@@ -123,16 +123,12 @@ CI runners are ephemeral, so the local cache is discarded when the job ends. It
 can only ever serve sources that a single job compiles more than once — for
 example a client `.cpp` that is built into both a "bench" and a "test" target.
 Measured on a Windows math-libs stage, that was 347 of 8,380 lookups (4.1%),
-paid for with 16,381 local writes. Those writes land on the checkout volume
-(`C:`) rather than the build volume (`B:`), and the resulting contention showed
-up in the log as roughly 80 `failed to rename ... The data is invalid` errors
-and 4,300 failed lock acquisitions per job.
+paid for with 16,381 local writes. Those writes also land on the checkout volume
+(`C:`) rather than the build volume (`B:`), so they compete with the checkout
+rather than using the runner's temp disk.
 
-It also occasionally corrupted a restored object file. `lld-link` then reported
-every symbol from that one translation unit as undefined, so a link failed on
-some runs of a commit and not others, with a different translation unit and a
-different subproject each time. `remote_only` removes that write path; the 4.1%
-of lookups local storage answered are served by the remote cache instead.
+`remote_only` removes those writes. The 4.1% of lookups local storage answered
+are served by the remote cache instead, which holds the same entries.
 
 `cache_dir` is still configured, because ccache uses it for temporary files,
 lock files, and the statistics counters that the "Report" step prints.

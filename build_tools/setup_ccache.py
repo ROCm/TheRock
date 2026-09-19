@@ -63,15 +63,10 @@ CONFIG_PRESETS_MAP = {
     # job compiles twice (e.g. a client .cpp built into both a "bench" and a
     # "test" target). Measured on a Windows math-libs stage, local storage
     # answered 347 of 8,380 lookups (4.1%) while performing 16,381 writes --
-    # every remote hit was re-serialized to disk for nothing. Those writes land
-    # on the checkout volume (C:) rather than the build volume (B:), and under
-    # the resulting contention ccache logged ~80 "failed to rename ... The data
-    # is invalid" errors and ~4,300 failed lock acquisitions per job, and
-    # occasionally left a restored object file incomplete. lld-link then
-    # reported every symbol from that one translation unit as undefined,
-    # producing a link failure that reproduced on some runs of a commit but not
-    # others. Skipping local storage removes that write path entirely; the 4.1%
-    # of lookups it answered are still served by the remote cache.
+    # every remote hit was re-serialized to disk for nothing, onto the checkout
+    # volume rather than the build volume. Skipping local storage removes those
+    # writes; the 4.1% of lookups it answered are still served by the remote
+    # cache, which also holds them.
     "github-oss-dev": {
         "remote_storage": CACHE_SRV_DEV,
         "remote_only": "true",
