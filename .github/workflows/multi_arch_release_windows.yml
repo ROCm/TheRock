@@ -123,6 +123,9 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
+    env:
+      BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -145,12 +148,14 @@ jobs:
           product: core
 
       - name: Copy to release buckets
+        env:
+          KPACK_SPLIT: ${{ needs.build_python_packages.outputs.kpack_split }}
         run: |
           python build_tools/github_actions/publish_rocm_to_release_buckets.py \
             --run-id="${{ github.run_id }}" \
             --platform=windows \
-            --release-type="${{ inputs.release_type }}" \
-            --kpack-split="${{ needs.build_python_packages.outputs.kpack_split }}" \
+            --release-type="${BUILD_RELEASE_TYPE}" \
+            --kpack-split="${KPACK_SPLIT}" \
             --structured
 
   trigger_test_artifacts_per_family:
@@ -167,7 +172,7 @@ jobs:
     steps:
       - name: Trigger test_artifacts
         if: ${{ matrix.family_info.test-runs-on != '' }}
-        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
           workflow: test_artifacts.yml
           inputs: |
@@ -197,7 +202,7 @@ jobs:
       actions: write
     steps:
       - name: Trigger PyTorch Build
-        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
           workflow: multi_arch_release_windows_pytorch_wheels.yml
           inputs: |

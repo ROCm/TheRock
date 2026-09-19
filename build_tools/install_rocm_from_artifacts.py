@@ -429,6 +429,8 @@ def retrieve_artifacts_by_run_id(args):
             args.kfdtest,
             args.rocwmma,
             args.rpp,
+            args.solver,
+            args.sparse,
             args.libhipcxx,
             args.hipthreads,
         ]
@@ -537,6 +539,13 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("aqlprofile")
             # Contains rocprofiler-sdk-rocpd
             argv.append("rocprofiler-sdk_run")
+            if args.tests:
+                # Installed-test CMake configure needs rocprofiler-sdkConfig.cmake.
+                argv.append("rocprofiler-sdk_dev")
+                # HIP/rocprofiler-sdk tests resolve AMDDeviceLibs via amd-llvm_dev and
+                # libdw headers via sysdeps_dev (sysdeps_lib ships only runtime libs).
+                argv.append("amd-llvm_dev")
+                argv.append("sysdeps_dev")
         if args.rocprofiler_compute:
             extra_artifacts.append("rocprofiler-compute")
             # Contains the rocprof-compute CLI executable.
@@ -567,6 +576,10 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
+        if args.solver:
+            extra_artifacts.append("solver")
+        if args.sparse:
+            extra_artifacts.append("sparse")
         if args.rpp:
             extra_artifacts.append("rpp")
             # test_rpp.py compiles the test suite against the installed tree,
@@ -808,6 +821,20 @@ def main(argv):
         "--blas",
         default=False,
         help="Include 'blas' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--solver",
+        default=False,
+        help="Include 'solver' artifacts (rocSOLVER, hipSOLVER)",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--sparse",
+        default=False,
+        help="Include 'sparse' artifacts (rocSPARSE, hipSPARSE, hipSPARSELt)",
         action=argparse.BooleanOptionalAction,
     )
 

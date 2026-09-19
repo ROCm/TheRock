@@ -127,6 +127,14 @@ jobs:
       id-token: write
       contents: read
     env:
+      PYTHON_VERSION: ${{ inputs.python_version }}
+      CACHE_TYPE: ${{ inputs.cache_type }}
+      PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
+      ROCM_VERSION: ${{ inputs.rocm_version }}
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url }}
+      ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
+      ARTIFACT_GROUP: ${{ inputs.artifact_group }}
       CHECKOUT_ROOT: B:/src
       # Note the \ here instead of /. This should be used from 'cmd' not 'bash'!
       PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
@@ -162,7 +170,7 @@ jobs:
       - name: Select Python version
         run: |
           python build_tools/github_actions/python_to_cp_version.py \
-            --python-version ${{ inputs.python_version }}
+            --python-version "${PYTHON_VERSION}"
 
       # sccache uses an S3 bucket reached via an OIDC-assumed IAM role, which
       # fork PRs / external repos cannot assume. Compute the effective cache
@@ -172,7 +180,7 @@ jobs:
         id: cache
         run: |
           python build_tools/github_actions/compute_pytorch_cache_type.py \
-            --cache-type "${{ inputs.cache_type }}"
+            --cache-type "${CACHE_TYPE}"
 
       # TODO(amd-justchen): share with build_windows_artifacts.yml. Include in VM image? Dockerfile?
       - name: Install requirements
@@ -224,7 +232,7 @@ jobs:
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
             --gitrepo-origin https://github.com/ROCm/pytorch.git \
-            --repo-hashtag ${{ inputs.pytorch_git_ref }} \
+            --repo-hashtag "${PYTORCH_GIT_REF}" \
             --no-commit-hipify
 
       # Note: determine_version.py sets optional_build_prod_arguments in
@@ -233,11 +241,11 @@ jobs:
         if: ${{ inputs.rocm_version }}
         run: |
           python build_tools/github_actions/determine_version.py \
-            --rocm-version ${{ inputs.rocm_version }}
+            --rocm-version "${ROCM_VERSION}"
 
       - name: Configure AWS Credentials for sccache
         if: ${{ steps.cache.outputs.cache_type == 'sccache' }}
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::324352301041:role/therock-ci
@@ -258,8 +266,8 @@ jobs:
         id: expand
         run: |
           targets=$(python build_tools/github_actions/expand_amdgpu_families.py \
-            --amdgpu-families "${{ inputs.amdgpu_families }}")
-          echo "Expanded families '${{ inputs.amdgpu_families }}' -> '${targets}'"
+            --amdgpu-families "${AMDGPU_FAMILIES}")
+          echo "Expanded families '${AMDGPU_FAMILIES}' -> '${targets}'"
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 
       # Using 'cmd' here is load bearing! There are configuration issues when
@@ -273,35 +281,44 @@ jobs:
       # build_prod_wheels.py::get_rocm_sdk_targets is removed.
       - name: Build PyTorch wheels
         shell: cmd
-        run: |
+        env:
+          CACHE_TYPE: ${{ steps.cache.outputs.cache_type }}
+          AMDGPU_TARGETS: ${{ steps.expand.outputs.targets }}
+        # determine_version.py emits multiple arguments from a parsed ROCm version.
+        # Trust that repository script to produce this intentional shell fragment.
+        # Delayed expansion keeps metacharacters in input values from becoming CMD operators.
+        run: | # zizmor: ignore[template-injection]
+          setlocal EnableDelayedExpansion
           set "CACHE_FLAG="
-          if "${{ steps.cache.outputs.cache_type }}"=="sccache" set "CACHE_FLAG=--use-sccache"
-          if "${{ steps.cache.outputs.cache_type }}"=="ccache" set "CACHE_FLAG=--use-ccache"
+          if "!CACHE_TYPE!"=="sccache" set "CACHE_FLAG=--use-sccache"
+          if "!CACHE_TYPE!"=="ccache" set "CACHE_FLAG=--use-ccache"
 
           set "PYTORCH_ROCM_ARCH_FLAG="
-          if not "${{ steps.expand.outputs.targets }}"=="" set "PYTORCH_ROCM_ARCH_FLAG=--pytorch-rocm-arch ${{ steps.expand.outputs.targets }}"
+          if not "!AMDGPU_TARGETS!"=="" set "PYTORCH_ROCM_ARCH_FLAG=--pytorch-rocm-arch !AMDGPU_TARGETS!"
 
-          echo "Building PyTorch wheels for ${{ inputs.artifact_group }} (cache: ${{ steps.cache.outputs.cache_type }})"
+          echo "Building PyTorch wheels for !ARTIFACT_GROUP! (cache: !CACHE_TYPE!)"
           python ./external-builds/pytorch/build_prod_wheels.py ^
             build ^
             --install-rocm ^
-            --index-url="${{ inputs.rocm_package_index_url }}" ^
-            --find-links="${{ inputs.rocm_package_find_links_url }}" ^
+            --index-url="!ROCM_PACKAGE_INDEX_URL!" ^
+            --find-links="!ROCM_PACKAGE_FIND_LINKS_URL!" ^
             --root-checkout-dir ${{ env.CHECKOUT_ROOT }} ^
             --clean ^
-            --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
-            %CACHE_FLAG% ^
-            %PYTORCH_ROCM_ARCH_FLAG% ^
+            --output-dir "!PACKAGE_DIST_DIR!" ^
+            !CACHE_FLAG! ^
+            !PYTORCH_ROCM_ARCH_FLAG! ^
             ${{ env.optional_build_prod_arguments }}
 
       - name: Report cache stats
         if: ${{ !cancelled() && steps.cache.outputs.cache_type != 'none' }}
+        env:
+          CACHE_TYPE: ${{ steps.cache.outputs.cache_type }}
         run: |
-          if [ "${{ steps.cache.outputs.cache_type }}" = "sccache" ]; then
+          if [ "${CACHE_TYPE}" = "sccache" ]; then
             echo "sccache stats:"
             echo "--------------"
             sccache --show-stats || true
-          elif [ "${{ steps.cache.outputs.cache_type }}" = "ccache" ]; then
+          elif [ "${CACHE_TYPE}" = "ccache" ]; then
             echo "ccache stats:"
             echo "-------------"
             ccache -s -v || true
@@ -310,7 +327,7 @@ jobs:
       - name: Sanity check wheel
         shell: cmd
         run: |
-          python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}
+          python external-builds/pytorch/sanity_check_wheel.py "%PACKAGE_DIST_DIR%"
 
       # The kpack wheel splitter takes the fat torch wheel and produces a
       # smaller host wheel plus one device wheel per gfx target. Source-install
@@ -336,7 +353,7 @@ jobs:
       - name: Split PyTorch fat wheel
         if: ${{ inputs.kpack_split == 'true' }}
         run: |
-          DIST_DIR="$(cygpath -u "${{ env.PACKAGE_DIST_DIR }}")"
+          DIST_DIR="$(cygpath -u "${PACKAGE_DIST_DIR}")"
 
           # LLVM binaries ship inside the already-installed rocm-sdk-devel.
           ROCM_SDK_ROOT="$(cygpath -u "$(python -m rocm_sdk path --root)")"
@@ -394,7 +411,7 @@ jobs:
       - name: Upload PyTorch wheels
         run: |
           python build_tools/github_actions/upload_python_packages.py \
-            --input-packages-dir="${{ env.PACKAGE_DIST_DIR }}" \
-            --artifact-group="${{ inputs.artifact_group }}" \
+            --input-packages-dir="${PACKAGE_DIST_DIR}" \
+            --artifact-group="${ARTIFACT_GROUP}" \
             --run-id="${{ github.run_id }}" \
             --multiarch
