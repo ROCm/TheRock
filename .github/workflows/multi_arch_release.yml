@@ -59,6 +59,14 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      resource_probe_targets:
+        description: "JSON array of exact Linux stage selectors to probe."
+        type: string
+        default: "[]"
+      resource_probe_interval_seconds:
+        description: "Resource probe sampling interval in seconds."
+        type: number
+        default: 5
       # Enable Quartz release-lineage tracking. When on, this run's id is
       # propagated to every triggered workflow as quartz_tracking_id, formatted
       # as "<github.run_id>;<release_type>". Tracking is currently only
@@ -108,6 +116,16 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      resource_probe_targets:
+        description: >-
+          JSON array of exact Linux stage selectors to probe, for example
+          ["compiler-runtime", "math-libs:gfx94X-dcgpu"].
+        type: string
+        default: "[]"
+      resource_probe_interval_seconds:
+        description: "Resource probe sampling interval in seconds."
+        type: number
+        default: 5
       # Enable Quartz release-lineage tracking. When on, this run's id is
       # propagated to every triggered workflow as quartz_tracking_id, formatted
       # as "<github.run_id>;<release_type>". Tracking is currently only
@@ -180,6 +198,8 @@ jobs:
       build_jax: ${{ inputs.build_jax }}
       python_version: ${{ inputs.python_version }}
       quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
+      resource_probe_targets: ${{ inputs.resource_probe_targets }}
+      resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows

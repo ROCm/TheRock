@@ -76,6 +76,14 @@ on:
       quartz_tracking_id:
         type: string
         default: ""
+      enable_resource_probe:
+        description: "Collect resource telemetry while building this stage."
+        type: boolean
+        default: false
+      resource_probe_interval_seconds:
+        description: "Resource probe sampling interval in seconds."
+        type: number
+        default: 5
 
 permissions:
   contents: read
@@ -104,6 +112,8 @@ jobs:
       RELEASE_TYPE: ${{ inputs.release_type }}
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
       EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
+      ENABLE_RESOURCE_PROBE: ${{ inputs.enable_resource_probe }}
+      RESOURCE_PROBE_INTERVAL_SECONDS: ${{ inputs.resource_probe_interval_seconds }}
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -204,7 +214,18 @@ jobs:
 
       - name: Build stage
         run: |
-          cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
+          PROBE=()
+          if [[ "${ENABLE_RESOURCE_PROBE}" == "true" ]]; then
+            PROBE=(
+              python3 build_tools/resource_probe.py
+              --phase build-stage
+              --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}"
+              --output-dir "${BUILD_DIR}/logs/resource-probe"
+              --storage-path "${GITHUB_WORKSPACE}"
+              --
+            )
+          fi
+          "${PROBE[@]}" cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 
       - name: Generate failed log summaries
         if: ${{ !cancelled() }}
