@@ -1,0 +1,41 @@
+From 94ce83fab53afa5fbae8e8948095e2022a916a0e Mon Sep 17 00:00:00 2001
+From: mengzcai <mengzcai@amd.com>
+Date: Fri, 18 Sep 2026 16:27:11 +0800
+Subject: [PATCH] hipblaslt: close the true16 gap the rebase left on
+ gfx1250-strict
+
+The rebase onto develop picked up the true16 NoSDWA change, whose arch
+test "^gfx1[12][0-9][0-9]$" does not match a stepping suffix. Merging the
+two cleanly left gfx1250-strict extops assembled without +real-true16
+while gfx1250 got it, with no error to show for it.
+
+Widen it the way the wavefront test above it is already widened. A
+stepping shares its ISA with the architecture it steps, so true16 comes
+with it; only what A0 genuinely lacks is gated per-stepping.
+
+(cherry picked from commit 43cdd0e355f1c0a194fa460a9337ad786507ea74)
+---
+ projects/hipblaslt/device-library/extops/CMakeLists.txt | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/projects/hipblaslt/device-library/extops/CMakeLists.txt b/projects/hipblaslt/device-library/extops/CMakeLists.txt
+index 33df0248e4..8b26430728 100644
+--- a/projects/hipblaslt/device-library/extops/CMakeLists.txt
++++ b/projects/hipblaslt/device-library/extops/CMakeLists.txt
+@@ -24,9 +24,11 @@ foreach(arch IN LISTS archs)
+         set(WAVEFRONT "-mno-wavefrontsize64")
+     endif()
+     # Enable true16 on all gfx11*/gfx12* (NoSDWA). "SHELL:" keeps the flag group
+-    # intact so CMake de-duplication does not drop the paired +real-true16.
++    # intact so CMake de-duplication does not drop the paired +real-true16. The
++    # stepping suffix is matched like it is for the wavefront size above: true16
++    # belongs to the ISA, which a stepping shares with the architecture it steps.
+     set(TRUE16_FEATURE "")
+-    if(arch MATCHES "^gfx1[12][0-9][0-9]$")
++    if(arch MATCHES "^gfx1[12][0-9][0-9](-[a-z0-9]+)*$")
+         set(TRUE16_FEATURE "SHELL:-Xclangas -target-feature -Xclangas +real-true16")
+     endif()
+     add_library(extop-obj-${arch} OBJECT)
+-- 
+2.43.0
+

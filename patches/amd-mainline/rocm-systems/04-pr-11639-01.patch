@@ -1,0 +1,80 @@
+From 6b78f4312cfc766dcecc849a98b22db277e79a87 Mon Sep 17 00:00:00 2001
+From: Shweta Khatri <155576586+shwetagkhatri@users.noreply.github.com>
+Date: Tue, 15 Sep 2026 10:35:41 -0400
+Subject: [PATCH] fix(rocm_agent_enumerator): report gfx1250-strict to match
+ rocminfo
+
+Two enumeration paths dropped the -strict stepping variant that rocminfo
+reports on A0 silicon, so build scripts could select the wrong compiler
+target with no error:
+
+- The target-name regexes truncated the -strict suffix from rocminfo output.
+- The KFD-derived path built the target from gfx_target_version alone and
+  never read the ASIC revision.
+
+Preserve the suffix in the regexes and, on the KFD path, read the ASIC
+revision from capability bits 25:22 and append -strict for A0 gfx1250 when
+strict reporting is enabled, matching rocminfo.
+
+(cherry picked from commit a22ff4ba34dc0e94ca22ea7f42a9e6c5f89a0e1a)
+---
+ projects/rocminfo/rocm_agent_enumerator | 22 +++++++++++++++++++---
+ 1 file changed, 19 insertions(+), 3 deletions(-)
+
+diff --git a/projects/rocminfo/rocm_agent_enumerator b/projects/rocminfo/rocm_agent_enumerator
+index 3e67ae6997..4661b53470 100755
+--- a/projects/rocminfo/rocm_agent_enumerator
++++ b/projects/rocminfo/rocm_agent_enumerator
+@@ -105,7 +105,8 @@ def staticVars(**kwargs):
+     return func
+   return deco
+ 
+-@staticVars(search_term=re.compile(r"gfx[0-9a-fA-F]+(-[0-9a-fA-F]+)?(-generic)?"))
++# Keep the -strict stepping suffix (e.g. gfx1250-strict) so it is not truncated to the base target.
++@staticVars(search_term=re.compile(r"gfx[0-9a-fA-F]+(-[0-9a-fA-F]+)?(-generic)?(-strict)?"))
+ def getGCNISA(line, match_from_beginning = False):
+  if match_from_beginning is True:
+    result = getGCNISA.search_term.match(line)
+@@ -116,7 +117,7 @@ def getGCNISA(line, match_from_beginning = False):
+    return result.group(0)
+  return None
+ 
+-@staticVars(search_name=re.compile(r"gfx[0-9a-fA-F]+(-[0-9a-fA-F]+)?(-generic)?(:[-+:\w]+)?"))
++@staticVars(search_name=re.compile(r"gfx[0-9a-fA-F]+(-[0-9a-fA-F]+)?(-generic)?(-strict)?(:[-+:\w]+)?"))
+ def getGCNArchName(line):
+  result = getGCNArchName.search_name.search(line)
+ 
+@@ -221,6 +222,16 @@ def readFromKFD():
+         prop_path = node_path + '/properties'
+         if os.path.isfile(prop_path) and os.access(prop_path, os.R_OK):
+           target_search_term = re.compile(r"gfx_target_version.+")
++          # ASIC revision lives in capability bits 25:22. Read it once for this node so
++          # A0 silicon can be re-pointed to the -strict ISA variant, matching rocminfo.
++          asic_revision = None
++          try:
++            with open(prop_path) as cap_file:
++              cap_match = re.search(r"^capability\s+(\d+)", cap_file.read(), re.MULTILINE)
++              if cap_match is not None:
++                asic_revision = (int(cap_match.group(1), 10) >> 22) & 0xF
++          except PermissionError:
++            pass
+           with open(prop_path) as f:
+             try:
+               line = f.readline()
+@@ -255,7 +266,12 @@ def readFromKFD():
+                     minor_ver = int((device_id / 100) % 100)
+                     stepping_ver = int(device_id % 100)
+ 
+-                  target_list.append("gfx" + format(major_ver, 'd') + format(minor_ver, 'x') + format(stepping_ver, 'x'))
++                  target = "gfx" + format(major_ver, 'd') + format(minor_ver, 'x') + format(stepping_ver, 'x')
++                  # A0 silicon (ASIC revision 0) uses the -strict variant, matching rocminfo.
++                  if target == "gfx1250" and asic_revision == 0 \
++                     and os.environ.get("HSA_DISABLE_GFX12_STRICT") == "0":
++                    target += "-strict"
++                  target_list.append(target)
+               line = f.readline()
+ 
+   return target_list
+-- 
+2.43.0
+

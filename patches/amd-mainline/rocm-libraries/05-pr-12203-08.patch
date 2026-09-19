@@ -1,0 +1,49 @@
+From de681ad0d6b33bb8d35a1f9e70e1be69095faffa Mon Sep 17 00:00:00 2001
+From: Illia Silin <Illia.Silin@amd.com>
+Date: Thu, 17 Sep 2026 12:51:17 -0700
+Subject: [PATCH] relax a couple of gfx1250-strict restrictions in amd-wmma,
+ re-enable a passing test on gfx1250 emulator
+
+(cherry picked from commit f0c0a3c85f3650ed739834c46289581ed36e9efa)
+---
+ projects/composablekernel/include/ck/utility/amd_wmma.hpp | 4 ++--
+ projects/composablekernel/test/CMakeLists.txt             | 1 -
+ 2 files changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/projects/composablekernel/include/ck/utility/amd_wmma.hpp b/projects/composablekernel/include/ck/utility/amd_wmma.hpp
+index e43fdba571..ed2c8a2226 100644
+--- a/projects/composablekernel/include/ck/utility/amd_wmma.hpp
++++ b/projects/composablekernel/include/ck/utility/amd_wmma.hpp
+@@ -1312,7 +1312,7 @@ struct intrin_wmma_scale_f32_16x16x128_f8f6f4<16,
+             "v_wmma_scale_f32_16x16x128_f8f6f4");
+ 
+         // keep int32_t for backward compatibility
+-#if defined(__gfx1250__)
++#if defined(__gfx125__)
+         reg_c.template AsType<float8_t>()(Number<0>{}) =
+             __builtin_amdgcn_wmma_scale_f32_16x16x128_f8f6f4(
+                 wmma_impl::MxTypeSelector<TypeA>::value, // OPSEL
+@@ -1371,7 +1371,7 @@ struct intrin_wmma_scale16_f32_16x16x128_f8f6f4<16,
+             "unsupported matrix/scale format combination for "
+             "v_wmma_scale16_f32_16x16x128_f8f6f4");
+ 
+-#if defined(__gfx1250__)
++#if defined(__gfx125__)
+         reg_c.template AsType<float8_t>()(Number<0>{}) =
+             __builtin_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4(
+                 wmma_impl::MxTypeSelector<TypeA>::value, // OPSEL
+diff --git a/projects/composablekernel/test/CMakeLists.txt b/projects/composablekernel/test/CMakeLists.txt
+index 8cbcc1d0a4..2b898a5024 100644
+--- a/projects/composablekernel/test/CMakeLists.txt
++++ b/projects/composablekernel/test/CMakeLists.txt
+@@ -126,7 +126,6 @@ set(REGRESSION_TESTS
+ set(KNOWN_FAILING_TESTS
+     test_ck_tile_mx_scale
+     test_ck_tile_mx_gemm_pipeline_tdm_wmma
+-    test_gemm_blockscale_wp_fp8
+     test_fp6
+     test_bf6
+     test_mx_fp4
+-- 
+2.43.0
+

@@ -1,0 +1,25 @@
+From bfd40464eae738ba5c0be62f2180c695b592f7ee Mon Sep 17 00:00:00 2001
+From: Stanley Tsang <stanley.tsang@amd.com>
+Date: Fri, 11 Sep 2026 15:08:56 -0600
+Subject: [PATCH] Remove incorrect line
+
+(cherry picked from commit 60cd2d55843134d96ca1a2c2e75911ff54e938fc)
+---
+ .../device/detail/config/device_merge_sort_block_merge.hpp       | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/projects/rocprim/rocprim/include/rocprim/device/detail/config/device_merge_sort_block_merge.hpp b/projects/rocprim/rocprim/include/rocprim/device/detail/config/device_merge_sort_block_merge.hpp
+index d98c223ece..ef6c43ecf9 100644
+--- a/projects/rocprim/rocprim/include/rocprim/device/detail/config/device_merge_sort_block_merge.hpp
++++ b/projects/rocprim/rocprim/include/rocprim/device/detail/config/device_merge_sort_block_merge.hpp
+@@ -3757,7 +3757,6 @@ using merge_sort_block_merge_targets
+                    comp_target<gen::cdna2, target_arch::gfx90a, gpu::mi210, rep::amdgcn>,
+                    comp_target<gen::cdna3, target_arch::gfx942, gpu::mi300x, rep::amdgcn>,
+                    comp_target<gen::rdna4, target_arch::gfx1201, gpu::rx9070, rep::amdgcn>,
+-                   comp_target<gen::cdna5, target_arch::gfx1250, gpu::mi455x, rep::amdgcn>,
+                    comp_target<gen::unknown, target_arch::unknown, gpu::generic, rep::amdgcn>>;
+ 
+ } // end namespace detail
+-- 
+2.43.0
+

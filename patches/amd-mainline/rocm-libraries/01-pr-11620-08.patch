@@ -1,0 +1,29 @@
+From 4e062395c4124ee01cff5c9efa8c1e7136d7f546 Mon Sep 17 00:00:00 2001
+From: Stanley Tsang <stanley.tsang@amd.com>
+Date: Mon, 14 Sep 2026 13:27:13 -0600
+Subject: [PATCH] Resolve merge conflict
+
+(cherry picked from commit 73d15a2b49bd7459e8af43566223976c4e118c5f)
+---
+ projects/rocprim/CHANGELOG.md | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/projects/rocprim/CHANGELOG.md b/projects/rocprim/CHANGELOG.md
+index c106319bfc..ea9fa59ed3 100644
+--- a/projects/rocprim/CHANGELOG.md
++++ b/projects/rocprim/CHANGELOG.md
+@@ -2,11 +2,7 @@
+ 
+ Full documentation for rocPRIM is available at [https://rocm.docs.amd.com/projects/rocPRIM/en/latest/](https://rocm.docs.amd.com/projects/rocPRIM/en/latest/).
+ 
+-<<<<<<< HEAD
+-## rocPRIM 5.0.0 for ROCM 10.2.0
+-=======
+ ## rocPRIM 5.0.0 for ROCm 10.2.0
+->>>>>>> f5dd6287fc1 (Move changes to ROCm 10.2)
+ 
+ ### Optimizations
+ 
+-- 
+2.43.0
+

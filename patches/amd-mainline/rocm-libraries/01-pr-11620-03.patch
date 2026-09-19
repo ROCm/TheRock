@@ -1,0 +1,104 @@
+From 690c980f26e23042badbb7e4a8a36872f82351fe Mon Sep 17 00:00:00 2001
+From: Stanley Tsang <stanley.tsang@amd.com>
+Date: Thu, 3 Sep 2026 09:48:35 -0600
+Subject: [PATCH] Fix syntax errors and update checks
+
+(cherry picked from commit 641029be22a64705ede9846ef0c38a15af70f429)
+---
+ projects/rocprim/rocprim/include/rocprim/config.hpp         | 6 +++---
+ .../rocprim/rocprim/include/rocprim/intrinsics/atomic.hpp   | 4 ++--
+ .../rocprim/rocprim/include/rocprim/thread/thread_load.hpp  | 4 ++--
+ .../rocprim/rocprim/include/rocprim/thread/thread_store.hpp | 4 ++--
+ 4 files changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/projects/rocprim/rocprim/include/rocprim/config.hpp b/projects/rocprim/rocprim/include/rocprim/config.hpp
+index 9b30586ba1..f9c28617c2 100644
+--- a/projects/rocprim/rocprim/include/rocprim/config.hpp
++++ b/projects/rocprim/rocprim/include/rocprim/config.hpp
+@@ -120,7 +120,7 @@
+ #undef ROCPRIM_TARGET_UNKNOWN
+ 
+ // See https://llvm.org/docs/AMDGPUUsage.html#instructions
+-if defined(__gfx1250__)
++#if defined(__gfx1250__)
+     #define ROCPRIM_TARGET_CDNA5 1
+ #elif defined(__gfx942__) || defined(__gfx9_4_generic__)
+     #define ROCPRIM_TARGET_CDNA3 1
+@@ -161,8 +161,8 @@ if defined(__gfx1250__)
+     #if !defined(ROCPRIM_THREAD_STORE_USE_CACHE_MODIFIERS)
+         #define ROCPRIM_THREAD_STORE_USE_CACHE_MODIFIERS 1
+     #endif
+-    #define ROCPRIM_IS_CDNA5() (__builtin_amdgcn_processor_is("gfx1250"))
+-    #define ROCPRIM_IS_CDNA4() (__builtin_amdgcn_processor_is("gfx950"))
++    #define ROCPRIM_IS_CDNA5() __builtin_amdgcn_processor_is("gfx1250")
++    #define ROCPRIM_IS_CDNA4() __builtin_amdgcn_processor_is("gfx950")
+     #define ROCPRIM_IS_CDNA3()                                                              \
+         (__builtin_amdgcn_processor_is("gfx942") || __builtin_amdgcn_processor_is("gfx950") \
+          || __builtin_amdgcn_processor_is("gfx9-4-generic"))
+diff --git a/projects/rocprim/rocprim/include/rocprim/intrinsics/atomic.hpp b/projects/rocprim/rocprim/include/rocprim/intrinsics/atomic.hpp
+index e2d34b2e1b..8b96275719 100644
+--- a/projects/rocprim/rocprim/include/rocprim/intrinsics/atomic.hpp
++++ b/projects/rocprim/rocprim/include/rocprim/intrinsics/atomic.hpp
+@@ -179,7 +179,7 @@ namespace detail
+         ROCPRIM_ATOMIC_LOAD("ds_read_b128", "", "s_waitcnt lgkmcnt(0)", ptr)
+     #define ROCPRIM_ATOMIC_LOAD_GLOBAL(ptr) \
+         ROCPRIM_ATOMIC_LOAD("global_load_dwordx4", "off sc1", "s_waitcnt vmcnt(0)", ptr)
+-#elif ROCPRIM_TARGET_RDNA4
++#elif ROCPRIM_TARGET_CDNA5 || ROCPRIM_TARGET_RDNA4
+     #define ROCPRIM_ATOMIC_LOAD_FLAT(ptr) \
+         ROCPRIM_ATOMIC_LOAD("flat_load_b128", "scope:SCOPE_DEV", "s_wait_loadcnt_dscnt 0x0", ptr)
+     #define ROCPRIM_ATOMIC_LOAD_SHARED(ptr) \
+@@ -296,7 +296,7 @@ namespace detail
+         ROCPRIM_ATOMIC_STORE("ds_write_b128", "", "s_waitcnt lgkmcnt(0)", ptr)
+     #define ROCPRIM_ATOMIC_STORE_GLOBAL(ptr) \
+         ROCPRIM_ATOMIC_STORE("global_store_dwordx4", "off sc1", "s_waitcnt vmcnt(0)", ptr)
+-#elif ROCPRIM_TARGET_RDNA4
++#elif ROCPRIM_TARGET_CDNA5 || ROCPRIM_TARGET_RDNA4
+     #define ROCPRIM_ATOMIC_STORE_FLAT(ptr) \
+         ROCPRIM_ATOMIC_STORE("flat_store_b128", "scope:SCOPE_DEV", "s_wait_storecnt_dscnt 0x0", ptr)
+     #define ROCPRIM_ATOMIC_STORE_SHARED(ptr) \
+diff --git a/projects/rocprim/rocprim/include/rocprim/thread/thread_load.hpp b/projects/rocprim/rocprim/include/rocprim/thread/thread_load.hpp
+index 83700c5f9d..3f20223ff5 100644
+--- a/projects/rocprim/rocprim/include/rocprim/thread/thread_load.hpp
++++ b/projects/rocprim/rocprim/include/rocprim/thread/thread_load.hpp
+@@ -85,14 +85,14 @@ T asm_thread_load(void* ptr)
+         ROCPRIM_DEVICE ROCPRIM_INLINE type asm_thread_load<cache_modifier, type>(void* ptr) \
+         {                                                                                   \
+             interim_type retval;                                                            \
+-            if(ROCPRIM_IS_CDNA5())                                                          \
++            if(ROCPRIM_IS_CDNA5() || ROCPRIM_IS_RDNA4())                                    \
+             {                                                                               \
+                 asm volatile(#asm_operator " %0, %1 th:TH_DEFAULT scope:SCOPE_DEV\n\t"      \
+                                            "s_wait_loadcnt_dscnt(%2)"                       \
+                              : "=&v"(retval)                                                \
+                              : "v"(ptr), "I"(0x00));                                        \
+             }                                                                               \
+-            else if(ROCPRIM_IS_CDNA3())                                                     \
++            else if(ROCPRIM_IS_CDNA3() || ROCPRIM_IS_CDNA4())                               \
+             {                                                                               \
+                 asm volatile(#asm_operator " %0, %1 sc0 nt\n\t"                             \
+                                            "s_waitcnt(%2)"                                  \
+diff --git a/projects/rocprim/rocprim/include/rocprim/thread/thread_store.hpp b/projects/rocprim/rocprim/include/rocprim/thread/thread_store.hpp
+index 063a73b48e..153eb3623a 100644
+--- a/projects/rocprim/rocprim/include/rocprim/thread/thread_store.hpp
++++ b/projects/rocprim/rocprim/include/rocprim/thread/thread_store.hpp
+@@ -83,14 +83,14 @@ void asm_thread_store(void* ptr, T val)
+                                                                                    type  val) \
+         {                                                                                     \
+             interim_type temp_val = *bit_cast<interim_type*>(&val);                           \
+-            if(ROCPRIM_IS_CDNA5))                                                            \
++            if(ROCPRIM_IS_CDNA5() || ROCPRIM_IS_RDNA4())                                      \
+             {                                                                                 \
+                 asm volatile(#asm_operator " %0, %1 th:TH_DEFAULT scope:SCOPE_DEV\n\t"        \
+                                            "s_wait_storecnt_dscnt(%2)"                        \
+                              :                                                                \
+                              : "v"(ptr), "v"(temp_val), "I"(0x00));                           \
+             }                                                                                 \
+-            else if(ROCPRIM_IS_CDNA3())                                                       \
++            else if(ROCPRIM_IS_CDNA3() || ROCPRIM_IS_CDNA4())                                 \
+             {                                                                                 \
+                 asm volatile(#asm_operator " %0, %1 sc0 nt\n\t"                               \
+                                            "s_waitcnt(%2)"                                    \
+-- 
+2.43.0
+

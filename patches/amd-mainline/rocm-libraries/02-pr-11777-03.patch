@@ -1,0 +1,753 @@
+From 2f4e2fef4effb5b2a1160db697816115d17c317d Mon Sep 17 00:00:00 2001
+From: George Tseng <george.tseng@amd.com>
+Date: Mon, 14 Sep 2026 10:46:28 +0000
+Subject: [PATCH] hipblaslt: strip probe features from GPU_TARGETS and ship
+ generator scripts
+
+amdgpu-arch reports a configuration (gfx950:sramecc+:xnack-), not a CMake
+target. tox -e py3 forwards that string into --gpu-targets, so configure
+rejects the whole name. Strip colon-delimited features on both the
+get-gpu-arch and explicit --gpu-targets paths, and keep hyphenated
+steppings such as gfx1250-strict.
+
+Also install SoftmaxGenerator.py and LayerNormGenerator.py into the
+tensilelite test artifact tree. Installed unit tests spawn those scripts
+next to AMaxGenerator.py, which was the only generator previously shipped.
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+(cherry picked from commit 659411491a39839cbfdb31486e62c6fc78ca5900)
+---
+ projects/hipblaslt/CMakeLists.txt             |   3 +-
+ .../hipblaslt/tensilelite/Tensile/GpuArch.py  |  17 +
+ .../Tensile/TensileCreateLibrary/Run.py       |  68 ++-
+ .../Tensile/Tests/unit/test_arch_steppings.py | 429 +++++++++++++++++-
+ projects/hipblaslt/tensilelite/tasks.py       |  46 +-
+ 5 files changed, 513 insertions(+), 50 deletions(-)
+
+diff --git a/projects/hipblaslt/CMakeLists.txt b/projects/hipblaslt/CMakeLists.txt
+index dc9f1cbbdc..9e61e5c381 100644
+--- a/projects/hipblaslt/CMakeLists.txt
++++ b/projects/hipblaslt/CMakeLists.txt
+@@ -737,11 +737,12 @@ if(HIPBLASLT_INSTALL_TENSILELITE_TEST_ARTIFACTS AND NOT WIN32)
+         COMPONENT tests
+     )
+ 
+-    # Imported directly by unit tests, so these generators must ship at the
++    # Imported or executed directly by unit tests, so these must ship at the
+     # tensilelite root, not under scripts/.
+     install(
+         FILES
+             "${_tensilelite_src}/AMaxGenerator.py"
++            "${_tensilelite_src}/SoftmaxGenerator.py"
+             "${_tensilelite_src}/LayerNormGenerator.py"
+         DESTINATION "${_tensilelite_install_dest}"
+         COMPONENT tests
+diff --git a/projects/hipblaslt/tensilelite/Tensile/GpuArch.py b/projects/hipblaslt/tensilelite/Tensile/GpuArch.py
+index dbcf063d23..50d0e381bc 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/GpuArch.py
++++ b/projects/hipblaslt/tensilelite/Tensile/GpuArch.py
+@@ -141,6 +141,23 @@ def detect_gpu_archs():
+     return _probe()[0]
+ 
+ 
++def cmake_gpu_target(name):
++    """The ``GPU_TARGETS`` spelling of an architecture name a host reported.
++
++    A detection tool answers with a configuration, not a build target:
++    amdgpu-arch names a gfx950 agent ``gfx950:sramecc+:xnack-``, listing the
++    target features that agent happens to have. The build validates
++    ``GPU_TARGETS`` against a fixed list of targets and appends ``:xnack+``
++    itself where a sanitizer build needs it, so a reported feature is not a
++    target it accepts -- configure fails on the whole string.
++
++    Only the colon-delimited features come off. A stepping is spelled with a
++    hyphen and is part of the name (``gfx1250-strict``), and dropping it would
++    build the other stepping's code objects, which the silicon rejects.
++    """
++    return name.split(":", 1)[0]
++
++
+ def detect_gpu_arch():
+     """The architecture name the runtime reports for the first GPU, or None."""
+     archs, any_tool_found = _probe()
+diff --git a/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py b/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
+index a5f5971495..5f6c19ebae 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
++++ b/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
+@@ -165,6 +165,33 @@ def buildTmpDir(outputPath: Union[str, Path], archs: Collection[str]) -> Path:
+     return buildTmpRoot(outputPath) / (f"{stem}-{steppings[0]}" if steppings else stem)
+ 
+ 
++def removeScratch(outputPath: Union[str, Path], buildTmpPath: Path) -> bool:
++    """Remove this run's scratch, taking no more than this run owns.
++
++    A fan-out child shares the scratch parent with a sibling still writing into
++    it and may only take its own subdirectory; the parent is left for whichever
++    of the two finishes last. Every other run owns the tree and clears it whole,
++    which also reclaims scratch an earlier build left under a different name.
++
++    The parent is named from outputPath rather than from buildTmpPath, so the
++    architecture list cannot move what gets removed.
++
++    Returns whether there was a scratch directory to remove, so a caller that
++    wants to report its absence can.
++    """
++    if not buildTmpPath.is_dir():
++        return False
++    if os.environ.get(_GROUP_BUILD_ENV):
++        shutil.rmtree(buildTmpPath)
++        try:
++            buildTmpRoot(outputPath).rmdir()
++        except OSError:
++            pass
++    else:
++        shutil.rmtree(buildTmpRoot(outputPath))
++    return True
++
++
+ def tensileLibraryFile(outputPath: Union[str, Path], arch: str, library_format: str = "msgpack") -> Path:
+     """The canonical TensileLibrary path for one base arch under outputPath.
+ 
+@@ -650,21 +677,7 @@ def writeSolutionsAndKernels(
+             )
+ 
+     if removeTemporaries and not generateSourcesAndExit:
+-        # Same rule as the other scratch cleanup: a fan-out child shares the
+-        # parent with a sibling still writing into it and may only take its own
+-        # subdirectory, while every other run owns the tree and clears it whole.
+-        # The parent is named from outputPath rather than from this run's own
+-        # scratch path, so no leaf name can move what gets removed.
+-        scratchRoot = buildTmpRoot(outputPath)
+-        if buildTmpPath.is_dir():
+-            if os.environ.get(_GROUP_BUILD_ENV):
+-                shutil.rmtree(buildTmpPath)
+-                try:
+-                    scratchRoot.rmdir()
+-                except OSError:
+-                    pass
+-            else:
+-                shutil.rmtree(scratchRoot)
++        removeScratch(outputPath, buildTmpPath)
+ 
+     return codeObjectFiles, numKernels
+ 
+@@ -1510,28 +1523,13 @@ def run():
+         # it resolves onto the shared parent of this run's scratch, where a
+         # concurrent group build may still be assembling into its own
+         # subdirectory, so it is skipped rather than emptied.
+-        # Named from outputPath rather than from this run's scratch path, so the
+-        # architecture list cannot move what gets removed.
+-        scratchRoot = buildTmpRoot(outputPath)
+         legacyBuildTmp = Path(arguments["OutputPath"]).parent / "library" / "build_tmp"
+-        if legacyBuildTmp.is_dir() and legacyBuildTmp.resolve() != scratchRoot.resolve():
++        if (
++            legacyBuildTmp.is_dir()
++            and legacyBuildTmp.resolve() != buildTmpRoot(outputPath).resolve()
++        ):
+             shutil.rmtree(legacyBuildTmp)
+-        if buildTmpPath.is_dir():
+-            if os.environ.get(_GROUP_BUILD_ENV):
+-                # A sibling group is building into its own subdirectory of the
+-                # same parent right now, so only this run's scratch may go. The
+-                # parent is left for whichever of us finishes last.
+-                shutil.rmtree(buildTmpPath)
+-                try:
+-                    scratchRoot.rmdir()
+-                except OSError:
+-                    pass
+-            else:
+-                # Nothing else is writing here, so take the whole tree -- which
+-                # also reclaims scratch left by an earlier build that named its
+-                # own directory differently.
+-                shutil.rmtree(scratchRoot)
+-        else:
++        if not removeScratch(outputPath, buildTmpPath):
+             printWarning(f"Cannot remove build_tmp")
+ 
+     print("# Tensile Library Writer DONE")
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_arch_steppings.py b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_arch_steppings.py
+index 185c69c96b..21981c59f0 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_arch_steppings.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_arch_steppings.py
+@@ -24,9 +24,11 @@ targeting gfx1250) and are skipped when the toolchain is unavailable.
+ """
+ 
+ import copy
++import importlib.util
+ import inspect
+ import os
+ import re
++import shutil
+ import stat
+ import subprocess
+ import sys
+@@ -1176,6 +1178,127 @@ def test_the_stepping_suffix_survives_the_probe(rocmRoot):
+     assert GpuArch.detect_gpu_arch() == GFX1250_STRICT
+ 
+ 
++# --- from the name a host reports to the target the build is asked for --------
++#
++# The two are different vocabularies: a probe names a configuration, GPU_TARGETS
++# names a build target checked against a fixed list. These cover the failure
++# that separating them was written for -- `invoke build-client` on a gfx950 node,
++# where amdgpu-arch answers gfx950:sramecc+:xnack- and configure rejects the
++# whole string, having only gfx950 and gfx950:xnack+ on its list.
++
++
++def _supportedArchitecturesFromCMake():
++    """The list GPU_TARGETS is validated against, read from the build itself.
++
++    Read rather than restated so the two cannot drift: a target dropped there is
++    a target this can no longer claim the build accepts.
++    """
++    cmake = (
++        Path(__file__).resolve().parents[4]
++        / "cmake"
++        / "tensilelite_supported_architectures.cmake"
++    )
++    block = re.search(r"set\(SUPPORTED_ARCHITECTURES(.*?)\)", cmake.read_text(), re.DOTALL)
++    assert block is not None, f"SUPPORTED_ARCHITECTURES not found in {cmake}"
++    return re.findall(r'"([^"]+)"', block.group(1))
++
++
++@pytest.mark.parametrize(
++    "reported,target",
++    [
++        ("gfx950:sramecc+:xnack-", "gfx950"),
++        ("gfx942:sramecc+:xnack+", "gfx942"),
++        ("gfx90a:xnack-", "gfx90a"),
++        ("gfx950", "gfx950"),
++        (f"{GFX1250_STRICT}:xnack-", GFX1250_STRICT),
++        (f"{GFX1250}:sramecc+:xnack-", GFX1250),
++    ],
++)
++def test_target_features_are_not_part_of_the_cmake_target(reported, target):
++    """Features describe the agent, and the build adds the ones it wants itself."""
++    assert GpuArch.cmake_gpu_target(reported) == target
++
++
++@pytest.mark.parametrize("reported", [GFX1250, GFX1250_STRICT])
++def test_the_stepping_survives_into_the_cmake_target(reported):
++    """Trimming the name to its hex part here would build the other stepping,
++    whose code objects the silicon rejects -- the opposite of the feature case,
++    which is why one split cannot serve both."""
++    assert GpuArch.cmake_gpu_target(reported) == reported
++
++
++@pytest.mark.parametrize(
++    "reported",
++    [
++        "gfx950:sramecc+:xnack-",
++        "gfx942:sramecc+:xnack-",
++        "gfx90a:sramecc+:xnack-",
++        "gfx942",
++        GFX1250,
++        GFX1250_STRICT,
++        f"{GFX1250_STRICT}:xnack-",
++    ],
++)
++def test_a_detected_name_yields_a_target_the_build_accepts(reported):
++    """Validation is an exact string match, so a near-miss is a failed configure."""
++    assert GpuArch.cmake_gpu_target(reported) in _supportedArchitecturesFromCMake()
++
++
++class _RecordingContext:
++    """An invoke context that records commands instead of running them."""
++
++    def __init__(self):
++        self.commands = []
++
++    def run(self, command, **kwargs):
++        self.commands.append(command)
++
++
++def test_build_client_configures_for_the_target_and_not_the_features(monkeypatch, tmp_path):
++    """The detection path itself, not just the helper: passing the probe's answer
++    straight to -DGPU_TARGETS is what failed CI, and nothing about the helper
++    existing prevents that on its own."""
++    pytest.importorskip("invoke")
++    tasksPath = Path(__file__).resolve().parents[3] / "tasks.py"
++    spec = importlib.util.spec_from_file_location("tensilelite_tasks", tasksPath)
++    tasks = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(tasks)
++
++    monkeypatch.setattr(tasks, "detect_gpu_arch", lambda: "gfx950:sramecc+:xnack-")
++    context = _RecordingContext()
++
++    tasks.build_client.body(
++        context, build=False, build_dir=str(tmp_path / "build"), rebuild_rocisa=False
++    )
++
++    configure = next(c for c in context.commands if c.startswith("cmake"))
++    assert "-DGPU_TARGETS=gfx950" in configure
++    assert "sramecc" not in configure
++
++
++def test_build_client_strips_features_from_an_explicit_gpu_target(monkeypatch, tmp_path):
++    """tox -e py3 forwards ``--gpu-targets $ARCH`` from get-gpu-arch; a probe
++    that still names sramecc must not reach CMake as GPU_TARGETS."""
++    pytest.importorskip("invoke")
++    tasksPath = Path(__file__).resolve().parents[3] / "tasks.py"
++    spec = importlib.util.spec_from_file_location("tensilelite_tasks", tasksPath)
++    tasks = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(tasks)
++
++    context = _RecordingContext()
++    tasks.build_client.body(
++        context,
++        build=False,
++        build_dir=str(tmp_path / "build"),
++        rebuild_rocisa=False,
++        gpu_targets="gfx942:sramecc+:xnack-",
++    )
++
++    configure = next(c for c in context.commands if c.startswith("cmake"))
++    assert "-DGPU_TARGETS=gfx942" in configure
++    assert "sramecc" not in configure
++
++
+ def test_every_device_is_reported_in_enumeration_order(rocmRoot):
+     _fakeTool(rocmRoot / "lib/llvm/bin/amdgpu-arch", "gfx950", "gfx942")
+ 
+@@ -2187,6 +2310,145 @@ def test_gfx_names_that_spell_no_version_are_not_an_error():
+         assert gfxToIsa(unparseable) is None
+ 
+ 
++def _scratch_tree(tmp_path, archs):
++    """An output directory holding this run's scratch and a sibling's, both
++    populated, so a cleanup that takes too much is visible as the sibling's
++    file disappearing."""
++    from Tensile.TensileCreateLibrary.Run import buildTmpDir, buildTmpRoot
++
++    mine = buildTmpDir(tmp_path / "Tensile", archs)
++    sibling = buildTmpRoot(tmp_path / "Tensile") / "SIBLING"
++    for d in (mine, sibling):
++        d.mkdir(parents=True)
++        (d / "kernel.s").write_text("")
++    return mine, sibling
++
++
++def test_a_solo_run_reclaims_the_whole_scratch_tree(tmp_path):
++    """Nothing else is writing here, so the tree goes whole -- which is also what
++    reclaims scratch an earlier build left under a name this run never uses."""
++    from Tensile.TensileCreateLibrary.Run import buildTmpRoot, removeScratch
++
++    mine, sibling = _scratch_tree(tmp_path, [GFX1250_STRICT])
++
++    assert removeScratch(tmp_path / "Tensile", mine) is True
++    assert not sibling.exists()
++    assert not buildTmpRoot(tmp_path / "Tensile").exists()
++
++
++def test_a_fanned_out_child_leaves_its_siblings_scratch_alone(monkeypatch, tmp_path):
++    """The whole reason the children are marked: a sibling group is assembling
++    into the same parent right now, and kernel basenames come from the ISA, so
++    taking the parent would delete files a live build is still writing."""
++    from Tensile.TensileCreateLibrary import Run
++
++    mine, sibling = _scratch_tree(tmp_path, [GFX1250_STRICT])
++    monkeypatch.setenv(Run._GROUP_BUILD_ENV, "1")
++
++    assert Run.removeScratch(tmp_path / "Tensile", mine) is True
++    assert not mine.exists()
++    assert (sibling / "kernel.s").is_file()
++    # The parent stays for whichever of the two finishes last.
++    assert Run.buildTmpRoot(tmp_path / "Tensile").is_dir()
++
++
++def test_the_last_child_out_takes_the_shared_parent(monkeypatch, tmp_path):
++    """Left behind by every child that is not last, the parent would otherwise
++    survive every fan-out as an empty directory in the output tree."""
++    from Tensile.TensileCreateLibrary import Run
++
++    mine, sibling = _scratch_tree(tmp_path, [GFX1250_STRICT])
++    shutil.rmtree(sibling)
++    monkeypatch.setenv(Run._GROUP_BUILD_ENV, "1")
++
++    assert Run.removeScratch(tmp_path / "Tensile", mine) is True
++    assert not Run.buildTmpRoot(tmp_path / "Tensile").exists()
++
++
++def test_a_run_that_wrote_no_scratch_says_so_rather_than_removing_something(tmp_path):
++    """The caller reports the absence, so it has to be distinguishable from a
++    successful removal rather than inferred from the directory being gone."""
++    from Tensile.TensileCreateLibrary.Run import buildTmpDir, removeScratch
++
++    assert removeScratch(
++        tmp_path / "Tensile", buildTmpDir(tmp_path / "Tensile", [GFX1250_STRICT])
++    ) is False
++
++
++# =========================================================================== #
++# Assembly target id. rocisa writes the .amdgcn_target directive from the ISA
++# alone, which for a stepping spells the architecture it steps from -- while the
++# build assembles it with -mcpu=<stepping>. The assembler rejects that pairing,
++# so the directive is rewritten before the file reaches it.
++# =========================================================================== #
++_DIRECTIVE = '.amdgcn_target "amdgcn-amd-amdhsa--{}"'
++
++
++def test_the_target_id_is_rewritten_to_the_stepping(tmp_path):
++    """Without this the assembler refuses the file outright: the base target id
++    names a processor that is not valid for the stepping's subarch."""
++    from Tensile.TensileCreateLibrary.Run import _alignAmdgcnTargetToStepping
++
++    asm = tmp_path / "k0.s"
++    asm.write_text(f"{_DIRECTIVE.format(GFX1250)}\n  s_endpgm\n")
++
++    _alignAmdgcnTargetToStepping(asm, ISA_GFX1250, GFX1250_STRICT)
++
++    assert _DIRECTIVE.format(GFX1250_STRICT) in asm.read_text()
++    assert _DIRECTIVE.format(GFX1250) not in asm.read_text()
++    # Only the directive is touched; the kernel body is not this function's.
++    assert "s_endpgm" in asm.read_text()
++
++
++def test_an_ordinary_architectures_assembly_is_left_byte_identical(tmp_path):
++    """Every architecture but a stepping already agrees with the ISA-derived
++    name, so this must be provably inert for them -- it runs on every .s the
++    build emits."""
++    from Tensile.TensileCreateLibrary.Run import _alignAmdgcnTargetToStepping
++
++    isa = gfxToIsa("gfx942")
++    asm = tmp_path / "k0.s"
++    original = f"{_DIRECTIVE.format('gfx942')}\n  s_endpgm\n"
++    asm.write_text(original)
++    before = asm.stat().st_mtime_ns
++
++    _alignAmdgcnTargetToStepping(asm, isa, "gfx942")
++
++    assert asm.read_text() == original
++    # Not rewritten with identical content either: the file is not reopened at
++    # all, so a build that only reassembles what changed is not invalidated.
++    assert asm.stat().st_mtime_ns == before
++
++
++def test_assembly_with_no_target_directive_is_left_alone(tmp_path):
++    """The directive is rocisa's to emit, and a helper kernel that carries none
++    must not acquire one -- nor make the rewrite an error."""
++    from Tensile.TensileCreateLibrary.Run import _alignAmdgcnTargetToStepping
++
++    asm = tmp_path / "helper.s"
++    asm.write_text("  s_endpgm\n")
++
++    _alignAmdgcnTargetToStepping(asm, ISA_GFX1250, GFX1250_STRICT)
++
++    assert asm.read_text() == "  s_endpgm\n"
++
++
++def test_only_the_first_target_directive_is_rewritten(tmp_path):
++    """One .s is one code object with one target. A second directive means the
++    file is not what this rewrite assumes, and silently retargeting all of them
++    would turn that into a code object claiming a target it was not built for."""
++    from Tensile.TensileCreateLibrary.Run import _alignAmdgcnTargetToStepping
++
++    asm = tmp_path / "k0.s"
++    asm.write_text(f"{_DIRECTIVE.format(GFX1250)}\n{_DIRECTIVE.format(GFX1250)}\n")
++
++    _alignAmdgcnTargetToStepping(asm, ISA_GFX1250, GFX1250_STRICT)
++
++    text = asm.read_text()
++    assert text.count(_DIRECTIVE.format(GFX1250_STRICT)) == 1
++    assert text.count(_DIRECTIVE.format(GFX1250)) == 1
++
++
+ # =========================================================================== #
+ # Partitioning. One run cannot name two architectures sharing an ISA, so the
+ # build asks isaCollisionFreeGroups how many runs it takes to cover what was
+@@ -2439,6 +2701,77 @@ def test_a_failed_group_is_not_swallowed(monkeypatch):
+         Run._buildGroupsSeparately([[GFX1250], [GFX1250_STRICT]], -1)
+ 
+ 
++def test_the_attached_form_of_the_jobs_flag_is_replaced_too(monkeypatch):
++    """``-j8`` is one token, so the scan that drops ``-j 8`` does not see it.
++    Left in, it would be the count the child actually ran with -- the whole
++    request, per group, on a machine already running both."""
++    argv = ["--architecture=gfx1250;gfx1250-strict", "-j8", "/src", "/out", "HIP"]
++    spawned = _spawnedCommands(
++        monkeypatch, [[GFX1250], [GFX1250_STRICT]], argv=argv, requestedJobs=8
++    )
++
++    for cmd, _ in spawned:
++        assert "-j8" not in cmd
++        assert "--jobs=4" in cmd
++
++
++def test_a_number_is_not_mistaken_for_the_jobs_flag(monkeypatch):
++    """The attached form is recognized by its digits, so a token that merely
++    starts with ``-j`` and is not a count has to survive: dropping it would
++    silently unset an option the caller asked for."""
++    argv = ["--architecture=gfx1250;gfx1250-strict", "-jit", "/src", "/out", "HIP"]
++    spawned = _spawnedCommands(monkeypatch, [[GFX1250_STRICT]], argv=argv)
++
++    assert "-jit" in spawned[0][0]
++
++
++def test_windows_caps_the_thread_count_it_shares_out(monkeypatch):
++    """The count is split among the groups, so it has to start from what this
++    process could actually wait on. The Windows scheduler bounds that at 61
++    handles, which CPUThreadCount already respects."""
++    from Tensile.TensileCreateLibrary import Run
++
++    monkeypatch.setattr(Run.os, "name", "nt")
++    monkeypatch.setattr(Run.os, "cpu_count", lambda: 128)
++
++    assert Run._cpuCount() == 61
++
++
++def test_a_child_still_running_is_stopped_when_a_spawn_fails(monkeypatch):
++    """A spawn can fail for reasons that have nothing to do with the build (fork
++    under memory pressure). The groups already started would otherwise keep
++    writing into the output directory after the parent has given up."""
++    from Tensile.TensileCreateLibrary import Run
++
++    terminated = []
++
++    class _Running:
++        def poll(self):
++            return None
++
++        def terminate(self):
++            terminated.append(self)
++
++        def wait(self):
++            return 0
++
++    started = iter([_Running(), OSError("cannot fork")])
++
++    def _popen(cmd, env=None):
++        nxt = next(started)
++        if isinstance(nxt, OSError):
++            raise nxt
++        return nxt
++
++    monkeypatch.setattr(Run.sys, "argv", ["TensileCreateLibrary"] + PARENT_ARGV)
++    monkeypatch.setattr(Run.subprocess, "Popen", _popen)
++
++    with pytest.raises(OSError):
++        Run._buildGroupsSeparately([[GFX1250], [GFX1250_STRICT]], -1)
++
++    assert len(terminated) == 1
++
++
+ def test_the_architecture_flag_is_replaced_whatever_its_spelling(monkeypatch):
+     """Replaced, not merely overridden. argparse's last-wins would pick the
+     appended one either way, so what this pins is that the child's target does
+@@ -2455,7 +2788,7 @@ def test_the_architecture_flag_is_replaced_whatever_its_spelling(monkeypatch):
+ 
+ 
+ def _run_createlibrary_to_writes(
+-    monkeypatch, tmp_path, arch, masterKey, mappingValue, shardNames=()
++    monkeypatch, tmp_path, arch, masterKey, mappingValue, shardNames=(), keepBuildTmp=True
+ ):
+     """Drives ``run()`` all the way through the per-arch master/mapping write loops
+     with the heavy steps stubbed, capturing every ``LibraryIO.write`` path and the
+@@ -2465,6 +2798,10 @@ def _run_createlibrary_to_writes(
+     ``shardNames`` populates the master library's ``lazyLibraries`` so the shard
+     write loop (``writeMsl``) actually runs; the ``ParallelMap2`` stub invokes the
+     callable rather than swallowing it, so the shard routing is exercised too.
++
++    ``keepBuildTmp`` is the parsed ``--keep-build-tmp``; set it False to reach the
++    scratch cleanup, which the stubbed writer stands in for by creating the
++    directory a real one would have filled.
+     """
+     from unittest.mock import MagicMock
+ 
+@@ -2483,7 +2820,12 @@ def _run_createlibrary_to_writes(
+     def _wsk(*args, **kwargs):
+         bound = writeSignature.bind(*args, **kwargs)
+         bound.apply_defaults()
+-        captured["wsk"]["cmdlineArchs"] = bound.arguments["cmdlineArchs"]
++        cmdlineArchs = bound.arguments["cmdlineArchs"]
++        captured["wsk"]["cmdlineArchs"] = cmdlineArchs
++        scratch = RunModule.buildTmpDir(bound.arguments["outputPath"], cmdlineArchs)
++        scratch.mkdir(parents=True, exist_ok=True)
++        (scratch / "kernel.s").write_text("")
++        captured["scratch"] = scratch
+         return (0, [], [])
+ 
+     def _glds(logicFiles, *a, **kw):
+@@ -2517,7 +2859,7 @@ def _run_createlibrary_to_writes(
+             "LogicFilter": "*",
+             "DisableAsmComments": False,
+             "UseCompression": False,
+-            "KeepBuildTmp": True,
++            "KeepBuildTmp": keepBuildTmp,
+         },
+     )
+     monkeypatch.setattr(RunModule, "setVerbosity", lambda *a, **kw: None)
+@@ -2677,6 +3019,87 @@ def test_ordinary_build_output_paths_are_unchanged(
+     assert captured["wsk"]["cmdlineArchs"] == ["gfx942"]
+ 
+ 
++def test_a_solo_build_clears_the_scratch_it_filled(
++    monkeypatch, tmp_path, restore_global_parameters
++):
++    """The cleanup has to find what the writer made. Both name the directory
++    through buildTmpDir, but the writer runs before the architecture list is
++    narrowed to the supported subset -- narrowing drops the stepping, which would
++    rename the directory and leave the real one behind."""
++    from Tensile.TensileCreateLibrary.Run import buildTmpRoot
++
++    captured = _run_createlibrary_to_writes(
++        monkeypatch,
++        tmp_path,
++        GFX1250_STRICT,
++        GFX1250_STRICT,
++        "prefix_" + GFX1250_STRICT,
++        keepBuildTmp=False,
++    )
++
++    assert not captured["scratch"].exists()
++    assert not buildTmpRoot(tmp_path / "out").exists()
++
++
++def test_a_build_asked_to_keep_its_scratch_keeps_it(
++    monkeypatch, tmp_path, restore_global_parameters
++):
++    """--keep-build-tmp exists to be able to look at the .s files afterwards, so
++    the stepping rename must not cost the flag its meaning."""
++    captured = _run_createlibrary_to_writes(
++        monkeypatch, tmp_path, GFX1250_STRICT, GFX1250_STRICT, "prefix_" + GFX1250_STRICT
++    )
++
++    assert (captured["scratch"] / "kernel.s").is_file()
++
++
++def test_a_fanned_out_build_clears_only_its_own_scratch(
++    monkeypatch, tmp_path, restore_global_parameters
++):
++    """End to end, through run() rather than the cleanup alone: this is the case
++    where a sibling process is writing into the same parent, and a build that
++    reclaimed the parent would delete the other stepping's kernels mid-build."""
++    from Tensile.TensileCreateLibrary import Run
++
++    sibling = Run.buildTmpRoot(tmp_path / "out") / "OUT"
++    sibling.mkdir(parents=True)
++    (sibling / "kernel.s").write_text("")
++    monkeypatch.setenv(Run._GROUP_BUILD_ENV, "1")
++
++    captured = _run_createlibrary_to_writes(
++        monkeypatch,
++        tmp_path,
++        GFX1250_STRICT,
++        GFX1250_STRICT,
++        "prefix_" + GFX1250_STRICT,
++        keepBuildTmp=False,
++    )
++
++    assert not captured["scratch"].exists()
++    assert (sibling / "kernel.s").is_file()
++
++
++def test_the_scratch_an_older_layout_left_is_reclaimed(
++    monkeypatch, tmp_path, restore_global_parameters
++):
++    """A build_tmp beside the output directory is where an earlier layout put its
++    scratch; it is nobody's now, and left alone it never goes away."""
++    legacy = tmp_path / "library" / "build_tmp"
++    legacy.mkdir(parents=True)
++    (legacy / "kernel.s").write_text("")
++
++    _run_createlibrary_to_writes(
++        monkeypatch,
++        tmp_path,
++        GFX1250_STRICT,
++        GFX1250_STRICT,
++        "prefix_" + GFX1250_STRICT,
++        keepBuildTmp=False,
++    )
++
++    assert not legacy.exists()
++
++
+ # =========================================================================== #
+ # Toolchain destination routing. Code objects and helper kernels are fanned out
+ # into library/<arch>/ by the assembly and source builders. The assembly builder
+diff --git a/projects/hipblaslt/tensilelite/tasks.py b/projects/hipblaslt/tensilelite/tasks.py
+index 8d9c28d6e6..7446a231fb 100644
+--- a/projects/hipblaslt/tensilelite/tasks.py
++++ b/projects/hipblaslt/tensilelite/tasks.py
+@@ -22,13 +22,34 @@ from Tensile.RocisaStatus import _rocisa_install_status
+ # Architecture detection, steppings included, lives in the packaged Tensile tree
+ # (invoke-free) so CI test artifacts can exercise it directly; these @task
+ # wrappers only expose it on the invoke command line.
+-from Tensile.GpuArch import detect_gpu_arch
++from Tensile.GpuArch import cmake_gpu_target, detect_gpu_arch
+ 
+ 
+ def _cmake_bool(value):
+     return "ON" if value else "OFF"
+ 
+ 
++def _cmake_gpu_targets(spec):
++    """``GPU_TARGETS`` for cmake: keep steppings, drop colon-delimited features.
++
++    Invoke accepts a comma-separated list. Each entry is passed through
++    ``cmake_gpu_target`` so ``gfx942:sramecc+:xnack-`` (what tox forwards from
++    an unstripped probe) becomes ``gfx942``.
++    """
++    return ",".join(
++        cmake_gpu_target(part.strip()) for part in spec.split(",") if part.strip()
++    )
++
++
++def _resolve_gpu_targets(spec):
++    if spec is None:
++        detected = detect_gpu_arch()
++        if not detected:
++            return None, None
++        return detected, _cmake_gpu_targets(detected)
++    return None, _cmake_gpu_targets(spec)
++
++
+ def _detect_rocm():
+     """Detect ROCm installation path.
+ 
+@@ -53,7 +74,9 @@ def _detect_rocm():
+ 
+ @task
+ def get_gpu_arch(c):
+-    print(detect_gpu_arch())
++    detected = detect_gpu_arch()
++    if detected:
++        print(cmake_gpu_target(detected))
+ 
+ 
+ @task(
+@@ -202,10 +225,12 @@ def build_client(
+     if enable_asan and enable_tsan:
+         raise Exit("Error: ASAN and TSAN cannot be enabled simultaneously", code=1)
+ 
+-    if gpu_targets is None:
+-        gpu_targets = detect_gpu_arch()
+-        if not gpu_targets:
+-            raise Exit("Error: No GPU detected and no gpu_targets provided", code=1)
++    detected, gpu_targets = _resolve_gpu_targets(gpu_targets)
++    if not gpu_targets:
++        raise Exit("Error: No GPU detected and no gpu_targets provided", code=1)
++    if detected is not None and detected != gpu_targets:
++        print(f"warning: No GPU targets specified. Detected {detected}, using: {gpu_targets}")
++    elif detected is not None:
+         print(f"warning: No GPU targets specified. Detected and using: {gpu_targets}")
+ 
+     if rocm_path:
+@@ -323,11 +348,10 @@ def build_coverage(
+     Builds rocisa, tensilelite-host, and client with LLVM coverage flags.
+     Run tests with tox -e coverage-cpp to generate coverage reports.
+     """
+-    if gpu_targets is None:
+-        gpu_targets = detect_gpu_arch()
+-        if not gpu_targets:
+-            print("Error: No GPU detected and no gpu_targets provided.")
+-            return
++    _, gpu_targets = _resolve_gpu_targets(gpu_targets)
++    if not gpu_targets:
++        print("Error: No GPU detected and no gpu_targets provided.")
++        return
+ 
+     if clean and os.path.exists(build_dir):
+         c.run(f"rm -rf {shlex.quote(build_dir)}")
+-- 
+2.43.0
+

@@ -1,0 +1,507 @@
+From d008b05bdda191a869a08b319af4dabf884c4bf7 Mon Sep 17 00:00:00 2001
+From: George Tseng <george.tseng@amd.com>
+Date: Tue, 15 Sep 2026 10:29:10 +0000
+Subject: [PATCH] hipblaslt: stop the build detecting a bare gfx1250 on strict
+ silicon
+
+_detectArchNames asks a device enumerator first so that a target.lst or an
+HSA_OVERRIDE_GFX_VERSION pin still wins, and took that answer verbatim.
+As of ROCm 10.2 amdgpu-arch -- the default enumerator -- is a trampoline
+that execs offload-arch, which names an agent from the KFD node's
+gfx_target_version alone and loads neither ROCr nor HIP. Both gfx1250
+steppings publish 120500 there, since the revision lives in the node's
+capability bits 25:22 that offload-arch never reads, so an A0 part came
+back as a bare "gfx1250" and the detect_gpu_archs fallback never ran.
+Configs that name no ISA take their target from here, so on strict
+silicon they built and tuned as base. Nothing failed to say so: a base
+code object still loads and still runs on A0, the strict hazard
+workarounds were simply absent, and the only sign was the architecture in
+the artifact path. Route the enumerator's answer through
+restore_steppings.
+
+ROCr does apply the revision rule and rocminfo reports through ROCr, so
+it still answers gfx1250-strict. Letting rocminfo only ever lengthen a
+name keeps each tool doing what it is good for: rocminfo needs read-write
+/dev/kfd, so a caller outside the render group gets nothing from it and
+has to keep enumerating with amdgpu-arch. A base rocminfo reports under
+more than one spelling is left alone rather than guessed at, since a box
+holding both steppings has no single right answer to substitute, and a
+base the enumeration already spells with a stepping is left alone for the
+same reason from the other direction -- that answer came from a tool that
+can tell the two apart on this box, so the device rocminfo happens not to
+be reporting would otherwise be renamed to its neighbour's stepping.
+
+Three testenvs had been adding --gpu-targets to the Tensile options
+whenever the detected name ended in -strict. That covered for the
+detection defect above while causing one of its own, forcing the strict
+stepping onto configs pinned to other ISAs; with detection fixed it is
+both unnecessary and wrong, so all three are gone. Adding --gpu-targets to
+make a strict test pass is a symptom of this bug rather than a fix for it.
+The same three testenvs exported TENSILE_ARCHITECTURE from the detected
+name, which would put an unnormalized string back into Tensile downstream
+of the normalization below. Nothing else reads the variable, so those are
+gone too.
+
+HSA_DISABLE_GFX12_STRICT picks which stepping the runtime reports on a
+revision-0 part, and tox does not inherit a variable that is not listed,
+so it read as unset inside the testenv -- which on ROCm 10.2 means the
+base one. That name drives both test selection through skip-<arch> and
+the client build, so dropping it did not narrow the run, it ran the base
+half of the corpus on strict silicon and reported green.
+
+An installed ROCm ships libtensilelite-host.so.1 too, and $ROCM_PATH/lib
+ahead of the build directory let that copy win. The two are not
+interchangeable: CMakeLists.txt defines TENSILE_YAML or TENSILE_MSGPACK
+and never both, so a msgpack-only host library has no reader for the YAML
+libraries Tensile writes by default. Every hardware config then failed at
+once, the client dying on "Failed to load solution library" before it ran
+a single GEMM, so put the build directory first.
+
+build-client only overrides the compilers when it is given a ROCm path and
+has no detection fallback of its own, so CMake's search won and found
+/opt/rocm's amdclang++ -- which rejects gfx1250-strict outright on a host
+whose system ROCm predates the target. Pin $ROCM_PATH at each call site.
+The quotes are escaped because tox parses the command with shlex and would
+otherwise strip them before the inner shell ever sees them.
+
+The test-side detection called rocm_agent_enumerator, which parses
+rocminfo with a capture group ending at gfx\d+ and so truncates a suffix
+in exactly the way described above. That list is what config_helpers.
+configMarks keys its skip-<arch> marks off, and the two spellings of a
+config carry mirrored marks -- a strict config says skip-gfx1250, a base
+config says skip-gfx1250-strict. Handing that comparison a truncated name
+therefore reverses the selection rather than narrowing it. Read through
+Tensile.GpuArch instead, the same detection the build uses, with
+TENSILE_ROCM_PATH applied around the call and taken back out again so the
+test-specific override does not leak into anything the tests launch.
+
+That detection answers with a configuration rather than an architecture,
+so the answer needs normalizing before a mark name is built from it:
+amdgpu-arch names a gfx90a agent gfx90a:sramecc+:xnack-, listing the
+target features that agent happens to have, while a mark is written for
+the architecture. Since configMarks builds its names by concatenation --
+"skip-%s" % arch -- an unnormalized answer looks for
+skip-gfx90a:sramecc+:xnack- and finds nothing any config file spells,
+unskipping every config pinned off that architecture: 446 tests on
+gfx90a, 380 on gfx942, 324 on gfx950, each announced beforehand by an
+Unknown pytest.mark warning carrying the feature string that nobody reads
+as an error. Route the answer through cmake_gpu_target, the same
+normalization the build spells GPU_TARGETS with, so only the
+colon-delimited features come off. The hyphenated stepping stays, for the
+mirrored-mark reason above: truncating gfx1250-strict to gfx1250 does not
+narrow that selection either, it reverses it. The enumerator this
+replaces had been taking the features off as a side effect of taking the
+stepping off, which is why both axes have to be spelled out here.
+
+_rocmShimReporting shims the detection tools through a fake ROCM_PATH so a
+test cannot fall through to PATH and answer from the machine running it.
+rocminfo is now consulted to restore a stepping, so it needs shimming for
+the same reason; left out, it reported this machine's stepping onto
+whatever architecture the caller asked for. It is the one tool here asked
+in its own format, read for indented Name: lines rather than bare ones.
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+(cherry picked from commit 08368dd15d787319a10bbd702fcc142ad251584d)
+---
+ .../Tensile/Common/Architectures.py           |  13 ++-
+ .../hipblaslt/tensilelite/Tensile/GpuArch.py  | 100 ++++++++++++++++--
+ .../Tensile/Tests/gpu_detection.py            |  70 ++++++++----
+ .../Tensile/Tests/unit/test_arch_steppings.py |  14 ++-
+ projects/hipblaslt/tensilelite/tox.ini        |  42 +++-----
+ 5 files changed, 181 insertions(+), 58 deletions(-)
+
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Common/Architectures.py b/projects/hipblaslt/tensilelite/Tensile/Common/Architectures.py
+index 105861ce39..3417bd5454 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Common/Architectures.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Common/Architectures.py
+@@ -29,7 +29,7 @@ from typing import List, Optional, Set, Tuple, Union, NamedTuple, Dict
+ 
+ from .Types import IsaVersion
+ from .Utilities import print1
+-from ..GpuArch import detect_gpu_archs
++from ..GpuArch import detect_gpu_archs, restore_steppings
+ 
+ import rocisa
+ 
+@@ -519,8 +519,17 @@ def _detectArchNames(detectionTool) -> List[str]:
+     What steppings changed is not the order but what survives the answer: the
+     name used to be rebuilt from its ISA, and gfx1250-strict shares (12,5,0)
+     with gfx1250, so the rebuild silently reported the wrong stepping.
++
++    The enumerator's answer goes through ``restore_steppings`` because asking it
++    first is not free: as of ROCm 10.2 amdgpu-arch -- the default enumerator --
++    names an A0 gfx1250 part "gfx1250", so the enumerator always answered and
++    the ``detect_gpu_archs`` fallback never ran. Configs that name no ISA get
++    their target from here, so a strict part built and tuned as base, and the
++    only sign was the arch in the artifact path.
+     """
+-    return _fromEnumerator(detectionTool) or _supportedArchNames(detect_gpu_archs())
++    return restore_steppings(_fromEnumerator(detectionTool)) or _supportedArchNames(
++        detect_gpu_archs()
++    )
+ 
+ 
+ def _fromEnumerator(detectionTool) -> List[str]:
+diff --git a/projects/hipblaslt/tensilelite/Tensile/GpuArch.py b/projects/hipblaslt/tensilelite/Tensile/GpuArch.py
+index 50d0e381bc..08bbaa9eec 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/GpuArch.py
++++ b/projects/hipblaslt/tensilelite/Tensile/GpuArch.py
+@@ -100,33 +100,113 @@ def _real_archs(names):
+     return [name for name in names if name and name != _PLACEHOLDER_ARCH]
+ 
+ 
++def _base_arch(name):
++    """``name`` without its stepping suffix or its target features.
++
++    A stepping is hyphenated onto the base name (``gfx1250-strict``) while
++    features are colon-delimited and may carry hyphens of their own
++    (``gfx950:sramecc+:xnack-``), so the base ends at whichever comes first.
++    """
++    return name.partition(":")[0].split("-", 1)[0]
++
++
++def _rocminfo_archs(rocminfo):
++    """The agent names rocminfo reports, or ``[]`` if it is absent or fails.
++
++    rocminfo needs read-write /dev/kfd, so a caller outside the render group
++    gets the empty list rather than an error -- which is why it supplements
++    amdgpu-arch here instead of replacing it.
++    """
++    if not rocminfo:
++        return []
++    output = _run([rocminfo])
++    if not output:
++        return []
++    return _real_archs(_ROCMINFO_AGENT_RE.findall(output))
++
++
++def _restore_steppings(archs, rocminfo_archs):
++    """``archs``, with any stepping suffix only rocminfo reports put back.
++
++    amdgpu-arch stopped being able to report a stepping in ROCm 10.2: it is now
++    a trampoline that execs offload-arch, which names an agent from the KFD
++    node's ``gfx_target_version`` alone and loads neither ROCr nor HIP. Both
++    gfx1250 steppings publish 120500 there -- the revision lives in the node's
++    ``capability`` bits 25:22, which offload-arch never reads -- so an A0 part
++    comes back as a bare "gfx1250". ROCr does apply that rule, and rocminfo
++    reports through ROCr, so it still answers "gfx1250-strict".
++
++    Letting rocminfo only ever *lengthen* a name keeps each tool doing what it
++    is good for: amdgpu-arch still enumerates, and rocminfo contributes a suffix
++    only for a base the two already agree on. A base rocminfo reports under more
++    than one spelling is left alone rather than guessed at, since a box holding
++    both steppings has no single right answer to substitute.
++
++    A base ``archs`` itself already spells with a stepping is left alone for the
++    same reason from the other direction: that answer came from a tool that can
++    tell the two apart on this box, so there is nothing to restore, and the
++    device rocminfo happens not to be reporting would otherwise be renamed to
++    its neighbour's stepping.
++    """
++    by_base = {}
++    for name in rocminfo_archs:
++        by_base.setdefault(_base_arch(name), set()).add(name.partition(":")[0])
++
++    told_apart = {
++        _base_arch(name) for name in archs if _base_arch(name) != name.partition(":")[0]
++    }
++
++    restored = []
++    for arch in archs:
++        head, separator, features = arch.partition(":")
++        unrestorable = head != _base_arch(head) or head in told_apart
++        candidates = set() if unrestorable else by_base.get(head, set())
++        if len(candidates) == 1:
++            (only,) = candidates
++            if only.startswith(head + "-"):
++                head = only
++        restored.append(head + separator + features)
++    return restored
++
++
++def restore_steppings(archs):
++    """``archs``, with any stepping suffix only rocminfo reports put back.
++
++    For callers holding an enumeration this module did not produce. Tensile's
++    build path is one: it asks a device enumerator first so that a ``target.lst``
++    or ``HSA_OVERRIDE_GFX_VERSION`` pin still wins, and every enumerator it can
++    be pointed at truncates a stepping the same way amdgpu-arch does, so the
++    answer needs the same cross-check before it names a compiler target.
++    """
++    return _restore_steppings(archs, _rocminfo_archs(_tool(_ROCMINFO_RELPATHS)))
++
++
+ def _probe():
+     """``(archs, any_tool_found)`` from the first tool that answers.
+ 
+     Deliberately does not use rocm_agent_enumerator: it parses rocminfo with a
+     capture group that ends at ``gfx\\d+``, so it truncates a suffix and answers
+     "gfx1250" for an agent rocminfo names "gfx1250-strict" -- which would build
+-    the wrong stepping's kernels without a word. amdgpu-arch and rocminfo both
+-    report the full name.
++    the wrong stepping's kernels without a word. amdgpu-arch truncates the same
++    way as of ROCm 10.2, so its answer is cross-checked against rocminfo, the
++    one local source that applies the revision rule; see ``_restore_steppings``.
+ 
+     The second element separates "no ROCm here" from "ROCm is here but reported
+     nothing usable", which the callers report differently.
+     """
+     amdgpu_arch = _tool(_AMDGPU_ARCH_RELPATHS)
++    rocminfo = _tool(_ROCMINFO_RELPATHS)
++
+     if amdgpu_arch:
+         output = _run([amdgpu_arch])
+         if output:
+             archs = _real_archs(_ARCH_LINE_RE.findall(output))
+             if archs:
+-                return archs, True
++                return _restore_steppings(archs, _rocminfo_archs(rocminfo)), True
+ 
+-    rocminfo = _tool(_ROCMINFO_RELPATHS)
+-    if rocminfo:
+-        output = _run([rocminfo])
+-        if output:
+-            archs = _real_archs(_ROCMINFO_AGENT_RE.findall(output))
+-            if archs:
+-                return archs, True
++    archs = _rocminfo_archs(rocminfo)
++    if archs:
++        return archs, True
+ 
+     return [], bool(amdgpu_arch or rocminfo)
+ 
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Tests/gpu_detection.py b/projects/hipblaslt/tensilelite/Tensile/Tests/gpu_detection.py
+index 3e27a28c36..bc2489a77a 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Tests/gpu_detection.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Tests/gpu_detection.py
+@@ -26,12 +26,57 @@
+ GPU architecture detection for TensileLite unit and common tests.
+ """
+ 
++import contextlib
+ import os
+-import subprocess
++
++from Tensile.GpuArch import cmake_gpu_target, detect_gpu_archs
++
++
++@contextlib.contextmanager
++def _rocmPathFromTestOverride():
++    """``TENSILE_ROCM_PATH`` standing in for ``ROCM_PATH`` inside the block.
++
++    ``Tensile.GpuArch`` reads ``ROCM_PATH``, the variable the build uses. The
++    tests keep their own override so a run can probe a different install without
++    moving the one the build points at, so it is applied here and taken back
++    out again rather than leaking into anything the tests go on to launch.
++    """
++    override = os.environ.get("TENSILE_ROCM_PATH")
++    if not override:
++        yield
++        return
++
++    previous = os.environ.get("ROCM_PATH")
++    os.environ["ROCM_PATH"] = override
++    try:
++        yield
++    finally:
++        if previous is None:
++            del os.environ["ROCM_PATH"]
++        else:
++            os.environ["ROCM_PATH"] = previous
+ 
+ 
+ def get_available_archs() -> list[str]:
+-    """Get list of available GPU architectures via rocm_agent_enumerator.
++    """Get list of available GPU architectures, one entry per distinct name.
++
++    Reads through ``Tensile.GpuArch``, the same detection the build uses, so a
++    stepping suffix survives. It has to: ``config_helpers.configMarks`` keys its
++    ``skip-<arch>`` marks off this list, and the two spellings of a config carry
++    mirrored marks -- a strict config says ``skip-gfx1250``, a base config says
++    ``skip-gfx1250-strict``. Handing that comparison a truncated ``gfx1250`` for
++    an agent named ``gfx1250-strict`` therefore does not narrow the selection,
++    it reverses it: every base config runs against a strict client and every
++    strict config is skipped. ``rocm_agent_enumerator``, which this used to
++    call, truncates in exactly that way.
++
++    The target features go, through the same ``cmake_gpu_target`` the build
++    spells ``GPU_TARGETS`` with. A detection tool answers with a configuration,
++    so amdgpu-arch names a gfx90a agent ``gfx90a:sramecc+:xnack-``, and a mark
++    is written for the architecture rather than for one agent's features:
++    ``skip-gfx90a`` never matches ``skip-gfx90a:sramecc+:xnack-``, so keeping
++    them would unskip every config pinned off this architecture. Only the
++    colon-delimited features come off; the hyphenated stepping stays.
+ 
+     Environment variable priority:
+         1. TENSILE_ROCM_PATH (test-specific override)
+@@ -39,24 +84,11 @@ def get_available_archs() -> list[str]:
+         3. /opt/rocm (default)
+ 
+     Returns:
+-        List of unique gfx architecture strings (e.g. ["gfx950"]).
+-        Returns empty list if rocm_agent_enumerator is not found or fails.
++        List of unique gfx architecture strings (e.g. ["gfx1250-strict"]).
++        Returns empty list if no detection tool is found or all of them fail.
+     """
+-    rocmpath = os.environ.get(
+-        "TENSILE_ROCM_PATH", os.environ.get("ROCM_PATH", "/opt/rocm")
+-    )
+-    enumerator = os.path.join(rocmpath, "bin", "rocm_agent_enumerator")
+-    if not os.path.exists(enumerator):
+-        return []
+-    try:
+-        output = subprocess.check_output([enumerator, "-t", "GPU"])
+-        return list(dict.fromkeys(
+-            line.strip()
+-            for line in output.decode().splitlines()
+-            if line.strip() and "gfx000" not in line
+-        ))
+-    except (FileNotFoundError, subprocess.CalledProcessError):
+-        return []
++    with _rocmPathFromTestOverride():
++        return list(dict.fromkeys(map(cmake_gpu_target, detect_gpu_archs())))
+ 
+ 
+ def has_arch(target: str) -> bool:
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_arch_steppings.py b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_arch_steppings.py
+index 6e19f23d7e..bd5c88064f 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_arch_steppings.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_arch_steppings.py
+@@ -3380,12 +3380,22 @@ def _rocmShimReporting(tmp_path, arch):
+     PATH and answer from the machine running the test. The tools are shimmed
+     through ROCM_PATH rather than PATH because both resolvers look under the
+     ROCm install first; everything else the script needs is still found on PATH.
++
++    rocminfo is shimmed for the same reason, and is the one tool here that is
++    asked in its own format: it is consulted to put back a stepping the other
++    two truncate, and it is read for indented ``Name:`` lines rather than bare
++    ones. Left out, it would report this machine's stepping onto whatever
++    architecture the caller asked for.
+     """
+     root = tmp_path / "rocm"
+-    for relative in ("bin/rocm_agent_enumerator", "lib/llvm/bin/amdgpu-arch"):
++    for relative, body in (
++        ("bin/rocm_agent_enumerator", f"echo {arch}"),
++        ("lib/llvm/bin/amdgpu-arch", f"echo {arch}"),
++        ("bin/rocminfo", f'echo "  Name:                    {arch}"'),
++    ):
+         tool = root / relative
+         tool.parent.mkdir(parents=True, exist_ok=True)
+-        tool.write_text(f"#!/bin/sh\necho {arch}\n")
++        tool.write_text(f"#!/bin/sh\n{body}\n")
+         tool.chmod(tool.stat().st_mode | stat.S_IEXEC)
+     return root
+ 
+diff --git a/projects/hipblaslt/tensilelite/tox.ini b/projects/hipblaslt/tensilelite/tox.ini
+index 0f26d87eee..a5cddd7258 100644
+--- a/projects/hipblaslt/tensilelite/tox.ini
++++ b/projects/hipblaslt/tensilelite/tox.ini
+@@ -26,11 +26,20 @@ deps =
+     invoke
+ setenv =
+     ROCM_PATH = {env:ROCM_PATH:/opt/rocm}
+-    LD_LIBRARY_PATH = {env:ROCM_PATH:/opt/rocm}/lib:{env:LD_LIBRARY_PATH:}
++    # The client's build dir has to come first. An installed ROCm also ships
++    # libtensilelite-host.so.1, and that copy is msgpack-only, so it cannot read
++    # the YAML libraries Tensile writes by default. Let it win and every
++    # hardware config fails at once with "Failed to load solution library".
++    LD_LIBRARY_PATH = {toxinidir}/build_tmp/tensilelite:{env:ROCM_PATH:/opt/rocm}/lib:{env:LD_LIBRARY_PATH:}
+     TENSILE_CLIENT_STATIC = {env:TENSILE_CLIENT_STATIC:}
+     TENSILELITE_CLIENT_ARGS = {env:TENSILELITE_CLIENT_ARGS:}
+     TENSILE_NUM_PYTEST_WORKERS = {env:TENSILE_NUM_PYTEST_WORKERS:4}
+ passenv =
++    ; Picks which stepping the runtime reports on a revision-0 gfx1250 part, and
++    ; on ROCm 10.2 unset means the base one. That name drives both test selection
++    ; (through skip-<arch>) and the client build, so dropping it here does not
++    ; narrow the run -- it runs the base half of the corpus on strict silicon.
++    HSA_DISABLE_GFX12_STRICT
+     ; FFM variables
+     HSA_MODEL_TOPOLOGY
+     HSA_MODEL_TOML
+@@ -50,12 +59,9 @@ commands =
+     pytest -v --basetemp={envtmpdir} --junit-xml={toxinidir}/rocisa_tests.xml --junit-prefix=rocisa --color=yes -n {env:TENSILE_NUM_PYTEST_WORKERS:4} {toxinidir}/rocisa/test
+     pip install pytest-cov
+     sh -c "ARCH=$(invoke get-gpu-arch); \
+-          export TENSILE_ARCHITECTURE=\$ARCH; \
+-          EXTRA_TENSILE_OPTS=; \
+-          case $ARCH in *-strict) EXTRA_TENSILE_OPTS=--tensile-options=--gpu-targets,$ARCH;; esac; \
+           export TENSILELITE_CLIENT_ARGS='{env:TENSILELITE_CLIENT_ARGS:} --gpu-targets '$ARCH; \
+-          invoke build-client --build-dir {toxinidir}/build_tmp $TENSILELITE_CLIENT_ARGS || exit $?; \
+-          pytest -v --basetemp={envtmpdir} --junit-xml={toxinidir}/python_tests.xml --junit-prefix={envname} --color=yes -n $TENSILE_NUM_PYTEST_WORKERS --prebuilt-client={toxinidir}/build_tmp/tensilelite/client/tensilelite-client --global-parameters CheckASMCodeSize=True $EXTRA_TENSILE_OPTS {toxinidir}/Tensile/Tests {posargs}; \
++          invoke build-client --build-dir {toxinidir}/build_tmp --rocm-path \"$ROCM_PATH\" $TENSILELITE_CLIENT_ARGS || exit $?; \
++          pytest -v --basetemp={envtmpdir} --junit-xml={toxinidir}/python_tests.xml --junit-prefix={envname} --color=yes -n $TENSILE_NUM_PYTEST_WORKERS --prebuilt-client={toxinidir}/build_tmp/tensilelite/client/tensilelite-client --global-parameters CheckASMCodeSize=True {toxinidir}/Tensile/Tests {posargs}; \
+           rc=$?; test $rc -eq 5 && exit 0; exit $rc"
+ allowlist_externals =
+     mkdir
+@@ -80,7 +86,7 @@ basepython = python3
+ commands =
+     pip install {toxinidir}/rocisa/
+     sh -c "ARCH=$(invoke get-gpu-arch); \
+-          invoke build-client --build-dir {toxinidir}/build_tmp --enable-sdma --gpu-targets $ARCH || exit $?; \
++          invoke build-client --build-dir {toxinidir}/build_tmp --enable-sdma --rocm-path \"$ROCM_PATH\" --gpu-targets $ARCH || exit $?; \
+           pytest -v --basetemp={envtmpdir} --junit-xml={toxinidir}/comm_tests.xml --junit-prefix={envname} --color=yes -m comm --prebuilt-client={toxinidir}/build_tmp/tensilelite/client/tensilelite-client {toxinidir}/Tensile/Tests {posargs}; \
+           rc=$?; test $rc -eq 5 && exit 0; exit $rc"
+ 
+@@ -190,9 +196,8 @@ commands =
+ 
+     # Build the client
+     sh -c "ARCH=$(invoke get-gpu-arch); \
+-          export TENSILE_ARCHITECTURE=\$ARCH; \
+           export TENSILELITE_CLIENT_ARGS='{env:TENSILELITE_CLIENT_ARGS:} --gpu-targets '$ARCH; \
+-          invoke build-client --build-dir {toxinidir}/build_tmp $TENSILELITE_CLIENT_ARGS"
++          invoke build-client --build-dir {toxinidir}/build_tmp --rocm-path \"$ROCM_PATH\" $TENSILELITE_CLIENT_ARGS"
+ 
+     # Run unit tests with coverage (no report yet)
+     pytest --cov=Tensile --cov=rocisa \
+@@ -207,12 +212,7 @@ commands =
+            {toxinidir}/Tensile/Tests/unit
+ 
+     # Run common tests with coverage (append to existing coverage data).
+-    # Wrapped in sh -c so the tests target the arch the runtime reports, which on
+-    # gfx1250 A0 silicon is gfx1250-strict rather than gfx1250.
+-    sh -c "ARCH=$(invoke get-gpu-arch); \
+-          EXTRA_TENSILE_OPTS=; \
+-          case $ARCH in *-strict) EXTRA_TENSILE_OPTS=--tensile-options=--gpu-targets,$ARCH;; esac; \
+-          pytest --cov=Tensile --cov=rocisa \
++    sh -c "pytest --cov=Tensile --cov=rocisa \
+            --cov-config={toxinidir}/pyproject.toml \
+            --cov-append \
+            --cov-report=html:{toxinidir}/htmlcov \
+@@ -227,7 +227,6 @@ commands =
+            -m common \
+            --prebuilt-client={toxinidir}/build_tmp/tensilelite/client/tensilelite-client \
+            --global-parameters CheckASMCodeSize=True \
+-           $EXTRA_TENSILE_OPTS \
+            {toxinidir}/Tensile/Tests/common {posargs}"
+ 
+     # Generate detailed coverage report summary
+@@ -503,16 +502,10 @@ commands =
+     pip install {toxinidir}/rocisa/
+ 
+     sh -c "ARCH=$(invoke get-gpu-arch); \
+-          export TENSILE_ARCHITECTURE=\$ARCH; \
+           export TENSILELITE_CLIENT_ARGS='{env:TENSILELITE_CLIENT_ARGS:} --gpu-targets '$ARCH; \
+-          invoke build-client --build-dir {toxinidir}/build_tmp $TENSILELITE_CLIENT_ARGS"
++          invoke build-client --build-dir {toxinidir}/build_tmp --rocm-path \"$ROCM_PATH\" $TENSILELITE_CLIENT_ARGS"
+ 
+-    # Wrapped in sh -c so the tests target the arch the runtime reports, which on
+-    # gfx1250 A0 silicon is gfx1250-strict rather than gfx1250.
+-    sh -c "ARCH=$(invoke get-gpu-arch); \
+-          EXTRA_TENSILE_OPTS=; \
+-          case $ARCH in *-strict) EXTRA_TENSILE_OPTS=--tensile-options=--gpu-targets,$ARCH;; esac; \
+-          pytest --cov=Tensile --cov=rocisa \
++    sh -c "pytest --cov=Tensile --cov=rocisa \
+            --cov-config={toxinidir}/pyproject.toml \
+            --cov-report=html:{toxinidir}/htmlcov \
+            --cov-report=xml:{toxinidir}/coverage.xml \
+@@ -524,7 +517,6 @@ commands =
+            -m common \
+            --prebuilt-client={toxinidir}/build_tmp/tensilelite/client/tensilelite-client \
+            --global-parameters CheckASMCodeSize=True \
+-           $EXTRA_TENSILE_OPTS \
+            {toxinidir}/Tensile/Tests/common {posargs}"
+ 
+     coverage report --show-missing
+-- 
+2.43.0
+

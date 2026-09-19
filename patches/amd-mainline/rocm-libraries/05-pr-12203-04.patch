@@ -1,0 +1,124 @@
+From b7ddddf9a53c54331c5310c79ed271667d831543 Mon Sep 17 00:00:00 2001
+From: Illia Silin <Illia.Silin@amd.com>
+Date: Wed, 16 Sep 2026 07:23:52 -0700
+Subject: [PATCH] restirict some gfx125 to gfx1250 ifdefs
+
+(cherry picked from commit bccd49636e2173e598387479ab71c4997beeb1ca)
+---
+ projects/composablekernel/include/ck/utility/amd_wmma.hpp | 8 ++++----
+ .../composablekernel/include/ck/utility/type_convert.hpp  | 8 ++++----
+ .../warp/warp_gemm_attribute_wmma_impl_8bit_traits.hpp    | 4 +++-
+ 3 files changed, 11 insertions(+), 9 deletions(-)
+
+diff --git a/projects/composablekernel/include/ck/utility/amd_wmma.hpp b/projects/composablekernel/include/ck/utility/amd_wmma.hpp
+index 3f5b71e818..e43fdba571 100644
+--- a/projects/composablekernel/include/ck/utility/amd_wmma.hpp
++++ b/projects/composablekernel/include/ck/utility/amd_wmma.hpp
+@@ -1312,7 +1312,7 @@ struct intrin_wmma_scale_f32_16x16x128_f8f6f4<16,
+             "v_wmma_scale_f32_16x16x128_f8f6f4");
+ 
+         // keep int32_t for backward compatibility
+-#if defined(__gfx125__)
++#if defined(__gfx1250__)
+         reg_c.template AsType<float8_t>()(Number<0>{}) =
+             __builtin_amdgcn_wmma_scale_f32_16x16x128_f8f6f4(
+                 wmma_impl::MxTypeSelector<TypeA>::value, // OPSEL
+@@ -1371,7 +1371,7 @@ struct intrin_wmma_scale16_f32_16x16x128_f8f6f4<16,
+             "unsupported matrix/scale format combination for "
+             "v_wmma_scale16_f32_16x16x128_f8f6f4");
+ 
+-#if defined(__gfx125__)
++#if defined(__gfx1250__)
+         reg_c.template AsType<float8_t>()(Number<0>{}) =
+             __builtin_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4(
+                 wmma_impl::MxTypeSelector<TypeA>::value, // OPSEL
+@@ -1426,7 +1426,7 @@ struct intrin_wmma_scale_f32_32x16x128_f4<32, 16, ScaleOpselB, ScaleTypeA, Scale
+                           is_same_v<ScaleTypeB, e5m3x4_scale_t> ||
+                           is_same_v<ScaleTypeB, e4m3x4_scale_t>,
+                       "ScaleTypeB must be e8m0x4_bexp_t, e5m3x4_scale_t, or e4m3x4_scale_t");
+-#if defined(__gfx125__)
++#if defined(__gfx1250__)
+         int32x16_t arg_a = bit_cast<int32x16_t>(reg_a);
+         int32x8_t arg_b  = bit_cast<int32x8_t>(reg_b);
+         reg_c.template AsType<float16_t>()(Number<0>{}) =
+@@ -1480,7 +1480,7 @@ struct intrin_wmma_scale16_f32_32x16x128_f4<32, 16, ScaleOpselB, ScaleTypeA, Sca
+                           is_same_v<ScaleTypeB, e5m3x8_scale_t> ||
+                           is_same_v<ScaleTypeB, e4m3x8_scale_t>,
+                       "ScaleTypeB must be e8m0x8_bexp_t, e5m3x8_scale_t, or e4m3x8_scale_t");
+-#if defined(__gfx125__)
++#if defined(__gfx1250__)
+         int32x16_t arg_a = bit_cast<int32x16_t>(reg_a);
+         int32x8_t arg_b  = bit_cast<int32x8_t>(reg_b);
+         reg_c.template AsType<float16_t>()(Number<0>{}) =
+diff --git a/projects/composablekernel/include/ck/utility/type_convert.hpp b/projects/composablekernel/include/ck/utility/type_convert.hpp
+index 5d035e10a0..4d0b9a2aca 100644
+--- a/projects/composablekernel/include/ck/utility/type_convert.hpp
++++ b/projects/composablekernel/include/ck/utility/type_convert.hpp
+@@ -1089,7 +1089,7 @@ inline __host__ __device__ bhalf_t type_convert<bhalf_t, f8_ocp_t>(f8_ocp_t x)
+     output.bhalf_vec = __builtin_amdgcn_cvt_scalef32_pk_bf16_fp8(input.i16val, /*scale*/ 1.f, 0);
+ 
+     return output.bhalf_arr[0];
+-#elif defined(__gfx125__)
++#elif defined(__gfx1250__)
+     union
+     {
+         fp8_impl::uint32x2_t ival;
+@@ -1120,7 +1120,7 @@ inline __host__ __device__ bhalf2_t type_convert<bhalf2_t, f8x2_ocp_t>(f8x2_ocp_
+ {
+ #if defined(__gfx950__)
+     return __builtin_amdgcn_cvt_scalef32_pk_bf16_fp8(bit_cast<uint16_t>(x), /*scale*/ 1.f, 0);
+-#elif defined(__gfx125__)
++#elif defined(__gfx1250__)
+     union
+     {
+         fp8_impl::uint32x2_t ival;
+@@ -1229,7 +1229,7 @@ inline __host__ __device__ half2_t type_convert<half2_t, bf8x2_ocp_t>(bf8x2_ocp_
+ {
+ #if defined(__gfx950__)
+     return __builtin_amdgcn_cvt_scalef32_pk_f16_bf8(bit_cast<uint16_t>(x), /*scale*/ 1.f, 0);
+-#elif defined(__gfx125__)
++#elif defined(__gfx1250__)
+     return __builtin_amdgcn_cvt_pk_f16_bf8(bit_cast<uint16_t>(x));
+ #else
+     return half2_t{type_convert<half_t>(float(x.AsType<bf8_ocp_t>()[Number<0>{}])),
+@@ -1262,7 +1262,7 @@ inline __host__ __device__ bhalf_t type_convert<bhalf_t, bf8_ocp_t>(bf8_ocp_t x)
+     output.bhalf_vec = __builtin_amdgcn_cvt_scalef32_pk_bf16_bf8(input.i16val, /*scale*/ 1.f, 0);
+ 
+     return output.bhalf_arr[0];
+-#elif defined(__gfx125__)
++#elif defined(__gfx1250__)
+     union
+     {
+         fp8_impl::uint32x2_t ival;
+diff --git a/projects/composablekernel/include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_8bit_traits.hpp b/projects/composablekernel/include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_8bit_traits.hpp
+index d61b713aaf..47b3f9211e 100644
+--- a/projects/composablekernel/include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_8bit_traits.hpp
++++ b/projects/composablekernel/include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_8bit_traits.hpp
+@@ -811,6 +811,7 @@ struct WmmaTraits<gfx125_t, bf8_t, fp8_t, float, 16, 16, 128, WmmaScale16Tag>
+ };
+ 
+ // 32x16x128 f4 specialization - GFX125
++#if defined(__gfx1250__)
+ template <>
+ struct WmmaTraits<gfx125_t, pk_fp4_t, pk_fp4_t, float, 32, 16, 128>
+     : WmmaTraitsBase<gfx12_t, pk_fp4_t, pk_fp4_t, float, 128, false, 32, 16>
+@@ -832,6 +833,7 @@ struct WmmaTraits<gfx125_t, pk_fp4_t, pk_fp4_t, float, 32, 16, 128>
+ #endif
+     }
+ };
++#endif
+ 
+ template <bool IsScale16>
+ struct WmmaTraitsGfx125PkFp4F32_32x32x128
+@@ -847,7 +849,7 @@ struct WmmaTraitsGfx125PkFp4F32_32x32x128
+                                                   const ScaleType& b_scale,
+                                                   const CVecType& c_vec)
+     {
+-#ifdef __gfx125__
++#ifdef __gfx1250__
+         using ASliceType = ext_vector_t<pk_fp4_t, sizeof(AVecType) / sizeof(pk_fp4_t)>;
+         using BSliceType = ext_vector_t<pk_fp4_t, sizeof(BVecType) / sizeof(pk_fp4_t) / kCNBlock>;
+         using CSliceType = fp32x16_t;
+-- 
+2.43.0
+

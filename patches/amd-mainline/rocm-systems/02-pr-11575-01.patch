@@ -1,0 +1,65 @@
+From 39b36bce064595e1d84a90b702939334c00aee3a Mon Sep 17 00:00:00 2001
+From: Shweta Khatri <155576586+shwetagkhatri@users.noreply.github.com>
+Date: Sun, 13 Sep 2026 23:56:22 -0400
+Subject: [PATCH] feat(rocr): report gfx12 A0 strict ISA variant by default
+
+Report the strict ISA variant by default on A0 agents. Set HSA_DISABLE_GFX12_STRICT=1 to fall back to the base target.
+
+Update the env variable documentation.
+---
+ .../rocr-runtime/runtime/docs/data/env_variables.rst  |  8 ++++----
+ .../rocr-runtime/runtime/hsa-runtime/core/util/flag.h | 11 ++++++-----
+ 2 files changed, 10 insertions(+), 9 deletions(-)
+
+diff --git a/projects/rocr-runtime/runtime/docs/data/env_variables.rst b/projects/rocr-runtime/runtime/docs/data/env_variables.rst
+index f873d628f0..7abeb77efc 100644
+--- a/projects/rocr-runtime/runtime/docs/data/env_variables.rst
++++ b/projects/rocr-runtime/runtime/docs/data/env_variables.rst
+@@ -100,10 +100,10 @@
+         | Any other value: Never load the HotSwap tool.
+ 
+     * - | ``HSA_DISABLE_GFX12_STRICT``
+-        | Controls reporting of the "strict" ISA variant on A0 silicon. Disabled by default, so the agent keeps the base target. Set to 0 to opt in and have the agent report the strict variant instead.
+-      - ``1``
+-      - | 0: Report the strict ISA variant on A0 agents.
+-        | 1, unset, empty, or any other value: Keep the base target on A0 agents.
++        | Controls reporting of the "strict" ISA variant on A0 silicon. Enabled by default, so the agent reports the strict variant and accepts native strict code objects. Set to 1 as an emergency kill switch to fall back to the base target.
++      - ``0``
++      - | 1: Keep the base target on A0 agents.
++        | 0, unset, or any other value: Report the strict ISA variant on A0 agents.
+ 
+     * - | ``HSA_HOTSWAP_VERBOSE``
+         | Enables HotSwap diagnostic logging to stderr. Read by the HotSwap tool itself, not by the runtime, so it has no effect unless the tool is loaded. Errors are always reported regardless of this setting.
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/util/flag.h b/projects/rocr-runtime/runtime/hsa-runtime/core/util/flag.h
+index e05545fd8d..271b78a70b 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/util/flag.h
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/util/flag.h
+@@ -249,11 +249,12 @@ class Flag {
+     var = os::GetEnvVar("HSA_DISABLE_PC_SAMPLING");
+     disable_pc_sampling_ = (var == "1") ? true : false;
+ 
+-    // Controls reporting of the "strict" ISA variant on A0 silicon. Disabled by
+-    // default, so the agent keeps the base target. Set the variable to 0 to opt
+-    // in and have the agent re-point to the strict variant.
++    // Controls reporting of the "strict" ISA variant on A0 silicon. Enabled by
++    // default, so an A0 agent re-points to the strict variant and accepts native
++    // strict code objects. Set the variable to 1 as an emergency kill switch to
++    // fall back to the base target.
+     var = os::GetEnvVar("HSA_DISABLE_GFX12_STRICT");
+-    disable_gfx12_strict_ = (var == "0") ? false : true;
++    disable_gfx12_strict_ = (var == "1") ? true : false;
+ 
+     var = os::GetEnvVar("HSA_LOADER_ENABLE_MMAP_URI");
+     loader_enable_mmap_uri_ = (var == "1") ? true : false;
+@@ -614,7 +615,7 @@ class Flag {
+   bool no_scratch_thread_limit_;
+   bool disable_image_;
+   bool disable_pc_sampling_;
+-  bool disable_gfx12_strict_ = true;
++  bool disable_gfx12_strict_ = false;
+   bool loader_enable_mmap_uri_;
+   bool check_sramecc_validity_;
+   bool debug_;
+-- 
+2.43.0
+

@@ -1,0 +1,923 @@
+From e20e5c89344261c503e2cea8115fa200d1afb4ee Mon Sep 17 00:00:00 2001
+From: George Tseng <george.tseng@amd.com>
+Date: Tue, 15 Sep 2026 02:54:21 +0000
+Subject: [PATCH] hipsparselt: stop pinning KernArgsVersion in the
+ gfx1250-strict spmm logic
+
+The 64 Gridbased logic files shipped InternalSupportParams with
+KernArgsVersion: 2. That key is bound to the generator version rather than
+being a tuning result, so library logic is meant to follow
+defaultInternalSupportParams instead of pinning a layout that goes stale;
+reorderSolutionDictForDictMerge drops it on write for exactly that reason.
+Every other tree already reflects this -- gfx950's 129 files and gfx1250's
+64 carry no occurrence, and gfx1250-strict was the only one that did.
+
+Drop the key here too. The .s metadata and benchmark solution files still
+carry it, so nothing that needs the generator's layout loses it. The
+remaining line now matches gfx1250's byte for byte, so a later
+regeneration will not churn these 64 lines again.
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+(cherry picked from commit daea67dfa0c271256a191fdb3d2daddac493dee8)
+---
+ ...-strict_Cijk_Ailk_Bjlk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bjlk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...0-strict_Cijk_Ailk_Bjlk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...0-strict_Cijk_Ailk_Bjlk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bjlk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bjlk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...0-strict_Cijk_Ailk_Bjlk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...0-strict_Cijk_Ailk_Bjlk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bjlk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bjlk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bjlk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bjlk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...strict_Cijk_Ailk_Bjlk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...strict_Cijk_Ailk_Bjlk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bjlk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bjlk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bljk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bljk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...0-strict_Cijk_Ailk_Bljk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...0-strict_Cijk_Ailk_Bljk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bljk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bljk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...0-strict_Cijk_Ailk_Bljk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...0-strict_Cijk_Ailk_Bljk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bljk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bljk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bljk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bljk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...strict_Cijk_Ailk_Bljk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...strict_Cijk_Ailk_Bljk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bljk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Ailk_Bljk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bjlk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bjlk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...0-strict_Cijk_Alik_Bjlk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...0-strict_Cijk_Alik_Bjlk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bjlk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bjlk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...0-strict_Cijk_Alik_Bjlk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...0-strict_Cijk_Alik_Bjlk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bjlk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bjlk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bjlk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bjlk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...strict_Cijk_Alik_Bjlk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...strict_Cijk_Alik_Bjlk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bjlk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bjlk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bljk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bljk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...0-strict_Cijk_Alik_Bljk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...0-strict_Cijk_Alik_Bljk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bljk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bljk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...0-strict_Cijk_Alik_Bljk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...0-strict_Cijk_Alik_Bljk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bljk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bljk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bljk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bljk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...strict_Cijk_Alik_Bljk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...strict_Cijk_Alik_Bljk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bljk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml | 2 +-
+ ...-strict_Cijk_Alik_Bljk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml | 2 +-
+ 64 files changed, 64 insertions(+), 64 deletions(-)
+
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index ed9974c5b7..0c3d411984 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 5a0874be57..1aac7fd66e 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 68b5c71c7b..4a9efe5bcc 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 83d6fb7d22..e95713b1da 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 661e651a91..310c0bd01e 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index ec2ce88d00..808d04d07c 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index ee34256228..270957fdb1 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 6ad25d1be4..f7d97da89e 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index c7b34d80d0..87d6b0fc81 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index f4c80b2b45..30105f23d9 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 9db16da4c6..3ff0918cdf 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 09d5193d2c..6e4678b5eb 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 2cbf86d9d2..2ebbdfba25 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 9003fb72b2..bf1cf129cf 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index f3fc11f1bd..dcd8d4f385 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -145,7 +145,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index fb89eebd40..07126bd628 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bjlk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -145,7 +145,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 008bcbf2ef..1ec38f0b46 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 2abbea52fc..b69a05e838 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index c5b7cce72f..d3562828fb 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index cf163d4692..8750b622fb 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 10c254f585..831952fb2b 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 331ccdd6bb..c3d73c3076 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 67e1a2cc73..d38f4ed95b 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index fa48d6296f..672ac2a1e3 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 4c31dd2ea1..b90c10e27a 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index d71d5566aa..e3a2fa6226 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index a693193851..d472c95d14 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index eebfafd6d7..ebff66813d 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 2fd777379c..7cd4a7dac9 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 86b83a4314..0bef3c001e 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index aaae22b448..3c621e5697 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -145,7 +145,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 01569ed571..47053bf211 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Ailk_Bljk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -145,7 +145,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index ffc037068f..74fcd4cf70 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 69943de24f..0904470904 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 4034093d36..1c816fb02e 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index e944757809..ccb685ed5c 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 07a497ed1c..e2d42b20fd 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 8dcd60d686..003bd72c38 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index f2fd65bc29..884e7e874c 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 34d4ce1af8..ec1fadac44 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 2d3bce8b17..c08e53a9c4 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index c61d203934..d452b9b010 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index ea2be7c72d..2a560f015d 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 198fa4ad3d..d4670c6479 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 5ea637df64..aa1464ed31 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 7e84346d0f..caed99006a 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 6cbd8c8872..abbbb3b042 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -145,7 +145,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 75eb028da7..912e928eb2 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bjlk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -145,7 +145,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index d5a00bbdeb..96817b1c88 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_B8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index cd3b645df1..69959bb3b9 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_B8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 8eff9dab6d..2581530bfc 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_BBS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index da84633d3d..fd97d81fbf 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_BBS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 8d6bea04f2..9f222f1c1c 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_F8SS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 31cc6c4ebd..97489edd90 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_F8SS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 3c32d0992b..972aee6287 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_HHS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 52556466de..19acecf406 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_HHS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 8cba718da3..b8e8954329 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8BS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 5adec2c3b0..20c5376ed4 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8BS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 4a2fbff32c..421d1e6852 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8HS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 74b2f1dc32..394f1c21cd 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8HS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index 4014ebdecb..e916e2a456 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8I8S_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 412b0290f3..ccef662093 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8I8S_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -138,7 +138,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+index bbec778ddc..9e2a6df820 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8IS_BH_Bias_FDMN_SPAML0_A_S_SAV.yaml
+@@ -145,7 +145,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+index 2c7cbc7c83..ecd670ba17 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full/gfx1250-strict/Gridbased/gfx1250-strict_Cijk_Alik_Bljk_I8IS_BH_Bias_FDMN_SPBML0_A_S_SAV.yaml
+@@ -145,7 +145,7 @@
+     ISA: [12, 5, 0]
+     InnerUnroll: 1
+     InterleaveAlpha: 0
+-    InternalSupportParams: {KernArgsVersion: 2, SupportCustomStaggerU: true, SupportCustomWGM: true,
++    InternalSupportParams: {SupportCustomStaggerU: true, SupportCustomWGM: true,
+       SupportUserGSU: true, UseUniversalArgs: true}
+     Kernel: true
+     KernelLanguage: Assembly
+-- 
+2.43.0
+

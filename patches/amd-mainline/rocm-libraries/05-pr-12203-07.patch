@@ -1,0 +1,26 @@
+From efd49f227e6fa753e2b14c2d8409cb2e78b3c1f4 Mon Sep 17 00:00:00 2001
+From: Illia Silin <Illia.Silin@amd.com>
+Date: Wed, 16 Sep 2026 11:31:36 -0700
+Subject: [PATCH] disable one more builtin on gfx1250-strict
+
+(cherry picked from commit ae84e8084abb9d073714daab5a1113c84b3c0244)
+---
+ projects/composablekernel/include/ck/utility/type_convert.hpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/projects/composablekernel/include/ck/utility/type_convert.hpp b/projects/composablekernel/include/ck/utility/type_convert.hpp
+index 4d0b9a2aca..38686de28f 100644
+--- a/projects/composablekernel/include/ck/utility/type_convert.hpp
++++ b/projects/composablekernel/include/ck/utility/type_convert.hpp
+@@ -1293,7 +1293,7 @@ inline __host__ __device__ bhalf2_t type_convert<bhalf2_t, bf8x2_ocp_t>(bf8x2_oc
+ {
+ #if defined(__gfx950__)
+     return __builtin_amdgcn_cvt_scalef32_pk_bf16_bf8(bit_cast<uint16_t>(x), /*scale*/ 1.f, 0);
+-#elif defined(__gfx125__)
++#elif defined(__gfx1250__)
+     union
+     {
+         fp8_impl::uint32x2_t ival;
+-- 
+2.43.0
+

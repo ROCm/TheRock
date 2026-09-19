@@ -207,6 +207,15 @@ jobs:
           ref: ${{ inputs.jax_ref }}
 
 
+      # gfx1250-strict integration uses the component PR's own XLA base.
+      - name: Checkout XLA strict target PR
+        timeout-minutes: 15
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: xla-source
+          repository: ROCm/xla
+          ref: 6f15d53df38a14173b7dbf55494ee3438ee2bf71
+
       - name: Configure Git Identity
         run: |
           git config --global user.name "therockbot"
@@ -268,6 +277,7 @@ jobs:
               ROCM_ROOT="$(rocm-sdk path --root)"
               python build/build.py build \
                 --wheels=jax-rocm-plugin,jax-rocm-pjrt \
+                --local_xla_path=/workspace/xla-source \
                 --python_version="${PYTHON_VERSION}" \
                 --bazel_startup_options=--bazelrc=build/rocm/rocm.bazelrc \
                 --bazel_options=--config=rocm_release_wheel \

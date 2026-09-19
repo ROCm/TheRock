@@ -121,7 +121,8 @@ jobs:
         id: matrix
         run: |
           python ./build_tools/github_actions/configure_jax_release_matrix.py \
-            --python-versions="${PYTHON_VERSION}"
+            --python-versions="${PYTHON_VERSION}" \
+            --jax-refs=rocm-jaxlib-v0.11.1
 
   build_jax_wheels:
     needs: setup_matrix

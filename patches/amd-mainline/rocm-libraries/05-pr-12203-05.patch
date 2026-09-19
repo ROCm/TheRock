@@ -1,0 +1,171 @@
+From 4df002c040d7652a577adc13b287a5655cf8b6d4 Mon Sep 17 00:00:00 2001
+From: Illia Silin <Illia.Silin@amd.com>
+Date: Wed, 16 Sep 2026 10:09:01 -0700
+Subject: [PATCH] disable mxtype conversion tests on gfx1250-strict
+
+(cherry picked from commit 4453ad8e218c2e1da0ec57db18f13b4ba270e8c4)
+---
+ .../include/ck/utility/mxf4_utils.hpp                |  4 ++--
+ .../include/ck/utility/mxf6_utils.hpp                |  4 ++--
+ .../include/ck/utility/mxf8_utils.hpp                |  6 +++---
+ .../include/ck/utility/scaled_type_convert.hpp       | 12 ++++++------
+ .../composablekernel/test/data_type/CMakeLists.txt   |  4 ++--
+ 5 files changed, 15 insertions(+), 15 deletions(-)
+
+diff --git a/projects/composablekernel/include/ck/utility/mxf4_utils.hpp b/projects/composablekernel/include/ck/utility/mxf4_utils.hpp
+index e95ceca518..779832eccc 100644
+--- a/projects/composablekernel/include/ck/utility/mxf4_utils.hpp
++++ b/projects/composablekernel/include/ck/utility/mxf4_utils.hpp
+@@ -8,7 +8,7 @@
+ #include "ck/utility/mxfp_utils.hpp"
+ #include "dtype_vector.hpp"
+ 
+-#if CK_MX_ARCH_950 || CK_MX_ARCH_125
++#if CK_MX_ARCH_950 || CK_MX_ARCH_1250
+ #define CK_MX_FP4_CVT_FAST_PATH 1
+ #else
+ #define CK_MX_FP4_CVT_FAST_PATH 0
+@@ -287,7 +287,7 @@ static inline __device__ f4x8_t cast_to_f4_scaled(T x, float scale)
+     return ret.vf4;
+ }
+ 
+-#elif CK_MX_ARCH_125
++#elif CK_MX_ARCH_1250
+ // from f4
+ template <typename T>
+ static inline __device__ enable_if_t<scalar_type<T>::vector_size == 1, T>
+diff --git a/projects/composablekernel/include/ck/utility/mxf6_utils.hpp b/projects/composablekernel/include/ck/utility/mxf6_utils.hpp
+index fd85993114..5683bd4f03 100644
+--- a/projects/composablekernel/include/ck/utility/mxf6_utils.hpp
++++ b/projects/composablekernel/include/ck/utility/mxf6_utils.hpp
+@@ -7,7 +7,7 @@
+ #include "ck/utility/numeric_limits.hpp"
+ #include "ck/utility/mxfp_utils.hpp"
+ 
+-#if CK_MX_ARCH_950 || CK_MX_ARCH_125
++#if CK_MX_ARCH_950 || CK_MX_ARCH_1250
+ #define CK_MX_FP6_CVT_FAST_PATH 1
+ #else
+ #define CK_MX_FP6_CVT_FAST_PATH 0
+@@ -721,7 +721,7 @@ inline __device__ T_F6 cast_to_f6_scaled(T x, float scale)
+     }
+ }
+ 
+-#elif CK_MX_ARCH_125
++#elif CK_MX_ARCH_1250
+ // from f6
+ template <typename T, typename T_F6>
+ inline __device__ enable_if_t<scalar_type<T>::vector_size == 1, T> cast_from_f6_scaled(T_F6 x,
+diff --git a/projects/composablekernel/include/ck/utility/mxf8_utils.hpp b/projects/composablekernel/include/ck/utility/mxf8_utils.hpp
+index 03a5013934..1d98123d4b 100644
+--- a/projects/composablekernel/include/ck/utility/mxf8_utils.hpp
++++ b/projects/composablekernel/include/ck/utility/mxf8_utils.hpp
+@@ -4,7 +4,7 @@
+ #include "ck/utility/numeric_limits.hpp"
+ #include "ck/utility/mxfp_utils.hpp"
+ 
+-#if CK_MX_ARCH_950 || CK_MX_ARCH_125
++#if CK_MX_ARCH_950 || CK_MX_ARCH_1250
+ #define CK_MX_FP8_CVT_FAST_PATH 1
+ #else
+ #define CK_MX_FP8_CVT_FAST_PATH 0
+@@ -660,7 +660,7 @@ static __device__ fp8x8_storage_t cast_to_f8_from_bf16_scaled(bhalf8_t v,
+     return ret.v8f8x1;
+ }
+ 
+-#elif CK_MX_ARCH_125
++#elif CK_MX_ARCH_1250
+ 
+ // fp8 -> float 8
+ template <ck_fp8_interpretation_t interpret, typename Ts, int Opsel>
+@@ -1011,7 +1011,7 @@ static __device__ bhalf2_t cast_to_bf16_from_f8_scaled(float scale, fp8x2_storag
+     out.v8x1 = cast_to_bf16_from_f8_scaled<interpret>(scale, v8);
+     return out.v2x4[0];
+ }
+-#endif // CK_MX_ARCH_125
++#endif // CK_MX_ARCH_1250
+ 
+ #endif // CK_MX_FP8_CVT_FAST_PATH
+ 
+diff --git a/projects/composablekernel/include/ck/utility/scaled_type_convert.hpp b/projects/composablekernel/include/ck/utility/scaled_type_convert.hpp
+index a0caca6f84..ae40a86963 100644
+--- a/projects/composablekernel/include/ck/utility/scaled_type_convert.hpp
++++ b/projects/composablekernel/include/ck/utility/scaled_type_convert.hpp
+@@ -1377,7 +1377,7 @@ inline __host__ __device__ half8_t scaled_type_convert<half8_t, f8x8_ocp_t>(e8m0
+ inline __host__ half8_t scaled_type_convert<half8_t, f8x8_ocp_t>(e8m0_bexp_t scale, f8x8_ocp_t x)
+ #endif
+ {
+-#if CK_MX_ARCH_125
++#if CK_MX_ARCH_1250
+     return fp8_impl::cast_to_f16_from_f8_scaled<f8_ocp_t::default_interpret>(
+         type_convert<float>(scale), x.AsType<fp8_impl::fp8x8_storage_t>()[Number<0>{}]);
+ #else
+@@ -1408,7 +1408,7 @@ inline __host__ __device__ half8_t scaled_type_convert<half8_t, bf8x8_ocp_t>(e8m
+ inline __host__ half8_t scaled_type_convert<half8_t, bf8x8_ocp_t>(e8m0_bexp_t scale, bf8x8_ocp_t x)
+ #endif
+ {
+-#if CK_MX_ARCH_125
++#if CK_MX_ARCH_1250
+     return fp8_impl::cast_to_f16_from_f8_scaled<bf8_ocp_t::default_interpret>(
+         type_convert<float>(scale), x.AsType<fp8_impl::fp8x8_storage_t>()[Number<0>{}]);
+ #else
+@@ -1627,7 +1627,7 @@ inline __host__ __device__ bhalf8_t scaled_type_convert<bhalf8_t, f8x8_ocp_t>(e8
+ inline __host__ bhalf8_t scaled_type_convert<bhalf8_t, f8x8_ocp_t>(e8m0_bexp_t scale, f8x8_ocp_t x)
+ #endif
+ {
+-#if CK_MX_ARCH_125
++#if CK_MX_ARCH_1250
+     return fp8_impl::cast_to_bf16_from_f8_scaled<f8_ocp_t::default_interpret>(
+         type_convert<float>(scale), x.AsType<fp8_impl::fp8x8_storage_t>()[Number<0>{}]);
+ #else
+@@ -1659,7 +1659,7 @@ inline __host__ bhalf8_t scaled_type_convert<bhalf8_t, bf8x8_ocp_t>(e8m0_bexp_t
+                                                                     bf8x8_ocp_t x)
+ #endif
+ {
+-#if CK_MX_ARCH_125
++#if CK_MX_ARCH_1250
+     return fp8_impl::cast_to_bf16_from_f8_scaled<bf8_ocp_t::default_interpret>(
+         type_convert<float>(scale), x.AsType<fp8_impl::fp8x8_storage_t>()[Number<0>{}]);
+ #else
+@@ -1796,7 +1796,7 @@ inline __host__ __device__ bf8x8_ocp_t scaled_type_convert<bf8x8_ocp_t, bhalf8_t
+ #endif
+ }
+ 
+-#if CK_MX_ARCH_125
++#if CK_MX_ARCH_1250
+ // Declare a template function for wave-wise scaled conversion
+ /* scale is packed 4 form, see details for FP8/BF8, FP4, FP6 */
+ template <typename Y, typename X, int Scale_sel>
+@@ -2149,6 +2149,6 @@ struct pk4scaled_type_convert_impl<bhalf16_t, bf6x16_t, Scale_sel>
+         return cast_from_f6_scaled<bhalf16_t, uint32_t, Scale_sel>(x, scale);
+     }
+ };
+-#endif // #if CK_MX_ARCH_125
++#endif // #if CK_MX_ARCH_1250
+ 
+ } // namespace ck
+diff --git a/projects/composablekernel/test/data_type/CMakeLists.txt b/projects/composablekernel/test/data_type/CMakeLists.txt
+index b7ebca8688..2fe9c626fa 100644
+--- a/projects/composablekernel/test/data_type/CMakeLists.txt
++++ b/projects/composablekernel/test/data_type/CMakeLists.txt
+@@ -45,7 +45,7 @@ if (CK_USE_FNUZ_FP8)
+   add_dependencies(test_fp8 test_bf8_fnuz)
+ endif()
+ 
+-if(GPU_TARGETS MATCHES "gfx950|gfx125")
++if(GPU_TARGETS MATCHES "gfx950|gfx125" AND NOT GPU_TARGETS MATCHES "gfx1250-strict")
+   add_custom_target(test_mx_data_types)
+ 
+   add_gtest_executable(test_fp4 test_fp4.cpp)
+@@ -133,7 +133,7 @@ if(result EQUAL 0)
+ endif()
+ add_gtest_executable(test_pk_i4 test_pk_i4.cpp)
+ 
+-if(GPU_TARGETS MATCHES "gfx1250")
++if(GPU_TARGETS MATCHES "gfx1250" AND NOT GPU_TARGETS MATCHES "gfx1250-strict")
+   add_gtest_executable(test_mx_fp8_pk4scale test_mx_fp8_pk4scale.cpp)
+   if(result EQUAL 0)
+     target_link_libraries(test_mx_fp8_pk4scale PRIVATE utility)
+-- 
+2.43.0
+

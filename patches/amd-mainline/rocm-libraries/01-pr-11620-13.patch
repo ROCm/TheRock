@@ -1,0 +1,31 @@
+From 6eb3cfefd8a2be331ed05138fff269fcc976d4e1 Mon Sep 17 00:00:00 2001
+From: Stanley Tsang <stanley.tsang@amd.com>
+Date: Fri, 18 Sep 2026 10:38:37 -0600
+Subject: [PATCH] Fix mistake with CDNA4 entry
+
+(cherry picked from commit 1af0df63a4042563b4301303a97d9939a302a153)
+---
+ projects/rocprim/rocprim/include/rocprim/config.hpp | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/projects/rocprim/rocprim/include/rocprim/config.hpp b/projects/rocprim/rocprim/include/rocprim/config.hpp
+index 775cfec0c4..f6d2d3fcec 100644
+--- a/projects/rocprim/rocprim/include/rocprim/config.hpp
++++ b/projects/rocprim/rocprim/include/rocprim/config.hpp
+@@ -209,10 +209,10 @@
+     #else
+         #define ROCPRIM_IS_CDNA5() 0
+     #endif
+-    #if defined(ROCPRIM_TARGET_CDNA3)
+-        #define ROCPRIM_IS_CDNA3() 1
++    #if defined(ROCPRIM_TARGET_CDNA4)
++        #define ROCPRIM_IS_CDNA4() 1
+     #else
+-        #define ROCPRIM_IS_CDNA3() 0
++        #define ROCPRIM_IS_CDNA4() 0
+     #endif
+     #if defined(ROCPRIM_TARGET_CDNA3)
+         #define ROCPRIM_IS_CDNA3() 1
+-- 
+2.43.0
+

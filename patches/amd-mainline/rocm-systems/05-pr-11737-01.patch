@@ -1,0 +1,861 @@
+From 2ac1a29f2d8d87f0206830683c5522e8872858b4 Mon Sep 17 00:00:00 2001
+From: Jakub Kuderski <jakub@nod-labs.com>
+Date: Wed, 16 Sep 2026 20:35:13 -0400
+Subject: [PATCH] [rocr][clr] Load gfx1250 code objects with fixed-on XNACK
+
+LLVM main emits XNACK ON for gfx1250, gfx1250-strict, and gfx12-5-generic.
+ROCr converts that flag into an unregistered :xnack+ ISA name and rejects
+the code object. HIP also rejects the same spelling returned by older
+COMGR versions before reaching the HSA loader.
+
+Use the bare processor names for permanently enabled XNACK in ROCr and
+normalize COMGR's legacy spelling in CLR. Preserve compatibility with
+UNSUPPORTED and ANY encodings while rejecting explicit OFF code objects.
+
+Add opt-in LLVM smoke tests through HIP and direct HSA for the three
+targets plus gfx90a and gfx950. Compare direct and assembly-path ELF flags,
+check compatible dispatch results, and cover incompatible feature modes.
+Use separate metadata controls without modifying compiler-produced objects.
+
+Rebuilt ROCr, CLR, and RocJITsu. All 10 compiler compatibility tests and
+three existing HSA/HIP integration tests pass, with 128 checked results
+per smoke dispatch and no RocJITsu implementation changes.
+
+(cherry picked from commit 056ef984360b80bef95c66abff9d0a1fb0a5ef73)
+---
+ emulation/rocjitsu/tests/CMakeLists.txt       |   1 +
+ .../tests/kernels/llvm_codegen_smoke.ll       |  21 ++
+ .../tests/tools/llvm_codegen_hsa_smoke.cpp    | 163 ++++++++++++
+ .../tests/tools/llvm_codegen_smoke.cmake      |  98 +++++++
+ .../tests/tools/llvm_codegen_smoke.cpp        |  71 +++++
+ .../tests/tools/llvm_codegen_smoke.md         |  56 ++++
+ .../tests/tools/llvm_codegen_smoke.py         | 243 ++++++++++++++++++
+ projects/clr/rocclr/device/device.cpp         |  18 +-
+ .../libamdhsacode/amd_hsa_code.cpp            |  40 ++-
+ 9 files changed, 692 insertions(+), 19 deletions(-)
+ create mode 100644 emulation/rocjitsu/tests/kernels/llvm_codegen_smoke.ll
+ create mode 100644 emulation/rocjitsu/tests/tools/llvm_codegen_hsa_smoke.cpp
+ create mode 100644 emulation/rocjitsu/tests/tools/llvm_codegen_smoke.cmake
+ create mode 100644 emulation/rocjitsu/tests/tools/llvm_codegen_smoke.cpp
+ create mode 100644 emulation/rocjitsu/tests/tools/llvm_codegen_smoke.md
+ create mode 100644 emulation/rocjitsu/tests/tools/llvm_codegen_smoke.py
+
+diff --git a/emulation/rocjitsu/tests/CMakeLists.txt b/emulation/rocjitsu/tests/CMakeLists.txt
+index 74f41f1109..fa1129cffe 100644
+--- a/emulation/rocjitsu/tests/CMakeLists.txt
++++ b/emulation/rocjitsu/tests/CMakeLists.txt
+@@ -2852,6 +2852,7 @@ endif()
+ rj_find_amdcxx(AMDCXX)
+ set(RJ_ENABLE_HIP_TESTS ON)
+ find_library(HIP_RUNTIME64 amdhip64 PATHS "${ROCM_PATH}" PATH_SUFFIXES lib)
++include(tools/llvm_codegen_smoke.cmake)
+ set(RJ_HIP_RUNTIME_SUPPORTS_TEST_ARCH FALSE)
+ set(RJ_HIP_RUNTIME_SUPPORTS_GFX950 FALSE)
+ set(RJ_HIP_RUNTIME_SUPPORTS_GFX942 FALSE)
+diff --git a/emulation/rocjitsu/tests/kernels/llvm_codegen_smoke.ll b/emulation/rocjitsu/tests/kernels/llvm_codegen_smoke.ll
+new file mode 100644
+index 0000000000..9362ded5fc
+--- /dev/null
++++ b/emulation/rocjitsu/tests/kernels/llvm_codegen_smoke.ll
+@@ -0,0 +1,21 @@
++; Copyright (c) 2026 Advanced Micro Devices, Inc.
++; SPDX-License-Identifier: MIT
++
++; Two workgroups of 64 threads. The host checks every output element, including
++; both waves on gfx1250. Feature module flags are appended by the test driver.
++define amdgpu_kernel void @smoke(ptr addrspace(1) %input, ptr addrspace(1) %output) {
++  %group = call i32 @llvm.amdgcn.workgroup.id.x()
++  %lane = call i32 @llvm.amdgcn.workitem.id.x()
++  %base = mul i32 %group, 64
++  %index = add i32 %base, %lane
++  %wide = zext i32 %index to i64
++  %src = getelementptr i32, ptr addrspace(1) %input, i64 %wide
++  %value = load i32, ptr addrspace(1) %src, align 4
++  %result = add i32 %value, 7
++  %dst = getelementptr i32, ptr addrspace(1) %output, i64 %wide
++  store i32 %result, ptr addrspace(1) %dst, align 4
++  ret void
++}
++
++declare i32 @llvm.amdgcn.workgroup.id.x()
++declare i32 @llvm.amdgcn.workitem.id.x()
+diff --git a/emulation/rocjitsu/tests/tools/llvm_codegen_hsa_smoke.cpp b/emulation/rocjitsu/tests/tools/llvm_codegen_hsa_smoke.cpp
+new file mode 100644
+index 0000000000..b9aa7cf651
+--- /dev/null
++++ b/emulation/rocjitsu/tests/tools/llvm_codegen_hsa_smoke.cpp
+@@ -0,0 +1,163 @@
++// Copyright (c) 2026 Advanced Micro Devices, Inc.
++// SPDX-License-Identifier: MIT
++
++#include <hsa/hsa.h>
++#include <hsa/hsa_ext_amd.h>
++
++#include <cstdint>
++#include <cstdio>
++#include <cstring>
++#include <fstream>
++#include <iterator>
++#include <string_view>
++#include <vector>
++
++#define HSA_CHECK(call)                                                                            \
++  do {                                                                                             \
++    const hsa_status_t status = (call);                                                            \
++    if (status != HSA_STATUS_SUCCESS) {                                                            \
++      const char *description = nullptr;                                                           \
++      hsa_status_string(status, &description);                                                     \
++      std::fprintf(stderr, "%s: %#x (%s)\n", #call, status,                                        \
++                   description ? description : "unknown");                                         \
++      return 1;                                                                                    \
++    }                                                                                              \
++  } while (false)
++
++int main(int argc, char **argv) {
++  if (argc != 3 ||
++      (std::string_view(argv[1]) != "execute" && std::string_view(argv[1]) != "reject")) {
++    std::fprintf(stderr, "Usage: %s execute|reject CODE_OBJECT\n", argv[0]);
++    return 2;
++  }
++  std::ifstream file(argv[2], std::ios::binary);
++  if (!file)
++    return 2;
++  const std::vector<char> image{std::istreambuf_iterator<char>(file), {}};
++  HSA_CHECK(hsa_init());
++  struct Agents {
++    hsa_agent_t cpu{}, gpu{};
++  } agents;
++  HSA_CHECK(hsa_iterate_agents(
++      [](hsa_agent_t agent, void *data) {
++        auto &agents = *static_cast<Agents *>(data);
++        hsa_device_type_t type{};
++        const auto status = hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, &type);
++        if (status != HSA_STATUS_SUCCESS)
++          return status;
++        if (type == HSA_DEVICE_TYPE_GPU)
++          agents.gpu = agent;
++        else if (type == HSA_DEVICE_TYPE_CPU)
++          agents.cpu = agent;
++        return HSA_STATUS_SUCCESS;
++      },
++      &agents));
++  if (!agents.cpu.handle || !agents.gpu.handle)
++    return 1;
++
++  hsa_code_object_reader_t reader{};
++  hsa_executable_t executable{};
++  HSA_CHECK(hsa_code_object_reader_create_from_memory(image.data(), image.size(), &reader));
++  HSA_CHECK(hsa_executable_create_alt(HSA_PROFILE_FULL, HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT,
++                                      nullptr, &executable));
++  const auto load =
++      hsa_executable_load_agent_code_object(executable, agents.gpu, reader, nullptr, nullptr);
++  if (std::string_view(argv[1]) == "reject") {
++    if (load != HSA_STATUS_ERROR_INVALID_ISA && load != HSA_STATUS_ERROR_INVALID_ISA_NAME &&
++        load != HSA_STATUS_ERROR_INVALID_CODE_OBJECT &&
++        load != HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS) {
++      std::fprintf(stderr, "Expected incompatible object rejection, got %#x\n", load);
++      return 1;
++    }
++    HSA_CHECK(hsa_executable_destroy(executable));
++    HSA_CHECK(hsa_code_object_reader_destroy(reader));
++    HSA_CHECK(hsa_shut_down());
++    return 0;
++  }
++  HSA_CHECK(load);
++  HSA_CHECK(hsa_executable_freeze(executable, nullptr));
++  hsa_executable_symbol_t symbol{};
++  uint64_t kernel_object = 0;
++  uint32_t group_size = 0, private_size = 0;
++  HSA_CHECK(hsa_executable_get_symbol_by_name(executable, "smoke.kd", &agents.gpu, &symbol));
++  HSA_CHECK(hsa_executable_symbol_get_info(symbol, HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT,
++                                           &kernel_object));
++  HSA_CHECK(hsa_executable_symbol_get_info(
++      symbol, HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_GROUP_SEGMENT_SIZE, &group_size));
++  HSA_CHECK(hsa_executable_symbol_get_info(
++      symbol, HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_PRIVATE_SEGMENT_SIZE, &private_size));
++
++  hsa_amd_memory_pool_t pool{};
++  HSA_CHECK(hsa_amd_agent_iterate_memory_pools(
++      agents.cpu,
++      [](hsa_amd_memory_pool_t candidate, void *data) {
++        hsa_amd_segment_t segment{};
++        hsa_amd_memory_pool_get_info(candidate, HSA_AMD_MEMORY_POOL_INFO_SEGMENT, &segment);
++        if (segment != HSA_AMD_SEGMENT_GLOBAL)
++          return HSA_STATUS_SUCCESS;
++        uint32_t flags = 0;
++        hsa_amd_memory_pool_get_info(candidate, HSA_AMD_MEMORY_POOL_INFO_GLOBAL_FLAGS, &flags);
++        if (flags & HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_KERNARG_INIT)
++          *static_cast<hsa_amd_memory_pool_t *>(data) = candidate;
++        return HSA_STATUS_SUCCESS;
++      },
++      &pool));
++  if (!pool.handle)
++    return 1;
++  constexpr size_t count = 128;
++  void *allocation = nullptr;
++  HSA_CHECK(hsa_amd_memory_pool_allocate(pool, 2 * count * sizeof(uint32_t) + 256, 0, &allocation));
++  HSA_CHECK(hsa_amd_agents_allow_access(1, &agents.gpu, nullptr, allocation));
++  auto *input = static_cast<uint32_t *>(allocation);
++  auto *output = input + count;
++  auto *arguments = reinterpret_cast<void **>(output + count);
++  std::memset(allocation, 0, 2 * count * sizeof(uint32_t) + 256);
++  for (size_t i = 0; i < count; ++i)
++    input[i] = static_cast<uint32_t>(3 * i);
++  arguments[0] = input;
++  arguments[1] = output;
++
++  hsa_queue_t *queue = nullptr;
++  hsa_signal_t completion{};
++  HSA_CHECK(hsa_queue_create(agents.gpu, 128, HSA_QUEUE_TYPE_SINGLE, nullptr, nullptr, UINT32_MAX,
++                             UINT32_MAX, &queue));
++  HSA_CHECK(hsa_signal_create(1, 0, nullptr, &completion));
++  const uint64_t index = hsa_queue_add_write_index_relaxed(queue, 1);
++  auto *packet = static_cast<hsa_kernel_dispatch_packet_t *>(queue->base_address) +
++                 (index & (queue->size - 1));
++  std::memset(packet, 0, sizeof(*packet));
++  packet->setup = 1 << HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS;
++  packet->workgroup_size_x = 64;
++  packet->workgroup_size_y = packet->workgroup_size_z = 1;
++  packet->grid_size_x = count;
++  packet->grid_size_y = packet->grid_size_z = 1;
++  packet->kernel_object = kernel_object;
++  packet->group_segment_size = group_size;
++  packet->private_segment_size = private_size;
++  packet->kernarg_address = arguments;
++  packet->completion_signal = completion;
++  const uint16_t header = (HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE) |
++                          (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE) |
++                          (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE);
++  __atomic_store_n(&packet->header, header, __ATOMIC_RELEASE);
++  hsa_signal_store_screlease(queue->doorbell_signal, index);
++  if (hsa_signal_wait_scacquire(completion, HSA_SIGNAL_CONDITION_EQ, 0, 5'000'000'000ULL,
++                                HSA_WAIT_STATE_BLOCKED) != 0) {
++    std::fprintf(stderr, "Kernel completion timed out\n");
++    return 1;
++  }
++  for (size_t i = 0; i < count; ++i) {
++    if (output[i] != input[i] + 7) {
++      std::fprintf(stderr, "Element %zu: got %u, expected %u\n", i, output[i], input[i] + 7);
++      return 1;
++    }
++  }
++  HSA_CHECK(hsa_signal_destroy(completion));
++  HSA_CHECK(hsa_queue_destroy(queue));
++  HSA_CHECK(hsa_amd_memory_pool_free(allocation));
++  HSA_CHECK(hsa_executable_destroy(executable));
++  HSA_CHECK(hsa_code_object_reader_destroy(reader));
++  HSA_CHECK(hsa_shut_down());
++  std::puts("128 kernel results matched through HSA");
++  return 0;
++}
+diff --git a/emulation/rocjitsu/tests/tools/llvm_codegen_smoke.cmake b/emulation/rocjitsu/tests/tools/llvm_codegen_smoke.cmake
+new file mode 100644
+index 0000000000..25f719b2c4
+--- /dev/null
++++ b/emulation/rocjitsu/tests/tools/llvm_codegen_smoke.cmake
+@@ -0,0 +1,98 @@
++# Copyright (c) 2026 Advanced Micro Devices, Inc.
++# SPDX-License-Identifier: MIT
++
++# Opt in to testing a specific external LLVM build, independently of the SDK
++# compiler used to build the rest of RocJITsu's fixtures.
++set(RJ_LLVM_SMOKE_TOOLS_DIR
++    ""
++    CACHE PATH
++    "LLVM bin directory for compiler compatibility smoke tests"
++)
++if(NOT RJ_LLVM_SMOKE_TOOLS_DIR)
++    return()
++endif()
++if(NOT HIP_RUNTIME64)
++    message(FATAL_ERROR "LLVM compiler smoke tests require the HIP runtime")
++endif()
++foreach(
++    tool
++    llc
++    llvm-mc
++    ld.lld
++    llvm-readobj
++    llvm-objdump
++)
++    if(NOT EXISTS "${RJ_LLVM_SMOKE_TOOLS_DIR}/${tool}")
++        message(
++            FATAL_ERROR
++            "LLVM compiler smoke tests require ${RJ_LLVM_SMOKE_TOOLS_DIR}/${tool}"
++        )
++    endif()
++endforeach()
++
++add_executable(llvm_codegen_smoke tools/llvm_codegen_smoke.cpp)
++target_include_directories(llvm_codegen_smoke PRIVATE "${ROCM_PATH}/include")
++target_compile_definitions(llvm_codegen_smoke PRIVATE __HIP_PLATFORM_AMD__=1)
++target_link_libraries(llvm_codegen_smoke PRIVATE ${HIP_RUNTIME64})
++rj_configure_target(llvm_codegen_smoke TEST)
++add_dependencies(llvm_codegen_smoke rocjitsu_bin rocjitsu_shared)
++
++find_library(
++    LLVM_SMOKE_HSA_RUNTIME
++    hsa-runtime64
++    PATHS "${ROCM_PATH}/lib"
++    NO_DEFAULT_PATH
++    REQUIRED
++)
++add_executable(llvm_codegen_hsa_smoke tools/llvm_codegen_hsa_smoke.cpp)
++target_include_directories(
++    llvm_codegen_hsa_smoke
++    SYSTEM
++    PRIVATE
++        "${ROCM_PATH}/include"
++        "${CMAKE_SOURCE_DIR}/lib/rocjitsu/external_headers/hsa_headers"
++)
++target_link_libraries(llvm_codegen_hsa_smoke PRIVATE ${LLVM_SMOKE_HSA_RUNTIME})
++rj_configure_target(llvm_codegen_hsa_smoke TEST)
++add_dependencies(llvm_codegen_hsa_smoke rocjitsu_bin rocjitsu_shared)
++
++foreach(
++    target
++    gfx90a
++    gfx950
++    gfx1250
++    gfx1250-strict
++    gfx12-5-generic
++)
++    if(target STREQUAL "gfx90a")
++        set(config gfx90a_mi210_kmd.json)
++    elseif(target STREQUAL "gfx950")
++        set(config gfx950_mi355x_kmd.json)
++    else()
++        set(config gfx1250_mi455x.json)
++    endif()
++    foreach(backend hip hsa)
++        if(backend STREQUAL "hip")
++            set(helper llvm_codegen_smoke)
++            set(test_prefix LlvmCodegenSmoke)
++        else()
++            set(helper llvm_codegen_hsa_smoke)
++            set(test_prefix LlvmCodegenHsaSmoke)
++        endif()
++        add_test(
++            NAME "${test_prefix}.${target}"
++            COMMAND
++                ${Python3_EXECUTABLE}
++                "${CMAKE_CURRENT_SOURCE_DIR}/tools/llvm_codegen_smoke.py"
++                --llvm-bin "${RJ_LLVM_SMOKE_TOOLS_DIR}" --helper
++                $<TARGET_FILE:${helper}> --rocjitsu $<TARGET_FILE:rocjitsu_bin>
++                --config "${CMAKE_SOURCE_DIR}/configs/${config}" --target
++                "${target}" --output
++                "${CMAKE_CURRENT_BINARY_DIR}/${helper}_objects/${target}"
++        )
++        set_tests_properties(
++            "${test_prefix}.${target}"
++            PROPERTIES TIMEOUT 600 LABELS "llvm-smoke"
++        )
++    endforeach()
++endforeach()
+diff --git a/emulation/rocjitsu/tests/tools/llvm_codegen_smoke.cpp b/emulation/rocjitsu/tests/tools/llvm_codegen_smoke.cpp
+new file mode 100644
+index 0000000000..1ba56d8faa
+--- /dev/null
++++ b/emulation/rocjitsu/tests/tools/llvm_codegen_smoke.cpp
+@@ -0,0 +1,71 @@
++// Copyright (c) 2026 Advanced Micro Devices, Inc.
++// SPDX-License-Identifier: MIT
++
++#include <hip/hip_runtime_api.h>
++
++#include <array>
++#include <cstdio>
++#include <string_view>
++
++#define HIP_CHECK(call)                                                                            \
++  do {                                                                                             \
++    const hipError_t status = (call);                                                              \
++    if (status != hipSuccess) {                                                                    \
++      std::fprintf(stderr, "%s: %s (%s)\n", #call, hipGetErrorName(status),                        \
++                   hipGetErrorString(status));                                                     \
++      return 1;                                                                                    \
++    }                                                                                              \
++  } while (false)
++
++int main(int argc, char **argv) {
++  if (argc != 3) {
++    std::fprintf(stderr, "Usage: %s execute|reject CODE_OBJECT\n", argv[0]);
++    return 2;
++  }
++  const std::string_view mode = argv[1];
++  if (mode != "execute" && mode != "reject")
++    return 2;
++
++  HIP_CHECK(hipInit(0));
++  HIP_CHECK(hipSetDevice(0));
++  hipModule_t module = nullptr;
++  const hipError_t load_status = hipModuleLoad(&module, argv[2]);
++  if (mode == "reject") {
++    if (load_status != hipErrorNoBinaryForGpu) {
++      std::fprintf(stderr, "Expected incompatible feature modes to be rejected, got %s\n",
++                   hipGetErrorName(load_status));
++      return 1;
++    }
++    HIP_CHECK(hipDeviceReset());
++    return 0;
++  }
++  HIP_CHECK(load_status);
++  hipFunction_t kernel = nullptr;
++  HIP_CHECK(hipModuleGetFunction(&kernel, module, "smoke"));
++  constexpr size_t count = 128;
++  std::array<unsigned, count> input{}, output{};
++  for (size_t i = 0; i < count; ++i)
++    input[i] = static_cast<unsigned>(i * 3);
++  void *device_input = nullptr;
++  void *device_output = nullptr;
++  HIP_CHECK(hipMalloc(&device_input, sizeof(input)));
++  HIP_CHECK(hipMalloc(&device_output, sizeof(output)));
++  HIP_CHECK(hipMemcpy(device_input, input.data(), sizeof(input), hipMemcpyHostToDevice));
++  HIP_CHECK(hipMemset(device_output, 0, sizeof(output)));
++  void *arguments[] = {&device_input, &device_output};
++  HIP_CHECK(hipModuleLaunchKernel(kernel, 2, 1, 1, 64, 1, 1, 0, nullptr, arguments, nullptr));
++  HIP_CHECK(hipDeviceSynchronize());
++  HIP_CHECK(hipMemcpy(output.data(), device_output, sizeof(output), hipMemcpyDeviceToHost));
++  for (size_t i = 0; i < count; ++i) {
++    if (output[i] != input[i] + 7) {
++      std::fprintf(stderr, "Element %zu: got %u, expected %u\n", i, output[i], input[i] + 7);
++      return 1;
++    }
++  }
++  HIP_CHECK(hipFree(device_input));
++  HIP_CHECK(hipFree(device_output));
++  HIP_CHECK(hipModuleUnload(module));
++  HIP_CHECK(hipDeviceReset());
++  std::puts("128 kernel results matched");
++  return 0;
++}
+diff --git a/emulation/rocjitsu/tests/tools/llvm_codegen_smoke.md b/emulation/rocjitsu/tests/tools/llvm_codegen_smoke.md
+new file mode 100644
+index 0000000000..ac82c791f6
+--- /dev/null
++++ b/emulation/rocjitsu/tests/tools/llvm_codegen_smoke.md
+@@ -0,0 +1,56 @@
++# LLVM compiler compatibility smoke tests
++
++These optional tests compile fresh kernels with an external LLVM build, check
++the ELF feature flags, and execute 128 checked results through the real
++runtime on a simulated GPU. Separate HIP and direct HSA tests cover `gfx90a`,
++`gfx950`, `gfx1250`, `gfx1250-strict`, and `gfx12-5-generic`. The strict and
++generic objects execute on the ordinary gfx1250 simulator configuration;
++target compatibility is handled by the runtime.
++
++Configure an existing RocJITsu build with the LLVM tools to test:
++
++```sh
++cmake -S rocm-systems/emulation/rocjitsu -B build \
++  -DRJ_LLVM_SMOKE_TOOLS_DIR="$HOME/llvm/main/build/bin"
++ninja -C build llvm_codegen_smoke llvm_codegen_hsa_smoke
++ctest --test-dir build -R '^LlvmCodegen(Hsa)?Smoke\.' -j4 --output-on-failure
++```
++
++Build LLVM completely before running the tests. A version string alone does
++not establish that every tool was rebuilt from the current checkout.
++The HIP/HSA headers and runtimes come from the build's existing `ROCM_PATH`; LLVM's
++`llc`, `llvm-mc`, `ld.lld`, `llvm-readobj`, and `llvm-objdump` come exclusively
++from `RJ_LLVM_SMOKE_TOOLS_DIR`. No LLVM development libraries are linked into
++RocJITsu. Clear the CMake setting to disable these external-toolchain tests.
++
++The driver compares direct object emission with the assembly/link path and
++exercises module flags and assembly target directives, including
++default, enabled and disabled XNACK/SRAM-ECC settings. On `gfx90a` and `gfx950`,
++explicit modes incompatible with the simulated agent must be rejected; the
++other cases must run and produce the expected output. The three gfx1250-family
++targets have permanently enabled XNACK, so an explicit OFF module flag must
++not turn it off. Their default SRAM-ECC mode must execute. Explicit SRAM-ECC
++ON and OFF currently remain unsupported by the HIP/ROCr ISA registries, so
++these tests check their rejection; they do not establish support for those
++modes. Separate metadata controls check legacy XNACK UNSUPPORTED and ANY
++compatibility and explicit XNACK OFF rejection. The compiler-produced objects
++are never modified.
++
++To compare source-built runtimes without replacing the SDK libraries, set
++`RJ_LLVM_SMOKE_PRELOAD` to their absolute paths, separated by colons:
++
++```sh
++RJ_LLVM_SMOKE_PRELOAD="/path/to/libamdhip64.so.7:/path/to/libhsa-runtime64.so.1" \
++  ctest --test-dir build -R '^LlvmCodegen(Hsa)?Smoke\.' -j4 --output-on-failure
++```
++
++The driver injects these libraries only into the simulator process. Do not
++preload HIP globally into the compiler tools: the SDK's COMGR can introduce
++LLVM libraries incompatible with the compiler under test. For ROCr-only
++experiments, select `^LlvmCodegenHsaSmoke\.` and preload only ROCr.
++
++Each target retains generated IR, assembly, linked code objects, tool output,
++and a `results.json` under `build/tests/llvm_codegen_smoke_objects/` or
++`build/tests/llvm_codegen_hsa_smoke_objects/`. Failures are reported as
++failures, including missing compiler support or runtime rejection of a
++supported case; these tests do not silently skip unsupported toolchains.
+diff --git a/emulation/rocjitsu/tests/tools/llvm_codegen_smoke.py b/emulation/rocjitsu/tests/tools/llvm_codegen_smoke.py
+new file mode 100644
+index 0000000000..dc76b40559
+--- /dev/null
++++ b/emulation/rocjitsu/tests/tools/llvm_codegen_smoke.py
+@@ -0,0 +1,243 @@
++#!/usr/bin/env python3
++# Copyright (c) 2026 Advanced Micro Devices, Inc.
++# SPDX-License-Identifier: MIT
++
++"""Compile fresh LLVM code objects and check their flags and execution."""
++
++import argparse
++import json
++import os
++from pathlib import Path
++import shlex
++import struct
++import subprocess
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('--llvm-bin', type=Path, required=True)
++    parser.add_argument('--helper', type=Path, required=True)
++    parser.add_argument('--rocjitsu', type=Path, required=True)
++    parser.add_argument('--config', type=Path, required=True)
++    parser.add_argument('--output', type=Path, required=True)
++    parser.add_argument(
++        '--runtime-preload', default=os.environ.get('RJ_LLVM_SMOKE_PRELOAD', '')
++    )
++    parser.add_argument(
++        '--target',
++        choices=['gfx90a', 'gfx950', 'gfx1250', 'gfx1250-strict', 'gfx12-5-generic'],
++        required=True,
++    )
++    args = parser.parse_args()
++    args.output.mkdir(parents=True, exist_ok=True)
++    source = (
++        Path(__file__).parent.parent / 'kernels/llvm_codegen_smoke.ll'
++    ).read_text()
++    results = []
++    env = dict(os.environ, HSA_XNACK='0')
++
++    def run(label, command):
++        command = [str(arg) for arg in command]
++        print(shlex.join(command), flush=True)
++        command_env = env
++        if args.runtime_preload and command[0] == str(args.rocjitsu):
++            command_env = dict(env)
++            command_env['LD_PRELOAD'] = ':'.join(
++                part
++                for part in [args.runtime_preload, env.get('LD_PRELOAD', '')]
++                if part
++            )
++        try:
++            proc = subprocess.run(
++                command,
++                env=command_env,
++                stdout=subprocess.PIPE,
++                stderr=subprocess.STDOUT,
++                text=True,
++                timeout=60,
++            )
++            output, code = proc.stdout, proc.returncode
++        except subprocess.TimeoutExpired as error:
++            output, code = str(error), 124
++        (args.output / f'{label}.log').write_text(output)
++        results.append({'stage': label, 'command': command, 'returncode': code})
++        if code:
++            print(output, flush=True)
++        return code == 0
++
++    run('llvm-version', [args.llvm_bin / 'llc', '--version'])
++    for mode, xnack, sramecc in [
++        ('any', None, None),
++        ('off-any', 0, None),
++        ('on-any', 1, None),
++        ('off-on', 0, 1),
++        ('on-on', 1, 1),
++        ('off-off', 0, 0),
++    ]:
++        ir = args.output / f'{mode}.ll'
++        assembly = ir.with_suffix('.s')
++        obj = ir.with_suffix('.o')
++        direct_obj = ir.with_suffix('.direct.o')
++        code_object = ir.with_suffix('.hsaco')
++        module_flags = []
++        for name, value in [('xnack', xnack), ('sramecc', sramecc)]:
++            if value is not None:
++                module_flags.append(
++                    f'!{len(module_flags)} = !{{i32 1, !"amdgpu.{name}", i32 {value}}}'
++                )
++        flags = ''
++        if module_flags:
++            refs = ', '.join(f'!{i}' for i in range(len(module_flags)))
++            flags = (
++                f'\n!llvm.module.flags = !{{{refs}}}\n' + '\n'.join(module_flags) + '\n'
++            )
++        ir.write_text(source + flags)
++        # Go through assembly so the new .amdgcn_target handling is exercised,
++        # in addition to the module flags used by the code generator.
++        if not run(
++            f'{mode}-compile',
++            [
++                args.llvm_bin / 'llc',
++                '-mtriple=amdgcn-amd-amdhsa',
++                f'-mcpu={args.target}',
++                '-O2',
++                ir,
++                '-o',
++                assembly,
++            ],
++        ):
++            continue
++        if not run(
++            f'{mode}-assemble',
++            [
++                args.llvm_bin / 'llvm-mc',
++                '-triple=amdgcn-amd-amdhsa',
++                f'-mcpu={args.target}',
++                '-filetype=obj',
++                assembly,
++                '-o',
++                obj,
++            ],
++        ):
++            continue
++        if not run(
++            f'{mode}-link',
++            [args.llvm_bin / 'ld.lld', '-shared', obj, '-o', code_object],
++        ):
++            continue
++        run(
++            f'{mode}-headers',
++            [args.llvm_bin / 'llvm-readobj', '--file-headers', code_object],
++        )
++        run(
++            f'{mode}-disassemble',
++            [args.llvm_bin / 'llvm-objdump', '--disassemble-all', code_object],
++        )
++        actual = struct.unpack_from('<I', code_object.read_bytes(), 48)[0]
++        if run(
++            f'{mode}-direct-compile',
++            [
++                args.llvm_bin / 'llc',
++                '-mtriple=amdgcn-amd-amdhsa',
++                f'-mcpu={args.target}',
++                '-O2',
++                '-filetype=obj',
++                ir,
++                '-o',
++                direct_obj,
++            ],
++        ):
++            direct_flags = struct.unpack_from('<I', direct_obj.read_bytes(), 48)[0]
++            results.append(
++                {
++                    'stage': f'{mode}-direct-flags',
++                    'actual': hex(direct_flags),
++                    'expected': hex(actual),
++                    'returncode': 0 if direct_flags == actual else 1,
++                }
++            )
++        machine = {
++            'gfx90a': 0x3F,
++            'gfx950': 0x4F,
++            'gfx1250': 0x49,
++            'gfx1250-strict': 0xEB,
++            'gfx12-5-generic': 0x5B,
++        }[args.target]
++        # gfx1250 and strict have XNACK permanently enabled. The target ID
++        # omits its mode, but ELF records ON even with an explicit OFF flag.
++        if args.target in ('gfx1250', 'gfx1250-strict', 'gfx12-5-generic'):
++            expected = machine | (3 << 8)
++        else:
++            expected = machine | ((1 if xnack is None else xnack + 2) << 8)
++        expected |= (1 if sramecc is None else sramecc + 2) << 10
++        if args.target == 'gfx12-5-generic':
++            expected |= 1 << 24  # Generic ABI version 1.
++        matched = actual == expected
++        results.append(
++            {
++                'stage': f'{mode}-flags',
++                'actual': hex(actual),
++                'expected': hex(expected),
++                'returncode': 0 if matched else 1,
++            }
++        )
++        print(f'{mode}: e_flags={actual:#x}, expected={expected:#x}', flush=True)
++        fixed_xnack = args.target in ('gfx1250', 'gfx1250-strict', 'gfx12-5-generic')
++        # The current HIP/ROCr stack advertises no selectable SRAM-ECC mode
++        # for gfx1250. Explicit modes remain unsupported, independently of XNACK.
++        incompatible = (
++            (sramecc is not None) if fixed_xnack else (sramecc == 0 or xnack == 1)
++        )
++        action = 'reject' if incompatible else 'execute'
++        run(
++            f'{mode}-{action}',
++            [
++                args.rocjitsu,
++                '--config',
++                args.config,
++                '--',
++                args.helper,
++                action,
++                code_object,
++            ],
++        )
++
++    # Fixed-on targets must keep accepting older producer flags, but must not
++    # silently accept an explicitly OFF XNACK contract. These are separate
++    # metadata controls; never rewrite the compiler-produced smoke objects.
++    original = args.output / 'any.hsaco'
++    if (
++        args.target in ('gfx1250', 'gfx1250-strict', 'gfx12-5-generic')
++        and original.exists()
++    ):
++        for label, bits, action in [
++            ('legacy-xnack-unsupported', 0, 'execute'),
++            ('xnack-any-compatible', 0x100, 'execute'),
++            ('xnack-off-incompatible', 0x200, 'reject'),
++        ]:
++            image = bytearray(original.read_bytes())
++            flags = struct.unpack_from('<I', image, 48)[0]
++            struct.pack_into('<I', image, 48, (flags & ~0x300) | bits)
++            control = args.output / f'{label}.hsaco'
++            control.write_bytes(image)
++            run(
++                label,
++                [
++                    args.rocjitsu,
++                    '--config',
++                    args.config,
++                    '--',
++                    args.helper,
++                    action,
++                    control,
++                ],
++            )
++
++    (args.output / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
++    failed = [r['stage'] for r in results if r['returncode']]
++    print('FAIL: ' + ', '.join(failed) if failed else 'PASS: all smoke stages')
++    return int(bool(failed))
++
++
++if __name__ == '__main__':
++    raise SystemExit(main())
+diff --git a/projects/clr/rocclr/device/device.cpp b/projects/clr/rocclr/device/device.cpp
+index 7a75245196..46f5d6974f 100644
+--- a/projects/clr/rocclr/device/device.cpp
++++ b/projects/clr/rocclr/device/device.cpp
+@@ -306,11 +306,19 @@ const Isa* Isa::findIsa(const char* isaName) {
+   if (!isaName) return nullptr;
+   const char* prefix = std::strstr(isaName, hsaIsaNamePrefix);
+   if (prefix != isaName) return nullptr;
+-  const char* targetId = isaName + std::strlen(hsaIsaNamePrefix);
++  std::string targetId = isaName + std::strlen(hsaIsaNamePrefix);
++  // Older COMGR versions spell fixed-on XNACK from the ELF flags as a target
++  // modifier. These processors have no selectable XNACK mode: accept ON as
++  // their canonical target, but keep rejecting OFF and unsupported features.
++  for (const char* fixedXnackTarget : {"gfx1250", "gfx1250-strict", "gfx12-5-generic"}) {
++    if (targetId == std::string(fixedXnackTarget) + ":xnack+") {
++      targetId = fixedXnackTarget;
++      break;
++    }
++  }
+   auto supportedIsas_ = supportedIsas();
+-  auto isaIter = std::find_if(supportedIsas_.first, supportedIsas_.second, [&](const Isa& isa) {
+-    return std::strcmp(targetId, isa.targetId_) == 0;
+-  });
++  auto isaIter = std::find_if(supportedIsas_.first, supportedIsas_.second,
++                              [&](const Isa& isa) { return targetId == isa.targetId_; });
+   return isaIter == supportedIsas_.second ? nullptr : isaIter;
+ }
+ 
+@@ -1384,7 +1392,7 @@ bool Device::GetHandleForAddressRange(void* dev_ptr, size_t size, void* handle,
+              "Cannot retrieve amd_mem_obj for dev_ptr: 0x%x", dev_ptr);
+     return false;
+   }
+-  
++
+   device::Memory* dev_mem = amd_mem_obj->getDeviceMemory(*this);
+   return dev_mem->GetFDHandleForMem(dev_ptr, size, VmmPtr, handle, flags);
+ }
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/libamdhsacode/amd_hsa_code.cpp b/projects/rocr-runtime/runtime/hsa-runtime/libamdhsacode/amd_hsa_code.cpp
+index 581196d904..f6142cf1cc 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/libamdhsacode/amd_hsa_code.cpp
++++ b/projects/rocr-runtime/runtime/hsa-runtime/libamdhsacode/amd_hsa_code.cpp
+@@ -605,6 +605,7 @@ inline bool IsNoteStringSizeWithinRoom(size_t room, size_t offset, uint16_t clai
+       std::string Name = "";
+       bool XnackSupported = false;
+       bool SrameccSupported = false;
++      bool XnackAlwaysOn = false;
+     };
+ 
+     // TODO: Move isa registry into the loader.
+@@ -655,8 +656,8 @@ inline bool IsNoteStringSizeWithinRoom(size_t room, size_t offset, uint16_t clai
+       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1153: MI.Name = "gfx1153"; MI.XnackSupported = false; MI.SrameccSupported = false; break;
+       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1200: MI.Name = "gfx1200"; MI.XnackSupported = false; MI.SrameccSupported = false; break;
+       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1201: MI.Name = "gfx1201"; MI.XnackSupported = false; MI.SrameccSupported = false; break;
+-      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1250: MI.Name = "gfx1250"; MI.XnackSupported = true; MI.SrameccSupported = true; break;
+-      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1250_STRICT: MI.Name = "gfx1250-strict"; MI.XnackSupported = true; MI.SrameccSupported = true; break;
++      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1250: MI.Name = "gfx1250"; MI.XnackSupported = true; MI.SrameccSupported = true; MI.XnackAlwaysOn = true; break;
++      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1250_STRICT: MI.Name = "gfx1250-strict"; MI.XnackSupported = true; MI.SrameccSupported = true; MI.XnackAlwaysOn = true; break;
+ 
+       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX9_GENERIC:    MI.Name = "gfx9-generic";    MI.XnackSupported = true; MI.SrameccSupported = false; break;
+       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX9_4_GENERIC:  MI.Name = "gfx9-4-generic";  MI.XnackSupported = true;  MI.SrameccSupported = true; break;
+@@ -664,7 +665,7 @@ inline bool IsNoteStringSizeWithinRoom(size_t room, size_t offset, uint16_t clai
+       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX10_3_GENERIC: MI.Name = "gfx10-3-generic"; MI.XnackSupported = false; MI.SrameccSupported = false; break;
+       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX11_GENERIC:   MI.Name = "gfx11-generic";   MI.XnackSupported = false; MI.SrameccSupported = false; break;
+       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX12_GENERIC:   MI.Name = "gfx12-generic";   MI.XnackSupported = false; MI.SrameccSupported = false; break;
+-      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX12_5_GENERIC: MI.Name = "gfx12-5-generic"; MI.XnackSupported = false; MI.SrameccSupported = false; break;
++      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX12_5_GENERIC: MI.Name = "gfx12-5-generic"; MI.XnackSupported = false; MI.SrameccSupported = false; MI.XnackAlwaysOn = true; break;
+       default: return false;
+       }
+       return true;
+@@ -805,10 +806,12 @@ inline bool IsNoteStringSizeWithinRoom(size_t room, size_t offset, uint16_t clai
+           else if (MI.SrameccSupported)
+             MI.Name += ":sramecc-";
+ 
+-          if (img->EFlags() & ELF::EF_AMDGPU_FEATURE_XNACK_V3)
+-            MI.Name += ":xnack+";
+-          else if (MI.XnackSupported)
+-            MI.Name += ":xnack-";
++          if (!MI.XnackAlwaysOn) {
++            if (img->EFlags() & ELF::EF_AMDGPU_FEATURE_XNACK_V3)
++              MI.Name += ":xnack+";
++            else if (MI.XnackSupported)
++              MI.Name += ":xnack-";
++          }
+         } else if (code_object_major_version >= 4) {
+           switch (img->EFlags() & ELF::EF_AMDGPU_FEATURE_SRAMECC_V4) {
+           case ELF::EF_AMDGPU_FEATURE_SRAMECC_OFF_V4:
+@@ -819,13 +822,22 @@ inline bool IsNoteStringSizeWithinRoom(size_t room, size_t offset, uint16_t clai
+             break;
+           }
+ 
+-          switch (img->EFlags() & ELF::EF_AMDGPU_FEATURE_XNACK_V4) {
+-          case ELF::EF_AMDGPU_FEATURE_XNACK_OFF_V4:
+-            MI.Name += ":xnack-";
+-            break;
+-          case ELF::EF_AMDGPU_FEATURE_XNACK_ON_V4:
+-            MI.Name += ":xnack+";
+-            break;
++          const unsigned xnack = img->EFlags() & ELF::EF_AMDGPU_FEATURE_XNACK_V4;
++          if (MI.XnackAlwaysOn) {
++            // Fixed-on XNACK is recorded in ELF but is not a target-ID modifier.
++            // Retain compatibility with older producers that marked it unsupported
++            // or unspecified, while refusing an explicit incompatible OFF setting.
++            if (xnack == ELF::EF_AMDGPU_FEATURE_XNACK_OFF_V4)
++              return false;
++          } else {
++            switch (xnack) {
++            case ELF::EF_AMDGPU_FEATURE_XNACK_OFF_V4:
++              MI.Name += ":xnack-";
++              break;
++            case ELF::EF_AMDGPU_FEATURE_XNACK_ON_V4:
++              MI.Name += ":xnack+";
++              break;
++            }
+           }
+ 
+           // Generic version is not part of the ISA name.
+-- 
+2.43.0
+

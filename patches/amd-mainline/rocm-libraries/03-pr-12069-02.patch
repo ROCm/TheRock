@@ -1,0 +1,194 @@
+From aabcd23ed6cfa11652932eff6d2c0a4120f3fc9a Mon Sep 17 00:00:00 2001
+From: Estevan Vedovelli <Estevan.Vedovelli@amd.com>
+Date: Tue, 15 Sep 2026 13:18:35 -0400
+Subject: [PATCH] Add tests to cover new parsings for gfx1250-strict
+
+(cherry picked from commit d1c13ebd106d08710f77d6f6d63457cddc96f1ca)
+---
+ shared/tensile/Tensile/Hardware.py            |  5 +-
+ .../tensile/Tensile/Tests/unit/test_Common.py | 61 +++++++++++++++++++
+ .../Tests/unit/test_HardwarePredicates.py     | 25 ++++++++
+ .../Tests/unit/test_TensileCreateLibrary.py   | 31 ++++++++++
+ 4 files changed, 120 insertions(+), 2 deletions(-)
+
+diff --git a/shared/tensile/Tensile/Hardware.py b/shared/tensile/Tensile/Hardware.py
+index d04a6a9265..6ac9d20313 100644
+--- a/shared/tensile/Tensile/Hardware.py
++++ b/shared/tensile/Tensile/Hardware.py
+@@ -25,16 +25,17 @@
+ from . import Properties
+ from . import Common
+ import copy
++import re
+ 
+ class HardwarePredicate(Properties.Predicate):
+     @classmethod
+     def FromISA(cls, isa):
+-        gfxArch = Common.gfxName(isa).removesuffix("-strict")
++        gfxArch = re.sub("-strict$", "", Common.gfxName(isa))
+         return cls("AMDGPU", value=cls("Processor", value=gfxArch))
+ 
+     @classmethod
+     def FromHardware(cls, isa, cuCount=None, isAPU=None):
+-        gfxArch = Common.gfxName(isa).removesuffix("-strict")
++        gfxArch = re.sub("-strict$", "", Common.gfxName(isa))
+         if cuCount == None and isAPU == None:
+             return cls("AMDGPU", value=cls("Processor", value=gfxArch))
+         elif cuCount == None:
+diff --git a/shared/tensile/Tensile/Tests/unit/test_Common.py b/shared/tensile/Tensile/Tests/unit/test_Common.py
+index 26857a9dde..07cdebcefc 100644
+--- a/shared/tensile/Tensile/Tests/unit/test_Common.py
++++ b/shared/tensile/Tensile/Tests/unit/test_Common.py
+@@ -28,6 +28,67 @@ import Tensile.Common as Common
+ 
+ import os
+ 
++import pytest
++
++
++@pytest.fixture
++def clearStrictEnv():
++    """Ensure the strict compiler-target env var is unset around each test."""
++    Common.os.environ.pop("TENSILE_GFX1250_COMPILER_TARGET", None)
++    yield
++    Common.os.environ.pop("TENSILE_GFX1250_COMPILER_TARGET", None)
++
++
++def test_architectureMap_strict_maps_to_gfx1250():
++    assert Common.architectureMap["gfx1250-strict"] == "gfx1250"
++    assert Common.getArchitectureName("gfx1250-strict") == "gfx1250"
++
++
++def test_configureCompilerTarget_setsEnvForStrict(clearStrictEnv):
++    Common.configureCompilerTarget("gfx1250-strict")
++    assert Common.os.environ["TENSILE_GFX1250_COMPILER_TARGET"] == "gfx1250-strict"
++
++
++def test_configureCompilerTarget_clearsEnvForNonStrict(clearStrictEnv):
++    Common.os.environ["TENSILE_GFX1250_COMPILER_TARGET"] = "gfx1250-strict"
++    Common.configureCompilerTarget("gfx1250")
++    assert "TENSILE_GFX1250_COMPILER_TARGET" not in Common.os.environ
++
++
++def test_configureCompilerTarget_acceptsDelimiterVariants(clearStrictEnv):
++    # CMake uses `_` delimiters, the CLI uses `;`.
++    Common.configureCompilerTarget("gfx942_gfx1250-strict")
++    assert Common.os.environ["TENSILE_GFX1250_COMPILER_TARGET"] == "gfx1250-strict"
++    Common.os.environ.pop("TENSILE_GFX1250_COMPILER_TARGET", None)
++    Common.configureCompilerTarget("gfx942;gfx1250-strict")
++    assert Common.os.environ["TENSILE_GFX1250_COMPILER_TARGET"] == "gfx1250-strict"
++
++
++@pytest.mark.parametrize("mixed", ["gfx1250;gfx1250-strict", "all;gfx1250-strict"])
++def test_configureCompilerTarget_rejectsMixingWithGfx1250(clearStrictEnv, mixed):
++    with pytest.raises(ValueError):
++        Common.configureCompilerTarget(mixed)
++
++
++def test_compilerTarget_rewritesGfx1250OnlyWhenStrict(clearStrictEnv):
++    assert Common.compilerTarget("gfx1250") == "gfx1250"
++    assert Common.compilerTarget("gfx942") == "gfx942"
++
++    Common.os.environ["TENSILE_GFX1250_COMPILER_TARGET"] = "gfx1250-strict"
++    assert Common.compilerTarget("gfx1250") == "gfx1250-strict"
++    # Only gfx1250 is rewritten; other targets are untouched.
++    assert Common.compilerTarget("gfx942") == "gfx942"
++
++
++def test_gfxName_appliesStrictCompilerTarget(clearStrictEnv):
++    assert Common.gfxName((12, 5, 0)) == "gfx1250"
++
++    Common.os.environ["TENSILE_GFX1250_COMPILER_TARGET"] = "gfx1250-strict"
++    assert Common.gfxName((12, 5, 0)) == "gfx1250-strict"
++    # A different ISA is not affected by the strict env var.
++    assert Common.gfxName((9, 4, 2)) == "gfx942"
++
++
+ def test_gfxArch():
+     assert Common.gfxArch('gfx9') is None
+ 
+diff --git a/shared/tensile/Tensile/Tests/unit/test_HardwarePredicates.py b/shared/tensile/Tensile/Tests/unit/test_HardwarePredicates.py
+index 23519e695e..12b0ebb7b0 100644
+--- a/shared/tensile/Tensile/Tests/unit/test_HardwarePredicates.py
++++ b/shared/tensile/Tensile/Tests/unit/test_HardwarePredicates.py
+@@ -25,10 +25,35 @@
+ import pytest
+ import itertools
+ import copy
++import Tensile.Common as Common
+ from Tensile.Hardware import HardwarePredicate
+ from Tensile.SolutionLibrary import PredicateLibrary
+ 
+ 
++@pytest.fixture
++def strictCompilerTarget():
++    """Enable the gfx1250-strict compiler target for the duration of a test."""
++    Common.os.environ["TENSILE_GFX1250_COMPILER_TARGET"] = "gfx1250-strict"
++    yield
++    Common.os.environ.pop("TENSILE_GFX1250_COMPILER_TARGET", None)
++
++
++def test_hardware_predicate_strict_strips_suffix(strictCompilerTarget):
++    # Under strict, gfxName((12,5,0)) yields "gfx1250-strict", but the runtime
++    # hardware predicate must still match the real gfx1250 device.
++    assert Common.gfxName((12, 5, 0)) == "gfx1250-strict"
++
++    fromISA = HardwarePredicate.FromISA((12, 5, 0))
++    fromHardware = HardwarePredicate.FromHardware((12, 5, 0))
++    processor = fromISA.value
++
++    assert processor.tag == "Processor"
++    assert processor.value == "gfx1250"
++    assert "strict" not in processor.value
++    assert fromISA == HardwarePredicate("AMDGPU", value=HardwarePredicate("Processor", value="gfx1250"))
++    assert fromHardware == fromISA
++
++
+ def test_hardware_predicate_comparison():
+     a = HardwarePredicate.FromISA((9,0,0))
+     b = HardwarePredicate.FromISA((9,0,6))
+diff --git a/shared/tensile/Tensile/Tests/unit/test_TensileCreateLibrary.py b/shared/tensile/Tensile/Tests/unit/test_TensileCreateLibrary.py
+index 08a0633a83..9369057892 100644
+--- a/shared/tensile/Tensile/Tests/unit/test_TensileCreateLibrary.py
++++ b/shared/tensile/Tensile/Tests/unit/test_TensileCreateLibrary.py
+@@ -1139,6 +1139,37 @@ def sanityCheck_oldLogic(sourceLibPaths, asmLibPaths, codeObjectFiles, genSource
+         assert len(sanityCheck1) == 0, "Missing expected code object files: {}".format(sanityCheck1)
+ 
+ 
++@pytest.fixture
++def restoreArchitecture():
++    """Save/restore globalParameters['Architecture'] around a test."""
++    saved = Common.globalParameters.get("Architecture")
++    yield
++    if saved is None:
++        Common.globalParameters.pop("Architecture", None)
++    else:
++        Common.globalParameters["Architecture"] = saved
++
++
++def test_addFallback_splitPreservesStrictSuffix(restoreArchitecture):
++    """
++    addFallback keys the fallback library by the architecture name with the
++    xnack qualifier stripped. Splitting on a bare '-' would fold
++    'gfx1250-strict' back to 'gfx1250' (colliding with the non-strict variant),
++    so the split must be anchored on '-xnack'.
++    """
++    # splitArchs() converts ':xnack+' to '-xnack+', so these are the post-split
++    # forms addFallback iterates over.
++    Common.globalParameters["Architecture"] = "gfx90a:xnack+;gfx1250-strict"
++    masterLibraries = {"fallback": MagicMock()}
++
++    tcl.addFallback(masterLibraries)
++
++    # gfx90a-xnack+ must fold to gfx90a; gfx1250-strict must be preserved.
++    assert "gfx90a" in masterLibraries, "xnack qualifier not stripped from fallback key"
++    assert "gfx1250-strict" in masterLibraries, "strict suffix wrongly stripped from fallback key"
++    assert "gfx1250" not in masterLibraries, "strict arch collided onto the non-strict gfx1250 key"
++
++
+ ###############################################################################
+ # Discrimination tests for renameFallbacksPerArch (kpack-collision regression).
+ #
+-- 
+2.43.0
+

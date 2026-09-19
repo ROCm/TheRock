@@ -1,0 +1,1055 @@
+From 7d756cab87c793c674478e582e3a98b09de512ce Mon Sep 17 00:00:00 2001
+From: George Tseng <george.tseng@amd.com>
+Date: Mon, 14 Sep 2026 08:41:03 +0000
+Subject: [PATCH] hipblaslt: build gfx1250-strict from "all" and drop the
+ gfx1250v0 overlay
+
+SUPPORTED_ISA cannot name a stepping, since a stepping shares the ISA
+it steps from, so "all" expanded to every architecture except
+gfx1250-strict. A default build therefore left A0 silicon with no
+library to load, and the one spelling that was supposed to mean
+"everything supported" was the one spelling that missed it.
+supportedSteppings() reads the names off architectureMap instead,
+restricted to steppings whose base architecture is already covered --
+being a stepping does not make an unsupported architecture supported.
+The expansion now collides with itself by design, a stepping and its
+base being unbuildable in one run; isaCollisionFreeGroups partitions it
+as it already does for names given explicitly.
+
+The gfx1250v0 overlay machinery goes with the revision it described.
+That workaround kept v0 logic in a subtree of gfx1250's corpus tagged
+by ScheduleName, which needed find_gfx1250v0_overlay_violations to
+check the tagging, --require-gfx1250v0-overlay to opt a corpus in, and
+a matching CMake keyword to reach it -- all of it there because the two
+revisions could not be told apart by name. gfx1250-strict has its own
+architecture directory, so there is no overlay left to validate and
+nothing for the caller to opt into.
+
+The .amdgcn_target directive has to be brought back in step with the
+assembler. rocisa derives it from the ISA alone, which spells the base
+name for a stepping, while the build assembles that stepping with
+-mcpu=<stepping>. Assemblers through ROCm 10.1 accepted the mismatch;
+10.2 rejects it -- "target id '...--gfx1250' specifies a processor that
+is not valid for subarch 'amdgpu12.50s'" -- so the build broke on a
+toolchain move rather than on a code change. Rewriting the directive
+before assembling is a no-op for every ordinary architecture, where the
+target already equals the name derived from the ISA.
+
+The packaging check learns that a hyphen is not enough to make a
+stepping. _stepping_base accepted any hyphenated subtree, which would
+have exempted library/gfx942-xnack+/ from the very check that reports
+it; the trailing sign separates a target feature from a stepping there,
+as it already does for filenames.
+
+The test corpus marks a stepping as itself. configMarks reads the
+architecture out of a filename, and without the suffix
+bf16_CLS_gfx1250-strict.yaml would mark itself gfx1250 and claim to be
+a config for the architecture it exists to stay off of; pytest.ini
+registers the stepping's marker alongside its xfail- and skip- forms.
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+(cherry picked from commit a32445afa4486d30eb473d357f322c226302bcb1)
+---
+ .../hipblaslt/cmake/hipblaslt_codegen.cmake   |   7 +-
+ .../Tensile/Common/Architectures.py           |  44 +++-
+ .../tensilelite/Tensile/KernelWriter.py       |   4 +-
+ .../Tensile/TensileCreateLibrary/Run.py       |  31 ++-
+ .../Tensile/TensileLogic/ParseArguments.py    |  12 -
+ .../tensilelite/Tensile/TensileLogic/Run.py   |  21 +-
+ .../TensileLogic/ValidCorpusConsistency.py    | 133 +----------
+ .../Tensile/Tests/common/config_helpers.py    |  16 +-
+ .../test_parsearguments_char.ambr             |   3 -
+ .../TensileLogic/test_run_char.py             |   2 +-
+ .../Tensile/Tests/unit/test_arch_steppings.py |  73 ++++--
+ .../unit/test_valid_corpus_consistency.py     | 219 +-----------------
+ projects/hipblaslt/tensilelite/pytest.ini     |   3 +
+ .../tests/test_validate_library_layout.py     |  17 ++
+ .../tools/scripts/validate_library_layout.py  |  18 +-
+ 15 files changed, 186 insertions(+), 417 deletions(-)
+
+diff --git a/projects/hipblaslt/cmake/hipblaslt_codegen.cmake b/projects/hipblaslt/cmake/hipblaslt_codegen.cmake
+index 9bb58bbd91..dc553efda1 100644
+--- a/projects/hipblaslt/cmake/hipblaslt_codegen.cmake
++++ b/projects/hipblaslt/cmake/hipblaslt_codegen.cmake
+@@ -135,12 +135,12 @@ function(create_device_library)
+     set(_one
+         TARGET LOGIC_PATH OUTPUT_DIR CODEGEN_ROOT PYTHON_EXECUTABLE CXX_COMPILER OFFLOAD_BUNDLER JOBS LOGIC_FILTER
+         ASAN YAML_FORMAT NO_COMPRESS EXPERIMENTAL GEMM_A2A_FUSION LAZY_LOAD ASM_COMMENTS
+-        KEEP_BUILD_TMP ASM_DEBUG REQUIRE_GFX1250V0_OVERLAY)
++        KEEP_BUILD_TMP ASM_DEBUG)
+     set(_multi ARCHES)
+     cmake_parse_arguments(_cdl "${_opts}" "${_one}" "${_multi}" ${ARGN})
+ 
+     if(_cdl_UNPARSED_ARGUMENTS)
+-        message(FATAL_ERROR "create_device_library: unexpected arguments: ${_cdl_UNPARSED_ARGUMENTS} (permitted options: HOST_ASAN, HOST_TSAN; single-value keywords: TARGET, LOGIC_PATH, OUTPUT_DIR, CODEGEN_ROOT, PYTHON_EXECUTABLE, CXX_COMPILER, OFFLOAD_BUNDLER, JOBS, LOGIC_FILTER, ASAN, YAML_FORMAT, NO_COMPRESS, EXPERIMENTAL, GEMM_A2A_FUSION, LAZY_LOAD, ASM_COMMENTS, KEEP_BUILD_TMP, ASM_DEBUG, REQUIRE_GFX1250V0_OVERLAY; multi-value keyword: ARCHES)")
++        message(FATAL_ERROR "create_device_library: unexpected arguments: ${_cdl_UNPARSED_ARGUMENTS} (permitted options: HOST_ASAN, HOST_TSAN; single-value keywords: TARGET, LOGIC_PATH, OUTPUT_DIR, CODEGEN_ROOT, PYTHON_EXECUTABLE, CXX_COMPILER, OFFLOAD_BUNDLER, JOBS, LOGIC_FILTER, ASAN, YAML_FORMAT, NO_COMPRESS, EXPERIMENTAL, GEMM_A2A_FUSION, LAZY_LOAD, ASM_COMMENTS, KEEP_BUILD_TMP, ASM_DEBUG; multi-value keyword: ARCHES)")
+     endif()
+     if(NOT _cdl_LOGIC_PATH)
+         message(FATAL_ERROR "create_device_library: LOGIC_PATH is required")
+@@ -301,9 +301,6 @@ function(create_device_library)
+         --use-bundled-known-bugs
+         --check-all
+     )
+-    if(_cdl_REQUIRE_GFX1250V0_OVERLAY)
+-        list(APPEND _tensile_logic_args --require-gfx1250v0-overlay)
+-    endif()
+     set(_codegen_dependencies "${_known_bugs_resource}")
+     if(TARGET _rocisa)
+         list(APPEND _codegen_dependencies _rocisa)
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Common/Architectures.py b/projects/hipblaslt/tensilelite/Tensile/Common/Architectures.py
+index 4d5367c762..105861ce39 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Common/Architectures.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Common/Architectures.py
+@@ -69,8 +69,8 @@ architectureMap = {
+     "gfx1200": "gfx1200",
+     "gfx1201": "gfx1201",
+     "gfx1250": "gfx1250",
+-    # Spelled as clang and ROCr both spell it. Shares gfx1250's ISA, so `all` --
+-    # built from SUPPORTED_ISA -- cannot name it; ask for it by name.
++    # Spelled as clang and ROCr both spell it. Shares gfx1250's ISA, so
++    # SUPPORTED_ISA cannot name it; this entry is where `all` picks it up.
+     "gfx1250-strict": "gfx1250-strict",
+ }
+ 
+@@ -191,14 +191,39 @@ def isaToGfx(arch: IsaVersion) -> str:
+ SUPPORTED_GFX = [isaToGfx(isa) for isa in SUPPORTED_ISA]
+ 
+ 
++def supportedSteppings() -> List[str]:
++    """The stepping names ``all`` covers, in ``architectureMap`` order.
++
++    A stepping shares the ISA of the architecture it steps from, so
++    ``SUPPORTED_ISA`` cannot name one; they are read off ``architectureMap``
++    instead. Only steppings of an architecture already covered qualify: being a
++    stepping does not make an unsupported architecture supported.
++
++    Returns:
++        The supported stepping names.
++    """
++    covered = set(SUPPORTED_GFX)
++    return [
++        name
++        for name in architectureMap
++        if steppingArchOf(name) in covered
++    ]
++
++
+ def expandAllArchitectures(archs: List[str]) -> List[str]:
+     """Replaces the ``all`` keyword with the architectures it covers.
+ 
+-    ``all`` is built from SUPPORTED_ISA, so it cannot name an architecture that
+-    shares another's ISA; those names survive alongside it and reach the
+-    mixed-build guard, rather than being dropped into a silent build of the
+-    other stepping. Qualified specs (``gfx942:xnack+``) name architectures
+-    ``all`` already covers, so they stay absorbed.
++    ``all`` means every supported architecture, steppings included. Their names
++    come from two places because a stepping shares the ISA it steps from:
++    SUPPORTED_ISA names the rest, ``architectureMap`` names the steppings. A
++    stepping and its base cannot be built in one run, so the expansion collides
++    with itself by design and the caller partitions it; see
++    ``isaCollisionFreeGroups``.
++
++    Names the expansion does not cover survive beside it and reach the
++    mixed-build guard, rather than being dropped into a silent build of another
++    architecture. Qualified specs (``gfx942:xnack+``) name architectures ``all``
++    already covers, so they stay absorbed.
+ 
+     Empty entries are dropped: cmake joins ``GPU_TARGETS`` with ``;``, so a
+     trailing one arrives as an empty spec the predicate splitter would reject.
+@@ -212,8 +237,9 @@ def expandAllArchitectures(archs: List[str]) -> List[str]:
+     archs = [a.strip() for a in archs if a.strip()]
+     if "all" not in archs:
+         return archs
+-    covered = set(SUPPORTED_GFX)
+-    return SUPPORTED_GFX + [
++    expanded = SUPPORTED_GFX + supportedSteppings()
++    covered = set(expanded)
++    return expanded + [
+         a for a in archs if a != "all" and baseArchName(a) not in covered
+     ]
+ 
+diff --git a/projects/hipblaslt/tensilelite/Tensile/KernelWriter.py b/projects/hipblaslt/tensilelite/Tensile/KernelWriter.py
+index 49352fc6c9..56653b3ef7 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/KernelWriter.py
++++ b/projects/hipblaslt/tensilelite/Tensile/KernelWriter.py
+@@ -5623,7 +5623,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
+           # Bracket them with a self-contained cluster-scope handshake so every
+           # multicast load stays synchronized and signal/wait counts stay
+           # balanced. Gated on streamKMulticast (cluster + TDM broadcast):
+-          # gfx1250v0 has the cluster launch but no peer ld_bcst to keep in lockstep.
++          # gfx1250-strict has the cluster launch but no peer ld_bcst to keep in lockstep.
+           if streamKMulticast(kernel):
+             skComponent = Component.StreamK.find(self)
+             module.add(skComponent.streamKMulticastProloguePrefetchHandshake(self, kernel))
+@@ -7083,7 +7083,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
+                                # an `s_wait_tensorcnt 0` is emitted after the cooperative
+                                # tensor_load group so the broadcast retires before the back edge.
+                                # Requires TDM multicast, not just a cluster: without a peer
+-                               # ld_bcst that wait has nothing to retire (gfx1250v0).
++                               # ld_bcst that wait has nothing to retire (gfx1250-strict).
+                                "StreamKMulticast": bool(streamKMulticast(kernel)),
+                                # TDMLoadWaveSyncPass (Gfx1250Backend): insert a barrier
+                                # between an urgent and a deferrable tensor_load group.
+diff --git a/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py b/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
+index 16b16b8324..a5f5971495 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
++++ b/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
+@@ -213,6 +213,29 @@ def _stinky_asm_verify_wanted(isa: IsaVersion) -> bool:
+     return bool(globalParameters["CheckASMCodeSize"]) and isaToGfx(isa) == "gfx1250"
+ 
+ 
++def _alignAmdgcnTargetToStepping(sPath, isa, targetGfx: str) -> None:
++    """Make the ``.amdgcn_target`` directive match the assembler ``-mcpu``.
++
++    rocisa derives the directive from the ISA alone (``isaToGfx(isa)``), so for a
++    stepping that shares its base architecture's ISA -- e.g. ``gfx1250-strict``
++    spells ISA 12.5.0 like ``gfx1250`` -- it emits the base name. But the build
++    assembles that stepping with ``-mcpu=<stepping>`` (from ``archNamesByIsa``),
++    and the assembler rejects the base target id against the stepping subarch:
++        target id '...--gfx1250' specifies a processor that is not valid for
++        subarch 'amdgpu12.50s'
++    Rewrite the directive to the stepping name so the two agree. No-op for
++    ordinary architectures, where ``targetGfx == isaToGfx(isa)``.
++    """
++    derived = isaToGfx(isa)
++    if targetGfx == derived:
++        return
++    old = f'.amdgcn_target "amdgcn-amd-amdhsa--{derived}"'
++    new = f'.amdgcn_target "amdgcn-amd-amdhsa--{targetGfx}"'
++    text = Path(sPath).read_text()
++    if old in text:
++        Path(sPath).write_text(text.replace(old, new, 1))
++
++
+ def _stinky_out(msg: str) -> None:
+     """Emit one user-visible log line for Stinky verify.
+ 
+@@ -559,8 +582,10 @@ def writeSolutionsAndKernels(
+     def assemble(ret):
+         p, isa, wavefrontsize, _ = ret
+         o_path = p.with_suffix(".o")
++        targetGfx = archNames.get(isa) or isaToGfx(isa)
++        _alignAmdgcnTargetToStepping(p, isa, targetGfx)
+         try:
+-            asmToolchain.assembler(archNames.get(isa) or isaToGfx(isa), wavefrontsize, str(p), str(o_path))
++            asmToolchain.assembler(targetGfx, wavefrontsize, str(p), str(o_path))
+         except RuntimeError as e:
+             printWarning(f"Failed to assemble {p}: {e}")
+             return
+@@ -698,7 +723,9 @@ def writeSolutionsAndKernelsTCL(
+     def assemble(ret, removeTemporaries: bool):
+         asmPath, isa, wavefrontsize, result = ret
+         o_path = asmPath.with_suffix(".o")
+-        asmToolchain.assembler(archNames.get(isa) or isaToGfx(isa), wavefrontsize, str(asmPath), str(o_path))
++        targetGfx = archNames.get(isa) or isaToGfx(isa)
++        _alignAmdgcnTargetToStepping(asmPath, isa, targetGfx)
++        asmToolchain.assembler(targetGfx, wavefrontsize, str(asmPath), str(o_path))
+         if _stinky_asm_verify_wanted(isa):
+             _verify_stinky_asm_comment_vs_elf_text(asmPath, o_path, asmPath.stem)
+         if removeTemporaries:
+diff --git a/projects/hipblaslt/tensilelite/Tensile/TensileLogic/ParseArguments.py b/projects/hipblaslt/tensilelite/Tensile/TensileLogic/ParseArguments.py
+index 9ad26a4545..944a283eda 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/TensileLogic/ParseArguments.py
++++ b/projects/hipblaslt/tensilelite/Tensile/TensileLogic/ParseArguments.py
+@@ -74,18 +74,6 @@ def parseArguments():
+         help="semicolon-separated list of gfx architectures to validate "
+         "(e.g. 'gfx1151;gfx942'); 'all' validates every logic file",
+     )
+-    argParser.add_argument(
+-        "--require-gfx1250v0-overlay",
+-        dest="RequireGfx1250v0Overlay",
+-        action="store_true",
+-        help="with --check-all, fail if the gfx1250v0 overlay directory is "
+-        "missing. Opt-in for the caller that actually owns the gfx1250/"
+-        "gfx1250v0 split (hipBLASLt's dedicated gfx1250v0 device-library "
+-        "build); not implied by --architecture=gfx1250v0 alone, since a "
+-        "shared invocation can request that architecture against a corpus "
+-        "that never did a v0/v1 split for gfx1250 in the first place (e.g. "
+-        "hipSPARSELt's)",
+-    )
+ 
+     group = argParser.add_mutually_exclusive_group()
+     group.add_argument(
+diff --git a/projects/hipblaslt/tensilelite/Tensile/TensileLogic/Run.py b/projects/hipblaslt/tensilelite/Tensile/TensileLogic/Run.py
+index dbf6560d12..75ebc19b14 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/TensileLogic/Run.py
++++ b/projects/hipblaslt/tensilelite/Tensile/TensileLogic/Run.py
+@@ -265,22 +265,15 @@ def main():
+     reset_reported_failures()
+     jobs, isaInfoMap, logicPath, files, check, args = _setup()
+ 
+-    # Cross-file invariants (sibling DeviceNames, gfx1250v0-overlay
+-    # consistency) run only when --check-all is given, and only over the
+-    # already --architecture-filtered `files` -- the same scope the
+-    # per-solution validators below use -- so a build for one architecture
+-    # can't be failed by unrelated data in another. `files` excludes
+-    # Experimental logic the same way _runChecks()'s own per-file loop does.
++    # Cross-file invariants (sibling DeviceNames) run only when --check-all is
++    # given, and only over the already --architecture-filtered `files` -- the
++    # same scope the per-solution validators below use -- so a build for one
++    # architecture can't be failed by unrelated data in another. `files`
++    # excludes Experimental logic the same way _runChecks()'s own per-file
++    # loop does.
+     corpus_files = [f for f in files if "Experimental" not in f.parts]
+     corpus_violations = (
+-        check_corpus_invariants(
+-            logicPath,
+-            corpus_files,
+-            args.Architecture.split(";"),
+-            overlay_required=args.RequireGfx1250v0Overlay,
+-        )
+-        if check.All
+-        else []
++        check_corpus_invariants(logicPath, corpus_files) if check.All else []
+     )
+     report_corpus_invariant_violations(corpus_violations)
+     if corpus_violations:
+diff --git a/projects/hipblaslt/tensilelite/Tensile/TensileLogic/ValidCorpusConsistency.py b/projects/hipblaslt/tensilelite/Tensile/TensileLogic/ValidCorpusConsistency.py
+index 7cc62bb025..45da3a6a54 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/TensileLogic/ValidCorpusConsistency.py
++++ b/projects/hipblaslt/tensilelite/Tensile/TensileLogic/ValidCorpusConsistency.py
+@@ -39,7 +39,7 @@ from Tensile.CustomYamlLoader import (
+ )
+ 
+ GFX1250 = "gfx1250"
+-GFX1250V0 = "gfx1250v0"
++GFX1250_STRICT = "gfx1250-strict"
+ 
+ # The corpus's ``<codename>/<gfx_arch>/...`` layout always lives under a
+ # directory named ``asm_full``. Callers rarely pass that exact directory,
+@@ -208,111 +208,9 @@ def find_sibling_device_names_violations(
+     return violations
+ 
+ 
+-def find_gfx1250v0_overlay_violations(
+-    logic_root: Path,
+-    files: Optional[Sequence[Path]] = None,
+-    overlay_required: bool = False,
+-) -> List[str]:
+-    """gfx1250 ships as two silicon revisions (v0, v1) sharing one ISA, arch
+-    name, and compiler target; the runtime tells them apart only via
+-    ``hipDeviceProp_t::asicRevision``, and ``TensileCreateLibrary`` globs one
+-    tree, separating the revisions by ``ScheduleName`` alone. A mis-tagged
+-    file fails silently -- dropped from v0, or leaked into every v1 build --
+-    so this checks the invariant against the tree that actually ships.
+-
+-    ``files`` is the same caller-selected list ``find_sibling_device_names_
+-    violations`` takes (the full corpus by default, or the already
+-    ``--architecture``/``Experimental``-filtered set ``Run.py`` passes) --
+-    both the overlay-contents and outside-overlay scans below are scoped to
+-    it, not a fresh unconditional walk of ``logic_root``, so an excluded
+-    file can't trip a violation the caller never selected. The
+-    directory-*exists* requirement is independent of file selection, since
+-    it is checking that the tree the runtime will actually read exists at
+-    all, not something about the selected files:
+-
+-    1. if ``overlay_required`` -- an explicit caller policy, not implied by
+-       ``--architecture`` (see below) -- the ``gfx1250v0`` overlay directory
+-       must exist on disk. Not every ``TensileLogic``-checked corpus does a
+-       v0/v1 split for gfx1250 in the first place -- e.g. hipSPARSELt's
+-       corpus has no ``gfx1250v0`` directory at all -- so a missing overlay
+-       is only a violation when the caller actually owns the split and says
+-       so;
+-    2. an *existing but empty* overlay (empty within the selected ``files``)
+-       is always a violation, regardless of ``overlay_required``: a v0 build
+-       reports success having written a library with no solutions in it,
+-       and any tree deliberately doing the split should never leave the
+-       overlay directory present-but-empty;
+-    3. every selected file inside the overlay declares
+-       ``ScheduleName: gfx1250v0``;
+-    4. every selected file inside the overlay keeps
+-       ``ArchitectureName: gfx1250`` (a stepping there is rejected by
+-       ``TensileCreateLibrary``, and ``library/gfx1250v0/`` is a directory
+-       the runtime never reads); and
+-    5. no selected file *outside* the overlay claims
+-       ``ScheduleName: gfx1250v0`` (checked regardless of whether the
+-       overlay directory exists).
+-
+-    ``overlay_required`` must be an explicit, caller-owned policy rather
+-    than inferred from whether ``gfx1250v0`` was requested: a shared
+-    invocation (e.g. hipSPARSELt's, which never did a gfx1250 v0/v1 split)
+-    can still be asked to build for architecture ``gfx1250v0`` without that
+-    request implying its corpus owns the overlay. Only hipBLASLt's dedicated
+-    gfx1250v0 device-library build (see ``device-library/CMakeLists.txt``,
+-    and ``--require-gfx1250v0-overlay`` in ``ParseArguments.py``) sets this
+-    ``True``.
+-    """
+-    logic_root = _resolve_corpus_root(logic_root)
+-    if files is None:
+-        files = sorted(logic_root.rglob("*.yaml"))
+-    violations: List[str] = []
+-    overlay_root = logic_root / GFX1250V0
+-    overlay_exists = overlay_root.is_dir()
+-    overlay_files = (
+-        sorted(p for p in files if p.is_relative_to(overlay_root)) if overlay_exists else []
+-    )
+-
+-    if overlay_required and not overlay_exists:
+-        violations.append(
+-            f"{GFX1250V0} overlay required but missing under {overlay_root}"
+-        )
+-    elif overlay_exists and not overlay_files:
+-        violations.append(
+-            f"{GFX1250V0} overlay ships no logic under {overlay_root} -- an "
+-            "empty overlay means a v0 build reports success having written a "
+-            "library with no solutions in it"
+-        )
+-
+-    for p in overlay_files:
+-        schedule_name = load_logic_schedule_name(p)
+-        if schedule_name != GFX1250V0:
+-            violations.append(
+-                f"{p.relative_to(logic_root)}: overlay file declares "
+-                f"ScheduleName {schedule_name!r}, expected {GFX1250V0!r}"
+-            )
+-        gfx_arch = load_logic_gfx_arch(p)
+-        if gfx_arch != GFX1250:
+-            violations.append(
+-                f"{p.relative_to(logic_root)}: overlay file declares "
+-                f"ArchitectureName {gfx_arch!r}, expected {GFX1250!r}"
+-            )
+-
+-    for p in sorted(files):
+-        if overlay_exists and p.is_relative_to(overlay_root):
+-            continue
+-        if load_logic_schedule_name(p) == GFX1250V0:
+-            violations.append(
+-                f"{p.relative_to(logic_root)}: declares ScheduleName "
+-                f"{GFX1250V0!r} outside the {GFX1250V0} overlay directory"
+-            )
+-
+-    return violations
+-
+-
+ def check_corpus_invariants(
+     logic_root: Path,
+     files: Optional[Sequence[Path]] = None,
+-    archs: Optional[Sequence[str]] = None,
+-    overlay_required: bool = False,
+ ) -> List[str]:
+     """Aggregate the corpus-wide invariant checks into one flat violation
+     list. Returns an empty list (rather than raising) when ``logic_root``
+@@ -320,21 +218,9 @@ def check_corpus_invariants(
+     cross-file comparison to make, so these checks are inapplicable rather
+     than failing.
+ 
+-    ``files`` and ``archs`` should be the caller's own already-selected file
+-    list and requested ``--architecture`` values (``["all"]`` when no
+-    filtering applies); both default to "the whole resolved corpus" for
+-    hermetic tests and other callers that just want to check everything.
+-
+-    The gfx1250v0-overlay check runs whenever ``gfx1250v0`` or ``all`` is in
+-    ``archs``, or ``overlay_required`` is set. ``overlay_required`` is a
+-    separate, explicit caller policy, deliberately *not* inferred from
+-    ``archs`` -- requesting architecture ``gfx1250v0`` does not by itself
+-    mean the corpus being validated owns a gfx1250/gfx1250v0 split (e.g. a
+-    shared invocation can ask for that architecture against hipSPARSELt's
+-    corpus, which never did the split and has no overlay directory at all).
+-    Only pass ``True`` when the caller actually owns that split (hipBLASLt's
+-    dedicated gfx1250v0 device-library build; see
+-    ``find_gfx1250v0_overlay_violations``).
++    ``files`` should be the caller's own already-selected file list, and
++    defaults to "the whole resolved corpus" for hermetic tests and other
++    callers that just want to check everything.
+ 
+     The chip-ID-architecture-lock check (locking chip-ID-aware dispatch to
+     ``gfx950``) is intentionally *not* included here: it guards a future
+@@ -348,15 +234,8 @@ def check_corpus_invariants(
+     resolved_root = _resolve_corpus_root(logic_root)
+     if files is None:
+         files = sorted(resolved_root.rglob("*.yaml"))
+-    if archs is None:
+-        archs = ["all"]
+-
+-    violations = list(find_sibling_device_names_violations(files, resolved_root))
+-    if overlay_required or GFX1250V0 in archs or "all" in archs:
+-        violations += find_gfx1250v0_overlay_violations(
+-            resolved_root, files, overlay_required=overlay_required
+-        )
+-    return violations
++
++    return list(find_sibling_device_names_violations(files, resolved_root))
+ 
+ 
+ def find_chip_id_arch_lock_violations(files: Sequence[Path]) -> List[str]:
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Tests/common/config_helpers.py b/projects/hipblaslt/tensilelite/Tensile/Tests/common/config_helpers.py
+index 90afdfba56..d0979a2d99 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Tests/common/config_helpers.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Tests/common/config_helpers.py
+@@ -38,6 +38,11 @@ from Tensile.Common.DataType import DataType
+ 
+ _TESTS_ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
+ 
++# The architectures the functional model stands in for. Both spellings are
++# listed rather than derived from one another: a stepping is its own
++# architecture here, exactly as it is everywhere else.
++FFM_EMULATED_ARCHS = ("gfx1250", "gfx1250-strict")
++
+ # Safe either way; bandit's B506 check only recognises the SafeLoader/CSafeLoader spelling,
+ # so the call sites using this name carry a bare nosec marker. Never spell that marker out
+ # with its leading hash here, or bandit parses this comment too (SEC-00404).
+@@ -138,7 +143,10 @@ def configMarks(filepath, rootDir, availableArchs):
+     if arch_val and markNamed(arch_val) not in marks:
+         marks.append(markNamed(arch_val))
+ 
+-    arch_in_name = re.search(r'(gfx\d+)', components[-1])
++    # The stepping suffix is part of the name it marks: without it
++    # ``tdm_gfx1250-strict.yaml`` would mark itself gfx1250 and claim to be a
++    # config for the architecture it exists to stay off of.
++    arch_in_name = re.search(r'(gfx\d+(?:-strict)?)', components[-1])
+     if arch_in_name and markNamed(arch_in_name.group(1)) not in marks:
+         marks.append(markNamed(arch_in_name.group(1)))
+ 
+@@ -165,11 +173,11 @@ def configMarks(filepath, rootDir, availableArchs):
+     # FFM-specific xfail: a config marked ``ffm_fail`` passes on real HW but
+     # fails under FFM emulation only. Turn it into an xfail only when running 
+     # under FFM — keyed on the emulator's HSA_MODEL_MEMFILE backing plus the 
+-    # gfx1250 arch — so it never fires on HW or on other emulators/arches, 
+-    # where the test must still run.
++    # arches the model stands in for — so it never fires on HW or on other 
++    # emulators/arches, where the test must still run.
+     if (
+         os.environ.get("HSA_MODEL_MEMFILE")
+-        and "gfx1250" in availableArchs
++        and any(a in FFM_EMULATED_ARCHS for a in availableArchs)
+         and markNamed("ffm_fail") in marks
+     ):
+         marks.append(pytest.mark.xfail)
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/characterization/TensileLogic/__snapshots__/test_parsearguments_char.ambr b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/characterization/TensileLogic/__snapshots__/test_parsearguments_char.ambr
+index 8077ab9fc5..a3154c3169 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/characterization/TensileLogic/__snapshots__/test_parsearguments_char.ambr
++++ b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/characterization/TensileLogic/__snapshots__/test_parsearguments_char.ambr
+@@ -8,7 +8,6 @@
+     'Jobs': '8',
+     'KnownBugs': 'kb.yaml',
+     'LogicPath': 'logic/dir',
+-    'RequireGfx1250v0Overlay': False,
+     'StrictKnownBugs': False,
+     'Verbose': 2,
+   })
+@@ -22,7 +21,6 @@
+     'Jobs': 48,
+     'KnownBugs': None,
+     'LogicPath': 'logic/dir',
+-    'RequireGfx1250v0Overlay': False,
+     'StrictKnownBugs': False,
+     'Verbose': 1,
+   })
+@@ -36,7 +34,6 @@
+     'Jobs': 48,
+     'KnownBugs': None,
+     'LogicPath': 'logic/dir',
+-    'RequireGfx1250v0Overlay': False,
+     'StrictKnownBugs': False,
+     'Verbose': 1,
+   })
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/characterization/TensileLogic/test_run_char.py b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/characterization/TensileLogic/test_run_char.py
+index 2e6475072d..05a1996c7d 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/characterization/TensileLogic/test_run_char.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/characterization/TensileLogic/test_run_char.py
+@@ -264,7 +264,7 @@ def _stub_main(monkeypatch, results, *, verbose=2, known_bugs=frozenset(),
+     if files is None:
+         files = [Path("lib/a.yaml")]
+     args = SimpleNamespace(
+-        KnownBugs=None, Verbose=verbose, Architecture="all", RequireGfx1250v0Overlay=False
++        KnownBugs=None, Verbose=verbose, Architecture="all"
+     )
+     check = Run.Check(OnlyCustomKernels=False, All=True)
+     monkeypatch.setattr(
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_arch_steppings.py b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_arch_steppings.py
+index 972cb9f7a6..185c69c96b 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_arch_steppings.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_arch_steppings.py
+@@ -129,31 +129,45 @@ def test_an_isa_naming_no_architecture_yields_no_macro():
+     assert archMacroNames(None) == []
+ 
+ 
+-def test_all_keeps_architectures_its_expansion_does_not_cover():
+-    """``all`` cannot name v0, so an explicit ``gfx1250-strict`` alongside it has to
+-    survive rather than be dropped -- being dropped would turn a request for an
+-    stepping that cannot be built together with v1 into a silent v1-only build.
+-    Kept, it reaches the mixed-build guard and reports the conflict."""
+-    expanded = expandAllArchitectures(["all", GFX1250_STRICT])
+-    assert GFX1250_STRICT in expanded
+-    assert set(SUPPORTED_GFX).issubset(expanded)
++def test_all_covers_the_steppings_of_the_architectures_it_covers():
++    """``all`` means every supported architecture, and a stepping is one. Leaving
++    it out made the default build -- ``install.sh`` passes ``all`` -- ship no
++    gfx1250-strict code objects at all, on a request that named everything."""
++    assert expandAllArchitectures(["all"]) == SUPPORTED_GFX + [GFX1250_STRICT]
++
++
++def test_a_stepping_named_beside_all_is_absorbed_rather_than_repeated():
++    """It is covered now, so naming it too says nothing new; repeating it would
++    hand the partitioner a duplicate and buy a third build run for it."""
++    assert expandAllArchitectures(["all", GFX1250_STRICT]) == SUPPORTED_GFX + [GFX1250_STRICT]
+ 
+ 
+ def test_all_expansion_does_not_duplicate_covered_architectures():
+-    assert expandAllArchitectures(["all", "gfx942"]) == SUPPORTED_GFX
++    assert expandAllArchitectures(["all", "gfx942"]) == SUPPORTED_GFX + [GFX1250_STRICT]
+ 
+ 
+ def test_expansion_is_a_passthrough_without_the_all_keyword():
+     assert expandAllArchitectures([GFX1250_STRICT, "gfx942"]) == [GFX1250_STRICT, "gfx942"]
+ 
+ 
++def test_only_steppings_of_covered_architectures_are_supported():
++    """``architectureMap`` is the source of stepping names, and it carries
++    entries that are not steppings at all -- ``all`` among them. Reading it
++    without that filter would put the keyword into the expansion of itself."""
++    from Tensile.Common.Architectures import supportedSteppings
++
++    steppings = supportedSteppings()
++    assert steppings == [GFX1250_STRICT]
++    assert all(steppingArchOf(s) in SUPPORTED_GFX for s in steppings)
++
++
+ @pytest.mark.parametrize("spec", ["gfx950[cu=64]", "gfx942:xnack+", "gfx942[id=74a0]"])
+ def test_all_absorbs_qualified_specs_of_architectures_it_covers(spec):
+     """Only names ``all`` genuinely cannot express may survive it. A predicate or
+     xnack spec names an architecture the expansion already covers, so keeping it
+     would both change behavior for architectures unrelated to the stepping split
+     and hand the predicate splitter a duplicate of that architecture."""
+-    assert expandAllArchitectures(["all", spec]) == SUPPORTED_GFX
++    assert expandAllArchitectures(["all", spec]) == SUPPORTED_GFX + [GFX1250_STRICT]
+ 
+ 
+ @pytest.mark.parametrize("padding", ["", " ", "\t"])
+@@ -163,7 +177,7 @@ def test_all_tolerates_empty_entries(padding):
+     discarded, empty entries included; keeping only genuinely uncoverable names
+     must not turn that into a hard build failure, since the predicate splitter
+     rejects any spec it cannot recognize."""
+-    assert expandAllArchitectures(["all", padding]) == SUPPORTED_GFX
++    assert expandAllArchitectures(["all", padding]) == SUPPORTED_GFX + [GFX1250_STRICT]
+ 
+ 
+ @pytest.mark.parametrize("padding", ["", " ", "\t"])
+@@ -180,7 +194,7 @@ def test_all_is_recognized_despite_surrounding_whitespace(keyword):
+     """Membership was tested on the raw entry while the filter compared the
+     stripped one, so a padded keyword skipped expansion and was handed to the
+     predicate splitter as an architecture named ``all``."""
+-    assert expandAllArchitectures([keyword, GFX1250_STRICT]) == SUPPORTED_GFX + [GFX1250_STRICT]
++    assert expandAllArchitectures([keyword]) == SUPPORTED_GFX + [GFX1250_STRICT]
+ 
+ 
+ # =========================================================================== #
+@@ -1505,6 +1519,11 @@ def _run_createlibrary(monkeypatch, tmp_path, arch, logicFiles=()):
+     every expensive step stubbed. ``logicFiles`` writes minimal logic files
+     (arch name, schedule name) into the logic dir; the real glob and filter run,
+     so the selection observed is the production wiring's.
++
++    A request covering two architectures that share an ISA takes the fan-out
++    instead, which ``run()`` returns straight after: the groups are recorded and
++    the spawning stubbed out, since the real one would hand a child pytest's own
++    argv. Stubbed unconditionally so no test can spawn a build by accident.
+     """
+     from unittest.mock import MagicMock
+ 
+@@ -1594,8 +1613,16 @@ def _run_createlibrary(monkeypatch, tmp_path, arch, logicFiles=()):
+     monkeypatch.setattr(RunModule, "copyStaticFiles", lambda *a, **kw: [])
+     monkeypatch.setattr(RunModule, "writeSolutionsAndKernelsTCL", _capture_archs)
+ 
+-    with pytest.raises(_Stop):
++    monkeypatch.setattr(
++        RunModule,
++        "_buildGroupsSeparately",
++        lambda groups, _jobs: captured.__setitem__("groups", groups),
++    )
++
++    try:
+         RunModule.run()
++    except _Stop:
++        pass
+ 
+     return captured
+ 
+@@ -1680,13 +1707,16 @@ def test_gfx1250_build_selects_only_the_architectures_logic(
+     assert captured["logicFiles"] == [_logicFileName(*_ARCH_LOGIC)]
+ 
+ 
+-def test_all_build_excludes_the_steppings_logic(
++def test_all_build_fans_out_to_cover_the_stepping(
+     monkeypatch, tmp_path, restore_global_parameters
+ ):
+-    """``all`` is the default distribution build and reaches the selection as the
+-    architectures it expands to -- a list built from ISAs, which cannot name a
+-    stepping. The stepping's logic must therefore be excluded from it, and every
+-    other architecture's must survive.
++    """``all`` is the default distribution build -- ``install.sh`` passes it --
++    and it covers the stepping, which no single run can name beside the
++    architecture it steps from. So it must reach the selection twice, once per
++    group, rather than once with the stepping quietly dropped: dropped, the
++    default build ships no gfx1250-strict code objects at all.
++
++    What each of those runs then selects is pinned by the two tests above.
+     """
+     captured = _run_createlibrary(
+         monkeypatch,
+@@ -1695,9 +1725,10 @@ def test_all_build_excludes_the_steppings_logic(
+         logicFiles=[_ARCH_LOGIC, _STRICT_LOGIC, _OTHER_ARCH_LOGIC],
+     )
+ 
+-    assert sorted(captured["logicFiles"]) == sorted(
+-        [_logicFileName(*_ARCH_LOGIC), _logicFileName(*_OTHER_ARCH_LOGIC)]
+-    )
++    groups = captured["groups"]
++    assert len(groups) == 2
++    assert GFX1250 in groups[0] and "gfx942" in groups[0]
++    assert groups[1] == [GFX1250_STRICT]
+ 
+ 
+ def test_stepping_selection_spares_other_architectures(
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_valid_corpus_consistency.py b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_valid_corpus_consistency.py
+index aa90533693..7c5a15e91e 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_valid_corpus_consistency.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_valid_corpus_consistency.py
+@@ -167,19 +167,6 @@ def _write_cu_variant_header_yaml(path, *, schedule="schedule", gfx="gfx942", cu
+     return path
+ 
+ 
+-def _write_overlay_yaml(path, *, schedule, gfx):
+-    """gfx1250v0-overlay tests only care about ScheduleName / gfx arch, but
+-    write the same full header shape ``_write_header_yaml`` does (rather than
+-    a bare positional list of scalars) so these stay representative of the
+-    real logic-file dialect that ``load_logic_schedule_name()`` /
+-    ``load_logic_gfx_arch()`` parse."""
+-    return _write_header_yaml(path, schedule=schedule, gfx=gfx)
+-
+-
+-# ===========================================================================
+-# read_device_names
+-# ===========================================================================
+-
+ def test_read_device_names_parses_header_line(tmp_path, vcc):
+     f = _write_header_yaml(tmp_path / "a.yaml", devices="Device 74a0, Device 74a1")
+     assert vcc.read_device_names(f) == ("74a0", "74a1")
+@@ -266,25 +253,6 @@ def test_resolve_corpus_root_skips_a_non_directory_asm_full_match(tmp_path, vcc)
+     assert vcc._resolve_corpus_root(tmp_path) == tmp_path
+ 
+ 
+-def test_gfx1250v0_overlay_violations_identical_via_ancestor_or_direct_corpus_root(tmp_path, vcc):
+-    # The exact shape that broke PR #11447's own CI: TensileLogic invoked
+-    # with `library` (an ancestor of asm_full), not asm_full directly. An
+-    # unresolved ancestor previously reported both a false "ships no logic"
+-    # violation (overlay_root computed at the wrong, nonexistent path) and a
+-    # false "outside the overlay" violation for every real overlay file.
+-    asm_full = tmp_path / "library" / "src" / "amd_detail" / "rocblaslt" / "src" / "Tensile" / "Logic" / "asm_full"
+-    _write_overlay_yaml(
+-        asm_full / vcc.GFX1250V0 / "Equality" / "logic.yaml",
+-        schedule=vcc.GFX1250V0, gfx=vcc.GFX1250,
+-    )
+-    _write_overlay_yaml(
+-        asm_full / "gfx1250" / "Equality" / "logic.yaml",
+-        schedule="gfx1250", gfx=vcc.GFX1250,
+-    )
+-    assert vcc.find_gfx1250v0_overlay_violations(asm_full) == []
+-    assert vcc.find_gfx1250v0_overlay_violations(tmp_path / "library") == []
+-
+-
+ def test_sibling_device_names_violations_identical_via_ancestor_or_direct_corpus_root(tmp_path, vcc):
+     asm_full = tmp_path / "library" / "src" / "amd_detail" / "rocblaslt" / "src" / "Tensile" / "Logic" / "asm_full"
+     _write_header_yaml(
+@@ -599,144 +567,13 @@ def test_chip_id_arch_lock_dedupes_repeated_archs(tmp_path, vcc):
+ 
+ 
+ # ===========================================================================
+-# find_gfx1250v0_overlay_violations
++# check_corpus_invariants
+ # ===========================================================================
+ 
+-def test_gfx1250v0_overlay_clean(tmp_path, vcc):
+-    _write_overlay_yaml(
+-        tmp_path / vcc.GFX1250V0 / "Equality" / "logic.yaml",
+-        schedule=vcc.GFX1250V0, gfx=vcc.GFX1250,
+-    )
+-    # A sibling v1 file elsewhere in the corpus, correctly *not* claiming the
+-    # v0 schedule name, must not trip the "leaked outside" check.
+-    _write_overlay_yaml(
+-        tmp_path / "gfx1250" / "Equality" / "logic.yaml",
+-        schedule="gfx1250", gfx=vcc.GFX1250,
+-    )
+-    assert vcc.find_gfx1250v0_overlay_violations(tmp_path) == []
+-
+-
+-def test_gfx1250v0_overlay_no_split_at_all_is_not_a_violation_when_not_required(tmp_path, vcc):
+-    # No gfx1250v0 directory anywhere, and the caller isn't specifically
+-    # requesting the gfx1250v0 architecture -- this corpus simply hasn't done
+-    # a v0/v1 split for gfx1250 (e.g. hipSPARSELt's corpus, which ships only a
+-    # unified gfx1250 tree with no per-revision overlay at all, and never
+-    # requests architecture gfx1250v0). Not every TensileLogic-checked corpus
+-    # is hipBLASLt's, so this is inapplicable, not a violation.
+-    (tmp_path / "gfx1250" / "Equality").mkdir(parents=True)
+-    assert vcc.find_gfx1250v0_overlay_violations(tmp_path, overlay_required=False) == []
+-
+-
+-def test_gfx1250v0_overlay_missing_is_a_violation_when_required(tmp_path, vcc):
+-    # hipBLASLt's dedicated gfx1250v0 build (device-library/CMakeLists.txt
+-    # invokes TensileLogic with --architecture gfx1250v0 specifically for
+-    # this) must find the overlay -- a corpus that does the v0/v1 split for
+-    # gfx1250 elsewhere cannot silently lose the overlay directory itself.
+-    (tmp_path / "gfx1250" / "Equality").mkdir(parents=True)
+-    violations = vcc.find_gfx1250v0_overlay_violations(tmp_path, overlay_required=True)
+-    assert any("required" in v for v in violations)
+-
+-
+-def test_gfx1250v0_overlay_existing_but_empty_is_a_violation(tmp_path, vcc):
+-    # The overlay directory exists on disk but ships no logic files -- this
+-    # is the actually-broken case: something started the v0/v1 split for
+-    # this corpus but the overlay ended up empty. A violation regardless of
+-    # overlay_required.
+-    (tmp_path / vcc.GFX1250V0).mkdir(parents=True)
+-    (tmp_path / "gfx1250" / "Equality").mkdir(parents=True)
+-    violations = vcc.find_gfx1250v0_overlay_violations(tmp_path)
+-    assert len(violations) == 1
+-    assert "ships no logic" in violations[0]
+-
+-
+-def test_gfx1250v0_overlay_wrong_schedule_name_is_a_violation(tmp_path, vcc):
+-    _write_overlay_yaml(
+-        tmp_path / vcc.GFX1250V0 / "Equality" / "logic.yaml",
+-        schedule="gfx1250",  # should be "gfx1250v0"
+-        gfx=vcc.GFX1250,
+-    )
+-    violations = vcc.find_gfx1250v0_overlay_violations(tmp_path)
+-    assert any("ScheduleName" in v and "expected 'gfx1250v0'" in v for v in violations)
+-
+-
+-def test_gfx1250v0_overlay_wrong_architecture_name_is_a_violation(tmp_path, vcc):
+-    _write_overlay_yaml(
+-        tmp_path / vcc.GFX1250V0 / "Equality" / "logic.yaml",
+-        schedule=vcc.GFX1250V0,
+-        gfx="gfx1250v0",  # must stay the base arch, "gfx1250"
+-    )
+-    violations = vcc.find_gfx1250v0_overlay_violations(tmp_path)
+-    assert any("ArchitectureName" in v and "expected 'gfx1250'" in v for v in violations)
+-
+-
+-def test_gfx1250v0_overlay_leaking_outside_is_a_violation(tmp_path, vcc):
+-    _write_overlay_yaml(
+-        tmp_path / vcc.GFX1250V0 / "Equality" / "logic.yaml",
+-        schedule=vcc.GFX1250V0, gfx=vcc.GFX1250,
+-    )
+-    # A file outside the overlay wrongly claims the v0 schedule name.
+-    _write_overlay_yaml(
+-        tmp_path / "gfx1250" / "Equality" / "logic.yaml",
+-        schedule=vcc.GFX1250V0, gfx=vcc.GFX1250,
+-    )
+-    violations = vcc.find_gfx1250v0_overlay_violations(tmp_path)
+-    assert any("outside the gfx1250v0 overlay" in v for v in violations)
+-
+-
+-def test_gfx1250v0_overlay_respects_a_caller_supplied_file_subset_outside_scan(tmp_path, vcc):
+-    # Regression: Run.py excludes "Experimental" logic from the file list it
+-    # passes to check_corpus_invariants(), mirroring _runChecks()'s own
+-    # per-file loop. An excluded Experimental file that wrongly claims the
+-    # v0 schedule name outside the overlay must not trip this check just
+-    # because find_gfx1250v0_overlay_violations() re-walked logic_root on
+-    # its own instead of honoring the caller's selection.
+-    _write_overlay_yaml(
+-        tmp_path / vcc.GFX1250V0 / "Equality" / "logic.yaml",
+-        schedule=vcc.GFX1250V0, gfx=vcc.GFX1250,
+-    )
+-    _write_overlay_yaml(
+-        tmp_path / "gfx1250" / "Equality" / "logic.yaml",
+-        schedule="gfx1250", gfx=vcc.GFX1250,
+-    )
+-    _write_overlay_yaml(
+-        tmp_path / "gfx1250" / "Experimental" / "probe.yaml",
+-        schedule=vcc.GFX1250V0, gfx=vcc.GFX1250,
+-    )
+-    selected = [p for p in _all_yaml(tmp_path) if "Experimental" not in p.parts]
+-    assert vcc.find_gfx1250v0_overlay_violations(tmp_path, selected) == []
+-    # Without the filter, the same corpus does flag it -- confirms the probe
+-    # file is a real would-be violation and not just inert.
+-    assert any(
+-        "outside the gfx1250v0 overlay" in v
+-        for v in vcc.find_gfx1250v0_overlay_violations(tmp_path)
+-    )
+-
+-
+-def test_gfx1250v0_overlay_respects_a_caller_supplied_file_subset_overlay_contents(tmp_path, vcc):
+-    # Same selection contract, but for a file *inside* the overlay: an
+-    # excluded Experimental file with a bad header inside the overlay
+-    # directory must not be flagged either.
+-    _write_overlay_yaml(
+-        tmp_path / vcc.GFX1250V0 / "Equality" / "logic.yaml",
+-        schedule=vcc.GFX1250V0, gfx=vcc.GFX1250,
+-    )
+-    _write_overlay_yaml(
+-        tmp_path / vcc.GFX1250V0 / "Experimental" / "probe.yaml",
+-        schedule="gfx1250",  # wrong ScheduleName, but excluded from selection
+-        gfx=vcc.GFX1250,
+-    )
+-    selected = [p for p in _all_yaml(tmp_path) if "Experimental" not in p.parts]
+-    assert vcc.find_gfx1250v0_overlay_violations(tmp_path, selected) == []
+-
+-
+-# ===========================================================================
+-# check_corpus_invariants / report_corpus_invariant_violations
+-# ===========================================================================
+-
+-def test_check_corpus_invariants_aggregates_sibling_and_overlay_finders(tmp_path, vcc):
+-    # One violation from each of the two finders check_corpus_invariants()
+-    # aggregates, planted in the same tmp corpus. (find_chip_id_arch_lock_violations
+-    # is deliberately not one of them -- see check_corpus_invariants()'s docstring.)
++def test_check_corpus_invariants_reports_the_sibling_finders_violations(tmp_path, vcc):
++    # What check_corpus_invariants() aggregates, planted in a tmp corpus.
++    # (find_chip_id_arch_lock_violations is deliberately not part of it --
++    # see check_corpus_invariants()'s docstring.)
+     _write_header_yaml(
+         tmp_path / "aldebaran" / "gfx950" / "Equality" / "logic.yaml",
+         devices="Device 75a0",
+@@ -745,47 +582,9 @@ def test_check_corpus_invariants_aggregates_sibling_and_overlay_finders(tmp_path
+         tmp_path / "aldebaran" / "gfx950" / "GridBased" / "logic.yaml",
+         devices="Device 75a3",
+     )
+-    (tmp_path / "gfx1250" / "Equality").mkdir(parents=True)
+-    # An existing-but-empty overlay directory, not merely a missing one, is
+-    # what actually trips the gfx1250v0-overlay finder when "all" is
+-    # requested (see test_gfx1250v0_overlay_no_split_at_all_is_not_a_violation_when_not_required).
+-    (tmp_path / vcc.GFX1250V0).mkdir(parents=True)
+ 
+     violations = vcc.check_corpus_invariants(tmp_path)
+     assert any("Divergent sibling DeviceNames" in v for v in violations)
+-    assert any("ships no logic" in v for v in violations)
+-
+-
+-def test_check_corpus_invariants_does_not_require_overlay_from_archs_alone(tmp_path, vcc):
+-    # Regression for the actual bug this shipped with: requesting
+-    # architecture gfx1250v0 does not by itself mean the corpus being
+-    # validated owns a gfx1250/gfx1250v0 split. hipSPARSELt's shared gfx125X
+-    # CI build invokes TensileLogic with --architecture gfx1250v0 against
+-    # its own corpus, which never did the split and has no gfx1250v0
+-    # directory at all -- that must not be a hard failure just because the
+-    # architecture spelling matched.
+-    (tmp_path / "gfx1250" / "Equality").mkdir(parents=True)
+-    assert vcc.check_corpus_invariants(tmp_path, archs=["gfx1250v0"]) == []
+-
+-
+-def test_check_corpus_invariants_requires_overlay_only_when_caller_opts_in(tmp_path, vcc):
+-    # hipBLASLt's dedicated gfx1250v0 device-library build opts in
+-    # explicitly via overlay_required=True (--require-gfx1250v0-overlay);
+-    # only then is a missing overlay a violation.
+-    (tmp_path / "gfx1250" / "Equality").mkdir(parents=True)
+-    violations = vcc.check_corpus_invariants(
+-        tmp_path, archs=["gfx1250v0"], overlay_required=True
+-    )
+-    assert any("required" in v for v in violations)
+-
+-
+-def test_check_corpus_invariants_skips_overlay_check_for_an_unrelated_architecture(tmp_path, vcc):
+-    # A gfx942-only build has no reason to care about the gfx1250v0 overlay
+-    # at all -- an absent (or even empty) overlay must not fail it.
+-    (tmp_path / vcc.GFX1250V0).mkdir(parents=True)
+-    _write_header_yaml(tmp_path / "aquavanjaram" / "gfx942" / "Equality" / "a.yaml", gfx="gfx942")
+-    files = [tmp_path / "aquavanjaram" / "gfx942" / "Equality" / "a.yaml"]
+-    assert vcc.check_corpus_invariants(tmp_path, files=files, archs=["gfx942"]) == []
+ 
+ 
+ def test_check_corpus_invariants_respects_a_caller_supplied_file_subset(tmp_path, vcc):
+@@ -801,14 +600,14 @@ def test_check_corpus_invariants_respects_a_caller_supplied_file_subset(tmp_path
+     )
+     _write_header_yaml(tmp_path / "aquavanjaram" / "gfx942" / "Equality" / "a.yaml", gfx="gfx942")
+     gfx942_only = [tmp_path / "aquavanjaram" / "gfx942" / "Equality" / "a.yaml"]
+-    assert vcc.check_corpus_invariants(tmp_path, files=gfx942_only, archs=["gfx942"]) == []
++    assert vcc.check_corpus_invariants(tmp_path, files=gfx942_only) == []
+ 
+ 
+ def test_check_corpus_invariants_empty_for_a_clean_corpus(tmp_path, vcc):
+     _write_header_yaml(tmp_path / "aquavanjaram" / "gfx942" / "Equality" / "a.yaml")
+-    _write_overlay_yaml(
+-        tmp_path / vcc.GFX1250V0 / "Equality" / "logic.yaml",
+-        schedule=vcc.GFX1250V0, gfx=vcc.GFX1250,
++    _write_header_yaml(
++        tmp_path / vcc.GFX1250_STRICT / "Equality" / "logic.yaml",
++        schedule=vcc.GFX1250_STRICT, gfx=vcc.GFX1250_STRICT,
+     )
+     assert vcc.check_corpus_invariants(tmp_path) == []
+ 
+diff --git a/projects/hipblaslt/tensilelite/pytest.ini b/projects/hipblaslt/tensilelite/pytest.ini
+index c682b4ca16..0029c33e1b 100644
+--- a/projects/hipblaslt/tensilelite/pytest.ini
++++ b/projects/hipblaslt/tensilelite/pytest.ini
+@@ -29,6 +29,7 @@ markers =
+  gfx94x: Common tests for gfx94x.
+  gfx950: Common tests for gfx950.
+  gfx1250: Common tests for gfx1250.
++ gfx1250-strict: Common tests for gfx1250-strict.
+  ffm_fail: Passes on real HW, fails under FFM emulation only
+ 
+  emu_fast: Fast emulation tests (pre-submit tier).
+@@ -76,6 +77,7 @@ markers =
+  xfail-gfx1200: architecture
+  xfail-gfx1201: architecture
+  xfail-gfx1250: architecture
++ xfail-gfx1250-strict: architecture
+  skip-gfx000:  architecture
+  skip-gfx900:  architecture
+  skip-gfx906:  architecture
+@@ -95,3 +97,4 @@ markers =
+  skip-gfx1200: architecture
+  skip-gfx1201: architecture
+  skip-gfx1250: architecture
++ skip-gfx1250-strict: architecture
+diff --git a/projects/hipblaslt/tools/scripts/tests/test_validate_library_layout.py b/projects/hipblaslt/tools/scripts/tests/test_validate_library_layout.py
+index 1e6a0be1ee..3480fbbb25 100644
+--- a/projects/hipblaslt/tools/scripts/tests/test_validate_library_layout.py
++++ b/projects/hipblaslt/tools/scripts/tests/test_validate_library_layout.py
+@@ -163,6 +163,23 @@ def test_an_unrelated_arch_is_not_treated_as_a_stepping_subtree(tmp_path):
+     assert any("extop_gfx942.co" in v for v in violations), violations
+ 
+ 
++def test_a_feature_suffixed_subtree_name_is_still_rejected(tmp_path):
++    """The stepping exemption must not become a way in for a target feature.
++
++    Both spellings hang a hyphenated token off a bare architecture, so an
++    exemption that reads any hyphen as a stepping hands library/gfx942-xnack+/
++    the pass meant for library/gfx1250-strict/ -- and that directory is the one
++    thing the bare-name rule exists to report.
++    """
++    feature_dir = tmp_path / "lib" / "hipblaslt" / "library" / "gfx942-xnack+"
++    feature_dir.mkdir(parents=True)
++    (feature_dir / "TensileLibrary_gfx942-xnack+.dat.zlib").write_bytes(b"x")
++
++    violations = validate_library_layout.validate(tmp_path)
++    assert any("gfx942-xnack+" in v and "carries target features" in v
++               for v in violations), violations
++
++
+ def test_the_subtree_name_regex_accepts_every_real_spelling():
+     """Names this validator will meet in an install tree, and names it must refuse.
+ 
+diff --git a/projects/hipblaslt/tools/scripts/validate_library_layout.py b/projects/hipblaslt/tools/scripts/validate_library_layout.py
+index 4a16660750..5dd9f6cb5c 100755
+--- a/projects/hipblaslt/tools/scripts/validate_library_layout.py
++++ b/projects/hipblaslt/tools/scripts/validate_library_layout.py
+@@ -57,14 +57,18 @@ def _arch_dir_name_is_base(name: str) -> bool:
+ def _stepping_base(name: str) -> Optional[str]:
+     """The architecture a stepping subtree belongs to, or None if it is not one.
+ 
+-    Subtree names are otherwise bare -- target features never reach them -- so a
+-    hyphen is the stepping, as in library/gfx1250-strict/. The architecture it
+-    returns is only for rules that are about the shared ISA; the files inside are
+-    validated against the subtree's own name, since that is the name the runtime
+-    reports for the silicon and therefore the one it forms filenames from.
++    A hyphen alone does not make one: library/gfx942-xnack+/ carries a target
++    feature, which a subtree may not, and exempting it here would be the only
++    thing standing between it and the check that reports it. The sign tells the
++    two apart, as it does for filenames. The architecture returned is only for
++    rules that are about the shared ISA; the files inside are validated against
++    the subtree's own name, since that is the name the runtime reports for the
++    silicon and therefore the one it forms filenames from.
+     """
+-    base, sep, _ = name.partition("-")
+-    return base if sep and _arch_dir_name_is_base(base) else None
++    base, sep, suffix = name.partition("-")
++    if not sep or not _arch_dir_name_is_base(base):
++        return None
++    return None if _TARGET_FEATURE_RE.match(suffix) else base
+ 
+ 
+ _ARCH_IN_FILENAME_RE = re.compile(
+-- 
+2.43.0
+

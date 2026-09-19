@@ -1,0 +1,436 @@
+From 0317a439b9381bec0d7c613b5286381c3c34c73b Mon Sep 17 00:00:00 2001
+From: Illia Silin <Illia.Silin@amd.com>
+Date: Tue, 15 Sep 2026 09:47:33 -0700
+Subject: [PATCH] update some gfx1250 macros
+
+(cherry picked from commit 34237fe39e8bc64f9a06df640b6d32af1ddeb7c0)
+---
+ .../include/ck/utility/amd_wmma.hpp           |  2 +-
+ .../include/ck/utility/e4m3.hpp               |  4 ++--
+ .../include/ck/utility/e5m3.hpp               |  4 ++--
+ .../include/ck_tile/core/config.hpp           |  4 ++--
+ .../gemm_pipeline_ag_bg_cr_comp_v3.hpp        |  2 +-
+ ...p_gemm_attribute_wmma_impl_8bit_traits.hpp |  2 +-
+ ...ply_wmma_c_shuffle_f8_f8_bf16_mk_nk_mn.cpp |  4 ++--
+ ...iply_wmma_c_shuffle_f8_f8_f16_mk_nk_mn.cpp |  4 ++--
+ ...ply_wmma_c_shuffle_i8_i8_bf16_mk_nk_mn.cpp |  4 ++--
+ ...iply_wmma_c_shuffle_i8_i8_f16_mk_nk_mn.cpp |  4 ++--
+ ...m_wmma_universal_bf16_i4_bf16_km_nk_mn.hpp |  2 +-
+ ...m_wmma_universal_bf16_i4_bf16_mk_nk_mn.hpp |  2 +-
+ ...emm_wmma_universal_f16_f8_f16_km_kn_mn.hpp |  2 +-
+ ...emm_wmma_universal_f16_f8_f16_km_nk_mn.hpp |  2 +-
+ ...emm_wmma_universal_f8_f8_bf16_mk_kn_mn.hpp |  2 +-
+ ...emm_wmma_universal_f8_f8_bf16_mk_nk_mn.hpp |  2 +-
+ ...ation_wmma_c_shuffle_i8_i8_i8_instance.hpp |  8 +++----
+ .../test_cluster_load_async_to_lds.cpp        | 22 +++++++++----------
+ 18 files changed, 38 insertions(+), 38 deletions(-)
+
+diff --git a/projects/composablekernel/include/ck/utility/amd_wmma.hpp b/projects/composablekernel/include/ck/utility/amd_wmma.hpp
+index 3a7f16c536..3f5b71e818 100644
+--- a/projects/composablekernel/include/ck/utility/amd_wmma.hpp
++++ b/projects/composablekernel/include/ck/utility/amd_wmma.hpp
+@@ -20,7 +20,7 @@ namespace ck {
+ #define __gfx120__
+ #endif
+ 
+-#if defined(__gfx1250__)
++#if defined(__gfx1250__) || defined(__gfx1250_strict__)
+ #define __gfx125__
+ #endif
+ 
+diff --git a/projects/composablekernel/include/ck/utility/e4m3.hpp b/projects/composablekernel/include/ck/utility/e4m3.hpp
+index 0d25979fa0..dd00b7b4e3 100644
+--- a/projects/composablekernel/include/ck/utility/e4m3.hpp
++++ b/projects/composablekernel/include/ck/utility/e4m3.hpp
+@@ -35,7 +35,7 @@ struct e4m3_scale_t
+     }
+     __host__ __device__ explicit e4m3_scale_t(float scale)
+     {
+-#if defined(__gfx1250__)
++#if defined(__gfx125__)
+         union
+         {
+             float fval;
+@@ -59,7 +59,7 @@ struct e4m3_scale_t
+ 
+     __host__ __device__ explicit operator float() const
+     {
+-#if defined(__gfx1250__)
++#if defined(__gfx125__)
+         union
+         {
+             unsigned int i32val;
+diff --git a/projects/composablekernel/include/ck/utility/e5m3.hpp b/projects/composablekernel/include/ck/utility/e5m3.hpp
+index dbb9826ac3..c66641e1a9 100644
+--- a/projects/composablekernel/include/ck/utility/e5m3.hpp
++++ b/projects/composablekernel/include/ck/utility/e5m3.hpp
+@@ -35,7 +35,7 @@ struct e5m3_scale_t
+     }
+     __host__ __device__ explicit e5m3_scale_t(float scale)
+     {
+-#if defined(__gfx1250__)
++#if defined(__gfx125__)
+         union
+         {
+             float fval;
+@@ -59,7 +59,7 @@ struct e5m3_scale_t
+ 
+     __host__ __device__ explicit operator float() const
+     {
+-#if defined(__gfx1250__)
++#if defined(__gfx125__)
+         union
+         {
+             unsigned int i32val;
+diff --git a/projects/composablekernel/include/ck_tile/core/config.hpp b/projects/composablekernel/include/ck_tile/core/config.hpp
+index d7ef94371c..568701956c 100644
+--- a/projects/composablekernel/include/ck_tile/core/config.hpp
++++ b/projects/composablekernel/include/ck_tile/core/config.hpp
+@@ -618,11 +618,11 @@ struct amdgcn_compiler_target_state
+ #endif // __gfx12_generic__
+ 
+     // GFX12.5
+-#if defined(__gfx1250__)
++#if defined(__gfx125__)
+     static constexpr bool CK_TILE_ARCH_GFX1250 = true;
+ #else
+     static constexpr bool CK_TILE_ARCH_GFX1250 = false;
+-#endif // __gfx1250__
++#endif // __gfx125__
+ 
+     // SPIR-V (target-agnostic, JIT-compiled at runtime)
+     // Guard with __HIP_DEVICE_COMPILE__ because __SPIRV__ is defined during
+diff --git a/projects/composablekernel/include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_v3.hpp b/projects/composablekernel/include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_v3.hpp
+index ea4ec7566b..d6b86c76b8 100644
+--- a/projects/composablekernel/include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_v3.hpp
++++ b/projects/composablekernel/include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_v3.hpp
+@@ -31,7 +31,7 @@ struct BaseGemmPipelineAgBgCrCompV3
+     // 8-warp special case on gfx1250 so those blocks use the standard path.
+     // NOTE: all users of these functions are CK_TILE_DEVICE (the pipeline
+     // operator() and the grouped/persistent kernel launchers), and TailHandler's
+-    // scenarios[] compiles in the same device pass, so this __gfx1250__/__GFX12__
++    // scenarios[] compiles in the same device pass, so this __gfx125__/__GFX12__
+     // guard is host/device consistent.
+ #if defined(__gfx125__) || defined(__GFX12__)
+     static constexpr bool Use8WarpSchedule = false;
+diff --git a/projects/composablekernel/include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_8bit_traits.hpp b/projects/composablekernel/include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_8bit_traits.hpp
+index 9ca262894e..d61b713aaf 100644
+--- a/projects/composablekernel/include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_8bit_traits.hpp
++++ b/projects/composablekernel/include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_8bit_traits.hpp
+@@ -821,7 +821,7 @@ struct WmmaTraits<gfx125_t, pk_fp4_t, pk_fp4_t, float, 32, 16, 128>
+     CK_TILE_DEVICE static CVecType
+     wmma_intrinsic(const AVecType& a_vec, const BVecType& b_vec, const CVecType& c_vec)
+     {
+-#ifdef __gfx1250__
++#ifdef __gfx125__
+         return __builtin_amdgcn_wmma_f32_32x16x128_f4(
+             bit_cast<int32x16_t>(a_vec), bit_cast<int32x8_t>(b_vec), 0, bit_cast<fp32x16_t>(c_vec));
+ #else
+diff --git a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_multiply_multiply/device_gemm_multiply_multiply_wmma_c_shuffle_f8_f8_bf16_mk_nk_mn.cpp b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_multiply_multiply/device_gemm_multiply_multiply_wmma_c_shuffle_f8_f8_bf16_mk_nk_mn.cpp
+index 364225db5c..4a1af13e1a 100644
+--- a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_multiply_multiply/device_gemm_multiply_multiply_wmma_c_shuffle_f8_f8_bf16_mk_nk_mn.cpp
++++ b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_multiply_multiply/device_gemm_multiply_multiply_wmma_c_shuffle_f8_f8_bf16_mk_nk_mn.cpp
+@@ -35,14 +35,14 @@ using device_gemm_multiply_multiply_wmma_f8_f8_bf16_mk_nk_mn_instances = std::tu
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    F8,    F8, F32_F32_Tuple,   BF16,    F32,       F32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   256,    64,   8,   8,   16,   16,       4,       4,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,              S<1, 1, 1>,  Intrawave,          V1,      F8,      F8>,
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    F8,    F8, F32_F32_Tuple,   BF16,    F32,       F32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   128,    64,   256,    64,   8,   8,   16,   16,       2,       8,       S<4, 32, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 32, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 4>,              S<1, 1, 1>,  Intrawave,          V1,      F8,      F8>,
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    F8,    F8, F32_F32_Tuple,   BF16,    F32,       F32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,    64,    32,    64,    64,   8,   8,   16,   16,       2,       2,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 16, 1, 4>,              S<1, 1, 1>,  Intrawave,          V1,      F8,      F8>,
+-#if !defined(__gfx1250__) && !defined(CK_USE_GFX1250)
++#if !defined(__gfx125__) && !defined(CK_USE_GFX1250)
+         // tile too small for gfx1250
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    F8,    F8, F32_F32_Tuple,   BF16,    F32,       F32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   128,    32,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,              S<1, 1, 1>,  Interwave,          V1,      F8,      F8>,
+ #endif
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    F8,    F8, F32_F32_Tuple,   BF16,    F32,       F32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   256,    64,   8,   8,   16,   16,       4,       4,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,              S<1, 1, 1>,  Interwave,          V1,      F8,      F8>,
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    F8,    F8, F32_F32_Tuple,   BF16,    F32,       F32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   160,    64,   8,   8,   16,   16,       2,       5,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<8, 32, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 64, 1, 4>,              S<1, 1, 1>,  Interwave,          V1,      F8,      F8>,
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    F8,    F8, F32_F32_Tuple,   BF16,    F32,       F32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,    64,    32,    64,    64,   8,   8,   16,   16,       2,       2,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 16, 1, 4>,              S<1, 1, 1>,  Interwave,          V1,      F8,      F8>,
+-#if !defined(__gfx1250__) && !defined(CK_USE_GFX1250)
++#if !defined(__gfx125__) && !defined(CK_USE_GFX1250)
+         // tile too small for gfx1250
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    F8,    F8, F32_F32_Tuple,   BF16,    F32,       F32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   128,    32,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,              S<1, 1, 1>,  Intrawave,          V3,      F8,      F8>,
+ #endif
+diff --git a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_multiply_multiply/device_gemm_multiply_multiply_wmma_c_shuffle_f8_f8_f16_mk_nk_mn.cpp b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_multiply_multiply/device_gemm_multiply_multiply_wmma_c_shuffle_f8_f8_f16_mk_nk_mn.cpp
+index f001e296b2..70dd01dd24 100644
+--- a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_multiply_multiply/device_gemm_multiply_multiply_wmma_c_shuffle_f8_f8_f16_mk_nk_mn.cpp
++++ b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_multiply_multiply/device_gemm_multiply_multiply_wmma_c_shuffle_f8_f8_f16_mk_nk_mn.cpp
+@@ -35,14 +35,14 @@ using device_gemm_multiply_multiply_wmma_f8_f8_f16_mk_nk_mn_instances = std::tup
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    F8,    F8, F32_F32_Tuple,    F16,    F32,       F32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   256,    64,   8,   8,   16,   16,       4,       4,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,              S<1, 1, 1>,  Intrawave,          V1,      F8,      F8>,
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    F8,    F8, F32_F32_Tuple,    F16,    F32,       F32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   128,    64,   256,    64,   8,   8,   16,   16,       2,       8,       S<4, 32, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 32, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 4>,              S<1, 1, 1>,  Intrawave,          V1,      F8,      F8>,
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    F8,    F8, F32_F32_Tuple,    F16,    F32,       F32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,    64,    32,    64,    64,   8,   8,   16,   16,       2,       2,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 16, 1, 4>,              S<1, 1, 1>,  Intrawave,          V1,      F8,      F8>,
+-#if !defined(__gfx1250__) && !defined(CK_USE_GFX1250)
++#if !defined(__gfx125__) && !defined(CK_USE_GFX1250)
+         // tile too small for gfx1250
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    F8,    F8, F32_F32_Tuple,    F16,    F32,       F32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   128,    32,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,              S<1, 1, 1>,  Interwave,          V1,      F8,      F8>,
+ #endif
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    F8,    F8, F32_F32_Tuple,    F16,    F32,       F32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   256,    64,   8,   8,   16,   16,       4,       4,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,              S<1, 1, 1>,  Interwave,          V1,      F8,      F8>,
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    F8,    F8, F32_F32_Tuple,    F16,    F32,       F32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   160,    64,   8,   8,   16,   16,       2,       5,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<8, 32, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 64, 1, 4>,              S<1, 1, 1>,  Interwave,          V1,      F8,      F8>,
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    F8,    F8, F32_F32_Tuple,    F16,    F32,       F32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,    64,    32,    64,    64,   8,   8,   16,   16,       2,       2,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 16, 1, 4>,              S<1, 1, 1>,  Interwave,          V1,      F8,      F8>,
+-#if !defined(__gfx1250__) && !defined(CK_USE_GFX1250)
++#if !defined(__gfx125__) && !defined(CK_USE_GFX1250)
+         // tile too small for gfx1250
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    F8,    F8, F32_F32_Tuple,    F16,    F32,       F32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   128,    32,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,              S<1, 1, 1>,  Intrawave,          V3,      F8,      F8>,
+ #endif
+diff --git a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_multiply_multiply/device_gemm_multiply_multiply_wmma_c_shuffle_i8_i8_bf16_mk_nk_mn.cpp b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_multiply_multiply/device_gemm_multiply_multiply_wmma_c_shuffle_i8_i8_bf16_mk_nk_mn.cpp
+index ffa723620f..6c942fd8bb 100644
+--- a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_multiply_multiply/device_gemm_multiply_multiply_wmma_c_shuffle_i8_i8_bf16_mk_nk_mn.cpp
++++ b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_multiply_multiply/device_gemm_multiply_multiply_wmma_c_shuffle_i8_i8_bf16_mk_nk_mn.cpp
+@@ -35,14 +35,14 @@ using device_gemm_multiply_multiply_wmma_i8_i8_bf16_mk_nk_mn_instances = std::tu
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    I8,    I8, F32_F32_Tuple,   BF16,    I32,       I32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   256,    64,   8,   8,   16,   16,       4,       4,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,              S<1, 1, 1>,  Intrawave,          V1,      I8,      I8>,
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    I8,    I8, F32_F32_Tuple,   BF16,    I32,       I32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   128,    64,   256,    64,   8,   8,   16,   16,       2,       8,       S<4, 32, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 32, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 4>,              S<1, 1, 1>,  Intrawave,          V1,      I8,      I8>,
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    I8,    I8, F32_F32_Tuple,   BF16,    I32,       I32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,    64,    32,    64,    64,   8,   8,   16,   16,       2,       2,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 16, 1, 4>,              S<1, 1, 1>,  Intrawave,          V1,      I8,      I8>,
+-#if !defined(__gfx1250__) && !defined(CK_USE_GFX1250)
++#if !defined(__gfx125__) && !defined(CK_USE_GFX1250)
+         // tile too small for gfx1250
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    I8,    I8, F32_F32_Tuple,   BF16,    I32,       I32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   128,    32,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,              S<1, 1, 1>,  Interwave,          V1,      I8,      I8>,
+ #endif
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    I8,    I8, F32_F32_Tuple,   BF16,    I32,       I32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   256,    64,   8,   8,   16,   16,       4,       4,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,              S<1, 1, 1>,  Interwave,          V1,      I8,      I8>,
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    I8,    I8, F32_F32_Tuple,   BF16,    I32,       I32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   160,    64,   8,   8,   16,   16,       2,       5,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<8, 32, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 64, 1, 4>,              S<1, 1, 1>,  Interwave,          V1,      I8,      I8>,
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    I8,    I8, F32_F32_Tuple,   BF16,    I32,       I32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,    64,    32,    64,    64,   8,   8,   16,   16,       2,       2,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 16, 1, 4>,              S<1, 1, 1>,  Interwave,          V1,      I8,      I8>,
+-#if !defined(__gfx1250__) && !defined(CK_USE_GFX1250)
++#if !defined(__gfx125__) && !defined(CK_USE_GFX1250)
+         // tile too small for gfx1250
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    I8,    I8, F32_F32_Tuple,   BF16,    I32,       I32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   128,    32,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,              S<1, 1, 1>,  Intrawave,          V3,      I8,      I8>,
+ #endif
+diff --git a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_multiply_multiply/device_gemm_multiply_multiply_wmma_c_shuffle_i8_i8_f16_mk_nk_mn.cpp b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_multiply_multiply/device_gemm_multiply_multiply_wmma_c_shuffle_i8_i8_f16_mk_nk_mn.cpp
+index de1055c04f..859ba4e549 100644
+--- a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_multiply_multiply/device_gemm_multiply_multiply_wmma_c_shuffle_i8_i8_f16_mk_nk_mn.cpp
++++ b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_multiply_multiply/device_gemm_multiply_multiply_wmma_c_shuffle_i8_i8_f16_mk_nk_mn.cpp
+@@ -35,14 +35,14 @@ using device_gemm_multiply_multiply_wmma_i8_i8_f16_mk_nk_mn_instances = std::tup
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    I8,    I8, F16_F16_Tuple,    F16,    I32,       I32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   256,    64,   8,   8,   16,   16,       4,       4,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,              S<1, 1, 1>,  Intrawave,          V1,      I8,      I8>,
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    I8,    I8, F16_F16_Tuple,    F16,    I32,       I32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   128,    64,   256,    64,   8,   8,   16,   16,       2,       8,       S<4, 32, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 32, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 4>,              S<1, 1, 1>,  Intrawave,          V1,      I8,      I8>,
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    I8,    I8, F16_F16_Tuple,    F16,    I32,       I32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,    64,    32,    64,    64,   8,   8,   16,   16,       2,       2,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 16, 1, 4>,              S<1, 1, 1>,  Intrawave,          V1,      I8,      I8>,
+-#if !defined(__gfx1250__) && !defined(CK_USE_GFX1250)
++#if !defined(__gfx125__) && !defined(CK_USE_GFX1250)
+         // tile too small for gfx1250
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    I8,    I8, F16_F16_Tuple,    F16,    I32,       I32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   128,    32,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,              S<1, 1, 1>,  Interwave,          V1,      I8,      I8>,
+ #endif
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    I8,    I8, F16_F16_Tuple,    F16,    I32,       I32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   256,    64,   8,   8,   16,   16,       4,       4,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,              S<1, 1, 1>,  Interwave,          V1,      I8,      I8>,
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    I8,    I8, F16_F16_Tuple,    F16,    I32,       I32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   160,    64,   8,   8,   16,   16,       2,       5,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<8, 32, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 64, 1, 4>,              S<1, 1, 1>,  Interwave,          V1,      I8,      I8>,
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    I8,    I8, F16_F16_Tuple,    F16,    I32,       I32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,    64,    32,    64,    64,   8,   8,   16,   16,       2,       2,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 16, 1, 4>,              S<1, 1, 1>,  Interwave,          V1,      I8,      I8>,
+-#if !defined(__gfx1250__) && !defined(CK_USE_GFX1250)
++#if !defined(__gfx125__) && !defined(CK_USE_GFX1250)
+         // tile too small for gfx1250
+         DeviceGemmMultipleD_Wmma_CShuffleV3<      Row,     Col, Row_Col_Tuple,     Row,    I8,    I8, F16_F16_Tuple,    F16,    I32,       I32, PassThrough, PassThrough, MultiplyMultiply, GemmSpec,   256,   128,   128,    32,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,              S<1, 1, 1>,  Intrawave,          V3,      I8,      I8>,
+ #endif
+diff --git a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_bf16_i4_bf16/device_gemm_wmma_universal_bf16_i4_bf16_km_nk_mn.hpp b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_bf16_i4_bf16/device_gemm_wmma_universal_bf16_i4_bf16_km_nk_mn.hpp
+index 005074ac56..20bb8b82cc 100644
+--- a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_bf16_i4_bf16/device_gemm_wmma_universal_bf16_i4_bf16_km_nk_mn.hpp
++++ b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_bf16_i4_bf16/device_gemm_wmma_universal_bf16_i4_bf16_km_nk_mn.hpp
+@@ -41,7 +41,7 @@ using device_gemm_wmma_universal_bf16_i4_bf16_km_nk_mn_comp_instances = std::tup
+         //#########################|        |        |        | Type|  Type|  Type|    Type| DataType| Elementwise| Elementwise| Elementwise|         |  Size| Block| Block| Block|    |    | Wmma| Wmma|        |        |     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraM|     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraN|    MRepeat|    NRepeat|        ClusterLengths|       ScalarPerVector|  PipeSched|                  PipelineVer|   TypeA|   TypeB|         |         |
+         //#########################|        |        |        |     |      |      |        |         |   Operation|   Operation|   Operation|         |      |      |      |      |    |    |     |     |        |        | Lengths_AK0_M_AK1|   ArrangeOrder|               |               |      PerVector|  PerVector_AK1|          | Lengths_BK0_N_BK1|   ArrangeOrder|               |               |      PerVector|  PerVector_BK1|          | PerShuffle| PerShuffle|     _MBlock_MPerBlock|            _NPerBlock|           |                             |        |        |         |         |
+         //#########################|        |        |        |     |      |      |        |         |            |            |            |         |      |      |      |      |    |    |     |     |        |        |                  |               |               |               |               |               |          |                  |               |               |               |               |               |          |           |           |     _NBlock_NPerBlock|                      |           |                             |        |        |         |         |
+-#if !defined(__gfx1250__) && !defined(CK_USE_GFX1250)
++#if !defined(__gfx125__) && !defined(CK_USE_GFX1250)
+         // numerical issues on gfx1250
+         DeviceGemm_Wmma_CShuffleV3<      Col,     Col,     Row, BF16,    I4,  BF16,     F32,     BF16, PassThrough, PassThrough, PassThrough, GemmSpec,    64,    32,    64,    64,   8,   8,   16,   16,       2,       2,       S<4, 16, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,         1,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 16, 1, 4>,                     8,  Interwave, BlockGemmPipelineVersion::v1,    BF16,    BF16,    false,    false>,
+         DeviceGemm_Wmma_CShuffleV3<      Col,     Col,     Row, BF16,    I4,  BF16,     F32,     BF16, PassThrough, PassThrough, PassThrough, GemmSpec,    64,    32,    64,    64,   8,   8,   16,   16,       2,       2,       S<4, 16, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,         1,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 16, 1, 4>,                     8,  Intrawave, BlockGemmPipelineVersion::v1,    BF16,    BF16,    false,     true>,
+diff --git a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_bf16_i4_bf16/device_gemm_wmma_universal_bf16_i4_bf16_mk_nk_mn.hpp b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_bf16_i4_bf16/device_gemm_wmma_universal_bf16_i4_bf16_mk_nk_mn.hpp
+index d80c52aa1d..c6ef717fc8 100644
+--- a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_bf16_i4_bf16/device_gemm_wmma_universal_bf16_i4_bf16_mk_nk_mn.hpp
++++ b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_bf16_i4_bf16/device_gemm_wmma_universal_bf16_i4_bf16_mk_nk_mn.hpp
+@@ -41,7 +41,7 @@ using device_gemm_wmma_universal_bf16_i4_bf16_mk_nk_mn_comp_instances = std::tup
+         //#########################|        |        |        | Type|  Type|  Type|    Type| DataType| Elementwise| Elementwise| Elementwise|         |  Size| Block| Block| Block|    |    | Wmma| Wmma|        |        |     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraM|     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraN|    MRepeat|    NRepeat|        ClusterLengths|       ScalarPerVector|  PipeSched|                  PipelineVer|   TypeA|   TypeB|         |         |
+         //#########################|        |        |        |     |      |      |        |         |   Operation|   Operation|   Operation|         |      |      |      |      |    |    |     |     |        |        | Lengths_AK0_M_AK1|   ArrangeOrder|               |               |      PerVector|  PerVector_AK1|          | Lengths_BK0_N_BK1|   ArrangeOrder|               |               |      PerVector|  PerVector_BK1|          | PerShuffle| PerShuffle|     _MBlock_MPerBlock|            _NPerBlock|           |                             |        |        |         |         |
+         //#########################|        |        |        |     |      |      |        |         |            |            |            |         |      |      |      |      |    |    |     |     |        |        |                  |               |               |               |               |               |          |                  |               |               |               |               |               |          |           |           |     _NBlock_NPerBlock|                      |           |                             |        |        |         |         |
+-#if !defined(__gfx1250__) && !defined(CK_USE_GFX1250)
++#if !defined(__gfx125__) && !defined(CK_USE_GFX1250)
+         // numerical issues on gfx1250
+         DeviceGemm_Wmma_CShuffleV3<      Row,     Col,     Row, BF16,    I4,  BF16,     F32,     BF16, PassThrough, PassThrough, PassThrough, GemmSpec,    64,    32,    64,    64,   8,   8,   16,   16,       2,       2,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 16, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 16, 1, 4>,                     8,  Intrawave, BlockGemmPipelineVersion::v1,    BF16,    BF16,    false,     true>,
+         DeviceGemm_Wmma_CShuffleV3<      Row,     Col,     Row, BF16,    I4,  BF16,     F32,     BF16, PassThrough, PassThrough, PassThrough, GemmSpec,   256,   128,   128,    64,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,                     8,  Interwave, BlockGemmPipelineVersion::v1,    BF16,    BF16,    false,     true>,
+diff --git a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_f16_f8_f16/device_gemm_wmma_universal_f16_f8_f16_km_kn_mn.hpp b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_f16_f8_f16/device_gemm_wmma_universal_f16_f8_f16_km_kn_mn.hpp
+index 8e9c95d7b0..184f5f9a68 100644
+--- a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_f16_f8_f16/device_gemm_wmma_universal_f16_f8_f16_km_kn_mn.hpp
++++ b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_f16_f8_f16/device_gemm_wmma_universal_f16_f8_f16_km_kn_mn.hpp
+@@ -40,7 +40,7 @@ using device_gemm_wmma_universal_f16_f8_f16_km_kn_mn_comp_instances = std::tuple
+         //#########################|        |        |        | Type|  Type|  Type|    Type| DataType| Elementwise| Elementwise| Elementwise|         |  Size| Block| Block| Block|    |    | Wmma| Wmma|        |        |     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraM|     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraN|    MRepeat|    NRepeat|        ClusterLengths|       ScalarPerVector|  PipeSched|                  PipelineVer|
+         //#########################|        |        |        |     |      |      |        |         |   Operation|   Operation|   Operation|         |      |      |      |      |    |    |     |     |        |        | Lengths_AK0_M_AK1|   ArrangeOrder|               |               |      PerVector|  PerVector_AK1|          | Lengths_BK0_N_BK1|   ArrangeOrder|               |               |      PerVector|  PerVector_BK1|          | PerShuffle| PerShuffle|     _MBlock_MPerBlock|            _NPerBlock|           |                             |
+         //#########################|        |        |        |     |      |      |        |         |            |            |            |         |      |      |      |      |    |    |     |     |        |        |                  |               |               |               |               |               |          |                  |               |               |               |               |               |          |           |           |     _NBlock_NPerBlock|                      |           |                             |
+-#if !defined(__gfx1250__) && !defined(CK_USE_GFX1250)
++#if !defined(__gfx125__) && !defined(CK_USE_GFX1250)
+         // numerical issues on gfx1250
+         DeviceGemm_Wmma_CShuffleV3<      Col,     Row,     Row,   F16,   F8,   F16,     F32,      F16, PassThrough, PassThrough, PassThrough, GemmSpec,   256,   128,   128,    32,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,         1,       S<4, 64, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,         1,          1,          1,        S<1, 32, 1, 8>,                     8,  Intrawave, BlockGemmPipelineVersion::v1>,
+         DeviceGemm_Wmma_CShuffleV3<      Col,     Row,     Row,   F16,   F8,   F16,     F32,      F16, PassThrough, PassThrough, PassThrough, GemmSpec,   128,   128,   128,    32,   8,   8,   16,   16,       4,       4,       S<4, 32, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,         1,       S<4, 32, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,         1,          1,          1,        S<1, 32, 1, 4>,                     8,  Intrawave, BlockGemmPipelineVersion::v1>,
+diff --git a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_f16_f8_f16/device_gemm_wmma_universal_f16_f8_f16_km_nk_mn.hpp b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_f16_f8_f16/device_gemm_wmma_universal_f16_f8_f16_km_nk_mn.hpp
+index ff42bc1f3c..786f82214e 100644
+--- a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_f16_f8_f16/device_gemm_wmma_universal_f16_f8_f16_km_nk_mn.hpp
++++ b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_f16_f8_f16/device_gemm_wmma_universal_f16_f8_f16_km_nk_mn.hpp
+@@ -43,7 +43,7 @@ using device_gemm_wmma_universal_f16_f8_f16_km_nk_mn_comp_instances = std::tuple
+         DeviceGemm_Wmma_CShuffleV3<      Col,     Col,     Row,  F16,    F8,   F16,     F32,      F16, PassThrough, PassThrough, PassThrough, GemmSpec,   256,   128,   128,    32,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,                     8,  Intrawave, BlockGemmPipelineVersion::v1>,
+         DeviceGemm_Wmma_CShuffleV3<      Col,     Col,     Row,  F16,    F8,   F16,     F32,      F16, PassThrough, PassThrough, PassThrough, GemmSpec,   256,   128,   128,    64,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,                     8,  Intrawave, BlockGemmPipelineVersion::v1>,
+         DeviceGemm_Wmma_CShuffleV3<      Col,     Col,     Row,  F16,    F8,   F16,     F32,      F16, PassThrough, PassThrough, PassThrough, GemmSpec,   128,    64,   256,    64,   8,   8,   16,   16,       2,       8,       S<4, 32, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,         1,       S<4, 32, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 4>,                     8,  Intrawave, BlockGemmPipelineVersion::v1>,
+-#if !defined(__gfx1250__) && !defined(CK_USE_GFX1250)
++#if !defined(__gfx125__) && !defined(CK_USE_GFX1250)
+         // numerical issues on gfx1250
+         DeviceGemm_Wmma_CShuffleV3<      Col,     Col,     Row,  F16,    F8,   F16,     F32,      F16, PassThrough, PassThrough, PassThrough, GemmSpec,   256,   128,   128,    32,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,                     8,  Interwave, BlockGemmPipelineVersion::v1>,
+ #endif
+diff --git a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_f8_f8_bf16/device_gemm_wmma_universal_f8_f8_bf16_mk_kn_mn.hpp b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_f8_f8_bf16/device_gemm_wmma_universal_f8_f8_bf16_mk_kn_mn.hpp
+index 222a05734c..b5b06b9fe7 100644
+--- a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_f8_f8_bf16/device_gemm_wmma_universal_f8_f8_bf16_mk_kn_mn.hpp
++++ b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_f8_f8_bf16/device_gemm_wmma_universal_f8_f8_bf16_mk_kn_mn.hpp
+@@ -40,7 +40,7 @@ using device_gemm_wmma_universal_f8_f8_bf16_mk_kn_mn_comp_instances = std::tuple
+         //#########################|        |        |        | Type|  Type|  Type|    Type| DataType| Elementwise| Elementwise| Elementwise|         |  Size| Block| Block| Block|    |    | Wmma| Wmma|        |        |     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraM|     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraN|    MRepeat|    NRepeat|        ClusterLengths|       ScalarPerVector|  PipeSched|                  PipelineVer|   TypeA|   TypeB|
+         //#########################|        |        |        |     |      |      |        |         |   Operation|   Operation|   Operation|         |      |      |      |      |    |    |     |     |        |        | Lengths_AK0_M_AK1|   ArrangeOrder|               |               |      PerVector|  PerVector_AK1|          | Lengths_BK0_N_BK1|   ArrangeOrder|               |               |      PerVector|  PerVector_BK1|          | PerShuffle| PerShuffle|     _MBlock_MPerBlock|            _NPerBlock|           |                             |        |        |
+         //#########################|        |        |        |     |      |      |        |         |            |            |            |         |      |      |      |      |    |    |     |     |        |        |                  |               |               |               |               |               |          |                  |               |               |               |               |               |          |           |           |     _NBlock_NPerBlock|                      |           |                             |        |        |
+-#if !defined(__gfx1250__) && !defined(CK_USE_GFX1250)
++#if !defined(__gfx125__) && !defined(CK_USE_GFX1250)
+         // tile size is not supported on gfx1250
+         DeviceGemm_Wmma_CShuffleV3<      Row,     Row,     Row,   F8,    F8,  BF16,     F32,     BF16, PassThrough, PassThrough, PassThrough, GemmSpec,   256,   128,   128,    32,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,         1,          1,          1,        S<1, 32, 1, 8>,                     8,  Intrawave, BlockGemmPipelineVersion::v1,      F8,      F8>,
+         DeviceGemm_Wmma_CShuffleV3<      Row,     Row,     Row,   F8,    F8,  BF16,     F32,     BF16, PassThrough, PassThrough, PassThrough, GemmSpec,   128,    64,    64,    32,   8,   8,   16,   16,       2,       2,       S<4, 32, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         0,       S<4, 32, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              2,              4,         1,          1,          1,        S<1, 32, 1, 2>,                     8,  Intrawave, BlockGemmPipelineVersion::v1,      F8,      F8>,
+diff --git a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_f8_f8_bf16/device_gemm_wmma_universal_f8_f8_bf16_mk_nk_mn.hpp b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_f8_f8_bf16/device_gemm_wmma_universal_f8_f8_bf16_mk_nk_mn.hpp
+index 031d19eedf..262f7e1820 100644
+--- a/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_f8_f8_bf16/device_gemm_wmma_universal_f8_f8_bf16_mk_nk_mn.hpp
++++ b/projects/composablekernel/library/src/tensor_operation_instance/gpu/gemm_universal/device_gemm_wmma_universal_f8_f8_bf16/device_gemm_wmma_universal_f8_f8_bf16_mk_nk_mn.hpp
+@@ -40,7 +40,7 @@ using device_gemm_wmma_universal_f8_f8_bf16_mk_nk_mn_comp_instances = std::tuple
+         //#########################|        |        |        | Type|  Type|  Type|    Type| DataType| Elementwise| Elementwise| Elementwise|         |  Size| Block| Block| Block|    |    | Wmma| Wmma|        |        |     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraM|     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraN|    MRepeat|    NRepeat|        ClusterLengths|       ScalarPerVector|  PipeSched|                  PipelineVer|   TypeA|   TypeB|
+         //#########################|        |        |        |     |      |      |        |         |   Operation|   Operation|   Operation|         |      |      |      |      |    |    |     |     |        |        | Lengths_AK0_M_AK1|   ArrangeOrder|               |               |      PerVector|  PerVector_AK1|          | Lengths_BK0_N_BK1|   ArrangeOrder|               |               |      PerVector|  PerVector_BK1|          | PerShuffle| PerShuffle|     _MBlock_MPerBlock|            _NPerBlock|           |                             |        |        |
+         //#########################|        |        |        |     |      |      |        |         |            |            |            |         |      |      |      |      |    |    |     |     |        |        |                  |               |               |               |               |               |          |                  |               |               |               |               |               |          |           |           |     _NBlock_NPerBlock|                      |           |                             |        |        |
+-#if !defined(__gfx1250__) && !defined(CK_USE_GFX1250)
++#if !defined(__gfx125__) && !defined(CK_USE_GFX1250)
+         // tile size is not supported on gfx1250
+         DeviceGemm_Wmma_CShuffleV3<      Row,     Col,     Row,   F8,    F8,  BF16,     F32,     BF16, PassThrough, PassThrough, PassThrough, GemmSpec,   256,   128,   128,    32,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,                     8,  Interwave, BlockGemmPipelineVersion::v1,      F8,      F8>,
+         DeviceGemm_Wmma_CShuffleV3<      Row,     Col,     Row,   F8,    F8,  BF16,     F32,     BF16, PassThrough, PassThrough, PassThrough, GemmSpec,   256,   128,   128,    32,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,         1,          1,          1,        S<1, 32, 1, 8>,                     8,  Intrawave, BlockGemmPipelineVersion::v3,      F8,      F8>,
+diff --git a/projects/composablekernel/library/src/tensor_operation_instance/gpu/quantization/gemm/device_gemm_quantization_wmma_c_shuffle_i8_i8_i8_instance.hpp b/projects/composablekernel/library/src/tensor_operation_instance/gpu/quantization/gemm/device_gemm_quantization_wmma_c_shuffle_i8_i8_i8_instance.hpp
+index e5e721e853..a41983c0b4 100644
+--- a/projects/composablekernel/library/src/tensor_operation_instance/gpu/quantization/gemm/device_gemm_quantization_wmma_c_shuffle_i8_i8_i8_instance.hpp
++++ b/projects/composablekernel/library/src/tensor_operation_instance/gpu/quantization/gemm/device_gemm_quantization_wmma_c_shuffle_i8_i8_i8_instance.hpp
+@@ -20,7 +20,7 @@ using device_gemm_quantization_wmma_c_shuffle_i8_i8_i8_km_kn_mn_instances = std:
+         //################################|        |        |           |        |       |       |            |         |        |         |            |            |              |           |      |      |      |      |    |    |     |     |        |        |                  |               |               |               |               |               |          |                  |               |               |               |               |               |          |           |           |     _NBlock_NPerBlock|                        |                      |            |             |             |
+         DeviceGemmMultipleD_Wmma_CShuffleV3<    Col,    Row, Empty_Tuple,     Row, int8_t, int8_t, Empty_Tuple,   int8_t, int32_t,  int32_t, PassThrough, PassThrough,  OutElementOp, MNKPadding,   256,   128,   128,    64,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,      true,       S<4, 64, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,      true,          1,          1,       S<1, 32, 1, 8>,                     S<1>, GemmPipelineScheduler, GemmPipeline,      int8_t,      int8_t>,
+         DeviceGemmMultipleD_Wmma_CShuffleV3<    Col,    Row, Empty_Tuple,     Row, int8_t, int8_t, Empty_Tuple,   int8_t, int32_t,  int32_t, PassThrough, PassThrough,  OutElementOp, MNKPadding,   256,   128,   128,    64,   8,   8,   16,   16,       4,       2,       S<4, 32, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,      true,       S<4, 32, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,      true,          1,          1,       S<1, 32, 1, 8>,                     S<1>, GemmPipelineScheduler, GemmPipeline,      int8_t,      int8_t>,
+-#if !defined(__gfx1250__) && !defined(CK_USE_GFX1250)
++#if !defined(__gfx125__) && !defined(CK_USE_GFX1250)
+         // tile too small for gfx1250
+         DeviceGemmMultipleD_Wmma_CShuffleV3<    Col,    Row, Empty_Tuple,     Row, int8_t, int8_t, Empty_Tuple,   int8_t, int32_t,  int32_t, PassThrough, PassThrough,  OutElementOp, MNKPadding,   128,   128,   128,    32,   8,   8,   16,   16,       4,       4,       S<4, 32, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,      true,       S<4, 32, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,      true,          1,          1,       S<1, 32, 1, 4>,                     S<1>, GemmPipelineScheduler, GemmPipeline,      int8_t,      int8_t>,
+ #endif
+@@ -37,7 +37,7 @@ using device_gemm_quantization_wmma_c_shuffle_i8_i8_i8_km_nk_mn_instances = std:
+         //################################|        |        |           |        |  Type|   Type|        Type|     Type|    Type| DataType| Elementwise| Elementwise|   Elementwise|           |  Size| Block| Block| Block|    |    | Wmma| Wmma|        |        |     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraM|     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraN|    MRepeat|    NRepeat|        ClusterLengths|        ScalarPerVectors|             PipeSched| PipelineVer|             |             |
+         //################################|        |        |           |        |      |       |            |         |        |         |   Operation|   Operation|     Operation|           |      |      |      |      |    |    |     |     |        |        | Lengths_AK0_M_AK1|   ArrangeOrder|               |               |      PerVector|  PerVector_AK1|          | Lengths_BK0_N_BK1|   ArrangeOrder|               |               |      PerVector|  PerVector_BK1|          | PerShuffle| PerShuffle|     _MBlock_MPerBlock|                        |                      |            |             |             |
+         //################################|        |        |           |        |      |       |            |         |        |         |            |            |              |           |      |      |      |      |    |    |     |     |        |        |                  |               |               |               |               |               |          |                  |               |               |               |               |               |          |           |           |     _NBlock_NPerBlock|                        |                      |            |             |             |
+-#if !defined(__gfx1250__) && !defined(CK_USE_GFX1250)
++#if !defined(__gfx125__) && !defined(CK_USE_GFX1250)
+         // tile too small for gfx1250
+         DeviceGemmMultipleD_Wmma_CShuffleV3<    Col,    Col, Empty_Tuple,    Row, int8_t, int8_t, Empty_Tuple,   int8_t, int32_t,  int32_t, PassThrough, PassThrough,  OutElementOp, MNKPadding,   256,   128,   128,    32,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,      true,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,      true,          1,          1,       S<1, 32, 1, 8>,                     S<1>, GemmPipelineScheduler, GemmPipeline,      int8_t,      int8_t>,
+ #endif
+@@ -56,7 +56,7 @@ using device_gemm_quantization_wmma_c_shuffle_i8_i8_i8_mk_kn_mn_instances = std:
+         //################################|        |        |           |        |   Type|   Type|        Type|     Type|    Type| DataType| Elementwise| Elementwise|   Elementwise|           |  Size| Block| Block| Block|    |    | Wmma| Wmma|        |        |     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraM|     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraN|    MRepeat|    NRepeat|        ClusterLengths|        ScalarPerVectors|             PipeSched| PipelineVer|             |             |
+         //################################|        |        |           |        |       |       |            |         |        |         |   Operation|   Operation|     Operation|           |      |      |      |      |    |    |     |     |        |        | Lengths_AK0_M_AK1|   ArrangeOrder|               |               |      PerVector|  PerVector_AK1|          | Lengths_BK0_N_BK1|   ArrangeOrder|               |               |      PerVector|  PerVector_BK1|          | PerShuffle| PerShuffle|     _MBlock_MPerBlock|                        |                      |            |             |             |
+         //################################|        |        |           |        |       |       |            |         |        |         |            |            |              |           |      |      |      |      |    |    |     |     |        |        |                  |               |               |               |               |               |          |                  |               |               |               |               |               |          |           |           |     _NBlock_NPerBlock|                        |                      |            |             |             |
+-#if !defined(__gfx1250__) && !defined(CK_USE_GFX1250)
++#if !defined(__gfx125__) && !defined(CK_USE_GFX1250)
+         // tile too small for gfx1250
+         DeviceGemmMultipleD_Wmma_CShuffleV3<    Row,    Row, Empty_Tuple,     Row, int8_t, int8_t, Empty_Tuple,   int8_t, int32_t,  int32_t, PassThrough, PassThrough,  OutElementOp, MNKPadding,   256,   128,   128,    32,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,     false,       S<4, 64, 1>,     S<0, 2, 1>,     S<0, 2, 1>,              1,              1,              8,     false,          1,          1,       S<1, 32, 1, 8>,                     S<1>, GemmPipelineScheduler, GemmPipeline,      int8_t,      int8_t>,
+ #endif
+@@ -75,7 +75,7 @@ using device_gemm_quantization_wmma_c_shuffle_i8_i8_i8_mk_nk_mn_instances = std:
+         //################################|        |        |           |        |   Type|   Type|        Type|     Type|    Type| DataType| Elementwise| Elementwise|   Elementwise|           |  Size| Block| Block| Block|    |    | Wmma| Wmma|        |        |     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraM|     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraN|    MRepeat|    NRepeat|        ClusterLengths|        ScalarPerVectors|             PipeSched| PipelineVer|             |             |
+         //################################|        |        |           |        |       |       |            |         |        |         |   Operation|   Operation|     Operation|           |      |      |      |      |    |    |     |     |        |        | Lengths_AK0_M_AK1|   ArrangeOrder|               |               |      PerVector|  PerVector_AK1|          | Lengths_BK0_N_BK1|   ArrangeOrder|               |               |      PerVector|  PerVector_BK1|          | PerShuffle| PerShuffle|     _MBlock_MPerBlock|                        |                      |            |             |             |
+         //################################|        |        |           |        |       |       |            |         |        |         |            |            |              |           |      |      |      |      |    |    |     |     |        |        |                  |               |               |               |               |               |          |                  |               |               |               |               |               |          |           |           |     _NBlock_NPerBlock|                        |                      |            |             |             |
+-#if !defined(__gfx1250__) && !defined(CK_USE_GFX1250)
++#if !defined(__gfx125__) && !defined(CK_USE_GFX1250)
+         // tile too small for gfx1250
+         DeviceGemmMultipleD_Wmma_CShuffleV3<    Row,    Col, Empty_Tuple,     Row, int8_t, int8_t, Empty_Tuple,   int8_t, int32_t,  int32_t, PassThrough, PassThrough,  OutElementOp, MNKPadding,   256,   128,   128,    32,   8,   8,   16,   16,       4,       2,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,      true,       S<4, 64, 1>,     S<1, 0, 2>,     S<1, 0, 2>,              2,              8,              8,      true,          1,          1,        S<1, 32, 1, 8>,                    S<1>, GemmPipelineScheduler, GemmPipeline,      int8_t,      int8_t>,
+ #endif
+diff --git a/projects/composablekernel/test/ck_tile/multicast_load/test_cluster_load_async_to_lds.cpp b/projects/composablekernel/test/ck_tile/multicast_load/test_cluster_load_async_to_lds.cpp
+index cd3ba7702c..03311b002a 100644
+--- a/projects/composablekernel/test/ck_tile/multicast_load/test_cluster_load_async_to_lds.cpp
++++ b/projects/composablekernel/test/ck_tile/multicast_load/test_cluster_load_async_to_lds.cpp
+@@ -56,7 +56,7 @@ struct AsyncLDSKernel
+ 
+     CK_TILE_DEVICE void operator()(const T* __restrict__ src, T* __restrict__ dst, int mask) const
+     {
+-#ifdef __gfx1250__
++#ifdef __gfx125__
+         __shared__ T lds_buf[NUM_LANES];
+ 
+         const int lane_id = threadIdx.x;
+@@ -170,7 +170,7 @@ struct LDSVisibilityKernel
+ 
+     CK_TILE_DEVICE void operator()(const T* __restrict__ src, T* __restrict__ dst, int mask) const
+     {
+-#ifdef __gfx1250__
++#ifdef __gfx125__
+         __shared__ T lds_buf[NUM_LANES]; // 32 slots, loaded by wave 0's 32 lanes
+ 
+         const int thread_id = threadIdx.x;
+@@ -293,7 +293,7 @@ struct LDSStridedKernel
+     CK_TILE_DEVICE void
+     operator()(const int* __restrict__ src, int* __restrict__ dst, int mask) const
+     {
+-#ifdef __gfx1250__
++#ifdef __gfx125__
+         __shared__ int lds_buf[NUM_LANES * LDSStridedKernel::kStride];
+ 
+         const int lane_id = threadIdx.x;
+@@ -391,7 +391,7 @@ struct AsyncLDSBroadcastKernel
+                                    int* __restrict__ diag_ids,
+                                    int num_wgs) const
+     {
+-#ifdef __gfx1250__
++#ifdef __gfx125__
+         __shared__ T lds_buf[NUM_LANES];
+ 
+         const int flat_id = __builtin_amdgcn_cluster_workgroup_flat_id();
+@@ -496,7 +496,7 @@ struct AsyncLDS2DClusterKernel
+                                    int* __restrict__ dst,
+                                    int* __restrict__ flat_ids) const
+     {
+-#ifdef __gfx1250__
++#ifdef __gfx125__
+         __shared__ int lds_buf[NUM_LANES];
+ 
+         const int block_flat_id = blockIdx.x + blockIdx.y * gridDim.x;
+@@ -614,7 +614,7 @@ struct ASYNCcntOrderingKernel
+                                    int* __restrict__ dst_b,
+                                    int mask) const
+     {
+-#ifdef __gfx1250__
++#ifdef __gfx125__
+         __shared__ int lds_a[NUM_LANES];
+         __shared__ int lds_b[NUM_LANES];
+ 
+@@ -733,7 +733,7 @@ struct PartialBroadcastKernel
+                                    int* __restrict__ dst,
+                                    int mask) const
+     {
+-#ifdef __gfx1250__
++#ifdef __gfx125__
+         __shared__ int lds_buf[NUM_LANES];
+ 
+         const int flat_id = __builtin_amdgcn_cluster_workgroup_flat_id();
+@@ -854,7 +854,7 @@ struct MultiWGPLDSVisibilityKernel
+                                    int* __restrict__ diag_ids,
+                                    int num_wgs) const
+     {
+-#ifdef __gfx1250__
++#ifdef __gfx125__
+         __shared__ T lds_buf[NUM_LANES]; // 32 slots; all waves in WG share this
+ 
+         const int flat_id   = __builtin_amdgcn_cluster_workgroup_flat_id();
+@@ -991,7 +991,7 @@ struct ConcurrentGroupsLDSKernel
+                                    T* __restrict__ dst,
+                                    int* __restrict__ diag_ids) const
+     {
+-#ifdef __gfx1250__
++#ifdef __gfx125__
+         __shared__ T lds_buf[NUM_LANES];
+ 
+         const int flat_id = __builtin_amdgcn_cluster_workgroup_flat_id();
+@@ -1134,7 +1134,7 @@ struct BufferViewBasicKernel
+ 
+     CK_TILE_DEVICE void operator()(const int* src, int* dst, int mask) const
+     {
+-#ifdef __gfx1250__
++#ifdef __gfx125__
+         __shared__ int lds_buf[NUM_LANES];
+ 
+         const int lane_id = threadIdx.x;
+@@ -1199,7 +1199,7 @@ struct BufferViewInstOffsetKernel
+ 
+     CK_TILE_DEVICE void operator()(const int* src, int* dst, int mask) const
+     {
+-#ifdef __gfx1250__
++#ifdef __gfx125__
+         __shared__ int lds_buf[2 * NUM_LANES];
+ 
+         const int lane_id  = threadIdx.x;
+-- 
+2.43.0
+
