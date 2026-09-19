@@ -9,6 +9,7 @@ import sys
 import unittest
 from pathlib import Path
 from unittest import mock
+from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
@@ -22,6 +23,7 @@ from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
     get_build_runner_labels,
     load_external_runner_config,
+    select_build_runner,
 )
 
 
@@ -275,6 +277,50 @@ class TestExternalConfig(unittest.TestCase):
         # Non-runner keys should come from local definitions
         self.assertEqual(result["gfx94x"]["linux"]["family"], "gfx94X-dcgpu")
         self.assertIn("asan", result["gfx94x"]["linux"]["build_variants"])
+
+
+# ---------------------------------------------------------------------------
+# Build runner selection
+# ---------------------------------------------------------------------------
+
+
+class TestBuildRunnerSelection(unittest.TestCase):
+    """Tests for select_build_runner() in amdgpu_family_matrix.py.
+
+    CI_CONFIG_PATH is cleared to ensure tests use local definitions only.
+    """
+
+    def setUp(self):
+        self._orig_env = os.environ.copy()
+        if "CI_CONFIG_PATH" in os.environ:
+            del os.environ["CI_CONFIG_PATH"]
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self._orig_env)
+
+    def test_select_build_runner(self):
+        """select_build_runner() returns the correct label for each platform/variant/size."""
+        cases = [
+            # (platform, variant, size, expected_runner_label)
+            ("linux", "release", "large", "aws-linux-scale-rocm-prod"),
+            ("windows", "release", "large", "azure-windows-scale-rocm"),
+            # Sanitizer builds always use the large runner regardless of requested size
+            ("linux", "asan", "small", "aws-linux-scale-rocm-large"),
+            ("linux", "tsan", "medium", "aws-linux-scale-rocm-large"),
+            ("linux", "release", "small", "aws-linux-scale-rocm-small"),
+            # Windows has no small/medium pool — falls back to the Windows default
+            ("windows", "release", "small", "azure-windows-scale-rocm"),
+            ("linux", "release", "medium", "aws-linux-scale-rocm-medium"),
+            ("windows", "release", "medium", "azure-windows-scale-rocm"),
+        ]
+        with patch("random.random", return_value=0.5):
+            for platform, variant, size, expected in cases:
+                with self.subTest(platform=platform, variant=variant, size=size):
+                    self.assertEqual(
+                        select_build_runner(platform, variant, size=size),
+                        expected,
+                    )
 
 
 if __name__ == "__main__":

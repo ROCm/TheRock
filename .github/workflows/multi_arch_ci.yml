@@ -18,22 +18,46 @@ on:
       - release/therock-*
   workflow_dispatch:
     inputs:
+      # --- Build targets ---
       linux_amdgpu_families:
         type: string
         description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx120X (empty = skip linux)"
-        default: ""
-      linux_test_labels:
-        type: string
-        description: "Comma-separated test options. Use test:* to filter tests (e.g. test:rocprim). Use test_filter:* to set test type (e.g. test_filter:quick)."
         default: ""
       windows_amdgpu_families:
         type: string
         description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx120X (empty = skip windows)"
         default: ""
+      # --- Test targets ---
+      linux_test_labels:
+        type: string
+        description: "Comma-separated test options. Use test:* to filter tests (e.g. test:rocprim). Use test_filter:* to set test type (e.g. test_filter:quick)."
+        default: ""
       windows_test_labels:
         type: string
         description: "Comma-separated test options. Use test:* to filter tests (e.g. test:rocprim). Use test_filter:* to set test type (e.g. test_filter:quick)."
         default: ""
+      # --- Build control ---
+      build_stages:
+        type: string
+        default: ""
+        description: "Comma-separated allowlist of build stages (empty = build all). Stages outside this list are skipped entirely."
+      build_python_packages:
+        type: boolean
+        default: true
+        description: "Build ROCm Python packages"
+      build_pytorch:
+        type: boolean
+        default: true
+        description: "Build PyTorch wheels"
+      build_jax:
+        type: boolean
+        default: true
+        description: "Build JAX wheels"
+      build_native_linux:
+        type: boolean
+        default: true
+        description: "Build native Linux packages and run install tests"
+      # --- Artifact reuse ---
       prebuilt_stages:
         type: string
         default: ""
@@ -68,26 +92,6 @@ on:
           Comma-separated list of changed project paths (e.g., 'projects/rocprim').
           Mapped to artifacts via BUILD_TOPOLOGY.toml source_paths for granular
           reuse and test filtering (empty = run all tests).
-      build_python_packages:
-        type: boolean
-        default: true
-        description: "Build ROCm Python packages"
-      build_pytorch:
-        type: boolean
-        default: true
-        description: "Build PyTorch wheels"
-      build_jax:
-        type: boolean
-        default: true
-        description: "Build JAX wheels"
-      build_native_linux:
-        type: boolean
-        default: true
-        description: "Build native Linux packages and run install tests"
-      build_stages:
-        type: string
-        default: ""
-        description: "Comma-separated allowlist of build stages (empty = build all). Stages outside this list are skipped entirely."
   pull_request:
     types:
       - labeled
