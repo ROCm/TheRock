@@ -23,8 +23,16 @@ Usage:
         --config-path .github/repos-config.json
 
 Outputs (to $GITHUB_OUTPUT):
-    changed_projects: Comma-separated list of changed project paths
-    run_all_tests: "true" if CI files changed (run full test suite)
+    changed_projects: Comma-separated list of changed project paths. When a
+        CI-infra file changed (e.g. a TheRock workflow ref bump), this is
+        every project registered in the calling repo's config -- not a
+        cross-repo "*" -- so downstream dependency-graph test selection
+        (determine_rocm_test_dependencies.py) still scopes to that repo's own
+        tests. See test_ci_workflow_changed_with_config_scopes_to_own_repo.
+    run_all_tests: "true" only when this repo's own project list cannot be
+        enumerated at all (no config, schedule/dispatch, truncated diff, or an
+        unclassified change) and TheRock must fall back to testing everything
+        it knows about, cross-repo included
     skip_tests: "true" if only docs/skippable files changed
 """
 
@@ -63,8 +71,16 @@ SKIPPABLE_PATH_PATTERNS = [
     "shared/*/docs/*",
 ]
 
-# Patterns that trigger a full test run when changed (CI infrastructure)
-FULL_TEST_TRIGGER_PATTERNS = [
+# Patterns for CI-orchestration files: which workflow/script decides what to
+# build and test (workflow YAMLs, the config-loading scripts, the repo list
+# itself). A change here can't be attributed to a specific subproject, but it
+# does not change what a test *is* or how tests are labeled/selected -- so
+# `configure()` scopes the run to every project *this* repo registers rather
+# than falling back to the cross-repo run-everything behavior. This is what
+# keeps a routine TheRock-ref bump PR (which necessarily touches every
+# `.github/workflows/therock*.yml` to update the pinned ref) from also pulling
+# in tests owned by a different external repo.
+CI_ORCHESTRATION_TRIGGER_PATTERNS = [
     ".github/workflows/therock*",
     ".github/scripts/therock*",
     ".github/scripts/get_changed_projects.py",
@@ -73,11 +89,24 @@ FULL_TEST_TRIGGER_PATTERNS = [
     ".github/scripts/repo_config_model.py",
     ".github/scripts/pr_detect_changed_subtrees.py",
     ".github/repos-config.json",
+]
+
+# Patterns whose change means the test-*selection machinery itself* may behave
+# differently everywhere -- cross-repo included -- so no amount of
+# dependency-graph scoping can be trusted: this is the one case that still
+# falls back to the true, universal run-everything behavior.
+TEST_LOGIC_TRIGGER_PATTERNS = [
     # shared/ctest holds the CTest categorization logic consumed by every
     # project's tests; a change there can alter selection everywhere, so treat
     # it as a full-test trigger rather than a single surfaced component.
     "shared/ctest/*",
 ]
+
+# Superset of both, kept for callers that only care about "does this PR touch
+# CI-selection-relevant infrastructure at all" (e.g. tests, external callers).
+FULL_TEST_TRIGGER_PATTERNS = (
+    CI_ORCHESTRATION_TRIGGER_PATTERNS + TEST_LOGIC_TRIGGER_PATTERNS
+)
 
 # CI-relevant monorepo directories that are NOT subtree-synced repos and so are
 # absent from an external repo's repos-config.json. Without these, a PR confined
@@ -96,6 +125,29 @@ CI_RELEVANT_NON_SUBTREE_PREFIXES = {
     "emulation/mirage",
     "emulation/rocjitsu",
 }
+
+# CI_RELEVANT_NON_SUBTREE_PREFIXES currently enumerates only rocm-systems' own
+# non-subtree dirs (see its docstring above). It is safe to union in
+# unconditionally in the normal changed-*file* path (find_matched_subtrees /
+# get_unclassified_paths): a rocm-libraries PR's modified_paths can never
+# actually contain a "shared/kpack/..." path, since that directory does not
+# exist in that repo's checkout. It is NOT safe to union in unconditionally
+# when *synthesizing* a "every project in this repo changed" identifier list
+# (the CI-orchestration-scoping path in configure()), since that path does
+# not check for real occurrences in modified_paths -- it would assert that
+# directories a different repo doesn't even have "changed". Gate on the owning
+# repo instead.
+_ROCM_SYSTEMS_REPO_SUFFIX = "/rocm-systems"
+
+
+def _owns_non_subtree_prefixes(github_repo: str) -> bool:
+    """Whether `github_repo` owns CI_RELEVANT_NON_SUBTREE_PREFIXES.
+
+    Currently just rocm-systems; see that set's docstring. Add repos here (and
+    split the set by owner) if a second repo ever needs its own non-subtree
+    dirs recognized.
+    """
+    return github_repo.lower().endswith(_ROCM_SYSTEMS_REPO_SUFFIX)
 
 
 @dataclass
@@ -334,9 +386,57 @@ def configure(
 
     logger.info(f"Modified paths: {len(modified_paths)} files")
 
-    # Check if CI files changed (run all tests)
-    if matches_patterns(modified_paths, FULL_TEST_TRIGGER_PATTERNS):
-        logger.info("CI files changed - running all tests")
+    # Loaded once and reused below: by the CI-infra-changed path (to scope to
+    # this repo's own projects) and by the normal changed-file path.
+    config = load_repo_config(config_path)
+
+    # Test-selection machinery itself changed (e.g. shared/ctest categorization
+    # logic): no dependency-graph scoping can be trusted here, so this is the
+    # one case that still falls back to the true, universal run-everything
+    # behavior, cross-repo included.
+    if matches_patterns(modified_paths, TEST_LOGIC_TRIGGER_PATTERNS):
+        logger.info("Test-selection logic changed - running all tests")
+        return ConfigureResult(
+            changed_projects="", run_all_tests=True, skip_tests=False
+        )
+
+    # CI-orchestration files changed (workflow YAMLs, config-loading scripts,
+    # the repo list itself). We cannot attribute that to a specific
+    # subproject, but we can still scope the run to every project *this repo*
+    # registers rather than falling back to the cross-repo run-everything
+    # behavior below: treat all of this repo's registered projects as
+    # "changed" and hand that list to the same dependency-graph selection
+    # (determine_rocm_test_dependencies.py) that handles any other
+    # multi-project diff. That keeps, e.g., a rocm-libraries TheRock-ref bump
+    # (which necessarily touches every `.github/workflows/therock*.yml` to
+    # update the pinned ref) from also pulling in tests owned by a different
+    # repo (rocm-systems) that nothing in rocm-libraries' own dependency graph
+    # reaches. Deliberately does NOT union in CI_RELEVANT_NON_SUBTREE_PREFIXES
+    # here: that set names rocm-systems' own non-subtree dirs (shared/kpack,
+    # emulation/mirage, ...); adding it unconditionally for every repo would
+    # feed foundational, wide-reach graph keys (e.g. hip-clr, level 3 /
+    # transitive) into selection for repos that don't actually own those
+    # paths, defeating the scoping this branch exists to provide.
+    if matches_patterns(modified_paths, CI_ORCHESTRATION_TRIGGER_PATTERNS):
+        if config:
+            all_projects_set = get_valid_prefixes(config)
+            if _owns_non_subtree_prefixes(github_repo):
+                all_projects_set = all_projects_set | CI_RELEVANT_NON_SUBTREE_PREFIXES
+            all_projects = sorted(all_projects_set)
+            logger.info(
+                f"CI-orchestration files changed - testing all "
+                f"{len(all_projects)} project(s) registered for {github_repo} "
+                "(not the full cross-repo test universe)"
+            )
+            return ConfigureResult(
+                changed_projects=",".join(all_projects),
+                run_all_tests=False,
+                skip_tests=False,
+            )
+        logger.warning(
+            "CI-orchestration files changed, no repo config loaded - "
+            "running all tests"
+        )
         return ConfigureResult(
             changed_projects="", run_all_tests=True, skip_tests=False
         )
@@ -349,7 +449,6 @@ def configure(
         )
 
     # Find changed projects from config
-    config = load_repo_config(config_path)
     if not config:
         logger.warning("No config loaded - running all tests")
         return ConfigureResult(

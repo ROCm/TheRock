@@ -219,7 +219,9 @@ class ConfigureTest(unittest.TestCase):
         self.assertEqual(result.run_all_tests, False)
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
-    def test_ci_workflow_changed_runs_all_tests(self, mock_api):
+    def test_ci_workflow_changed_without_config_runs_all_tests(self, mock_api):
+        """No repo config to enumerate from -> only remaining option is the
+        true cross-repo run-everything fallback."""
         mock_api.return_value = {".github/workflows/therock-ci.yml"}
         result = configure(
             event_name="pull_request",
@@ -229,7 +231,105 @@ class ConfigureTest(unittest.TestCase):
             config_path="",
         )
         self.assertEqual(result.run_all_tests, True)
+        self.assertEqual(result.changed_projects, "")
         self.assertEqual(result.skip_tests, False)
+
+    @patch("configure_external_repo_ci.get_modified_paths_api")
+    @patch("configure_external_repo_ci.load_repo_config")
+    def test_ci_workflow_changed_with_config_scopes_to_own_repo(
+        self, mock_config, mock_api
+    ):
+        """A CI-infra change (e.g. a TheRock workflow ref bump) should scope
+        to every project *this repo* registers, not the cross-repo test
+        universe -- so a rocm-libraries bump PR does not also pull in
+        rocm-systems-owned tests (RCCL, hip-tests, amdsmi, ...) that nothing
+        in rocm-libraries' own dependency graph reaches."""
+        mock_api.return_value = {".github/workflows/therock-ci.yml"}
+        mock_config.return_value = [
+            RepoEntry(name="rocblas", url="", branch="", category="projects"),
+            RepoEntry(name="hipblas", url="", branch="", category="projects"),
+        ]
+        result = configure(
+            event_name="pull_request",
+            github_repo="ROCm/rocm-libraries",
+            base_sha="abc123",
+            head_sha="def456",
+            config_path=".github/repos-config.json",
+        )
+        self.assertEqual(result.run_all_tests, False)
+        self.assertEqual(result.skip_tests, False)
+        self.assertEqual(result.changed_projects, "projects/hipblas,projects/rocblas")
+
+    @patch("configure_external_repo_ci.get_modified_paths_api")
+    @patch("configure_external_repo_ci.load_repo_config")
+    def test_ci_workflow_changed_does_not_add_other_repos_non_subtree_prefixes(
+        self, mock_config, mock_api
+    ):
+        """CI_RELEVANT_NON_SUBTREE_PREFIXES names rocm-systems' own
+        non-subtree dirs (shared/kpack, emulation/mirage, ...). The
+        CI-orchestration scoping path must only add those for the repo that
+        actually owns them (rocm-systems, see
+        test_ci_workflow_changed_includes_non_subtree_prefixes_for_rocm_systems)
+        -- adding them for rocm-libraries too would feed foundational,
+        wide-reach graph keys (e.g. hip-clr via shared/amdgpu-windows-interop)
+        into selection for a repo that does not own those paths, defeating
+        the point of scoping to "this repo's own projects"."""
+        mock_api.return_value = {".github/scripts/therock_configure.py"}
+        mock_config.return_value = [
+            RepoEntry(name="rocblas", url="", branch="", category="projects"),
+        ]
+        result = configure(
+            event_name="pull_request",
+            github_repo="ROCm/rocm-libraries",
+            base_sha="abc123",
+            head_sha="def456",
+            config_path=".github/repos-config.json",
+        )
+        self.assertEqual(result.run_all_tests, False)
+        self.assertEqual(result.changed_projects, "projects/rocblas")
+
+    @patch("configure_external_repo_ci.get_modified_paths_api")
+    @patch("configure_external_repo_ci.load_repo_config")
+    def test_ci_workflow_changed_includes_non_subtree_prefixes_for_rocm_systems(
+        self, mock_config, mock_api
+    ):
+        """rocm-systems DOES own the CI_RELEVANT_NON_SUBTREE_PREFIXES dirs
+        (shared/kpack, emulation/mirage, emulation/rocjitsu, ...), which are
+        absent from repos-config.json precisely because they are not
+        subtree-synced. A rocm-systems TheRock-ref bump must still cover
+        them, or their own test jobs (rocm-kpack, mirage, rocjitsu) silently
+        drop out of "every rocm-systems project changed"."""
+        mock_api.return_value = {".github/workflows/therock-ci.yml"}
+        mock_config.return_value = [
+            RepoEntry(name="rocm-core", url="", branch="", category="projects"),
+        ]
+        result = configure(
+            event_name="pull_request",
+            github_repo="ROCm/rocm-systems",
+            base_sha="abc123",
+            head_sha="def456",
+            config_path=".github/repos-config.json",
+        )
+        self.assertEqual(result.run_all_tests, False)
+        changed = set(result.changed_projects.split(","))
+        self.assertIn("projects/rocm-core", changed)
+        self.assertTrue(CI_RELEVANT_NON_SUBTREE_PREFIXES.issubset(changed))
+
+    @patch("configure_external_repo_ci.get_modified_paths_api")
+    def test_ctest_logic_changed_still_runs_all_tests_cross_repo(self, mock_api):
+        """shared/ctest holds test-*selection* logic itself, not mere CI
+        plumbing -- it keeps the true, unscoped run-everything fallback even
+        when a repo config is available, unlike a workflow-file bump."""
+        mock_api.return_value = {"shared/ctest/TestCategories.cmake"}
+        result = configure(
+            event_name="pull_request",
+            github_repo="ROCm/rocm-libraries",
+            base_sha="abc123",
+            head_sha="def456",
+            config_path=".github/repos-config.json",
+        )
+        self.assertEqual(result.run_all_tests, True)
+        self.assertEqual(result.changed_projects, "")
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
     @patch("configure_external_repo_ci.load_repo_config")
