@@ -76,6 +76,9 @@ string(APPEND EXTRA_CPPFLAGS " -I${THEROCK_BINARY_DIR}/third-party/sysdeps/linux
 string(APPEND EXTRA_CPPFLAGS " -fPIC")
 message(STATUS "EXTRA_CPPFLAGS=${EXTRA_CPPFLAGS}")
 
+# Disable "treat compiler warnings as errors" in elfutils by adding `-Wno-error`
+set(ELFUTILS_CFLAGS "-O2 -g -Wno-error")
+
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -101,6 +104,8 @@ add_custom_target(
       # then escaped single quotes to make it to the linker command line.
       "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath=\\'\\$$\\$$ORIGIN\\'"
       "CPPFLAGS=${EXTRA_CPPFLAGS}"
+      "CFLAGS=${ELFUTILS_CFLAGS}"
+      "CXXFLAGS=${ELFUTILS_CFLAGS}"
       --
     "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
