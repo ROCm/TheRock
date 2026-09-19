@@ -145,6 +145,11 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       pytorch_matrix: ${{ steps.matrix.outputs.pytorch_matrix }}
+    env:
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
+      PYTHON_VERSION: ${{ inputs.python_version }}
+
     steps:
       - name: "Quartz - started - release PyTorch wheels"
         continue-on-error: true
@@ -168,10 +173,10 @@ jobs:
         id: matrix
         run: |
           python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
-            --python-versions="${{ inputs.python_version }}" \
+            --python-versions="${PYTHON_VERSION}" \
             --platform=linux \
-            --release-type="${{ inputs.release_type }}" \
-            --amdgpu-families="${{ inputs.amdgpu_families }}"
+            --release-type="${BUILD_RELEASE_TYPE}" \
+            --amdgpu-families="${AMDGPU_FAMILIES}"
 
   build_pytorch_wheels:
     needs: setup_matrix

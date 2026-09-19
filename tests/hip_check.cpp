@@ -3,63 +3,31 @@
 
 #include <cstdio>
 #include <hip/hip_runtime.h>
-
-// Simple vector addition kernel: C = A + B
-__global__ void vector_add(const int *A, const int *B, int *C, int N) {
+__global__ void squares(int *buf) {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i < N) {
-    C[i] = A[i] + B[i];
-  }
+  printf("Thread %#04x is writing %4d\n", i, i * i);
+  buf[i] = i * i;
 }
-
 int main() {
-  constexpr int N = 256;
+  constexpr int gridsize = 1;
   constexpr int blocksize = 64;
-  constexpr int gridsize = (N + blocksize - 1) / blocksize;
-
-  // Host arrays
-  int h_A[N], h_B[N], h_C[N];
-
-  // Initialize input arrays
-  for (int i = 0; i < N; ++i) {
-    h_A[i] = i;
-    h_B[i] = i * 2;
-  }
-
-  // Device arrays
-  int *d_A, *d_B, *d_C;
-  hipMalloc(&d_A, N * sizeof(int));
-  hipMalloc(&d_B, N * sizeof(int));
-  hipMalloc(&d_C, N * sizeof(int));
-
-  // Copy input data to device
-  hipMemcpy(d_A, h_A, N * sizeof(int), hipMemcpyHostToDevice);
-  hipMemcpy(d_B, h_B, N * sizeof(int), hipMemcpyHostToDevice);
-
-  // Launch kernel
-  hipLaunchKernelGGL(vector_add, gridsize, blocksize, 0, 0, d_A, d_B, d_C, N);
+  constexpr int size = gridsize * blocksize;
+  int *d_buf;
+  hipHostMalloc(&d_buf, size * sizeof(int));
+  hipLaunchKernelGGL(squares, gridsize, blocksize, 0, 0, d_buf);
   hipDeviceSynchronize();
 
-  // Copy result back to host
-  hipMemcpy(h_C, d_C, N * sizeof(int), hipMemcpyDeviceToHost);
-
-  // Check results
+  // Check results.
   int mismatches_count = 0;
-  for (int i = 0; i < N; ++i) {
-    int expected = h_A[i] + h_B[i];
-    if (h_C[i] != expected) {
+  for (int i = 0; i < size; ++i) {
+    int square = i * i;
+    if (d_buf[i] != square) {
       fprintf(stderr,
               "Element at index %d expected value %d, actual value: %d\n", i,
-              expected, h_C[i]);
+              square, d_buf[i]);
       ++mismatches_count;
     }
   }
-
-  // Cleanup
-  hipFree(d_A);
-  hipFree(d_B);
-  hipFree(d_C);
-
   if (mismatches_count > 0) {
     fprintf(stderr, "There were %d mismatches\n", mismatches_count);
     return 1;

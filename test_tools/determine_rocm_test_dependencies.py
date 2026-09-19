@@ -84,6 +84,8 @@ _EXTERNAL_SUBTREE_ALIASES = {
     # emulation stack; kpack is the ROCm packaging tool (rocm-kpack).
     "shared/kpack": ["rocm-kpack"],
     "shared/machine-readable-isa": ["rocjitsu"],
+    # primbench is a benchmarking header library used by rocprim/rocrand benchmarks.
+    "shared/primbench": ["rocprim", "rocrand"],
     "shared/mxdatagenerator": [
         "hipblas",
         "hipblaslt",
@@ -127,6 +129,7 @@ _CI_TEST_SELECTOR_ALIASES = {
     "hipdnn_integration_tests": ["hipdnn-integration-tests"],
     "hipdnn_samples": ["hipdnn-samples"],
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
+    "rocr-debug-agent-tests": ["rocr-debug-agent"],
 }
 
 

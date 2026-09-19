@@ -220,6 +220,7 @@ following standards:
 | ✅ Pull requests should link an issue | <ul><li>[`therock-pr-bot.yml`](/.github/workflows/therock-pr-bot.yml)</li></ul>                                                              | <ul><li>[`pull_request_template.md`](/.github/pull_request_template.md)<li>Policy Bot [`FAQ.md`](/skills/therock_pr_bot/FAQ.md#-pr-description)</li></ul> |
 | ✅ Lint pre-commit checks             | <ul><li>[`pre-commit.yml`](.github/workflows/pre-commit.yml)</li></ul>                                                                       | <ul><li>[pre-commit checks](#pre-commit-checks)</li></ul>                                                                                                 |
 | ✅ Changes should be tested           | <ul><li>[`unit_tests.yml`](.github/workflows/unit_tests.yml)</li><li>[`therock-pr-bot.yml`](/.github/workflows/therock-pr-bot.yml)</li></ul> | <ul><li>[`TESTING.md`](/TESTING.md)</li><li>[`docs/development/adding_tests.md`](docs/development/adding_tests.md)</li></ul>                              |
+| ✅ Security scans                     | <ul><li>[`security_scan_pr.yml`](/.github/workflows/security_scan_pr.yml)</li></ul>                                                          | <ul><li>[Security scanners](#security-scanners)</li></ul>                                                                                                 |
 
 > [!NOTE]
 > For more information about the PR Policy Bot which enforces some of these
@@ -307,6 +308,55 @@ pre-commit run --hook-stage manual --all-files lychee
 The `lychee` hook checks that repo-relative markdown links resolve to files that
 exist. It is confined to the `manual` stage because it downloads a `lychee`
 binary on first run, which the other hooks do not need.
+
+#### Security scanners
+
+Separately from the correctness checks above, we scan the repository for
+secrets, unsafe Python, workflow vulnerabilities, and image
+misconfigurations. These run in CI via
+[`security_scan_pr.yml`](/.github/workflows/security_scan_pr.yml), which calls
+the shared [`ROCm/rocm-security-gh`](https://github.com/ROCm/rocm-security-gh)
+reusable workflow. See
+[the security scanning section in `TESTING.md`](/TESTING.md#therock-feature-area-security-scanning)
+for how the two security workflows fit together.
+
+Each scanner is runnable locally against the same configuration CI uses, which
+is faster than pushing a commit to see what CI says. The configurations live in
+[`build_tools/scan_tools/`](/build_tools/scan_tools/):
+
+```bash
+# Secrets, over the full git history (installed separately, see gitleaks docs).
+gitleaks detect --source . --config build_tools/scan_tools/gitleaks.toml \
+  --redact --verbose --no-banner
+
+# Secrets, working tree only. Much faster, and usually what you want locally.
+gitleaks detect --source . --config build_tools/scan_tools/gitleaks.toml \
+  --redact --no-banner --no-git
+
+# Unsafe patterns in Python (pip install bandit).
+bandit --configfile build_tools/scan_tools/bandit.yml --severity-level low \
+  --recursive .
+
+# GitHub Actions workflow vulnerabilities (pip install zizmor).
+zizmor --persona regular --config build_tools/scan_tools/zizmor.yml .
+
+# Dockerfile misconfigurations and dependency vulnerabilities (see trivy docs).
+trivy fs --config build_tools/scan_tools/trivy.yml \
+  --severity LOW,MEDIUM,HIGH,CRITICAL --scanners misconfig,vuln .
+```
+
+> [!NOTE]
+> These commands report every severity, while CI only fails on `HIGH` (and
+> `CRITICAL` for trivy). Expect more output locally than a red CI check implies.
+>
+> The commands also scan the whole repository, while pull request runs default
+> to scanning only what the pull request changed. A full-history `gitleaks` run
+> in particular reports pre-existing findings that the pull request check does
+> not.
+
+CodeQL is not in the list above because it needs the CodeQL CLI and a built
+database; it runs in CI only, configured by
+[`build_tools/scan_tools/codeql.yml`](/build_tools/scan_tools/codeql.yml).
 
 #### Requesting a code review
 
