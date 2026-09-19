@@ -233,6 +233,12 @@ jobs:
         run: |
           cmake --build "${BUILD_DIR}" --target therock-build-tests -- -k 0
 
+      - name: Audit linker inputs on failure
+        if: ${{ failure() }}
+        run: |
+          python build_tools/github_actions/audit_link_inputs.py \
+            --build-dir="${BUILD_DIR}"
+
       - name: Report
         if: ${{ !cancelled() }}
         run: |
