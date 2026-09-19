@@ -1,0 +1,4 @@
+{{ repo_id }}.sources /etc/apt/sources.list.d/
+{% if signed %}
+{{ deb_keyring_file }} {{ deb_keyring_dir }}/
+{% endif %}
