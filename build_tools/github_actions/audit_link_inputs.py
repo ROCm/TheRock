@@ -16,10 +16,21 @@ It then re-runs the failed sub-project build without touching any source. If
 ninja re-runs only the link and it now succeeds, the inputs were correct all
 along and the original failure was a transient read.
 
+That covers failures whose inputs are objects. A second, distinct mode was
+observed in CI run 35479909973: every object was valid and the re-link failed
+identically, because the missing symbols were meant to come from an *import
+library* rather than from an object. Object-only auditing reports "0 suspect
+inputs" for that case and says nothing about the actual faulty input, so the
+libraries named on the failed link line are audited too: each is checked for
+the symbols the linker said were undefined, and its size/mtime/digest are
+recorded so a bad build product can be told apart from a bad read.
+
 Writes into `<build-dir>/logs/` so the existing stage log upload picks it up.
 """
 
 import argparse
+import hashlib
+import re
 import shutil
 import subprocess
 import sys
@@ -34,6 +45,212 @@ COFF_MAGIC = {
     b"\x4c\x01",  # IMAGE_FILE_MACHINE_I386
     b"\xaa\x64",  # IMAGE_FILE_MACHINE_ARM64
 }
+
+# `lld-link: error: undefined symbol: __declspec(dllimport) rocsolver_csytrs`
+# The build log prefixes each line with an elapsed-time stamp, so this is
+# deliberately not anchored to the start of the line.
+UNDEFINED_RE = re.compile(
+    r"undefined symbol:\s*(?:__declspec\(dllimport\)\s*)?(.+?)\s*$"
+)
+
+# `-LB:/path/to/lib` or `-L B:/path/to/lib`.
+LIB_DIR_RE = re.compile(r"-L\s*([^\s\"]+)")
+
+LIB_SUFFIXES = (".lib", ".dll", ".a", ".so", ".dll.a")
+
+
+def parse_undefined_symbols(text: str) -> list[str]:
+    """Returns the symbols lld reported as undefined, in first-seen order.
+
+    C++ symbols are printed demangled and so will not match the mangled names
+    that nm reports; they are still collected because a human reading the
+    report needs to see everything the linker complained about.
+    """
+    seen: dict[str, None] = {}
+    for line in text.splitlines():
+        if "undefined symbol:" not in line:
+            continue
+        match = UNDEFINED_RE.search(line)
+        if match:
+            seen.setdefault(match.group(1), None)
+    return list(seen)
+
+
+def parse_link_libraries(text: str) -> tuple[list[str], list[str]]:
+    """Returns (library search dirs, library tokens) from failed link lines.
+
+    Only lines belonging to a failed link are considered, so an unrelated
+    successful link earlier in the log cannot contribute libraries that were
+    never part of the failure.
+    """
+    dirs: dict[str, None] = {}
+    libs: dict[str, None] = {}
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if "FAILED:" not in line:
+            continue
+        # The command follows the FAILED: marker, usually on the next line.
+        for command in lines[index : index + 3]:
+            if "-fuse-ld" not in command and "lld-link" not in command:
+                continue
+            for hit in LIB_DIR_RE.finditer(command):
+                dirs.setdefault(hit.group(1).replace("\\", "/"), None)
+            for token in command.replace('"', " ").split():
+                bare = token.strip(",")
+                if bare.lower().endswith(LIB_SUFFIXES):
+                    libs.setdefault(bare.replace("\\", "/"), None)
+    return list(dirs), list(libs)
+
+
+def find_llvm_tool(name: str, build_dir: Path, log_text: str) -> Path | None:
+    """Locates an LLVM binary, preferring the toolchain the build actually used.
+
+    The compiler path in the build log is authoritative: a tool from some other
+    toolchain could disagree about what the file contains.
+    """
+    exe = f"{name}.exe" if sys.platform == "win32" else name
+    for line in log_text.splitlines():
+        match = re.search(r"(\S*[/\\]llvm[/\\]bin)[/\\]clang", line)
+        if match:
+            candidate = Path(match.group(1).replace("\\", "/")) / exe
+            if candidate.is_file():
+                return candidate
+    for candidate in sorted(build_dir.glob(f"**/llvm/bin/{exe}")):
+        return candidate
+    found = shutil.which(name)
+    return Path(found) if found else None
+
+
+def library_symbols(lib: Path, nm: Path) -> tuple[set[str], str]:
+    """Returns (symbol names, status) for one library.
+
+    Import libraries list their exports as ordinary symbols, so a plain nm
+    listing answers the question that matters here: does this library offer
+    the symbol the linker could not find?
+    """
+    try:
+        proc = subprocess.run(
+            [str(nm), "--no-sort", str(lib)],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=120,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return set(), f"nm failed: {exc.__class__.__name__}"
+    names: set[str] = set()
+    for line in proc.stdout.splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        # "<addr> <type> <name>" or "<type> <name>" for undefined entries.
+        names.add(parts[-1])
+    if not names and proc.returncode != 0:
+        return set(), f"nm exit {proc.returncode}"
+    return names, "ok"
+
+
+def describe_file(path: Path) -> str:
+    """Returns size/mtime/digest for a file, for telling builds apart."""
+    try:
+        stat = path.stat()
+    except OSError as exc:
+        return f"unstattable ({exc.__class__.__name__})"
+    digest = "?"
+    try:
+        with path.open("rb") as handle:
+            digest = hashlib.sha256(handle.read()).hexdigest()[:16]
+    except OSError:
+        pass
+    return f"size={stat.st_size} mtime={int(stat.st_mtime)} sha256:{digest}"
+
+
+def resolve_libraries(dirs: list[str], libs: list[str], build_dir: Path) -> list[Path]:
+    """Maps library tokens from the link line onto files on disk."""
+    resolved: dict[Path, None] = {}
+    for token in libs:
+        candidate = Path(token)
+        if candidate.is_file():
+            resolved.setdefault(candidate.resolve(), None)
+            continue
+        name = candidate.name
+        for directory in dirs:
+            probe = Path(directory) / name
+            if probe.is_file():
+                resolved.setdefault(probe.resolve(), None)
+                break
+        else:
+            # A bare name with no matching -L dir: look inside the build tree
+            # rather than dropping it, since that is where staged libs live.
+            for probe in sorted(build_dir.rglob(name))[:1]:
+                resolved.setdefault(probe.resolve(), None)
+    return list(resolved)
+
+
+def audit_libraries(build_dir: Path, report: list[str]) -> int:
+    """Checks whether the libraries on the failed link line export the symbols.
+
+    Returns the number of undefined symbols that no library provided. A
+    non-zero count means the fault is in a build product rather than in a
+    momentary failure to read a correct one.
+    """
+    logs = sorted((build_dir / "logs").glob("*_build.log"))
+    text = ""
+    for log in logs:
+        try:
+            candidate = log.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if "undefined symbol:" in candidate:
+            text += candidate
+
+    report.append("")
+    report.append("=== library audit ===")
+    if not text:
+        report.append("no build log mentions an undefined symbol; skipped")
+        return 0
+
+    symbols = parse_undefined_symbols(text)
+    dirs, lib_tokens = parse_link_libraries(text)
+    libraries = resolve_libraries(dirs, lib_tokens, build_dir)
+    report.append(f"undefined symbols reported: {len(symbols)}")
+    report.append(f"libraries on the failed link line: {len(libraries)}")
+    if not symbols:
+        return 0
+    if not libraries:
+        report.append("could not resolve any library from the link line")
+        return 0
+
+    nm = find_llvm_tool("llvm-nm", build_dir, text)
+    if nm is None:
+        report.append("llvm-nm not found; cannot check exports")
+        return 0
+    report.append(f"using {nm}")
+
+    exports: dict[Path, set[str]] = {}
+    for lib in libraries:
+        names, status = library_symbols(lib, nm)
+        exports[lib] = names
+        report.append(f"  {lib}  {describe_file(lib)}  symbols={len(names)} {status}")
+
+    missing = 0
+    report.append("")
+    for symbol in symbols:
+        providers = [lib.name for lib, names in exports.items() if symbol in names]
+        if providers:
+            report.append(f"  PRESENT  {symbol}  <- {', '.join(providers[:3])}")
+        else:
+            missing += 1
+            report.append(f"  ABSENT   {symbol}  (no scanned library exports it)")
+
+    report.append("")
+    report.append(f"SYMBOLS NOT EXPORTED BY ANY SCANNED LIBRARY: {missing}")
+    if missing:
+        report.append(
+            "MODE B: a library on the link line is missing symbols it should "
+            "export -> a build product is wrong on disk, not merely misread"
+        )
+    return missing
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -192,6 +409,10 @@ def audit(build_dir: Path, log_dir: Path) -> int:
 
     report.append("")
     report.append(f"TOTAL SUSPECT INPUTS: {suspect_total}")
+
+    # Run before the retry: the retry rebuilds, which can replace the very
+    # library whose contents are the evidence.
+    audit_libraries(build_dir, report)
 
     for sub_dir in find_failed_subprojects(build_dir):
         retry_link(sub_dir, report)
