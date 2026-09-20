@@ -105,7 +105,7 @@ on:
       - synchronize
 
 run-name: >-
-  Multi-Arch CI [linux:azure-linux-scale-rocm-v7-nosmt80vcpu-tmp]
+  Multi-Arch CI [linux:azure-linux-scale-rocm-v7-f80as-p30-tmp]
 
 permissions:
   contents: read
@@ -166,7 +166,7 @@ jobs:
       force_resource_profiling: ${{ inputs.force_resource_profiling || '' }}
       # Linux performance run: pin the CPU build onto the Azure F80ads_v7
       # (no-SMT, 80 vCPU) tmp pool.
-      aws_linux_cpu_build_label: azure-linux-scale-rocm-v7-nosmt80vcpu-tmp
+      aws_linux_cpu_build_label: azure-linux-scale-rocm-v7-f80as-p30-tmp
       skip_gpu_tests: ${{ (github.event_name == 'workflow_dispatch' && inputs.skip_gpu_tests) || false }}
     permissions:
       contents: read
