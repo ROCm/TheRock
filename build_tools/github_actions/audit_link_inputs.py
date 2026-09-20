@@ -30,6 +30,7 @@ Writes into `<build-dir>/logs/` so the existing stage log upload picks it up.
 
 import argparse
 import hashlib
+import os
 import re
 import shutil
 import subprocess
@@ -395,6 +396,116 @@ def retry_link(sub_dir: Path, report: list[str]) -> None:
     print(f"[audit_link_inputs] {verdict}")
 
 
+def discover_alias_roots(build_dir: Path) -> list[Path]:
+    """Finds other paths that expose the same build tree as build_dir.
+
+    The Windows CI containers mount the build volume more than once (B:\\build,
+    S:\\, and C:\\<GUID>\\build have all been observed live in one pod). Each
+    alias is confirmed by writing a file through build_dir and reading it back
+    through the candidate, so a directory that merely looks similar is not
+    mistaken for the same storage.
+    """
+    marker = build_dir / f".alias_probe_{os.getpid()}"
+    try:
+        marker.write_bytes(b"alias-probe")
+    except OSError:
+        return []
+
+    candidates: list[Path] = []
+    try:
+        for drive in "SBDEFGT":
+            root = Path(f"{drive}:/")
+            if not root.exists() or root == Path(f"{build_dir.drive}/"):
+                continue
+            candidates.append(root / build_dir.name)
+            candidates.append(root)
+        for entry in Path("C:/").glob("*-*-*"):
+            if entry.is_dir():
+                candidates.append(entry / build_dir.name)
+
+        confirmed: list[Path] = []
+        for candidate in candidates:
+            try:
+                probe = candidate / marker.name
+                if probe.is_file() and probe.read_bytes() == b"alias-probe":
+                    confirmed.append(candidate)
+            except OSError:
+                continue
+        return confirmed
+    finally:
+        try:
+            marker.unlink()
+        except OSError:
+            pass
+
+
+def digest(path: Path) -> tuple[str, int] | None:
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return None
+    return hashlib.sha256(data).hexdigest()[:16], len(data)
+
+
+def compare_across_aliases(
+    build_dir: Path, objects: list[Path], report: list[str]
+) -> int:
+    """Reads the same objects through every mount of the build volume.
+
+    This is the decisive test for the mount-aliasing theory. If one alias
+    returns different bytes than another for a file nothing is writing, the
+    aliases are not coherent and that is the source of the bad reads. If every
+    alias agrees, the divergence was momentary and had already healed, which
+    points at caching during the link rather than at the mounts themselves.
+    """
+    report.append("")
+    report.append("=== cross-alias comparison ===")
+
+    roots = discover_alias_roots(build_dir)
+    if not roots:
+        report.append("no second mount of the build tree found; skipped")
+        return 0
+    for root in roots:
+        report.append(f"alias: {root}")
+
+    divergent = 0
+    checked = 0
+    for obj in objects[:400]:
+        try:
+            rel = obj.relative_to(build_dir)
+        except ValueError:
+            continue
+        primary = digest(obj)
+        if primary is None:
+            continue
+        checked += 1
+        for root in roots:
+            other = digest(root / rel)
+            if other is None:
+                report.append(f"  UNREADABLE via {root}: {rel}")
+                divergent += 1
+            elif other != primary:
+                divergent += 1
+                report.append(
+                    f"  DIVERGENT {rel}\n"
+                    f"      {build_dir}: sha={primary[0]} size={primary[1]}\n"
+                    f"      {root}: sha={other[0]} size={other[1]}"
+                )
+
+    report.append(f"compared {checked} object(s) across {len(roots)} alias(es)")
+    if divergent:
+        report.append(
+            f"ALIAS DIVERGENCE: {divergent} -> the mounts are NOT coherent; "
+            "this is the source of the bad reads"
+        )
+    else:
+        report.append(
+            "no divergence now -> if the link still failed, the bad read was "
+            "momentary and has already healed"
+        )
+    return divergent
+
+
 def audit(build_dir: Path, log_dir: Path) -> int:
     rsp_files = sorted(build_dir.rglob("CMakeFiles/*.rsp"))
     rsp_copy_dir = log_dir / "rsp"
@@ -405,6 +516,7 @@ def audit(build_dir: Path, log_dir: Path) -> int:
         "",
     ]
     suspect_total = 0
+    all_objects: list[Path] = []
 
     for rsp in rsp_files:
         # Entries are relative to the directory containing CMakeFiles/.
@@ -418,6 +530,7 @@ def audit(build_dir: Path, log_dir: Path) -> int:
             path = Path(entry)
             if not path.is_absolute():
                 path = base / path
+            all_objects.append(path)
             try:
                 size = path.stat().st_size
             except OSError as exc:
@@ -450,6 +563,7 @@ def audit(build_dir: Path, log_dir: Path) -> int:
     # Run before the retry: the retry rebuilds, which can replace the very
     # library whose contents are the evidence.
     audit_libraries(build_dir, report)
+    compare_across_aliases(build_dir, all_objects, report)
 
     for sub_dir in find_failed_subprojects(build_dir):
         retry_link(sub_dir, report)
