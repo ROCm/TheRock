@@ -85,6 +85,14 @@ on:
         description: "Resource probe sampling interval in seconds."
         type: number
         default: 5
+      resource_probe_detail_profile:
+        description: 'Probe detail: "basic", "process", or "diagnostic".'
+        type: string
+        default: "basic"
+      resource_probe_phases:
+        description: "JSON array of allowlisted stage phases to probe."
+        type: string
+        default: '["dependency-install","fetch-inbound-artifacts","fetch-sources","configure","build-stage","build-tests","packaging-tests","artifact-push","log-upload","package-fetch","package-build","package-test","package-repository-build","package-upload","publish-release-buckets"]'
 
 permissions:
   contents: read
@@ -129,6 +137,8 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       enable_resource_probe: ${{ contains(fromJSON(inputs.resource_probe_targets || '[]'), 'compiler-runtime') }}
       resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases }}
     permissions:
       contents: read
       id-token: write
@@ -156,6 +166,8 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       enable_resource_probe: ${{ contains(fromJSON(inputs.resource_probe_targets || '[]'), 'emulation') }}
       resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases }}
     permissions:
       contents: read
       id-token: write
@@ -183,6 +195,8 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       enable_resource_probe: ${{ contains(fromJSON(inputs.resource_probe_targets || '[]'), 'runtime-tests') }}
       resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases }}
     permissions:
       contents: read
       id-token: write
@@ -245,6 +259,8 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       enable_resource_probe: ${{ contains(fromJSON(inputs.resource_probe_targets || '[]'), format('math-libs:{0}', matrix.family_info.amdgpu_family)) }}
       resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases }}
     permissions:
       contents: read
       id-token: write
@@ -276,6 +292,8 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       enable_resource_probe: ${{ contains(fromJSON(inputs.resource_probe_targets || '[]'), 'comm-libs') }}
       resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases }}
     permissions:
       contents: read
       id-token: write
@@ -305,6 +323,8 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       enable_resource_probe: ${{ contains(fromJSON(inputs.resource_probe_targets || '[]'), 'storage-libs') }}
       resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases }}
     permissions:
       contents: read
       id-token: write
@@ -332,6 +352,8 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       enable_resource_probe: ${{ contains(fromJSON(inputs.resource_probe_targets || '[]'), 'debug-tools') }}
       resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases }}
     permissions:
       contents: read
       id-token: write
@@ -359,6 +381,8 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       enable_resource_probe: ${{ contains(fromJSON(inputs.resource_probe_targets || '[]'), 'dctools-core') }}
       resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases }}
     permissions:
       contents: read
       id-token: write
@@ -386,6 +410,8 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       enable_resource_probe: ${{ contains(fromJSON(inputs.resource_probe_targets || '[]'), 'profiler-apps') }}
       resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases }}
     permissions:
       contents: read
       id-token: write
@@ -413,6 +439,8 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       enable_resource_probe: ${{ contains(fromJSON(inputs.resource_probe_targets || '[]'), 'cv-libs') }}
       resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases }}
     permissions:
       contents: read
       id-token: write
@@ -440,6 +468,8 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       enable_resource_probe: ${{ contains(fromJSON(inputs.resource_probe_targets || '[]'), 'media-libs') }}
       resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases }}
     permissions:
       contents: read
       id-token: write

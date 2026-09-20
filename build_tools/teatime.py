@@ -37,12 +37,92 @@ with interactive group handles.
 
 import argparse
 import io
+import json
 import os
 from pathlib import Path
+import re
 import shlex
 import subprocess
 import sys
 import time
+
+
+_TELEMETRY_LABEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$")
+_TELEMETRY_OPERATIONS = frozenset({"configure", "build", "install", "test"})
+
+
+class TelemetrySpan:
+    """Writes a privacy-safe component span for later correlation with samples.
+
+    The output deliberately excludes commands, paths, environment values, and
+    process names. Component labels are supplied by CMake at configure time and
+    are constrained to the target-label alphabet used by TheRock.
+    """
+
+    def __init__(self, args: argparse.Namespace):
+        self.path: Path | None = None
+        self.component: str | None = args.telemetry_component
+        self.operation: str | None = args.telemetry_operation
+        self.started_ns: int | None = None
+
+        configured_path = os.getenv("THEROCK_RESOURCE_SPANS_FILE")
+        if configured_path and self.component:
+            self.path = Path(configured_path)
+
+    def _write(self, event: str, **fields: object) -> None:
+        if self.path is None or self.component is None or self.operation is None:
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "schema": "therock.component_span.v1",
+            "event": event,
+            "component": self.component,
+            "operation": self.operation,
+            **fields,
+        }
+        # One O_APPEND write keeps individual records intact when independent
+        # Ninja edges finish concurrently.
+        payload = (
+            json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n"
+        ).encode()
+        descriptor = os.open(self.path, os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
+        try:
+            os.write(descriptor, payload)
+        finally:
+            os.close(descriptor)
+
+    def start(self) -> None:
+        if self.path is None:
+            return
+        self.started_ns = time.time_ns()
+        self._write("begin", timestamp_unix_ns=self.started_ns)
+
+    def finish(self, rc: int) -> None:
+        if self.path is None:
+            return
+        ended_ns = time.time_ns()
+        fields: dict[str, object] = {
+            "timestamp_unix_ns": ended_ns,
+            "exit_code": rc,
+        }
+        if self.started_ns is not None:
+            fields["duration_ns"] = max(0, ended_ns - self.started_ns)
+        self._write("end", **fields)
+
+
+def _telemetry_label(value: str) -> str:
+    if not _TELEMETRY_LABEL_RE.fullmatch(value):
+        raise argparse.ArgumentTypeError("invalid telemetry component label")
+    return value
+
+
+def _telemetry_operation(value: str) -> str:
+    if value not in _TELEMETRY_OPERATIONS:
+        raise argparse.ArgumentTypeError(
+            "invalid telemetry operation "
+            f"(expected one of {sorted(_TELEMETRY_OPERATIONS)})"
+        )
+    return value
 
 
 class OutputSink:
@@ -177,7 +257,10 @@ def main(cl_args: list[str]):
         "--interactive",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Enable interactive output (if disabled console output will only be emitted on failure)",
+        help=(
+            "Enable interactive output (if disabled console output will only be "
+            "emitted on failure)"
+        ),
     )
     p.add_argument(
         "--log-timestamps",
@@ -185,8 +268,21 @@ def main(cl_args: list[str]):
         default=False,
         help="Log timestamps along with log lines to the log file",
     )
+    p.add_argument(
+        "--telemetry-component",
+        type=_telemetry_label,
+        help=("Source-declared CMake target label for privacy-safe telemetry spans"),
+    )
+    p.add_argument(
+        "--telemetry-operation",
+        type=_telemetry_operation,
+        choices=sorted(_TELEMETRY_OPERATIONS),
+        help="Source-declared operation associated with the telemetry span",
+    )
     p.add_argument("file", type=Path, help="Also log output to this file")
     args = p.parse_args(cl_args)
+    if bool(args.telemetry_component) != bool(args.telemetry_operation):
+        p.error("--telemetry-component and --telemetry-operation must be used together")
 
     # Allow some things to be overriden by env vars.
     force_interactive = os.getenv("TEATIME_FORCE_INTERACTIVE")
@@ -200,7 +296,9 @@ def main(cl_args: list[str]):
         args.interactive = bool(force_interactive)
 
     sink = OutputSink(args)
+    telemetry_span = TelemetrySpan(args)
     sink.start()
+    telemetry_span.start()
     rc = 0
     try:
         run(args, child_arg_list, sink)
@@ -214,6 +312,7 @@ def main(cl_args: list[str]):
             rc = 1
         raise
     finally:
+        telemetry_span.finish(rc)
         sink.finish(rc)
 
 

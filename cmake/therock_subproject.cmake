@@ -104,6 +104,10 @@ set(THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS "/guard:cf")
 # OUTPUT_ON_FAILURE: Boolean value to indicate whether output should go to the
 #   console only on failure.
 # LABEL: Label to prefix console output with.
+# TELEMETRY_COMPONENT: Source-declared CMake target label. If
+#   THEROCK_RESOURCE_SPANS_FILE is set at execution time, teatime writes only
+#   this validated label, the operation, timestamps, duration, and exit code.
+# TELEMETRY_OPERATION: One of configure, build, install, or test.
 #
 # This uses the build_tools/teatime.py script for output management. See that
 # script for further details. One thing to note: if TEATIME_LABEL_GH_GROUP=1
@@ -114,7 +118,7 @@ function(therock_subproject_log_command out_var)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
     ""
-    "LOG_FILE;LABEL;OUTPUT_ON_FAILURE"
+    "LOG_FILE;LABEL;OUTPUT_ON_FAILURE;TELEMETRY_COMPONENT;TELEMETRY_OPERATION"
     ""
   )
 
@@ -125,6 +129,15 @@ function(therock_subproject_log_command out_var)
   )
   if(ARG_LABEL)
     list(APPEND command "--label" "${ARG_LABEL}")
+  endif()
+  if(ARG_TELEMETRY_COMPONENT OR ARG_TELEMETRY_OPERATION)
+    if(NOT ARG_TELEMETRY_COMPONENT OR NOT ARG_TELEMETRY_OPERATION)
+      message(FATAL_ERROR "TELEMETRY_COMPONENT and TELEMETRY_OPERATION must be supplied together")
+    endif()
+    list(APPEND command
+      "--telemetry-component" "${ARG_TELEMETRY_COMPONENT}"
+      "--telemetry-operation" "${ARG_TELEMETRY_OPERATION}"
+    )
   endif()
   if(ARG_OUTPUT_ON_FAILURE)
     list(APPEND command "--no-interactive")
@@ -1010,6 +1023,8 @@ function(therock_cmake_subproject_activate target_name)
       LOG_FILE "${target_name}_configure.log"
       LABEL "${target_name} configure"
       OUTPUT_ON_FAILURE "${_output_on_failure}"
+      TELEMETRY_COMPONENT "${target_name}"
+      TELEMETRY_OPERATION "configure"
     )
 
     # Finger-print vital configure content.
@@ -1085,6 +1100,8 @@ function(therock_cmake_subproject_activate target_name)
       LOG_FILE "${target_name}_build.log"
       LABEL "${target_name}"
       OUTPUT_ON_FAILURE "${_output_on_failure}"
+      TELEMETRY_COMPONENT "${target_name}"
+      TELEMETRY_OPERATION "build"
     )
 
     add_custom_command(
@@ -1133,6 +1150,8 @@ function(therock_cmake_subproject_activate target_name)
           # While useful for debugging, stage install logs are almost pure noise
           # for interactive use.
           OUTPUT_ON_FAILURE "${THEROCK_QUIET_INSTALL}"
+          TELEMETRY_COMPONENT "${target_name}"
+          TELEMETRY_OPERATION "install"
         )
         # install component to stage directory.
         list(APPEND _optional_component_install_commands
@@ -1147,6 +1166,8 @@ function(therock_cmake_subproject_activate target_name)
       # While useful for debugging, stage install logs are almost pure noise
       # for interactive use.
       OUTPUT_ON_FAILURE "${THEROCK_QUIET_INSTALL}"
+      TELEMETRY_COMPONENT "${target_name}"
+      TELEMETRY_OPERATION "install"
     )
     add_custom_command(
       OUTPUT "${_stage_stamp_file}"
@@ -1285,6 +1306,8 @@ function(therock_cmake_subproject_build_test target_name)
       LOG_FILE "${_log_file}"
       LABEL "${_log_label}"
       OUTPUT_ON_FAILURE "${_output_on_failure}"
+      TELEMETRY_COMPONENT "${target_name}"
+      TELEMETRY_OPERATION "test"
     )
 
     set(_test_command_var "_test_command_${_command_index}")

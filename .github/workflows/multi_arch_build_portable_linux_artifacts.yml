@@ -84,6 +84,16 @@ on:
         description: "Resource probe sampling interval in seconds."
         type: number
         default: 5
+      resource_probe_detail_profile:
+        description: "Probe detail profile: basic, process, or diagnostic."
+        type: string
+        default: basic
+      resource_probe_phases:
+        description: >-
+          JSON array of exact phase names to probe. Ignored unless
+          enable_resource_probe is true.
+        type: string
+        default: '["fetch-inbound-artifacts","fetch-sources","dependency-install","configure","build-stage","build-tests","packaging-tests","artifact-push","log-upload"]'
 
 permissions:
   contents: read
@@ -114,6 +124,11 @@ jobs:
       EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
       ENABLE_RESOURCE_PROBE: ${{ inputs.enable_resource_probe }}
       RESOURCE_PROBE_INTERVAL_SECONDS: ${{ inputs.resource_probe_interval_seconds }}
+      RESOURCE_PROBE_DETAIL_PROFILE: ${{ inputs.resource_probe_detail_profile }}
+      RESOURCE_PROBE_PHASES: ${{ inputs.resource_probe_phases }}
+      RESOURCE_PROBE_OUTPUT_DIR: ${{ github.workspace }}/build/logs/resource-probe
+      RESOURCE_PROBE_POST_UPLOAD_DIR: ${{ github.workspace }}/.resource-probe-log-upload
+      THEROCK_RESOURCE_SPANS_FILE: ${{ inputs.enable_resource_probe && contains(fromJSON(inputs.resource_probe_phases), 'build-stage') && format('{0}/build/logs/resource-probe/component-spans.jsonl', github.workspace) || '' }}
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -144,7 +159,16 @@ jobs:
           path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}
 
       - name: Install python deps
-        run: pip install -r requirements.txt
+        run: |
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase dependency-install \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}/bootstrap" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- pip install -r requirements.txt
 
       - name: Adjust git config
         run: |
@@ -166,7 +190,15 @@ jobs:
       # all currently have public read access.
       - name: Fetch inbound artifacts
         run: |
-          python build_tools/artifact_manager.py fetch \
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase fetch-inbound-artifacts \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- python build_tools/artifact_manager.py fetch \
             --run-id=${{ github.run_id }} \
             --stage="${STAGE_NAME}" \
             --amdgpu-families="${{ inputs.amdgpu_family }}" \
@@ -179,7 +211,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh auth setup-git --hostname github.com
-          ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase fetch-sources \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- ./build_tools/fetch_sources.py --stage "${STAGE_NAME}" --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
 
       - name: Get stage configuration
         id: stage_config
@@ -194,7 +234,16 @@ jobs:
 
       - name: Install stage python deps
         if: ${{ steps.stage_config.outputs.pip_install_cmd }}
-        run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: |
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase dependency-install \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}/stage" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- python -m pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
       - name: Configure
         run: |
@@ -202,7 +251,15 @@ jobs:
           if ((SUBPROJECT_TEST_JOBS > 16)); then
             SUBPROJECT_TEST_JOBS=16
           fi
-          cmake -B "${BUILD_DIR}" -S . -GNinja \
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase configure \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- cmake -B "${BUILD_DIR}" -S . -GNinja \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DTHEROCK_ROCJITSU_TEST_JOBS="${SUBPROJECT_TEST_JOBS}" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -214,18 +271,15 @@ jobs:
 
       - name: Build stage
         run: |
-          PROBE=()
-          if [[ "${ENABLE_RESOURCE_PROBE}" == "true" ]]; then
-            PROBE=(
-              python3 build_tools/resource_probe.py
-              --phase build-stage
-              --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}"
-              --output-dir "${BUILD_DIR}/logs/resource-probe"
-              --storage-path "${GITHUB_WORKSPACE}"
-              --
-            )
-          fi
-          "${PROBE[@]}" cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase build-stage \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- cmake --build "${BUILD_DIR}" --target "stage-${STAGE_NAME}" therock-artifacts -- -k 0
 
       - name: Generate failed log summaries
         if: ${{ !cancelled() }}
@@ -237,7 +291,15 @@ jobs:
         env:
           TEATIME_FORCE_INTERACTIVE: 1
         run: |
-          cmake --build "${BUILD_DIR}" --target build-test-amd-comgr -- -k 0
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase build-tests \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- cmake --build "${BUILD_DIR}" --target build-test-amd-comgr -- -k 0
 
       # Rocjitsu and mirage build tests report failures without gating CI.
       - name: Run build tests (emulation, non-blocking)
@@ -246,7 +308,15 @@ jobs:
         env:
           TEATIME_FORCE_INTERACTIVE: 1
         run: |
-          cmake --build "${BUILD_DIR}" --target therock-build-tests -- -k 0
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase build-tests \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- cmake --build "${BUILD_DIR}" --target therock-build-tests -- -k 0
 
       - name: Report
         if: ${{ !cancelled() }}
@@ -258,7 +328,15 @@ jobs:
 
       - name: Test Packaging
         run: |
-          ctest --test-dir ${BUILD_DIR} --output-on-failure
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase packaging-tests \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- ctest --test-dir "${BUILD_DIR}" --output-on-failure
 
       - name: Configure AWS credentials for artifact uploads
         if: ${{ always() }}
@@ -273,7 +351,15 @@ jobs:
       #     if the workflow failed or was cancelled before the build even started though.
       - name: Push stage artifacts
         run: |
-          python build_tools/artifact_manager.py push \
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase artifact-push \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- python build_tools/artifact_manager.py push \
             --run-id ${{ github.run_id }} \
             --stage="${STAGE_NAME}" \
             --build-dir="${BUILD_DIR}"
@@ -281,11 +367,33 @@ jobs:
       - name: Upload stage logs
         if: ${{ always() }}
         run: |
-          python build_tools/github_actions/post_stage_upload.py \
+          # This phase writes telemetry outside BUILD_DIR so the log uploader
+          # never races with an open telemetry file. The following always-run
+          # GitHub artifact step collects both locations after this command exits.
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase log-upload \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_POST_UPLOAD_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- python build_tools/github_actions/post_stage_upload.py \
             --run-id=${{ github.run_id }} \
             --stage="${STAGE_NAME}" \
             --build-dir="${BUILD_DIR}" \
             --amdgpu-family="${AMDGPU_FAMILIES}"
+
+      - name: Upload resource telemetry
+        if: ${{ always() && inputs.enable_resource_probe }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: resource-probe-${{ inputs.stage_name }}-${{ inputs.amdgpu_family || 'generic' }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.RESOURCE_PROBE_OUTPUT_DIR }}
+            ${{ env.RESOURCE_PROBE_POST_UPLOAD_DIR }}
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Capture job summary
         id: summary

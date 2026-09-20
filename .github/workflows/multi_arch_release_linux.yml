@@ -64,6 +64,14 @@ on:
         description: "Resource probe sampling interval in seconds."
         type: number
         default: 5
+      resource_probe_detail_profile:
+        description: 'Probe detail: "basic", "process", or "diagnostic".'
+        type: string
+        default: "basic"
+      resource_probe_phases:
+        description: "JSON array of allowlisted Linux release phases to probe."
+        type: string
+        default: '["dependency-install","fetch-inbound-artifacts","fetch-sources","configure","build-stage","build-tests","packaging-tests","artifact-push","log-upload","package-fetch","package-build","package-test","package-repository-build","package-upload","publish-release-buckets"]'
 
 permissions:
   contents: read
@@ -104,6 +112,8 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       resource_probe_targets: ${{ inputs.resource_probe_targets }}
       resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases }}
     permissions:
       contents: read
       id-token: write
@@ -121,6 +131,10 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      enable_resource_probe: ${{ contains(fromJSON(inputs.resource_probe_targets || '[]'), 'release-tarballs:linux') }}
+      resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases }}
     permissions:
       contents: read
       id-token: write
@@ -141,6 +155,10 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      enable_resource_probe: ${{ contains(fromJSON(inputs.resource_probe_targets || '[]'), 'release-python-packages:linux') }}
+      resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases }}
     permissions:
       contents: read
       id-token: write
@@ -160,6 +178,10 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      enable_resource_probe: ${{ contains(fromJSON(inputs.resource_probe_targets || '[]'), 'release-native-packages:deb') }}
+      resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases }}
     permissions:
       contents: read
       id-token: write
@@ -179,6 +201,10 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      enable_resource_probe: ${{ contains(fromJSON(inputs.resource_probe_targets || '[]'), 'release-native-packages:rpm') }}
+      resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases }}
     permissions:
       contents: read
       id-token: write
@@ -189,6 +215,12 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
+    env:
+      ENABLE_RESOURCE_PROBE: ${{ contains(fromJSON(inputs.resource_probe_targets || '[]'), 'release-publish:linux') }}
+      RESOURCE_PROBE_OUTPUT_DIR: ${{ github.workspace }}/.resource-probe-linux-publish
+      RESOURCE_PROBE_PHASES: ${{ inputs.resource_probe_phases }}
+      RESOURCE_PROBE_INTERVAL_SECONDS: ${{ inputs.resource_probe_interval_seconds }}
+      RESOURCE_PROBE_DETAIL_PROFILE: ${{ inputs.resource_probe_detail_profile }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -202,7 +234,16 @@ jobs:
           python-version: "3.12"
 
       - name: Install Python requirements
-        run: pip install -r requirements.txt
+        run: |
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase dependency-install \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- pip install -r requirements.txt
 
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_product_publication_credentials
@@ -212,13 +253,30 @@ jobs:
 
       - name: Copy to release buckets
         run: |
-          python build_tools/github_actions/publish_rocm_to_release_buckets.py \
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase publish-release-buckets \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- python build_tools/github_actions/publish_rocm_to_release_buckets.py \
             --run-id="${{ github.run_id }}" \
             --platform=linux \
             --release-type="${{ inputs.release_type }}" \
             --kpack-split="${{ needs.build_python_packages.outputs.kpack_split }}" \
             --structured \
             --build-variant="${{ inputs.build_variant }}"
+
+      - name: Upload publication resource telemetry
+        if: ${{ always() && contains(fromJSON(inputs.resource_probe_targets || '[]'), 'release-publish:linux') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: resource-probe-release-publish-linux-${{ github.run_attempt }}
+          path: ${{ env.RESOURCE_PROBE_OUTPUT_DIR }}
+          if-no-files-found: warn
+          retention-days: 14
 
   trigger_test_artifacts_per_family:
     needs: [build_artifacts]

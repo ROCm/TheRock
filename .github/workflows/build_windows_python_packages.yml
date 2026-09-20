@@ -92,6 +92,18 @@ on:
       quartz_tracking_id:
         type: string
         default: ""
+      windows_resource_probe_targets:
+        type: string
+        default: "[]"
+      windows_resource_probe_interval_seconds:
+        type: number
+        default: 5
+      resource_probe_detail_profile:
+        type: string
+        default: process
+      resource_probe_canary_mode:
+        type: boolean
+        default: false
     outputs:
       package_find_links_url:
         description: URL for pip --find-links to install built packages
@@ -122,13 +134,16 @@ jobs:
       ARTIFACTS_DIR: "${{ github.workspace }}/artifacts"
       PACKAGES_DIR: "${{ github.workspace }}/packages"
       RELEASE_TYPE: ${{ inputs.release_type }}
+      WINDOWS_RESOURCE_PROBE_TARGETS: ${{ inputs.windows_resource_probe_targets || '[]' }}
+      WINDOWS_RESOURCE_PROBE_INTERVAL_SECONDS: ${{ inputs.windows_resource_probe_interval_seconds || 5 }}
+      RESOURCE_PROBE_DETAIL_PROFILE: ${{ inputs.resource_probe_detail_profile || 'process' }}
     defaults:
       run:
         shell: bash
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ !inputs.resource_probe_canary_mode && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
@@ -148,14 +163,23 @@ jobs:
           python-version: '3.12'
 
       - name: Install Python requirements
-        run: pip install -r requirements.txt
+        run: |
+          PROBE=()
+          if [[ '${{ contains(fromJSON(inputs.windows_resource_probe_targets || '[]'), 'python-packages:dependencies') }}' == 'true' ]]; then
+            PROBE=(python build_tools/windows_resource_probe.py --phase windows-python-dependencies --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" --interval-seconds "${WINDOWS_RESOURCE_PROBE_INTERVAL_SECONDS}" --output-dir "${RUNNER_TEMP}/resource-probe" --storage-path "${GITHUB_WORKSPACE}" --)
+          fi
+          "${PROBE[@]}" pip install -r requirements.txt
 
       - name: Fetch artifacts
         run: |
+          PROBE=()
+          if [[ '${{ contains(fromJSON(inputs.windows_resource_probe_targets || '[]'), 'python-packages:fetch') }}' == 'true' ]]; then
+            PROBE=(python build_tools/windows_resource_probe.py --phase windows-python-fetch --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" --interval-seconds "${WINDOWS_RESOURCE_PROBE_INTERVAL_SECONDS}" --output-dir "${RUNNER_TEMP}/resource-probe" --storage-path "${GITHUB_WORKSPACE}" --)
+          fi
           if [ -n "${{ inputs.amdgpu_families }}" ]; then
             # Multi-arch mode: use artifact_manager.py to fetch all families
             echo "Fetching artifacts for multiple families: ${{ inputs.amdgpu_families }}"
-            python ./build_tools/artifact_manager.py fetch \
+            "${PROBE[@]}" python ./build_tools/artifact_manager.py fetch \
               --run-id="${{ env.ARTIFACT_RUN_ID }}" \
               --run-github-repo="${{ inputs.artifact_github_repo }}" \
               --stage=all \
@@ -168,7 +192,7 @@ jobs:
           else
             # Single-family mode: use fetch_artifacts.py (backward compatible)
             echo "Fetching artifacts for single family: ${{ inputs.artifact_group }}"
-            python ./build_tools/fetch_artifacts.py \
+            "${PROBE[@]}" python ./build_tools/fetch_artifacts.py \
               --run-github-repo="${{ inputs.artifact_github_repo }}" \
               --run-id="${{ env.ARTIFACT_RUN_ID }}" \
               --artifact-group="${{ inputs.artifact_group }}" \
@@ -177,7 +201,11 @@ jobs:
 
       - name: Build Python packages
         run: |
-          python ./build_tools/build_python_packages.py \
+          PROBE=()
+          if [[ '${{ contains(fromJSON(inputs.windows_resource_probe_targets || '[]'), 'python-packages:build') }}' == 'true' ]]; then
+            PROBE=(python build_tools/windows_resource_probe.py --phase windows-python-build --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" --interval-seconds "${WINDOWS_RESOURCE_PROBE_INTERVAL_SECONDS}" --output-dir "${RUNNER_TEMP}/resource-probe" --storage-path "${GITHUB_WORKSPACE}" --)
+          fi
+          "${PROBE[@]}" python ./build_tools/build_python_packages.py \
             --artifact-dir="${{ env.ARTIFACTS_DIR }}" \
             --dest-dir="${{ env.PACKAGES_DIR }}" \
             --version="${{ inputs.package_version }}" \
@@ -189,17 +217,44 @@ jobs:
         with:
           release_type: ${{ inputs.release_type }}
 
+      - name: Generate canary Python package manifest
+        if: ${{ inputs.resource_probe_canary_mode }}
+        run: |
+          python build_tools/artifact_equivalence_manifest.py \
+            --artifact-dir "${PACKAGES_DIR}" \
+            --output "${RUNNER_TEMP}/resource-probe/artifact-manifest.json"
+
+      - name: Upload canary Python package manifest
+        if: ${{ always() && inputs.resource_probe_canary_mode }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-canary-manifest-python-packages-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/resource-probe/artifact-manifest.json
+          if-no-files-found: error
+
       # NOTE: we use `github.run_id` and NOT `env.ARTIFACT_RUN_ID` here!
       # This ensures that if they are different we _download_ artifacts from the
       # input run's subdirectory and _upload_ to our current run's subdirectory.
       - name: Upload Python packages
         id: upload
         run: |
-          python build_tools/github_actions/upload_python_packages.py \
+          PROBE=()
+          if [[ '${{ contains(fromJSON(inputs.windows_resource_probe_targets || '[]'), 'python-packages:upload') }}' == 'true' ]]; then
+            PROBE=(python build_tools/windows_resource_probe.py --phase windows-python-upload --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" --interval-seconds "${WINDOWS_RESOURCE_PROBE_INTERVAL_SECONDS}" --output-dir "${RUNNER_TEMP}/resource-probe" --storage-path "${GITHUB_WORKSPACE}" --)
+          fi
+          "${PROBE[@]}" python build_tools/github_actions/upload_python_packages.py \
             --input-packages-dir="${{ env.PACKAGES_DIR }}" \
             --artifact-group="${{ inputs.artifact_group }}" \
             --run-id="${{ github.run_id }}" \
             ${{ inputs.multiarch_index && '--multiarch' || '' }}
+
+      - name: Upload resource telemetry
+        if: ${{ always() && inputs.windows_resource_probe_targets != '' && inputs.windows_resource_probe_targets != '[]' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-resource-probe-python-packages-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/resource-probe
+          if-no-files-found: warn
 
       - name: Capture job summary
         id: summary
@@ -208,7 +263,7 @@ jobs:
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ always() && !inputs.resource_probe_canary_mode && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed

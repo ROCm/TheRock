@@ -79,6 +79,26 @@ on:
       quartz_tracking_id:
         type: string
         default: ""
+      enable_resource_probe:
+        description: "Collect privacy-safe resource telemetry for tarball packaging phases."
+        type: boolean
+        default: false
+      resource_probe_interval_seconds:
+        description: "Resource probe sampling interval in seconds."
+        type: number
+        default: 5
+      resource_probe_detail_profile:
+        description: "Probe detail profile: basic, process, or diagnostic."
+        type: string
+        default: basic
+      resource_probe_phases:
+        description: "JSON array of exact allowlisted packaging phases to probe."
+        type: string
+        default: '["dependency-install","package-build","package-upload"]'
+      resource_probe_canary_mode:
+        description: "Emit an artifact-equivalence manifest for A/B qualification."
+        type: boolean
+        default: false
     outputs:
       tarball_urls:
         description: Tarball URLs keyed by family
@@ -104,11 +124,16 @@ jobs:
       QUARTZ_WORKFLOW_POSTFIX: "- build tarballs"
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       RELEASE_TYPE: ${{ inputs.release_type }}
+      ENABLE_RESOURCE_PROBE: ${{ inputs.enable_resource_probe || false }}
+      RESOURCE_PROBE_INTERVAL_SECONDS: ${{ inputs.resource_probe_interval_seconds || 5 }}
+      RESOURCE_PROBE_DETAIL_PROFILE: ${{ inputs.resource_probe_detail_profile || 'basic' }}
+      RESOURCE_PROBE_PHASES: ${{ inputs.resource_probe_phases || '["dependency-install","package-build","package-upload"]' }}
+      RESOURCE_PROBE_OUTPUT_DIR: ${{ github.workspace }}/resource-probe
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ !inputs.resource_probe_canary_mode && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
@@ -124,7 +149,16 @@ jobs:
           ref: ${{ inputs.ref || github.ref_name }}
 
       - name: Install Python requirements
-        run: pip install -r requirements.txt
+        run: |
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase dependency-install \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- pip install -r requirements.txt
 
       - name: Build tarballs
         shell: bash
@@ -134,7 +168,15 @@ jobs:
             EXTRA_ARGS+=(--include-test-tarballs)
           fi
 
-          python build_tools/packaging/archives/build_tarballs.py \
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase package-build \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- python build_tools/packaging/archives/build_tarballs.py \
             --run-id="${{ env.ARTIFACT_RUN_ID }}" \
             --run-github-repo="${{ inputs.artifact_github_repo }}" \
             --dist-amdgpu-families="${{ inputs.dist_amdgpu_families }}" \
@@ -148,18 +190,51 @@ jobs:
         with:
           release_type: ${{ inputs.release_type }}
 
+      - name: Generate canary tarball manifest
+        if: ${{ inputs.resource_probe_canary_mode }}
+        run: |
+          python build_tools/artifact_equivalence_manifest.py \
+            --artifact-dir "${{ github.workspace }}/tarballs" \
+            --output "${{ github.workspace }}/canary-evidence/tarballs/artifact-manifest.json"
+
+      - name: Upload canary tarball manifest
+        if: ${{ always() && inputs.resource_probe_canary_mode }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-canary-manifest-tarballs-${{ github.run_attempt }}
+          path: ${{ github.workspace }}/canary-evidence/tarballs/artifact-manifest.json
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload tarballs
         id: upload
         run: |
-          python build_tools/github_actions/upload_tarballs.py \
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase package-upload \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- python build_tools/github_actions/upload_tarballs.py \
             --input-tarballs-dir="${{ github.workspace }}/tarballs" \
             --run-id="${{ github.run_id }}" \
             --platform="${{ inputs.platform }}" \
             --release-type="${{ inputs.release_type }}"
 
+      - name: Upload resource telemetry
+        if: ${{ always() && inputs.enable_resource_probe }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: resource-probe-tarballs-${{ inputs.platform }}-${{ github.run_attempt }}
+          path: ${{ env.RESOURCE_PROBE_OUTPUT_DIR }}
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ always() && !inputs.resource_probe_canary_mode && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed

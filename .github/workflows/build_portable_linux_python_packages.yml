@@ -92,6 +92,22 @@ on:
       quartz_tracking_id:
         type: string
         default: ""
+      enable_resource_probe:
+        description: "Collect privacy-safe resource telemetry for Python packaging phases."
+        type: boolean
+        default: false
+      resource_probe_interval_seconds:
+        description: "Resource probe sampling interval in seconds."
+        type: number
+        default: 5
+      resource_probe_detail_profile:
+        description: "Probe detail profile: basic, process, or diagnostic."
+        type: string
+        default: basic
+      resource_probe_phases:
+        description: "JSON array of exact allowlisted packaging phases to probe."
+        type: string
+        default: '["dependency-install","package-fetch","package-build","package-upload"]'
     outputs:
       package_find_links_url:
         description: URL for pip --find-links to install built packages
@@ -125,6 +141,11 @@ jobs:
       ARTIFACTS_DIR: "${{ github.workspace }}/artifacts"
       PACKAGES_DIR: "${{ github.workspace }}/packages"
       RELEASE_TYPE: ${{ inputs.release_type }}
+      ENABLE_RESOURCE_PROBE: ${{ inputs.enable_resource_probe || false }}
+      RESOURCE_PROBE_INTERVAL_SECONDS: ${{ inputs.resource_probe_interval_seconds || 5 }}
+      RESOURCE_PROBE_DETAIL_PROFILE: ${{ inputs.resource_probe_detail_profile || 'basic' }}
+      RESOURCE_PROBE_PHASES: ${{ inputs.resource_probe_phases || '["dependency-install","package-fetch","package-build","package-upload"]' }}
+      RESOURCE_PROBE_OUTPUT_DIR: ${{ github.workspace }}/resource-probe
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -145,14 +166,31 @@ jobs:
           ref: ${{ inputs.ref }}
 
       - name: Install Python requirements
-        run: pip install -r requirements.txt
+        run: |
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase dependency-install \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- pip install -r requirements.txt
 
       - name: Fetch artifacts
         run: |
           if [ -n "${{ inputs.amdgpu_families }}" ]; then
             # Multi-arch mode: use artifact_manager.py to fetch all families
             echo "Fetching artifacts for multiple families: ${{ inputs.amdgpu_families }}"
-            python ./build_tools/artifact_manager.py fetch \
+            python build_tools/run_resource_probe_phase.py \
+              --enabled "${ENABLE_RESOURCE_PROBE}" \
+              --selected-phases "${RESOURCE_PROBE_PHASES}" \
+              --phase package-fetch \
+              --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+              --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+              --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+              --storage-path "${GITHUB_WORKSPACE}" \
+              -- python ./build_tools/artifact_manager.py fetch \
               --run-id="${{ env.ARTIFACT_RUN_ID }}" \
               --run-github-repo="${{ inputs.artifact_github_repo }}" \
               --stage=all \
@@ -165,7 +203,15 @@ jobs:
           else
             # Single-family mode: use fetch_artifacts.py (backward compatible)
             echo "Fetching artifacts for single family: ${{ inputs.artifact_group }}"
-            python ./build_tools/fetch_artifacts.py \
+            python build_tools/run_resource_probe_phase.py \
+              --enabled "${ENABLE_RESOURCE_PROBE}" \
+              --selected-phases "${RESOURCE_PROBE_PHASES}" \
+              --phase package-fetch \
+              --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+              --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+              --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+              --storage-path "${GITHUB_WORKSPACE}" \
+              -- python ./build_tools/fetch_artifacts.py \
               --run-github-repo="${{ inputs.artifact_github_repo }}" \
               --run-id="${{ env.ARTIFACT_RUN_ID }}" \
               --artifact-group="${{ inputs.artifact_group }}" \
@@ -174,7 +220,15 @@ jobs:
 
       - name: Build Python packages
         run: |
-          python ./build_tools/build_python_packages.py \
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase package-build \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- python ./build_tools/build_python_packages.py \
             --artifact-dir="${{ env.ARTIFACTS_DIR }}" \
             --dest-dir="${{ env.PACKAGES_DIR }}" \
             --version="${{ inputs.package_version }}" \
@@ -192,11 +246,28 @@ jobs:
       - name: Upload Python packages
         id: upload
         run: |
-          python build_tools/github_actions/upload_python_packages.py \
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase package-upload \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- python build_tools/github_actions/upload_python_packages.py \
             --input-packages-dir="${{ env.PACKAGES_DIR }}" \
             --artifact-group="${{ inputs.artifact_group }}" \
             --run-id="${{ github.run_id }}" \
             ${{ inputs.multiarch_index && '--multiarch' || '' }}
+
+      - name: Upload resource telemetry
+        if: ${{ always() && inputs.enable_resource_probe }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: resource-probe-python-packages-${{ inputs.artifact_group }}-${{ github.run_attempt }}
+          path: ${{ env.RESOURCE_PROBE_OUTPUT_DIR }}
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Capture job summary
         id: summary

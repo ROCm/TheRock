@@ -60,13 +60,33 @@ on:
         type: string
         default: ""
       resource_probe_targets:
-        description: "JSON array of exact Linux stage selectors to probe."
+        description: "JSON array of exact Linux stage or core release selectors to probe."
         type: string
         default: "[]"
       resource_probe_interval_seconds:
         description: "Resource probe sampling interval in seconds."
         type: number
         default: 5
+      resource_probe_detail_profile:
+        description: 'Resource probe detail: "basic", "process", or "diagnostic".'
+        type: string
+        default: "diagnostic"
+      resource_probe_phases:
+        description: "JSON array of allowlisted Linux release phases to probe."
+        type: string
+        default: '["dependency-install","fetch-inbound-artifacts","fetch-sources","configure","build-stage","build-tests","packaging-tests","artifact-push","log-upload","package-fetch","package-build","package-test","package-repository-build","package-upload","publish-release-buckets"]'
+      windows_resource_probe_targets:
+        description: "JSON array of exact Windows stage or packaging selectors to probe."
+        type: string
+        default: "[]"
+      windows_resource_probe_interval_seconds:
+        description: "Windows resource probe sampling interval in seconds."
+        type: number
+        default: 5
+      windows_resource_probe_canary_mode:
+        description: "Use Windows publication dry-run and disable Windows downstream dispatches for qualification."
+        type: boolean
+        default: false
       # Enable Quartz release-lineage tracking. When on, this run's id is
       # propagated to every triggered workflow as quartz_tracking_id, formatted
       # as "<github.run_id>;<release_type>". Tracking is currently only
@@ -118,14 +138,28 @@ on:
         default: ""
       resource_probe_targets:
         description: >-
-          JSON array of exact Linux stage selectors to probe, for example
-          ["compiler-runtime", "math-libs:gfx94X-dcgpu"].
+          JSON array of exact Linux stage or core release selectors, for example
+          ["compiler-runtime", "math-libs:gfx94X-dcgpu", "release-tarballs:linux"].
         type: string
         default: "[]"
-      resource_probe_interval_seconds:
-        description: "Resource probe sampling interval in seconds."
-        type: number
-        default: 5
+      windows_resource_probe_targets:
+        description: "JSON array of exact Windows stage or packaging selectors to probe."
+        type: string
+        default: "[]"
+      windows_resource_probe_canary_mode:
+        description: "Pin Windows stages, disable ccache, dry-run final publication, and skip downstream dispatches."
+        type: boolean
+        default: false
+      windows_resource_probe_canary_pair:
+        description: "Optional A/B canary pair label (1, 2, or 3)."
+        type: choice
+        options: ['1', '2', '3']
+        required: false
+      windows_resource_probe_canary_variant:
+        description: "Optional A/B canary variant label."
+        type: choice
+        options: [baseline, probed]
+        required: false
       # Enable Quartz release-lineage tracking. When on, this run's id is
       # propagated to every triggered workflow as quartz_tracking_id, formatted
       # as "<github.run_id>;<release_type>". Tracking is currently only
@@ -144,10 +178,11 @@ run-name: >-
   Multi-Arch Release (${{ inputs.release_type }})
   | Linux: ${{ inputs.linux_amdgpu_families || 'none' }}
   | Windows: ${{ inputs.windows_amdgpu_families || 'none' }}
+  | Windows canary: ${{ inputs.windows_resource_probe_canary_pair || 'off' }}-${{ inputs.windows_resource_probe_canary_variant || 'off' }}
 
 jobs:
   notify_quartz_start:
-    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    if: ${{ !inputs.windows_resource_probe_canary_mode && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     name: "Quartz - started - release"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -199,7 +234,9 @@ jobs:
       python_version: ${{ inputs.python_version }}
       quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
       resource_probe_targets: ${{ inputs.resource_probe_targets }}
-      resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds }}
+      resource_probe_interval_seconds: ${{ inputs.resource_probe_interval_seconds || 5 }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile || 'diagnostic' }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases || '["dependency-install","fetch-inbound-artifacts","fetch-sources","configure","build-stage","build-tests","packaging-tests","artifact-push","log-upload","package-fetch","package-build","package-test","package-repository-build","package-upload","publish-release-buckets"]' }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows
@@ -221,13 +258,52 @@ jobs:
       build_pytorch: ${{ inputs.build_pytorch }}
       python_version: ${{ inputs.python_version }}
       quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
+      windows_resource_probe_targets: ${{ inputs.windows_resource_probe_targets || '[]' }}
+      windows_resource_probe_interval_seconds: ${{ inputs.windows_resource_probe_interval_seconds || 5 }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile || 'diagnostic' }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases || '["dependency-install","fetch-inbound-artifacts","fetch-sources","configure","build-stage","build-tests","packaging-tests","artifact-push","log-upload","package-fetch","package-build","package-test","package-repository-build","package-upload","publish-release-buckets"]' }}
+      resource_probe_canary_mode: ${{ inputs.windows_resource_probe_canary_mode || false }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows
       id-token: write  # Added permission for AWS S3 upload
 
+  windows_canary_label_evidence:
+    name: Windows canary label evidence
+    needs: windows_release
+    if: >-
+      ${{ always() && inputs.windows_resource_probe_canary_mode &&
+      inputs.windows_resource_probe_canary_pair != '' &&
+      inputs.windows_resource_probe_canary_variant != '' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Write pair label
+        env:
+          PAIR_INDEX: ${{ inputs.windows_resource_probe_canary_pair }}
+          VARIANT: ${{ inputs.windows_resource_probe_canary_variant }}
+          HEAD_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RELEASE_RESULT: ${{ needs.windows_release.result }}
+        run: |
+          mkdir -p evidence
+          jq -n \
+            --arg pair_index "${PAIR_INDEX}" \
+            --arg variant "${VARIANT}" \
+            --arg head_sha "${HEAD_SHA}" \
+            --arg run_id "${RUN_ID}" \
+            --arg release_result "${RELEASE_RESULT}" \
+            '{schema:"therock.windows_canary_label.v1",pair_index:$pair_index,variant:$variant,head_sha:$head_sha,run_id:$run_id,release_result:$release_result}' \
+            > evidence/canary-label.json
+      - name: Upload pair label
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-canary-label-pair-${{ inputs.windows_resource_probe_canary_pair }}-${{ inputs.windows_resource_probe_canary_variant }}-${{ github.run_attempt }}
+          path: evidence/canary-label.json
+          if-no-files-found: error
+          retention-days: 14
+
   notify_quartz_completed:
-    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    if: ${{ always() && !inputs.windows_resource_probe_canary_mode && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [setup, linux_release, windows_release]
     name: "Quartz - completed - release"
     runs-on: ubuntu-24.04

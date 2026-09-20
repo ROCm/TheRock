@@ -38,9 +38,7 @@ PROCESS_CATEGORY_PATTERNS = (
     ("build_tool", re.compile(r"^(?:cmake|ninja|make|meson)$")),
     (
         "compiler",
-        re.compile(
-            r"^(?:cc|c\+\+|cc1|cc1plus|gcc|g\+\+|clang|clang\+\+|clang-\d+)$"
-        ),
+        re.compile(r"^(?:cc|c\+\+|cc1|cc1plus|gcc|g\+\+|clang|clang\+\+|clang-\d+)$"),
     ),
     ("linker", re.compile(r"^(?:ld|ld\.lld|lld|collect2)$")),
     (
@@ -161,6 +159,87 @@ def parse_io_stat(text: str | None) -> dict[str, int] | None:
     return totals if found else None
 
 
+def parse_io_stat_devices(text: str | None) -> dict[str, dict[str, int]]:
+    """Parse cgroup io.stat without persisting host device names."""
+    result: dict[str, dict[str, int]] = {}
+    if not text:
+        return result
+    allowed = ("rbytes", "wbytes", "rios", "wios", "dbytes", "dios")
+    for line in text.splitlines():
+        fields = line.split()
+        if not fields or not re.fullmatch(r"\d+:\d+", fields[0]):
+            continue
+        counters: dict[str, int] = {}
+        for field in fields[1:]:
+            if "=" not in field:
+                continue
+            key, raw = field.split("=", 1)
+            if key not in allowed:
+                continue
+            try:
+                counters[key] = int(raw)
+            except ValueError:
+                continue
+        if counters:
+            result[fields[0]] = counters
+    return result
+
+
+def parse_diskstats(text: str | None) -> dict[str, dict[str, int]]:
+    """Return host disk counters keyed only by stable major:minor numbers."""
+    result: dict[str, dict[str, int]] = {}
+    if not text:
+        return result
+    keys = (
+        "reads_completed",
+        "reads_merged",
+        "sectors_read",
+        "read_time_ms",
+        "writes_completed",
+        "writes_merged",
+        "sectors_written",
+        "write_time_ms",
+        "io_in_progress",
+        "io_time_ms",
+        "weighted_io_time_ms",
+    )
+    for line in text.splitlines():
+        fields = line.split()
+        if len(fields) < 14:
+            continue
+        try:
+            device_id = f"{int(fields[0])}:{int(fields[1])}"
+            values = [int(value) for value in fields[3:14]]
+        except ValueError:
+            continue
+        result[device_id] = dict(zip(keys, values))
+    return result
+
+
+def parse_numa_stat(text: str | None) -> dict[str, Any] | None:
+    """Aggregate cgroup NUMA counters without retaining source text or paths."""
+    if not text:
+        return None
+    totals: dict[str, int] = {}
+    nodes: set[int] = set()
+    for line in text.splitlines():
+        fields = line.split()
+        if not fields:
+            continue
+        metric_total = 0
+        found = False
+        for field in fields[1:]:
+            match = re.fullmatch(r"N(\d+)=(\d+)", field)
+            if not match:
+                continue
+            nodes.add(int(match.group(1)))
+            metric_total += int(match.group(2))
+            found = True
+        if found:
+            totals[fields[0]] = metric_total
+    return {"node_count": len(nodes), "totals_bytes": totals} if totals else None
+
+
 def parse_net_dev(text: str | None) -> dict[str, int] | None:
     if not text:
         return None
@@ -264,6 +343,7 @@ class Collector:
         storage_path: Path,
         proc_root: Path = Path("/proc"),
         cgroup_root: Path | None = None,
+        detail_profile: str = "basic",
     ):
         self.storage_path = storage_path
         self.proc_root = proc_root
@@ -273,6 +353,13 @@ class Collector:
         self.previous_cpu_usage: int | None = None
         self.previous_sample_ns: int | None = None
         self.page_size = getattr(os, "sysconf", lambda _key: 4096)("SC_PAGE_SIZE")
+        self.clock_ticks = getattr(os, "sysconf", lambda _key: 100)("SC_CLK_TCK")
+        self.detail_profile = detail_profile
+        self.previous_processes: dict[tuple[int, int], dict[str, Any]] = {}
+        self.tracked_processes: set[tuple[int, int]] = set()
+        self.child_identity: tuple[int, int] | None = None
+        self.previous_io_devices: dict[str, dict[str, int]] = {}
+        self.previous_diskstats: dict[str, dict[str, int]] = {}
 
     def _cgroup_text(self, name: str) -> str | None:
         return _read_text(self.cgroup_root / name) if self.cgroup_root else None
@@ -280,8 +367,72 @@ class Collector:
     def _cgroup_int(self, name: str) -> int | None:
         return _read_int(self.cgroup_root / name) if self.cgroup_root else None
 
+    def _ancestor_limits(self) -> dict[str, Any]:
+        if not self.cgroup_root:
+            return {
+                "scope": "cgroup_ancestors",
+                "levels_observed": 0,
+                "effective_cpu_quota_cores": None,
+                "effective_memory_limit_bytes": None,
+                "effective_swap_limit_bytes": None,
+            }
+        cpu_limits: list[float] = []
+        memory_limits: list[int] = []
+        swap_limits: list[int] = []
+        levels = 0
+        current = self.cgroup_root
+        while (current / "cgroup.controllers").exists():
+            levels += 1
+            cpu_max = _read_text(current / "cpu.max")
+            if cpu_max:
+                fields = cpu_max.split()
+                try:
+                    if len(fields) >= 2 and fields[0] != "max" and int(fields[1]) > 0:
+                        cpu_limits.append(int(fields[0]) / int(fields[1]))
+                except ValueError:
+                    pass
+            for name, destination in (
+                ("memory.max", memory_limits),
+                ("memory.swap.max", swap_limits),
+            ):
+                value = _read_int(current / name)
+                if value is not None:
+                    destination.append(value)
+            if current == current.parent:
+                break
+            current = current.parent
+        return {
+            "scope": "cgroup_ancestors",
+            "levels_observed": levels,
+            "effective_cpu_quota_cores": min(cpu_limits) if cpu_limits else None,
+            "effective_memory_limit_bytes": (
+                min(memory_limits) if memory_limits else None
+            ),
+            "effective_swap_limit_bytes": min(swap_limits) if swap_limits else None,
+        }
+
+    def _numa_capacity(self) -> dict[str, Any]:
+        node_root = self.proc_root.parent / "sys" / "devices" / "system" / "node"
+        nodes: list[dict[str, int]] = []
+        try:
+            entries = list(node_root.iterdir())
+        except OSError:
+            entries = []
+        for entry in entries:
+            match = re.fullmatch(r"node(\d+)", entry.name)
+            if not match:
+                continue
+            cpus = parse_cpu_list(_read_text(entry / "cpulist"))
+            nodes.append({"node": int(match.group(1)), "cpu_count": len(cpus)})
+        return {
+            "available": bool(nodes),
+            "node_count": len(nodes) if nodes else None,
+            "nodes": sorted(nodes, key=lambda item: item["node"]) or None,
+        }
+
     def capacity(self) -> dict[str, Any]:
         os_count = os.cpu_count()
+        ancestor_limits = self._ancestor_limits()
         try:
             affinity = sorted(os.sched_getaffinity(0))
         except (AttributeError, OSError):
@@ -309,6 +460,9 @@ class Collector:
             candidates.append(float(len(cpuset)))
         if quota is not None and period:
             candidates.append(quota / period)
+        ancestor_cpu_limit = ancestor_limits["effective_cpu_quota_cores"]
+        if isinstance(ancestor_cpu_limit, (int, float)):
+            candidates.append(float(ancestor_cpu_limit))
         effective = min(candidates) if candidates else None
 
         fs_total = None
@@ -330,6 +484,8 @@ class Collector:
             "cgroup_memory_limit_bytes": self._cgroup_int("memory.max"),
             "cgroup_swap_limit_bytes": self._cgroup_int("memory.swap.max"),
             "filesystem_total_bytes": fs_total,
+            "cgroup_ancestor_limits": ancestor_limits,
+            "numa": self._numa_capacity(),
         }
 
     def capabilities(self) -> dict[str, bool]:
@@ -354,6 +510,28 @@ class Collector:
             "network": (self.proc_root / "net" / "dev").exists(),
             "filesystem": self.storage_path.exists(),
             "processes": self.proc_root.exists() and os.name == "posix",
+            "numa": bool(
+                self._numa_capacity()["available"]
+                or (cgroup and (cgroup / "memory.numa_stat").exists())
+            ),
+            "numa_topology": bool(self._numa_capacity()["available"]),
+            "cgroup_numa": bool(cgroup and (cgroup / "memory.numa_stat").exists()),
+            "host_diskstats": (self.proc_root / "diskstats").exists(),
+        }
+
+    def diagnostic_collector_status(self) -> dict[str, dict[str, Any]]:
+        """Declare optional privileged collectors; never acquire capabilities."""
+        paranoid = _read_int(self.proc_root / "sys" / "kernel" / "perf_event_paranoid")
+        return {
+            "perf": {
+                "status": "unsupported",
+                "reason": "collection_not_implemented_no_privileges_requested",
+                "perf_event_paranoid": paranoid,
+            },
+            "ebpf": {
+                "status": "unsupported",
+                "reason": "collection_not_implemented_no_privileges_requested",
+            },
         }
 
     def _pressure(self, resource_name: str) -> tuple[str | None, dict[str, Any] | None]:
@@ -465,14 +643,12 @@ class Collector:
             "free_inodes": fs.f_ffree,
         }
 
-    def _processes(self, child_pid: int | None) -> dict[str, Any] | None:
-        if child_pid is None or os.name != "posix":
-            return None
+    def _read_processes(self) -> dict[int, dict[str, Any]]:
         processes: dict[int, dict[str, Any]] = {}
         try:
             entries = list(self.proc_root.iterdir())
         except OSError:
-            return None
+            return processes
         for entry in entries:
             if not entry.name.isdigit():
                 continue
@@ -486,25 +662,50 @@ class Collector:
             fields = stat_text[close + 1 :].split()
             try:
                 pid = int(stat_text[:open_].strip())
-                ppid = int(fields[1])
-                cpu_ticks = int(fields[11]) + int(fields[12])
-                rss_bytes = max(0, int(fields[21])) * int(self.page_size)
+                status = parse_key_values(_read_text(entry / "status"))
+                io = parse_key_values(_read_text(entry / "io"))
+                processes[pid] = {
+                    "pid": pid,
+                    "ppid": int(fields[1]),
+                    "state": fields[0],
+                    "category": _process_category(stat_text[open_ + 1 : close]),
+                    "minor_faults": int(fields[7]),
+                    "major_faults": int(fields[9]),
+                    "user_ticks": int(fields[11]),
+                    "system_ticks": int(fields[12]),
+                    "cpu_ticks": int(fields[11]) + int(fields[12]),
+                    "threads": int(fields[17]),
+                    "starttime_ticks": int(fields[19]),
+                    "rss_bytes": max(0, int(fields[21])) * int(self.page_size),
+                    "voluntary_context_switches": status.get("voluntary_ctxt_switches"),
+                    "involuntary_context_switches": status.get(
+                        "nonvoluntary_ctxt_switches"
+                    ),
+                    "read_bytes": io.get("read_bytes"),
+                    "write_bytes": io.get("write_bytes"),
+                }
             except (IndexError, ValueError):
                 continue
-            io = parse_key_values(_read_text(entry / "io"))
-            processes[pid] = {
-                "pid": pid,
-                "ppid": ppid,
-                # Process names are workload-controlled and can contain copied
-                # argv/environment secrets. Persist only a fixed category.
-                "category": _process_category(stat_text[open_ + 1 : close]),
-                "rss_bytes": rss_bytes,
-                "cpu_ticks": cpu_ticks,
-                "read_bytes": io.get("read_bytes"),
-                "write_bytes": io.get("write_bytes"),
-            }
+        return processes
 
-        selected: set[int] = {child_pid}
+    def _processes(self, child_pid: int | None) -> dict[str, Any] | None:
+        if child_pid is None or os.name != "posix":
+            return None
+        processes = self._read_processes()
+
+        root = processes.get(child_pid)
+        if root is not None and self.child_identity is None:
+            self.child_identity = (child_pid, root["starttime_ticks"])
+        selected: set[int] = set()
+        if root is not None and self.child_identity == (
+            child_pid,
+            root["starttime_ticks"],
+        ):
+            selected.add(child_pid)
+        for pid, item in processes.items():
+            identity = (pid, item["starttime_ticks"])
+            if identity in self.tracked_processes:
+                selected.add(pid)
         changed = True
         while changed:
             changed = False
@@ -513,6 +714,11 @@ class Collector:
                     selected.add(pid)
                     changed = True
         descendants = [processes[pid] for pid in selected if pid in processes]
+        current = {(item["pid"], item["starttime_ticks"]): item for item in descendants}
+        previous = self.previous_processes
+        current_ids = set(current)
+        previous_ids = set(previous)
+        self.tracked_processes.update(current_ids)
         top: list[dict[str, Any]] = []
         selected_pids: set[int] = set()
         # Preserve representatives for distinct bottleneck dimensions. A pure
@@ -537,13 +743,144 @@ class Collector:
             if item["pid"] not in selected_pids:
                 top.append(item)
                 selected_pids.add(item["pid"])
-        top = top[:8]
-        return {
+        top = [
+            {
+                key: item.get(key)
+                for key in (
+                    "pid",
+                    "ppid",
+                    "category",
+                    "rss_bytes",
+                    "cpu_ticks",
+                    "read_bytes",
+                    "write_bytes",
+                )
+            }
+            for item in top[:8]
+        ]
+        result = {
             "scope": "wrapped_process_tree",
             "count": len(descendants),
             "aggregate_rss_bytes": sum(item["rss_bytes"] for item in descendants),
             "top": top,
         }
+        if self.detail_profile in ("process", "diagnostic"):
+            categories: dict[str, dict[str, Any]] = {}
+            for identity, item in current.items():
+                prior = previous.get(identity, {})
+                category = item["category"]
+                aggregate = categories.setdefault(
+                    category,
+                    {
+                        "category": category,
+                        "process_count": 0,
+                        "rss_bytes": 0,
+                        "thread_count": 0,
+                        "state_counts": {},
+                        "user_cpu_ticks_delta": 0,
+                        "system_cpu_ticks_delta": 0,
+                        "minor_faults_delta": 0,
+                        "major_faults_delta": 0,
+                        "voluntary_context_switches_delta": 0,
+                        "involuntary_context_switches_delta": 0,
+                        "read_bytes_delta": 0,
+                        "write_bytes_delta": 0,
+                        "counter_delta_process_count": 0,
+                        "new_process_count": 0,
+                        "counter_scope": "sampled_survivors_lower_bound",
+                    },
+                )
+                aggregate["process_count"] += 1
+                aggregate["rss_bytes"] += item["rss_bytes"]
+                aggregate["thread_count"] += item["threads"]
+                if prior:
+                    aggregate["counter_delta_process_count"] += 1
+                else:
+                    aggregate["new_process_count"] += 1
+                states = aggregate["state_counts"]
+                states[item["state"]] = states.get(item["state"], 0) + 1
+                for source, destination in (
+                    ("user_ticks", "user_cpu_ticks_delta"),
+                    ("system_ticks", "system_cpu_ticks_delta"),
+                    ("minor_faults", "minor_faults_delta"),
+                    ("major_faults", "major_faults_delta"),
+                    (
+                        "voluntary_context_switches",
+                        "voluntary_context_switches_delta",
+                    ),
+                    (
+                        "involuntary_context_switches",
+                        "involuntary_context_switches_delta",
+                    ),
+                    ("read_bytes", "read_bytes_delta"),
+                    ("write_bytes", "write_bytes_delta"),
+                ):
+                    value = _delta(item.get(source), prior.get(source))
+                    if value is not None:
+                        aggregate[destination] += value
+            result.update(
+                {
+                    "clock_ticks_per_second": self.clock_ticks,
+                    "counter_scope": "sampled_survivors_lower_bound",
+                    "counter_scope_note": (
+                        "Counters omit processes that start and exit between samples; "
+                        "newly observed process counters begin at their first observation."
+                    ),
+                    "category_aggregates": sorted(
+                        categories.values(), key=lambda item: item["category"]
+                    ),
+                    "lifecycle": {
+                        "scope": "sample_observed_process_identities",
+                        "started_since_previous_sample": len(
+                            current_ids - previous_ids
+                        ),
+                        "exited_since_previous_sample": len(previous_ids - current_ids),
+                        "identity": "pid_and_starttime_ticks",
+                    },
+                }
+            )
+            self.previous_processes = current
+        return result
+
+    def _diagnostic_io(self) -> dict[str, Any]:
+        current_cgroup = parse_io_stat_devices(self._cgroup_text("io.stat"))
+        current_host = parse_diskstats(_read_text(self.proc_root / "diskstats"))
+        device_ids = sorted(current_cgroup)
+
+        def device_deltas(
+            current: dict[str, dict[str, int]],
+            previous: dict[str, dict[str, int]],
+            selected: list[str],
+        ) -> list[dict[str, Any]]:
+            values: list[dict[str, Any]] = []
+            for device_id in selected:
+                counters = current.get(device_id, {})
+                prior = previous.get(device_id, {})
+                values.append(
+                    {
+                        "device_id": device_id,
+                        "deltas": {
+                            key: _delta(value, prior.get(key))
+                            for key, value in counters.items()
+                        },
+                    }
+                )
+            return values
+
+        result = {
+            "cgroup_devices": device_deltas(
+                current_cgroup, self.previous_io_devices, device_ids
+            ),
+            "host_diskstats": {
+                "scope": "host_counters_for_cgroup_device_ids",
+                "devices": device_deltas(
+                    current_host, self.previous_diskstats, device_ids
+                ),
+            },
+        }
+        self.previous_io_devices = current_cgroup
+        self.previous_diskstats = current_host
+        return result
 
     def sample(
         self, now_ns: int, child_pid: int | None, include_processes: bool
@@ -551,7 +888,7 @@ class Collector:
         cpu_psi_scope, cpu_psi = self._pressure("cpu")
         memory_psi_scope, memory_psi = self._pressure("memory")
         io_psi_scope, io_psi = self._pressure("io")
-        return {
+        result = {
             "cpu": self._cpu(now_ns),
             "memory": self._memory(),
             "io": parse_io_stat(self._cgroup_text("io.stat")),
@@ -569,6 +906,10 @@ class Collector:
             },
             "processes": self._processes(child_pid) if include_processes else None,
         }
+        if self.detail_profile == "diagnostic":
+            result["diagnostic_io"] = self._diagnostic_io()
+            result["numa"] = parse_numa_stat(self._cgroup_text("memory.numa_stat"))
+        return result
 
 
 class JsonlWriter:
@@ -646,6 +987,8 @@ def _summary(
         item["processes"] for item in samples if isinstance(item.get("processes"), dict)
     ]
     process_totals: dict[str, dict[str, Any]] = {}
+    process_interval_totals: dict[str, dict[str, Any]] = {}
+    process_lifecycle = {"started": 0, "exited": 0}
     for process_sample in process_samples:
         for process in process_sample.get("top", []):
             category = process.get("category")
@@ -670,6 +1013,61 @@ def _summary(
                 value = process.get(source)
                 if isinstance(value, int):
                     aggregate[destination] = max(aggregate[destination], value)
+        lifecycle = process_sample.get("lifecycle")
+        if isinstance(lifecycle, dict):
+            for source, destination in (
+                ("started_since_previous_sample", "started"),
+                ("exited_since_previous_sample", "exited"),
+            ):
+                value = lifecycle.get(source)
+                if isinstance(value, int):
+                    process_lifecycle[destination] += value
+        for category_sample in process_sample.get("category_aggregates", []):
+            category = category_sample.get("category")
+            if not isinstance(category, str):
+                continue
+            aggregate = process_interval_totals.setdefault(
+                category,
+                {
+                    "category": category,
+                    "observed_peak_process_count": 0,
+                    "observed_peak_rss_bytes": 0,
+                    "observed_peak_thread_count": 0,
+                    "user_cpu_ticks_delta": 0,
+                    "system_cpu_ticks_delta": 0,
+                    "minor_faults_delta": 0,
+                    "major_faults_delta": 0,
+                    "voluntary_context_switches_delta": 0,
+                    "involuntary_context_switches_delta": 0,
+                    "read_bytes_delta": 0,
+                    "write_bytes_delta": 0,
+                    "counter_delta_process_count": 0,
+                    "new_process_count": 0,
+                },
+            )
+            for source, destination in (
+                ("process_count", "observed_peak_process_count"),
+                ("rss_bytes", "observed_peak_rss_bytes"),
+                ("thread_count", "observed_peak_thread_count"),
+            ):
+                value = category_sample.get(source)
+                if isinstance(value, int):
+                    aggregate[destination] = max(aggregate[destination], value)
+            for key in (
+                "user_cpu_ticks_delta",
+                "system_cpu_ticks_delta",
+                "minor_faults_delta",
+                "major_faults_delta",
+                "voluntary_context_switches_delta",
+                "involuntary_context_switches_delta",
+                "read_bytes_delta",
+                "write_bytes_delta",
+                "counter_delta_process_count",
+                "new_process_count",
+            ):
+                value = category_sample.get(key)
+                if isinstance(value, int):
+                    aggregate[key] += value
 
     def counter_delta(section: str, key: str) -> int | None:
         return _delta(_nested_int(last, section, key), _nested_int(first, section, key))
@@ -773,9 +1171,7 @@ def _summary(
                 **{
                     pressure_type
                     + "_total_usec_delta": _delta(
-                        _nested_int(
-                            last, "psi", resource_name, pressure_type, "total"
-                        ),
+                        _nested_int(last, "psi", resource_name, pressure_type, "total"),
                         _nested_int(
                             first, "psi", resource_name, pressure_type, "total"
                         ),
@@ -813,6 +1209,15 @@ def _summary(
                 ),
                 reverse=True,
             )[:8],
+            "interval_categories": sorted(
+                process_interval_totals.values(), key=lambda item: item["category"]
+            ),
+            "interval_category_counter_scope": "sampled_survivors_lower_bound",
+            "lifecycle": {
+                "observed_started_count": process_lifecycle["started"],
+                "observed_exited_count": process_lifecycle["exited"],
+                "identity": "pid_and_starttime_ticks",
+            },
         },
         "probe_overhead": {
             "self_cpu_ns": self_cpu_ns,
@@ -994,7 +1399,7 @@ def run_probe(args: argparse.Namespace) -> int:
             return False
 
     self_cpu_start = time.process_time_ns()
-    collector = Collector(Path(args.storage_path))
+    collector = Collector(Path(args.storage_path), detail_profile=args.detail_profile)
     capacity = collector.capacity()
     capabilities = collector.capabilities()
     start_ns = time.monotonic_ns()
@@ -1059,6 +1464,7 @@ def run_probe(args: argparse.Namespace) -> int:
             "sequence": sequence,
             "probe_version": PROBE_VERSION,
             "interval_seconds": args.interval_seconds,
+            "detail_profile": args.detail_profile,
             "probe_pid": os.getpid(),
             "child_pid": process.pid if process else None,
             "child_process_category": _process_category(Path(command[0]).name),
@@ -1074,6 +1480,8 @@ def run_probe(args: argparse.Namespace) -> int:
             "capacity": capacity,
             "capabilities": capabilities,
         }
+        if args.detail_profile == "diagnostic":
+            metadata["optional_collectors"] = collector.diagnostic_collector_status()
         emit(metadata)
         sequence += 1
         if writer is not None and baseline is not None:
@@ -1119,7 +1527,10 @@ def run_probe(args: argparse.Namespace) -> int:
                     payload = collector.sample(
                         collection_start,
                         process.pid if process else None,
-                        include_processes=(len(samples) % 3 == 0),
+                        include_processes=(
+                            args.detail_profile in ("process", "diagnostic")
+                            or len(samples) % 3 == 0
+                        ),
                     )
                     duration = time.monotonic_ns() - collection_start
                     record = {
@@ -1268,6 +1679,16 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--interval-seconds", type=_interval, default=5.0)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--storage-path", default=".")
+    parser.add_argument(
+        "--detail-profile",
+        choices=("basic", "process", "diagnostic"),
+        default="basic",
+        help=(
+            "basic preserves low-overhead sampling; process adds per-interval "
+            "privacy-safe descendant aggregates; diagnostic also adds "
+            "unprivileged NUMA and per-device I/O indicators"
+        ),
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER)
     return parser.parse_args(argv)
 

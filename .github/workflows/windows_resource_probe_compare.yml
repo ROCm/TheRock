@@ -1,0 +1,128 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Compare Windows Resource Probe Canary Pair
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseline_run_id:
+        description: "Completed baseline canary run ID."
+        type: string
+        required: true
+      probed_run_id:
+        description: "Completed probed canary run ID from the same pair and commit."
+        type: string
+        required: true
+      expected_head_sha:
+        description: "Pinned commit shared by all six runs in the three-pair cohort."
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout pinned comparison code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Verify matching commit and download manifests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+          PROBED_RUN_ID: ${{ inputs.probed_run_id }}
+          EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+        run: |
+          mkdir -p evidence/baseline evidence/probed
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BASELINE_RUN_ID}" > evidence/baseline-run.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROBED_RUN_ID}" > evidence/probed-run.json
+          for variant in baseline probed; do
+            run_path="$(jq -r .path "evidence/${variant}-run.json")"
+            run_event="$(jq -r .event "evidence/${variant}-run.json")"
+            run_status="$(jq -r .status "evidence/${variant}-run.json")"
+            run_conclusion="$(jq -r .conclusion "evidence/${variant}-run.json")"
+            if [[ "${run_path}" != ".github/workflows/windows_resource_probe_canary.yml" && \
+                  "${run_path}" != ".github/workflows/multi_arch_release.yml" ]]; then
+              echo "${variant} is not a recognized Windows canary entry workflow" >&2
+              exit 1
+            fi
+            if [[ "${run_event}" != "workflow_dispatch" || \
+                  "${run_status}" != "completed" || \
+                  "${run_conclusion}" != "success" ]]; then
+              echo "${variant} is not a successful completed Windows canary run" >&2
+              exit 1
+            fi
+          done
+          baseline_sha="$(jq -r .head_sha evidence/baseline-run.json)"
+          probed_sha="$(jq -r .head_sha evidence/probed-run.json)"
+          if [[ "${baseline_sha}" != "${probed_sha}" || \
+                "${baseline_sha}" != "${EXPECTED_HEAD_SHA}" ]]; then
+            echo "runs do not use the pinned cohort commit" >&2
+            exit 1
+          fi
+          baseline_attempt="$(jq -r .run_attempt evidence/baseline-run.json)"
+          probed_attempt="$(jq -r .run_attempt evidence/probed-run.json)"
+          gh run download "${BASELINE_RUN_ID}" --repo "${GITHUB_REPOSITORY}" \
+            --pattern "windows-canary-label-pair-*-baseline-${baseline_attempt}" \
+            --dir evidence/baseline-label
+          gh run download "${PROBED_RUN_ID}" --repo "${GITHUB_REPOSITORY}" \
+            --pattern "windows-canary-label-pair-*-probed-${probed_attempt}" \
+            --dir evidence/probed-label
+          baseline_label="$(find evidence/baseline-label -name canary-label.json -type f -print -quit)"
+          probed_label="$(find evidence/probed-label -name canary-label.json -type f -print -quit)"
+          [[ -n "${baseline_label}" && -n "${probed_label}" ]]
+          baseline_pair="$(jq -r .pair_index "${baseline_label}")"
+          probed_pair="$(jq -r .pair_index "${probed_label}")"
+          if [[ -z "${baseline_pair}" || "${baseline_pair}" != "${probed_pair}" ]]; then
+            echo "canary labels do not form a pair" >&2
+            exit 1
+          fi
+          if [[ "$(jq -r .variant "${baseline_label}")" != "baseline" || \
+                "$(jq -r .variant "${probed_label}")" != "probed" || \
+                "$(jq -r .head_sha "${baseline_label}")" != "${baseline_sha}" || \
+                "$(jq -r .head_sha "${probed_label}")" != "${probed_sha}" || \
+                "$(jq -r .run_id "${baseline_label}")" != "${BASELINE_RUN_ID}" || \
+                "$(jq -r .run_id "${probed_label}")" != "${PROBED_RUN_ID}" || \
+                "$(jq -r .release_result "${baseline_label}")" != "success" || \
+                "$(jq -r .release_result "${probed_label}")" != "success" ]]; then
+            echo "canary label validation failed" >&2
+            exit 1
+          fi
+          if [[ "${baseline_pair}" == "2" ]]; then
+            if (( PROBED_RUN_ID >= BASELINE_RUN_ID )); then
+              echo "pair 2 must use BA order (probed before baseline)" >&2
+              exit 1
+            fi
+          elif (( BASELINE_RUN_ID >= PROBED_RUN_ID )); then
+            echo "pairs 1 and 3 must use AB order (baseline before probed)" >&2
+            exit 1
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BASELINE_RUN_ID}/jobs?per_page=100&filter=latest" \
+            --jq '[.jobs[] | {name,status,conclusion,started_at,completed_at,steps:[.steps[] | {name,status,conclusion,started_at,completed_at}]}]' \
+            > evidence/baseline-phase-timing.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROBED_RUN_ID}/jobs?per_page=100&filter=latest" \
+            --jq '[.jobs[] | {name,status,conclusion,started_at,completed_at,steps:[.steps[] | {name,status,conclusion,started_at,completed_at}]}]' \
+            > evidence/probed-phase-timing.json
+          gh run download "${BASELINE_RUN_ID}" --repo "${GITHUB_REPOSITORY}" \
+            --pattern "windows-canary-manifest-*-${baseline_attempt}" --dir evidence/baseline
+          gh run download "${PROBED_RUN_ID}" --repo "${GITHUB_REPOSITORY}" \
+            --pattern "windows-canary-manifest-*-${probed_attempt}" --dir evidence/probed
+          python build_tools/compare_artifact_equivalence_manifests.py \
+            --baseline-dir evidence/baseline \
+            --probed-dir evidence/probed \
+            --output evidence/comparison.json
+
+      - name: Upload comparison evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-canary-equivalence-${{ inputs.baseline_run_id }}-${{ inputs.probed_run_id }}-${{ github.run_attempt }}
+          path: |
+            evidence/comparison.json
+            evidence/baseline-phase-timing.json
+            evidence/probed-phase-timing.json
+          if-no-files-found: error

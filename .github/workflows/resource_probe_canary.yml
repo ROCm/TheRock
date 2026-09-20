@@ -1,0 +1,251 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Resource probe A/B canary
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Completed compatible TheRock run whose inbound artifacts should be bootstrapped"
+        type: string
+        required: true
+      pair_count:
+        description: "Number of independently paired A/B observations per target (minimum 3)"
+        type: number
+        default: 3
+      interval_seconds:
+        description: "Probe sampling interval in seconds"
+        type: number
+        default: 5
+      rocm_package_version:
+        description: "ROCm package version passed to the canary builds"
+        type: string
+        default: "0.0.0"
+      build_runs_on:
+        description: "Linux build runner label"
+        type: string
+        default: "aws-linux-scale-rocm-prod"
+
+permissions:
+  contents: read
+
+jobs:
+  matrix:
+    name: Validate canary inputs
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Build paired target matrix
+        id: matrix
+        env:
+          PAIR_COUNT: ${{ inputs.pair_count }}
+        run: |
+          python3 -c 'import json, os; count=int(os.environ["PAIR_COUNT"]); assert 3 <= count <= 10, "pair_count must be between 3 and 10"; targets=[{"selector":"compiler-runtime","stage":"compiler-runtime","family":"","dist":"gfx110X-all;gfx94X-dcgpu"},{"selector":"comm-libs","stage":"comm-libs","family":"","dist":"gfx110X-all;gfx94X-dcgpu"},{"selector":"math-libs:gfx110X-all","stage":"math-libs","family":"gfx110X-all","dist":"gfx110X-all"},{"selector":"math-libs:gfx94X-dcgpu","stage":"math-libs","family":"gfx94X-dcgpu","dist":"gfx94X-dcgpu"}]; include=[dict(target, pair=pair, order=("baseline-probe" if pair % 2 else "probe-baseline")) for pair in range(1,count+1) for target in targets]; open(os.environ["GITHUB_OUTPUT"],"a",encoding="utf-8").write("matrix="+json.dumps({"include":include},separators=(",",":"))+"\n")'
+
+  paired-canary:
+    name: ${{ matrix.selector }} pair ${{ matrix.pair }} (${{ matrix.order }})
+    needs: matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
+    runs-on: ${{ inputs.build_runs_on }}
+    timeout-minutes: 1200
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
+    env:
+      CCACHE_DISABLE: "true"
+      CACHE_DIR: ${{ github.workspace }}/.container-cache
+      TEATIME_FORCE_INTERACTIVE: 0
+      CANARY_ROOT: ${{ github.workspace }}/.resource-probe-canary
+      SELECTED_PHASES: '["fetch-inbound-artifacts","fetch-sources","dependency-install","configure","build-stage","build-tests","packaging-tests","artifact-push-local-equivalent","log-upload-local-equivalent"]'
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Adjust git configuration
+        run: |
+          git config --global --add safe.directory "$PWD"
+          git config fetch.parallel 10
+
+      - name: Run clean paired builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          PAIR_NUMBER: ${{ matrix.pair }}
+          RUN_ORDER: ${{ matrix.order }}
+          STAGE_NAME: ${{ matrix.stage }}
+          AMDGPU_FAMILY: ${{ matrix.family }}
+          DIST_AMDGPU_FAMILIES: ${{ matrix.dist }}
+          INTERVAL_SECONDS: ${{ inputs.interval_seconds }}
+          ROCM_PACKAGE_VERSION: ${{ inputs.rocm_package_version }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${SOURCE_RUN_ID}" =~ ^[0-9]+$ ]]; then
+            echo "source_run_id must be numeric" >&2
+            exit 2
+          fi
+          if [[ "${RUN_ORDER}" == "baseline-probe" ]]; then
+            variants=(baseline probe)
+          else
+            variants=(probe baseline)
+          fi
+          base_path="${PATH}"
+          base_pythonpath="${PYTHONPATH:-}"
+
+          run_phase() {
+            local enabled="$1"
+            local phase="$2"
+            local output_dir="$3"
+            shift 3
+            local started_ns
+            local ended_ns
+            local rc
+            started_ns="$(date +%s%N)"
+            set +e
+            python build_tools/run_resource_probe_phase.py \
+              --enabled "${enabled}" \
+              --selected-phases "${SELECTED_PHASES}" \
+              --phase "${phase}" \
+              --interval-seconds "${INTERVAL_SECONDS}" \
+              --detail-profile diagnostic \
+              --output-dir "${output_dir}" \
+              --storage-path "${GITHUB_WORKSPACE}" \
+              -- "$@"
+            rc="$?"
+            set -e
+            ended_ns="$(date +%s%N)"
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+              "${CANARY_VARIANT}" "${phase}" "${started_ns}" "${ended_ns}" \
+              "$(( ended_ns - started_ns ))" "${rc}" >> "${CANARY_TIMINGS}"
+            return "${rc}"
+          }
+
+          for variant in "${variants[@]}"; do
+            source_dir="${CANARY_ROOT}/${PAIR_NUMBER}/${variant}/source"
+            build_dir="${source_dir}/build"
+            telemetry_dir="${CANARY_ROOT}/${PAIR_NUMBER}/${variant}/telemetry"
+            manifest="${CANARY_ROOT}/${PAIR_NUMBER}/${variant}/artifact-manifest.json"
+            if [[ -e "${source_dir}" || -e "${telemetry_dir}" ]]; then
+              echo "refusing to reuse a non-clean canary directory" >&2
+              exit 2
+            fi
+            mkdir -p "${telemetry_dir}"
+            git clone --quiet --no-hardlinks "${GITHUB_WORKSPACE}" "${source_dir}"
+            cd "${source_dir}"
+            git config --global --add safe.directory "${source_dir}"
+
+            enabled=false
+            export CANARY_VARIANT="${variant}"
+            export CANARY_TIMINGS="${CANARY_ROOT}/${PAIR_NUMBER}/${variant}/phase-timings.tsv"
+            printf 'variant\tphase\tstarted_unix_ns\tended_unix_ns\tduration_ns\texit_code\n' > "${CANARY_TIMINGS}"
+            unset THEROCK_RESOURCE_SPANS_FILE || true
+            if [[ "${variant}" == "probe" ]]; then
+              enabled=true
+              export THEROCK_RESOURCE_SPANS_FILE="${telemetry_dir}/component-spans.jsonl"
+            fi
+
+            dependency_dir="${CANARY_ROOT}/${PAIR_NUMBER}/${variant}/python-deps"
+            export PATH="${dependency_dir}/bin:${base_path}"
+            export PYTHONPATH="${dependency_dir}${base_pythonpath:+:${base_pythonpath}}"
+
+            gh auth setup-git --hostname github.com
+            run_phase "${enabled}" fetch-sources "${telemetry_dir}" \
+              ./build_tools/fetch_sources.py --stage "${STAGE_NAME}" --jobs 12 --depth 1
+
+            run_phase "${enabled}" fetch-inbound-artifacts "${telemetry_dir}" \
+              python build_tools/artifact_manager.py fetch \
+                --run-id="${SOURCE_RUN_ID}" \
+                --stage="${STAGE_NAME}" \
+                --amdgpu-families="${AMDGPU_FAMILY}" \
+                --output-dir="${build_dir}" \
+                --bootstrap
+
+            args_file="${CANARY_ROOT}/${PAIR_NUMBER}/${variant}/cmake-args.txt"
+            python build_tools/configure_stage.py \
+              --stage="${STAGE_NAME}" \
+              --amdgpu-families="${AMDGPU_FAMILY}" \
+              --dist-amdgpu-families="${DIST_AMDGPU_FAMILIES}" \
+              --manylinux \
+              --output-cmake-args="${args_file}"
+            mapfile -t cmake_args < "${args_file}"
+            mapfile -t stage_python_requirements < <(
+              python -c 'import sys; sys.path.insert(0,"build_tools"); import configure_stage; print("\n".join(configure_stage.get_topology().get_python_requires_for_stage(sys.argv[1])))' "${STAGE_NAME}"
+            )
+            if (( ${#stage_python_requirements[@]} )); then
+              run_phase "${enabled}" dependency-install "${telemetry_dir}" \
+                python -m pip install --target "${dependency_dir}" \
+                  "${stage_python_requirements[@]}"
+            fi
+
+            subproject_test_jobs="$(( $(nproc) / 2 ))"
+            if (( subproject_test_jobs > 16 )); then
+              subproject_test_jobs=16
+            fi
+            run_phase "${enabled}" configure "${telemetry_dir}" \
+              cmake -B "${build_dir}" -S . -GNinja \
+                -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
+                -DTHEROCK_ROCJITSU_TEST_JOBS="${subproject_test_jobs}" \
+                -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+                -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+                "${cmake_args[@]}"
+
+            run_phase "${enabled}" build-stage "${telemetry_dir}" \
+              cmake --build "${build_dir}" \
+                --target "stage-${STAGE_NAME}" therock-artifacts -- -k 0
+
+            if [[ "${STAGE_NAME}" == "compiler-runtime" ]]; then
+              run_phase "${enabled}" build-tests "${telemetry_dir}" \
+                cmake --build "${build_dir}" --target build-test-amd-comgr -- -k 0
+            fi
+
+            run_phase "${enabled}" packaging-tests "${telemetry_dir}" \
+              ctest --test-dir "${build_dir}" --output-on-failure
+
+            python build_tools/artifact_equivalence_manifest.py \
+              --artifact-dir "${build_dir}/artifacts" \
+              --output "${manifest}"
+
+            local_sink="${CANARY_ROOT}/${PAIR_NUMBER}/${variant}/local-release-sink"
+            run_phase "${enabled}" artifact-push-local-equivalent "${telemetry_dir}" \
+              python build_tools/canary_release_path.py \
+                --source "${build_dir}/artifacts" \
+                --destination "${local_sink}/artifacts" \
+                --manifest "${local_sink}/artifact-push-manifest.json"
+            run_phase "${enabled}" log-upload-local-equivalent "${telemetry_dir}" \
+              python build_tools/canary_release_path.py \
+                --source "${build_dir}/logs" \
+                --destination "${local_sink}/logs" \
+                --manifest "${local_sink}/log-upload-manifest.json"
+
+            cd "${GITHUB_WORKSPACE}"
+          done
+
+          baseline_manifest="${CANARY_ROOT}/${PAIR_NUMBER}/baseline/artifact-manifest.json"
+          probe_manifest="${CANARY_ROOT}/${PAIR_NUMBER}/probe/artifact-manifest.json"
+          if ! cmp --silent "${baseline_manifest}" "${probe_manifest}"; then
+            echo "baseline and probed artifact manifests differ" >&2
+            diff --unified "${baseline_manifest}" "${probe_manifest}" || true
+            exit 1
+          fi
+          echo "Artifact manifests are byte-for-byte equivalent." >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload canary evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: resource-probe-ab-${{ matrix.stage }}-${{ matrix.family || 'generic' }}-pair-${{ matrix.pair }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.CANARY_ROOT }}/${{ matrix.pair }}/baseline/artifact-manifest.json
+            ${{ env.CANARY_ROOT }}/${{ matrix.pair }}/baseline/phase-timings.tsv
+            ${{ env.CANARY_ROOT }}/${{ matrix.pair }}/baseline/local-release-sink/*-manifest.json
+            ${{ env.CANARY_ROOT }}/${{ matrix.pair }}/probe/artifact-manifest.json
+            ${{ env.CANARY_ROOT }}/${{ matrix.pair }}/probe/phase-timings.tsv
+            ${{ env.CANARY_ROOT }}/${{ matrix.pair }}/probe/local-release-sink/*-manifest.json
+            ${{ env.CANARY_ROOT }}/${{ matrix.pair }}/probe/telemetry
+          if-no-files-found: warn
+          retention-days: 14

@@ -40,6 +40,28 @@ def test_parser_helpers():
         "dbytes": 5,
         "dios": 6,
     }
+    assert probe.parse_io_stat_devices(
+        "8:0 rbytes=10 wbytes=20 rios=1\ninvalid rbytes=9\n"
+    ) == {"8:0": {"rbytes": 10, "wbytes": 20, "rios": 1}}
+    assert probe.parse_diskstats("8 0 secret-device 1 2 3 4 5 6 7 8 9 10 11\n") == {
+        "8:0": {
+            "reads_completed": 1,
+            "reads_merged": 2,
+            "sectors_read": 3,
+            "read_time_ms": 4,
+            "writes_completed": 5,
+            "writes_merged": 6,
+            "sectors_written": 7,
+            "write_time_ms": 8,
+            "io_in_progress": 9,
+            "io_time_ms": 10,
+            "weighted_io_time_ms": 11,
+        }
+    }
+    assert probe.parse_numa_stat("anon N0=10 N1=20\nfile N0=3 N1=4\n") == {
+        "node_count": 2,
+        "totals_bytes": {"anon": 30, "file": 7},
+    }
     assert probe.parse_psi(
         "some avg10=1.25 avg60=0.50 avg300=0.10 total=42\n"
         "full avg10=0.00 avg60=0.00 avg300=0.00 total=7\n"
@@ -66,11 +88,18 @@ def test_cgroup_v2_discovery_and_capacity(tmp_path, monkeypatch):
     (cgroup_dir / "cpuset.cpus.effective").write_text("0-3,8\n")
     (cgroup_dir / "memory.max").write_text("1073741824\n")
     (cgroup_dir / "memory.swap.max").write_text("max\n")
+    node_root = tmp_path / "sys" / "devices" / "system" / "node"
+    (node_root / "node0").mkdir(parents=True)
+    (node_root / "node1").mkdir()
+    (node_root / "node0" / "cpulist").write_text("0-3\n")
+    (node_root / "node1" / "cpulist").write_text("4-7\n")
 
     assert probe.discover_cgroup_v2(proc_root) == cgroup_dir
 
     monkeypatch.setattr(probe.os, "cpu_count", lambda: 96)
-    monkeypatch.setattr(probe.os, "sched_getaffinity", lambda _pid: set(range(8)))
+    monkeypatch.setattr(
+        probe.os, "sched_getaffinity", lambda _pid: set(range(8)), raising=False
+    )
     monkeypatch.setattr(
         probe.os,
         "statvfs",
@@ -94,6 +123,243 @@ def test_cgroup_v2_discovery_and_capacity(tmp_path, monkeypatch):
     assert capacity["cgroup_memory_limit_bytes"] == 1073741824
     assert capacity["cgroup_swap_limit_bytes"] is None
     assert capacity["filesystem_total_bytes"] == 409600
+    assert capacity["numa"] == {
+        "available": True,
+        "node_count": 2,
+        "nodes": [{"node": 0, "cpu_count": 4}, {"node": 1, "cpu_count": 4}],
+    }
+    assert capacity["cgroup_ancestor_limits"] == {
+        "scope": "cgroup_ancestors",
+        "levels_observed": 1,
+        "effective_cpu_quota_cores": 2.0,
+        "effective_memory_limit_bytes": 1073741824,
+        "effective_swap_limit_bytes": None,
+    }
+
+
+def test_ancestor_limits_choose_most_restrictive_level(tmp_path):
+    parent = tmp_path / "cgroup"
+    child = parent / "job"
+    child.mkdir(parents=True)
+    for path in (parent, child):
+        (path / "cgroup.controllers").write_text("cpu memory\n")
+    (parent / "cpu.max").write_text("400000 100000\n")
+    (child / "cpu.max").write_text("max 100000\n")
+    (parent / "memory.max").write_text("1000\n")
+    (child / "memory.max").write_text("2000\n")
+
+    limits = probe.Collector(tmp_path, cgroup_root=child)._ancestor_limits()
+
+    assert limits["levels_observed"] == 2
+    assert limits["effective_cpu_quota_cores"] == 4.0
+    assert limits["effective_memory_limit_bytes"] == 1000
+
+
+def test_diagnostic_io_uses_device_ids_and_interval_deltas(tmp_path):
+    proc_root = tmp_path / "proc"
+    cgroup = tmp_path / "cgroup"
+    proc_root.mkdir()
+    cgroup.mkdir()
+    (cgroup / "io.stat").write_text("8:0 rbytes=10 wbytes=20 rios=1 wios=2\n")
+    (proc_root / "diskstats").write_text("8 0 secret-device 1 0 2 3 4 0 5 6 0 7 8\n")
+    collector = probe.Collector(
+        tmp_path,
+        proc_root=proc_root,
+        cgroup_root=cgroup,
+        detail_profile="diagnostic",
+    )
+
+    first = collector._diagnostic_io()
+    assert first["cgroup_devices"][0]["device_id"] == "8:0"
+    assert first["cgroup_devices"][0]["deltas"]["rbytes"] is None
+    assert "secret-device" not in json.dumps(first)
+
+    (cgroup / "io.stat").write_text("8:0 rbytes=25 wbytes=24 rios=3 wios=3\n")
+    (proc_root / "diskstats").write_text("8 0 changed-name 3 0 6 8 5 0 7 9 0 11 13\n")
+    second = collector._diagnostic_io()
+    assert second["cgroup_devices"][0]["deltas"]["rbytes"] == 15
+    host = second["host_diskstats"]["devices"][0]["deltas"]
+    assert host["reads_completed"] == 2
+    assert host["io_time_ms"] == 4
+    assert "changed-name" not in json.dumps(second)
+
+
+def test_privileged_collectors_are_explicitly_unsupported(tmp_path):
+    proc_root = tmp_path / "proc"
+    perf_setting = proc_root / "sys" / "kernel"
+    perf_setting.mkdir(parents=True)
+    (perf_setting / "perf_event_paranoid").write_text("2\n")
+    status = probe.Collector(
+        tmp_path, proc_root=proc_root, cgroup_root=tmp_path / "none"
+    ).diagnostic_collector_status()
+
+    assert status["perf"] == {
+        "status": "unsupported",
+        "reason": "collection_not_implemented_no_privileges_requested",
+        "perf_event_paranoid": 2,
+    }
+    assert status["ebpf"]["status"] == "unsupported"
+
+
+def _write_fake_process(
+    proc_root: Path,
+    pid: int,
+    *,
+    ppid: int,
+    name: str,
+    starttime: int,
+    user_ticks: int,
+    system_ticks: int,
+    read_bytes: int,
+    write_bytes: int,
+) -> None:
+    directory = proc_root / str(pid)
+    directory.mkdir(parents=True, exist_ok=True)
+    fields = [
+        "R",
+        str(ppid),
+        "1",
+        "1",
+        "0",
+        "0",
+        "0",
+        "5",
+        "0",
+        "2",
+        "0",
+        str(user_ticks),
+        str(system_ticks),
+        "0",
+        "0",
+        "20",
+        "0",
+        "3",
+        "0",
+        str(starttime),
+        "100000",
+        "10",
+    ]
+    (directory / "stat").write_text(f"{pid} ({name}) " + " ".join(fields) + "\n")
+    (directory / "status").write_text(
+        "voluntary_ctxt_switches:\t7\nnonvoluntary_ctxt_switches:\t3\n"
+    )
+    (directory / "io").write_text(
+        f"read_bytes: {read_bytes}\nwrite_bytes: {write_bytes}\n"
+    )
+
+
+@pytest.mark.skipif(os.name != "posix", reason="procfs process test targets Linux CI")
+def test_process_profile_has_interval_category_deltas_and_pid_reuse_safety(tmp_path):
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    _write_fake_process(
+        proc_root,
+        100,
+        ppid=1,
+        name="ninja",
+        starttime=1000,
+        user_ticks=10,
+        system_ticks=2,
+        read_bytes=100,
+        write_bytes=200,
+    )
+    _write_fake_process(
+        proc_root,
+        101,
+        ppid=100,
+        name="clang",
+        starttime=1001,
+        user_ticks=20,
+        system_ticks=4,
+        read_bytes=300,
+        write_bytes=400,
+    )
+    collector = probe.Collector(
+        tmp_path,
+        proc_root=proc_root,
+        cgroup_root=tmp_path / "none",
+        detail_profile="process",
+    )
+
+    first = collector._processes(100)
+    assert first["lifecycle"]["started_since_previous_sample"] == 2
+    assert first["lifecycle"]["identity"] == "pid_and_starttime_ticks"
+    compiler = next(
+        item for item in first["category_aggregates"] if item["category"] == "compiler"
+    )
+    assert compiler["process_count"] == 1
+    assert compiler["user_cpu_ticks_delta"] == 0
+    assert compiler["thread_count"] == 3
+
+    _write_fake_process(
+        proc_root,
+        101,
+        ppid=100,
+        name="clang",
+        starttime=1001,
+        user_ticks=27,
+        system_ticks=6,
+        read_bytes=340,
+        write_bytes=490,
+    )
+    second = collector._processes(100)
+    compiler = next(
+        item for item in second["category_aggregates"] if item["category"] == "compiler"
+    )
+    assert compiler["user_cpu_ticks_delta"] == 7
+    assert compiler["system_cpu_ticks_delta"] == 2
+    assert compiler["read_bytes_delta"] == 40
+    assert compiler["write_bytes_delta"] == 90
+
+    for name in ("stat", "status", "io"):
+        (proc_root / "100" / name).unlink()
+    (proc_root / "100").rmdir()
+    _write_fake_process(
+        proc_root,
+        100,
+        ppid=1,
+        name="secret-reused-name",
+        starttime=9999,
+        user_ticks=999,
+        system_ticks=999,
+        read_bytes=999,
+        write_bytes=999,
+    )
+    _write_fake_process(
+        proc_root,
+        101,
+        ppid=1,
+        name="clang",
+        starttime=1001,
+        user_ticks=28,
+        system_ticks=6,
+        read_bytes=340,
+        write_bytes=490,
+    )
+    third = collector._processes(100)
+    assert third["count"] == 1
+    assert third["lifecycle"]["exited_since_previous_sample"] == 1
+    assert "secret-reused-name" not in json.dumps(third)
+
+
+def test_detail_profile_cli_defaults_to_basic_and_validates_values(tmp_path):
+    basic = probe.parse_args(
+        ["--phase", "x", "--output-dir", str(tmp_path), "--", "true"]
+    )
+    process = probe.parse_args(
+        [
+            "--phase",
+            "x",
+            "--output-dir",
+            str(tmp_path),
+            "--detail-profile",
+            "process",
+            "--",
+            "true",
+        ]
+    )
+    assert basic.detail_profile == "basic"
+    assert process.detail_profile == "process"
 
 
 def _run_probe(tmp_path: Path, exit_code: int, *, secret: str | None = None):
@@ -611,10 +877,7 @@ def test_summary_cpu_average_has_duration_weighted_fallback():
     summary = _make_summary(samples)
 
     assert summary["cpu"]["average_cores_used"] == pytest.approx(1.7)
-    assert (
-        summary["cpu"]["average_cores_used_source"]
-        == "interval_weighted_samples"
-    )
+    assert summary["cpu"]["average_cores_used_source"] == "interval_weighted_samples"
 
 
 def test_baseline_collection_precedes_child_launch(tmp_path, monkeypatch):
@@ -624,8 +887,8 @@ def test_baseline_collection_precedes_child_launch(tmp_path, monkeypatch):
         page_size = 4096
         cgroup_root = Path("/fake-cgroup")
 
-        def __init__(self, _storage_path):
-            pass
+        def __init__(self, _storage_path, detail_profile="basic"):
+            self.detail_profile = detail_profile
 
         def capacity(self):
             return {}

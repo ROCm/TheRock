@@ -73,6 +73,22 @@ on:
       quartz_tracking_id:
         type: string
         default: ""
+      enable_resource_probe:
+        description: "Collect privacy-safe Windows resource telemetry for the build command."
+        type: boolean
+        default: false
+      resource_probe_interval_seconds:
+        description: "Resource probe sampling interval in seconds."
+        type: number
+        default: 5
+      resource_probe_detail_profile:
+        description: "Telemetry detail: basic, process, or diagnostic (capability-gated PDH)."
+        type: string
+        default: process
+      resource_probe_canary_mode:
+        description: "Generate artifact-equivalence evidence without changing normal runs."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -97,16 +113,21 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_family }}
       BUILD_DIR: B:\build
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      CCACHE_DISABLE: ${{ inputs.resource_probe_canary_mode && '1' || '0' }}
       CACHE_DIR: ${{ github.workspace }}/.cache
       TEATIME_FORCE_INTERACTIVE: 0
       RELEASE_TYPE: ${{ inputs.release_type }}
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
       EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
+      ENABLE_RESOURCE_PROBE: ${{ inputs.enable_resource_probe }}
+      RESOURCE_PROBE_INTERVAL_SECONDS: ${{ inputs.resource_probe_interval_seconds }}
+      RESOURCE_PROBE_DETAIL_PROFILE: ${{ inputs.resource_probe_detail_profile }}
+      RESOURCE_PROBE_OUTPUT_DIR: B:/resource-probe
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ !inputs.resource_probe_canary_mode && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
@@ -141,21 +162,31 @@ jobs:
           python-version: "3.12"
 
       - name: Install python deps
-        run: pip install -r requirements.txt
+        run: |
+          PROBE=()
+          if [[ "${ENABLE_RESOURCE_PROBE}" == "true" ]]; then
+            PROBE=(python build_tools/windows_resource_probe.py --phase windows-bootstrap-python-deps --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" --storage-path "${BUILD_DIR}" --)
+          fi
+          "${PROBE[@]}" pip install -r requirements.txt
 
       - name: Install requirements
         run: |
-          choco source disable -n=chocolatey
-          choco source add -n=internal -s http://nexus-service.nexus-ns.svc.cluster.local:8081/repository/choco-group/ --priority=1
-          choco install --no-progress -y ccache
-          # ninja pinned due to a bug in the 1.13.0 release:
-          # https://github.com/ninja-build/ninja/issues/2616
-          choco install --no-progress -y ninja --version 1.12.1
-          choco install --no-progress -y strawberryperl
-          # win_flex/win_bison are required by the amd-mesa (libva/d3d12) build.
-          if [[ "${STAGE_NAME}" == "media-libs" ]]; then
-            choco install --no-progress -y winflexbison3
+          PROBE=()
+          if [[ "${ENABLE_RESOURCE_PROBE}" == "true" ]]; then
+            PROBE=(python build_tools/windows_resource_probe.py --phase windows-system-dependencies --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" --storage-path "${BUILD_DIR}" --)
           fi
+          "${PROBE[@]}" bash -eo pipefail -c '
+            choco source disable -n=chocolatey
+            choco source add -n=internal -s http://nexus-service.nexus-ns.svc.cluster.local:8081/repository/choco-group/ --priority=1
+            choco install --no-progress -y ccache
+            # ninja pinned due to a bug in the 1.13.0 release:
+            # https://github.com/ninja-build/ninja/issues/2616
+            choco install --no-progress -y ninja --version 1.12.1
+            choco install --no-progress -y strawberryperl
+            if [[ "${STAGE_NAME}" == "media-libs" ]]; then
+              choco install --no-progress -y winflexbison3
+            fi
+          '
           echo "$PATH;C:\Strawberry\c\bin" >> $GITHUB_PATH
 
       - uses: iterative/setup-dvc@6c05772f52d19792ed73aedb6c2bf65ec92adebb # v3.0.0
@@ -188,7 +219,11 @@ jobs:
       # all currently have public read access.
       - name: Fetch inbound artifacts
         run: |
-          python build_tools/artifact_manager.py fetch \
+          PROBE=()
+          if [[ "${ENABLE_RESOURCE_PROBE}" == "true" ]]; then
+            PROBE=(python build_tools/windows_resource_probe.py --phase windows-fetch-inbound-artifacts --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" --storage-path "${BUILD_DIR}" --)
+          fi
+          "${PROBE[@]}" python build_tools/artifact_manager.py fetch \
             --run-id="${{ github.run_id }}" \
             --stage="${STAGE_NAME}" \
             --amdgpu-families="${{ inputs.amdgpu_family }}" \
@@ -201,7 +236,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh auth setup-git --hostname github.com
-          python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
+          PROBE=()
+          if [[ "${ENABLE_RESOURCE_PROBE}" == "true" ]]; then
+            PROBE=(python build_tools/windows_resource_probe.py --phase windows-fetch-sources --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" --storage-path "${BUILD_DIR}" --)
+          fi
+          "${PROBE[@]}" python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
 
       - name: Get stage configuration
         id: stage_config
@@ -215,11 +254,23 @@ jobs:
 
       - name: Install stage python deps
         if: ${{ steps.stage_config.outputs.pip_install_cmd }}
-        run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
+        env:
+          STAGE_PIP_INSTALL_CMD: ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: |
+          PROBE=()
+          if [[ "${ENABLE_RESOURCE_PROBE}" == "true" ]]; then
+            PROBE=(python build_tools/windows_resource_probe.py --phase windows-stage-python-deps --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" --storage-path "${BUILD_DIR}" --)
+          fi
+          read -ra PIP_ARGS <<< "${STAGE_PIP_INSTALL_CMD}"
+          "${PROBE[@]}" pip install "${PIP_ARGS[@]}"
 
       - name: Configure
         run: |
-          cmake -B "${BUILD_DIR}" -S . -GNinja \
+          PROBE=()
+          if [[ "${ENABLE_RESOURCE_PROBE}" == "true" ]]; then
+            PROBE=(python build_tools/windows_resource_probe.py --phase windows-configure --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" --storage-path "${BUILD_DIR}" --)
+          fi
+          "${PROBE[@]}" cmake -B "${BUILD_DIR}" -S . -GNinja \
             --preset=${{ inputs.build_variant_cmake_preset }} \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -230,14 +281,30 @@ jobs:
 
       - name: Build stage
         run: |
-          cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
+          PROBE=()
+          if [[ "${ENABLE_RESOURCE_PROBE}" == "true" ]]; then
+            PROBE=(
+              python build_tools/windows_resource_probe.py
+              --phase "windows-stage-${STAGE_NAME}"
+              --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}"
+              --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}"
+              --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}"
+              --storage-path "${BUILD_DIR}"
+              --
+            )
+          fi
+          "${PROBE[@]}" cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 
       - name: Run build tests (Comgr, blocking)
         if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' }}
         env:
           TEATIME_FORCE_INTERACTIVE: 1
         run: |
-          cmake --build "${BUILD_DIR}" --target therock-build-tests -- -k 0
+          PROBE=()
+          if [[ "${ENABLE_RESOURCE_PROBE}" == "true" ]]; then
+            PROBE=(python build_tools/windows_resource_probe.py --phase windows-build-tests --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" --storage-path "${BUILD_DIR}" --)
+          fi
+          "${PROBE[@]}" cmake --build "${BUILD_DIR}" --target therock-build-tests -- -k 0
 
       - name: Report
         if: ${{ !cancelled() }}
@@ -249,7 +316,26 @@ jobs:
 
       - name: Test Packaging
         run: |
-          ctest --test-dir ${BUILD_DIR} --output-on-failure
+          PROBE=()
+          if [[ "${ENABLE_RESOURCE_PROBE}" == "true" ]]; then
+            PROBE=(python build_tools/windows_resource_probe.py --phase windows-packaging-tests --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" --storage-path "${BUILD_DIR}" --)
+          fi
+          "${PROBE[@]}" ctest --test-dir ${BUILD_DIR} --output-on-failure
+
+      - name: Generate canary artifact manifest
+        if: ${{ inputs.resource_probe_canary_mode }}
+        run: |
+          python build_tools/artifact_equivalence_manifest.py \
+            --artifact-dir "${BUILD_DIR}/artifacts" \
+            --output "${RESOURCE_PROBE_OUTPUT_DIR}/artifact-manifest.json"
+
+      - name: Upload canary artifact manifest
+        if: ${{ always() && inputs.resource_probe_canary_mode }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-canary-manifest-stage-${{ inputs.stage_name }}-${{ inputs.amdgpu_family || 'generic' }}-${{ github.run_attempt }}
+          path: B:\resource-probe\artifact-manifest.json
+          if-no-files-found: error
 
       - name: Configure AWS credentials for artifact uploads
         if: ${{ always() }}
@@ -264,7 +350,11 @@ jobs:
       #     if the workflow failed or was cancelled before the build even started though.
       - name: Push stage artifacts
         run: |
-          python build_tools/artifact_manager.py push \
+          PROBE=()
+          if [[ "${ENABLE_RESOURCE_PROBE}" == "true" ]]; then
+            PROBE=(python build_tools/windows_resource_probe.py --phase windows-artifact-push --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" --storage-path "${BUILD_DIR}" --)
+          fi
+          "${PROBE[@]}" python build_tools/artifact_manager.py push \
             --run-id ${{ github.run_id }} \
             --stage="${STAGE_NAME}" \
             --build-dir="${BUILD_DIR}"
@@ -272,11 +362,23 @@ jobs:
       - name: Upload stage logs
         if: ${{ always() }}
         run: |
-          python build_tools/github_actions/post_stage_upload.py \
+          PROBE=()
+          if [[ "${ENABLE_RESOURCE_PROBE}" == "true" ]]; then
+            PROBE=(python build_tools/windows_resource_probe.py --phase windows-log-upload --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" --storage-path "${BUILD_DIR}" --)
+          fi
+          "${PROBE[@]}" python build_tools/github_actions/post_stage_upload.py \
             --run-id=${{ github.run_id }} \
             --stage="${STAGE_NAME}" \
             --build-dir="${BUILD_DIR}" \
             --amdgpu-family="${AMDGPU_FAMILIES}"
+
+      - name: Upload resource telemetry
+        if: ${{ always() && inputs.enable_resource_probe }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-resource-probe-${{ inputs.stage_name }}-${{ inputs.amdgpu_family || 'generic' }}-${{ github.run_attempt }}
+          path: B:\resource-probe
+          if-no-files-found: warn
 
       - name: Capture job summary
         id: summary
@@ -285,7 +387,7 @@ jobs:
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ always() && !inputs.resource_probe_canary_mode && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed

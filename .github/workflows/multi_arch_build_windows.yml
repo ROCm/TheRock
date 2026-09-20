@@ -75,13 +75,28 @@ on:
       quartz_tracking_id:
         type: string
         default: ""
+      windows_resource_probe_targets:
+        description: "JSON array of source-declared Windows stage/package selectors. Empty disables telemetry."
+        type: string
+        default: "[]"
+      windows_resource_probe_interval_seconds:
+        description: "Windows resource probe sampling interval in seconds."
+        type: number
+        default: 5
+      resource_probe_detail_profile:
+        description: "Telemetry detail: basic, process, or diagnostic."
+        type: string
+        default: process
+      resource_probe_canary_mode:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   notify_quartz_start:
-    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    if: ${{ !inputs.resource_probe_canary_mode && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     name: "Quartz - started - build ROCm"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -116,6 +131,10 @@ jobs:
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      enable_resource_probe: ${{ contains(fromJSON(inputs.windows_resource_probe_targets || '[]'), 'compiler-runtime') }}
+      resource_probe_interval_seconds: ${{ inputs.windows_resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_canary_mode: ${{ inputs.resource_probe_canary_mode }}
     permissions:
       contents: read
       id-token: write
@@ -141,6 +160,10 @@ jobs:
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      enable_resource_probe: ${{ contains(fromJSON(inputs.windows_resource_probe_targets || '[]'), 'runtime-tests') }}
+      resource_probe_interval_seconds: ${{ inputs.windows_resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_canary_mode: ${{ inputs.resource_probe_canary_mode }}
     permissions:
       contents: read
       id-token: write
@@ -177,6 +200,10 @@ jobs:
       external_repo_config: ${{ inputs.external_repo_config }}
       rebuild_artifacts: ${{ inputs.rebuild_artifacts }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      enable_resource_probe: ${{ contains(fromJSON(inputs.windows_resource_probe_targets || '[]'), 'math-libs:*') || contains(fromJSON(inputs.windows_resource_probe_targets || '[]'), format('math-libs:{0}', matrix.family_info.amdgpu_family)) }}
+      resource_probe_interval_seconds: ${{ inputs.windows_resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_canary_mode: ${{ inputs.resource_probe_canary_mode }}
     permissions:
       contents: read
       id-token: write
@@ -202,6 +229,10 @@ jobs:
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      enable_resource_probe: ${{ contains(fromJSON(inputs.windows_resource_probe_targets || '[]'), 'debug-tools') }}
+      resource_probe_interval_seconds: ${{ inputs.windows_resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_canary_mode: ${{ inputs.resource_probe_canary_mode }}
     permissions:
       contents: read
       id-token: write
@@ -230,6 +261,10 @@ jobs:
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      enable_resource_probe: ${{ contains(fromJSON(inputs.windows_resource_probe_targets || '[]'), 'media-libs') }}
+      resource_probe_interval_seconds: ${{ inputs.windows_resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_canary_mode: ${{ inputs.resource_probe_canary_mode }}
     permissions:
       contents: read
       id-token: write
@@ -250,7 +285,7 @@ jobs:
         run: echo '${{ toJSON(needs) }}'
 
   notify_quartz_completed:
-    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    if: ${{ always() && !inputs.resource_probe_canary_mode && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [compiler-runtime, runtime-tests, math-libs, debug-tools, media-libs]
     name: "Quartz - completed - build ROCm"
     runs-on: ubuntu-24.04

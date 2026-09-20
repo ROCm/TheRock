@@ -50,6 +50,22 @@ on:
           set it manually.
         type: string
         default: ""
+      enable_resource_probe:
+        description: "Collect privacy-safe resource telemetry for native packaging phases."
+        type: boolean
+        default: false
+      resource_probe_interval_seconds:
+        description: "Resource probe sampling interval in seconds."
+        type: number
+        default: 5
+      resource_probe_detail_profile:
+        description: "Probe detail profile: basic, process, or diagnostic."
+        type: string
+        default: basic
+      resource_probe_phases:
+        description: "JSON array of exact allowlisted packaging phases to probe."
+        type: string
+        default: '["dependency-install","package-fetch","package-build","package-test","package-repository-build","package-upload"]'
     outputs:
       package_repository_url:
         description: "Public repository URL for package installation"
@@ -81,6 +97,11 @@ jobs:
       ARTIFACTS_DIR: output/artifacts
       PACKAGE_DIST_DIR: output/packages
       RELEASE_TYPE: ${{ inputs.release_type }}
+      ENABLE_RESOURCE_PROBE: ${{ inputs.enable_resource_probe }}
+      RESOURCE_PROBE_INTERVAL_SECONDS: ${{ inputs.resource_probe_interval_seconds }}
+      RESOURCE_PROBE_DETAIL_PROFILE: ${{ inputs.resource_probe_detail_profile }}
+      RESOURCE_PROBE_PHASES: ${{ inputs.resource_probe_phases }}
+      RESOURCE_PROBE_OUTPUT_DIR: ${{ github.workspace }}/resource-probe
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
@@ -106,17 +127,28 @@ jobs:
 
       - name: Install Python requirements
         run: |
-          pip install pyelftools boto3 jinja2 pyzstd
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase dependency-install \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}/python" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- pip install pyelftools boto3 jinja2 pyzstd
 
       - name: Install System requirements
         run: |
-          # Install the needed tools for creating rpm / deb packages
-          # Also install tools for creating repo files
-          sudo apt-get update
-          sudo apt-get install -y llvm-20
-          sudo apt-get install -y rpm debhelper-compat build-essential
-          sudo apt-get install -y dpkg-dev createrepo-c
-          sudo apt-get install -y patchelf
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase dependency-install \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}/system" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- bash -euo pipefail -c \
+            'sudo apt-get update && sudo apt-get install -y llvm-20 rpm debhelper-compat build-essential dpkg-dev createrepo-c patchelf'
 
       - name: Fetch Artifacts for all GPU families
         run: |
@@ -124,7 +156,15 @@ jobs:
           # NOTE: artifact_manager.py appends /artifacts to --output-dir in non-flatten mode,
           # so we pass OUTPUT_DIR (parent) to have artifacts land in $OUTPUT_DIR/artifacts
           # which matches the ARTIFACTS_DIR environment variable
-          python ./build_tools/artifact_manager.py fetch \
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase package-fetch \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- python ./build_tools/artifact_manager.py fetch \
             --run-id="${{ env.ARTIFACT_RUN_ID }}" \
             --stage=all \
             --amdgpu-families="${{ env.DIST_AMDGPU_FAMILIES }}" \
@@ -137,7 +177,15 @@ jobs:
           # GFX architectures are auto-detected from the artifact directory
           # (populated by --expand-family-to-targets in the fetch step).
           # KPACK_SPLIT_ARTIFACTS is auto-detected from therock_manifest.json.
-          python ./build_tools/packaging/linux/build_package.py \
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase package-build \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- python ./build_tools/packaging/linux/build_package.py \
             --dest-dir "${{ env.PACKAGE_DIST_DIR }}" \
             --rocm-version "${{ inputs.rocm_version }}" \
             --artifacts-dir "${{ env.ARTIFACTS_DIR }}" \
@@ -148,14 +196,30 @@ jobs:
       - name: Simulated install Test
         id: test-packages
         run: |
-          python ./build_tools/packaging/linux/native_linux_package_install_test.py \
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase package-test \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- python ./build_tools/packaging/linux/native_linux_package_install_test.py \
             --test-type simulate \
             --packages-dir "${{ env.PACKAGE_DIST_DIR }}" \
             --pkg-type ${{ inputs.native_package_type }}
 
       - name: Build Package repository
         run: |
-          python ./build_tools/packaging/linux/build_package_repo.py \
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase package-repository-build \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- python ./build_tools/packaging/linux/build_package_repo.py \
             --pkg-type "${{ inputs.native_package_type }}" \
             --package-dir "${{ env.PACKAGE_DIST_DIR }}" \
             --release-type "${{ env.RELEASE_TYPE }}"
@@ -168,10 +232,27 @@ jobs:
       - name: Upload Package repo to S3
         id: upload-packages
         run: |
-          python ./build_tools/packaging/linux/upload_package_repo.py \
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase package-upload \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- python ./build_tools/packaging/linux/upload_package_repo.py \
             --pkg-type "${{ inputs.native_package_type }}" \
             --run-id "${{ env.ARTIFACT_RUN_ID }}" \
             --package-dir "${{ env.PACKAGE_DIST_DIR }}"
+
+      - name: Upload resource telemetry
+        if: ${{ always() && inputs.enable_resource_probe }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: resource-probe-native-${{ inputs.native_package_type }}-${{ github.run_attempt }}
+          path: ${{ env.RESOURCE_PROBE_OUTPUT_DIR }}
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Capture job summary
         id: summary

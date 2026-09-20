@@ -38,13 +38,33 @@ on:
           set it manually.
         type: string
         default: ""
+      windows_resource_probe_targets:
+        description: "JSON array of Windows release selectors. Empty disables telemetry."
+        type: string
+        default: "[]"
+      windows_resource_probe_interval_seconds:
+        description: "Resource probe sampling interval in seconds."
+        type: number
+        default: 5
+      resource_probe_detail_profile:
+        description: "Telemetry detail: basic, process, or diagnostic."
+        type: string
+        default: process
+      resource_probe_phases:
+        description: "JSON array of allowlisted Linux-hosted release phases to probe."
+        type: string
+        default: '["dependency-install","package-build","package-upload","publish-release-buckets"]'
+      resource_probe_canary_mode:
+        description: "Safety mode: publication is dry-run and downstream dispatches are disabled."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   notify_quartz_start:
-    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    if: ${{ !inputs.resource_probe_canary_mode && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     name: "Quartz - started - release Windows"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -70,12 +90,16 @@ jobs:
       build_variant_label: ${{ fromJSON(inputs.build_config).build_variant_label }}
       build_variant_cmake_preset: ${{ fromJSON(inputs.build_config).build_variant_cmake_preset }}
       build_variant_suffix: ${{ fromJSON(inputs.build_config).build_variant_suffix }}
-      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
+      build_runs_on: ${{ inputs.resource_probe_canary_mode && 'azure-windows-scale-rocm' || fromJSON(inputs.build_config).build_runs_on }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      windows_resource_probe_targets: ${{ inputs.windows_resource_probe_targets }}
+      windows_resource_probe_interval_seconds: ${{ inputs.windows_resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_canary_mode: ${{ inputs.resource_probe_canary_mode }}
     permissions:
       contents: read
       id-token: write
@@ -93,6 +117,11 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      enable_resource_probe: ${{ contains(fromJSON(inputs.windows_resource_probe_targets || '[]'), 'release-tarballs:windows') }}
+      resource_probe_interval_seconds: ${{ inputs.windows_resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_phases: ${{ inputs.resource_probe_phases }}
+      resource_probe_canary_mode: ${{ inputs.resource_probe_canary_mode }}
     permissions:
       contents: read
       id-token: write
@@ -113,6 +142,10 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      windows_resource_probe_targets: ${{ inputs.windows_resource_probe_targets }}
+      windows_resource_probe_interval_seconds: ${{ inputs.windows_resource_probe_interval_seconds }}
+      resource_probe_detail_profile: ${{ inputs.resource_probe_detail_profile }}
+      resource_probe_canary_mode: ${{ inputs.resource_probe_canary_mode }}
     permissions:
       contents: read
       id-token: write
@@ -123,6 +156,13 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
+    env:
+      ENABLE_RESOURCE_PROBE: ${{ contains(fromJSON(inputs.windows_resource_probe_targets || '[]'), 'release-publish:windows') }}
+      RESOURCE_PROBE_INTERVAL_SECONDS: ${{ inputs.windows_resource_probe_interval_seconds }}
+      RESOURCE_PROBE_DETAIL_PROFILE: ${{ inputs.resource_probe_detail_profile }}
+      RESOURCE_PROBE_PHASES: ${{ inputs.resource_probe_phases }}
+      RESOURCE_PROBE_OUTPUT_DIR: ${{ github.workspace }}/resource-probe
+      PUBLISH_DRY_RUN: ${{ inputs.resource_probe_canary_mode && '--dry-run' || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -136,7 +176,16 @@ jobs:
           python-version: "3.12"
 
       - name: Install Python requirements
-        run: pip install -r requirements.txt
+        run: |
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase dependency-install \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- pip install -r requirements.txt
 
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_product_publication_credentials
@@ -146,17 +195,34 @@ jobs:
 
       - name: Copy to release buckets
         run: |
-          python build_tools/github_actions/publish_rocm_to_release_buckets.py \
+          python build_tools/run_resource_probe_phase.py \
+            --enabled "${ENABLE_RESOURCE_PROBE}" \
+            --selected-phases "${RESOURCE_PROBE_PHASES}" \
+            --phase publish-release-buckets \
+            --interval-seconds "${RESOURCE_PROBE_INTERVAL_SECONDS}" \
+            --detail-profile "${RESOURCE_PROBE_DETAIL_PROFILE}" \
+            --output-dir "${RESOURCE_PROBE_OUTPUT_DIR}" \
+            --storage-path "${GITHUB_WORKSPACE}" \
+            -- python build_tools/github_actions/publish_rocm_to_release_buckets.py \
             --run-id="${{ github.run_id }}" \
             --platform=windows \
             --release-type="${{ inputs.release_type }}" \
             --kpack-split="${{ needs.build_python_packages.outputs.kpack_split }}" \
-            --structured
+            --structured \
+            ${PUBLISH_DRY_RUN}
+
+      - name: Upload publication resource telemetry
+        if: ${{ always() && contains(fromJSON(inputs.windows_resource_probe_targets || '[]'), 'release-publish:windows') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: resource-probe-windows-publication-${{ github.run_attempt }}
+          path: ${{ github.workspace }}/resource-probe
+          if-no-files-found: warn
 
   trigger_test_artifacts_per_family:
     needs: [build_artifacts]
     name: Trigger Test Artifacts (${{ matrix.family_info.amdgpu_family }})
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && !inputs.resource_probe_canary_mode }}
     runs-on: ubuntu-24.04
     permissions:
       actions: write
@@ -191,7 +257,7 @@ jobs:
   trigger_release_pytorch_wheels:
     needs: [build_python_packages, publish_to_release_buckets]
     name: Trigger Release PyTorch Wheels
-    if: ${{ inputs.build_pytorch != false && fromJSON(inputs.build_config).build_pytorch == true }}
+    if: ${{ !inputs.resource_probe_canary_mode && inputs.build_pytorch != false && fromJSON(inputs.build_config).build_pytorch == true }}
     runs-on: ubuntu-24.04
     permissions:
       actions: write
@@ -212,7 +278,7 @@ jobs:
             }
 
   notify_quartz_completed:
-    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    if: ${{ always() && !inputs.resource_probe_canary_mode && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [build_artifacts, build_tarballs, build_python_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_release_pytorch_wheels]
     name: "Quartz - completed - release Windows"
     runs-on: ubuntu-24.04
