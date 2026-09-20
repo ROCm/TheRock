@@ -46,6 +46,46 @@ COFF_MAGIC = {
     b"\xaa\x64",  # IMAGE_FILE_MACHINE_ARM64
 }
 
+# A bigobj/anonymous object starts with IMAGE_FILE_MACHINE_UNKNOWN followed by
+# 0xFFFF, so a run of zeros shares only its first two bytes. Checking two bytes
+# alone therefore accepts an all-zero file as a valid object, which matters
+# because that is precisely what a bad read produces: lld-link accepts such an
+# object without complaint and silently omits everything it should have
+# defined. Verified against lld-link directly -- an all-zero object of the
+# original size links with exit 0 and drops the exports.
+ANON_OBJECT_SIG2 = b"\xff\xff"
+
+
+def classify_object(path: Path, size: int) -> str | None:
+    """Returns a defect description for an object file, or None if it looks sound.
+
+    Reads only the header plus enough of the body to tell an all-zero file
+    apart from a merely unusual one.
+    """
+    try:
+        with path.open("rb") as handle:
+            head = handle.read(4)
+            probe = handle.read(4096)
+    except OSError as exc:
+        return f"UNREADABLE ({exc.__class__.__name__})"
+
+    magic = head[:2]
+    if magic not in COFF_MAGIC:
+        return f"NOT-COFF (size={size}, magic={magic.hex()})"
+
+    # An all-zero header is only legitimate for an anonymous object, which must
+    # carry 0xFFFF next. Without that, this is a zero-filled file wearing a
+    # valid-looking magic.
+    if magic == b"\x00\x00" and head[2:4] != ANON_OBJECT_SIG2:
+        if not any(head) and not any(probe):
+            return (
+                f"ALL-ZEROS (size={size}) -- links cleanly but defines nothing; "
+                "this is the signature of a bad read, not a bad compile"
+            )
+        return f"BAD-ANON-HEADER (size={size}, head={head.hex()})"
+    return None
+
+
 # `lld-link: error: undefined symbol: __declspec(dllimport) rocsolver_csytrs`
 # The build log prefixes each line with an elapsed-time stamp, so this is
 # deliberately not anchored to the start of the line.
@@ -386,14 +426,11 @@ def audit(build_dir: Path, log_dir: Path) -> int:
             if size == 0:
                 suspects.append(f"EMPTY    {entry}")
                 continue
-            try:
-                with path.open("rb") as handle:
-                    magic = handle.read(2)
-            except OSError as exc:
-                suspects.append(f"UNREADABLE {entry}  ({exc.__class__.__name__})")
-                continue
-            if magic not in COFF_MAGIC:
-                suspects.append(f"NOT-COFF {entry}  (size={size}, magic={magic.hex()})")
+            defect = classify_object(path, size)
+            if defect:
+                suspects.append(
+                    f"{defect.split(' ', 1)[0]:<8} {entry}  {defect.split(' ', 1)[1] if ' ' in defect else ''}"
+                )
         if not objects:
             continue
 
