@@ -212,6 +212,15 @@ option(THEROCK_COMPILER_RT_DEBUG "Enables compiler-rt debug build" OFF)
 option(THEROCK_QUIET_INSTALL "Enable quiet install logging (install logs only go to the logfile)" ON)
 option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider, performing strict package checks" ON)
 
+# The Windows CI runners intermittently fail a link with every symbol of one
+# translation unit reported undefined, even though the object is correct on
+# disk and a re-link of the identical inputs succeeds. Retry that signature once
+# there; a genuine undefined symbol reproduces and still fails the build.
+option(THEROCK_RETRY_TRANSIENT_LINK_FAILURES
+  "Retry a sub-project build once if it fails with undefined symbols at link time"
+  "${WIN32}"
+)
+
 ################################################################################
 # Feature selection
 # Each feature added via therock_add_feature produces a boolean cache variable
