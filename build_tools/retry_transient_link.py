@@ -112,6 +112,15 @@ def main(argv: Sequence[str]) -> int:
     label = args.label or "<unlabeled>"
     tail: collections.deque[str] = collections.deque(maxlen=TAIL_LINES)
 
+    # This wrapper sits in front of every sub-project build, so it must never be
+    # the thing that breaks one. Build output routinely contains characters the
+    # active Windows console codepage cannot encode, which would otherwise raise
+    # UnicodeEncodeError mid-stream and fail a build that was going fine.
+    try:
+        sys.stdout.reconfigure(errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
     for attempt in range(args.max_retries + 1):
         returncode = run_once(args.command, tail)
         if returncode == 0:
