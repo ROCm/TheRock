@@ -285,37 +285,34 @@ to supply executable code. Document that assumption beside a local suppression:
     cmake -B build ${{ inputs.cmake_args }}
 ```
 
-#### Security - Limit secrets at workflow entry points
+#### Security - Limit usage and forwarding of secrets
 
-Workflows that execute code with limited trust, such as pull requests, should
-receive only the secrets they need. `secrets: inherit` forwards every secret
-available to the caller, potentially exposing unrelated credentials to child
-workflows. At `pull_request` entry points, forward secrets explicitly and omit
-`secrets:` when none are needed. This limits forwarding; it does not make PR
-code safe to run with the secrets you do provide.
+Minimize reliance on secrets for two reasons:
 
-Explicit forwarding at every layer gives tighter control, but repeats secret
-mappings and declarations throughout nested workflows. For trusted `push`,
-`workflow_dispatch`, and `schedule` runs, either explicit forwarding or inheritance
-is acceptable. Internal workflows may also inherit the set restricted by their
-PR caller. Document intentional inheritance briefly at the top of the workflow
-and suppress individual calls. Consider the code and refs a run executes when
-assessing trust, including workflows with multiple entry paths.
+- **Contributor compatibility:** `pull_request` runs from forks do not normally
+  receive repository or organization secrets. Keep core build and test paths
+  working without secrets so both internal _and external_ contributors can use
+  workflows.
+- **Security:** Give workflows only the credentials and permissions they need
+  to reduce the attack surface and impact of compromised code.
 
-Declare secrets in `on.workflow_call.secrets` when callers pass them by name.
-Inherited secrets need no declarations; declarations do not filter inheritance.
-`GITHUB_TOKEN` remains available without explicit forwarding.
-See [secrets-inherit](https://docs.zizmor.sh/audits/#secrets-inherit) and
-[GitHub's forwarding rules](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows#passing-secrets-to-nested-workflows).
+To address zizmor's [secrets-inherit](https://docs.zizmor.sh/audits/#secrets-inherit)
+findings:
+
+- **If no secrets are needed:** Omit `secrets:` lines and add a short comment
+  highlighting it, as below.
+- **If specific secrets are needed:** Forward them by name and declare them in the
+  callee's `on.workflow_call.secrets`.
+- **Intentional inheritance:** Higher-trust entry points may use
+  `secrets: inherit` to avoid repeating secret mappings across nested workflows.
+  Add a short comment explaining the trust level and suppress the finding with
+  `# zizmor: ignore[secrets-inherit]`.
 
 ✅ **Preferred:**
 
-The PR entry point needs no secrets, so it omits `secrets:` and documents that
-decision. The shared workflow inherits only the set received from its caller.
-Trusted manual runs of the shared workflow may inherit all available secrets.
+When the called workflow needs no secrets, omit forwarding and document why.
 
 ```yaml
-# .github/workflows/ci.yml
 on:
   pull_request:
 
@@ -325,26 +322,78 @@ jobs:
     # Note: not using 'secrets: inherit' here; no secrets are needed.
 ```
 
+✅ **Preferred:**
+
+When a workflow needs secrets, explicitly forward them and declare them in the
+callee's `on.workflow_call.secrets`.
+Across a workflow chain, each call must repeat the mappings and each callee must
+repeat the declarations.
+
+> [!TIP]
+> Using `secrets: inherit` can avoid this duplication but it should be reserved
+> for higher-trust workflows (see below).
+
 ```yaml
-# .github/workflows/test.yml
-# Inherit caller-provided secrets; PR entry points restrict the forwarded set.
+# .github/workflows/release.yml (caller)
 on:
-  workflow_call:
   workflow_dispatch:
 
 jobs:
-  component:
-    uses: ./.github/workflows/test_component.yml
+  notify:
+    uses: ./.github/workflows/notify.yml
+    secrets:
+      GH_APP_HAULY_CID: ${{ secrets.GH_APP_HAULY_CID }}
+      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+```
+
+```yaml
+# .github/workflows/notify.yml (callee)
+on:
+  workflow_call:
+    secrets:
+      GH_APP_HAULY_CID:
+        required: true
+      GH_APP_HAULY_PRIVATE_KEY:
+        required: true
+
+jobs:
+  notify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Notify Quartz
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+          run_phase: started
+          reporting_workflow: notify.yml
+```
+
+🟡 **Acceptable with tradeoffs:**
+
+Higher-trust entry points may inherit secrets to avoid repeating mappings
+across nested workflows.
+
+```yaml
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  build:
+    # Higher-trust entry points: triggered by maintainers or automation.
+    uses: ./.github/workflows/build.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
 ```
 
 ❌ **Avoid:**
 
-This PR entry point forwards all available secrets, including those its child
-does not need.
+Do not forward all available secrets to a workflow that does not need them.
 
 ```yaml
-# .github/workflows/ci.yml
 on:
   pull_request:
 
