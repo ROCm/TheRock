@@ -201,7 +201,6 @@ amdgpu_family_info_matrix dictionary fields:
 - test-runs-on-multi-gpu: (optional) GitHub runner label for multi-GPU tests for this architecture
 - test-runs-on-multi-gpu-labels: (optional) List of runner label configs for multi-GPU load balancing.
     Same format as test-runs-on-labels.
-- benchmark-runs-on: (optional) GitHub runner label for benchmarks for this architecture
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
 - family: (required) AMD GPU family name, used for test selection and artifact fetching
 - fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])
@@ -234,8 +233,6 @@ amdgpu_family_info_matrix_presubmit = {
             "test-runs-on-multi-gpu-labels": [
                 {"label": "linux-gfx942-8gpu-ossci-rocm", "count": 10},
             ],
-            # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
-            "benchmark-runs-on": "linux-gfx942-8gpu-ossci-rocm",
             "family": "gfx94X-dcgpu",
             # Individual GPU target(s) on the test runner, for fetching split artifacts.
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
@@ -281,8 +278,6 @@ amdgpu_family_info_matrix_presubmit = {
         },
         "windows": {
             "test-runs-on": "windows-gfx1151-gpu-rocm",
-            # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
-            "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
             "fetch-gfx-targets": ["gfx1151"],
             "build_variants": ["release"],
@@ -564,7 +559,6 @@ def _extract_runner_labels_from_v1(external_config: dict) -> dict:
         "test-runs-on-multi-gpu",
         "test-runs-on-multi-gpu-labels",
         "test-runs-on-kernel",
-        "benchmark-runs-on",
     }
 
     for _trigger, families in gpu_families.items():
