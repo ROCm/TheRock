@@ -130,6 +130,8 @@ jobs:
       # See https://github.com/ROCm/TheRock/issues/7075.
       VENV_DIR: ${{ contains(inputs.test_runs_on, 'windows') && format('{0}/.venv with spaces', github.workspace) || format('{0}/.venv', github.workspace) }}
       PROFILER_VENV_DIR: ${{ github.workspace }}/.venv-profiler
+      ROCSHMEM4PY_VENV_DIR: ${{ github.workspace }}/.venv-rocshmem4py
+      ROCSHMEM4PY_VALIDATION_SCRIPT: ${{ github.workspace }}/.rocshmem4py-validation/build_tools/github_actions/validate_rocshmem4py_install.py
 
     steps:
       - name: Checkout
@@ -137,6 +139,22 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
+
+      # Use the workflow revision instead of the caller-selected repository/ref.
+      - name: Checkout rocshmem4py validation helper
+        if: ${{ runner.os == 'Linux' && inputs.package_find_links_url != '' }}
+        timeout-minutes: 15
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          path: .rocshmem4py-validation
+          persist-credentials: false
+          sparse-checkout: |
+            build_tools/github_actions/determine_version.py
+            build_tools/github_actions/github_actions_api.py
+            build_tools/github_actions/validate_rocshmem4py_install.py
+          sparse-checkout-cone-mode: false
 
       # actions/setup-python only has prebuilt binaries for Ubuntu
       - name: Set up Python
@@ -179,6 +197,39 @@ jobs:
         timeout-minutes: 5
         run: |
           rocm-sdk test
+
+      - name: Install rocshmem4py from packages
+        id: install_rocshmem4py
+        if: >-
+          ${{
+            !cancelled()
+            && runner.os == 'Linux'
+            && steps.install_libraries.outcome == 'success'
+            && inputs.package_find_links_url != ''
+          }}
+        env:
+          PACKAGE_FIND_LINKS_URL: ${{ inputs.package_find_links_url }}
+          PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
+          ROCM_VERSION: ${{ inputs.rocm_version }}
+        run: |
+          python "${ROCSHMEM4PY_VALIDATION_SCRIPT}" \
+            install \
+            --venv-dir="${ROCSHMEM4PY_VENV_DIR}" \
+            --rocm-version="${ROCM_VERSION}" \
+            --index-url="${PACKAGE_INDEX_URL}" \
+            --find-links="${PACKAGE_FIND_LINKS_URL}"
+
+      - name: Test installed rocshmem4py wheel
+        if: ${{ !cancelled() && steps.install_rocshmem4py.outcome == 'success' }}
+        timeout-minutes: 5
+        env:
+          ROCSHMEM_HEAP_SIZE: 268435456
+          ROCM_VERSION: ${{ inputs.rocm_version }}
+        run: |
+          python "${ROCSHMEM4PY_VALIDATION_SCRIPT}" \
+            validate \
+            --venv-dir="${ROCSHMEM4PY_VENV_DIR}" \
+            --rocm-version="${ROCM_VERSION}"
 
       - name: Install rocm[libraries,devel]
         id: install_devel
