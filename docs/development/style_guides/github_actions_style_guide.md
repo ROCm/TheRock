@@ -287,50 +287,69 @@ to supply executable code. Document that assumption beside a local suppression:
 
 #### Security - Limit secrets at workflow entry points
 
+Workflows that execute code with limited trust, such as pull requests, should
+receive only the secrets they need. `secrets: inherit` forwards every secret
+available to the caller, potentially exposing unrelated credentials to child
+workflows. At `pull_request` entry points, forward secrets explicitly and omit
+`secrets:` when none are needed. This limits forwarding; it does not make PR
+code safe to run with the secrets you do provide.
+
+Explicit forwarding at every layer gives tighter control, but repeats secret
+mappings and declarations throughout nested workflows. For trusted `push`,
+`workflow_dispatch`, and `schedule` runs, either explicit forwarding or inheritance
+is acceptable. Internal workflows may also inherit the set restricted by their
+PR caller. Document intentional inheritance briefly at the top of the workflow
+and suppress individual calls. Consider the code and refs a run executes when
+assessing trust, including workflows with multiple entry paths.
+
+Declare secrets in `on.workflow_call.secrets` when callers pass them by name.
+Inherited secrets need no declarations; declarations do not filter inheritance.
+`GITHUB_TOKEN` remains available without explicit forwarding.
 See [secrets-inherit](https://docs.zizmor.sh/audits/#secrets-inherit) and
 [GitHub's forwarding rules](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows#passing-secrets-to-nested-workflows).
 
-- **Limited trust `pull_request` events:** Forward only the secrets the child
-  needs, and declare them under its `on.workflow_call.secrets`.
-- **Trusted `push`, `workflow_dispatch`, or `schedule` events:** Use explicit
-  forwarding or `secrets: inherit`. Internal workflows may inherit the set
-  passed by their caller and inherited secrets need no declarations.
-- **No secrets needed:** Omit `secrets:` (`GITHUB_TOKEN` is always available).
+✅ **Preferred:**
 
-Inheritance reduces repeated declarations and mappings, but gives children all
-forwarded secrets. Document that choice at the top of the workflow and suppress
-individual calls. For workflows with multiple entry paths, restrict secrets at
-PR callers even if trusted callers inherit them.
+The PR entry point needs no secrets, so it omits `secrets:` and documents that
+decision. The shared workflow inherits only the set received from its caller.
+Trusted manual runs of the shared workflow may inherit all available secrets.
 
 ```yaml
-# ci.yml
+# .github/workflows/ci.yml
 on:
-  # This is a limited trust trigger so always forward only what children need.
   pull_request:
+
 jobs:
   test:
     uses: ./.github/workflows/test.yml
-    secrets:
-      BENCHMARK_DB_URL: ${{ secrets.BENCHMARK_DB_URL }}
+    # Note: not using 'secrets: inherit' here; no secrets are needed.
 ```
 
 ```yaml
-# test.yml
+# .github/workflows/test.yml
+# Inherit caller-provided secrets; PR entry points restrict the forwarded set.
 on:
-  # Callers may or may not trust us with secrets, add explicit entries as needed.
   workflow_call:
-    secrets:
-      # Needed for the explicit `uses:` with `secrets:` above
-      BENCHMARK_DB_URL:
-        required: false
-  # Trusted manual runs may inherit all available secrets.
   workflow_dispatch:
+
 jobs:
   component:
     uses: ./.github/workflows/test_component.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
 ```
 
-For example, [rockrel](https://github.com/ROCm/rockrel) forwards Quartz credentials
-through release workflows but TheRock's `pull_request` entry points do not need
-them.
+❌ **Avoid:**
+
+This PR entry point forwards all available secrets, including those its child
+does not need.
+
+```yaml
+# .github/workflows/ci.yml
+on:
+  pull_request:
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+    secrets: inherit
+```
