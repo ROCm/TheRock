@@ -20,12 +20,17 @@ import install_jax_wheels as wheels
 
 INDEX_URL = "https://rocm.nightlies.amd.com/whl-multi-arch/"
 FIND_LINKS_URL = "https://therock-artifacts.s3.amazonaws.com/12345-linux/index.html"
+JAX_INDEX_URL = (
+    "https://us-python.pkg.dev/ml-oss-artifacts-published/"
+    "jax-public-nightly-artifacts-registry/simple/"
+)
 
 
 def wheel_args(**overrides) -> argparse.Namespace:
     values = dict(
         index_url=INDEX_URL,
         find_links="",
+        jax_index_url="",
         plugin_package="jax_rocm10_plugin",
         pjrt_package="jax_rocm10_pjrt",
         plugin_version="0.11.0",
@@ -65,6 +70,27 @@ class InstallJaxWheelsTest(unittest.TestCase):
         # jax itself is never built here, so it always comes from PyPI.
         self.assertNotIn("--index-url", commands[2])
         self.assertIn("jax==0.11.0", commands[2])
+
+    def test_jax_and_jaxlib_take_the_extra_index(self):
+        # A tip build is versioned as a JAX nightly, which PyPI does not carry.
+        commands = wheels.install_commands(
+            wheel_args(jax_version="0.11.2.dev20260914", jax_index_url=JAX_INDEX_URL)
+        )
+
+        self.assertEqual(len(commands), 2)
+        self.assertIn("--extra-index-url", commands[1])
+        self.assertEqual(
+            commands[1][commands[1].index("--extra-index-url") + 1], JAX_INDEX_URL
+        )
+        self.assertIn("jax==0.11.2.dev20260914", commands[1])
+        self.assertIn("jaxlib==0.11.2.dev20260914", commands[1])
+
+    def test_the_extra_index_never_reaches_the_plugin_install(self):
+        # The plugin and PJRT wheels are this run's own; only jax and jaxlib
+        # are upstream packages that a nightly index could supply.
+        commands = wheels.install_commands(wheel_args(jax_index_url=JAX_INDEX_URL))
+
+        self.assertNotIn("--extra-index-url", commands[0])
 
     def test_a_run_with_nowhere_to_install_from_is_rejected(self):
         # jax_rocm<major>_plugin is a published name, so leaving pip on PyPI
