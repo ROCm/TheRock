@@ -132,7 +132,9 @@ jobs:
 
       # TODO(8354): pip install rocm-bootstrap instead
       - name: Checkout shared package ownership metadata
-        run: git submodule update --init --depth 1 rocm-systems
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git submodule update --init --depth 1 rocm-systems
 
       - name: Install Python requirements
         run: pip install -r requirements.txt
