@@ -50,6 +50,7 @@ Choose one of these options to specify where to install from:
 | `--rocalution`  | Flag | Include rocALUTION artifacts                       |
 | `--rocwmma`     | Flag | Include rocWMMA artifacts                          |
 | `--rpp`         | Flag | Include RPP artifacts                              |
+| `--mivisionx`   | Flag | Include MIVisionX artifacts (Linux only)           |
 | `--tests`       | Flag | Include test artifacts for enabled components      |
 
 > [!NOTE]

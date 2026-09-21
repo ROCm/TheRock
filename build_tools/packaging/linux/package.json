@@ -3298,6 +3298,119 @@
     "Gfxarch": "False"
   },
   {
+    "Package": "amdrocm-mivisionx",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-runtime",
+      "amdrocm-sysdeps",
+      "amdrocm-rpp"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime",
+      "amdrocm-sysdeps",
+      "amdrocm-rpp"
+    ],
+    "Maintainer": "MIVisionX Support <mivisionx.support@amd.com>",
+    "Description_Short": "MIVisionX computer vision toolkit built on AMD OpenVX",
+    "Description_Long": "MIVisionX is a comprehensive computer vision toolkit built on AMD OpenVX. Provides GPU-accelerated image processing, augmentation, and vision kernels via the OpenVX standard. Includes the amd_openvx runtime libraries and extensions for HIP-accelerated computer vision pipelines.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/MIVisionX",
+    "Artifactory": [
+      {
+        "Artifact": "mivisionx",
+        "Artifact_Subdir": [
+          {
+            "Name": "mivisionx",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "amdrocm-mivisionx-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-mivisionx"
+    ],
+    "RPMRequires": [
+      "amdrocm-mivisionx"
+    ],
+    "Maintainer": "MIVisionX Support <mivisionx.support@amd.com>",
+    "Description_Short": "MIVisionX development headers and build configuration files",
+    "Description_Long": "Development package for MIVisionX. Contains C/C++ header files and CMake build configuration for integrating AMD OpenVX-based computer vision functionality into applications.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/MIVisionX",
+    "Artifactory": [
+      {
+        "Artifact": "mivisionx",
+        "Artifact_Subdir": [
+          {
+            "Name": "mivisionx",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "amdrocm-mivisionx-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-mivisionx-devel"
+    ],
+    "RPMRequires": [
+      "amdrocm-mivisionx-devel"
+    ],
+    "Maintainer": "MIVisionX Support <mivisionx.support@amd.com>",
+    "Description_Short": "MIVisionX test suite and validation binaries",
+    "Description_Long": "Test suite for MIVisionX. Includes unit tests and correctness validation for OpenVX kernels and HIP-accelerated computer vision extensions.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/MIVisionX",
+    "Artifactory": [
+      {
+        "Artifact": "mivisionx",
+        "Artifact_Subdir": [
+          {
+            "Name": "mivisionx",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+  {
     "Package": "amdrocm-hipfile",
     "Version": "",
     "Architecture": "amd64",
@@ -3646,6 +3759,86 @@
     "License": "MIT",
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Metapackage": "True",
+    "Gfxarch": "True"
+  },
+  {
+    "Comments": "Opt-in Vision SDK metapackages. Built with cv-libs but NOT pulled in by the default amdrocm metapackage.",
+    "Package": "amdrocm-vision",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-rpp",
+      "amdrocm-mivisionx"
+    ],
+    "RPMRequires": [
+      "amdrocm-rpp",
+      "amdrocm-mivisionx"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm Vision SDK runtime metapackage",
+    "Description_Long": "Opt-in metapackage that installs the ROCm Vision SDK runtime libraries including RPP and MIVisionX. Use this to run Vision SDK applications on AMD GPUs.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/MIVisionX",
+    "Metapackage": "True",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-vision-sdk",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-vision",
+      "amdrocm-rpp-devel",
+      "amdrocm-mivisionx-devel"
+    ],
+    "RPMRequires": [
+      "amdrocm-vision",
+      "amdrocm-rpp-devel",
+      "amdrocm-mivisionx-devel"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm Vision SDK development metapackage",
+    "Description_Long": "Opt-in metapackage that installs the ROCm Vision SDK headers and build files. Use this to develop and build new code against RPP and MIVisionX libraries.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/MIVisionX",
+    "Metapackage": "True",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-vision-tests",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-vision-sdk",
+      "amdrocm-rpp-test",
+      "amdrocm-mivisionx-test"
+    ],
+    "RPMRequires": [
+      "amdrocm-vision-sdk",
+      "amdrocm-rpp-test",
+      "amdrocm-mivisionx-test"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm Vision SDK test metapackage",
+    "Description_Long": "Opt-in metapackage that installs ROCm Vision SDK test binaries. Intended for internal use to validate Vision SDK builds.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/MIVisionX",
     "Metapackage": "True",
     "Gfxarch": "True"
   },
