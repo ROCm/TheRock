@@ -601,7 +601,7 @@ jobs:
               print(f'{platform}_artifact_url={root.artifact_index().https_url}')
               print(f'{platform}_log_url={root.log_root_index().https_url}')
               print(f'{platform}_manifest_url={root.manifests_index().https_url}')
-          " >> "$GITHUB_OUTPUT"
+          " | grep '=' >> "$GITHUB_OUTPUT"
 
       - name: Generate summary
         env:
