@@ -58,8 +58,8 @@ JAX_REF_CONFIGS = {
         "exclude_python_versions": ["3.11"],
     },
     # Upstream JAX at its moving tip, built against the ROCm of the same run
-    # (tip vs tip). Not yet in any default ref list below: a caller asks for
-    # it with --jax-refs jax-main.
+    # (tip vs tip), the way PyTorch's "nightly" ref is a row of its release
+    # matrix. Release types other than prerelease include it (RELEASE_JAX_REFS).
     # The manylinux Dockerfile comes from rocm-jax's default branch, since
     # rocm-jax has no ref named "main" and the Dockerfile has no JAX-version
     # coupling.
@@ -77,18 +77,20 @@ JAX_REF_CONFIGS = {
     },
 }
 
-# Keep release behavior equivalent to the old generate_jax_matrix(None):
-# all release refs across all release Python versions.
-#
-# TODO: separate out nightly/dev/prerelease JAX refs if those release types
-# should differ later.
-RELEASE_JAX_REFS = {
+# Refs for the "prerelease" release type: versions we support, and nothing
+# whose content can change under us on the way to a release.
+RELEASE_STABLE_JAX_REFS = {
     "linux": [
         "rocm-jaxlib-v0.10.2",
         "rocm-jaxlib-v0.11.0",
         "rocm-jaxlib-v0.11.1",
         "rocm-jaxlib-v0.11.2",
     ],
+}
+
+# Refs for the other release types: stable refs + upstream tip.
+RELEASE_JAX_REFS = {
+    platform: [*refs, "jax-main"] for platform, refs in RELEASE_STABLE_JAX_REFS.items()
 }
 
 # CI builds a single, stable JAX ref to keep the CI runner load low; the base
@@ -119,6 +121,8 @@ def _default_python_versions(*, release_type: str, platform: str) -> list[str]:
 def _default_jax_refs(*, release_type: str, platform: str) -> list[str]:
     if release_type == "ci":
         return list(CI_JAX_REFS[platform])
+    if release_type == "prerelease":
+        return list(RELEASE_STABLE_JAX_REFS[platform])
     return list(RELEASE_JAX_REFS[platform])
 
 

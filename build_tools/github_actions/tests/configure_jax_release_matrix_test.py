@@ -76,8 +76,9 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         # A release tag exists under the same name in ROCm/jax and
         # ROCm/rocm-jax, so a ref config that names no rocm_jax_ref keeps the
         # two checkouts on one ref, as the workflows did before the key existed.
+        # Only tip names a rocm_jax_ref of its own, and prerelease omits it.
         matrix = m.generate_jax_matrix_for_release_type(
-            release_type="dev",
+            release_type="prerelease",
             platform="linux",
         )
 
@@ -106,7 +107,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         # carries the release version; only the tip config opts into nightly
         # versioning, and a config that names nothing gets "release".
         matrix = m.generate_jax_matrix_for_release_type(
-            release_type="dev",
+            release_type="prerelease",
             platform="linux",
         )
 
@@ -114,15 +115,38 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         for row in matrix:
             self.assertEqual(row["wheel_type"], "release")
 
-    def test_jax_main_is_not_a_default_ref(self):
-        # The tip build is opt-in: no release type builds upstream main unless
-        # a caller asks for it by name.
-        for release_type in m.RELEASE_TYPES:
-            matrix = m.generate_jax_matrix_for_release_type(
-                release_type=release_type,
-                platform="linux",
-            )
-            self.assertNotIn("main", {row["jax_ref"] for row in matrix})
+    def test_prerelease_builds_stable_refs_only(self):
+        # A prerelease is a candidate for something we ship, so nothing in it
+        # may change between two runs. Upstream tip moves, so it is left out.
+        matrix = m.generate_jax_matrix_for_release_type(
+            release_type="prerelease",
+            platform="linux",
+        )
+
+        self.assertGreater(len(matrix), 0)
+        self.assertNotIn("main", {row["jax_ref"] for row in matrix})
+
+    def test_release_types_other_than_prerelease_build_tip(self):
+        # Tip against the ROCm of the same run is a row of the matrix, the way
+        # PyTorch's "nightly" ref is, so a break shows up as a failed cell.
+        for release_type in set(m.RELEASE_TYPES) - {"ci", "prerelease"}:
+            with self.subTest(release_type=release_type):
+                matrix = m.generate_jax_matrix_for_release_type(
+                    release_type=release_type,
+                    platform="linux",
+                )
+                self.assertIn("main", {row["jax_ref"] for row in matrix})
+
+    def test_ci_never_builds_a_moving_ref(self):
+        # A pull request is judged against refs whose content is fixed;
+        # upstream moving under it would fail CI outside the author's control.
+        matrix = m.generate_jax_matrix_for_release_type(
+            release_type="ci",
+            platform="linux",
+        )
+
+        self.assertGreater(len(matrix), 0)
+        self.assertNotIn("main", {row["jax_ref"] for row in matrix})
 
     def test_generated_rows_cover_workflow_matrix_inputs(self):
         # workflow file like:
