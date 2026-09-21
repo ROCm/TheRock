@@ -17,6 +17,7 @@ if platform.system() == "Linux":
     if static_lib.exists():
         static_lib.unlink()
 elif platform.system() == "Windows":
-    # We don't want the .dll on Windows.
-    (Path(PREFIX) / "bin" / "liblzma.dll").unlink()
-    (Path(PREFIX) / "lib" / "liblzma.lib").unlink()
+    # Keep the DLL and its import lib: rocgdb (built with mingw gcc) links
+    # -llzma against the import lib and loads the DLL at runtime.  The DLL
+    # carries the private rocm_sysdeps_liblzma name (see liblzma_include.cmake).
+    pass

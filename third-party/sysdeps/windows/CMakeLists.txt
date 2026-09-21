@@ -12,6 +12,7 @@ set(THEROCK_INSTALL_WINDOWS_DLLS_SCRIPT
 # All system deps (alpha unless if different dependency order needed).
 if(THEROCK_ENABLE_SYSDEPS)
   add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/bzip2" "${CMAKE_CURRENT_BINARY_DIR}/bzip2")
+  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/liblzma" "${CMAKE_CURRENT_BINARY_DIR}/liblzma")
   add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/sqlite3" "${CMAKE_CURRENT_BINARY_DIR}/sqlite3")
   add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/zlib" "${CMAKE_CURRENT_BINARY_DIR}/zlib")
   add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/zstd" "${CMAKE_CURRENT_BINARY_DIR}/zstd")
@@ -24,6 +25,7 @@ if(THEROCK_ENABLE_SYSDEPS)
       lib
     SUBPROJECT_DEPS
       therock-bzip2
+      therock-liblzma
       therock-sqlite3
       therock-zlib
       therock-zstd
