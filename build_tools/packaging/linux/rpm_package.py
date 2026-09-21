@@ -14,6 +14,9 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pathlib import Path
 
 from packaging_utils import *
+from _therock_utils.log_utils import TheRockLogger
+
+logger = TheRockLogger(__name__)
 
 # Setup paths
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -32,7 +35,7 @@ def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
     Returns:
     output_list: List of packages created
     """
-    print_function_name()
+    logger.debug("create_nonversioned_rpm_package")
     # Create immutable config copy with versioned_pkg=False
     build_config = replace(config, versioned_pkg=False)
 
@@ -63,7 +66,7 @@ def create_versioned_rpm_package(pkg_name, config: PackageConfig):
     Returns:
     output_list: List of packages created
     """
-    print_function_name()
+    logger.debug("create_versioned_rpm_package")
     # Explicitly ensure versioned_pkg=True
     build_config = replace(config, versioned_pkg=True)
 
@@ -90,7 +93,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
     Returns: None
     """
-    print_function_name()
+    logger.debug("generate_spec_file")
     os.makedirs(os.path.dirname(specfile), exist_ok=True)
 
     pkg_info = get_package_info(pkg_name)  # Raises ValueError if not found
@@ -102,10 +105,15 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     rpmrecommends = rpmsuggests = ""
     sourcedir_list = []
     rpm_scripts = []
-    # amdrocm-debugger: Exclude libpython requirements
+    # amdrocm-debugger: Exclude libpython requires only (provides are not an issue).
     # Multiple Python-version-specific binaries are included; the wrapper script
-    # automatically selects the binary matching the system's Python version
+    # automatically selects the binary matching the system's Python version.
     exclude_libpython_requires = pkg_name == "amdrocm-debugger"
+    # amdrocm-profiler: Exclude vendored TBB from both Requires AND Provides metadata.
+    # rocprofiler-systems bundles TBB for Dyninst; suppress public Provides so
+    # dyninst/tbb do not block dnf autoremove (ROCM-28385), and suppress
+    # auto-Requires so profiler does not couple to distro tbb at install time.
+    exclude_vendored_tbb_metadata = pkg_name == "amdrocm-profiler"
 
     if config.versioned_pkg:
         # Get -> Filter -> Transform
@@ -113,10 +121,14 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
             pkg_info, "RPMRecommends", config
         )
         rpmsuggests = process_secondary_dependencies(pkg_info, "RPMSuggests", config)
-        requires = process_main_dependencies(pkg_info, "RPMRequires", config)
+        requires = process_versioned_dependencies(pkg_info, "RPMRequires", config)
 
         dir_list = filter_components_fromartifactory(
-            pkg_name, config.artifacts_dir, config.gfx_arch, config.enable_kpack
+            pkg_name,
+            config.artifacts_dir,
+            config.gfx_arch,
+            config.enable_kpack,
+            target_members=package_target_members(config),
         )
         sourcedir_list.extend(dir_list)
 
@@ -129,8 +141,8 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         # Warn if we have no artifacts for non-meta packages
         if not sourcedir_list and not is_meta and not is_gfx_meta:
             if config.enable_kpack:
-                print(
-                    f"WARNING: {pkg_name}: Empty sourcedir_list and not a meta package, creating empty RPM"
+                logger.warning(
+                    f"{pkg_name}: Empty sourcedir_list and not a meta package, creating empty RPM"
                 )
             else:
                 sys.exit(
@@ -146,7 +158,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         obsoletes = process_name_field(pkg_info, "Obsoletes")
         conflicts = process_name_field(pkg_info, "Conflicts")
         # Non-versioned package requires versioned package itself
-        requires = resolve_versioned_dependencies([pkg_name], config, is_meta)
+        requires = process_nonversioned_dependencies(pkg_info, config)
 
     pkg_name = update_package_name(pkg_name, config)
 
@@ -181,6 +193,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "sourcedir_list": sourcedir_list,
         "rpm_scripts": rpm_scripts,
         "exclude_libpython_requires": exclude_libpython_requires,
+        "exclude_vendored_tbb_metadata": exclude_vendored_tbb_metadata,
     }
 
     with open(specfile, "w", encoding="utf-8") as f:
@@ -248,7 +261,7 @@ def package_with_rpmbuild(spec_file):
 
     Returns: None
     """
-    print_function_name()
+    logger.debug("package_with_rpmbuild")
     # Build the command
     cmd = [
         "rpmbuild",
@@ -261,7 +274,7 @@ def package_with_rpmbuild(spec_file):
     # Execute the command
     try:
         subprocess.run(cmd, check=True)
-        print(f"RPM Package built successfully: {spec_file.name}")
+        logger.info(f"RPM Package built successfully: {spec_file.parent.name}\n")
     except subprocess.CalledProcessError as e:
-        print(f"Error building RPM package: {spec_file.name}: {e}")
+        logger.error(f"Error building RPM package: {spec_file.parent.name}: {e}")
         sys.exit(e.returncode)

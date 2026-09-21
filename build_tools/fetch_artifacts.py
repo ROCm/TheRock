@@ -8,18 +8,20 @@
 The install_rocm_from_artifacts.py script builds on top of this script to both
 download artifacts then unpack them into a usable install directory.
 
-Example usage (using https://github.com/ROCm/TheRock/actions/runs/15685736080):
+Example usage (find run IDs at https://github.com/ROCm/TheRock/actions):
   pip install boto3
+  RUN_ID="<replace-with-run-id>"
   python build_tools/fetch_artifacts.py \
-    --run-id 15685736080 --artifact-group gfx110X-all --output-dir ~/.therock/artifacts_15685736080
+    --run-id ${RUN_ID} --output-dir ~/.therock/artifacts_${RUN_ID}
 
-Download all artifacts for all GPU architectures:
+Download artifacts for selected individual GPU targets:
   python build_tools/fetch_artifacts.py \
-    --run-id 15685736080 --output-dir ~/.therock/artifacts_15685736080
+    --run-id ${RUN_ID} --amdgpu-targets gfx942,gfx1100 \
+    --output-dir ~/.therock/artifacts_${RUN_ID}
 
 Include/exclude regular expressions can be given to control what is downloaded:
   python build_tools/fetch_artifacts.py \
-    --run-id 15685736080 --artifact-group gfx110X-all --output-dir ~/.therock/artifacts_15685736080 \
+    --run-id ${RUN_ID} --output-dir ~/.therock/artifacts_${RUN_ID} \
     amd-llvm base 'core-(hip|runtime)' sysdeps \
     --exclude _dbg_
 

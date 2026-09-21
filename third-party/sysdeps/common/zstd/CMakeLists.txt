@@ -97,6 +97,18 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
        bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}")
 endif()
 
+# The nested configure below does not otherwise inherit compile flags, and zstd
+# links statically into shipped binaries.
+set(driver_build_flag_args)
+if(WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+  list(APPEND driver_build_flag_args
+    "-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}"
+    "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}"
+    "-DCMAKE_EXE_LINKER_FLAGS=${CMAKE_EXE_LINKER_FLAGS}"
+    "-DCMAKE_SHARED_LINKER_FLAGS=${CMAKE_SHARED_LINKER_FLAGS}"
+  )
+endif()
+
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -114,6 +126,7 @@ add_custom_target(
       "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
       "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
       "-DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}"
+      ${driver_build_flag_args}
       -DZSTD_BUILD_TESTS=OFF
       -DZSTD_LEGACY_SUPPORT=OFF
       -DZSTD_BUILD_PROGRAMS=OFF

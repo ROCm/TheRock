@@ -17,10 +17,10 @@ on:
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       package_index_url:
-        description: Python package index URL to test, typically nightly/dev URL with a "whl-multi-arch" subdir
+        description: Python package index URL to test, typically a repo.amd.com aggregate whl-next index
         required: true
         type: string
-        default: "https://rocm.nightlies.amd.com/whl-multi-arch/"
+        default: "https://nightly.repo.amd.com/rocm/whl-next/"
       python_version:
         required: true
         type: string
@@ -30,9 +30,9 @@ on:
         required: true
         type: string
       pytorch_git_ref:
-        description: PyTorch ref to checkout test sources from. (e.g. "nightly", or "release/2.7")
+        description: PyTorch ref to checkout test sources from. (e.g. "nightly", or "release/2.13")
         type: string
-        default: "release/2.7"
+        default: "release/2.13"
       device_query:
         description: >-
           GPU candidate-set selection (--device-query, stage 1). "unique": one
@@ -52,6 +52,13 @@ on:
           - "single"
           - "all"
         default: "single"
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 
   workflow_call:
     inputs:
@@ -72,7 +79,7 @@ on:
         type: string
       pytorch_git_ref:
         type: string
-        default: "release/2.7"
+        default: "release/2.13"
       device_query:
         description: >-
           --device-query. "unique": one device per architecture; "all": every
@@ -91,6 +98,9 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
+      quartz_tracking_id:
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -123,6 +133,11 @@ jobs:
     # PYTORCH_TESTING_DEVICE_ONLY_FOR and TEST_CONFIG (via --test-config)
     # itself, so we only set the extras the runner does not manage.
     env:
+      DEVICE_QUERY: ${{ inputs.device_query }}
+      GPU_POLICY: ${{ inputs.gpu_policy }}
+      TORCH_VERSION: ${{ inputs.torch_version }}
+      PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
+      PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
       QUARTZ_REPORTING_WORKFLOW: test_pytorch_wheels.yml
       QUARTZ_WORKFLOW_POSTFIX: "- test PyTorch wheels"
       VENV_DIR: ${{ github.workspace }}/.venv
@@ -137,7 +152,7 @@ jobs:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
           reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
@@ -163,17 +178,19 @@ jobs:
         id: expand
         run: |
           python build_tools/github_actions/expand_amdgpu_families.py \
-            --amdgpu-families "${{ inputs.amdgpu_family }}" \
+            --amdgpu-families "${AMDGPU_FAMILY}" \
             --output-mode=device-extras
 
       # TODO: also upload and reference test report together with this logging?
       - name: Summarize workflow inputs
+        env:
+          DEVICE_EXTRAS: ${{ steps.expand.outputs.device_extras }}
         run: |
           python build_tools/github_actions/summarize_test_pytorch_workflow.py \
-            --torch-version=${{ inputs.torch_version }} \
-            --pytorch-git-ref=${{ inputs.pytorch_git_ref }} \
-            --index-url=${{ inputs.package_index_url }} \
-            --device-extras="${{ steps.expand.outputs.device_extras }}"
+            --torch-version="${TORCH_VERSION}" \
+            --pytorch-git-ref="${PYTORCH_GIT_REF}" \
+            --index-url="${PACKAGE_INDEX_URL}" \
+            --device-extras="${DEVICE_EXTRAS}"
 
       - name: Set git options
         run: |
@@ -189,6 +206,7 @@ jobs:
       # related repository pins that produced the package under test.
       - name: Checkout PyTorch Source Repos from nightly branch
         if: ${{ (inputs.pytorch_git_ref == 'nightly') }}
+        timeout-minutes: 30
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/pytorch/pytorch.git \
@@ -198,26 +216,37 @@ jobs:
 
       - name: Checkout PyTorch Source Repos from stable branch
         if: ${{ (inputs.pytorch_git_ref != 'nightly') }}
+        timeout-minutes: 30
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/ROCm/pytorch.git \
-            --repo-hashtag ${{ inputs.pytorch_git_ref }} \
+            --repo-hashtag "${PYTORCH_GIT_REF}" \
             --no-hipify \
             --no-submodules
 
       - name: Set up virtual environment
         timeout-minutes: 15
+        env:
+          DEVICE_EXTRAS: ${{ steps.expand.outputs.device_extras }}
         run: |
           # The torch wheel already depends on the matching rocm runtime
           # packages (PYTORCH_EXTRA_INSTALL_REQUIREMENTS pins rocm[libraries]),
           # so installing torch is enough to pull the ROCm runtime.
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }}" \
-            --index-url=${{ inputs.package_index_url }} \
+            --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION}" \
+            --index-url="${PACKAGE_INDEX_URL}" \
             --activate-in-future-github-actions-steps
 
       - name: Install test requirements
         run: |
+          # Some pinned test requirements have no cp314 wheel and build from
+          # source. The container ships clang but not gcc, and setuptools
+          # defaults to the CC=gcc baked into sysconfig. Scoped to this step so
+          # it does not affect the tests.
+          if [[ "${RUNNER_OS}" == "Linux" ]]; then
+            export CC=clang
+            export CXX=clang++
+          fi
           python -m pip install -r external-builds/pytorch/requirements-test.txt
           python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           pip freeze
@@ -249,8 +278,8 @@ jobs:
         run: |
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
             --test-config default \
-            --device-query "${{ inputs.device_query }}" \
-            --gpu-policy "${{ inputs.gpu_policy }}" \
+            --device-query "${DEVICE_QUERY}" \
+            --gpu-policy "${GPU_POLICY}" \
             --include \
               test_nn \
               test_torch \
@@ -278,7 +307,7 @@ jobs:
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
         if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed
           run_conclusion: ${{ job.status }}

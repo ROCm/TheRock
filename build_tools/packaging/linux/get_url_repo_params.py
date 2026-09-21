@@ -90,7 +90,9 @@ def _normalize_release_type(release_type: str) -> str:
     return aliases.get(rt, rt)
 
 
-_KNOWN_RELEASE_TYPES = frozenset({"prerelease", "release", "dev", "nightly", "ci"})
+_KNOWN_RELEASE_TYPES = frozenset(
+    {"prerelease", "release", "dev", "dev-bkc", "nightly", "nightly-bkc", "ci"}
+)
 
 
 def _normalize_and_validate_release_type(release_type: str) -> str:
@@ -145,15 +147,18 @@ def cmd_base_url(args: argparse.Namespace) -> int:
 def get_gpg_key_url(package_url: str) -> str:
     """Derive the AMD repo signing-key URL from a package repository URL.
 
-    Keys sit beside the packages tree in the URL path:
-    ``…/packages/gpg/``, ``…/rocm/packages/gpg/``, or
-    ``…/packages-multi-arch/gpg/`` (stable: ``…/rocm/packages-multi-arch/gpg/``).
+    Legacy hosts keep keys beside the packages tree (``…/packages/gpg/rocm.gpg``,
+    ``…/packages-multi-arch/gpg/rocm.gpg``, etc.).
+
+    Current ``{stream}.repo.amd.com`` product repos use a stream-scoped key at
+    ``{origin}/rocm/gpg/packages.gpg`` regardless of the ``core/packages/`` path
+    depth (standard or ASAN).
 
     Args:
         package_url: Full or partial native Linux package repo URL.
 
     Returns:
-        HTTPS URL to ``rocm.gpg`` beside the matching packages tree.
+        HTTPS URL to the matching signing key (``packages.gpg`` or ``rocm.gpg``).
 
     Raises:
         ValueError: If ``package_url`` is not a valid HTTP(S) URL.
@@ -163,6 +168,10 @@ def get_gpg_key_url(package_url: str) -> str:
             → https://sample-cdn.example/packages/gpg/rocm.gpg
         https://sample-cdn.example/rocm/packages/rhel10/x86_64/
             → https://sample-cdn.example/rocm/packages/gpg/rocm.gpg
+        https://rc.repo.amd.com/rocm/core/packages/ubuntu2404
+            → https://rc.repo.amd.com/rocm/gpg/packages.gpg
+        https://stable.repo.amd.com/rocm/core/packages/ubuntu2404
+            → https://stable.repo.amd.com/rocm/gpg/packages.gpg
         https://sample-cdn.example/packages-multi-arch/ubuntu2604
             → https://sample-cdn.example/packages-multi-arch/gpg/rocm.gpg
         https://sample-cdn.example/packages-multi-arch/deb/20260204-12345/
@@ -184,6 +193,14 @@ def get_gpg_key_url(package_url: str) -> str:
         "/packages-multi-arch"
     ):
         return f"{origin}/packages-multi-arch/gpg/rocm.gpg"
+    if "/rocm/core/packages-asan/" in path or path.rstrip("/").endswith(
+        "/rocm/core/packages-asan"
+    ):
+        return f"{origin}/rocm/gpg/packages.gpg"
+    if "/rocm/core/packages/" in path or path.rstrip("/").endswith(
+        "/rocm/core/packages"
+    ):
+        return f"{origin}/rocm/gpg/packages.gpg"
     if "/rocm/packages/" in path or path.rstrip("/").endswith("/rocm/packages"):
         return f"{origin}/rocm/packages/gpg/rocm.gpg"
     if "/packages/" in path or path.rstrip("/").endswith("/packages"):
@@ -212,17 +229,21 @@ def get_gpg_key_url_from_release_type(
     Examples:
         prerelease + per_family
             → https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+        stable (before ROCm 10) + per_family
+            → https://repo.amd.com/rocm/packages/gpg/rocm.gpg
+        prerelease + multi_arch
+            → https://rc.repo.amd.com/rocm/gpg/packages.gpg
         stable + multi_arch
-            → https://repo.amd.com/rocm/packages-multi-arch/gpg/rocm.gpg
+            → https://stable.repo.amd.com/rocm/gpg/packages.gpg
     """
     rt = _normalize_release_type(release_type)
     layout_norm = normalize_layout(layout)
 
     if layout_norm == LAYOUT_MULTI_ARCH:
         if rt == "prerelease":
-            return "https://rocm.prereleases.amd.com/packages-multi-arch/gpg/rocm.gpg"
+            return "https://rc.repo.amd.com/rocm/gpg/packages.gpg"
         if rt == "release":
-            return "https://repo.amd.com/rocm/packages-multi-arch/gpg/rocm.gpg"
+            return "https://stable.repo.amd.com/rocm/gpg/packages.gpg"
         raise ValueError(
             f"GPG key URL not defined for release_type={release_type!r} "
             f"with layout={layout!r}"
@@ -369,10 +390,7 @@ def get_repo_url_multi_arch(
     os_profile: str,
     repo_sub_folder: str,
 ) -> str:
-    """Build a multi-arch native Linux package repo URL (``packages-multi-arch/``).
-
-    Matches ``dockerfiles/install_rocm_packages.sh`` ``build_repo_url`` when
-    ``multi_arch=1``.
+    """Build a current multi-arch native Linux package repo URL.
 
     Args:
         release_type: ``prerelease``, ``release`` / ``stable``, or unsigned
@@ -386,34 +404,35 @@ def get_repo_url_multi_arch(
         HTTPS URL pointing at the apt/dnf repo root.
 
     Layout:
-        - prerelease deb: ``{base}/packages-multi-arch/{os_profile}``
-        - release deb: ``{base}/rocm/packages-multi-arch/{os_profile}``
-        - nightly deb: ``{base}/packages-multi-arch/deb/{repo_sub_folder}``
-        - nightly rpm: ``{base}/packages-multi-arch/rpm/{repo_sub_folder}/x86_64``
+        - prerelease deb: ``{base}/rocm/core/packages/{os_profile}``
+        - release deb: ``{base}/rocm/core/packages/{os_profile}``
+        - nightly deb: ``{base}/rocm/core/packages/deb/{repo_sub_folder}``
+        - nightly rpm: ``{base}/rocm/core/packages/rpm/{repo_sub_folder}/x86_64``
 
     Raises:
         ValueError: If ``release_type`` is empty or unknown.
     """
     base = repo_base_url.rstrip("/")
     rt = _normalize_and_validate_release_type(release_type)
+    parent = f"{base}/rocm/core/packages"
 
     if rt == "prerelease":
         if native_package_type == "deb":
-            return f"{base}/packages-multi-arch/{os_profile}"
-        return f"{base}/packages-multi-arch/{os_profile}/x86_64/"
+            return f"{parent}/{os_profile}"
+        return f"{parent}/{os_profile}/x86_64/"
 
     if rt == "release":
         if native_package_type == "deb":
-            return f"{base}/rocm/packages-multi-arch/{os_profile}"
-        return f"{base}/rocm/packages-multi-arch/{os_profile}/x86_64/"
+            return f"{parent}/{os_profile}"
+        return f"{parent}/{os_profile}/x86_64/"
 
     if native_package_type == "deb":
         if repo_sub_folder:
-            return f"{base}/packages-multi-arch/deb/{repo_sub_folder}"
-        return f"{base}/packages-multi-arch/deb"
+            return f"{parent}/deb/{repo_sub_folder}"
+        return f"{parent}/deb"
     if repo_sub_folder:
-        return f"{base}/packages-multi-arch/rpm/{repo_sub_folder}/x86_64"
-    return f"{base}/packages-multi-arch/rpm/x86_64"
+        return f"{parent}/rpm/{repo_sub_folder}/x86_64"
+    return f"{parent}/rpm/x86_64"
 
 
 def get_repo_url(

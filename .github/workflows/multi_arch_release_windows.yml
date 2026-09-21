@@ -14,7 +14,7 @@ on:
       test_type:
         type: string
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease".'
+        description: 'Release type: "dev", "dev-bkc", "nightly", "nightly-bkc", or "prerelease".'
         type: string
         required: true
       repository:
@@ -31,6 +31,13 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -44,7 +51,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: "Quartz - started - release Windows"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
           reporting_workflow: multi_arch_release_windows.yml
@@ -68,6 +75,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -84,6 +92,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -103,6 +112,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -159,6 +169,9 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
+    env:
+      BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -175,17 +188,21 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Configure AWS Credentials
-        uses: ./.github/actions/configure_aws_artifacts_credentials
+        uses: ./.github/actions/configure_aws_product_publication_credentials
         with:
           release_type: ${{ inputs.release_type }}
+          product: core
 
       - name: Copy to release buckets
+        env:
+          KPACK_SPLIT: ${{ needs.build_python_packages.outputs.kpack_split }}
         run: |
           python build_tools/github_actions/publish_rocm_to_release_buckets.py \
             --run-id="${{ github.run_id }}" \
             --platform=windows \
-            --release-type="${{ inputs.release_type }}" \
-            --kpack-split="${{ needs.build_python_packages.outputs.kpack_split }}"
+            --release-type="${BUILD_RELEASE_TYPE}" \
+            --kpack-split="${KPACK_SPLIT}" \
+            --structured
 
   trigger_test_artifacts_per_family:
     needs: [build_artifacts]
@@ -201,7 +218,7 @@ jobs:
     steps:
       - name: Trigger test_artifacts
         if: ${{ matrix.family_info.test-runs-on != '' }}
-        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
           workflow: test_artifacts.yml
           inputs: |
@@ -213,13 +230,17 @@ jobs:
               "test_type": "${{ inputs.test_type }}",
               "release_type": "${{ inputs.release_type }}",
               "repository": "${{ inputs.repository }}",
-              "ref": "${{ inputs.ref }}"
+              "ref": "${{ inputs.ref }}",
+              "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
-  # TODO: Consider switch pulling ROCm packages from the CDN instead of the artifact
-  #   bucket if the job order is not altered.
+  # The PyTorch release workflow publishes its wheels to the release index, then
+  # tests from that index. Wait for the corresponding ROCm release to be published
+  # before triggering the downstream release.
+  # TODO: Consider pulling ROCm packages from the published release index instead
+  #   of the artifact bucket now that this waits for release bucket publication.
   trigger_release_pytorch_wheels:
-    needs: [build_artifacts, build_python_packages]
+    needs: [build_python_packages, publish_to_release_buckets]
     name: Trigger Release PyTorch Wheels
     if: ${{ inputs.build_pytorch != false && fromJSON(inputs.build_config).build_pytorch == true }}
     runs-on: ubuntu-24.04
@@ -227,7 +248,7 @@ jobs:
       actions: write
     steps:
       - name: Trigger PyTorch Build
-        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
           workflow: multi_arch_release_windows_pytorch_wheels.yml
           inputs: |
@@ -236,7 +257,9 @@ jobs:
               "rocm_package_find_links_url": "${{ needs.build_python_packages.outputs.package_find_links_url }}",
               "release_type": "${{ inputs.release_type }}",
               "ref": "${{ inputs.ref || '' }}",
-              "python_version": "${{ inputs.python_version }}"
+              "python_version": "${{ inputs.python_version }}",
+              "build_runs_on": "${{ fromJSON(inputs.build_config).build_runs_on }}",
+              "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
   notify_quartz_completed:
@@ -248,7 +271,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: "Quartz - completed - release Windows"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed
           reporting_workflow: multi_arch_release_windows.yml

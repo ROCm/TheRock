@@ -36,7 +36,12 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         self.assertFalse(run_ci)
 
     def test_dont_run_ci_if_only_skipped_files_edited(self):
-        paths = ["gitleaks.toml", "build_tools/scan_tools/script.py"]
+        paths = [
+            "build_tools/scan_tools/gitleaks.toml",
+            "build_tools/scan_tools/bandit.yaml",
+            "build_tools/scan_tools/trivy.yaml",
+            "build_tools/scan_tools/zizmor.yaml",
+        ]
         run_ci = is_ci_run_required(paths)
         self.assertFalse(run_ci)
 
@@ -66,6 +71,50 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         paths = ["source_file.h", ".github/workflows/pre-commit.yml"]
         run_ci = is_ci_run_required(paths)
         self.assertTrue(run_ci)
+
+    def test_dont_run_ci_for_unit_test_only_changes(self):
+        # These directories are exercised separately by unit_tests.yml.
+        unit_test_paths = [
+            "build_tools/tests/example_test.py",
+            "build_tools/github_actions/tests/example_test.py",
+            "build_tools/packaging/archives/tests/example_test.py",
+            "build_tools/packaging/linux/tests/example_test.py",
+            "build_tools/packaging/python/tests/example_test.py",
+            "build_tools/third_party/s3_management/tests/example_test.py",
+            "test_tools/tests/example_test.py",
+        ]
+
+        for path in unit_test_paths:
+            with self.subTest(path=path):
+                self.assertFalse(is_ci_run_required([path]))
+
+    def test_dont_run_ci_for_path_filter_only_changes(self):
+        paths = ["build_tools/github_actions/configure_ci_path_filters.py"]
+        self.assertFalse(is_ci_run_required(paths))
+
+    def test_run_ci_for_tests_exercising_built_packages(self):
+        integration_test_paths = [
+            # Tests for ROCm subprojects.
+            "build_tools/github_actions/test_executable_scripts/test_example.py",
+            # Install tests for packages (run on CI after building packages)
+            "build_tools/packaging/python/templates/example_test.py",
+            "build_tools/packaging/linux/example_test.py",
+            # Integration tests for ROCm (run on CI after building artifacts)
+            "tests/test_rocm_sanity.py",
+        ]
+
+        for path in integration_test_paths:
+            with self.subTest(path=path):
+                self.assertTrue(is_ci_run_required([path]))
+
+    def test_run_ci_for_source_and_unit_test_changes(self):
+        # Exclusions for skipping unit tests do not take priority over
+        # inclusions for modifying script files.
+        paths = [
+            "build_tools/packaging/archives/build_tarballs.py",
+            "build_tools/packaging/archives/tests/build_tarballs_test.py",
+        ]
+        self.assertTrue(is_ci_run_required(paths))
 
     @patch("configure_ci_path_filters.subprocess.run")
     def test_missing_base_sha_is_fetched_before_diffing(self, mock_run):

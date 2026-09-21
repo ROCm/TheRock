@@ -13,3 +13,16 @@ if(NOT EXISTS "${ROCJITSU_HOTSWAP_LIBRARY}")
 endif()
 
 install(FILES "${ROCJITSU_HOTSWAP_LIBRARY}" DESTINATION lib)
+
+if(EXISTS "${ROCJITSU_HOTSWAP_TRANSLATOR_LIBRARY}")
+  cmake_path(GET ROCJITSU_HOTSWAP_TRANSLATOR_LIBRARY PARENT_PATH _translator_dir)
+  file(GLOB _translator_libraries
+    "${_translator_dir}/librocjitsu_gfx1250_b0_to_a0.so*"
+  )
+  install(FILES ${_translator_libraries} DESTINATION lib)
+else()
+  message(WARNING
+    "RocJitsu hotswap translator library is not available in this rocm-systems revision: "
+    "${ROCJITSU_HOTSWAP_TRANSLATOR_LIBRARY}"
+  )
+endif()

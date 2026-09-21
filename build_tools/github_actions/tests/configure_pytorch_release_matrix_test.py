@@ -33,18 +33,17 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.11",
-                    "amdgpu_families": "gfx94X-dcgpu",
-                },
-                {
-                    "python_version": "3.12",
                     "pytorch_git_ref": "release/2.12",
                     "amdgpu_families": "gfx94X-dcgpu",
+                    "test_level": "standard",
+                    "test_amdgpu_families": "auto",
                 },
                 {
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx94X-dcgpu",
+                    "test_level": "standard",
+                    "test_amdgpu_families": "auto",
                 },
             ],
         )
@@ -65,8 +64,10 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.11",
+                    "pytorch_git_ref": "release/2.12",
                     "amdgpu_families": "gfx110X-all",
+                    "test_level": "standard",
+                    "test_amdgpu_families": "auto",
                 },
             ],
         )
@@ -87,19 +88,21 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "python_version": "3.13",
                     "pytorch_git_ref": "nightly",
                     "amdgpu_families": "gfx94X-dcgpu",
+                    "test_level": "none",
+                    "test_amdgpu_families": "auto",
                 }
             ],
         )
 
     def test_filters_exact_unsupported_family(self):
         # Unsupported families are filtered while supported ones are kept.
-        for pytorch_git_ref in ("release/2.13",):
+        for pytorch_git_ref in ("release/2.13", "release/2.14"):
             with self.subTest(pytorch_git_ref=pytorch_git_ref):
                 matrix = m.generate_pytorch_matrix_for_release_type(
                     release_type="dev",
                     python_versions=["3.12"],
                     pytorch_git_refs=[pytorch_git_ref],
-                    amdgpu_families="gfx94X-dcgpu;gfx90c",
+                    amdgpu_families="gfx125X-dcgpu;gfx90c",
                     platform="linux",
                 )
 
@@ -109,7 +112,9 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                         {
                             "python_version": "3.12",
                             "pytorch_git_ref": pytorch_git_ref,
-                            "amdgpu_families": "gfx94X-dcgpu",
+                            "amdgpu_families": "gfx125X-dcgpu",
+                            "test_level": "none",
+                            "test_amdgpu_families": "auto",
                         }
                     ],
                 )
@@ -130,8 +135,51 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "users/alice/gfx125x-bringup",
                     "amdgpu_families": "gfx125X-dcgpu",
+                    "test_level": "none",
+                    "test_amdgpu_families": "auto",
                 }
             ],
+        )
+
+    def test_release_uses_primary_python_version_for_standard_tests(self):
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="nightly",
+            python_versions=["3.10", "3.11", "3.12"],
+            pytorch_git_refs=["release/2.13"],
+            amdgpu_families="gfx94X-dcgpu",
+            platform="linux",
+        )
+
+        self.assertEqual(
+            [(row["python_version"], row["test_level"]) for row in matrix],
+            [("3.10", "none"), ("3.11", "standard"), ("3.12", "none")],
+        )
+
+    def test_summary_explains_an_all_none_matrix(self):
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="dev",
+            python_versions=["3.12"],
+            pytorch_git_refs=["release/2.12", "nightly"],
+            amdgpu_families="gfx94X-dcgpu",
+            platform="linux",
+        )
+
+        summary = m.format_matrix_summary(
+            release_type="dev",
+            platform="linux",
+            python_versions=["3.12"],
+            pytorch_git_refs=["release/2.12", "nightly"],
+            amdgpu_families="gfx94X-dcgpu",
+            matrix=matrix,
+        )
+
+        self.assertIn("| Generated rows | 2 (`none`: 2) |", summary)
+        self.assertIn("`release/2.12`: `3.11`", summary)
+        self.assertIn("`nightly`: `3.11`", summary)
+        self.assertIn("All generated rows use `none`", summary)
+        self.assertIn(
+            "| `3.12` | `release/2.12` | `gfx94X-dcgpu` | `none` |",
+            summary,
         )
 
     def test_generated_rows_cover_workflow_matrix_inputs(self):

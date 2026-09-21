@@ -25,8 +25,13 @@ on:
         required: false
         type: string
         default: ""
+      build_variant:
+        description: "Build variant (e.g. 'asan', 'asan-debug', 'host-asan', 'host-asan-debug'). When it contains 'asan', changes the install prefix to DEFAULT_INSTALL_PREFIX-asan-MAJOR.MINOR (e.g. /opt/rocm/core-asan-7.15)."
+        required: false
+        type: string
+        default: ""
       release_type:
-        description: "Release type: 'ci', 'dev', 'nightly', or 'prerelease'"
+        description: "Release type used for artifact storage and package publishing."
         required: false
         type: string
         default: ci
@@ -38,6 +43,13 @@ on:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow"
         type: string
         required: false
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
     outputs:
       package_repository_url:
         description: "Public repository URL for package installation"
@@ -59,6 +71,9 @@ jobs:
       package_repository_url: ${{ steps.upload-packages.outputs.package_repository_url }}
       summary: ${{ steps.summary.outputs.summary }}
     env:
+      ROCM_VERSION: ${{ inputs.rocm_version }}
+      BUILD_VARIANT: ${{ inputs.build_variant }}
+      NATIVE_PACKAGE_TYPE: ${{ inputs.native_package_type }}
       QUARTZ_REPORTING_WORKFLOW: multi_arch_build_native_linux_packages.yml
       QUARTZ_WORKFLOW_POSTFIX: "- build rpm/deb packages"
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
@@ -73,7 +88,7 @@ jobs:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
           reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
@@ -113,9 +128,9 @@ jobs:
           # so we pass OUTPUT_DIR (parent) to have artifacts land in $OUTPUT_DIR/artifacts
           # which matches the ARTIFACTS_DIR environment variable
           python ./build_tools/artifact_manager.py fetch \
-            --run-id="${{ env.ARTIFACT_RUN_ID }}" \
+            --run-id="${ARTIFACT_RUN_ID}" \
             --stage=all \
-            --amdgpu-families="${{ env.DIST_AMDGPU_FAMILIES }}" \
+            --amdgpu-families="${DIST_AMDGPU_FAMILIES}" \
             --expand-family-to-targets \
             --output-dir="${{ env.OUTPUT_DIR }}"
 
@@ -127,10 +142,11 @@ jobs:
           # KPACK_SPLIT_ARTIFACTS is auto-detected from therock_manifest.json.
           python ./build_tools/packaging/linux/build_package.py \
             --dest-dir "${{ env.PACKAGE_DIST_DIR }}" \
-            --rocm-version "${{ inputs.rocm_version }}" \
+            --rocm-version "${ROCM_VERSION}" \
             --artifacts-dir "${{ env.ARTIFACTS_DIR }}" \
-            --pkg-type "${{ inputs.native_package_type }}" \
-            --version-suffix "${{ env.ARTIFACT_RUN_ID }}"
+            --pkg-type "${NATIVE_PACKAGE_TYPE}" \
+            --version-suffix "${ARTIFACT_RUN_ID}" \
+            --build-variant "${BUILD_VARIANT}"
 
       - name: Simulated install Test
         id: test-packages
@@ -138,7 +154,14 @@ jobs:
           python ./build_tools/packaging/linux/native_linux_package_install_test.py \
             --test-type simulate \
             --packages-dir "${{ env.PACKAGE_DIST_DIR }}" \
-            --pkg-type ${{ inputs.native_package_type }}
+            --pkg-type "${NATIVE_PACKAGE_TYPE}"
+
+      - name: Build Package repository
+        run: |
+          python ./build_tools/packaging/linux/build_package_repo.py \
+            --pkg-type "${NATIVE_PACKAGE_TYPE}" \
+            --package-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --release-type "${RELEASE_TYPE}"
 
       - name: Configure AWS credentials for artifact uploads
         uses: ./.github/actions/configure_aws_artifacts_credentials
@@ -149,8 +172,8 @@ jobs:
         id: upload-packages
         run: |
           python ./build_tools/packaging/linux/upload_package_repo.py \
-            --pkg-type "${{ inputs.native_package_type }}" \
-            --run-id "${{ env.ARTIFACT_RUN_ID }}" \
+            --pkg-type "${NATIVE_PACKAGE_TYPE}" \
+            --run-id "${ARTIFACT_RUN_ID}" \
             --package-dir "${{ env.PACKAGE_DIST_DIR }}"
 
       - name: Capture job summary
@@ -161,7 +184,7 @@ jobs:
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
         if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed
           run_conclusion: ${{ job.status }}

@@ -229,6 +229,30 @@ class WorkflowOutputRoot:
         """
         return StorageLocation(self.bucket, f"{self.prefix}/packages/{pkg_type}")
 
+    def native_linux_packages_log_dir(self, pkg_type: str) -> StorageLocation:
+        """Location for native Linux packaging logs directory.
+
+        Returns ``StorageLocation`` at ``{run_id}-linux/logs/packaging/{pkg_type}``
+        (e.g. ``12345678901-linux/logs/packaging/deb``).
+
+        This directory contains per-package build logs generated during
+        native package creation (e.g., ``deb-amdrocm-core.log``).
+
+        Args:
+            pkg_type: Package type ('deb' or 'rpm').
+        """
+        return StorageLocation(self.bucket, f"{self.prefix}/logs/packaging/{pkg_type}")
+
+    def native_linux_packages_log_index(self, pkg_type: str) -> StorageLocation:
+        """Location for native Linux packaging logs index HTML.
+
+        Args:
+            pkg_type: Package type ('deb' or 'rpm').
+        """
+        return StorageLocation(
+            self.bucket, f"{self.prefix}/logs/packaging/{pkg_type}/index.html"
+        )
+
     # -- Python packages --------------------------------------------------------
 
     def python_packages(self, artifact_group: str = "") -> StorageLocation:

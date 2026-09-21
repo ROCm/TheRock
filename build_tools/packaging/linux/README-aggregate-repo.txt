@@ -46,7 +46,7 @@ Sources are passed as --source arguments (repeatable, no limit on count).
 DEB — merge ROCm nightly + RVS:
 
   python aggregate_deb_metadata.py \
-    --source "core,https://repo.amd.com/rocm/packages-multi-arch/ubuntu2404,dists,pool/core" \
+    --source "core,https://nightly.repo.amd.com/rocm/core/packages/deb/20260823-12345678,dists,pool/core" \
     --source "rvs,https://d22tya8uodfbu6.cloudfront.net/nightly/rvs/deb,flat,pool/rvs" \
     --output-dir /tmp/deb-metadata \
     --suite stable \
@@ -61,7 +61,7 @@ DEB — merge ROCm nightly + RVS:
 RPM — merge ROCm nightly + RVS:
 
   python aggregate_rpm_metadata.py \
-    --source "core,https://repo.amd.com/rocm/packages-multi-arch/rhel10/x86_64,core" \
+    --source "core,https://nightly.repo.amd.com/rocm/core/packages/rpm/20260823-12345678/x86_64,core" \
     --source "rvs,https://d22tya8uodfbu6.cloudfront.net/nightly/rvs/rpm,rvs" \
     --output-dir /tmp/rpm-metadata
 
@@ -88,7 +88,7 @@ Requires boto3 and AWS credentials with s3:PutObject on the output bucket.
 Upload the generated metadata by adding --output-bucket:
 
   python aggregate_deb_metadata.py \
-    --source "core,https://repo.amd.com/rocm/packages-multi-arch/ubuntu2404,dists,pool/core" \
+    --source "core,https://nightly.repo.amd.com/rocm/core/packages/deb/20260823-12345678,dists,pool/core" \
     --source "rvs,https://d22tya8uodfbu6.cloudfront.net/nightly/rvs/deb,flat,pool/rvs" \
     --output-bucket therock-deb-rpm-test \
     --output-prefix metadata/deb \
@@ -102,7 +102,7 @@ Upload the generated metadata by adding --output-bucket:
     therock-deb-rpm-test/metadata/deb/dists/stable/main/binary-amd64/Packages.gz
 
   python aggregate_rpm_metadata.py \
-    --source "core,https://repo.amd.com/rocm/packages-multi-arch/rhel10/x86_64,core" \
+    --source "core,https://nightly.repo.amd.com/rocm/core/packages/rpm/20260823-12345678/x86_64,core" \
     --source "rvs,https://d22tya8uodfbu6.cloudfront.net/nightly/rvs/rpm,rvs" \
     --output-bucket therock-deb-rpm-test \
     --output-prefix metadata/rpm
@@ -117,8 +117,8 @@ locally and upload in a single run.
 
 Step 3: Set Up CloudFront
 --------------------------
-Add cache behaviors to the repo.amd.com CloudFront distribution. List them
-most-specific first (CloudFront matches top-down).
+Add cache behaviors to the nightly.repo.amd.com CloudFront distribution. List
+them most-specific first (CloudFront matches top-down).
 
 DEB (ubuntu2404):
 
@@ -152,7 +152,7 @@ Step 4: User Setup
 
 Ubuntu/Debian:
 
-  echo "deb [trusted=yes] https://repo.amd.com/rocm/metadata/ubuntu2404 stable main" \
+  echo "deb [trusted=yes] https://nightly.repo.amd.com/rocm/metadata/ubuntu2404 stable main" \
     | sudo tee /etc/apt/sources.list.d/amdrocm-aggregate.list
   sudo apt update
   sudo apt install amdrocm7-rvs
@@ -162,7 +162,7 @@ RHEL/AlmaLinux:
   sudo tee /etc/yum.repos.d/amdrocm-aggregate.repo <<EOF
   [amdrocm-aggregate]
   name=AMD ROCm Aggregate
-  baseurl=https://repo.amd.com/rocm/metadata/rhel10/x86_64
+  baseurl=https://nightly.repo.amd.com/rocm/metadata/rhel10/x86_64
   enabled=1
   gpgcheck=0
   repo_gpgcheck=0
@@ -182,7 +182,7 @@ DEB — produces Release.gpg (detached) + InRelease (clearsigned):
   python aggregate_deb_metadata.py ... --sign-key <KEY_ID>
 
   Client setup (no [trusted=yes] needed):
-  echo "deb [signed-by=/etc/apt/keyrings/amdrocm.gpg] https://repo.amd.com/rocm/metadata/ubuntu2404 stable main" \
+  echo "deb [signed-by=/etc/apt/keyrings/amdrocm.gpg] https://nightly.repo.amd.com/rocm/metadata/ubuntu2404 stable main" \
     | sudo tee /etc/apt/sources.list.d/amdrocm-aggregate.list
 
 RPM — produces repomd.xml.asc (detached):
@@ -191,4 +191,4 @@ RPM — produces repomd.xml.asc (detached):
 
   Client .repo file additions:
     repo_gpgcheck=1
-    gpgkey=https://repo.amd.com/rocm/rocm.gpg.key
+    gpgkey=https://nightly.repo.amd.com/rocm/rocm.gpg.key

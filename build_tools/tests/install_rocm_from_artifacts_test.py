@@ -74,6 +74,14 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         argv = self._run_main(["--base-only"])
         self.assertIn("rocjitsu-hotswap_lib", argv)
 
+    def test_hipdnn_integration_tests_includes_rocrand(self):
+        # The hipdnn_gpu_ref_tests binary links librocrand for GPU tensor data
+        # generation, so the test runners must fetch the rand artifact even
+        # though --rand was not requested.
+        argv = self._run_main(["--hipdnn-integration-tests"])
+        self.assertIn("hipdnn-integration-tests_run", argv)
+        self.assertIn("rand_lib", argv)
+
 
 def _tarball_name(platform: str, artifact_group: str, version: str) -> str:
     """Return a tarball name matching the platform under test."""
@@ -395,6 +403,8 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         kfdtest=False,
         rocwmma=False,
         rpp=False,
+        solver=False,
+        sparse=False,
         libhipcxx=False,
         hipthreads=False,
         tests=False,
@@ -417,6 +427,19 @@ class TestDebugToolsAmdLlvmDev(unittest.TestCase):
     def test_debug_tools_includes_amd_llvm_dev(self) -> None:
         argv = _captured_fetch_argv(_make_run_id_args(debug_tools=True))
         self.assertIn("amd-llvm_dev", argv)
+
+
+class TestRocprofilerSdkDev(unittest.TestCase):
+    """Tests that --rocprofiler-sdk --tests pulls rocprofiler-sdk_dev."""
+
+    def test_rocprofiler_sdk_tests_includes_dev(self) -> None:
+        argv = _captured_fetch_argv(_make_run_id_args(rocprofiler_sdk=True, tests=True))
+        self.assertIn("rocprofiler-sdk_dev", argv)
+
+    def test_rocprofiler_sdk_tests_includes_configure_deps(self) -> None:
+        argv = _captured_fetch_argv(_make_run_id_args(rocprofiler_sdk=True, tests=True))
+        self.assertIn("amd-llvm_dev", argv)
+        self.assertIn("sysdeps_dev", argv)
 
 
 if __name__ == "__main__":

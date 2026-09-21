@@ -27,6 +27,11 @@ class DetermineVersionTest(unittest.TestCase):
         suffix = determine_version.derive_version_suffix(rocm_version)
         self.assertEqual(suffix, "+rocm7.0.0rc20250707")
 
+    def test_bkc_version_suffix(self):
+        rocm_version = "10.1.0a20260811+bkc.20260813"
+        suffix = determine_version.derive_version_suffix(rocm_version)
+        self.assertEqual(suffix, "+rocm10.1.0a20260811-bkc.20260813")
+
     def test_version_suffix_sorting(self):
         # This tests that version suffixes follow this ordering:
         # final > prerelease > alpha > dev

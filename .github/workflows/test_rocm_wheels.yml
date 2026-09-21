@@ -18,9 +18,9 @@ on:
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       package_index_url:
         description: >-
-          Full Python package index URL for use with --index-url.
+          Full repo.amd.com aggregate Python package index URL for use with --index-url.
         type: string
-        default: "https://rocm.nightlies.amd.com/whl-multi-arch/"
+        default: "https://nightly.repo.amd.com/rocm/whl-next/"
       package_find_links_url:
         description: Full Python package index URL for use with --find-links (usually instead of package_index_url)
         type: string
@@ -120,12 +120,17 @@ jobs:
       run:
         shell: bash
     env:
+      AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+      ROCM_VERSION: ${{ inputs.rocm_version }}
+      PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
+      PACKAGE_FIND_LINKS_URL: ${{ inputs.package_find_links_url }}
       # Use a venv path containing a space on Windows so that `rocm-sdk test`
       # exercises the space-in-path handling of the console-script trampolines
       # (users often install under paths like "C:\Users\First Last\..." or "C:\Program Files\...").
       # See https://github.com/ROCm/TheRock/issues/7075.
       VENV_DIR: ${{ contains(inputs.test_runs_on, 'windows') && format('{0}/.venv with spaces', github.workspace) || format('{0}/.venv', github.workspace) }}
       PROFILER_VENV_DIR: ${{ github.workspace }}/.venv-profiler
+      COMPUTE_ANALYZE_VENV_DIR: ${{ github.workspace }}/.venv-compute-analyze
 
     steps:
       - name: Checkout
@@ -145,21 +150,23 @@ jobs:
         id: device_extras
         run: |
           python build_tools/github_actions/expand_amdgpu_families.py \
-            --amdgpu-families "${{ inputs.amdgpu_family }}" \
+            --amdgpu-families "${AMDGPU_FAMILY}" \
             --output-mode=device-extras
 
       # Key off install_libraries success (not test_libraries) so devel install/test still run
       - name: Install rocm[libraries]
         id: install_libraries
+        env:
+          DEVICE_EXTRAS: ${{ steps.device_extras.outputs.device_extras }}
         run: |
           pkg="rocm[libraries]"
-          if [ -n "${{ steps.device_extras.outputs.device_extras }}" ]; then
-            pkg="${pkg%]},${{ steps.device_extras.outputs.device_extras }}]"
+          if [ -n "${DEVICE_EXTRAS}" ]; then
+            pkg="${pkg%]},${DEVICE_EXTRAS}]"
           fi
           python build_tools/setup_venv.py "${VENV_DIR}" \
-            --packages "${pkg}==${{ inputs.rocm_version }}" \
-            --index-url=${{ inputs.package_index_url }} \
-            --find-links=${{ inputs.package_find_links_url }} \
+            --packages "${pkg}==${ROCM_VERSION}" \
+            --index-url="${PACKAGE_INDEX_URL}" \
+            --find-links="${PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
 
       - name: Show installed packages (libraries)
@@ -177,15 +184,17 @@ jobs:
       - name: Install rocm[libraries,devel]
         id: install_devel
         if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' }}
+        env:
+          DEVICE_EXTRAS: ${{ steps.device_extras.outputs.device_extras }}
         run: |
           pkg="rocm[libraries,devel]"
-          if [ -n "${{ steps.device_extras.outputs.device_extras }}" ]; then
-            pkg="${pkg%]},${{ steps.device_extras.outputs.device_extras }}]"
+          if [ -n "${DEVICE_EXTRAS}" ]; then
+            pkg="${pkg%]},${DEVICE_EXTRAS}]"
           fi
           python build_tools/setup_venv.py "${VENV_DIR}" \
-            --packages "${pkg}==${{ inputs.rocm_version }}" \
-            --index-url=${{ inputs.package_index_url }} \
-            --find-links=${{ inputs.package_find_links_url }}
+            --packages "${pkg}==${ROCM_VERSION}" \
+            --index-url="${PACKAGE_INDEX_URL}" \
+            --find-links="${PACKAGE_FIND_LINKS_URL}"
 
       - name: Show installed packages (libraries,devel)
         if: ${{ !cancelled() && steps.install_devel.outcome == 'success' }}
@@ -210,9 +219,9 @@ jobs:
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: |
           python build_tools/setup_venv.py ${PROFILER_VENV_DIR} \
-            --packages "rocm[profiler]==${{ inputs.rocm_version }}" \
-            --index-url=${{ inputs.package_index_url }} \
-            --find-links=${{ inputs.package_find_links_url }} \
+            --packages "rocm[profiler]==${ROCM_VERSION}" \
+            --index-url="${PACKAGE_INDEX_URL}" \
+            --find-links="${PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
 
       - name: Show installed packages (profiler)
@@ -225,3 +234,31 @@ jobs:
         timeout-minutes: 5
         run: |
           rocm-sdk test
+
+      # `rocprof-compute analyze` needs Python packages that `rocprof-compute
+      # profile` does not, so they are opt-in behind the compute-analyze extra
+      # and installed into their own venv. The extra's dependencies come from
+      # PyPI rather than the ROCm index, hence --extra-index-url.
+      - name: Install rocm-profiler[compute-analyze]
+        id: install_compute_analyze
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: |
+          python build_tools/setup_venv.py ${COMPUTE_ANALYZE_VENV_DIR} \
+            --packages "rocm-profiler[compute-analyze]==${{ inputs.rocm_version }}" \
+            --index-url=${{ inputs.package_index_url }} \
+            --extra-index-url=https://pypi.org/simple \
+            --find-links=${{ inputs.package_find_links_url }} \
+            --activate-in-future-github-actions-steps
+
+      - name: Show installed packages (compute-analyze)
+        if: ${{ !cancelled() && steps.install_compute_analyze.outcome == 'success' }}
+        run: |
+          pip freeze
+
+      # Importing the analyze command pulls in the whole extra, so this fails if
+      # any of its dependencies is missing from the wheel metadata.
+      - name: Test rocprof-compute analyze
+        if: ${{ !cancelled() && steps.install_compute_analyze.outcome == 'success' }}
+        timeout-minutes: 5
+        run: |
+          rocprof-compute analyze --help

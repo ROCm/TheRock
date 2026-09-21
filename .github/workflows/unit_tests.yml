@@ -45,16 +45,12 @@ jobs:
     - name: Test build_tools
       working-directory: build_tools
       run: |
-        python -m pytest -vv \
+        python -m pytest -vv --durations=20 \
           --cov --cov-report=term-missing --cov-report=html
-
-    - name: Test scan_tools
-      working-directory: build_tools/scan_tools
-      run: python -m pytest -vv
 
     - name: Test test_tools
       working-directory: test_tools
-      run: python -m pytest -vv
+      run: python -m pytest -vv --durations=20
 
     # TODO: upload to AWS S3 instead (so reports are hosted and don't require
     #       a download step to view).
@@ -77,6 +73,7 @@ jobs:
       - name: Evaluate workflow results
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
           python build_tools/github_actions/workflow_summary.py \
-            --needs-json '${{ toJSON(needs) }}'
+            --needs-json "${NEEDS_JSON}"
