@@ -20,6 +20,8 @@ Because ROCm includes a compiler and uses multiple toolchains to build, there ar
 In order to simplify use, the following presets are available for setting up specific sanitizer strategies:
 
 - `--preset linux-release-asan`: Full ASAN build with both host and device instrumentation. Enables ASAN globally and selectively disables it for the compiler and certain system libraries that are not yet ready for generic sanitizer builds. Requires xnack-capable hardware (gfx942, gfx950) at runtime.
+- `--preset linux-release-asan-debug`: Same as `linux-release-asan` but `RelWithDebInfo` with `-g1 -gdwarf-4` so ASAN reports include line numbers.
+- `--preset linux-release-asan-compact`: Same as `linux-release-asan` plus size-oriented flags (`THEROCK_ASAN_COMPACT`): `-fsanitize-address-outline-instrumentation`, `-Oz`, `-gz`, `-gline-tables-only`, `--offload-compress`, `-fdata-sections`/`-ffunction-sections`, `-flto`, and `-Wl,--gc-sections`. These are injected only into Clang/HIP subprojects.
 - `--preset linux-release-host-asan`: Host-only ASAN build without device-side instrumentation. Same as above but GPU_TARGETS are not modified to include xnack+ variants. Can run on any GPU hardware.
 - TODO: compiler-asan preset: We will enable a build mode such that the compiler and base libraries can also be instrumented. We will use this for qualifying compiler builds but not generally for *using* the compiler.
 
