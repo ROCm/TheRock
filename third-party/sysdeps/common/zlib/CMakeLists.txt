@@ -18,7 +18,9 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR .
       FPRINT_SOURCE_DIR "${_source_dir}"
-      FPRINT_FILE_GLOBS "${CMAKE_CURRENT_LIST_DIR}/*"
+      FPRINT_FILE_GLOBS
+        "${CMAKE_CURRENT_LIST_DIR}/*"
+        ${THEROCK_INSTALL_WINDOWS_DLLS_SCRIPT}
       BINARY_DIR build
       NO_MERGE_COMPILE_COMMANDS
       BACKGROUND_BUILD
@@ -38,6 +40,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         lib/rocm_sysdeps/lib/pkgconfig
       EXTRA_DEPENDS
         "${_download_stamp}"
+        ${THEROCK_INSTALL_WINDOWS_DLLS_SCRIPT}
     )
     therock_cmake_subproject_provide_package(therock-zlib ZLIB lib/rocm_sysdeps/lib/cmake/ZLIB)
     therock_cmake_subproject_activate(therock-zlib)
@@ -81,6 +84,19 @@ endif()
 # a sub-build. We do this uniformly across all platforms because it is easier
 # to have common code paths. We write directly into the install prefix at
 # build time since this build is only ever used in a one shot way.
+set(POST_INSTALL_COMMANDS)
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  # The DLL installs under this sub-project's private prefix, where the Windows
+  # loader will not look for it.  Copy it to the stage's bin/ as well.
+  set(POST_INSTALL_COMMANDS
+    COMMAND
+      "${CMAKE_COMMAND}"
+        "-DPREFIX=${CMAKE_INSTALL_PREFIX}"
+        "-DSTAGE_DIR=${THEROCK_STAGE_INSTALL_ROOT}"
+        -P "${THEROCK_SOURCE_DIR}/cmake/therock_install_windows_dlls.cmake"
+  )
+endif()
+
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -112,9 +128,14 @@ add_custom_target(
       "-DCMAKE_PROJECT_INCLUDE=${THEROCK_SOURCE_DIR}/cmake/therock_compiler_hardening.cmake"
       # Force lib/ to match the hardcoded paths throughout this file.
       -DCMAKE_INSTALL_LIBDIR=lib
-      # On Windows we only use the static library; skip the shared build
-      # to avoid having to track the DLL alongside the static artifact.
-      "$<$<BOOL:${WIN32}>:-DZLIB_BUILD_SHARED=OFF>"
+      # On Windows build both the static library, for the MSVC-ABI consumers,
+      # and a shared library (DLL).  rocgdb is built with mingw gcc, which
+      # cannot link the clang/MSVC-ABI static lib (it references MSVC /GS
+      # __security_cookie symbols mingw does not provide), so it links the DLL's
+      # import lib instead.  zlib's ZLIB_BUILD_SHARED / ZLIB_BUILD_STATIC are
+      # independent (both default ON), so leaving both on keeps the static lib
+      # available to the MSVC-ABI consumers.  The DLL is given a private name in
+      # zlib_include.cmake.
       ${driver_msvc_runtime_args}
       # zlib 1.3.2 dropped SKIP_INSTALL_FILES, so it always installs its own
       # zlib.pc. patch_install.py removes it; we install our own below.
@@ -128,6 +149,7 @@ add_custom_target(
       "PATCHELF=${PATCHELF}"
       "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}" --
     "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.py" ${CMAKE_INSTALL_PREFIX}
+  ${POST_INSTALL_COMMANDS}
 )
 
 
