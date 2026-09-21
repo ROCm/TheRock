@@ -13,6 +13,9 @@
 # - Builds ALL architectures (release + ASAN)
 # - Tests only gfx94x (Linux) and gfx110x (Windows) with quick/standard test type
 # - No ASAN tests (build only for downstream consumption)
+# - Triggers Linux PyTorch + Linux JAX + Windows PyTorch wheel releases after
+#   publish (same workflows as multi_arch_release). There is no Windows JAX
+#   wheels workflow in this repo, so JAX is Linux-only.
 
 name: Compiler Daily Bump
 
@@ -319,7 +322,9 @@ jobs:
       release_type: dev
       linux_amdgpu_families: "none"
       windows_amdgpu_families: "all"
-      build_pytorch: false
+      # PyTorch wheels: yes. JAX: no Windows JAX release workflow exists
+      # (multi_arch_release.yml is the same — JAX is Linux-only).
+      build_pytorch: true
       build_jax: false
       repository: ${{ github.repository }}
       ref: ${{ needs.create-branch.outputs.branch_name }}
@@ -448,6 +453,111 @@ jobs:
           echo "under a unique run_id, preventing mixing with release artifacts."
 
   # ==========================================================================
+  # Phase 2b - Framework wheels (same dispatch as multi_arch_release)
+  # Wait for ROCm python packages to be published, then kick downstream
+  # PyTorch/JAX wheel builds against this bump's artifact index.
+  # ==========================================================================
+  trigger-linux-pytorch-wheels:
+    name: Trigger Linux PyTorch Wheels
+    needs: [create-branch, setup-linux, build-linux-python-packages, publish-linux-artifacts]
+    if: ${{ inputs.dry_run != true && needs.publish-linux-artifacts.result == 'success' }}
+    runs-on: ubuntu-24.04
+    outputs:
+      run_url: ${{ steps.dispatch.outputs.runUrlHtml }}
+    steps:
+      - name: Trigger Linux PyTorch Build
+        id: dispatch
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: multi_arch_release_linux_pytorch_wheels.yml
+          ref: ${{ needs.create-branch.outputs.branch_name }}
+          inputs: |
+            {
+              "amdgpu_families": "${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}",
+              "rocm_version": "${{ needs.setup-linux.outputs.rocm_package_version }}",
+              "rocm_package_find_links_url": "${{ needs.build-linux-python-packages.outputs.package_find_links_url }}",
+              "release_type": "dev",
+              "run_full_pytorch_tests": "false",
+              "ref": "${{ needs.setup-linux.outputs.ref }}",
+              "python_version": "",
+              "build_runs_on": "${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on }}"
+            }
+
+      - name: Output PyTorch run URL
+        if: ${{ steps.dispatch.outputs.runUrlHtml != '' }}
+        env:
+          RUN_URL: ${{ steps.dispatch.outputs.runUrlHtml }}
+        run: |
+          echo "## Linux PyTorch Wheels Triggered" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Run:** ${RUN_URL}" >> "$GITHUB_STEP_SUMMARY"
+
+  trigger-linux-jax-wheels:
+    name: Trigger Linux JAX Wheels
+    needs: [create-branch, setup-linux, build-linux-python-packages, publish-linux-artifacts]
+    if: ${{ inputs.dry_run != true && needs.publish-linux-artifacts.result == 'success' }}
+    runs-on: ubuntu-24.04
+    outputs:
+      run_url: ${{ steps.dispatch.outputs.runUrlHtml }}
+    steps:
+      - name: Trigger Linux JAX Build
+        id: dispatch
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: multi_arch_release_linux_jax_wheels.yml
+          ref: ${{ needs.create-branch.outputs.branch_name }}
+          inputs: |
+            {
+              "test_amdgpu_family": "${{ contains(fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families, 'gfx94X-dcgpu') && 'gfx94X-dcgpu' || '' }}",
+              "release_type": "dev",
+              "rocm_version": "${{ needs.setup-linux.outputs.rocm_package_version }}",
+              "rocm_package_find_links_url": "${{ needs.build-linux-python-packages.outputs.package_find_links_url }}",
+              "repository": "${{ github.repository }}",
+              "ref": "${{ needs.setup-linux.outputs.ref }}",
+              "python_version": ""
+            }
+
+      - name: Output JAX run URL
+        if: ${{ steps.dispatch.outputs.runUrlHtml != '' }}
+        env:
+          RUN_URL: ${{ steps.dispatch.outputs.runUrlHtml }}
+        run: |
+          echo "## Linux JAX Wheels Triggered" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Run:** ${RUN_URL}" >> "$GITHUB_STEP_SUMMARY"
+
+  trigger-windows-pytorch-wheels:
+    name: Trigger Windows PyTorch Wheels
+    needs: [create-branch, setup-windows, build-windows-python-packages, publish-windows-artifacts]
+    if: ${{ inputs.dry_run != true && needs.publish-windows-artifacts.result == 'success' }}
+    runs-on: ubuntu-24.04
+    outputs:
+      run_url: ${{ steps.dispatch.outputs.runUrlHtml }}
+    steps:
+      - name: Trigger Windows PyTorch Build
+        id: dispatch
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: multi_arch_release_windows_pytorch_wheels.yml
+          ref: ${{ needs.create-branch.outputs.branch_name }}
+          inputs: |
+            {
+              "amdgpu_families": "${{ fromJSON(needs.setup-windows.outputs.windows_build_config).dist_amdgpu_families }}",
+              "rocm_version": "${{ needs.setup-windows.outputs.rocm_package_version }}",
+              "rocm_package_find_links_url": "${{ needs.build-windows-python-packages.outputs.package_find_links_url }}",
+              "release_type": "dev",
+              "ref": "${{ needs.setup-windows.outputs.ref }}",
+              "python_version": "",
+              "build_runs_on": "${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on }}"
+            }
+
+      - name: Output PyTorch run URL
+        if: ${{ steps.dispatch.outputs.runUrlHtml != '' }}
+        env:
+          RUN_URL: ${{ steps.dispatch.outputs.runUrlHtml }}
+        run: |
+          echo "## Windows PyTorch Wheels Triggered" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Run:** ${RUN_URL}" >> "$GITHUB_STEP_SUMMARY"
+
+  # ==========================================================================
   # Phase 3 - Testing: gfx94x (Linux) and gfx110x (Windows) only
   # ==========================================================================
   trigger-linux-tests:
@@ -560,6 +670,9 @@ jobs:
       - build-windows-python-packages
       - publish-windows-artifacts
       - dispatch-asan-build
+      - trigger-linux-pytorch-wheels
+      - trigger-linux-jax-wheels
+      - trigger-windows-pytorch-wheels
       - trigger-linux-tests
       - trigger-windows-tests
     if: always()
@@ -609,6 +722,9 @@ jobs:
           BRANCH_NAME: ${{ needs.create-branch.outputs.branch_name }}
           LINUX_TEST_RUN_URL: ${{ needs.trigger-linux-tests.outputs.test_run_url }}
           WINDOWS_TEST_RUN_URL: ${{ needs.trigger-windows-tests.outputs.test_run_url }}
+          LINUX_PT_URL: ${{ needs.trigger-linux-pytorch-wheels.outputs.run_url }}
+          LINUX_JAX_URL: ${{ needs.trigger-linux-jax-wheels.outputs.run_url }}
+          WINDOWS_PT_URL: ${{ needs.trigger-windows-pytorch-wheels.outputs.run_url }}
           LINUX_ARTIFACT_URL: ${{ steps.artifact-urls.outputs.linux_artifact_url }}
           LINUX_LOG_URL: ${{ steps.artifact-urls.outputs.linux_log_url }}
           LINUX_MANIFEST_URL: ${{ steps.artifact-urls.outputs.linux_manifest_url }}
@@ -677,6 +793,30 @@ jobs:
             echo "- :x: Test trigger failed" >> "$GITHUB_STEP_SUMMARY"
           fi
 
+          # Linux PyTorch / JAX wheels
+          if [ "${{ needs.trigger-linux-pytorch-wheels.result }}" == "success" ]; then
+            if [ -n "${LINUX_PT_URL}" ]; then
+              echo "- :white_check_mark: PyTorch wheels triggered: [View Run]($LINUX_PT_URL)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- :white_check_mark: PyTorch wheels triggered" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          elif [ "${{ needs.trigger-linux-pytorch-wheels.result }}" == "failure" ]; then
+            echo "- :x: PyTorch wheels trigger failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.trigger-linux-pytorch-wheels.result }}" == "skipped" ]; then
+            echo "- :fast_forward: PyTorch wheels skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "${{ needs.trigger-linux-jax-wheels.result }}" == "success" ]; then
+            if [ -n "${LINUX_JAX_URL}" ]; then
+              echo "- :white_check_mark: JAX wheels triggered: [View Run]($LINUX_JAX_URL)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- :white_check_mark: JAX wheels triggered" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          elif [ "${{ needs.trigger-linux-jax-wheels.result }}" == "failure" ]; then
+            echo "- :x: JAX wheels trigger failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.trigger-linux-jax-wheels.result }}" == "skipped" ]; then
+            echo "- :fast_forward: JAX wheels skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "### Windows" >> "$GITHUB_STEP_SUMMARY"
 
@@ -717,6 +857,19 @@ jobs:
             fi
           elif [ "${{ needs.trigger-windows-tests.result }}" == "failure" ]; then
             echo "- :x: Test trigger failed" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Windows PyTorch wheels (no Windows JAX release workflow)
+          if [ "${{ needs.trigger-windows-pytorch-wheels.result }}" == "success" ]; then
+            if [ -n "${WINDOWS_PT_URL}" ]; then
+              echo "- :white_check_mark: PyTorch wheels triggered: [View Run]($WINDOWS_PT_URL)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- :white_check_mark: PyTorch wheels triggered" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          elif [ "${{ needs.trigger-windows-pytorch-wheels.result }}" == "failure" ]; then
+            echo "- :x: PyTorch wheels trigger failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.trigger-windows-pytorch-wheels.result }}" == "skipped" ]; then
+            echo "- :fast_forward: PyTorch wheels skipped" >> "$GITHUB_STEP_SUMMARY"
           fi
 
           echo "" >> "$GITHUB_STEP_SUMMARY"
