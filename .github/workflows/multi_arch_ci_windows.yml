@@ -1,13 +1,13 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Inherit only the secrets explicitly forwarded by the limited-trust PR entry points.
-
 name: Multi-Arch CI - Windows
 
 on:
   workflow_call:
     secrets:
+      # CI entry points forward only these benchmark database credentials.
+      # Nested calls inherit the caller-provided set.
       BENCHMARK_DB_URL:
         required: false
       BENCHMARK_DB_FALLBACK_URL:
