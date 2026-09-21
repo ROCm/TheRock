@@ -4,9 +4,9 @@
 # TEMPORARY. Delete this file and the workflow_call trigger it relies on before
 # merging the coverage PR.
 #
-# multi_arch_ci_coverage.yml runs by hand, but workflow_dispatch only appears
-# once the file is on the default branch -- so it can't run from a branch or
-# show in a PR's checks, leaving phase 1 unable to demonstrate itself.
+# multi_arch_ci_coverage_linux.yml runs by hand, but workflow_dispatch only
+# appears once the file is on the default branch -- so it can't run from a
+# branch or show in a PR's checks, leaving phase 1 unable to demonstrate itself.
 #
 # A caller has no such restriction: paths under ./.github/workflows resolve
 # against the caller's commit, so this runs the branch's copy and its jobs
@@ -24,7 +24,6 @@ on:
     # coverage logic are worth one.
     paths:
       - ".github/workflows/coverage_nightly_pr_check.yml"
-      - ".github/workflows/multi_arch_ci_coverage.yml"
       - ".github/workflows/multi_arch_ci_coverage_linux.yml"
       - ".github/workflows/multi_arch_ci_coverage_report.yml"
       - ".github/workflows/test_code_coverage_component.yml"
@@ -43,7 +42,7 @@ concurrency:
 jobs:
   coverage:
     name: Coverage
-    uses: ./.github/workflows/multi_arch_ci_coverage.yml
+    uses: ./.github/workflows/multi_arch_ci_coverage_linux.yml
     secrets: inherit
     # A called workflow can't hold more than its caller, so grant these here too:
     # id-token for the AWS role the artifact fetches assume, actions:read for the
