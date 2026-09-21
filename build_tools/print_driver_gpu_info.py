@@ -139,11 +139,26 @@ def run_sanity(os_name: str) -> int:
         )
     else:
         # Linux: amd-smi static + rocminfo
+        # Get visible devices from environment
+        visible_devices = os.getenv("ROCR_VISIBLE_DEVICES", "")
+
+        if visible_devices:
+            amdsmi_args = ["static", "--gpu", visible_devices]
+        else:
+            amdsmi_args = ["static"]
+
+        # Only use extra_command_search_paths for gfx125X-dcgpu
+        amdgpu_families = os.getenv("AMDGPU_FAMILIES", "")
+        if "gfx125X-dcgpu" in amdgpu_families:
+            amdsmi_extra_paths = [bin_dir]
+        else:
+            amdsmi_extra_paths = []
+
         run_command_with_search(
             label="amd-smi static",
             command="amd-smi",
-            args=["static"],
-            extra_command_search_paths=[bin_dir],
+            args=amdsmi_args,
+            extra_command_search_paths=amdsmi_extra_paths,
         )
         # Check if rocminfo should be skipped for this GPU family
         amdgpu_families = os.getenv("AMDGPU_FAMILIES", "")

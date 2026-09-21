@@ -353,6 +353,9 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
+        "exclude_family": {
+            "linux": ["gfx125X-dcgpu"],
+        },
     },
     "hipblaslt": {
         "job_name": "hipblaslt",
