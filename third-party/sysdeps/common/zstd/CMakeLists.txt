@@ -19,7 +19,9 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR .
       FPRINT_SOURCE_DIR "${_source_dir}"
-      FPRINT_FILE_GLOBS "${CMAKE_CURRENT_LIST_DIR}/*"
+      FPRINT_FILE_GLOBS
+        "${CMAKE_CURRENT_LIST_DIR}/*"
+        ${THEROCK_INSTALL_WINDOWS_DLLS_SCRIPT}
       BINARY_DIR build
       NO_MERGE_COMPILE_COMMANDS
       BACKGROUND_BUILD
@@ -38,6 +40,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         lib/rocm_sysdeps/lib/pkgconfig
       EXTRA_DEPENDS
         "${_download_stamp}"
+        ${THEROCK_INSTALL_WINDOWS_DLLS_SCRIPT}
     )
     therock_cmake_subproject_provide_package(therock-zstd zstd lib/rocm_sysdeps/lib/cmake/zstd)
     therock_cmake_subproject_activate(therock-zstd)
@@ -81,10 +84,15 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
       "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.py" ${CMAKE_INSTALL_PREFIX}
   )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-  # On Windows, we build static.
+  # On Windows build both the static library, for the MSVC-ABI consumers, and
+  # a shared library (DLL).  rocgdb is built with mingw gcc, which cannot link
+  # the clang/MSVC-ABI static lib (it references MSVC /GS __security_cookie
+  # symbols mingw does not provide), so it links the DLL's import lib instead
+  # and loads the DLL at runtime.  The DLL resolves the MSVC runtime references
+  # itself, so mingw links only against its C API.
   set(CONFIGURE_ARGS
     -DZSTD_BUILD_STATIC=ON
-    -DZSTD_BUILD_SHARED=OFF
+    -DZSTD_BUILD_SHARED=ON
   )
   # Driver builds link zstd into comgr, which uses the static MSVC runtime.
   if(THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
@@ -93,7 +101,19 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
       -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
     )
   endif()
-  set(POST_INSTALL_COMMANDS)
+  # The DLL installs under this sub-project's private prefix, where the Windows
+  # loader will not look for it.  Copy it to the stage's bin/ as well, keeping
+  # the original for the exported CMake targets that point at it.
+  # patch_install.py then makes libzstd.pc relocatable, as on Linux.
+  set(POST_INSTALL_COMMANDS
+    COMMAND
+      "${CMAKE_COMMAND}"
+        "-DPREFIX=${CMAKE_INSTALL_PREFIX}"
+        "-DSTAGE_DIR=${THEROCK_STAGE_INSTALL_ROOT}"
+        -P "${THEROCK_SOURCE_DIR}/cmake/therock_install_windows_dlls.cmake"
+    COMMAND
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.py" ${CMAKE_INSTALL_PREFIX}
+  )
 else()
   message(FATAL_ERROR "System not recognized")
 endif()
