@@ -1392,10 +1392,11 @@ def _expand_build_config_for_platform(
         # label (e.g., gfx950-dcgpu, gfx125X-dcgpu) is present on the PR.
         # This allows families with limited hardware to have tests opt-in via
         # PR labels rather than always running. Builds always run regardless.
-        # push and workflow_dispatch bypass this check (postsubmit always runs tests).
+        # workflow_dispatch bypasses this check (manual triggers always run tests).
+        # Both pull_request and push triggers respect this flag.
         if (
             platform_info.get("trigger_test_label_only", False)
-            and ci_inputs.is_pull_request
+            and not ci_inputs.is_workflow_dispatch
         ):
             family_label = platform_info["family"]
             if family_label not in ci_inputs.pr_labels:
