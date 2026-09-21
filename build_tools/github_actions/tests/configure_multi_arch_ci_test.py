@@ -24,7 +24,6 @@ from amdgpu_family_matrix import get_all_families_for_trigger_types
 from configure_multi_arch_ci_summary import format_summary
 from workflow_utils import WORKFLOWS_DIR
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -714,6 +713,12 @@ class TestDecideJobs(unittest.TestCase):
         # Both labels are compatible with the stages
         self.assertEqual(outputs.linux_test_labels, ["test:hip-tests", "test:kfdtest"])
 
+    def test_debug_tools_stage_allows_all_debugger_tests(self):
+        self.assertEqual(
+            cm._get_allowed_test_labels_for_stages(["debug-tools"]),
+            ["rocgdb", "rocr-debug-agent"],
+        )
+
     # TODO(#3433): Remove ASAN tests once ASAN tests are passing
     def test_asan_tests_only_run_on_nightly_triggers(self):
         """ASAN tests only run on schedule/workflow_dispatch, skip on PR/push."""
@@ -901,6 +906,70 @@ class TestSelectTargets(unittest.TestCase):
         self.assertIn("gfx125x", result.linux_families)
         # gfx950 is postsubmit-only, should NOT be in PR defaults
         self.assertNotIn("gfx950", result.linux_families)
+
+    def test_pull_request_uses_caller_supplied_families(self):
+        """PRs use the caller's explicit per-platform build coverage."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            linux_amdgpu_families=["gfx94x", "gfx950", "gfx125x"],
+            windows_amdgpu_families=["gfx110x"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(result.linux_families, ["gfx94x", "gfx950", "gfx125x"])
+        self.assertEqual(result.windows_families, ["gfx110x"])
+
+    def test_push_uses_caller_supplied_families(self):
+        """Pushes use the caller's explicit per-platform build coverage."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            linux_amdgpu_families=["gfx94x", "gfx950", "gfx125x"],
+            windows_amdgpu_families=["gfx110x"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(result.linux_families, ["gfx94x", "gfx950", "gfx125x"])
+        self.assertEqual(result.windows_families, ["gfx110x"])
+
+    def test_pull_request_can_skip_windows(self):
+        """A caller can select Linux families and skip Windows."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="asan",
+            linux_amdgpu_families=["gfx94x", "gfx950", "gfx125x"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(result.linux_families, ["gfx94x", "gfx950", "gfx125x"])
+        self.assertEqual(result.windows_families, [])
+
+    def test_schedule_defaults_omitted_platform_to_all(self):
+        """Schedules retain all-family coverage for an omitted platform."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="schedule",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            linux_amdgpu_families=["gfx94x"],
+        )
+        result = cm.select_targets(inputs)
+        all_families = cm.get_all_families_for_trigger_types(
+            ["presubmit", "postsubmit", "nightly"]
+        )
+        expected_windows_families = [
+            name for name, info in all_families.items() if "windows" in info
+        ]
+        self.assertEqual(result.linux_families, ["gfx94x"])
+        self.assertEqual(result.windows_families, expected_windows_families)
 
     def test_pull_request_gfx_label_adds_family(self):
         """PR with a gfx label adds that family to the defaults."""
@@ -1101,6 +1170,50 @@ class TestSelectTargets(unittest.TestCase):
         self.assertIn("gfx94x", result.linux_families)
         self.assertNotIn("gfx94x", result.windows_families)
 
+    def test_explicit_strict_linux_dev_selection(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="feature",
+            base_ref="",
+            build_variant="release",
+            linux_amdgpu_families=["gfx1250-strict"],
+            windows_amdgpu_families=["none"],
+        )
+        targets = cm.select_targets(inputs)
+        self.assertEqual(targets.linux_families, ["gfx1250-strict"])
+        self.assertEqual(targets.windows_families, [])
+
+    def test_strict_stays_out_of_default_selections(self):
+        for event in ("pull_request", "push", "schedule", "workflow_dispatch"):
+            with self.subTest(event=event):
+                inputs = cm.CIInputs(
+                    run_id="12345",
+                    event_name=event,
+                    commit_ref="feature",
+                    base_ref="HEAD^",
+                    build_variant="release",
+                    linux_amdgpu_families=(
+                        ["all"] if event == "workflow_dispatch" else []
+                    ),
+                    windows_amdgpu_families=["none"],
+                )
+                targets = cm.select_targets(inputs)
+                self.assertNotIn("gfx1250-strict", targets.linux_families)
+                self.assertNotIn("gfx1250-strict", targets.windows_families)
+
+    def test_manual_selection_still_rejects_unknown_family(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="feature",
+            base_ref="",
+            build_variant="release",
+            linux_amdgpu_families=["gfx1250-stric"],
+        )
+        with self.assertRaisesRegex(ValueError, "Unknown GPU families"):
+            cm.select_targets(inputs)
+
 
 # ---------------------------------------------------------------------------
 # Step 5: Build Configs
@@ -1205,7 +1318,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "test-runs-on",
             "sanity_check_only_for_family",
         }
-        optional_keys = {"test-runs-on-labels"}
+        optional_keys = {"test-runs-on-labels", "test_type"}
         for config in [result.linux, result.windows]:
             self.assertIsNotNone(config)
             per_family = config.per_family_info
@@ -1650,6 +1763,26 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertIn("sandbox", entry["test-runs-on"])
 
+    def test_explicit_strict_linux_dev_build(self):
+        """Explicit selection creates a build config without GPU tests."""
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(event_name="workflow_dispatch"),
+            git_context=cm.GitContext.empty(),
+            targets=cm.TargetSelection(linux_families=["gfx1250-strict"]),
+            jobs=_jobs(),
+        )
+        self.assertIsNone(result.windows)
+        linux = result.linux
+        self.assertIsNotNone(linux)
+        self.assertEqual(linux.dist_amdgpu_families, "gfx1250-strict")
+        self.assertEqual(linux.build_variant_label, "release")
+        self.assertEqual(len(linux.per_family_info), 1)
+        family = linux.per_family_info[0]
+        self.assertEqual(family["amdgpu_family"], "gfx1250-strict")
+        self.assertEqual(family["test-runs-on"], "")
+        self.assertEqual(family["amdgpu_targets"], "")
+        self.assertEqual(linux.test_python_packages_matrix, [])
+
 
 # ---------------------------------------------------------------------------
 # Step 6: Format Outputs
@@ -1968,7 +2101,54 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
 
 
 class TestFamilyTestFilters(unittest.TestCase):
-    """Tests for family-level test filtering (trigger_test_label_only, test_type_for_family)."""
+    """Tests for family-level test filtering using mock family matrices.
+
+    These tests use synthetic family configurations to verify the behavior of
+    trigger_test_label_only, test_type_for_family, and other family-level flags.
+    This decouples tests from production CI configuration, avoiding "change detector"
+    tests that break whenever the real family matrix changes.
+    """
+
+    # Mock family matrix for testing trigger_test_label_only behavior.
+    # Family keys use "mock-" prefix to avoid conflict with label parsing
+    # (labels starting with "gfx" get special handling in select_targets).
+    MOCK_FAMILIES_TRIGGER_TEST_LABEL = {
+        # Presubmit family - always runs on PRs
+        "mock-presubmit": {
+            "linux": {
+                "test-runs-on": "linux-presubmit-runner",
+                "family": "mock-presubmit",
+                "fetch-gfx-targets": ["gfx0000"],
+                "build_variants": ["release"],
+            },
+        },
+        # Postsubmit family with trigger_test_label_only - tests require label on PRs
+        "mock-postsubmit-labeled": {
+            "linux": {
+                "test-runs-on": "linux-postsubmit-runner",
+                "family": "mock-postsubmit-labeled",
+                "fetch-gfx-targets": ["gfx0001"],
+                "build_variants": ["release"],
+                "trigger_test_label_only": True,
+            },
+        },
+        # Family with test_type_for_family override
+        "mock-quick-only": {
+            "linux": {
+                "test-runs-on": "linux-quick-runner",
+                "family": "mock-quick-only",
+                "fetch-gfx-targets": ["gfx0002"],
+                "build_variants": ["release"],
+                "trigger_test_label_only": True,
+                "test_type_for_family": "quick",
+            },
+        },
+    }
+
+    def _mock_get_all_families(self, trigger_types):
+        """Return mock families based on trigger types."""
+        # For simplicity, return all mock families for any trigger type
+        return self.MOCK_FAMILIES_TRIGGER_TEST_LABEL
 
     def _find_family_info(self, outputs, family_name):
         """Helper to find family info in build outputs."""
@@ -1978,178 +2158,115 @@ class TestFamilyTestFilters(unittest.TestCase):
                     return family_info
         return None
 
-    def test_gfx90a_always_runs_tests(self):
-        """gfx90a (no trigger_test_label_only) runs tests on push and workflow_dispatch."""
-        test_cases = [
-            {
-                "name": "push",
-                "event_name": "push",
-                "base_ref": "HEAD^",
-                "extra_inputs": {},
-                "git_context": cm.GitContext(
-                    changed_files=["CMakeLists.txt"],
-                    submodule_paths=["rocm-systems"],
-                ),
-            },
-            {
-                "name": "push_with_submodule_changes",
-                "event_name": "push",
-                "base_ref": "HEAD^",
-                "extra_inputs": {},
-                "git_context": cm.GitContext(
-                    changed_files=["some-submodule"],
-                    submodule_paths=["some-submodule"],
-                ),
-            },
-            {
-                "name": "workflow_dispatch",
-                "event_name": "workflow_dispatch",
-                "base_ref": "HEAD^",
-                "extra_inputs": {"linux_amdgpu_families": ["gfx90a"]},
-                "git_context": cm.GitContext.empty(),
-            },
-        ]
+    def test_trigger_test_label_only_pr_with_label_runs_tests(self):
+        """PR with family label runs tests when trigger_test_label_only is set."""
+        with patch(
+            "configure_multi_arch_ci.get_all_families_for_trigger_types",
+            side_effect=self._mock_get_all_families,
+        ):
+            ci_inputs = cm.CIInputs(
+                run_id="12345",
+                event_name="pull_request",
+                commit_ref="feature",
+                base_ref="main",
+                build_variant="release",
+                pr_labels=["mock-postsubmit-labeled"],
+                linux_amdgpu_families=["mock-postsubmit-labeled"],
+            )
+            outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+            family_info = self._find_family_info(outputs, "mock-postsubmit-labeled")
 
-        for tc in test_cases:
-            with self.subTest(tc["name"]):
-                ci_inputs = cm.CIInputs(
-                    run_id="12345",
-                    event_name=tc["event_name"],
-                    commit_ref="main",
-                    base_ref=tc["base_ref"],
-                    build_variant="release",
-                    **tc["extra_inputs"],
-                )
-                outputs = cm.configure(ci_inputs, tc["git_context"])
-                gfx90a_info = self._find_family_info(outputs, "gfx90a")
+            self.assertIsNotNone(family_info)
+            self.assertNotEqual(family_info["test-runs-on"], "")
 
-                self.assertIsNotNone(gfx90a_info)
-                self.assertNotEqual(gfx90a_info["test-runs-on"], "")
+    def test_trigger_test_label_only_pr_without_label_skips_tests(self):
+        """PR without family label skips tests when trigger_test_label_only is set."""
+        with patch(
+            "configure_multi_arch_ci.get_all_families_for_trigger_types",
+            side_effect=self._mock_get_all_families,
+        ):
+            ci_inputs = cm.CIInputs(
+                run_id="12345",
+                event_name="pull_request",
+                commit_ref="feature",
+                base_ref="main",
+                build_variant="release",
+                pr_labels=[],  # No family label
+                linux_amdgpu_families=["mock-postsubmit-labeled"],
+            )
+            outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+            family_info = self._find_family_info(outputs, "mock-postsubmit-labeled")
 
-    def test_trigger_test_label_only_behavior(self):
-        """trigger_test_label_only gates tests based on label presence."""
-        test_cases = [
-            # gfx125x tests
-            {
-                "name": "gfx125x_pr_with_label_enabled",
-                "family_key": "gfx125x",
-                "family_name": "gfx125X-dcgpu",
-                "event_name": "pull_request",
-                "pr_labels": ["gfx125X-dcgpu"],
-                "extra_inputs": {"linux_amdgpu_families": ["gfx125x"]},
-                "expect_tests": True,
-            },
-            {
-                "name": "gfx125x_pr_without_label_disabled",
-                "family_key": "gfx125x",
-                "family_name": "gfx125X-dcgpu",
-                "event_name": "pull_request",
-                "pr_labels": [],
-                "extra_inputs": {"linux_amdgpu_families": ["gfx125x"]},
-                "expect_tests": False,
-            },
-            # gfx950 tests
-            {
-                "name": "gfx950_push_with_label_enabled",
-                "family_key": "gfx950",
-                "family_name": "gfx950-dcgpu",
-                "event_name": "push",
-                "pr_labels": ["gfx950-dcgpu"],
-                "extra_inputs": {},
-                "expect_tests": True,
-            },
-            {
-                "name": "gfx950_push_without_label_disabled",
-                "family_key": "gfx950",
-                "family_name": "gfx950-dcgpu",
-                "event_name": "push",
-                "pr_labels": [],
-                "extra_inputs": {},
-                "expect_tests": False,
-            },
-            # workflow_dispatch bypasses label requirement
-            {
-                "name": "gfx950_workflow_dispatch_bypasses_label",
-                "family_key": "gfx950",
-                "family_name": "gfx950-dcgpu",
-                "event_name": "workflow_dispatch",
-                "pr_labels": [],
-                "extra_inputs": {"linux_amdgpu_families": ["gfx950"]},
-                "expect_tests": True,
-            },
-            {
-                "name": "gfx125x_workflow_dispatch_bypasses_label",
-                "family_key": "gfx125x",
-                "family_name": "gfx125X-dcgpu",
-                "event_name": "workflow_dispatch",
-                "pr_labels": [],
-                "extra_inputs": {"linux_amdgpu_families": ["gfx125x"]},
-                "expect_tests": True,
-            },
-        ]
+            self.assertIsNotNone(family_info)
+            self.assertEqual(family_info["test-runs-on"], "")
 
-        for tc in test_cases:
-            with self.subTest(tc["name"]):
-                base_ref = None if tc["event_name"] == "workflow_dispatch" else "main"
-                if tc["event_name"] == "push":
-                    base_ref = "HEAD^"
+    def test_trigger_test_label_only_push_always_runs_tests(self):
+        """Push (postsubmit) always runs tests regardless of trigger_test_label_only."""
+        with patch(
+            "configure_multi_arch_ci.get_all_families_for_trigger_types",
+            side_effect=self._mock_get_all_families,
+        ):
+            ci_inputs = cm.CIInputs(
+                run_id="12345",
+                event_name="push",
+                commit_ref="main",
+                base_ref="HEAD^",
+                build_variant="release",
+            )
+            outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+            family_info = self._find_family_info(outputs, "mock-postsubmit-labeled")
 
-                ci_inputs = cm.CIInputs(
-                    run_id="12345",
-                    event_name=tc["event_name"],
-                    commit_ref=(
-                        "main" if tc["event_name"] != "pull_request" else "feature"
-                    ),
-                    base_ref=base_ref,
-                    build_variant="release",
-                    pr_labels=tc["pr_labels"],
-                    **tc["extra_inputs"],
-                )
-                outputs = cm.configure(ci_inputs, cm.GitContext.empty())
-                family_info = self._find_family_info(outputs, tc["family_name"])
+            self.assertIsNotNone(family_info)
+            self.assertNotEqual(family_info["test-runs-on"], "")
 
-                self.assertIsNotNone(
-                    family_info, f"Family {tc['family_name']} not found"
-                )
-                if tc["expect_tests"]:
-                    self.assertNotEqual(
-                        family_info["test-runs-on"],
-                        "",
-                        f"Expected tests enabled for {tc['name']}",
-                    )
-                else:
-                    self.assertEqual(
-                        family_info["test-runs-on"],
-                        "",
-                        f"Expected tests disabled for {tc['name']}",
-                    )
+    def test_trigger_test_label_only_workflow_dispatch_always_runs_tests(self):
+        """workflow_dispatch always runs tests regardless of trigger_test_label_only."""
+        with patch(
+            "configure_multi_arch_ci.get_all_families_for_trigger_types",
+            side_effect=self._mock_get_all_families,
+        ):
+            ci_inputs = cm.CIInputs(
+                run_id="12345",
+                event_name="workflow_dispatch",
+                commit_ref="main",
+                base_ref=None,
+                build_variant="release",
+                linux_amdgpu_families=["mock-postsubmit-labeled"],
+            )
+            outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+            family_info = self._find_family_info(outputs, "mock-postsubmit-labeled")
+
+            self.assertIsNotNone(family_info)
+            self.assertNotEqual(family_info["test-runs-on"], "")
 
     def test_test_type_for_family_forces_test_type(self):
-        """test_type_for_family forces the test type for a family."""
-        # gfx125x has test_type_for_family=["quick"] and trigger_test_label_only
-        # With label present, tests should run with forced test_type="quick"
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="pull_request",
-            commit_ref="feature",
-            base_ref="main",
-            build_variant="release",
-            pr_labels=["gfx125X-dcgpu"],
-            linux_amdgpu_families=["gfx125x"],
-        )
-        # Submodule changes would normally trigger test_type="full"
-        git_context = cm.GitContext(
-            changed_files=["some-submodule"],
-            submodule_paths=["some-submodule"],
-        )
-        outputs = cm.configure(ci_inputs, git_context)
-        gfx125x_info = self._find_family_info(outputs, "gfx125X-dcgpu")
+        """test_type_for_family overrides global test_type for the family."""
+        with patch(
+            "configure_multi_arch_ci.get_all_families_for_trigger_types",
+            side_effect=self._mock_get_all_families,
+        ):
+            ci_inputs = cm.CIInputs(
+                run_id="12345",
+                event_name="pull_request",
+                commit_ref="feature",
+                base_ref="main",
+                build_variant="release",
+                pr_labels=["mock-quick-only"],  # Label to enable tests
+                linux_amdgpu_families=["mock-quick-only"],
+            )
+            # Submodule changes would normally trigger test_type="full"
+            git_context = cm.GitContext(
+                changed_files=["some-submodule"],
+                submodule_paths=["some-submodule"],
+            )
+            outputs = cm.configure(ci_inputs, git_context)
+            family_info = self._find_family_info(outputs, "mock-quick-only")
 
-        self.assertIsNotNone(gfx125x_info)
-        # Tests should be enabled (label present)
-        self.assertNotEqual(gfx125x_info["test-runs-on"], "")
-        # test_type should be forced to "quick" despite global being "full"
-        self.assertEqual(gfx125x_info.get("test_type"), "quick")
+            self.assertIsNotNone(family_info)
+            # Tests should be enabled (label present)
+            self.assertNotEqual(family_info["test-runs-on"], "")
+            # test_type should be forced to "quick" despite global being "full"
+            self.assertEqual(family_info.get("test_type"), "quick")
 
 
 # ---------------------------------------------------------------------------

@@ -69,6 +69,8 @@ jobs:
       run:
         shell: bash
     env:
+      DIST_AMDGPU_FAMILIES: ${{ inputs.dist_amdgpu_families }}
+      ROCM_PACKAGE_VERSION: ${{ inputs.rocm_package_version }}
       QUARTZ_REPORTING_WORKFLOW: multi_arch_build_wsl_rocdxg_artifacts.yml
       QUARTZ_WORKFLOW_POSTFIX: "- build WSL ROCDXG artifacts"
       STAGE_NAME: ${{ inputs.stage_name }}
@@ -81,7 +83,7 @@ jobs:
       # misparses during nested subproject configure.
       THEROCK_WSL_WIN_SDK_MOUNT: /opt/winsdk-shared
       # Injects Windows env vars into WSL
-      WSLENV: THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT:THEROCK_WIN_SDK_SHARED/p
+      WSLENV: THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:STAGE_NAME:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT:THEROCK_WIN_SDK_SHARED/p
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -209,14 +211,16 @@ jobs:
         run: |
           python build_tools/configure_stage.py \
             --stage="${STAGE_NAME}" \
-            --dist-amdgpu-families="${{ inputs.dist_amdgpu_families }}" \
+            --dist-amdgpu-families="${DIST_AMDGPU_FAMILIES}" \
             --platform=linux \
             --gha-output
 
       - name: Install stage python deps
         if: ${{ steps.stage_config.outputs.pip_install_cmd }}
         shell: wsl-bash {0}
-        run: |
+        # configure_stage.py emits argument fragments from repository build configuration.
+        # Trust that configuration as executable build input; multiple arguments are intentional.
+        run: | # zizmor: ignore[template-injection]
           wsl_venv_dir="${HOME}/therock-wsl-rocdxg/.venv"
           "${wsl_venv_dir}/bin/python" -m pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
@@ -250,7 +254,7 @@ jobs:
       - name: Fetch inbound artifacts
         shell: wsl-bash {0}
         run: |
-          stage_name="${{ inputs.stage_name }}"
+          stage_name="${STAGE_NAME}"
           wsl_venv_dir="${HOME}/therock-wsl-rocdxg/.venv"
           wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
           mkdir -p "${wsl_build_dir}"
@@ -267,7 +271,11 @@ jobs:
         env:
           # Made available in WSL via job-level WSLENV
           THEROCK_WIN_SDK_SHARED: C:\Program Files (x86)\Windows Kits\10\Include\${{ steps.detect_sdk.outputs.sdk_version }}\shared
-        run: |
+          WSLENV: ${{ env.WSLENV }}:ROCM_PACKAGE_VERSION
+        # configure_stage.py emits argument fragments from repository build configuration.
+        # Trust that configuration and the caller-provided preset/external repo options
+        # as executable build inputs; their shell quoting and multiple arguments are intentional.
+        run: | # zizmor: ignore[template-injection]
           wsl_src_dir="${HOME}/therock-wsl-rocdxg/src"
           wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
           docker run --rm \
@@ -276,6 +284,7 @@ jobs:
             --mount "type=bind,src=${THEROCK_WIN_SDK_SHARED},dst=${THEROCK_WSL_WIN_SDK_MOUNT},readonly" \
             -w "${wsl_src_dir}" \
             -e "WSL_BUILD_DIR=${wsl_build_dir}" \
+            -e ROCM_PACKAGE_VERSION \
             "${MANYLINUX_IMAGE}" \
             bash -c '
               set -euo pipefail
@@ -284,7 +293,7 @@ jobs:
               ${{ steps.stage_config.outputs.pip_install_cmd && format('pip install {0}', steps.stage_config.outputs.pip_install_cmd) || 'true' }}
               cmake -B "${WSL_BUILD_DIR}" -S . -G Ninja \
                 -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-                -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
+                -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
                 -DTHEROCK_WSL_WIN_SDK="'"${THEROCK_WSL_WIN_SDK_MOUNT}"'" \
                 ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
                 ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
@@ -298,7 +307,7 @@ jobs:
           # Made available in WSL via job-level WSLENV
           THEROCK_WIN_SDK_SHARED: C:\Program Files (x86)\Windows Kits\10\Include\${{ steps.detect_sdk.outputs.sdk_version }}\shared
         run: |
-          stage_name="${{ inputs.stage_name }}"
+          stage_name="${STAGE_NAME}"
           wsl_src_dir="${HOME}/therock-wsl-rocdxg/src"
           wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
           docker run --rm \
@@ -335,7 +344,7 @@ jobs:
           # Append AWS creds set by the "Configure AWS credentials" step
           WSLENV: ${{ env.WSLENV }}:AWS_ACCESS_KEY_ID:AWS_SECRET_ACCESS_KEY:AWS_SESSION_TOKEN:AWS_DEFAULT_REGION:AWS_REGION
         run: |
-          stage_name="${{ inputs.stage_name }}"
+          stage_name="${STAGE_NAME}"
           wsl_venv_dir="${HOME}/therock-wsl-rocdxg/.venv"
           wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
           "${wsl_venv_dir}/bin/python" "${THEROCK_HOST_WORKSPACE}/build_tools/artifact_manager.py" push --run-id ${{ github.run_id }} \
@@ -356,7 +365,7 @@ jobs:
           "${wsl_venv_dir}/bin/python" "${THEROCK_HOST_WORKSPACE}/build_tools/github_actions/post_stage_upload.py" \
             --run-id=${{ github.run_id }} \
             --platform=linux \
-            --stage="${{ inputs.stage_name }}" \
+            --stage="${STAGE_NAME}" \
             --build-dir="${wsl_build_dir}" \
             --amdgpu-family=""
 
