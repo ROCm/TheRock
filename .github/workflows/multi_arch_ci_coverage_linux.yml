@@ -3,20 +3,18 @@
 
 # Multi-Arch CI Coverage - Linux
 #
-# Per-platform build + fanout layer. Builds one fully instrumented Linux stack
-# covering every coverage-enabled project, then fans out to
-# multi_arch_ci_coverage_report.yml once per project to test against that stack
-# and report separately. Paying for a single large build rather than one build
-# per project is what keeps the cost flat as more projects are onboarded.
+# Per-platform build + fanout layer. Builds one instrumented Linux stack for
+# every coverage-enabled project, then fans out to
+# multi_arch_ci_coverage_report.yml once per project. One large build instead
+# of one per project keeps cost flat as projects are onboarded.
 #
-# The stack is assembled by naming the stages coverage needs and calling the
-# shared per-stage build workflow for each, rather than running the whole
-# multi_arch_build_portable_linux.yml pipeline and filtering stages out of it.
+# The stack is assembled by calling the shared per-stage build workflow for each
+# needed stage, rather than running multi_arch_build_portable_linux.yml and
+# filtering stages out.
 #
-# The shared coverage matrix and build configuration are computed once by the
-# parent (multi_arch_ci_coverage.yml) and handed down as inputs, so that adding
-# multi_arch_ci_coverage_windows.yml later duplicates none of that logic -- it
-# only mirrors the build + fanout below with Windows runners.
+# The matrix and build config are computed once by the parent
+# (multi_arch_ci_coverage.yml) and passed in, so a future Windows layer
+# duplicates none of it -- it only mirrors the build + fanout with Windows runners.
 
 name: Multi-Arch CI Coverage - Linux
 
@@ -65,16 +63,15 @@ on:
         type: string
         default: ""
         description: >-
-          Leave empty. Internal Quartz tracking id, propagated from the caller
-          to link this run to a release lineage once the nightly dispatches
-          coverage automatically.
+          Leave empty. Internal Quartz tracking id, propagated from the caller to
+          link this run to a release lineage once the nightly dispatches coverage.
 
 permissions:
   contents: read
 
 jobs:
-  # Built first so that every later stage in this run has a compiler-runtime to
-  # link against and to fetch as an inbound artifact.
+  # Built first so later stages have a compiler-runtime to link against and
+  # fetch as an inbound artifact.
   build_instrumented_compiler_runtime:
     name: Build Instrumented Compiler Runtime
     if: ${{ inputs.coverage_matrix != '[]' }}
@@ -92,12 +89,10 @@ jobs:
       contents: read
       id-token: write
 
-  # The whole stage is built, not just the onboarded projects: the test jobs
-  # below need the complete dependency set, and phase 1 instruments every
-  # onboarded project in one pass rather than per changed project.
-  # `coverage_cmake_options` is the THEROCK_COVERAGE_*_ALL group option when the
-  # selection covers a whole group, and the individual project flags otherwise;
-  # everything not selected builds normally.
+  # Build the whole stage, not just onboarded projects: test jobs need the full
+  # dependency set, and phase 1 instruments every project in one pass.
+  # coverage_cmake_options is the THEROCK_COVERAGE_*_ALL group option for a whole
+  # group, else individual project flags; unselected projects build normally.
   build_instrumented_math_libs:
     name: Build Instrumented Math Libs
     needs: build_instrumented_compiler_runtime
@@ -126,23 +121,19 @@ jobs:
       contents: read
       id-token: write
 
-  # One test + report job per project. The instrumented stack built above is the
-  # only thing taken from this run: each job installs `baseline_run_id` and then
-  # replaces its own project, so a project's dependencies stay non-instrumented
-  # even though the build instrumented all of them at once.
+  # One test + report job per project. Each installs baseline_run_id and replaces
+  # only its own project from this run's instrumented stack, so dependencies stay
+  # non-instrumented even though the build instrumented them all at once.
   coverage_report:
     name: Coverage::${{ matrix.coverage.project_name }} (${{ matrix.coverage.amdgpu_families }})
-    # compiler-runtime is named explicitly rather than relied on through
-    # math-libs: a selection that needs no math-libs build still tests against
-    # binaries that stage produced.
+    # Name compiler-runtime explicitly, not via math-libs: a selection with no
+    # math-libs build still tests against binaries that stage produced.
     needs:
       [
         build_instrumented_compiler_runtime,
         build_instrumented_math_libs,
       ]
-    # `!failure() && !cancelled()` alone would let this run when the parent's
-    # matrix was empty, and fromJSON('') is a hard error, so the matrix has to
-    # be checked explicitly.
+    # Also guard the empty matrix: fromJSON('') would hard-error.
     if: >-
       ${{
         !failure() && !cancelled() &&

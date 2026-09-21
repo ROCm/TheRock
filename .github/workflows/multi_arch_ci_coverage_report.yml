@@ -8,15 +8,13 @@
 #
 #   test (collect profraw) -> merge -> report
 #
-# The instrumented stack itself is built by the caller
-# (multi_arch_ci_coverage_linux.yml), which instruments every onboarded
-# project in one pass. This workflow only consumes it.
+# The instrumented stack is built by the caller
+# (multi_arch_ci_coverage_linux.yml); this workflow only consumes it.
 #
-# `baseline_run_id` drives the hybrid install: the tree comes from a regular
-# nightly run and only the project under test is replaced from the instrumented
-# run, keeping instrumented dependencies out of the report. Without it the
-# instrumented run's own artifacts are tested as built, which measures the
-# project's dependencies alongside it.
+# baseline_run_id drives the hybrid install: the tree comes from a regular
+# nightly and only the project under test is replaced from the instrumented run,
+# keeping instrumented dependencies out of the report. Without it, the
+# instrumented artifacts are tested as built, measuring dependencies alongside it.
 
 name: Multi-Arch CI Coverage - Report
 
@@ -40,17 +38,16 @@ on:
         type: string
         default: ""
         description: >-
-          Build stage owning the project. The report job fetches this stage's
-          sources so the HTML rendering has something to annotate; the lcov and
-          text outputs do not need them. Empty skips the fetch and the HTML.
+          Build stage owning the project. Its sources are fetched so the HTML
+          report can annotate them; lcov and text outputs don't need them.
+          Empty skips the fetch and the HTML.
       baseline_run_id:
         type: string
         default: ""
         description: >-
-          Regular nightly run to take non-instrumented dependencies from. Set
-          by the nightly caller, which instruments the whole stack in its own
-          run; the test jobs then install that run and overlay only the project
-          under test. Empty tests the instrumented artifacts as built.
+          Regular nightly run supplying non-instrumented dependencies. Test jobs
+          install it and overlay only the project under test. Empty tests the
+          instrumented artifacts as built.
       baseline_repository:
         type: string
         default: ""
@@ -122,8 +119,8 @@ jobs:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: "[]"
-          # The report covers one project, so only that project's tests run
-          # here; the other onboarded projects get their own job.
+          # One project per report, so only its tests run here; other projects
+          # get their own job.
           PROJECTS_TO_TEST: ${{ inputs.test_component }}
           CI_CONFIG_PATH: ci-config
           BUILD_VARIANT: coverage
@@ -147,10 +144,9 @@ jobs:
     uses: ./.github/workflows/test_code_coverage_component.yml
     secrets: inherit
     with:
-      # The installer takes the generic tree from baseline_run_id and replaces
-      # only this project's libs from the instrumented run (this workflow's own
-      # run id), deriving the replacement artifact name and folder from the
-      # component job_name -- so artifact_names/relpaths are no longer needed.
+      # Installer takes the generic tree from baseline_run_id and replaces only
+      # this project's libs from this run's instrumented artifacts, deriving the
+      # artifact name and folder from the component job_name.
       generic_run_id: ${{ inputs.baseline_run_id }}
       baseline_repository: ${{ inputs.baseline_repository }}
       artifact_group: multi-arch-coverage
@@ -169,8 +165,8 @@ jobs:
   aggregate_coverage:
     name: Coverage Report (${{ inputs.project_name }})
     needs: [configure_test_matrix, test_coverage]
-    # Runs even when some shards failed: a partial report is more useful than
-    # none, and a failing test still exercises code.
+    # Runs even if some shards failed: a partial report beats none, and a
+    # failing test still exercises code.
     if: >-
       ${{
         !cancelled() &&
@@ -221,9 +217,9 @@ jobs:
             --output-dir=${OUTPUT_ARTIFACTS_DIR} \
             ${FETCH_ARTIFACT_ARGS}
 
-      # Only the HTML rendering reads source, so this runs after the artifacts
-      # are already down: a failure here, including running the runner out of
-      # disk, costs the annotated view and leaves lcov and the text table.
+      # Only HTML rendering reads source, so fetch after the artifacts are down:
+      # a failure here (e.g. out of disk) costs only the annotated view, leaving
+      # lcov and the text table.
       - name: Fetch sources for the annotated report
         if: ${{ inputs.build_stage != '' }}
         id: fetch_sources
@@ -238,10 +234,10 @@ jobs:
 
       - name: Merge profraw and generate reports
         env:
-          # Sources are recorded at the path the build container used, which is
-          # not where they sit here, so llvm-cov is told how to get from one to
-          # the other. Generated files under build/ are in neither and are
-          # reported as uncovered; the text summary still counts them.
+          # Sources are recorded at the build container's path, not where they
+          # sit here, so tell llvm-cov how to map between them. Generated files
+          # under build/ are in neither and report as uncovered; the text
+          # summary still counts them.
           BUILD_WORKSPACE: /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}
           HTML_ENABLED: ${{ steps.fetch_sources.outcome == 'success' }}
         run: |
@@ -265,8 +261,7 @@ jobs:
             --path-equivalence="${BUILD_WORKSPACE},${GITHUB_WORKSPACE}" \
             "${html_args[@]}"
 
-      # Puts the totals on the run's summary page, so the number is readable
-      # without downloading anything.
+      # Put totals on the run summary page, readable without downloading.
       - name: Publish the summary to the job page
         if: ${{ always() }}
         run: |
@@ -292,8 +287,8 @@ jobs:
             ${{ env.REPORT_DIR }}/html
           if-no-files-found: warn
 
-      # Skipped rather than failed when the repository has no Codecov token,
-      # so forks and first-time setups still get the lcov artifact above.
+      # Skip (not fail) when there's no Codecov token, so forks and first-time
+      # setups still get the lcov artifact above.
       - name: Upload report to Codecov
         if: ${{ env.HAS_CODECOV_TOKEN == 'true' }}
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0

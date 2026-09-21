@@ -5,19 +5,16 @@
 #
 # Computes the shared coverage matrix once (setup_coverage_matrix) and hands it
 # to a per-platform build+fanout layer (multi_arch_ci_coverage_linux.yml today;
-# a Windows sibling later). The instrumented build and the per-project
-# test+report live in those layers, not here, so adding a platform duplicates
-# none of the matrix logic.
+# Windows later). The build and per-project test+report live in those layers,
+# so adding a platform duplicates no matrix logic.
 #
-# RFC0014 phase 1 runs every enabled component on one default architecture
-# (gfx942, i.e. the gfx94X-dcgpu family). Change-based selection and
-# multi-architecture expansion come later.
+# RFC0014 phase 1: every enabled component on one architecture (gfx94X-dcgpu).
+# Change-based selection and multi-arch come later.
 #
-# Coverage runs as its own run, separate from the regular nightly: the nightly
-# dispatches this workflow once its build finishes and hands over its own run id
-# as `baseline_run_id` (RFC option C). Coverage having a run id of its own means
-# a failure here leaves the nightly's status alone, and the nightly's unstable
-# test jobs do not hold coverage up.
+# Coverage runs separately from the nightly, which dispatches it and passes its
+# own run id as `baseline_run_id` (RFC option C). A separate run id means a
+# failure here doesn't touch the nightly's status, nor its unstable tests hold
+# coverage up.
 
 name: Multi-Arch CI Coverage
 
@@ -38,7 +35,7 @@ on:
         default: ""
       projects_to_test:
         type: string
-        description: "Comma-separated coverage projects (e.g. hiprand); case-insensitive. Group alias: rocm_libraries_all. Empty = every project this workflow can build. rccl and rocshmem need the comm-libs build job, which phase 1 does not have, so naming them (or rocm_systems_all / all) is rejected."
+        description: "Comma-separated coverage projects (e.g. hiprand), case-insensitive. Alias: rocm_libraries_all. Empty = every buildable project. rccl/rocshmem need the comm-libs build job (absent in phase 1), so they (and rocm_systems_all / all) are rejected."
         default: ""
       amdgpu_families:
         type: string
@@ -55,16 +52,15 @@ on:
       quartz_tracking_id:
         type: string
         description: >-
-          Leave empty. Internal Quartz tracking id, used to link this run to a
-          release lineage once the nightly dispatches coverage automatically.
+          Leave empty. Internal Quartz tracking id linking this run to a release
+          lineage once the nightly dispatches coverage automatically.
         default: ""
 
-  # TEMPORARY, paired with coverage_nightly_pr_check.yml. A workflow_dispatch
-  # is only offered once the file is on the default branch, so this workflow
-  # cannot be run from a branch and cannot be shown in a PR's checks. A caller
-  # is not subject to that, so the check workflow runs this branch's copy.
-  # Actions does not expand YAML anchors, so the inputs are repeated verbatim.
-  # Remove this trigger with the check workflow once the run has gone green.
+  # TEMPORARY, paired with coverage_nightly_pr_check.yml. workflow_dispatch only
+  # appears once the file is on the default branch, so this can't run from a
+  # branch or show in PR checks; a caller can, so the check workflow runs this
+  # branch's copy. Actions doesn't expand YAML anchors, so inputs are repeated.
+  # Remove this trigger with the check workflow once the run is green.
   workflow_call:
     inputs:
       baseline_run_id:
@@ -81,7 +77,7 @@ on:
         default: ""
       projects_to_test:
         type: string
-        description: "Comma-separated coverage projects (e.g. hiprand); case-insensitive. Group alias: rocm_libraries_all. Empty = every project this workflow can build. rccl and rocshmem need the comm-libs build job, which phase 1 does not have, so naming them (or rocm_systems_all / all) is rejected."
+        description: "Comma-separated coverage projects (e.g. hiprand), case-insensitive. Alias: rocm_libraries_all. Empty = every buildable project. rccl/rocshmem need the comm-libs build job (absent in phase 1), so they (and rocm_systems_all / all) are rejected."
         default: ""
       amdgpu_families:
         type: string
@@ -98,15 +94,14 @@ on:
       quartz_tracking_id:
         type: string
         description: >-
-          Leave empty. Internal Quartz tracking id, used to link this run to a
-          release lineage once the nightly dispatches coverage automatically.
+          Leave empty. Internal Quartz tracking id linking this run to a release
+          lineage once the nightly dispatches coverage automatically.
         default: ""
 
 permissions:
   contents: read
 
-# The two run ids are only connected through this input, so surface it in the
-# run title rather than making people open the logs to find the baseline.
+# Surface the baseline in the run title so people don't dig through logs for it.
 run-name: >-
   Multi-Arch CI Coverage
   | baseline: ${{ inputs.baseline_run_id || 'none (self-contained)' }}
@@ -153,16 +148,14 @@ jobs:
             --release-type=ci \
             --override-git-sha=${{ steps.checkout.outputs.commit }}
 
-  # The build + fanout half is per-platform. The shared matrix computed above is
-  # handed to the Linux layer, which builds the instrumented stack once and then
-  # fans out to the per-project report workflow. A Windows layer would be a
-  # sibling job here, reusing setup_coverage_matrix and the report workflow
-  # unchanged.
+  # Build + fanout is per-platform. The Linux layer builds the instrumented
+  # stack once, then fans out to the per-project report workflow. A Windows
+  # layer would be a sibling job reusing the same matrix and report workflow.
   coverage_linux:
     name: Coverage - Linux
     needs: setup_coverage_matrix
-    # `fromJSON('')` is a hard error downstream, and an empty selection has
-    # nothing to build, so the matrix is checked explicitly before fanning out.
+    # Empty selection has nothing to build, and fromJSON('') hard-errors, so
+    # check the matrix explicitly.
     if: ${{ needs.setup_coverage_matrix.outputs.coverage_matrix != '[]' }}
     uses: ./.github/workflows/multi_arch_ci_coverage_linux.yml
     secrets: inherit

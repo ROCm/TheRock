@@ -35,9 +35,8 @@ from _therock_utils.archive_util import open_archive_for_read
 from _therock_utils.artifacts import ArtifactName
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
 
-# Maps each --replace-<name> flag (argparse dest) to the TheRock artifact name
-# that ships the instrumented library. rocBLAS is packaged in the 'blas'
-# artifact and rocSOLVER in the 'solver' artifact (see BUILD_TOPOLOGY.toml).
+# Maps each --replace-<name> flag to its TheRock artifact and library folder.
+# e.g. rocBLAS ships in the 'blas' artifact (see BUILD_TOPOLOGY.toml).
 COMPONENT_MAP = {
     # component: (artifact_name, library_folder),
     "rocfft": ("fft", "rocFFT"),
@@ -67,10 +66,9 @@ COMPONENT_MAP = {
 
 
 def _read_passthrough_options(passthrough_argv):
-    """Read (without consuming) options shared with install_rocm_from_artifacts.
+    """Read options shared with install_rocm_from_artifacts without consuming them.
 
-    These are parsed non-destructively so the same argv can still be forwarded
-    to install_rocm_from_artifacts.py unchanged.
+    Parsed non-destructively so the same argv still forwards unchanged.
     """
     reader = argparse.ArgumentParser(add_help=False)
     # --amdgpu-family and --artifact-group share a dest, mirroring install_rocm_from_artifacts.
@@ -86,8 +84,8 @@ def _read_passthrough_options(passthrough_argv):
 def _target_families(family, amdgpu_targets):
     """Build the family match set: generic + family + expanded gfx targets.
 
-    blas/solver are target-specific artifacts named per family (mono-arch) or
-    per gfx target (kpack-split), so both spellings must be matched.
+    Target-specific artifacts (blas/solver) are named per family (mono-arch) or
+    per gfx target (kpack-split), so match both spellings.
     """
     families = ["generic"]
     if family:
@@ -100,18 +98,12 @@ def _target_families(family, amdgpu_targets):
 def download_replacement_artifacts(
     code_coverage_run_id, artifact_names, opts, code_coverage_run_github_repo
 ):
-    """Download the instrumented replacement artifacts from the code-coverage run.
+    """Download instrumented replacement artifacts from the code-coverage run.
 
-    Uses the code coverage run ID as the run-id for the S3 backend, then fetches
-    every component tar matching the requested artifact names and target family.
-
-    The instrumented replacement lives in a DIFFERENT repo than the generic
-    baseline: the generic build comes from --run-id in --run-github-repo (e.g.
-    ROCm/rocm-libraries), while the instrumented coverage run comes from
-    --code-coverage-run-id in --code-coverage-run-github-repo (the coverage
-    run's own repo, e.g. ROCm/TheRock). The backend's S3 bucket lookup 404s if
-    the run id is queried against the wrong owning repo, so we must pass the
-    code-coverage repo here rather than reusing opts.run_github_repo.
+    Fetches every component tar matching the requested artifact names and family.
+    The coverage run lives in its own repo (--code-coverage-run-github-repo),
+    separate from the generic baseline's --run-github-repo. Pass it explicitly:
+    the S3 bucket lookup 404s if the run id is queried against the wrong repo.
     """
     backend = create_backend_from_env(
         run_id=code_coverage_run_id,
@@ -152,9 +144,8 @@ def download_replacement_artifacts(
 def _replace_scoped_member(tf, member, dest_path, output_dir, relpaths):
     """Write a single archive member into the flattened install tree.
 
-    Mirrors the file/symlink/dir/hardlink handling used when TheRock flattens
-    an artifact archive, so replaced files keep their exec bits and link
-    structure. Any existing file/symlink at dest_path is removed first.
+    Mirrors TheRock's file/symlink/dir/hardlink flattening so replaced files
+    keep their exec bits and link structure. Removes any existing file first.
     """
     if dest_path.is_symlink() or (dest_path.exists() and not dest_path.is_dir()):
         os.unlink(dest_path)
@@ -173,8 +164,8 @@ def _replace_scoped_member(tf, member, dest_path, output_dir, relpaths):
     elif member.issym():
         dest_path.symlink_to(member.linkname)
     elif member.islnk():
-        # Hardlink target is archive-relative; strip its manifest prefix so it
-        # resolves to the already-written file in the flattened output tree.
+        # Hardlink target is archive-relative; strip the manifest prefix to
+        # resolve it against the already-written flattened file.
         for prefix in relpaths:
             prefix_slash = prefix + "/"
             if member.linkname.startswith(prefix_slash):
@@ -192,10 +183,9 @@ def _replace_scoped_member(tf, member, dest_path, output_dir, relpaths):
 def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
     """Extract instrumented libs from downloaded archives into the install tree.
 
-    For every replacement archive under dest_dir, read its artifact_manifest.txt
-    to learn the relpath prefixes, then flatten (strip prefix) each member into
-    output_dir -- but only members whose scoped path matches the artifact's
-    library folder (rocBLAS/rocSOLVER), so unrelated files are left in place.
+    Reads each archive's artifact_manifest.txt for relpath prefixes, then flattens
+    members into output_dir -- but only those matching the artifact's library
+    folder (e.g. rocBLAS), leaving unrelated files in place.
     """
     archives = sorted(
         p for p in dest_dir.iterdir() if p.name.endswith((".tar.zst", ".tar.xz"))
@@ -252,12 +242,9 @@ def main(argv):
         type=str,
         help="run id of the build from which instrumental components needs to be replaced",
     )
-    # The instrumented replacement fetch is keyed on a DIFFERENT repo than the
-    # generic install: the generic baseline uses --run-github-repo (e.g.
-    # ROCm/rocm-libraries), while the coverage run lives in its own repo (e.g.
-    # ROCm/TheRock). Defaults to $GITHUB_REPOSITORY so CI resolves to the
-    # coverage run's own repo automatically. Consumed by parse_known_args so it
-    # does NOT leak into extra_args / the generic install.
+    # Repo owning --code-coverage-run-id (the instrumented run), separate from
+    # --run-github-repo (the generic baseline). Defaults to $GITHUB_REPOSITORY.
+    # parse_known_args consumes it so it does not leak into the generic install.
     parser.add_argument(
         "--code-coverage-run-github-repo",
         type=str,

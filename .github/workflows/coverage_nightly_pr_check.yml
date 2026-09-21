@@ -1,31 +1,27 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# TEMPORARY. Delete this file, and the workflow_call trigger it relies on,
-# before merging the coverage PR.
+# TEMPORARY. Delete this file and the workflow_call trigger it relies on before
+# merging the coverage PR.
 #
-# multi_arch_ci_coverage.yml is triggered by hand, but a
-# workflow_dispatch only appears once the file is on the default branch. There
-# is therefore no way to run it from a branch and no way to see it in a PR's
-# checks, which leaves the phase 1 work unable to demonstrate the one thing it
-# exists to demonstrate.
+# multi_arch_ci_coverage.yml runs by hand, but workflow_dispatch only appears
+# once the file is on the default branch -- so it can't run from a branch or
+# show in a PR's checks, leaving phase 1 unable to demonstrate itself.
 #
 # A caller has no such restriction: paths under ./.github/workflows resolve
-# against the caller's own commit, so this runs the branch's copy of the
-# coverage workflow and its jobs report as checks on this PR.
+# against the caller's commit, so this runs the branch's copy and its jobs
+# report as checks on this PR.
 #
-# This is scaffolding, not part of the design. Coverage on presubmit is exactly
-# what the phase 1 scope rejects: one run is a multi-hour instrumented build
-# plus a full test suite, which is why coverage is a separate, manually
-# triggered workflow in the first place. Leaving this in place would charge
-# that cost to every PR touching coverage.
+# Scaffolding, not design. Presubmit coverage is what phase 1 rejects: each run
+# is a multi-hour instrumented build plus full test suite, which is why coverage
+# is a separate manual workflow. Leaving this in charges that cost to every PR.
 
 name: Coverage Nightly PR Check
 
 on:
   pull_request:
-    # Narrow on purpose. Every run here is a multi-hour instrumented build, so
-    # only the files carrying coverage logic are worth spending one on.
+    # Narrow on purpose: each run is a multi-hour build, so only files carrying
+    # coverage logic are worth one.
     paths:
       - ".github/workflows/coverage_nightly_pr_check.yml"
       - ".github/workflows/multi_arch_ci_coverage.yml"
@@ -39,9 +35,8 @@ on:
       - "CMakeLists.txt"
 
 concurrency:
-  # A later push supersedes this run. Queueing multi-hour instrumented builds
-  # behind each other, to report on code that has already been replaced, only
-  # occupies build nodes the rest of CI needs.
+  # A later push supersedes this run: queueing multi-hour builds to report on
+  # already-replaced code just occupies nodes the rest of CI needs.
   group: coverage-nightly-pr-check-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
@@ -50,72 +45,59 @@ jobs:
     name: Coverage
     uses: ./.github/workflows/multi_arch_ci_coverage.yml
     secrets: inherit
-    # A called workflow cannot hold more than its caller, so these are granted
-    # here even though the coverage workflow declares them itself: id-token for
-    # the AWS role the artifact fetches assume, actions:read for the baseline
-    # run lookup.
+    # A called workflow can't hold more than its caller, so grant these here too:
+    # id-token for the AWS role the artifact fetches assume, actions:read for the
+    # baseline run lookup.
     permissions:
       contents: read
       actions: read
       id-token: write
     with:
-      # Pinned rather than resolved, so that a change in the report means a
-      # change in this branch.
+      # Pinned, not resolved, so a change in the report means a change in this branch.
       #
       # ROCm/rockrel run 34068476531, "Multi-Arch Release (nightly)" on main,
-      # 2026-09-07, succeeded. A real nightly rather than a CI run, because
-      # that is what a dispatched coverage run will be given in practice and
-      # the phase 1 PoC is worth exercising against the real thing.
+      # 2026-09-07, succeeded. A real nightly, not a CI run, since that's what a
+      # dispatched coverage run gets in practice.
       #
-      # Being a rockrel run is safe here. Its artifacts embed the workspace
-      # they were built in (/__w/rockrel/rockrel), which breaks any consumer
-      # that configures CMake against them, but this workflow never does: it
-      # builds the instrumented stack from source in its own workspace and
-      # only installs the baseline on the test runner, where prebuilt binaries
-      # are executed and no package config is read.
+      # A rockrel run is safe here. Its artifacts embed their build workspace
+      # (/__w/rockrel/rockrel), which breaks consumers that configure CMake
+      # against them -- but this workflow never does: it builds the instrumented
+      # stack from source and only installs the baseline on the test runner,
+      # where prebuilt binaries run and no package config is read.
       #
-      # Verified before pinning that this run publishes artifacts covering
-      # every selected project: blas, fft, hipdnn, rand, solver and
-      # sparse. Not all are per-target -- hipdnn is generic throughout and
-      # solver's tests are generic -- so checking only for _gfx942 understates
-      # what is there.
+      # Verified before pinning that this run publishes artifacts for every
+      # selected project: blas, fft, hipdnn, rand, solver, sparse. Not all are
+      # per-target (hipdnn and solver's tests are generic), so checking only for
+      # _gfx942 understates what's there.
       baseline_run_id: "34068476531"
-      # The bucket lookup queries the run through the GitHub API, so it has to
-      # be told where the run lives; ROCm/TheRock returns 404 for a rockrel id.
+      # The bucket lookup queries the run via the GitHub API, so it needs the
+      # owning repo; ROCm/TheRock 404s for a rockrel id.
       baseline_repository: "ROCm/rockrel"
-      # That run published to therock-nightly-artifacts, which is the default,
-      # but naming it keeps the pin and its channel in one place.
+      # That run published to therock-nightly-artifacts (the default); naming it
+      # keeps the pin and channel together.
       baseline_release_type: "nightly"
       amdgpu_families: "gfx94X-dcgpu"
       # Every rocm-libraries project that builds a shared library. Run
-      # 34135220913 proved the path end to end on hipRAND -- instrumented
-      # build, baseline install, overlay, tests and a 77% report -- once
-      # libclang_rt.profile_rocm.a's own dependencies (-ldl, -lpthread) were
-      # added to the link line, which had been failing every instrumented
-      # binary before that. Run 34164420766 then took the instrumented build
-      # of all twelve green and reported six of them; the six that failed are
-      # what the host-only scoping, the timeout floor and the two registry
-      # corrections in this branch are for.
+      # 34135220913 proved the path end to end on hipRAND (build, install,
+      # overlay, tests, 77% report) once libclang_rt.profile_rocm.a's own deps
+      # (-ldl, -lpthread) were added to the link line. Run 34164420766 then built
+      # all twelve green and reported six; the six failures are what the host-only
+      # scoping, timeout floor and two registry corrections in this branch fix.
       #
-      # Named explicitly rather than using rocm_libraries_all because the four
-      # header-only projects (hipCUB, rocPRIM, rocThrust, rocWMMA) are left
-      # out. They have no library of their own to instrument, so they report
-      # against instrumented test binaries instead, and their inline code is
-      # the linkonce_odr case the overlay cannot fully isolate. Worth doing,
-      # but worth doing separately.
+      # Named explicitly, not rocm_libraries_all, to leave out the four
+      # header-only projects (hipCUB, rocPRIM, rocThrust, rocWMMA): they have no
+      # library to instrument, report against instrumented test binaries, and hit
+      # the linkonce_odr case the overlay can't isolate. Worth doing separately.
       #
-      # rccl and rocshmem are absent because they are not selectable: they
-      # live in comm-libs, which has no build job here. Both are also blocked
-      # upstream -- rccl's CMake refuses coverage outside a Debug build, and
-      # rocshmem fails on coverage plus HIP relocatable device code.
+      # rccl and rocshmem aren't selectable: they live in comm-libs, which has no
+      # build job here. Both are also blocked upstream -- rccl's CMake refuses
+      # coverage outside Debug, and rocshmem fails on coverage + HIP RDC.
       #
-      # hipBLASLt and hipTensor are absent for the same reason they are absent
-      # from the default selection: neither instrumented build links. See their
-      # blocked_reason in configure_coverage_ci.py. hipTensor was still in this
-      # list for run 34201973090, which is how its failure was found: the two
-      # registry corrections meant it was instrumented for the first time, and
-      # a stage is built as a unit, so its link error failed math-libs and
-      # skipped the report for all twelve.
+      # hipBLASLt and hipTensor are absent because neither instrumented build
+      # links (see blocked_reason in configure_coverage_ci.py). hipTensor was
+      # still listed for run 34201973090, which found its failure: the registry
+      # corrections instrumented it for the first time, and a stage builds as a
+      # unit, so its link error failed math-libs and skipped all twelve reports.
       projects_to_test: >-
         hipblas,hipdnn,hipfft,hiprand,hipsolver,
         hipsparselt,rocblas,rocfft,rocrand,rocsolver,rocsparse
