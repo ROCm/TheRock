@@ -190,6 +190,12 @@ all_build_variants = {
             "build_variant_suffix": "",
             "build_variant_cmake_preset": "windows-release",
         },
+        # Release sources built with CFG and the driver comgr DLL name.
+        "driver": {
+            "build_variant_label": "driver",
+            "build_variant_suffix": "driver",
+            "build_variant_cmake_preset": "windows-release-driver",
+        },
     },
 }
 
@@ -265,7 +271,7 @@ amdgpu_family_info_matrix_presubmit = {
             "family": "gfx110X-all",
             "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
             "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
+            "build_variants": ["release", "driver"],
         },
     },
     "gfx1151": {
