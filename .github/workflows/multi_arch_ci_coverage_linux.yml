@@ -12,8 +12,7 @@
 # directly. A future Windows mirror copies this file, swapping the build
 # reusable and runners; multi_arch_ci_coverage_report.yml is reused unchanged.
 #
-# RFC0014 phase 1: every enabled component on one architecture (gfx94X-dcgpu).
-# Change-based selection and multi-arch come later.
+# Currently targets gfx94X-dcgpu; change-based selection and multi-arch come later.
 
 name: Multi-Arch CI Coverage - Linux
 
@@ -34,11 +33,11 @@ on:
         default: ""
       projects_to_test:
         type: string
-        description: "Comma-separated coverage projects (e.g. hiprand), case-insensitive. Alias: rocm_libraries_all. Empty = every buildable project. rccl/rocshmem need the comm-libs build job (absent in phase 1), so they (and rocm_systems_all / all) are rejected."
+        description: "Comma-separated coverage projects (e.g. hiprand), case-insensitive. Alias: rocm_libraries_all. Empty = every buildable project. rccl/rocshmem require a comm-libs build job (not present), so rocm_systems_all and all are rejected."
         default: ""
       amdgpu_families:
         type: string
-        description: "Comma-separated GPU families to collect coverage on. Phase 1 uses the single default architecture."
+        description: "Comma-separated GPU families to collect coverage on."
         default: "gfx94X-dcgpu"
       coverage_config_source:
         type: string
@@ -50,16 +49,13 @@ on:
         default: "standard"
       quartz_tracking_id:
         type: string
-        description: >-
-          Leave empty. Internal Quartz tracking id linking this run to a release
-          lineage once the nightly dispatches coverage automatically.
+        description: "Leave empty. Reserved for release tracking."
         default: ""
 
-  # TEMPORARY, paired with coverage_nightly_pr_check.yml. workflow_dispatch only
-  # appears once the file is on the default branch, so it can't run from a
-  # branch or show in PR checks; a caller can, so the check workflow runs this
-  # branch's copy. Actions doesn't expand YAML anchors, so inputs are repeated.
-  # Remove this trigger with the check workflow once the run is green.
+  # TEMPORARY, paired with coverage_nightly_pr_check.yml.
+  # workflow_dispatch requires the file to be on the default branch; a caller
+  # has no such restriction. Actions doesn't expand YAML anchors, so inputs are
+  # repeated. Remove this trigger with the check workflow once the run is green.
   workflow_call:
     inputs:
       baseline_run_id:
@@ -76,11 +72,11 @@ on:
         default: ""
       projects_to_test:
         type: string
-        description: "Comma-separated coverage projects (e.g. hiprand), case-insensitive. Alias: rocm_libraries_all. Empty = every buildable project. rccl/rocshmem need the comm-libs build job (absent in phase 1), so they (and rocm_systems_all / all) are rejected."
+        description: "Comma-separated coverage projects (e.g. hiprand), case-insensitive. Alias: rocm_libraries_all. Empty = every buildable project. rccl/rocshmem require a comm-libs build job (not present), so rocm_systems_all and all are rejected."
         default: ""
       amdgpu_families:
         type: string
-        description: "Comma-separated GPU families to collect coverage on. Phase 1 uses the single default architecture."
+        description: "Comma-separated GPU families to collect coverage on."
         default: "gfx94X-dcgpu"
       coverage_config_source:
         type: string
@@ -92,9 +88,7 @@ on:
         default: "standard"
       quartz_tracking_id:
         type: string
-        description: >-
-          Leave empty. Internal Quartz tracking id linking this run to a release
-          lineage once the nightly dispatches coverage automatically.
+        description: "Leave empty. Reserved for release tracking."
         default: ""
 
 permissions:
@@ -166,8 +160,8 @@ jobs:
       contents: read
       id-token: write
 
-  # Build the whole stage, not just onboarded projects: test jobs need the full
-  # dependency set, and phase 1 instruments every project in one pass.
+  # Build the whole stage: test jobs need the full dependency set, and
+  # instrumenting as a unit keeps the per-project build cost flat.
   # coverage_cmake_options is the THEROCK_COVERAGE_*_ALL group option for a whole
   # group, else individual project flags; unselected projects build normally.
   build_instrumented_math_libs:

@@ -63,11 +63,9 @@ KNOWN_STAGES = frozenset(
     }
 )
 
-# Phase 1 has build jobs for these two only. The jobs that built any other
-# stage were removed while their sole measurable consumers -- rccl and rocshmem
-# in comm-libs -- are blocked upstream, so a selection reaching further is
-# rejected by resolve_build_stages() rather than failing hours later on a
-# missing inbound artifact.
+# Only compiler-runtime and math-libs have build jobs. rccl and rocshmem
+# (comm-libs) are blocked upstream, so selecting them is rejected here rather
+# than failing hours later on a missing inbound artifact.
 BUILDABLE_STAGES = frozenset({STAGE_COMPILER_RUNTIME, STAGE_MATH_LIBS})
 
 
@@ -769,7 +767,7 @@ def build_coverage_cmake_options(project_keys: list[str]) -> list[str]:
 
 
 def resolve_build_stages(project_keys: list[str]) -> set[str]:
-    """Returns the stages the selection needs, rejecting what phase 1 cannot build.
+    """Returns the stages the selection needs, rejecting stages with no build job.
 
     Only compiler-runtime and math-libs have build jobs. A project from any
     other stage would have nothing built for it, and that would not surface

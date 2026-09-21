@@ -1,20 +1,14 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# TEMPORARY. Delete this file and the workflow_call trigger it relies on before
-# merging the coverage PR.
+# TEMPORARY. Delete this file and the workflow_call trigger before merging.
 #
-# multi_arch_ci_coverage_linux.yml runs by hand, but workflow_dispatch only
-# appears once the file is on the default branch -- so it can't run from a
-# branch or show in a PR's checks, leaving phase 1 unable to demonstrate itself.
+# workflow_dispatch only appears once the file is on the default branch, so it
+# can't trigger from a branch. A caller can: paths resolve against the caller's
+# commit, so this runs the branch copy as a PR check.
 #
-# A caller has no such restriction: paths under ./.github/workflows resolve
-# against the caller's commit, so this runs the branch's copy and its jobs
-# report as checks on this PR.
-#
-# Scaffolding, not design. Presubmit coverage is what phase 1 rejects: each run
-# is a multi-hour instrumented build plus full test suite, which is why coverage
-# is a separate manual workflow. Leaving this in charges that cost to every PR.
+# Presubmit coverage is too expensive for every PR (multi-hour instrumented
+# build + full test suite); coverage is a separate manual workflow by design.
 
 name: Coverage Nightly PR Check
 
@@ -52,7 +46,7 @@ jobs:
       actions: read
       id-token: write
     with:
-      # Pinned, not resolved, so a change in the report means a change in this branch.
+      # Pinned baseline: a report change must reflect a code change, not a baseline drift.
       #
       # ROCm/rockrel run 34068476531, "Multi-Arch Release (nightly)" on main,
       # 2026-09-07, succeeded. A real nightly, not a CI run, since that's what a
@@ -80,8 +74,7 @@ jobs:
       # 34135220913 proved the path end to end on hipRAND (build, install,
       # overlay, tests, 77% report) once libclang_rt.profile_rocm.a's own deps
       # (-ldl, -lpthread) were added to the link line. Run 34164420766 then built
-      # all twelve green and reported six; the six failures are what the host-only
-      # scoping, timeout floor and two registry corrections in this branch fix.
+      # all twelve green and reported six.
       #
       # Named explicitly, not rocm_libraries_all, to leave out the four
       # header-only projects (hipCUB, rocPRIM, rocThrust, rocWMMA): they have no
