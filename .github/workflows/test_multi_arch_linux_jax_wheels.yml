@@ -361,6 +361,11 @@ jobs:
 
       # Package names, versions and where to get them arrive as env vars above.
       - name: Install JAX wheels
+        env:
+          # A tip build is versioned as a JAX nightly, which PyPI does not
+          # carry. This registry holds nightlies only, so it has nothing to
+          # answer with for the pinned releases every other cell installs.
+          JAX_INDEX_URL: "https://us-python.pkg.dev/ml-oss-artifacts-published/jax-public-nightly-artifacts-registry/simple/"
         run: |
           python external-builds/jax/install_jax_wheels.py
 
@@ -397,6 +402,7 @@ jobs:
           python external-builds/jax/run_jax_tests.py \
             --jax-dir jax \
             --jax-ref "${JAX_REF}" \
+            --jax-version "${JAX_VERSION}" \
             --amdgpu-family "${TEST_AMDGPU_FAMILY}" \
             --test-subset "${TEST_SUBSET}"
 

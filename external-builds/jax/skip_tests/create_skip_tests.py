@@ -16,6 +16,7 @@ Example usage:
 import argparse
 import importlib.util
 import pathlib
+import re
 import sys
 from typing import Any
 
@@ -25,6 +26,22 @@ GENERIC_FILE = "generic.py"
 
 # Applies regardless of which GPU family the tests run on.
 COMMON_SECTION = "common"
+
+# The leading release number of a full version, e.g. 0.11.2 of
+# 0.11.2.dev20260914+rocm7.14.0a20260914.
+_BASE_VERSION_RE = re.compile(r"^\d+(?:\.\d+)*")
+
+
+def base_version(jax_version: str) -> str:
+    """The release a full version belongs to: 0.11.2.dev20260914 -> 0.11.2.
+
+    A build of upstream tip is versioned as the JAX nightly it pairs with, and
+    what fails on it is what fails on the release that nightly leads to, so both
+    read the same file. A value that does not start with a release number (a
+    branch name) is returned unchanged and simply names no file.
+    """
+    match = _BASE_VERSION_RE.match(jax_version)
+    return match.group(0) if match else jax_version
 
 
 def _load_data_file(path: pathlib.Path) -> dict[str, Any]:
@@ -45,7 +62,7 @@ def data_files(jax_version: str) -> list[pathlib.Path]:
     if jax_version == "all":
         files += sorted(THIS_DIR.glob("jax_*.py"))
     elif jax_version:
-        version_file = THIS_DIR / f"jax_{jax_version}.py"
+        version_file = THIS_DIR / f"jax_{base_version(jax_version)}.py"
         if version_file.exists():
             files.append(version_file)
     return files
