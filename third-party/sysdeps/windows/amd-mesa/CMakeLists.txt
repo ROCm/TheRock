@@ -85,6 +85,8 @@ cpp = ${_meson_cpp_bin}
 ")
 
 set(PATCH_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/../patch_source")
+file(TO_NATIVE_PATH "${SOURCE_DIR}" _source_dir_native)
+file(TO_NATIVE_PATH "${PATCH_SOURCE_DIR}" _patch_source_dir_native)
 
 add_custom_target(
   meson_build ALL
@@ -92,8 +94,12 @@ add_custom_target(
   COMMAND
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${PATCH_SOURCE_DIR}"
   COMMAND
-    # We have to patch the sources so make a fresh copy.
-    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${PATCH_SOURCE_DIR}"
+    # We have to patch the sources so make a fresh copy. Use robocopy /SL rather
+    # than cmake -E copy_directory so symlinks are copied as links instead of
+    # being dereferenced: mesa ships a dangling symlink that would otherwise
+    # abort the copy.
+    # robocopy exits 0-7 on success and >=8 on failure, so map that to 0/1.
+    cmd /c "robocopy \"${_source_dir_native}\" \"${_patch_source_dir_native}\" /E /SL /NFL /NDL /NJH /NJS & if errorlevel 8 (exit /b 1) else (exit /b 0)"
   COMMAND
     # Step 1: Initial meson setup to download libva-2.22.0 subproject.
     # Required before patching because patch_source.ps1 modifies files

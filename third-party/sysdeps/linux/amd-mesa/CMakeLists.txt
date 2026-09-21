@@ -59,8 +59,10 @@ add_custom_target(
   COMMAND
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${PATCH_SOURCE_DIR}"
   COMMAND
-    # We have to patch the sources so make a fresh copy.
-    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${PATCH_SOURCE_DIR}"
+    # We have to patch the sources so make a fresh copy. Use cp -a rather than
+    # cmake -E copy_directory so symlinks are preserved instead of dereferenced:
+    # mesa ships a dangling symlink that would otherwise abort the copy.
+    cp -a "${SOURCE_DIR}" "${PATCH_SOURCE_DIR}"
   COMMAND
     # Step 1: Initial meson setup to download libva-2.22.0 subproject
     # This is required before patching because patch_source.sh modifies files in the libva subproject
