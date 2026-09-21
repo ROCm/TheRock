@@ -244,6 +244,9 @@ class CIInputs:
     # Changed projects from external repos (e.g., "projects/rocprim,projects/hipcub")
     changed_projects: list[str] = field(default_factory=list)
 
+    # When True, suppress GPU test jobs for all families (test-runs-on = "").
+    skip_gpu_tests: bool = False
+
     # External repo JSON (e.g., '{"repository":"ROCm/rocm-libraries","ref":"..."}')
     # Non-empty when an external repo calls TheRock workflows
     external_repo: str = ""
@@ -415,6 +418,8 @@ class CIInputs:
             baseline_repository=os.environ.get("BASELINE_REPOSITORY")
             or os.environ.get("THEROCK_REPOSITORY", ""),
             changed_projects=_parse_comma_list(os.environ.get("CHANGED_PROJECTS", "")),
+            skip_gpu_tests=os.environ.get("SKIP_GPU_TESTS", "").lower()
+            in ("1", "true"),
             external_repo=os.environ.get("EXTERNAL_REPO", ""),
         )
         inputs.validate()
@@ -1295,6 +1300,11 @@ def _expand_build_config_for_platform(
         # fetch_test_configurations.py for better load distribution.
         # Here we just use the default fallback label.
         test_runs_on = platform_info["test-runs-on"]
+
+        # When skip_gpu_tests is set, suppress all GPU test jobs.
+        if ci_inputs.skip_gpu_tests and test_runs_on:
+            test_runs_on = ""
+            print(f"  {family_name}: skip_gpu_tests=true, disabling GPU tests")
 
         # When a test_runner:<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
