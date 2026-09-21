@@ -57,19 +57,20 @@ def load_external_runner_config() -> dict | None:
     config_path = Path(ci_config_path)
     sys.path.insert(0, str(config_path))
     try:
-        from ci_config_api import get_gpu_runner_labels, load_runner_config
+        from ci_config_api import load_config
     except ImportError:
         _log(f"CI config API not found at {ci_config_path}, using local fallback")
         return None
     try:
-        raw_config = load_runner_config(config_path)
+        config = load_config(version=2, config_path=config_path)
     except Exception as e:
         _log(f"Failed to load CI config from {ci_config_path}: {e}")
         return None
-    # Add runner_labels for _overlay_runner_config (extracted from gpu_runner_labels)
-    raw_config["runner_labels"] = get_gpu_runner_labels(raw_config)
     _log(f"Loaded external runner config from {ci_config_path}")
-    return raw_config
+    return {
+        "runner_labels": config.get_gpu_runner_labels(),
+        "build_runners": config.build_runners,
+    }
 
 
 def is_asan():
@@ -211,7 +212,8 @@ amdgpu_family_info_matrix dictionary fields:
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
 - nightly_check_only_for_family (optional): if enabled, only run CI nightly tests for this architecture
 - submodule_bump_tests_only (optional): if enabled, only run tests when submodule changes are detected or on workflow_dispatch (builds always run)
-- skip_tests_on_submodule_bump (optional): if enabled, skip tests when submodule changes are detected (inverse of submodule_bump_tests_only). Useful for architectures with limited hardware where submodule bumps are tested elsewhere.
+- test_type_for_family (optional): forces the test type for this family (e.g., "quick"), overriding the global test_type. Useful for families with limited hardware that should always run quick tests.
+- trigger_test_label_only (optional): if enabled, only run tests when the family's gfx* label is present on the PR (e.g., gfx125x label for gfx125x family). Builds always run regardless of label.
 """
 # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
 amdgpu_family_info_matrix_presubmit = {
@@ -309,11 +311,10 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx125x": {
         "linux": {
-            # No hardware available for testing yet; build-only.
-            # PyTorch builds can be triggered manually via workflow_dispatch.
-            "test-runs-on": "",
+            # NOTE: MI455 runner supply is very limited.
+            "test-runs-on": "linux-mi455-gpu-rocm",
             "family": "gfx125X-dcgpu",
-            "fetch-gfx-targets": [],
+            "fetch-gfx-targets": ["gfx1250"],
             # gfx1250 has xnack enabled by default and is not in the
             # gfx942/gfx950 xnack+ munging list in therock_sanitizers.cmake,
             # so GPU_TARGETS stays plain "gfx1250" for these variants.
@@ -324,6 +325,10 @@ amdgpu_family_info_matrix_presubmit = {
                 "host-asan",
                 "host-asan-debug",
             ],
+            # Only run tests when gfx125X-dcgpu label is present
+            "trigger_test_label_only": True,
+            # Force quick tests for MI455 hardware
+            "test_type_for_family": "quick",
         },
     },
 }
@@ -337,7 +342,8 @@ amdgpu_family_info_matrix_postsubmit = {
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
             "build_variants": ["release"],
-            "skip_tests_on_submodule_bump": True,
+            # Only run tests when gfx90a label is present on PR
+            "trigger_test_label_only": True,
         },
         "windows": {
             "test-runs-on": "",
@@ -361,8 +367,8 @@ amdgpu_family_info_matrix_postsubmit = {
                 "host-asan-debug",
                 "tsan",
             ],
-            # Only run tests on submodule bumps (builds always run)
-            "submodule_bump_tests_only": True,
+            # Only run tests when gfx950-dcgpu label is present
+            "trigger_test_label_only": True,
         }
     },
 }
@@ -512,6 +518,20 @@ amdgpu_family_info_matrix_nightly = {
 }
 
 
+# Targets must be named explicitly; excluded from all and default CI selections.
+amdgpu_family_info_matrix_explicit_only = {
+    "gfx1250-strict": {
+        "linux": {
+            "family": "gfx1250-strict",
+            "test-runs-on": "",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "bypass_tests_for_releases": True,
+        },
+    },
+}
+
+
 def _get_local_families_for_trigger_types(trigger_types) -> dict:
     """Returns combined family matrix from local definitions for trigger types."""
     result = {}
@@ -519,6 +539,7 @@ def _get_local_families_for_trigger_types(trigger_types) -> dict:
         "presubmit": amdgpu_family_info_matrix_presubmit,
         "postsubmit": amdgpu_family_info_matrix_postsubmit,
         "nightly": amdgpu_family_info_matrix_nightly,
+        "explicit_only": amdgpu_family_info_matrix_explicit_only,
     }
 
     for trigger_type in trigger_types:

@@ -83,8 +83,8 @@ jobs:
       contents: read
       id-token: write
 
-  ci_summary:
-    name: CI Summary
+  ci_asan_summary:
+    name: CI ASAN Summary
     if: always()
     needs:
       - setup
@@ -95,6 +95,7 @@ jobs:
       - name: Evaluate workflow results
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
           python build_tools/github_actions/workflow_summary.py \
-            --needs-json '${{ toJSON(needs) }}'
+            --needs-json "${NEEDS_JSON}"
