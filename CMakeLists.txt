@@ -23,6 +23,8 @@ endif()
 #     on oversized DWARF64 sections produced by -Og -gdwarf64 -gsplit-dwarf
 #   - hipBLASLt: rocisa C extension (nanobind) aborts joblib worker processes under debug,
 #     causing TensileCreateLibrary TerminatedWorkerError
+#   - rocjitsu: assert(initialized_) in libc_passthrough.cpp:66 fires under debug
+#     (compiled out by -DNDEBUG in release); workaround until source bug is fixed
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
   set(amdsmi_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type for amdsmi" FORCE)
   set(therock-host-blas_BUILD_TYPE Release CACHE STRING "Build type for host-blas" FORCE)
@@ -31,6 +33,7 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
   set(rpp_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type for rpp" FORCE)
   set(composable_kernel_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type for composable_kernel" FORCE)
   set(hipBLASLt_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type for hipBLASLt" FORCE)
+  set(rocjitsu_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type for rocjitsu" FORCE)
 endif()
 
 project(THEROCK)
