@@ -10,6 +10,7 @@ on:
       - 'stage/docker/**'
     paths:
       - dockerfiles/no_rocm_image_ubi10.Dockerfile
+      - dockerfiles/docker_images.json
       - .github/workflows/publish_no_rocm_image_ubi10.yml
 
 permissions:
@@ -17,8 +18,15 @@ permissions:
   packages: write
 
 jobs:
+  resolve-images:
+    uses: ./.github/workflows/resolve-docker-images.yml
+    with:
+      image_name: ubi10_base
+
   publish_no_rocm_image_ubi10:
+    needs: [resolve-images]
     uses: ./.github/workflows/publish_dockerfile.yml
     with:
       DOCKER_FILE_NAME: no_rocm_image_ubi10
       DOCKER_IMAGE_NAME: no_rocm_image_ubi10
+      BUILD_ARGS: BASE_IMAGE=${{ needs.resolve-images.outputs.image_ref }}

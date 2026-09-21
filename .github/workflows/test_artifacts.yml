@@ -122,6 +122,12 @@ permissions:
 run-name: Test Artifacts (${{ inputs.amdgpu_families }}, ${{ inputs.release_type }}, ${{ inputs.test_type }}, ${{ inputs.build_variant }}, ${{ inputs.test_runs_on }})
 
 jobs:
+  resolve-images:
+    uses: ./.github/workflows/resolve-docker-images.yml
+    with:
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      image_name: no_rocm_image_ubuntu24_04
+
   configure_test_matrix:
     name: "Configure test matrix (${{ inputs.amdgpu_families }})"
     # if there is a test machine available
@@ -192,7 +198,7 @@ jobs:
 
   test_sanity_check:
     name: 'Test Sanity Check'
-    needs: configure_test_matrix
+    needs: [resolve-images, configure_test_matrix]
     if: ${{ fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner != '' }}
     uses: './.github/workflows/test_component.yml'
     secrets: inherit
@@ -210,11 +216,12 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       build_variant: ${{ inputs.build_variant }}
+      default_container_image: ${{ needs.resolve-images.outputs.image_ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   test_components:
     name: 'Test ${{ matrix.components.job_name }}'
-    needs: [test_sanity_check, configure_test_matrix]
+    needs: [resolve-images, test_sanity_check, configure_test_matrix]
     # Run when:
     #   - sanity check passed
     #   - there are components to test
@@ -267,6 +274,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       build_variant: ${{ inputs.build_variant }}
+      default_container_image: ${{ needs.resolve-images.outputs.image_ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:

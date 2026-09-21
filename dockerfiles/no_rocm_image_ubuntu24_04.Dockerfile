@@ -1,6 +1,7 @@
 # This Docker image is used for TheRock builds and tests, providing a clean ROCm-less container
 
-FROM ubuntu:24.04
+ARG BASE_IMAGE=docker.io/ubuntu:24.04
+FROM ${BASE_IMAGE}
 
 RUN apt update && apt install sudo -y
 

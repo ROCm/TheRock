@@ -1,4 +1,5 @@
-FROM ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
+ARG BASE_IMAGE=ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:f6741eb54c20d3219bdcd25742dbaa2c6b14394253671bf018be89b324b31a48
+FROM ${BASE_IMAGE}
 
 # no_rocm_image_ubuntu24_04_media:
 # Extend the base no_rocm_image_ubuntu24_04 image with media / video codec

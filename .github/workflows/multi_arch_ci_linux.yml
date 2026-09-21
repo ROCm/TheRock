@@ -53,15 +53,21 @@ permissions:
   contents: read
 
 jobs:
+  resolve-images:
+    uses: ./.github/workflows/resolve-docker-images.yml
+    with:
+      image_name: python_slim
+
   copy_prebuilt_stages:
     name: Copy Prebuilt Stages
+    needs: [resolve-images]
     if: ${{ fromJSON(inputs.build_config).prebuilt_stages != '' && fromJSON(inputs.build_config).baseline_run_id != '' }}
     runs-on: aws-linux-scale-rocm-prod
     permissions:
       contents: read
       id-token: write
     container:
-      image: python:3.12-slim
+      image: ${{ needs.resolve-images.outputs.image_ref }}
     steps:
       - name: Checking out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
