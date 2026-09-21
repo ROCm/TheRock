@@ -8,8 +8,9 @@
 # * https://github.com/ROCm/TheRock/issues/3332
 # * https://github.com/ROCm/TheRock/issues/3291
 
-# Higher-trust entry points: manual runs and automation from https://github.com/ROCm/rockrel.
-# Inherit Quartz credentials through nested workflows without repeating mappings.
+# Notes on security:
+#   * Higher-trust entry points: manual runs and automation from https://github.com/ROCm/rockrel.
+#   * Inherit Quartz credentials through nested workflows without repeating mappings.
 
 name: Multi-Arch Release Windows PyTorch Wheels
 

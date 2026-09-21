@@ -5,8 +5,9 @@
 #
 # Modeled on multi_arch_release.yml but uses the ASAN build variant.
 
-# Higher-trust entry points: manual runs and automation from https://github.com/ROCm/rockrel.
-# Inherit Quartz credentials through nested workflows without repeating mappings.
+# Notes on security:
+#   * Higher-trust entry points: manual runs and automation from https://github.com/ROCm/rockrel.
+#   * Inherit Quartz credentials through nested workflows without repeating mappings.
 
 name: Multi-Arch Release ASAN
 

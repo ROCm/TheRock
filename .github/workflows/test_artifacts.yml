@@ -1,8 +1,9 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Inherit caller-provided secrets; limited-trust PR entry points restrict the set.
-# Higher-trust push/manual runs and https://github.com/ROCm/rockrel also supply secrets.
+# Notes on security:
+#   * Inherit caller-provided secrets; limited-trust PR entry points restrict the set.
+#   * Higher-trust push/manual runs and https://github.com/ROCm/rockrel also supply secrets.
 
 name: Test Artifacts
 

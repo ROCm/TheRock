@@ -13,8 +13,9 @@
 # let us have this pre-trigger job freeze commits/versions so re-runs use
 # consistent values, see https://github.com/ROCm/TheRock/issues/1236.
 
-# Higher-trust entry points: manual runs and automation from https://github.com/ROCm/rockrel.
-# Inherit Quartz credentials through nested workflows without repeating mappings.
+# Notes on security:
+#   * Higher-trust entry points: manual runs and automation from https://github.com/ROCm/rockrel.
+#   * Inherit Quartz credentials through nested workflows without repeating mappings.
 
 name: Multi-Arch Release
 

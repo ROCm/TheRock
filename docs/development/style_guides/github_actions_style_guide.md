@@ -305,7 +305,9 @@ findings:
   callee's `on.workflow_call.secrets`.
 - **Intentional inheritance:** Higher-trust entry points may use
   `secrets: inherit` to avoid repeating secret mappings across nested workflows.
-  Add a short comment explaining the trust level and suppress the finding with
+  Child workflows may also inherit a limited set of secrets explicitly forwarded
+  by a limited-trust entry point. Add a short comment explaining the trust level
+  or caller-imposed limits and suppress the finding with
   `# zizmor: ignore[secrets-inherit]`.
 
 ✅ **Preferred:**
@@ -330,8 +332,8 @@ Across a workflow chain, each call must repeat the mappings and each callee must
 repeat the declarations.
 
 > [!TIP]
-> Using `secrets: inherit` can avoid this duplication but it should be reserved
-> for higher-trust workflows (see below).
+> Using `secrets: inherit` can avoid this duplication in higher-trust workflows
+> or when a limited-trust entry point restricts the forwarded set (see below).
 
 ```yaml
 # .github/workflows/release.yml (caller)
@@ -386,6 +388,41 @@ jobs:
   build:
     # Higher-trust entry points: triggered by maintainers or automation.
     uses: ./.github/workflows/build.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+```
+
+Child workflows may also inherit secrets after a limited-trust entry point
+explicitly restricts the forwarded set. Here, nested calls receive only the two
+named credentials. Fork PRs still lack these secrets, so secret-dependent
+notifications must handle their absence.
+
+```yaml
+# .github/workflows/ci.yml
+on:
+  pull_request:
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+    secrets:
+      GH_APP_HAULY_CID: ${{ secrets.GH_APP_HAULY_CID }}
+      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+```
+
+```yaml
+# .github/workflows/test.yml
+on:
+  workflow_call:
+    secrets:
+      # The PR entry point explicitly limits the forwarded set.
+      GH_APP_HAULY_CID:
+        required: false
+      GH_APP_HAULY_PRIVATE_KEY:
+        required: false
+
+jobs:
+  component:
+    uses: ./.github/workflows/test_component.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
 ```
 

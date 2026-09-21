@@ -1,8 +1,9 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Inherit caller-provided Quartz credentials from higher-trust release entry points.
-# This avoids repeating secret mappings across nested workflows.
+# Notes on security:
+#   * Inherit caller-provided Quartz credentials from higher-trust release entry points.
+#     This avoids repeating secret mappings across nested workflows.
 
 name: Multi-Arch Release Linux
 

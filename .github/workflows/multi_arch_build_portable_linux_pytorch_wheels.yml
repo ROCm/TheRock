@@ -20,8 +20,9 @@
 # * https://github.com/ROCm/TheRock/issues/3332
 # * https://github.com/ROCm/TheRock/issues/3291
 
-# Inherit caller-provided secrets; limited-trust PR entry points restrict the set.
-# Higher-trust callers supply Quartz credentials without repeating nested mappings.
+# Notes on security:
+#   * Inherit caller-provided secrets; limited-trust PR entry points restrict the set.
+#   * Higher-trust callers supply Quartz credentials without repeating nested mappings.
 
 name: Multi-Arch Build Portable Linux PyTorch Wheels
 

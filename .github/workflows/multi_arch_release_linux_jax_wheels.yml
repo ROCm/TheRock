@@ -6,8 +6,9 @@
 # This workflow owns the release matrix and delegates each matrix cell to the
 # reusable single-build workflow.
 
-# Higher-trust entry points: manual runs and automation from https://github.com/ROCm/rockrel.
-# Inherit Quartz credentials through nested workflows without repeating mappings.
+# Notes on security:
+#   * Higher-trust entry points: manual runs and automation from https://github.com/ROCm/rockrel.
+#   * Inherit Quartz credentials through nested workflows without repeating mappings.
 
 name: Multi-Arch Release Linux JAX Wheels
 

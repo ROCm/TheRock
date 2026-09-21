@@ -14,8 +14,9 @@
 # - Tests only gfx94x (Linux) and gfx110x (Windows) with quick/standard test type
 # - No ASAN tests (build only for downstream consumption)
 
-# Higher-trust entry point: manually triggered by maintainers.
-# Inherit secrets to avoid repeating mappings across nested workflows.
+# Notes on security:
+#   * Higher-trust entry point: manually triggered by maintainers.
+#   * Inherit secrets to avoid repeating mappings across nested workflows.
 
 name: Compiler Daily Bump
 

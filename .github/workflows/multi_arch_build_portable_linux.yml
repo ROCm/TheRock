@@ -17,8 +17,9 @@
 # 11. cv-libs (generic) - rpp
 # 12. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
 
-# Inherit caller-provided secrets; limited-trust PR entry points restrict the set.
-# Higher-trust callers supply Quartz credentials without repeating nested mappings.
+# Notes on security:
+#   * Inherit caller-provided secrets; limited-trust PR entry points restrict the set.
+#   * Higher-trust callers supply Quartz credentials without repeating nested mappings.
 
 name: Multi-Arch Build (Linux)
 
