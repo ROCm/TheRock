@@ -38,7 +38,7 @@ jobs:
       - name: Determine Docker tag
         id: tag
         run: |
-          ref="${{ github.ref_name }}"
+          ref="${GITHUB_REF_NAME}"
           if [[ "$ref" == stage/docker/* ]]; then
             suffix="${ref#stage/docker/}"
             echo "TAG_SUFFIX=stage-${suffix}" >> "$GITHUB_OUTPUT"
