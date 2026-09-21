@@ -176,7 +176,7 @@ class CommandConstructionTest(TempDirTestBase):
         self.assertIn("--format=html", command)
         self.assertIn(f"-output-dir={output_dir}", command)
         self.assertIn("--project-title=hiprand", command)
-        self.assertIn("-Xdemangler=/llvm/llvm-cxxfilt", command)
+        self.assertIn(f"-Xdemangler={Path('/llvm/llvm-cxxfilt')}", command)
 
     def test_path_equivalence_reaches_every_rendering(self):
         objects = [self.touch("lib/a.so")]

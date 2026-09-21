@@ -18,10 +18,10 @@ A project's tests load its dependencies too. If those were instrumented, their
 counters would pollute the report. So exactly one library is instrumented; the
 rest come from the regular nightly build (the **baseline**):
 
-| | Source | What it provides |
-|---|---|---|
+|              | Source              | What it provides                   |
+| ------------ | ------------------- | ---------------------------------- |
 | **Baseline** | Regular nightly run | Whole ROCm stack, non-instrumented |
-| **Coverage** | This run | Only the one instrumented project |
+| **Coverage** | This run            | Only the one instrumented project  |
 
 The test runner installs the baseline, then replaces only the selected
 project's libraries with instrumented ones. See [Coverage CI](#coverage-ci).
@@ -42,11 +42,11 @@ for an unregistered project is a configure error, not a silent no-op.
 
 ### Enabling a whole group
 
-| Option | Instruments |
-| --- | --- |
+| Option                                | Instruments                                  |
+| ------------------------------------- | -------------------------------------------- |
 | `THEROCK_COVERAGE_ROCM_LIBRARIES_ALL` | all coverage-enabled rocm-libraries projects |
-| `THEROCK_COVERAGE_ROCM_SYSTEMS_ALL` | all coverage-enabled rocm-systems projects |
-| `THEROCK_COVERAGE_ALL` | both of the above |
+| `THEROCK_COVERAGE_ROCM_SYSTEMS_ALL`   | all coverage-enabled rocm-systems projects   |
+| `THEROCK_COVERAGE_ALL`                | both of the above                            |
 
 Each expands to individual `<PROJECT>_ENABLE_COVERAGE` flags. An explicit
 `-D<PROJECT>_ENABLE_COVERAGE=OFF` wins over a group flag. Membership is
@@ -191,10 +191,10 @@ most for header-only projects (rocPRIM, hipCUB, rocThrust, rocWMMA).
 
 ### Artifacts
 
-| Artifact | Where | Purpose |
-| --- | --- | --- |
-| Instrumented | CI bucket, this run | Stack under test + LLVM tools |
-| Profraw | GitHub Actions artifacts, per shard | Raw profiles for aggregation |
+| Artifact     | Where                               | Purpose                       |
+| ------------ | ----------------------------------- | ----------------------------- |
+| Instrumented | CI bucket, this run                 | Stack under test + LLVM tools |
+| Profraw      | GitHub Actions artifacts, per shard | Raw profiles for aggregation  |
 
 Profraw names include the project, GPU family, and shard index.
 
@@ -209,11 +209,11 @@ doesn't match the project's install layout).
 
 The `coverage-report-<project>-<family>` artifact:
 
-| File | What it is |
-| --- | --- |
-| `coverage.info` | lcov for Codecov |
+| File                   | What it is                 |
+| ---------------------- | -------------------------- |
+| `coverage.info`        | lcov for Codecov           |
 | `coverage_summary.txt` | per-file table with totals |
-| `html/index.html` | browsable annotated report |
+| `html/index.html`      | browsable annotated report |
 
 Totals are also written to the job summary page. The HTML step runs
 `fetch_sources.py` and remaps paths with `--path-equivalence`; it is
