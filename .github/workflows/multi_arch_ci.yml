@@ -129,7 +129,6 @@ jobs:
       build_jax: ${{ github.event_name != 'workflow_dispatch' || inputs.build_jax }}
       build_native_linux: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_linux }}
       build_stages: ${{ inputs.build_stages || '' }}
-    secrets: inherit
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
@@ -140,7 +139,6 @@ jobs:
         needs.setup.outputs.enable_build_jobs == 'true'
       }}
     uses: ./.github/workflows/multi_arch_ci_linux.yml
-    secrets: inherit
     with:
       build_config: ${{ needs.setup.outputs.linux_build_config }}
       test_labels: ${{ needs.setup.outputs.linux_test_labels }}
@@ -162,7 +160,6 @@ jobs:
         needs.setup.outputs.enable_build_jobs == 'true'
       }}
     uses: ./.github/workflows/multi_arch_ci_windows.yml
-    secrets: inherit
     with:
       build_config: ${{ needs.setup.outputs.windows_build_config }}
       test_labels: ${{ needs.setup.outputs.windows_test_labels }}
