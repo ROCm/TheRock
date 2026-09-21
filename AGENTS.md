@@ -224,4 +224,4 @@ Reference the below for specialty tasks and deeper analysis, asking questions wi
 - [docs/development/development_guide.md](docs/development/development_guide.md) - Component development
 - [docs/development/dependencies.md](docs/development/dependencies.md) - Dependency management
 
-If development patterns become useful for certain development styles, prefer to document the salient details locally in this CLAUDE.md in addition to exhaustive documentation elsewhere.
+If development patterns become useful for certain development styles, prefer to document the salient details locally in this AGENTS.md in addition to exhaustive documentation elsewhere.

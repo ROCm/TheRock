@@ -185,6 +185,9 @@ jobs:
     env:
       QUARTZ_REPORTING_WORKFLOW: setup_multi_arch.yml
       QUARTZ_WORKFLOW_POSTFIX: "- setup"
+      BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
+      PRERELEASE_VERSION: ${{ inputs.prerelease_version }}
+      EXTERNAL_REPO: ${{ inputs.external_repo }}
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
@@ -250,7 +253,6 @@ jobs:
           # Token for GitHub API calls (branch history, baseline workflow runs)
           GITHUB_TOKEN: ${{ github.token }}
           # External repo JSON (e.g., {"repository":"ROCm/rocm-libraries","ref":"..."})
-          EXTERNAL_REPO: ${{ inputs.external_repo }}
           CI_CONFIG_PATH: ci-config
           # External repo family overrides allow callers to add/modify GPU family configs
           # (e.g., adding test runners for architectures not enabled in TheRock's default config)
@@ -273,18 +275,20 @@ jobs:
       # buckets, use different ccache namespaces, etc.
       - name: Compute package version
         id: rocm_package_version
+        env:
+          CHECKOUT_COMMIT: ${{ steps.checkout.outputs.commit }}
         run: |
           python ./build_tools/compute_rocm_package_version.py \
-            --release-type=${{ inputs.release_type }} \
-            --prerelease-version=${{ inputs.prerelease_version }} \
-            --override-git-sha=${{ steps.checkout.outputs.commit }}
+            --release-type="${BUILD_RELEASE_TYPE}" \
+            --prerelease-version="${PRERELEASE_VERSION}" \
+            --override-git-sha="${CHECKOUT_COMMIT}"
 
       - name: Detect external repo config
         id: external_repo_config
         if: ${{ inputs.external_repo != '' }}
         run: |
           python ./build_tools/github_actions/detect_external_repo_config.py \
-            --external-repo-json='${{ inputs.external_repo }}'
+            --external-repo-json="${EXTERNAL_REPO}"
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true

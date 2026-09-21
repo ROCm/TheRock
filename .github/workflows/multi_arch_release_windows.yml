@@ -123,6 +123,9 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
+    env:
+      BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -146,12 +149,14 @@ jobs:
           product: core
 
       - name: Copy to release buckets
+        env:
+          KPACK_SPLIT: ${{ needs.build_python_packages.outputs.kpack_split }}
         run: |
           python build_tools/github_actions/publish_rocm_to_release_buckets.py \
             --run-id="${{ github.run_id }}" \
             --platform=windows \
-            --release-type="${{ inputs.release_type }}" \
-            --kpack-split="${{ needs.build_python_packages.outputs.kpack_split }}" \
+            --release-type="${BUILD_RELEASE_TYPE}" \
+            --kpack-split="${KPACK_SPLIT}" \
             --structured
 
   trigger_test_artifacts_per_family:

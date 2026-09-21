@@ -29,8 +29,6 @@ _FETCH_SOURCES_PATTERNS = ("fetch_sources.py",)
 _KNOWN_VIOLATIONS = frozenset(
     [
         "bump_submodules.yml / bump-submodules / 'Checkout ROCm/TheRock'",
-        "gitleaks.yml / scan / 'Bootstrap checkout'",
-        "gitleaks.yml / scan / 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'",
         "hip_tagging_automation.yml / tag-rocm-systems / 'Checkout ROCm/TheRock'",
         "manifest-diff.yml / generate-report / 'Checkout repository'",
         "multi_arch_build_portable_linux_pytorch_wheels.yml / build_pytorch_wheels / 'Checkout'",

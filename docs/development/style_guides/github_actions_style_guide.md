@@ -90,9 +90,11 @@ Benefits:
 
 ```yaml
 - name: Process artifacts
+  env:
+    AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
   run: |
     python build_tools/process_artifacts.py \
-      --families "${{ inputs.amdgpu_families }}" \
+      --families "${AMDGPU_FAMILIES}" \
       --artifact-dir artifacts \
       --install-dir install
 ```
@@ -102,8 +104,10 @@ Benefits:
 ```yaml
 - name: Process artifacts
   shell: bash
+  env:
+    AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
   run: |
-    for family in $(echo "${{ inputs.amdgpu_families }}" | tr ',' ' '); do
+    for family in $(echo "${AMDGPU_FAMILIES}" | tr ',' ' '); do
       if [[ -f "artifacts/${family}/rocm.tar.gz" ]]; then
         tar -xzf "artifacts/${family}/rocm.tar.gz" -C "install/${family}"
         echo "Extracted ${family}"
@@ -220,4 +224,63 @@ jobs:
 
       - name: Run tests on GPU
         run: build_tools/github_actions/test_executable_scripts/test_hipblas.py
+```
+
+### Security guidelines
+
+Use [zizmor](https://docs.zizmor.sh/) to check workflows and composite actions.
+See its [audit reference](https://docs.zizmor.sh/audits/) for rule details.
+
+```bash
+# See https://docs.zizmor.sh/installation/ for other options
+pip install zizmor
+
+# Check workflows and composite actions locally.
+zizmor --offline .github
+
+# Recheck a workflow after editing it.
+zizmor --offline .github/workflows/multi_arch_ci.yml
+```
+
+Confirm the findings you addressed no longer appear; unrelated findings may
+still produce a nonzero exit code. `--offline` skips audits requiring network
+access. Add `--no-ignores` to inspect suppressed findings too.
+
+#### Security - Avoid template injection
+
+Pass input values through step environment variables instead of inserting
+`${{ ... }}` expressions into `run:`. GitHub expands expressions before the
+shell parses the script, so even a quoted expression can execute injected code.
+See [template-injection](https://docs.zizmor.sh/audits/#template-injection).
+
+✅ **Preferred:**
+
+```yaml
+# Here, a value such as `$(cat file.txt)` is passed literally to Python.
+- name: Process artifacts
+  shell: bash
+  env:
+    AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+  run: |
+    python build_tools/process_artifacts.py --families "${AMDGPU_FAMILIES}"
+```
+
+❌ **Avoid:**
+
+```yaml
+# Here, a value such as `$(cat file.txt)` is executed by the shell (!).
+- name: Process artifacts
+  run: |
+    python build_tools/process_artifacts.py --families "${{ inputs.amdgpu_families }}"
+```
+
+**Exceptions:** A value intentionally supplying shell-quoted arguments or a
+script may require direct expansion. Only allow this when its source is trusted
+to supply executable code. Document that assumption beside a local suppression:
+
+```yaml
+- name: Configure
+  # The caller is trusted to supply executable build options, including shell syntax.
+  run: | # zizmor: ignore[template-injection]
+    cmake -B build ${{ inputs.cmake_args }}
 ```
