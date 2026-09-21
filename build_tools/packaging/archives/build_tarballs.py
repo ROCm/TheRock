@@ -4,7 +4,7 @@
 
 """Fetch multi-arch build artifacts and package them into per-family tarballs.
 
-For each GPU family in --dist-amdgpu-families, this script:
+For each package-owner group in --dist-amdgpu-families, this script:
 1. Fetches artifacts (generic + family-specific) using artifact_manager.py
 2. Flattens them into a single install-prefix-like layout
 3. Compresses the result into a tarball
@@ -17,6 +17,10 @@ containing all targets in a single install prefix.
 A shared download cache avoids re-downloading generic (host) artifacts
 when processing multiple families.
 
+Individual targets sharing a package owner are collected into one tarball
+named for that owner. Only the requested targets are fetched; family selections
+retain their family names.
+
 By default, generated tarballs exclude test artifacts and fftw3. Pass
 ``--include-test-tarballs`` to also generate full tarballs, named with a
 ``-tests`` suffix, that include test artifacts.
@@ -27,7 +31,7 @@ Tarball naming follows the existing release convention:
 
 Example
 -------
-    python build_tools/build_tarballs.py \\
+    python build_tools/packaging/archives/build_tarballs.py \\
         --run-id=24104028483 \\
         --dist-amdgpu-families="gfx94X-dcgpu;gfx110X-all" \\
         --platform=linux \\
@@ -41,7 +45,7 @@ https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml
 and use its run ID. Use ``--platform`` to select which platform's
 artifacts to fetch (defaults to the current system).
 
-Expected output: one .tar.gz per family in ``--output-dir``, named
+Expected output: one .tar.gz per family or shared target owner in ``--output-dir``, named
 ``therock-dist-{platform}-{family}-{version}.tar.gz``. If
 KPACK_SPLIT_ARTIFACTS is enabled in the build, also a
 ``therock-dist-{platform}-multiarch-{version}.tar.gz``.
@@ -64,6 +68,11 @@ import time
 from pathlib import Path
 
 from zlib_ng import gzip_ng_threaded
+
+_BUILD_TOOLS_DIR = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+
+from _therock_utils.sdk_targets import group_package_targets
 
 DEFAULT_EXCLUDED_ARTIFACTS: list[str] = ["fftw3"]
 DEFAULT_EXCLUDED_COMPONENTS: list[str] = ["test"]
@@ -147,7 +156,7 @@ def fetch_and_flatten(
 
     cmd = [
         sys.executable,
-        "build_tools/artifact_manager.py",
+        _BUILD_TOOLS_DIR / "artifact_manager.py",
         "fetch",
         f"--run-id={run_id}",
         "--stage=all",
@@ -387,11 +396,11 @@ def main(argv: list[str] | None = None) -> None:
     # family and multiarch staging trees.
     family_dirs = []
     compress_tasks: list[CompressionTask] = []
-    for family in families:
+    for family, members in group_package_targets(families).items():
         flatten_dir = work_dir / family
         fetch_and_flatten(
             run_id=args.run_id,
-            amdgpu_families=[family],
+            amdgpu_families=members,
             platform=args.platform,
             output_dir=flatten_dir,
             download_cache_dir=download_cache_dir,
@@ -415,7 +424,7 @@ def main(argv: list[str] | None = None) -> None:
             tests_dir = work_dir / "tests" / family
             fetch_and_flatten(
                 run_id=args.run_id,
-                amdgpu_families=[family],
+                amdgpu_families=members,
                 platform=args.platform,
                 output_dir=tests_dir,
                 download_cache_dir=download_cache_dir,

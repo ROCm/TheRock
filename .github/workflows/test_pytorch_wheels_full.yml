@@ -154,6 +154,11 @@ jobs:
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
       summary: ${{ steps.summary.outputs.summary }}
+    env:
+      INPUT_TEST_CONFIGS: ${{ inputs.test_configs }}
+      TEST_RUNS_ON: ${{ inputs.test_runs_on }}
+      TEST_RUNS_ON_MULTI_GPU: ${{ inputs.test_runs_on_multi_gpu }}
+
     steps:
       - name: "Quartz - started - test PyTorch wheels (full suite)"
         continue-on-error: true
@@ -175,9 +180,9 @@ jobs:
       - id: generate
         run: |
           python external-builds/pytorch/generate_test_sharding_matrix.py \
-            --test-configs '${{ inputs.test_configs }}' \
-            --default-runner '${{ inputs.test_runs_on }}' \
-            --multi-gpu-runner '${{ inputs.test_runs_on_multi_gpu }}'
+            --test-configs "${INPUT_TEST_CONFIGS}" \
+            --default-runner "${TEST_RUNS_ON}" \
+            --multi-gpu-runner "${TEST_RUNS_ON_MULTI_GPU}"
 
       - name: Capture job summary
         id: summary
@@ -213,6 +218,12 @@ jobs:
     # (e.g. export_test_times.py, run_pytorch_tests_full.py). The Python script
     # uses os.environ.setdefault() so values set here take precedence.
     env:
+      PYTORCH_GIT_REPO: ${{ inputs.pytorch_git_repo }}
+      PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
+      TORCH_VERSION: ${{ inputs.torch_version }}
+      PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
+      DEVICE_QUERY: ${{ inputs.device_query }}
+      GPU_POLICY: ${{ inputs.gpu_policy }}
       VENV_DIR: ${{ github.workspace }}/.venv
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
       SHARD_NUMBER: ${{ matrix.shard }}
@@ -225,7 +236,7 @@ jobs:
       # non-deterministic results in tests like test_entropy_monte_carlo.
       OPENBLAS_NUM_THREADS: "1"
       PYTORCH_NUM_PYTEST_RERUNS: "2"
-      TEST_CONFIG: ${{ matrix.test_config }}
+      MATRIX_TEST_CONFIG: ${{ matrix.test_config }}
       TESTS_TO_INCLUDE: ${{ inputs.tests_to_include }}
 
     steps:
@@ -247,7 +258,7 @@ jobs:
         id: expand
         run: |
           python build_tools/github_actions/expand_amdgpu_families.py \
-            --amdgpu-families "${{ inputs.amdgpu_family }}" \
+            --amdgpu-families "${AMDGPU_FAMILY}" \
             --output-mode=device-extras
 
       # safe.directory must be set before Runner Health Status
@@ -265,17 +276,19 @@ jobs:
         timeout-minutes: 30
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --gitrepo-origin https://github.com/${{ inputs.pytorch_git_repo }}.git \
-            --repo-hashtag ${{ inputs.pytorch_git_ref }} \
+            --gitrepo-origin https://github.com/"${PYTORCH_GIT_REPO}".git \
+            --repo-hashtag "${PYTORCH_GIT_REF}" \
             --no-hipify \
             --no-submodules
 
       - name: Set up virtual environment
         timeout-minutes: 15
+        env:
+          DEVICE_EXTRAS: ${{ steps.expand.outputs.device_extras }}
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }} rocm[devel,${{ steps.expand.outputs.device_extras }}]" \
-            --index-url=${{ inputs.package_index_url }} \
+            --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION} rocm[devel,${DEVICE_EXTRAS}]" \
+            --index-url="${PACKAGE_INDEX_URL}" \
             --activate-in-future-github-actions-steps
 
       - name: Initialize ROCm SDK and configure environment
@@ -359,8 +372,9 @@ jobs:
         if: ${{ runner.os == 'Linux' }}
         run: |
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
-            --device-query "${{ inputs.device_query }}" \
-            --gpu-policy "${{ inputs.gpu_policy }}" \
+            --test-config "${MATRIX_TEST_CONFIG}" \
+            --device-query "${DEVICE_QUERY}" \
+            --gpu-policy "${GPU_POLICY}" \
             -- \
             --continue-on-collection-errors
 
