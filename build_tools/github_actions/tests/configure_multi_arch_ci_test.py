@@ -713,6 +713,12 @@ class TestDecideJobs(unittest.TestCase):
         # Both labels are compatible with the stages
         self.assertEqual(outputs.linux_test_labels, ["test:hip-tests", "test:kfdtest"])
 
+    def test_debug_tools_stage_allows_all_debugger_tests(self):
+        self.assertEqual(
+            cm._get_allowed_test_labels_for_stages(["debug-tools"]),
+            ["rocgdb", "rocr-debug-agent"],
+        )
+
     # TODO(#3433): Remove ASAN tests once ASAN tests are passing
     def test_asan_tests_only_run_on_nightly_triggers(self):
         """ASAN tests only run on schedule/workflow_dispatch, skip on PR/push."""
@@ -900,6 +906,70 @@ class TestSelectTargets(unittest.TestCase):
         self.assertIn("gfx125x", result.linux_families)
         # gfx950 is postsubmit-only, should NOT be in PR defaults
         self.assertNotIn("gfx950", result.linux_families)
+
+    def test_pull_request_uses_caller_supplied_families(self):
+        """PRs use the caller's explicit per-platform build coverage."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            linux_amdgpu_families=["gfx94x", "gfx950", "gfx125x"],
+            windows_amdgpu_families=["gfx110x"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(result.linux_families, ["gfx94x", "gfx950", "gfx125x"])
+        self.assertEqual(result.windows_families, ["gfx110x"])
+
+    def test_push_uses_caller_supplied_families(self):
+        """Pushes use the caller's explicit per-platform build coverage."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            linux_amdgpu_families=["gfx94x", "gfx950", "gfx125x"],
+            windows_amdgpu_families=["gfx110x"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(result.linux_families, ["gfx94x", "gfx950", "gfx125x"])
+        self.assertEqual(result.windows_families, ["gfx110x"])
+
+    def test_pull_request_can_skip_windows(self):
+        """A caller can select Linux families and skip Windows."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="asan",
+            linux_amdgpu_families=["gfx94x", "gfx950", "gfx125x"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(result.linux_families, ["gfx94x", "gfx950", "gfx125x"])
+        self.assertEqual(result.windows_families, [])
+
+    def test_schedule_defaults_omitted_platform_to_all(self):
+        """Schedules retain all-family coverage for an omitted platform."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="schedule",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            linux_amdgpu_families=["gfx94x"],
+        )
+        result = cm.select_targets(inputs)
+        all_families = cm.get_all_families_for_trigger_types(
+            ["presubmit", "postsubmit", "nightly"]
+        )
+        expected_windows_families = [
+            name for name, info in all_families.items() if "windows" in info
+        ]
+        self.assertEqual(result.linux_families, ["gfx94x"])
+        self.assertEqual(result.windows_families, expected_windows_families)
 
     def test_pull_request_gfx_label_adds_family(self):
         """PR with a gfx label adds that family to the defaults."""

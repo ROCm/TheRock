@@ -142,8 +142,10 @@ jobs:
       jax_plugin_version: ${{ steps.write_jax_versions.outputs.jax_plugin_version }}
       jax_pjrt_version: ${{ steps.write_jax_versions.outputs.jax_pjrt_version }}
     env:
-      MANYLINUX_IMAGE_TAG: therock-jax-manylinux:${{ inputs.jax_ref }}-${{ inputs.python_version }}
+      ARTIFACT_GROUP: ${{ inputs.artifact_group }}
+      ROCM_VERSION: ${{ inputs.rocm_version }}
       RELEASE_TYPE: ci
+      MANYLINUX_IMAGE_TAG: therock-jax-manylinux:${{ inputs.jax_ref }}-${{ inputs.python_version }}
       PACKAGE_DIST_DIR: ${{ github.workspace }}/jax-source/dist
 
     steps:
@@ -210,16 +212,18 @@ jobs:
       - name: Determine wheel version suffix
         run: |
           python build_tools/github_actions/determine_version.py \
-            --rocm-version "${{ inputs.rocm_version }}"
+            --rocm-version "${ROCM_VERSION}"
+
 
       - name: Build JAX Wheels in manylinux container
         working-directory: jax-source
         env:
-          ROCM_VERSION: ${{ inputs.rocm_version }}
           PYTHON_VERSION: ${{ inputs.python_version }}
+          JAX_COMMIT: ${{ steps.checkout_jax.outputs.commit }}
         run: |
           docker run --rm \
             --user root \
+            --env JAX_COMMIT \
             --env ROCM_VERSION="${ROCM_VERSION}" \
             --env PYTHON_VERSION="${PYTHON_VERSION}" \
             --env ML_WHEEL_VERSION_SUFFIX="${version_suffix}" \
@@ -237,7 +241,7 @@ jobs:
                 --bazel_options=--repo_env=ROCM_PATH="${ROCM_ROOT}" \
                 --bazel_options=--repo_env=ML_WHEEL_TYPE=release \
                 --bazel_options=--repo_env=ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
-                --bazel_options=--//jaxlib/tools:jaxlib_git_hash="${{ steps.checkout_jax.outputs.commit }}" \
+                --bazel_options=--//jaxlib/tools:jaxlib_git_hash="${JAX_COMMIT}" \
                 --verbose \
                 --detailed_timestamped_log \
                 --output_path="$(pwd)/dist"
@@ -247,7 +251,7 @@ jobs:
         id: write_jax_versions
         run: |
           python3 ./build_tools/github_actions/write_jax_versions.py \
-            --dist-dir "${{ env.PACKAGE_DIST_DIR }}"
+            --dist-dir "${PACKAGE_DIST_DIR}"
 
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_artifacts_credentials
@@ -258,10 +262,11 @@ jobs:
         id: upload_jax_wheels
         run: |
           python build_tools/github_actions/upload_python_packages.py \
-            --input-packages-dir="${{ env.PACKAGE_DIST_DIR }}" \
-            --artifact-group="${{ inputs.artifact_group }}" \
+            --input-packages-dir="${PACKAGE_DIST_DIR}" \
+            --artifact-group="${ARTIFACT_GROUP}" \
             --run-id="${{ github.run_id }}" \
             --multiarch
+
 
   configure_jax_tests:
     name: Configure JAX Tests
@@ -270,6 +275,10 @@ jobs:
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
+    env:
+      TEST_AMDGPU_FAMILY: ${{ inputs.test_amdgpu_family }}
+      TEST_SIZE: ${{ inputs.test_size }}
+
     steps:
       - name: Checking out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -295,9 +304,9 @@ jobs:
           CI_CONFIG_PATH: ci-config
         run: |
           python ./build_tools/github_actions/configure_jax_test_matrix.py \
-            --target "${{ inputs.test_amdgpu_family }}" \
+            --target "${TEST_AMDGPU_FAMILY}" \
             --platform linux \
-            --test-size "${{ inputs.test_size }}"
+            --test-size "${TEST_SIZE}"
 
   test_jax_wheels:
     if: ${{ needs.configure_jax_tests.outputs.enabled == 'true' }}

@@ -462,7 +462,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Report reused stage results
-        run: echo '${{ toJSON(needs) }}'
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: echo "${NEEDS_JSON}"
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
