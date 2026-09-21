@@ -51,6 +51,7 @@ concurrency:
 jobs:
   setup:
     uses: ./.github/workflows/setup_multi_arch.yml
+    # Note: not using 'secrets: inherit' here; TheRock CI does not use Quartz.
     with:
       build_variant: "asan"
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}

@@ -8,9 +8,8 @@
 # * https://github.com/ROCm/TheRock/issues/3332
 # * https://github.com/ROCm/TheRock/issues/3291
 
-# Secret inheritance is intentional within this workflow chain.
-# When called by https://github.com/ROCm/rockrel, inherit its Quartz credentials for build and test notifications.
-# See docs/development/style_guides/github_actions_style_guide.md for the policy.
+# Higher-trust entry points: manual runs and automation from https://github.com/ROCm/rockrel.
+# Inherit Quartz credentials through nested workflows without repeating mappings.
 
 name: Multi-Arch Release Windows PyTorch Wheels
 

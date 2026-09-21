@@ -1,9 +1,8 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Secret inheritance is intentional within this workflow chain.
-# Callers supply benchmark credentials and, for https://github.com/ROCm/rockrel runs, Quartz notification credentials.
-# See docs/development/style_guides/github_actions_style_guide.md for the policy.
+# Inherit caller-provided secrets; limited-trust PR entry points restrict the set.
+# Higher-trust push/manual runs and https://github.com/ROCm/rockrel also supply secrets.
 
 name: Test Artifacts
 

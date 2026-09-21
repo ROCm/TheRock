@@ -1,8 +1,8 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Secret inheritance is intentional within this workflow chain.
-# See docs/development/style_guides/github_actions_style_guide.md for the policy.
+# Inherit caller-provided Quartz credentials from higher-trust release entry points.
+# This avoids repeating secret mappings across nested workflows.
 
 name: Multi-Arch Release Linux
 

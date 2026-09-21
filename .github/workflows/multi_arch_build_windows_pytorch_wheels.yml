@@ -20,8 +20,8 @@
 # * https://github.com/ROCm/TheRock/issues/3332
 # * https://github.com/ROCm/TheRock/issues/3291
 
-# Secret inheritance is intentional within this workflow chain.
-# See docs/development/style_guides/github_actions_style_guide.md for the policy.
+# Inherit caller-provided secrets; limited-trust PR entry points restrict the set.
+# Higher-trust callers supply Quartz credentials without repeating nested mappings.
 
 name: Multi-Arch Build Windows PyTorch Wheels
 
