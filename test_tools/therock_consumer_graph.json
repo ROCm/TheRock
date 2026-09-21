@@ -659,6 +659,7 @@
       "rocblas",
       "rocfft",
       "rocprim_tests",
+      "rocprofiler-systems",
       "rocrand",
       "rocroller",
       "rocshmem",
