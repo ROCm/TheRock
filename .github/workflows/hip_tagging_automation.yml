@@ -42,9 +42,11 @@ jobs:
           pip install PyGithub
 
       - name: Run tagging script
+        env:
+          TAGGING_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
           python build_tools/github_actions/hip_tagging_helper.py \
             --repo "${{ github.repository }}" \
             --before "${{ github.event.before }}" \
             --after "${{ github.sha }}" \
-            --pat "${{ steps.generate-token.outputs.token }}"
+            --pat "${TAGGING_TOKEN}"

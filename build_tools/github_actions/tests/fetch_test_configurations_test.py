@@ -310,6 +310,39 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertNotIn("rocgdb-corefile", self._selected_names())
 
     # -----------------------
+    # test_types tier gating
+    # -----------------------
+
+    def test_test_types_excludes_disallowed_tier(self):
+        # A component that opts out of the quick tier is not scheduled on quick.
+        os.environ["TEST_TYPE"] = "quick"
+        self._inject_job("tt-gated", test_types=["standard", "comprehensive", "full"])
+        self.assertNotIn("tt-gated", self._selected_names())
+
+    def test_test_types_includes_allowed_tier(self):
+        # The same component runs on a tier that is in its list.
+        os.environ["TEST_TYPE"] = "standard"
+        self._inject_job("tt-gated", test_types=["standard", "comprehensive", "full"])
+        self.assertIn("tt-gated", self._selected_names())
+
+    def test_test_types_omitted_runs_on_all_tiers(self):
+        # Without "test_types", a component runs on every tier, including quick.
+        os.environ["TEST_TYPE"] = "quick"
+        self._inject_job("tt-ungated")
+        self.assertIn("tt-ungated", self._selected_names())
+
+    def test_miopen_dbsync_declares_non_quick_tiers(self):
+        # miopen-dbsync is a slow specialist check gated to standard/comprehensive/full.
+        config = fetch_test_configurations.test_matrix["miopen-dbsync"]
+        self.assertEqual(config["test_types"], ["standard", "comprehensive", "full"])
+
+    def test_miopen_dbsync_excluded_on_quick(self):
+        # Integration: the real entry is not scheduled on the quick tier.
+        os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync"
+        os.environ["TEST_TYPE"] = "quick"
+        self.assertNotIn("miopen-dbsync", self._selected_names())
+
+    # -----------------------
     # Functional test merging via run_extended_tests
     # -----------------------
 
@@ -512,6 +545,24 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     # -----------------------
     # Output contract
     # -----------------------
+
+    def test_additional_requirements_files_are_preserved_in_output(self):
+        requirements_files = [
+            "share/example/requirements.txt",
+            "share/example/requirements-test.txt",
+        ]
+        self._inject_job(
+            "custom-requirements",
+            additional_requirements_files=requirements_files,
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        self.assertEqual(len(components), 1)
+        self.assertEqual(
+            components[0]["additional_requirements_files"], requirements_files
+        )
 
     def test_windows_hip_tests_emits_pal_and_rocr_entries(self):
         """On Windows, hip-tests runs with both PAL and ROCR backends."""

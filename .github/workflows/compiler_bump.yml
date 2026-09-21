@@ -141,8 +141,8 @@ jobs:
           LLVM_REF: ${{ inputs.llvm_ref || 'amd-staging' }}
           HIPIFY_REF: ${{ inputs.hipify_ref || 'amd-staging' }}
           SPIRV_REF: ${{ inputs.spirv_ref || 'amd-staging' }}
+          BRANCH_NAME: ${{ steps.branch-name.outputs.branch_name }}
         run: |
-          BRANCH_NAME="${{ steps.branch-name.outputs.branch_name }}"
           echo "branch_name=${BRANCH_NAME}" >> "$GITHUB_OUTPUT"
 
           git config user.name "github-actions[bot]"
@@ -238,10 +238,42 @@ jobs:
       repository: ${{ github.repository }}
       ref: ${{ needs.setup-linux.outputs.ref }}
 
+  build-linux-native-deb-packages:
+    name: Build Linux DEB Packages
+    needs: [create-branch, setup-linux, build-linux]
+    if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
+    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    secrets: inherit
+    with:
+      dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
+      artifact_run_id: ${{ github.run_id }}
+      rocm_version: ${{ needs.setup-linux.outputs.rocm_deb_package_version }}
+      native_package_type: deb
+      release_type: dev
+      build_variant: release
+      repository: ${{ github.repository }}
+      ref: ${{ needs.setup-linux.outputs.ref }}
+
+  build-linux-native-rpm-packages:
+    name: Build Linux RPM Packages
+    needs: [create-branch, setup-linux, build-linux]
+    if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
+    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    secrets: inherit
+    with:
+      dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
+      artifact_run_id: ${{ github.run_id }}
+      rocm_version: ${{ needs.setup-linux.outputs.rocm_rpm_package_version }}
+      native_package_type: rpm
+      release_type: dev
+      build_variant: release
+      repository: ${{ github.repository }}
+      ref: ${{ needs.setup-linux.outputs.ref }}
+
   publish-linux-artifacts:
     name: Publish Linux Artifacts
-    needs: [create-branch, setup-linux, build-linux, build-linux-tarballs, build-linux-python-packages]
-    if: ${{ inputs.dry_run != true && needs.build-linux-tarballs.result == 'success' && needs.build-linux-python-packages.result == 'success' }}
+    needs: [create-branch, setup-linux, build-linux, build-linux-tarballs, build-linux-python-packages, build-linux-native-deb-packages, build-linux-native-rpm-packages]
+    if: ${{ inputs.dry_run != true && needs.build-linux-tarballs.result == 'success' && needs.build-linux-python-packages.result == 'success' && needs.build-linux-native-deb-packages.result == 'success' && needs.build-linux-native-rpm-packages.result == 'success' }}
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -265,12 +297,14 @@ jobs:
           product: core
 
       - name: Publish to release buckets
+        env:
+          KPACK_SPLIT: ${{ needs.build-linux-python-packages.outputs.kpack_split }}
         run: |
           python build_tools/github_actions/publish_rocm_to_release_buckets.py \
             --run-id="${{ github.run_id }}" \
             --platform=linux \
             --release-type="dev" \
-            --kpack-split="${{ needs.build-linux-python-packages.outputs.kpack_split }}" \
+            --kpack-split="${KPACK_SPLIT}" \
             --structured \
             --build-variant="release"
 
@@ -372,12 +406,14 @@ jobs:
           product: core
 
       - name: Publish to release buckets
+        env:
+          KPACK_SPLIT: ${{ needs.build-windows-python-packages.outputs.kpack_split }}
         run: |
           python build_tools/github_actions/publish_rocm_to_release_buckets.py \
             --run-id="${{ github.run_id }}" \
             --platform=windows \
             --release-type="dev" \
-            --kpack-split="${{ needs.build-windows-python-packages.outputs.kpack_split }}" \
+            --kpack-split="${KPACK_SPLIT}" \
             --structured \
             --build-variant="release"
 
@@ -406,9 +442,11 @@ jobs:
             }
 
       - name: Output ASAN run URL
+        env:
+          ASAN_URL: ${{ steps.dispatch.outputs.runUrlHtml }}
         run: |
           echo "## ASAN Build Dispatched" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Run URL:** ${{ steps.dispatch.outputs.runUrlHtml }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Run URL:** ${ASAN_URL}" >> "$GITHUB_STEP_SUMMARY"
           echo ""
           echo "ASAN build runs as a separate workflow to ensure artifacts are stored"
           echo "under a unique run_id, preventing mixing with release artifacts."
@@ -455,9 +493,11 @@ jobs:
 
       - name: Output test run URL
         if: ${{ steps.trigger-tests.outputs.runUrlHtml != '' }}
+        env:
+          TEST_RUN_URL: ${{ steps.trigger-tests.outputs.runUrlHtml }}
         run: |
           echo "## Linux Tests Triggered" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Test Run:** ${{ steps.trigger-tests.outputs.runUrlHtml }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Test Run:** ${TEST_RUN_URL}" >> "$GITHUB_STEP_SUMMARY"
 
   trigger-windows-tests:
     name: Trigger Windows Tests (gfx110X-all)
@@ -498,9 +538,11 @@ jobs:
 
       - name: Output test run URL
         if: ${{ steps.trigger-tests.outputs.runUrlHtml != '' }}
+        env:
+          TEST_RUN_URL: ${{ steps.trigger-tests.outputs.runUrlHtml }}
         run: |
           echo "## Windows Tests Triggered" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Test Run:** ${{ steps.trigger-tests.outputs.runUrlHtml }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Test Run:** ${TEST_RUN_URL}" >> "$GITHUB_STEP_SUMMARY"
 
   # ==========================================================================
   # Summary
@@ -513,6 +555,8 @@ jobs:
       - build-linux
       - build-linux-tarballs
       - build-linux-python-packages
+      - build-linux-native-deb-packages
+      - build-linux-native-rpm-packages
       - publish-linux-artifacts
       - setup-windows
       - build-windows
@@ -524,6 +568,11 @@ jobs:
       - trigger-windows-tests
     if: always()
     runs-on: ubuntu-24.04
+    env:
+      LLVM_REF: ${{ inputs.llvm_ref || 'amd-staging' }}
+      HIPIFY_REF: ${{ inputs.hipify_ref || 'amd-staging' }}
+      SPIRV_REF: ${{ inputs.spirv_ref || 'amd-staging' }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -556,16 +605,27 @@ jobs:
               print(f'{platform}_artifact_url={root.artifact_index().https_url}')
               print(f'{platform}_log_url={root.log_root_index().https_url}')
               print(f'{platform}_manifest_url={root.manifests_index().https_url}')
-          " >> "$GITHUB_OUTPUT"
+          " | grep '=' >> "$GITHUB_OUTPUT"
 
       - name: Generate summary
+        env:
+          ASAN_URL: ${{ needs.dispatch-asan-build.outputs.run_url }}
+          BRANCH_NAME: ${{ needs.create-branch.outputs.branch_name }}
+          LINUX_TEST_RUN_URL: ${{ needs.trigger-linux-tests.outputs.test_run_url }}
+          WINDOWS_TEST_RUN_URL: ${{ needs.trigger-windows-tests.outputs.test_run_url }}
+          LINUX_ARTIFACT_URL: ${{ steps.artifact-urls.outputs.linux_artifact_url }}
+          LINUX_LOG_URL: ${{ steps.artifact-urls.outputs.linux_log_url }}
+          LINUX_MANIFEST_URL: ${{ steps.artifact-urls.outputs.linux_manifest_url }}
+          WINDOWS_ARTIFACT_URL: ${{ steps.artifact-urls.outputs.windows_artifact_url }}
+          WINDOWS_LOG_URL: ${{ steps.artifact-urls.outputs.windows_log_url }}
+          WINDOWS_MANIFEST_URL: ${{ steps.artifact-urls.outputs.windows_manifest_url }}
         run: |
           echo "## Workflow Results" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
           # Branch
           if [ "${{ needs.create-branch.result }}" == "success" ]; then
-            echo "- :white_check_mark: Branch: [\`${{ needs.create-branch.outputs.branch_name }}\`](https://github.com/${{ github.repository }}/tree/${{ needs.create-branch.outputs.branch_name }})" >> "$GITHUB_STEP_SUMMARY"
+            echo "- :white_check_mark: Branch: [\`${BRANCH_NAME}\`](https://github.com/${{ github.repository }}/tree/${BRANCH_NAME})" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "- :x: Branch creation failed" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -591,6 +651,15 @@ jobs:
             echo "- :fast_forward: Packaging skipped" >> "$GITHUB_STEP_SUMMARY"
           fi
 
+          # Linux native packages
+          if [ "${{ needs.build-linux-native-deb-packages.result }}" == "success" ] && [ "${{ needs.build-linux-native-rpm-packages.result }}" == "success" ]; then
+            echo "- :white_check_mark: Native packages (DEB + RPM)" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-linux-native-deb-packages.result }}" == "failure" ] || [ "${{ needs.build-linux-native-rpm-packages.result }}" == "failure" ]; then
+            echo "- :x: Native packages failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-linux-native-deb-packages.result }}" == "skipped" ]; then
+            echo "- :fast_forward: Native packages skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
           # Linux publish
           if [ "${{ needs.publish-linux-artifacts.result }}" == "success" ]; then
             echo "- :white_check_mark: Published to release buckets" >> "$GITHUB_STEP_SUMMARY"
@@ -602,7 +671,7 @@ jobs:
 
           # Linux tests
           if [ "${{ needs.trigger-linux-tests.result }}" == "success" ]; then
-            LINUX_TEST_URL="${{ needs.trigger-linux-tests.outputs.test_run_url }}"
+            LINUX_TEST_URL="${LINUX_TEST_RUN_URL}"
             if [ -n "$LINUX_TEST_URL" ]; then
               echo "- :white_check_mark: Tests triggered (gfx94X-dcgpu): [View Run]($LINUX_TEST_URL)" >> "$GITHUB_STEP_SUMMARY"
             else
@@ -644,7 +713,7 @@ jobs:
 
           # Windows tests
           if [ "${{ needs.trigger-windows-tests.result }}" == "success" ]; then
-            WINDOWS_TEST_URL="${{ needs.trigger-windows-tests.outputs.test_run_url }}"
+            WINDOWS_TEST_URL="${WINDOWS_TEST_RUN_URL}"
             if [ -n "$WINDOWS_TEST_URL" ]; then
               echo "- :white_check_mark: Tests triggered (gfx110X-all): [View Run]($WINDOWS_TEST_URL)" >> "$GITHUB_STEP_SUMMARY"
             else
@@ -659,7 +728,6 @@ jobs:
 
           # ASAN build (dispatched as separate workflow)
           if [ "${{ needs.dispatch-asan-build.result }}" == "success" ]; then
-            ASAN_URL="${{ needs.dispatch-asan-build.outputs.run_url }}"
             if [ -n "$ASAN_URL" ]; then
               echo "- :white_check_mark: ASAN Build dispatched: [View Run]($ASAN_URL)" >> "$GITHUB_STEP_SUMMARY"
             else
@@ -689,8 +757,8 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Platform | Artifacts | Logs | Manifests |" >> "$GITHUB_STEP_SUMMARY"
           echo "|----------|-----------|------|-----------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Linux | ${{ steps.artifact-urls.outputs.linux_artifact_url }} | ${{ steps.artifact-urls.outputs.linux_log_url }} | ${{ steps.artifact-urls.outputs.linux_manifest_url }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Windows | ${{ steps.artifact-urls.outputs.windows_artifact_url }} | ${{ steps.artifact-urls.outputs.windows_log_url }} | ${{ steps.artifact-urls.outputs.windows_manifest_url }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Linux | ${LINUX_ARTIFACT_URL} | ${LINUX_LOG_URL} | ${LINUX_MANIFEST_URL} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Windows | ${WINDOWS_ARTIFACT_URL} | ${WINDOWS_LOG_URL} | ${WINDOWS_MANIFEST_URL} |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "> **Tip:** Use \`gh run download ${{ github.run_id }}\` to download artifacts locally." >> "$GITHUB_STEP_SUMMARY"
 
@@ -708,6 +776,6 @@ jobs:
           echo "| Build Only | \`${{ inputs.build_only || 'false' }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Linux Test Family | \`gfx94X-dcgpu\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Windows Test Family | \`gfx110X-all\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| llvm-project | \`${{ inputs.llvm_ref || 'amd-staging' }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| HIPIFY | \`${{ inputs.hipify_ref || 'amd-staging' }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| SPIRV-LLVM-Translator | \`${{ inputs.spirv_ref || 'amd-staging' }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| llvm-project | \`${LLVM_REF}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| HIPIFY | \`${HIPIFY_REF}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| SPIRV-LLVM-Translator | \`${SPIRV_REF}\` |" >> "$GITHUB_STEP_SUMMARY"

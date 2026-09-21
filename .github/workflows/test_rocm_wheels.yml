@@ -120,6 +120,10 @@ jobs:
       run:
         shell: bash
     env:
+      AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+      ROCM_VERSION: ${{ inputs.rocm_version }}
+      PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
+      PACKAGE_FIND_LINKS_URL: ${{ inputs.package_find_links_url }}
       # Use a venv path containing a space on Windows so that `rocm-sdk test`
       # exercises the space-in-path handling of the console-script trampolines
       # (users often install under paths like "C:\Users\First Last\..." or "C:\Program Files\...").
@@ -145,21 +149,23 @@ jobs:
         id: device_extras
         run: |
           python build_tools/github_actions/expand_amdgpu_families.py \
-            --amdgpu-families "${{ inputs.amdgpu_family }}" \
+            --amdgpu-families "${AMDGPU_FAMILY}" \
             --output-mode=device-extras
 
       # Key off install_libraries success (not test_libraries) so devel install/test still run
       - name: Install rocm[libraries]
         id: install_libraries
+        env:
+          DEVICE_EXTRAS: ${{ steps.device_extras.outputs.device_extras }}
         run: |
           pkg="rocm[libraries]"
-          if [ -n "${{ steps.device_extras.outputs.device_extras }}" ]; then
-            pkg="${pkg%]},${{ steps.device_extras.outputs.device_extras }}]"
+          if [ -n "${DEVICE_EXTRAS}" ]; then
+            pkg="${pkg%]},${DEVICE_EXTRAS}]"
           fi
           python build_tools/setup_venv.py "${VENV_DIR}" \
-            --packages "${pkg}==${{ inputs.rocm_version }}" \
-            --index-url=${{ inputs.package_index_url }} \
-            --find-links=${{ inputs.package_find_links_url }} \
+            --packages "${pkg}==${ROCM_VERSION}" \
+            --index-url="${PACKAGE_INDEX_URL}" \
+            --find-links="${PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
 
       - name: Show installed packages (libraries)
@@ -177,15 +183,17 @@ jobs:
       - name: Install rocm[libraries,devel]
         id: install_devel
         if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' }}
+        env:
+          DEVICE_EXTRAS: ${{ steps.device_extras.outputs.device_extras }}
         run: |
           pkg="rocm[libraries,devel]"
-          if [ -n "${{ steps.device_extras.outputs.device_extras }}" ]; then
-            pkg="${pkg%]},${{ steps.device_extras.outputs.device_extras }}]"
+          if [ -n "${DEVICE_EXTRAS}" ]; then
+            pkg="${pkg%]},${DEVICE_EXTRAS}]"
           fi
           python build_tools/setup_venv.py "${VENV_DIR}" \
-            --packages "${pkg}==${{ inputs.rocm_version }}" \
-            --index-url=${{ inputs.package_index_url }} \
-            --find-links=${{ inputs.package_find_links_url }}
+            --packages "${pkg}==${ROCM_VERSION}" \
+            --index-url="${PACKAGE_INDEX_URL}" \
+            --find-links="${PACKAGE_FIND_LINKS_URL}"
 
       - name: Show installed packages (libraries,devel)
         if: ${{ !cancelled() && steps.install_devel.outcome == 'success' }}
@@ -210,9 +218,9 @@ jobs:
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: |
           python build_tools/setup_venv.py ${PROFILER_VENV_DIR} \
-            --packages "rocm[profiler]==${{ inputs.rocm_version }}" \
-            --index-url=${{ inputs.package_index_url }} \
-            --find-links=${{ inputs.package_find_links_url }} \
+            --packages "rocm[profiler]==${ROCM_VERSION}" \
+            --index-url="${PACKAGE_INDEX_URL}" \
+            --find-links="${PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
 
       - name: Show installed packages (profiler)

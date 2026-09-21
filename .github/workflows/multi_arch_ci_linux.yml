@@ -81,13 +81,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TYPE: ${{ inputs.release_type }}
+          BUILD_CONFIG_BASELINE_RUN_ID: ${{ fromJSON(inputs.build_config).baseline_run_id }}
+          BUILD_CONFIG_BASELINE_REPOSITORY: ${{ fromJSON(inputs.build_config).baseline_repository }}
+          BUILD_CONFIG_PREBUILT_STAGES: ${{ fromJSON(inputs.build_config).prebuilt_stages }}
+          BUILD_CONFIG_REUSABLE_ARTIFACTS: ${{ fromJSON(inputs.build_config).reusable_artifacts }}
+          BUILD_CONFIG_DIST_AMDGPU_FAMILIES: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
         run: |
           python build_tools/artifact_manager.py copy \
-            --source-run-id=${{ fromJSON(inputs.build_config).baseline_run_id }} \
-            --source-repository=${{ fromJSON(inputs.build_config).baseline_repository }} \
-            --stage="${{ fromJSON(inputs.build_config).prebuilt_stages }}" \
-            --artifacts="${{ fromJSON(inputs.build_config).reusable_artifacts }}" \
-            --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}" \
+            --source-run-id="${BUILD_CONFIG_BASELINE_RUN_ID}" \
+            --source-repository="${BUILD_CONFIG_BASELINE_REPOSITORY}" \
+            --stage="${BUILD_CONFIG_PREBUILT_STAGES}" \
+            --artifacts="${BUILD_CONFIG_REUSABLE_ARTIFACTS}" \
+            --amdgpu-families="${BUILD_CONFIG_DIST_AMDGPU_FAMILIES}" \
             --expand-family-to-targets
 
   build_multi_arch_stages:
