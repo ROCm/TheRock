@@ -1764,6 +1764,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         for family, rows in grouped_matrix.items():
             self.assertTrue(rows)
             self.assertTrue(all(row["amdgpu_family"] == family for row in rows))
+
     def test_asan_debug_uses_sandbox_runner(self):
         """asan-debug variant uses sandbox runner like asan."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])

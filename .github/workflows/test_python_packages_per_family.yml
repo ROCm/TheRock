@@ -76,4 +76,3 @@ jobs:
       container_image_url: ${{ matrix.container_image_url }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
-
