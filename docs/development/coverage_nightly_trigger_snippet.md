@@ -1,31 +1,19 @@
 # Reference: `trigger_coverage_linux` / `trigger_coverage_windows` jobs for the rocm-libraries nightly
 
-This snippet belongs in **`ROCm/rocm-libraries`**
-`.github/workflows/therock-multi-arch-ci-nightly.yml`, not in this repo. It is
-kept here only as the canonical reference for the code-coverage dispatch
-contract. TheRock cannot edit the external repo; copy this into the nightly when
-wiring the real driver.
+Snippet for **`ROCm/rocm-libraries`**
+`.github/workflows/therock-multi-arch-ci-nightly.yml`. Copy here when wiring
+the real driver; TheRock cannot edit that repo.
 
-The nightly's regular build is **non-instrumented**, so it can only ever be the
-baseline that coverage is measured against, never the thing coverage runs on.
-Each platform's coverage orchestrator (`multi_arch_ci_coverage_linux.yml` /
-`multi_arch_ci_coverage_windows.yml` in `ROCm/TheRock`) therefore runs as a
-**separate** GitHub Actions run with its own `run_id`; a nested `uses:` call
-would share the nightly's `run_id` and collide the generic and instrumented
-trees the installer needs to keep apart.
+The nightly build is non-instrumented and can only be a baseline. Coverage must
+run as a **separate** GitHub Actions run (its own `run_id`) so the generic and
+instrumented artifact sets stay distinct. Dispatching per-platform as each build
+finishes avoids cross-platform waits and matches the nightly's own pattern.
 
-Linux and Windows build at different speeds. Dispatching per-platform as soon as
-each build finishes mirrors the nightly's own pattern (which dispatches
-`multi_arch_ci_linux.yml` and `multi_arch_ci_windows.yml` independently) and
-avoids forcing the faster platform to wait for the slower one.
+Auth uses a **GitHub App token** (`actions/create-github-app-token`), modelled
+on `ROCm/rocm-systems/.github/workflows/rocm_ci_caller.yml`. No classic PAT.
 
-Cross-repo dispatch is authenticated with a **GitHub App token**
-(`actions/create-github-app-token`), modelled on `ROCm/rocm-systems`
-`.github/workflows/rocm_ci_caller.yml`. No classic PAT is introduced.
-
-> **One-time org setup (not code):** a GitHub App reachable from rocm-libraries
-> must be installed on **ROCm/TheRock** with **`actions: write`**, so the tokens
-> minted below are allowed to call `createWorkflowDispatch` on TheRock.
+> **One-time org setup:** a GitHub App reachable from rocm-libraries must be
+> installed on **ROCm/TheRock** with **`actions: write`**.
 
 ## `workflow_dispatch` inputs (add to the nightly's `on:` block)
 
@@ -149,11 +137,10 @@ jobs:
 
 Notes:
 
-- `baseline_run_id` is stringified because `createWorkflowDispatch` inputs must
-  be strings; `context.runId` is a number.
-- Both jobs pass the **same** `baseline_run_id` (the nightly is one run) but
-  dispatch to different workflow files and different `amdgpu_families`.
-- `ref` pins which TheRock copy of the coverage workflows runs. A
-  `workflow_dispatch` always executes the workflow file from that ref.
-- `baseline_release_type` and `projects_to_test` should track whatever the
-  nightly actually built and published.
+- `baseline_run_id` must be a string (`String(context.runId)`).
+- Both jobs share the same `baseline_run_id` but dispatch to different workflow
+  files and `amdgpu_families`.
+- `ref` pins the TheRock workflow copy; update it when the coverage workflows
+  change in a breaking way.
+- `baseline_release_type` and `projects_to_test` should match what the nightly
+  built.
