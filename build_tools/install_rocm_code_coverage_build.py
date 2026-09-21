@@ -97,15 +97,25 @@ def _target_families(family, amdgpu_targets):
     return families
 
 
-def download_replacement_artifacts(code_coverage_run_id, artifact_names, opts):
+def download_replacement_artifacts(
+    code_coverage_run_id, artifact_names, opts, code_coverage_run_github_repo
+):
     """Download the instrumented replacement artifacts from the code-coverage run.
 
     Uses the code coverage run ID as the run-id for the S3 backend, then fetches
     every component tar matching the requested artifact names and target family.
+
+    The instrumented replacement lives in a DIFFERENT repo than the generic
+    baseline: the generic build comes from --run-id in --run-github-repo (e.g.
+    ROCm/rocm-libraries), while the instrumented coverage run comes from
+    --code-coverage-run-id in --code-coverage-run-github-repo (the coverage
+    run's own repo, e.g. ROCm/TheRock). The backend's S3 bucket lookup 404s if
+    the run id is queried against the wrong owning repo, so we must pass the
+    code-coverage repo here rather than reusing opts.run_github_repo.
     """
     backend = create_backend_from_env(
         run_id=code_coverage_run_id,
-        github_repository=opts.run_github_repo,
+        github_repository=code_coverage_run_github_repo,
         platform=platform.system().lower(),
     )
     log(f"Fetching replacement artifacts from {backend.base_uri}")
@@ -242,6 +252,23 @@ def main(argv):
         type=str,
         help="run id of the build from which instrumental components needs to be replaced",
     )
+    # The instrumented replacement fetch is keyed on a DIFFERENT repo than the
+    # generic install: the generic baseline uses --run-github-repo (e.g.
+    # ROCm/rocm-libraries), while the coverage run lives in its own repo (e.g.
+    # ROCm/TheRock). Defaults to $GITHUB_REPOSITORY so CI resolves to the
+    # coverage run's own repo automatically. Consumed by parse_known_args so it
+    # does NOT leak into extra_args / the generic install.
+    parser.add_argument(
+        "--code-coverage-run-github-repo",
+        type=str,
+        default=os.environ.get("GITHUB_REPOSITORY"),
+        help=(
+            "GitHub repository (owner/name) that owns --code-coverage-run-id, "
+            "used to resolve the instrumented artifact backend. Defaults to "
+            "$GITHUB_REPOSITORY (the coverage run's own repo). This is separate "
+            "from --run-github-repo, which owns the generic --run-id build."
+        ),
+    )
     artifacts_group = parser.add_argument_group("replace_comps")
     for comp in COMPONENT_MAP.keys():
         artifacts_group.add_argument(
@@ -272,9 +299,12 @@ def main(argv):
             "--code-coverage-run-id is required when using --replace-* options"
         )
 
-    # download selected component artifacts
+    # download selected component artifacts (instrumented, from the coverage repo)
     dest_dir = download_replacement_artifacts(
-        args.code_coverage_run_id, artifacts.keys(), opts
+        args.code_coverage_run_id,
+        artifacts.keys(),
+        opts,
+        args.code_coverage_run_github_repo,
     )
 
     # replace selected library folder paths in selected component artifacts

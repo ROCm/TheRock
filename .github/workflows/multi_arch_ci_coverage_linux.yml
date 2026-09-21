@@ -3,319 +3,169 @@
 
 # Multi-Arch CI Coverage - Linux
 #
-# Runs the test and report half of the coverage pipeline for a single project on
-# a single GPU family:
+# Per-platform build + fanout layer. Builds one fully instrumented Linux stack
+# covering every coverage-enabled project, then fans out to
+# multi_arch_ci_coverage_report.yml once per project to test against that stack
+# and report separately. Paying for a single large build rather than one build
+# per project is what keeps the cost flat as more projects are onboarded.
 #
-#   test (collect profraw) -> merge -> report
+# The stack is assembled by naming the stages coverage needs and calling the
+# shared per-stage build workflow for each, rather than running the whole
+# multi_arch_build_portable_linux.yml pipeline and filtering stages out of it.
 #
-# The instrumented stack itself is built by the caller
-# (multi_arch_ci_coverage_nightly.yml), which instruments every onboarded
-# project in one pass. This workflow only consumes it.
-#
-# `baseline_run_id` drives the hybrid install: the tree comes from a regular
-# nightly run and only the project under test is overlaid from the instrumented
-# run, keeping instrumented dependencies out of the report. Without it the
-# instrumented run's own artifacts are tested as built, which measures the
-# project's dependencies alongside it.
+# The shared coverage matrix and build configuration are computed once by the
+# parent (multi_arch_ci_coverage.yml) and handed down as inputs, so that adding
+# multi_arch_ci_coverage_windows.yml later duplicates none of that logic -- it
+# only mirrors the build + fanout below with Windows runners.
 
 name: Multi-Arch CI Coverage - Linux
 
 on:
   workflow_call:
     inputs:
-      project_name:
+      coverage_matrix:
         type: string
-        description: "Coverage project key (e.g. hiprand)"
-      test_component:
+        description: "JSON array of per-project coverage matrix entries produced by setup_coverage_matrix."
+      dist_amdgpu_families:
         type: string
-        description: "Test matrix key for the project's tests"
-      object_globs:
+        description: "GPU families the instrumented stack is distributed for."
+      families_matrix_json:
         type: string
-        description: "Comma-separated globs matching the instrumented binaries"
-      fetch_artifact_args:
+        description: "JSON array of per-family build matrix entries for the math-libs stage."
+      coverage_cmake_options:
         type: string
-        default: ""
-        description: "Extra install_rocm_from_artifacts.py args for the report job"
-      build_stage:
+        description: "Extra CMake options enabling instrumentation for the selected projects."
+      needs_math_libs:
         type: string
-        default: ""
-        description: >-
-          Build stage owning the project. The report job fetches this stage's
-          sources so the HTML rendering has something to annotate; the lcov and
-          text outputs do not need them. Empty skips the fetch and the HTML.
+        description: "'true' when the selection requires the math-libs stage to be built."
+      rocm_package_version:
+        type: string
+        description: "Computed ROCm package version stamped onto the instrumented build."
       baseline_run_id:
         type: string
         default: ""
-        description: >-
-          Regular nightly run to take non-instrumented dependencies from. Set
-          by the nightly caller, which instruments the whole stack in its own
-          run; the test jobs then install that run and overlay only the project
-          under test. Empty tests the instrumented artifacts as built.
+        description: "Regular nightly run id supplying the non-instrumented dependencies. Empty tests this run's own instrumented stack end to end."
       baseline_release_type:
         type: string
         default: "nightly"
-        description: >-
-          Release channel baseline_run_id published to. Artifacts are bucketed
-          by channel, so the baseline is read from its own channel rather than
-          from this run's.
+        description: "Release channel baseline_run_id published to; artifacts are bucketed by channel."
       baseline_repository:
         type: string
         default: ""
-        description: >-
-          Repository owning baseline_run_id, in 'owner/repo' form. Needed when
-          the baseline is a release nightly, which ROCm/rockrel publishes.
-      artifact_names:
-        type: string
-        default: ""
-        description: "Artifact names holding the instrumented project, for the hybrid fetch"
-      artifact_relpaths:
-        type: string
-        default: ""
-        description: "Subproject stage directories to overlay, for the hybrid fetch"
-      codecov_flag:
-        type: string
-        default: ""
-        description: "Codecov flag to file the report under"
-      amdgpu_families:
-        type: string
-        description: "GPU family to test coverage on"
+        description: "Repository owning baseline_run_id (owner/repo). Release nightlies come from ROCm/rockrel; empty means this repository."
       test_type:
         type: string
-        default: standard
+        default: "standard"
+        description: "Test type to run against the instrumented build."
       release_type:
         type: string
-        default: ci
-      repository:
-        description: "Repository to checkout. Defaults to github.repository."
-        type: string
-        default: ""
-      ref:
-        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
-        type: string
-        default: ""
+        default: "ci"
+        description: "Release channel this coverage run's own instrumented artifacts publish to."
       quartz_tracking_id:
+        type: string
+        default: ""
         description: >-
           Leave empty. Internal Quartz tracking id, propagated from the caller
-          to link this run to its release lineage.
-        type: string
-        default: ""
+          to link this run to a release lineage once the nightly dispatches
+          coverage automatically.
 
 permissions:
   contents: read
 
 jobs:
-  configure_test_matrix:
-    name: Configure Coverage Tests (${{ inputs.project_name }})
-    runs-on: ubuntu-24.04
-    outputs:
-      components: ${{ steps.configure.outputs.components }}
-      platform: ${{ steps.configure.outputs.platform }}
-    steps:
-      - name: Checking out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 15
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref }}
+  # Built first so that every later stage in this run has a compiler-runtime to
+  # link against and to fetch as an inbound artifact.
+  build_instrumented_compiler_runtime:
+    name: Build Instrumented Compiler Runtime
+    if: ${{ inputs.coverage_matrix != '[]' }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: compiler-runtime
+      stage_display_name: "Stage - Coverage Compiler Runtime"
+      timeout_minutes: 480 # 8 hours (compiler is big)
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      release_type: ci
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+    permissions:
+      contents: read
+      id-token: write
 
-      - name: Checkout CI config
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 15
-        with:
-          repository: ROCm/therock-ci-config
-          ref: main
-          path: ci-config
-        continue-on-error: true
-
-      - name: Setting up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: 3.12
-
-      - name: Configuring coverage test options
-        id: configure
-        env:
-          ARTIFACT_GROUP: multi-arch-coverage
-          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
-          TEST_TYPE: ${{ inputs.test_type }}
-          TEST_LABELS: "[]"
-          # The report covers one project, so only that project's tests run
-          # here; the other onboarded projects get their own job.
-          PROJECTS_TO_TEST: ${{ inputs.test_component }}
-          CI_CONFIG_PATH: ci-config
-          BUILD_VARIANT: coverage
-        run: |
-          python ./build_tools/github_actions/fetch_test_configurations.py \
-            --platform=linux
-
-  test_coverage:
-    name: Test Coverage (${{ inputs.project_name }})
-    needs: configure_test_matrix
+  # The whole stage is built, not just the onboarded projects: the test jobs
+  # below need the complete dependency set, and phase 1 instruments every
+  # onboarded project in one pass rather than per changed project.
+  # `coverage_cmake_options` is the THEROCK_COVERAGE_*_ALL group option when the
+  # selection covers a whole group, and the individual project flags otherwise;
+  # everything not selected builds normally.
+  build_instrumented_math_libs:
+    name: Build Instrumented Math Libs
+    needs: build_instrumented_compiler_runtime
     if: >-
       ${{
         !failure() && !cancelled() &&
-        needs.configure_test_matrix.outputs.components != '' &&
-        needs.configure_test_matrix.outputs.components != '[]'
+        inputs.needs_math_libs == 'true'
       }}
     strategy:
       fail-fast: false
       matrix:
-        components: ${{ fromJSON(needs.configure_test_matrix.outputs.components || '[]') }}
-    uses: ./.github/workflows/test_component.yml
+        family_info: ${{ fromJSON(inputs.families_matrix_json) }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
-      artifact_group: multi-arch-coverage
-      amdgpu_families: ${{ inputs.amdgpu_families }}
-      test_runs_on: ${{ matrix.components.test_runner }}
-      platform: ${{ needs.configure_test_matrix.outputs.platform }}
-      component: ${{ toJSON(matrix.components) }}
-      release_type: ${{ inputs.release_type }}
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
-      build_variant: coverage
-      coverage_enabled: true
-      coverage_artifact_prefix: coverage-profraw-${{ inputs.project_name }}-${{ inputs.amdgpu_families }}
-      coverage_baseline_run_id: ${{ inputs.baseline_run_id }}
-      coverage_baseline_release_type: ${{ inputs.baseline_release_type }}
-      coverage_baseline_repository: ${{ inputs.baseline_repository }}
-      coverage_artifact_names: ${{ inputs.artifact_names }}
-      coverage_artifact_relpaths: ${{ inputs.artifact_relpaths }}
+      stage_name: math-libs
+      stage_display_name: "Stage - Coverage Math Libs (${{ matrix.family_info.amdgpu_family }})"
+      timeout_minutes: 480 # 8 hours; instrumented builds are slower than normal
+      amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      extra_cmake_options: ${{ inputs.coverage_cmake_options }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      release_type: ci
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
-
-  aggregate_coverage:
-    name: Coverage Report (${{ inputs.project_name }})
-    needs: [configure_test_matrix, test_coverage]
-    # Runs even when some shards failed: a partial report is more useful than
-    # none, and a failing test still exercises code.
-    if: >-
-      ${{
-        !cancelled() &&
-        needs.configure_test_matrix.result == 'success' &&
-        needs.configure_test_matrix.outputs.components != '[]'
-      }}
-    runs-on: ubuntu-24.04
     permissions:
       contents: read
       id-token: write
-    env:
-      OUTPUT_ARTIFACTS_DIR: ${{ github.workspace }}/build
-      PROFRAW_DIR: ${{ github.workspace }}/coverage-profraw
-      REPORT_DIR: ${{ github.workspace }}/coverage-report
-      HAS_CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN != '' }}
-    steps:
-      - name: Checking out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 15
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref }}
 
-      - name: Setting up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: 3.12
-
-      - name: Download profraw files from all shards
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
-        with:
-          pattern: coverage-profraw-${{ inputs.project_name }}-${{ inputs.amdgpu_families }}-*
-          path: ${{ env.PROFRAW_DIR }}
-        continue-on-error: true
-
-      - name: Install python deps
-        run: pip install -r requirements.txt
-
-      - name: Download instrumented artifacts
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          RELEASE_TYPE: ${{ inputs.release_type }}
-          FETCH_ARTIFACT_ARGS: ${{ inputs.fetch_artifact_args }}
-        run: |
-          python ./build_tools/install_rocm_from_artifacts.py \
-            --run-id=${{ github.run_id }} \
-            --artifact-group=${{ inputs.amdgpu_families }} \
-            --output-dir=${OUTPUT_ARTIFACTS_DIR} \
-            ${FETCH_ARTIFACT_ARGS}
-
-      # Only the HTML rendering reads source, so this runs after the artifacts
-      # are already down: a failure here, including running the runner out of
-      # disk, costs the annotated view and leaves lcov and the text table.
-      - name: Fetch sources for the annotated report
-        if: ${{ inputs.build_stage != '' }}
-        id: fetch_sources
-        timeout-minutes: 30
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          STAGE_NAME: ${{ inputs.build_stage }}
-        run: |
-          gh auth setup-git --hostname github.com
-          ./build_tools/fetch_sources.py --stage "${STAGE_NAME}" --jobs 12 --depth 1
-
-      - name: Merge profraw and generate reports
-        env:
-          # Sources are recorded at the path the build container used, which is
-          # not where they sit here, so llvm-cov is told how to get from one to
-          # the other. Generated files under build/ are in neither and are
-          # reported as uncovered; the text summary still counts them.
-          BUILD_WORKSPACE: /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}
-          HTML_ENABLED: ${{ steps.fetch_sources.outcome == 'success' }}
-        run: |
-          html_args=()
-          if [[ "${HTML_ENABLED}" == "true" ]]; then
-            html_args=(
-              --html-output="${REPORT_DIR}/html"
-              --project-title="${{ inputs.project_name }} (${{ inputs.amdgpu_families }})"
-            )
-          else
-            echo "::warning::Sources unavailable; skipping the annotated HTML report."
-          fi
-
-          python ./build_tools/github_actions/merge_coverage_report.py \
-            --profraw-dir="${PROFRAW_DIR}" \
-            --rocm-dir="${OUTPUT_ARTIFACTS_DIR}" \
-            --object-globs="${{ inputs.object_globs }}" \
-            --profdata-output="${REPORT_DIR}/coverage.profdata" \
-            --lcov-output="${REPORT_DIR}/coverage.info" \
-            --summary-output="${REPORT_DIR}/coverage_summary.txt" \
-            --path-equivalence="${BUILD_WORKSPACE},${GITHUB_WORKSPACE}" \
-            "${html_args[@]}"
-
-      # Puts the totals on the run's summary page, so the number is readable
-      # without downloading anything.
-      - name: Publish the summary to the job page
-        if: ${{ always() }}
-        run: |
-          summary="${REPORT_DIR}/coverage_summary.txt"
-          [[ -f "${summary}" ]] || exit 0
-          {
-            echo "## Coverage: ${{ inputs.project_name }} (${{ inputs.amdgpu_families }})"
-            echo '```'
-            tail -n 3 "${summary}"
-            echo '```'
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Upload coverage report
-        if: ${{ always() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: coverage-report-${{ inputs.project_name }}-${{ inputs.amdgpu_families }}
-          # The whole directory: coverage.info for Codecov, coverage_summary.txt
-          # for the numbers, and html/index.html for the annotated report.
-          path: |
-            ${{ env.REPORT_DIR }}/coverage.info
-            ${{ env.REPORT_DIR }}/coverage_summary.txt
-            ${{ env.REPORT_DIR }}/html
-          if-no-files-found: warn
-
-      # Skipped rather than failed when the repository has no Codecov token,
-      # so forks and first-time setups still get the lcov artifact above.
-      - name: Upload report to Codecov
-        if: ${{ env.HAS_CODECOV_TOKEN == 'true' }}
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.REPORT_DIR }}/coverage.info
-          flags: ${{ inputs.codecov_flag || inputs.project_name }}
-          name: ${{ inputs.project_name }}-${{ inputs.amdgpu_families }}
-          fail_ci_if_error: false
+  # One test + report job per project. The instrumented stack built above is the
+  # only thing taken from this run: each job installs `baseline_run_id` and then
+  # replaces its own project, so a project's dependencies stay non-instrumented
+  # even though the build instrumented all of them at once.
+  coverage_report:
+    name: Coverage::${{ matrix.coverage.project_name }} (${{ matrix.coverage.amdgpu_families }})
+    # compiler-runtime is named explicitly rather than relied on through
+    # math-libs: a selection that needs no math-libs build still tests against
+    # binaries that stage produced.
+    needs:
+      [
+        build_instrumented_compiler_runtime,
+        build_instrumented_math_libs,
+      ]
+    # `!failure() && !cancelled()` alone would let this run when the parent's
+    # matrix was empty, and fromJSON('') is a hard error, so the matrix has to
+    # be checked explicitly.
+    if: >-
+      ${{
+        !failure() && !cancelled() &&
+        inputs.coverage_matrix != '[]'
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        coverage: ${{ fromJSON(inputs.coverage_matrix) }}
+    uses: ./.github/workflows/multi_arch_ci_coverage_report.yml
+    secrets: inherit
+    with:
+      project_name: ${{ matrix.coverage.project_name }}
+      test_component: ${{ matrix.coverage.test_component }}
+      object_globs: ${{ matrix.coverage.object_globs }}
+      fetch_artifact_args: ${{ matrix.coverage.fetch_artifact_args }}
+      build_stage: ${{ matrix.coverage.build_stage }}
+      codecov_flag: ${{ matrix.coverage.codecov_flag }}
+      amdgpu_families: ${{ matrix.coverage.amdgpu_families }}
+      baseline_run_id: ${{ inputs.baseline_run_id }}
+      baseline_repository: ${{ inputs.baseline_repository }}
+      test_type: ${{ inputs.test_type || 'standard' }}
+      release_type: ${{ inputs.release_type || 'ci' }}
+    permissions:
+      contents: read
+      id-token: write

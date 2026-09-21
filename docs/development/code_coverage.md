@@ -170,9 +170,11 @@ graph TD
 ```
 
 Every edge is a job dependency inside the one coverage run.
-`multi_arch_ci_coverage_nightly.yml` is the top level; it delegates to
-`multi_arch_ci_coverage_linux.yml` for the per-project test and aggregation
-sequence on one GPU family. Both take their project list from
+`multi_arch_ci_coverage.yml` is the thin top-level orchestrator; it delegates to
+`multi_arch_ci_coverage_linux.yml`, the per-platform build + fan-out layer that
+builds the instrumented stacks and calls `multi_arch_ci_coverage_report.yml` for
+the per-project test and aggregation sequence on one GPU family. All take their
+project list from
 `build_tools/github_actions/configure_coverage_ci.py`, the registry of
 coverage-enabled projects and everything the pipeline needs to know about each
 one: the CMake target, the build stage it lives in, its test component, the
@@ -180,10 +182,12 @@ object globs handed to `llvm-cov`, and its Codecov flag.
 
 ### Dispatching a run
 
-`multi_arch_ci_coverage_nightly.yml` is started by hand, from the Actions tab
-or the `gh` CLI. There is no cron trigger, and the regular nightly does not
-know about this workflow — it has no coverage-specific jobs, and a coverage run
-neither reads its artifacts nor depends on it having succeeded.
+`multi_arch_ci_coverage.yml` is started by hand, from the Actions tab or the
+`gh` CLI, and can now also be dispatched by the consumer nightly (RFC option C):
+`ROCm/rocm-libraries`'s `therock-multi-arch-ci-nightly.yml` triggers it as a
+separate run via a GitHub App token, passing its own run id as `baseline_run_id`.
+A coverage run has no cron trigger of its own, and it neither reads the nightly's
+artifacts nor depends on it having succeeded — it only takes the baseline run id.
 
 Pick a recent nightly run, pass its id as `baseline_run_id`, and leave
 `baseline_release_type` at `nightly`. The other input that matters is
@@ -243,18 +247,18 @@ The artifacts publish under `release_type: ci`, under this run's id.
 ### Test execution
 
 `coverage_report` fans out over the matrix, one call to
-`multi_arch_ci_coverage_linux.yml` per project and GPU family.
+`multi_arch_ci_coverage_report.yml` per project and GPU family.
 `configure_test_matrix` runs `fetch_test_configurations.py` — shared with
 regular CI — narrowed to the one project this report covers, and outputs the
-shard list. `test_coverage` then runs one `test_component.yml` job per shard
-with `coverage_enabled: true`. Three things happen in order:
+shard list. `test_coverage` then runs one `test_code_coverage_component.yml` job
+per shard. Three things happen in order:
 
-1. **Install the baseline, then overlay.** `setup_test_environment` runs
-   against `baseline_run_id` and `baseline_release_type`, installing a fully
-   non-instrumented stack. `overlay_coverage_artifacts.py` then fetches this
-   run's artifact for the project under test and copies only that project's
-   stage directories over it, so exactly one library in the install is
-   instrumented.
+1. **Install the baseline, then swap in the instrumented project.**
+   `install_rocm_code_coverage_build.py` installs the generic non-instrumented
+   tree from `--run-id` (the baseline nightly run) and replaces only the
+   project-under-test's libraries from `--code-coverage-run-id` (this coverage
+   run's own id), deriving the artifact name and folder from the component
+   `job_name`, so exactly one library in the install is instrumented.
 1. **Point the runtime at a profile directory.** `LLVM_PROFILE_FILE` is set to
    a per-shard path using the `%p` and `%m` substitutions, so a shard that
    forks or loads several instrumented libraries does not overwrite its own
@@ -476,7 +480,7 @@ larger code model is the likely fix.
 
 ## Adding a stage
 
-`multi_arch_ci_coverage_nightly.yml` builds compiler-runtime and math-libs, and
+`multi_arch_ci_coverage_linux.yml` builds compiler-runtime and math-libs, and
 `configure_coverage_ci.py` rejects any selection that reaches beyond them
 (`BUILDABLE_STAGES`). That covers 17 of the 19 measurable projects.
 

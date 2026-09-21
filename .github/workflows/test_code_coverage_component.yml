@@ -9,6 +9,14 @@ on:
       generic_run_id:
         type: string
         default: ""
+      baseline_repository:
+        description: >-
+          Repository owning generic_run_id (owner/repo), passed to the installer
+          as --run-github-repo for the generic fetch. Empty lets the installer
+          default to the current repository. The instrumented replacement always
+          resolves against this coverage run's own repository.
+        type: string
+        default: ""
       artifact_group:
         type: string
       amdgpu_families:
@@ -136,16 +144,34 @@ jobs:
         env:
           RELEASE_TYPE: ${{ inputs.release_type }}
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
+          BASELINE_REPOSITORY: ${{ inputs.baseline_repository }}
         run: |
           pip3 install -r requirements-test.txt
+          # The generic (baseline) tree comes from generic_run_id. When it is
+          # empty (self-contained dispatch), fall back to this run's own
+          # instrumented artifacts so the install still resolves -- the
+          # subsequent --replace then re-extracts the same instrumented libs,
+          # leaving the whole stack instrumented, which is the documented
+          # self-contained behavior.
+          generic_run_id="${{ inputs.generic_run_id }}"
+          if [[ -z "${generic_run_id}" ]]; then
+            generic_run_id="${{ github.run_id }}"
+          fi
+          # Only pass --run-github-repo when a baseline repository was given, so
+          # an empty value lets the installer default to the current repository.
+          run_github_repo_arg=()
+          if [[ -n "${BASELINE_REPOSITORY}" ]]; then
+            run_github_repo_arg=(--run-github-repo="${BASELINE_REPOSITORY}")
+          fi
           python3 build_tools/install_rocm_code_coverage_build.py \
             --code-coverage-run-id=${{ env.CODE_COVERAGE_RUN_ID }} \
-            --run-id=${{ inputs.generic_run_id }} \
+            --run-id="${generic_run_id}" \
             --artifact-group=${{ inputs.amdgpu_families }} \
             --amdgpu-targets=${{ inputs.amdgpu_targets }} \
             --tests \
             --output-dir=${{ env.OUTPUT_ARTIFACTS_DIR }} \
             --replace-${{ fromJSON(inputs.component).job_name }} \
+            "${run_github_repo_arg[@]}" \
             ${FETCH_ARTIFACT_ARGS}
 
       # safe.directory must be set before Runner Health Status

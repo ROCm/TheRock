@@ -786,7 +786,7 @@ def resolve_build_stages(project_keys: list[str]) -> set[str]:
             f"cannot build coverage for {', '.join(blocked)}: this workflow has "
             f"build jobs for {', '.join(sorted(BUILDABLE_STAGES))} only, not "
             f"{', '.join(unbuildable)}. Restore the staged build jobs in "
-            "multi_arch_ci_coverage_nightly.yml to select these projects."
+            "multi_arch_ci_coverage_linux.yml to select these projects."
         )
     return stages
 

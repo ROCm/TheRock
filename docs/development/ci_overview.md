@@ -53,8 +53,9 @@ and upload steps inside a WSL Ubuntu shell. See
 Code coverage has its own entry point, because the projects it measures have to
 be rebuilt with instrumentation before their tests can be run:
 
-- [`.github/workflows/multi_arch_ci_coverage_nightly.yml`](/.github/workflows/multi_arch_ci_coverage_nightly.yml) - builds one instrumented stack covering every coverage-enabled project. Dispatched by hand: pass the run id of a recent nightly as `baseline_run_id` to take the non-instrumented dependencies from it, or leave it empty to build the whole stack within the run
-  - [`.github/workflows/multi_arch_ci_coverage_linux.yml`](/.github/workflows/multi_arch_ci_coverage_linux.yml) - runs one project's tests on one GPU family, then turns the collected profiles into an lcov file, a text summary and a browsable HTML report
+- [`.github/workflows/multi_arch_ci_coverage.yml`](/.github/workflows/multi_arch_ci_coverage.yml) - thin top-level orchestrator (`setup_coverage_matrix`, `coverage_linux`, `ci_summary`). Dispatched by hand or by the nightly: pass the run id of a recent nightly as `baseline_run_id` to take the non-instrumented dependencies from it, or leave it empty to build the whole stack within the run
+  - [`.github/workflows/multi_arch_ci_coverage_linux.yml`](/.github/workflows/multi_arch_ci_coverage_linux.yml) - the per-platform build + fan-out layer: builds the instrumented compiler-runtime and math-libs, then fans out over projects (a future `multi_arch_ci_coverage_windows.yml` will mirror it)
+    - [`.github/workflows/multi_arch_ci_coverage_report.yml`](/.github/workflows/multi_arch_ci_coverage_report.yml) - runs one project's tests on one GPU family, then turns the collected profiles into an lcov file, a text summary and a browsable HTML report
 
 See [Code Coverage](code_coverage.md) for the CMake options and how to onboard a
 project, and [Coverage CI](code_coverage.md#coverage-ci) for the end-to-end

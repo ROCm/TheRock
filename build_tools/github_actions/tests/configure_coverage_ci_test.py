@@ -323,7 +323,7 @@ class ResolveBuildStagesTest(unittest.TestCase):
         message = str(caught.exception)
         self.assertIn("rccl", message)
         self.assertIn("comm-libs", message)
-        self.assertIn("multi_arch_ci_coverage_nightly.yml", message)
+        self.assertIn("multi_arch_ci_coverage_linux.yml", message)
 
     def test_rejection_names_every_unbuildable_project_not_just_the_first(self):
         with self.assertRaises(ValueError) as caught:

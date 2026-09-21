@@ -4,7 +4,7 @@
 # TEMPORARY. Delete this file, and the workflow_call trigger it relies on,
 # before merging the coverage PR.
 #
-# multi_arch_ci_coverage_nightly.yml is triggered by hand, but a
+# multi_arch_ci_coverage.yml is triggered by hand, but a
 # workflow_dispatch only appears once the file is on the default branch. There
 # is therefore no way to run it from a branch and no way to see it in a PR's
 # checks, which leaves the phase 1 work unable to demonstrate the one thing it
@@ -28,12 +28,13 @@ on:
     # only the files carrying coverage logic are worth spending one on.
     paths:
       - ".github/workflows/coverage_nightly_pr_check.yml"
-      - ".github/workflows/multi_arch_ci_coverage_nightly.yml"
+      - ".github/workflows/multi_arch_ci_coverage.yml"
       - ".github/workflows/multi_arch_ci_coverage_linux.yml"
-      - ".github/workflows/test_component.yml"
+      - ".github/workflows/multi_arch_ci_coverage_report.yml"
+      - ".github/workflows/test_code_coverage_component.yml"
       - "build_tools/github_actions/configure_coverage_ci.py"
-      - "build_tools/github_actions/overlay_coverage_artifacts.py"
       - "build_tools/github_actions/merge_coverage_report.py"
+      - "build_tools/install_rocm_code_coverage_build.py"
       - "cmake/therock_subproject.cmake"
       - "CMakeLists.txt"
 
@@ -47,7 +48,7 @@ concurrency:
 jobs:
   coverage:
     name: Coverage
-    uses: ./.github/workflows/multi_arch_ci_coverage_nightly.yml
+    uses: ./.github/workflows/multi_arch_ci_coverage.yml
     secrets: inherit
     # A called workflow cannot hold more than its caller, so these are granted
     # here even though the coverage workflow declares them itself: id-token for
