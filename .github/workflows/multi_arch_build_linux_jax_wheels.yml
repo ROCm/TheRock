@@ -296,21 +296,18 @@ jobs:
         env:
           PYTHON_VERSION: ${{ inputs.python_version }}
           JAX_COMMIT: ${{ steps.checkout_jax.outputs.commit }}
-          # XLA's python_wheel_version_suffix_repository drops
-          # ML_WHEEL_VERSION_SUFFIX for its "nightly" type, so a nightly build
-          # uses the "custom" type, which appends .dev<build date> and then the
-          # ROCm suffix: 0.11.2.dev20260914+rocm7.14.0a20260914.
-          ML_WHEEL_TYPE: ${{ inputs.wheel_type == 'nightly' && 'custom' || 'release' }}
-          ML_WHEEL_BUILD_DATE: ${{ steps.resolve_jax_nightly_version.outputs.build_date }}
+          # A nightly stays a "release" build carrying the date in its suffix,
+          # giving 0.11.2.dev20260914+rocm7.14.0a20260914. XLA's own "nightly"
+          # type drops the ROCm suffix, and its "custom" type emits one "+"
+          # where build.py's copy glob writes two, so neither finds the wheel.
+          WHEEL_VERSION_DATE: ${{ inputs.wheel_type == 'nightly' && format('.dev{0}', steps.resolve_jax_nightly_version.outputs.build_date) || '' }}
         run: |
           docker run --rm \
             --user root \
             --env JAX_COMMIT \
             --env ROCM_VERSION="${ROCM_VERSION}" \
             --env PYTHON_VERSION="${PYTHON_VERSION}" \
-            --env ML_WHEEL_TYPE="${ML_WHEEL_TYPE}" \
-            --env ML_WHEEL_BUILD_DATE="${ML_WHEEL_BUILD_DATE}" \
-            --env ML_WHEEL_VERSION_SUFFIX="${version_suffix}" \
+            --env ML_WHEEL_VERSION_SUFFIX="${WHEEL_VERSION_DATE}${version_suffix}" \
             --env PACKAGE_DIST_DIR="/workspace/jax-source/dist" \
             --volume "${GITHUB_WORKSPACE}:/workspace" \
             --workdir /workspace/jax-source \
@@ -323,8 +320,7 @@ jobs:
                 --bazel_startup_options=--bazelrc=build/rocm/rocm.bazelrc \
                 --bazel_options=--config=rocm_release_wheel \
                 --bazel_options=--repo_env=ROCM_PATH="${ROCM_ROOT}" \
-                --bazel_options=--repo_env=ML_WHEEL_TYPE="${ML_WHEEL_TYPE}" \
-                --bazel_options=--repo_env=ML_WHEEL_BUILD_DATE="${ML_WHEEL_BUILD_DATE}" \
+                --bazel_options=--repo_env=ML_WHEEL_TYPE=release \
                 --bazel_options=--repo_env=ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
                 --bazel_options=--//jaxlib/tools:jaxlib_git_hash="${JAX_COMMIT}" \
                 --verbose \
