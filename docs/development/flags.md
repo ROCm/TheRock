@@ -273,6 +273,40 @@ therock_override_flag_default(KPACK_SPLIT_ARTIFACTS ON)
 present, `BRANCH_CONFIG.json` flag defaults are applied after
 `BRANCH_FLAGS.cmake`.
 
+## Selecting Flags in CI
+
+The Multi-Arch CI workflow has a `build_flags` dispatch input for running CI
+with non-default flag values, without committing to the branch. It takes a
+comma-separated list of `NAME=VALUE` pairs:
+
+```text
+HIPDNN_ENABLE_SDPA=ON,KPACK_SPLIT_ARTIFACTS=OFF,EXAMPLE_INTEGER=-17
+```
+
+A bare `NAME` means `NAME=ON` and only works for `BOOL` flags. Use `NAME=VALUE`
+to turn a default-`ON` flag off or to set an `INTEGER` flag.
+
+Names and values are checked against `FLAGS.cmake`, so a typo or an
+out-of-range value fails the run instead of reaching CMake. This happens in the
+CI configure step (which also lists the flags in the step summary) and again in
+each build job.
+
+Flags are passed as `-DTHEROCK_FLAG_<NAME>=<VALUE>`, which overrides both the
+declared `DEFAULT_VALUE` and any `BRANCH_CONFIG.json` entry.
+
+Because flags change what gets built, they are part of the run's identity: they
+are hashed into the build variant suffix, which namespaces artifacts and
+uploads, and they show up in job names. A flag build never reuses or overwrites
+default-build artifacts.
+
+The parsing and validation live in
+`build_tools/github_actions/therock_build_flags.py`, which also runs locally:
+
+```bash
+python build_tools/github_actions/therock_build_flags.py \
+  --build-flags=HIPDNN_ENABLE_SDPA --cmake-args
+```
+
 ## Manifest Integration
 
 Flag states are recorded in the TheRock manifest (`share/therock/therock_manifest.json`)

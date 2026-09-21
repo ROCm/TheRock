@@ -8,6 +8,8 @@ construct the input dataclass, call the function, assert on the output.
 No environment variables or filesystem access needed (except from_environ tests).
 """
 
+import contextlib
+import io
 import json
 import os
 import re
@@ -173,6 +175,43 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertFalse(inputs.build_pytorch)
         self.assertTrue(inputs.build_jax)
         self.assertEqual(inputs.python_versions, ["3.12"])
+
+    def test_build_flags_are_validated_at_parse_time(self):
+        """BUILD_FLAGS is checked against FLAGS.cmake; bad input fails early."""
+        inputs = _run_from_environ(
+            event_name="workflow_dispatch",
+            event_payload={},
+            extra_env={"BUILD_FLAGS": "HIPDNN_ENABLE_SDPA,KPACK_SPLIT_ARTIFACTS=off"},
+        )
+        self.assertEqual(
+            inputs.build_flags,
+            {"HIPDNN_ENABLE_SDPA": "ON", "KPACK_SPLIT_ARTIFACTS": "OFF"},
+        )
+
+        with self.assertRaises(cm.BuildFlagError):
+            _run_from_environ(
+                event_name="workflow_dispatch",
+                event_payload={},
+                extra_env={"BUILD_FLAGS": "NOT_A_REAL_FLAG=ON"},
+            )
+
+    def test_bad_build_flags_report_a_workflow_error(self):
+        """A bad flag is annotated for the job log, not raised as a traceback."""
+        stderr = io.StringIO()
+        with (
+            patch.object(
+                cm.CIInputs,
+                "from_environ",
+                side_effect=cm.BuildFlagError("Unknown build flag 'NOT_A_REAL_FLAG'."),
+            ),
+            contextlib.redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as raised:
+                cm.main()
+
+        self.assertEqual(raised.exception.code, 1)
+        self.assertIn("::error::Invalid build_flags input:", stderr.getvalue())
+        self.assertIn("NOT_A_REAL_FLAG", stderr.getvalue())
 
     def test_pull_request_extracts_labels(self):
         """PR labels are extracted from event.pull_request.labels."""
@@ -1382,6 +1421,30 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertIn("release", config.artifact_group)
         self.assertIsInstance(config.build_pytorch, bool)
 
+    def test_build_flags_namespace_the_run(self):
+        """Requested flags make the run distinct from a default build."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"], windows_families=[])
+        flagged = cm.expand_build_configs(
+            ci_inputs=self._inputs(build_flags={"HIPDNN_ENABLE_SDPA": "ON"}),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        ).linux
+        default = cm.expand_build_configs(
+            ci_inputs=self._inputs(),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        ).linux
+
+        self.assertEqual(flagged.build_flags, "HIPDNN_ENABLE_SDPA=ON")
+        self.assertEqual(default.build_flags, "")
+        # Artifacts must not collide with a default build.
+        self.assertNotEqual(flagged.artifact_group, default.artifact_group)
+        self.assertTrue(flagged.build_variant_suffix.startswith("flags-"))
+        # Job names render build_variant_label.
+        self.assertIn("HIPDNN_ENABLE_SDPA=ON", flagged.build_variant_label)
+
     def test_build_config_includes_python_package_test_matrix(self):
         targets = cm.TargetSelection(
             linux_families=["gfx94x"],
@@ -1819,6 +1882,28 @@ class TestFormatSummary(unittest.TestCase):
         # Just check the header. The output is markdown for humans and asserting
         # on more exact formatting would create a change detector test.
         self.assertTrue(result.startswith("## Multi-Arch CI Configuration"))
+
+    def test_build_flags_appear_in_summary(self):
+        """Requested flags are listed as non-default configuration."""
+        jobs = cm.JobDecisions(
+            build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
+            test_rocm=cm.TestRocmDecision(action=cm.JobAction.RUN, test_type="full"),
+            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            build_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            test_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            build_jax=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+        )
+        ci_inputs = self._inputs(build_flags={"HIPDNN_ENABLE_SDPA": "ON"})
+        builds = cm.expand_build_configs(
+            ci_inputs=ci_inputs,
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(linux_families=["gfx94x"]),
+            jobs=jobs,
+        )
+        outputs = cm.CIOutputs(is_ci_enabled=True, builds=builds, jobs=jobs)
+        result = format_summary(ci_inputs, outputs)
+
+        self.assertIn("THEROCK_FLAG_HIPDNN_ENABLE_SDPA=ON", result)
 
     def test_skipped_summary(self):
         outputs = cm.CIOutputs.skipped()

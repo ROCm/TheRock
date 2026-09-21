@@ -52,6 +52,12 @@ on:
         description: >-
           Comma-separated build stages to drop from the graph entirely. Unlike
           prebuilt_stages, no artifacts exist for these stages afterwards.
+      build_flags:
+        type: string
+        default: ""
+        description: >-
+          Comma-separated FLAGS.cmake overrides as NAME=VALUE. Applied as
+          -DTHEROCK_FLAG_<NAME>=<VALUE>. See docs/development/flags.md.
       build_runs_on:
         type: string
         default: "aws-linux-scale-rocm-prod"
@@ -116,6 +122,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      build_flags: ${{ inputs.build_flags }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
@@ -141,6 +148,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      build_flags: ${{ inputs.build_flags }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
@@ -166,6 +174,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      build_flags: ${{ inputs.build_flags }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
@@ -190,6 +199,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      build_flags: ${{ inputs.build_flags }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
@@ -226,6 +236,7 @@ jobs:
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
       rebuild_artifacts: ${{ inputs.rebuild_artifacts }}
+      build_flags: ${{ inputs.build_flags }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
@@ -255,6 +266,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      build_flags: ${{ inputs.build_flags }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
@@ -282,6 +294,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      build_flags: ${{ inputs.build_flags }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
@@ -307,6 +320,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      build_flags: ${{ inputs.build_flags }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
@@ -332,6 +346,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      build_flags: ${{ inputs.build_flags }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
@@ -357,6 +372,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      build_flags: ${{ inputs.build_flags }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
@@ -382,6 +398,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      build_flags: ${{ inputs.build_flags }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
@@ -407,6 +424,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      build_flags: ${{ inputs.build_flags }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
