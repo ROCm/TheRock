@@ -85,9 +85,7 @@ class TestCodeCoverageRepoSplit(unittest.TestCase):
         return captured
 
     def test_replacement_uses_code_coverage_repo_not_generic_repo(self):
-        captured = self._run_main(
-            ["--code-coverage-run-github-repo", "ROCm/TheRock"]
-        )
+        captured = self._run_main(["--code-coverage-run-github-repo", "ROCm/TheRock"])
         self.assertEqual(captured["run_id"], "222")
         self.assertEqual(captured["github_repository"], "ROCm/TheRock")
         self.assertNotEqual(captured["github_repository"], "ROCm/rocm-libraries")
@@ -95,9 +93,7 @@ class TestCodeCoverageRepoSplit(unittest.TestCase):
     def test_replacement_repo_defaults_to_github_repository_env(self):
         # main() must be re-imported so the argparse default picks up the env,
         # since the default is evaluated at parse time inside main().
-        captured = self._run_main(
-            [], env={"GITHUB_REPOSITORY": "ROCm/TheRock"}
-        )
+        captured = self._run_main([], env={"GITHUB_REPOSITORY": "ROCm/TheRock"})
         self.assertEqual(captured["github_repository"], "ROCm/TheRock")
 
 
