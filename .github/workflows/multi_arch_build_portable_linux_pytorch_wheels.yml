@@ -326,6 +326,8 @@ jobs:
             --require-related-commit \
             --no-commit-hipify
           ./external-builds/pytorch/pytorch_triton_repo.py checkout \
+            --gitrepo-origin https://github.com/ethanwee1/triton.git \
+            --repo-hashtag 7b3310594fe5f3f37d98a7f169eb7ec6b7875c72 \
             --no-commit-hipify
           ./external-builds/pytorch/pytorch_apex_repo.py checkout \
             --require-related-commit \
