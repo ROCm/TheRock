@@ -107,7 +107,7 @@ jobs:
     with:
       stage_name: compiler-runtime
       stage_display_name: "Stage - Compiler Runtime"
-      timeout_minutes: 1  # Test timeout handling
+      timeout_minutes: 480  # 8 hours (compiler is big)
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
@@ -126,7 +126,14 @@ jobs:
   # ==========================================================================
   emulation:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'emulation') && !contains(inputs.skip_stages, 'emulation') }}
+    if: >-
+      ${{
+        !cancelled() &&
+        (needs.compiler-runtime.result == 'success' ||
+          (needs.compiler-runtime.result == 'skipped' && contains(inputs.prebuilt_stages, 'compiler-runtime'))) &&
+        !contains(inputs.prebuilt_stages, 'emulation') &&
+        !contains(inputs.skip_stages, 'emulation')
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -151,7 +158,14 @@ jobs:
   # ==========================================================================
   runtime-tests:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'runtime-tests') && !contains(inputs.skip_stages, 'runtime-tests') }}
+    if: >-
+      ${{
+        !cancelled() &&
+        (needs.compiler-runtime.result == 'success' ||
+          (needs.compiler-runtime.result == 'skipped' && contains(inputs.prebuilt_stages, 'compiler-runtime'))) &&
+        !contains(inputs.prebuilt_stages, 'runtime-tests') &&
+        !contains(inputs.skip_stages, 'runtime-tests')
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -176,7 +190,14 @@ jobs:
   # ==========================================================================
   wsl-rocdxg:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'wsl-rocdxg') && !contains(inputs.skip_stages, 'wsl-rocdxg') }}
+    if: >-
+      ${{
+        !cancelled() &&
+        (needs.compiler-runtime.result == 'success' ||
+          (needs.compiler-runtime.result == 'skipped' && contains(inputs.prebuilt_stages, 'compiler-runtime'))) &&
+        !contains(inputs.prebuilt_stages, 'wsl-rocdxg') &&
+        !contains(inputs.skip_stages, 'wsl-rocdxg')
+      }}
     uses: ./.github/workflows/multi_arch_build_wsl_rocdxg_artifacts.yml
     secrets: inherit
     with:
@@ -200,7 +221,14 @@ jobs:
   # ==========================================================================
   math-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'math-libs') && !contains(inputs.skip_stages, 'math-libs') }}
+    if: >-
+      ${{
+        !cancelled() &&
+        (needs.compiler-runtime.result == 'success' ||
+          (needs.compiler-runtime.result == 'skipped' && contains(inputs.prebuilt_stages, 'compiler-runtime'))) &&
+        !contains(inputs.prebuilt_stages, 'math-libs') &&
+        !contains(inputs.skip_stages, 'math-libs')
+      }}
     strategy:
       # `fail-fast: false` lets all families complete even if one fails.
       # This is useful for CI (to see all failures at once), but for releases
@@ -239,7 +267,16 @@ jobs:
   # ==========================================================================
   comm-libs:
     needs: [compiler-runtime, emulation]
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'comm-libs') && !contains(inputs.skip_stages, 'comm-libs') }}
+    if: >-
+      ${{
+        !cancelled() &&
+        (needs.compiler-runtime.result == 'success' ||
+          (needs.compiler-runtime.result == 'skipped' && contains(inputs.prebuilt_stages, 'compiler-runtime'))) &&
+        (needs.emulation.result == 'success' ||
+          (needs.emulation.result == 'skipped' && contains(inputs.prebuilt_stages, 'emulation'))) &&
+        !contains(inputs.prebuilt_stages, 'comm-libs') &&
+        !contains(inputs.skip_stages, 'comm-libs')
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -266,7 +303,14 @@ jobs:
   # ==========================================================================
   storage-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'storage-libs') && !contains(inputs.skip_stages, 'storage-libs') }}
+    if: >-
+      ${{
+        !cancelled() &&
+        (needs.compiler-runtime.result == 'success' ||
+          (needs.compiler-runtime.result == 'skipped' && contains(inputs.prebuilt_stages, 'compiler-runtime'))) &&
+        !contains(inputs.prebuilt_stages, 'storage-libs') &&
+        !contains(inputs.skip_stages, 'storage-libs')
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -292,7 +336,14 @@ jobs:
   # ==========================================================================
   debug-tools:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'debug-tools') && !contains(inputs.skip_stages, 'debug-tools') }}
+    if: >-
+      ${{
+        !cancelled() &&
+        (needs.compiler-runtime.result == 'success' ||
+          (needs.compiler-runtime.result == 'skipped' && contains(inputs.prebuilt_stages, 'compiler-runtime'))) &&
+        !contains(inputs.prebuilt_stages, 'debug-tools') &&
+        !contains(inputs.skip_stages, 'debug-tools')
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -317,7 +368,14 @@ jobs:
   # ==========================================================================
   dctools-core:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'dctools-core') && !contains(inputs.skip_stages, 'dctools-core') }}
+    if: >-
+      ${{
+        !cancelled() &&
+        (needs.compiler-runtime.result == 'success' ||
+          (needs.compiler-runtime.result == 'skipped' && contains(inputs.prebuilt_stages, 'compiler-runtime'))) &&
+        !contains(inputs.prebuilt_stages, 'dctools-core') &&
+        !contains(inputs.skip_stages, 'dctools-core')
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -342,7 +400,14 @@ jobs:
   # ==========================================================================
   profiler-apps:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'profiler-apps') && !contains(inputs.skip_stages, 'profiler-apps') }}
+    if: >-
+      ${{
+        !cancelled() &&
+        (needs.compiler-runtime.result == 'success' ||
+          (needs.compiler-runtime.result == 'skipped' && contains(inputs.prebuilt_stages, 'compiler-runtime'))) &&
+        !contains(inputs.prebuilt_stages, 'profiler-apps') &&
+        !contains(inputs.skip_stages, 'profiler-apps')
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -367,7 +432,14 @@ jobs:
   # ==========================================================================
   cv-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'cv-libs') && !contains(inputs.skip_stages, 'cv-libs') }}
+    if: >-
+      ${{
+        !cancelled() &&
+        (needs.compiler-runtime.result == 'success' ||
+          (needs.compiler-runtime.result == 'skipped' && contains(inputs.prebuilt_stages, 'compiler-runtime'))) &&
+        !contains(inputs.prebuilt_stages, 'cv-libs') &&
+        !contains(inputs.skip_stages, 'cv-libs')
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -392,7 +464,14 @@ jobs:
   # ==========================================================================
   media-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'media-libs') && !contains(inputs.skip_stages, 'media-libs') }}
+    if: >-
+      ${{
+        !cancelled() &&
+        (needs.compiler-runtime.result == 'success' ||
+          (needs.compiler-runtime.result == 'skipped' && contains(inputs.prebuilt_stages, 'compiler-runtime'))) &&
+        !contains(inputs.prebuilt_stages, 'media-libs') &&
+        !contains(inputs.skip_stages, 'media-libs')
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:

@@ -98,7 +98,7 @@ jobs:
   build_multi_arch_stages:
     name: Build Multi-Arch Stages
     needs: copy_prebuilt_stages
-    if: ${{ !cancelled() && !failure() }}
+    if: ${{ needs.copy_prebuilt_stages.result == 'success' }}
     uses: ./.github/workflows/multi_arch_build_portable_linux.yml
     secrets: inherit
     with:
@@ -124,7 +124,7 @@ jobs:
   validate_artifact_structure:
     needs: [build_multi_arch_stages]
     name: Validate Artifact Structure
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ needs.build_multi_arch_stages.result == 'success' }}
     uses: ./.github/workflows/test_artifacts_structure.yml
     secrets: inherit
     with:
@@ -137,7 +137,11 @@ jobs:
   test_artifacts_per_family:
     needs: [copy_prebuilt_stages, build_multi_arch_stages]
     name: Test ${{ matrix.family_info.amdgpu_family }}
-    if: ${{ !failure() && !cancelled() }}
+    if: >-
+      ${{
+        needs.copy_prebuilt_stages.result == 'success' &&
+        needs.build_multi_arch_stages.result == 'success'
+      }}
     strategy:
       fail-fast: false
       matrix:
@@ -163,7 +167,7 @@ jobs:
   build_native_deb_packages:
     needs: [build_multi_arch_stages]
     name: Build DEB Packages
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
+    if: ${{ needs.build_multi_arch_stages.result == 'success' && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     secrets: inherit
     with:
@@ -180,7 +184,7 @@ jobs:
   build_native_rpm_packages:
     needs: [build_multi_arch_stages]
     name: Build RPM Packages
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
+    if: ${{ needs.build_multi_arch_stages.result == 'success' && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     secrets: inherit
     with:
@@ -197,7 +201,7 @@ jobs:
   test_native_packages_ubuntu2404:
     needs: [build_native_deb_packages]
     name: Test DEB Install - ubuntu2404
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
+    if: ${{ needs.build_native_deb_packages.result == 'success' && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     secrets: inherit
     with:
@@ -216,7 +220,7 @@ jobs:
   test_native_packages_rhel8:
     needs: [build_native_rpm_packages]
     name: Test RPM Install - rhel8
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
+    if: ${{ needs.build_native_rpm_packages.result == 'success' && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     secrets: inherit
     with:
@@ -235,7 +239,7 @@ jobs:
   test_native_packages_rhel10:
     needs: [build_native_rpm_packages]
     name: Test RPM Install - rhel10
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
+    if: ${{ needs.build_native_rpm_packages.result == 'success' && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     secrets: inherit
     with:
@@ -254,7 +258,7 @@ jobs:
   test_native_packages_sles16:
     needs: [build_native_rpm_packages]
     name: Test RPM Install - sles16
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
+    if: ${{ needs.build_native_rpm_packages.result == 'success' && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     secrets: inherit
     with:
@@ -273,7 +277,7 @@ jobs:
   build_python_packages:
     needs: [build_multi_arch_stages]
     name: Build Python Packages
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_python_packages == true }}
+    if: ${{ needs.build_multi_arch_stages.result == 'success' && fromJSON(inputs.build_config).build_python_packages == true }}
     uses: ./.github/workflows/build_portable_linux_python_packages.yml
     secrets: inherit
     with:
@@ -293,7 +297,7 @@ jobs:
   test_python_packages_per_family:
     needs: [build_python_packages]
     name: Test Python
-    if: ${{ !failure() && !cancelled() && toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) != '[]' }}
+    if: ${{ needs.build_python_packages.result == 'success' && toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) != '[]' }}
     strategy:
       fail-fast: false
       matrix:
