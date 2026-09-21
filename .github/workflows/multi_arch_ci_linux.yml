@@ -98,7 +98,7 @@ jobs:
   build_multi_arch_stages:
     name: Build Multi-Arch Stages
     needs: copy_prebuilt_stages
-    if: ${{ needs.copy_prebuilt_stages.result == 'success' }}
+    if: ${{ needs.copy_prebuilt_stages.result == 'success' || needs.copy_prebuilt_stages.result == 'skipped' }}
     uses: ./.github/workflows/multi_arch_build_portable_linux.yml
     secrets: inherit
     with:
@@ -139,7 +139,7 @@ jobs:
     name: Test ${{ matrix.family_info.amdgpu_family }}
     if: >-
       ${{
-        needs.copy_prebuilt_stages.result == 'success' &&
+        (needs.copy_prebuilt_stages.result == 'success' || needs.copy_prebuilt_stages.result == 'skipped') &&
         needs.build_multi_arch_stages.result == 'success'
       }}
     strategy:
