@@ -84,9 +84,7 @@ class ROCmDevelTest(unittest.TestCase):
             msg=f"Could not find `hipconfig` console script for interpreter {sys.executable}",
         )
         rocmpath_output = (
-            utils.run_command([hipconfig, "--rocmpath"], capture=True)
-            .decode()
-            .strip()
+            utils.run_command([hipconfig, "--rocmpath"], capture=True).decode().strip()
         )
         rocmpath = Path(rocmpath_output)
         self.assertTrue(
