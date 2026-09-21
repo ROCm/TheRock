@@ -1,0 +1,48 @@
+From 324a6f8823a4180d8ba26a46706711c41cc76fcb Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Fri, 18 Sep 2026 19:00:35 +0000
+Subject: [PATCH] fix(rocjitsu): suppress GCC 14+ false-positive -Warray-bounds
+ in bounds test
+
+GCC 14+ inlines copy_dwords_lane_major into the
+ReadRegionRejectsInvalidLaneMajorCopyBounds test and flags the memcpy
+as out-of-bounds, not realizing the exception guard on line 783 makes
+that path unreachable. Wrap the test in a diagnostic pragma to suppress
+the false positive.
+
+Reproduces on both x86_64 (GCC 15.2, Ubuntu 26.04) and ppc64le
+(GCC 14.3, RHEL 9).
+---
+ emulation/rocjitsu/tests/register_access_test.cpp | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/emulation/rocjitsu/tests/register_access_test.cpp b/emulation/rocjitsu/tests/register_access_test.cpp
+index dc1af19a8f8..51be9c0a6c7 100644
+--- a/emulation/rocjitsu/tests/register_access_test.cpp
++++ b/emulation/rocjitsu/tests/register_access_test.cpp
+@@ -340,6 +340,12 @@ TEST(RegisterAccessTest, ReadRegionCopiesDwordsToLaneMajorStorage) {
+   EXPECT_TRUE(std::ranges::all_of(masked_lane, [](uint8_t byte) { return byte == 0xAA; }));
+ }
+ 
++// GCC 14+ inlines copy_dwords_lane_major and flags the memcpy as out-of-bounds,
++// not realizing the exception guard makes it unreachable. Suppress the false positive.
++#if defined(__GNUC__) && !defined(__clang__)
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Warray-bounds"
++#endif
+ TEST(RegisterAccessTest, ReadRegionRejectsInvalidLaneMajorCopyBounds) {
+   Fixture fx(ROCJITSU_CODE_ARCH_CDNA4, kSgprsPerWave, /*wavefront_slots=*/1, kVgprsPerWave,
+              /*wave_size=*/32);
+@@ -355,6 +361,9 @@ TEST(RegisterAccessTest, ReadRegionRejectsInvalidLaneMajorCopyBounds) {
+                std::invalid_argument);
+   EXPECT_THROW(region.copy_dwords_lane_major(bytes, uint64_t{1} << 32), std::invalid_argument);
+ }
++#if defined(__GNUC__) && !defined(__clang__)
++#pragma GCC diagnostic pop
++#endif
+ 
+ TEST(RegisterAccessTest, ReadRegionTraversesAndCopiesLogicalRegisterRange) {
+   for (const auto arch : {ROCJITSU_CODE_ARCH_CDNA4, ROCJITSU_CODE_ARCH_CDNA5}) {
+-- 
+2.52.0
+
