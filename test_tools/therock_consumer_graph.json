@@ -642,6 +642,7 @@
       "hipcub",
       "hipdnn",
       "hipdnn_integration_tests",
+      "hipdnn_samples",
       "hipfft",
       "hipfile",
       "hipkernelprovider",
