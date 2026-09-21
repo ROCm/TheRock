@@ -257,17 +257,43 @@ jobs:
             --rocm-version "${ROCM_VERSION}"
 
 
+      # Runner-local files at /data/ci-cert.{crt,key}, the same path XLA and
+      # JAX CI mount. Missing files leave the mount absent.
+      - name: Locate Bazel remote cache credentials
+        id: cache_credentials
+        env:
+          JAX_BAZEL_CACHE_CREDENTIALS_DIR: ${{ vars.JAX_BAZEL_CACHE_CREDENTIALS_DIR }}
+        run: |
+          python build_tools/github_actions/write_jax_bazel_cache_credentials.py
+
       - name: Build JAX Wheels in manylinux container
         working-directory: jax-source
         env:
           PYTHON_VERSION: ${{ inputs.python_version }}
           JAX_COMMIT: ${{ steps.checkout_jax.outputs.commit }}
+          # The release type decides whether this build shares entries at all,
+          # so prerelease stays isolated without a rule of its own here.
+          RELEASE_TYPE: ${{ inputs.release_type }}
+          JAX_BAZEL_CACHE_ALLOW_UPLOAD: "true"
+          JAX_BAZEL_REMOTE_CACHE_URL: ${{ vars.JAX_BAZEL_REMOTE_CACHE_URL }}
+          CACHE_CREDENTIALS_DIR: ${{ steps.cache_credentials.outputs.credentials_dir }}
         run: |
+          # rocm.bazelrc reads the client credentials from /data, copied
+          # from the runner's /data/ci-cert.* into $RUNNER_TEMP.
+          credentials_mount=""
+          if [[ -n "${CACHE_CREDENTIALS_DIR}" ]]; then
+            credentials_mount="--volume ${CACHE_CREDENTIALS_DIR}:/data:ro"
+          fi
+
           docker run --rm \
             --user root \
             --env JAX_COMMIT \
+            ${credentials_mount} \
             --env ROCM_VERSION="${ROCM_VERSION}" \
             --env PYTHON_VERSION="${PYTHON_VERSION}" \
+            --env RELEASE_TYPE="${RELEASE_TYPE}" \
+            --env JAX_BAZEL_CACHE_ALLOW_UPLOAD="${JAX_BAZEL_CACHE_ALLOW_UPLOAD}" \
+            --env JAX_BAZEL_REMOTE_CACHE_URL="${JAX_BAZEL_REMOTE_CACHE_URL}" \
             --env ML_WHEEL_VERSION_SUFFIX="${version_suffix}" \
             --env PACKAGE_DIST_DIR="/workspace/jax-source/dist" \
             --volume "${GITHUB_WORKSPACE}:/workspace" \
@@ -275,6 +301,7 @@ jobs:
             "${MANYLINUX_IMAGE_TAG}" \
             bash -lc '
               ROCM_ROOT="$(rocm-sdk path --root)"
+              bazel_cache_options="$(python /workspace/build_tools/github_actions/configure_jax_bazel_cache.py)"
               python build/build.py build \
                 --wheels=jax-rocm-plugin,jax-rocm-pjrt \
                 --python_version="${PYTHON_VERSION}" \
@@ -284,6 +311,7 @@ jobs:
                 --bazel_options=--repo_env=ML_WHEEL_TYPE=release \
                 --bazel_options=--repo_env=ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
                 --bazel_options=--//jaxlib/tools:jaxlib_git_hash="${JAX_COMMIT}" \
+                ${bazel_cache_options} \
                 --verbose \
                 --detailed_timestamped_log \
                 --output_path="$(pwd)/dist"

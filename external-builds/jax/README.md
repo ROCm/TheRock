@@ -10,7 +10,7 @@ Table of contents:
 
 - [Support status](#support-status)
 - [Build instructions](#build-instructions)
-- [CI Bazel remote cache](#ci-bazel-remote-cache)
+- [Bazel remote cache](#bazel-remote-cache)
 - [Test instructions](#test-instructions)
 - [Nightly releases](#nightly-releases)
 
@@ -148,10 +148,11 @@ from the TheRock multi-arch Python package index (the manylinux flow).
 For more detailed build options, see the `ROCm/jax` repository and the
 `.github/workflows/multi_arch_build_linux_jax_wheels.yml` workflow in TheRock.
 
-## CI Bazel remote cache
+## Bazel remote cache
 
-The Linux JAX wheel job compiles with Bazel inside a fresh manylinux container,
-so it cannot use the ccache setup that covers TheRock's CMake stages (see
+Both Linux JAX wheel jobs, CI and release, compile with Bazel inside a fresh
+manylinux container,
+so they cannot use the ccache setup that covers TheRock's CMake stages (see
 [CCache Troubleshooting](/docs/development/ccache_troubleshooting.md)). PyTorch
 wheels use sccache and S3 instead ([cache buckets](/docs/development/s3_buckets.md#cache-buckets)).
 
@@ -173,9 +174,11 @@ Bazel options when the files are missing, the release type may not read shared
 entries (`prerelease`, `nightly-bkc`), or the endpoint does not complete a TLS
 handshake. Those cases leave the build command unchanged.
 
-Pull requests pass `--remote_upload_local_results=false`. Pushes to `main` (and
-`workflow_dispatch`) upload. Set `JAX_BAZEL_REMOTE_CACHE_URL` to point the
-build at a different cache.
+Pull requests pass `--remote_upload_local_results=false`, so no proposed change
+can put an entry in front of a later build. Everything else uploads, release
+builds included: they are the canonical build of a ref, and a release type that
+may not share entries never reaches the cache at all. Set
+`JAX_BAZEL_REMOTE_CACHE_URL` to point the build at a different cache.
 
 EngFlow entries from `ROCm/jax` CI do not help TheRock: that CI compiles with
 `--config=rocm_rbe`, so the action keys differ. TheRock has to populate the
