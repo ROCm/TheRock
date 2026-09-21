@@ -246,7 +246,7 @@ observed across multiple commits.
 > [!TIP]
 > These style guides are intended for both human developers _and_ AI agents.
 >
-> The repository's [`CLAUDE.md`](/CLAUDE.md) references them, as do the
+> The repository's [`AGENTS.md`](/AGENTS.md) references them, as do the
 > PR-quality skills for AI agents under [`skills/`](/skills/). Following these
 > guides during agent-driven development can help produce higher-quality
 > contributions that are easier for maintainers to review.

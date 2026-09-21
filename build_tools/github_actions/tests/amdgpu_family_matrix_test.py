@@ -278,6 +278,50 @@ class TestExternalConfig(unittest.TestCase):
         self.assertEqual(result["gfx94x"]["linux"]["family"], "gfx94X-dcgpu")
         self.assertIn("asan", result["gfx94x"]["linux"]["build_variants"])
 
+    def test_load_external_runner_config_v2_api_success(self):
+        """load_external_runner_config successfully calls load_config(version=2)."""
+        # Create a mock config object that mimics the v2 API
+        mock_config = mock.MagicMock()
+        mock_config.get_gpu_runner_labels.return_value = {
+            "gfx94x": {
+                "linux": {"test-runs-on": "v2-runner-label"},
+            }
+        }
+        mock_config.build_runners = {
+            "linux": {"default": [{"label": "v2-build-runner", "weight": 1.0}]}
+        }
+
+        # Create mock ci_config_api module
+        mock_ci_config_api = mock.MagicMock()
+        mock_ci_config_api.load_config.return_value = mock_config
+
+        os.environ["CI_CONFIG_PATH"] = "/fake/config/path"
+
+        with mock.patch.dict(sys.modules, {"ci_config_api": mock_ci_config_api}):
+            # Need to reimport to pick up the mocked module
+            import importlib
+
+            importlib.reload(amdgpu_family_matrix)
+            result = amdgpu_family_matrix.load_external_runner_config()
+
+        # Verify load_config was called with version=2
+        mock_ci_config_api.load_config.assert_called_once()
+        call_kwargs = mock_ci_config_api.load_config.call_args
+        self.assertEqual(call_kwargs.kwargs.get("version"), 2)
+
+        # Verify the result structure
+        self.assertIsNotNone(result)
+        self.assertIn("runner_labels", result)
+        self.assertIn("build_runners", result)
+        self.assertEqual(
+            result["runner_labels"]["gfx94x"]["linux"]["test-runs-on"],
+            "v2-runner-label",
+        )
+        self.assertEqual(
+            result["build_runners"]["linux"]["default"][0]["label"],
+            "v2-build-runner",
+        )
+
 
 # ---------------------------------------------------------------------------
 # Build runner selection
