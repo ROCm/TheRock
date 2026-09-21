@@ -93,6 +93,94 @@ on:
       - labeled
       - opened
       - synchronize
+  workflow_call:
+    inputs:
+      # --- Build Configuration ---
+      build_variant:
+        type: string
+        default: "release"
+      linux_amdgpu_families:
+        type: string
+        default: ""
+      windows_amdgpu_families:
+        type: string
+        default: ""
+      linux_test_labels:
+        type: string
+        default: ""
+      windows_test_labels:
+        type: string
+        default: ""
+
+      # --- Artifact Reuse ---
+      prebuilt_stages:
+        type: string
+        default: ""
+      baseline_run_id:
+        type: string
+        default: ""
+      baseline_repository:
+        type: string
+        default: ""
+        description: "Repository for baseline_run_id. External repos set this to their own repo."
+      stage_reuse_mode:
+        type: string
+        default: "dry-run"
+      stage_reuse_max_age_hours:
+        type: string
+        default: "72"
+      stage_reuse_commit_history:
+        type: string
+        default: "50"
+
+      # --- Testing ---
+      changed_projects:
+        type: string
+        default: ""
+
+      # --- Feature Flags ---
+      build_python_packages:
+        type: boolean
+        default: true
+      build_pytorch:
+        type: boolean
+        default: true
+      build_jax:
+        type: boolean
+        default: false
+      build_native_linux:
+        type: boolean
+        default: true
+      build_stages:
+        type: string
+        default: ""
+
+      # --- External Repo Support ---
+      repository:
+        type: string
+        default: ""
+        description: "TheRock repository to checkout. Defaults to github.repository."
+      ref:
+        type: string
+        default: ""
+        description: "TheRock branch/tag/SHA. Defaults to triggering ref."
+      external_repo:
+        type: string
+        default: ""
+        description: "JSON: {repository, ref, extra_cmake_options, family_overrides}"
+    outputs:
+      linux_build_config:
+        description: "Linux build configuration JSON"
+        value: ${{ jobs.setup.outputs.linux_build_config }}
+      windows_build_config:
+        description: "Windows build configuration JSON"
+        value: ${{ jobs.setup.outputs.windows_build_config }}
+      rocm_package_version:
+        description: "ROCm package version"
+        value: ${{ jobs.setup.outputs.rocm_package_version }}
+      external_repo_config:
+        description: "External repo config JSON (for downstream use)"
+        value: ${{ jobs.setup.outputs.external_repo_config }}
 
 permissions:
   contents: read
@@ -114,21 +202,27 @@ jobs:
   setup:
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
-      build_variant: "release"
+      build_variant: ${{ inputs.build_variant || 'release' }}
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
       windows_amdgpu_families: ${{ inputs.windows_amdgpu_families || '' }}
       linux_test_labels: ${{ inputs.linux_test_labels || '' }}
       windows_test_labels: ${{ inputs.windows_test_labels || '' }}
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
+      baseline_repository: ${{ inputs.baseline_repository || '' }}
       stage_reuse_mode: ${{ inputs.stage_reuse_mode || 'dry-run' }}
       stage_reuse_max_age_hours: ${{ inputs.stage_reuse_max_age_hours || '72' }}
       stage_reuse_commit_history: ${{ inputs.stage_reuse_commit_history || '50' }}
-      build_python_packages: ${{ github.event_name != 'workflow_dispatch' || inputs.build_python_packages }}
-      build_pytorch: ${{ github.event_name != 'workflow_dispatch' || inputs.build_pytorch }}
-      build_jax: ${{ github.event_name != 'workflow_dispatch' || inputs.build_jax }}
-      build_native_linux: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_linux }}
+      build_python_packages: ${{ github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call' || inputs.build_python_packages }}
+      build_pytorch: ${{ github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call' || inputs.build_pytorch }}
+      build_jax: ${{ github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call' || inputs.build_jax }}
+      build_native_linux: ${{ github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call' || inputs.build_native_linux }}
       build_stages: ${{ inputs.build_stages || '' }}
+      changed_projects: ${{ inputs.changed_projects || '' }}
+      # External repo support
+      repository: ${{ inputs.repository || '' }}
+      ref: ${{ inputs.ref || '' }}
+      external_repo: ${{ inputs.external_repo || '' }}
     secrets: inherit
 
   linux_build_and_test:
@@ -149,6 +243,9 @@ jobs:
       rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       changed_projects: ${{ inputs.changed_projects || '' }}
+      external_repo_config: ${{ needs.setup.outputs.external_repo_config }}
+      repository: ${{ inputs.repository || '' }}
+      ref: ${{ needs.setup.outputs.ref || inputs.ref || '' }}
     permissions:
       contents: read
       id-token: write
@@ -169,6 +266,9 @@ jobs:
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       changed_projects: ${{ inputs.changed_projects || '' }}
+      external_repo_config: ${{ needs.setup.outputs.external_repo_config }}
+      repository: ${{ inputs.repository || '' }}
+      ref: ${{ needs.setup.outputs.ref || inputs.ref || '' }}
     permissions:
       contents: read
       id-token: write
@@ -177,7 +277,8 @@ jobs:
     name: Manifest Diff
     # Refs are auto-derived from push / pull_request events only.
     # For manual runs, dispatch manifest-diff.yml directly with explicit refs.
-    if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+    # Skip for external repo calls (manifest diff only makes sense for TheRock's own CI).
+    if: ${{ inputs.external_repo == '' && (github.event_name == 'pull_request' || github.event_name == 'push') }}
     uses: ./.github/workflows/manifest-diff.yml
     permissions:
       contents: read
@@ -194,6 +295,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
       - name: Evaluate workflow results
         env:
           GITHUB_TOKEN: ${{ github.token }}
