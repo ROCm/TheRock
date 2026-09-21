@@ -87,7 +87,12 @@ jobs:
       prerelease_version: ${{ inputs.prerelease_version }}
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || 'all' }}
       windows_amdgpu_families: "none"
-      build_pytorch: false
+      # Forward the workflow input instead of hardcoding false, so the
+      # "Build PyTorch wheels" dispatch checkbox actually reaches setup /
+      # build_config. Without this, build_config.build_pytorch stays false and
+      # the trigger_release_pytorch_wheels gate (which ANDs the linux_release
+      # input with build_config.build_pytorch) can never fire for ASAN.
+      build_pytorch: ${{ inputs.build_pytorch }}
       build_jax: false
       python_version: ${{ inputs.python_version }}
       repository: ${{ inputs.repository || github.repository }}
