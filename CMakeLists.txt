@@ -18,11 +18,19 @@ endif()
 #     config-specific subdir (e.g. lib/Debug/) in Debug mode, breaking the
 #     expected path lib/host-math/lib/librocm-openblas.so
 #   - therock-SuiteSparse: third-party lib with no debug build support
+#   - rpp: -O0 produces >2 GB binary, causing R_X86_64_PC32 relocation overflow in ld.lld
+#   - composable_kernel: HIP device-code linker (clang-linker-wrapper/amdgcn-link) crashes
+#     on oversized DWARF64 sections produced by -Og -gdwarf64 -gsplit-dwarf
+#   - hipBLASLt: rocisa C extension (nanobind) aborts joblib worker processes under debug,
+#     causing TensileCreateLibrary TerminatedWorkerError
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
   set(amdsmi_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type for amdsmi" FORCE)
   set(therock-host-blas_BUILD_TYPE Release CACHE STRING "Build type for host-blas" FORCE)
   set(therock-host-blas64_BUILD_TYPE Release CACHE STRING "Build type for host-blas64" FORCE)
   set(therock-SuiteSparse_BUILD_TYPE Release CACHE STRING "Build type for SuiteSparse" FORCE)
+  set(rpp_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type for rpp" FORCE)
+  set(composable_kernel_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type for composable_kernel" FORCE)
+  set(hipBLASLt_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type for hipBLASLt" FORCE)
 endif()
 
 project(THEROCK)
