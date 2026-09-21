@@ -658,6 +658,7 @@
       "rocblas",
       "rocfft",
       "rocprim_tests",
+      "rocr-debug-agent-tests",
       "rocrand",
       "rocroller",
       "rocshmem",
