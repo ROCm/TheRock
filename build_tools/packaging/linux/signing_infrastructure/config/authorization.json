@@ -2,6 +2,7 @@
   "$comment": "Authorization configuration for GPG signing server.",
   "$comment2": "key_aliases maps tier names to GPG key identifiers — update per environment.",
   "$comment3": "artifact_profiles maps artifact types to GPG signing parameters.",
+  "$comment4": "clients (Phase 1b) maps an AWS IAM role name -> an entry in 'roles' below. Populated when signing-server.py runs with --trust-apigw-header (cross-cloud build runners via API Gateway + SigV4). Role names here currently ASSUME reuse of the existing S3-upload IAM roles from build_tools/_therock_utils/s3_buckets.py — this is an UNCONFIRMED assumption (see signing-server-design.md §4.1b); if dedicated signing-only roles are provisioned instead, only these keys need to change. therock-release is intentionally absent — release-tier signing stays manual/operator-only, not automated cross-cloud.",
 
   "key_aliases": {
     "dev":     "nunnikri@amd.com",
@@ -33,6 +34,13 @@
       "digest_algo": "SHA256",
       "description": "DEB Release file — clearsigned combined file (InRelease)"
     }
+  },
+
+  "clients": {
+    "therock-ci":        { "role": "therock-dev" },
+    "therock-dev":       { "role": "therock-dev" },
+    "therock-nightly":   { "role": "therock-nightly" },
+    "therock-prerelease": { "role": "therock-nightly" }
   },
 
   "roles": {

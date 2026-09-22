@@ -522,3 +522,93 @@ Skipping or reordering any step produces a specific error:
 | SM before KMS | `KMSNotFoundException` when creating secret |
 | Start server before role attached | `Unable to locate credentials` |
 | Start server before SM secret exists | `ResourceNotFoundException` fetching secret |
+
+---
+
+## Section 7 — Phase 1b: Cross-Cloud Client Access
+
+Additive to the Phase 1 setup above — see `signing-server-design.md` §4.1b for the full design and `signing-server-requirements.md` §2A for requirements. This section covers (a) one-time provisioning of the API Gateway/VPC Link/NLB front door, and (b) the repeatable procedure for onboarding each new signing client (a repo/IAM role pair).
+
+### 7.1 One-Time Provisioning
+
+```
+1. Create internal NLB + target group, register the existing signing server EC2 instance
+   aws elbv2 create-load-balancer --name signing-nlb --type network --scheme internal \
+     --subnets <private-subnet-ids>
+   aws elbv2 create-target-group --name signing-targets --protocol TCP --port 443 \
+     --target-type instance --vpc-id <vpc-id>
+   aws elbv2 register-targets --target-group-arn <tg-arn> --targets Id=<signing-server-instance-id>
+   aws elbv2 create-listener --load-balancer-arn <nlb-arn> --protocol TCP --port 443 \
+     --default-actions Type=forward,TargetGroupArn=<tg-arn>
+
+2. Create a VPC Link to the NLB
+   aws apigateway create-vpc-link --name signing-vpc-link \
+     --target-arns <nlb-arn>
+   └── Creates ENIs in the NLB's subnets — note their Security Group for step 3
+
+3. Update the signing server's Security Group
+   Add an inbound rule on sg-signing-server allowing TCP 443 from the VPC Link's
+   Security Group/ENIs only (do not open it to the whole VPC CIDR)
+
+4. Create the REST API (v1 — required for the resource policy in step 5)
+   aws apigateway create-rest-api --name therock-signing-api
+   aws apigateway put-method --rest-api-id <api-id> --resource-id <root-id> \
+     --http-method POST --authorization-type AWS_IAM
+   aws apigateway put-integration --rest-api-id <api-id> --resource-id <root-id> \
+     --http-method POST --type HTTP_PROXY --integration-http-method POST \
+     --connection-type VPC_LINK --connection-id <vpc-link-id> \
+     --uri https://<nlb-dns-name>/sign
+
+5. Attach a resource policy allow-listing authorized client IAM role ARNs
+   (see 7.2 step 3 below — the policy is maintained incrementally as clients are onboarded)
+
+6. Deploy the API to a stage (e.g. "prod")
+   aws apigateway create-deployment --rest-api-id <api-id> --stage-name prod
+
+7. Verify: no client onboarded yet, so any invoke attempt (even with valid AWS
+   credentials) should return 403 from the resource policy — confirms the
+   deny-by-default posture before the first client is added
+```
+
+### 7.2 Onboarding a New Client (per repository)
+
+Repeat for each repo/role that needs cross-cloud signing access. The default assumption (see §4.1b) is that the client's existing GitHub-OIDC-federated IAM role — the same one used for S3 artifact uploads — is reused; substitute a dedicated signing-only role if that assumption doesn't hold for this client.
+
+```
+1. Identify (or create) the client's IAM role
+   Existing role: build_tools/_therock_utils/s3_buckets.py (e.g. "therock-nightly")
+   New role: trust policy scoped to repo:<org>/<repo>:ref:<ref> via the
+   token.actions.githubusercontent.com:sub condition — copy the shape of an
+   existing S3-upload role's trust policy
+
+2. Attach an execute-api:Invoke permission scoped to this API's /sign route only
+   aws iam put-role-policy --role-name <role-name> --policy-name signing-invoke \
+     --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow",
+     "Action":"execute-api:Invoke","Resource":"arn:aws:execute-api:<region>:<acct>:<api-id>/prod/POST/sign"}]}'
+
+3. Add the role ARN to the API Gateway resource policy allow-list, redeploy the stage
+   aws apigateway update-rest-api --rest-api-id <api-id> --patch-operations \
+     op=replace,path=/policy,value='<policy JSON with role ARN added to Principal list>'
+   aws apigateway create-deployment --rest-api-id <api-id> --stage-name prod
+
+4. Add an entry to authorization.json's "clients" map, mapping the role name to
+   an existing (or new) "role" in the "roles" block with the intended
+   allowed_keys/allowed_digest_algos/max_requests_per_hour — never reuse
+   TheRock's key aliases for a different repo's client
+
+5. Test with a non-production key/tier first:
+   - Trigger the client's workflow on a test branch with TRUST_APIGW_HEADER
+     disabled on a staging signing server, confirm the SigV4 request round-trips
+   - Only then enable against the production signing server / production tier
+
+6. To revoke a client: remove its entry from authorization.json's "clients" map
+   AND remove its ARN from the API Gateway resource policy (either alone is
+   sufficient to deny it — do both for defense-in-depth and a clean audit trail)
+```
+
+| Symptom | Likely cause |
+|---------|-------------|
+| `403` from API Gateway itself (never reaches signing server logs) | Role not on the resource policy allow-list, or missing `execute-api:Invoke` permission |
+| `403` from the signing server (`Forbidden: Unknown signing client`) | Role reached the server but has no entry in `authorization.json`'s `clients` map |
+| `401` "missing client identity" from the signing server | `TRUST_APIGW_HEADER=true` but the API Gateway integration isn't mapping `$context.identity.userArn` into `X-Signing-Client-Role` |
+| Works from AWS-hosted runners, fails from Azure-hosted ones | Check the Azure runner actually received `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN` from the OIDC exchange step before the signing step ran |

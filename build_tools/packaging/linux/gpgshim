@@ -14,13 +14,16 @@ The shim minimizes data transfer by:
 import sys
 import os
 import hashlib
+import hmac
 import json
 import time
 import random
+import datetime
 import argparse
 import logging
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit, quote
 from base64 import b64encode, b64decode
 
 
@@ -38,6 +41,18 @@ class GPGShim:
 
         # Authentication configuration
         self.auth_token = os.environ.get('GPG_SERVER_TOKEN', '')
+
+        # Cross-cloud path (Phase 1b): if set, requests go to this AWS API
+        # Gateway endpoint instead of GPG_SIGNING_SERVER, authenticated via
+        # AWS SigV4 using the temporary credentials already present in the
+        # job's environment (e.g. exported by aws-actions/configure-aws-credentials
+        # for the same job's S3 upload step). GPG_SIGNING_SERVER remains the
+        # direct-HTTP path used by the VPN-based operator tooling, unchanged.
+        self.api_url = os.environ.get('GPG_SIGNING_API_URL', '')
+        self.aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID', '')
+        self.aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+        self.aws_session_token = os.environ.get('AWS_SESSION_TOKEN', '')
+        self.aws_region = os.environ.get('AWS_REGION', os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'))
 
         # Simplified API: GPG_TIER maps to tier in authorization.json key_aliases.
         # If set, the request uses {"tier": ..., "artifact": "rpm"} instead of
@@ -248,28 +263,114 @@ class GPGShim:
             self.error(last_error)
         return None
 
+    def _sigv4_headers(self, method, url, body):
+        """Compute AWS Signature Version 4 headers for a request to API Gateway.
+
+        Implemented against stdlib only (hashlib/hmac/urllib.parse) to preserve
+        gpgshim's zero-dependency, Python 3.6-compatible design goal — no boto3.
+        """
+        parsed = urlsplit(url)
+        host = parsed.netloc
+        canonical_uri = quote(parsed.path if parsed.path else '/', safe='/-_.~')
+        canonical_querystring = parsed.query or ''
+
+        now = datetime.datetime.utcnow()
+        amz_date = now.strftime('%Y%m%dT%H%M%SZ')
+        date_stamp = now.strftime('%Y%m%d')
+
+        payload_hash = hashlib.sha256(body).hexdigest()
+
+        headers_to_sign = {
+            'host': host,
+            'x-amz-content-sha256': payload_hash,
+            'x-amz-date': amz_date,
+        }
+        if self.aws_session_token:
+            headers_to_sign['x-amz-security-token'] = self.aws_session_token
+
+        signed_header_names = sorted(headers_to_sign.keys())
+        canonical_headers = ''.join(
+            '{}:{}\n'.format(name, headers_to_sign[name]) for name in signed_header_names
+        )
+        signed_headers = ';'.join(signed_header_names)
+
+        canonical_request = '\n'.join([
+            method,
+            canonical_uri,
+            canonical_querystring,
+            canonical_headers,
+            signed_headers,
+            payload_hash,
+        ])
+
+        algorithm = 'AWS4-HMAC-SHA256'
+        credential_scope = '{}/{}/execute-api/aws4_request'.format(date_stamp, self.aws_region)
+        string_to_sign = '\n'.join([
+            algorithm,
+            amz_date,
+            credential_scope,
+            hashlib.sha256(canonical_request.encode('utf-8')).hexdigest(),
+        ])
+
+        def _hmac_sha256(key, msg):
+            return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
+
+        k_date = _hmac_sha256(('AWS4' + self.aws_secret_key).encode('utf-8'), date_stamp)
+        k_region = _hmac_sha256(k_date, self.aws_region)
+        k_service = _hmac_sha256(k_region, 'execute-api')
+        k_signing = _hmac_sha256(k_service, 'aws4_request')
+        signature = hmac.new(k_signing, string_to_sign.encode('utf-8'), hashlib.sha256).hexdigest()
+
+        authorization_header = '{} Credential={}/{}, SignedHeaders={}, Signature={}'.format(
+            algorithm, self.aws_access_key, credential_scope, signed_headers, signature
+        )
+
+        result = {
+            'Host': host,
+            'X-Amz-Date': amz_date,
+            'X-Amz-Content-Sha256': payload_hash,
+            'Authorization': authorization_header,
+        }
+        if self.aws_session_token:
+            result['X-Amz-Security-Token'] = self.aws_session_token
+        return result
+
     def _make_signing_request(self, payload, options, digest_hash):
         """Make a single signing request to the server."""
+        target_url = self.api_url if self.api_url else self.signing_server
+        body = json.dumps(payload).encode('utf-8')
+
         # Build headers
         headers = {
             'Content-Type': 'application/json',
             'User-Agent': 'gpgshim/2.0'
         }
 
-        # Add authentication token if configured
-        if self.auth_token:
+        if self.api_url:
+            # Cross-cloud path (Phase 1b): authenticate via AWS SigV4 using
+            # temporary credentials already present in the job environment.
+            # Fail fast with a clear error rather than sending an unsigned
+            # request that API Gateway would reject with an opaque 403.
+            if not (self.aws_access_key and self.aws_secret_key):
+                raise ValueError(
+                    "GPG_SIGNING_API_URL is set but AWS_ACCESS_KEY_ID/"
+                    "AWS_SECRET_ACCESS_KEY are missing from the environment"
+                )
+            headers.update(self._sigv4_headers('POST', target_url, body))
+        elif self.auth_token:
+            # Direct/operator path: pre-shared bearer token (Phase 2), unchanged.
             headers['Authorization'] = 'Bearer {}'.format(self.auth_token)
 
         request = Request(
-            self.signing_server,
-            data=json.dumps(payload).encode('utf-8'),
+            target_url,
+            data=body,
             headers=headers,
             method='POST'
         )
 
         # Configure SSL/TLS context if using HTTPS
         ssl_context = None
-        if self.signing_server.startswith('https://'):
+        if target_url.startswith('https://'):
             import ssl
             ssl_context = ssl.create_default_context()
 

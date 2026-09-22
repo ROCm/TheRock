@@ -23,6 +23,8 @@ Implementation is split into two phases to deliver a working signing pipeline qu
 | **gpgshim** | Current implementation (stdlib only) | Updated with fallback URL and Phase 2 auth header |
 | **Operator access** | `sign-file` CLI (basic) | `sign-file` with app-layer token support |
 
+**Phase 1b (see §2A):** an additive phase, independent of Phase 2, adding cross-cloud client access for build runners outside AWS (e.g. Azure) via AWS API Gateway + SigV4, reusing the GitHub OIDC → AWS IAM federation already used for S3 uploads. Covers `ci`/`dev`/`nightly`/`prerelease` tiers only; `release` stays manual.
+
 ---
 
 ## 2. Phase 1 Requirements
@@ -242,6 +244,59 @@ The following steps are performed offline by an authorized operator — not by t
 | P1-CI-4 | RPM packages shall be signed before repository metadata (`repomd.xml`) is generated, so signed package checksums are captured in the metadata |
 | P1-CI-5 | `upload_package_repo.py` shall call `POST /sign` directly for repo metadata (`repomd.xml`, `Release`) — no `gpgshim` involved for this step |
 | P1-CI-6 | `GPG_SIGNING_SERVER` (the server private IP and port) shall be stored as a GitHub Actions repository secret — not hardcoded in workflow YAML |
+
+---
+
+## 2A. Phase 1b Requirements — Cross-Cloud Client Access
+
+Additive to Phase 1, independent of Phase 2. Addresses build runners that may run outside AWS (e.g. Azure), where the Phase 1 Security-Group-only trust model does not apply. See `signing-server-design.md` §4.1b for full rationale.
+
+### 2A.1 Infrastructure — API Gateway, VPC Link, NLB
+
+| ID | Requirement |
+|----|-------------|
+| P1b-NET-1 | A Regional API Gateway REST API shall be provisioned with a single `POST /sign` route using `AWS_IAM` authorization |
+| P1b-NET-2 | The API Gateway route shall integrate via a VPC Link to an internal (non-internet-facing) Network Load Balancer targeting the existing signing server EC2 instance |
+| P1b-NET-3 | The signing server's Security Group shall be updated to admit traffic from the VPC Link's ENIs, in addition to (not instead of) the existing `sg-build-runner` and operator VPN CIDR rules |
+| P1b-NET-4 | The API Gateway shall not use a custom domain name — the default `execute-api.<region>.amazonaws.com` hostname shall be used, to avoid a recognizable name appearing in public Certificate Transparency logs |
+| P1b-NET-5 | The API Gateway shall use generic gateway-response error mappings so internal error text, stack traces, or hostnames are never returned to a caller |
+
+### 2A.2 IAM — Client Roles and Permissions
+
+| ID | Requirement |
+|----|-------------|
+| P1b-IAM-1 | A resource policy on the API Gateway REST API shall explicitly allow-list the IAM role ARNs of authorized signing clients; no other principal shall be permitted `execute-api:Invoke` on this API |
+| P1b-IAM-2 | Each authorized client IAM role's permission policy shall grant `execute-api:Invoke` scoped to this specific API's `/sign` route only — not account-wide |
+| P1b-IAM-3 | **[Open assumption, unconfirmed]** The initial implementation reuses the existing per-release-type IAM roles (`therock-ci`, `therock-dev`, `therock-nightly`, `therock-prerelease`, defined in `build_tools/_therock_utils/s3_buckets.py`), granting them the additional `execute-api:Invoke` permission above. This has not been confirmed with the AWS account/IAM owner and may be replaced with dedicated signing-only roles without any code change — see `signing-server-design.md` §4.1b |
+| P1b-IAM-4 | `therock-release` shall not be granted this permission — release-tier signing remains a manual/operator-only process (§2.4), unchanged by this phase |
+
+### 2A.3 Software — gpgshim SigV4
+
+| ID | Requirement |
+|----|-------------|
+| P1b-SHIM-1 | `gpgshim` shall support an additional environment variable `GPG_SIGNING_API_URL`. When set, requests shall be sent to this URL instead of `GPG_SIGNING_SERVER`, authenticated via AWS Signature Version 4 |
+| P1b-SHIM-2 | SigV4 signing shall be implemented using only the Python standard library (`hashlib`, `hmac`, `urllib.parse`) — no `boto3`/`botocore` dependency, preserving `gpgshim`'s zero-dependency, Python 3.6-compatible design goal (P1-SHIM-1) |
+| P1b-SHIM-3 | `gpgshim` shall read AWS credentials from `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and `AWS_REGION`/`AWS_DEFAULT_REGION` — the same variables already exported by `aws-actions/configure-aws-credentials` for the existing S3 upload step |
+| P1b-SHIM-4 | If `GPG_SIGNING_API_URL` is set but `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` are absent, `gpgshim` shall fail immediately with a clear error rather than sending an unsigned request |
+| P1b-SHIM-5 | The existing direct-HTTP path (`GPG_SIGNING_SERVER`, P1-SHIM-2/3) shall remain unchanged and continue to be used by the operator/VPN path (`sign-file`, EXT-2) |
+
+### 2A.4 Software — Signing Server and Authorization
+
+| ID | Requirement |
+|----|-------------|
+| P1b-AUTH-1 | The signing server shall support a `--trust-apigw-header` flag (env: `TRUST_APIGW_HEADER`, default `false`). When enabled, the server shall read caller identity from the `X-Signing-Client-Role` header instead of a Bearer token |
+| P1b-AUTH-2 | `--trust-apigw-header` shall require `--authz-config` to be set (containing a `clients` map) and shall be mutually exclusive with `--enable-auth` |
+| P1b-AUTH-3 | `authorization.json` shall support a `clients` map: IAM role name → `{"role": <existing roles key>}`. `auth.py::authorize_client_role_request()` shall normalize an assumed-role ARN to its bare role name before lookup |
+| P1b-AUTH-4 | A role name absent from the `clients` map shall be denied (`403`) — there shall be no default/fallback tier for unrecognized clients |
+| P1b-AUTH-5 | `TRUST_APIGW_HEADER` shall default to `false`; the operations runbook shall state it must only be enabled on a signing server reachable exclusively through the API Gateway VPC Link — never on a deployment also reachable by any other network path, where a caller could set the header directly and impersonate any client |
+| P1b-AUTH-6 | Rate limiting for `client_role`-authenticated requests shall use the resolved tier (not a generic `default`) as the rate-limit key, consistent with existing per-role limits in `authorization.json` |
+
+### 2A.5 Scope Boundary
+
+| ID | Requirement |
+|----|-------------|
+| P1b-SCOPE-1 | This phase applies only to the `ci`, `dev`, `nightly`, and `prerelease` signing tiers. The `release` tier is explicitly out of scope and continues to be signed only via the existing manual operator path (§2.4) |
+| P1b-SCOPE-2 | This phase is independent of, and does not require, Phase 2 (ALB, secondary server, pre-shared app tokens) to be implemented |
 
 ---
 

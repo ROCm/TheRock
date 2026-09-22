@@ -5,8 +5,10 @@ Production signing server for GPG package signing.
 Accepts POST /sign requests containing data to sign, invokes gpg, and
 returns the detached or clearsigned signature.
 
-Phase 1: No application-layer auth — access controlled by VPC Security Groups.
-Phase 2: Enable --enable-auth for pre-shared token validation.
+Phase 1:  No application-layer auth — access controlled by VPC Security Groups.
+Phase 1b: Enable --trust-apigw-header for cross-cloud build runners, authenticated
+          by AWS IAM/SigV4 at an API Gateway front door before reaching this server.
+Phase 2:  Enable --enable-auth for pre-shared token validation.
 
 Key loading:
   Pass --secrets-manager-secret <name> (repeatable) to fetch GPG private keys
@@ -158,7 +160,7 @@ try:
         validate_jwt_token, validate_github_oidc_token,
         validate_app_token,
         load_secrets, load_authorization_config, load_tokens_config,
-        authorize_request, authorize_oidc_request,
+        authorize_request, authorize_oidc_request, authorize_client_role_request,
         check_rate_limit, audit_log,
         OIDC_AVAILABLE
     )
@@ -210,6 +212,19 @@ class SigningHandler(BaseHTTPRequestHandler):
     @property
     def AUTH_ENABLED(self):
         return os.environ.get('AUTH_ENABLED', 'false').lower() == 'true'
+
+    # Phase 1b: cross-cloud build runners, authenticated by API Gateway via
+    # SigV4 before the request ever reaches this server. Defaults OFF so a
+    # direct VPN/Security-Group-only deployment never honors a caller-
+    # supplied header. Only enable this on a signing server that is
+    # network-reachable exclusively through the API Gateway's VPC Link (i.e.
+    # the Security Group only admits that VPC Link's traffic) — otherwise a
+    # caller with any other network path in could forge this header.
+    SIGNING_CLIENT_HEADER = 'X-Signing-Client-Role'
+
+    @property
+    def TRUST_APIGW_HEADER(self):
+        return os.environ.get('TRUST_APIGW_HEADER', 'false').lower() == 'true'
 
     @property
     def SECRETS_FILE(self):
@@ -375,6 +390,23 @@ class SigningHandler(BaseHTTPRequestHandler):
                 elif auth_type == 'oidc':
                     client_id = f"oidc:{payload.get('repository', 'unknown')}"
 
+            elif self.TRUST_APIGW_HEADER:
+                if not AUTH_AVAILABLE:
+                    self.send_json_error(500,
+                        "Client-role auth enabled but auth module not available")
+                    return
+                client_role_header = self.headers.get(self.SIGNING_CLIENT_HEADER, '')
+                if not client_role_header:
+                    self.send_json_error(401, "Unauthorized: missing client identity")
+                    audit_log('AUTH_FAILED', client_id, 'none', '', '',
+                              self.client_address[0], False,
+                              self.AUDIT_LOG_FILE, None, 'client_role',
+                              int((time.time() - request_start) * 1000))
+                    return
+                payload = {'role_identity': client_role_header}
+                auth_type = 'client_role'
+                client_id = f"client:{client_role_header}"
+
             # --- Validate request fields ---
             data_b64 = request.get('data')
             if not data_b64:
@@ -414,7 +446,7 @@ class SigningHandler(BaseHTTPRequestHandler):
                              len(data), client_id)
 
             # --- Authorization (Phase 1: only key_id in-keyring check) ---
-            if self.AUTH_ENABLED and payload:
+            if (self.AUTH_ENABLED or self.TRUST_APIGW_HEADER) and payload:
                 if self._authz_cache is None:
                     self.__class__._authz_cache = load_authorization_config(
                         self.AUTHZ_CONFIG_FILE)
@@ -444,6 +476,23 @@ class SigningHandler(BaseHTTPRequestHandler):
                                   self.AUDIT_LOG_FILE, None, auth_type,
                                   int((time.time() - request_start) * 1000))
                         return
+                elif auth_type == 'client_role':
+                    role, authorized, reason = authorize_client_role_request(
+                        payload['role_identity'], key_id, digest_algo,
+                        self._authz_cache)
+                    if not authorized:
+                        self.log_message("Authorization denied: %s", reason)
+                        self.send_json_error(403, f"Forbidden: {reason}")
+                        audit_log('DENIED', client_id, role or 'unknown',
+                                  key_id, digest_algo,
+                                  self.client_address[0], False,
+                                  self.AUDIT_LOG_FILE, None, auth_type,
+                                  int((time.time() - request_start) * 1000))
+                        return
+                    # Feed the resolved tier back into payload so rate
+                    # limiting below keys off the actual signing role
+                    # rather than defaulting to 'default'.
+                    payload['role'] = role
 
                 # Rate limit keyed by client_id (token name or source IP)
                 if self._authz_cache and not check_rate_limit(
@@ -459,7 +508,8 @@ class SigningHandler(BaseHTTPRequestHandler):
                     return
 
             # Phase 1: source-IP rate limiting (no auth token, use IP as key)
-            if not self.AUTH_ENABLED and AUTH_AVAILABLE and self.AUTHZ_CONFIG_FILE:
+            if not self.AUTH_ENABLED and not self.TRUST_APIGW_HEADER \
+                    and AUTH_AVAILABLE and self.AUTHZ_CONFIG_FILE:
                 if self._authz_cache is None:
                     self.__class__._authz_cache = load_authorization_config(
                         self.AUTHZ_CONFIG_FILE)
@@ -729,6 +779,15 @@ def main():
     parser.add_argument('--audit-log', default='',
         help='Path to audit log file (optional; always logs to stdout)')
 
+    # Phase 1b: Cross-cloud client access (API Gateway + SigV4)
+    parser.add_argument('--trust-apigw-header', action='store_true',
+        help="Trust the X-Signing-Client-Role header for caller identity "
+             "(Phase 1b). Only enable this if the server is reachable "
+             "exclusively through the API Gateway VPC Link — never on a "
+             "server also reachable directly, where a caller could forge "
+             "this header themselves. Requires --authz-config with a "
+             "'clients' map.")
+
     # TLS
     parser.add_argument('--enable-tls', action='store_true')
     parser.add_argument('--cert-file', default='')
@@ -754,6 +813,19 @@ def main():
             sys.exit(1)
         if not args.authz_config:
             print("Error: --enable-auth requires --authz-config")
+            sys.exit(1)
+
+    if args.trust_apigw_header:
+        if not AUTH_AVAILABLE:
+            print("Error: auth.py module not found")
+            sys.exit(1)
+        if not args.authz_config:
+            print("Error: --trust-apigw-header requires --authz-config "
+                  "(with a 'clients' map)")
+            sys.exit(1)
+        if args.enable_auth:
+            print("Error: --enable-auth and --trust-apigw-header are "
+                  "mutually exclusive auth mechanisms")
             sys.exit(1)
 
     # --- Validate TLS ---
@@ -784,6 +856,8 @@ def main():
         os.environ['AUTHZ_CONFIG_FILE'] = os.path.abspath(args.authz_config)
     if args.audit_log:
         os.environ['AUDIT_LOG_FILE'] = args.audit_log
+    if args.trust_apigw_header:
+        os.environ['TRUST_APIGW_HEADER'] = 'true'
 
     # --- Load keys from Secrets Manager (Phase 1) ---
     global _keyring_ready
@@ -830,7 +904,13 @@ def main():
     print(f"Endpoints: POST /sign  GET /health")
     print(f"GPG:       {args.gpg}")
     print(f"Keyring:   {keyring_dir or '(system default)'}")
-    print(f"Auth:      {'ENABLED' if args.enable_auth else 'DISABLED (Phase 1 — VPC Security Groups)'}")
+    if args.enable_auth:
+        auth_status = 'ENABLED (Phase 2 — token/OIDC/JWT)'
+    elif args.trust_apigw_header:
+        auth_status = 'ENABLED (Phase 1b — API Gateway client-role header)'
+    else:
+        auth_status = 'DISABLED (Phase 1 — VPC Security Groups)'
+    print(f"Auth:      {auth_status}")
     print(f"TLS:       {'ENABLED' if args.enable_tls else 'DISABLED'}")
     print(f"Threads:   {args.max_threads}")
     print(f"Max req:   {args.max_request_size} bytes")

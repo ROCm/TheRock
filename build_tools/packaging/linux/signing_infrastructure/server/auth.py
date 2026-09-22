@@ -355,6 +355,73 @@ def authorize_oidc_request(payload, key_id, digest_algo, authz_config):
     return role, True, "Authorized"
 
 
+def normalize_client_role_identity(role_identity):
+    """
+    Normalize an AWS IAM caller identity down to a bare role name.
+
+    API Gateway surfaces the caller's identity as an STS assumed-role ARN,
+    e.g. 'arn:aws:sts::123456789012:assumed-role/therock-nightly/<session-id>'.
+    Only the role name portion is meaningful for the 'clients' map lookup —
+    the account ID and session ID are discarded, which keeps this function
+    (and authorization.json) portable across AWS accounts and unrelated to
+    which specific account/session made the call.
+    """
+    if not role_identity:
+        return ''
+    if role_identity.startswith('arn:'):
+        parts = role_identity.split('/')
+        if len(parts) >= 2:
+            return parts[-2]
+        return role_identity
+    return role_identity
+
+
+def authorize_client_role_request(role_identity, key_id, digest_algo, authz_config):
+    """
+    Authorize a request identified by an AWS IAM role (Phase 1b: cross-cloud
+    build runners authenticated via SigV4 through API Gateway).
+
+    `role_identity` must come from a header that only API Gateway's own
+    integration mapping can set (never a value a caller could inject
+    directly) — the caller only reaches this function if API Gateway's own
+    IAM/SigV4 check already verified the credential; this function only
+    decides which signing tier that verified role is allowed to use.
+
+    Looks up the normalized role name in authz_config['clients'] (IAM role
+    name -> signing role/tier), then delegates to the existing
+    authorize_request() using the resolved role — no duplication of the
+    key/tier policy already expressed in authz_config['roles'].
+
+    Args:
+        role_identity: IAM role name or assumed-role ARN surfaced by API Gateway
+        key_id: Requested signing key ID
+        digest_algo: Requested digest algorithm
+        authz_config: Authorization configuration dict
+
+    Returns:
+        Tuple (role: str, authorized: bool, reason: str) — same shape as
+        authorize_oidc_request(), so callers can handle both uniformly.
+    """
+    role_name = normalize_client_role_identity(role_identity)
+    if not role_name:
+        return None, False, "Missing client role identity"
+
+    clients = authz_config.get('clients', {})
+    client_config = clients.get(role_name)
+    if not client_config:
+        return None, False, f"Unknown signing client: '{role_name}'"
+
+    role = client_config.get('role')
+    if not role:
+        return role_name, False, f"Client '{role_name}' has no role mapping configured"
+
+    authorized, reason = authorize_request(role, key_id, digest_algo, authz_config)
+    if not authorized:
+        return role, False, reason
+
+    return role, True, "Authorized"
+
+
 def _match_ref_pattern(ref, pattern):
     """
     Match git ref against pattern (supports wildcards).

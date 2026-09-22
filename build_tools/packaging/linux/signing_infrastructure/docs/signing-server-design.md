@@ -182,6 +182,7 @@ This diagram shows the complete signing microservice as it looks when all phases
 | EXT-1 | Build runner → Signing server | External inbound | Inbound | HTTPS POST `/sign` | VPC Security Group (sg-build-runner) | 1 |
 | EXT-2 | Operator → Signing server | External inbound | Inbound | HTTPS POST `/sign` or `/sign-rpm` | VPC Security Group (operator VPN CIDR) | 1 |
 | EXT-1/2 | Any caller → ALB → Signing server | External inbound | Inbound | HTTPS POST, ACM cert | SG + app token header | 2 |
+| EXT-3 | Cross-cloud build runner → API Gateway → VPC Link → NLB → Signing server | External inbound | Inbound | HTTPS POST `/sign`, AWS_IAM auth | AWS SigV4 (IAM role via GitHub OIDC) + API GW resource policy + `authorization.json` `clients` map | 1b |
 | INT-1 | Signing server → Secrets Manager | Internal outbound | Outbound | HTTPS via VPC endpoint | IAM `secretsmanager:GetSecretValue` | 1 |
 | INT-2 | Signing server → KMS | Internal outbound | Outbound | HTTPS via VPC endpoint | IAM `kms:Decrypt` (invoked by SM) | 1 |
 | INT-3 | Signing server → CloudWatch Logs | Internal outbound | Outbound | HTTPS via VPC endpoint | IAM `logs:PutLogEvents` | 1 |
@@ -206,6 +207,18 @@ This diagram shows the complete signing microservice as it looks when all phases
 | Audit | Structured JSON to stdout → systemd journal (local only) |
 | Observability | `GET /health`, manual `journalctl` inspection |
 | High availability | None — single server; outage blocks signing |
+
+#### Phase 1b — Cross-cloud client access
+
+| Component | What's added |
+|-----------|-------------|
+| API Gateway | New Regional REST API, `AWS_IAM` auth on `POST /sign`, resource policy allow-listing specific client IAM role ARNs |
+| VPC Link + internal NLB | New, private-only, forwards API Gateway traffic to the unchanged signing server |
+| `gpgshim` | Adds AWS SigV4 request signing (stdlib-only) when `GPG_SIGNING_API_URL` is set; unchanged direct-HTTP path (`GPG_SIGNING_SERVER`) still used by operators |
+| IAM | One new `execute-api:Invoke` permission added to existing per-release-type roles (`therock-ci`, `therock-dev`, `therock-nightly`, `therock-prerelease`) — see open assumption in §4.1b |
+| `authorization.json` | New `clients` map: IAM role name → existing `roles` entry |
+| Signing server | New `--trust-apigw-header` / `TRUST_APIGW_HEADER` flag (default off); reads `X-Signing-Client-Role` header set only by API Gateway's integration mapping |
+| Scope | Covers `ci`/`dev`/`nightly`/`prerelease` tiers; `therock-release` remains manual/operator-only |
 
 #### Phase 2 — Production hardening
 
@@ -290,7 +303,9 @@ upload_package_repo.py              Signing Server
 
 Access to the signing server is controlled at the VPC network layer. Only EC2 instances in the designated build runner security group, and the operator VPN IP range, can reach port 443 on the signing server.
 
-**Why not SigV4:** SigV4 is designed for public-facing AWS API endpoints. For a server already air-gapped in a private subnet, Security Groups enforce the same perimeter more simply — with no per-request signing overhead in `gpgshim`, no `botocore` dependency, and no IMDS credential fetching.
+**Why not SigV4 (for same-cloud build runners):** SigV4 is designed for public-facing AWS API endpoints. For a server already air-gapped in a private subnet, reachable only by AWS-native compute, Security Groups enforce the same perimeter more simply — with no per-request signing overhead in `gpgshim`, no `botocore` dependency, and no IMDS credential fetching.
+
+This reasoning holds only while build runners are AWS-native. §4.1b introduces SigV4 specifically for build runners outside AWS (e.g. Azure), where Security Group membership isn't available as a trust mechanism at all — there the tradeoff above doesn't apply, since the alternative isn't "SigV4 vs. simpler SG," it's "SigV4 vs. no cloud-agnostic access control."
 
 **App-layer auth (Phase 2):** A lightweight pre-shared token is added on top of Security Groups as a second layer, primarily for audit traceability (distinguishing CI build calls from operator calls in logs) rather than as a security boundary.
 
@@ -514,6 +529,75 @@ Every signing request logs `auth_type` so the audit trail captures how each requ
 ```
 
 OIDC entries additionally include `repository`, `ref`, `workflow`, `actor`, `run_id`, and `event_name` from the token claims — giving a full CI context audit trail at no extra cost.
+
+### 4.1b Cross-Cloud Client Access (Phase 1b)
+
+#### Problem
+
+Section 4.1's Security-Group-only model assumes every build runner is an AWS instance. Build runners may run on Azure instead — an Azure VM cannot be a member of an AWS Security Group, and there is no cross-cloud equivalent without a permanent VPN/interconnect between the two clouds.
+
+Rejected alternatives:
+- AWS-Azure VPN/interconnect — heavy, a new permanent attack surface, doesn't scale to additional clouds.
+- Expose the signing server directly to the internet (even behind mTLS) — breaks the air-gap principle Section 4.1/Section 8 depend on.
+- A dedicated "signing workflow" proxy job on new AWS compute — viable, but requires standing up and securing new runner infrastructure plus custom OIDC-validation code to write and maintain ourselves.
+
+#### Chosen approach: reuse existing OIDC-to-AWS-role federation, add SigV4 + API Gateway
+
+The build workflow already exchanges its GitHub OIDC token for temporary AWS credentials today, for S3 artifact uploads (`.github/actions/configure_aws_artifacts_credentials/action.yml`, `AssumeRoleWithWebIdentity`) — this works identically regardless of which cloud the runner executes on, since it is just an outbound HTTPS call to AWS STS. Phase 1b extends this same credential to also authorize a call to a new AWS API Gateway front door for signing:
+
+```
+GitHub OIDC token -> AWS STS AssumeRoleWithWebIdentity -> temporary AWS credentials
+        (already happens today, for S3 -- unchanged)
+                          |
+                          v
+gpgshim signs its /sign request with AWS SigV4, using those same credentials
+                          |
+                          v
+        API Gateway (Regional REST API, AWS_IAM auth)   <- new, AWS-managed
+                          |  VPC Link (private, AWS-internal only)
+                          v
+        Internal NLB (no public IP, not internet-facing) <- new
+                          |  private subnet only
+                          v
+        Signing server EC2                                <- UNCHANGED from Section 3.1/4.1:
+                                                              private IP only, no IGW route,
+                                                              tmpfs GNUPGHOME, sg-signing-server
+```
+
+Only the API Gateway's public hostname is internet-reachable. It rejects every request that doesn't carry a valid AWS SigV4 signature before any of it reaches our own code — no banner, no version info, no backend detail is exposed. The signing server itself is exactly as air-gapped as in Section 4.1: no public IP, no internet gateway route, unchanged Security Group (now scoped to the VPC Link's traffic instead of the general build-runner SG).
+
+This mirrors the industry-standard shape for "heterogeneous CI needs to reach a centralized trust anchor without static secrets" — the same pattern behind GitHub's own "Trusted Publishing" (PyPI/npm/RubyGems) and Sigstore/Fulcio's OIDC-identity-based signing.
+
+#### Three-layer access model
+
+| Layer | Question answered | Where enforced |
+|---|---|---|
+| IAM trust policy (existing, unchanged) | Can this repo/ref even get AWS credentials? | AWS IAM |
+| IAM permission (new) + API Gateway resource policy (new) | Can this credential call the signing API at all? | AWS IAM / API Gateway |
+| `authorization.json` `clients` map (new) | What key/tier can this specific caller use? | signing server config |
+
+`clients` maps a normalized IAM role name to an entry in the existing `roles` block — no duplication of key/tier policy, purely an identity-to-role binding:
+
+```json
+"clients": {
+  "therock-nightly": { "role": "therock-nightly" },
+  "therock-dev":      { "role": "therock-dev" }
+}
+```
+
+#### Server-side trust boundary: TRUST_APIGW_HEADER
+
+The signing server never talks to AWS IAM or API Gateway directly — it only ever sees an HTTP header, `X-Signing-Client-Role`, that API Gateway's own integration mapping injects from the caller's already-verified IAM identity (`$context.identity.userArn`). This is meaningfully different from a caller-supplied header: a caller talking to API Gateway cannot set or override this header themselves — API Gateway computes it server-side from the credential it just validated.
+
+This is why `TRUST_APIGW_HEADER` (env var / `--trust-apigw-header`) defaults to off and is documented as safe to enable only when the signing server's Security Group admits traffic solely from the API Gateway's VPC Link — never on a deployment also reachable by any other path, where a caller could set that header directly and impersonate any client. `auth.py::authorize_client_role_request()` treats an unrecognized role name as denied (fail-closed) rather than falling back to a default tier.
+
+#### Deliberate scope boundary: therock-release stays manual
+
+The existing per-release-type IAM roles used for S3 uploads (`build_tools/_therock_utils/s3_buckets.py`) have no automated role for the `release` type today (`iam_role=None` — release publishing is already a manual/human process). Phase 1b does not change that: automated cross-cloud signing via API Gateway covers `ci`/`dev`/`nightly`/`prerelease` only. Release-tier signing continues through the existing human-operator path (`sign-file`, VPN + Security Group, Section 4.1/EXT-2), keeping the most sensitive key out of automated, cross-cloud reach.
+
+#### Open assumption, flagged for confirmation
+
+The `clients` map above assumes the same IAM roles used for S3 uploads are reused for signing (one additional `execute-api:Invoke` permission attached to each). This is convenient — one `configure-aws-credentials` step already run by the workflow covers both — but broadens those roles' blast radius and has not been confirmed with the AWS account/IAM owner. If dedicated, signing-only roles are required instead, the change is confined to: new role provisioning, the `clients` map's keys, and a second `Configure AWS credentials` step in the workflow assuming the signing role before the signing step. Neither `gpgshim` nor `auth.py`/`signing-server.py` reference role names directly, so this fallback never requires a code change — only configuration and infrastructure.
 
 ### 4.2 Primary + Secondary with Scheduled Key Sync
 
@@ -1230,11 +1314,13 @@ Security operates at three distinct layers. Controls at one layer do not substit
 
 | Control | What it does |
 |---------|-------------|
-| `sg-signing-server` inbound | Allows TCP 443 from `sg-build-runner` and operator VPN CIDR only. All other sources silently dropped. |
+| `sg-signing-server` inbound | Allows TCP 443 from `sg-build-runner`, operator VPN CIDR, and (Phase 1b) the API Gateway VPC Link's ENIs only. All other sources silently dropped. |
 | No public IP / internet gateway | Server has no route to the internet — unreachable from outside the VPC |
 | Outbound restricted to VPC endpoints | Server can only reach Secrets Manager, KMS, and CloudWatch via PrivateLink — no other outbound traffic permitted |
 
-See §4.1 for the full rationale on why VPC Security Groups are used instead of per-request SigV4 authentication.
+**Phase 1b addition — cross-cloud path:** for build runners outside AWS, the perimeter is API Gateway (public hostname, `AWS_IAM` auth — rejects any request without a valid AWS SigV4 signature before it reaches our code) → VPC Link (private, AWS-internal only) → internal NLB (no public IP) → signing server. The signing server's own network exposure is unchanged by this addition — only the VPC Link's ENIs are added to `sg-signing-server`'s allow-list, not a broader range. See §4.1b for the full design and the caller-identity trust boundary (`TRUST_APIGW_HEADER`, `X-Signing-Client-Role`).
+
+See §4.1 for the full rationale on why VPC Security Groups are the primary control for same-cloud build runners, and §4.1b for why SigV4 is introduced specifically for cross-cloud access.
 
 ---
 
