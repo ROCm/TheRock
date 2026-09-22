@@ -214,28 +214,18 @@ jobs:
       # so we have the right set of test source files. We _probably_ don't need
       # to run HIPIFY, apply patches, or fetch submodules, so we skip those
       # steps to save time.
-      # --no-hipify --no-submodules so tests use the exact source commit and
-      # related repository pins that produced the package under test.
-      - name: Checkout PyTorch Source Repos from stable branch
-        if: ${{ (inputs.pytorch_git_ref != 'nightly') }}
+      - name: Checkout PyTorch Source Repos
         timeout-minutes: 30
         run: |
-          python external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --gitrepo-origin https://github.com/ROCm/pytorch.git \
-            --repo-hashtag "${PYTORCH_GIT_REF}" \
-            --no-hipify \
-            --no-submodules
-
-      # Pin the test source to the exact commit baked into the wheel so the test
-      # files can never diverge from the source the wheel was built from.
-      - name: Checkout PyTorch Source Repos from nightly branch
-        if: ${{ (inputs.pytorch_git_ref == 'nightly') }}
-        timeout-minutes: 30
-        run: |
+          if [ "${PYTORCH_GIT_REF}" = "nightly" ]; then
+            ORIGIN="https://github.com/pytorch/pytorch.git"
+          else
+            ORIGIN="https://github.com/ROCm/pytorch.git"
+          fi
           TORCH_SHA=$(python -c "import torch; print(torch.version.git_version)")
           echo "Pinning pytorch test source to wheel commit: ${TORCH_SHA}"
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --gitrepo-origin https://github.com/pytorch/pytorch.git \
+            --gitrepo-origin "${ORIGIN}" \
             --repo-hashtag "${TORCH_SHA}" \
             --no-hipify \
             --no-submodules
