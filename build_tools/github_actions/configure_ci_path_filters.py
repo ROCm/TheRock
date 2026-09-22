@@ -82,7 +82,9 @@ def get_git_commit_hash(ref: str) -> str:
     ).stdout.strip()
 
 
-def get_git_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
+def get_git_modified_paths(
+    base_ref: str, cwd: Optional[str] = None
+) -> Optional[Iterable[str]]:
     """Returns the paths of files modified since the base reference commit.
 
     Uses `git diff --name-only` to find files that have changed between the
@@ -90,16 +92,21 @@ def get_git_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
 
     Args:
         base_ref: Git reference (commit SHA, branch name, or HEAD^1) to compare against
+        cwd: Working directory for git commands. If None, uses current directory.
 
     Returns:
         List of relative file paths that were modified, or None if the operation times out
     """
-    print(f"Computing modified paths with: 'git diff --name-only {base_ref}'")
+    cwd_msg = f" (in {cwd})" if cwd else ""
+    print(f"Computing modified paths with: 'git diff --name-only {base_ref}'{cwd_msg}")
     try:
         # Push events can advance a branch by multiple commits. The setup
         # checkout is intentionally shallow, so event.before may be older than
         # the fetched history even though it is a valid reachable commit.
-        _ensure_git_commit_available(base_ref)
+        # Note: _ensure_git_commit_available only works in the current repo,
+        # for external repos we rely on the checkout having sufficient depth.
+        if cwd is None:
+            _ensure_git_commit_available(base_ref)
 
         # We have the commit, now run the diff.
         return subprocess.run(
@@ -108,6 +115,7 @@ def get_git_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
             check=True,
             text=True,
             timeout=60,
+            cwd=cwd,
         ).stdout.splitlines()
     except subprocess.TimeoutExpired:
         print(

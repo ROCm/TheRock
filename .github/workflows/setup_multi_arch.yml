@@ -221,16 +221,16 @@ jobs:
           path: ci-config
         continue-on-error: true
 
-      # Checkout external repo's skip-ci config file if provided.
-      # This allows external repos to define their own skip patterns in a TOML file.
-      - name: Checkout external repo skip-ci config
-        if: ${{ inputs.external_repo != '' && fromJSON(inputs.external_repo).skip_ci_config != '' }}
+      # Checkout external repo for skip-ci config and git diff.
+      # We need fetch-depth: 2 to have parent commit for git diff.
+      # configure_multi_arch_ci.py runs git diff here to get changed files.
+      - name: Checkout external repo
+        if: ${{ inputs.external_repo != '' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ fromJSON(inputs.external_repo).repository }}
           ref: ${{ fromJSON(inputs.external_repo).ref }}
-          sparse-checkout: ${{ fromJSON(inputs.external_repo).skip_ci_config }}
-          sparse-checkout-cone-mode: false
+          fetch-depth: 2
           path: external-repo-config
         continue-on-error: true
 
