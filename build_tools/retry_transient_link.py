@@ -123,26 +123,42 @@ def _audit_module():
         return None
 
 
-def find_deficient_libraries(tail: Sequence[str]) -> list[Path]:
+def _symbol_family(symbol: str) -> str:
+    """Returns the owning-library prefix of a C symbol, or "" when unclear.
+
+    `rocsolver_ssygvdj_batched` belongs to whatever library also exports the
+    other `rocsolver_*` symbols. This is what lets a specific library be named
+    instead of every library on the link line.
+    """
+    name = symbol.lstrip("_")
+    head, sep, _rest = name.partition("_")
+    return head if sep and len(head) >= 4 else ""
+
+
+def find_deficient_libraries(tail: Sequence[str], build_dir: Path | None = None):
     """Returns in-tree libraries that fail to export the symbols the link needs.
 
     A retry cannot fix this class of failure: the library is already on disk and
     ninja considers it current, so the second attempt re-reads the same bad
     input. Naming the library is what makes it fixable, and it is only reported
-    when llvm-nm confirms the symbols really are absent, so a library is never
-    deleted on a guess.
+    when llvm-nm confirms the symbols really are absent AND the same library
+    exports the rest of that symbol's family, so a library is never deleted on a
+    guess and an unrelated one is never deleted at all.
     """
     ali = _audit_module()
     if ali is None:
         return []
     text = "".join(tail)
     try:
+        root = build_dir or Path.cwd()
         symbols = ali.parse_undefined_symbols(text)
-        dirs, tokens = ali.parse_link_libraries(text)
-        libraries = ali.resolve_libraries(dirs, tokens, Path.cwd())
+        # The libraries of a long link live inside a @*.rsp, so the build tree
+        # has to be searched; without it only the -L dirs are visible.
+        dirs, tokens = ali.parse_link_libraries(text, root)
+        libraries = ali.resolve_libraries(dirs, tokens, root)
         if not symbols or not libraries:
             return []
-        nm = ali.find_llvm_tool("llvm-nm", Path.cwd(), text)
+        nm = ali.find_llvm_tool("llvm-nm", root, text)
         if nm is None:
             return []
         exports: dict[Path, set[str]] = {}
@@ -152,13 +168,23 @@ def find_deficient_libraries(tail: Sequence[str]) -> list[Path]:
         missing = [s for s in symbols if not any(s in n for n in exports.values())]
         if not missing:
             return []
-        # Only libraries this build produces can be rebuilt by re-running it.
-        # Deleting anything else would turn a flake into a broken tree.
-        return [
-            lib
-            for lib, names in exports.items()
-            if names and not any(s in names for s in missing) and _is_rebuildable(lib)
-        ]
+        # Only the library that owns the missing symbols' family is a candidate,
+        # and only if this build can regenerate it. Deleting anything else would
+        # turn a flake into a broken tree.
+        families = {f for f in (_symbol_family(s) for s in missing) if f}
+        if not families:
+            return []
+        deficient = []
+        for lib, names in exports.items():
+            if not names or not _is_rebuildable(lib):
+                continue
+            if any(s in names for s in missing):
+                continue
+            if any(
+                n.lstrip("_").startswith(f"{fam}_") for fam in families for n in names
+            ):
+                deficient.append(lib)
+        return deficient
     except Exception:
         return []
 

@@ -98,6 +98,8 @@ UNDEFINED_RE = re.compile(
 LIB_DIR_RE = re.compile(r"-L\s*([^\s\"]+)")
 
 LIB_SUFFIXES = (".lib", ".dll", ".a", ".so", ".dll.a")
+# Linker options whose value is a file the link WRITES, not one it reads.
+OUTPUT_OPTION_RE = re.compile(r"^[-/](implib|out|pdb|def|map)[:=]", re.IGNORECASE)
 
 
 def parse_undefined_symbols(text: str) -> list[str]:
@@ -117,12 +119,48 @@ def parse_undefined_symbols(text: str) -> list[str]:
     return list(seen)
 
 
-def parse_link_libraries(text: str) -> tuple[list[str], list[str]]:
+def expand_response_files(command: str, build_dir: Path) -> str:
+    """Returns the command with the contents of any @response file appended.
+
+    CMake moves the bulk of a long link line -- the objects AND the libraries --
+    into `CMakeFiles/<target>.rsp` and leaves only `@<file>.rsp` behind. Scanning
+    the command line alone therefore sees the `-L` search dirs but none of the
+    libraries they are there to find, so a deficient library can never be named.
+    The response file is located by its path when that resolves, else by its
+    basename within the build tree, because the command records it relative to a
+    working directory the log does not always state.
+    """
+    extra: list[str] = []
+    for token in command.replace('"', " ").split():
+        bare = token.strip(",")
+        if not bare.startswith("@") or not bare.lower().endswith(".rsp"):
+            continue
+        ref = bare[1:].replace("\\", "/")
+        candidates: list[Path] = []
+        direct = Path(ref)
+        if direct.is_file():
+            candidates.append(direct)
+        else:
+            probe = build_dir / ref
+            if probe.is_file():
+                candidates.append(probe)
+            else:
+                candidates.extend(sorted(build_dir.rglob(direct.name))[:1])
+        for rsp in candidates:
+            extra.extend(read_entries(rsp))
+    return command + " " + " ".join(extra) if extra else command
+
+
+def parse_link_libraries(
+    text: str, build_dir: Path | None = None
+) -> tuple[list[str], list[str]]:
     """Returns (library search dirs, library tokens) from failed link lines.
 
     Only lines belonging to a failed link are considered, so an unrelated
     successful link earlier in the log cannot contribute libraries that were
-    never part of the failure.
+    never part of the failure. When a build dir is supplied, `@*.rsp` references
+    on the command are expanded first; without that the libraries of every long
+    link are invisible.
     """
     dirs: dict[str, None] = {}
     libs: dict[str, None] = {}
@@ -134,12 +172,21 @@ def parse_link_libraries(text: str) -> tuple[list[str], list[str]]:
         for command in lines[index : index + 3]:
             if "-fuse-ld" not in command and "lld-link" not in command:
                 continue
+            if build_dir is not None:
+                command = expand_response_files(command, build_dir)
             for hit in LIB_DIR_RE.finditer(command):
                 dirs.setdefault(hit.group(1).replace("\\", "/"), None)
             for token in command.replace('"', " ").split():
                 bare = token.strip(",")
-                if bare.lower().endswith(LIB_SUFFIXES):
-                    libs.setdefault(bare.replace("\\", "/"), None)
+                if not bare.lower().endswith(LIB_SUFFIXES):
+                    continue
+                # /implib: and /out: name files this link WRITES. Treating an
+                # output as an input would let the target's own import library
+                # be judged for symbols it is not responsible for, and in the
+                # worst case selected for deletion.
+                if OUTPUT_OPTION_RE.match(bare):
+                    continue
+                libs.setdefault(bare.replace("\\", "/"), None)
     return list(dirs), list(libs)
 
 
@@ -252,7 +299,7 @@ def audit_libraries(build_dir: Path, report: list[str]) -> int:
         return 0
 
     symbols = parse_undefined_symbols(text)
-    dirs, lib_tokens = parse_link_libraries(text)
+    dirs, lib_tokens = parse_link_libraries(text, build_dir)
     libraries = resolve_libraries(dirs, lib_tokens, build_dir)
     report.append(f"undefined symbols reported: {len(symbols)}")
     report.append(f"libraries on the failed link line: {len(libraries)}")
@@ -455,7 +502,8 @@ def parse_link_objects(text: str, build_dir: Path) -> list[Path]:
     leave no .rsp behind. Scanning only .rsp files therefore skips exactly the
     links that produced no file, which reads as "nothing to check" rather than
     as a gap. The failed command line is the one source that is present either
-    way.
+    way, and `@*.rsp` references on it are expanded so the long links are
+    covered from the command line too.
     """
     found: dict[Path, None] = {}
     lines = text.splitlines()
@@ -463,8 +511,9 @@ def parse_link_objects(text: str, build_dir: Path) -> list[Path]:
         if "FAILED:" not in line:
             continue
         for command in lines[index : index + 3]:
-            if ".obj" not in command and ".o " not in command:
+            if ".obj" not in command and ".o " not in command and ".rsp" not in command:
                 continue
+            command = expand_response_files(command, build_dir)
             for token in command.replace('"', " ").split():
                 bare = token.strip(",").lstrip("@")
                 if not bare.lower().endswith((".obj", ".o")):
