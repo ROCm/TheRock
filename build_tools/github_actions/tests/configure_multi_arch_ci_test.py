@@ -1433,7 +1433,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 )
 
                 self.assertEqual(
-                    {row["python_version"] for row in result.linux.pytorch_build_matrix},
+                    {
+                        row["python_version"]
+                        for row in result.linux.pytorch_build_matrix
+                    },
                     {python_version},
                 )
 
