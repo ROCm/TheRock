@@ -28,25 +28,10 @@ RELEASE_TYPES = [
 # TODO: add opt-ins for CI runs to use python versions and pytorch refs normally
 #       only included in release runs
 
-PYTHON_VERSIONS_THROUGH_3_14 = ["3.10", "3.11", "3.12", "3.13", "3.14"]
-PYTHON_VERSIONS_THROUGH_3_15 = [*PYTHON_VERSIONS_THROUGH_3_14, "3.15"]
-
-# Match each ref's declared upstream support instead of scheduling every Python
-# version against every PyTorch release.
-RELEASE_PYTHON_VERSIONS = {
-    "linux": {
-        "release/2.12": PYTHON_VERSIONS_THROUGH_3_14,
-        "release/2.13": PYTHON_VERSIONS_THROUGH_3_15,
-        "release/2.14": PYTHON_VERSIONS_THROUGH_3_15,
-        "nightly": PYTHON_VERSIONS_THROUGH_3_15,
-    },
-    "windows": {
-        "release/2.12": PYTHON_VERSIONS_THROUGH_3_14,
-        "release/2.13": PYTHON_VERSIONS_THROUGH_3_14,
-        "release/2.14": PYTHON_VERSIONS_THROUGH_3_15,
-        "nightly": PYTHON_VERSIONS_THROUGH_3_15,
-    },
-}
+# All configured refs currently share this build-version range. When upstream
+# support windows diverge, replace it with an ordered per-ref version map and
+# derive each ref's primary test version from the oldest entry in that map.
+RELEASE_PYTHON_VERSIONS = ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
 CI_PYTHON_VERSIONS = {
     "linux": ["3.12"],
     "windows": ["3.12"],
@@ -132,7 +117,7 @@ def _split_families(raw: str) -> list[str]:
 def _default_python_versions(*, release_type: str, platform: str) -> list[str]:
     if release_type == "ci":
         return list(CI_PYTHON_VERSIONS[platform])
-    return list(PYTHON_VERSIONS_THROUGH_3_15)
+    return list(RELEASE_PYTHON_VERSIONS)
 
 
 def _default_pytorch_git_refs(*, release_type: str, platform: str) -> list[str]:
@@ -165,15 +150,6 @@ def _primary_test_python_version(pytorch_git_ref: str) -> str:
     return PYTORCH_PRIMARY_TEST_PYTHON_VERSIONS.get(
         pytorch_git_ref, PYTORCH_PRIMARY_TEST_PYTHON_VERSIONS["nightly"]
     )
-
-
-def _supports_python_version(
-    *, platform: str, pytorch_git_ref: str, python_version: str
-) -> bool:
-    supported_versions = RELEASE_PYTHON_VERSIONS[platform].get(
-        pytorch_git_ref, RELEASE_PYTHON_VERSIONS[platform]["nightly"]
-    )
-    return python_version in supported_versions
 
 
 def _select_test_level(
@@ -233,12 +209,6 @@ def generate_pytorch_matrix_for_release_type(
     matrix: list[dict[str, str]] = []
     for py in versions:
         for ref in refs:
-            if not _supports_python_version(
-                platform=platform,
-                pytorch_git_ref=ref,
-                python_version=py,
-            ):
-                continue
             exclude = UNSUPPORTED_AMDGPU_FAMILIES[platform].get(ref, set())
             families = _filter_families(amdgpu_families, exclude)
             if not families:
