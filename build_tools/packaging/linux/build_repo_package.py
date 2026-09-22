@@ -12,11 +12,65 @@ signing key, so that after installing the package a user can install ROCm with
 their native package manager. The signing key is fetched at build time and
 embedded in the package; it is never stored in the source tree.
 
+Package naming
+--------------
+
+Every OS profile builds a *different* package, because each embeds its own
+repository URL. The profile therefore has to reach the package name, or two of
+them would be indistinguishable. Each ecosystem does that its own way: use the
+distro token the ecosystem already defines where there is one, and the
+``--os-profile`` name where there is not.
+
+    deb   the profile goes in the version:   10.0.0-1~ubuntu2404
+    rpm   the profile goes in the Release:   10.0.0-1.stable.el8
+
+``-1`` is ``--version-suffix``, this package's own build number (default 1),
+bumped to re-ship the repository configuration at an unchanged ROCm version.
+
+Worked examples, all at ``--rocm-version 10.0.0`` with the default
+``--version-suffix``. A build_id stream additionally takes
+``--repo-sub-folder``; a flat stream rejects it:
+
+    --os-profile  --stream  --repo-sub-folder  resulting package file
+    ------------  --------  -----------------  -------------------------------------------
+    ubuntu2404    stable    -                  amdrocm-repo_10.0.0-1~ubuntu2404_all.deb
+    ubuntu2404    rc        -                  amdrocm-repo_10.0.0~pre-1~ubuntu2404_all.deb
+    ubuntu2404    nightly   20260716-12345     amdrocm-repo_20260716.12345-1~ubuntu2404_all.deb
+    rhel8         stable    -                  amdrocm-repo-10.0.0-1.stable.el8.noarch.rpm
+    rhel8         rc        -                  amdrocm-repo-10.0.0-1.rc.el8.noarch.rpm
+    rhel8         nightly   20260716-12345     amdrocm-repo-20260716-12345.1.nightly.el8.noarch.rpm
+    rhel10        stable    -                  amdrocm-repo-10.0.0-1.stable.el10.noarch.rpm
+    sles16        stable    -                  amdrocm-repo-10.0.0-1.stable.sles16.noarch.rpm
+
+``rc`` configures the release-candidate repository for the next GA. Its marker
+sorts below the plain version, so the stable package upgrades over it. Note that
+``rc`` does not spell itself the same way everywhere -- its repo file is
+``amdrocm-stablerc`` and its deb marker is ``~pre`` -- see STREAM_IDS.
+
+``--rocm-version`` may carry a prerelease marker, which stays in the upstream
+part of the version and sorts below the matching GA release:
+
+    --rocm-version 7.14.0~dev20260811, --os-profile ubuntu2404
+        -> amdrocm-repo_7.14.0~dev20260811-1~ubuntu2404_all.deb
+
 ```
 python build_repo_package.py \
     --os-profile ubuntu2404 \
     --stream stable \
     --repo-base-url https://stable.repo.amd.com/rocm/core/packages \
+    --rocm-version 10.0.0 \
+    --dest-dir ./output
+```
+
+The same build for a per-build stream, which pins the repository to one build
+folder and ships no signing key (those repositories are unsigned):
+
+```
+python build_repo_package.py \
+    --os-profile rhel8 \
+    --stream nightly \
+    --repo-base-url https://nightly.repo.amd.com/rocm/core/packages \
+    --repo-sub-folder 20260716-12345 \
     --rocm-version 10.0.0 \
     --dest-dir ./output
 ```
@@ -52,6 +106,14 @@ REPO_NAME = "AMD ROCm"
 # The deb suite the repositories publish under (``dists/<suite>/``). Used to
 # locate the index when verifying a repo URL. It is written literally in
 # template/repo/deb/amdrocm.sources.j2; a test asserts the two agree.
+#
+# One suite for every stream, matching what the servers actually publish rather
+# than naming the suite after the stream. Every stream serves ``dists/stable/``
+# and declares ``Suite: stable`` / ``Codename: stable`` inside its own Release
+# file; a per-stream suite such as ``dists/stablerc/`` returns 404. Pointing apt
+# at a stream-named suite would therefore produce a package that installs
+# cleanly and then fails on the user's first update, so this follows the server.
+# Flagged to devops rather than encoded as a bug.
 DEB_SUITE = "stable"
 
 MAINTAINER = "ROCm Dev Support <rocm-dev.support@amd.com>"
@@ -143,6 +205,16 @@ EXPECTED_KEY_FINGERPRINT = "D0F004A0025A1145C7807FCD0701EAC4D5E02107"
 _VERSION_RE = re.compile(r"^[0-9][0-9A-Za-z.+~]*\Z")
 _SUB_FOLDER_RE = re.compile(r"^[0-9]{8}-[0-9A-Za-z._]+\Z")
 
+# --version-suffix is the package's own build number, bumped to re-ship the
+# repository configuration at an unchanged ROCm version. It is stricter than
+# _VERSION_RE in two ways:
+#
+#   no "-"  deb_version joins it to the upstream version with the single "-"
+#           that separates a debian revision, and rpm forbids one in a Release.
+#   no "~"  deb_version appends "~<os-profile>" after it, and "~" sorts before
+#           everything, so a "~" inside the suffix would reorder the two.
+_VERSION_SUFFIX_RE = re.compile(r"^[0-9][0-9A-Za-z.+]*\Z")
+
 # The RFC0012 streams, each served from <stream>.repo.amd.com.
 #
 # A stream has one of two shapes, and everything else follows from the shape:
@@ -160,15 +232,60 @@ _BUILD_ID = "build_id"
 
 STREAM_SHAPES = {
     "stable": _FLAT,
+    "rc": _FLAT,
     "nightly": _BUILD_ID,
 }
 STREAMS = tuple(STREAM_SHAPES)
 
-# Streams that resolve but serve nothing yet are deliberately absent above:
-# rc (flat, every distro empty) and weekly (no tree at all). dev is served but
-# is explicitly not for end users, so no bootstrap package is built for it.
-# Adding one back is a single entry here plus its golden test.
+# Adding a *flat* stream is an entry here, any alternate names it carries (see
+# STREAM_IDS), and its golden tests.
+#
+# Adding a second *build_id* stream needs more than that: deb_version() derives
+# a build_id version from the sub-folder alone, so two build_id streams sharing
+# a sub-folder would produce one deb version for two different packages. The rpm
+# side already carries the stream in its Release. test_streams_never_share_a_
+# package_version fails loudly if this is ever reached, but the fix is to give
+# deb_version a stream token, not to relax the test.
 
+# Alternate names a stream is known by, where they differ from the stream id.
+# Streams absent here, or missing a key, use the stream id unchanged.
+#
+#   "file_id"     the installed repo file. RFC0012 names rc's tier package
+#                 amdrocm-repo-stablerc, so the file is amdrocm-stablerc while
+#                 the subdomain stays rc. Matching it now keeps the eventual
+#                 per-tier split from having to rename a package and a file
+#                 together -- the one case dpkg and rpm do not handle.
+#   "deb_marker"  the prerelease marker. docs/packaging/versioning.md gives deb
+#                 "~preN" against rpm's "~rcN", and the published packages
+#                 agree, so this package follows suit alongside them. No
+#                 candidate number: that would name one candidate, and this
+#                 names the stream.
+#
+# rpm needs no marker: its Release carries the stream verbatim, and cannot
+# contain a "-" anyway (see rpm_version_release).
+STREAM_IDS = {
+    "rc": {"file_id": "stablerc", "deb_marker": "pre"},
+}
+
+
+def _stream_id(stream: str, key: str) -> str:
+    """Return a stream's alternate name for ``key``, or the stream name."""
+    return STREAM_IDS.get(stream, {}).get(key, stream)
+
+
+# "dist_tag" is appended to the rpm Release so two profiles cannot produce an
+# identically named package. Stated per profile rather than taken from rpm's
+# %{?dist}, which reads the *build host* rather than the target (a rhel8 build
+# in a RHEL 9 container would stamp ".el9") and is empty on SUSE, so every SUSE
+# profile would share one Release -- invisible while sles16 is the only one.
+#
+# ".el8"/".el10" reproduce what %{?dist} yields there, so RHEL names do not
+# change. ".sles16" is a deliberate departure from SUSE's own convention, which
+# leads the Release with a numeric code (160000.2.2 on SLE 16.0): that is a
+# prefix where RHEL's is a suffix, so no single placement satisfies both.
+#
+# deb profiles carry no dist_tag -- deb_version() puts the profile in the
+# version -- so read it with .get(); build_context() runs for both types.
 OS_PROFILES = {
     "ubuntu2404": {
         "family": "debian",
@@ -179,18 +296,24 @@ OS_PROFILES = {
         "family": "rhel",
         "pkg_type": "rpm",
         "rpm_repo_dir": "/etc/yum.repos.d",
+        "rpm_refresh_cmd": "sudo dnf makecache",
+        "dist_tag": ".el8",
         "description": "RHEL/Rocky/OL 8",
     },
     "rhel10": {
         "family": "rhel",
         "pkg_type": "rpm",
         "rpm_repo_dir": "/etc/yum.repos.d",
+        "rpm_refresh_cmd": "sudo dnf makecache",
+        "dist_tag": ".el10",
         "description": "RHEL/Rocky/OL 10",
     },
     "sles16": {
         "family": "sles",
         "pkg_type": "rpm",
         "rpm_repo_dir": "/etc/zypp/repos.d",
+        "rpm_refresh_cmd": "sudo zypper refresh",
+        "dist_tag": ".sles16",
         "description": "SLES 16",
     },
 }
@@ -223,13 +346,17 @@ OS_PROFILES = {
 def repo_id(stream: str) -> str:
     """Return the repo-file stem and section id for a stream.
 
-    ``amdrocm-stable`` etc. The stem drives the installed filename in both
-    families -- ``debian/install`` maps ``{repo_id}.sources`` and the spec
-    ``%files`` lists ``{repo_id}.repo`` -- so naming the stream here is what
-    keeps two streams' repo files from overwriting one another on disk.
+    ``amdrocm-stable``, ``amdrocm-stablerc`` etc. The stem drives the installed
+    filename in both families -- ``debian/install`` maps ``{repo_id}.sources``
+    and the spec ``%files`` lists ``{repo_id}.repo`` -- so naming the stream
+    here is what keeps two streams' repo files from overwriting one another on
+    disk.
+
+    The stem is not always the stream name: rc's file is ``amdrocm-stablerc``
+    while its subdomain stays ``rc``. See STREAM_IDS.
     """
     stream_shape(stream)  # reject unknown streams before they reach a filename
-    return f"{REPO_ID_PREFIX}-{stream}"
+    return f"{REPO_ID_PREFIX}-{_stream_id(stream, 'file_id')}"
 
 
 def stream_shape(stream: str) -> str:
@@ -370,18 +497,29 @@ def _valid_repo_base_url(url: str) -> bool:
 
 
 def rpm_version_release(
-    stream: str, rocm_version: str, repo_sub_folder: str
+    stream: str,
+    rocm_version: str,
+    repo_sub_folder: str,
+    version_suffix: str,
+    dist_tag: str,
 ) -> tuple[str, str]:
     """Return (Version, Release) for the rpm package.
 
     Flat streams track the (rolling) ROCm version. A build_id stream is pinned
     to its build: an rpm Version cannot contain ``-``, so the date becomes the
-    Version and the id becomes the Release.
+    Version and the id leads the Release.
 
-    The stream is part of the Release field so that two streams can never
-    produce an identically named package. Without it, installing one stream's
-    package over another at the same ROCm version is a silent no-op: the package
-    manager reports success and leaves the old repository configured.
+    Release is ``[<id>.]<version_suffix>.<stream><dist_tag>``, e.g.
+    ``1.stable.el8`` or ``12345.1.nightly.el8``. Each part exists to keep two
+    packages from sharing a name:
+
+    - ``stream`` -- without it, installing one stream's package over another at
+      the same ROCm version is a silent no-op: the package manager reports
+      success and leaves the old repository configured.
+    - ``dist_tag`` -- one package is built per OS profile and their contents
+      differ, so the profile must reach the name too (see OS_PROFILES).
+    - ``version_suffix`` -- this package's own build number, so the repository
+      configuration can be re-shipped at an unchanged ROCm version.
 
     Note that Version is compared before Release, and a build_id Version is a
     date (``20260827``) while a flat one is a semantic version (``10.0.0``), so
@@ -391,8 +529,9 @@ def rpm_version_release(
     """
     if stream_shape(stream) == _BUILD_ID:
         date, _, ident = repo_sub_folder.partition("-")
-        return date, f"{ident or '1'}.{stream}"
-    return rocm_version, f"1.{stream}"
+        lead = f"{ident}." if ident else ""
+        return date, f"{lead}{version_suffix}.{stream}{dist_tag}"
+    return rocm_version, f"{version_suffix}.{stream}{dist_tag}"
 
 
 # An rpm %changelog date has to be English whatever LC_TIME the build machine
@@ -426,19 +565,55 @@ def rpm_changelog_date(when: datetime) -> str:
     )
 
 
-def deb_version(stream: str, rocm_version: str, repo_sub_folder: str) -> str:
-    """Return the deb package version (a build_id stream is pinned, no ``-``).
+def deb_version(
+    stream: str,
+    rocm_version: str,
+    repo_sub_folder: str,
+    version_suffix: str,
+    os_profile: str,
+) -> str:
+    """Return the deb package version, e.g. ``10.0.0-1~ubuntu2404``.
 
-    ``stable`` carries the plain ROCm version. Any other flat stream carries a
-    ``~<stream>`` suffix: ``~`` sorts before the plain version, so the stable
-    package upgrades over it and no two streams share a version (see
-    ``rpm_version_release``).
+    The value is ``<upstream>-<debian revision>``. The upstream part names what
+    the repository points at: the ROCm version for a flat stream, or the build
+    folder for a build_id one. That folder's ``-`` becomes a ``.`` because only
+    the *last* ``-`` in a deb version separates the revision, so leaving it
+    would split the version in the wrong place. A flat stream other than
+    ``stable`` also carries a ``~<marker>``, which sorts below the plain
+    version so that stable upgrades over it.
+
+    The marker is the deb spelling of the stream rather than the stream name:
+    rc becomes ``~pre``, matching the ``~preN`` that the ROCm content packages
+    in that same repository carry on deb (they use ``~rcN`` on rpm). It carries
+    no candidate number -- see STREAM_IDS.
+
+    The revision carries ``<version_suffix>~<os_profile>``:
+
+    - ``version_suffix`` is this package's own build number, so the repository
+      configuration can be re-shipped at an unchanged ROCm version.
+    - ``os_profile`` is part of the version because one package is built per
+      profile and their contents differ -- each embeds its own repository URL.
+      Without it every debian-family profile would produce an identically named
+      package holding different files.
+
+    Profile names rather than Debian codenames: codenames are not
+    alphabetically ordered, so ``10.0.0-1~bullseye1`` sorts *above*
+    ``10.0.0-1~bookworm1`` and an in-place Debian 11 -> 12 upgrade would see the
+    newer package as a downgrade. ``ubuntu2404``/``debian12`` are monotonic, and
+    match both ``--os-profile`` and the ``repo/<os-profile>/`` publish path.
+
+    Note that ``~`` sorts before everything, including nothing at all, so
+    ``10.0.0-1~ubuntu2404`` ranks *below* a bare ``10.0.0-1``. Every package
+    built here carries a profile, so that comparison never arises between two of
+    ours -- but it is why the separator must stay ``~`` and not become ``.``.
     """
     if stream_shape(stream) == _BUILD_ID:
-        return repo_sub_folder.replace("-", ".")
-    if stream == "stable":
-        return rocm_version
-    return f"{rocm_version}~{stream}"
+        upstream = repo_sub_folder.replace("-", ".")
+    elif stream == "stable":
+        upstream = rocm_version
+    else:
+        upstream = f"{rocm_version}~{_stream_id(stream, 'deb_marker')}"
+    return f"{upstream}-{version_suffix}~{os_profile}"
 
 
 # --- signing key -------------------------------------------------------------
@@ -632,6 +807,16 @@ def build_context(args: argparse.Namespace, profile: dict) -> dict:
         # keep one source of truth for the name.
         "rpm_gpg_key_file": PurePosixPath(RPM_GPG_KEY_PATH).name,
         "rpm_repo_dir": profile.get("rpm_repo_dir", ""),
+        # .get(), not a subscript: this function runs before main() dispatches
+        # on pkg_type, so it is called for deb profiles too -- and those carry
+        # no dist_tag.
+        #
+        # Consumed by build_rpm_package, which hands it to rpm_version_release.
+        # The spec template renders the finished Release string and must not
+        # append the tag a second time.
+        "dist_tag": profile.get("dist_tag", ""),
+        # Same .get() reasoning as dist_tag: deb profiles reach here too.
+        "rpm_refresh_cmd": profile.get("rpm_refresh_cmd", ""),
         # Declared for every stream: amdgpu-install configures a ROCm
         # repository whichever stream this package points at.
         "legacy_installer_package": LEGACY_INSTALLER_PACKAGE,
@@ -666,7 +851,11 @@ def build_rpm_package(
         )
 
     version, release = rpm_version_release(
-        args.stream, args.rocm_version, args.repo_sub_folder
+        args.stream,
+        args.rocm_version,
+        args.repo_sub_folder,
+        args.version_suffix,
+        context["dist_tag"],
     )
     spec_context = {
         **context,
@@ -709,7 +898,11 @@ def build_deb_package(
     deb_context = {
         **context,
         "deb_version": deb_version(
-            args.stream, args.rocm_version, args.repo_sub_folder
+            args.stream,
+            args.rocm_version,
+            args.repo_sub_folder,
+            args.version_suffix,
+            args.os_profile,
         ),
         "date": format_datetime(datetime.now(timezone.utc)),
     }
@@ -736,8 +929,15 @@ def build_deb_package(
         )
     (deb_dir / "rules").chmod(0o755)
     (deb_dir / "postinst").chmod(0o755)
-    # Native source format: the package version carries no debian revision, so
-    # no separate upstream tarball is required.
+    # Native source format: this package has no upstream outside this
+    # repository, so there is no separate tarball for a non-native format to
+    # reference.
+    #
+    # A native package conventionally carries no debian revision, and this one
+    # does (see deb_version). That convention is enforced by dpkg-source, which
+    # a binary-only build never runs: "dpkg-buildpackage -b" below produces the
+    # .deb straight from debian/. Checked against both dpkg-buildpackage and
+    # lintian, neither of which reports a version or source-format tag for it.
     (deb_dir / "source").mkdir(exist_ok=True)
     (deb_dir / "source" / "format").write_text("3.0 (native)\n", encoding="utf-8")
 
@@ -824,6 +1024,17 @@ def parse_args(argv=None) -> argparse.Namespace:
         ),
     )
     p.add_argument(
+        "--version-suffix",
+        default="1",
+        help=(
+            "This package's own build number, separate from --rocm-version "
+            "(default: 1). Bump it to re-ship the repository configuration "
+            "at an unchanged ROCm version: without it there would be no "
+            "higher version to publish, and the package manager would treat "
+            "the corrected package as already installed"
+        ),
+    )
+    p.add_argument(
         "--dest-dir",
         type=Path,
         required=True,
@@ -867,6 +1078,8 @@ def parse_args(argv=None) -> argparse.Namespace:
     # maintainer metadata so they cannot alter the surrounding syntax.
     if not _VERSION_RE.match(args.rocm_version):
         p.error(f"--rocm-version has an unexpected format: {args.rocm_version!r}")
+    if not _VERSION_SUFFIX_RE.match(args.version_suffix):
+        p.error(f"--version-suffix has an unexpected format: {args.version_suffix!r}")
     if not _valid_repo_base_url(args.repo_base_url):
         p.error(f"--repo-base-url is not a valid http(s) URL: {args.repo_base_url!r}")
     if args.repo_sub_folder and not _SUB_FOLDER_RE.match(args.repo_sub_folder):

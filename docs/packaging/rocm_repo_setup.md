@@ -19,9 +19,10 @@ single repo definition and, for signed streams, the repository signing key:
 | `rhel8`, `rhel10` | `dnf` / `yum`   | `/etc/yum.repos.d/amdrocm-<stream>.repo`           | `/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm` |
 | `sles16`          | `zypper`        | `/etc/zypp/repos.d/amdrocm-<stream>.repo`          | `/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm` |
 
-The filename and the rpm section id both carry the stream, so packages for two
-different streams can be installed in turn without one silently replacing the
-other's configuration.
+The filename and the rpm section id both identify the stream, so packages for
+two different streams can be installed in turn without one silently replacing
+the other's configuration. The stem is `amdrocm-<stream>` for every stream
+except `rc`, whose file is `amdrocm-stablerc` — see [Streams](#streams).
 
 The deb repo definition uses the deb822 `.sources` format (`X-Repo-Id`,
 `Suites: stable`, `Components: main`, `Architectures: amd64`, `Enabled: yes`)
@@ -36,17 +37,35 @@ system set up either way ends up with equivalent repository configuration.
 Each stream is served from its own subdomain, `<stream>.repo.amd.com`, and every
 repository serves x86_64 (`amd64`) packages only.
 
-| Stream    | Repository base                                   | Signed |
-| --------- | ------------------------------------------------- | ------ |
-| `stable`  | `https://stable.repo.amd.com/rocm/core/packages`  | yes    |
-| `nightly` | `https://nightly.repo.amd.com/rocm/core/packages` | no     |
+| Stream    | Repository base                                   | Signed | Installed repo file               |
+| --------- | ------------------------------------------------- | ------ | --------------------------------- |
+| `stable`  | `https://stable.repo.amd.com/rocm/core/packages`  | yes    | `amdrocm-stable.{sources,repo}`   |
+| `rc`      | `https://rc.repo.amd.com/rocm/core/packages`      | yes    | `amdrocm-stablerc.{sources,repo}` |
+| `nightly` | `https://nightly.repo.amd.com/rocm/core/packages` | no     | `amdrocm-nightly.{sources,repo}`  |
 
-Both streams are published per distro. They differ only in whether a build
+`rc` is the release-candidate stream for the next GA release. Its package
+version carries a prerelease marker, which sorts below the plain version, so the
+stable package upgrades cleanly over a candidate.
+
+The marker follows the same per-ecosystem spelling the ROCm content packages
+use: **`~pre` on deb and `.rc.` on rpm**. The rc repository publishes those
+packages as `10.1.0~pre1` and `10.1.0~rc1` respectively, so `amdrocm-repo` reads
+consistently alongside them. It carries no candidate number, because it names
+the stream rather than one candidate — the repository serves several at once.
+
+Note that `rc`'s installed file is `amdrocm-stablerc`, not `amdrocm-rc`. The
+stream names the subdomain, while `stablerc` is the spelling RFC0012 uses for
+that stream's package (`amdrocm-repo-stablerc`). Matching it now means a future
+split into per-tier packages never has to move a file that is already on a
+user's disk.
+
+The streams are published per distro and differ only in whether a build
 identifier appears in the path:
 
 | Stream    | deb `URIs`                       | rpm `baseurl`                           |
 | --------- | -------------------------------- | --------------------------------------- |
 | `stable`  | `<base>/<os-profile>/`           | `<base>/<os-profile>/x86_64/`           |
+| `rc`      | `<base>/<os-profile>/`           | `<base>/<os-profile>/x86_64/`           |
 | `nightly` | `<base>/<os-profile>/<date-id>/` | `<base>/<os-profile>/<date-id>/x86_64/` |
 
 The signing key is at `<stream-root>/gpg/packages.gpg` — for example
@@ -62,11 +81,17 @@ building the package.
 > More importantly, a nightly repo file names **one specific build**. Nightly
 > retention prunes old builds, so a nightly `amdrocm-repo` stops resolving once
 > the build it points at is removed, and the package must be rebuilt to follow
-> the stream. Use `stable` for anything beyond short-lived testing.
+> the stream.
+>
+> The retained window is roughly **30 days**: as of 2026-09-22 each distro keeps
+> 30 build folders at one build per night. So a nightly `amdrocm-repo` has an
+> expected shelf life of about a month, after which `apt update` or
+> `dnf makecache` fails against it. Use `stable` for anything beyond short-lived
+> testing.
 
-Other streams exist on `repo.amd.com` — `rc`, `dev` and `weekly` — but no
-`amdrocm-repo` is built for them. `rc` and `weekly` are not yet serving content,
-and `dev` is intended for developer testing rather than end users.
+Two further streams exist on `repo.amd.com` but no `amdrocm-repo` is built for
+them: `weekly` is not yet serving content, and `dev` is intended for developer
+testing rather than end users.
 
 ## Relationship to `amdgpu-install`
 
@@ -206,6 +231,43 @@ python3 build_tools/packaging/linux/build_repo_package.py \
 
 `--verify-repo-url` has no effect for the nightly stream: its build folder is
 published by the same run that builds the package, so it does not exist yet.
+
+### Package naming
+
+Every OS profile builds a *different* package, because each one embeds its own
+repository URL. The profile is therefore part of the package name, so that two
+of them can never be mistaken for each other. Each format does this its own way:
+deb carries the profile in the version, rpm in the release field.
+
+| `--os-profile` | `--stream` | Resulting file                                         |
+| -------------- | ---------- | ------------------------------------------------------ |
+| `ubuntu2404`   | `stable`   | `amdrocm-repo_10.0.0-1~ubuntu2404_all.deb`             |
+| `ubuntu2404`   | `rc`       | `amdrocm-repo_10.0.0~pre-1~ubuntu2404_all.deb`         |
+| `ubuntu2404`   | `nightly`  | `amdrocm-repo_20260716.12345-1~ubuntu2404_all.deb`     |
+| `rhel8`        | `stable`   | `amdrocm-repo-10.0.0-1.stable.el8.noarch.rpm`          |
+| `rhel8`        | `rc`       | `amdrocm-repo-10.0.0-1.rc.el8.noarch.rpm`              |
+| `rhel8`        | `nightly`  | `amdrocm-repo-20260716-12345.1.nightly.el8.noarch.rpm` |
+| `rhel10`       | `stable`   | `amdrocm-repo-10.0.0-1.stable.el10.noarch.rpm`         |
+| `sles16`       | `stable`   | `amdrocm-repo-10.0.0-1.stable.sles16.noarch.rpm`       |
+
+All rows use `--rocm-version 10.0.0`; the nightly rows add
+`--repo-sub-folder 20260716-12345`.
+
+The `-1` is `--version-suffix`, this package's own build number (default `1`).
+Bump it to re-ship the repository configuration at an unchanged ROCm version —
+without it there would be no higher version for the package manager to accept,
+and installing the corrected package would silently do nothing.
+
+`--rocm-version` may carry a prerelease marker, which stays in the upstream part
+of the version and sorts below the matching GA release — for example
+`--rocm-version 7.14.0~dev20260811` on `ubuntu2404` yields
+`amdrocm-repo_7.14.0~dev20260811-1~ubuntu2404_all.deb`.
+
+The deb token is the `--os-profile` name rather than a Debian codename, because
+codenames are not alphabetically ordered: `bullseye` sorts *above* `bookworm`,
+so a Debian 11 → 12 upgrade would see the newer package as a downgrade. On RHEL
+the token is rpm's conventional `.el8`/`.el10`. SUSE defines no equivalent
+token — `%{?dist}` is empty there — so the profile name is used instead.
 
 See `build_repo_package.py --help` for the full option list.
 

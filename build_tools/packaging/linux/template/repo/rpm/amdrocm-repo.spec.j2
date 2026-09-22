@@ -1,6 +1,6 @@
 Name: {{ pkg_name }}
 Version: {{ version }}
-Release: {{ release }}%{?dist}
+Release: {{ release }}
 BuildArch: noarch
 Summary: {{ description_short }}
 License: MIT
@@ -18,6 +18,24 @@ install -m 644 %{_sourcedir}/{{ repo_id }}.repo %{buildroot}{{ rpm_repo_dir }}/
 mkdir -p %{buildroot}/etc/pki/rpm-gpg
 install -m 644 %{_sourcedir}/{{ rpm_gpg_key_file }} %{buildroot}{{ rpm_gpg_key_path }}
 {% endif %}
+
+# Messages only, mirroring the deb postinst greeting so both package types
+# behave the same on install.
+#
+# Nothing here may touch the rpm database -- in particular it must never run
+# "rpm --import" to add the signing key. rpm holds the database lock for the
+# whole transaction, so an import fails from this scriptlet and from a
+# post-transaction one alike, and it fails only as a warning: the package
+# installs looking healthy while the key was never added. Callers use their
+# package manager's own flag instead ("dnf -y", "zypper --gpg-auto-import-keys"),
+# which is what the documented install steps do.
+#
+# The legacy-installer warning the deb postinst prints has no counterpart here:
+# dnf and zypper enforce Conflicts by refusing the pair outright, so there is no
+# removed-but-not-purged state to detect.
+%post
+echo "AMD ROCm repository configured."
+echo "Run '{{ rpm_refresh_cmd }}' to refresh package lists."
 
 %files
 %defattr(-, root, root, -)
