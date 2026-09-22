@@ -77,7 +77,6 @@ from configure_ci_path_filters import (
     get_git_modified_paths,
     get_git_submodule_paths,
     is_ci_run_required,
-    is_external_repo_ci_required,
 )
 from configure_jax_release_matrix import generate_jax_matrix_for_release_type
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
@@ -102,15 +101,7 @@ _EXTERNAL_REPO_CONFIG_DIR = "external-repo-config"
 
 
 def _load_skip_ci_patterns_from_toml(config_path: str) -> Optional[list[str]]:
-    """Load skip CI patterns from a TOML config file.
-
-    Args:
-        config_path: Path to the TOML config file (relative to external repo root).
-
-    Returns:
-        List of glob patterns that can skip CI, or None if file not found
-        or tomllib not available.
-    """
+    """Load skip CI patterns from external repo's TOML config file."""
     # The external repo config is checked out to external-repo-config/
     full_path = Path(_EXTERNAL_REPO_CONFIG_DIR) / config_path
     if not full_path.exists():
@@ -865,29 +856,16 @@ def should_skip_ci(
 
         repo_name = external_repo.get("repository", "").split("/")[-1]
 
-        # Get changed_files by running git diff in the external repo checkout.
-        # The external repo is checked out to external-repo-config/ by setup_multi_arch.yml
-        # with fetch-depth: 2 so we have the parent commit for diffing.
-        #
-        # changed_files semantics:
-        # - None: Unknown changes (schedule, workflow_dispatch, checkout failed).
-        #         Do NOT skip CI - run conservatively.
-        # - []: No files changed (empty diff). Can skip CI.
-        # - [...]: Known changed files. Evaluate against skip patterns.
+        # Get changed_files via git diff in external repo checkout.
         changed_files: list[str] | None = None
         external_repo_path = Path(_EXTERNAL_REPO_CONFIG_DIR)
-
-        # Determine base_ref for git diff
-        # Priority: explicit base_ref > event-based default (HEAD^)
         base_ref = external_repo.get("base_ref")
         event_name = external_repo.get("event_name", "")
 
-        # For schedule/workflow_dispatch, we don't have a meaningful base to diff against
         if event_name in ("schedule", "workflow_dispatch"):
             print(f"  External repo {repo_name}: {event_name} event, no diff available")
             changed_files = None
         elif external_repo_path.exists() and external_repo_path.is_dir():
-            # Default to HEAD^ if no base_ref provided (works for PRs and pushes)
             if not base_ref:
                 base_ref = "HEAD^"
             print(f"  External repo {repo_name}: computing changed files...")
@@ -895,9 +873,13 @@ def should_skip_ci(
                 get_git_modified_paths(base_ref, cwd=str(external_repo_path)) or []
             )
             if changed_files is not None:
-                print(f"  External repo {repo_name}: {len(changed_files)} file(s) changed")
+                print(
+                    f"  External repo {repo_name}: {len(changed_files)} file(s) changed"
+                )
         else:
-            print(f"  External repo {repo_name}: checkout not found at {external_repo_path}")
+            print(
+                f"  External repo {repo_name}: checkout not found at {external_repo_path}"
+            )
 
         # Get skip patterns from TOML config file
         skip_ci_config = external_repo.get("skip_ci_config")
@@ -908,30 +890,20 @@ def should_skip_ci(
             # (checked out to external-repo-config/ by setup_multi_arch.yml)
             skip_ci_patterns = _load_skip_ci_patterns_from_toml(skip_ci_config)
 
-        # Only evaluate skip logic when both changed_files and skip_ci_patterns
-        # are available. When changed_files is None (unknown), we must run CI
-        # conservatively.
-        if changed_files is not None and skip_ci_patterns is not None:
-            if not is_external_repo_ci_required(
-                changed_files, skip_ci_patterns, repo_name
-            ):
-                print("  External repo build: only skippable files changed")
-                return True
-        # If we reach here, either:
-        # - changed_files is None (unknown): must run CI conservatively
-        # - skip_ci_patterns not available: continue to ASAN checks
-        # - CI is required: continue to ASAN checks
+        # Evaluate skip logic using unified is_ci_run_required().
+        # Pass skip_patterns to use external repo's TOML patterns.
+        if not is_ci_run_required(changed_files, skip_ci_patterns, repo_name):
+            print("  External repo build: CI can be skipped")
+            return True
+        # If we reach here, CI is required. Continue to ASAN checks.
         # Stage reuse will optimize builds regardless.
 
-    # 2b. Local repo: If we have a list of changed files (push/pull_request events),
-    # check if CI should run for that set of changed files.
+    # 2b. Local repo (TheRock): check changed files against built-in skip patterns.
+    # Pass skip_patterns=None to use _SKIPPABLE_PATH_PATTERNS.
     if not ci_inputs.external_repo and git_context.changed_files is not None:
-        print(
-            f"  Checking {len(git_context.changed_files)} changed file(s) "
-            f"against path filters..."
-        )
+        print(f"  Checking {len(git_context.changed_files)} changed file(s)...")
         if not is_ci_run_required(git_context.changed_files):
-            print("  Skipping: no CI-relevant files changed")
+            print("  TheRock: CI can be skipped")
             return True
 
     # 3. ASAN skip - only evaluated if path filtering didn't skip CI

@@ -221,9 +221,7 @@ jobs:
           path: ci-config
         continue-on-error: true
 
-      # Checkout external repo for skip-ci config and git diff.
-      # We need fetch-depth: 2 to have parent commit for git diff.
-      # configure_multi_arch_ci.py runs git diff here to get changed files.
+      # Checkout external repo for skip-ci evaluation (git diff + TOML config).
       - name: Checkout external repo
         if: ${{ inputs.external_repo != '' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

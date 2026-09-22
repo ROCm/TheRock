@@ -8,14 +8,12 @@ This module provides utilities to:
 - Filter paths based on skippable patterns (docs, markdown, etc.)
 - Identify CI-related workflow files
 - Decide whether CI should run based on the modified paths
-- Check if external repo file changes require TheRock CI
 
 Public API:
     get_git_commit_hash() - Resolve a git ref to a commit hash
     get_git_modified_paths() - Get modified files from git diff compared to worktree
     get_git_submodule_paths() - Get list of git submodule paths in the repository
     is_ci_run_required() - Check if CI run is required based on modified paths
-    is_external_repo_ci_required() - Check if external repo changes require CI
 """
 
 import fnmatch
@@ -162,51 +160,89 @@ def get_git_submodule_paths(repo_root: Optional[str] = None) -> Optional[Iterabl
         return []
 
 
-def is_ci_run_required(paths: Optional[Iterable[str]]) -> bool:
+def is_ci_run_required(
+    paths: Optional[Iterable[str]],
+    skip_patterns: Optional[list[str]] = None,
+    repo_name: str = "",
+) -> bool:
     """Checks if a CI run is required based on modified file paths.
 
     CI will run if:
-    - At least one CI-related workflow file was modified, OR
+    - At least one CI-related workflow file was modified (TheRock only), OR
     - At least one non-skippable file was modified
 
     CI will be skipped if:
     - No files were modified, OR
-    - Only skippable files were modified (docs, markdown, etc.), OR
-    - Only non-CI workflow files were modified that are skippable.
+    - Only skippable files were modified (docs, markdown, etc.)
 
     Args:
         paths: Iterable of file paths to evaluate, or None if no files modified
+        skip_patterns: Optional list of glob patterns for skippable files.
+            If provided (external repo case), uses these patterns.
+            If None (TheRock case), uses built-in _SKIPPABLE_PATH_PATTERNS.
+        repo_name: Optional repo name for logging (e.g., "rocm-libraries")
 
     Returns:
         True if CI run is required, False if CI can be skipped
     """
+    label = f"[{repo_name}] " if repo_name else ""
+
     if paths is None:
-        print("No files were modified, skipping build jobs")
+        print(f"{label}No changed files provided, CI required (conservative)")
+        return True
+
+    paths_list = list(paths)
+    if not paths_list:
+        print(f"{label}No files changed, skipping CI")
         return False
 
-    paths_set = set(paths)
-    github_workflows_paths = set(
-        [p for p in paths if p.startswith(".github/workflows")]
-    )
-    other_paths = paths_set - github_workflows_paths
+    # Determine which patterns to use
+    use_external_patterns = skip_patterns is not None
 
-    related_to_ci = _check_for_workflow_file_related_to_ci(github_workflows_paths)
-    contains_other_non_skippable_files = _check_for_non_skippable_path(other_paths)
+    def is_skippable(path: str) -> bool:
+        if use_external_patterns:
+            return _is_path_skippable_for_patterns(path, skip_patterns)
+        return _is_path_skippable(path)
 
-    print("is_ci_run_required findings:")
-    print(f"  related_to_ci: {related_to_ci}")
-    print(f"  contains_other_non_skippable_files: {contains_other_non_skippable_files}")
+    # For TheRock (no skip_patterns), also check CI workflow files
+    if not use_external_patterns:
+        github_workflows_paths = [
+            p for p in paths_list if p.startswith(".github/workflows")
+        ]
+        other_paths = [p for p in paths_list if not p.startswith(".github/workflows")]
 
-    if related_to_ci:
-        print("Enabling build jobs since a related workflow file was modified")
-        return True
-    elif contains_other_non_skippable_files:
-        print("Enabling build jobs since a non-skippable path was modified")
+        related_to_ci = _check_for_workflow_file_related_to_ci(github_workflows_paths)
+        contains_non_skippable = any(not is_skippable(p) for p in other_paths)
+
+        print(f"{label}is_ci_run_required findings:")
+        print(f"  related_to_ci: {related_to_ci}")
+        print(f"  contains_non_skippable: {contains_non_skippable}")
+
+        if related_to_ci:
+            print(f"{label}CI required: CI-related workflow file modified")
+            return True
+        elif contains_non_skippable:
+            print(f"{label}CI required: non-skippable file modified")
+            return True
+        else:
+            print(f"{label}All files skippable, CI can be skipped")
+            return False
+
+    # External repo case: just check against skip_patterns
+    non_skippable = [f for f in paths_list if not is_skippable(f)]
+
+    print(f"{label}Evaluating {len(paths_list)} changed file(s):")
+    for f in paths_list[:10]:
+        skippable = is_skippable(f)
+        print(f"  {'[skip]' if skippable else '[ci]  '} {f}")
+    if len(paths_list) > 10:
+        print(f"  ... and {len(paths_list) - 10} more")
+
+    if non_skippable:
+        print(f"{label}CI required: {len(non_skippable)} non-skippable file(s)")
         return True
     else:
-        print(
-            "Only unrelated and/or skippable paths were modified, skipping build jobs"
-        )
+        print(f"{label}All files skippable, CI can be skipped")
         return False
 
 
@@ -333,57 +369,3 @@ def _check_for_workflow_file_related_to_ci(paths: Optional[Iterable[str]]) -> bo
 def _is_path_skippable_for_patterns(path: str, patterns: list[str]) -> bool:
     """Checks if a file path matches any of the provided skippable patterns."""
     return any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
-
-
-def is_external_repo_ci_required(
-    changed_files: Optional[Iterable[str]],
-    skip_ci_patterns: Optional[list[str]] = None,
-    repo_name: str = "",
-) -> bool:
-    """Returns True if any changed file is non-skippable (requires CI).
-
-    Args:
-        changed_files: List of files changed in the external repo.
-        skip_ci_patterns: List of glob patterns for files that can skip CI.
-            These patterns are provided by the external repo, allowing each
-            repo to define its own skippable paths without updating TheRock.
-        repo_name: Name of the external repo for logging.
-
-    Returns:
-        True if CI is required, False if it can be skipped.
-    """
-    repo_label = f"[{repo_name}] " if repo_name else ""
-
-    if skip_ci_patterns is None or not skip_ci_patterns:
-        print(f"{repo_label}No skip_ci_patterns provided, CI required")
-        return True
-
-    if changed_files is None:
-        print(f"{repo_label}No changed files provided, CI required (conservative)")
-        return True
-
-    changed_files_list = list(changed_files)
-    if not changed_files_list:
-        print(f"{repo_label}No files changed, skipping CI")
-        return False
-
-    def is_skippable(path: str) -> bool:
-        return _is_path_skippable_for_patterns(path, skip_ci_patterns)
-
-    non_skippable = [f for f in changed_files_list if not is_skippable(f)]
-
-    print(f"{repo_label}Evaluating {len(changed_files_list)} changed file(s):")
-    for f in changed_files_list[:10]:
-        skippable = is_skippable(f)
-        print(f"  {'[skip]' if skippable else '[ci]  '} {f}")
-    if len(changed_files_list) > 10:
-        print(f"  ... and {len(changed_files_list) - 10} more")
-
-    if non_skippable:
-        print(
-            f"{repo_label}{len(non_skippable)} non-skippable file(s) found, CI required"
-        )
-        return True
-    else:
-        print(f"{repo_label}All files are skippable, CI can be skipped")
-        return False
