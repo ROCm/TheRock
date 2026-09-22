@@ -137,7 +137,13 @@ jobs:
   # ==========================================================================
   runtime-tests:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'runtime-tests') && !contains(inputs.skip_stages, 'runtime-tests') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'runtime-tests') &&
+        !contains(inputs.skip_stages, 'runtime-tests')
+      }}
     uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
@@ -162,7 +168,13 @@ jobs:
   # ==========================================================================
   math-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'math-libs') && !contains(inputs.skip_stages, 'math-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'math-libs') &&
+        !contains(inputs.skip_stages, 'math-libs')
+      }}
     strategy:
       # `fail-fast: false` lets all families complete even if one fails.
       # This is useful for CI (to see all failures at once), but for releases
@@ -198,7 +210,13 @@ jobs:
   # ==========================================================================
   debug-tools:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'debug-tools') && !contains(inputs.skip_stages, 'debug-tools') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'debug-tools') &&
+        !contains(inputs.skip_stages, 'debug-tools')
+      }}
     uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
@@ -226,7 +244,13 @@ jobs:
   # out by configure_stage.py, so they are not built here.
   media-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'media-libs') && !contains(inputs.skip_stages, 'media-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'media-libs') &&
+        !contains(inputs.skip_stages, 'media-libs')
+      }}
     uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
