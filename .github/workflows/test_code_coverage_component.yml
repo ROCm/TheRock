@@ -168,8 +168,8 @@ jobs:
             --tests \
             --output-dir=${{ env.OUTPUT_ARTIFACTS_DIR }} \
             --replace-${{ fromJSON(inputs.component).job_name }} \
-#            "${run_github_repo_arg[@]}" \
             ${FETCH_ARTIFACT_ARGS}
+#            "${run_github_repo_arg[@]}" \
 
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
