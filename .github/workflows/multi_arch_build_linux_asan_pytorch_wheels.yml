@@ -38,6 +38,13 @@ on:
         description: Runner label for the build.
         type: string
         default: "aws-linux-scale-rocm-prod"
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 
 permissions:
   contents: read

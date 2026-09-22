@@ -322,6 +322,7 @@ jobs:
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
