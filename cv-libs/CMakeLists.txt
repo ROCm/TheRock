@@ -17,6 +17,7 @@ if(THEROCK_ENABLE_RPP)
       amd-hip
     RUNTIME_DEPS
       hip-clr
+      rocFFT
     BUILD_DEPS
       rocm-half
     CMAKE_ARGS
