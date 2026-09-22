@@ -110,6 +110,7 @@ def test_rejected_platform(pkg: str) -> None:
         # Free-threaded and future versions
         "numpy-2.0.0-cp313t-cp313t-linux_x86_64.whl",
         "numpy-2.0.0-cp314t-cp314t-linux_x86_64.whl",
+        "numpy-2.0.0-cp315t-cp315t-linux_x86_64.whl",
         # Python 2 and py2.py3 universal tags
         "six-1.16.0-py2-none-any.whl",
         "six-1.16.0-py2.py3-none-any.whl",

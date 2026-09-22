@@ -224,7 +224,7 @@ def generate_pytorch_matrix_for_release_type(
     #   },
     #   ...
     #   {
-    #     "python_version": "3.14",
+    #     "python_version": "3.15",
     #     "pytorch_git_ref": "nightly",
     #     "amdgpu_families": "gfx94X-dcgpu",
     #     "test_level": "none"
