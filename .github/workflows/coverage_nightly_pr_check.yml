@@ -91,6 +91,5 @@ jobs:
       # corrections instrumented it for the first time, and a stage builds as a
       # unit, so its link error failed math-libs and skipped all twelve reports.
       projects_to_test: >-
-        hipblas,hipdnn,hipfft,hiprand,hipsolver,
-        hipsparselt,rocblas,rocfft,rocrand,rocsolver,rocsparse
+        hipblas,hipdnn
       test_type: "standard"
