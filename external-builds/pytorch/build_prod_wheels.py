@@ -1236,14 +1236,7 @@ def do_build_pytorch(
     print("+++ Installing pytorch build backend requirements:")
     # PyTorch 2.12 pins build==1.3.0, which passes color= into HelpFormatter
     # (removed in Python 3.15). Force 1.5.0+, matching 2.13+.
-    build_backend_install = [
-        sys.executable,
-        "-m",
-        "pip",
-        "install",
-        "-U",
-        "build>=1.5.0",
-    ]
+    build_backend_install = [sys.executable, "-m", "pip", "install", "-U", "build>=1.5.0"]
     pytorch_build_requirements = pytorch_dir / "requirements-build.txt"
     if pytorch_build_requirements.exists():
         build_backend_install += ["-r", pytorch_build_requirements]
