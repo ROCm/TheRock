@@ -25,6 +25,13 @@ on:
         required: true
         type: string
         default: "https://nightly.repo.amd.com/rocm/whl-next/"
+      extra_index_url:
+        description: >-
+          Optional second index passed as pip --extra-index-url. Use when the
+          torch wheel under test and the ROCm packages it pins live on different
+          channels (e.g. a dev-published torch that requires an rc ROCm SDK).
+        type: string
+        default: ""
       python_version:
         required: true
         type: string
@@ -102,6 +109,9 @@ on:
       package_index_url:
         required: true
         type: string
+      extra_index_url:
+        type: string
+        default: ""
       python_version:
         required: true
         type: string
@@ -223,6 +233,7 @@ jobs:
       PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
       TORCH_VERSION: ${{ inputs.torch_version }}
       PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
+      EXTRA_INDEX_URL: ${{ inputs.extra_index_url }}
       DEVICE_QUERY: ${{ inputs.device_query }}
       GPU_POLICY: ${{ inputs.gpu_policy }}
       VENV_DIR: ${{ github.workspace }}/.venv
@@ -288,9 +299,14 @@ jobs:
         env:
           DEVICE_EXTRAS: ${{ steps.expand.outputs.device_extras }}
         run: |
+          extra_index_args=()
+          if [ -n "${EXTRA_INDEX_URL}" ]; then
+            extra_index_args+=(--extra-index-url="${EXTRA_INDEX_URL}")
+          fi
           python build_tools/setup_venv.py ${VENV_DIR} \
             --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION} rocm[devel,${DEVICE_EXTRAS}]" \
             --index-url="${PACKAGE_INDEX_URL}" \
+            ${extra_index_args[@]+"${extra_index_args[@]}"} \
             --activate-in-future-github-actions-steps
 
       - name: Initialize ROCm SDK and configure environment
