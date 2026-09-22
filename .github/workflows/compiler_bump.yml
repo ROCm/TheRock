@@ -94,6 +94,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
+          # Retain GITHUB_TOKEN for the "Create and push branch" step below.
+          persist-credentials: true
           fetch-depth: 0
 
       - name: Initialize compiler submodules
@@ -139,6 +141,7 @@ jobs:
           echo "| SPIRV-LLVM-Translator | ${SPIRV_REF} | \`${SPIRV_SHA:0:12}\` |" >> "$GITHUB_STEP_SUMMARY"
           cd ../..
 
+      # git push uses GITHUB_TOKEN persisted by "Checkout TheRock".
       - name: Create and push branch
         id: create-branch
         env:
@@ -282,6 +285,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
+          persist-credentials: false
           ref: ${{ needs.setup-linux.outputs.ref }}
 
       - name: Setup Python
@@ -389,6 +393,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
+          persist-credentials: false
           ref: ${{ needs.setup-windows.outputs.ref }}
 
       - name: Setup Python
@@ -576,6 +581,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
         timeout-minutes: 15
 
       - name: Setup Python

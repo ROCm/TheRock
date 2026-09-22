@@ -21,6 +21,8 @@ jobs:
       - name: Checkout ROCm/TheRock
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Tags are created through the API with a separate GitHub App token.
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Setup Python
@@ -41,6 +43,7 @@ jobs:
         run: |
           pip install PyGithub
 
+      # The script creates tags through the API using TAGGING_TOKEN from "Generate GitHub App token".
       - name: Run tagging script
         env:
           TAGGING_TOKEN: ${{ steps.generate-token.outputs.token }}
