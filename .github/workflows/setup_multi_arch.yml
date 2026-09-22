@@ -214,6 +214,19 @@ jobs:
           path: ci-config
         continue-on-error: true
 
+      # Checkout external repo's skip-ci config file if provided.
+      # This allows external repos to define their own skip patterns in a TOML file.
+      - name: Checkout external repo skip-ci config
+        if: ${{ inputs.external_repo != '' && fromJSON(inputs.external_repo).skip_ci_config != '' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ fromJSON(inputs.external_repo).repository }}
+          ref: ${{ fromJSON(inputs.external_repo).ref }}
+          sparse-checkout: ${{ fromJSON(inputs.external_repo).skip_ci_config }}
+          sparse-checkout-cone-mode: false
+          path: external-repo-config
+        continue-on-error: true
+
       # Note: the script reads PR labels, the base ref, etc. from the event
       # payload (GITHUB_EVENT_PATH). That is the original event that started
       # the workflow run, which may not directly map to the "inputs" on

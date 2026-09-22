@@ -460,6 +460,43 @@ class TestShouldSkipCI(unittest.TestCase):
             cm.should_skip_ci(inputs, git)
         self.assertIn("skip_ci_patterns must be a list or null", str(ctx.exception))
 
+    def test_external_repo_skip_ci_config_missing_file_runs_ci(self):
+        """External repo with skip_ci_config pointing to missing file runs CI."""
+        inputs = self._inputs(
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123","changed_files":["README.md"],"skip_ci_config":".github/nonexistent.toml"}'
+        )
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        # Should not skip - config file not found, run CI conservatively
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_external_repo_skip_ci_config_with_toml(self):
+        """External repo with skip_ci_config TOML file loads patterns."""
+        # Create a temporary TOML config file
+        import tempfile
+        import shutil
+
+        # Create external-repo-config directory with the TOML file
+        config_dir = Path("external-repo-config/.github")
+        config_dir.mkdir(parents=True, exist_ok=True)
+        config_path = config_dir / "skip-ci-config.toml"
+
+        try:
+            config_path.write_text('''
+version = 1
+
+[skip_ci]
+common = ["*.md", "docs/*"]
+''')
+            inputs = self._inputs(
+                external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123","changed_files":["README.md","docs/guide.md"],"skip_ci_config":".github/skip-ci-config.toml"}'
+            )
+            git = cm.GitContext(changed_files=["rocm-libraries"])
+            # Should skip - all files match skip patterns from TOML
+            self.assertTrue(cm.should_skip_ci(inputs, git))
+        finally:
+            # Cleanup
+            shutil.rmtree("external-repo-config", ignore_errors=True)
+
 
 # ---------------------------------------------------------------------------
 # Step 3: Decide Jobs

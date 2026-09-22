@@ -52,6 +52,16 @@ import os
 import sys
 from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
+from typing import Optional
+
+# Try tomllib (Python 3.11+), fall back to tomli
+try:
+    import tomllib
+except ImportError:
+    try:
+        import tomli as tomllib
+    except ImportError:
+        tomllib = None  # type: ignore
 
 # Add parent directory to path for _therock_utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -86,6 +96,60 @@ from stage_reuse_decision import (
 )
 
 _NULL_GIT_SHA = "0" * 40
+
+# Default path where external repo config is checked out in setup_multi_arch.yml
+_EXTERNAL_REPO_CONFIG_DIR = "external-repo-config"
+
+
+def _load_skip_ci_patterns_from_toml(config_path: str) -> Optional[list[str]]:
+    """Load skip CI patterns from a TOML config file.
+
+    Args:
+        config_path: Path to the TOML config file (relative to external repo root).
+
+    Returns:
+        List of glob patterns that can skip CI, or None if file not found
+        or tomllib not available.
+    """
+    # The external repo config is checked out to external-repo-config/
+    full_path = Path(_EXTERNAL_REPO_CONFIG_DIR) / config_path
+    if not full_path.exists():
+        print(f"  Skip CI config not found: {full_path}")
+        return None
+
+    if tomllib is None:
+        print("  Warning: tomllib not available, cannot read TOML config")
+        return None
+
+    try:
+        with open(full_path, "rb") as f:
+            config = tomllib.load(f)
+    except Exception as e:
+        print(f"  Warning: Failed to parse TOML config: {e}")
+        return None
+
+    skip_ci = config.get("skip_ci", {})
+    patterns: list[str] = []
+
+    # Common patterns apply to all platforms
+    common = skip_ci.get("common", [])
+    if isinstance(common, list):
+        patterns.extend(common)
+
+    # Platform-specific patterns (can be extended based on RUNNER_OS)
+    runner_os = os.environ.get("RUNNER_OS", "").lower()
+    if runner_os == "linux":
+        linux_patterns = skip_ci.get("linux", [])
+        if isinstance(linux_patterns, list):
+            patterns.extend(linux_patterns)
+    elif runner_os == "windows":
+        windows_patterns = skip_ci.get("windows", [])
+        if isinstance(windows_patterns, list):
+            patterns.extend(windows_patterns)
+
+    print(f"  Loaded {len(patterns)} skip CI patterns from {config_path}")
+    return patterns
+
 
 # ---------------------------------------------------------------------------
 # Input parsing helpers
@@ -798,9 +862,7 @@ def should_skip_ci(
                 f"external_repo must be a JSON object, got: {type(external_repo).__name__}"
             )
 
-        # Check changed_files and skip_ci_patterns from external repo if provided.
-        # External repos provide their own skip patterns, allowing them to define
-        # skippable paths without updating TheRock.
+        # Get changed_files from external repo JSON.
         #
         # changed_files semantics:
         # - None/missing: Unknown changes (schedule, workflow_dispatch, truncated).
@@ -808,21 +870,33 @@ def should_skip_ci(
         # - []: No files changed (empty diff). Can skip CI.
         # - [...]: Known changed files. Evaluate against skip patterns.
         changed_files = external_repo.get("changed_files")
-        skip_ci_patterns = external_repo.get("skip_ci_patterns")
 
-        # Validate types when provided
+        # Validate changed_files type
         if changed_files is not None and not isinstance(changed_files, list):
             raise ValueError(
                 f"changed_files must be a list or null, got: {type(changed_files).__name__}"
             )
-        if skip_ci_patterns is not None and not isinstance(skip_ci_patterns, list):
-            raise ValueError(
-                f"skip_ci_patterns must be a list or null, got: {type(skip_ci_patterns).__name__}"
-            )
+
+        # Get skip patterns - prefer TOML config file, fall back to inline patterns
+        skip_ci_config = external_repo.get("skip_ci_config")
+        skip_ci_patterns = None
+
+        if skip_ci_config:
+            # Load patterns from external repo's TOML config file
+            # (checked out to external-repo-config/ by setup_multi_arch.yml)
+            skip_ci_patterns = _load_skip_ci_patterns_from_toml(skip_ci_config)
+
+        # Fall back to inline patterns if TOML not available (backwards compat)
+        if skip_ci_patterns is None:
+            skip_ci_patterns = external_repo.get("skip_ci_patterns")
+            if skip_ci_patterns is not None and not isinstance(skip_ci_patterns, list):
+                raise ValueError(
+                    f"skip_ci_patterns must be a list or null, got: {type(skip_ci_patterns).__name__}"
+                )
 
         # Only evaluate skip logic when both changed_files and skip_ci_patterns
-        # are explicitly provided. When changed_files is None (unknown), we must
-        # run CI conservatively.
+        # are available. When changed_files is None (unknown), we must run CI
+        # conservatively.
         if changed_files is not None and skip_ci_patterns is not None:
             repo_name = external_repo.get("repository", "").split("/")[-1]
             if not is_external_repo_ci_required(
@@ -832,7 +906,7 @@ def should_skip_ci(
                 return True
         # If we reach here, either:
         # - changed_files is None (unknown): must run CI conservatively
-        # - skip_ci_patterns not provided: continue to ASAN checks
+        # - skip_ci_patterns not available: continue to ASAN checks
         # - CI is required: continue to ASAN checks
         # Stage reuse will optimize builds regardless.
 
