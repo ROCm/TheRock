@@ -67,17 +67,13 @@ def _write_sdist(
     path = directory / f"{project}-{version}.tar.gz"
     package_root = f"{project}-{version}"
     metadata = (
-        "Metadata-Version: 2.1\n"
-        f"Name: {project}\n"
-        f"Version: {version}\n"
+        "Metadata-Version: 2.1\n" f"Name: {project}\n" f"Version: {version}\n"
     ).encode()
     info = tarfile.TarInfo(f"{package_root}/PKG-INFO")
     info.size = len(metadata)
     with tarfile.open(path, "w:gz") as sdist:
         sdist.addfile(info, BytesIO(metadata))
-        nested_info = tarfile.TarInfo(
-            f"{package_root}/src/{project}.egg-info/PKG-INFO"
-        )
+        nested_info = tarfile.TarInfo(f"{package_root}/src/{project}.egg-info/PKG-INFO")
         nested_payload = metadata if nested_metadata is None else nested_metadata
         nested_info.size = len(nested_payload)
         sdist.addfile(nested_info, BytesIO(nested_payload))

@@ -329,8 +329,7 @@ def validate_asan_rocm_version(rocm_version: str) -> None:
     parsed_version = parse(rocm_version)
     if tuple(parsed_version.release[:2]) != ASAN_SUPPORTED_ROCM:
         raise RuntimeError(
-            "--asan currently requires a ROCm 10.2 SDK; "
-            f"found {rocm_version!r}"
+            "--asan currently requires a ROCm 10.2 SDK; " f"found {rocm_version!r}"
         )
     local_parts = (parsed_version.local or "").split(".")
     if not local_parts or local_parts[0] != "asan" or len(local_parts) < 2:
@@ -348,9 +347,7 @@ def get_asan_version_suffix(rocm_version: str) -> str:
     return f"+rocm{major}.{minor}.{parsed_version.local}"
 
 
-def resolve_asan_version_suffix(
-    rocm_version: str, explicit_suffix: str | None
-) -> str:
+def resolve_asan_version_suffix(rocm_version: str, explicit_suffix: str | None) -> str:
     expected_suffix = get_asan_version_suffix(rocm_version)
     if explicit_suffix and explicit_suffix != expected_suffix:
         raise RuntimeError(
@@ -987,18 +984,13 @@ def _setup_asan_build_env(rocm_dir: Path, pytorch_rocm_arch: str) -> dict[str, s
             )
 
     hip_device_lib_path = rocm_dir / "lib" / "llvm" / "amdgcn" / "bitcode"
-    if not hip_device_lib_path.is_dir() or not any(
-        hip_device_lib_path.glob("*.bc")
-    ):
+    if not hip_device_lib_path.is_dir() or not any(hip_device_lib_path.glob("*.bc")):
         raise RuntimeError(
-            "--asan requires ROCm device bitcode under "
-            f"{hip_device_lib_path}"
+            "--asan requires ROCm device bitcode under " f"{hip_device_lib_path}"
         )
 
     runtime_name = f"libclang_rt.asan-{platform.machine().lower()}.so"
-    runtime_text = capture(
-        [clangxx, f"-print-file-name={runtime_name}"], cwd=rocm_dir
-    )
+    runtime_text = capture([clangxx, f"-print-file-name={runtime_name}"], cwd=rocm_dir)
     runtime_path = Path(runtime_text)
     if (
         not runtime_text
@@ -1018,9 +1010,11 @@ def _setup_asan_build_env(rocm_dir: Path, pytorch_rocm_arch: str) -> dict[str, s
         # its resource dir through the equivalent lib copy. Accept only when
         # the reported suffix also exists below this exact SDK payload root.
         try:
-            payload_index = len(runtime_path.parts) - 1 - list(
-                reversed(runtime_path.parts)
-            ).index(rocm_dir.name)
+            payload_index = (
+                len(runtime_path.parts)
+                - 1
+                - list(reversed(runtime_path.parts)).index(rocm_dir.name)
+            )
             payload_relative = Path(*runtime_path.parts[payload_index + 1 :])
         except ValueError:
             payload_relative = Path()
@@ -1587,9 +1581,7 @@ def do_build_pytorch(
 
     # Enable/disable Flash Attention. ASAN uses prebuilt AOTriton +asan
     # artifacts and intentionally has no separate Triton wheel dependency.
-    use_flash_attention = resolve_pytorch_flash_attention(
-        args, env, triton_requirement
-    )
+    use_flash_attention = resolve_pytorch_flash_attention(args, env, triton_requirement)
     # Finally update the environment with the resolved setting.
     env.update(
         {

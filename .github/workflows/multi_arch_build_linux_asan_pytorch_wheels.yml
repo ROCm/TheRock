@@ -50,10 +50,17 @@ jobs:
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
     env:
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      ARTIFACT_GITHUB_REPO: ${{ github.repository }}
+      ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
       ARTIFACTS_DIR: ${{ github.workspace }}/artifacts
       ASAN_BUILD_ID: ${{ inputs.artifact_run_id }}
       ASAN_INDEX_ROOT: ${{ github.workspace }}/asan-index
+      BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
+      OUTPUT_ROOT: ${{ github.workspace }}
       PACKAGES_DIR: ${{ github.workspace }}/packages
+      PYTHON_VERSION: ${{ inputs.python_version }}
+      PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
       PYTORCH_OUTPUT_DIR: ${{ github.workspace }}/pytorch-dist
     steps:
       - name: Checkout TheRock
@@ -62,11 +69,12 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
+          persist-credentials: false
 
       - name: Select Python version
         run: |
           python build_tools/github_actions/python_to_cp_version.py \
-            --python-version "${{ inputs.python_version }}"
+            --python-version "${PYTHON_VERSION}"
 
       - name: Add selected Python version to PATH
         run: |
@@ -86,12 +94,12 @@ jobs:
       - name: Fetch ROCm ASAN artifacts
         run: |
           python build_tools/artifact_manager.py fetch \
-            --run-id="${{ inputs.artifact_run_id }}" \
-            --run-github-repo="${{ github.repository }}" \
+            --run-id="${ARTIFACT_RUN_ID}" \
+            --run-github-repo="${ARTIFACT_GITHUB_REPO}" \
             --stage=all \
-            --amdgpu-families="${{ inputs.amdgpu_families }}" \
+            --amdgpu-families="${AMDGPU_FAMILIES}" \
             --expand-family-to-targets \
-            --output-dir="${{ github.workspace }}"
+            --output-dir="${OUTPUT_ROOT}"
 
       - name: Compute ROCm ASAN package version
         id: asan-version
@@ -101,25 +109,26 @@ jobs:
             --asan-build-id="${ASAN_BUILD_ID}"
 
       - name: Build ROCm ASAN Python packages
+        env:
+          ROCM_ASAN_VERSION: ${{ steps.asan-version.outputs.rocm_package_version }}
         run: |
           python build_tools/build_python_packages.py \
             --artifact-dir="${ARTIFACTS_DIR}" \
             --dest-dir="${PACKAGES_DIR}" \
-            --version="${{ steps.asan-version.outputs.rocm_package_version }}" \
+            --version="${ROCM_ASAN_VERSION}" \
             --asan \
             --asan-build-id="${ASAN_BUILD_ID}" \
-            --linux-amdgpu-families="${{ inputs.amdgpu_families }}"
+            --linux-amdgpu-families="${AMDGPU_FAMILIES}"
 
       - name: Stage local ROCm ASAN index
-        id: asan-index
+        env:
+          ROCM_ASAN_VERSION: ${{ steps.asan-version.outputs.rocm_package_version }}
         run: |
           python build_tools/packaging/python/stage_local_asan_index.py stage \
             --input-dir="${PACKAGES_DIR}" \
             --output-root="${ASAN_INDEX_ROOT}" \
-            --version-prefix="${{ steps.asan-version.outputs.rocm_package_version }}" \
+            --version-prefix="${ROCM_ASAN_VERSION}" \
             --require-phase1-set
-          index_dir="${ASAN_INDEX_ROOT}/whl-asan/gfx942-all"
-          echo "index_dir=${index_dir}" >> "$GITHUB_OUTPUT"
 
       - name: Upload ROCm ASAN Python index
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -132,30 +141,32 @@ jobs:
         timeout-minutes: 30
         run: |
           pytorch_origin="https://github.com/pytorch/pytorch.git"
-          if [ "${{ inputs.pytorch_git_ref }}" != "nightly" ]; then
+          if [ "${PYTORCH_GIT_REF}" != "nightly" ]; then
             pytorch_origin="https://github.com/ROCm/pytorch.git"
           fi
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin="${pytorch_origin}" \
-            --repo-hashtag="${{ inputs.pytorch_git_ref }}" \
+            --repo-hashtag="${PYTORCH_GIT_REF}" \
             --no-commit-hipify
 
       - name: Build PyTorch ASAN wheel
+        env:
+          ROCM_ASAN_VERSION: ${{ steps.asan-version.outputs.rocm_package_version }}
         run: |
           python external-builds/pytorch/build_prod_wheels.py build \
             --asan \
             --install-rocm \
-            --find-links="${{ steps.asan-index.outputs.index_dir }}" \
-            --rocm-sdk-version="==${{ steps.asan-version.outputs.rocm_package_version }}" \
+            --find-links="${ASAN_INDEX_ROOT}/whl-asan/gfx942-all" \
+            --rocm-sdk-version="==${ROCM_ASAN_VERSION}" \
             --rocm-extras=device \
-            --pytorch-dir="${{ github.workspace }}/external-builds/pytorch/pytorch" \
+            --pytorch-dir="${OUTPUT_ROOT}/external-builds/pytorch/pytorch" \
             --pytorch-rocm-arch="gfx942:xnack+" \
             --no-build-triton \
             --no-build-pytorch-audio \
             --no-build-pytorch-vision \
             --no-build-apex \
             --clean \
-            --release-type="${{ inputs.release_type }}" \
+            --release-type="${BUILD_RELEASE_TYPE}" \
             --output-dir="${PYTORCH_OUTPUT_DIR}"
 
       - name: Upload PyTorch ASAN wheel

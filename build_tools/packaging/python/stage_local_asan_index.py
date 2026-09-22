@@ -114,9 +114,7 @@ def _read_sdist_metadata(path: Path) -> bytes:
             if canonical_file is None:
                 raise ValueError(f"Cannot read PKG-INFO in {path}")
             canonical_bytes = canonical_file.read()
-            normalized_canonical = canonical_bytes.replace(b"\r\n", b"\n").rstrip(
-                b"\n"
-            )
+            normalized_canonical = canonical_bytes.replace(b"\r\n", b"\n").rstrip(b"\n")
 
             for member in metadata_files:
                 if member is canonical_files[0]:
@@ -125,9 +123,7 @@ def _read_sdist_metadata(path: Path) -> bytes:
                 if metadata_file is None:
                     raise ValueError(f"Cannot read {member.name} in {path}")
                 nested_bytes = metadata_file.read()
-                normalized_nested = nested_bytes.replace(b"\r\n", b"\n").rstrip(
-                    b"\n"
-                )
+                normalized_nested = nested_bytes.replace(b"\r\n", b"\n").rstrip(b"\n")
                 if normalized_nested != normalized_canonical:
                     raise ValueError(
                         f"Auxiliary PKG-INFO {member.name} disagrees with "
@@ -218,9 +214,7 @@ def _html_page(title: str, links: list[tuple[str, str]]) -> str:
     return "\n".join(lines)
 
 
-def _write_indexes(
-    index_dir: Path, family: str, records: list[PackageRecord]
-) -> None:
+def _write_indexes(index_dir: Path, family: str, records: list[PackageRecord]) -> None:
     """Write flat find-links and PEP 503 indexes for staged packages."""
     generate_simple_index(
         output_path=index_dir / "index.html",
@@ -346,13 +340,9 @@ def stage_index(
             shutil.copy2(source, destination)
 
     staged_packages = sorted(
-        path
-        for pattern in ("*.whl", "*.tar.gz")
-        for path in index_dir.glob(pattern)
+        path for pattern in ("*.whl", "*.tar.gz") for path in index_dir.glob(pattern)
     )
-    records = [
-        inspect_package(package, version_prefix) for package in staged_packages
-    ]
+    records = [inspect_package(package, version_prefix) for package in staged_packages]
     records.sort(key=lambda item: (item.normalized_project, item.filename))
     _validate_consistent_versions(records)
 
@@ -418,28 +408,22 @@ def verify_index(
         raise FileNotFoundError("Missing index files: " + ", ".join(missing_indexes))
 
     flat_index = (index_dir / "index.html").read_text(encoding="utf-8")
-    simple_root = (index_dir / "simple" / "index.html").read_text(
-        encoding="utf-8"
-    )
+    simple_root = (index_dir / "simple" / "index.html").read_text(encoding="utf-8")
     for record in records:
-        if f'./{quote(record.filename)}' not in flat_index:
+        if f"./{quote(record.filename)}" not in flat_index:
             raise ValueError(
                 f"Package missing from find-links index: {record.filename}"
             )
-        if f'./{quote(record.normalized_project)}/' not in simple_root:
+        if f"./{quote(record.normalized_project)}/" not in simple_root:
             raise ValueError(
                 f"Project missing from simple index: {record.normalized_project}"
             )
         project_index = (
             index_dir / "simple" / record.normalized_project / "index.html"
         ).read_text(encoding="utf-8")
-        expected_link = (
-            f"../../{quote(record.filename)}#sha256={record.sha256}"
-        )
+        expected_link = f"../../{quote(record.filename)}#sha256={record.sha256}"
         if expected_link not in project_index:
-            raise ValueError(
-                f"Package missing from project index: {record.filename}"
-            )
+            raise ValueError(f"Package missing from project index: {record.filename}")
     return index_dir
 
 

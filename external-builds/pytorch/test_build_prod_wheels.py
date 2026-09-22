@@ -32,9 +32,7 @@ class AsanVersionTest(unittest.TestCase):
 
     def test_conflicting_explicit_suffix_is_rejected(self):
         with self.assertRaisesRegex(RuntimeError, "collide"):
-            bpw.resolve_asan_version_suffix(
-                "10.2.0+asan.20260807", "+rocm10.2"
-            )
+            bpw.resolve_asan_version_suffix("10.2.0+asan.20260807", "+rocm10.2")
 
 
 class LocalAsanIndexTest(unittest.TestCase):
@@ -199,8 +197,7 @@ class AsanEnvironmentTest(unittest.TestCase):
             )
 
     def test_runtime_outside_sdk_is_rejected(self):
-        with tempfile.TemporaryDirectory() as sdk_td, tempfile.TemporaryDirectory(
-        ) as rt_td:
+        with tempfile.TemporaryDirectory() as sdk_td, tempfile.TemporaryDirectory() as rt_td:
             root = Path(sdk_td)
             self._make_sdk(root)
             runtime = Path(rt_td) / "libclang_rt.asan-x86_64.so"
