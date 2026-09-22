@@ -21,6 +21,8 @@ import amdgpu_family_matrix
 from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
     get_build_runner_labels,
+    is_asan,
+    is_device_asan,
     load_external_runner_config,
 )
 
@@ -319,6 +321,41 @@ class TestExternalConfig(unittest.TestCase):
             result["build_runners"]["linux"]["default"][0]["label"],
             "v2-build-runner",
         )
+
+
+class TestAsanVariantChecks(unittest.TestCase):
+    """host-asan instruments host code only, so it needs the accommodations
+    is_asan() gates but not the skips for instrumented device code."""
+
+    ASAN_FAMILY = ["asan", "asan-debug", "host-asan", "host-asan-debug"]
+
+    def _with_variant(self, variant):
+        return mock.patch.dict(os.environ, {"BUILD_VARIANT": variant})
+
+    def test_is_asan_matches_every_asan_variant(self):
+        for variant in self.ASAN_FAMILY:
+            with self.subTest(variant=variant), self._with_variant(variant):
+                self.assertTrue(is_asan())
+
+    def test_is_device_asan_excludes_the_host_only_variants(self):
+        for variant in ["host-asan", "host-asan-debug"]:
+            with self.subTest(variant=variant), self._with_variant(variant):
+                self.assertFalse(is_device_asan())
+
+    def test_is_device_asan_matches_the_device_variants(self):
+        for variant in ["asan", "asan-debug"]:
+            with self.subTest(variant=variant), self._with_variant(variant):
+                self.assertTrue(is_device_asan())
+
+    def test_neither_matches_a_release_build(self):
+        with self._with_variant("release"):
+            self.assertFalse(is_asan())
+            self.assertFalse(is_device_asan())
+
+    def test_neither_matches_an_unset_variant(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(is_asan())
+            self.assertFalse(is_device_asan())
 
 
 if __name__ == "__main__":
