@@ -106,7 +106,7 @@ jobs:
     with:
       stage_name: compiler-runtime
       stage_display_name: "Stage - Compiler Runtime"
-      timeout_minutes: 480  # 8 hours (compiler is big)
+      timeout_minutes: 1
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       build_runs_on: ${{ inputs.build_runs_on }}
