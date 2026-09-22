@@ -294,6 +294,8 @@ endif(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
 # profiler-hub
 ##############################################################################
 if(THEROCK_ENABLE_PROFILER_HUB)
+  set(_profiler_hub_source_dir
+    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/profilers/profiler-hub")
   set(_profiler_hub_build_deps therock-spdlog therock-fmt therock-nlohmann-json)
   if(THEROCK_BUILD_TESTING)
     list(APPEND _profiler_hub_build_deps therock-googletest)
@@ -302,7 +304,7 @@ if(THEROCK_ENABLE_PROFILER_HUB)
   therock_cmake_subproject_declare(profiler-hub
     DISABLE_AMDGPU_TARGETS
     COMPILER_TOOLCHAIN amd-llvm
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/profilers/profiler-hub"
+    EXTERNAL_SOURCE_DIR "${_profiler_hub_source_dir}"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/profiler-hub"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -310,6 +312,28 @@ if(THEROCK_ENABLE_PROFILER_HUB)
       -DPROFILER_HUB_BUILD_BENCHMARKS=OFF
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
+    # Build inputs that glob_c_sources does not reach: the CMake modules, the
+    # configure_file templates and the subdirectory CMakeLists.txt files. Only
+    # the top-level CMakeLists.txt is an implicit dependency of the configure
+    # stamp, so without these an edit to any of them leaves the stamp valid.
+    EXTRA_DEPENDS
+      "${_profiler_hub_source_dir}/cmake/Findprofiler-hub.cmake"
+      "${_profiler_hub_source_dir}/cmake/benchmark.cmake"
+      "${_profiler_hub_source_dir}/cmake/coverage.cmake"
+      "${_profiler_hub_source_dir}/cmake/fmt.cmake"
+      "${_profiler_hub_source_dir}/cmake/gtest.cmake"
+      "${_profiler_hub_source_dir}/cmake/nlohmann_json.cmake"
+      "${_profiler_hub_source_dir}/cmake/profiler-hub-config.cmake.in"
+      "${_profiler_hub_source_dir}/cmake/rocprofiler-sdk-rocpd.cmake"
+      "${_profiler_hub_source_dir}/cmake/spdlog.cmake"
+      "${_profiler_hub_source_dir}/cmake/sqlite3.cmake"
+      "${_profiler_hub_source_dir}/source/CMakeLists.txt"
+      "${_profiler_hub_source_dir}/source/data_storage/CMakeLists.txt"
+      "${_profiler_hub_source_dir}/source/data_storage/schema/rocpd_schema.in"
+      "${_profiler_hub_source_dir}/source/queries/CMakeLists.txt"
+      "${_profiler_hub_source_dir}/tests/CMakeLists.txt"
+      "${_profiler_hub_source_dir}/tests/benchmarks/CMakeLists.txt"
+      "${_profiler_hub_source_dir}/tests/unit/CMakeLists.txt"
     BUILD_DEPS
       ${_profiler_hub_build_deps}
     RUNTIME_DEPS
