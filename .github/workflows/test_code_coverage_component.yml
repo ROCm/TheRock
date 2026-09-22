@@ -144,7 +144,7 @@ jobs:
         env:
           RELEASE_TYPE: ${{ inputs.release_type }}
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
-          BASELINE_REPOSITORY: ${{ inputs.baseline_repository }}
+#          BASELINE_REPOSITORY: ${{ inputs.baseline_repository }}
         run: |
           pip install -r requirements-test.txt
           # Baseline tree comes from generic_run_id. When empty (self-contained
@@ -157,9 +157,9 @@ jobs:
           # Pass --run-github-repo only when set, so empty defaults to the
           # current repository.
           run_github_repo_arg=()
-          if [[ -n "${BASELINE_REPOSITORY}" ]]; then
-            run_github_repo_arg=(--run-github-repo="${BASELINE_REPOSITORY}")
-          fi
+#          if [[ -n "${BASELINE_REPOSITORY}" ]]; then
+#            run_github_repo_arg=(--run-github-repo="${BASELINE_REPOSITORY}")
+#          fi
           python3 build_tools/install_rocm_code_coverage_build.py \
             --code-coverage-run-id=${{ env.CODE_COVERAGE_RUN_ID }} \
             --run-id="${generic_run_id}" \
@@ -168,7 +168,7 @@ jobs:
             --tests \
             --output-dir=${{ env.OUTPUT_ARTIFACTS_DIR }} \
             --replace-${{ fromJSON(inputs.component).job_name }} \
-            "${run_github_repo_arg[@]}" \
+#            "${run_github_repo_arg[@]}" \
             ${FETCH_ARTIFACT_ARGS}
 
       # safe.directory must be set before Runner Health Status

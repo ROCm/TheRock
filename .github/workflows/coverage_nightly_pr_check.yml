@@ -62,10 +62,10 @@ jobs:
       # selected project: blas, fft, hipdnn, rand, solver, sparse. Not all are
       # per-target (hipdnn and solver's tests are generic), so checking only for
       # _gfx942 understates what's there.
-      baseline_run_id: "34068476531"
+      baseline_run_id: "35620066949"
       # The bucket lookup queries the run via the GitHub API, so it needs the
       # owning repo; ROCm/TheRock 404s for a rockrel id.
-      baseline_repository: "ROCm/rockrel"
+      baseline_repository: "ROCm/TheRock"
       # That run published to therock-nightly-artifacts (the default); naming it
       # keeps the pin and channel together.
       baseline_release_type: "nightly"
