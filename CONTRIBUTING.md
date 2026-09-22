@@ -208,7 +208,7 @@ Discussion about new features is welcome via
 > intent to work on a pull request early in development, as this gives other
 > contributors time to offer advice and avoid duplicating effort.
 
-### Creating pull requests
+### Contributing via GitHub pull requests
 
 To keep code quality high across the project, we hold pull requests to the
 following standards:
@@ -358,37 +358,65 @@ CodeQL is not in the list above because it needs the CodeQL CLI and a built
 database; it runs in CI only, configured by
 [`build_tools/scan_tools/codeql.yml`](/build_tools/scan_tools/codeql.yml).
 
-#### Requesting a code review
+#### Using draft pull requests
 
 If you are not looking for a review on a pull request yet, please mark that pull
 request as a draft:
 
-- ![create_pr_as_draft](docs/assets/github_pr_create_as_draft.png)
 - GitHub Docs: [Creating a pull request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request)
+
+  ![create_pr_as_draft](docs/assets/github_pr_create_as_draft.png)
+
 - GitHub Docs: [Changing the stage of a pull request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/changing-the-stage-of-a-pull-request)
 
-When you are ready for a review, please request a review from a maintainer and
-mark the PR as not a draft as needed:
-
-- ![request_reviewers](docs/assets/github_pr_request_reviewers.png)
-- ![mark_pr_as_ready](docs/assets/github_pr_mark_as_ready.png)
-- GitHub Docs: [Requesting a pull request review](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/requesting-a-pull-request-review)
-
-You can check the git history to see who recently authored or approved PRs in
-the same files or folders:
-
-- CODEOWNERS
-  - GitHub Docs: [About code owners](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners)
-  - [`.github/CODEOWNERS`](/.github/CODEOWNERS)
-- Checking history
-  - GitHub Docs: [Viewing and understanding files](https://docs.github.com/en/repositories/working-with-files/using-files/viewing-and-understanding-files)
-  - GitHub Docs: [Differences between commit views](https://docs.github.com/en/pull-requests/committing-changes-to-your-project/viewing-and-comparing-commits/differences-between-commit-views)
-
-> [!TIP]
-> After addressing feedback, please
-> [re-request review](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/requesting-a-pull-request-review#requesting-reviews-from-collaborators-and-organization-members)
+> [!WARNING]
+> Reviews from CODEOWNERS are automatically requested
+> for non-draft pull requests, see
+> [About code owners](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners).
 >
-> ![rerequest_review](docs/assets/github_pr_rerequest_review.png)
->
-> this ensures that your pull request shows up for reviewers on dashboards such
-> as <https://github.com/pulls/reviews>.
+> If a pull request modifies files covered under
+> [`CODEOWNERS`](/.github/CODEOWNERS), such as the `rocm-libraries` submodule,
+> maintainers will be asked to review the changes. If a pull request is only
+> intended to be used for testing, please mark it as a draft to limit
+> review request notifications.
+
+#### Requesting a code review
+
+When you are ready for a review, please:
+
+1. Mark the PR as "ready for review" if it was a draft:
+
+   ![mark_pr_as_ready](docs/assets/github_pr_mark_as_ready.png)
+
+1. Request a review from a reviewer or maintainer (GitHub Docs:
+   [Requesting a pull request review](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/requesting-a-pull-request-review))
+
+   ![request_reviewers](docs/assets/github_pr_request_reviewers.png)
+
+   You can check the git history to see who recently authored or approved PRs in
+   the same files or folders:
+
+   - CODEOWNERS
+     - GitHub Docs: [About code owners](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners)
+     - [`.github/CODEOWNERS`](/.github/CODEOWNERS)
+   - Checking history
+     - GitHub Docs: [Viewing and understanding files](https://docs.github.com/en/repositories/working-with-files/using-files/viewing-and-understanding-files)
+     - GitHub Docs: [Differences between commit views](https://docs.github.com/en/pull-requests/committing-changes-to-your-project/viewing-and-comparing-commits/differences-between-commit-views)
+
+#### Responding to review feedback and re-requesting review
+
+After addressing review feedback, please
+[re-request review](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/requesting-a-pull-request-review#requesting-reviews-from-collaborators-and-organization-members)
+to ensure that your pull request shows up for reviewers on dashboards such
+as <https://github.com/pulls/reviews>:
+
+![rerequest_review](docs/assets/github_pr_rerequest_review.png)
+
+#### Merging approved changes
+
+Once a pull request has been approved, pull request authors with write access
+can merge their own changes, typically using the "squash and merge" strategy
+(see
+[Pull request merges](https://docs.github.com/en/pull-requests/reference/pull-request-merges))
+with the pull request description as the commit message. Contributors without
+write access can request that a maintainer merge on their behalf.
