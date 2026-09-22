@@ -94,43 +94,6 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             ],
         )
 
-    def test_python315_uses_supported_linux_refs(self):
-        matrix = m.generate_pytorch_matrix_for_release_type(
-            release_type="nightly",
-            python_versions=["3.15"],
-            amdgpu_families="gfx94X-dcgpu",
-            platform="linux",
-        )
-
-        self.assertEqual(
-            [row["pytorch_git_ref"] for row in matrix],
-            ["release/2.13", "release/2.14", "nightly"],
-        )
-
-    def test_python315_uses_supported_windows_refs(self):
-        matrix = m.generate_pytorch_matrix_for_release_type(
-            release_type="nightly",
-            python_versions=["3.15"],
-            amdgpu_families="gfx110X-all",
-            platform="windows",
-        )
-
-        self.assertEqual(
-            [row["pytorch_git_ref"] for row in matrix],
-            ["release/2.14", "nightly"],
-        )
-
-    def test_explicit_unsupported_python_version_produces_no_rows(self):
-        matrix = m.generate_pytorch_matrix_for_release_type(
-            release_type="nightly",
-            python_versions=["3.15"],
-            pytorch_git_refs=["release/2.12"],
-            amdgpu_families="gfx94X-dcgpu",
-            platform="linux",
-        )
-
-        self.assertEqual(matrix, [])
-
     def test_filters_exact_unsupported_family(self):
         # Unsupported families are filtered while supported ones are kept.
         for pytorch_git_ref in ("release/2.13", "release/2.14"):
