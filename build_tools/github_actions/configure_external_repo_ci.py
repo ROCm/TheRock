@@ -5,7 +5,14 @@
 """Configure CI for external repos (rocm-systems, rocm-libraries).
 
 This script determines which projects changed and whether to run/skip tests.
-It consolidates logic previously duplicated across external repo workflows.
+
+Stage Reuse:
+    TheRock's stage_reuse_decision.py handles stage impact analysis and
+    baseline run selection using commit compatibility. The external repo
+    workflow should:
+    1. Resolve therock_ref using resolve_therock_ref.py (merge-base pinning)
+    2. Pass that ref to setup_multi_arch.yml
+    3. TheRock's stage_reuse_decision.py finds commit-compatible baseline runs
 
 Usage:
     python configure_external_repo_ci.py \
@@ -30,7 +37,6 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass, fields
-from pathlib import Path
 from typing import (
     Callable,
     Iterable,
@@ -67,7 +73,29 @@ FULL_TEST_TRIGGER_PATTERNS = [
     ".github/scripts/repo_config_model.py",
     ".github/scripts/pr_detect_changed_subtrees.py",
     ".github/repos-config.json",
+    # shared/ctest holds the CTest categorization logic consumed by every
+    # project's tests; a change there can alter selection everywhere, so treat
+    # it as a full-test trigger rather than a single surfaced component.
+    "shared/ctest/*",
 ]
+
+# CI-relevant monorepo directories that are NOT subtree-synced repos and so are
+# absent from an external repo's repos-config.json. Without these, a PR confined
+# to shared/* or emulation/* yields no matched subtree -> empty changed_projects
+# -> TheRock falls back to building and testing everything. Each entry MUST have
+# a corresponding mapping in TheRock (build-topology alias + the test selector's
+# _EXTERNAL_SUBTREE_ALIASES); the test selector hard-fails on an unmapped
+# shared/* or emulation/* path, so keep this list in lock-step with TheRock when
+# adding directories. (Currently enumerates rocm-systems' non-subtree dirs;
+# rocm-libraries paths already resolve as repos-config subtrees.)
+CI_RELEVANT_NON_SUBTREE_PREFIXES = {
+    "shared/amdgpu-windows-interop",
+    "shared/kpack",
+    "shared/machine-readable-isa",
+    "shared/primbench",
+    "emulation/mirage",
+    "emulation/rocjitsu",
+}
 
 
 @dataclass
@@ -197,13 +225,32 @@ def get_valid_prefixes(config: List[RepoEntry]) -> Set[str]:
 def find_matched_subtrees(
     changed_files: Iterable[str], valid_prefixes: Set[str]
 ) -> List[str]:
-    """Find subtrees matching changed files."""
-    changed_subtrees = {
-        "/".join(path.split("/", 2)[:2])
-        for path in changed_files
-        if len(path.split("/")) >= 2
-    }
-    return sorted(changed_subtrees & valid_prefixes)
+    """Find subtrees matching changed files via longest-prefix match.
+
+    A changed file's subtree is the LONGEST registered prefix (`category/name`,
+    or a nested `category/name/subname`) that matches its path -- checked from
+    most to least specific -- not a fixed 2-segment truncation. A fixed
+    2-segment truncation would make a nested subtree registered in
+    repos-config.json (e.g. `hipblaslt/tensilelite`, nested inside `hipblaslt`)
+    indistinguishable from a change to its parent: both collapse to
+    `projects/hipblaslt`, silently losing the more specific match. Matching
+    longest-prefix-first, and attributing each changed file to exactly one
+    subtree, keeps a tensilelite-only change from also firing hipblaslt-proper's
+    (potentially different) test selection.
+    """
+    # Longest prefixes first, so a nested subtree wins over its parent.
+    prefixes_by_specificity = sorted(
+        valid_prefixes, key=lambda p: p.count("/"), reverse=True
+    )
+    matched: Set[str] = set()
+    for path in changed_files:
+        segments = path.split("/")
+        for prefix in prefixes_by_specificity:
+            prefix_segments = prefix.split("/")
+            if segments[: len(prefix_segments)] == prefix_segments:
+                matched.add(prefix)
+                break
+    return sorted(matched)
 
 
 def set_github_output(outputs: Mapping[str, str]) -> None:
@@ -217,6 +264,28 @@ def set_github_output(outputs: Mapping[str, str]) -> None:
     with open(output_file, "a") as f:
         for k, v in outputs.items():
             f.write(f"{k}={v}\n")
+
+
+def _subtree_prefix(path: str) -> str:
+    """First two path components, matching find_matched_subtrees()."""
+    return "/".join(path.split("/", 2)[:2])
+
+
+def get_unclassified_paths(paths: Iterable[str], valid_prefixes: Set[str]) -> List[str]:
+    """Non-skippable changed paths that map to no known subtree.
+
+    A PR can mix a recognized path (e.g. ``projects/rdc/...``) with a path we
+    cannot classify (a top-level file, or a directory absent from both
+    repos-config.json and CI_RELEVANT_NON_SUBTREE_PREFIXES). find_matched_subtrees
+    silently drops the unclassified path, which would let CI narrow the build to
+    the recognized subset and miss the impact of the unclassified change. Callers
+    should treat any such path conservatively (run the full suite).
+    """
+    return [
+        p
+        for p in paths
+        if not is_skippable(p) and _subtree_prefix(p) not in valid_prefixes
+    ]
 
 
 def configure(
@@ -287,7 +356,22 @@ def configure(
             changed_projects="", run_all_tests=True, skip_tests=False
         )
 
-    valid_prefixes = get_valid_prefixes(config)
+    valid_prefixes = get_valid_prefixes(config) | CI_RELEVANT_NON_SUBTREE_PREFIXES
+
+    # Conservative guard: if any non-skippable change cannot be classified to a
+    # known subtree, we cannot reason about its build/test impact. Narrowing on
+    # just the recognized subset would silently drop the unclassified change, so
+    # fall back to a full run instead.
+    unclassified = get_unclassified_paths(modified_paths, valid_prefixes)
+    if unclassified:
+        logger.info(
+            f"Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
+            " - running all tests"
+        )
+        return ConfigureResult(
+            changed_projects="", run_all_tests=True, skip_tests=False
+        )
+
     matched = find_matched_subtrees(modified_paths, valid_prefixes)
     logger.info(f"Matched projects: {matched}")
 

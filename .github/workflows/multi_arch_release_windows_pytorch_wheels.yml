@@ -8,6 +8,10 @@
 # * https://github.com/ROCm/TheRock/issues/3332
 # * https://github.com/ROCm/TheRock/issues/3291
 
+# Notes on security:
+#   * Higher-trust entry points: manual runs and automation from https://github.com/ROCm/rockrel.
+#   * Inherit Quartz credentials through nested workflows without repeating mappings.
+
 name: Multi-Arch Release Windows PyTorch Wheels
 
 on:
@@ -52,6 +56,17 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      build_runs_on:
+        description: "Build runner label (selected by configure script with weighted distribution)"
+        type: string
+        default: "aws-windows-scale-rocm-prod"
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -74,7 +89,7 @@ on:
         type: string
         default: ""
       release_type:
-        description: 'Release type; developer-triggered jobs should use "dev"'
+        description: 'Release type; ordinary developer-triggered jobs should use "dev"'
         type: choice
         options:
           - dev
@@ -99,21 +114,53 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      build_runs_on:
+        description: "Build runner label"
+        type: string
+        default: "aws-windows-scale-rocm-prod"
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 
-run-name: Release Windows PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
+run-name: >-
+  Release Windows PyTorch Wheels
+  (${{ inputs.release_type }}, ${{ inputs.rocm_version }},
+  ${{ inputs.amdgpu_families }}, py ${{ inputs.python_version || 'all' }})
 
 permissions:
   contents: read
 
 jobs:
   setup_matrix:
+    name: Configure PyTorch Release Matrix
     runs-on: ubuntu-24.04
     outputs:
       pytorch_matrix: ${{ steps.matrix.outputs.pytorch_matrix }}
+    env:
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
+      PYTHON_VERSION: ${{ inputs.python_version }}
+
     steps:
+      - name: "Quartz - started - release PyTorch wheels"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: multi_arch_release_windows_pytorch_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
@@ -121,10 +168,10 @@ jobs:
         id: matrix
         run: |
           python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
-            --python-versions="${{ inputs.python_version }}" \
+            --python-versions="${PYTHON_VERSION}" \
             --platform=windows \
-            --release-type="${{ inputs.release_type }}" \
-            --amdgpu-families="${{ inputs.amdgpu_families }}"
+            --release-type="${BUILD_RELEASE_TYPE}" \
+            --amdgpu-families="${AMDGPU_FAMILIES}"
 
   build_pytorch_wheels:
     needs: setup_matrix
@@ -138,8 +185,11 @@ jobs:
       id-token: write
       contents: read
     uses: ./.github/workflows/multi_arch_build_windows_pytorch_wheels.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
+      test_amdgpu_families: ${{ matrix.test_amdgpu_families }}
+      test_level: ${{ matrix.test_level }}
       python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       rocm_version: ${{ inputs.rocm_version }}
@@ -149,3 +199,23 @@ jobs:
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
       cache_type: ${{ inputs.cache_type }}
+      build_runs_on: ${{ inputs.build_runs_on }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [setup_matrix, build_pytorch_wheels]
+    name: "Quartz - completed - release PyTorch wheels"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - release PyTorch wheels"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          reporting_workflow: multi_arch_release_windows_pytorch_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

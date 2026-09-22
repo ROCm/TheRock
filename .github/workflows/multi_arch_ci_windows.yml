@@ -5,6 +5,13 @@ name: Multi-Arch CI - Windows
 
 on:
   workflow_call:
+    secrets:
+      # CI entry points forward only these benchmark database credentials.
+      # Nested calls inherit the caller-provided set.
+      BENCHMARK_DB_URL:
+        required: false
+      BENCHMARK_DB_FALLBACK_URL:
+        required: false
     inputs:
       build_config:
         type: string
@@ -23,7 +30,7 @@ on:
       test_type:
         type: string
       release_type:
-        description: 'Release type: "ci", "dev", "nightly", or "prerelease".'
+        description: "Release type used for artifact storage and package versioning."
         type: string
         default: ci
       external_repo_config:
@@ -52,7 +59,7 @@ jobs:
     if: ${{ fromJSON(inputs.build_config).prebuilt_stages != '' && fromJSON(inputs.build_config).baseline_run_id != '' }}
     # TODO: Consider running on a Linux runner with --platform=windows to
     #   avoid Windows runner setup overhead (setup-python ~51s).
-    runs-on: ${{ fromJSON(inputs.build_config).build_runs_on || 'azure-windows-scale-rocm' }}
+    runs-on: ${{ fromJSON(inputs.build_config).build_runs_on_large || 'azure-windows-scale-rocm' }}
     defaults:
       run:
         shell: bash
@@ -62,7 +69,9 @@ jobs:
     steps:
       - name: Checking out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
@@ -83,20 +92,26 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TYPE: ${{ inputs.release_type }}
+          BUILD_CONFIG_BASELINE_RUN_ID: ${{ fromJSON(inputs.build_config).baseline_run_id }}
+          BUILD_CONFIG_BASELINE_REPOSITORY: ${{ fromJSON(inputs.build_config).baseline_repository }}
+          BUILD_CONFIG_PREBUILT_STAGES: ${{ fromJSON(inputs.build_config).prebuilt_stages }}
+          BUILD_CONFIG_REUSABLE_ARTIFACTS: ${{ fromJSON(inputs.build_config).reusable_artifacts }}
+          BUILD_CONFIG_DIST_AMDGPU_FAMILIES: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
         run: |
           python build_tools/artifact_manager.py copy \
-            --source-run-id=${{ fromJSON(inputs.build_config).baseline_run_id }} \
-            --source-repository=${{ fromJSON(inputs.build_config).baseline_repository }} \
-            --stage="${{ fromJSON(inputs.build_config).prebuilt_stages }}" \
-            --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}" \
+            --source-run-id="${BUILD_CONFIG_BASELINE_RUN_ID}" \
+            --source-repository="${BUILD_CONFIG_BASELINE_REPOSITORY}" \
+            --stage="${BUILD_CONFIG_PREBUILT_STAGES}" \
+            --artifacts="${BUILD_CONFIG_REUSABLE_ARTIFACTS}" \
+            --amdgpu-families="${BUILD_CONFIG_DIST_AMDGPU_FAMILIES}" \
             --expand-family-to-targets
 
   build_multi_arch_stages:
     name: Build Multi-Arch Stages
     needs: copy_prebuilt_stages
-    if: ${{ !cancelled() && !failure() }}
+    if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') }}
     uses: ./.github/workflows/multi_arch_build_windows.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       matrix_per_family_json: ${{ toJSON(fromJSON(inputs.build_config).per_family_info) }}
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -105,7 +120,11 @@ jobs:
       build_variant_cmake_preset: ${{ fromJSON(inputs.build_config).build_variant_cmake_preset }}
       build_variant_suffix: ${{ fromJSON(inputs.build_config).build_variant_suffix }}
       prebuilt_stages: ${{ fromJSON(inputs.build_config).prebuilt_stages }}
-      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
+      rebuild_artifacts: ${{ fromJSON(inputs.build_config).rebuild_artifacts }}
+      skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
+      build_runs_on_large: ${{ fromJSON(inputs.build_config).build_runs_on_large }}
+      build_runs_on_small: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
+      build_runs_on_medium: ${{ fromJSON(inputs.build_config).build_runs_on_medium }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
       external_repo_config: ${{ inputs.external_repo_config }}
@@ -118,8 +137,9 @@ jobs:
   validate_artifact_structure:
     needs: [build_multi_arch_stages]
     name: Validate Artifact Structure
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') }}
     uses: ./.github/workflows/test_artifacts_structure.yml
+    # Note: not using 'secrets: inherit' here; no secrets are needed.
     with:
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       platform: windows
@@ -130,12 +150,13 @@ jobs:
   test_artifacts_per_family:
     needs: [copy_prebuilt_stages, build_multi_arch_stages]
     name: Test ${{ matrix.family_info.amdgpu_family }}
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') }}
     strategy:
       fail-fast: false
       matrix:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
     uses: ./.github/workflows/test_artifacts.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       # Use architecture-specific artifact group for fetching per-arch artifacts
       artifact_group: ${{ matrix.family_info.amdgpu_family }}
@@ -153,8 +174,9 @@ jobs:
   build_python_packages:
     needs: [build_multi_arch_stages]
     name: Build Python Packages
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && fromJSON(inputs.build_config).build_python_packages == true }}
     uses: ./.github/workflows/build_windows_python_packages.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -172,12 +194,13 @@ jobs:
   test_python_packages_per_family:
     needs: [build_python_packages]
     name: Test Python
-    if: ${{ !failure() && !cancelled() && toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) != '[]' }}
+    if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) != '[]' }}
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(inputs.build_config).test_python_packages_matrix }}
     uses: ./.github/workflows/test_rocm_wheels.yml
+    # Note: not using 'secrets: inherit' here; no secrets are needed.
     with:
       amdgpu_family: ${{ matrix.amdgpu_family }}
       test_runs_on: ${{ matrix.test_runs_on }}
@@ -209,8 +232,8 @@ jobs:
     name: Build PyTorch (fat + split)
     if: >-
       ${{
-        !failure() &&
-        !cancelled() &&
+        !failure() && !cancelled() &&
+        !contains(needs.*.result, 'cancelled') &&
         fromJSON(inputs.build_config).build_pytorch == true &&
         toJSON(fromJSON(inputs.build_config).pytorch_build_matrix) != '[]'
       }}
@@ -229,6 +252,7 @@ jobs:
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_large }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:

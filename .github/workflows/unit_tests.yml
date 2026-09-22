@@ -30,6 +30,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      timeout-minutes: 5
+      with:
+        persist-credentials: false
     - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       with:
         python-version: 3.12
@@ -45,12 +48,12 @@ jobs:
     - name: Test build_tools
       working-directory: build_tools
       run: |
-        python -m pytest -vv \
+        python -m pytest -vv --durations=20 \
           --cov --cov-report=term-missing --cov-report=html
 
-    - name: Test scan_tools
-      working-directory: build_tools/scan_tools
-      run: python -m pytest -vv
+    - name: Test test_tools
+      working-directory: test_tools
+      run: python -m pytest -vv --durations=20
 
     # TODO: upload to AWS S3 instead (so reports are hosted and don't require
     #       a download step to view).
@@ -70,9 +73,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
       - name: Evaluate workflow results
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
           python build_tools/github_actions/workflow_summary.py \
-            --needs-json '${{ toJSON(needs) }}'
+            --needs-json "${NEEDS_JSON}"

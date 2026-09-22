@@ -66,8 +66,6 @@ _ALLOWED_CPYTHON_TAGS: frozenset[str] = frozenset(
 )
 
 PACKAGES_PER_PROJECT = {
-    "dbus_python": {"versions": ["latest"], "project": "jax"},
-    "flatbuffers": {"versions": ["latest"], "project": "jax"},
     "ml_dtypes": {"versions": ["latest"], "project": "jax"},
     "opt_einsum": {"versions": ["latest"], "project": "jax"},
     "tomli": {"versions": ["latest"], "project": "jax"},

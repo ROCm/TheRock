@@ -45,6 +45,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocprofiler-systems-examples | --no-rocprofiler-systems-examples]
     [--rocrtst | --no-rocrtst]
     [--rocalution | --no-rocalution]
+    [--kfdtest | --no-kfdtest]
     [--rocwmma | --no-rocwmma]
     [--rpp | --no-rpp]
     [--hiptensor | --no-hiptensor]
@@ -389,7 +390,7 @@ def retrieve_artifacts_by_run_id(args):
         "core-kpack_lib",
         "core-ocl_lib",
         "core-ocl_dev",
-        "core-ocl_run",  # clinfo binary for the OpenCL sanity test (loader is the system ICD)
+        "core-ocl_run",  # clinfo for the OpenCL sanity test
         "rocprofiler-sdk_lib",
         "host-suite-sparse_lib",
     ]
@@ -426,8 +427,11 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_systems_examples,
             args.rocrtst,
             args.rocalution,
+            args.kfdtest,
             args.rocwmma,
             args.rpp,
+            args.solver,
+            args.sparse,
             args.libhipcxx,
             args.hipthreads,
         ]
@@ -468,6 +472,8 @@ def retrieve_artifacts_by_run_id(args):
             # --test-engine; without _run, ctest finds the entry but errors with
             # "Unable to find executable: ../hipdnn_integration_tests".
             argv.append("hipdnn-integration-tests_run")
+            # The test binaries link librocrand.
+            argv.append("rand_lib")
         if args.hipdnn_samples:
             extra_artifacts.append("hipdnn-samples")
         if args.hipfile:
@@ -534,6 +540,13 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("aqlprofile")
             # Contains rocprofiler-sdk-rocpd
             argv.append("rocprofiler-sdk_run")
+            if args.tests:
+                # Installed-test CMake configure needs rocprofiler-sdkConfig.cmake.
+                argv.append("rocprofiler-sdk_dev")
+                # HIP/rocprofiler-sdk tests resolve AMDDeviceLibs via amd-llvm_dev and
+                # libdw headers via sysdeps_dev (sysdeps_lib ships only runtime libs).
+                argv.append("amd-llvm_dev")
+                argv.append("sysdeps_dev")
         if args.rocprofiler_compute:
             extra_artifacts.append("rocprofiler-compute")
             # Contains the rocprof-compute CLI executable.
@@ -556,9 +569,18 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocalution:
             extra_artifacts.append("rocalution")
             argv.append("rocalution_dev")
+        if args.kfdtest:
+            extra_artifacts.append("kfdtest")
+            # kfdtest depends on llvm-dev
+            argv.append("amd-llvm_dev")
+            argv.append("amd-llvm_lib")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
+        if args.solver:
+            extra_artifacts.append("solver")
+        if args.sparse:
+            extra_artifacts.append("sparse")
         if args.rpp:
             extra_artifacts.append("rpp")
             # test_rpp.py compiles the test suite against the installed tree,
@@ -804,6 +826,20 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--solver",
+        default=False,
+        help="Include 'solver' artifacts (rocSOLVER, hipSOLVER)",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--sparse",
+        default=False,
+        help="Include 'sparse' artifacts (rocSPARSE, hipSPARSE, hipSPARSELt)",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--debug-tools",
         default=False,
         help="Include ROCm debugging tools (amd-dbgapi, rocgdb and rocr_debug_agent) artifacts",
@@ -982,6 +1018,13 @@ def main(argv):
         "--rocalution",
         default=False,
         help="Include 'rocalution' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--kfdtest",
+        default=False,
+        help="Include 'kfdtest' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

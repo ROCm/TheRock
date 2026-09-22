@@ -93,11 +93,14 @@ def _parse_flags(raw_flags: Any, config_path: Path) -> dict[str, str]:
             raise ValueError(f"{config_path}: invalid flag name '{flag_name}'")
         if isinstance(flag_value, bool):
             flags[flag_name] = "ON" if flag_value else "OFF"
+        elif isinstance(flag_value, int):
+            flags[flag_name] = str(flag_value)
         elif isinstance(flag_value, str):
             flags[flag_name] = flag_value
         else:
             raise ValueError(
-                f"{config_path}: flag '{flag_name}' value must be a string or boolean"
+                f"{config_path}: flag '{flag_name}' value must be a string, "
+                "boolean, or integer"
             )
     return flags
 

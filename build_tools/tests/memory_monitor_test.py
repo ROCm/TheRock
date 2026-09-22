@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
 """Tests for memory_monitor.py"""
 
+import json
 import sys
 import time
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from memory_monitor import ResourceMonitor, get_storage_info, get_thread_info
+from memory_monitor import (
+    GB,
+    ResourceMonitor,
+    get_gpu_memory,
+    get_storage_info,
+    get_thread_info,
+)
 
 
 def test_collect_stats():
@@ -48,6 +56,31 @@ def test_monitor_start_stop():
 
     assert len(monitor.samples) >= 1
     assert monitor.stop_event.is_set()
+
+
+def test_get_gpu_memory_from_amd_smi_json():
+    """Parse VRAM from amd-smi metric JSON output."""
+    payload = {
+        "gpu_data": [
+            {
+                "gpu": 0,
+                "mem_usage": {
+                    "total_vram": {"value": 131072},
+                    "used_vram": {"value": 65536},
+                },
+            }
+        ]
+    }
+    completed = mock.Mock(returncode=0, stdout=json.dumps(payload))
+
+    with mock.patch("memory_monitor.subprocess.run", return_value=completed):
+        gpus = get_gpu_memory()
+
+    assert len(gpus) == 1
+    assert gpus[0]["id"] == "gpu0"
+    assert gpus[0]["total_gb"] == pytest.approx(131072 * 1024 * 1024 / GB)
+    assert gpus[0]["used_gb"] == pytest.approx(65536 * 1024 * 1024 / GB)
+    assert gpus[0]["percent"] == pytest.approx(50.0)
 
 
 def test_responsive_shutdown():

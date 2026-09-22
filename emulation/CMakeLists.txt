@@ -3,6 +3,9 @@
 
 # ROCm Emulation Tools
 
+set(THEROCK_ROCJITSU_TEST_JOBS "1" CACHE STRING
+  "Number of parallel jobs for rocJITsu tests")
+
 if(THEROCK_ENABLE_ROCJITSU)
   ##############################################################################
   # rocjitsu
@@ -21,6 +24,8 @@ if(THEROCK_ENABLE_ROCJITSU)
       -DBUILD_TESTING=${THEROCK_BUILD_TESTING}
     RUNTIME_DEPS
       ${THEROCK_BUNDLED_LIBDRM}
+    INSTALL_RPATH_DIRS
+      lib
   )
 
   therock_cmake_subproject_glob_c_sources(rocjitsu
@@ -34,17 +39,13 @@ if(THEROCK_ENABLE_ROCJITSU)
 
   therock_cmake_subproject_build_test(rocjitsu
     COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure --no-tests=error
+      -j "${THEROCK_ROCJITSU_TEST_JOBS}"
   )
 
   therock_test_validate_shared_lib(PATH rocjitsu/dist/lib
     LIB_NAMES
       librocjitsu.so
   )
-  therock_test_validate_shared_lib(PATH rocjitsu/dist/lib
-    LIB_NAMES
-      libhsa_hotswap_rocjitsu.so
-  )
-
   therock_provide_artifact(rocjitsu
     TARGET_NEUTRAL
     DESCRIPTOR artifact-rocjitsu.toml
@@ -69,11 +70,17 @@ if(THEROCK_ENABLE_ROCJITSU_HOTSWAP)
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocjitsu-hotswap"
     CMAKE_ARGS
       -DROCJITSU_HOTSWAP_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/rocjitsu/dist/lib/libhsa_hotswap_rocjitsu.so
+      -DROCJITSU_HOTSWAP_TRANSLATOR_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/rocjitsu/dist/lib/librocjitsu_gfx1250_b0_to_a0.so
     BUILD_DEPS
       rocjitsu
   )
 
   therock_cmake_subproject_activate(rocjitsu-hotswap)
+
+  therock_test_validate_shared_lib(PATH rocjitsu-hotswap/dist/lib
+    LIB_NAMES
+      libhsa_hotswap_rocjitsu.so
+  )
 
   therock_provide_artifact(rocjitsu-hotswap
     TARGET_NEUTRAL

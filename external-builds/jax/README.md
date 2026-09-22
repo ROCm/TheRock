@@ -53,10 +53,10 @@ Support for JAX is provided via stable release branches from
 
 | JAX version | Linux                                                                                                   | Windows          |
 | ----------- | ------------------------------------------------------------------------------------------------------- | ---------------- |
+| 0.11.1      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.11.1`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.11.1) | ❌ Not supported |
 | 0.11.0      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.11.0`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.11.0) | ❌ Not supported |
 | 0.10.2      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.10.2`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.10.2) | ❌ Not supported |
 | 0.10.1      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.10.1`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.10.1) | ❌ Not supported |
-| 0.10.0      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.10.0`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.10.0) | ❌ Not supported |
 
 > [!NOTE]
 > Python 3.11 is not supported for JAX 0.11.0 and later (dropped upstream).
@@ -74,8 +74,8 @@ This repository builds the following ROCm-enabled JAX artifacts:
 - **`jax_rocm<major>_plugin`** (JAX runtime plugin for ROCm)
 
 > [!NOTE]
-> jaxlib is **not built** for supported JAX versions (0.10.0+); it is installed
-> from upstream PyPI (e.g. `pip install jaxlib==0.11.0`). Only
+> jaxlib is **not built** for supported JAX versions (0.10.1+); it is installed
+> from upstream PyPI (e.g. `pip install jaxlib==0.11.1`). Only
 > **`jax_rocm<major>_pjrt`** and **`jax_rocm<major>_plugin`** are built.
 
 ### How building with TheRock differs from upstream
@@ -83,7 +83,7 @@ This repository builds the following ROCm-enabled JAX artifacts:
 The [downstream ROCm/jax](https://github.com/ROCm/jax) build instructions
 assume that a stable ROCm version is already installed on the system.
 
-Supported JAX versions (0.10.0+) build against ROCm Python packages installed
+Supported JAX versions (0.10.1+) build against ROCm Python packages installed
 from the TheRock multi-arch Python package index (the manylinux flow).
 
 ### Prerequisites
@@ -102,13 +102,13 @@ from the TheRock multi-arch Python package index (the manylinux flow).
    git clone https://github.com/ROCm/jax.git
 
    pushd jax
-   git checkout rocm-jaxlib-v0.11.0
+   git checkout rocm-jaxlib-v0.11.1
    popd
    ```
 
 1. Choose your configuration:
 
-   - **JAX version**: e.g. `0.10.0`, `0.10.1`, `0.10.2`, or `0.11.0`
+   - **JAX version**: e.g. `0.10.1`, `0.10.2`, `0.11.0`, or `0.11.1`
    - **Python version**: e.g. `3.12`
    - **Package index**: the TheRock multi-arch Python package index.
 
@@ -173,14 +173,6 @@ For more detailed build options, see the `ROCm/jax` repository and the
    source jax_test_env/bin/activate
    ```
 
-1. Install requirements:
-
-   ```bash
-   cd jax
-   pip install -r build/test-requirements.txt
-   pip install pytest-html pytest-csv uv pytest-json-report
-   ```
-
 1. Install ROCm Python packages:
 
    ```bash
@@ -194,23 +186,93 @@ For more detailed build options, see the `ROCm/jax` repository and the
    ```bash
    # Replace <rocm_major> with the ROCm major version of the index you install
    # from, e.g. 7 for a ROCm 7.x release or 10 for a ROCm 10.x release.
-   pip install \
-   --index-url <package_index_url> \
-   jax_rocm<rocm_major>_plugin \
-   jax_rocm<rocm_major>_pjrt
-
-   # Install jax from PyPI to match the version
-   pip install jax==<JAX_VERSION>
+   python external-builds/jax/install_jax_wheels.py \
+     --index-url <package_index_url> \
+     --plugin-package jax_rocm<rocm_major>_plugin \
+     --pjrt-package jax_rocm<rocm_major>_pjrt \
+     --plugin-version <JAX_VERSION> \
+     --pjrt-version <JAX_VERSION> \
+     --jax-version <JAX_VERSION>
    ```
 
-1. Run JAX tests:
+1. Install the test requirements, which come from the checkout so that they match
+   the release under test:
 
    ```bash
-   cd jax
-   # Create a dist directory (required to run the pytest-rocm.sh script).
-   mkdir -p dist
-   sh ci/run_pytest_rocm.sh
+   python external-builds/jax/install_jax_test_requirements.py \
+     --jax-dir jax_tests \
+     --python-version 3.12
    ```
+
+1. Run the JAX tests:
+
+   ```bash
+   python external-builds/jax/run_jax_tests.py \
+     --jax-dir jax_tests \
+     --jax-version <JAX_VERSION> \
+     --amdgpu-family <amdgpu_family>
+   ```
+
+### How the test runner works
+
+[`run_jax_tests.py`](./run_jax_tests.py) is what CI runs, so the command above
+reproduces a CI job locally. The suite script in the `ROCm/jax` checkout
+(`ci/run_pytest_rocm.sh`) stays the source of truth for how the tests run, and
+the runner adds only what is ours:
+
+- The ROCm runtime workarounds this repository needs. Everything else about the
+  environment, such as the allocator and the XLA flags, is read back out of the
+  suite script so the retry pass below matches the run it checks. A version that
+  changes those values, including behind a conditional, needs no change here. If
+  the script's environment section cannot be read, because it was renamed, the
+  job fails with an error naming what to update, rather than retrying under an
+  environment that does not match the run.
+- The known-bad tests for the version and GPU family under test, as a pytest
+  `-k` expression. These live in [`skip_tests/`](./skip_tests/README.md), which
+  also documents how to inspect the expression or run only the skipped tests.
+- An optional subset, when `--test-list` names one. CI uses it to get a
+  PR-sized run out of the same suite the nightly runs; see
+  [`test_selection/`](./test_selection/README.md) for the sizes and the format.
+- Two layers of retry, which are not interchangeable:
+  - **In-process reruns** (`--in-process-reruns`, default 2) are
+    pytest-rerunfailures. They repeat a failed test inside the same worker,
+    recovering a crashed worker or a one-off runtime error.
+  - **A fresh-process retry** (`--fresh-process-retry`, on by default) is a
+    separate pytest run over the tests the suite reported as failed. Some
+    failures are sticky: the first one leaves the process in a state where
+    every later test fails the same way, which no rerun inside that process can
+    clear. Only a new process tells a real failure apart from a poisoned worker,
+    which is why this pass decides the result. It only decides it when the
+    suite's own pytest sessions ran to the end, which their reported exit codes
+    are what say: a session that stopped early leaves the suite failure
+    standing, since its report lists only the tests it reached.
+- The CPUs the run may use. A container shares the host's kernel, so a job
+  holding 25 cores of a shared 8-GPU box still reads 192 cores and sizes every
+  thread pool from that: one worker holds 1021 threads, against 16 workers at a
+  time. On CI the allocation arrives in `KUBE_CPU_REQUEST`; anywhere else
+  `--cpus` says the same thing. The run is pinned to that many CPUs, which
+  takes a worker to 107 threads.
+
+Useful flags while debugging:
+
+```bash
+# Print the environment and the commands without running anything.
+python external-builds/jax/run_jax_tests.py --jax-dir jax_tests --dry-run
+
+# Run only the tests the skip lists would skip.
+python external-builds/jax/run_jax_tests.py --jax-dir jax_tests \
+  --jax-version 0.10.2 --amdgpu-family gfx94X-dcgpu --debug
+
+# Run the suite alone, with both retry layers off.
+python external-builds/jax/run_jax_tests.py --jax-dir jax_tests --no-retries
+
+# Hold the run to 25 cores, as a CI pod would be.
+python external-builds/jax/run_jax_tests.py --jax-dir jax_tests --cpus 25
+
+# Run the subset PR CI runs, rather than the whole suite.
+python external-builds/jax/run_jax_tests.py --jax-dir jax_tests \
+  --test-list external-builds/jax/test_selection/small_tests.txt
+```
 
 ### Teaching an installed JAX about a new ROCm major version
 
@@ -239,10 +301,10 @@ ROCm 7 wheels need none of this.
 
 ### Gating releases with JAX tests
 
-Successful builds publish JAX wheels to the nightly multi-arch Python package
+Successful builds publish JAX wheels to the nightly aggregate Python package
 index:
 
-<https://rocm.nightlies.amd.com/whl-multi-arch/>
+<https://nightly.repo.amd.com/rocm/whl-next/>
 
 The published wheels are validated by the JAX test workflow as part of the
 nightly release process before being made available for use.

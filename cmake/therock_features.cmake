@@ -14,6 +14,8 @@
 #     be enabled for this feature
 #   THEROCK_PLATFORM_DISABLED_${feature_name}: List of platforms where this
 #     feature is disabled (only set if DISABLE_PLATFORMS is specified)
+#   THEROCK_PROCESSOR_DISABLED_${feature_name}: List of CPU processors where
+#     this feature is disabled (only set if DISABLE_PROCESSORS is specified)
 #   THEROCK_ALL_FEATURES: Added to this global list of features.
 #
 # A feature is enabled by default unless if the GROUP keyword is specified.
@@ -23,8 +25,20 @@ function(therock_add_feature feature_name)
   cmake_parse_arguments(PARSE_ARGV 1 ARG
     ""
     "DEFAULT;GROUP;DESCRIPTION"
-    "REQUIRES;DISABLE_PLATFORMS"
+    "REQUIRES;DISABLE_PLATFORMS;DISABLE_PROCESSORS"
   )
+
+  # Normalize CMAKE_SYSTEM_PROCESSOR to a canonical processor name.
+  string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _proc_lower)
+  if(_proc_lower MATCHES "^(x86_64|amd64)$")
+    set(_therock_host_arch "x86_64")
+  elseif(_proc_lower MATCHES "^(aarch64|arm64|arm64e|arm64ec)$")
+    set(_therock_host_arch "aarch64")
+  elseif(_proc_lower STREQUAL "ppc64le")
+    set(_therock_host_arch "ppc64le")
+  else()
+    set(_therock_host_arch "${_proc_lower}")
+  endif()
 
   set(_default_enabled ON)
   if(ARG_GROUP)
@@ -43,7 +57,16 @@ function(therock_add_feature feature_name)
     string(TOLOWER "${CMAKE_SYSTEM_NAME}" _system_lower)
     if(_system_lower IN_LIST ARG_DISABLE_PLATFORMS)
       set(_default_enabled OFF)
-      # If user tries to force enable, we'll check later and error
+    endif()
+  endif()
+
+  # Check if current CPU processor is in DISABLE_PROCESSORS list
+  if(ARG_DISABLE_PROCESSORS)
+    set(THEROCK_PROCESSOR_DISABLED_${feature_name} "${ARG_DISABLE_PROCESSORS}")
+    set(THEROCK_PROCESSOR_DISABLED_${feature_name} "${ARG_DISABLE_PROCESSORS}" PARENT_SCOPE)
+
+    if(_therock_host_arch IN_LIST ARG_DISABLE_PROCESSORS)
+      set(_default_enabled OFF)
     endif()
   endif()
 
@@ -56,23 +79,21 @@ function(therock_add_feature feature_name)
     message(FATAL_ERROR "CMake feature already defined: ${feature_name}")
   endif()
 
-  # Filter out requirements that are disabled on the current platform
+  # Filter out requirements that are disabled on the current platform.
+  # Note: processor-disabled requirements are NOT filtered because
+  # DISABLE_PROCESSORS is a soft default that the user can override.
   set(_filtered_requires)
   foreach(require ${ARG_REQUIRES})
     if(NOT DEFINED THEROCK_ENABLE_${require})
       message(FATAL_ERROR "CMake feature order error: ${feature_name} requires ${require} which was not defined first")
     endif()
-    # Check if this requirement is disabled on the current platform
-    # by checking if it's in the list of platform-disabled features
     if(DEFINED THEROCK_PLATFORM_DISABLED_${require})
-      # Skip this requirement on platforms where it's disabled
       string(TOLOWER "${CMAKE_SYSTEM_NAME}" _system_lower)
-      if(NOT _system_lower IN_LIST THEROCK_PLATFORM_DISABLED_${require})
-        list(APPEND _filtered_requires ${require})
+      if(_system_lower IN_LIST THEROCK_PLATFORM_DISABLED_${require})
+        continue()
       endif()
-    else()
-      list(APPEND _filtered_requires ${require})
     endif()
+    list(APPEND _filtered_requires ${require})
   endforeach()
   # Use filtered requirements
   set(ARG_REQUIRES ${_filtered_requires})
@@ -89,6 +110,10 @@ function(therock_add_feature feature_name)
       message(FATAL_ERROR "${feature_name} is not supported on ${CMAKE_SYSTEM_NAME}")
     endif()
   endif()
+
+  # Note: unlike DISABLE_PLATFORMS, DISABLE_PROCESSORS is a soft default.
+  # The feature is OFF by default on matching processors but the user can
+  # override it with -DTHEROCK_ENABLE_<feature>=ON.
 
   set(THEROCK_ENABLE_${feature_name} "${_actual}" PARENT_SCOPE)
   set(THEROCK_REQUIRES_${feature_name} ${ARG_REQUIRES} PARENT_SCOPE)

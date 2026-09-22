@@ -20,6 +20,10 @@ skip_tests = {
             # Skipped across all PyTorch versions; the hipblas.h include error
             # persists in the ROCm SDK environment.
             "test_mempool_empty_cache_inactive",
+            # JIT-compiles dummy_allocator, but the wheel test environment is
+            # runtime-only and does not configure a native compiler or install
+            # the ROCm development headers. See #8217.
+            "test_mempool_limited_memory_with_allocator",
             # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI
             "test_memory_snapshot",
             "test_memory_plots",
@@ -299,7 +303,7 @@ skip_tests = {
             # The callstack for this one points to _fill_mem_eff_dropout_mask, so it may be related to aotriton?
             "test_cublas_config_nondeterministic_alert_cuda",
             # Large test that isn't very CI-friendly (takes ~2 seconds, possibly hanging)
-            "test_memory_format_operators_cuda"
+            "test_memory_format_operators_cuda",
             # Flaky tests hanging on some gfx1151 machines...
             # Maybe memory pressure? Tests use some large tensors:
             #   v = torch.FloatTensor([64000., 32., 64000.])

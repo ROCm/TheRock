@@ -19,6 +19,7 @@ Usage:
 """
 
 import argparse
+import os
 import platform
 import shutil
 import subprocess
@@ -75,10 +76,12 @@ def build_reproduction_command(args: argparse.Namespace) -> str:
         f"--run-id {args.run_id} "
         f"--repository {args.repository} "
         f"--amdgpu-family {args.amdgpu_family} "
-        f'--test-script "{args.test_script}" '
+        f'--test-script "{args.test_script}"'
     )
     if args.amdgpu_targets:
         cmd += f" --amdgpu-targets {args.amdgpu_targets}"
+    if args.output_dir != "build":
+        cmd += f' --output-dir "{args.output_dir}"'
     if args.shard_index != "1":
         cmd += f" --shard-index {args.shard_index}"
     if args.total_shards != "1":
@@ -87,7 +90,26 @@ def build_reproduction_command(args: argparse.Namespace) -> str:
         cmd += f" --test-type {args.test_type}"
     if args.fetch_artifact_args:
         cmd += f' --fetch-artifact-args="{args.fetch_artifact_args}"'
+    if args.additional_requirements_files:
+        cmd += (
+            " --additional-requirements-files="
+            f'"{args.additional_requirements_files}"'
+        )
     return cmd
+
+
+def append_additional_requirements_step(
+    steps: list[tuple[str, str]], requirements_files: str
+) -> None:
+    """Add a step that installs the specified component test requirements."""
+    if requirements_files:
+        steps.append(
+            (
+                "Installing component test dependencies",
+                "python build_tools/install_additional_requirements.py "
+                f'--requirements-files "{requirements_files}"',
+            )
+        )
 
 
 def run_linux(args: argparse.Namespace) -> int:
@@ -99,6 +121,7 @@ def run_linux(args: argparse.Namespace) -> int:
     fetch_cmd = (
         f"GITHUB_REPOSITORY={args.repository} "
         f"python build_tools/install_rocm_from_artifacts.py "
+        f'--output-dir "{args.output_dir}" '
         f"--run-id {args.run_id} "
         f"--amdgpu-family {args.amdgpu_family}"
     )
@@ -123,8 +146,8 @@ def run_linux(args: argparse.Namespace) -> int:
             "Setting environment variables",
             " && ".join(
                 [
-                    "export THEROCK_BIN_DIR=./therock-build/bin",
-                    "export OUTPUT_ARTIFACTS_DIR=./therock-build",
+                    f'export THEROCK_BIN_DIR="{args.output_dir}/bin"',
+                    f'export OUTPUT_ARTIFACTS_DIR="{args.output_dir}"',
                     f"export SHARD_INDEX={args.shard_index}",
                     f"export TOTAL_SHARDS={args.total_shards}",
                     f"export TEST_TYPE={args.test_type}",
@@ -132,6 +155,8 @@ def run_linux(args: argparse.Namespace) -> int:
             ),
         ),
     ]
+
+    append_additional_requirements_step(steps, args.additional_requirements_files)
 
     if args.setup_only:
         steps.append(("Setup complete", f"echo 'Run: {args.test_script}'"))
@@ -219,6 +244,7 @@ def run_windows(args: argparse.Namespace) -> int:
     fetch_cmd = (
         f"$env:GITHUB_REPOSITORY='{args.repository}'; "
         f"python build_tools/install_rocm_from_artifacts.py "
+        f'--output-dir "{args.output_dir}" '
         f"--run-id {args.run_id} "
         f"--amdgpu-family {args.amdgpu_family}"
     )
@@ -289,8 +315,8 @@ def run_windows(args: argparse.Namespace) -> int:
                 "Setting environment variables",
                 "; ".join(
                     [
-                        "$env:THEROCK_BIN_DIR='./therock-build/bin'",
-                        "$env:OUTPUT_ARTIFACTS_DIR='./therock-build'",
+                        f"$env:THEROCK_BIN_DIR='{args.output_dir}/bin'",
+                        f"$env:OUTPUT_ARTIFACTS_DIR='{args.output_dir}'",
                         f"$env:SHARD_INDEX='{args.shard_index}'",
                         f"$env:TOTAL_SHARDS='{args.total_shards}'",
                         f"$env:TEST_TYPE='{args.test_type}'",
@@ -299,6 +325,8 @@ def run_windows(args: argparse.Namespace) -> int:
             ),
         ]
     )
+
+    append_additional_requirements_step(steps, args.additional_requirements_files)
 
     if args.setup_only:
         steps.append(("Setup complete", f"Write-Host 'Run: {args.test_script}'"))
@@ -364,8 +392,16 @@ def main() -> int:
         default=DEFAULT_CONTAINER_IMAGE,
         help="Docker image (Linux only)",
     )
+    parser.add_argument("--fetch-artifact-args", default="", help="Extra artifact args")
     parser.add_argument(
-        "--fetch-artifact-args", nargs="?", default="", help="Extra artifact args"
+        "--output-dir",
+        default=os.environ.get("OUTPUT_ARTIFACTS_DIR", "build"),
+        help="Artifact extraction directory; must match paths in --additional-requirements-files",
+    )
+    parser.add_argument(
+        "--additional-requirements-files",
+        default="",
+        help="Comma-separated requirements files relative to the repository root",
     )
     parser.add_argument(
         "--setup-only", action="store_true", help="Setup only, don't run test"
