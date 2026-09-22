@@ -1,6 +1,10 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# Notes on security:
+#   * Inherit caller-provided secrets; limited-trust PR entry points restrict the set.
+#   * Higher-trust push/manual runs and https://github.com/ROCm/rockrel also supply secrets.
+
 name: Test Artifacts
 
 on:
@@ -146,13 +150,17 @@ jobs:
 
       - name: Checking out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
       - name: Checkout CI config
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
+          persist-credentials: false
           repository: ROCm/therock-ci-config
           ref: main
           path: ci-config
@@ -195,7 +203,7 @@ jobs:
     needs: configure_test_matrix
     if: ${{ fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner != '' }}
     uses: './.github/workflows/test_component.yml'
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: ${{ inputs.artifact_group }}
@@ -232,7 +240,7 @@ jobs:
       matrix:
         components: ${{ fromJSON(needs.configure_test_matrix.outputs.components || '[]') }}
     uses: './.github/workflows/test_component.yml'
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: ${{ inputs.artifact_group }}

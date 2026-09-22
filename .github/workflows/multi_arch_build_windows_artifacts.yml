@@ -93,14 +93,18 @@ jobs:
     env:
       QUARTZ_REPORTING_WORKFLOW: multi_arch_build_windows_artifacts.yml
       QUARTZ_WORKFLOW_POSTFIX: "- build ROCm artifacts"
-      STAGE_NAME: ${{ inputs.stage_name }}
+      DIST_AMDGPU_FAMILIES: ${{ inputs.dist_amdgpu_families }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_family }}
-      BUILD_DIR: B:\build
-      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
-      CACHE_DIR: ${{ github.workspace }}/.cache
-      TEATIME_FORCE_INTERACTIVE: 0
+      ROCM_PACKAGE_VERSION: ${{ inputs.rocm_package_version }}
       RELEASE_TYPE: ${{ inputs.release_type }}
+      REBUILD_ARTIFACTS: ${{ inputs.rebuild_artifacts }}
+      STAGE_NAME: ${{ inputs.stage_name }}
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      TEATIME_FORCE_INTERACTIVE: 0
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
+      EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
+      BUILD_DIR: B:\build
+      CACHE_DIR: ${{ github.workspace }}/.cache
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -123,6 +127,7 @@ jobs:
         timeout-minutes: 10
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
@@ -131,6 +136,7 @@ jobs:
         timeout-minutes: 10
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ fromJSON(inputs.external_repo_config).repository }}
           ref: ${{ fromJSON(inputs.external_repo_config).ref }}
           path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}
@@ -178,7 +184,7 @@ jobs:
       - name: Setup ccache
         run: |
           python ./build_tools/setup_ccache.py \
-            --release-type "${{ inputs.release_type }}" \
+            --release-type "${RELEASE_TYPE}" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache" \
             --log-dir "${BUILD_DIR}/logs/ccache"
@@ -190,7 +196,7 @@ jobs:
           python build_tools/artifact_manager.py fetch \
             --run-id="${{ github.run_id }}" \
             --stage="${STAGE_NAME}" \
-            --amdgpu-families="${{ inputs.amdgpu_family }}" \
+            --amdgpu-families="${AMDGPU_FAMILIES}" \
             --output-dir="${BUILD_DIR}" \
             --bootstrap
 
@@ -207,20 +213,26 @@ jobs:
         run: |
           python build_tools/configure_stage.py \
             --stage=${STAGE_NAME} \
-            --artifacts="${{ inputs.rebuild_artifacts }}" \
-            --amdgpu-families="${{ inputs.amdgpu_family }}" \
-            --dist-amdgpu-families="${{ inputs.dist_amdgpu_families }}" \
+            --artifacts="${REBUILD_ARTIFACTS}" \
+            --amdgpu-families="${AMDGPU_FAMILIES}" \
+            --dist-amdgpu-families="${DIST_AMDGPU_FAMILIES}" \
             --gha-output
 
       - name: Install stage python deps
         if: ${{ steps.stage_config.outputs.pip_install_cmd }}
-        run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
+        # configure_stage.py emits argument fragments from repository build configuration.
+        # Trust that configuration as executable build input; multiple arguments are intentional.
+        run: | # zizmor: ignore[template-injection]
+          pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
       - name: Configure
-        run: |
+        # configure_stage.py emits argument fragments from repository build configuration.
+        # Trust that configuration and the caller-provided preset/external repo options
+        # as executable build inputs; their shell quoting and multiple arguments are intentional.
+        run: | # zizmor: ignore[template-injection]
           cmake -B "${BUILD_DIR}" -S . -GNinja \
             --preset=${{ inputs.build_variant_cmake_preset }} \
-            -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
+            -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \

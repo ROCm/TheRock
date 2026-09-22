@@ -133,6 +133,11 @@ jobs:
     # PYTORCH_TESTING_DEVICE_ONLY_FOR and TEST_CONFIG (via --test-config)
     # itself, so we only set the extras the runner does not manage.
     env:
+      DEVICE_QUERY: ${{ inputs.device_query }}
+      GPU_POLICY: ${{ inputs.gpu_policy }}
+      TORCH_VERSION: ${{ inputs.torch_version }}
+      PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
+      PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
       QUARTZ_REPORTING_WORKFLOW: test_pytorch_wheels.yml
       QUARTZ_WORKFLOW_POSTFIX: "- test PyTorch wheels"
       VENV_DIR: ${{ github.workspace }}/.venv
@@ -158,6 +163,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
@@ -173,17 +179,19 @@ jobs:
         id: expand
         run: |
           python build_tools/github_actions/expand_amdgpu_families.py \
-            --amdgpu-families "${{ inputs.amdgpu_family }}" \
+            --amdgpu-families "${AMDGPU_FAMILY}" \
             --output-mode=device-extras
 
       # TODO: also upload and reference test report together with this logging?
       - name: Summarize workflow inputs
+        env:
+          DEVICE_EXTRAS: ${{ steps.expand.outputs.device_extras }}
         run: |
           python build_tools/github_actions/summarize_test_pytorch_workflow.py \
-            --torch-version=${{ inputs.torch_version }} \
-            --pytorch-git-ref=${{ inputs.pytorch_git_ref }} \
-            --index-url=${{ inputs.package_index_url }} \
-            --device-extras="${{ steps.expand.outputs.device_extras }}"
+            --torch-version="${TORCH_VERSION}" \
+            --pytorch-git-ref="${PYTORCH_GIT_REF}" \
+            --index-url="${PACKAGE_INDEX_URL}" \
+            --device-extras="${DEVICE_EXTRAS}"
 
       - name: Set git options
         run: |
@@ -213,19 +221,21 @@ jobs:
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/ROCm/pytorch.git \
-            --repo-hashtag ${{ inputs.pytorch_git_ref }} \
+            --repo-hashtag "${PYTORCH_GIT_REF}" \
             --no-hipify \
             --no-submodules
 
       - name: Set up virtual environment
         timeout-minutes: 15
+        env:
+          DEVICE_EXTRAS: ${{ steps.expand.outputs.device_extras }}
         run: |
           # The torch wheel already depends on the matching rocm runtime
           # packages (PYTORCH_EXTRA_INSTALL_REQUIREMENTS pins rocm[libraries]),
           # so installing torch is enough to pull the ROCm runtime.
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }}" \
-            --index-url=${{ inputs.package_index_url }} \
+            --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION}" \
+            --index-url="${PACKAGE_INDEX_URL}" \
             --activate-in-future-github-actions-steps
 
       - name: Install test requirements
@@ -269,8 +279,8 @@ jobs:
         run: |
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
             --test-config default \
-            --device-query "${{ inputs.device_query }}" \
-            --gpu-policy "${{ inputs.gpu_policy }}" \
+            --device-query "${DEVICE_QUERY}" \
+            --gpu-policy "${GPU_POLICY}" \
             --include \
               test_nn \
               test_torch \

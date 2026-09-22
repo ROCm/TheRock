@@ -102,8 +102,12 @@ jobs:
     env:
       QUARTZ_REPORTING_WORKFLOW: multi_arch_build_tarballs.yml
       QUARTZ_WORKFLOW_POSTFIX: "- build tarballs"
+      ARTIFACT_GITHUB_REPO: ${{ inputs.artifact_github_repo }}
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      DIST_AMDGPU_FAMILIES: ${{ inputs.dist_amdgpu_families }}
+      PACKAGE_VERSION: ${{ inputs.package_version }}
       RELEASE_TYPE: ${{ inputs.release_type }}
+      PLATFORM: ${{ inputs.platform }}
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -117,11 +121,22 @@ jobs:
           gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
           gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
 
+      - name: Install Git
+        run: apt-get update && apt-get install -y --no-install-recommends git
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref_name }}
+
+      # TODO(8354): pip install rocm-bootstrap instead
+      - name: Checkout shared package ownership metadata
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git submodule update --init --depth 1 rocm-systems
 
       - name: Install Python requirements
         run: pip install -r requirements.txt
@@ -134,12 +149,12 @@ jobs:
             EXTRA_ARGS+=(--include-test-tarballs)
           fi
 
-          python build_tools/build_tarballs.py \
-            --run-id="${{ env.ARTIFACT_RUN_ID }}" \
-            --run-github-repo="${{ inputs.artifact_github_repo }}" \
-            --dist-amdgpu-families="${{ inputs.dist_amdgpu_families }}" \
-            --platform="${{ inputs.platform }}" \
-            --package-version="${{ inputs.package_version }}" \
+          python build_tools/packaging/archives/build_tarballs.py \
+            --run-id="${ARTIFACT_RUN_ID}" \
+            --run-github-repo="${ARTIFACT_GITHUB_REPO}" \
+            --dist-amdgpu-families="${DIST_AMDGPU_FAMILIES}" \
+            --platform="${PLATFORM}" \
+            --package-version="${PACKAGE_VERSION}" \
             --output-dir="${{ github.workspace }}/tarballs" \
             "${EXTRA_ARGS[@]}"
 
@@ -154,8 +169,8 @@ jobs:
           python build_tools/github_actions/upload_tarballs.py \
             --input-tarballs-dir="${{ github.workspace }}/tarballs" \
             --run-id="${{ github.run_id }}" \
-            --platform="${{ inputs.platform }}" \
-            --release-type="${{ inputs.release_type }}"
+            --platform="${PLATFORM}" \
+            --release-type="${RELEASE_TYPE}"
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true

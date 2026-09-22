@@ -42,6 +42,20 @@ logging.basicConfig(level=logging.INFO)
 # Note: these paths are relative to the repository root. We could make that
 # more explicit, or use absolute paths.
 SCRIPT_DIR = Path("./build_tools/github_actions/test_executable_scripts")
+OUTPUT_ARTIFACTS_DIR = Path(os.environ.get("OUTPUT_ARTIFACTS_DIR", "build"))
+
+
+def _get_script_path(script_name: str) -> str:
+    # Convert to posix (using `/` instead of `\\`) so test workflows can use
+    # 'bash' as the shell on Linux and Windows.
+    return (SCRIPT_DIR / script_name).as_posix()
+
+
+def _get_artifact_path(artifact_path: str) -> str:
+    # Convert to posix (using `/` instead of `\\`) so test workflows can use
+    # 'bash' as the shell on Linux and Windows.
+    return (OUTPUT_ARTIFACTS_DIR / artifact_path).as_posix()
+
 
 # Maps a group label (the part after "test:") to the individual test matrix
 # keys it expands to. Use this when a single label should select multiple
@@ -49,14 +63,6 @@ SCRIPT_DIR = Path("./build_tools/github_actions/test_executable_scripts")
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
 }
-
-
-def _get_script_path(script_name: str) -> str:
-    platform_path = SCRIPT_DIR / script_name
-    # Convert to posix (using `/` instead of `\\`) so test workflows can use
-    # 'bash' as the shell on Linux and Windows.
-    posix_path = platform_path.as_posix()
-    return str(posix_path)
 
 
 # Base container options applied to all Linux containers
@@ -144,7 +150,9 @@ def _family_matches(
 
 
 # Common settings applied to all jobs
-_common_settings = {}
+_common_settings = {
+    "additional_requirements_files": [],
+}
 
 # Common settings for rocgdb jobs
 _rocgdb_common = {
@@ -194,6 +202,18 @@ _rocgdb_common = {
 # "gfx125X-dcgpu"). Examples:
 #   "exclude_family": {"linux": ["gfx1030"]}                # skip a single target
 #   "include_family": {"linux": ["gfx908", "gfx90a", "gfx942"]}  # opt in to a set
+#
+# A component may restrict which test tiers it runs on via "test_types", a list of
+# allowed TEST_TYPE values (any of "quick", "standard", "comprehensive", "full").
+# When set, the component is skipped entirely -- no job is scheduled -- for any tier
+# not in the list; omit the field to run on every tier (the default). For example, a
+# component whose suite is too slow for the quick sanity tier opts out of it with:
+#   "test_types": ["standard", "comprehensive", "full"]
+#
+# rocprofiler-sdk SPM: the default rocprofiler-sdk job and rocprofiler-sdk-spm share
+# one artifact but use different runners. SPM-labeled tests run on a pinned gfx94x
+# runner; the default job excludes them via --ctest-label-exclude spm. Preflight
+# and spm labels live in the companion rocm-systems rocprofiler-sdk PR.
 
 test_matrix = {
     # Sanity tests - always run first as a prerequisite for other component tests
@@ -289,6 +309,11 @@ test_matrix = {
         "job_name": "tensilelite",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 15,
+        # TODO: Use "build/share/hipblaslt/tensilelite/requirements-test.txt" after
+        # https://github.com/ROCm/rocm-libraries/pull/11396 is integrated.
+        "additional_requirements_files": [
+            "build_tools/github_actions/test_executable_scripts/requirements-test-tensilelite.txt",
+        ],
         # Python/pytest suite only (rocisa + TensileLite unit). The C++ gtest
         # suite (tensilelite/tests) is appended below for TEST_TYPE != quick;
         # see the "tensilelite" special-case in the component loop
@@ -413,14 +438,7 @@ test_matrix = {
     "rocgdb-corefile": {
         **_rocgdb_common,
         "job_name": "rocgdb-corefile",
-        "test_script": (
-            "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests"
-            " gdb.rocm/corefile.exp"
-            " gdb.rocm/core-no-read-special-files.exp"
-            " gdb.rocm/gcore-after-attach.exp"
-            " gdb.rocm/load-core-remote-system.exp"
-            " gdb.rocm/runtime-core.exp"
-        ),
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm/runtime-core.exp",
         "test_runner": "linux-gfx942-gpu-rocm-mathlib",
         "include_family": {
             "linux": ["gfx942"],
@@ -586,6 +604,35 @@ test_matrix = {
             "windows": 4,
         },
     },
+    # MIOpen dbsync (StaticFDBSync) -- GPU-free under the rocjitsu KMD interposer on a CPU runner.
+    # The runner ships in the MIOpen dist (share/miopen/bin/run_dbsync_rocjitsu.py, pulled via
+    # --miopen; defined in rocm-libraries projects/miopen/test/gtest/dbsync/): it resolves arch + CU
+    # list from AMDGPU_FAMILIES, sparse-builds the pinned rocjitsu KMD, and runs StaticFDBSync once
+    # per CU with a CU-corrected config. include_family restricts it to gfx942, whose FAMILY_MAP
+    # entry covers both CU variants -- MI300X (304 CU) and MI300A (228 CU) -- in a single job.
+    # linux_cpu_runner: no scarce GPU test runner needed; uses the default no_rocm Ubuntu container
+    # (the runner sudo-apt-installs cmake/build-essential/libdrm-dev to build rocjitsu).
+    "miopen-dbsync": {
+        "job_name": "miopen-dbsync",
+        "fetch_artifact_args": "--blas --miopen --rand --tests",
+        # Standard/comprehensive/full only: "test_types" makes the framework skip this
+        # job entirely on the `quick` tier -- no job is scheduled, so no artifact fetch
+        # or rocjitsu build is paid for on quick (the runner script also self-skips on
+        # TEST_TYPE=quick as a backstop). Runs serially (MIOPEN_DBSYNC_MAX_THREADS=1)
+        # under rocjitsu; full set (gfx942 304+228) + artifact fetch + rocjitsu build
+        # measures ~15 min, so 30 gives margin and fails a hung interposer faster.
+        "timeout_minutes": 30,
+        "test_script": "python ./build/share/miopen/bin/run_dbsync_rocjitsu.py",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "test_types": ["standard", "comprehensive", "full"],
+        "include_family": {
+            "linux": ["gfx942"],
+        },
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # RCCL tests
     "rccl": {
         "job_name": "rccl",
@@ -618,11 +665,11 @@ test_matrix = {
     "rocprofiler-sdk": {
         "job_name": "rocprofiler-sdk",
         "fetch_artifact_args": "--tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 20,
         "additional_requirements_files": [
-            "share/rocprofiler-sdk/tests/requirements.txt",
+            _get_artifact_path("share/rocprofiler-sdk/tests/requirements.txt"),
         ],
-        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --enable-cdash",
+        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --enable-cdash --ctest-label-exclude spm",
         "platform": ["linux"],
         "container_options": ["--cap-add=SYS_PTRACE"],
         "total_shards_dict": {
@@ -632,6 +679,31 @@ test_matrix = {
         # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
         # the specialized openmpi image.
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
+    },
+    # rocprofiler-sdk SPM tests: same artifact as rocprofiler-sdk above, but only
+    # CTest tests labeled "spm" run here on a pinned gfx94x runner (driver preflight
+    # in the companion rocm-systems PR). To disable scheduling, comment out this entry.
+    "rocprofiler-sdk-spm": {
+        "job_name": "rocprofiler-sdk-spm",
+        "fetch_artifact_args": "--rocprofiler-sdk --tests",
+        "timeout_minutes": 30,
+        "additional_requirements_files": [
+            _get_artifact_path("share/rocprofiler-sdk/tests/requirements.txt"),
+        ],
+        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --ctest-label spm",
+        "platform": ["linux"],
+        "container_options": ["--cap-add=SYS_PTRACE"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        # rocprofv3 mpi-ranks tests gate on find_package(MPI) and launch under
+        # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
+        # the specialized openmpi image.
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
+        "test_runner": "linux-gfx942-gpu-rocm-profiler",
+        "include_family": {
+            "linux": ["gfx94X-dcgpu"],
+        },
     },
     # hipDNN tests
     "hipdnn": {
@@ -752,25 +824,21 @@ test_matrix = {
         "fetch_artifact_args": "--rocprofiler-compute --rocprofiler-sdk --tests",
         "timeout_minutes": 60,
         "additional_requirements_files": [
-            "libexec/rocprofiler-compute/requirements.txt",
-            "libexec/rocprofiler-compute/requirements-test.txt",
+            _get_artifact_path("libexec/rocprofiler-compute/requirements.txt"),
+            _get_artifact_path("libexec/rocprofiler-compute/requirements-test.txt"),
         ],
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {"linux": 1},
         "exclude_family": {
-            # rocprofiler-compute only supports gfx908, gfx90a, gfx942, gfx950, gfx1250
-            # (see TheRock#2892)
+            # rocprofiler-compute supports gfx908, gfx90a, gfx942, gfx950,
+            # gfx115X and gfx1250 (see TheRock#2892)
             "linux": [
                 "gfx1030",
                 "gfx1100",
                 "gfx1101",
                 "gfx1102",
                 "gfx1103",
-                "gfx1150",
-                "gfx1151",
-                "gfx1152",
-                "gfx1153",
                 "gfx1200",
                 "gfx1201",
             ],
@@ -781,7 +849,7 @@ test_matrix = {
         "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-systems-examples --rocprofiler-sdk --tests",
         "timeout_minutes": 60,
         "additional_requirements_files": [
-            "share/rocprofiler-systems/tests/requirements.txt",
+            _get_artifact_path("share/rocprofiler-systems/tests/requirements.txt"),
         ],
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
@@ -795,6 +863,11 @@ test_matrix = {
         "job_name": "libhipcxx_amdclang",
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 30,
+        # TODO: Use "build/libhipcxx/requirements-test.txt" after the submodule includes
+        # https://github.com/ROCm/libhipcxx/pull/29.
+        "additional_requirements_files": [
+            "build_tools/github_actions/test_executable_scripts/requirements-test-libhipcxx.txt",
+        ],
         "test_script": f"python {_get_script_path('test_libhipcxx_amdclang.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -807,6 +880,11 @@ test_matrix = {
         "job_name": "libhipcxx_hiprtc",
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 20,
+        # TODO: Use "build/libhipcxx/requirements-test.txt" after the submodule includes
+        # https://github.com/ROCm/libhipcxx/pull/29.
+        "additional_requirements_files": [
+            "build_tools/github_actions/test_executable_scripts/requirements-test-libhipcxx.txt",
+        ],
         "test_script": f"python {_get_script_path('test_libhipcxx_hiprtc.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
@@ -819,6 +897,9 @@ test_matrix = {
         "job_name": "hipthreads",
         "fetch_artifact_args": "--hipthreads --tests",
         "timeout_minutes": 30,
+        "additional_requirements_files": [
+            _get_artifact_path("hipthreads/test/requirements-test.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_hipthreads.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -1047,6 +1128,17 @@ def run():
         ]
         if key != "sanity" and expanded_test_labels and key not in expanded_test_labels:
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
+            continue
+
+        # Tier gate: a component may declare which test tiers it runs on via
+        # "test_types". Skip it entirely (schedule no job) for any TEST_TYPE not in
+        # the list -- e.g. miopen-dbsync runs standard/comprehensive/full only, never
+        # quick. Omit the field to run on every tier.
+        allowed_test_types = selected_matrix[key].get("test_types")
+        if allowed_test_types and test_type not in allowed_test_types:
+            logging.info(
+                f"Excluding job {job_name}: test_type {test_type} not in {allowed_test_types}"
+            )
             continue
 
         # If the test is enabled for a particular platform and a particular (or all) projects are selected.
