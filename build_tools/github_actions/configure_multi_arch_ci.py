@@ -248,9 +248,7 @@ class CIInputs:
     # Non-empty when an external repo calls TheRock workflows
     external_repo: str = ""
 
-    # Set by callers that are configured as an automatic ASAN presubmit gate: a
-    # scoped run cheap enough to start on every pull request. Grants host-asan
-    # runs a sandbox test runner outside of nightly.
+    # Allows the host-asan build variant CI to run on pull_request events
     asan_presubmit: bool = False
 
     def log(self) -> None:
@@ -1297,13 +1295,15 @@ def _expand_build_config_for_platform(
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant.startswith("host-asan"):
-            # Run host-asan tests on nightly (schedule or workflow_dispatch), or
-            # for external repos that declare themselves an automatic presubmit
-            # gate. Presubmit is declared explicitly rather than inferred from
-            # build_stages: scoping the build graph and opting into sandbox test
-            # runners on every PR are separate decisions, and a caller that
-            # narrows its build for unrelated reasons should not silently start
-            # consuming ASAN runner capacity.
+            # host-asan tests are resource intensive so they run on the
+            # following triggers:
+            #   trigger           | conditions
+            #   ----------------- | --------------
+            #   schedule:         | always enabled
+            #   workflow_dispatch | always enabled
+            #   push              | never enabled
+            #   pull_request      | enabled for external repos that set the
+            #                     | 'asan_presubmit' opt-in
             if not (
                 ci_inputs.is_schedule
                 or ci_inputs.is_workflow_dispatch

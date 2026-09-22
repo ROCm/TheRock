@@ -1647,6 +1647,38 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertIn("sandbox", entry["test-runs-on"])
 
+    def _host_asan_push_entry(self, **kwargs):
+        """Runs the host-asan gate on a push/pull_request style trigger."""
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="push", build_variant="host-asan", **kwargs
+            ),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(linux_families=["gfx94x"]),
+            jobs=_jobs(),
+        )
+        return result.linux.per_family_info[0]
+
+    def test_host_asan_presubmit_opt_in_enables_tests(self):
+        """An external repo opting in gets a sandbox runner outside of nightly."""
+        entry = self._host_asan_push_entry(
+            external_repo='{"repository":"ROCm/rocm-systems","ref":"develop"}',
+            asan_presubmit=True,
+        )
+        self.assertIn("sandbox", entry["test-runs-on"])
+
+    def test_host_asan_without_presubmit_opt_in_disables_tests(self):
+        """Without the opt-in the gate leaves host-asan tests unscheduled."""
+        entry = self._host_asan_push_entry(
+            external_repo='{"repository":"ROCm/rocm-systems","ref":"develop"}',
+        )
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_host_asan_presubmit_opt_in_requires_an_external_repo(self):
+        """The opt-in alone does not enable tests for in-repo triggers."""
+        entry = self._host_asan_push_entry(asan_presubmit=True)
+        self.assertEqual(entry["test-runs-on"], "")
+
 
 # ---------------------------------------------------------------------------
 # Step 6: Format Outputs
