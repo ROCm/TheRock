@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
 """
-Manage CI labels for GitHub repositories.
+Create CI labels for GitHub repositories.
 
-This script creates and cleans up GitHub labels for repos. It is intended to be
+This script creates CI-related GitHub labels for repos. It is intended to be
 used LOCALLY only to sync CI-related labels across repositories.
 
 Usage:
-    # List labels that would be created (dry run)
-    python manage_ci_labels.py --repo OWNER/REPO --dry-run
+    # List labels and their status in the repo
+    python configure_ci_labels.py --repo OWNER/REPO --list
+
+    # Create missing labels (dry run)
+    python configure_ci_labels.py --repo OWNER/REPO --create --dry-run
 
     # Create missing labels
-    python manage_ci_labels.py --repo OWNER/REPO --create
-
-    # Delete labels not in the defined list
-    python manage_ci_labels.py --repo OWNER/REPO --cleanup
-
-    # Sync labels (create missing + delete extra)
-    python manage_ci_labels.py --repo OWNER/REPO --sync
+    python configure_ci_labels.py --repo OWNER/REPO --create
 """
 
 import argparse
@@ -24,16 +21,15 @@ import subprocess
 import json
 import sys
 from dataclasses import dataclass
-from typing import Optional
 
 # =============================================================================
 # CI Labels Definition
 # =============================================================================
-# Labels from ROCm/TheRock with prefixes: ci:, gfx, test:, test_filter:
+# Labels from ROCm/TheRock for CI behavior manipulation.
 # Format: (name, color, description)
 
 CI_LABELS: list[tuple[str, str, str]] = [
-    # ci: labels
+    # ci: general labels
     ("ci:skip", "FFFF00", "Skip all CI builds/tests for this PR"),
     ("ci:run-all-archs", "FFFF00", "Opt-in to building for all architectures on a pull request"),
     ("ci:run-multi-arch", "FFFF00", "Opt-in to running multi-arch CI on a pull request"),
@@ -41,28 +37,28 @@ CI_LABELS: list[tuple[str, str, str]] = [
     ("ci:build-jax", "FFFF00", "Enable Jax Build"),
     ("ci:asan", "FFFF00", "Opt-in to building ASAN"),
     ("ci:host-asan", "FFFF00", "Opt-in to running multi-arch host-asan CI on a pull request"),
-    # gfx labels
-    ("gfx103X-linux", "5A4D41", ""),
-    ("gfx103X", "f9d0c4", ""),
-    ("gfx90X-dcgpu", "5A4D41", ""),
-    ("gfx94X-dcgpu", "5A4D41", "Issue/PR relates to gfx94X-dcgpu family."),
-    ("gfx950-dcgpu", "5A4D41", "Issue/PR relates to gfx950-dcgpu family."),
-    ("gfx110X-dgpu", "5A4D41", "Issue/PR relates to gfx110X-dgpu family."),
-    ("gfx110X-all", "b04f4c", "Issue/PR related to gfx110X-all family"),
-    ("gfx1103", "795816", "Issue/PR relates to gfx1103"),
-    ("gfx1150", "5A4D41", ""),
-    ("gfx1151", "5A4D41", "Issue/PR relates to gfx1151."),
-    ("gfx1152", "5A4D41", ""),
-    ("gfx1153", "5A4D41", ""),
-    ("gfx120X-all", "5A4D41", "Issue/PR relates to gfx120X-all family"),
-    ("gfx125x", "5A4D41", "Issue/PR relates to gfx125x family"),
-    ("gfx125X-dcgpu", "5A4D41", "Issue/PR relates to gfx125X-dcgpu family."),
-    ("gfx900", "5A4D41", ""),
-    ("gfx906", "5A4D41", ""),
-    ("gfx908", "5A4D41", ""),
-    ("gfx90a", "5A4D41", ""),
-    ("gfx90c", "5A4D41", ""),
-    # test: labels
+    # ci:gfx labels (GPU architecture opt-in)
+    ("ci:gfx103X-linux", "5A4D41", "Opt-in to gfx103X-linux builds/tests"),
+    ("ci:gfx103X", "5A4D41", "Opt-in to gfx103X builds/tests"),
+    ("ci:gfx90X-dcgpu", "5A4D41", "Opt-in to gfx90X-dcgpu builds/tests"),
+    ("ci:gfx94X-dcgpu", "5A4D41", "Opt-in to gfx94X-dcgpu builds/tests"),
+    ("ci:gfx950-dcgpu", "5A4D41", "Opt-in to gfx950-dcgpu builds/tests"),
+    ("ci:gfx110X-dgpu", "5A4D41", "Opt-in to gfx110X-dgpu builds/tests"),
+    ("ci:gfx110X-all", "5A4D41", "Opt-in to gfx110X-all builds/tests"),
+    ("ci:gfx1103", "5A4D41", "Opt-in to gfx1103 builds/tests"),
+    ("ci:gfx1150", "5A4D41", "Opt-in to gfx1150 builds/tests"),
+    ("ci:gfx1151", "5A4D41", "Opt-in to gfx1151 builds/tests"),
+    ("ci:gfx1152", "5A4D41", "Opt-in to gfx1152 builds/tests"),
+    ("ci:gfx1153", "5A4D41", "Opt-in to gfx1153 builds/tests"),
+    ("ci:gfx120X-all", "5A4D41", "Opt-in to gfx120X-all builds/tests"),
+    ("ci:gfx125x", "5A4D41", "Opt-in to gfx125x builds/tests"),
+    ("ci:gfx125X-dcgpu", "5A4D41", "Opt-in to gfx125X-dcgpu builds/tests"),
+    ("ci:gfx900", "5A4D41", "Opt-in to gfx900 builds/tests"),
+    ("ci:gfx906", "5A4D41", "Opt-in to gfx906 builds/tests"),
+    ("ci:gfx908", "5A4D41", "Opt-in to gfx908 builds/tests"),
+    ("ci:gfx90a", "5A4D41", "Opt-in to gfx90a builds/tests"),
+    ("ci:gfx90c", "5A4D41", "Opt-in to gfx90c builds/tests"),
+    # test: labels (project-specific test opt-in)
     ("test:hipblaslt", "3FA7D6", "For pull requests, runs full tests for only hipblaslt and other labeled projects."),
     ("test:hipcub", "3FA7D6", "For pull requests, runs full tests for only hipcub and other labeled projects."),
     ("test:miopen", "3FA7D6", "For pull requests, runs full tests for only miopen and other labeled projects."),
@@ -92,19 +88,19 @@ CI_LABELS: list[tuple[str, str, str]] = [
     ("test:rocprofiler-systems", "3FA7D6", "For pull requests, runs full tests for only rocprofiler-systems and other labeled projects."),
     ("test:rocprofiler-sdk", "3FA7D6", "For pull requests, runs full tests for only rocprofiler-sdk and other labeled projects."),
     ("test:hipkernelprovider", "20566E", "For pull requests, runs full tests for only hipkernelprovider and other labeled projects."),
-    ("test:amdsmi", "277804", ""),
+    ("test:amdsmi", "277804", "For pull requests, runs full tests for only amdsmi and other labeled projects."),
     ("test:rocgdb-cpu", "20566E", "Run ROCgdb cpu tests only"),
     ("test:rocgdb-gpu", "20566E", "Run ROCgdb gpu tests only"),
     ("test:rocgdb", "20566E", "Test all test:rocgdb* labels"),
-    ("test:rocprofiler-sdk-spm", "3FA7D6", "To run rocprofier-sdk-spm jobs"),
-    ("test:rpp", "3FA7D6", ""),
+    ("test:rocprofiler-sdk-spm", "3FA7D6", "To run rocprofiler-sdk-spm jobs"),
+    ("test:rpp", "3FA7D6", "For pull requests, runs full tests for only rpp and other labeled projects."),
     ("test:miopen-dbsync", "3FA7D6", "For pull requests, runs the GPU-free miopen-dbsync (StaticFDBSync/rocjitsu) test component."),
-    # test_filter: labels
+    # test_filter: labels (test level override)
     ("test_filter:quick", "a2fab4", "If enabled, the PR will run quick tests"),
     ("test_filter:standard", "a2fab4", "If enabled, the PR will run standard tests"),
     ("test_filter:comprehensive", "a2fab4", "If enabled, the PR will run comprehensive tests"),
     ("test_filter:full", "a2fab4", "If enabled, the PR will run full tests"),
-    # test_runner: labels
+    # test_runner: labels (test machine selection)
     ("test_runner:oem", "23edeb", "If added, the tests will run on a machine configured with `oem` kernel"),
     # build_variant: labels
     ("build_variant:asan", "4b398c", "If enabled, the pull request will run ASAN builds"),
@@ -134,12 +130,12 @@ def get_repo_labels(repo: str) -> list[Label]:
 
 
 def create_label(repo: str, name: str, color: str, description: str, dry_run: bool = False) -> bool:
-    """Create a label in the repository."""
+    """Create a label in the repository. Skips if already exists."""
     if dry_run:
         print(f"  [DRY RUN] Would create label: {name}")
         return True
 
-    args = ["label", "create", name, "--repo", repo, "--color", color, "--force"]
+    args = ["label", "create", name, "--repo", repo, "--color", color]
     if description:
         args.extend(["--description", description])
 
@@ -152,34 +148,9 @@ def create_label(repo: str, name: str, color: str, description: str, dry_run: bo
         return False
 
 
-def delete_label(repo: str, name: str, dry_run: bool = False) -> bool:
-    """Delete a label from the repository."""
-    if dry_run:
-        print(f"  [DRY RUN] Would delete label: {name}")
-        return True
-
-    result = run_gh_command(["label", "delete", name, "--repo", repo, "--yes"], check=False)
-    if result.returncode == 0:
-        print(f"  Deleted label: {name}")
-        return True
-    else:
-        print(f"  Failed to delete label {name}: {result.stderr}")
-        return False
-
-
 def get_ci_label_names() -> set[str]:
     """Get set of CI label names."""
     return {label[0] for label in CI_LABELS}
-
-
-# Prefixes that are safe to clean up (delete if not in CI_LABELS)
-# We only cleanup these specific prefixes to avoid touching other labels
-CLEANUP_PREFIXES = ("gfx", "test:", "test_filter:")
-
-
-def filter_cleanable_labels(labels: list[Label]) -> list[Label]:
-    """Filter labels to only those with prefixes safe to cleanup."""
-    return [l for l in labels if any(l.name.startswith(p) for p in CLEANUP_PREFIXES)]
 
 
 def list_labels(repo: str) -> None:
@@ -190,19 +161,20 @@ def list_labels(repo: str) -> None:
     existing_labels = get_repo_labels(repo)
     existing_names = {l.name for l in existing_labels}
 
-    print("\nLabels that would be created/updated:")
+    missing_count = 0
+    exists_count = 0
+
+    print("\nLabel status:")
     for name, color, description in CI_LABELS:
-        status = "exists" if name in existing_names else "MISSING"
+        if name in existing_names:
+            status = "exists"
+            exists_count += 1
+        else:
+            status = "MISSING"
+            missing_count += 1
         print(f"  [{status}] {name} (#{color})")
 
-    ci_label_names = get_ci_label_names()
-    extra_cleanable_labels = [l for l in filter_cleanable_labels(existing_labels) if l.name not in ci_label_names]
-
-    if extra_cleanable_labels:
-        print(f"\nCleanable labels in repo not in this script ({len(extra_cleanable_labels)}):")
-        print(f"(Only labels with prefixes {CLEANUP_PREFIXES} are subject to cleanup)")
-        for label in extra_cleanable_labels:
-            print(f"  {label.name} (#{label.color})")
+    print(f"\nSummary: {exists_count} exist, {missing_count} missing")
 
 
 def create_labels(repo: str, dry_run: bool = False) -> None:
@@ -226,45 +198,9 @@ def create_labels(repo: str, dry_run: bool = False) -> None:
     print(f"\nSummary: {created} created, {skipped} already existed")
 
 
-def cleanup_labels(repo: str, dry_run: bool = False) -> None:
-    """Delete labels with cleanable prefixes that are not in the defined list.
-
-    Only cleans up labels with prefixes: gfx, test:, test_filter:
-    Other labels (ci:, test_runner:, build_variant:, etc.) are NOT touched.
-    """
-    print(f"\nCleaning up labels in {repo}...")
-    print(f"(Only cleaning labels with prefixes: {CLEANUP_PREFIXES})")
-    if dry_run:
-        print("(DRY RUN - no changes will be made)\n")
-
-    existing_labels = get_repo_labels(repo)
-    ci_label_names = get_ci_label_names()
-
-    # Only clean up labels with cleanable prefixes that aren't in our list
-    extra_labels = [l for l in filter_cleanable_labels(existing_labels) if l.name not in ci_label_names]
-
-    if not extra_labels:
-        print("No extra labels to clean up.")
-        return
-
-    deleted = 0
-    for label in extra_labels:
-        if delete_label(repo, label.name, dry_run):
-            deleted += 1
-
-    print(f"\nSummary: {deleted} labels deleted")
-
-
-def sync_labels(repo: str, dry_run: bool = False) -> None:
-    """Sync labels: create missing and optionally delete extra."""
-    create_labels(repo, dry_run)
-    print()
-    cleanup_labels(repo, dry_run)
-
-
 def main():
     parser = argparse.ArgumentParser(
-        description="Manage CI labels for GitHub repositories (LOCAL USE ONLY)",
+        description="Create CI labels for GitHub repositories (LOCAL USE ONLY)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -283,22 +219,12 @@ def main():
     action_group.add_argument(
         "--list",
         action="store_true",
-        help="List CI labels and their status",
+        help="List CI labels and their status in the repo",
     )
     action_group.add_argument(
         "--create",
         action="store_true",
-        help="Create missing CI labels",
-    )
-    action_group.add_argument(
-        "--cleanup",
-        action="store_true",
-        help="Delete labels with prefixes (gfx, test:, test_filter:) not in the defined list",
-    )
-    action_group.add_argument(
-        "--sync",
-        action="store_true",
-        help="Sync labels (create missing + delete extra)",
+        help="Create missing CI labels (skips existing)",
     )
 
     args = parser.parse_args()
@@ -313,10 +239,6 @@ def main():
             list_labels(args.repo)
         elif args.create:
             create_labels(args.repo, args.dry_run)
-        elif args.cleanup:
-            cleanup_labels(args.repo, args.dry_run)
-        elif args.sync:
-            sync_labels(args.repo, args.dry_run)
     except subprocess.CalledProcessError as e:
         print(f"Error running gh command: {e}")
         print(f"stderr: {e.stderr}")
