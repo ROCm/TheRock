@@ -85,6 +85,18 @@ def is_asan():
     return "asan" in os.getenv("BUILD_VARIANT", "")
 
 
+def is_device_asan():
+    """Determines if device code is ASAN-instrumented using BUILD_VARIANT.
+
+    Matches "asan" and "asan-debug" but not the "host-" forms, which instrument
+    host code only. Tests skipped because instrumented device code misbehaves
+    belong here; is_asan() stays the right check for accommodations that any
+    ASAN-family build needs, like preloading the runtime or longer timeouts.
+    """
+    build_variant = os.getenv("BUILD_VARIANT", "")
+    return "asan" in build_variant and not build_variant.startswith("host-")
+
+
 def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
     """Select a runner label via weighted random pick.
 

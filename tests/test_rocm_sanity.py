@@ -20,9 +20,9 @@ THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
 
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
-# Importing is_asan from amdgpu_family_matrix.py
+# Importing is_device_asan from amdgpu_family_matrix.py
 sys.path.append(str(THIS_DIR.parent / "build_tools" / "github_actions"))
-from amdgpu_family_matrix import is_asan
+from amdgpu_family_matrix import is_device_asan
 
 
 def is_windows():
@@ -59,7 +59,8 @@ class TestROCmSanity:
     @pytest.mark.skipif(is_windows(), reason="rocminfo is not supported on Windows")
     # TODO(#3312): Re-enable once rocminfo test is fixed for ASAN builds
     @pytest.mark.skipif(
-        is_asan(), reason="rocminfo test fails with ASAN build, see TheRock#3312"
+        is_device_asan(),
+        reason="rocminfo test fails with device ASAN build, see TheRock#3312",
     )
     # TODO(#7659): Re-enable once rocminfo is fixed for gfx125X-dcgpu
     @pytest.mark.skipif(
