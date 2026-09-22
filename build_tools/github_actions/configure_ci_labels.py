@@ -30,7 +30,7 @@ from dataclasses import dataclass
 # =============================================================================
 # Labels from ROCm/TheRock for CI behavior manipulation.
 # Format: (name, color, description)
-
+# fmt: off
 CI_LABELS: list[tuple[str, str, str]] = [
     # ci: general labels
     ("ci:skip", "FFFF00", "Skip all CI builds/tests for this PR"),
@@ -62,52 +62,53 @@ CI_LABELS: list[tuple[str, str, str]] = [
     ("ci:gfx90a", "5A4D41", "Opt-in to gfx90a builds/tests"),
     ("ci:gfx90c", "5A4D41", "Opt-in to gfx90c builds/tests"),
     # test: labels (project-specific test opt-in)
-    ("test:hipblaslt", "3FA7D6", "For pull requests, runs full tests for only hipblaslt and other labeled projects."),
-    ("test:hipcub", "3FA7D6", "For pull requests, runs full tests for only hipcub and other labeled projects."),
-    ("test:miopen", "3FA7D6", "For pull requests, runs full tests for only miopen and other labeled projects."),
-    ("test:rocblas", "3FA7D6", "For pull requests, runs full tests for only rocblas and other labeled projects."),
-    ("test:hipblas", "3FA7D6", "For pull requests, runs full tests for only hipblas and other labeled projects."),
-    ("test:rocprim", "3FA7D6", "For pull requests, runs full tests for only rocprim and other labeled projects."),
-    ("test:rocsolver", "3FA7D6", "For pull requests, runs full tests for only rocsolver and other labeled projects."),
-    ("test:rocthrust", "3FA7D6", "For pull requests, runs full tests for only rocthrust and other labeled projects."),
-    ("test:rocsparse", "3FA7D6", "For pull requests, runs full tests for only rocsparse and other labeled projects."),
-    ("test:hipsparse", "3FA7D6", "For pull requests, runs full tests for only hipsparse and other labeled projects."),
-    ("test:hipfft", "3FA7D6", "For pull requests, runs full tests for only hipfft and other labeled projects."),
-    ("test:hipsolver", "3FA7D6", "For pull requests, runs full tests for only hipsolver and other labeled projects."),
-    ("test:rocfft", "3FA7D6", "For pull requests, runs full tests for only rocfft and other labeled projects."),
-    ("test:hipsparselt", "3FA7D6", "For pull requests, runs full tests for only hipsparselt and other labeled projects."),
-    ("test:rccl", "3FA7D6", "For pull requests, runs full tests for only rccl and other labeled projects."),
-    ("test:hipdnn", "3FA7D6", "For pull requests, runs full tests for only hipdnn and other labeled projects."),
-    ("test:rocroller", "3FA7D6", "For pull requests, runs full tests for only rocroller and other labeled projects."),
-    ("test:composablekernel", "3FA7D6", "For pull requests, runs full tests for only composable_kernel and other labeled projects."),
-    ("test:libhipcxx_hipcc", "3FA7D6", "For pull requests, runs full tests for only libhipcxx_hipcc and other labeled projects."),
-    ("test:libhipcxx_hiprtc", "3FA7D6", "For pull requests, runs full tests for only libhipcxx_hiprtc and other labeled projects."),
-    ("test:ocltst", "3FA7D6", "For pull requests, this label executes the ocltst and other labeled projects."),
-    ("test:hip-tests", "3FA7D6", "For pull requests, this label executes the hip-tests"),
-    ("test:rocrtst", "3FA7D6", "For pull requests, this label executes the rocrtst and other labeled projects."),
-    ("test:origami", "3FA7D6", "For pull requests, this label executes the origami and other labeled projects."),
-    ("test:rocdecode", "3FA7D6", "For pull requests, this label executes the rocdecode and other labeled projects."),
-    ("test:rocjpeg", "3FA7D6", "For pull requests, this label executes the rocjpeg and other labeled projects."),
-    ("test:rocprofiler-systems", "3FA7D6", "For pull requests, runs full tests for only rocprofiler-systems and other labeled projects."),
-    ("test:rocprofiler-sdk", "3FA7D6", "For pull requests, runs full tests for only rocprofiler-sdk and other labeled projects."),
-    ("test:hipkernelprovider", "3FA7D6", "For pull requests, runs full tests for only hipkernelprovider and other labeled projects."),
-    ("test:amdsmi", "3FA7D6", "For pull requests, runs full tests for only amdsmi and other labeled projects."),
+    ("test:hipblaslt", "3FA7D6", "Run full tests for hipblaslt"),
+    ("test:hipcub", "3FA7D6", "Run full tests for hipcub"),
+    ("test:miopen", "3FA7D6", "Run full tests for miopen"),
+    ("test:rocblas", "3FA7D6", "Run full tests for rocblas"),
+    ("test:hipblas", "3FA7D6", "Run full tests for hipblas"),
+    ("test:rocprim", "3FA7D6", "Run full tests for rocprim"),
+    ("test:rocsolver", "3FA7D6", "Run full tests for rocsolver"),
+    ("test:rocthrust", "3FA7D6", "Run full tests for rocthrust"),
+    ("test:rocsparse", "3FA7D6", "Run full tests for rocsparse"),
+    ("test:hipsparse", "3FA7D6", "Run full tests for hipsparse"),
+    ("test:hipfft", "3FA7D6", "Run full tests for hipfft"),
+    ("test:hipsolver", "3FA7D6", "Run full tests for hipsolver"),
+    ("test:rocfft", "3FA7D6", "Run full tests for rocfft"),
+    ("test:hipsparselt", "3FA7D6", "Run full tests for hipsparselt"),
+    ("test:rccl", "3FA7D6", "Run full tests for rccl"),
+    ("test:hipdnn", "3FA7D6", "Run full tests for hipdnn"),
+    ("test:rocroller", "3FA7D6", "Run full tests for rocroller"),
+    ("test:composablekernel", "3FA7D6", "Run full tests for composable_kernel"),
+    ("test:libhipcxx_hipcc", "3FA7D6", "Run full tests for libhipcxx_hipcc"),
+    ("test:libhipcxx_hiprtc", "3FA7D6", "Run full tests for libhipcxx_hiprtc"),
+    ("test:ocltst", "3FA7D6", "Run ocltst tests"),
+    ("test:hip-tests", "3FA7D6", "Run hip-tests"),
+    ("test:rocrtst", "3FA7D6", "Run rocrtst tests"),
+    ("test:origami", "3FA7D6", "Run origami tests"),
+    ("test:rocdecode", "3FA7D6", "Run rocdecode tests"),
+    ("test:rocjpeg", "3FA7D6", "Run rocjpeg tests"),
+    ("test:rocprofiler-systems", "3FA7D6", "Run full tests for rocprofiler-systems"),
+    ("test:rocprofiler-sdk", "3FA7D6", "Run full tests for rocprofiler-sdk"),
+    ("test:hipkernelprovider", "3FA7D6", "Run full tests for hipkernelprovider"),
+    ("test:amdsmi", "3FA7D6", "Run full tests for amdsmi"),
     ("test:rocgdb-cpu", "3FA7D6", "Run ROCgdb cpu tests only"),
     ("test:rocgdb-gpu", "3FA7D6", "Run ROCgdb gpu tests only"),
     ("test:rocgdb", "3FA7D6", "Test all test:rocgdb* labels"),
-    ("test:rocprofiler-sdk-spm", "3FA7D6", "To run rocprofiler-sdk-spm jobs"),
-    ("test:rpp", "3FA7D6", "For pull requests, runs full tests for only rpp and other labeled projects."),
-    ("test:miopen-dbsync", "3FA7D6", "For pull requests, runs the GPU-free miopen-dbsync (StaticFDBSync/rocjitsu) test component."),
+    ("test:rocprofiler-sdk-spm", "3FA7D6", "Run rocprofiler-sdk-spm tests"),
+    ("test:rpp", "3FA7D6", "Run full tests for rpp"),
+    ("test:miopen-dbsync", "3FA7D6", "Run miopen-dbsync (StaticFDBSync/rocjitsu) tests"),
     # test_filter: labels (test level override)
     ("test_filter:quick", "a2fab4", "If enabled, the PR will run quick tests"),
     ("test_filter:standard", "a2fab4", "If enabled, the PR will run standard tests"),
     ("test_filter:comprehensive", "a2fab4", "If enabled, the PR will run comprehensive tests"),
     ("test_filter:full", "a2fab4", "If enabled, the PR will run full tests"),
     # test_runner: labels (test machine selection)
-    ("test_runner:oem", "23edeb", "If added, the tests will run on a machine configured with `oem` kernel"),
+    ("test_runner:oem", "23edeb", "Run tests on a machine configured with `oem` kernel"),
     # build_variant: labels
     ("build_variant:asan", "4b398c", "If enabled, the pull request will run ASAN builds"),
 ]
+# fmt: on
 
 
 @dataclass
@@ -126,13 +127,27 @@ def run_gh_command(args: list[str], check: bool = True) -> subprocess.CompletedP
 def get_repo_labels(repo: str) -> list[Label]:
     """Get all labels from a repository."""
     result = run_gh_command(
-        ["label", "list", "--repo", repo, "--limit", "500", "--json", "name,color,description"]
+        [
+            "label",
+            "list",
+            "--repo",
+            repo,
+            "--limit",
+            "500",
+            "--json",
+            "name,color,description",
+        ]
     )
     labels_data = json.loads(result.stdout)
-    return [Label(name=l["name"], color=l["color"], description=l["description"]) for l in labels_data]
+    return [
+        Label(name=l["name"], color=l["color"], description=l["description"])
+        for l in labels_data
+    ]
 
 
-def create_label(repo: str, name: str, color: str, description: str, dry_run: bool = False) -> bool:
+def create_label(
+    repo: str, name: str, color: str, description: str, dry_run: bool = False
+) -> bool:
     """Create a label in the repository. Skips if already exists."""
     if dry_run:
         print(f"  [DRY RUN] Would create label: {name}")
@@ -164,9 +179,13 @@ def update_label(
     if existing.color.lower() != color.lower():
         changes.append(f"color: #{existing.color} -> #{color}")
     if existing.description != description:
-        old_desc = existing.description[:30] + "..." if len(existing.description) > 30 else existing.description
+        old_desc = (
+            existing.description[:30] + "..."
+            if len(existing.description) > 30
+            else existing.description
+        )
         new_desc = description[:30] + "..." if len(description) > 30 else description
-        changes.append(f"desc: \"{old_desc}\" -> \"{new_desc}\"")
+        changes.append(f'desc: "{old_desc}" -> "{new_desc}"')
     change_str = ", ".join(changes)
 
     if dry_run:
@@ -239,8 +258,11 @@ def create_labels(repo: str, dry_run: bool = False, force: bool = False) -> None
         if name in existing_map:
             if force:
                 existing = existing_map[name]
-                # Check if color or description differs (color comparison is case-insensitive)
-                if existing.color.lower() != color.lower() or existing.description != description:
+                # Check if color or description differs
+                if (
+                    existing.color.lower() != color.lower()
+                    or existing.description != description
+                ):
                     if update_label(repo, name, color, description, existing, dry_run):
                         updated += 1
                 else:
