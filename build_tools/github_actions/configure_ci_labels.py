@@ -151,10 +151,26 @@ def create_label(repo: str, name: str, color: str, description: str, dry_run: bo
         return False
 
 
-def update_label(repo: str, name: str, color: str, description: str, dry_run: bool = False) -> bool:
+def update_label(
+    repo: str,
+    name: str,
+    color: str,
+    description: str,
+    existing: Label,
+    dry_run: bool = False,
+) -> bool:
     """Update an existing label's color and description."""
+    changes = []
+    if existing.color.lower() != color.lower():
+        changes.append(f"color: #{existing.color} -> #{color}")
+    if existing.description != description:
+        old_desc = existing.description[:30] + "..." if len(existing.description) > 30 else existing.description
+        new_desc = description[:30] + "..." if len(description) > 30 else description
+        changes.append(f"desc: \"{old_desc}\" -> \"{new_desc}\"")
+    change_str = ", ".join(changes)
+
     if dry_run:
-        print(f"  [DRY RUN] Would update label: {name}")
+        print(f"  [DRY RUN] Would update label: {name} ({change_str})")
         return True
 
     args = ["label", "edit", name, "--repo", repo, "--color", color]
@@ -163,7 +179,7 @@ def update_label(repo: str, name: str, color: str, description: str, dry_run: bo
 
     result = run_gh_command(args, check=False)
     if result.returncode == 0:
-        print(f"  Updated label: {name}")
+        print(f"  Updated label: {name} ({change_str})")
         return True
     else:
         print(f"  Failed to update label {name}: {result.stderr}")
@@ -225,7 +241,7 @@ def create_labels(repo: str, dry_run: bool = False, force: bool = False) -> None
                 existing = existing_map[name]
                 # Check if color or description differs (color comparison is case-insensitive)
                 if existing.color.lower() != color.lower() or existing.description != description:
-                    if update_label(repo, name, color, description, dry_run):
+                    if update_label(repo, name, color, description, existing, dry_run):
                         updated += 1
                 else:
                     skipped += 1
