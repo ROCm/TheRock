@@ -185,7 +185,6 @@ STANDARD_DIR_TOKENS: set[str] = {
 
 def fetch_artifacts(
     run_id: str,
-    platform: str,
     dest_dir: Path,
     run_github_repo: str | None = None,
 ) -> Path:
@@ -218,7 +217,8 @@ def fetch_artifacts(
         str(BUILD_TOOLS_DIR / "artifact_manager.py"),
         "fetch",
         f"--run-id={run_id}",
-        f"--platform={platform}",
+        # MSI packaging is Windows-only; never fetch other platforms' artifacts.
+        "--platform=windows",
         "--stage=all",
         "--generic-only",
         f"--exclude-components={','.join(exclude_components)}",
@@ -227,7 +227,7 @@ def fetch_artifacts(
     ]
     if run_github_repo:
         cmd.append(f"--run-github-repo={run_github_repo}")
-    print(f"Fetching artifacts for run {run_id} ({platform}) ...")
+    print(f"Fetching artifacts for run {run_id} (windows) ...")
     subprocess.run(cmd, check=True)
     return dest_dir / "artifacts"
 
@@ -420,12 +420,6 @@ def parse_args() -> argparse.Namespace:
             "bucket is resolved from the run id; public artifacts need no "
             "credentials. Example: 27315369389"
         ),
-    )
-    parser.add_argument(
-        "--platform",
-        default="windows",
-        metavar="OS",
-        help="Platform of the artifacts to fetch with --run-id. Default: windows.",
     )
     parser.add_argument(
         "--run-github-repo",
@@ -626,7 +620,6 @@ def resolve_package_inputs(args: argparse.Namespace) -> PackageInputs:
     if args.run_id:
         artifact_dir = fetch_artifacts(
             run_id=args.run_id,
-            platform=args.platform,
             dest_dir=args.artifacts_cache_dir,
             run_github_repo=args.run_github_repo,
         )

@@ -20,7 +20,6 @@ from generate_msi_wxs import (
     InstallLayout,
     WixDocument,
     collect_files_from_catalog,
-    fetch_artifacts,
     make_id,
     build_wxs,
     parse_args,
@@ -288,56 +287,6 @@ class TestCollectFilesFromCatalog(unittest.TestCase):
             self.assertEqual(files, [])
 
 
-class TestFetchArtifacts(unittest.TestCase):
-    """fetch_artifacts delegates to artifact_manager.py; assert the argv."""
-
-    def _run_and_capture(self, **kwargs):
-        with unittest.mock.patch("generate_msi_wxs.subprocess.run") as mock_run:
-            result = fetch_artifacts(**kwargs)
-        self.assertEqual(mock_run.call_count, 1)
-        argv = mock_run.call_args.args[0]
-        return argv, mock_run.call_args, result
-
-    def test_delegates_to_artifact_manager_fetch(self):
-        cache = Path("/tmp/cache")
-        argv, call, result = self._run_and_capture(
-            run_id="12345", platform="windows", dest_dir=cache
-        )
-        self.assertIn("artifact_manager.py", " ".join(argv))
-        self.assertIn("fetch", argv)
-        self.assertIn("--run-id=12345", argv)
-        self.assertIn("--platform=windows", argv)
-        self.assertIn("--stage=all", argv)
-        self.assertIn("--generic-only", argv)
-        self.assertIn(f"--output-dir={cache}", argv)
-        self.assertIn(f"--download-cache-dir={cache / '_downloads'}", argv)
-        # Only the lib component is needed today; the rest are excluded to keep
-        # the fetch small (more can be added once more MSI packages are scoped).
-        exclude = next(a for a in argv if a.startswith("--exclude-components="))
-        excluded = set(exclude.split("=", 1)[1].split(","))
-        self.assertEqual(excluded, {"run", "dev", "dbg", "doc", "test"})
-        self.assertNotIn("lib", excluded)
-        # check=True so a fetch failure aborts rather than silently continuing.
-        self.assertTrue(call.kwargs.get("check"))
-        # Returns the extract dir ArtifactCatalog reads.
-        self.assertEqual(result, cache / "artifacts")
-
-    def test_passes_run_github_repo_when_set(self):
-        argv, _, _ = self._run_and_capture(
-            run_id="1",
-            platform="windows",
-            dest_dir=Path("/tmp/c"),
-            run_github_repo="me/fork",
-        )
-        self.assertIn("--run-github-repo=me/fork", argv)
-
-    def test_omits_run_github_repo_by_default(self):
-        argv, _, _ = self._run_and_capture(
-            run_id="1", platform="windows", dest_dir=Path("/tmp/c")
-        )
-        self.assertFalse(any(a.startswith("--run-github-repo") for a in argv))
-
-
 class TestBuildWxs(unittest.TestCase):
     """Integration tests: run build_wxs and parse the resulting XML."""
 
@@ -388,7 +337,6 @@ class TestBuildWxs(unittest.TestCase):
             version_dir="ROCm",
             package_version="1.2.3",
             run_id=None,
-            platform="windows",
             run_github_repo=None,
             artifacts_cache_dir=root / "artifact-cache",
         )
@@ -494,7 +442,6 @@ class TestBuildWxs(unittest.TestCase):
                 version_dir="ROCm",
                 package_version="1.2.3",
                 run_id=None,
-                platform="windows",
                 run_github_repo=None,
                 artifacts_cache_dir=root_path / "artifact-cache",
             )
