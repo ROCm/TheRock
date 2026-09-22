@@ -242,6 +242,12 @@ test_matrix = {
             "linux": 4,
             "windows": 4,
         },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # hipFile (storage-libs) unit tests. CPU-only (mocked), so they run quickly
     # and do not require a GPU runner.
@@ -292,6 +298,8 @@ test_matrix = {
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
             ],
             "windows": [
                 "gfx1100",
@@ -323,6 +331,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "origami": {
         "job_name": "origami",
@@ -331,6 +345,12 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_origami.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "hipblas": {
         "job_name": "hipblas",
@@ -343,6 +363,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "amdsmi": {
         "job_name": "amdsmi",
@@ -352,6 +378,12 @@ test_matrix = {
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
+        },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
         },
     },
     "hipblaslt": {
@@ -380,6 +412,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "rocsolver": {
         "job_name": "rocsolver",
@@ -395,6 +433,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 3,
             "windows": 2,
+        },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
         },
     },
     # PRIM tests
@@ -430,6 +474,10 @@ test_matrix = {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm",
+        # FAILURE: Known issues on gfx125X-dcgpu, excluding for test purposes
+        "exclude_family": {
+            "linux": ["gfx125X-dcgpu"],
+        },
     },
     # Corefile tests require specific hardware support (GPU core dump capable runners).
     # test_runner is pre-pinned so the family-based runner selection loop skips it.
@@ -465,6 +513,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # CRITICAL FAILURE (amd-smi hangs)
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # SPARSE tests
     "hipsparse": {
@@ -491,6 +545,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 3,
             "windows": 3,
+        },
+        "exclude_family": {
+            "linux": [
+                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35798263253/job/106982866615
+                "gfx125X-dcgpu",
+            ],
         },
     },
     "hipsparselt": {
@@ -553,6 +613,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "hiprand": {
         "job_name": "hiprand",
@@ -563,6 +629,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
         },
     },
     # FFT tests
@@ -576,6 +648,12 @@ test_matrix = {
             "linux": 2,
             "windows": 2,
         },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "hipfft": {
         "job_name": "hipfft",
@@ -586,6 +664,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 2,
             "windows": 2,
+        },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
         },
     },
     # MIOpen tests
@@ -716,6 +800,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # hipDNN install/consumption tests
     "hipdnn_install": {
@@ -726,6 +816,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
         },
     },
     # hipDNN integration tests (unit tests for the integration test harness)
@@ -751,6 +847,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # MIOpen provider tests
     "miopenprovider": {
@@ -775,6 +877,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35798263253/job/106982866530
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # hip-kernel-provider tests. test_hipkernelprovider.py installs the staged
     # rocKE wheels, then delegates to test_runner.py.
@@ -787,6 +895,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
         },
     },
     # rocWMMA tests
@@ -802,8 +916,12 @@ test_matrix = {
             "windows": 2,
         },
         "exclude_family": {
-            # rocWMMA does not support gfx103X (see TheRock#1944)
-            "linux": ["gfx1030"],
+            "linux": [
+                # rocWMMA does not support gfx103X (see TheRock#1944)
+                "gfx1030",
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
         },
     },
     # rocALUTION tests
@@ -816,6 +934,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
         },
     },
     # profiler tests
@@ -841,6 +965,8 @@ test_matrix = {
                 "gfx1103",
                 "gfx1200",
                 "gfx1201",
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
             ],
         },
     },
@@ -857,6 +983,12 @@ test_matrix = {
             "linux": 1,
         },
         "container_options": ["--cap-add=SYS_PTRACE", "--cap-add=PERFMON"],
+        "exclude_family": {
+            "linux": [
+                # CRITICAL FAILURE (amd-smi hangs)
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # libhipcxx amdclang++ tests (formerly libhipcxx_hipcc)
     "libhipcxx_amdclang": {
@@ -934,6 +1066,12 @@ test_matrix = {
         # libavutil-dev) for test builds. These are not bundled in TheRock
         # artifacts and are provided via the specialized media image.
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:d715ae2db664b055c90343e00588ce9ac3eec387513fe359396e5e08e75521ca",
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "rocjpeg": {
         "job_name": "rocjpeg",
@@ -943,6 +1081,12 @@ test_matrix = {
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
+        },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
         },
     },
     "rpp": {
@@ -958,6 +1102,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # aqlprofile tests
     "aqlprofile": {
@@ -969,6 +1119,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
         },
     },
     # rocrtst tests
