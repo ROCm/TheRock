@@ -5,6 +5,7 @@
 """Unit tests for configure_asan_env.py"""
 
 import os
+import platform
 import stat
 import sys
 import tempfile
@@ -88,6 +89,35 @@ class TestResolveAsanEnv(unittest.TestCase):
 
             self.assertNotIn("ASAN_RUNTIME_PATH", env)
             self.assertTrue(any("clang not found" in w for w in warnings))
+
+    @requires_posix
+    def test_resolves_the_legacy_arch_suffixed_runtime(self):
+        """The name depends on LLVM_ENABLE_PER_TARGET_RUNTIME_DIR; both must work."""
+        arch_lib = f"libclang_rt.asan-{platform.machine()}.so"
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "build"
+            runtime_path = (
+                artifacts / "lib" / "llvm" / "lib" / "clang" / "24" / arch_lib
+            )
+            runtime_path.parent.mkdir(parents=True, exist_ok=True)
+            runtime_path.write_text("")
+            # Real clang echoes the requested name back when it cannot find it.
+            _make_executable(
+                artifacts / "llvm" / "bin" / "clang",
+                "#!/bin/sh\n"
+                f'case "$1" in\n'
+                f'  *={arch_lib}) echo "{runtime_path}" ;;\n'
+                f'  *) echo "${{1#*=}}" ;;\n'
+                f"esac\n",
+            )
+            _make_executable(
+                artifacts / "llvm" / "bin" / "llvm-symbolizer", "#!/bin/sh\n"
+            )
+
+            env, warnings = resolve_asan_env(artifacts)
+
+            self.assertEqual(warnings, [])
+            self.assertEqual(env["ASAN_RUNTIME_PATH"], str(runtime_path.resolve()))
 
     @requires_posix
     def test_missing_runtime_file_warns(self):
