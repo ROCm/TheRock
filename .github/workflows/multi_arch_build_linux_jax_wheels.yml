@@ -12,6 +12,10 @@
 #   - Uploads the resulting wheels to the multi-arch release bucket.
 #   - Runs the JAX test subset against the published multi-arch index.
 
+# Notes on security:
+#   * Inherit caller-provided secrets; limited-trust PR entry points restrict the set.
+#   * Higher-trust callers supply Quartz credentials without repeating nested mappings.
+
 name: Multi-Arch Build Linux JAX Wheels
 
 on:
@@ -165,6 +169,8 @@ jobs:
       jax_pjrt_version: ${{ steps.write_jax_versions.outputs.jax_pjrt_version }}
       summary: ${{ steps.summary.outputs.summary }}
     env:
+      ROCM_VERSION: ${{ inputs.rocm_version }}
+      BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
       MANYLINUX_IMAGE_TAG: therock-jax-manylinux:${{ inputs.jax_ref }}-${{ inputs.python_version }}
       PACKAGE_DIST_DIR: ${{ github.workspace }}/jax-source/dist
 
@@ -184,6 +190,7 @@ jobs:
         timeout-minutes: 15
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref_name }}
 
@@ -191,6 +198,7 @@ jobs:
         timeout-minutes: 15
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           path: rocm-jax
           repository: ROCm/rocm-jax
           ref: ${{ inputs.jax_ref }}
@@ -200,6 +208,7 @@ jobs:
         timeout-minutes: 15
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           path: jax-source
           repository: ${{ inputs.jax_repository }}
           ref: ${{ inputs.jax_ref }}
@@ -243,16 +252,18 @@ jobs:
       - name: Determine wheel version suffix
         run: |
           python build_tools/github_actions/determine_version.py \
-            --rocm-version "${{ inputs.rocm_version }}"
+            --rocm-version "${ROCM_VERSION}"
+
 
       - name: Build JAX Wheels in manylinux container
         working-directory: jax-source
         env:
-          ROCM_VERSION: ${{ inputs.rocm_version }}
           PYTHON_VERSION: ${{ inputs.python_version }}
+          JAX_COMMIT: ${{ steps.checkout_jax.outputs.commit }}
         run: |
           docker run --rm \
             --user root \
+            --env JAX_COMMIT \
             --env ROCM_VERSION="${ROCM_VERSION}" \
             --env PYTHON_VERSION="${PYTHON_VERSION}" \
             --env ML_WHEEL_VERSION_SUFFIX="${version_suffix}" \
@@ -270,7 +281,7 @@ jobs:
                 --bazel_options=--repo_env=ROCM_PATH="${ROCM_ROOT}" \
                 --bazel_options=--repo_env=ML_WHEEL_TYPE=release \
                 --bazel_options=--repo_env=ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
-                --bazel_options=--//jaxlib/tools:jaxlib_git_hash="${{ steps.checkout_jax.outputs.commit }}" \
+                --bazel_options=--//jaxlib/tools:jaxlib_git_hash="${JAX_COMMIT}" \
                 --verbose \
                 --detailed_timestamped_log \
                 --output_path="$(pwd)/dist"
@@ -280,7 +291,7 @@ jobs:
         id: write_jax_versions
         run: |
           python3 ./build_tools/github_actions/write_jax_versions.py \
-            --dist-dir "${{ env.PACKAGE_DIST_DIR }}"
+            --dist-dir "${PACKAGE_DIST_DIR}"
 
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_product_publication_credentials
@@ -292,9 +303,10 @@ jobs:
         id: publish_jax_wheels
         run: |
           python build_tools/github_actions/publish_jax_to_release_bucket.py \
-            --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
-            --release-type="${{ inputs.release_type }}" \
+            --source-dir="${PACKAGE_DIST_DIR}" \
+            --release-type="${BUILD_RELEASE_TYPE}" \
             --structured
+
 
       - name: Capture job summary
         id: summary
@@ -309,11 +321,16 @@ jobs:
       enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
       summary: ${{ steps.summary.outputs.summary }}
+    env:
+      TEST_AMDGPU_FAMILY: ${{ inputs.test_amdgpu_family }}
+      TEST_SIZE: ${{ inputs.test_size }}
+
     steps:
       - name: Checking out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref_name }}
 
@@ -321,6 +338,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
+          persist-credentials: false
           repository: ROCm/therock-ci-config
           ref: main
           path: ci-config
@@ -332,9 +350,9 @@ jobs:
           CI_CONFIG_PATH: ci-config
         run: |
           python ./build_tools/github_actions/configure_jax_test_matrix.py \
-            --target "${{ inputs.test_amdgpu_family }}" \
+            --target "${TEST_AMDGPU_FAMILY}" \
             --platform linux \
-            --test-size "${{ inputs.test_size }}"
+            --test-size "${TEST_SIZE}"
 
       - name: Capture job summary
         id: summary
@@ -352,7 +370,7 @@ jobs:
       contents: read
       id-token: write
     uses: ./.github/workflows/test_multi_arch_linux_jax_wheels.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
       package_index_url: ${{ needs.build_jax_wheels.outputs.package_index_url }}

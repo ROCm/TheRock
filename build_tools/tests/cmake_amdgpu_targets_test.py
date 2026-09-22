@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: MIT
 
 import os
+import subprocess
 import sys
+import tempfile
 import textwrap
 import unittest
 from pathlib import Path
@@ -11,6 +13,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.cmake_amdgpu_targets import (
     AmdgpuTargetInfo,
+    amdgpu_family_map,
     build_family_to_targets,
     parse_amdgpu_targets_cmake,
 )
@@ -18,8 +21,6 @@ from _therock_utils.cmake_amdgpu_targets import (
 
 class ParseAmdgpuTargetsCmakeTest(unittest.TestCase):
     def _parse(self, cmake_text: str) -> list[AmdgpuTargetInfo]:
-        import tempfile
-
         with tempfile.NamedTemporaryFile(mode="w", suffix=".cmake", delete=False) as f:
             f.write(textwrap.dedent(cmake_text))
             tmp_path = Path(f.name)
@@ -106,6 +107,138 @@ class BuildFamilyToTargetsTest(unittest.TestCase):
         ]
         mapping = build_family_to_targets(infos)
         self.assertEqual(mapping["gfx942"].count("gfx942"), 1)
+
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+class CmakeTargetSelectionTest(unittest.TestCase):
+    def test_registration(self):
+        infos = parse_amdgpu_targets_cmake(ROOT / "cmake/therock_amdgpu_targets.cmake")
+        strict = next(info for info in infos if info.gfx_target == "gfx1250-strict")
+        self.assertEqual(strict.families, [])
+        families = amdgpu_family_map()
+        self.assertEqual(families["gfx1250"], ["gfx1250"])
+        self.assertEqual(families["gfx1250-strict"], ["gfx1250-strict"])
+        for family in ("gfx125X-all", "gfx125X-dcgpu", "dcgpu-all"):
+            self.assertNotIn("gfx1250-strict", families[family])
+
+    def test_cmake_selection_and_defaults(self):
+        cases = [
+            ("set(THEROCK_AMDGPU_FAMILIES gfx1250)", "gfx1250", "gfx1250", "default"),
+            (
+                "set(THEROCK_AMDGPU_FAMILIES gfx125X-all)",
+                "gfx1250",
+                "gfx1250",
+                "default",
+            ),
+            (
+                "set(THEROCK_AMDGPU_TARGETS gfx1250)",
+                "gfx1250",
+                "THEROCK_DIST_AMDGPU_TARGETS-NOTFOUND",
+                "default",
+            ),
+            (
+                "set(THEROCK_AMDGPU_FAMILIES gfx1250-strict)\nset(THEROCK_TEST_AMDGPU_FAMILIES gfx1250-strict)",
+                "gfx1250-strict",
+                "gfx1250-strict",
+                "gfx1250-strict",
+            ),
+            (
+                "set(THEROCK_AMDGPU_TARGETS gfx1250-strict)\nset(THEROCK_DIST_AMDGPU_TARGETS gfx1250-strict)\nset(THEROCK_TEST_AMDGPU_TARGETS gfx1250-strict)",
+                "gfx1250-strict",
+                "gfx1250-strict",
+                "gfx1250-strict",
+            ),
+            (
+                "set(THEROCK_AMDGPU_FAMILIES gfx1250-strict)",
+                "gfx1250-strict",
+                "gfx1250-strict",
+                "all",
+            ),
+            (
+                "set(THEROCK_AMDGPU_TARGETS gfx1250-strict)",
+                "gfx1250-strict",
+                "THEROCK_DIST_AMDGPU_TARGETS-NOTFOUND",
+                "all",
+            ),
+            (
+                "set(THEROCK_AMDGPU_FAMILIES gfx1250 gfx1250-strict)\nset(THEROCK_AMDGPU_DIST_BUNDLE_NAME combined)",
+                "gfx1250;gfx1250-strict",
+                "gfx1250;gfx1250-strict",
+                "all",
+            ),
+            (
+                "set(THEROCK_AMDGPU_FAMILIES gfx125X-all)\nset(THEROCK_AMDGPU_TARGETS gfx1250-strict)\nset(THEROCK_AMDGPU_DIST_BUNDLE_NAME combined)",
+                "gfx1250;gfx1250-strict",
+                "gfx1250",
+                "all",
+            ),
+            (
+                "set(THEROCK_DIST_AMDGPU_FAMILIES gfx1250-strict)",
+                "THEROCK_AMDGPU_TARGETS-NOTFOUND",
+                "gfx1250-strict",
+                "all",
+            ),
+            (
+                "set(THEROCK_DIST_AMDGPU_TARGETS gfx1250 gfx1250-strict)",
+                "THEROCK_AMDGPU_TARGETS-NOTFOUND",
+                "gfx1250;gfx1250-strict",
+                "all",
+            ),
+            (
+                "set(THEROCK_DIST_AMDGPU_FAMILIES gfx125X-all)",
+                "THEROCK_AMDGPU_TARGETS-NOTFOUND",
+                "gfx1250",
+                "default",
+            ),
+            (
+                "set(THEROCK_AMDGPU_FAMILIES gfx1250-strict)\nset(THEROCK_TEST_AMDGPU_TARGETS gfx1250)",
+                "gfx1250-strict",
+                "gfx1250-strict",
+                "gfx1250",
+            ),
+            (
+                "set(THEROCK_AMDGPU_FAMILIES gfx1250-strict)\nset(THEROCK_TEST_AMDGPU_FAMILIES gfx125X-all)",
+                "gfx1250-strict",
+                "gfx1250-strict",
+                "gfx1250",
+            ),
+        ]
+        for settings, build, dist, tests in cases:
+            with self.subTest(settings=settings), tempfile.TemporaryDirectory() as tmp:
+                script = Path(tmp) / "probe.cmake"
+                script.write_text(
+                    f"""cmake_minimum_required(VERSION 3.25)
+include("{ROOT.as_posix()}/cmake/therock_amdgpu_targets.cmake")
+{settings}
+therock_validate_amdgpu_targets()
+if(NOT THEROCK_AMDGPU_TARGETS STREQUAL "{build}")
+  message(FATAL_ERROR "Wrong build targets: ${{THEROCK_AMDGPU_TARGETS}}")
+endif()
+if(NOT THEROCK_DIST_AMDGPU_TARGETS STREQUAL "{dist}")
+  message(FATAL_ERROR "Wrong dist targets: ${{THEROCK_DIST_AMDGPU_TARGETS}}")
+endif()
+"""
+                )
+                with script.open("a") as f:
+                    if tests in ("default", "all"):
+                        f.write(
+                            "get_property(expected GLOBAL PROPERTY THEROCK_AMDGPU_TARGETS)\n"
+                        )
+                        if tests == "default":
+                            f.write("list(REMOVE_ITEM expected gfx1250-strict)\n")
+                    else:
+                        f.write(f'set(expected "{tests}")\n')
+                    f.write(
+                        'if(NOT THEROCK_TEST_AMDGPU_TARGETS STREQUAL expected)\nmessage(FATAL_ERROR "Wrong test targets: ${THEROCK_TEST_AMDGPU_TARGETS}; expected: ${expected}")\nendif()\n'
+                    )
+                subprocess.run(
+                    ["cmake", "-P", str(script)],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
 
 
 if __name__ == "__main__":

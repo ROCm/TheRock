@@ -179,7 +179,7 @@ STAGE_TO_TEST_LABELS: dict[str, list[str]] = {
     "profiler-apps": ["rocprofiler-systems", "rocprofiler-compute"],
     "cv-libs": ["rpp"],
     "media-libs": ["rocdecode", "rocjpeg"],
-    "debug-tools": ["rocgdb"],
+    "debug-tools": ["rocgdb", "rocr-debug-agent"],
 }
 
 
@@ -226,7 +226,7 @@ class CIInputs:
     # PR labels (from event payload for pull_request events)
     pr_labels: list[str] = field(default_factory=list)
 
-    # Per-platform workflow_dispatch overrides (parsed from comma-separated input)
+    # Per-platform GPU family selections parsed from reusable workflow inputs.
     linux_amdgpu_families: list[str] = field(default_factory=list)
     windows_amdgpu_families: list[str] = field(default_factory=list)
     linux_test_labels: list[str] = field(default_factory=list)
@@ -686,8 +686,10 @@ class BuildConfig:
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
     pytorch_build_matrix: list[dict[str, str]] = field(default_factory=list)
     jax_build_matrix: list[dict[str, str]] = field(default_factory=list)
-    # Build runner label for this platform/variant combination
-    build_runs_on: str = ""
+    # Build runner labels for this platform/variant combination
+    build_runs_on_large: str = ""
+    build_runs_on_small: str = ""
+    build_runs_on_medium: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
     # Stages excluded from the build graph entirely (no build, no artifact copy).
@@ -867,6 +869,9 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
       taken directly from the workflow inputs, giving the caller the ability
       to either replicate what CI does on PRs/push or build/test a narrow
       set of targets for investigation.
+    - pull requests and pushes with explicit per-platform family inputs: The
+      caller-supplied families take precedence over trigger defaults. PR labels
+      can still extend this caller-selected set.
 
     Returns per-platform family lists, filtered to only include families
     that have a platform entry in amdgpu_family_matrix.py.
@@ -874,6 +879,11 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     # All families for validation and "all" keyword expansion.
     # Empty trigger list returns all families (workflow_dispatch/schedule case).
     all_families = get_all_families_for_trigger_types([])
+    # Default families excludes explicit_only targets (used for "all" keyword)
+    default_family_names = list(all_families)
+    # For workflow_dispatch, also include explicit_only families for lookup
+    if ci_inputs.is_workflow_dispatch:
+        all_families.update(get_all_families_for_trigger_types(["explicit_only"]))
 
     # Select family names per platform based on trigger type.
     # Ordered from most-specific (workflow_dispatch) to broadest (schedule).
@@ -884,15 +894,35 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
         linux_names = list(ci_inputs.linux_amdgpu_families)
         windows_names = list(ci_inputs.windows_amdgpu_families)
         if linux_names == ["all"]:
-            linux_names = list(all_families.keys())
+            linux_names = default_family_names
             print("  linux_amdgpu_families='all' -> all Linux families")
         elif linux_names == ["none"]:
             linux_names = []
         if windows_names == ["all"]:
-            windows_names = list(all_families.keys())
+            windows_names = default_family_names
             print("  windows_amdgpu_families='all' -> all Windows families")
         elif windows_names == ["none"]:
             windows_names = []
+    elif (ci_inputs.is_pull_request or ci_inputs.is_push) and (
+        ci_inputs.linux_amdgpu_families or ci_inputs.windows_amdgpu_families
+    ):
+        # Callers can define their intended build coverage through the reusable
+        # workflow inputs. When either platform is explicit, an empty input for
+        # the other platform skips it; trigger defaults apply only when both
+        # inputs are empty.
+        linux_names = list(ci_inputs.linux_amdgpu_families)
+        windows_names = list(ci_inputs.windows_amdgpu_families)
+        if linux_names == ["all"]:
+            linux_names = default_family_names
+            print("  linux_amdgpu_families='all' -> all Linux families")
+        elif linux_names == ["none"]:
+            linux_names = []
+        if windows_names == ["all"]:
+            windows_names = default_family_names
+            print("  windows_amdgpu_families='all' -> all Windows families")
+        elif windows_names == ["none"]:
+            windows_names = []
+        print("  Using caller-supplied GPU families")
     elif ci_inputs.is_pull_request:
         # Smallest default set for fast PR feedback. PR labels can extend
         # the set below (gfx* for individual families, ci:run-all-archs
@@ -1465,7 +1495,9 @@ def _expand_build_config_for_platform(
     suffix = variant_config.get("build_variant_suffix", "")
 
     # Select build runner using weighted distribution
-    build_runs_on = select_build_runner(platform, build_variant)
+    build_runs_on_large = select_build_runner(platform, build_variant, size="large")
+    build_runs_on_small = select_build_runner(platform, build_variant, size="small")
+    build_runs_on_medium = select_build_runner(platform, build_variant, size="medium")
 
     pytorch_build_matrix: list[dict[str, str]] = []
     build_pytorch = jobs.build_pytorch.action == JobAction.RUN
@@ -1535,7 +1567,9 @@ def _expand_build_config_for_platform(
         build_jax=build_jax,
         pytorch_build_matrix=pytorch_build_matrix,
         jax_build_matrix=jax_build_matrix,
-        build_runs_on=build_runs_on,
+        build_runs_on_large=build_runs_on_large,
+        build_runs_on_small=build_runs_on_small,
+        build_runs_on_medium=build_runs_on_medium,
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         skip_stages=jobs.build_rocm.skipped_stages,
@@ -1596,6 +1630,7 @@ def expand_build_configs(
     """
     all_families = get_all_families_for_trigger_types(
         ["presubmit", "postsubmit", "nightly"]
+        + (["explicit_only"] if ci_inputs.is_workflow_dispatch else [])
     )
 
     # =========================================================================
