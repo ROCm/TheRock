@@ -22,6 +22,7 @@
     "License": "MIT",
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Postinstall": "True",
     "Artifactory": [
       {
         "Artifact": "core-amdsmi",

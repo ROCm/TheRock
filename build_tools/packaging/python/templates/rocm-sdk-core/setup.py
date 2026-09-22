@@ -7,6 +7,7 @@ import importlib.util
 import os
 import platform
 from setuptools import setup, find_packages
+from setuptools.command.build_py import build_py as _build_py
 import sys
 import sysconfig
 from pathlib import Path
@@ -37,6 +38,46 @@ platform_package_name = my_package.get_py_package_name()
 packages.append(platform_package_name)
 print("Found packages:", packages)
 
+# The amdsmi Python module travels as ordinary files inside the platform
+# payload, at <py_package>/share/amd_smi/amdsmi. Nothing in a wheel install puts
+# that directory on sys.path, so `import amdsmi` fails even though the files are
+# present. Ship a .pth naming it.
+#
+# The entry is relative, which site.py resolves against the site-packages
+# directory holding the .pth, so the wheel stays relocatable. The module is
+# referenced where it lands rather than copied: amdsmi_wrapper.py locates
+# libamd_smi.so by a path relative to its own file, so a copy elsewhere would
+# bind whichever library the dynamic linker found first.
+AMDSMI_PTH_NAME = "amdsmi.pth"
+AMDSMI_SHARE_RELPATH = f"{platform_package_name}/share/amd_smi"
+
+
+def _amdsmi_module_present() -> bool:
+    staged = (
+        THIS_DIR / "platform" / platform_package_name / "share" / "amd_smi" / "amdsmi"
+    )
+    return (staged / "__init__.py").is_file()
+
+
+class build_py(_build_py):
+    """Emit amdsmi.pth at the wheel root so the staged module is importable.
+
+    A file copied into build_lib's root becomes a top-level entry in the wheel,
+    which pip installs directly into site-packages and records in RECORD, so
+    `pip uninstall` removes it again.
+    """
+
+    def run(self):
+        super().run()
+        if not _amdsmi_module_present():
+            print("amdsmi module not present in payload; skipping amdsmi.pth")
+            return
+        os.makedirs(self.build_lib, exist_ok=True)
+        target = Path(self.build_lib) / AMDSMI_PTH_NAME
+        target.write_text(AMDSMI_SHARE_RELPATH + "\n")
+        print(f"Wrote {target} -> {AMDSMI_SHARE_RELPATH}")
+
+
 WINDOWS_CONSOLE_SCRIPTS = [
     "hipInfo=rocm_sdk_core._cli:hipInfo",
 ]
@@ -51,6 +92,7 @@ if (
 setup(
     name=f"rocm-sdk-core",
     version=dist_info.__version__,
+    cmdclass={"build_py": build_py},
     packages=packages,
     package_dir={
         "": "src",
