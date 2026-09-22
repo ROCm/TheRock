@@ -206,7 +206,7 @@ jobs:
       id-token: write
       contents: read
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:33a1763953ddc076beea845cb041f8664266be104c816f53cbc7ecc22bc37490 # 2026-09-22
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       optional_build_prod_arguments: ""
