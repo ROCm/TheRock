@@ -137,12 +137,7 @@ jobs:
   test_artifacts_per_family:
     needs: [copy_prebuilt_stages, build_multi_arch_stages]
     name: Test ${{ matrix.family_info.amdgpu_family }}
-    if: >-
-      ${{
-        !cancelled() &&
-        (needs.copy_prebuilt_stages.result == 'success' || needs.copy_prebuilt_stages.result == 'skipped') &&
-        needs.build_multi_arch_stages.result == 'success'
-      }}
+    if: ${{ !cancelled() && (needs.copy_prebuilt_stages.result == 'success' || needs.copy_prebuilt_stages.result == 'skipped') && needs.build_multi_arch_stages.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
