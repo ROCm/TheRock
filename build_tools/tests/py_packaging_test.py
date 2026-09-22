@@ -9,6 +9,7 @@ These tests cover:
   - params.populated_packages: registration and cross-package search helpers
 """
 
+import argparse
 import json
 import os
 import stat
@@ -16,6 +17,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import sys
 
@@ -23,7 +25,10 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.artifacts import ArtifactCatalog
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, PopulatedFiles
-from build_python_packages import validate_kpack_split_target_completeness
+from build_python_packages import (
+    _run_kpack_split,
+    validate_kpack_split_target_completeness,
+)
 
 
 class TmpDirTestCase(unittest.TestCase):
@@ -461,7 +466,9 @@ class DevicePackagingTest(TmpDirTestCase):
             kpack_split=kpack_split,
         )
 
-    def _setup_kpack_split_artifacts(self) -> Path:
+    def _setup_kpack_split_artifacts(
+        self, targets: tuple[str, ...] = ("gfx942",)
+    ) -> Path:
         """Create a minimal set of generic + per-ISA artifacts."""
         artifact_dir = self.temp_dir / "artifacts"
         # Generic library artifact (host code)
@@ -472,17 +479,17 @@ class DevicePackagingTest(TmpDirTestCase):
             "generic",
             {"lib/librocblas.txt": "host library"},
         )
-        # Per-ISA device artifact
-        self._add_artifact(
-            artifact_dir,
-            "blas",
-            "lib",
-            "gfx942",
-            {
-                ".kpack/blas_lib_gfx942.kpack": "kpack data",
-                "lib/rocblas/library/Foo_gfx942.co": "kernel object",
-            },
-        )
+        for target in targets:
+            self._add_artifact(
+                artifact_dir,
+                "blas",
+                "lib",
+                target,
+                {
+                    f".kpack/blas_lib_{target}.kpack": "kpack data",
+                    f"lib/rocblas/library/Foo_{target}.co": "kernel object",
+                },
+            )
         return artifact_dir
 
     def test_kpack_split_libraries_is_arch_neutral(self):
@@ -730,6 +737,97 @@ class DevicePackagingTest(TmpDirTestCase):
         self.assertIn("LIBRARIES_PY_PACKAGE_NAME", content)
         self.assertIn("_rocm_sdk_libraries", content)
 
+    def _populate_targets(self, targets: tuple[str, ...]) -> PopulatedDistPackage:
+        artifacts = self._setup_kpack_split_artifacts(targets)
+        params = self._make_params(artifacts, kpack_split=True)
+        device = PopulatedDistPackage(
+            params, logical_name="device", target_family="gfx1250"
+        )
+        return device.populate_device_files(
+            params.filter_artifacts(lambda an: an.target_family in targets)
+        )
+
+    def test_gfx1250_payload_population(self):
+        device = self._populate_targets(("gfx1250",))
+        self.assertEqual(
+            list((device.platform_dir / ".kpack").iterdir()),
+            [device.platform_dir / ".kpack/blas_lib_gfx1250.kpack"],
+        )
+        self.assertEqual(
+            (device.platform_dir / ".kpack/blas_lib_gfx1250.kpack").read_text(),
+            "kpack data",
+        )
+
+    def test_gfx1250_strict_payload_population(self):
+        device = self._populate_targets(("gfx1250-strict",))
+        self.assertEqual(
+            list((device.platform_dir / ".kpack").iterdir()),
+            [device.platform_dir / ".kpack/blas_lib_gfx1250-strict.kpack"],
+        )
+        self.assertEqual(
+            (device.platform_dir / ".kpack/blas_lib_gfx1250-strict.kpack").read_text(),
+            "kpack data",
+        )
+
+    def test_shared_owner_payload_population(self):
+        device = self._populate_targets(("gfx1250", "gfx1250-strict"))
+        self.assertEqual(
+            {p.name for p in (device.platform_dir / ".kpack").iterdir()},
+            {"blas_lib_gfx1250.kpack", "blas_lib_gfx1250-strict.kpack"},
+        )
+        for target in ("gfx1250", "gfx1250-strict"):
+            self.assertEqual(
+                (device.platform_dir / f".kpack/blas_lib_{target}.kpack").read_text(),
+                "kpack data",
+            )
+
+    def test_shared_owner_manifest_preserves_target_paths(self):
+        device = self._populate_targets(("gfx1250", "gfx1250-strict"))
+        manifest = json.loads(
+            (device.platform_dir / ".devel_links/gfx1250.json").read_text()
+        )
+        links = {entry["relpath"]: entry["target"] for entry in manifest["links"]}
+        self.assertEqual(len(manifest["links"]), 4)
+        for target in ("gfx1250", "gfx1250-strict"):
+            self.assertEqual(
+                links[f".kpack/blas_lib_{target}.kpack"],
+                f"../../{device.platform_dir.name}/.kpack/blas_lib_{target}.kpack",
+            )
+            self.assertEqual(
+                links[f"lib/rocblas/library/Foo_{target}.co"],
+                f"../../../../{device.platform_dir.name}/lib/rocblas/library/Foo_{target}.co",
+            )
+
+    def test_split_constructs_one_device_package_per_owner(self):
+        artifact_dir = self._setup_kpack_split_artifacts(("gfx1250", "gfx1250-strict"))
+        params = self._make_params(artifact_dir, kpack_split=True)
+        core = PopulatedDistPackage(params, logical_name="core")
+        args = argparse.Namespace(
+            build_packages=False,
+            dest_dir=params.dest_dir,
+            devel_tarball_compression=False,
+        )
+        _run_kpack_split(args, params, core, None)
+        devices = [p for p in params.populated_packages if p.logical_name == "device"]
+        self.assertEqual(len(devices), 1)
+        self.assertEqual(devices[0].target_family, "gfx1250")
+
+    def test_conflicting_payloads_fail_before_population(self):
+        artifact_dir = self.temp_dir / "artifacts"
+        for target in ("gfx1100", "gfx1101"):
+            self._add_artifact(
+                artifact_dir, "blas", "lib", target, {"lib/shared.dat": target}
+            )
+        params = self._make_params(artifact_dir, kpack_split=True)
+        device = PopulatedDistPackage(
+            params, logical_name="device", target_family="gfx110X-all"
+        )
+        with self.assertRaisesRegex(
+            ValueError, "Conflicting device path lib/shared.dat"
+        ):
+            device.populate_device_files(params.artifacts)
+        self.assertFalse((device.platform_dir / "lib/shared.dat").exists())
+
 
 class KpackSplitCompletenessTest(TmpDirTestCase):
     """Tests for validating kpack-split artifact coverage before packaging."""
@@ -831,6 +929,28 @@ class KpackSplitCompletenessTest(TmpDirTestCase):
             windows_targets=None,
             platform_name="linux",
         )
+
+    def test_shared_owner_does_not_satisfy_missing_target(self):
+        for present, requested in (
+            ("gfx1250", "gfx1250-strict"),
+            ("gfx1250-strict", "gfx1250"),
+        ):
+            with self.subTest(present=present):
+                self._make_artifact_catalog([present])
+                artifacts = ArtifactCatalog(
+                    self.temp_dir / "artifacts",
+                    filter=lambda an: an.target_family == present,
+                )
+                with self.assertRaisesRegex(
+                    RuntimeError, "missing fetched artifact targets"
+                ):
+                    self._validate_completeness(
+                        kpack_split=True,
+                        artifacts=artifacts,
+                        linux_targets=[requested],
+                        windows_targets=None,
+                        platform_name="linux",
+                    )
 
 
 class RequiredDistPackagesTest(TmpDirTestCase):
@@ -970,6 +1090,19 @@ class RequiredDistPackagesTest(TmpDirTestCase):
             artifacts=artifacts,
             kpack_split=True,
             linux_targets=["gfx1100"],
+            windows_targets=None,
+            platform_name="linux",
+        )
+
+    def test_required_dist_uses_shared_owner_wheel(self):
+        artifacts = self._make_artifact_catalog(
+            [("blas", "lib", "gfx1250"), ("blas", "lib", "gfx1250-strict")]
+        )
+        self._write_required_kpack_split_runtime_files("gfx1250")
+        self._validate_required_dist_packages(
+            artifacts=artifacts,
+            kpack_split=True,
+            linux_targets=["gfx1250", "gfx1250-strict"],
             windows_targets=None,
             platform_name="linux",
         )
@@ -1275,6 +1408,7 @@ class CrossPlatformFamiliesTest(TmpDirTestCase):
         on_disk_families: list[str] | None = None,
         linux_target_families: list[str] | None = None,
         windows_target_families: list[str] | None = None,
+        kpack_split: bool = False,
     ) -> Parameters:
         artifact_dir = self.temp_dir / "artifacts"
         artifact_dir.mkdir(exist_ok=True)
@@ -1289,6 +1423,7 @@ class CrossPlatformFamiliesTest(TmpDirTestCase):
             artifacts=ArtifactCatalog(artifact_dir),
             linux_target_families=linux_target_families,
             windows_target_families=windows_target_families,
+            kpack_split=kpack_split,
         )
 
     def _exec_dist_info(self, params: Parameters) -> dict:
@@ -1483,6 +1618,55 @@ class CrossPlatformFamiliesTest(TmpDirTestCase):
             linux_params.dist_info_contents,
             windows_params.dist_info_contents,
         )
+
+    def test_shared_owner_does_not_create_target_intersection(self):
+        params = self._make_params(
+            linux_target_families=["gfx1100", "gfx1250-strict"],
+            windows_target_families=["gfx1250"],
+            kpack_split=True,
+        )
+        self.assertEqual(params.default_target_family, "gfx1100")
+
+    def test_linux_only_targets_do_not_override_shared_target(self):
+        params = self._make_params(
+            linux_target_families=["gfx1250", "gfx1250-strict", "gfx942"],
+            windows_target_families=["gfx942"],
+            kpack_split=True,
+        )
+        self.assertEqual(params.default_target_family, "gfx942")
+
+    def test_shared_owner_metadata(self):
+        params = self._make_params(
+            linux_target_families=["gfx1250-strict", "gfx942"],
+            windows_target_families=["gfx1250"],
+            kpack_split=True,
+        )
+        info = params.dist_info
+        self.assertEqual(
+            info.ALL_PACKAGES["device"].get_dist_package_require("gfx1250-strict"),
+            "rocm-sdk-device-gfx1250==0.0.1.test",
+        )
+        self.assertEqual(info.get_target_family_platform_marker("gfx1250-strict"), "")
+        extras = info.build_per_target_extras()
+        self.assertIn("device-gfx1250", extras)
+        self.assertNotIn("device-gfx1250-strict", extras)
+
+    def test_explicit_selection_retains_target_name(self):
+        params = self._make_params(
+            linux_target_families=["gfx1250-strict"], kpack_split=True
+        )
+        with mock.patch.dict(os.environ, {"ROCM_SDK_TARGET_FAMILY": "gfx1250-strict"}):
+            self.assertEqual(
+                params.dist_info.determine_target_family(), "gfx1250-strict"
+            )
+
+    def test_architectural_classification_is_independent_of_build_membership(self):
+        info = self._make_params(linux_target_families=["gfx125X-all"]).dist_info
+        for target in ("gfx1250", "gfx1250-strict"):
+            with self.subTest(target=target), mock.patch.object(
+                info.subprocess, "check_output", return_value=target + "\n"
+            ):
+                self.assertEqual(info.discover_current_target_family(), "gfx125X-all")
 
 
 # ---------------------------------------------------------------------------

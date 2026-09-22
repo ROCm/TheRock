@@ -66,6 +66,7 @@ IGNORED_COMPONENTS = {"dbg"}
 
 KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
     ("base", "test"),
+    ("fft", "test"),  # amdrocm-fft-test removed: links GPL fftw3, not distributed.
     ("fftw3", "dev"),  # fftw3 is currently test-only; may be distributed later.
     ("fftw3", "doc"),
     ("fftw3", "run"),
