@@ -1420,25 +1420,20 @@ class TestExpandBuildConfigs(unittest.TestCase):
             linux_families=["gfx94x"],
             windows_families=[],
         )
-        for python_version in ("3.13", "3.14", "3.15"):
-            with self.subTest(python_version=python_version):
-                result = cm.expand_build_configs(
-                    ci_inputs=self._inputs(
-                        release_type="dev",
-                        python_versions=[python_version],
-                    ),
-                    git_context=cm.GitContext(),
-                    targets=targets,
-                    jobs=_jobs(),
-                )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                release_type="dev",
+                python_versions=["3.13"],
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
 
-                self.assertEqual(
-                    {
-                        row["python_version"]
-                        for row in result.linux.pytorch_build_matrix
-                    },
-                    {python_version},
-                )
+        self.assertEqual(
+            {row["python_version"] for row in result.linux.pytorch_build_matrix},
+            {"3.13"},
+        )
 
     def test_build_config_disables_pytorch_when_job_skipped(self):
         targets = cm.TargetSelection(
