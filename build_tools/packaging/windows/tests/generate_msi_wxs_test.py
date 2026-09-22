@@ -604,7 +604,7 @@ class TestResolveLegacyDlls(unittest.TestCase):
             root = Path(tmp)
             artifact_dir = root / "artifacts"
             artifact_dir.mkdir()
-            with self.assertRaises(SystemExit):
+            with self.assertRaises(FileNotFoundError):
                 resolve_legacy_dlls(artifact_dir, ["absent.dll"], root)
 
 

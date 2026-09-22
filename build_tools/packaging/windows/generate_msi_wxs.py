@@ -377,8 +377,8 @@ def resolve_legacy_dlls(
             if fallback.is_file():
                 found = fallback
         if found is None:
-            sys.exit(
-                f"Error: System32 DLL not found: {name} "
+            raise FileNotFoundError(
+                f"System32 DLL not found: {name} "
                 f"(searched {artifact_dir} and {legacy_fallback}). "
                 "These DLLs are a prerequisite; ensure the artifacts and the "
                 "rocm-systems DVC files are present (e.g. run fetch_sources.py "
