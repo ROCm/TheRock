@@ -224,6 +224,7 @@ jobs:
       # Checkout external repo for skip-ci evaluation (git diff + TOML config).
       - name: Checkout external repo
         if: ${{ inputs.external_repo != '' }}
+        timeout-minutes: 15
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ fromJSON(inputs.external_repo).repository }}

@@ -12,10 +12,37 @@ The CI pipelines test a growing set of GPU targets depending on trigger type/fre
 | `push`         | <ul><li>`amdgpu_family_info_matrix_presubmit`</li><li>`amdgpu_family_info_matrix_postsubmit`</li></ul>                                             | High priority targets with limited test runners |
 | `schedule`     | <ul><li>`amdgpu_family_info_matrix_presubmit`</li><li>`amdgpu_family_info_matrix_postsubmit`</li><li>`amdgpu_family_info_matrix_nightly`</li></ul> | All targets, even those that fail to build      |
 
+### Path-based skip CI
+
+CI is skipped when only documentation or metadata files change. TheRock uses
+built-in patterns in [`configure_ci_path_filters.py`](../../build_tools/github_actions/configure_ci_path_filters.py).
+
+External repos (e.g., rocm-libraries) define their own patterns via a TOML config:
+
+```toml
+# .github/skip-ci-config.toml
+version = 1
+
+[skip_ci]
+common = [
+    "*.md",
+    "docs/*",
+    ".gitignore",
+    "projects/*/docs/*",
+]
+linux = []   # Additional patterns for Linux-only skip
+windows = [] # Additional patterns for Windows-only skip
+```
+
+Pass the config path in `external_repo` JSON when calling TheRock workflows:
+
+```json
+{"repository": "ROCm/rocm-libraries", "ref": "...", "skip_ci_config": ".github/skip-ci-config.toml"}
+```
+
 ### Pull request
 
-CI runs on pull requests if modified files pass the filters in
-[`configure_ci_path_filters.py`](../../build_tools/github_actions/configure_ci_path_filters.py).
+CI runs on pull requests if modified files pass the path filters described above.
 
 The following labels may be added to a pull request to modify CI behavior:
 
@@ -32,8 +59,7 @@ The following labels may be added to a pull request to modify CI behavior:
 
 ### Push
 
-CI runs on pushes to `main` if modified files pass the filters in
-[`configure_ci_path_filters.py`](../../build_tools/github_actions/configure_ci_path_filters.py).
+CI runs on pushes to `main` if modified files pass the path filters described above.
 
 ### Schedule
 
