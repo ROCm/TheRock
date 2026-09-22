@@ -1851,6 +1851,8 @@ def write_outputs(
         "test_type": test_type,
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,
+        # Changed projects for granular test filtering (computed from external repo git diff)
+        "changed_projects": ",".join(ci_inputs.changed_projects),
     }
     gha_set_output(output_vars)
 
