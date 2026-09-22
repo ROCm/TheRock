@@ -154,7 +154,8 @@ class ConfigureTest(unittest.TestCase):
             config_path="",
         )
         self.assertEqual(result.run_all_tests, True)
-        self.assertEqual(result.changed_files, [])
+        # changed_files=None signals "unknown" to prevent path-based skip
+        self.assertIsNone(result.changed_files)
 
     def test_workflow_dispatch_runs_all_tests(self):
         result = configure(
@@ -165,7 +166,8 @@ class ConfigureTest(unittest.TestCase):
             config_path="",
         )
         self.assertEqual(result.run_all_tests, True)
-        self.assertEqual(result.changed_files, [])
+        # changed_files=None signals "unknown" to prevent path-based skip
+        self.assertIsNone(result.changed_files)
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
     @patch("configure_external_repo_ci.load_repo_config")
@@ -227,7 +229,8 @@ class ConfigureTest(unittest.TestCase):
             config_path="",
         )
         self.assertEqual(result.run_all_tests, True)
-        self.assertEqual(result.changed_files, [])
+        # changed_files=None signals "unknown" to prevent path-based skip
+        self.assertIsNone(result.changed_files)
 
     def test_no_shas_provided_runs_all_tests(self):
         result = configure(
@@ -294,7 +297,6 @@ class ConfigureNonSubtreeTest(unittest.TestCase):
         r = self._configure(["shared/amdgpu-windows-interop/pal/x.cpp"])
         self.assertEqual(r.changed_projects, "shared/amdgpu-windows-interop")
         self.assertFalse(r.run_all_tests)
-        self.assertFalse(r.skip_tests)
 
     def test_emulation_components_are_surfaced(self):
         r = self._configure(["emulation/mirage/a.cpp", "emulation/rocjitsu/b.cpp"])

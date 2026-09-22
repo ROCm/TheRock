@@ -792,11 +792,37 @@ def should_skip_ci(
                 f"Invalid external_repo JSON: {ci_inputs.external_repo!r}"
             ) from e
 
+        # Validate external_repo is a dict
+        if not isinstance(external_repo, dict):
+            raise ValueError(
+                f"external_repo must be a JSON object, got: {type(external_repo).__name__}"
+            )
+
         # Check changed_files and skip_ci_patterns from external repo if provided.
         # External repos provide their own skip patterns, allowing them to define
         # skippable paths without updating TheRock.
+        #
+        # changed_files semantics:
+        # - None/missing: Unknown changes (schedule, workflow_dispatch, truncated).
+        #                 Do NOT skip CI - run conservatively.
+        # - []: No files changed (empty diff). Can skip CI.
+        # - [...]: Known changed files. Evaluate against skip patterns.
         changed_files = external_repo.get("changed_files")
         skip_ci_patterns = external_repo.get("skip_ci_patterns")
+
+        # Validate types when provided
+        if changed_files is not None and not isinstance(changed_files, list):
+            raise ValueError(
+                f"changed_files must be a list or null, got: {type(changed_files).__name__}"
+            )
+        if skip_ci_patterns is not None and not isinstance(skip_ci_patterns, list):
+            raise ValueError(
+                f"skip_ci_patterns must be a list or null, got: {type(skip_ci_patterns).__name__}"
+            )
+
+        # Only evaluate skip logic when both changed_files and skip_ci_patterns
+        # are explicitly provided. When changed_files is None (unknown), we must
+        # run CI conservatively.
         if changed_files is not None and skip_ci_patterns is not None:
             repo_name = external_repo.get("repository", "").split("/")[-1]
             if not is_external_repo_ci_required(
@@ -805,7 +831,8 @@ def should_skip_ci(
                 print("  External repo build: only skippable files changed")
                 return True
         # If we reach here, either:
-        # - changed_files/skip_ci_patterns not provided: continue to ASAN checks
+        # - changed_files is None (unknown): must run CI conservatively
+        # - skip_ci_patterns not provided: continue to ASAN checks
         # - CI is required: continue to ASAN checks
         # Stage reuse will optimize builds regardless.
 

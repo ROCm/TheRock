@@ -50,6 +50,8 @@ from typing import (
     TypeVar,
 )
 
+from configure_ci_path_filters import _is_path_skippable
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -91,10 +93,17 @@ CI_RELEVANT_NON_SUBTREE_PREFIXES = {
 
 @dataclass
 class ConfigureResult:
-    """Result of CI configuration analysis."""
+    """Result of CI configuration analysis.
+
+    changed_files semantics:
+    - None: Unknown/unavailable (schedule, workflow_dispatch, truncated API).
+            TheRock should NOT use path filtering and must run CI.
+    - []: No files changed (empty diff). TheRock may skip CI.
+    - [...]: Known changed files. TheRock evaluates skip patterns.
+    """
 
     changed_projects: str  # Comma-separated list
-    changed_files: List[str]  # List of changed file paths
+    changed_files: Optional[List[str]]  # None = unknown, [] = no changes
     run_all_tests: bool
 
 
@@ -265,7 +274,7 @@ def get_unclassified_paths(paths: Iterable[str], valid_prefixes: Set[str]) -> Li
     return [
         p
         for p in paths
-        if not is_skippable(p) and _subtree_prefix(p) not in valid_prefixes
+        if not _is_path_skippable(p) and _subtree_prefix(p) not in valid_prefixes
     ]
 
 
@@ -279,10 +288,11 @@ def configure(
     """Main configuration logic."""
 
     # Schedule/workflow_dispatch events run all tests
+    # changed_files=None signals "unknown" so TheRock won't use path filtering
     if event_name in ("schedule", "workflow_dispatch"):
         logger.info(f"{event_name} event - running all tests")
         return ConfigureResult(
-            changed_projects="", changed_files=[], run_all_tests=True
+            changed_projects="", changed_files=None, run_all_tests=True
         )
 
     # Get modified paths via GitHub API
@@ -297,14 +307,15 @@ def configure(
     else:
         logger.warning("No SHAs provided - running all tests")
         return ConfigureResult(
-            changed_projects="", changed_files=[], run_all_tests=True
+            changed_projects="", changed_files=None, run_all_tests=True
         )
 
     # If API returned None (truncated results), fall back to run-all
+    # changed_files=None signals "unknown" so TheRock won't use path filtering
     if modified_paths is None:
         logger.info("Truncated API response - running all tests")
         return ConfigureResult(
-            changed_projects="", changed_files=[], run_all_tests=True
+            changed_projects="", changed_files=None, run_all_tests=True
         )
 
     modified_paths_list = sorted(modified_paths)
@@ -345,7 +356,7 @@ def configure(
             " - running all tests"
         )
         return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
+            changed_projects="", changed_files=modified_paths_list, run_all_tests=True
         )
 
     matched = find_matched_subtrees(modified_paths_list, valid_prefixes)

@@ -410,6 +410,56 @@ class TestShouldSkipCI(unittest.TestCase):
             cm.should_skip_ci(inputs, git)
         self.assertIn("Invalid external_repo JSON", str(ctx.exception))
 
+    def test_external_repo_null_changed_files_runs_ci_conservatively(self):
+        """External repo with null changed_files runs CI (unknown = conservative).
+
+        End-to-end test without mocking is_external_repo_ci_required.
+        When changed_files is null (from schedule/workflow_dispatch/truncated API),
+        CI must run conservatively - we cannot skip based on path filtering.
+        """
+        # changed_files: null signals "unknown changes" from external repo
+        # This happens for schedule, workflow_dispatch, or truncated API responses
+        inputs = self._inputs(
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123","changed_files":null,"skip_ci_patterns":["*.md","docs/*"]}'
+        )
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        # Must NOT skip - null means unknown, run conservatively
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_external_repo_empty_changed_files_with_patterns_skips(self):
+        """External repo with empty changed_files list can skip CI.
+
+        End-to-end test without mocking is_external_repo_ci_required.
+        When changed_files is [] (empty diff), CI can be skipped.
+        """
+        # changed_files: [] signals "no files changed" (empty diff)
+        inputs = self._inputs(
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123","changed_files":[],"skip_ci_patterns":["*.md","docs/*"]}'
+        )
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        # Can skip - empty diff means nothing to build/test
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+
+    def test_external_repo_invalid_changed_files_type_raises(self):
+        """External repo with invalid changed_files type raises ValueError."""
+        inputs = self._inputs(
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123","changed_files":"not-a-list","skip_ci_patterns":["*.md"]}'
+        )
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        with self.assertRaises(ValueError) as ctx:
+            cm.should_skip_ci(inputs, git)
+        self.assertIn("changed_files must be a list or null", str(ctx.exception))
+
+    def test_external_repo_invalid_skip_ci_patterns_type_raises(self):
+        """External repo with invalid skip_ci_patterns type raises ValueError."""
+        inputs = self._inputs(
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123","changed_files":["README.md"],"skip_ci_patterns":"not-a-list"}'
+        )
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        with self.assertRaises(ValueError) as ctx:
+            cm.should_skip_ci(inputs, git)
+        self.assertIn("skip_ci_patterns must be a list or null", str(ctx.exception))
+
 
 # ---------------------------------------------------------------------------
 # Step 3: Decide Jobs
