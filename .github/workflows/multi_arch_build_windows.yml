@@ -127,12 +127,10 @@ jobs:
     needs: compiler-runtime
     if: >-
       ${{
-        !cancelled() &&
-        (
-          needs.compiler-runtime.result == 'success' ||
-          (needs.compiler-runtime.result == 'skipped' && contains(inputs.prebuilt_stages, 'compiler-runtime') && !contains(inputs.skip_stages, 'compiler-runtime'))
-        ) &&
-        !contains(inputs.prebuilt_stages, 'runtime-tests') && !contains(inputs.skip_stages, 'runtime-tests')
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'runtime-tests') &&
+        !contains(inputs.skip_stages, 'runtime-tests')
       }}
     uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
     secrets: inherit
@@ -160,12 +158,10 @@ jobs:
     needs: compiler-runtime
     if: >-
       ${{
-        !cancelled() &&
-        (
-          needs.compiler-runtime.result == 'success' ||
-          (needs.compiler-runtime.result == 'skipped' && contains(inputs.prebuilt_stages, 'compiler-runtime') && !contains(inputs.skip_stages, 'compiler-runtime'))
-        ) &&
-        !contains(inputs.prebuilt_stages, 'math-libs') && !contains(inputs.skip_stages, 'math-libs')
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'math-libs') &&
+        !contains(inputs.skip_stages, 'math-libs')
       }}
     strategy:
       # `fail-fast: false` lets all families complete even if one fails.
@@ -204,12 +200,10 @@ jobs:
     needs: compiler-runtime
     if: >-
       ${{
-        !cancelled() &&
-        (
-          needs.compiler-runtime.result == 'success' ||
-          (needs.compiler-runtime.result == 'skipped' && contains(inputs.prebuilt_stages, 'compiler-runtime') && !contains(inputs.skip_stages, 'compiler-runtime'))
-        ) &&
-        !contains(inputs.prebuilt_stages, 'debug-tools') && !contains(inputs.skip_stages, 'debug-tools')
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'debug-tools') &&
+        !contains(inputs.skip_stages, 'debug-tools')
       }}
     uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
     secrets: inherit
@@ -240,12 +234,10 @@ jobs:
     needs: compiler-runtime
     if: >-
       ${{
-        !cancelled() &&
-        (
-          needs.compiler-runtime.result == 'success' ||
-          (needs.compiler-runtime.result == 'skipped' && contains(inputs.prebuilt_stages, 'compiler-runtime') && !contains(inputs.skip_stages, 'compiler-runtime'))
-        ) &&
-        !contains(inputs.prebuilt_stages, 'media-libs') && !contains(inputs.skip_stages, 'media-libs')
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'media-libs') &&
+        !contains(inputs.skip_stages, 'media-libs')
       }}
     uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
     secrets: inherit

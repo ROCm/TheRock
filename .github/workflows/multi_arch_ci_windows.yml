@@ -100,7 +100,7 @@ jobs:
   build_multi_arch_stages:
     name: Build Multi-Arch Stages
     needs: copy_prebuilt_stages
-    if: ${{ !cancelled() && (needs.copy_prebuilt_stages.result == 'success' || needs.copy_prebuilt_stages.result == 'skipped') }}
+    if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') }}
     uses: ./.github/workflows/multi_arch_build_windows.yml
     secrets: inherit
     with:
@@ -126,7 +126,7 @@ jobs:
   validate_artifact_structure:
     needs: [build_multi_arch_stages]
     name: Validate Artifact Structure
-    if: ${{ !cancelled() && needs.build_multi_arch_stages.result == 'success' }}
+    if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') }}
     uses: ./.github/workflows/test_artifacts_structure.yml
     secrets: inherit
     with:
@@ -139,7 +139,7 @@ jobs:
   test_artifacts_per_family:
     needs: [copy_prebuilt_stages, build_multi_arch_stages]
     name: Test ${{ matrix.family_info.amdgpu_family }}
-    if: ${{ !cancelled() && (needs.copy_prebuilt_stages.result == 'success' || needs.copy_prebuilt_stages.result == 'skipped') && needs.build_multi_arch_stages.result == 'success' }}
+    if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') }}
     strategy:
       fail-fast: false
       matrix:
@@ -163,7 +163,7 @@ jobs:
   build_python_packages:
     needs: [build_multi_arch_stages]
     name: Build Python Packages
-    if: ${{ !cancelled() && needs.build_multi_arch_stages.result == 'success' && fromJSON(inputs.build_config).build_python_packages == true }}
+    if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && fromJSON(inputs.build_config).build_python_packages == true }}
     uses: ./.github/workflows/build_windows_python_packages.yml
     secrets: inherit
     with:
@@ -183,7 +183,7 @@ jobs:
   test_python_packages_per_family:
     needs: [build_python_packages]
     name: Test Python
-    if: ${{ !cancelled() && needs.build_python_packages.result == 'success' && toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) != '[]' }}
+    if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -221,8 +221,8 @@ jobs:
     name: Build PyTorch (fat + split)
     if: >-
       ${{
-        !failure() &&
-        !cancelled() &&
+        !failure() && !cancelled() &&
+        !contains(needs.*.result, 'cancelled') &&
         fromJSON(inputs.build_config).build_pytorch == true &&
         toJSON(fromJSON(inputs.build_config).pytorch_build_matrix) != '[]'
       }}
