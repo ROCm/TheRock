@@ -118,6 +118,17 @@ TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
 # coverage for any number of (gtest-binary) entries. Single-entry components are
 # unaffected either way, so this is safe to keep narrowly scoped.
 GTEST_ONLY_SHARDING_COMPONENTS = {"rocsparse", "hipsparse"}
+
+# Per-component, per-GPU-family ctest exclusions (ctest --exclude-regex patterns).
+# Structure: { "component": { "gpu_family": ["test_pattern1", "test_pattern2"] } }
+COMPONENT_CTEST_EXCLUSIONS = {
+    "rocprofiler-systems": {
+        "gfx125X-dcgpu": [
+            # Known failure of test
+            "openmp-fortran-offload-sys-run",
+        ],
+    },
+}
 use_gtest_only_sharding = test_component_job_name in GTEST_ONLY_SHARDING_COMPONENTS
 
 # CTest runs serially by default; per-GPU overrides can be added below.
@@ -498,7 +509,12 @@ def generate_resource_spec():
 
 
 def build_ctest_command(
-    category, gpu_arch, available_gpu_archs, exclude_labels, resource_spec_file=None
+    category,
+    gpu_arch,
+    available_gpu_archs,
+    exclude_labels,
+    resource_spec_file=None,
+    amdgpu_families=None,
 ):
     """
     Build the appropriate ctest command based on the category and GPU architecture.
@@ -590,6 +606,14 @@ def build_ctest_command(
     if resource_spec_file:
         cmd.extend(["--resource-spec-file", resource_spec_file])
 
+    # Apply per-component, per-GPU-family ctest exclusions via --exclude-regex.
+    ctest_exclusions = COMPONENT_CTEST_EXCLUSIONS.get(test_component_job_name, {})
+    if amdgpu_families and amdgpu_families in ctest_exclusions:
+        exclude_patterns = ctest_exclusions[amdgpu_families]
+        if exclude_patterns:
+            cmd.extend(["--exclude-regex", "|".join(exclude_patterns)])
+            print(f"# Excluding ctest tests by regex: {exclude_patterns}")
+
     return cmd
 
 
@@ -635,7 +659,12 @@ def main():
 
     # Build the ctest command
     cmd = build_ctest_command(
-        category, gpu_arch, available_gpu_archs, exclude_labels, resource_spec_file
+        category,
+        gpu_arch,
+        available_gpu_archs,
+        exclude_labels,
+        resource_spec_file,
+        AMDGPU_FAMILIES,
     )
 
     print(f"# Running: {' '.join(cmd)}")
