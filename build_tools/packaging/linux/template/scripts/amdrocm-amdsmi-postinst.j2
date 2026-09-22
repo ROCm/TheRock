@@ -11,9 +11,8 @@
 # would pair it with whichever library the dynamic linker found first.
 #
 # The path recorded is /opt/rocm/share/amd_smi -- the update-alternatives link,
-# not this package's versioned prefix. Co-installed versions then write
-# byte-identical content to the same file instead of fighting over it, and the
-# module follows the same version selection as /usr/bin/amd-smi.
+# not this package's versioned prefix. Each prefix owns a separate .pth file;
+# Python's site module deduplicates their identical target paths.
 
 is_debian_like() {
     local id_like="$1"
@@ -32,22 +31,29 @@ is_debian_like() {
 # tree reserved for locally built software. Ask for the deb_system scheme first
 # and fall back to posix_prefix, which is what RPM distros use, then to
 # whatever purelib reports.
-site_packages_dir() {
-    python3 - <<'PY' 2>/dev/null
+registration_path() {
+    /usr/bin/python3 - "$1" <<'PY' 2>/dev/null
+import hashlib
+from pathlib import Path
+import sys
 import sysconfig
+
 for scheme in ("deb_system", "posix_prefix"):
     if scheme in sysconfig.get_scheme_names():
         path = sysconfig.get_path("purelib", scheme)
         if path:
-            print(path)
             break
 else:
-    print(sysconfig.get_paths()["purelib"])
+    path = sysconfig.get_paths()["purelib"]
+
+# Install and removal must use the same literal prefix, without resolving aliases.
+identity = hashlib.sha256(sys.argv[1].encode("utf-8")).hexdigest()
+print(Path(path) / f"amdrocm-amdsmi-{identity}.pth")
 PY
 }
 
 do_register_python_module() {
-    command -v python3 >/dev/null || return 0
+    [ -x /usr/bin/python3 ] || return 0
 
     {% if target == "deb" %}
        PKG_INSTALL_PREFIX={{ install_prefix }}
@@ -55,32 +61,27 @@ do_register_python_module() {
        PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
     {% endif %}
 
-    local rocm_root share_dir site_dir pth tmp
-    # An empty prefix would turn every path below into a root-anchored one.
+    local share_dir site_dir pth tmp
+    # The prefix is the registration's identity. An empty one would give every
+    # co-installed version the same identity, and they would fight over one file.
     [ -n "$PKG_INSTALL_PREFIX" ] || return 0
-    rocm_root="$(dirname "$PKG_INSTALL_PREFIX")"
-    share_dir="$rocm_root/share/amd_smi"
+    # Core's alternatives root stays /opt/rocm even when RPM relocates the payload.
+    share_dir="/opt/rocm/share/amd_smi"
 
-    site_dir="$(site_packages_dir)"
-    if [ -z "$site_dir" ]; then
-        echo "amdsmi: could not determine site-packages; skipping module registration" >&2
-        return 0
-    fi
-
+    pth="$(registration_path "$PKG_INSTALL_PREFIX")" || return 0
+    [ -n "$pth" ] || return 0
+    site_dir="$(dirname "$pth")"
     mkdir -p "$site_dir" || return 0
-    pth="$site_dir/amdsmi.pth"
 
     # Write via a fresh temp file and rename. A plain redirect follows a
     # pre-existing symlink, which would let anything able to create a file here
     # redirect a root-owned write elsewhere; rename replaces the link itself.
     # mktemp rather than a PID-derived name so the target cannot be guessed and
-    # pre-created. Written, not appended, so re-running cannot accumulate
-    # entries and a co-installed version writes the same single line.
-    tmp="$(mktemp "$site_dir/amdsmi.pth.XXXXXX" 2>/dev/null)" || return 0
+    # pre-created. Re-running replaces only this prefix's registration.
+    tmp="$(mktemp "$pth.XXXXXX" 2>/dev/null)" || return 0
     printf '%s\n' "$share_dir" > "$tmp" || { rm -f "$tmp"; return 0; }
     chmod 644 "$tmp" || true
     mv -f "$tmp" "$pth" || { rm -f "$tmp"; return 0; }
-    true
 }
 
 if [ -e /etc/os-release ] && source /etc/os-release && is_debian_like "${ID_LIKE:-$ID}"

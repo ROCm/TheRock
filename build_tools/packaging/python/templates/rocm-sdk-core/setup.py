@@ -48,7 +48,6 @@ print("Found packages:", packages)
 # referenced where it lands rather than copied: amdsmi_wrapper.py locates
 # libamd_smi.so by a path relative to its own file, so a copy elsewhere would
 # bind whichever library the dynamic linker found first.
-AMDSMI_PTH_NAME = "amdsmi.pth"
 AMDSMI_SHARE_RELPATH = f"{platform_package_name}/share/amd_smi"
 
 
@@ -73,7 +72,7 @@ class build_py(_build_py):
             print("amdsmi module not present in payload; skipping amdsmi.pth")
             return
         os.makedirs(self.build_lib, exist_ok=True)
-        target = Path(self.build_lib) / AMDSMI_PTH_NAME
+        target = Path(self.build_lib) / "amdsmi.pth"
         target.write_text(AMDSMI_SHARE_RELPATH + "\n")
         print(f"Wrote {target} -> {AMDSMI_SHARE_RELPATH}")
 

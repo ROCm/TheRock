@@ -1,12 +1,6 @@
 #!/bin/bash
 #
-# Drop the amdsmi .pth once no installed version provides the module any more.
-#
-# This runs as postrm rather than prerm because it has to see the state of the
-# filesystem *after* the payload is gone: with several ROCm versions installed
-# the .pth is shared, and removing one of them must leave the others working.
-# /opt/rocm/share is an update-alternatives link, so if another version is still
-# installed the path below still resolves and the file must stay.
+# Remove only this install prefix's registration after its payload is gone.
 
 is_debian_like() {
     local id_like="$1"
@@ -20,35 +14,40 @@ is_debian_like() {
     esac
 }
 
-site_packages_dir() {
-    python3 - <<'PY' 2>/dev/null
+registration_path() {
+    /usr/bin/python3 - "$1" <<'PY' 2>/dev/null
+import hashlib
+from pathlib import Path
+import sys
 import sysconfig
+
 for scheme in ("deb_system", "posix_prefix"):
     if scheme in sysconfig.get_scheme_names():
         path = sysconfig.get_path("purelib", scheme)
         if path:
-            print(path)
             break
 else:
-    print(sysconfig.get_paths()["purelib"])
+    path = sysconfig.get_paths()["purelib"]
+
+# Install and removal must use the same literal prefix, without resolving aliases.
+identity = hashlib.sha256(sys.argv[1].encode("utf-8")).hexdigest()
+print(Path(path) / f"amdrocm-amdsmi-{identity}.pth")
 PY
 }
 
 do_unregister_python_module() {
-    command -v python3 >/dev/null || return 0
-
     {% if target == "deb" %}
        PKG_INSTALL_PREFIX={{ install_prefix }}
     {% else %}
        PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
     {% endif %}
 
-    local rocm_root share_dir site_dir pth recorded own_module
+    local share_dir pth recorded own_module
     # Guard before any path is built from it: an empty prefix would make the
     # cleanup below operate on /share/amd_smi/amdsmi.
     [ -n "$PKG_INSTALL_PREFIX" ] || return 0
-    rocm_root="$(dirname "$PKG_INSTALL_PREFIX")"
-    share_dir="$rocm_root/share/amd_smi"
+    # Core's alternatives root stays /opt/rocm even when RPM relocates the payload.
+    share_dir="/opt/rocm/share/amd_smi"
 
     # Byte-compilation caches are created at run time, so the package manager
     # does not own them and they outlive removal. The leftover directory then
@@ -61,30 +60,19 @@ do_unregister_python_module() {
         rmdir "$PKG_INSTALL_PREFIX/share/amd_smi" 2>/dev/null || true
     fi
 
-    site_dir="$(site_packages_dir)"
-    [ -n "$site_dir" ] || return 0
-    pth="$site_dir/amdsmi.pth"
+    # RPM's old postun runs after an upgrade/reinstall has installed the new payload.
+    [ -f "$own_module/__init__.py" ] && return 0
+
+    [ -x /usr/bin/python3 ] || return 0
+    pth="$(registration_path "$PKG_INSTALL_PREFIX")" || return 0
+    [ -n "$pth" ] || return 0
     [ -f "$pth" ] || return 0
 
     # Only touch the file if it is the one this package writes.
-    recorded="$(head -n 1 "$pth" 2>/dev/null)"
+    recorded="$(cat "$pth" 2>/dev/null)" || return 0
     [ "$recorded" = "$share_dir" ] || return 0
 
-    # Keep the registration while any installed ROCm tree still provides the
-    # module. Testing the alternatives link alone is not enough: removing the
-    # currently selected version leaves that link dangling until amdrocm-core's
-    # own prerm runs, so a co-installed version would lose its registration.
-    if [ -f "$share_dir/amdsmi/__init__.py" ]; then
-        return 0
-    fi
-    for candidate in "$rocm_root"/core-*/share/amd_smi/amdsmi/__init__.py; do
-        if [ -f "$candidate" ]; then
-            return 0
-        fi
-    done
-
     rm -f "$pth" || true
-    true
 }
 
 if [ -e /etc/os-release ] && source /etc/os-release && is_debian_like "${ID_LIKE:-$ID}"
