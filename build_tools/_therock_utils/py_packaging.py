@@ -5,6 +5,7 @@
 
 from typing import Callable, Sequence
 
+import concurrent.futures
 import importlib.util
 import io
 import json
@@ -18,6 +19,7 @@ import subprocess
 import shutil
 import sys
 import tarfile
+import time
 
 from .artifacts import ArtifactCatalog, ArtifactName
 from .sdk_targets import package_owner, render_dist_info
@@ -817,13 +819,77 @@ def get_soname(sofile: Path) -> str:
     )
 
 
+def _build_package(
+    child_path: Path,
+    *,
+    effective_dist_dir: Path,
+    wheel_compression: bool,
+) -> None:
+    child_name = child_path.name
+
+    # Some of our packages build as sdists and some as wheels.
+    # Contrary to documented wisdom, we invoke setuptools directly. This is
+    # because the "build frontends" have an impossible compatibility matrix
+    # and opinions about how to pass arguments to the backends. So we skip
+    # the frontends for such a closed case as this.
+    setuppy_path = child_path / "setup.py"
+    build_args = [
+        sys.executable,
+        str(setuppy_path.resolve()),
+    ]
+    if child_name in ["rocm"]:
+        build_args.append("sdist")
+    else:
+        build_args.append("bdist_wheel")
+        if not wheel_compression:
+            build_args.append("--compression")
+            build_args.append("stored")
+    build_args.extend(
+        [
+            "-v",
+            "--dist-dir",
+            str(effective_dist_dir.resolve()),
+        ]
+    )
+
+    start_time = time.monotonic()
+    log(f"::: Building python package {child_name}: {shlex.join(build_args)}")
+    subprocess.check_call(build_args, cwd=child_path, stderr=subprocess.STDOUT)
+    duration = time.monotonic() - start_time
+    log(f"::: Built python package {child_name} in {duration:.1f} seconds")
+
+    if child_name == "rocm":
+        # setuptools writes PKG-INFO / setup.cfg / egg-info in platform
+        # text mode, which yields CRLF on Windows. Normalize so the
+        # rocm sdist's text members are content-identical across Linux
+        # and Windows builds (tar metadata such as mtime may still
+        # differ).
+        sdists = list(effective_dist_dir.glob(f"{child_name}-*.tar.gz"))
+        if not sdists:
+            raise RuntimeError(
+                f"No {child_name} sdist produced in {effective_dist_dir}"
+            )
+        for sdist in sdists:
+            _normalize_sdist_line_endings(sdist)
+
+
 def build_packages(
     dest_dir: Path,
     *,
     wheel_compression: bool = True,
     package_dirs: list[Path] | None = None,
     dist_dir: Path | None = None,
-):
+    max_workers: int = 1,
+) -> None:
+    """Build independent package staging directories concurrently.
+
+    Each worker launches one setuptools process. Wheel compression within each
+    process remains single-threaded, so this controls package-level parallelism,
+    not compression threads.
+    """
+    if max_workers < 1:
+        raise ValueError(f"max_workers must be at least 1, got {max_workers}")
+
     effective_dist_dir = dist_dir or (dest_dir / "dist")
     effective_dist_dir.mkdir(parents=True, exist_ok=True)
     if package_dirs is None:
@@ -832,50 +898,40 @@ def build_packages(
             for p in dest_dir.iterdir()
             if p.is_dir() and (p / "pyproject.toml").exists()
         ]
-    for child_path in package_dirs:
-        child_name = child_path.name
+    if not package_dirs:
+        return
 
-        # Some of our packages build as sdists and some as wheels.
-        # Contrary to documented wisdom, we invoke setuptools directly. This is
-        # because the "build frontends" have an impossible compatibility matrix
-        # and opinions about how to pass arguments to the backends. So we skip
-        # the frontends for such a closed case as this.
-        setuppy_path = child_path / "setup.py"
-        build_args = [
-            sys.executable,
-            str(setuppy_path.resolve()),
+    worker_count = min(max_workers, len(package_dirs))
+    log(
+        f"::: Building {len(package_dirs)} python package(s) "
+        f"with {worker_count} worker(s)"
+    )
+    if worker_count == 1:
+        for child_path in package_dirs:
+            _build_package(
+                child_path,
+                effective_dist_dir=effective_dist_dir,
+                wheel_compression=wheel_compression,
+            )
+        return
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:
+        futures = [
+            executor.submit(
+                _build_package,
+                child_path,
+                effective_dist_dir=effective_dist_dir,
+                wheel_compression=wheel_compression,
+            )
+            for child_path in package_dirs
         ]
-        if child_name in ["rocm"]:
-            build_args.append("sdist")
-        else:
-            build_args.append("bdist_wheel")
-            if not wheel_compression:
-                build_args.append("--compression")
-                build_args.append("stored")
-        build_args.extend(
-            [
-                "-v",
-                "--dist-dir",
-                str(effective_dist_dir.resolve()),
-            ]
-        )
-
-        log(f"::: Building python package {child_name}: {shlex.join(build_args)}")
-        subprocess.check_call(build_args, cwd=child_path, stderr=subprocess.STDOUT)
-
-        if child_name == "rocm":
-            # setuptools writes PKG-INFO / setup.cfg / egg-info in platform
-            # text mode, which yields CRLF on Windows. Normalize so the
-            # rocm sdist's text members are content-identical across Linux
-            # and Windows builds (tar metadata such as mtime may still
-            # differ).
-            sdists = list(effective_dist_dir.glob(f"{child_name}-*.tar.gz"))
-            if not sdists:
-                raise RuntimeError(
-                    f"No {child_name} sdist produced in {effective_dist_dir}"
-                )
-            for sdist in sdists:
-                _normalize_sdist_line_endings(sdist)
+        try:
+            for future in concurrent.futures.as_completed(futures):
+                future.result()
+        except Exception:
+            for future in futures:
+                future.cancel()
+            raise
 
 
 _TEXT_SUFFIXES = frozenset({".py", ".md", ".toml", ".cfg", ".txt", ".rst", ".in"})
