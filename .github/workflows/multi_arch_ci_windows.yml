@@ -59,7 +59,7 @@ jobs:
     if: ${{ fromJSON(inputs.build_config).prebuilt_stages != '' && fromJSON(inputs.build_config).baseline_run_id != '' }}
     # TODO: Consider running on a Linux runner with --platform=windows to
     #   avoid Windows runner setup overhead (setup-python ~51s).
-    runs-on: ${{ fromJSON(inputs.build_config).build_runs_on || 'azure-windows-scale-rocm' }}
+    runs-on: ${{ fromJSON(inputs.build_config).build_runs_on_large || 'azure-windows-scale-rocm' }}
     defaults:
       run:
         shell: bash
@@ -122,7 +122,9 @@ jobs:
       prebuilt_stages: ${{ fromJSON(inputs.build_config).prebuilt_stages }}
       rebuild_artifacts: ${{ fromJSON(inputs.build_config).rebuild_artifacts }}
       skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
-      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
+      build_runs_on_large: ${{ fromJSON(inputs.build_config).build_runs_on_large }}
+      build_runs_on_small: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
+      build_runs_on_medium: ${{ fromJSON(inputs.build_config).build_runs_on_medium }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
       external_repo_config: ${{ inputs.external_repo_config }}
@@ -250,7 +252,7 @@ jobs:
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}
-      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_large }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:

@@ -686,8 +686,10 @@ class BuildConfig:
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
     pytorch_build_matrix: list[dict[str, str]] = field(default_factory=list)
     jax_build_matrix: list[dict[str, str]] = field(default_factory=list)
-    # Build runner label for this platform/variant combination
-    build_runs_on: str = ""
+    # Build runner labels for this platform/variant combination
+    build_runs_on_large: str = ""
+    build_runs_on_small: str = ""
+    build_runs_on_medium: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
     # Stages excluded from the build graph entirely (no build, no artifact copy).
@@ -1446,7 +1448,9 @@ def _expand_build_config_for_platform(
     suffix = variant_config.get("build_variant_suffix", "")
 
     # Select build runner using weighted distribution
-    build_runs_on = select_build_runner(platform, build_variant)
+    build_runs_on_large = select_build_runner(platform, build_variant, size="large")
+    build_runs_on_small = select_build_runner(platform, build_variant, size="small")
+    build_runs_on_medium = select_build_runner(platform, build_variant, size="medium")
 
     pytorch_build_matrix: list[dict[str, str]] = []
     build_pytorch = jobs.build_pytorch.action == JobAction.RUN
@@ -1516,7 +1520,9 @@ def _expand_build_config_for_platform(
         build_jax=build_jax,
         pytorch_build_matrix=pytorch_build_matrix,
         jax_build_matrix=jax_build_matrix,
-        build_runs_on=build_runs_on,
+        build_runs_on_large=build_runs_on_large,
+        build_runs_on_small=build_runs_on_small,
+        build_runs_on_medium=build_runs_on_medium,
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         skip_stages=jobs.build_rocm.skipped_stages,
