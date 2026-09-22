@@ -6,6 +6,10 @@
 # This workflow owns the release matrix and delegates each matrix cell to the
 # reusable single-build workflow.
 
+# Notes on security:
+#   * Higher-trust entry points: manual runs and automation from https://github.com/ROCm/rockrel.
+#   * Inherit Quartz credentials through nested workflows without repeating mappings.
+
 name: Multi-Arch Release Linux JAX Wheels
 
 on:
@@ -136,7 +140,7 @@ jobs:
       id-token: write
       contents: read
     uses: ./.github/workflows/multi_arch_build_linux_jax_wheels.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
       python_version: ${{ matrix.python_version }}

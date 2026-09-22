@@ -1,6 +1,10 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# Notes on security:
+#   * Inherit caller-provided secrets; limited-trust PR entry points restrict the set.
+#   * Higher-trust push/manual runs and https://github.com/ROCm/rockrel also supply secrets.
+
 name: Test Artifacts
 
 on:
@@ -197,7 +201,7 @@ jobs:
     needs: configure_test_matrix
     if: ${{ fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner != '' }}
     uses: './.github/workflows/test_component.yml'
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: ${{ inputs.artifact_group }}
@@ -234,7 +238,7 @@ jobs:
       matrix:
         components: ${{ fromJSON(needs.configure_test_matrix.outputs.components || '[]') }}
     uses: './.github/workflows/test_component.yml'
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: ${{ inputs.artifact_group }}
