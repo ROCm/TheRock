@@ -161,7 +161,6 @@ jobs:
   trigger_test_artifacts_per_family:
     needs: [build_artifacts]
     name: Trigger Test Artifacts (${{ matrix.family_info.amdgpu_family }})
-    if: ${{ !cancelled() && needs.build_artifacts.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       actions: write
