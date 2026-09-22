@@ -447,6 +447,35 @@ def digest(path: Path) -> tuple[str, int] | None:
     return hashlib.sha256(data).hexdigest()[:16], len(data)
 
 
+def parse_link_objects(text: str, build_dir: Path) -> list[Path]:
+    """Returns the object files named on failed link command lines.
+
+    CMake only writes a response file when the command would otherwise exceed
+    the command-line length limit, so short links pass their objects inline and
+    leave no .rsp behind. Scanning only .rsp files therefore skips exactly the
+    links that produced no file, which reads as "nothing to check" rather than
+    as a gap. The failed command line is the one source that is present either
+    way.
+    """
+    found: dict[Path, None] = {}
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if "FAILED:" not in line:
+            continue
+        for command in lines[index : index + 3]:
+            if ".obj" not in command and ".o " not in command:
+                continue
+            for token in command.replace('"', " ").split():
+                bare = token.strip(",").lstrip("@")
+                if not bare.lower().endswith((".obj", ".o")):
+                    continue
+                path = Path(bare)
+                if not path.is_absolute():
+                    path = build_dir / bare
+                found.setdefault(path, None)
+    return list(found)
+
+
 def compare_across_aliases(
     build_dir: Path, objects: list[Path], report: list[str]
 ) -> int:
@@ -468,8 +497,15 @@ def compare_across_aliases(
     for root in roots:
         report.append(f"alias: {root}")
 
+    if not objects:
+        # Saying "no divergence" here would report a clean result for a check
+        # that never ran.
+        report.append("NO OBJECTS TO COMPARE -> this check did not run; not a result")
+        return 0
+
     divergent = 0
     checked = 0
+    missing = 0
     for obj in objects[:400]:
         try:
             rel = obj.relative_to(build_dir)
@@ -477,6 +513,7 @@ def compare_across_aliases(
             continue
         primary = digest(obj)
         if primary is None:
+            missing += 1
             continue
         checked += 1
         for root in roots:
@@ -492,7 +529,13 @@ def compare_across_aliases(
                     f"      {root}: sha={other[0]} size={other[1]}"
                 )
 
-    report.append(f"compared {checked} object(s) across {len(roots)} alias(es)")
+    report.append(
+        f"compared {checked} object(s) across {len(roots)} alias(es)"
+        + (f"; {missing} not readable via the primary path" if missing else "")
+    )
+    if not checked:
+        report.append("NO OBJECTS TO COMPARE -> this check did not run; not a result")
+        return 0
     if divergent:
         report.append(
             f"ALIAS DIVERGENCE: {divergent} -> the mounts are NOT coherent; "
@@ -559,6 +602,43 @@ def audit(build_dir: Path, log_dir: Path) -> int:
 
     report.append("")
     report.append(f"TOTAL SUSPECT INPUTS: {suspect_total}")
+
+    # Short links pass their objects inline and leave no .rsp behind, so the
+    # failed command line is the only record of what they consumed. Without
+    # this the checks below silently have nothing to look at.
+    inline_objects: list[Path] = []
+    for log in sorted((build_dir / "logs").glob("*_build.log")):
+        try:
+            text = log.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if "undefined symbol:" in text:
+            inline_objects.extend(parse_link_objects(text, build_dir))
+    if inline_objects:
+        known = set(all_objects)
+        added = [o for o in inline_objects if o not in known]
+        all_objects.extend(added)
+        report.append(
+            f"recovered {len(added)} object(s) from inline link command lines"
+        )
+
+    # Validate whatever the response files did not cover.
+    extra_suspects = 0
+    for path in inline_objects:
+        try:
+            size = path.stat().st_size
+        except OSError:
+            continue
+        if size == 0:
+            report.append(f"    EMPTY    {path}")
+            extra_suspects += 1
+            continue
+        defect = classify_object(path, size)
+        if defect:
+            report.append(f"    {defect}  {path}")
+            extra_suspects += 1
+    if extra_suspects:
+        report.append(f"TOTAL SUSPECT INLINE INPUTS: {extra_suspects}")
 
     # Run before the retry: the retry rebuilds, which can replace the very
     # library whose contents are the evidence.
