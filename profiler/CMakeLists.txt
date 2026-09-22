@@ -323,6 +323,9 @@ if(THEROCK_ENABLE_PROFILER_HUB)
     INTERFACE_LINK_DIRS
       lib
   )
+  therock_cmake_subproject_glob_c_sources(profiler-hub
+    SUBDIRS .
+  )
   therock_cmake_subproject_provide_package(profiler-hub profiler-hub lib/cmake/profiler-hub)
   therock_cmake_subproject_activate(profiler-hub)
 
@@ -379,6 +382,7 @@ if(THEROCK_ENABLE_PROFILER_HUB)
       "-DPROFILER_HUB_ARTIFACT_PREFIX=${_profiler_hub_test_prefix}"
     EXTRA_DEPENDS
       "${_profiler_hub_test_stamp}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/profiler-hub-install-test/test_template.cpp.in"
     INSTALL_RPATH_DIRS
       lib
   )
