@@ -16,29 +16,29 @@ import build_prod_wheels as bpw
 
 
 class AsanVersionTest(unittest.TestCase):
-    def test_rocm_10_1_asan_suffix_is_unique(self):
+    def test_rocm_10_2_asan_suffix_is_unique(self):
         self.assertEqual(
-            bpw.get_asan_version_suffix("10.1.0+asan.20260807"),
-            "+rocm10.1.asan.20260807",
+            bpw.get_asan_version_suffix("10.2.0+asan.20260807"),
+            "+rocm10.2.asan.20260807",
         )
 
     def test_release_sdk_is_rejected(self):
         with self.assertRaisesRegex(RuntimeError, "uniquely labelled"):
-            bpw.validate_asan_rocm_version("10.1.0")
+            bpw.validate_asan_rocm_version("10.2.0")
 
     def test_old_branch_version_is_rejected(self):
-        with self.assertRaisesRegex(RuntimeError, "ROCm 10.1"):
+        with self.assertRaisesRegex(RuntimeError, "ROCm 10.2"):
             bpw.validate_asan_rocm_version("7.15.0+asan.20260807")
 
     def test_conflicting_explicit_suffix_is_rejected(self):
         with self.assertRaisesRegex(RuntimeError, "collide"):
             bpw.resolve_asan_version_suffix(
-                "10.1.0+asan.20260807", "+rocm10.1"
+                "10.2.0+asan.20260807", "+rocm10.2"
             )
 
 
 class LocalAsanIndexTest(unittest.TestCase):
-    def _write_manifest(self, root: Path, *, version="10.1.0+asan.20260807"):
+    def _write_manifest(self, root: Path, *, version="10.2.0+asan.20260807"):
         index = root / "whl-asan" / "gfx942-all"
         index.mkdir(parents=True)
         packages = []
@@ -68,7 +68,7 @@ class LocalAsanIndexTest(unittest.TestCase):
     def test_accepts_phase1_directory_or_index_page(self):
         with tempfile.TemporaryDirectory() as td:
             index = self._write_manifest(Path(td))
-            expected = "10.1.0+asan.20260807"
+            expected = "10.2.0+asan.20260807"
             self.assertEqual(bpw.validate_local_asan_index(str(index)), expected)
             self.assertEqual(
                 bpw.validate_local_asan_index(str(index / "index.html")), expected
@@ -96,8 +96,8 @@ class LocalAsanIndexTest(unittest.TestCase):
             bpw.validate_build_args(parser, args)
 
             self.assertEqual(args.pytorch_rocm_arch, "gfx942:xnack+")
-            self.assertEqual(args.rocm_sdk_version, "==10.1.0+asan.20260807")
-            self.assertEqual(args.asan_index_version, "10.1.0+asan.20260807")
+            self.assertEqual(args.rocm_sdk_version, "==10.2.0+asan.20260807")
+            self.assertEqual(args.asan_index_version, "10.2.0+asan.20260807")
 
     def test_build_validation_rejects_remote_index(self):
         with tempfile.TemporaryDirectory() as td:
@@ -258,12 +258,12 @@ class AsanInstallAndFeatureTest(unittest.TestCase):
             pre=True,
             index_url=None,
             find_links="/local/whl-asan/gfx942-all/index.html",
-            rocm_sdk_version="==10.1.0+asan.20260807",
+            rocm_sdk_version="==10.2.0+asan.20260807",
             rocm_extras="device",
             no_index=True,
         )
         with mock.patch.object(bpw, "run_command") as run, mock.patch.object(
-            bpw, "get_rocm_sdk_version", return_value="10.1.0+asan.20260807"
+            bpw, "get_rocm_sdk_version", return_value="10.2.0+asan.20260807"
         ), mock.patch.object(bpw, "validate_asan_bootstrap_requirements"):
             bpw.do_install_rocm(args)
         install_command = next(
@@ -273,7 +273,7 @@ class AsanInstallAndFeatureTest(unittest.TestCase):
         self.assertIn("--no-build-isolation", install_command)
         self.assertIn("--find-links", install_command)
         self.assertIn(
-            "rocm[libraries,devel,device]==10.1.0+asan.20260807", install_command
+            "rocm[libraries,devel,device]==10.2.0+asan.20260807", install_command
         )
 
     def test_release_install_preserves_index_and_extras_behavior(self):
@@ -288,7 +288,7 @@ class AsanInstallAndFeatureTest(unittest.TestCase):
             rocm_extras="",
         )
         with mock.patch.object(bpw, "run_command") as run, mock.patch.object(
-            bpw, "get_rocm_sdk_version", return_value="10.1.0"
+            bpw, "get_rocm_sdk_version", return_value="10.2.0"
         ):
             bpw.do_install_rocm(args)
         install_command = next(

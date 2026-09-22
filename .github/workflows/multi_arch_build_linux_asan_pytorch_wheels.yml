@@ -1,0 +1,166 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Build Linux ASAN PyTorch Wheel
+
+on:
+  workflow_call:
+    inputs:
+      artifact_run_id:
+        description: Workflow run containing the ROCm ASAN artifacts.
+        type: string
+        required: true
+      amdgpu_families:
+        description: AMD GPU families used to build the ROCm ASAN artifacts.
+        type: string
+        required: true
+      python_version:
+        description: Python version used to build the wheel.
+        type: string
+        default: "3.12"
+      pytorch_git_ref:
+        description: PyTorch ref to build.
+        type: string
+        default: "nightly"
+      release_type:
+        description: Release type used to version the PyTorch wheel.
+        type: string
+        required: true
+      repository:
+        description: TheRock repository to check out.
+        type: string
+        default: ""
+      ref:
+        description: TheRock ref to check out.
+        type: string
+        default: ""
+      build_runs_on:
+        description: Runner label for the build.
+        type: string
+        default: "aws-linux-scale-rocm-prod"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    name: Build ASAN PyTorch | py ${{ inputs.python_version }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-24.04' }}
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
+    env:
+      ARTIFACTS_DIR: ${{ github.workspace }}/artifacts
+      ASAN_BUILD_ID: ${{ inputs.artifact_run_id }}
+      ASAN_INDEX_ROOT: ${{ github.workspace }}/asan-index
+      PACKAGES_DIR: ${{ github.workspace }}/packages
+      PYTORCH_OUTPUT_DIR: ${{ github.workspace }}/pytorch-dist
+    steps:
+      - name: Checkout TheRock
+        timeout-minutes: 15
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Select Python version
+        run: |
+          python build_tools/github_actions/python_to_cp_version.py \
+            --python-version "${{ inputs.python_version }}"
+
+      - name: Add selected Python version to PATH
+        run: |
+          python_dir="/opt/python/${cp_version}"
+          if ! [ -x "${python_dir}/bin/python" ]; then
+            echo "ERROR: Could not find python: ${python_dir}"
+            exit 1
+          fi
+          echo "${python_dir}/bin" >> "$GITHUB_PATH"
+
+      - name: Install build requirements
+        run: |
+          pip install -r requirements.txt
+          pip install -r external-builds/pytorch/requirements-ci.txt \
+            "setuptools>=70.2" wheel
+
+      - name: Fetch ROCm ASAN artifacts
+        run: |
+          python build_tools/artifact_manager.py fetch \
+            --run-id="${{ inputs.artifact_run_id }}" \
+            --run-github-repo="${{ github.repository }}" \
+            --stage=all \
+            --amdgpu-families="${{ inputs.amdgpu_families }}" \
+            --expand-family-to-targets \
+            --output-dir="${{ github.workspace }}"
+
+      - name: Compute ROCm ASAN package version
+        id: asan-version
+        run: |
+          python build_tools/compute_rocm_package_version.py \
+            --release-type=asan \
+            --asan-build-id="${ASAN_BUILD_ID}"
+
+      - name: Build ROCm ASAN Python packages
+        run: |
+          python build_tools/build_python_packages.py \
+            --artifact-dir="${ARTIFACTS_DIR}" \
+            --dest-dir="${PACKAGES_DIR}" \
+            --version="${{ steps.asan-version.outputs.rocm_package_version }}" \
+            --asan \
+            --asan-build-id="${ASAN_BUILD_ID}" \
+            --linux-amdgpu-families="${{ inputs.amdgpu_families }}"
+
+      - name: Stage local ROCm ASAN index
+        id: asan-index
+        run: |
+          python build_tools/packaging/python/stage_local_asan_index.py stage \
+            --input-dir="${PACKAGES_DIR}" \
+            --output-root="${ASAN_INDEX_ROOT}" \
+            --version-prefix="${{ steps.asan-version.outputs.rocm_package_version }}" \
+            --require-phase1-set
+          index_dir="${ASAN_INDEX_ROOT}/whl-asan/gfx942-all"
+          echo "index_dir=${index_dir}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload ROCm ASAN Python index
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rocm-asan-python-index-${{ inputs.artifact_run_id }}
+          path: ${{ env.ASAN_INDEX_ROOT }}
+          if-no-files-found: error
+
+      - name: Checkout PyTorch
+        timeout-minutes: 30
+        run: |
+          pytorch_origin="https://github.com/pytorch/pytorch.git"
+          if [ "${{ inputs.pytorch_git_ref }}" != "nightly" ]; then
+            pytorch_origin="https://github.com/ROCm/pytorch.git"
+          fi
+          ./external-builds/pytorch/pytorch_torch_repo.py checkout \
+            --gitrepo-origin="${pytorch_origin}" \
+            --repo-hashtag="${{ inputs.pytorch_git_ref }}" \
+            --no-commit-hipify
+
+      - name: Build PyTorch ASAN wheel
+        run: |
+          python external-builds/pytorch/build_prod_wheels.py build \
+            --asan \
+            --install-rocm \
+            --find-links="${{ steps.asan-index.outputs.index_dir }}" \
+            --rocm-sdk-version="==${{ steps.asan-version.outputs.rocm_package_version }}" \
+            --rocm-extras=device \
+            --pytorch-dir="${{ github.workspace }}/external-builds/pytorch/pytorch" \
+            --pytorch-rocm-arch="gfx942:xnack+" \
+            --no-build-triton \
+            --no-build-pytorch-audio \
+            --no-build-pytorch-vision \
+            --no-build-apex \
+            --clean \
+            --release-type="${{ inputs.release_type }}" \
+            --output-dir="${PYTORCH_OUTPUT_DIR}"
+
+      - name: Upload PyTorch ASAN wheel
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pytorch-asan-wheel-${{ inputs.artifact_run_id }}-py${{ inputs.python_version }}
+          path: ${{ env.PYTORCH_OUTPUT_DIR }}/*.whl
+          if-no-files-found: error

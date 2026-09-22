@@ -200,7 +200,7 @@ LINUX_LIBRARY_PRELOADS = [
     "hipfile",
 ]
 
-ASAN_SUPPORTED_ROCM = (10, 1)
+ASAN_SUPPORTED_ROCM = (10, 2)
 ASAN_SUPPORTED_ARCH = "gfx942:xnack+"
 ASAN_DEFAULT_OPTIONS = "detect_leaks=0:abort_on_error=1:print_stacktrace=1"
 ASAN_CMAKE_ARGS = ("-DCMAKE_CXX_SCAN_FOR_MODULES=OFF",)
@@ -329,14 +329,14 @@ def validate_asan_rocm_version(rocm_version: str) -> None:
     parsed_version = parse(rocm_version)
     if tuple(parsed_version.release[:2]) != ASAN_SUPPORTED_ROCM:
         raise RuntimeError(
-            "--asan currently requires a ROCm 10.1 SDK; "
+            "--asan currently requires a ROCm 10.2 SDK; "
             f"found {rocm_version!r}"
         )
     local_parts = (parsed_version.local or "").split(".")
     if not local_parts or local_parts[0] != "asan" or len(local_parts) < 2:
         raise RuntimeError(
             "--asan requires a uniquely labelled ROCm ASAN SDK version "
-            f"(expected 10.1.x+asan.<build-id>, found {rocm_version!r})"
+            f"(expected 10.2.x+asan.<build-id>, found {rocm_version!r})"
         )
 
 
@@ -1910,7 +1910,7 @@ def main(argv: list[str]):
         "--asan",
         action="store_true",
         default=False,
-        help="Build a ROCm 10.1 gfx942:xnack+ torch ASAN wheel from the local "
+        help="Build a ROCm 10.2 gfx942:xnack+ torch ASAN wheel from the local "
         "Phase 1 SDK index. Enables ROCm Clang and strict SDK/runtime preflight; "
         "Triton, sibling wheels, and remote package indexes are excluded.",
     )
