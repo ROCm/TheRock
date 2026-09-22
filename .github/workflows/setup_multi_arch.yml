@@ -162,6 +162,9 @@ on:
       external_repo_config:
         description: "JSON config for external repo checkout (generated from external_repo_name)"
         value: ${{ jobs.setup.outputs.external_repo_config }}
+      changed_projects:
+        description: "Comma-separated list of changed projects (computed from external repo git diff)"
+        value: ${{ jobs.setup.outputs.changed_projects }}
 
 permissions:
   contents: read
@@ -182,6 +185,7 @@ jobs:
       rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
       ref: ${{ steps.checkout.outputs.commit }}
       external_repo_config: ${{ steps.external_repo_config.outputs.config_json }}
+      changed_projects: ${{ steps.configure.outputs.changed_projects }}
     env:
       QUARTZ_REPORTING_WORKFLOW: setup_multi_arch.yml
       QUARTZ_WORKFLOW_POSTFIX: "- setup"
