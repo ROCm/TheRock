@@ -126,6 +126,7 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
           persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
@@ -133,7 +134,9 @@ jobs:
 
       # TODO(8354): pip install rocm-bootstrap instead
       - name: Checkout shared package ownership metadata
-        run: git submodule update --init --depth 1 rocm-systems
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git submodule update --init --depth 1 rocm-systems
 
       - name: Install Python requirements
         run: pip install -r requirements.txt
