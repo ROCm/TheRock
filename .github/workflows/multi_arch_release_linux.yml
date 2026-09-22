@@ -9,11 +9,6 @@ on:
       build_config:
         type: string
         description: JSON object with build configuration for this platform.
-      quartz_tracking_id:
-        description: Quartz tracking ID
-        required: false
-        type: string
-        default: ""
       rocm_package_version:
         type: string
       rocm_deb_package_version:
