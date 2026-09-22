@@ -302,6 +302,7 @@ jobs:
             --repo-hashtag nightly \
             --no-commit-hipify
           ./external-builds/pytorch/pytorch_triton_repo.py checkout \
+            --repo-hashtag 226904950fe411558663ce8e0e437b27b9855d69 \
             --no-commit-hipify
           ./external-builds/pytorch/pytorch_apex_repo.py checkout \
             --repo-hashtag master \
