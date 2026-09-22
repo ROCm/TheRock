@@ -96,7 +96,11 @@ def _target_families(family, amdgpu_targets):
 
 
 def download_replacement_artifacts(
-    code_coverage_run_id, artifact_names, opts, code_coverage_run_github_repo
+    code_coverage_run_id,
+    artifact_names,
+    opts,
+    code_coverage_run_github_repo,
+    code_coverage_release_type,
 ):
     """Download instrumented replacement artifacts from the code-coverage run.
 
@@ -109,6 +113,7 @@ def download_replacement_artifacts(
         run_id=code_coverage_run_id,
         github_repository=code_coverage_run_github_repo,
         platform=platform.system().lower(),
+        release_type=code_coverage_release_type,
     )
     log(f"Fetching replacement artifacts from {backend.base_uri}")
 
@@ -256,6 +261,18 @@ def main(argv):
             "from --run-github-repo, which owns the generic --run-id build."
         ),
     )
+    parser.add_argument(
+        "--code-coverage-release-type",
+        type=str,
+        default="ci",
+        help=(
+            "Release type of the instrumented build identified by "
+            "--code-coverage-run-id (e.g. 'ci', 'nightly'). Controls which S3 "
+            "bucket is used for the replacement artifact lookup. Defaults to "
+            "'ci' because instrumented builds always run as CI jobs. This is "
+            "separate from the baseline's RELEASE_TYPE env var."
+        ),
+    )
     artifacts_group = parser.add_argument_group("replace_comps")
     for comp in COMPONENT_MAP.keys():
         artifacts_group.add_argument(
@@ -292,6 +309,7 @@ def main(argv):
         artifacts.keys(),
         opts,
         args.code_coverage_run_github_repo,
+        args.code_coverage_release_type,
     )
 
     # replace selected library folder paths in selected component artifacts
