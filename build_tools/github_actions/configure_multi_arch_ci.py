@@ -142,6 +142,70 @@ def _load_skip_ci_patterns_from_toml(config_path: str) -> Optional[list[str]]:
     return patterns
 
 
+def _compute_changed_projects_from_files(
+    changed_files: list[str],
+    projects_config_path: str,
+) -> list[str]:
+    """Compute changed projects from changed files using external repo config.
+
+    Maps changed file paths (e.g., "projects/rocprim/src/foo.cpp") to project
+    paths (e.g., "projects/rocprim") using the repos-config.json structure.
+
+    Args:
+        changed_files: List of changed file paths from git diff.
+        projects_config_path: Path to repos-config.json relative to external repo.
+
+    Returns:
+        List of unique changed project paths (e.g., ["projects/rocprim", "projects/hipcub"]).
+    """
+    full_path = Path(_EXTERNAL_REPO_CONFIG_DIR) / projects_config_path
+    if not full_path.exists():
+        print(f"  Projects config not found: {full_path}")
+        return []
+
+    try:
+        with open(full_path, "r") as f:
+            config = json.load(f)
+    except Exception as e:
+        print(f"  Warning: Failed to parse projects config: {e}")
+        return []
+
+    # Build set of valid project prefixes from repos-config.json.
+    # Each entry has "category" (e.g., "projects") and "name" (e.g., "rocprim").
+    # The full prefix is "category/name" (e.g., "projects/rocprim").
+    valid_prefixes: set[str] = set()
+    repositories = config.get("repositories", [])
+    for entry in repositories:
+        category = entry.get("category", "")
+        name = entry.get("name", "")
+        if category and name:
+            valid_prefixes.add(f"{category}/{name}")
+
+    if not valid_prefixes:
+        print("  Warning: No valid project prefixes found in config")
+        return []
+
+    # Sort prefixes by specificity (longest first) so nested projects match first.
+    # e.g., "projects/hipblaslt/tensilelite" should match before "projects/hipblaslt"
+    prefixes_by_specificity = sorted(
+        valid_prefixes, key=lambda p: p.count("/"), reverse=True
+    )
+
+    # Find matched projects from changed files
+    matched_projects: set[str] = set()
+    for path in changed_files:
+        segments = path.split("/")
+        for prefix in prefixes_by_specificity:
+            prefix_segments = prefix.split("/")
+            if segments[: len(prefix_segments)] == prefix_segments:
+                matched_projects.add(prefix)
+                break
+
+    result = sorted(matched_projects)
+    print(f"  Computed {len(result)} changed projects from {len(changed_files)} files")
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Input parsing helpers
 # ---------------------------------------------------------------------------
@@ -1886,6 +1950,39 @@ def main():
             )
         external_repo_name = repo_full_name.split("/")[-1]
         git_context = GitContext.from_external_repo(external_repo_name)
+
+        # If changed_projects not provided externally but projects_config is specified,
+        # compute changed_projects from external repo's changed files.
+        # This enables granular artifact-level reuse for external repos.
+        projects_config = external_repo.get("projects_config")
+        if not ci_inputs.changed_projects and projects_config:
+            external_repo_path = Path(_EXTERNAL_REPO_CONFIG_DIR)
+            base_ref = external_repo.get("base_ref")
+            event_name = external_repo.get("event_name", "")
+
+            # Only compute for PR/push events, not schedule/workflow_dispatch
+            if event_name not in ("schedule", "workflow_dispatch"):
+                if external_repo_path.exists() and external_repo_path.is_dir():
+                    if not base_ref:
+                        base_ref = "HEAD^"
+                    print(
+                        f"\n=== Computing changed projects from {external_repo_name} ==="
+                    )
+                    changed_files = list(
+                        get_git_modified_paths(base_ref, cwd=str(external_repo_path))
+                        or []
+                    )
+                    if changed_files:
+                        computed_projects = _compute_changed_projects_from_files(
+                            changed_files, projects_config
+                        )
+                        if computed_projects:
+                            # Use dataclass replace to update ci_inputs immutably
+                            ci_inputs = replace(
+                                ci_inputs, changed_projects=computed_projects
+                            )
+                            print(f"  Changed projects: {', '.join(computed_projects)}")
+                        print()
     elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.
