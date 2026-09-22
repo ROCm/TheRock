@@ -63,9 +63,10 @@ STATIC_ASAN_ENV = {
     "HSA_XNACK": "1",
 }
 
-# `-fsanitize=address` emits libclang_rt.asan.so under a per-target runtime
-# directory, and libclang_rt.asan-<arch>.so under the layout #8077 reintroduced.
-# Which one a toolchain ships depends on how it was configured, so ask for both.
+# Which of these exists depends on LLVM_ENABLE_PER_TARGET_RUNTIME_DIR: ON
+# installs <resource-dir>/lib/<triple>/libclang_rt.asan.so, OFF installs
+# <resource-dir>/lib/linux/libclang_rt.asan-<arch>.so. TheRock has flipped
+# between the two (#8077), so try both rather than pinning one.
 ASAN_RUNTIME_LIBS = (
     "libclang_rt.asan.so",
     f"libclang_rt.asan-{platform.machine()}.so",
@@ -123,15 +124,19 @@ def _ask_compiler(clang: Path, flag: str, name: str) -> Optional[Path]:
     return candidate.resolve() if candidate.is_file() else None
 
 
-def _resolve_asan_runtime(clang: Path) -> Path:
-    """Asks clang where its ASAN runtime lives. Raises if it ships none."""
+def resolve_asan_runtime(clang: Path) -> Path:
+    """Asks clang where its ASAN runtime lives. Raises if it ships none.
+
+    Public because test scripts that preload the runtime themselves need the
+    same answer; see test_hiptests.py.
+    """
     for name in ASAN_RUNTIME_LIBS:
         runtime = _ask_compiler(clang, "print-file-name", name)
         if runtime:
             return runtime
     raise AsanEnvironmentError(
-        f"{clang} reports no {' or '.join(ASAN_RUNTIME_LIBS)}; "
-        "the build under test is probably not ASAN-instrumented"
+        f"ASAN runtime not found, tried {', '.join(ASAN_RUNTIME_LIBS)} via "
+        f"{clang}; the build under test is probably not ASAN-instrumented"
     )
 
 
@@ -182,7 +187,7 @@ def resolve_asan_env(
     warnings: list[str] = []
 
     clang = _resolve_compiler(artifacts_dir)
-    env["ASAN_RUNTIME_PATH"] = str(_resolve_asan_runtime(clang))
+    env["ASAN_RUNTIME_PATH"] = str(resolve_asan_runtime(clang))
 
     symbolizer, warning = _resolve_symbolizer(artifacts_dir, clang)
     if symbolizer:

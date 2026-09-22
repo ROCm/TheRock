@@ -5,6 +5,13 @@ name: Multi-Arch CI - Windows
 
 on:
   workflow_call:
+    secrets:
+      # CI entry points forward only these benchmark database credentials.
+      # Nested calls inherit the caller-provided set.
+      BENCHMARK_DB_URL:
+        required: false
+      BENCHMARK_DB_FALLBACK_URL:
+        required: false
     inputs:
       build_config:
         type: string
@@ -62,7 +69,9 @@ jobs:
     steps:
       - name: Checking out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
@@ -83,13 +92,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TYPE: ${{ inputs.release_type }}
+          BUILD_CONFIG_BASELINE_RUN_ID: ${{ fromJSON(inputs.build_config).baseline_run_id }}
+          BUILD_CONFIG_BASELINE_REPOSITORY: ${{ fromJSON(inputs.build_config).baseline_repository }}
+          BUILD_CONFIG_PREBUILT_STAGES: ${{ fromJSON(inputs.build_config).prebuilt_stages }}
+          BUILD_CONFIG_REUSABLE_ARTIFACTS: ${{ fromJSON(inputs.build_config).reusable_artifacts }}
+          BUILD_CONFIG_DIST_AMDGPU_FAMILIES: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
         run: |
           python build_tools/artifact_manager.py copy \
-            --source-run-id=${{ fromJSON(inputs.build_config).baseline_run_id }} \
-            --source-repository=${{ fromJSON(inputs.build_config).baseline_repository }} \
-            --stage="${{ fromJSON(inputs.build_config).prebuilt_stages }}" \
-            --artifacts="${{ fromJSON(inputs.build_config).reusable_artifacts }}" \
-            --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}" \
+            --source-run-id="${BUILD_CONFIG_BASELINE_RUN_ID}" \
+            --source-repository="${BUILD_CONFIG_BASELINE_REPOSITORY}" \
+            --stage="${BUILD_CONFIG_PREBUILT_STAGES}" \
+            --artifacts="${BUILD_CONFIG_REUSABLE_ARTIFACTS}" \
+            --amdgpu-families="${BUILD_CONFIG_DIST_AMDGPU_FAMILIES}" \
             --expand-family-to-targets
 
   build_multi_arch_stages:
@@ -97,7 +111,7 @@ jobs:
     needs: copy_prebuilt_stages
     if: ${{ !cancelled() && !failure() }}
     uses: ./.github/workflows/multi_arch_build_windows.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       matrix_per_family_json: ${{ toJSON(fromJSON(inputs.build_config).per_family_info) }}
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -123,7 +137,7 @@ jobs:
     name: Validate Artifact Structure
     if: ${{ !failure() && !cancelled() }}
     uses: ./.github/workflows/test_artifacts_structure.yml
-    secrets: inherit
+    # Note: not using 'secrets: inherit' here; no secrets are needed.
     with:
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       platform: windows
@@ -140,7 +154,7 @@ jobs:
       matrix:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
     uses: ./.github/workflows/test_artifacts.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       # Use architecture-specific artifact group for fetching per-arch artifacts
       artifact_group: ${{ matrix.family_info.amdgpu_family }}
@@ -160,7 +174,7 @@ jobs:
     name: Build Python Packages
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_python_packages == true }}
     uses: ./.github/workflows/build_windows_python_packages.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -184,7 +198,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(inputs.build_config).test_python_packages_matrix }}
     uses: ./.github/workflows/test_rocm_wheels.yml
-    secrets: inherit
+    # Note: not using 'secrets: inherit' here; no secrets are needed.
     with:
       amdgpu_family: ${{ matrix.amdgpu_family }}
       test_runs_on: ${{ matrix.test_runs_on }}

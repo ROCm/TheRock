@@ -156,22 +156,29 @@ jobs:
       run:
         shell: bash
     env:
-      VIRTUAL_ENV: ${{ github.workspace }}/.venv
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+      ROCM_VERSION: ${{ inputs.rocm_version }}
+      JAX_PLUGIN_VERSION: ${{ inputs.jax_plugin_version }}
+      JAX_VERSION: ${{ inputs.jax_version }}
+      JAXLIB_VERSION: ${{ inputs.jaxlib_version }}
+      JAX_PJRT_VERSION: ${{ inputs.jax_pjrt_version }}
       THEROCK_TAR_URL: ${{ inputs.tar_url }}
       PYTHON_VERSION: ${{ inputs.python_version }}
       WHEEL_INDEX_URL: ${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }}
+      VIRTUAL_ENV: ${{ github.workspace }}/.venv
 
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Checkout rocm-jax (plugin + build scripts)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           path: rocm-jax
           repository: ROCm/rocm-jax
           ref: ${{ inputs.jax_ref }}
@@ -179,6 +186,7 @@ jobs:
       - name: Checkout JAX extended tests repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           path: jax
           repository: ROCm/jax
           ref: ${{ inputs.jax_ref }}
@@ -201,15 +209,12 @@ jobs:
           pip install -r external-builds/jax/requirements-jax.txt
 
       - name: Configure ROCm from TheRock tarball
-        env:
-          ROCM_VERSION: ${{ inputs.rocm_version }}
-          AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
         run: |
-          DEST="/opt/rocm-${{ inputs.rocm_version }}"
+          DEST="/opt/rocm-${ROCM_VERSION}"
           # Install directly from TheRock release buckets (nightly/dev) using the provided version
           python build_tools/install_rocm_from_artifacts.py \
-            --release "${{ inputs.rocm_version }}" \
-            --artifact-group "${{ inputs.amdgpu_family }}" \
+            --release "${ROCM_VERSION}" \
+            --artifact-group "${AMDGPU_FAMILY}" \
             --output-dir "${DEST}"
           # Temporary CI workaround.
           # TODO(#4201): Remove this /opt/rocm symlink once JAX wheel
@@ -222,7 +227,7 @@ jobs:
           # The plugin/pjrt wheels embed the ROCm major version in their package
           # name (jax_rocm7_*, jax_rocm10_*), tracking the ROCm release they were
           # built against.
-          rocm_major="${{ inputs.rocm_version }}"
+          rocm_major="${ROCM_VERSION}"
           rocm_major="${rocm_major%%.*}"
           if [ -z "${rocm_major}" ]; then
             echo "::error::rocm_version is required to determine the JAX plugin package name"
@@ -234,17 +239,13 @@ jobs:
           # Use versions passed from the build workflow when available.
           # For manual workflow_dispatch, compute the version suffix using
           # compute_jax_package_version.py (matches rocm-jax ci_build format).
-          if [ -n "${{ inputs.jax_plugin_version }}" ] && [ -n "${{ inputs.jax_version }}" ]; then
+          if [ -n "${JAX_PLUGIN_VERSION}" ] && [ -n "${JAX_VERSION}" ]; then
             echo "Using versions passed from build workflow"
-            echo "JAXLIB_VERSION=${{ inputs.jaxlib_version }}" >> "$GITHUB_ENV"
-            echo "JAX_VERSION=${{ inputs.jax_version }}" >> "$GITHUB_ENV"
-            echo "JAX_PLUGIN_VERSION=${{ inputs.jax_plugin_version }}" >> "$GITHUB_ENV"
-            echo "JAX_PJRT_VERSION=${{ inputs.jax_pjrt_version }}" >> "$GITHUB_ENV"
           else
             echo "Computing versions from rocm_version and rocm-jax requirements"
             pip install packaging
             python build_tools/github_actions/compute_jax_package_version.py \
-              --rocm-version "${{ inputs.rocm_version }}" \
+              --rocm-version "${ROCM_VERSION}" \
               --jax-requirements rocm-jax/build/requirements.txt
           fi
 
@@ -258,13 +259,13 @@ jobs:
           echo "  JAX_PLUGIN_PACKAGE=${JAX_PLUGIN_PACKAGE}"
           echo "  JAX_PJRT_PACKAGE=${JAX_PJRT_PACKAGE}"
           # Install plugin/pjrt from the GPU-family index
-          pip install --index-url "${{ env.WHEEL_INDEX_URL }}" \
+          pip install --index-url "${WHEEL_INDEX_URL}" \
             "${JAX_PLUGIN_PACKAGE}==${JAX_PLUGIN_VERSION}" \
             "${JAX_PJRT_PACKAGE}==${JAX_PJRT_VERSION}"
           # For JAX <= 0.9.0, jaxlib is built and installed from GPU index.
           # For JAX >= 0.9.1, jaxlib is not built - install jax and jaxlib from upstream PyPI.
           if [ -n "${JAXLIB_VERSION}" ]; then
-            pip install --index-url "${{ env.WHEEL_INDEX_URL }}" "jaxlib==${JAXLIB_VERSION}"
+            pip install --index-url "${WHEEL_INDEX_URL}" "jaxlib==${JAXLIB_VERSION}"
             pip install jax==${JAX_VERSION}
           else
             pip install jax==${JAX_VERSION} jaxlib==${JAX_VERSION}

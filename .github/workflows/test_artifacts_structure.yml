@@ -72,14 +72,19 @@ jobs:
     container:
       image: python:3.12-slim
     env:
+      ARTIFACT_GITHUB_REPO: ${{ inputs.artifact_github_repo }}
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      PLATFORM: ${{ inputs.platform }}
-      THEROCK_ARTIFACTS_DIR: ${{ github.workspace }}/.download_cache
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       RELEASE_TYPE: ${{ inputs.release_type }}
+      PLATFORM: ${{ inputs.platform }}
+      OUTPUT_ROOT: "${{ github.workspace }}"
+      THEROCK_ARTIFACTS_DIR: ${{ github.workspace }}/.download_cache
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
@@ -92,16 +97,16 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python ./build_tools/artifact_manager.py fetch \
-            --run-id="${{ env.ARTIFACT_RUN_ID }}" \
-            --run-github-repo="${{ inputs.artifact_github_repo }}" \
+            --run-id="${ARTIFACT_RUN_ID}" \
+            --run-github-repo="${ARTIFACT_GITHUB_REPO}" \
             --stage=all \
-            --amdgpu-families="${{ inputs.amdgpu_families }}" \
-            --platform="${{ env.PLATFORM }}" \
-            --output-dir="${GITHUB_WORKSPACE}" \
+            --amdgpu-families="${AMDGPU_FAMILIES}" \
+            --platform="${PLATFORM}" \
+            --output-dir="${OUTPUT_ROOT}" \
             --no-extract
           # NOTE: artifact_manager.py appends /.download_cache to --output-dir
-          # in --no-extract mode, so pass workspace root here so that
-          # artifacts land in THEROCK_ARTIFACTS_DIR ($workspace/.download_cache).
+          # in --no-extract mode, so pass OUTPUT_ROOT here so that
+          # artifacts land in THEROCK_ARTIFACTS_DIR ($OUTPUT_ROOT/.download_cache).
 
       - name: Validate artifact structure
         run: |

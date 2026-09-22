@@ -27,6 +27,7 @@ CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_t
 # Importing is_asan from amdgpu_family_matrix.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from amdgpu_family_matrix import is_asan
+from configure_asan_env import resolve_asan_runtime
 
 env = os.environ.copy()
 
@@ -107,17 +108,10 @@ GENERIC_TEST_TO_IGNORE = [
 
 
 def get_asan_lib_path():
-    arch = platform.machine()
-    CLANG_PATH = str(Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "clang++")
-    cmd = [f"{CLANG_PATH}", f"--print-file-name=libclang_rt.asan-{arch}.so"]
-    logging.info(f"++ Exec [{CLANG_PATH}]$ {shlex.join(cmd)}")
-    result = subprocess.run(
-        cmd,
-        check=True,
-        text=True,
-        capture_output=True,
-    )
-    return result.stdout.strip()
+    clang = Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "clang++"
+    runtime = resolve_asan_runtime(clang)
+    logging.info(f"++ Resolved ASAN runtime via {clang}: {runtime}")
+    return str(runtime)
 
 
 def copy_dlls_exe_path():
