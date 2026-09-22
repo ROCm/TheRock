@@ -144,7 +144,7 @@ jobs:
         env:
           RELEASE_TYPE: ${{ inputs.release_type }}
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
-#          BASELINE_REPOSITORY: ${{ inputs.baseline_repository }}
+          BASELINE_REPOSITORY: ${{ inputs.baseline_repository }}
         run: |
           pip install -r requirements-test.txt
           # Baseline tree comes from generic_run_id. When empty (self-contained
@@ -155,21 +155,23 @@ jobs:
             generic_run_id="${{ github.run_id }}"
           fi
           # Pass --run-github-repo only when set, so empty defaults to the
-          # current repository.
+          # current repository. The generic baseline lives in a different repo
+          # than this coverage run (rockrel for the PR check, rocm-libraries for
+          # the nightly); the S3 bucket lookup 404s if that repo is not named.
           run_github_repo_arg=()
-          #if [[ -n "${BASELINE_REPOSITORY}" ]]; then
-          #  run_github_repo_arg=(--run-github-repo="${BASELINE_REPOSITORY}")
-          #fi
+          if [[ -n "${BASELINE_REPOSITORY}" ]]; then
+            run_github_repo_arg=(--run-github-repo="${BASELINE_REPOSITORY}")
+          fi
           python3 build_tools/install_rocm_code_coverage_build.py \
             --code-coverage-run-id=${{ env.CODE_COVERAGE_RUN_ID }} \
             --run-id="${generic_run_id}" \
+            "${run_github_repo_arg[@]}" \
             --artifact-group=${{ inputs.amdgpu_families }} \
             --amdgpu-targets=${{ inputs.amdgpu_targets }} \
             --tests \
             --output-dir=${{ env.OUTPUT_ARTIFACTS_DIR }} \
             --replace-${{ fromJSON(inputs.component).job_name }} \
             ${FETCH_ARTIFACT_ARGS}
-            #"${run_github_repo_arg[@]}" \
 
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config

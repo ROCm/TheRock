@@ -48,8 +48,8 @@ jobs:
     with:
       # Pinned baseline: a report change must reflect a code change, not a baseline drift.
       #
-      # ROCm/rockrel run 34068476531, "Multi-Arch Release (nightly)" on main,
-      # 2026-09-07, succeeded. A real nightly, not a CI run, since that's what a
+      # ROCm/rockrel run 35670146294, "Multi-Arch Release (nightly)" on main,
+      # 2026-09-22, succeeded. A real nightly, not a CI run, since that's what a
       # dispatched coverage run gets in practice.
       #
       # A rockrel run is safe here. Its artifacts embed their build workspace
@@ -58,14 +58,14 @@ jobs:
       # stack from source and only installs the baseline on the test runner,
       # where prebuilt binaries run and no package config is read.
       #
-      # Verified before pinning that this run publishes artifacts for every
+      # Verify before pinning that this run publishes artifacts for every
       # selected project: blas, fft, hipdnn, rand, solver, sparse. Not all are
       # per-target (hipdnn and solver's tests are generic), so checking only for
       # _gfx942 understates what's there.
-      baseline_run_id: "35620066949"
+      baseline_run_id: "35670146294"
       # The bucket lookup queries the run via the GitHub API, so it needs the
       # owning repo; ROCm/TheRock 404s for a rockrel id.
-      baseline_repository: "ROCm/TheRock"
+      baseline_repository: "ROCm/rockrel"
       # That run published to therock-nightly-artifacts (the default); naming it
       # keeps the pin and channel together.
       baseline_release_type: "nightly"

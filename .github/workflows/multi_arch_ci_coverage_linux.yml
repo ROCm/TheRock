@@ -226,6 +226,7 @@ jobs:
       codecov_flag: ${{ matrix.coverage.codecov_flag }}
       amdgpu_families: ${{ matrix.coverage.amdgpu_families }}
       baseline_run_id: ${{ inputs.baseline_run_id }}
+      baseline_release_type: ${{ inputs.baseline_release_type }}
       baseline_repository: ${{ inputs.baseline_repository }}
       test_type: ${{ inputs.test_type || 'standard' }}
       release_type: ci
