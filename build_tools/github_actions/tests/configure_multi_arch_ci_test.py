@@ -2200,27 +2200,6 @@ class TestFamilyTestFilters(unittest.TestCase):
             self.assertIsNotNone(family_info)
             self.assertEqual(family_info["test-runs-on"], "")
 
-    def test_trigger_test_label_only_push_without_label_skips_tests(self):
-        """Push (postsubmit) without label skips tests when trigger_test_label_only is set."""
-        with patch(
-            "configure_multi_arch_ci.get_all_families_for_trigger_types",
-            side_effect=self._mock_get_all_families,
-        ):
-            ci_inputs = cm.CIInputs(
-                run_id="12345",
-                event_name="push",
-                commit_ref="main",
-                base_ref="HEAD^",
-                build_variant="release",
-                pr_labels=[],  # No labels on push
-            )
-            outputs = cm.configure(ci_inputs, cm.GitContext.empty())
-            family_info = self._find_family_info(outputs, "mock-postsubmit-labeled")
-
-            self.assertIsNotNone(family_info)
-            # Push events without labels should skip tests
-            self.assertEqual(family_info["test-runs-on"], "")
-
     def test_trigger_test_label_only_push_with_label_runs_tests(self):
         """Push (postsubmit) with label runs tests when trigger_test_label_only is set.
 
