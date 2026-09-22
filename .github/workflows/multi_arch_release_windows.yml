@@ -9,6 +9,11 @@ on:
       build_config:
         type: string
         description: JSON object with build configuration for this platform.
+      quartz_tracking_id:
+        description: Quartz tracking ID
+        required: false
+        type: string
+        default: ""
       rocm_package_version:
         type: string
       test_type:
@@ -138,6 +143,7 @@ jobs:
     uses: ./.github/workflows/test_python_packages_per_family.yml
     secrets: inherit
     with:
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
       test_runs_on: ${{ matrix.family_info['test-runs-on'] }}
       test_matrix: >-

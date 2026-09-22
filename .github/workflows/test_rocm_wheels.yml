@@ -53,6 +53,11 @@ on:
 
   workflow_call:
     inputs:
+      quartz_tracking_id:
+        description: Quartz tracking ID propagated from the release workflow
+        required: false
+        type: string
+        default: ""
       amdgpu_family:
         required: true
         type: string

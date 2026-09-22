@@ -6,6 +6,12 @@ name: Test Python Packages Per AMDGPU Family
 on:
   workflow_call:
     inputs:
+      quartz_tracking_id:
+        description: Quartz tracking ID propagated from the release workflow
+        required: false
+        type: string
+        default: ""
+
       amdgpu_family:
         description: AMDGPU family under test
         required: true
@@ -67,6 +73,7 @@ jobs:
     uses: ./.github/workflows/test_rocm_wheels.yml
     secrets: inherit
     with:
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       amdgpu_family: ${{ inputs.amdgpu_family }}
       test_runs_on: ${{ inputs.test_runs_on }}
       package_find_links_url: ${{ inputs.package_find_links_url }}
