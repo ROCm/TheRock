@@ -2200,8 +2200,12 @@ class TestFamilyTestFilters(unittest.TestCase):
             self.assertIsNotNone(family_info)
             self.assertEqual(family_info["test-runs-on"], "")
 
-    def test_trigger_test_label_only_push_always_runs_tests(self):
-        """Push (postsubmit) always runs tests regardless of trigger_test_label_only."""
+    def test_trigger_test_label_only_push_with_label_runs_tests(self):
+        """Push (postsubmit) with label runs tests when trigger_test_label_only is set.
+
+        This tests the case where an external caller (like rocm-libraries) passes
+        pr_labels to the push event, allowing tests to run for specific families.
+        """
         with patch(
             "configure_multi_arch_ci.get_all_families_for_trigger_types",
             side_effect=self._mock_get_all_families,
@@ -2212,11 +2216,14 @@ class TestFamilyTestFilters(unittest.TestCase):
                 commit_ref="main",
                 base_ref="HEAD^",
                 build_variant="release",
+                pr_labels=["mock-postsubmit-labeled"],  # Label passed by caller
+                linux_amdgpu_families=["mock-postsubmit-labeled"],
             )
             outputs = cm.configure(ci_inputs, cm.GitContext.empty())
             family_info = self._find_family_info(outputs, "mock-postsubmit-labeled")
 
             self.assertIsNotNone(family_info)
+            # Push events WITH labels should run tests
             self.assertNotEqual(family_info["test-runs-on"], "")
 
     def test_trigger_test_label_only_workflow_dispatch_always_runs_tests(self):
