@@ -25,6 +25,7 @@ from generate_msi_wxs import (
     parse_args,
     create_wix_document,
     resolve_install_layout,
+    resolve_legacy_dlls,
     add_install_directory_tree,
     add_legacy_system32_feature,
     _stable_guid,
@@ -316,9 +317,20 @@ class TestBuildWxs(unittest.TestCase):
                     artifacts, artifact_name, component, self.BASEDIR, files
                 )
 
+        # Materialize every System32 DLL the package declares in the source-tree
+        # legacy dir so resolve_legacy_dlls (fail-fast on missing) is satisfied.
+        # Standing in for the build's DVC pull of rocm-systems.
+        legacy_dir = (
+            root / "rocm-systems" / "shared" / "amdgpu-windows-interop" / "legacy"
+        )
+        legacy_dir.mkdir(parents=True, exist_ok=True)
+        for dll in PACKAGES[package].legacy_system32_dlls:
+            (legacy_dir / dll).write_bytes(b"dll")
+
         defaults = dict(
             package=package,
             build_root=build,
+            repo_root=root,
             output=out,
             install_root="ProgramFiles64Folder",
             product_dir="AMD",
@@ -326,7 +338,6 @@ class TestBuildWxs(unittest.TestCase):
             package_version="1.2.3",
             artifacts_url=None,
             artifacts_cache_dir=root / "artifact-cache",
-            fetch_legacy_dlls=False,
         )
         defaults.update(extra_args or {})
         # Override build_root so artifacts/ is under it
@@ -408,9 +419,22 @@ class TestBuildWxs(unittest.TestCase):
             empty_build.mkdir()
             out = root_path / "out.wxs"
             buf = io.StringIO()
+            # The System32 DLLs are a hard prerequisite, so provide them; this
+            # test is about missing *payload* artifacts, not System32 DLLs.
+            legacy_dir = (
+                root_path
+                / "rocm-systems"
+                / "shared"
+                / "amdgpu-windows-interop"
+                / "legacy"
+            )
+            legacy_dir.mkdir(parents=True)
+            for dll in PACKAGES["runtime"].legacy_system32_dlls:
+                (legacy_dir / dll).write_bytes(b"dll")
             args = argparse.Namespace(
                 package="runtime",
                 build_root=empty_build,
+                repo_root=root_path,
                 output=out,
                 install_root="ProgramFiles64Folder",
                 product_dir="AMD",
@@ -418,7 +442,6 @@ class TestBuildWxs(unittest.TestCase):
                 package_version="1.2.3",
                 artifacts_url=None,
                 artifacts_cache_dir=root_path / "artifact-cache",
-                fetch_legacy_dlls=False,
             )
             with redirect_stderr(buf):
                 build_wxs(args)
@@ -533,6 +556,56 @@ class TestBuildWxs(unittest.TestCase):
             )
             targetdirs = [d.get("Id") for d in root.iter(_ns("Directory"))]
             self.assertIn("TARGETDIR", targetdirs)
+
+
+class TestResolveLegacyDlls(unittest.TestCase):
+    """resolve_legacy_dlls reads pre-present DLLs; it never fetches them."""
+
+    LEGACY_REL = Path("rocm-systems/shared/amdgpu-windows-interop/legacy")
+
+    def test_empty_names_returns_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.assertEqual(resolve_legacy_dlls(root / "artifacts", [], root), [])
+
+    def test_prefers_artifact_over_source_tree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact_dir = root / "artifacts"
+            (artifact_dir / "sub").mkdir(parents=True)
+            (artifact_dir / "sub" / "amdhip64_7.dll").write_bytes(b"art")
+            legacy = root / self.LEGACY_REL
+            legacy.mkdir(parents=True)
+            (legacy / "amdhip64_7.dll").write_bytes(b"src")
+            resolved = resolve_legacy_dlls(artifact_dir, ["amdhip64_7.dll"], root)
+            self.assertEqual(len(resolved), 1)
+            self.assertEqual(resolved[0][1].read_bytes(), b"art")
+
+    def test_falls_back_to_source_tree_legacy_dir(self):
+        # Driver-supplied DLLs live only in the rocm-systems source checkout
+        # (DVC-pulled by the build), not in the artifacts.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact_dir = root / "artifacts"
+            artifact_dir.mkdir()
+            legacy = root / self.LEGACY_REL
+            legacy.mkdir(parents=True)
+            (legacy / "amdhip64_6.dll").write_bytes(b"driver")
+            resolved = resolve_legacy_dlls(artifact_dir, ["amdhip64_6.dll"], root)
+            self.assertEqual(len(resolved), 1)
+            self.assertEqual(resolved[0][0], "amdhip64_6.dll")
+            self.assertEqual(resolved[0][1], legacy / "amdhip64_6.dll")
+
+    def test_missing_dll_is_fatal(self):
+        # Presence is a prerequisite: a declared DLL that cannot be found in the
+        # artifacts or the source checkout must fail, never silently ship an
+        # incomplete MSI.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact_dir = root / "artifacts"
+            artifact_dir.mkdir()
+            with self.assertRaises(FileNotFoundError):
+                resolve_legacy_dlls(artifact_dir, ["absent.dll"], root)
 
 
 class TestPackageDefs(unittest.TestCase):
