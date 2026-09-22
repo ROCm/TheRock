@@ -179,12 +179,13 @@ jobs:
         run: |
           pip freeze
 
-      # Must run after the install (the runtime ships in the wheels) and before
-      # any `rocm-sdk test`, which needs ASAN_RUNTIME_PATH to preload.
+      # Must run after the install (rocm-sdk-core puts amdclang++ on PATH) and
+      # before any `rocm-sdk test`, which needs ASAN_RUNTIME_PATH to preload.
+      # No --artifacts-dir: ROCm is installed as Python packages here.
       - name: Enable sanitizer-specific test flags
         if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' && contains(inputs.artifact_group, 'asan') }}
         run: |
-          python ./build_tools/github_actions/configure_wheel_asan_env.py
+          python ./build_tools/github_actions/configure_asan_env.py
 
       - name: Test rocm[libraries]
         id: test_libraries
@@ -196,11 +197,6 @@ jobs:
           # without the runtime already loaded the process aborts with "ASan
           # runtime does not come first in initial library list" (#6331).
           LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
-          # Preloading puts uninstrumented CPython under LeakSanitizer, which
-          # then reports the interpreter's own allocations as leaks. This step
-          # answers "do the wheels load and work", not "is CPython leak-free".
-          # Extends rather than replaces, to keep the options set above.
-          ASAN_OPTIONS: ${{ env.ASAN_OPTIONS }}:detect_leaks=0
         run: |
           rocm-sdk test
 
@@ -228,7 +224,6 @@ jobs:
         env:
           # Same venv as rocm[libraries], so the values resolved above still apply.
           LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
-          ASAN_OPTIONS: ${{ env.ASAN_OPTIONS }}:detect_leaks=0
         run: |
           rocm-sdk test
 
@@ -259,13 +254,12 @@ jobs:
       - name: Enable sanitizer-specific test flags (profiler)
         if: ${{ !cancelled() && steps.install_profiler.outcome == 'success' && contains(inputs.artifact_group, 'asan') }}
         run: |
-          python ./build_tools/github_actions/configure_wheel_asan_env.py
+          python ./build_tools/github_actions/configure_asan_env.py
 
       - name: Test rocm[profiler]
         if: ${{ !cancelled() && steps.install_profiler.outcome == 'success' }}
         timeout-minutes: 5
         env:
           LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
-          ASAN_OPTIONS: ${{ env.ASAN_OPTIONS }}:detect_leaks=0
         run: |
           rocm-sdk test
