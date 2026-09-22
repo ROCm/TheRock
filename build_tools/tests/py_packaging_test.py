@@ -15,6 +15,7 @@ import os
 import stat
 import subprocess
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -24,7 +25,12 @@ import sys
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.artifacts import ArtifactCatalog
-from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, PopulatedFiles
+from _therock_utils.py_packaging import (
+    Parameters,
+    PopulatedDistPackage,
+    PopulatedFiles,
+    build_packages,
+)
 from build_python_packages import (
     _run_kpack_split,
     validate_kpack_split_target_completeness,
@@ -51,6 +57,46 @@ class TmpDirTestCase(unittest.TestCase):
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content)
         return p
+
+
+# ---------------------------------------------------------------------------
+# Package build concurrency
+# ---------------------------------------------------------------------------
+
+
+class BuildPackagesConcurrencyTest(TmpDirTestCase):
+    def _make_package_dirs(self, count: int) -> list[Path]:
+        package_dirs = []
+        for i in range(count):
+            package_dir = self.temp_dir / f"package-{i}"
+            package_dir.mkdir()
+            (package_dir / "setup.py").write_text("# test fixture\n")
+            package_dirs.append(package_dir)
+        return package_dirs
+
+    def test_builds_independent_packages_concurrently(self):
+        """Both subprocesses must start before either is allowed to finish."""
+        package_dirs = self._make_package_dirs(2)
+        both_started = threading.Barrier(2, timeout=5)
+
+        def check_call(*args, **kwargs):
+            both_started.wait()
+
+        with mock.patch(
+            "_therock_utils.py_packaging.subprocess.check_call",
+            side_effect=check_call,
+        ) as check_call_mock:
+            build_packages(
+                self.temp_dir,
+                package_dirs=package_dirs,
+                max_workers=2,
+            )
+
+        self.assertEqual(check_call_mock.call_count, 2)
+
+    def test_rejects_nonpositive_workers(self):
+        with self.assertRaisesRegex(ValueError, "max_workers must be at least 1"):
+            build_packages(self.temp_dir, package_dirs=[], max_workers=0)
 
 
 # ---------------------------------------------------------------------------
@@ -811,6 +857,26 @@ class DevicePackagingTest(TmpDirTestCase):
         devices = [p for p in params.populated_packages if p.logical_name == "device"]
         self.assertEqual(len(devices), 1)
         self.assertEqual(devices[0].target_family, "gfx1250")
+
+    def test_split_batches_device_packages_for_parallel_build(self):
+        artifact_dir = self._setup_kpack_split_artifacts(("gfx942", "gfx1100"))
+        params = self._make_params(artifact_dir, kpack_split=True)
+        core = PopulatedDistPackage(params, logical_name="core")
+        args = argparse.Namespace(
+            build_packages=True,
+            dest_dir=params.dest_dir,
+            devel_tarball_compression=False,
+            wheel_build_workers=4,
+            wheel_compression=True,
+        )
+
+        with mock.patch("build_python_packages.build_packages") as build_mock:
+            _run_kpack_split(args, params, core, None)
+
+        device_call = build_mock.call_args_list[1]
+        device_package_dirs = device_call.kwargs["package_dirs"]
+        self.assertEqual(len(device_package_dirs), 2)
+        self.assertEqual(device_call.kwargs["max_workers"], 4)
 
     def test_conflicting_payloads_fail_before_population(self):
         artifact_dir = self.temp_dir / "artifacts"

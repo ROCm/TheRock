@@ -385,13 +385,18 @@ def _run_kpack_split(
     # rocm-sdk-device staging dirs do not exist yet, so the default scan
     # in build_packages will not accidentally include them.
     if args.build_packages:
-        build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
+        build_packages(
+            args.dest_dir,
+            wheel_compression=args.wheel_compression,
+            max_workers=args.wheel_build_workers,
+        )
 
     # Per-ISA device wheels. Device artifacts overlay into
     # _rocm_sdk_libraries/lib/ and may include ELF .so files (per-arch
     # MIOpen CK kernels) with dynamic deps on core.
     # Group supplied members before construction, preserving artifact identities.
     owner_groups = group_package_targets(sorted(params.all_target_families))
+    device_package_dirs: list[Path] = []
     for target, members in owner_groups.items():
         dev = PopulatedDistPackage(params, logical_name="device", target_family=target)
         dev.rpath_dep(core, "lib")
@@ -402,12 +407,14 @@ def _run_kpack_split(
                 and device_artifact_filter(target, an),
             )
         )
-        if args.build_packages:
-            build_packages(
-                args.dest_dir,
-                package_dirs=[dev.path],
-                wheel_compression=args.wheel_compression,
-            )
+        device_package_dirs.append(dev.path)
+    if args.build_packages:
+        build_packages(
+            args.dest_dir,
+            package_dirs=device_package_dirs,
+            wheel_compression=args.wheel_compression,
+            max_workers=args.wheel_build_workers,
+        )
 
     # Single generic meta sdist.
     meta = PopulatedDistPackage(params, logical_name="meta", target_family=None)
@@ -416,6 +423,7 @@ def _run_kpack_split(
             args.dest_dir,
             package_dirs=[meta.path],
             wheel_compression=args.wheel_compression,
+            max_workers=args.wheel_build_workers,
         )
 
     # Single arch-neutral devel wheel. Exclude test component — in kpack-split
@@ -447,6 +455,7 @@ def _run_kpack_split(
             args.dest_dir,
             package_dirs=[devel.path],
             wheel_compression=args.wheel_compression,
+            max_workers=args.wheel_build_workers,
         )
 
 
@@ -485,7 +494,11 @@ def _run_legacy(
     # staging dirs do not exist yet, so the default scan in build_packages
     # will not accidentally include them.
     if args.build_packages:
-        build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
+        build_packages(
+            args.dest_dir,
+            wheel_compression=args.wheel_compression,
+            max_workers=args.wheel_build_workers,
+        )
 
     # One meta (rocm) sdist per target family. In a multi-arch build,
     # target_family and restrict_families=True bake THIS_TARGET_FAMILY,
@@ -510,6 +523,7 @@ def _run_legacy(
                     (args.dest_dir / "dist" / target_family) if multi_arch else None
                 ),
                 wheel_compression=args.wheel_compression,
+                max_workers=args.wheel_build_workers,
             )
 
     # One rocm-sdk-devel wheel per target family. Each wheel is NOT generic:
@@ -546,6 +560,7 @@ def _run_legacy(
                     (args.dest_dir / "dist" / target_family) if multi_arch else None
                 ),
                 wheel_compression=args.wheel_compression,
+                max_workers=args.wheel_build_workers,
             )
 
 
@@ -716,6 +731,15 @@ def main(argv: list[str]):
         help="Apply compression when building wheels (disable for faster iteration or prior to recompression activities)",
     )
     p.add_argument(
+        "--wheel-build-workers",
+        type=int,
+        default=1,
+        help=(
+            "Maximum number of independent Python packages to build concurrently "
+            "(default: 1)"
+        ),
+    )
+    p.add_argument(
         "--linux-amdgpu-families",
         type=_amdgpu_families_arg,
         default=None,
@@ -738,6 +762,8 @@ def main(argv: list[str]):
         ),
     )
     args = p.parse_args(argv)
+    if args.wheel_build_workers < 1:
+        p.error("--wheel-build-workers must be at least 1")
 
     if not args.version:
         print(f"::: Version not specified, choosing a default")
