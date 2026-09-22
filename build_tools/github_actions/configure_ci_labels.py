@@ -14,6 +14,9 @@ Usage:
 
     # Create missing labels
     python configure_ci_labels.py --repo OWNER/REPO --create
+
+    # Create missing labels and update existing ones to match color/description
+    python configure_ci_labels.py --repo OWNER/REPO --create --force
 """
 
 import argparse
@@ -148,6 +151,25 @@ def create_label(repo: str, name: str, color: str, description: str, dry_run: bo
         return False
 
 
+def update_label(repo: str, name: str, color: str, description: str, dry_run: bool = False) -> bool:
+    """Update an existing label's color and description."""
+    if dry_run:
+        print(f"  [DRY RUN] Would update label: {name}")
+        return True
+
+    args = ["label", "edit", name, "--repo", repo, "--color", color]
+    if description:
+        args.extend(["--description", description])
+
+    result = run_gh_command(args, check=False)
+    if result.returncode == 0:
+        print(f"  Updated label: {name}")
+        return True
+    else:
+        print(f"  Failed to update label {name}: {result.stderr}")
+        return False
+
+
 def get_ci_label_names() -> set[str]:
     """Get set of CI label names."""
     return {label[0] for label in CI_LABELS}
@@ -177,25 +199,46 @@ def list_labels(repo: str) -> None:
     print(f"\nSummary: {exists_count} exist, {missing_count} missing")
 
 
-def create_labels(repo: str, dry_run: bool = False) -> None:
-    """Create missing CI labels in the repository."""
+def create_labels(repo: str, dry_run: bool = False, force: bool = False) -> None:
+    """Create missing CI labels in the repository.
+
+    Args:
+        repo: Repository in OWNER/REPO format.
+        dry_run: If True, only print what would be done.
+        force: If True, update existing labels to match color/description.
+    """
     print(f"\nCreating CI labels in {repo}...")
+    if force:
+        print("(--force: existing labels will be updated to match)")
     if dry_run:
         print("(DRY RUN - no changes will be made)\n")
 
     existing_labels = get_repo_labels(repo)
-    existing_names = {l.name for l in existing_labels}
+    existing_map = {l.name: l for l in existing_labels}
 
     created = 0
+    updated = 0
     skipped = 0
     for name, color, description in CI_LABELS:
-        if name in existing_names:
-            skipped += 1
+        if name in existing_map:
+            if force:
+                existing = existing_map[name]
+                # Check if color or description differs (color comparison is case-insensitive)
+                if existing.color.lower() != color.lower() or existing.description != description:
+                    if update_label(repo, name, color, description, dry_run):
+                        updated += 1
+                else:
+                    skipped += 1
+            else:
+                skipped += 1
             continue
         if create_label(repo, name, color, description, dry_run):
             created += 1
 
-    print(f"\nSummary: {created} created, {skipped} already existed")
+    summary_parts = [f"{created} created", f"{skipped} already matched"]
+    if force:
+        summary_parts.insert(1, f"{updated} updated")
+    print(f"\nSummary: {', '.join(summary_parts)}")
 
 
 def main():
@@ -213,6 +256,11 @@ def main():
         "--dry-run",
         action="store_true",
         help="Show what would be done without making changes",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Update existing labels to match color/description (use with --create)",
     )
 
     action_group = parser.add_mutually_exclusive_group(required=True)
@@ -238,7 +286,7 @@ def main():
         if args.list:
             list_labels(args.repo)
         elif args.create:
-            create_labels(args.repo, args.dry_run)
+            create_labels(args.repo, args.dry_run, args.force)
     except subprocess.CalledProcessError as e:
         print(f"Error running gh command: {e}")
         print(f"stderr: {e.stderr}")
