@@ -194,6 +194,11 @@ jobs:
           PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
           CI_CONFIG_PATH: ci-config
           BUILD_VARIANT: ${{ inputs.build_variant }}
+          # Forwarded so container options can honor a dispatch-time runner
+          # override. test_component.yml's runs-on prefers this input over the
+          # matrix-selected runner, so the container device set (for example the
+          # WSL /dev/dxg pools) must be derived from the same value.
+          TEST_RUNS_ON: ${{ inputs.test_runs_on }}
         run: |
           python ./build_tools/github_actions/fetch_test_configurations.py \
             --platform=${{ contains(inputs.test_runs_on, 'windows') && 'windows' || 'linux' }}

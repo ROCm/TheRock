@@ -126,17 +126,36 @@ _WSL_GPU_CONTAINER_OPTIONS = [
 _WSL_RUNNER_LABEL_MARKER = "wsl-"
 
 
+def _is_wsl_label(label) -> bool:
+    """Return True if a runner label identifies a WSL-hosted pool.
+
+    Matches on prefix, not substring: ephemeral runner names carry a random
+    suffix that can contain these letters by coincidence (for example
+    ...-1gpu-rocm-scale-runner-3wsl is an ordinary bare-metal runner).
+    """
+    return isinstance(label, str) and label.startswith(_WSL_RUNNER_LABEL_MARKER)
+
+
 def _is_wsl_runner(job_config: dict) -> bool:
     """Return True if this job is scheduled onto a WSL-hosted runner.
 
-    The runner label is resolved before container options are built, so the
-    selected label is available on the job config.
+    A workflow_dispatch run can override the runner for every component via the
+    test_runs_on input, which test_artifacts.yml forwards as TEST_RUNS_ON. That
+    override wins in test_component.yml's runs-on expression, so it has to win
+    here too - otherwise a manual dispatch onto a WSL pool would still be handed
+    the bare-metal /dev/kfd device set and fail to start the container.
+
+    Otherwise fall back to the label resolved during runner selection, which
+    runs before container options are built.
     """
-    for key in ("test_runner", "multi_gpu_runner"):
-        label = job_config.get(key)
-        if isinstance(label, str) and label.startswith(_WSL_RUNNER_LABEL_MARKER):
-            return True
-    return False
+    dispatch_override = os.getenv("TEST_RUNS_ON", "").strip()
+    if dispatch_override:
+        return _is_wsl_label(dispatch_override)
+
+    return any(
+        _is_wsl_label(job_config.get(key))
+        for key in ("test_runner", "multi_gpu_runner")
+    )
 
 
 def _build_container_options(job_config: dict, platform: str) -> dict:

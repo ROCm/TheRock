@@ -35,6 +35,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_TYPE"] = "full"
         os.environ["TEST_LABELS"] = "[]"
         os.environ["PROJECTS_TO_TEST"] = "*"
+        # Only set on workflow_dispatch runs; clear it so tests never pick up a
+        # dispatch-time runner override from the ambient environment.
+        os.environ.pop("TEST_RUNS_ON", None)
 
         # Default to linux platform
         sys.argv = ["fetch_test_configurations.py", "--platform=linux"]
@@ -704,6 +707,38 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         out = fetch_test_configurations._build_container_options(job, "linux")
         self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
         self.assertIn("--device /dev/dxg", out["container_options"])
+
+    def test_dispatch_override_to_wsl_wins_over_matrix_runner(self):
+        """A workflow_dispatch test_runs_on override must drive the device set.
+
+        test_component.yml prefers inputs.test_runs_on over the matrix-selected
+        runner, so dispatching a normal family onto a WSL pool would otherwise
+        get the bare-metal /dev/kfd options and fail to start the container.
+        """
+        os.environ["TEST_RUNS_ON"] = "wsl-gfx1101-gpu-rocm-test"
+        job = {"test_runner": "linux-gfx110X-gpu-rocm"}
+        out = fetch_test_configurations._build_container_options(job, "linux")
+
+        self.assertIn("--device /dev/dxg", out["container_options"])
+        self.assertNotIn("/dev/kfd", out["container_options"])
+
+    def test_dispatch_override_to_non_wsl_wins_over_wsl_matrix_runner(self):
+        """The override is authoritative in both directions."""
+        os.environ["TEST_RUNS_ON"] = "linux-gfx110X-gpu-rocm"
+        job = {"test_runner": "wsl-gfx1101-gpu-rocm"}
+        out = fetch_test_configurations._build_container_options(job, "linux")
+
+        self.assertIn("--device /dev/kfd", out["container_options"])
+        self.assertNotIn("/dev/dxg", out["container_options"])
+
+    def test_empty_dispatch_override_falls_back_to_matrix_runner(self):
+        """Scheduled/PR runs send an empty TEST_RUNS_ON; ignore it."""
+        os.environ["TEST_RUNS_ON"] = ""
+        job = {"test_runner": "wsl-gfx1101-gpu-rocm"}
+        out = fetch_test_configurations._build_container_options(job, "linux")
+
+        self.assertIn("--device /dev/dxg", out["container_options"])
+        self.assertNotIn("/dev/kfd", out["container_options"])
 
     # -----------------------
     # ASAN sandbox runner selection
