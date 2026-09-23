@@ -58,7 +58,7 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
-      build_runs_on:
+      build_runs_on_large:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
         default: "azure-windows-scale-rocm"
@@ -80,7 +80,7 @@ permissions:
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
-    runs-on: ${{ inputs.build_runs_on }}
+    runs-on: ${{ inputs.build_runs_on_large }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
@@ -127,6 +127,7 @@ jobs:
         timeout-minutes: 10
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
@@ -135,6 +136,7 @@ jobs:
         timeout-minutes: 10
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ fromJSON(inputs.external_repo_config).repository }}
           ref: ${{ fromJSON(inputs.external_repo_config).ref }}
           path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}

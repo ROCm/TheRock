@@ -17,6 +17,10 @@
 # 11. cv-libs (generic) - rpp
 # 12. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
 
+# Notes on security:
+#   * Inherit caller-provided secrets; limited-trust PR entry points restrict the set.
+#   * Higher-trust callers supply Quartz credentials without repeating nested mappings.
+
 name: Multi-Arch Build (Linux)
 
 on:
@@ -52,10 +56,18 @@ on:
         description: >-
           Comma-separated build stages to drop from the graph entirely. Unlike
           prebuilt_stages, no artifacts exist for these stages afterwards.
-      build_runs_on:
+      build_runs_on_large:
         type: string
         default: "aws-linux-scale-rocm-prod"
-        description: "Build runner label (selected by configure script with weighted distribution)"
+        description: "Build runner label for CPU-intensive stages (selected by configure script with weighted distribution)"
+      build_runs_on_small:
+        type: string
+        default: "aws-linux-scale-rocm-small"
+        description: "Build runner label for low-CPU stages (storage-libs, media-libs, dctools-core, debug-tools, profiler-apps, cv-libs, emulation)"
+      build_runs_on_medium:
+        type: string
+        default: "aws-linux-scale-rocm-medium"
+        description: "Build runner label for medium-CPU stages (runtime-tests)"
       release_type:
         description: "Release type used for artifact storage and package versioning."
         type: string
@@ -109,7 +121,7 @@ jobs:
   compiler-runtime:
     if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'compiler-runtime') && !contains(inputs.skip_stages, 'compiler-runtime') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       stage_name: compiler-runtime
       stage_display_name: "Stage - Compiler Runtime"
@@ -117,7 +129,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_medium }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -133,9 +145,15 @@ jobs:
   # ==========================================================================
   emulation:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'emulation') && !contains(inputs.skip_stages, 'emulation') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'emulation') &&
+        !contains(inputs.skip_stages, 'emulation')
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       stage_name: emulation
       stage_display_name: "Stage - Emulation"
@@ -143,7 +161,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_small }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -158,9 +176,15 @@ jobs:
   # ==========================================================================
   runtime-tests:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'runtime-tests') && !contains(inputs.skip_stages, 'runtime-tests') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'runtime-tests') &&
+        !contains(inputs.skip_stages, 'runtime-tests')
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       stage_name: runtime-tests
       stage_display_name: "Stage - Runtime Tests"
@@ -168,7 +192,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_medium }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -184,9 +208,15 @@ jobs:
   # ==========================================================================
   wsl-rocdxg:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'wsl-rocdxg') && !contains(inputs.skip_stages, 'wsl-rocdxg') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'wsl-rocdxg') &&
+        !contains(inputs.skip_stages, 'wsl-rocdxg')
+      }}
     uses: ./.github/workflows/multi_arch_build_wsl_rocdxg_artifacts.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       stage_name: wsl-rocdxg
       stage_display_name: "Stage - WSL ROCDXG"
@@ -208,7 +238,13 @@ jobs:
   # ==========================================================================
   math-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'math-libs') && !contains(inputs.skip_stages, 'math-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'math-libs') &&
+        !contains(inputs.skip_stages, 'math-libs')
+      }}
     strategy:
       # `fail-fast: false` lets all families complete even if one fails.
       # This is useful for CI (to see all failures at once), but for releases
@@ -219,7 +255,7 @@ jobs:
       matrix:
         family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       stage_name: math-libs
       stage_display_name: "Stage - Math Libs (${{ matrix.family_info.amdgpu_family }})"
@@ -228,7 +264,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_large }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -248,9 +284,15 @@ jobs:
   # ==========================================================================
   comm-libs:
     needs: [compiler-runtime, emulation]
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'comm-libs') && !contains(inputs.skip_stages, 'comm-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'comm-libs') &&
+        !contains(inputs.skip_stages, 'comm-libs')
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       stage_name: comm-libs
       stage_display_name: "Stage - Comm Libs"
@@ -259,7 +301,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_large }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -276,9 +318,15 @@ jobs:
   # ==========================================================================
   storage-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'storage-libs') && !contains(inputs.skip_stages, 'storage-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'storage-libs') &&
+        !contains(inputs.skip_stages, 'storage-libs')
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       stage_name: storage-libs
       stage_display_name: "Stage - Storage Libs"
@@ -287,7 +335,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_small }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -303,9 +351,15 @@ jobs:
   # ==========================================================================
   debug-tools:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'debug-tools') && !contains(inputs.skip_stages, 'debug-tools') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'debug-tools') &&
+        !contains(inputs.skip_stages, 'debug-tools')
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       stage_name: debug-tools
       stage_display_name: "Stage - Debug Tools"
@@ -313,7 +367,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_small }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -329,9 +383,15 @@ jobs:
   # ==========================================================================
   dctools-core:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'dctools-core') && !contains(inputs.skip_stages, 'dctools-core') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'dctools-core') &&
+        !contains(inputs.skip_stages, 'dctools-core')
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       stage_name: dctools-core
       stage_display_name: "Stage - DC Tools Core"
@@ -339,7 +399,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_small }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -355,9 +415,15 @@ jobs:
   # ==========================================================================
   profiler-apps:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'profiler-apps') && !contains(inputs.skip_stages, 'profiler-apps') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'profiler-apps') &&
+        !contains(inputs.skip_stages, 'profiler-apps')
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       stage_name: profiler-apps
       stage_display_name: "Stage - Profiler Apps"
@@ -365,7 +431,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_small }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -381,9 +447,15 @@ jobs:
   # ==========================================================================
   cv-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'cv-libs') && !contains(inputs.skip_stages, 'cv-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'cv-libs') &&
+        !contains(inputs.skip_stages, 'cv-libs')
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       stage_name: cv-libs
       stage_display_name: "Stage - CV Libs"
@@ -391,7 +463,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_small }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -407,9 +479,15 @@ jobs:
   # ==========================================================================
   media-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'media-libs') && !contains(inputs.skip_stages, 'media-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'media-libs') &&
+        !contains(inputs.skip_stages, 'media-libs')
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       stage_name: media-libs
       stage_display_name: "Stage - Media Libs"
@@ -417,7 +495,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_small }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}

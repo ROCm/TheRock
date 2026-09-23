@@ -14,6 +14,10 @@
 # - Tests only gfx94x (Linux) and gfx110x (Windows) with quick/standard test type
 # - No ASAN tests (build only for downstream consumption)
 
+# Notes on security:
+#   * Higher-trust entry point: manually triggered by maintainers.
+#   * Inherit secrets to avoid repeating mappings across nested workflows.
+
 name: Compiler Daily Bump
 
 on:
@@ -90,6 +94,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
+          # Retain GITHUB_TOKEN for the "Create and push branch" step below.
+          persist-credentials: true
           fetch-depth: 0
 
       - name: Initialize compiler submodules
@@ -135,6 +141,7 @@ jobs:
           echo "| SPIRV-LLVM-Translator | ${SPIRV_REF} | \`${SPIRV_SHA:0:12}\` |" >> "$GITHUB_STEP_SUMMARY"
           cd ../..
 
+      # git push uses GITHUB_TOKEN persisted by "Checkout TheRock".
       - name: Create and push branch
         id: create-branch
         env:
@@ -184,14 +191,14 @@ jobs:
       build_jax: true
       repository: ${{ github.repository }}
       ref: ${{ needs.create-branch.outputs.branch_name }}
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
 
   build-linux:
     name: Build Linux Release
     needs: [create-branch, setup-linux]
     if: ${{ inputs.dry_run != true && needs.setup-linux.outputs.linux_build_config != '' }}
     uses: ./.github/workflows/multi_arch_build_portable_linux.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       matrix_per_family_json: ${{ toJSON(fromJSON(needs.setup-linux.outputs.linux_build_config).per_family_info) }}
       dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
@@ -199,7 +206,9 @@ jobs:
       build_variant_label: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_variant_label }}
       build_variant_cmake_preset: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_variant_cmake_preset }}
       build_variant_suffix: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_variant_suffix }}
-      build_runs_on: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on }}
+      build_runs_on_large: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_large }}
+      build_runs_on_small: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_small }}
+      build_runs_on_medium: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_medium }}
       rocm_package_version: ${{ needs.setup-linux.outputs.rocm_package_version }}
       release_type: dev
       repository: ${{ github.repository }}
@@ -210,7 +219,7 @@ jobs:
     needs: [create-branch, setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
     uses: ./.github/workflows/multi_arch_build_tarballs.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
       platform: linux
@@ -224,7 +233,7 @@ jobs:
     needs: [create-branch, setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
     uses: ./.github/workflows/build_portable_linux_python_packages.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_group: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
@@ -241,7 +250,7 @@ jobs:
     needs: [create-branch, setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
       artifact_run_id: ${{ github.run_id }}
@@ -257,7 +266,7 @@ jobs:
     needs: [create-branch, setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
       artifact_run_id: ${{ github.run_id }}
@@ -278,6 +287,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
+          persist-credentials: false
           ref: ${{ needs.setup-linux.outputs.ref }}
 
       - name: Setup Python
@@ -323,14 +333,14 @@ jobs:
       build_jax: false
       repository: ${{ github.repository }}
       ref: ${{ needs.create-branch.outputs.branch_name }}
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
 
   build-windows:
     name: Build Windows Release
     needs: [create-branch, setup-windows]
     if: ${{ inputs.dry_run != true && needs.setup-windows.outputs.windows_build_config != '' }}
     uses: ./.github/workflows/multi_arch_build_windows.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       matrix_per_family_json: ${{ toJSON(fromJSON(needs.setup-windows.outputs.windows_build_config).per_family_info) }}
       dist_amdgpu_families: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).dist_amdgpu_families }}
@@ -338,7 +348,9 @@ jobs:
       build_variant_label: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_variant_label }}
       build_variant_cmake_preset: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_variant_cmake_preset }}
       build_variant_suffix: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_variant_suffix }}
-      build_runs_on: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on }}
+      build_runs_on_large: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on_large }}
+      build_runs_on_small: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on_small }}
+      build_runs_on_medium: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on_medium }}
       rocm_package_version: ${{ needs.setup-windows.outputs.rocm_package_version }}
       release_type: dev
       repository: ${{ github.repository }}
@@ -349,7 +361,7 @@ jobs:
     needs: [create-branch, setup-windows, build-windows]
     if: ${{ inputs.dry_run != true && needs.build-windows.result == 'success' }}
     uses: ./.github/workflows/multi_arch_build_tarballs.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       dist_amdgpu_families: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).dist_amdgpu_families }}
       platform: windows
@@ -363,7 +375,7 @@ jobs:
     needs: [create-branch, setup-windows, build-windows]
     if: ${{ inputs.dry_run != true && needs.build-windows.result == 'success' }}
     uses: ./.github/workflows/build_windows_python_packages.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_group: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).dist_amdgpu_families }}
@@ -385,6 +397,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
+          persist-credentials: false
           ref: ${{ needs.setup-windows.outputs.ref }}
 
       - name: Setup Python
@@ -572,6 +585,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
         timeout-minutes: 15
 
       - name: Setup Python
