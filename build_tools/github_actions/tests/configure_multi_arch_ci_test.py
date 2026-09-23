@@ -1435,6 +1435,45 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertEqual(result.linux.test_python_packages_matrix, [])
         self.assertEqual(result.windows.test_python_packages_matrix, [])
 
+    def test_asan_build_config_can_enable_python_packages_and_tests(self):
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="workflow_dispatch",
+                build_variant="asan",
+                build_python_packages=True,
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+
+        self.assertTrue(result.linux.build_python_packages)
+        self.assertEqual(len(result.linux.test_python_packages_matrix), 6)
+        self.assertEqual(
+            {
+                row["amdgpu_family"]
+                for row in result.linux.test_python_packages_matrix
+            },
+            {"gfx94X-dcgpu"},
+        )
+
+    def test_asan_build_config_keeps_python_packages_optional(self):
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="workflow_dispatch",
+                build_variant="asan",
+                build_python_packages=False,
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+
+        self.assertFalse(result.linux.build_python_packages)
+        self.assertEqual(result.linux.test_python_packages_matrix, [])
+
     def test_build_config_includes_pytorch_build_matrix(self):
         targets = cm.TargetSelection(
             linux_families=["gfx94x"],

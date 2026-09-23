@@ -152,6 +152,37 @@ ls ${PACKAGES_DIR}/dist
 # rocm-*.tar.gz
 ```
 
+### Experimental ASAN Packages
+
+The manual `Multi-Arch CI ASAN` workflow can build and test the base ROCm
+Python package set by leaving **Build Python packages** enabled. The
+`Multi-Arch Release ASAN` workflow also builds and tests this package set.
+PyTorch and other framework wheels are a separate stage and are not enabled by
+this option.
+
+ASAN wheels are retained in the workflow run's artifact index only. The release
+publisher intentionally does not copy them into the normal `whl-next` indexes,
+because ASAN and non-ASAN wheels currently use the same distribution names and
+versions. Do not combine their `--find-links` locations.
+
+To inspect or rebuild a completed ASAN run locally, use the
+[Building from CI Artifacts](#building-from-ci-artifacts) procedure above with
+that run ID. Test on an XNACK-capable GPU with the ASAN runtime environment:
+
+```bash
+export HSA_XNACK=1
+export ASAN_OPTIONS=detect_odr_violation=0:quarantine_size_mb=600:verify_asan_link_order=0
+
+python -m venv .venv-asan && source .venv-asan/bin/activate
+pip install "rocm[libraries,devel,device-gfx942]" --pre \
+    --no-index --find-links=${PACKAGES_DIR}/dist
+rocm-sdk test
+```
+
+See [Using ASan-Instrumented Libraries](../development/sanitizers.md#using-asan-instrumented-libraries)
+for the complete runtime and loader-path requirements. The CI wheel test passes
+the XNACK and ASAN options above automatically.
+
 ### Installing Locally Built Packages
 
 To install locally built packages, you can use the

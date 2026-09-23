@@ -330,6 +330,7 @@ jobs:
         }}
       python_version: ${{ matrix.python_version }}
       rocm_version: ${{ inputs.rocm_package_version }}
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_suffix || 'release' }}
       container_image_name: ${{ matrix.container_image_name }}
       container_image_url: ${{ matrix.container_image_url }}
       repository: ${{ inputs.repository }}

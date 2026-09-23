@@ -32,6 +32,10 @@ on:
         description: ROCm version to pip install (e.g. "7.10.0a20251124")
         required: true
         type: string
+      build_variant:
+        description: Build variant under test (release, asan, asan-debug, or host-asan)
+        type: string
+        default: "release"
       kpack_split:
         description: "'true' if this is a kpack-split flat build."
         type: string
@@ -71,6 +75,10 @@ on:
       rocm_version:
         required: true
         type: string
+      build_variant:
+        description: Build variant under test (release, asan, asan-debug, or host-asan)
+        type: string
+        default: "release"
       container_image_name:
         description: >-
           Short, human-readable label for the container image (e.g. 'ubuntu24.04',
@@ -124,6 +132,11 @@ jobs:
       ROCM_VERSION: ${{ inputs.rocm_version }}
       PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
       PACKAGE_FIND_LINKS_URL: ${{ inputs.package_find_links_url }}
+      # Device ASAN requires XNACK. The remaining options match the established
+      # ASAN component-test environment for instrumented ROCm libraries loaded
+      # by uninstrumented processes such as Python.
+      HSA_XNACK: ${{ contains(inputs.build_variant, 'asan') && '1' || '' }}
+      ASAN_OPTIONS: ${{ contains(inputs.build_variant, 'asan') && 'detect_odr_violation=0:quarantine_size_mb=600:verify_asan_link_order=0' || '' }}
       # Use a venv path containing a space on Windows so that `rocm-sdk test`
       # exercises the space-in-path handling of the console-script trampolines
       # (users often install under paths like "C:\Users\First Last\..." or "C:\Program Files\...").

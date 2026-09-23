@@ -1477,10 +1477,11 @@ def _expand_build_config_for_platform(
         # Flip back to False if the generated matrix is empty.
         build_jax = bool(jax_build_matrix)
 
-    # ASAN builds native Linux packages (deb/rpm) but not Python packages.
-    # The build_python_packages input allows callers to disable Python packages.
-    is_asan = suffix in ("asan", "host-asan")
-    build_python_packages = ci_inputs.build_python_packages and not is_asan
+    # Python package generation is caller-controlled for every build variant.
+    # ASAN callers keep this disabled unless they also arrange ASAN-aware wheel
+    # tests; when enabled, the normal package layout preserves the instrumented
+    # artifacts and XNACK device code produced by the ASAN build.
+    build_python_packages = ci_inputs.build_python_packages
     test_python_packages_matrix = (
         build_rocm_python_test_matrix(
             per_family_info=per_family_info,

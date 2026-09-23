@@ -141,6 +141,42 @@ jobs:
       contents: read
       id-token: write
 
+  # ASAN Python packages are experimental run-local artifacts, so validate
+  # them directly from the per-run find-links index before they are consumed by
+  # higher-level packages. Normal release-wheel testing remains unchanged.
+  test_asan_python_packages_per_family:
+    needs: [build_python_packages]
+    name: Test ASAN Python
+    if: >-
+      ${{
+        !failure() && !cancelled() &&
+        contains(inputs.build_variant, 'asan') &&
+        toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) != '[]'
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.build_config).test_python_packages_matrix }}
+    uses: ./.github/workflows/test_rocm_wheels.yml
+    with:
+      amdgpu_family: ${{ matrix.amdgpu_family }}
+      test_runs_on: ${{ matrix.test_runs_on }}
+      package_find_links_url: >-
+        ${{
+          needs.build_python_packages.outputs.kpack_split == 'true'
+          && needs.build_python_packages.outputs.package_find_links_url
+          || format('{0}/{1}/index.html',
+              needs.build_python_packages.outputs.package_find_links_url,
+              matrix.amdgpu_family)
+        }}
+      python_version: ${{ matrix.python_version }}
+      rocm_version: ${{ inputs.rocm_package_version }}
+      build_variant: ${{ inputs.build_variant }}
+      container_image_name: ${{ matrix.container_image_name }}
+      container_image_url: ${{ matrix.container_image_url }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
   build_native_deb_packages:
     needs: [build_artifacts]
     name: Build DEB Packages
@@ -344,7 +380,7 @@ jobs:
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_native_install, trigger_release_pytorch_wheels, trigger_release_jax_wheels]
+    needs: [build_artifacts, build_tarballs, build_python_packages, test_asan_python_packages_per_family, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_native_install, trigger_release_pytorch_wheels, trigger_release_jax_wheels]
     name: "Quartz - completed - release Linux"
     runs-on: ubuntu-24.04
     timeout-minutes: 10

@@ -91,6 +91,9 @@ jobs:
       prerelease_version: ${{ inputs.prerelease_version }}
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || 'all' }}
       windows_amdgpu_families: "none"
+      # Stage 1 of #7508: produce the base ROCm wheel set. The release publisher
+      # deliberately excludes ASAN Python packages, so these remain run-local.
+      build_python_packages: true
       build_pytorch: false
       build_jax: false
       python_version: ${{ inputs.python_version }}
