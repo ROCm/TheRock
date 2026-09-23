@@ -9,7 +9,7 @@
 # We build our portable linux releases on the manylinux (RHEL-based)
 # images, with custom additional packages installed. We switch to
 # new upstream versions as needed.
-FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:531d7aa844bbb0c131d4ab011d3db741c4abc8d498cd5ccc86121046f62303b4
+FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:d632b5e68ab39e59e128dcf0e59e438b26f122d7f2d45f3eea69ffd2877ab017
 
 ######## Python and CMake setup #######
 # These images come with multiple python versions. We pin one for
