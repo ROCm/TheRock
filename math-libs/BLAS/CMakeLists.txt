@@ -140,6 +140,8 @@ list(APPEND _blas_subproject_names origami)
 
 set(rocBLAS_optional_runtime_deps)
 if(NOT WIN32)
+  # rocBLAS clients require amd_smi directly when hipBLASLt is omitted.
+  list(APPEND rocBLAS_optional_runtime_deps amdsmi)
   # rocBLAS is hard-coded to not expect rocm-smi.
   if(TARGET rocm_smi_lib)
     list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
