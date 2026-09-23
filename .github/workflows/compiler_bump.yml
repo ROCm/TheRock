@@ -208,7 +208,10 @@ jobs:
       build_variant_suffix: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_variant_suffix }}
       build_runs_on_large: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_large }}
       build_runs_on_small: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_small }}
-      build_runs_on_medium: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_medium }}
+      # COT builds ALL GPU families (16 targets). LLVM compilation with all
+      # backends exceeds the medium runner's 60 GiB limit, causing OOM.
+      # Route medium stages to the default (large) runner instead.
+      build_runs_on_medium: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_large }}
       rocm_package_version: ${{ needs.setup-linux.outputs.rocm_package_version }}
       release_type: dev
       repository: ${{ github.repository }}
