@@ -50,6 +50,11 @@ on:
           set it manually.
         type: string
         default: ""
+      build_runs_on:
+        description: "Runner label for the build job"
+        type: string
+        required: false
+        default: "aws-linux-scale-rocm-prod"
     outputs:
       package_repository_url:
         description: "Public repository URL for package installation"
@@ -64,13 +69,16 @@ run-name: Build ${{ inputs.native_package_type }} packages (${{ inputs.rocm_vers
 jobs:
   build_native_packages:
     name: Build ${{ inputs.native_package_type }} packages
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-24.04' }}
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
     outputs:
       package_repository_url: ${{ steps.upload-packages.outputs.package_repository_url }}
       summary: ${{ steps.summary.outputs.summary }}
     env:
+      ROCM_VERSION: ${{ inputs.rocm_version }}
+      BUILD_VARIANT: ${{ inputs.build_variant }}
+      NATIVE_PACKAGE_TYPE: ${{ inputs.native_package_type }}
       QUARTZ_REPORTING_WORKFLOW: multi_arch_build_native_linux_packages.yml
       QUARTZ_WORKFLOW_POSTFIX: "- build rpm/deb packages"
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
@@ -95,7 +103,9 @@ jobs:
 
       - name: Checking out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
@@ -125,9 +135,9 @@ jobs:
           # so we pass OUTPUT_DIR (parent) to have artifacts land in $OUTPUT_DIR/artifacts
           # which matches the ARTIFACTS_DIR environment variable
           python ./build_tools/artifact_manager.py fetch \
-            --run-id="${{ env.ARTIFACT_RUN_ID }}" \
+            --run-id="${ARTIFACT_RUN_ID}" \
             --stage=all \
-            --amdgpu-families="${{ env.DIST_AMDGPU_FAMILIES }}" \
+            --amdgpu-families="${DIST_AMDGPU_FAMILIES}" \
             --expand-family-to-targets \
             --output-dir="${{ env.OUTPUT_DIR }}"
 
@@ -139,11 +149,11 @@ jobs:
           # KPACK_SPLIT_ARTIFACTS is auto-detected from therock_manifest.json.
           python ./build_tools/packaging/linux/build_package.py \
             --dest-dir "${{ env.PACKAGE_DIST_DIR }}" \
-            --rocm-version "${{ inputs.rocm_version }}" \
+            --rocm-version "${ROCM_VERSION}" \
             --artifacts-dir "${{ env.ARTIFACTS_DIR }}" \
-            --pkg-type "${{ inputs.native_package_type }}" \
-            --version-suffix "${{ env.ARTIFACT_RUN_ID }}" \
-            --build-variant "${{ inputs.build_variant }}"
+            --pkg-type "${NATIVE_PACKAGE_TYPE}" \
+            --version-suffix "${ARTIFACT_RUN_ID}" \
+            --build-variant "${BUILD_VARIANT}"
 
       - name: Simulated install Test
         id: test-packages
@@ -151,14 +161,14 @@ jobs:
           python ./build_tools/packaging/linux/native_linux_package_install_test.py \
             --test-type simulate \
             --packages-dir "${{ env.PACKAGE_DIST_DIR }}" \
-            --pkg-type ${{ inputs.native_package_type }}
+            --pkg-type "${NATIVE_PACKAGE_TYPE}"
 
       - name: Build Package repository
         run: |
           python ./build_tools/packaging/linux/build_package_repo.py \
-            --pkg-type "${{ inputs.native_package_type }}" \
+            --pkg-type "${NATIVE_PACKAGE_TYPE}" \
             --package-dir "${{ env.PACKAGE_DIST_DIR }}" \
-            --release-type "${{ env.RELEASE_TYPE }}"
+            --release-type "${RELEASE_TYPE}"
 
       - name: Configure AWS credentials for artifact uploads
         uses: ./.github/actions/configure_aws_artifacts_credentials
@@ -169,8 +179,8 @@ jobs:
         id: upload-packages
         run: |
           python ./build_tools/packaging/linux/upload_package_repo.py \
-            --pkg-type "${{ inputs.native_package_type }}" \
-            --run-id "${{ env.ARTIFACT_RUN_ID }}" \
+            --pkg-type "${NATIVE_PACKAGE_TYPE}" \
+            --run-id "${ARTIFACT_RUN_ID}" \
             --package-dir "${{ env.PACKAGE_DIST_DIR }}"
 
       - name: Capture job summary
