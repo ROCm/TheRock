@@ -38,7 +38,7 @@ PACKAGE TYPES TESTED:
   - Distribution tarballs: therock-dist-{platform}-gfx{arch}-{version}.tar.gz
 
 PREREQUISITES:
-  - pip install -r ./build_tools/packaging/requirements.txt
+  - pip install pytest -r ./build_tools/packaging/requirements.txt
 
 USAGE:
   # Test on current platform (auto-detected):
@@ -55,7 +55,7 @@ import os
 from pathlib import Path
 import tempfile
 from packaging.version import Version
-from pkginfo import Wheel
+import pytest
 import subprocess
 import urllib
 import platform as platform_module
@@ -112,6 +112,10 @@ def checkPromotedFileNames(dir_path: Path, platform: str) -> tuple[bool, str]:
 def checkAllWheelsSameVersion(
     dir_path: Path, expected_version: Version
 ) -> tuple[bool, str]:
+    # Deferred import so this script can pass pytest collection and skip by
+    # default without requiring this optional package.
+    from pkginfo import Wheel
+
     for file in dir_path.glob("*.whl"):
         wheel = Wheel(file)
         version = Version(wheel.version)
@@ -406,7 +410,7 @@ def getWindowsPackagesLinks() -> tuple[list[tuple[str, str]], Version, Version]:
     return url_and_packages, version, expected_version
 
 
-if __name__ == "__main__":
+def main(argv: list[str] | None = None) -> bool:
     parser = argparse.ArgumentParser(
         description="""Tests promotion of packages from release candidate to final release (e.g. 7.10.0rc1 --> 7.10.0).
 """
@@ -422,7 +426,7 @@ if __name__ == "__main__":
         type=Path,
         default=None,
     )
-    p = parser.parse_args(sys.argv[1:])
+    p = parser.parse_args(argv)
     platform = p.platform
     cache_dir = p.cache_dir
 
@@ -469,3 +473,13 @@ if __name__ == "__main__":
         print(
             "================================================================================="
         )
+        return res_everything and res_rocm and res_torch
+
+
+@pytest.mark.manual
+def test_promote_packages():
+    assert main([]), "Package promotion checks failed; see captured output for details"
+
+
+if __name__ == "__main__":
+    sys.exit(0 if main() else 1)

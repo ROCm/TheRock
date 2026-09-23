@@ -2,6 +2,7 @@
 testpaths = [
     "build_tools/tests",
     "build_tools/github_actions/tests",
+    "build_tools/packaging/tests",
     "build_tools/packaging/archives/tests",
     "build_tools/packaging/linux/tests",
     "build_tools/packaging/python/tests",
@@ -11,7 +12,13 @@ testpaths = [
     "skills/therock_pr_bot/test_policy_check_ut.py",
 ]
 python_files = ["*_test.py"]
-addopts = "-ra"
+addopts = [
+    "-ra",
+    "-m", "not manual",
+]
+markers = [
+    "manual: expensive or environment-dependent tests that require explicit opt-in with -m manual",
+]
 
 [tool.coverage.run]
 data_file = "build/.coverage"
@@ -19,6 +26,7 @@ source = ["build_tools"]
 omit = [
     "build_tools/tests/*",
     "build_tools/github_actions/tests/*",
+    "build_tools/packaging/tests/*",
     "build_tools/packaging/archives/tests/*",
     "build_tools/packaging/linux/tests/*",
     "build_tools/packaging/python/tests/*",
