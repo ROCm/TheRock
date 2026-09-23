@@ -91,7 +91,7 @@ Optional Fields
 
 ## S3 Configuration and Package Repository URLs
 
-The following table shows the S3 bucket configuration and public repository URLs for each release type. This configuration is used by `build_tools/packaging/linux/get_s3_config.py` and `build_tools/packaging/linux/upload_package_repo.py`.
+The following table shows the S3 bucket configuration and public repository URLs for each release type. This configuration is used by `build_tools/packaging/linux/get_s3_config.py`. CI workflows build repository metadata locally with `build_tools/packaging/linux/build_package_repo.py` (after the simulate install test), then upload with `build_tools/packaging/linux/upload_package_repo.py`.
 
 ### Current Multi-Arch Release Packages
 

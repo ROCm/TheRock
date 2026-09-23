@@ -92,6 +92,10 @@ on:
       quartz_tracking_id:
         type: string
         default: ""
+      build_runs_on:
+        description: "Runner label for the build job"
+        type: string
+        default: "aws-linux-scale-rocm-prod"
     outputs:
       package_find_links_url:
         description: URL for pip --find-links to install built packages
@@ -109,7 +113,7 @@ jobs:
   build_rocm_wheels:
     name: Build Python | ${{ inputs.artifact_group }}
     # Note: GitHub-hosted runners run out of disk space for some gpu families
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-24.04' }}
     permissions:
       id-token: write
     container:
@@ -121,10 +125,17 @@ jobs:
     env:
       QUARTZ_REPORTING_WORKFLOW: build_portable_linux_python_packages.yml
       QUARTZ_WORKFLOW_POSTFIX: "- build ROCm Python packages"
+      ARTIFACT_GITHUB_REPO: ${{ inputs.artifact_github_repo }}
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      ARTIFACT_GROUP: ${{ inputs.artifact_group }}
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
+      WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
+      PACKAGE_VERSION: ${{ inputs.package_version }}
+      RELEASE_TYPE: ${{ inputs.release_type }}
+      OUTPUT_ROOT: "${{ github.workspace }}"
       ARTIFACTS_DIR: "${{ github.workspace }}/artifacts"
       PACKAGES_DIR: "${{ github.workspace }}/packages"
-      RELEASE_TYPE: ${{ inputs.release_type }}
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -140,7 +151,9 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
@@ -149,37 +162,37 @@ jobs:
 
       - name: Fetch artifacts
         run: |
-          if [ -n "${{ inputs.amdgpu_families }}" ]; then
+          if [ -n "${AMDGPU_FAMILIES}" ]; then
             # Multi-arch mode: use artifact_manager.py to fetch all families
-            echo "Fetching artifacts for multiple families: ${{ inputs.amdgpu_families }}"
+            echo "Fetching artifacts for multiple families: ${AMDGPU_FAMILIES}"
             python ./build_tools/artifact_manager.py fetch \
-              --run-id="${{ env.ARTIFACT_RUN_ID }}" \
-              --run-github-repo="${{ inputs.artifact_github_repo }}" \
+              --run-id="${ARTIFACT_RUN_ID}" \
+              --run-github-repo="${ARTIFACT_GITHUB_REPO}" \
               --stage=all \
-              --amdgpu-families="${{ inputs.amdgpu_families }}" \
+              --amdgpu-families="${AMDGPU_FAMILIES}" \
               --expand-family-to-targets \
-              --output-dir="${{ github.workspace }}"
+              --output-dir="${OUTPUT_ROOT}"
               # NOTE: artifact_manager.py appends /artifacts to --output-dir
-              # in non-flatten mode, so pass workspace root here so that
-              # artifacts land in ARTIFACTS_DIR ($workspace/artifacts).
+              # in non-flatten mode, so pass OUTPUT_ROOT here so that
+              # artifacts land in ARTIFACTS_DIR ($OUTPUT_ROOT/artifacts).
           else
             # Single-family mode: use fetch_artifacts.py (backward compatible)
-            echo "Fetching artifacts for single family: ${{ inputs.artifact_group }}"
+            echo "Fetching artifacts for single family: ${ARTIFACT_GROUP}"
             python ./build_tools/fetch_artifacts.py \
-              --run-github-repo="${{ inputs.artifact_github_repo }}" \
-              --run-id="${{ env.ARTIFACT_RUN_ID }}" \
-              --artifact-group="${{ inputs.artifact_group }}" \
-              --output-dir="${{ env.ARTIFACTS_DIR }}"
+              --run-github-repo="${ARTIFACT_GITHUB_REPO}" \
+              --run-id="${ARTIFACT_RUN_ID}" \
+              --artifact-group="${ARTIFACT_GROUP}" \
+              --output-dir="${ARTIFACTS_DIR}"
           fi
 
       - name: Build Python packages
         run: |
           python ./build_tools/build_python_packages.py \
-            --artifact-dir="${{ env.ARTIFACTS_DIR }}" \
-            --dest-dir="${{ env.PACKAGES_DIR }}" \
-            --version="${{ inputs.package_version }}" \
-            --linux-amdgpu-families="${{ inputs.linux_amdgpu_families }}" \
-            --windows-amdgpu-families="${{ inputs.windows_amdgpu_families }}"
+            --artifact-dir="${ARTIFACTS_DIR}" \
+            --dest-dir="${PACKAGES_DIR}" \
+            --version="${PACKAGE_VERSION}" \
+            --linux-amdgpu-families="${LINUX_AMDGPU_FAMILIES}" \
+            --windows-amdgpu-families="${WINDOWS_AMDGPU_FAMILIES}"
 
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_artifacts_credentials
@@ -193,8 +206,8 @@ jobs:
         id: upload
         run: |
           python build_tools/github_actions/upload_python_packages.py \
-            --input-packages-dir="${{ env.PACKAGES_DIR }}" \
-            --artifact-group="${{ inputs.artifact_group }}" \
+            --input-packages-dir="${PACKAGES_DIR}" \
+            --artifact-group="${ARTIFACT_GROUP}" \
             --run-id="${{ github.run_id }}" \
             ${{ inputs.multiarch_index && '--multiarch' || '' }}
 

@@ -57,25 +57,32 @@ def load_external_runner_config() -> dict | None:
     config_path = Path(ci_config_path)
     sys.path.insert(0, str(config_path))
     try:
-        from ci_config_api import get_gpu_runner_labels, load_runner_config
+        from ci_config_api import load_config
     except ImportError:
         _log(f"CI config API not found at {ci_config_path}, using local fallback")
         return None
     try:
-        raw_config = load_runner_config(config_path)
+        config = load_config(version=2, config_path=config_path)
     except Exception as e:
         _log(f"Failed to load CI config from {ci_config_path}: {e}")
         return None
-    # Add runner_labels for _overlay_runner_config (extracted from gpu_runner_labels)
-    raw_config["runner_labels"] = get_gpu_runner_labels(raw_config)
     _log(f"Loaded external runner config from {ci_config_path}")
-    return raw_config
+    return {
+        "runner_labels": config.get_gpu_runner_labels(),
+        "build_runners": config.build_runners,
+    }
 
 
 def is_asan():
-    """Determines if this is an ASAN build using BUILD_VARIANT env var."""
-    BUILD_VARIANT = os.getenv("BUILD_VARIANT", "")
-    return BUILD_VARIANT == "asan"
+    """Determines if this is an ASAN-family build using BUILD_VARIANT env var.
+
+    Matches "asan", "host-asan" and their "-debug" forms, like the check in
+    fetch_test_configurations.py. An exact match on "asan" leaves host-asan test
+    jobs without the ASAN handling their callers apply -- most visibly the
+    LD_PRELOAD in test_hiptests.py, without which Catch2 cannot load the
+    instrumented binaries to enumerate tests.
+    """
+    return "asan" in os.getenv("BUILD_VARIANT", "")
 
 
 def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
@@ -109,6 +116,12 @@ BUILD_RUNNER_LABELS = {
         "default": [
             {"label": "aws-linux-scale-rocm-prod", "weight": 1.0},
         ],
+        "small": [
+            {"label": "aws-linux-scale-rocm-small", "weight": 1.0},
+        ],
+        "medium": [
+            {"label": "aws-linux-scale-rocm-medium", "weight": 1.0},
+        ],
         "sanitizer": [
             {"label": "aws-linux-scale-rocm-large", "weight": 1.0},
         ],
@@ -121,20 +134,30 @@ BUILD_RUNNER_LABELS = {
 }
 
 
-def select_build_runner(platform: str, build_variant: str) -> str:
-    """Select a build runner label based on platform and build variant."""
+def select_build_runner(platform: str, build_variant: str, size: str = "large") -> str:
+    """Select a build runner label based on platform, build variant, and size.
+
+    Args:
+        platform: "linux" or "windows"
+        build_variant: build variant string (e.g. "release", "asan", "tsan")
+        size: runner pool size — "small", "medium", or "large" (default).
+              Sanitizer variants always use the sanitizer (large) pool regardless
+              of size. Platforms without a size-specific pool fall back to default.
+    """
     build_runner_labels = get_build_runner_labels()
     if platform not in build_runner_labels:
-        # Platform not configured for weighted selection, return default
         print(f"  No build runner config for platform {platform}, using default")
         return ""
 
     platform_config = build_runner_labels[platform]
 
-    # Use sanitizer runners for asan/tsan builds
+    # Sanitizer builds are memory-intensive; keep them on dedicated runners
     if "san" in build_variant:
         labels_config = platform_config.get("sanitizer", platform_config["default"])
         context_name = f"build-runner ({platform}, {build_variant})"
+    elif size in ("small", "medium"):
+        labels_config = platform_config.get(size, platform_config["default"])
+        context_name = f"build-runner-{size} ({platform})"
     else:
         labels_config = platform_config["default"]
         context_name = f"build-runner ({platform})"
@@ -211,6 +234,8 @@ amdgpu_family_info_matrix dictionary fields:
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
 - nightly_check_only_for_family (optional): if enabled, only run CI nightly tests for this architecture
 - submodule_bump_tests_only (optional): if enabled, only run tests when submodule changes are detected or on workflow_dispatch (builds always run)
+- test_type_for_family (optional): forces the test type for this family (e.g., "quick"), overriding the global test_type. Useful for families with limited hardware that should always run quick tests.
+- trigger_test_label_only (optional): if enabled, only run tests when the family's gfx* label is present on the PR (e.g., gfx125x label for gfx125x family). Builds always run regardless of label.
 """
 # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
 amdgpu_family_info_matrix_presubmit = {
@@ -227,7 +252,7 @@ amdgpu_family_info_matrix_presubmit = {
                 },  # ccs-csp
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
-            "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
+            "test-runs-on-sandbox": "linux-gfx942-1gpu-asan-sandbox-rocm",
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             "test-runs-on-multi-gpu-labels": [
                 {"label": "linux-gfx942-8gpu-ossci-rocm", "count": 10},
@@ -306,6 +331,28 @@ amdgpu_family_info_matrix_presubmit = {
             "nightly_check_only_for_family": True,
         },
     },
+    "gfx125x": {
+        "linux": {
+            # NOTE: MI455 runner supply is very limited.
+            "test-runs-on": "linux-mi455-gpu-rocm",
+            "family": "gfx125X-dcgpu",
+            "fetch-gfx-targets": ["gfx1250"],
+            # gfx1250 has xnack enabled by default and is not in the
+            # gfx942/gfx950 xnack+ munging list in therock_sanitizers.cmake,
+            # so GPU_TARGETS stays plain "gfx1250" for these variants.
+            "build_variants": [
+                "release",
+                "asan",
+                "asan-debug",
+                "host-asan",
+                "host-asan-debug",
+            ],
+            # Only run tests when gfx125X-dcgpu label is present
+            "trigger_test_label_only": True,
+            # Force quick tests for MI455 hardware
+            "test_type_for_family": "quick",
+        },
+    },
 }
 
 
@@ -317,8 +364,8 @@ amdgpu_family_info_matrix_postsubmit = {
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
             "build_variants": ["release"],
-            # Only run tests on submodule bumps (builds always run)
-            "submodule_bump_tests_only": True,
+            # Only run tests when gfx90a label is present on PR
+            "trigger_test_label_only": True,
         },
         "windows": {
             "test-runs-on": "",
@@ -330,12 +377,20 @@ amdgpu_family_info_matrix_postsubmit = {
     "gfx950": {
         "linux": {
             "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+            "test-runs-on-sandbox": "linux-gfx950-1gpu-asan-sandbox-rocm",
             "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
-            "build_variants": ["release", "asan", "asan-debug", "tsan"],
-            # Only run tests on submodule bumps (builds always run)
-            "submodule_bump_tests_only": True,
+            "build_variants": [
+                "release",
+                "asan",
+                "asan-debug",
+                "host-asan",
+                "host-asan-debug",
+                "tsan",
+            ],
+            # Only run tests when gfx950-dcgpu label is present
+            "trigger_test_label_only": True,
         }
     },
 }
@@ -482,16 +537,18 @@ amdgpu_family_info_matrix_nightly = {
             "build_variants": ["release"],
         },
     },
-    "gfx125x": {
+}
+
+
+# Targets must be named explicitly; excluded from all and default CI selections.
+amdgpu_family_info_matrix_explicit_only = {
+    "gfx1250-strict": {
         "linux": {
-            # No hardware available for testing yet; build-only.
-            # PyTorch builds are included — workflow_dispatch can be used
-            # to trigger manually; nightly schedule runs both ROCm stack
-            # and PyTorch builds.
+            "family": "gfx1250-strict",
             "test-runs-on": "",
-            "family": "gfx125X-dcgpu",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "bypass_tests_for_releases": True,
         },
     },
 }
@@ -504,6 +561,7 @@ def _get_local_families_for_trigger_types(trigger_types) -> dict:
         "presubmit": amdgpu_family_info_matrix_presubmit,
         "postsubmit": amdgpu_family_info_matrix_postsubmit,
         "nightly": amdgpu_family_info_matrix_nightly,
+        "explicit_only": amdgpu_family_info_matrix_explicit_only,
     }
 
     for trigger_type in trigger_types:

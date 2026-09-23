@@ -27,6 +27,7 @@
       "hipthreads",
       "kfdtest",
       "libhipcxx",
+      "mxdatagenerator",
       "ocl-clr",
       "rdc",
       "rocgdb",
@@ -641,6 +642,7 @@
       "hipcub",
       "hipdnn",
       "hipdnn_integration_tests",
+      "hipdnn_samples",
       "hipfft",
       "hipfile",
       "hipkernelprovider",
@@ -657,6 +659,7 @@
       "rocblas",
       "rocfft",
       "rocprim_tests",
+      "rocprofiler-systems",
       "rocrand",
       "rocroller",
       "rocshmem",
@@ -779,6 +782,7 @@
       "hipkernelprovider",
       "miopen",
       "miopenprovider",
+      "rocprofiler-systems",
       "therock-frugally-deep"
     ]
   },
