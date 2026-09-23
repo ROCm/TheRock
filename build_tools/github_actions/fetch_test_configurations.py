@@ -518,12 +518,7 @@ test_matrix = {
             "linux": 3,
             "windows": 3,
         },
-        "exclude_family": {
-            "linux": [
-                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35798263253/job/106982866615
-                "gfx125X-dcgpu",
-            ],
-        },
+        # gfx125X-dcgpu: specific failing tests excluded via GTEST_FILTER in test_runner.py
     },
     "hipsparselt": {
         "job_name": "hipsparselt",
@@ -635,12 +630,7 @@ test_matrix = {
             "linux": 4,
             "windows": 4,
         },
-        "exclude_family": {
-            "linux": [
-                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861426
-                "gfx125X-dcgpu",
-            ],
-        },
+        # gfx125X-dcgpu: specific failing tests excluded via GTEST_FILTER in test_runner.py
     },
     # MIOpen dbsync (StaticFDBSync) -- GPU-free under the rocjitsu KMD interposer on a CPU runner.
     # The runner ships in the MIOpen dist (share/miopen/bin/run_dbsync_rocjitsu.py, pulled via
@@ -825,12 +815,7 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        "exclude_family": {
-            "linux": [
-                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35798263253/job/106982866530
-                "gfx125X-dcgpu",
-            ],
-        },
+        # gfx125X-dcgpu: specific failing tests excluded via GTEST_FILTER in test_runner.py
     },
     # hip-kernel-provider tests. test_hipkernelprovider.py installs the staged
     # rocKE wheels, then delegates to test_runner.py.

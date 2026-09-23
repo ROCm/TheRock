@@ -129,6 +129,39 @@ COMPONENT_CTEST_EXCLUSIONS = {
         ],
     },
 }
+
+# Per-component, per-GPU-family gtest exclusions (GTEST_FILTER patterns).
+# These patterns are combined into a GTEST_FILTER env var to exclude specific
+# gtest sub-tests that fail on certain GPU families. Uses gtest filter syntax:
+#   "*-pattern1:pattern2:pattern3" excludes tests matching any pattern.
+# Structure: { "component": { "gpu_family": ["pattern1", "pattern2"] } }
+COMPONENT_GTEST_EXCLUSIONS = {
+    "rocsparse": {
+        "gfx125X-dcgpu": [
+            # FAILURE: sddmm f16 tests fail with tolerance issues
+            # https://github.com/ROCm/TheRock/actions/runs/35798263253/job/106982866615
+            "quick/sddmm.level3/*f16_r*",
+        ],
+    },
+    "miopen": {
+        "gfx125X-dcgpu": [
+            # FAILURE: Gemm solver tests fail on gfx125X
+            # https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861426
+            "Smoke/GPU_UnitTestConvSolverGemmBwdRestBwd_FP16.*",
+            "Smoke/GPU_UnitTestConvSolverGemmFwdRestFwd_FP16.*",
+            "Smoke/GPU_UnitTestConvSolverGemmWrwUniversalWrw_FP16.*",
+            "Smoke/CPU_UnitTestConvSolverConvDepthwiseFwd2DDevApplicability_FP16.*",
+        ],
+    },
+    "hipblasltprovider": {
+        "gfx125X-dcgpu": [
+            # FAILURE: GpuMatmulPlan and HipblasltMatmulPlanBuilder tests fail
+            # https://github.com/ROCm/TheRock/actions/runs/35798263253/job/106982866530
+            "TestGpuMatmulPlan.*",
+            "TestHipblasltMatmulPlanBuilder.*",
+        ],
+    },
+}
 use_gtest_only_sharding = test_component_job_name in GTEST_ONLY_SHARDING_COMPONENTS
 
 # CTest runs serially by default; per-GPU overrides can be added below.
@@ -146,6 +179,16 @@ environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
 environ_vars["ROCM_PATH"] = str(ROCM_PATH)
+
+# Apply per-component, per-GPU-family gtest exclusions via GTEST_FILTER.
+# This excludes specific failing gtest sub-tests while allowing the rest to run.
+gtest_exclusions = COMPONENT_GTEST_EXCLUSIONS.get(test_component_job_name, {})
+if AMDGPU_FAMILIES and AMDGPU_FAMILIES in gtest_exclusions:
+    exclude_patterns = gtest_exclusions[AMDGPU_FAMILIES]
+    if exclude_patterns:
+        gtest_filter = "*-" + ":".join(exclude_patterns)
+        environ_vars["GTEST_FILTER"] = gtest_filter
+        print(f"# Excluding gtest tests via GTEST_FILTER: {exclude_patterns}")
 
 # Component-specific ENV VARs/PATHs applied on top of defaults.
 #
