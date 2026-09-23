@@ -85,10 +85,18 @@ jobs:
       contents: read
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
+    env:
+      END_REF: ${{ inputs.end_ref || (github.event_name == 'pull_request' && github.event.pull_request.head.sha) || github.sha }}
+      START_REF: ${{ inputs.start_ref || (github.event_name == 'push' && github.event.before) || '' }}
+      FIND_LAST_RUN: ${{ inputs.find_last_run }}
+      PR_BASE_REF: ${{ inputs.pr_base_ref || (github.event_name == 'pull_request' && github.event.pull_request.base.ref) || '' }}
+      BRANCH: ${{ inputs.branch }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
           fetch-depth: 0
@@ -103,11 +111,11 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python3 build_tools/generate_manifest_diff_report.py \
-            --end "${{ inputs.end_ref || (github.event_name == 'pull_request' && github.event.pull_request.head.sha) || github.sha }}" \
-            --start "${{ inputs.start_ref || (github.event_name == 'push' && github.event.before) || '' }}" \
-            --find-last-run "${{ inputs.find_last_run }}" \
-            --pr-base-ref "${{ inputs.pr_base_ref || (github.event_name == 'pull_request' && github.event.pull_request.base.ref) || '' }}" \
-            --branch "${{ inputs.branch }}" \
+            --end "${END_REF}" \
+            --start "${START_REF}" \
+            --find-last-run "${FIND_LAST_RUN}" \
+            --pr-base-ref "${PR_BASE_REF}" \
+            --branch "${BRANCH}" \
             ${{ inputs.workflow_mode && '--workflow-mode' || '' }} \
             --output-dir reports
 

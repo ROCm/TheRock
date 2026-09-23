@@ -583,6 +583,15 @@ class TestCliInputParsing(_FixtureTestCase):
         self.assertIn("rocroller", projects)
         self.assertIn("hipblaslt", projects)  # rocroller direct consumer
 
+    def test_rocgdb_graph_node_expands_to_runnable_test_jobs(self) -> None:
+        proc = self._run("--changed-projects", "amd-dbgapi", "--level", "4")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        projects = set(json.loads(proc.stdout.strip()))
+        self.assertNotIn("rocgdb", projects)
+        self.assertTrue(
+            {"rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"}.issubset(projects)
+        )
+
     def test_unmapped_external_namespace_fails(self) -> None:
         proc = self._run("--changed-projects", "shared/not-aliased", "--level", "4")
         self.assertNotEqual(proc.returncode, 0)
@@ -923,9 +932,44 @@ class TestValidatePolicies(_FixtureTestCase):
 # graph, so a stale policy key is caught.
 # ---------------------------------------------------------------------------
 class TestRealCommittedPolicies(unittest.TestCase):
+    _DEBUGGER_TESTS = {
+        "rocgdb-cpu",
+        "rocgdb-gpu",
+        "rocgdb-corefile",
+        "rocr-debug-agent",
+    }
+
+    def _select_for_external_project(self, project: str) -> set[str]:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--therock-dir",
+                str(THEROCK_DIR),
+                "--changed-projects",
+                project,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return set(json.loads(proc.stdout.strip()))
+
     def test_committed_policies_validate_against_committed_graph(self) -> None:
         ok, messages = validate_policies(THEROCK_DIR)
         self.assertTrue(ok, "\n".join(messages))
+
+    def test_rocdbgapi_selects_all_runnable_debugger_tests(self) -> None:
+        selected = self._select_for_external_project("projects/rocdbgapi")
+        self.assertTrue(self._DEBUGGER_TESTS.issubset(selected))
+        self.assertNotIn("rocgdb", selected)
+        self.assertNotIn("rocr-debug-agent-tests", selected)
+
+    def test_clr_selects_all_runnable_debugger_tests(self) -> None:
+        selected = self._select_for_external_project("projects/clr")
+        self.assertTrue(self._DEBUGGER_TESTS.issubset(selected))
+        self.assertNotIn("rocgdb", selected)
+        self.assertNotIn("rocr-debug-agent-tests", selected)
 
 
 # ---------------------------------------------------------------------------
