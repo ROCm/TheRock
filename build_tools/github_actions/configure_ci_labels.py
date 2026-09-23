@@ -25,97 +25,109 @@ import json
 import sys
 from dataclasses import dataclass
 
-# =============================================================================
-# CI Labels Definition
-# =============================================================================
-# Labels from ROCm/TheRock for CI behavior manipulation.
-# Format: (name, color, description)
-# fmt: off
-CI_LABELS: list[tuple[str, str, str]] = [
-    # ci: general labels
-    ("ci:skip", "FFFF00", "Skip all CI builds/tests for this PR"),
-    ("ci:run-all-archs", "FFFF00", "Opt-in to building for all architectures on a pull request"),
-    ("ci:run-multi-arch", "FFFF00", "Opt-in to running multi-arch CI on a pull request"),
-    ("ci:run-non-multi-arch", "FFFF00", "Opt-in to running non-multi-arch CI on a pull request"),
-    ("ci:build-jax", "FFFF00", "Enable Jax Build"),
-    ("ci:asan", "FFFF00", "Opt-in to building ASAN"),
-    ("ci:host-asan", "FFFF00", "Opt-in to running multi-arch host-asan CI on a pull request"),
-    # ci:gfx labels (GPU architecture opt-in)
-    ("ci:gfx103X-linux", "5A4D41", "Opt-in to gfx103X-linux builds/tests"),
-    ("ci:gfx103X", "5A4D41", "Opt-in to gfx103X builds/tests"),
-    ("ci:gfx90X-dcgpu", "5A4D41", "Opt-in to gfx90X-dcgpu builds/tests"),
-    ("ci:gfx94X-dcgpu", "5A4D41", "Opt-in to gfx94X-dcgpu builds/tests"),
-    ("ci:gfx950-dcgpu", "5A4D41", "Opt-in to gfx950-dcgpu builds/tests"),
-    ("ci:gfx110X-dgpu", "5A4D41", "Opt-in to gfx110X-dgpu builds/tests"),
-    ("ci:gfx110X-all", "5A4D41", "Opt-in to gfx110X-all builds/tests"),
-    ("ci:gfx1103", "5A4D41", "Opt-in to gfx1103 builds/tests"),
-    ("ci:gfx1150", "5A4D41", "Opt-in to gfx1150 builds/tests"),
-    ("ci:gfx1151", "5A4D41", "Opt-in to gfx1151 builds/tests"),
-    ("ci:gfx1152", "5A4D41", "Opt-in to gfx1152 builds/tests"),
-    ("ci:gfx1153", "5A4D41", "Opt-in to gfx1153 builds/tests"),
-    ("ci:gfx120X-all", "5A4D41", "Opt-in to gfx120X-all builds/tests"),
-    ("ci:gfx125x", "5A4D41", "Opt-in to gfx125x builds/tests"),
-    ("ci:gfx125X-dcgpu", "5A4D41", "Opt-in to gfx125X-dcgpu builds/tests"),
-    ("ci:gfx900", "5A4D41", "Opt-in to gfx900 builds/tests"),
-    ("ci:gfx906", "5A4D41", "Opt-in to gfx906 builds/tests"),
-    ("ci:gfx908", "5A4D41", "Opt-in to gfx908 builds/tests"),
-    ("ci:gfx90a", "5A4D41", "Opt-in to gfx90a builds/tests"),
-    ("ci:gfx90c", "5A4D41", "Opt-in to gfx90c builds/tests"),
-    # test: labels (project-specific test opt-in)
-    ("test:hipblaslt", "3FA7D6", "Run full tests for hipblaslt"),
-    ("test:hipcub", "3FA7D6", "Run full tests for hipcub"),
-    ("test:miopen", "3FA7D6", "Run full tests for miopen"),
-    ("test:rocblas", "3FA7D6", "Run full tests for rocblas"),
-    ("test:hipblas", "3FA7D6", "Run full tests for hipblas"),
-    ("test:rocprim", "3FA7D6", "Run full tests for rocprim"),
-    ("test:rocsolver", "3FA7D6", "Run full tests for rocsolver"),
-    ("test:rocthrust", "3FA7D6", "Run full tests for rocthrust"),
-    ("test:rocsparse", "3FA7D6", "Run full tests for rocsparse"),
-    ("test:hipsparse", "3FA7D6", "Run full tests for hipsparse"),
-    ("test:hipfft", "3FA7D6", "Run full tests for hipfft"),
-    ("test:hipsolver", "3FA7D6", "Run full tests for hipsolver"),
-    ("test:rocfft", "3FA7D6", "Run full tests for rocfft"),
-    ("test:hipsparselt", "3FA7D6", "Run full tests for hipsparselt"),
-    ("test:rccl", "3FA7D6", "Run full tests for rccl"),
-    ("test:hipdnn", "3FA7D6", "Run full tests for hipdnn"),
-    ("test:rocroller", "3FA7D6", "Run full tests for rocroller"),
-    ("test:composablekernel", "3FA7D6", "Run full tests for composable_kernel"),
-    ("test:libhipcxx_hipcc", "3FA7D6", "Run full tests for libhipcxx_hipcc"),
-    ("test:libhipcxx_hiprtc", "3FA7D6", "Run full tests for libhipcxx_hiprtc"),
-    ("test:ocltst", "3FA7D6", "Run ocltst tests"),
-    ("test:hip-tests", "3FA7D6", "Run hip-tests"),
-    ("test:rocrtst", "3FA7D6", "Run rocrtst tests"),
-    ("test:origami", "3FA7D6", "Run origami tests"),
-    ("test:rocdecode", "3FA7D6", "Run rocdecode tests"),
-    ("test:rocjpeg", "3FA7D6", "Run rocjpeg tests"),
-    ("test:rocprofiler-systems", "3FA7D6", "Run full tests for rocprofiler-systems"),
-    ("test:rocprofiler-sdk", "3FA7D6", "Run full tests for rocprofiler-sdk"),
-    ("test:hipkernelprovider", "3FA7D6", "Run full tests for hipkernelprovider"),
-    ("test:amdsmi", "3FA7D6", "Run full tests for amdsmi"),
-    ("test:rocgdb-cpu", "3FA7D6", "Run ROCgdb cpu tests only"),
-    ("test:rocgdb-gpu", "3FA7D6", "Run ROCgdb gpu tests only"),
-    ("test:rocgdb", "3FA7D6", "Test all test:rocgdb* labels"),
-    ("test:rocprofiler-sdk-spm", "3FA7D6", "Run rocprofiler-sdk-spm tests"),
-    ("test:rpp", "3FA7D6", "Run full tests for rpp"),
-    ("test:miopen-dbsync", "3FA7D6", "Run miopen-dbsync (StaticFDBSync/rocjitsu) tests"),
-    # test_filter: labels (test level override)
-    ("test_filter:quick", "a2fab4", "If enabled, the PR will run quick tests"),
-    ("test_filter:standard", "a2fab4", "If enabled, the PR will run standard tests"),
-    ("test_filter:comprehensive", "a2fab4", "If enabled, the PR will run comprehensive tests"),
-    ("test_filter:full", "a2fab4", "If enabled, the PR will run full tests"),
-    # test_runner: labels (test machine selection)
-    ("test_runner:oem", "23edeb", "Run tests on a machine configured with `oem` kernel"),
-    # build_variant: labels
-    ("build_variant:asan", "4b398c", "If enabled, the pull request will run ASAN builds"),
-]
-# fmt: on
-
 
 @dataclass
 class Label:
     name: str
     color: str
     description: str
+
+
+# =============================================================================
+# Color Constants
+# =============================================================================
+# Named constants for label colors to ensure consistency and easy updates.
+COLOR_CI_GENERAL = "FFFF00"  # Yellow - general CI behavior labels
+COLOR_CI_GFX = "5A4D41"  # Brown - GPU architecture opt-in labels
+COLOR_TEST = "3FA7D6"  # Blue - project-specific test labels
+COLOR_TEST_FILTER = "a2fab4"  # Light green - test level override labels
+COLOR_TEST_RUNNER = "23edeb"  # Cyan - test machine selection labels
+COLOR_BUILD_VARIANT = "4b398c"  # Purple - build variant labels
+
+
+# =============================================================================
+# CI Labels Definition
+# =============================================================================
+# Labels from ROCm/TheRock for CI behavior manipulation.
+# fmt: off
+CI_LABELS: list[Label] = [
+    # ci: general labels
+    Label("ci:skip", COLOR_CI_GENERAL, "Skip all CI builds/tests for this PR"),
+    Label("ci:run-all-archs", COLOR_CI_GENERAL, "Opt-in to building for all architectures on a pull request"),
+    Label("ci:run-multi-arch", COLOR_CI_GENERAL, "Opt-in to running multi-arch CI on a pull request"),
+    Label("ci:run-non-multi-arch", COLOR_CI_GENERAL, "Opt-in to running non-multi-arch CI on a pull request"),
+    Label("ci:build-jax", COLOR_CI_GENERAL, "Enable Jax Build"),
+    Label("ci:asan", COLOR_CI_GENERAL, "Opt-in to building ASAN"),
+    Label("ci:host-asan", COLOR_CI_GENERAL, "Opt-in to running multi-arch host-asan CI on a pull request"),
+    # ci:gfx labels (GPU architecture opt-in)
+    Label("ci:gfx103X-linux", COLOR_CI_GFX, "Opt-in to gfx103X-linux builds/tests"),
+    Label("ci:gfx103X", COLOR_CI_GFX, "Opt-in to gfx103X builds/tests"),
+    Label("ci:gfx90X-dcgpu", COLOR_CI_GFX, "Opt-in to gfx90X-dcgpu builds/tests"),
+    Label("ci:gfx94X-dcgpu", COLOR_CI_GFX, "Opt-in to gfx94X-dcgpu builds/tests"),
+    Label("ci:gfx950-dcgpu", COLOR_CI_GFX, "Opt-in to gfx950-dcgpu builds/tests"),
+    Label("ci:gfx110X-dgpu", COLOR_CI_GFX, "Opt-in to gfx110X-dgpu builds/tests"),
+    Label("ci:gfx110X-all", COLOR_CI_GFX, "Opt-in to gfx110X-all builds/tests"),
+    Label("ci:gfx1103", COLOR_CI_GFX, "Opt-in to gfx1103 builds/tests"),
+    Label("ci:gfx1150", COLOR_CI_GFX, "Opt-in to gfx1150 builds/tests"),
+    Label("ci:gfx1151", COLOR_CI_GFX, "Opt-in to gfx1151 builds/tests"),
+    Label("ci:gfx1152", COLOR_CI_GFX, "Opt-in to gfx1152 builds/tests"),
+    Label("ci:gfx1153", COLOR_CI_GFX, "Opt-in to gfx1153 builds/tests"),
+    Label("ci:gfx120X-all", COLOR_CI_GFX, "Opt-in to gfx120X-all builds/tests"),
+    Label("ci:gfx125x", COLOR_CI_GFX, "Opt-in to gfx125x builds/tests"),
+    Label("ci:gfx125X-dcgpu", COLOR_CI_GFX, "Opt-in to gfx125X-dcgpu builds/tests"),
+    Label("ci:gfx900", COLOR_CI_GFX, "Opt-in to gfx900 builds/tests"),
+    Label("ci:gfx906", COLOR_CI_GFX, "Opt-in to gfx906 builds/tests"),
+    Label("ci:gfx908", COLOR_CI_GFX, "Opt-in to gfx908 builds/tests"),
+    Label("ci:gfx90a", COLOR_CI_GFX, "Opt-in to gfx90a builds/tests"),
+    Label("ci:gfx90c", COLOR_CI_GFX, "Opt-in to gfx90c builds/tests"),
+    # test: labels (project-specific test opt-in)
+    Label("test:hipblaslt", COLOR_TEST, "Run full tests for hipblaslt"),
+    Label("test:hipcub", COLOR_TEST, "Run full tests for hipcub"),
+    Label("test:miopen", COLOR_TEST, "Run full tests for miopen"),
+    Label("test:rocblas", COLOR_TEST, "Run full tests for rocblas"),
+    Label("test:hipblas", COLOR_TEST, "Run full tests for hipblas"),
+    Label("test:rocprim", COLOR_TEST, "Run full tests for rocprim"),
+    Label("test:rocsolver", COLOR_TEST, "Run full tests for rocsolver"),
+    Label("test:rocthrust", COLOR_TEST, "Run full tests for rocthrust"),
+    Label("test:rocsparse", COLOR_TEST, "Run full tests for rocsparse"),
+    Label("test:hipsparse", COLOR_TEST, "Run full tests for hipsparse"),
+    Label("test:hipfft", COLOR_TEST, "Run full tests for hipfft"),
+    Label("test:hipsolver", COLOR_TEST, "Run full tests for hipsolver"),
+    Label("test:rocfft", COLOR_TEST, "Run full tests for rocfft"),
+    Label("test:hipsparselt", COLOR_TEST, "Run full tests for hipsparselt"),
+    Label("test:rccl", COLOR_TEST, "Run full tests for rccl"),
+    Label("test:hipdnn", COLOR_TEST, "Run full tests for hipdnn"),
+    Label("test:rocroller", COLOR_TEST, "Run full tests for rocroller"),
+    Label("test:composablekernel", COLOR_TEST, "Run full tests for composable_kernel"),
+    Label("test:libhipcxx_hipcc", COLOR_TEST, "Run full tests for libhipcxx_hipcc"),
+    Label("test:libhipcxx_hiprtc", COLOR_TEST, "Run full tests for libhipcxx_hiprtc"),
+    Label("test:ocltst", COLOR_TEST, "Run ocltst tests"),
+    Label("test:hip-tests", COLOR_TEST, "Run hip-tests"),
+    Label("test:rocrtst", COLOR_TEST, "Run rocrtst tests"),
+    Label("test:origami", COLOR_TEST, "Run origami tests"),
+    Label("test:rocdecode", COLOR_TEST, "Run rocdecode tests"),
+    Label("test:rocjpeg", COLOR_TEST, "Run rocjpeg tests"),
+    Label("test:rocprofiler-systems", COLOR_TEST, "Run full tests for rocprofiler-systems"),
+    Label("test:rocprofiler-sdk", COLOR_TEST, "Run full tests for rocprofiler-sdk"),
+    Label("test:hipkernelprovider", COLOR_TEST, "Run full tests for hipkernelprovider"),
+    Label("test:amdsmi", COLOR_TEST, "Run full tests for amdsmi"),
+    Label("test:rocgdb-cpu", COLOR_TEST, "Run ROCgdb cpu tests only"),
+    Label("test:rocgdb-gpu", COLOR_TEST, "Run ROCgdb gpu tests only"),
+    Label("test:rocgdb", COLOR_TEST, "Test all test:rocgdb* labels"),
+    Label("test:rocprofiler-sdk-spm", COLOR_TEST, "Run rocprofiler-sdk-spm tests"),
+    Label("test:rpp", COLOR_TEST, "Run full tests for rpp"),
+    Label("test:miopen-dbsync", COLOR_TEST, "Run miopen-dbsync (StaticFDBSync/rocjitsu) tests"),
+    # test_filter: labels (test level override)
+    Label("test_filter:quick", COLOR_TEST_FILTER, "If enabled, the PR will run quick tests"),
+    Label("test_filter:standard", COLOR_TEST_FILTER, "If enabled, the PR will run standard tests"),
+    Label("test_filter:comprehensive", COLOR_TEST_FILTER, "If enabled, the PR will run comprehensive tests"),
+    Label("test_filter:full", COLOR_TEST_FILTER, "If enabled, the PR will run full tests"),
+    # test_runner: labels (test machine selection)
+    Label("test_runner:oem", COLOR_TEST_RUNNER, "Run tests on a machine configured with `oem` kernel"),
+    # build_variant: labels
+    Label("build_variant:asan", COLOR_BUILD_VARIANT, "If enabled, the pull request will run ASAN builds"),
+]
+# fmt: on
 
 
 def run_gh_command(args: list[str], check: bool = True) -> subprocess.CompletedProcess:
@@ -207,7 +219,7 @@ def update_label(
 
 def get_ci_label_names() -> set[str]:
     """Get set of CI label names."""
-    return {label[0] for label in CI_LABELS}
+    return {label.name for label in CI_LABELS}
 
 
 def list_labels(repo: str) -> None:
@@ -222,14 +234,14 @@ def list_labels(repo: str) -> None:
     exists_count = 0
 
     print("\nLabel status:")
-    for name, color, description in CI_LABELS:
-        if name in existing_names:
+    for label in CI_LABELS:
+        if label.name in existing_names:
             status = "exists"
             exists_count += 1
         else:
             status = "MISSING"
             missing_count += 1
-        print(f"  [{status}] {name} (#{color})")
+        print(f"  [{status}] {label.name} (#{label.color})")
 
     print(f"\nSummary: {exists_count} exist, {missing_count} missing")
 
@@ -254,23 +266,32 @@ def create_labels(repo: str, dry_run: bool = False, force: bool = False) -> None
     created = 0
     updated = 0
     skipped = 0
-    for name, color, description in CI_LABELS:
-        if name in existing_map:
+    for label in CI_LABELS:
+        if label.name in existing_map:
             if force:
-                existing = existing_map[name]
+                existing = existing_map[label.name]
                 # Check if color or description differs
                 if (
-                    existing.color.lower() != color.lower()
-                    or existing.description != description
+                    existing.color.lower() != label.color.lower()
+                    or existing.description != label.description
                 ):
-                    if update_label(repo, name, color, description, existing, dry_run):
+                    if update_label(
+                        repo,
+                        label.name,
+                        label.color,
+                        label.description,
+                        existing,
+                        dry_run,
+                    ):
                         updated += 1
                 else:
+                    if dry_run:
+                        print(f"  [DRY RUN] Already up to date: {label.name}")
                     skipped += 1
             else:
                 skipped += 1
             continue
-        if create_label(repo, name, color, description, dry_run):
+        if create_label(repo, label.name, label.color, label.description, dry_run):
             created += 1
 
     summary_parts = [f"{created} created", f"{skipped} already matched"]

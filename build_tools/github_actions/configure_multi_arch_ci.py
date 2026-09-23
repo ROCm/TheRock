@@ -974,7 +974,7 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 # we have some labels like `ci:gfx94X-dcgpu` or `ci:gfx103X-linux`.
                 # Family keys are lowercase, so normalize the target.
                 # Strip ci: prefix, then split on dash to get the base family.
-                target = label[3:].split("-")[0].lower()
+                target = label.lower().removeprefix("ci:").split("-")[0]
                 linux_names.append(target)
                 windows_names.append(target)
                 print(f"  Label '{label}' -> adding target {target}")
