@@ -41,6 +41,9 @@ PREREQUISITES:
   - pip install pytest -r ./build_tools/packaging/requirements.txt
 
 USAGE:
+  # Run explicitly through pytest (excluded from default unit-test runs):
+  python -m pytest -m manual build_tools/packaging/tests/promote_packages_test.py
+
   # Test on current platform (auto-detected):
   python ./build_tools/packaging/tests/promote_packages_test.py
 
