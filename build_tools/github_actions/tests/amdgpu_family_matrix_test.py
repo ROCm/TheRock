@@ -396,16 +396,9 @@ class TestBuildVariantTestTriggers(unittest.TestCase):
     def test_host_asan_still_skips_postsubmit(self):
         self.assertFalse(self._runs("host-asan", "push"))
 
-    def test_host_asan_presubmit_requires_the_opt_in_label(self):
-        self.assertFalse(self._runs("host-asan", "pull_request", pr_labels=[]))
-        self.assertTrue(
-            self._runs("host-asan", "pull_request", pr_labels=["ci:host-asan"])
-        )
-
-    def test_an_unrelated_label_does_not_enable_tests(self):
-        self.assertFalse(
-            self._runs("host-asan", "pull_request", pr_labels=["ci:skip", "gfx942"])
-        )
+    def test_host_asan_tests_on_presubmit_without_a_label(self):
+        """ROCm/TheRock#7202 requires this to run with no opt-in label."""
+        self.assertTrue(self._runs("host-asan", "pull_request"))
 
     def test_debug_variant_follows_the_same_policy(self):
         """The gate matches on the host-asan prefix, so both forms need a rule."""

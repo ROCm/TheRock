@@ -222,35 +222,33 @@ all_build_variants = {
 # A variant with no entry runs tests on every trigger, which is what release
 # does. Within an entry, an event with no rule does not run tests.
 #
-#   "enabled"                : tests run on this event
-#   "disabled"               : tests do not run on this event
-#   {"opt_in_label": "..."}  : tests run when the PR carries that label
+#   "enabled"   : tests run on this event
+#   "disabled"  : tests do not run on this event
 #
 # Extending this is a data edit. Running a variant on postsubmit means adding
 # a "push" rule, and a new variant means adding a key -- neither needs a new
 # workflow input.
 build_variant_test_triggers = {
-    # ASAN runners are scarce, so presubmit is opt-in per PR. Repositories that
-    # want it on every PR (rocm-systems, rocm-libraries) apply the label
-    # automatically rather than setting a workflow input.
+    # Presubmit is enabled because reaching this gate already means the caller
+    # asked for a host-asan build, so disabling the tests would pay for the
+    # build and discard the signal. See ROCm/TheRock#7202. Postsubmit stays off
+    # because nightly already covers it.
     "host-asan": {
         "schedule": "enabled",
         "workflow_dispatch": "enabled",
         "push": "disabled",
-        "pull_request": {"opt_in_label": "ci:host-asan"},
+        "pull_request": "enabled",
     },
     "host-asan-debug": {
         "schedule": "enabled",
         "workflow_dispatch": "enabled",
         "push": "disabled",
-        "pull_request": {"opt_in_label": "ci:host-asan"},
+        "pull_request": "enabled",
     },
 }
 
 
-def build_variant_runs_tests(
-    build_variant: str, event_name: str, pr_labels: list[str] | None = None
-) -> bool:
+def build_variant_runs_tests(build_variant: str, event_name: str) -> bool:
     """Returns whether build_variant runs tests on event_name.
 
     Raises ValueError if a rule is malformed, so a typo in the table fails the
@@ -265,11 +263,9 @@ def build_variant_runs_tests(
         return True
     if rule == "disabled":
         return False
-    if isinstance(rule, dict) and "opt_in_label" in rule:
-        return rule["opt_in_label"] in (pr_labels or [])
     raise ValueError(
         f"build_variant_test_triggers[{build_variant!r}][{event_name!r}] is "
-        f"{rule!r}; expected 'enabled', 'disabled', or {{'opt_in_label': ...}}"
+        f"{rule!r}; expected 'enabled' or 'disabled'"
     )
 
 """

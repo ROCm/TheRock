@@ -1321,9 +1321,7 @@ def _expand_build_config_for_platform(
         if build_variant.startswith("host-asan"):
             # Which triggers run host-asan tests is declared in
             # build_variant_test_triggers, beside the per-family trigger keys.
-            if not build_variant_runs_tests(
-                build_variant, ci_inputs.event_name, ci_inputs.pr_labels
-            ):
+            if not build_variant_runs_tests(build_variant, ci_inputs.event_name):
                 test_runs_on = ""
                 print(
                     f"  {family_name}: {build_variant} does not run tests on "
