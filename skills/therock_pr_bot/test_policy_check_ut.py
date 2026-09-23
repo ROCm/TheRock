@@ -300,7 +300,11 @@ class UnitTestRuleTests(unittest.TestCase):
             "test.py",
         ]:
             with self.subTest(src=src):
-                self.assertTrue(self._errs([make_file(src)]))
+                self.assertTrue(
+                    self._errs([make_file(src)]),
+                    f"Expected a missing-unit-test error for source file {src!r}; "
+                    f"test patterns: {self.policy.unit_test_patterns!r}",
+                )
 
     def test_test_file_anywhere_satisfies_requirement(self) -> None:
         # A real test_* file in ANY folder satisfies the requirement.
