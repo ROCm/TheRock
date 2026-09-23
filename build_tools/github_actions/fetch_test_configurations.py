@@ -62,6 +62,7 @@ def _get_artifact_path(artifact_path: str) -> str:
 # related jobs without relying on name-prefix inference.
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
+    "tensilelite": ["tensilelite", "tensilelite-common"],
 }
 
 
@@ -317,6 +318,36 @@ test_matrix = {
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
+        },
+    },
+    # TensileLite common GEMM tests (Tensile/Tests/common) on real hardware,
+    # matching Math CI's `preliminary` `-m common` stage. A separate job rather
+    # than another stage chained onto "tensilelite", so a unit-test failure
+    # cannot hide the GEMM result.
+    #
+    # include_family is opt-in on purpose: selection inside the suite works by
+    # each config declaring skip-gfxNNNN, and that list only covers the
+    # architectures registered in tensilelite's pytest.ini. A family with no
+    # declarations (e.g. gfx1103, gfx115X) would try to run all ~417 configs.
+    #
+    # In Math CI (4 xdist workers) this suite takes up to 2h03 on gfx950 and
+    # 64 min on gfx942. Only gfx942 is on the PR path (gfx950 and gfx90a are
+    # postsubmit, gfx120X-all is nightly), so it runs unsharded; the timeout is
+    # sized for gfx950.
+    "tensilelite-common": {
+        "job_name": "tensilelite-common",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 180,
+        "additional_requirements_files": [
+            "build_tools/github_actions/test_executable_scripts/requirements-test-tensilelite.txt",
+        ],
+        "test_script": f"TEST_CATEGORY=hw-common python {_get_script_path('pytest_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        "include_family": {
+            "linux": ["gfx90a", "gfx94X-dcgpu", "gfx950-dcgpu", "gfx120X-all"],
         },
     },
     "origami": {

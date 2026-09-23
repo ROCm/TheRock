@@ -119,6 +119,33 @@ class ResolveComponentPathTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             pytest_runner.resolve_component_path("bogus", Path("/opt/rocm"))
 
+    def test_tensilelite_common_shares_tensilelite_install_tree(self):
+        rocm = Path("/opt/rocm")
+        self.assertEqual(
+            pytest_runner.resolve_component_path("tensilelite-common", rocm),
+            pytest_runner.resolve_component_path("tensilelite", rocm),
+        )
+
+
+class ResolveTestCategoryTest(unittest.TestCase):
+    def test_test_category_overrides_test_type(self):
+        env = {"TEST_CATEGORY": "hw-common", "TEST_TYPE": "standard"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(pytest_runner.resolve_test_category(), "hw-common")
+
+    def test_falls_back_to_test_type(self):
+        with mock.patch.dict(os.environ, {"TEST_TYPE": "standard"}, clear=True):
+            self.assertEqual(pytest_runner.resolve_test_category(), "standard")
+
+    def test_blank_test_category_falls_back_to_test_type(self):
+        env = {"TEST_CATEGORY": "", "TEST_TYPE": "comprehensive"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(pytest_runner.resolve_test_category(), "comprehensive")
+
+    def test_defaults_to_quick(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(pytest_runner.resolve_test_category(), "quick")
+
 
 class GetEnvIntOverrideTest(unittest.TestCase):
     def test_unset_returns_zero(self):

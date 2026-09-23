@@ -27,6 +27,8 @@ TEST_COMPONENT: Job name of the component to test (e.g. "tensilelite").
 TEST_TYPE: Test category to run; must be a category defined in
     test_categories.yaml (e.g. quick, standard, comprehensive, full). Defaults to
     "quick" when unset.
+TEST_CATEGORY: Optional. When set, overrides TEST_TYPE, for jobs that always
+    run one specific category regardless of the CI tier (e.g. hw-common).
 AMDGPU_FAMILIES: GPU architecture for skip-marker filtering (e.g. "gfx942").
 THEROCK_BIN_DIR: Path to the installed bin/ directory; its parent is the ROCm
     install prefix used to locate share/, lib/ and llvm tooling.
@@ -50,6 +52,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 # packages + pytest modules, not native test executables.
 INSTALLED_COMPONENTS = {
     "tensilelite": "share/hipblaslt/tensilelite",
+    "tensilelite-common": "share/hipblaslt/tensilelite",
 }
 
 
@@ -80,6 +83,11 @@ def get_env_int_override(name):
         logging.warning(f"Ignoring negative {name}={raw!r}")
         return 0
     return value
+
+
+def resolve_test_category():
+    """Return the category to run: TEST_CATEGORY if set, else TEST_TYPE."""
+    return os.getenv("TEST_CATEGORY") or os.getenv("TEST_TYPE", "quick")
 
 
 def resolve_component_path(component_name, rocm_path):
@@ -253,7 +261,7 @@ def build_environment(rocm_path, component_name):
 
 if __name__ == "__main__":
     TEST_COMPONENT_NAME = os.getenv("TEST_COMPONENT")
-    TEST_TYPE = os.getenv("TEST_TYPE", "quick")
+    TEST_TYPE = resolve_test_category()
     AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
     AMDGPU_TARGETS = os.getenv("AMDGPU_TARGETS")
     THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
