@@ -36,10 +36,6 @@ on:
       package_version:
         description: "package_version to set on packages, e.g. '7.13.0.dev0+dbd7369489260265fc6ddfc9d0de1262a95fe974'"
         type: string
-      wheel_build_workers:
-        description: "Maximum number of independent Python packages to build concurrently"
-        type: number
-        default: 1
       release_type:
         description: "Release type used for package publishing."
         type: string
@@ -82,9 +78,6 @@ on:
         default: false
       package_version:
         type: string
-      wheel_build_workers:
-        type: number
-        default: 1
       release_type:
         type: string
         default: ci
@@ -114,14 +107,11 @@ on:
 permissions:
   contents: read
 
-run-name: >-
-  Build portable Linux Python Packages
-  (${{ inputs.artifact_group }}, ${{ inputs.package_version }},
-  workers=${{ inputs.wheel_build_workers }})
+run-name: Build portable Linux Python Packages (${{ inputs.artifact_group }}, ${{ inputs.package_version }})
 
 jobs:
   build_rocm_wheels:
-    name: Build Python | ${{ inputs.artifact_group }} | workers ${{ inputs.wheel_build_workers }}
+    name: Build Python | ${{ inputs.artifact_group }}
     # Note: GitHub-hosted runners run out of disk space for some gpu families
     runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-24.04' }}
     permissions:
@@ -142,7 +132,6 @@ jobs:
       LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
       WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
       PACKAGE_VERSION: ${{ inputs.package_version }}
-      WHEEL_BUILD_WORKERS: ${{ inputs.wheel_build_workers }}
       RELEASE_TYPE: ${{ inputs.release_type }}
       OUTPUT_ROOT: "${{ github.workspace }}"
       ARTIFACTS_DIR: "${{ github.workspace }}/artifacts"
@@ -202,7 +191,6 @@ jobs:
             --artifact-dir="${ARTIFACTS_DIR}" \
             --dest-dir="${PACKAGES_DIR}" \
             --version="${PACKAGE_VERSION}" \
-            --wheel-build-workers="${WHEEL_BUILD_WORKERS}" \
             --linux-amdgpu-families="${LINUX_AMDGPU_FAMILIES}" \
             --windows-amdgpu-families="${WINDOWS_AMDGPU_FAMILIES}"
 

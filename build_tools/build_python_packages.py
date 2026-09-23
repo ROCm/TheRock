@@ -733,10 +733,10 @@ def main(argv: list[str]):
     p.add_argument(
         "--wheel-build-workers",
         type=int,
-        default=1,
+        default=3,
         help=(
             "Maximum number of independent Python packages to build concurrently "
-            "(default: 1)"
+            "(default: 3)"
         ),
     )
     p.add_argument(

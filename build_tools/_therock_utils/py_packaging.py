@@ -879,7 +879,7 @@ def build_packages(
     wheel_compression: bool = True,
     package_dirs: list[Path] | None = None,
     dist_dir: Path | None = None,
-    max_workers: int = 1,
+    max_workers: int = 3,
 ) -> None:
     """Build independent package staging directories concurrently.
 
