@@ -1087,10 +1087,25 @@ function(therock_cmake_subproject_activate target_name)
       OUTPUT_ON_FAILURE "${_output_on_failure}"
     )
 
+    # On the Windows CI runners, lld-link intermittently reports every symbol of
+    # one translation unit as undefined even though the object is correct on
+    # disk. Re-running the build links the same objects successfully. Wrap the
+    # build so that signature is retried once; see retry_transient_link.py.
+    set(_build_retry_prefix)
+    if(THEROCK_RETRY_TRANSIENT_LINK_FAILURES)
+      set(_build_retry_prefix
+        "${Python3_EXECUTABLE}"
+        "${THEROCK_SOURCE_DIR}/build_tools/retry_transient_link.py"
+        "--label" "${target_name}"
+        "--"
+      )
+    endif()
+
     add_custom_command(
       OUTPUT "${_build_stamp_file}"
       COMMAND
         ${_build_log_prefix}
+        ${_build_retry_prefix}
         "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
         "${CMAKE_COMMAND}" "--build" "${_binary_dir}"
       COMMAND "${CMAKE_COMMAND}" -E touch "${_build_stamp_file}"
