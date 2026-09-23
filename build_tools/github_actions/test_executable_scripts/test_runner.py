@@ -137,40 +137,19 @@ COMPONENT_CTEST_EXCLUSIONS = {
     },
 }
 
-# Per-component, per-GPU-family gtest exclusions (GTEST_FILTER patterns).
-# These patterns are combined into a GTEST_FILTER env var to exclude specific
-# gtest sub-tests that fail on certain GPU families. Uses gtest filter syntax:
-#   "*-pattern1:pattern2:pattern3" excludes tests matching any pattern.
-# Structure: { "component": { "gpu_family": ["pattern1", "pattern2"] } }
+# NOTE: GTEST_FILTER environment variable does NOT work for components where
+# ctest passes its own --gtest_filter argument (which overrides the env var).
+# For those components, we must either:
+#   1. Exclude the entire component via fetch_test_configurations.py exclude_family
+#   2. Use COMPONENT_CTEST_EXCLUSIONS (but this excludes entire ctest targets, not
+#      individual gtest sub-tests)
+#   3. Request upstream changes to add exclusion labels in test_categories.yml
+#
+# Components affected: hipblasltprovider, rocsparse, miopen (they use --gtest_filter
+# in their CTestTestfile.cmake which overrides GTEST_FILTER env var)
 COMPONENT_GTEST_EXCLUSIONS = {
-    "rocsparse": {
-        "gfx125X-dcgpu": [
-            # FAILURE: sddmm pure f16 compute tests fail with tolerance issues
-            # Pattern matches tests where compute_type is f16_r (not f32_r)
-            # Failing: quick/sddmm.level3/i32_i32_f16_r_f16_r_f16_r_f16_r_...
-            # Passing: quick/sddmm.level3/i32_i32_f16_r_f16_r_f32_r_f32_r_...
-            # https://github.com/ROCm/TheRock/actions/runs/35898004321/job/107306879511
-            "quick/sddmm*f16_r_f16_r_f16_r_f16_r*",
-        ],
-    },
-    "miopen": {
-        "gfx125X-dcgpu": [
-            # FAILURE: Gemm solver tests fail on gfx125X
-            # https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861426
-            "Smoke/GPU_UnitTestConvSolverGemmBwdRestBwd_FP16.*",
-            "Smoke/GPU_UnitTestConvSolverGemmFwdRestFwd_FP16.*",
-            "Smoke/GPU_UnitTestConvSolverGemmWrwUniversalWrw_FP16.*",
-            "Smoke/CPU_UnitTestConvSolverConvDepthwiseFwd2DDevApplicability_FP16.*",
-        ],
-    },
-    "hipblasltprovider": {
-        "gfx125X-dcgpu": [
-            # FAILURE: GpuMatmulPlan and HipblasltMatmulPlanBuilder tests fail
-            # https://github.com/ROCm/TheRock/actions/runs/35798263253/job/106982866530
-            "TestGpuMatmulPlan.*",
-            "TestHipblasltMatmulPlanBuilder.*",
-        ],
-    },
+    # Currently empty - GTEST_FILTER doesn't work due to ctest passing --gtest_filter
+    # See: https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363782678
 }
 use_gtest_only_sharding = test_component_job_name in GTEST_ONLY_SHARDING_COMPONENTS
 

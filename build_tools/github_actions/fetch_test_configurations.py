@@ -523,7 +523,14 @@ test_matrix = {
             "linux": 3,
             "windows": 3,
         },
-        # gfx125X-dcgpu: specific failing tests excluded via GTEST_FILTER in test_runner.py
+        "exclude_family": {
+            "linux": [
+                # FAILURE: sddmm f16 compute tests fail with tolerance issues
+                # GTEST_FILTER doesn't work (ctest passes --gtest_filter which overrides env var)
+                # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363781930
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "hipsparselt": {
         "job_name": "hipsparselt",
@@ -635,7 +642,14 @@ test_matrix = {
             "linux": 4,
             "windows": 4,
         },
-        # gfx125X-dcgpu: specific failing tests excluded via GTEST_FILTER in test_runner.py
+        "exclude_family": {
+            "linux": [
+                # FAILURE: Gemm solver FP16 tests fail on gfx125X
+                # GTEST_FILTER doesn't work (ctest passes --gtest_filter which overrides env var)
+                # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363782290
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # MIOpen dbsync (StaticFDBSync) -- GPU-free under the rocjitsu KMD interposer on a CPU runner.
     # The runner ships in the MIOpen dist (share/miopen/bin/run_dbsync_rocjitsu.py, pulled via
@@ -828,7 +842,14 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        # gfx125X-dcgpu: specific failing tests excluded via GTEST_FILTER in test_runner.py
+        "exclude_family": {
+            "linux": [
+                # FAILURE: TestGpuMatmulPlan and TestHipblasltMatmulPlanBuilder tests fail
+                # GTEST_FILTER doesn't work (ctest passes --gtest_filter which overrides env var)
+                # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363782678
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # hip-kernel-provider tests. test_hipkernelprovider.py installs the staged
     # rocKE wheels, then delegates to test_runner.py.
