@@ -25,6 +25,10 @@ endif()
 #     causing TensileCreateLibrary TerminatedWorkerError
 #   - rocjitsu: assert(initialized_) in libc_passthrough.cpp:66 fires under debug
 #     (compiled out by -DNDEBUG in release); workaround until source bug is fixed
+#   - libhipcxx: CCCL_ENABLE_ASSERTIONS (set in Debug) triggers a -Werror #warning on
+#     gfx9 archs for the TSC clock rate assumption in __config:357
+#   - hipBLAS: template signature mismatch in test binary (ref_syrk_ex/ref_herk_ex)
+#     between cblas_interface.cpp.o and callers under debug build
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
   set(amdsmi_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type for amdsmi" FORCE)
   set(therock-host-blas_BUILD_TYPE Release CACHE STRING "Build type for host-blas" FORCE)
@@ -34,6 +38,8 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
   set(composable_kernel_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type for composable_kernel" FORCE)
   set(hipBLASLt_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type for hipBLASLt" FORCE)
   set(rocjitsu_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type for rocjitsu" FORCE)
+  set(libhipcxx_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type for libhipcxx" FORCE)
+  set(hipBLAS_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type for hipBLAS" FORCE)
 endif()
 
 project(THEROCK)
