@@ -563,6 +563,10 @@ test_matrix = {
                 "gfx1153",
                 "gfx1200",
                 "gfx1201",
+                # CRITICAL FAILURE (GPU MES hang): spmm_test.spmm causes GPU hang
+                # amdgpu MES failed to respond to msg=REMOVE_QUEUE, container unkillable
+                # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363783468
+                "gfx125X-dcgpu",
             ],
             "windows": [
                 "gfx908",
