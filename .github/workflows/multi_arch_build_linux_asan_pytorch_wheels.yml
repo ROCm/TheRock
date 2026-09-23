@@ -63,12 +63,14 @@ jobs:
       ARTIFACTS_DIR: ${{ github.workspace }}/artifacts
       ASAN_BUILD_ID: ${{ inputs.artifact_run_id }}
       ASAN_INDEX_ROOT: ${{ github.workspace }}/asan-index
-      BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
       OUTPUT_ROOT: ${{ github.workspace }}
       PACKAGES_DIR: ${{ github.workspace }}/packages
       PYTHON_VERSION: ${{ inputs.python_version }}
       PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
       PYTORCH_OUTPUT_DIR: ${{ github.workspace }}/pytorch-dist
+      # artifact_manager.py resolves the artifacts bucket from RELEASE_TYPE;
+      # without it the fetch defaults to the "ci" bucket and finds nothing.
+      RELEASE_TYPE: ${{ inputs.release_type }}
     steps:
       - name: Checkout TheRock
         timeout-minutes: 15
@@ -173,7 +175,7 @@ jobs:
             --no-build-pytorch-vision \
             --no-build-apex \
             --clean \
-            --release-type="${BUILD_RELEASE_TYPE}" \
+            --release-type="${RELEASE_TYPE}" \
             --output-dir="${PYTORCH_OUTPUT_DIR}"
 
       - name: Upload PyTorch ASAN wheel
