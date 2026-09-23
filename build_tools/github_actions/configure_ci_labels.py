@@ -59,6 +59,7 @@ CI_LABELS: list[Label] = [
     Label("ci:build-jax", COLOR_CI_GENERAL, "Enable Jax Build"),
     Label("ci:asan", COLOR_CI_GENERAL, "Opt-in to building ASAN"),
     Label("ci:host-asan", COLOR_CI_GENERAL, "Opt-in to running multi-arch host-asan CI on a pull request"),
+    Label("ci:run-multi-gpu", COLOR_CI_GENERAL, "Opt-in to running multi-GPU tests"),
     # ci:gfx labels (GPU architecture opt-in)
     Label("ci:gfx103X-linux", COLOR_CI_GFX, "Opt-in to gfx103X-linux builds/tests"),
     Label("ci:gfx103X", COLOR_CI_GFX, "Opt-in to gfx103X builds/tests"),

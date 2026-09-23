@@ -997,6 +997,11 @@ def run():
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
     build_variant = os.getenv("BUILD_VARIANT", "release")
 
+    # Check for ci:run-multi-gpu label to force multi-GPU tests
+    enable_multi_gpu_by_label = "ci:run-multi-gpu" in test_labels
+    if enable_multi_gpu_by_label:
+        logging.info("Multi-GPU tests forced via ci:run-multi-gpu label")
+
     # Get runner config for per-component runner selection
     # This enables better load distribution across runner pools
     test_runs_on_labels = None
@@ -1090,7 +1095,9 @@ def run():
 
         # If test labels are populated, and the test job name is not in the test labels, skip the test
         # Note: Benchmarks never use test_labels (always empty list)
-        parsed_test_labels = [c.split("test:")[-1] for c in test_labels]
+        # Filter out ci: control labels - they're not test component selectors
+        component_test_labels = [c for c in test_labels if not c.startswith("ci:")]
+        parsed_test_labels = [c.split("test:")[-1] for c in component_test_labels]
         expanded_test_labels = [
             member
             for label in parsed_test_labels
@@ -1202,25 +1209,26 @@ def run():
             # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
             # If the multi GPU test runner is not enabled, we will skip the test
             if "multi_gpu" in selected_matrix[key]:
-                # TEMPORARY: Skip multi-GPU tests for quick runs until capacity is restored.
+                # Skip multi-GPU tests for quick runs unless enable_multi_gpu_by_label is set.
                 # Jobs that require multi-GPU runners (defined via "multi_gpu" in their config)
-                # only run on standard, comprehensive, or full tiers.
-                if test_type == "quick":
+                # only run on standard, comprehensive, or full tiers by default.
+                if test_type == "quick" and not enable_multi_gpu_by_label:
                     logging.info(
                         f"Excluding job {job_name}: multi-GPU tests skipped for quick runs (capacity constraint)"
                     )
                     continue
 
-                if (
+                # Check if this family has multi-GPU runner support, OR if enable_multi_gpu_by_label is set
+                family_has_multi_gpu = (
                     platform in selected_matrix[key]["multi_gpu"]
                     and amdgpu_families in selected_matrix[key]["multi_gpu"][platform]
-                ):
+                )
+
+                if family_has_multi_gpu or enable_multi_gpu_by_label:
                     # Mark this component as needing a multi-GPU runner.
                     # The actual runner selection is done in the per-component loop below.
                     job_config_data["multi_gpu_runner"] = True
-                    logging.info(
-                        f"Including job {job_name} for multi GPU testing with family {amdgpu_families}"
-                    )
+                    logging.info(f"Including job {job_name} for multi-GPU testing")
                 else:
                     # If the architecture is not available for multi GPU testing, we skip the test requiring multi GPU
                     logging.info(
