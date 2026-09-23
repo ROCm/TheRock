@@ -9,7 +9,7 @@ variable (e.g. RELEASE_TYPE=dev -> therock-dev-artifacts), matching how the
 Linux native packages and Python packages are uploaded.
 
 Usage:
-  upload_msi_packages.py --run-id RUN_ID --package-dir DIR [--dry-run]
+  upload_package_repo.py --run-id RUN_ID --package-dir DIR [--dry-run]
 
 Output layout:
   {bucket}/{external_repo}{run_id}-windows/packages/msi/
@@ -35,7 +35,7 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 PLATFORM = "windows"
 
 
-def upload_msi_packages(run_id: str, package_dir: Path, dry_run: bool) -> None:
+def upload_package_repo(run_id: str, package_dir: Path, dry_run: bool) -> None:
     if not package_dir.is_dir():
         sys.exit(f"Error: package dir not found: {package_dir}")
 
@@ -65,7 +65,7 @@ def main(argv: list[str]) -> None:
         "--dry-run", action="store_true", help="Print plan without uploading"
     )
     args = parser.parse_args(argv)
-    upload_msi_packages(args.run_id, args.package_dir, args.dry_run)
+    upload_package_repo(args.run_id, args.package_dir, args.dry_run)
 
 
 if __name__ == "__main__":

@@ -236,7 +236,7 @@ class WorkflowOutputRoot:
         (e.g. ``12345678901-windows/packages/msi``).
 
         Unlike the Linux deb/rpm repositories, the contents are loose installer
-        files (one ``.msi`` per package). See ``upload_msi_packages.py`` for the
+        files (one ``.msi`` per package). See ``upload_package_repo.py`` for the
         upload side.
 
         Args:

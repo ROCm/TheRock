@@ -290,7 +290,7 @@ def publish_native_windows_packages(
 ) -> None:
     """Copy native Windows MSI packages from the artifacts bucket to the release bucket.
 
-    The source MSIs were uploaded by upload_msi_packages.py (called from
+    The source MSIs were uploaded by upload_package_repo.py (called from
     multi_arch_build_native_windows_packages.yml) as loose .msi files.
 
     dev/nightly example:
