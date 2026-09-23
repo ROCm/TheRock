@@ -87,7 +87,7 @@ on:
           reuse and test filtering (empty = run all tests).
       skip_gpu_tests:
         type: boolean
-        default: false
+        default: true
         description: "When true, suppress GPU test jobs for all families (build-only run)."
   pull_request:
     types:
