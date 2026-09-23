@@ -1,7 +1,7 @@
 ---
 author: Saad Rahim (saadrahim)
 created: 2026-04-08
-modified: 2026-06-09
+modified: 2026-09-22
 status: Approved
 ---
 
@@ -272,9 +272,9 @@ retention) are captured in *Per-stream specializations* further down.
 
     - zip — **Windows only**; the `.zip` archive is the Windows
       equivalent of the Linux tarball and is not produced for Linux
-      distros. A single Windows OS variant agnostic `.zip` is published in
-      `zip/` as one build covers all supported Windows
-      versions.
+      distros or macOS. macOS `.zip` files are signed bundle
+      archives, not unpack-anywhere SDK archives, and live under
+      `macos-installers/`.
 
     - windows-installers — Windows installer artifacts (`.exe`,
       `.msi`) for setups that don't unpack the `zip` archive.
@@ -293,6 +293,31 @@ retention) are captured in *Per-stream specializations* further down.
       `.exe` / `.msi` artifacts for that OS; per-OS variants (debug,
       etc.) follow the same `<os>-<variant>/` sibling-folder rule
       used for Linux distros (e.g. `win11-debug/`) if and when they
+      ship.
+
+    - macos-installers — macOS installer artifacts (`.pkg`, `.dmg`)
+      and signed archives (`.zip`). Organized into **one subfolder
+      per supported CPU architecture**, using Apple's arch names:
+
+      - `arm64/` — Apple Silicon. The only supported macOS
+        architecture.
+
+      Intel (`x86_64`) is **not** supported and has no folder.
+      `x86_64/` and `universal2/` are reserved names should that
+      change.
+
+      macOS artifacts are **not** partitioned by OS version. The
+      minimum supported macOS version is carried inside the artifact
+      (`LSMinimumSystemVersion` in the bundle `Info.plist`, and the
+      `pkg` distribution's `allowed-os-versions`), so one build covers
+      every supported release and a per-OS folder would carry no
+      information — same reasoning as the OS-agnostic Windows `zip/`.
+      Architecture, not OS version, is the discriminator that changes
+      the bits.
+
+      Per-arch variants (debug, etc.) follow the same
+      `<arch>-<variant>/` sibling-folder rule used for Linux distros
+      and Windows OS versions (e.g. `arm64-debug/`) if and when they
       ship.
 
     - linux-installers — Linux installer artifacts, including the
@@ -353,9 +378,10 @@ retention) are captured in *Per-stream specializations* further down.
         the aggregated index is an equally acceptable realization. The
         example is not prescriptive.
 
-  - *(no separate top-level `windows/` folder — Windows artifacts
-    live alongside their Linux siblings inside each component, e.g.
-    `core/zip`, `core/windows-installers`.)*
+  - *(no separate top-level `windows/` or `macos/` folder — Windows
+    and macOS artifacts live alongside their Linux siblings inside
+    each component, e.g. `core/zip`, `core/windows-installers`,
+    `core/macos-installers`.)*
 
   - **pytorch/** — `whl/` + `whl-next/` (same rule as `core/`).
 
@@ -383,7 +409,8 @@ retention) are captured in *Per-stream specializations* further down.
       `core/` — `tarball`, `zip` (with per-OS subfolders mirroring
       `core/zip/` when needed), `windows-installers/` (with per-OS
       subfolders `win11/`, `server2022/`, `server2025/`, same rule
-      as `core/windows-installers/`),
+      as `core/windows-installers/`), `macos-installers/` (with
+      per-arch subfolders, same rule as `core/macos-installers/`),
       `linux-installers`, `whl/` + `whl-next/` (per the central
       indices; internal layout implementation-defined), and
       `packages/` (same implementation-defined layout as
@@ -407,7 +434,8 @@ retention) are captured in *Per-stream specializations* further down.
 
     - **rvs/** — tarball, packages
 
-    - **rocoptiq/** — tarball, whl, whl-next, packages
+    - **rocoptiq/** — tarball, whl, whl-next, packages,
+      windows-installers, macos-installers
 
     - **omnistat/** — whl, whl-next
 
@@ -461,6 +489,41 @@ retention) are captured in *Per-stream specializations* further down.
         `pip install "rocm-rvs==1.2.0+rocm7"` or a constraints file.
 
       The exclusion fallback in option (b) is unnecessary.
+
+#### macOS artifact requirements
+
+Every macOS artifact published to `repo.amd.com` must be **signed with
+an AMD Developer ID certificate, notarized by Apple, and stapled**
+(`xcrun stapler staple`) before upload. Gatekeeper rejects unstapled
+artifacts on a default-configured Mac, so an unstapled upload is a
+broken download rather than a degraded one.
+
+- `dev` and `nightly` may publish un-notarized builds if the stream
+  index page states that a Gatekeeper override is required. `weekly`,
+  `rc`, and `stable` must not.
+- Stapling is required so first-launch validation succeeds offline.
+- The signing identity and notarization Team ID are recorded in the
+  build's release notes, the same way the GPG key is recorded for
+  native Linux packages.
+- Where signing happens is out of scope. The signed, stapled artifact
+  is the publishable unit — the publish pipeline uploads, it never
+  signs.
+
+**No macOS repository package.** There is no `amdrocm-repo-*` artifact
+for macOS and none is planned. Homebrew taps, MacPorts portfiles, and
+similar third-party channels are out of scope; macOS consumers download
+directly from the stream subdomain or install the wheel from `whl/` /
+`whl-next/`.
+
+**Install location.** macOS components install under `/opt/rocm/` on
+the same version-scoped path rule as Linux — not `/Library/Frameworks`,
+not a `.app` bundle. This keeps the on-disk coexistence rule in
+*Repository Package* uniform across POSIX platforms.
+
+**Indexing.** Server-side index generation does not yet exist for
+`windows-installers/` or `macos-installers/`. Until it does, an
+`index.html` for each is generated and uploaded by the publishing team.
+Both trees are covered by a single indexing work item.
 
 #### Per-stream specializations
 
@@ -710,6 +773,9 @@ placement-related and already covered elsewhere in this document:
   packages coexist because each Core SDK build lands in a
   stream-distinct, version-scoped path under `/opt/rocm/` — see
   *Install Locations (ROCm Core SDK)* in `RFC00XX-Repository-Package.md`.
+- **Native packages only.** The tier packages are rpm/deb. There is
+  no Windows or macOS repo-setup package; those platforms download
+  artifacts directly from the stream subdomain.
 
 All other repo-package mechanics (filename scheme, deb822 stanza
 shape, default enablement table, rpath sibling, driver-pin churn
