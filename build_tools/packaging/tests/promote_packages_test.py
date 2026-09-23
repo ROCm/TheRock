@@ -58,6 +58,7 @@ import os
 from pathlib import Path
 import tempfile
 from packaging.version import Version
+from pkginfo import Wheel
 import pytest
 import subprocess
 import urllib
@@ -115,10 +116,6 @@ def checkPromotedFileNames(dir_path: Path, platform: str) -> tuple[bool, str]:
 def checkAllWheelsSameVersion(
     dir_path: Path, expected_version: Version
 ) -> tuple[bool, str]:
-    # Deferred import so this script can pass pytest collection and skip by
-    # default without requiring this optional package.
-    from pkginfo import Wheel
-
     for file in dir_path.glob("*.whl"):
         wheel = Wheel(file)
         version = Version(wheel.version)
