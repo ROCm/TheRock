@@ -341,8 +341,16 @@ and particularly the
 
 All Python unit tests should be run as part of
 [`.github/workflows/unit_tests.yml`](/.github/workflows/unit_tests.yml), with
-the help of files like
-[`build_tools/pyproject.toml`](/build_tools/pyproject.toml).
+test discovery and coverage configured in [`pyproject.toml`](/pyproject.toml).
+The explicit `testpaths` list selects unit tests and excludes suites that need
+build artifacts or other integration-test environments.
+
+To run the tests:
+
+```bash
+python -m pip install -r requirements-test.txt
+pytest
+```
 
 Note that simple unit tests do not fully replace integration testing using real
 build tools, packages, or remote APIs.
