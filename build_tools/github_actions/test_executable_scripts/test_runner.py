@@ -128,6 +128,13 @@ COMPONENT_CTEST_EXCLUSIONS = {
             "openmp-fortran-offload-sys-run",
         ],
     },
+    "rocprofiler-compute": {
+        "gfx125X-dcgpu": [
+            # HANG: test_l1_cache_counters hangs on gfx125X-dcgpu, causing other GPU jobs to stall
+            # https://github.com/ROCm/TheRock/actions/runs/35898004321/job/107306879895
+            "test_l1_cache_counters",
+        ],
+    },
 }
 
 # Per-component, per-GPU-family gtest exclusions (GTEST_FILTER patterns).
