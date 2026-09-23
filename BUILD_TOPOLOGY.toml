@@ -415,6 +415,16 @@ type = "target-neutral"
 artifact_deps = []
 feature_group = "DEBUG_TOOLS"
 
+# Windows-only.  Linux and macOS have iconv in libc, so only Windows needs a
+# bundled libiconv (rocgdb links it statically).  Grouped with the debug tools
+# like expat, gmp, mpfr and ncurses, since rocgdb is its only consumer too.
+[artifacts.sysdeps-libiconv]
+artifact_group = "debug-tools"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "DEBUG_TOOLS"
+disable_platforms = ["linux"]
+
 [artifacts.sysdeps-libmnl]
 artifact_group = "third-party-sysdeps"
 type = "target-neutral"
