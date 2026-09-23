@@ -123,9 +123,6 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      # LLVM benefits from large runners — good parallelism and on the critical
-      # path, so paying more for incremental speedups is worth it. Medium runners
-      # can suffice with cache hits but OOM on cold builds.
       build_runs_on: ${{ inputs.build_runs_on_large }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
