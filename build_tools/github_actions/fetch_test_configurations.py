@@ -420,6 +420,14 @@ test_matrix = {
             "linux": 2,
             "windows": 2,
         },
+        "exclude_family": {
+            "linux": [
+                # CRITICAL FAILURE (GPU MES hang): RocprimDeviceReduceByKey.LargeSegmentCountReduceByKeyDeterministic
+                # causes GPU hang, amdgpu MES failed to respond to msg=REMOVE_QUEUE
+                # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363782145
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "hipcub": {
         "job_name": "hipcub",
