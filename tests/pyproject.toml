@@ -1,4 +1,6 @@
-# Keep integration-test runs independent of the root unit-test configuration.
+# This file isolates these integration tests from the root pyproject.toml
+# which limits patterns to only `*_test.py`.
+
 [tool.pytest.ini_options]
 python_files = ["test_*.py", "*_test.py"]
 addopts = "-ra"
