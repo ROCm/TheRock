@@ -1,0 +1,4 @@
+# Keep integration-test runs independent of the root unit-test configuration.
+[tool.pytest.ini_options]
+python_files = ["test_*.py", "*_test.py"]
+addopts = "-ra"

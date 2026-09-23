@@ -10,7 +10,7 @@ testpaths = [
     "build_tools/third_party/s3_management/tests",
     "external-builds/pytorch/tests",
     "test_tools/tests",
-    "skills/therock_pr_bot/test_policy_check_ut.py",
+    "skills/therock_pr_bot/policy_check_test.py",
 ]
 python_files = ["*_test.py"]
 addopts = [

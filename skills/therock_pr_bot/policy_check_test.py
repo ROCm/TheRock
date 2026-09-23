@@ -7,9 +7,9 @@ These let us iterate on policies WITHOUT pushing branches or running workflows:
                    the higher-level ensure_* functions.
 
 Run locally:
-    python -m unittest .github/therock_pr_bot/test_policy_check_ut.py -v
+    python -m unittest skills/therock_pr_bot/policy_check_test.py -v
     # or
-    pytest .github/therock_pr_bot/test_policy_check_ut.py
+    pytest skills/therock_pr_bot/policy_check_test.py
 """
 
 import re

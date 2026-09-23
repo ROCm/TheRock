@@ -68,7 +68,8 @@ repos:
     language: fail
     files: '(^|/)([^/]*\.(pem|key|exe|crt|cer|p12|pfx|der|csr|gpg|asc)|\.env|id_(rsa|dsa|ecdsa|ed25519))$'
   - id: test-file-naming
-    name: Enforce *_test.py naming for build_tools tests
+    name: Enforce *_test.py naming for unit tests
     entry: "Test files must use the *_test.py naming convention, not test_*.py"
     language: fail
-    files: '^build_tools/(.*/)?tests/test_[^/]*\.py$'
+    files: '(^|/)test_[^/]*\.py$'
+    exclude: '^(tests/|build_tools/github_actions/test_executable_scripts/)'
