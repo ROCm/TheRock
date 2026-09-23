@@ -859,7 +859,7 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 
     - pull_request: Smallest default set (presubmit families). Designed for
       fast feedback on proposed changes. PR labels can opt in to additional
-      families (gfx* labels) or the full set (ci:run-all-archs).
+      families (ci:gfx* labels) or the full set (ci:run-all-archs).
     - push: Broader coverage (presubmit + postsubmit families). Runs on
       code that has landed, so we want more thorough validation than PRs
       without paying the full nightly cost.
@@ -922,7 +922,7 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
         print("  Using caller-supplied GPU families")
     elif ci_inputs.is_pull_request:
         # Smallest default set for fast PR feedback. PR labels can extend
-        # the set below (gfx* for individual families, ci:run-all-archs
+        # the set below (ci:gfx* for individual families, ci:run-all-archs
         # for everything).
         defaults = list(get_all_families_for_trigger_types(["presubmit"]).keys())
         linux_names = list(defaults)
@@ -968,12 +968,13 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 windows_names = list(all_families.keys())
                 print("  Label 'ci:run-all-archs' -> all families")
                 break
-            if label.lower().startswith("gfx"):
+            if label.lower().startswith("ci:gfx"):
                 # Trim suffixes from labels since amdgpu_family_matrix.py
                 # specifies families with no suffix (e.g. `gfx94x`) but
-                # we have some labels like `gfx94X-dcgpu` or `gfx103X-linux`.
+                # we have some labels like `ci:gfx94X-dcgpu` or `ci:gfx103X-linux`.
                 # Family keys are lowercase, so normalize the target.
-                target = label.split("-")[0].lower()
+                # Strip ci: prefix, then split on dash to get the base family.
+                target = label.lower().removeprefix("ci:").split("-")[0]
                 linux_names.append(target)
                 windows_names.append(target)
                 print(f"  Label '{label}' -> adding target {target}")
