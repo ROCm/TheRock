@@ -271,7 +271,8 @@ test_matrix = {
         },
         "exclude_family": {
             "linux": [
-                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35820932302/job/107052684531
+                # FAILURE (rocblas-test_quick_suite crash/no gtest output, cannot filter individual tests)
+                # https://github.com/ROCm/TheRock/actions/runs/35820932302/job/107052684531
                 "gfx125X-dcgpu",
             ],
         },
@@ -374,7 +375,8 @@ test_matrix = {
             "linux": [
                 # hipBLASLt does not support gfx103X (see TheRock#1062)
                 "gfx1030",
-                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038470972
+                # FAILURE (3275+ gtest failures - too many to filter individually)
+                # https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038470972
                 "gfx125X-dcgpu",
             ],
         },
@@ -440,7 +442,8 @@ test_matrix = {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm",
-        # FAILURE: Known issues on gfx125X-dcgpu, excluding for test purposes
+        # FAILURE (many gdb.rocm sub-test failures, test framework doesn't support GTEST_FILTER)
+        # https://github.com/ROCm/TheRock/actions/runs/35784025966/job/106936788391
         "exclude_family": {
             "linux": ["gfx125X-dcgpu"],
         },
@@ -470,7 +473,8 @@ test_matrix = {
         },
         "exclude_family": {
             "linux": [
-                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35803014951/job/106997748160
+                # FAILURE (15 test failures, custom test framework doesn't support GTEST_FILTER)
+                # https://github.com/ROCm/TheRock/actions/runs/35803014951/job/106997748160
                 "gfx125X-dcgpu",
             ],
         },
@@ -923,7 +927,8 @@ test_matrix = {
         },
         "exclude_family": {
             "linux": [
-                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038470967
+                # FAILURE (hipErrorNoBinaryForGpu - fundamental gfx1250 arch support issue in lit tests)
+                # https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038470967
                 "gfx125X-dcgpu",
             ],
         },
@@ -946,7 +951,8 @@ test_matrix = {
         },
         "exclude_family": {
             "linux": [
-                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861741
+                # FAILURE (hipErrorNoBinaryForGpu - fundamental gfx1250 arch support issue in lit tests)
+                # https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861741
                 "gfx125X-dcgpu",
             ],
         },
@@ -967,7 +973,8 @@ test_matrix = {
         },
         "exclude_family": {
             "linux": [
-                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861504
+                # FAILURE (hipErrorNoBinaryForGpu/hsa-hotswap errors - fundamental gfx1250 arch issue)
+                # https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861504
                 "gfx125X-dcgpu",
             ],
         },
@@ -987,7 +994,8 @@ test_matrix = {
         },
         "exclude_family": {
             "linux": [
-                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35820932302/job/107052684535
+                # FAILURE (hipErrorNoBinaryForGpu/hsa-hotswap errors - fundamental gfx1250 arch issue)
+                # https://github.com/ROCm/TheRock/actions/runs/35820932302/job/107052684535
                 "gfx125X-dcgpu",
             ],
         },
