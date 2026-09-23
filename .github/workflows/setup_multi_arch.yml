@@ -208,8 +208,8 @@ jobs:
           persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
-          # We need the parent commit to do a diff
-          fetch-depth: 2
+          # Include enough history for PR diffs and stage-reuse compatibility.
+          fetch-depth: ${{ inputs.stage_reuse_commit_history }}
 
       - name: Checkout CI config
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

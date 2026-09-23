@@ -11,6 +11,7 @@ This module provides utilities to:
 
 Public API:
     get_git_commit_hash() - Resolve a git ref to a commit hash
+    get_git_first_parent_history() - Get first-parent commit history from a ref
     get_git_modified_paths() - Get modified files from git diff compared to worktree
     get_git_submodule_paths() - Get list of git submodule paths in the repository
     is_ci_run_required() - Check if CI run is required based on modified paths
@@ -27,7 +28,11 @@ from typing import Iterable, Optional
 _FULL_GIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
-def _ensure_git_commit_available(ref: str) -> None:
+def _ensure_git_commit_available(
+    ref: str,
+    *,
+    repo_root: Optional[str] = None,
+) -> None:
     """Fetch a full SHA when it is missing from the shallow checkout."""
     if _FULL_GIT_SHA_RE.fullmatch(ref) is None:
         return
@@ -35,6 +40,7 @@ def _ensure_git_commit_available(ref: str) -> None:
     is_commit_available_locally = (
         subprocess.run(
             ["git", "cat-file", "-e", f"{ref}^{{commit}}"],
+            cwd=repo_root,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False,
@@ -56,6 +62,7 @@ def _ensure_git_commit_available(ref: str) -> None:
             "origin",
             ref,
         ],
+        cwd=repo_root,
         stdout=subprocess.PIPE,
         check=True,
         text=True,
@@ -78,6 +85,39 @@ def get_git_commit_hash(ref: str) -> str:
         text=True,
         timeout=60,
     ).stdout.strip()
+
+
+def get_git_first_parent_history(
+    ref: str,
+    *,
+    max_count: int,
+    repo_root: Optional[str] = None,
+) -> list[str]:
+    """Return commit SHAs from ref by following only first parents.
+
+    For a synthetic pull-request merge commit, first-parent traversal follows
+    the target branch history and excludes commits reachable only through the
+    pull-request head.
+    """
+    if max_count < 1:
+        raise ValueError("max_count must be at least 1")
+
+    _ensure_git_commit_available(ref, repo_root=repo_root)
+
+    return subprocess.run(
+        [
+            "git",
+            "rev-list",
+            "--first-parent",
+            f"--max-count={max_count}",
+            ref,
+        ],
+        cwd=repo_root,
+        stdout=subprocess.PIPE,
+        check=True,
+        text=True,
+        timeout=60,
+    ).stdout.splitlines()
 
 
 def get_git_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
