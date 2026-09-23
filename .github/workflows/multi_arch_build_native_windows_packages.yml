@@ -18,10 +18,14 @@ name: Build Multi-Arch Native Windows Packages
 on:
   workflow_dispatch:
     inputs:
-      artifacts_url:
-        description: "Base URL of the artifact storage directory containing {name}_{component}_generic.tar.zst files."
+      run_id:
+        description: "GitHub Actions run id whose published Windows artifacts to package into MSIs (e.g. 27315369389)."
         type: string
         required: true
+      run_github_repo:
+        description: "owner/repo that owns run_id (for fork runs). Defaults to ROCm/TheRock."
+        type: string
+        default: ""
       packages:
         description: 'JSON list of packages to build (e.g. ["runtime","core"]).'
         type: string
@@ -44,9 +48,12 @@ on:
         default: ""
   workflow_call:
     inputs:
-      artifacts_url:
+      run_id:
         type: string
         required: true
+      run_github_repo:
+        type: string
+        default: ""
       packages:
         type: string
         default: '["runtime"]'
@@ -67,7 +74,7 @@ permissions:
   contents: read
   id-token: write
 
-run-name: Build Windows MSI packages (${{ inputs.artifacts_url }})
+run-name: Build Windows MSI packages (run ${{ inputs.run_id }})
 
 jobs:
   build:
@@ -81,7 +88,8 @@ jobs:
       run:
         shell: bash
     env:
-      ARTIFACTS_URL: ${{ inputs.artifacts_url }}
+      RUN_ID: ${{ inputs.run_id }}
+      RUN_GITHUB_REPO: ${{ inputs.run_github_repo }}
       PACKAGE_VERSION: ${{ inputs.rocm_version }}
       MSI_DIR: ${{ github.workspace }}/msi-output
       RELEASE_TYPE: ${{ inputs.release_type }}
@@ -109,22 +117,42 @@ jobs:
       # The legacy System32 DLLs (amdhip64_6.dll, amd_comgr_2.dll) are tracked
       # by DVC under rocm-systems/shared/amdgpu-windows-interop/legacy/. The
       # outer checkout uses submodules: false for speed, so sparse-fetch only
-      # that directory — the generator then pulls the actual DLLs over
-      # anonymous HTTPS from the DVC remote. A full submodule init would clone
-      # the multi-GB rocm-systems repo needlessly.
+      # that directory (plus .dvc/ for the remote config) and materialize the
+      # DLLs from the anonymous DVC S3 remote. The generator reads them from
+      # this source checkout and fails fatally if any are missing, so they must
+      # exist before the generate step. A full submodule init would clone the
+      # multi-GB rocm-systems repo needlessly.
       #
       # CRITICAL: the rocm-systems SHA must match the commit the *artifacts*
       # were built from (or the legacy DLLs would be version-skewed against the
       # rest of the MSI), so read pin_sha from the artifact set's own manifest
       # rather than from this checkout's submodule gitlink.
       #
-      # TODO(#1987): this belongs in generate_msi_wxs.py — in --artifacts-url
-      # mode the generator already fetches the manifest and should self-pin the
-      # legacy DVC fetch. Wiring it here keeps this PR scoped to the workflow;
-      # a follow-up will move the logic into the generator and drop this step.
-      - name: Sparse-checkout rocm-systems legacy DVC pointers
+      # TODO(#1987): this belongs in generate_msi_wxs.py — in --run-id mode the
+      # generator already fetches the manifest and should self-pin the legacy
+      # DVC fetch. Wiring it here keeps this PR scoped to the workflow; a
+      # follow-up will move the logic into the generator and drop this step.
+      - name: Materialize rocm-systems legacy System32 DLLs (DVC)
         run: |
-          manifest_url="${ARTIFACTS_URL%/}/manifests/therock_manifest.json"
+          # Resolve the artifact set's manifest URL from the run id (bucket is
+          # selected from RELEASE_TYPE); no --artifacts-url is passed anymore.
+          # The bucket-resolution helper prints diagnostics to stdout, so send
+          # those to stderr (still visible in the log) and let only the URL
+          # reach stdout — robust regardless of what the helper prints.
+          manifest_url="$(python -c "
+          import contextlib, os, sys
+          sys.path.insert(0, 'build_tools')
+          from _therock_utils.workflow_outputs import WorkflowOutputRoot
+          with contextlib.redirect_stdout(sys.stderr):
+              root = WorkflowOutputRoot.from_workflow_run(
+                  run_id=os.environ['RUN_ID'],
+                  platform='windows',
+                  github_repository=os.environ.get('RUN_GITHUB_REPO') or None,
+                  release_type=os.environ['RELEASE_TYPE'],
+              )
+              url = root.manifest_root().https_url
+          print(url)
+          ")"
           echo "Reading rocm-systems pin from ${manifest_url}"
           rocm_systems_sha="$(
             curl -fsSL "${manifest_url}" \
@@ -133,10 +161,18 @@ jobs:
           echo "rocm-systems pin_sha=${rocm_systems_sha}"
           git clone --no-checkout --filter=blob:none --depth=1 \
             https://github.com/ROCm/rocm-systems.git rocm-systems
+          # .dvc/ carries the anonymous S3 remote config that the DVC pull needs;
+          # the legacy dir carries the .dvc pointer files for the 2 DLLs.
           git -C rocm-systems sparse-checkout set --no-cone \
-            shared/amdgpu-windows-interop/legacy
+            shared/amdgpu-windows-interop/legacy \
+            .dvc
           git -C rocm-systems fetch --depth=1 origin "${rocm_systems_sha}"
           git -C rocm-systems checkout "${rocm_systems_sha}"
+          # Materialize the actual DLLs from the anonymous DVC S3 remote. Call
+          # the pull helper directly (rather than the top-level source-fetch
+          # script) so we don't trigger the outer checkout's submodule/topology
+          # logic.
+          python -c "import sys; sys.path.insert(0, 'build_tools'); from pathlib import Path; import fetch_dvc_artifacts as d; d.pull(Path('rocm-systems'))"
 
       - name: Generate WiX source and build MSI
         run: |
@@ -152,7 +188,8 @@ jobs:
 
           python build_tools/packaging/windows/generate_msi_wxs.py \
             --package "${{ matrix.package }}" \
-            --artifacts-url "${ARTIFACTS_URL}" \
+            --run-id "${RUN_ID}" \
+            ${RUN_GITHUB_REPO:+--run-github-repo "${RUN_GITHUB_REPO}"} \
             ${PACKAGE_VERSION:+--package-version "${PACKAGE_VERSION}"} \
             --output "${MSI_DIR}/${stem}.wxs"
 
