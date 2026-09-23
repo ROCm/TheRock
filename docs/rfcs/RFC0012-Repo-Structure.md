@@ -515,11 +515,6 @@ similar third-party channels are out of scope; macOS consumers download
 directly from the stream subdomain or install the wheel from `whl/` /
 `whl-next/`.
 
-**Install location.** macOS components install under `/opt/rocm/` on
-the same version-scoped path rule as Linux — not `/Library/Frameworks`,
-not a `.app` bundle. This keeps the on-disk coexistence rule in
-*Repository Package* uniform across POSIX platforms.
-
 **Indexing.** Server-side index generation does not yet exist for
 `windows-installers/` or `macos-installers/`. Until it does, an
 `index.html` for each is generated and uploaded by the publishing team.
