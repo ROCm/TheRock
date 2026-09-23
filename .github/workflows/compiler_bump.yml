@@ -225,6 +225,7 @@ jobs:
       platform: linux
       package_version: ${{ needs.setup-linux.outputs.rocm_package_version }}
       release_type: dev
+      build_runs_on: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_large }}
       repository: ${{ github.repository }}
       ref: ${{ needs.setup-linux.outputs.ref }}
 
