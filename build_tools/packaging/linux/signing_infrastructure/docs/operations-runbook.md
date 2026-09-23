@@ -1,24 +1,24 @@
 # Signing Server — Operations Runbook
 
-**Component:** Remote GPG Signing Service  
+**Component:** Remote GPG Signing Service
 **Related docs:** `signing-server-design.md`, `use-case-flows.md`
 
 This runbook covers the full lifecycle of the signing server: initial provisioning, day-to-day operations, key rotation, and emergency procedures. All commands are AWS CLI unless noted otherwise.
 
----
+______________________________________________________________________
 
 ## Prerequisites
 
 Before starting, confirm the following exist:
 
-| Prerequisite | How to verify |
-|-------------|---------------|
-| AWS account and region decided | `aws sts get-caller-identity` |
-| VPC with a private subnet (no internet gateway) | AWS Console → VPC |
-| EC2 instance launched in the private subnet | Running state in EC2 console |
-| Security group `sg-signing-server` created | Inbound: TCP 443 from build runner SG and operator VPN CIDR only |
-| GPG key pair generated offline | `gpg --list-secret-keys` on the air-gapped machine |
-| Operator has AWS CLI configured with sufficient IAM permissions | `aws iam get-user` |
+| Prerequisite                                                    | How to verify                                                    |
+| --------------------------------------------------------------- | ---------------------------------------------------------------- |
+| AWS account and region decided                                  | `aws sts get-caller-identity`                                    |
+| VPC with a private subnet (no internet gateway)                 | AWS Console → VPC                                                |
+| EC2 instance launched in the private subnet                     | Running state in EC2 console                                     |
+| Security group `sg-signing-server` created                      | Inbound: TCP 443 from build runner SG and operator VPN CIDR only |
+| GPG key pair generated offline                                  | `gpg --list-secret-keys` on the air-gapped machine               |
+| Operator has AWS CLI configured with sufficient IAM permissions | `aws iam get-user`                                               |
 
 Set your region once for all commands in this session:
 
@@ -28,7 +28,7 @@ export AWS_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 echo "Account: $AWS_ACCOUNT  Region: $AWS_REGION"
 ```
 
----
+______________________________________________________________________
 
 ## Section 1 — Initial Provisioning (One-Time Setup)
 
@@ -93,7 +93,7 @@ aws iam get-role --role-name role-signing-server \
 # Expected: arn:aws:iam::123456789:role/role-signing-server
 ```
 
----
+______________________________________________________________________
 
 ### 1.2 Create the KMS Customer Managed Key (CMK)
 
@@ -161,7 +161,7 @@ aws kms describe-key --key-id alias/amd-signing-gpg-key \
 # Expected: Enabled
 ```
 
----
+______________________________________________________________________
 
 ### 1.3 Store GPG Private Keys in Secrets Manager
 
@@ -199,7 +199,7 @@ aws secretsmanager get-secret-value \
 
 Repeat for each signing tier (`therock-dev`, `therock-nightly`, `therock-release`).
 
----
+______________________________________________________________________
 
 ### 1.4 Attach IAM Role to EC2 Instance
 
@@ -229,39 +229,44 @@ aws sts get-caller-identity
 # Expected: Arn contains "assumed-role/role-signing-server"
 ```
 
----
+______________________________________________________________________
 
 ### 1.5 Clone Repo and Run Setup Script
 
-**Final step** — run on the EC2 instance. All AWS prerequisites must be in place.
+**Final step — for provisioning a brand-new instance only.** Run on the EC2 instance. All AWS prerequisites must be in place.
+
+> **This `git clone` is a one-time bootstrap action for a fresh instance, not an update mechanism.** Never `git pull` on an already-running production signing server to pick up code or config changes — see §8 "Instance Replacement Procedure" below for how updates are actually deployed. Treating a live instance's checkout as something you periodically re-pull creates exactly the "patched in place, no clean rollback, no reproducible build" problem §8 exists to avoid.
 
 ```bash
 # Install git
 sudo apt-get install -y git   # Ubuntu
 # sudo yum install -y git     # Amazon Linux
 
-# Clone the signing branch
-sudo git clone \
-  --branch users/nunnikri/signing-serverver-test \
-  https://github.com/ROCm/TheRock.git \
-  /opt/therock-signing
+# Clone a specific, known-good commit or tag — never a floating branch.
+# A branch name (including "main") can move between when you test an AMI/
+# instance and when you actually launch from it, so two instances built
+# "from the same branch" at different times are not guaranteed to run the
+# same code. Pin to a tag or commit SHA instead:
+sudo git clone https://github.com/ROCm/TheRock.git /opt/therock-signing
+cd /opt/therock-signing
+sudo git checkout <release-tag-or-commit-sha>   # e.g. v1.4.2, or a specific SHA
 
 # Run setup script
-cd /opt/therock-signing
 sudo bash build_tools/packaging/linux/signing_infrastructure/tools/setup-server.sh \
   --secret signing/gpg/therock-release \
   --region $AWS_REGION
 ```
 
 The script:
-1. Installs `gnupg2`, `python3`, `python3-venv`
-2. Creates `/opt/signing-server-venv` with `boto3` and `PyJWT`
-3. Mounts `tmpfs` at `/var/gpg-keyring` and adds to `/etc/fstab`
-4. Copies `signing-server.py` and `auth.py` to `/opt/signing-server/`
-5. Generates a self-signed TLS certificate in `/opt/signing-server/certs/`
-6. Installs and enables the `signing-server` systemd service
 
----
+1. Installs `gnupg2`, `python3`, `python3-venv`
+1. Creates `/opt/signing-server-venv` with `boto3` and `PyJWT`
+1. Mounts `tmpfs` at `/var/gpg-keyring` and adds to `/etc/fstab`
+1. Copies `signing-server.py` and `auth.py` to `/opt/signing-server/`
+1. Generates a self-signed TLS certificate in `/opt/signing-server/certs/`
+1. Installs and enables the `signing-server` systemd service
+
+______________________________________________________________________
 
 ### 1.6 Start and Verify
 
@@ -274,6 +279,7 @@ sudo journalctl -u signing-server -f
 ```
 
 Expected startup output:
+
 ```
 Fetching GPG key from Secrets Manager: signing/gpg/therock-release
   Imported key from 'signing/gpg/therock-release'
@@ -302,7 +308,7 @@ cat /tmp/test.txt.asc
 # Expected: -----BEGIN PGP SIGNATURE-----
 ```
 
----
+______________________________________________________________________
 
 ## Section 2 — Day-to-Day Operations
 
@@ -353,7 +359,7 @@ Rate limit hits appear in the audit log as `RATE_LIMITED`:
 sudo journalctl -u signing-server --since today | grep RATE_LIMITED
 ```
 
----
+______________________________________________________________________
 
 ## Section 3 — GPG Key Rotation
 
@@ -394,7 +400,7 @@ sudo systemctl restart signing-server
 # No restart needed
 ```
 
----
+______________________________________________________________________
 
 ## Section 4 — Emergency Procedures
 
@@ -471,24 +477,24 @@ When replacing a failed or outdated instance:
 aws ec2 terminate-instances --instance-ids <old-instance-id>
 ```
 
----
+______________________________________________________________________
 
 ## Section 5 — Troubleshooting
 
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `Unable to locate credentials` | No IAM role attached to EC2 instance | Attach `role-signing-server` instance profile (Section 1.4) |
-| `Failed to fetch secret ... AccessDeniedException` | IAM role lacks `secretsmanager:GetSecretValue` | Check role policy has the Secrets Manager statement |
-| `KMS AccessDeniedException` | Role not in CMK key policy | Update KMS key policy to include role ARN (Section 1.2) |
-| `/health` returns `503` | Key not loaded into keyring | Check `journalctl -u signing-server` for import error |
-| `gpg --import failed` | Secret content is not a PGP private key | Verify with: `aws secretsmanager get-secret-value --secret-id signing/gpg/therock-release --query SecretString --output text \| head -1` |
-| `Address already in use` | Port 443 already bound | `sudo lsof -i :443` to find the process |
-| `Connection refused` from build runner | Wrong IP or SG blocking | Confirm `sg-signing-server` allows TCP 443 from build runner SG |
-| `Invalid key_id format` | key_id contains disallowed characters | key_id must match `[a-zA-Z0-9@.\-_ <>]+` |
-| `externally-managed-environment` pip error | Python 3.12+ on Debian/Ubuntu | Re-run setup-server.sh — it uses venv automatically |
-| `python3-venv` not found | Missing OS package | `sudo apt install python3.X-venv` where X matches `python3 --version` |
+| Error                                              | Cause                                          | Fix                                                                                                                                      |
+| -------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `Unable to locate credentials`                     | No IAM role attached to EC2 instance           | Attach `role-signing-server` instance profile (Section 1.4)                                                                              |
+| `Failed to fetch secret ... AccessDeniedException` | IAM role lacks `secretsmanager:GetSecretValue` | Check role policy has the Secrets Manager statement                                                                                      |
+| `KMS AccessDeniedException`                        | Role not in CMK key policy                     | Update KMS key policy to include role ARN (Section 1.2)                                                                                  |
+| `/health` returns `503`                            | Key not loaded into keyring                    | Check `journalctl -u signing-server` for import error                                                                                    |
+| `gpg --import failed`                              | Secret content is not a PGP private key        | Verify with: `aws secretsmanager get-secret-value --secret-id signing/gpg/therock-release --query SecretString --output text \| head -1` |
+| `Address already in use`                           | Port 443 already bound                         | `sudo lsof -i :443` to find the process                                                                                                  |
+| `Connection refused` from build runner             | Wrong IP or SG blocking                        | Confirm `sg-signing-server` allows TCP 443 from build runner SG                                                                          |
+| `Invalid key_id format`                            | key_id contains disallowed characters          | key_id must match `[a-zA-Z0-9@.\-_ <>]+`                                                                                                 |
+| `externally-managed-environment` pip error         | Python 3.12+ on Debian/Ubuntu                  | Re-run setup-server.sh — it uses venv automatically                                                                                      |
+| `python3-venv` not found                           | Missing OS package                             | `sudo apt install python3.X-venv` where X matches `python3 --version`                                                                    |
 
----
+______________________________________________________________________
 
 ## Section 6 — Provisioning Order Reference
 
@@ -516,14 +522,14 @@ aws ec2 terminate-instances --instance-ids <old-instance-id>
 
 Skipping or reordering any step produces a specific error:
 
-| Wrong order | Error seen |
-|-------------|-----------|
-| KMS before role | `InvalidPrincipalException` when setting key policy |
-| SM before KMS | `KMSNotFoundException` when creating secret |
-| Start server before role attached | `Unable to locate credentials` |
-| Start server before SM secret exists | `ResourceNotFoundException` fetching secret |
+| Wrong order                          | Error seen                                          |
+| ------------------------------------ | --------------------------------------------------- |
+| KMS before role                      | `InvalidPrincipalException` when setting key policy |
+| SM before KMS                        | `KMSNotFoundException` when creating secret         |
+| Start server before role attached    | `Unable to locate credentials`                      |
+| Start server before SM secret exists | `ResourceNotFoundException` fetching secret         |
 
----
+______________________________________________________________________
 
 ## Section 7 — Phase 1b: Cross-Cloud Client Access
 
@@ -606,9 +612,69 @@ Repeat for each repo/role that needs cross-cloud signing access. The default ass
    sufficient to deny it — do both for defense-in-depth and a clean audit trail)
 ```
 
-| Symptom | Likely cause |
-|---------|-------------|
-| `403` from API Gateway itself (never reaches signing server logs) | Role not on the resource policy allow-list, or missing `execute-api:Invoke` permission |
-| `403` from the signing server (`Forbidden: Unknown signing client`) | Role reached the server but has no entry in `authorization.json`'s `clients` map |
-| `401` "missing client identity" from the signing server | `TRUST_APIGW_HEADER=true` but the API Gateway integration isn't mapping `$context.identity.userArn` into `X-Signing-Client-Role` |
-| Works from AWS-hosted runners, fails from Azure-hosted ones | Check the Azure runner actually received `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN` from the OIDC exchange step before the signing step ran |
+| Symptom                                                             | Likely cause                                                                                                                                                     |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `403` from API Gateway itself (never reaches signing server logs)   | Role not on the resource policy allow-list, or missing `execute-api:Invoke` permission                                                                           |
+| `403` from the signing server (`Forbidden: Unknown signing client`) | Role reached the server but has no entry in `authorization.json`'s `clients` map                                                                                 |
+| `401` "missing client identity" from the signing server             | `TRUST_APIGW_HEADER=true` but the API Gateway integration isn't mapping `$context.identity.userArn` into `X-Signing-Client-Role`                                 |
+| Works from AWS-hosted runners, fails from Azure-hosted ones         | Check the Azure runner actually received `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN` from the OIDC exchange step before the signing step ran |
+
+______________________________________________________________________
+
+## Section 8 — Instance Replacement Procedure (Required Before Production Cutover)
+
+`signing-server-design.md` §4 states the intended model — **an instance is replaced for any code or config change, never patched in place** — but until now no concrete procedure existed for actually doing that, and §1.5's `git clone` step reads like an ongoing update mechanism if followed literally. This section is that missing procedure, and closes both gaps together.
+
+### 8.1 Why "patch in place" is rejected here specifically
+
+- The server explicitly has no SSH or SSM access except under the audited break-glass procedure (`signing-server-design.md` §4) — there is no routine, low-friction way to reach a shell on a live instance to run `git pull` anyway, by design.
+- A floating branch (including `main`) does not give a reproducible answer to "what code is actually running on this instance right now" — two instances built from the same branch name at different times can silently differ.
+- In-place mutation of a signing server has no clean rollback: if a bad config change causes signing failures, the previous known-good state has already been overwritten.
+
+### 8.2 The gap this must close before Phase 1 goes to production
+
+**Phase 1 clients call the signing server's raw private IP directly** (§3.1a, EXT-1/EXT-2 — no ALB exists until Phase 2, no DNS name is used anywhere in the current design). This means replacing the instance today would require updating every caller's configured endpoint (the `GPG_SIGNING_SERVER` value baked into CI secrets and operator tooling) at the same moment the instance changes — operationally fragile and easy to get wrong under incident pressure.
+
+**Required fix, before relying on this procedure in production:** put a stable address in front of the single Phase 1 instance so replacement never requires a caller-side config change:
+
+- Simplest: a private Route 53 record (e.g. `signing.internal.therock.aws`) pointed at the current instance's private IP, updated as part of step 4 below. Callers are configured with the DNS name, never a raw IP.
+- Alternative: reuse the same Elastic Network Interface (ENI) across replacements — detach it from the old instance, attach to the new one — so the private IP itself never changes. Works for Phase 1's single-instance model; stop using this once Phase 2's ALB makes it moot.
+
+Either is a small, one-time addition. Do not skip this — without it, this replacement procedure just relocates the "update every client" problem instead of solving it.
+
+### 8.3 Procedure
+
+```
+1. Launch a new EC2 instance
+   Same AMI base, same role-signing-server instance profile, same
+   Security Group, same subnet as the instance being replaced
+
+2. Bootstrap it (§1.5) pinned to the new release's tag/commit SHA
+   sudo git clone https://github.com/ROCm/TheRock.git /opt/therock-signing
+   cd /opt/therock-signing && sudo git checkout <new-tag-or-sha>
+   sudo bash build_tools/packaging/linux/signing_infrastructure/tools/setup-server.sh \
+     --secret signing/gpg/therock-release --region $AWS_REGION
+   sudo systemctl start signing-server
+
+3. Verify before cutover
+   curl -k https://<new-instance-private-ip>/health
+   Expect: {"status": "ok"} — confirms keyring loaded, service healthy,
+   BEFORE any caller traffic is pointed at it
+
+4. Cut over
+   Update the Route 53 record (or re-attach the shared ENI) to point at
+   the new instance. Nothing on the caller side changes.
+
+5. Confirm traffic is flowing to the new instance
+   Check the new instance's audit log / CloudWatch for incoming SIGNED
+   entries; check the old instance has stopped receiving new requests
+
+6. Terminate the old instance
+   Only after step 5 confirms the new instance is serving successfully.
+   Keep it stopped-but-not-terminated for a short window if you want a
+   fast manual rollback option instead of terminating immediately.
+```
+
+### 8.4 Rollback
+
+If step 3 or step 5 fails: do not cut over. Terminate the failed new instance, fix the issue, and retry from step 1. If a problem is only discovered *after* cutover (step 4): repeat this procedure targeting the previous known-good tag/commit — this is why pinning to a specific tag/SHA (not a branch) at every step matters; it's what makes "go back to the last thing that worked" an unambiguous action rather than a guess.

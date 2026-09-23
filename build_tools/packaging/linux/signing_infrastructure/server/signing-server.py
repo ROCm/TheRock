@@ -41,7 +41,7 @@ _keyring_ready = False
 def get_signing_semaphore():
     global _signing_semaphore
     if _signing_semaphore is None:
-        max_threads = int(os.environ.get('MAX_THREADS', '10'))
+        max_threads = int(os.environ.get("MAX_THREADS", "10"))
         _signing_semaphore = threading.Semaphore(max_threads)
     return _signing_semaphore
 
@@ -50,7 +50,10 @@ def get_signing_semaphore():
 # Secrets Manager key loading (Phase 1)
 # ---------------------------------------------------------------------------
 
-def load_keys_from_secrets_manager(secret_names, keyring_dir, region=None, gpg_binary='gpg'):
+
+def load_keys_from_secrets_manager(
+    secret_names, keyring_dir, region=None, gpg_binary="gpg"
+):
     """
     Fetch GPG private keys from AWS Secrets Manager and import into keyring_dir.
 
@@ -73,54 +76,64 @@ def load_keys_from_secrets_manager(secret_names, keyring_dir, region=None, gpg_b
     try:
         import boto3
     except ImportError:
-        print("ERROR: boto3 is required for --secrets-manager-secret. "
-              "Install with: pip install boto3", file=sys.stderr)
+        print(
+            "ERROR: boto3 is required for --secrets-manager-secret. "
+            "Install with: pip install boto3",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     kwargs = {}
     if region:
-        kwargs['region_name'] = region
-    client = boto3.client('secretsmanager', **kwargs)
+        kwargs["region_name"] = region
+    client = boto3.client("secretsmanager", **kwargs)
 
     imported = 0
     env = os.environ.copy()
-    env['GNUPGHOME'] = keyring_dir
+    env["GNUPGHOME"] = keyring_dir
 
     for secret_name in secret_names:
         print(f"Fetching GPG key from Secrets Manager: {secret_name}")
         try:
             response = client.get_secret_value(SecretId=secret_name)
         except Exception as e:
-            print(f"ERROR: Failed to fetch secret '{secret_name}': {e}", file=sys.stderr)
+            print(
+                f"ERROR: Failed to fetch secret '{secret_name}': {e}", file=sys.stderr
+            )
             sys.exit(1)
 
         # SecretString contains the PEM-armored private key
-        key_material = response.get('SecretString', '')
+        key_material = response.get("SecretString", "")
         if not key_material:
             print(f"ERROR: Secret '{secret_name}' is empty or binary", file=sys.stderr)
             sys.exit(1)
 
-        if '-----BEGIN PGP PRIVATE KEY BLOCK-----' not in key_material:
-            print(f"ERROR: Secret '{secret_name}' does not look like a GPG private key "
-                  f"(missing PGP header). Check the secret was stored correctly.",
-                  file=sys.stderr)
+        if "-----BEGIN PGP PRIVATE KEY BLOCK-----" not in key_material:
+            print(
+                f"ERROR: Secret '{secret_name}' does not look like a GPG private key "
+                f"(missing PGP header). Check the secret was stored correctly.",
+                file=sys.stderr,
+            )
             sys.exit(1)
 
         # Pipe key directly into gpg --import — never write to disk
         result = run(
-            [gpg_binary, '--batch', '--import'],
-            input=key_material.encode('utf-8'),
+            [gpg_binary, "--batch", "--import"],
+            input=key_material.encode("utf-8"),
             stdout=PIPE,
             stderr=PIPE,
-            env=env
+            env=env,
         )
 
         # Clear key material from memory
         key_material = None
 
         if result.returncode != 0:
-            err = result.stderr.decode('utf-8', errors='ignore')
-            print(f"ERROR: gpg --import failed for '{secret_name}': {err}", file=sys.stderr)
+            err = result.stderr.decode("utf-8", errors="ignore")
+            print(
+                f"ERROR: gpg --import failed for '{secret_name}': {err}",
+                file=sys.stderr,
+            )
             sys.exit(1)
 
         print(f"  Imported key from '{secret_name}'")
@@ -129,7 +142,7 @@ def load_keys_from_secrets_manager(secret_names, keyring_dir, region=None, gpg_b
     return imported
 
 
-def verify_keyring(keyring_dir, gpg_binary='gpg'):
+def verify_keyring(keyring_dir, gpg_binary="gpg"):
     """
     Confirm at least one secret key is present in the keyring.
 
@@ -137,16 +150,16 @@ def verify_keyring(keyring_dir, gpg_binary='gpg'):
         True if at least one key found, False otherwise
     """
     env = os.environ.copy()
-    env['GNUPGHOME'] = keyring_dir
+    env["GNUPGHOME"] = keyring_dir
 
     result = run(
-        [gpg_binary, '--list-secret-keys', '--keyid-format', 'LONG'],
+        [gpg_binary, "--list-secret-keys", "--keyid-format", "LONG"],
         stdout=PIPE,
         stderr=PIPE,
-        env=env
+        env=env,
     )
-    output = result.stdout.decode('utf-8', errors='ignore')
-    count = output.count('sec ')
+    output = result.stdout.decode("utf-8", errors="ignore")
+    count = output.count("sec ")
     print(f"Keyring verified: {count} secret key(s) available")
     return count > 0
 
@@ -157,13 +170,20 @@ def verify_keyring(keyring_dir, gpg_binary='gpg'):
 
 try:
     from auth import (
-        validate_jwt_token, validate_github_oidc_token,
+        validate_jwt_token,
+        validate_github_oidc_token,
         validate_app_token,
-        load_secrets, load_authorization_config, load_tokens_config,
-        authorize_request, authorize_oidc_request, authorize_client_role_request,
-        check_rate_limit, audit_log,
-        OIDC_AVAILABLE
+        load_secrets,
+        load_authorization_config,
+        load_tokens_config,
+        authorize_request,
+        authorize_oidc_request,
+        authorize_client_role_request,
+        check_rate_limit,
+        audit_log,
+        OIDC_AVAILABLE,
     )
+
     AUTH_AVAILABLE = True
 except ImportError:
     AUTH_AVAILABLE = False
@@ -173,6 +193,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # HTTP server
 # ---------------------------------------------------------------------------
+
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     allow_reuse_address = True
@@ -189,29 +210,29 @@ class SigningHandler(BaseHTTPRequestHandler):
 
     @property
     def GPG_BINARY(self):
-        return os.environ.get('GPG_BINARY', 'gpg')
+        return os.environ.get("GPG_BINARY", "gpg")
 
     @property
     def GPG_HOME(self):
-        return os.environ.get('GNUPGHOME', '')
+        return os.environ.get("GNUPGHOME", "")
 
     @property
     def SIGNING_TIMEOUT(self):
-        return int(os.environ.get('GPG_TIMEOUT', '30'))
+        return int(os.environ.get("GPG_TIMEOUT", "30"))
 
     @property
     def MAX_REQUEST_SIZE(self):
         # 512 KB default: RPM headers are 50-100 KB; metadata files < 10 KB.
         # POST /sign-rpm (Phase 2) overrides this per-request for full RPMs.
-        return int(os.environ.get('MAX_REQUEST_SIZE', '524288'))
+        return int(os.environ.get("MAX_REQUEST_SIZE", "524288"))
 
     @property
     def READ_TIMEOUT(self):
-        return int(os.environ.get('READ_TIMEOUT', '10'))
+        return int(os.environ.get("READ_TIMEOUT", "10"))
 
     @property
     def AUTH_ENABLED(self):
-        return os.environ.get('AUTH_ENABLED', 'false').lower() == 'true'
+        return os.environ.get("AUTH_ENABLED", "false").lower() == "true"
 
     # Phase 1b: cross-cloud build runners, authenticated by API Gateway via
     # SigV4 before the request ever reaches this server. Defaults OFF so a
@@ -220,27 +241,27 @@ class SigningHandler(BaseHTTPRequestHandler):
     # network-reachable exclusively through the API Gateway's VPC Link (i.e.
     # the Security Group only admits that VPC Link's traffic) — otherwise a
     # caller with any other network path in could forge this header.
-    SIGNING_CLIENT_HEADER = 'X-Signing-Client-Role'
+    SIGNING_CLIENT_HEADER = "X-Signing-Client-Role"
 
     @property
     def TRUST_APIGW_HEADER(self):
-        return os.environ.get('TRUST_APIGW_HEADER', 'false').lower() == 'true'
+        return os.environ.get("TRUST_APIGW_HEADER", "false").lower() == "true"
 
     @property
     def SECRETS_FILE(self):
-        return os.environ.get('SECRETS_FILE', '')
+        return os.environ.get("SECRETS_FILE", "")
 
     @property
     def AUTHZ_CONFIG_FILE(self):
-        return os.environ.get('AUTHZ_CONFIG_FILE', '')
+        return os.environ.get("AUTHZ_CONFIG_FILE", "")
 
     @property
     def TOKENS_FILE(self):
-        return os.environ.get('TOKENS_FILE', '')
+        return os.environ.get("TOKENS_FILE", "")
 
     @property
     def AUDIT_LOG_FILE(self):
-        return os.environ.get('AUDIT_LOG_FILE', '')
+        return os.environ.get("AUDIT_LOG_FILE", "")
 
     # ------------------------------------------------------------------
     # Tier + artifact resolution (simplified API)
@@ -261,8 +282,8 @@ class SigningHandler(BaseHTTPRequestHandler):
             (key_id, digest_algo, armor, clearsign, error_msg)
             error_msg is None on success, a string on failure.
         """
-        tier     = request.get('tier', '')
-        artifact = request.get('artifact', '')
+        tier = request.get("tier", "")
+        artifact = request.get("artifact", "")
 
         if tier or artifact:
             # Simplified API path — both tier and artifact must be present
@@ -274,36 +295,47 @@ class SigningHandler(BaseHTTPRequestHandler):
             # Load config (cached)
             if self._authz_cache is None:
                 self.__class__._authz_cache = load_authorization_config(
-                    self.AUTHZ_CONFIG_FILE)
+                    self.AUTHZ_CONFIG_FILE
+                )
 
-            aliases  = self._authz_cache.get('key_aliases', {})
-            profiles = self._authz_cache.get('artifact_profiles', {})
+            aliases = self._authz_cache.get("key_aliases", {})
+            profiles = self._authz_cache.get("artifact_profiles", {})
 
             key_id = aliases.get(tier)
             if not key_id:
-                known = ', '.join(sorted(aliases.keys())) or 'none configured'
-                return None, None, None, None, \
-                    f"Unknown tier '{tier}'. Known tiers: {known}"
+                known = ", ".join(sorted(aliases.keys())) or "none configured"
+                return (
+                    None,
+                    None,
+                    None,
+                    None,
+                    f"Unknown tier '{tier}'. Known tiers: {known}",
+                )
 
             profile = profiles.get(artifact)
             if not profile:
-                known = ', '.join(sorted(profiles.keys())) or 'none configured'
-                return None, None, None, None, \
-                    f"Unknown artifact '{artifact}'. Known artifacts: {known}"
+                known = ", ".join(sorted(profiles.keys())) or "none configured"
+                return (
+                    None,
+                    None,
+                    None,
+                    None,
+                    f"Unknown artifact '{artifact}'. Known artifacts: {known}",
+                )
 
             return (
                 key_id,
-                profile.get('digest_algo', 'SHA256').upper(),
-                profile.get('armor', False),
-                profile.get('clearsign', False),
-                None
+                profile.get("digest_algo", "SHA256").upper(),
+                profile.get("armor", False),
+                profile.get("clearsign", False),
+                None,
             )
 
         # Legacy API path — use explicit fields
-        key_id      = request.get('key_id', '')
-        digest_algo = request.get('digest_algo', 'SHA256').upper()
-        armor       = request.get('armor', False)
-        clearsign   = request.get('clearsign', False)
+        key_id = request.get("key_id", "")
+        digest_algo = request.get("digest_algo", "SHA256").upper()
+        armor = request.get("armor", False)
+        clearsign = request.get("clearsign", False)
         return key_id, digest_algo, armor, clearsign, None
 
     # ------------------------------------------------------------------
@@ -311,45 +343,53 @@ class SigningHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
 
     def do_GET(self):
-        if self.path != '/health':
-            self.send_error(404, 'Not Found')
+        if self.path != "/health":
+            self.send_error(404, "Not Found")
             return
 
         if _keyring_ready:
-            self.send_json_response(200, {'status': 'ok'})
+            self.send_json_response(200, {"status": "ok"})
         else:
-            self.send_json_response(503, {'status': 'unavailable',
-                                          'reason': 'keyring not loaded'})
+            self.send_json_response(
+                503, {"status": "unavailable", "reason": "keyring not loaded"}
+            )
 
     # ------------------------------------------------------------------
     # POST /sign and POST /quit
     # ------------------------------------------------------------------
 
     def do_POST(self):
-        if self.path == '/quit':
-            self.send_json_response(200, {'message': 'Server shutting down'})
+        if self.path == "/quit":
+            self.send_json_response(200, {"message": "Server shutting down"})
             self.log_message("Shutdown requested via /quit endpoint")
+
             def shutdown():
                 time.sleep(0.5)
                 self.server.shutdown()
+
             threading.Thread(target=shutdown).start()
             return
 
-        if self.path != '/sign':
-            self.send_error(404, 'Not Found')
+        if self.path != "/sign":
+            self.send_error(404, "Not Found")
             return
 
         request_start = time.time()
 
         try:
             # --- Read and size-check request body ---
-            content_length = int(self.headers.get('Content-Length', 0))
+            content_length = int(self.headers.get("Content-Length", 0))
             if content_length > self.MAX_REQUEST_SIZE:
-                self.log_message("Request rejected: %d bytes exceeds %d byte limit",
-                                 content_length, self.MAX_REQUEST_SIZE)
-                self.send_json_error(413,
+                self.log_message(
+                    "Request rejected: %d bytes exceeds %d byte limit",
+                    content_length,
+                    self.MAX_REQUEST_SIZE,
+                )
+                self.send_json_error(
+                    413,
                     f"Request too large: {content_length} bytes "
-                    f"(max {self.MAX_REQUEST_SIZE} bytes)")
+                    f"(max {self.MAX_REQUEST_SIZE} bytes)",
+                )
                 return
 
             original_timeout = self.connection.gettimeout()
@@ -364,70 +404,93 @@ class SigningHandler(BaseHTTPRequestHandler):
                 if original_timeout is not None:
                     self.connection.settimeout(original_timeout)
 
-            request = json.loads(body.decode('utf-8'))
+            request = json.loads(body.decode("utf-8"))
 
             # --- Authentication (Phase 1: disabled; Phase 2: token/JWT/OIDC) ---
             payload = None
-            auth_type = 'none'
+            auth_type = "none"
             client_id = self.client_address[0]  # source IP as default identifier
 
             if self.AUTH_ENABLED:
                 if not AUTH_AVAILABLE:
-                    self.send_json_error(500,
-                        "Authentication enabled but auth module not available")
+                    self.send_json_error(
+                        500, "Authentication enabled but auth module not available"
+                    )
                     return
                 payload, auth_type = self.authenticate_request()
                 if payload is None:
                     self.send_json_error(401, "Unauthorized: Invalid or missing token")
-                    audit_log('AUTH_FAILED', client_id, 'none', '', '',
-                              self.client_address[0], False,
-                              self.AUDIT_LOG_FILE, None, 'none',
-                              int((time.time() - request_start) * 1000))
+                    audit_log(
+                        "AUTH_FAILED",
+                        client_id,
+                        "none",
+                        "",
+                        "",
+                        self.client_address[0],
+                        False,
+                        self.AUDIT_LOG_FILE,
+                        None,
+                        "none",
+                        int((time.time() - request_start) * 1000),
+                    )
                     return
                 # Use token-based client_id if available
-                if auth_type in ('jwt', 'token'):
-                    client_id = payload.get('client_id', client_id)
-                elif auth_type == 'oidc':
+                if auth_type in ("jwt", "token"):
+                    client_id = payload.get("client_id", client_id)
+                elif auth_type == "oidc":
                     client_id = f"oidc:{payload.get('repository', 'unknown')}"
 
             elif self.TRUST_APIGW_HEADER:
                 if not AUTH_AVAILABLE:
-                    self.send_json_error(500,
-                        "Client-role auth enabled but auth module not available")
+                    self.send_json_error(
+                        500, "Client-role auth enabled but auth module not available"
+                    )
                     return
-                client_role_header = self.headers.get(self.SIGNING_CLIENT_HEADER, '')
+                client_role_header = self.headers.get(self.SIGNING_CLIENT_HEADER, "")
                 if not client_role_header:
                     self.send_json_error(401, "Unauthorized: missing client identity")
-                    audit_log('AUTH_FAILED', client_id, 'none', '', '',
-                              self.client_address[0], False,
-                              self.AUDIT_LOG_FILE, None, 'client_role',
-                              int((time.time() - request_start) * 1000))
+                    audit_log(
+                        "AUTH_FAILED",
+                        client_id,
+                        "none",
+                        "",
+                        "",
+                        self.client_address[0],
+                        False,
+                        self.AUDIT_LOG_FILE,
+                        None,
+                        "client_role",
+                        int((time.time() - request_start) * 1000),
+                    )
                     return
-                payload = {'role_identity': client_role_header}
-                auth_type = 'client_role'
+                payload = {"role_identity": client_role_header}
+                auth_type = "client_role"
                 client_id = f"client:{client_role_header}"
 
             # --- Validate request fields ---
-            data_b64 = request.get('data')
+            data_b64 = request.get("data")
             if not data_b64:
                 self.send_json_error(400, "Missing 'data' field")
                 return
 
             # Resolve tier+artifact (simplified API) or fall back to explicit fields
-            key_id, digest_algo, armor, clearsign, err = \
-                self.resolve_signing_params(request)
+            key_id, digest_algo, armor, clearsign, err = self.resolve_signing_params(
+                request
+            )
             if err:
                 self.send_json_error(400, err)
                 return
 
             if not key_id:
-                self.send_json_error(400,
-                    "Specify either 'tier'+'artifact' or 'key_id'")
+                self.send_json_error(
+                    400, "Specify either 'tier'+'artifact' or 'key_id'"
+                )
                 return
 
             if not self.validate_key_id(key_id):
-                self.send_json_error(400,
-                    "Invalid key_id format: must be alphanumeric, @, ., -, or _")
+                self.send_json_error(
+                    400, "Invalid key_id format: must be alphanumeric, @, ., -, or _"
+                )
                 return
 
             try:
@@ -440,81 +503,131 @@ class SigningHandler(BaseHTTPRequestHandler):
                 self.send_json_error(400, "Data cannot be empty")
                 return
 
-            self.log_message("Signing request: key=%s, algo=%s, armor=%s, "
-                             "clearsign=%s, data_len=%d, client=%s",
-                             key_id, digest_algo, armor, clearsign,
-                             len(data), client_id)
+            self.log_message(
+                "Signing request: key=%s, algo=%s, armor=%s, "
+                "clearsign=%s, data_len=%d, client=%s",
+                key_id,
+                digest_algo,
+                armor,
+                clearsign,
+                len(data),
+                client_id,
+            )
 
             # --- Authorization (Phase 1: only key_id in-keyring check) ---
             if (self.AUTH_ENABLED or self.TRUST_APIGW_HEADER) and payload:
                 if self._authz_cache is None:
                     self.__class__._authz_cache = load_authorization_config(
-                        self.AUTHZ_CONFIG_FILE)
+                        self.AUTHZ_CONFIG_FILE
+                    )
 
-                if auth_type == 'oidc':
+                if auth_type == "oidc":
                     role, authorized, reason = authorize_oidc_request(
-                        payload, key_id, digest_algo, self._authz_cache)
+                        payload, key_id, digest_algo, self._authz_cache
+                    )
                     if not authorized:
                         self.log_message("Authorization denied: %s", reason)
                         self.send_json_error(403, f"Forbidden: {reason}")
-                        audit_log('DENIED', client_id, role or 'unknown',
-                                  key_id, digest_algo,
-                                  self.client_address[0], False,
-                                  self.AUDIT_LOG_FILE,
-                                  self._oidc_context(payload), auth_type,
-                                  int((time.time() - request_start) * 1000))
+                        audit_log(
+                            "DENIED",
+                            client_id,
+                            role or "unknown",
+                            key_id,
+                            digest_algo,
+                            self.client_address[0],
+                            False,
+                            self.AUDIT_LOG_FILE,
+                            self._oidc_context(payload),
+                            auth_type,
+                            int((time.time() - request_start) * 1000),
+                        )
                         return
-                elif auth_type in ('jwt', 'token'):
-                    role = payload.get('role', '')
+                elif auth_type in ("jwt", "token"):
+                    role = payload.get("role", "")
                     authorized, reason = authorize_request(
-                        role, key_id, digest_algo, self._authz_cache)
+                        role, key_id, digest_algo, self._authz_cache
+                    )
                     if not authorized:
                         self.log_message("Authorization denied: %s", reason)
                         self.send_json_error(403, f"Forbidden: {reason}")
-                        audit_log('DENIED', client_id, role, key_id,
-                                  digest_algo, self.client_address[0], False,
-                                  self.AUDIT_LOG_FILE, None, auth_type,
-                                  int((time.time() - request_start) * 1000))
+                        audit_log(
+                            "DENIED",
+                            client_id,
+                            role,
+                            key_id,
+                            digest_algo,
+                            self.client_address[0],
+                            False,
+                            self.AUDIT_LOG_FILE,
+                            None,
+                            auth_type,
+                            int((time.time() - request_start) * 1000),
+                        )
                         return
-                elif auth_type == 'client_role':
+                elif auth_type == "client_role":
                     role, authorized, reason = authorize_client_role_request(
-                        payload['role_identity'], key_id, digest_algo,
-                        self._authz_cache)
+                        payload["role_identity"], key_id, digest_algo, self._authz_cache
+                    )
                     if not authorized:
                         self.log_message("Authorization denied: %s", reason)
                         self.send_json_error(403, f"Forbidden: {reason}")
-                        audit_log('DENIED', client_id, role or 'unknown',
-                                  key_id, digest_algo,
-                                  self.client_address[0], False,
-                                  self.AUDIT_LOG_FILE, None, auth_type,
-                                  int((time.time() - request_start) * 1000))
+                        audit_log(
+                            "DENIED",
+                            client_id,
+                            role or "unknown",
+                            key_id,
+                            digest_algo,
+                            self.client_address[0],
+                            False,
+                            self.AUDIT_LOG_FILE,
+                            None,
+                            auth_type,
+                            int((time.time() - request_start) * 1000),
+                        )
                         return
                     # Feed the resolved tier back into payload so rate
                     # limiting below keys off the actual signing role
                     # rather than defaulting to 'default'.
-                    payload['role'] = role
+                    payload["role"] = role
 
                 # Rate limit keyed by client_id (token name or source IP)
                 if self._authz_cache and not check_rate_limit(
-                        client_id, payload.get('role', 'default'),
-                        self._rate_limits, self._authz_cache):
+                    client_id,
+                    payload.get("role", "default"),
+                    self._rate_limits,
+                    self._authz_cache,
+                ):
                     self.log_message("Rate limit exceeded for client %s", client_id)
                     self.send_json_error(429, "Rate limit exceeded")
-                    audit_log('RATE_LIMITED', client_id,
-                              payload.get('role', 'unknown'),
-                              key_id, digest_algo, self.client_address[0],
-                              False, self.AUDIT_LOG_FILE, None, auth_type,
-                              int((time.time() - request_start) * 1000))
+                    audit_log(
+                        "RATE_LIMITED",
+                        client_id,
+                        payload.get("role", "unknown"),
+                        key_id,
+                        digest_algo,
+                        self.client_address[0],
+                        False,
+                        self.AUDIT_LOG_FILE,
+                        None,
+                        auth_type,
+                        int((time.time() - request_start) * 1000),
+                    )
                     return
 
             # Phase 1: source-IP rate limiting (no auth token, use IP as key)
-            if not self.AUTH_ENABLED and not self.TRUST_APIGW_HEADER \
-                    and AUTH_AVAILABLE and self.AUTHZ_CONFIG_FILE:
+            if (
+                not self.AUTH_ENABLED
+                and not self.TRUST_APIGW_HEADER
+                and AUTH_AVAILABLE
+                and self.AUTHZ_CONFIG_FILE
+            ):
                 if self._authz_cache is None:
                     self.__class__._authz_cache = load_authorization_config(
-                        self.AUTHZ_CONFIG_FILE)
-                check_rate_limit(client_id, 'default',
-                                 self._rate_limits, self._authz_cache)
+                        self.AUTHZ_CONFIG_FILE
+                    )
+                check_rate_limit(
+                    client_id, "default", self._rate_limits, self._authz_cache
+                )
 
             # --- Acquire semaphore ---
             semaphore = get_signing_semaphore()
@@ -525,8 +638,7 @@ class SigningHandler(BaseHTTPRequestHandler):
                 return
 
             try:
-                signature = self.sign_data(data, key_id, digest_algo,
-                                           armor, clearsign)
+                signature = self.sign_data(data, key_id, digest_algo, armor, clearsign)
             finally:
                 semaphore.release()
 
@@ -537,19 +649,26 @@ class SigningHandler(BaseHTTPRequestHandler):
             latency_ms = int((time.time() - request_start) * 1000)
 
             response = {
-                'signature': b64encode(signature).decode('ascii'),
-                'key_id': key_id,
-                'digest_algo': digest_algo
+                "signature": b64encode(signature).decode("ascii"),
+                "key_id": key_id,
+                "digest_algo": digest_algo,
             }
             self.send_json_response(200, response)
             self.log_message("Signing successful (%dms)", latency_ms)
 
-            audit_log('SIGNED', client_id,
-                      payload.get('role', 'none') if payload else 'none',
-                      key_id, digest_algo, self.client_address[0], True,
-                      self.AUDIT_LOG_FILE,
-                      self._oidc_context(payload) if auth_type == 'oidc' else None,
-                      auth_type, latency_ms)
+            audit_log(
+                "SIGNED",
+                client_id,
+                payload.get("role", "none") if payload else "none",
+                key_id,
+                digest_algo,
+                self.client_address[0],
+                True,
+                self.AUDIT_LOG_FILE,
+                self._oidc_context(payload) if auth_type == "oidc" else None,
+                auth_type,
+                latency_ms,
+            )
 
         except json.JSONDecodeError as e:
             self.send_json_error(400, f"Invalid JSON: {str(e)}")
@@ -579,8 +698,8 @@ class SigningHandler(BaseHTTPRequestHandler):
         if not self.AUTH_ENABLED or not AUTH_AVAILABLE:
             return None, None
 
-        auth_header = self.headers.get('Authorization', '')
-        if not auth_header.startswith('Bearer '):
+        auth_header = self.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
             return None, None
 
         token = auth_header[7:]
@@ -591,19 +710,23 @@ class SigningHandler(BaseHTTPRequestHandler):
                 self.__class__._tokens_cache = load_tokens_config(self.TOKENS_FILE)
             token_payload = validate_app_token(token, self._tokens_cache)
             if token_payload:
-                self.log_message("App token validated for client: %s",
-                                 token_payload.get('client_id', 'unknown'))
-                return token_payload, 'token'
+                self.log_message(
+                    "App token validated for client: %s",
+                    token_payload.get("client_id", "unknown"),
+                )
+                return token_payload, "token"
 
         # 2. GitHub OIDC token
         if OIDC_AVAILABLE:
-            oidc_audience = os.environ.get('OIDC_AUDIENCE', 'amd-signing-service')
+            oidc_audience = os.environ.get("OIDC_AUDIENCE", "amd-signing-service")
             oidc_payload = validate_github_oidc_token(token, oidc_audience)
             if oidc_payload:
-                self.log_message("OIDC token validated for repo: %s, ref: %s",
-                                 oidc_payload.get('repository', 'unknown'),
-                                 oidc_payload.get('ref', 'unknown'))
-                return oidc_payload, 'oidc'
+                self.log_message(
+                    "OIDC token validated for repo: %s, ref: %s",
+                    oidc_payload.get("repository", "unknown"),
+                    oidc_payload.get("ref", "unknown"),
+                )
+                return oidc_payload, "oidc"
 
         # 3. JWT HMAC-SHA256 token (fallback)
         if self.SECRETS_FILE:
@@ -611,10 +734,12 @@ class SigningHandler(BaseHTTPRequestHandler):
                 self.__class__._secrets_cache = load_secrets(self.SECRETS_FILE)
             jwt_payload = validate_jwt_token(token, self._secrets_cache)
             if jwt_payload:
-                self.log_message("JWT token validated for client: %s, role: %s",
-                                 jwt_payload.get('client_id', 'unknown'),
-                                 jwt_payload.get('role', 'unknown'))
-                return jwt_payload, 'jwt'
+                self.log_message(
+                    "JWT token validated for client: %s, role: %s",
+                    jwt_payload.get("client_id", "unknown"),
+                    jwt_payload.get("role", "unknown"),
+                )
+                return jwt_payload, "jwt"
 
         return None, None
 
@@ -630,45 +755,42 @@ class SigningHandler(BaseHTTPRequestHandler):
           --detach-sign  (default) — binary or ASCII-armored detached signature
           --clearsign    — data + signature in one block (required for InRelease)
         """
-        with tempfile.NamedTemporaryFile(mode='wb', delete=False,
-                                         suffix='.dat') as f:
+        with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".dat") as f:
             data_file = f.name
             f.write(data)
 
         try:
             cmd = [
                 self.GPG_BINARY,
-                '--batch',
-                '--no-tty',
-                '--digest-algo', digest_algo,
-                '--local-user', key_id,
+                "--batch",
+                "--no-tty",
+                "--digest-algo",
+                digest_algo,
+                "--local-user",
+                key_id,
             ]
 
             env = None
             if self.GPG_HOME:
                 env = os.environ.copy()
-                env['GNUPGHOME'] = self.GPG_HOME
+                env["GNUPGHOME"] = self.GPG_HOME
 
             if clearsign:
                 # Clearsigned output — data + signature combined
                 # Always ASCII armored by nature; --armor flag is ignored
-                cmd.extend(['--clearsign', '--output', '-', data_file])
+                cmd.extend(["--clearsign", "--output", "-", data_file])
             else:
                 # Detached signature
                 if armor:
-                    cmd.append('--armor')
-                cmd.extend(['--detach-sign', '--output', '-', data_file])
+                    cmd.append("--armor")
+                cmd.extend(["--detach-sign", "--output", "-", data_file])
 
             result = run(
-                cmd,
-                stdout=PIPE,
-                stderr=PIPE,
-                timeout=self.SIGNING_TIMEOUT,
-                env=env
+                cmd, stdout=PIPE, stderr=PIPE, timeout=self.SIGNING_TIMEOUT, env=env
             )
 
             if result.returncode != 0:
-                err = result.stderr.decode('utf-8', errors='ignore')
+                err = result.stderr.decode("utf-8", errors="ignore")
                 self.log_message("GPG error (exit %d): %s", result.returncode, err)
                 return None
 
@@ -682,8 +804,9 @@ class SigningHandler(BaseHTTPRequestHandler):
             self.log_message("GPG binary not found: %s", self.GPG_BINARY)
             return None
         except TimeoutExpired:
-            self.log_message("GPG signing timeout after %d seconds",
-                             self.SIGNING_TIMEOUT)
+            self.log_message(
+                "GPG signing timeout after %d seconds", self.SIGNING_TIMEOUT
+            )
             return None
         except Exception as e:
             self.log_message("Signing error: %s", str(e))
@@ -700,11 +823,12 @@ class SigningHandler(BaseHTTPRequestHandler):
 
     def validate_key_id(self, key_id):
         import re
+
         if not key_id or len(key_id) > 256:
             return False
-        if not re.match(r'^[a-zA-Z0-9@.\-_ <>]+$', key_id):
+        if not re.match(r"^[a-zA-Z0-9@.\-_ <>]+$", key_id):
             return False
-        if '..' in key_id or '/' in key_id or '\\' in key_id:
+        if ".." in key_id or "/" in key_id or "\\" in key_id:
             return False
         return True
 
@@ -712,26 +836,26 @@ class SigningHandler(BaseHTTPRequestHandler):
         if not payload:
             return None
         return {
-            'repository': payload.get('repository'),
-            'ref':        payload.get('ref'),
-            'workflow':   payload.get('workflow'),
-            'actor':      payload.get('actor'),
-            'run_id':     payload.get('run_id'),
-            'run_number': payload.get('run_number'),
-            'event_name': payload.get('event_name'),
-            'job_workflow_ref': payload.get('job_workflow_ref'),
+            "repository": payload.get("repository"),
+            "ref": payload.get("ref"),
+            "workflow": payload.get("workflow"),
+            "actor": payload.get("actor"),
+            "run_id": payload.get("run_id"),
+            "run_number": payload.get("run_number"),
+            "event_name": payload.get("event_name"),
+            "job_workflow_ref": payload.get("job_workflow_ref"),
         }
 
     def send_json_response(self, code, data):
-        response = json.dumps(data).encode('utf-8')
+        response = json.dumps(data).encode("utf-8")
         self.send_response(code)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', str(len(response)))
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(response)))
         self.end_headers()
         self.wfile.write(response)
 
     def send_json_error(self, code, message):
-        self.send_json_response(code, {'error': message})
+        self.send_json_response(code, {"error": message})
 
     def log_message(self, format, *args):
         timestamp = self.log_date_time_string()
@@ -742,56 +866,89 @@ class SigningHandler(BaseHTTPRequestHandler):
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='GPG signing server for RPM/DEB package signing')
-    parser.add_argument('--port', type=int, default=8080)
-    parser.add_argument('--host', default='localhost')
-    parser.add_argument('--gpg', default='gpg')
-    parser.add_argument('--keyring', default='',
-        help='Path to GPG keyring directory (GNUPGHOME). '
-             'Must exist before starting if not using --secrets-manager-secret.')
-    parser.add_argument('--max-request-size', type=int, default=524288,
-        help='Maximum request body size in bytes (default: 524288 = 512 KB). '
-             'RPM headers are typically 50-100 KB.')
-    parser.add_argument('--read-timeout', type=int, default=10)
-    parser.add_argument('--max-threads', type=int, default=10)
+        description="GPG signing server for RPM/DEB package signing"
+    )
+    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--host", default="localhost")
+    parser.add_argument("--gpg", default="gpg")
+    parser.add_argument(
+        "--keyring",
+        default="",
+        help="Path to GPG keyring directory (GNUPGHOME). "
+        "Must exist before starting if not using --secrets-manager-secret.",
+    )
+    parser.add_argument(
+        "--max-request-size",
+        type=int,
+        default=524288,
+        help="Maximum request body size in bytes (default: 524288 = 512 KB). "
+        "RPM headers are typically 50-100 KB.",
+    )
+    parser.add_argument("--read-timeout", type=int, default=10)
+    parser.add_argument("--max-threads", type=int, default=10)
 
     # Phase 1: Secrets Manager key loading
-    parser.add_argument('--secrets-manager-secret', action='append',
-        dest='sm_secrets', metavar='SECRET_NAME', default=[],
-        help='Secrets Manager secret name containing a GPG private key. '
-             'Repeatable for multiple keys. Fetched at startup into --keyring.')
-    parser.add_argument('--region', default='',
-        help='AWS region for Secrets Manager (optional)')
+    parser.add_argument(
+        "--secrets-manager-secret",
+        action="append",
+        dest="sm_secrets",
+        metavar="SECRET_NAME",
+        default=[],
+        help="Secrets Manager secret name containing a GPG private key. "
+        "Repeatable for multiple keys. Fetched at startup into --keyring.",
+    )
+    parser.add_argument(
+        "--region", default="", help="AWS region for Secrets Manager (optional)"
+    )
 
     # Phase 2: Authentication
-    parser.add_argument('--enable-auth', action='store_true',
-        help='Enable application-layer token authentication (Phase 2)')
-    parser.add_argument('--tokens-file', default='',
-        help='Path to tokens.json with pre-shared tokens (Phase 2)')
-    parser.add_argument('--secrets-file', default='',
-        help='Path to secrets.json with JWT shared secrets (Phase 2 fallback)')
-    parser.add_argument('--authz-config', default='',
-        help='Path to authorization.json with role/key mappings')
-    parser.add_argument('--audit-log', default='',
-        help='Path to audit log file (optional; always logs to stdout)')
+    parser.add_argument(
+        "--enable-auth",
+        action="store_true",
+        help="Enable application-layer token authentication (Phase 2)",
+    )
+    parser.add_argument(
+        "--tokens-file",
+        default="",
+        help="Path to tokens.json with pre-shared tokens (Phase 2)",
+    )
+    parser.add_argument(
+        "--secrets-file",
+        default="",
+        help="Path to secrets.json with JWT shared secrets (Phase 2 fallback)",
+    )
+    parser.add_argument(
+        "--authz-config",
+        default="",
+        help="Path to authorization.json with role/key mappings",
+    )
+    parser.add_argument(
+        "--audit-log",
+        default="",
+        help="Path to audit log file (optional; always logs to stdout)",
+    )
 
     # Phase 1b: Cross-cloud client access (API Gateway + SigV4)
-    parser.add_argument('--trust-apigw-header', action='store_true',
+    parser.add_argument(
+        "--trust-apigw-header",
+        action="store_true",
         help="Trust the X-Signing-Client-Role header for caller identity "
-             "(Phase 1b). Only enable this if the server is reachable "
-             "exclusively through the API Gateway VPC Link — never on a "
-             "server also reachable directly, where a caller could forge "
-             "this header themselves. Requires --authz-config with a "
-             "'clients' map.")
+        "(Phase 1b). Only enable this if the server is reachable "
+        "exclusively through the API Gateway VPC Link — never on a "
+        "server also reachable directly, where a caller could forge "
+        "this header themselves. Requires --authz-config with a "
+        "'clients' map.",
+    )
 
     # TLS
-    parser.add_argument('--enable-tls', action='store_true')
-    parser.add_argument('--cert-file', default='')
-    parser.add_argument('--key-file', default='')
+    parser.add_argument("--enable-tls", action="store_true")
+    parser.add_argument("--cert-file", default="")
+    parser.add_argument("--key-file", default="")
 
     args = parser.parse_args()
 
@@ -800,10 +957,12 @@ def main():
         if not os.path.isdir(args.keyring):
             print(f"Error: Keyring directory does not exist: {args.keyring}")
             sys.exit(1)
-        os.environ['GNUPGHOME'] = os.path.abspath(args.keyring)
+        os.environ["GNUPGHOME"] = os.path.abspath(args.keyring)
     elif args.sm_secrets:
-        print("Error: --secrets-manager-secret requires --keyring to be set "
-              "(the directory to import keys into)")
+        print(
+            "Error: --secrets-manager-secret requires --keyring to be set "
+            "(the directory to import keys into)"
+        )
         sys.exit(1)
 
     # --- Validate auth config ---
@@ -820,12 +979,16 @@ def main():
             print("Error: auth.py module not found")
             sys.exit(1)
         if not args.authz_config:
-            print("Error: --trust-apigw-header requires --authz-config "
-                  "(with a 'clients' map)")
+            print(
+                "Error: --trust-apigw-header requires --authz-config "
+                "(with a 'clients' map)"
+            )
             sys.exit(1)
         if args.enable_auth:
-            print("Error: --enable-auth and --trust-apigw-header are "
-                  "mutually exclusive auth mechanisms")
+            print(
+                "Error: --enable-auth and --trust-apigw-header are "
+                "mutually exclusive auth mechanisms"
+            )
             sys.exit(1)
 
     # --- Validate TLS ---
@@ -839,44 +1002,47 @@ def main():
                 sys.exit(1)
 
     # --- Set env vars for handlers ---
-    os.environ['GPG_BINARY'] = args.gpg
-    os.environ['MAX_REQUEST_SIZE'] = str(args.max_request_size)
-    os.environ['READ_TIMEOUT'] = str(args.read_timeout)
-    os.environ['MAX_THREADS'] = str(args.max_threads)
+    os.environ["GPG_BINARY"] = args.gpg
+    os.environ["MAX_REQUEST_SIZE"] = str(args.max_request_size)
+    os.environ["READ_TIMEOUT"] = str(args.read_timeout)
+    os.environ["MAX_THREADS"] = str(args.max_threads)
 
     if args.enable_auth:
-        os.environ['AUTH_ENABLED'] = 'true'
+        os.environ["AUTH_ENABLED"] = "true"
         if args.tokens_file:
-            os.environ['TOKENS_FILE'] = os.path.abspath(args.tokens_file)
+            os.environ["TOKENS_FILE"] = os.path.abspath(args.tokens_file)
         if args.secrets_file:
-            os.environ['SECRETS_FILE'] = os.path.abspath(args.secrets_file)
+            os.environ["SECRETS_FILE"] = os.path.abspath(args.secrets_file)
         if args.authz_config:
-            os.environ['AUTHZ_CONFIG_FILE'] = os.path.abspath(args.authz_config)
+            os.environ["AUTHZ_CONFIG_FILE"] = os.path.abspath(args.authz_config)
     if args.authz_config:
-        os.environ['AUTHZ_CONFIG_FILE'] = os.path.abspath(args.authz_config)
+        os.environ["AUTHZ_CONFIG_FILE"] = os.path.abspath(args.authz_config)
     if args.audit_log:
-        os.environ['AUDIT_LOG_FILE'] = args.audit_log
+        os.environ["AUDIT_LOG_FILE"] = args.audit_log
     if args.trust_apigw_header:
-        os.environ['TRUST_APIGW_HEADER'] = 'true'
+        os.environ["TRUST_APIGW_HEADER"] = "true"
 
     # --- Load keys from Secrets Manager (Phase 1) ---
     global _keyring_ready
     if args.sm_secrets:
-        keyring_dir = os.environ.get('GNUPGHOME', '')
+        keyring_dir = os.environ.get("GNUPGHOME", "")
         n = load_keys_from_secrets_manager(
-            args.sm_secrets, keyring_dir,
+            args.sm_secrets,
+            keyring_dir,
             region=args.region or None,
-            gpg_binary=args.gpg
+            gpg_binary=args.gpg,
         )
         print(f"Loaded {n} key(s) from Secrets Manager")
 
     # --- Verify keyring ---
-    keyring_dir = os.environ.get('GNUPGHOME', '')
+    keyring_dir = os.environ.get("GNUPGHOME", "")
     if keyring_dir:
         _keyring_ready = verify_keyring(keyring_dir, args.gpg)
         if not _keyring_ready:
-            print("WARNING: No secret keys found in keyring. "
-                  "/health will return 503 until keys are loaded.")
+            print(
+                "WARNING: No secret keys found in keyring. "
+                "/health will return 503 until keys are loaded."
+            )
     else:
         # Using system default keyring — assume ready
         _keyring_ready = True
@@ -890,9 +1056,9 @@ def main():
 
     if args.enable_tls:
         import ssl
+
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        ssl_context.load_cert_chain(certfile=args.cert_file,
-                                    keyfile=args.key_file)
+        ssl_context.load_cert_chain(certfile=args.cert_file, keyfile=args.key_file)
         ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
         server.socket = ssl_context.wrap_socket(server.socket, server_side=True)
 
@@ -905,11 +1071,11 @@ def main():
     print(f"GPG:       {args.gpg}")
     print(f"Keyring:   {keyring_dir or '(system default)'}")
     if args.enable_auth:
-        auth_status = 'ENABLED (Phase 2 — token/OIDC/JWT)'
+        auth_status = "ENABLED (Phase 2 — token/OIDC/JWT)"
     elif args.trust_apigw_header:
-        auth_status = 'ENABLED (Phase 1b — API Gateway client-role header)'
+        auth_status = "ENABLED (Phase 1b — API Gateway client-role header)"
     else:
-        auth_status = 'DISABLED (Phase 1 — VPC Security Groups)'
+        auth_status = "DISABLED (Phase 1 — VPC Security Groups)"
     print(f"Auth:      {auth_status}")
     print(f"TLS:       {'ENABLED' if args.enable_tls else 'DISABLED'}")
     print(f"Threads:   {args.max_threads}")
@@ -923,5 +1089,5 @@ def main():
         server.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
