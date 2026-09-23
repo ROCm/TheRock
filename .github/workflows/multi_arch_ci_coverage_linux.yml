@@ -51,6 +51,14 @@ on:
         type: string
         description: "Leave empty. Reserved for release tracking."
         default: ""
+      repository:
+        type: string
+        description: "Repository holding this workflow's scripts. Empty defaults to github.repository; cross-repo callers pass ROCm/TheRock."
+        default: ""
+      ref:
+        type: string
+        description: "Ref/SHA of this workflow's scripts. Cross-repo callers pass the ref they pinned in uses:."
+        default: ""
 
   # TEMPORARY, paired with coverage_nightly_pr_check.yml.
   # workflow_dispatch requires the file to be on the default branch; a caller
@@ -90,6 +98,14 @@ on:
         type: string
         description: "Leave empty. Reserved for release tracking."
         default: ""
+      repository:
+        type: string
+        description: "Repository holding this workflow's scripts. Empty defaults to github.repository; cross-repo callers pass ROCm/TheRock."
+        default: ""
+      ref:
+        type: string
+        description: "Ref/SHA of this workflow's scripts. Cross-repo callers pass the ref they pinned in uses:."
+        default: ""
 
 permissions:
   contents: read
@@ -120,9 +136,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
-          # Called cross-repo (rocm-libraries), so pin TheRock + this workflow's commit.
-          repository: ROCm/TheRock
-          ref: ${{ github.job_workflow_sha || github.sha }}
+          # Cross-repo callers pass ROCm/TheRock + ref; same-repo defaults to github.repository.
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
 
       - name: Setting up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -234,9 +250,9 @@ jobs:
       baseline_repository: ${{ inputs.baseline_repository }}
       test_type: ${{ inputs.test_type || 'standard' }}
       release_type: ci
-      # Called cross-repo (rocm-libraries), so pin TheRock + this workflow's commit.
-      repository: ROCm/TheRock
-      ref: ${{ github.job_workflow_sha || github.sha }}
+      # Forwarded to L2's checkouts and the component jobs.
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
@@ -255,9 +271,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
-          # Called cross-repo (rocm-libraries), so pin TheRock + this workflow's commit.
-          repository: ROCm/TheRock
-          ref: ${{ github.job_workflow_sha || github.sha }}
+          # Cross-repo callers pass ROCm/TheRock + ref; same-repo defaults to github.repository.
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
       - name: Evaluate workflow results
         env:
           GITHUB_TOKEN: ${{ github.token }}
