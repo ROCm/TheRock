@@ -261,6 +261,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # BLAS tests
     "rocblas": {
@@ -274,6 +280,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 6,
             "windows": 6,
+        },
+        "exclude_family": {
+            "linux": [
+                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35820932302/job/107052684531
+                "gfx125X-dcgpu",
+            ],
         },
     },
     "rocroller": {
@@ -397,8 +409,12 @@ test_matrix = {
             "windows": 1,
         },
         "exclude_family": {
-            # hipBLASLt does not support gfx103X (see TheRock#1062)
-            "linux": ["gfx1030"],
+            "linux": [
+                # hipBLASLt does not support gfx103X (see TheRock#1062)
+                "gfx1030",
+                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038470972
+                "gfx125X-dcgpu",
+            ],
         },
     },
     # SOLVER tests
@@ -452,6 +468,12 @@ test_matrix = {
             "linux": 2,
             "windows": 2,
         },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "hipcub": {
         "job_name": "hipcub",
@@ -463,12 +485,24 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "rocgdb-cpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-cpu",
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --tests gdb.dwarf2",
         "linux_cpu_runner": True,
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "rocgdb-gpu": {
         **_rocgdb_common,
@@ -502,6 +536,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35803014951/job/106997748160
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "rocthrust": {
         "job_name": "rocthrust",
@@ -530,6 +570,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 3,
             "windows": 3,
+        },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
         },
     },
     "rocsparse": {
@@ -584,6 +630,8 @@ test_matrix = {
                 "gfx1153",
                 "gfx1200",
                 "gfx1201",
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
             ],
             "windows": [
                 "gfx908",
@@ -687,6 +735,12 @@ test_matrix = {
             "linux": 4,
             "windows": 4,
         },
+        "exclude_family": {
+            "linux": [
+                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861426
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # MIOpen dbsync (StaticFDBSync) -- GPU-free under the rocjitsu KMD interposer on a CPU runner.
     # The runner ships in the MIOpen dist (share/miopen/bin/run_dbsync_rocjitsu.py, pulled via
@@ -763,6 +817,12 @@ test_matrix = {
         # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
         # the specialized openmpi image.
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
+        "exclude_family": {
+            "linux": [
+                # CRITICAL FAILURE: https://github.com/ROCm/TheRock/actions/runs/35820932302/job/107052684462
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # rocprofiler-sdk SPM tests: same artifact as rocprofiler-sdk above, but only
     # CTest tests labeled "spm" run here on a pinned gfx94x runner (driver preflight
@@ -835,6 +895,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # hipDNN samples tests
     "hipdnn-samples": {
@@ -864,6 +930,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+        "exclude_family": {
+            "linux": [
+                # CRITICAL FAILURE: https://github.com/ROCm/TheRock/actions/runs/35803014951/job/106997748208
+                "gfx125X-dcgpu",
+            ],
         },
     },
     # hipBLASLt provider tests
@@ -1006,6 +1078,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038470967
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # libhipcxx hiprtc tests
     "libhipcxx_hiprtc": {
@@ -1023,6 +1101,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861741
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # hipthreads lit tests
     "hipthreads": {
@@ -1038,6 +1122,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861504
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # hipthreads example apps (build + run consumer samples against the artifact).
     "hipthreads_examples": {
@@ -1051,6 +1141,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+        "exclude_family": {
+            "linux": [
+                # FAILURE: https://github.com/ROCm/TheRock/actions/runs/35820932302/job/107052684535
+                "gfx125X-dcgpu",
+            ],
         },
     },
     "rocdecode": {
@@ -1138,6 +1234,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # PASSED: https://github.com/ROCm/TheRock/actions/runs/35784025966, excluding as known good
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # hipTensor tests
     "hiptensor": {
@@ -1159,7 +1261,15 @@ test_matrix = {
         "exclude_family": {
             # hipTensor requires composable_kernel, which is filtered out on some platforms,
             # so no hipTensor test artifact is produced for that family (see TheRock#2074).
-            "linux": ["gfx900", "gfx90c", "gfx906", "gfx101X-all", "gfx103X-all"],
+            "linux": [
+                "gfx900",
+                "gfx90c",
+                "gfx906",
+                "gfx101X-all",
+                "gfx103X-all",
+                # CRITICAL FAILURE: https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038471042
+                "gfx125X-dcgpu",
+            ],
             "windows": ["gfx900", "gfx90c", "gfx906", "gfx101X-all", "gfx103X-all"],
         },
     },
