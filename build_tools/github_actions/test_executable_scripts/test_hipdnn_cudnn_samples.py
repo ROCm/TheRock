@@ -67,6 +67,8 @@ OUTCOME_RAN_CLEAN = "ran-clean"
 OUTCOME_RAN_NO_ASSERTIONS = "ran-no-assertions"
 OUTCOME_RAN_WITH_ASSERTION_FAILURES = "ran-with-assertion-failures"
 OUTCOME_CRASHED = "crashed"
+# Exited non-zero without a Catch2 summary: the sample never ran its cases.
+OUTCOME_RUN_FAILED = "run-failed"
 OUTCOME_EXCLUDED = "excluded"
 
 KNOWN_OUTCOMES = {
@@ -78,6 +80,7 @@ KNOWN_OUTCOMES = {
     OUTCOME_RAN_NO_ASSERTIONS,
     OUTCOME_RAN_WITH_ASSERTION_FAILURES,
     OUTCOME_CRASHED,
+    OUTCOME_RUN_FAILED,
     OUTCOME_EXCLUDED,
 }
 
@@ -90,6 +93,7 @@ RAN_OUTCOMES = {
     OUTCOME_RAN_NO_ASSERTIONS,
     OUTCOME_RAN_WITH_ASSERTION_FAILURES,
     OUTCOME_CRASHED,
+    OUTCOME_RUN_FAILED,
 }
 COMPILED_OUTCOMES = RAN_OUTCOMES | {OUTCOME_COMPILED, OUTCOME_XFAIL_NOW_COMPILES}
 
@@ -283,10 +287,13 @@ def load_sidecars(report_dir: Path):
     this driver must always produce.
 
     EXCLUDED entries are written at configure time and have no ctest case at
-    all, so sidecars and tests do not correspond one-to-one.
+    all, so sidecars and tests do not correspond one-to-one. Each translation
+    unit must still own exactly one sidecar; a second one would be counted
+    twice, so it is an anomaly.
     """
     entries = []
     anomalies = []
+    sidecar_by_tu = {}
 
     if not report_dir.is_dir():
         anomalies.append(f"No sidecar directory at {report_dir}")
@@ -311,6 +318,11 @@ def load_sidecars(report_dir: Path):
         if normalize_outcome(entry.get("outcome", "")) not in KNOWN_OUTCOMES:
             anomalies.append(
                 f"{entry['tu']}: unrecognized outcome {entry.get('outcome')!r}"
+            )
+        previous = sidecar_by_tu.setdefault(entry["tu"], sidecar.name)
+        if previous != sidecar.name:
+            anomalies.append(
+                f"{entry['tu']}: reported by both {previous} and {sidecar.name}"
             )
         entries.append(entry)
 
