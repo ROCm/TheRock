@@ -85,8 +85,6 @@ cpp = ${_meson_cpp_bin}
 ")
 
 set(PATCH_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/../patch_source")
-file(TO_NATIVE_PATH "${SOURCE_DIR}" _source_dir_native)
-file(TO_NATIVE_PATH "${PATCH_SOURCE_DIR}" _patch_source_dir_native)
 
 add_custom_target(
   meson_build ALL
@@ -94,12 +92,14 @@ add_custom_target(
   COMMAND
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${PATCH_SOURCE_DIR}"
   COMMAND
-    # We have to patch the sources so make a fresh copy. Use robocopy /SL rather
-    # than cmake -E copy_directory so symlinks are copied as links instead of
-    # being dereferenced: mesa ships a dangling symlink that would otherwise
-    # abort the copy.
-    # robocopy exits 0-7 on success and >=8 on failure, so map that to 0/1.
-    cmd /c "robocopy \"${_source_dir_native}\" \"${_patch_source_dir_native}\" /E /SL /NFL /NDL /NJH /NJS & if errorlevel 8 (exit /b 1) else (exit /b 0)"
+    # We have to patch the sources so make a fresh copy. Use xcopy instead of
+    # `cmake -E copy_directory`: mesa ships a dangling symlink and copy_directory
+    # aborts when it cannot dereference it. xcopy dereferences valid symlinks into
+    # plain files and, with /C, skips the dangling one instead of failing. xcopy
+    # also needs no elevation, unlike robocopy /SL which cannot create symlinks
+    # outside an elevated shell. Flags: /E all subdirs, /I treat dest as a dir,
+    # /Y no overwrite prompt, /C continue past the broken link, /H include hidden.
+    xcopy "${SOURCE_DIR}" "${PATCH_SOURCE_DIR}" /E /I /Y /C /H
   COMMAND
     # Step 1: Initial meson setup to download libva-2.22.0 subproject.
     # Required before patching because patch_source.ps1 modifies files
