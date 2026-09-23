@@ -39,6 +39,7 @@ if(THEROCK_ENABLE_MIOPEN)
       -DROCM_DIR=
       "-DBUILD_TESTING=${_THEROCK_MIOPEN_ENABLE_TESTING}"
       "-DMIOPEN_USE_COMPOSABLEKERNEL=${_miopen_use_ck}"
+      -DMIOPEN_USE_HIPBLASLT=OFF
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_TEST_DISCRETE=OFF
       "-DMIOPEN_INSTALL_GPU_DATABASES=\"${THEROCK_AMDGPU_TARGETS}\""
@@ -58,7 +59,6 @@ if(THEROCK_ENABLE_MIOPEN)
       hipBLAS-common
       hip-clr
       hipBLAS
-      hipBLASLt
       rocm-half
       rocBLAS
       rocRAND
@@ -241,53 +241,8 @@ if(THEROCK_ENABLE_MIOPENPROVIDER)
   )
 endif(THEROCK_ENABLE_MIOPENPROVIDER)
 
-if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
-  ##############################################################################
-  # hipDNN hipBLASLt provider
-  ##############################################################################
+# hipBLASLt provider omitted with its required hipBLASLt library.
 
-  therock_cmake_subproject_declare(hipblasltprovider
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/hipblaslt-provider"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipblasltprovider"
-    BACKGROUND_BUILD
-    CMAKE_ARGS
-      -DHIP_PLATFORM=amd
-      -DROCM_PATH=
-      -DROCM_DIR=
-      "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
-      -DENABLE_CLANG_TIDY=OFF
-      -DENABLE_CLANG_FORMAT=OFF
-    CMAKE_INCLUDES
-      therock_explicit_finders.cmake
-    COMPILER_TOOLCHAIN
-      amd-hip
-    BUILD_DEPS
-      hipDNN
-      therock-googletest
-      therock-flatbuffers
-      therock-nlohmann-json
-    RUNTIME_DEPS
-      hipBLAS-common
-      hipBLASLt
-      hipdnn_integration_tests
-  )
-  therock_cmake_subproject_glob_c_sources(hipblasltprovider
-  SUBDIRS
-    .
-  )
-  therock_cmake_subproject_activate(hipblasltprovider)
-
-  therock_provide_artifact(hipblasltprovider
-    TARGET_NEUTRAL
-    DESCRIPTOR artifact-hipblasltprovider.toml
-    COMPONENTS
-      dbg
-      lib
-      test
-    SUBPROJECT_DEPS
-      hipblasltprovider
-  )
-endif(THEROCK_ENABLE_HIPBLASLTPROVIDER)
 
 if(THEROCK_ENABLE_HIPKERNELPROVIDER)
   ##############################################################################

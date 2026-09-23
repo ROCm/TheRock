@@ -69,7 +69,7 @@
 #   disable_processors = ["aarch64"]     # Optional: CPU processors where disabled
 #                                           #   Canonical names: x86_64, aarch64, ppc64le
 #   python_requires = ["-r path/to/req.txt", "pkg"]  # Optional: pip install args
-#   split_databases = ["rocblas", "hipblaslt"]  # Optional: database handlers for kpack split
+#   split_databases = ["rocblas"]  # Optional: database handlers for kpack split
 #   source_paths = ["path1", "path2"]         # Optional: monorepo subdirectory names that map
 #       to this artifact. Used for granular CI artifact reuse: when only specific
 #       source paths change in an external repo (e.g., rocm-libraries), only affected
@@ -625,6 +625,13 @@ source_paths = ["hip-tests"]
 
 # --- Math Libraries (per-arch) ---
 
+[artifacts.blas]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "rocprofiler-sdk", "spdlog"]
+split_databases = ["rocblas"]
+source_paths = ["rocblas", "hipblas", "hipblas-common", "hipblaslt", "rocroller", "origami", "tensile", "stinkytofu"]
+
 [artifacts.rand]
 artifact_group = "math-libs"
 type = "target-specific"
@@ -642,6 +649,28 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "rand"]
 source_paths = ["rocprim", "hipcub", "rocthrust", "primbench"]
+
+[artifacts.sparse]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["blas", "prim"]
+source_paths = ["rocsparse", "hipsparse", "hipsparselt"]
+
+[artifacts.solver]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["blas", "prim", "sparse", "host-suite-sparse"]
+source_paths = ["rocsolver", "hipsolver"]
+
+[artifacts.rocalution]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "blas", "prim", "rand", "sparse"]
+
+[artifacts.rocwmma]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "blas"]
 
 [artifacts.composable-kernel]
 artifact_group = "math-libs"
@@ -674,6 +703,12 @@ source_paths = ["mxdatagenerator"]
 
 # --- ML Libraries (per-arch) ---
 
+[artifacts.miopen]
+artifact_group = "ml-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "blas", "composable-kernel", "rand", "rocprofiler-sdk"]
+split_databases = ["miopen"]
+
 [artifacts.hipdnn]
 artifact_group = "ml-libs"
 type = "target-neutral"
@@ -684,6 +719,17 @@ artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "rand"]
 source_paths = ["integration-tests"]
+
+[artifacts.miopenprovider]
+artifact_group = "ml-libs"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "hipdnn-integration-tests"]
+source_paths = ["miopen-provider"]
+
+[artifacts.hipdnn-samples]
+artifact_group = "ml-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider"]
 
 [artifacts.hipkernelprovider]
 artifact_group = "ml-libs"
