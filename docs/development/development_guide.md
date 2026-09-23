@@ -196,25 +196,44 @@ These CMake flags allow overriding the global options for individual sub-project
 
 - `{project}_BUILD_TYPE`
 
-For example, this will build the "hipBLASLt" subproject in `RelWithDebInfo` and all other projects in `Release`:
+  For example, this will build the "hipBLASLt" subproject in `RelWithDebInfo` and all other projects in `Release`:
 
-```bash
-  -DCMAKE_BUILD_TYPE=Release \
-  -DhipBLASLt_BUILD_TYPE=RelWithDebInfo \
-```
+  ```bash
+    -DCMAKE_BUILD_TYPE=Release \
+    -DhipBLASLt_BUILD_TYPE=RelWithDebInfo \
+  ```
 
-> [!TIP]
-> See the [Tips for using VSCode](#tips-for-using-vscode) section below for an
-> example of how to debug programs built in this way.
+  > [!TIP]
+  > See the [Tips for using VSCode](#tips-for-using-vscode) section below for an
+  > example of how to debug programs built in this way.
 
 - `{project}_CMAKE_ARGS`
 
-This variable will append to a subproject's default CMAKE arguments. It is a semicolon separated list.
-For example, this will add options to set tensilelite build parallel and keep build tmp in the "hipBLASLt" subproject:
+  This variable will append to a subproject's default CMAKE arguments. It is a semicolon separated list.
+  For example, this will add options to set tensilelite build parallel and keep build tmp in the "hipBLASLt" subproject:
 
-```bash
-  -DhipBLASLt_CMAKE_ARGS="-DTENSILELITE_BUILD_PARALLEL_LEVEL=32;-DTENSILELITE_KEEP_BUILD_TMP=ON"
-```
+  ```bash
+    -DhipBLASLt_CMAKE_ARGS="-DTENSILELITE_BUILD_PARALLEL_LEVEL=32;-DTENSILELITE_KEEP_BUILD_TMP=ON"
+  ```
+
+- `{project}_GENERATE_DEBUG_INFO`
+
+  Controls whether `THEROCK_DEBUG_INFO_FLAGS` is appended to an individual subproject's compile flags,
+  overriding the super-project-wide `THEROCK_GENERATE_DEBUG_INFO` (which is not set by any preset today).
+  If neither is set, debug-info flags are applied by default. For example, the ASAN/TSAN debug-info presets
+  set `THEROCK_DEBUG_INFO_FLAGS` to `-g1 -gdwarf-4` for readable stack traces, but disable it for `amd-llvm`,
+  which is never sanitizer-instrumented in those presets and gains nothing from carrying its own debug info:
+
+  ```bash
+    -DTHEROCK_DEBUG_INFO_FLAGS="-g1 -gdwarf-4" \
+    -Damd-llvm_GENERATE_DEBUG_INFO=OFF \
+  ```
+
+  > [!NOTE]
+  > This name follows [RFC #6034](https://github.com/ROCm/TheRock/pull/6034), which proposes a fuller
+  > `{project}_GENERATE_DEBUG_INFO` / `{project}_DEBUG_INFO_LEVEL` / `{project}_SPLIT_DEBUG_INFO` mechanism.
+  > Only the on/off switch described here is implemented today; the name may change once that RFC is
+  > finalized and approved.
 
 - `{PROJECT}_ENABLE_COVERAGE`
 
