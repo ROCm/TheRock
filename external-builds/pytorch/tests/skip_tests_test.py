@@ -11,6 +11,7 @@ against typos and structural mistakes when a new version skip list (e.g.
 """
 
 import importlib.util
+import unittest
 from pathlib import Path
 
 SKIP_DIR = Path(__file__).resolve().parent.parent / "skip_tests"
@@ -31,39 +32,35 @@ def _load_skip_tests(path):
     return getattr(module, "skip_tests", None)
 
 
-def test_skip_files_define_skip_tests_dict():
-    files = _skip_list_files()
-    assert files, "expected at least one skip-list file"
-    for path in files:
-        skip_tests = _load_skip_tests(path)
-        assert isinstance(skip_tests, dict), f"{path.name}: skip_tests must be a dict"
-        assert skip_tests, f"{path.name}: skip_tests must not be empty"
+class SkipTestsTest(unittest.TestCase):
+    def test_skip_files_define_skip_tests_dict(self):
+        files = _skip_list_files()
+        self.assertTrue(files, "expected at least one skip-list file")
+        for path in files:
+            with self.subTest(path=path.name):
+                skip_tests = _load_skip_tests(path)
+                self.assertIsInstance(skip_tests, dict)
+                self.assertTrue(skip_tests, "skip_tests must not be empty")
 
-
-def test_skip_tests_entries_are_well_formed():
-    for path in _skip_list_files():
-        skip_tests = _load_skip_tests(path)
-        for section, modules in skip_tests.items():
-            assert isinstance(
-                section, str
-            ), f"{path.name}: section {section!r} not a str"
-            assert isinstance(
-                modules, dict
-            ), f"{path.name}:{section} must map to a dict"
-            for module_name, tests in modules.items():
-                assert isinstance(
-                    module_name, str
-                ), f"{path.name}:{section} module {module_name!r} not a str"
-                assert isinstance(
-                    tests, (list, set, tuple)
-                ), f"{path.name}:{section}.{module_name} must be a collection"
-                for name in tests:
-                    assert (
-                        isinstance(name, str) and name
-                    ), f"{path.name}:{section}.{module_name} bad entry {name!r}"
+    def test_skip_tests_entries_are_well_formed(self):
+        files = _skip_list_files()
+        self.assertTrue(files, "expected at least one skip-list file")
+        for path in files:
+            with self.subTest(path=path.name):
+                skip_tests = _load_skip_tests(path)
+                self.assertIsInstance(skip_tests, dict)
+                for section, modules in skip_tests.items():
+                    with self.subTest(section=section):
+                        self.assertIsInstance(section, str)
+                        self.assertIsInstance(modules, dict)
+                        for module_name, tests in modules.items():
+                            with self.subTest(module=module_name):
+                                self.assertIsInstance(module_name, str)
+                                self.assertIsInstance(tests, (list, set, tuple))
+                                for name in tests:
+                                    self.assertIsInstance(name, str)
+                                    self.assertTrue(name, "test name must not be empty")
 
 
 if __name__ == "__main__":
-    test_skip_files_define_skip_tests_dict()
-    test_skip_tests_entries_are_well_formed()
-    print("All skip-test sanity checks passed.")
+    unittest.main()
