@@ -64,10 +64,7 @@ if(THEROCK_ENABLE_RAND)
 endif()
 
 if(THEROCK_ENABLE_SPARSE)
-    if(NOT WIN32)
-        find_package(hipsparselt CONFIG REQUIRED)
-        message(STATUS "hipsparselt version: ${hipsparselt_VERSION}")
-    endif()
+    # hipSPARSELt is intentionally omitted on this bring-up branch.
     find_package(hipsparse CONFIG REQUIRED)
     find_package(rocsparse CONFIG REQUIRED)
     message(STATUS "hipsparse version: ${hipsparse_VERSION}")
@@ -96,10 +93,9 @@ if(THEROCK_ENABLE_RCCL)
 endif()
 
 if(THEROCK_ENABLE_BLAS)
-    find_package(hipblaslt CONFIG REQUIRED)
+    # hipBLASLt is intentionally omitted on this bring-up branch.
     find_package(hipblas CONFIG REQUIRED)
     find_package(rocblas CONFIG REQUIRED)
-    message(STATUS "hipblaslt version: ${hipblaslt_VERSION}")
     message(STATUS "hipblas version: ${hipblas_VERSION}")
     message(STATUS "rocblas version: ${rocblas_VERSION}")
 endif()
