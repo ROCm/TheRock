@@ -789,6 +789,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            # CRITICAL FAILURE on gfx125X-dcgpu: hipdnn_sample_conv_fprop hangs and
+            # becomes a zombie process, blocking the test job indefinitely.
+            # See: https://github.com/ROCm/TheRock/actions/runs/15831078820/job/107341707111
+            "linux": ["gfx125X-dcgpu"],
+        },
     },
     # MIOpen provider tests
     "miopenprovider": {
