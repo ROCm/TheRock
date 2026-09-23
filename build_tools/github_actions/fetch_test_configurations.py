@@ -648,9 +648,16 @@ test_matrix = {
         "test_script": "python ./build/share/miopen/bin/run_dbsync_rocjitsu.py",
         "platform": ["linux"],
         "linux_cpu_runner": True,
+        # Opts this component (only) into scheduling even when the family
+        # has no GPU runner at all for this run (see the runner-assignment
+        # loop below) -- distinct from linux_cpu_runner so other CPU-only
+        # components (hipfile, rocgdb-cpu) don't silently gain new
+        # scheduling reach on unvalidated (family, component) pairs just
+        # because they also happen to be linux_cpu_runner.
+        "opt_in_when_no_gpu_runner": True,
         "test_types": ["standard", "comprehensive", "full"],
         "include_family": {
-            "linux": ["gfx942"],
+            "linux": ["gfx942", "gfx950"],
         },
         "total_shards_dict": {
             "linux": 1,
@@ -1049,9 +1056,46 @@ def run():
             )
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
 
+    # TEST_RUNS_ON == "" (explicitly, not merely unset) means the caller
+    # confirmed no GPU runner exists for this run, even though the static
+    # matrix above may have one. Clear both the single- and multi-GPU
+    # selections so the runner-assignment loop drops non-CPU/benchmark jobs.
+    test_runs_on_env = os.getenv("TEST_RUNS_ON")
+    gpu_runner_confirmed_absent_for_run = (
+        test_runs_on_env is not None and not test_runs_on_env
+    )
+    if gpu_runner_confirmed_absent_for_run:
+        logging.info(
+            "TEST_RUNS_ON was explicitly empty for this run (static matrix "
+            f"has test-runs-on={test_runs_on_default!r}, "
+            f"test-runs-on-multi-gpu={test_runs_on_multi_gpu_default!r}); "
+            "clearing single- and multi-GPU runner selection so only "
+            "CPU-only/benchmark components are scheduled."
+        )
+        test_runs_on_default = ""
+        test_runs_on_labels = None
+        test_runs_on_sandbox = ""
+        test_runs_on_multi_gpu_default = ""
+        test_runs_on_multi_gpu_labels = None
+
     logging.info(f"Selecting projects: {projects_to_test}")
 
     logging.info(f"Using test_matrix ({len(test_matrix)} test(s))")
+
+    # opt_in_when_no_gpu_runner means "schedule this even with no GPU runner
+    # for this family/run" -- only sensible for a component that never needed
+    # a GPU runner in the first place. Enforce that here, once, so the
+    # runner-assignment loop below can trust the invariant and check only
+    # opt_in_when_no_gpu_runner directly.
+    for key, config in test_matrix.items():
+        if config.get("opt_in_when_no_gpu_runner", False) and not config.get(
+            "linux_cpu_runner", False
+        ):
+            raise ValueError(
+                f"{key}: opt_in_when_no_gpu_runner=True requires linux_cpu_runner=True "
+                "(a component that needs real GPU hardware cannot opt into running "
+                "without one)"
+            )
 
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in projects_to_test.split(",")]
@@ -1168,6 +1212,20 @@ def run():
             job_config_data = {**_common_settings, **test_matrix[key]}
             job_config_data["test_type"] = test_type
 
+            # gfx950 dbsync coverage: advisory-only while re-qualifying.
+            # #7651 shipped this same include_family and validated it green
+            # on gfx950-dcgpu; #7967 reverted it for an unrelated cause (a
+            # runner sudo/apt-install permission issue, #7965), and the
+            # #8086 restage deliberately deferred gfx950 rather than
+            # re-landing it. expect_failure keeps this visible without
+            # blocking merges during re-qualification. Mirrors the existing,
+            # already-production-proven use of this field for benchmark
+            # components (tests/extended_tests/benchmark/benchmark_test_matrix.py).
+            # TODO(ALMIOPEN-2674): drop "gfx950-dcgpu" once gfx950 dbsync is
+            # green for a few consecutive runs.
+            if key == "miopen-dbsync" and amdgpu_families in {"gfx950-dcgpu"}:
+                job_config_data["expect_failure"] = True
+
             # tensilelite: append the tensilelite/tests C++ gtest suite (run via
             # ctest -L <test_type>, driven by the shared test_runner.py) after
             # the existing pytest stage, for every tier except quick -- that
@@ -1273,6 +1331,36 @@ def run():
                 )
             elif test_runs_on_default:
                 component["test_runner"] = test_runs_on_default
+            elif component.get("opt_in_when_no_gpu_runner", False):
+                # Only components that explicitly opt in get scheduled when
+                # there's no GPU runner at all for this family/run -- being
+                # linux_cpu_runner alone isn't enough (enforced above), so
+                # not every CPU-only component rides along on any family the
+                # gate below happens to open for, only the ones that
+                # actually asked to. Routed via the linux_cpu_runner branch
+                # in test_artifacts.yml, independent of test_runner.
+                pass
+            else:
+                # No single-GPU runner (default, weighted labels, or ASAN
+                # sandbox) is configured for this family/platform, and this
+                # component isn't CPU-only either. Drop it
+                # instead of scheduling a job with an empty runner label,
+                # which would hang waiting for a nonexistent runner.
+                logging.info(
+                    f"Excluding job {job_name}: no test runner available for this family"
+                )
+                continue
+        elif gpu_runner_confirmed_absent_for_run:
+            # Pre-pinned test_runner: the component supplies its own GPU
+            # label, bypassing the assignment block above entirely (it
+            # already has a "test_runner" key). Fine on a family that has
+            # GPUs, but this run has none -- drop it rather than schedule
+            # GPU work in the CPU-only lane.
+            logging.info(
+                f"Excluding job {job_name}: pre-pinned test_runner but no GPU "
+                "runner confirmed for this family/run"
+            )
+            continue
         components_with_runners.append(component)
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)

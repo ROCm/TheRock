@@ -1299,6 +1299,16 @@ def _expand_build_config_for_platform(
         # Here we just use the default fallback label.
         test_runs_on = platform_info["test-runs-on"]
 
+        # Tracks whether test_runs_on was blanked below for a reason other
+        # than trigger_test_label_only (hardware exists but this PR didn't
+        # opt in via label). CPU-only components don't need GPU hardware, so
+        # allow_cpu_only_tests stays true when that's the only reason -- but
+        # every other reason here is a deliberate "don't test this family/
+        # variant/tier at all right now" policy decision (capacity, nightly-
+        # only, submodule-gated, kernel mismatch), not a hardware-scarcity
+        # exemption CPU-only components should ride along with.
+        blanked_by_deny_reason = False
+
         # When a test_runner:<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
         # this family (the default runner may not have the right kernel).
@@ -1312,6 +1322,7 @@ def _expand_build_config_for_platform(
                 )
             else:
                 test_runs_on = ""
+                blanked_by_deny_reason = True
                 print(
                     f"  {family_name}: no {test_runner_kernel} kernel "
                     f"runner available, disabling tests"
@@ -1323,6 +1334,7 @@ def _expand_build_config_for_platform(
             # due to limited ASAN runner capacity and stability concerns.
             if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
                 test_runs_on = ""
+                blanked_by_deny_reason = True
                 print(
                     f"  {family_name}: host-asan tests only run on nightly, "
                     f"disabling tests"
@@ -1334,6 +1346,7 @@ def _expand_build_config_for_platform(
                 )
             else:
                 test_runs_on = ""
+                blanked_by_deny_reason = True
                 print(
                     f"  {family_name}: no host-asan sandbox runner available, "
                     f"disabling tests"
@@ -1342,6 +1355,7 @@ def _expand_build_config_for_platform(
             # Only run full ASAN tests on scheduled or workflow_dispatch runs
             if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
                 test_runs_on = ""
+                blanked_by_deny_reason = True
                 print(
                     f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
                     f"disabling tests"
@@ -1351,6 +1365,7 @@ def _expand_build_config_for_platform(
                 print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
             else:
                 test_runs_on = ""
+                blanked_by_deny_reason = True
                 print(
                     f"  {family_name}: no ASAN sandbox runner available, "
                     f"disabling tests"
@@ -1362,6 +1377,7 @@ def _expand_build_config_for_platform(
             and jobs.test_rocm.test_type == "quick"
         ):
             test_runs_on = ""
+            blanked_by_deny_reason = True
             print(
                 f"  {family_name}: run-full-tests-only flag set, "
                 f"disabling tests for quick test run"
@@ -1373,6 +1389,7 @@ def _expand_build_config_for_platform(
             ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch
         ):
             test_runs_on = ""
+            blanked_by_deny_reason = True
             print(
                 f"  {family_name}: nightly_check_only_for_family flag set, "
                 f"disabling test runner for non-scheduled/non-dispatch runs"
@@ -1386,6 +1403,7 @@ def _expand_build_config_for_platform(
             and git_context.has_submodule_changes is not True
         ):
             test_runs_on = ""
+            blanked_by_deny_reason = True
             print(
                 f"  {family_name}: submodule_bump_tests_only flag set, "
                 f"disabling tests (no submodule changes detected)"
@@ -1395,8 +1413,11 @@ def _expand_build_config_for_platform(
         # label (e.g., gfx950-dcgpu, gfx125X-dcgpu) is present on the PR.
         # This allows families with limited hardware to have tests opt-in via
         # PR labels rather than always running. Builds always run regardless.
-        # workflow_dispatch bypasses this check (manual triggers always run tests).
-        # Both pull_request and push triggers respect this flag.
+        # push and pull_request both respect this flag (see #8407); only
+        # workflow_dispatch bypasses it (manual testing always runs tests).
+        # Deliberately does not set blanked_by_deny_reason: this is the one
+        # reason CPU-only components (which never touch the gated hardware)
+        # should still be allowed to run.
         if (
             platform_info.get("trigger_test_label_only", False)
             and not ci_inputs.is_workflow_dispatch
@@ -1426,6 +1447,14 @@ def _expand_build_config_for_platform(
             "amdgpu_family": platform_info["family"],
             "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
             "test-runs-on": test_runs_on,
+            # True when there's either a real single-GPU runner, or
+            # test_runs_on was blanked only by trigger_test_label_only
+            # (hardware exists, this PR just didn't opt in via label) --
+            # false when blanked by a deliberate "don't test this family/
+            # variant/tier right now" policy (ASAN capacity, nightly-only,
+            # submodule-gated, kernel mismatch), so CPU-only components
+            # don't ride along with policy exemptions unrelated to hardware.
+            "allow_cpu_only_tests": not blanked_by_deny_reason,
             "sanity_check_only_for_family": platform_info.get(
                 "sanity_check_only_for_family", False
             ),

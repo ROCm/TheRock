@@ -75,6 +75,11 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             self.assertIn("linux", job["platform"])
 
     def test_windows_jobs_selected(self):
+        # gfx94X-dcgpu (setUp's default) has no windows entry in the real
+        # family matrix; use gfx1151, which does, so this exercises a real
+        # windows runner rather than the old silent fallthrough that
+        # emitted components with no test_runner at all.
+        os.environ["AMDGPU_FAMILIES"] = "gfx1151"
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
 
         fetch_test_configurations.run()
@@ -159,6 +164,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         components = self._get_components()
         hipblaslt_linux = components[0]
 
+        # gfx94X-dcgpu (setUp's default) has no windows entry in the real
+        # family matrix; use gfx1151, which does.
+        os.environ["AMDGPU_FAMILIES"] = "gfx1151"
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
         fetch_test_configurations.run()
         components = self._get_components()
@@ -392,6 +400,10 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_TYPE"] = "quick"
         self.assertNotIn("miopen-dbsync", self._selected_names())
 
+    def test_miopen_dbsync_include_family_covers_gfx942_and_gfx950(self):
+        config = fetch_test_configurations.test_matrix["miopen-dbsync"]
+        self.assertEqual(config["include_family"]["linux"], ["gfx942", "gfx950"])
+
     # -----------------------
     # Multi-GPU logic (RCCL)
     # -----------------------
@@ -544,6 +556,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_windows_hip_tests_emits_pal_and_rocr_entries(self):
         """On Windows, hip-tests runs with both PAL and ROCR backends."""
+        # gfx94X-dcgpu (setUp's default) has no windows entry in the real
+        # family matrix; use gfx1151, which does.
+        os.environ["AMDGPU_FAMILIES"] = "gfx1151"
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
         os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
 
@@ -816,6 +831,220 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIn("rocdecode", names)
         self.assertIn("rocjpeg", names)
 
+    # -----------------------
+    # CPU-only test lane when a family has no confirmed GPU runner for this
+    # run: configure_test_matrix.if now runs regardless, but only
+    # linux_cpu_runner/benchmark components should actually be scheduled.
+    # -----------------------
+
+    def test_regular_component_excluded_when_no_gpu_runner_at_all(self):
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+        os.environ["PROJECTS_TO_TEST"] = "rocblas"
+
+        fetch_test_configurations.run()
+        names = {j["job_name"] for j in self._get_components()}
+
+        self.assertNotIn("rocblas", names)
+
+    def test_opted_in_component_included_when_no_gpu_runner(self):
+        def fake_get_all_families(_):
+            # fetch-gfx-targets is needed for miopen-dbsync's include_family
+            # (["gfx942", "gfx950"]) to match against this family group.
+            return {"gfx94x": {"linux": {"fetch-gfx-targets": ["gfx942"]}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+        os.environ["PROJECTS_TO_TEST"] = "hipfile,rocgdb-cpu,miopen-dbsync"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+        names = {j["job_name"] for j in components}
+
+        # miopen-dbsync opts in (opt_in_when_no_gpu_runner) and is scheduled.
+        self.assertIn("miopen-dbsync", names)
+        dbsync = next(j for j in components if j["job_name"] == "miopen-dbsync")
+        self.assertNotIn("test_runner", dbsync)
+
+        # hipfile/rocgdb-cpu are linux_cpu_runner but do NOT opt in -- being
+        # CPU-only alone must not be enough to ride this lane, or they'd
+        # gain scheduling reach on every family/trigger the gate opens for,
+        # not just the ones they're actually validated against.
+        self.assertNotIn("hipfile", names)
+        self.assertNotIn("rocgdb-cpu", names)
+
+    def test_multi_gpu_only_family_not_wrongly_excluded(self):
+        # Regression guard: an earlier draft of the no-GPU-runner exclusion
+        # (an early-loop has_gpu_runner boolean) would have wrongly dropped
+        # this component.
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        rccl = next(j for j in components if j["job_name"] == "rccl")
+        self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu")
+
+    def test_asan_sandbox_only_family_not_wrongly_excluded(self):
+        # Regression guard, symmetric to the multi-GPU case above.
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "",
+                        "test-runs-on-sandbox": "linux-gfx942-sandbox",
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+        os.environ["BUILD_VARIANT"] = "asan"
+        os.environ["PROJECTS_TO_TEST"] = "rocblas"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        rocblas = next(j for j in components if j["job_name"] == "rocblas")
+        self.assertEqual(rocblas["test_runner"], "linux-gfx942-sandbox")
+
+    def test_sanity_excluded_and_serialized_as_null_when_no_gpu_runner(self):
+        # Documents/protects the skip-not-fail contract test_artifacts.yml's
+        # gate relies on: GitHub Actions coerces both operands to numbers for
+        # loose (!=) comparison (null -> 0, '' -> 0), not a null-to-string
+        # cast, so fromJSON('null').test_runner != '' evaluates false and
+        # test_sanity_check is skipped rather than failed.
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+
+        self.assertEqual(self.gha_output["sanity_component"], "null")
+
+    def test_regular_and_multi_gpu_components_dropped_cpu_kept_when_test_runs_on_env_empty(
+        self,
+    ):
+        # A fixture shaped like gfx950 itself, whose static matrix genuinely
+        # HAS both a real single-GPU test-runs-on and a real
+        # test-runs-on-multi-gpu (matching rccl's/rocshmem's actual
+        # multi_gpu family list), but TEST_RUNS_ON is explicitly empty for
+        # this run -- simulating trigger_test_label_only with no opt-in
+        # label. Without asserting (a)/(b), tests above would stay green
+        # even if the script still ignored inputs.test_runs_on entirely,
+        # since they only exercise a family with no runner in the static
+        # matrix at all -- not the actual production condition for
+        # gfx950/gfx90a/gfx125x. Without (c), the multi-GPU test above
+        # would stay green even if the multi-GPU pool alone still ignored
+        # inputs.test_runs_on.
+        def fake_get_all_families(_):
+            return {
+                "gfx950": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+                        "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
+                        # Needed for miopen-dbsync's include_family (["gfx942",
+                        # "gfx950"]) to match this family group.
+                        "fetch-gfx-targets": ["gfx950"],
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+        os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
+        os.environ["TEST_RUNS_ON"] = ""
+        os.environ["PROJECTS_TO_TEST"] = "*"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+        names = {j["job_name"] for j in components}
+
+        # (a) regular single-GPU component: dropped
+        self.assertNotIn("rocblas", names)
+        # (b) opted-in CPU-only component: scheduled, no test_runner assigned
+        self.assertIn("miopen-dbsync", names)
+        dbsync = next(j for j in components if j["job_name"] == "miopen-dbsync")
+        self.assertNotIn("test_runner", dbsync)
+        self.assertTrue(dbsync["expect_failure"])
+        # (b2) linux_cpu_runner component that does NOT opt in: still dropped,
+        # scoping this lane to miopen-dbsync rather than every CPU-only
+        # component
+        self.assertNotIn("hipfile", names)
+        # (c) multi-GPU component: dropped entirely, not merely missing
+        # multi_gpu_runner
+        self.assertNotIn("rccl", names)
+
+    def test_cpu_only_component_not_scheduled_on_family_with_permanently_no_runner(
+        self,
+    ):
+        # gfx101X-dgpu/gfx1152-shaped family: test-runs-on is permanently ""
+        # in the static matrix itself (no policy flag involved, TEST_RUNS_ON
+        # not even set). hipfile/rocgdb-cpu must not ride along here just
+        # because they're linux_cpu_runner -- nobody has validated them
+        # against this family, and it's not miopen-dbsync's include_family
+        # either way.
+        def fake_get_all_families(_):
+            return {"gfx101x": {"linux": {"test-runs-on": ""}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+        os.environ["AMDGPU_FAMILIES"] = "gfx101X-dgpu"
+        os.environ["PROJECTS_TO_TEST"] = "*"
+
+        fetch_test_configurations.run()
+        names = {j["job_name"] for j in self._get_components()}
+
+        self.assertNotIn("hipfile", names)
+        self.assertNotIn("rocgdb-cpu", names)
+        self.assertNotIn("miopen-dbsync", names)
+
+    def test_opt_in_when_no_gpu_runner_requires_linux_cpu_runner(self):
+        # A component that needs real GPU hardware cannot sensibly opt into
+        # running without one -- that's exactly the "empty runner label"
+        # hang this whole mechanism exists to avoid.
+        self._inject_job("bad-opt-in", opt_in_when_no_gpu_runner=True)
+        with self.assertRaises(ValueError):
+            fetch_test_configurations.run()
+
+    def test_pre_pinned_test_runner_dropped_when_no_gpu_runner_confirmed(self):
+        # rocgdb-corefile shape: a component with
+        # test_runner pre-pinned in the static matrix skips the whole
+        # assignment block above (it already has a "test_runner" key, so it
+        # matches neither the multi_gpu_runner nor the "test_runner" not in
+        # component branch). Confirm it's still dropped when TEST_RUNS_ON is
+        # explicitly empty for this run, rather than emitting its static,
+        # hardcoded runner label regardless of whether a GPU runner was
+        # actually confirmed.
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {"test-runs-on": "linux-gfx942-default"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+        self._inject_job("pre-pinned-job", test_runner="linux-gfx942-gpu-rocm-mathlib")
+        os.environ["TEST_RUNS_ON"] = ""
+
+        fetch_test_configurations.run()
+        names = {j["job_name"] for j in self._get_components()}
+
+        self.assertNotIn("pre-pinned-job", names)
 
 if __name__ == "__main__":
     unittest.main()

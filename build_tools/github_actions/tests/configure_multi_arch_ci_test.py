@@ -1316,6 +1316,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "amdgpu_family",
             "amdgpu_targets",
             "test-runs-on",
+            "allow_cpu_only_tests",
             "sanity_check_only_for_family",
         }
         optional_keys = {"test-runs-on-labels", "test_type"}
@@ -2143,6 +2144,17 @@ class TestFamilyTestFilters(unittest.TestCase):
                 "test_type_for_family": "quick",
             },
         },
+        # Family blanked by a deny reason (nightly-only), for
+        # allow_cpu_only_tests deny-side coverage.
+        "mock-nightly-only": {
+            "linux": {
+                "test-runs-on": "linux-nightly-runner",
+                "family": "mock-nightly-only",
+                "fetch-gfx-targets": ["gfx0003"],
+                "build_variants": ["release"],
+                "nightly_check_only_for_family": True,
+            },
+        },
     }
 
     def _mock_get_all_families(self, trigger_types):
@@ -2199,6 +2211,33 @@ class TestFamilyTestFilters(unittest.TestCase):
 
             self.assertIsNotNone(family_info)
             self.assertEqual(family_info["test-runs-on"], "")
+            # The only reason this family was blanked is trigger_test_label_only
+            # (hardware exists, this PR just didn't opt in) -- CPU-only
+            # components don't need that hardware, so they should still be
+            # allowed to run.
+            self.assertTrue(family_info["allow_cpu_only_tests"])
+
+    def test_nightly_check_only_for_family_denies_cpu_only_tests(self):
+        """A deny-reason block (nightly-only) should suppress the CPU-only
+        lane too, not just the GPU test runner."""
+        with patch(
+            "configure_multi_arch_ci.get_all_families_for_trigger_types",
+            side_effect=self._mock_get_all_families,
+        ):
+            ci_inputs = cm.CIInputs(
+                run_id="12345",
+                event_name="pull_request",
+                commit_ref="feature",
+                base_ref="main",
+                build_variant="release",
+                linux_amdgpu_families=["mock-nightly-only"],
+            )
+            outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+            family_info = self._find_family_info(outputs, "mock-nightly-only")
+
+            self.assertIsNotNone(family_info)
+            self.assertEqual(family_info["test-runs-on"], "")
+            self.assertFalse(family_info["allow_cpu_only_tests"])
 
     def test_trigger_test_label_only_push_with_label_runs_tests(self):
         """Push (postsubmit) with label runs tests when trigger_test_label_only is set.

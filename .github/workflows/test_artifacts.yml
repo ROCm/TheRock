@@ -25,6 +25,10 @@ on:
       sanity_check_only_for_family:
         type: boolean
         default: false
+      allow_cpu_only_tests:
+        description: "Run configure_test_matrix even with no GPU test runner, so components that opt in (opt_in_when_no_gpu_runner) can still be scheduled."
+        type: boolean
+        default: false
       test_type:
         type: string
       test_labels:
@@ -80,6 +84,9 @@ on:
       sanity_check_only_for_family:
         type: boolean
         default: false
+      allow_cpu_only_tests:
+        type: boolean
+        default: false
       test_type:
         type: string
       test_labels:
@@ -117,7 +124,7 @@ jobs:
   configure_test_matrix:
     name: "Configure test matrix (${{ inputs.amdgpu_families }})"
     # if there is a test machine available
-    if: ${{ inputs.test_runs_on != '' }}
+    if: ${{ inputs.test_runs_on != '' || inputs.allow_cpu_only_tests == true }}
     runs-on: ubuntu-24.04
     outputs:
       sanity_component: ${{ steps.configure.outputs.sanity_component }}
@@ -181,6 +188,7 @@ jobs:
           PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
           CI_CONFIG_PATH: ci-config
           BUILD_VARIANT: ${{ inputs.build_variant }}
+          TEST_RUNS_ON: ${{ inputs.test_runs_on }}
         run: |
           python ./build_tools/github_actions/fetch_test_configurations.py \
             --platform=${{ contains(inputs.test_runs_on, 'windows') && 'windows' || 'linux' }}
