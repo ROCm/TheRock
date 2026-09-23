@@ -97,6 +97,7 @@ THEROCK_ENV_VARS = [
     "PYTORCH_TESTING_DEVICE_ONLY_FOR",
     "PYTORCH_PRINT_REPRO_ON_FAILURE",
     "PYTORCH_TEST_RUN_EVERYTHING_IN_SERIAL",
+    "TORCH_SERIALIZATION_DEBUG",
     "MIOPEN_CUSTOM_CACHE_DIR",
     "TEST_CONFIG",
     "PYTHONPATH",
@@ -151,6 +152,9 @@ def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> N
     os.environ.setdefault("PYTORCH_TEST_WITH_ROCM", "1")
     os.environ.setdefault("PYTORCH_TESTING_DEVICE_ONLY_FOR", "cuda")
     os.environ.setdefault("PYTORCH_PRINT_REPRO_ON_FAILURE", "0")
+    # Upstream exports this in .ci/pytorch/test.sh, and test_serialization.py
+    # asserts it is set whenever CI is set.
+    os.environ.setdefault("TORCH_SERIALIZATION_DEBUG", "1")
     os.environ["MIOPEN_CUSTOM_CACHE_DIR"] = tempfile.mkdtemp()
 
     if test_config:

@@ -22,7 +22,8 @@ _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from github_actions.amdgpu_family_matrix import get_all_families_for_trigger_types
-from github_actions.github_actions_api import gha_set_output
+from github_actions.github_actions_api import gha_append_step_summary, gha_set_output
+from configure_pytorch_release_matrix import PYTORCH_TEST_LEVELS
 
 
 def split_families(value: str) -> list[str]:
@@ -47,8 +48,18 @@ def build_test_matrix(
     *,
     amdgpu_families: list[str],
     platform: str,
+    test_level: str,
 ) -> dict[str, list[dict[str, str]]]:
-    print(f"Requested {platform} AMDGPU families: {amdgpu_families}")
+    if test_level not in PYTORCH_TEST_LEVELS:
+        raise ValueError(f"Unknown PyTorch test level: {test_level!r}")
+    if test_level == "none":
+        print(
+            "Test level 'none': no self-hosted GPU test jobs will be scheduled; "
+            "the build job still runs its build-time wheel validation"
+        )
+        return {"include": []}
+
+    print(f"Resolved {platform} GPU test families: {amdgpu_families or 'none'}")
     include: list[dict[str, str]] = []
     for requested_family in amdgpu_families:
         test_runs_on = find_test_runs_on(
@@ -73,6 +84,74 @@ def build_test_matrix(
     return {"include": include}
 
 
+def format_test_summary(
+    *,
+    platform: str,
+    test_level: str,
+    built_families: list[str],
+    requested_test_families: str,
+    resolved_test_families: list[str],
+    matrix: dict[str, list[dict[str, str]]],
+) -> str:
+    """Format the resolved test policy for logs and the job summary."""
+
+    def format_families(families: list[str]) -> str:
+        return ", ".join(f"`{family}`" for family in families) or "none"
+
+    include = matrix["include"]
+    lines = [
+        "## PyTorch Test Configuration",
+        "",
+        "| Setting | Value |",
+        "| --- | --- |",
+        f"| Platform | `{platform}` |",
+        f"| Test level | `{test_level}` |",
+        f"| Built AMDGPU families | {format_families(built_families)} |",
+        f"| Requested test families | `{requested_test_families}` |",
+        f"| Resolved test families | {format_families(resolved_test_families)} |",
+        f"| Self-hosted GPU test jobs | {len(include)} |",
+        "",
+    ]
+
+    if test_level == "none":
+        lines.append(
+            "**Decision:** No self-hosted GPU test jobs are scheduled because "
+            "the test level is `none`."
+        )
+    elif not resolved_test_families:
+        lines.append(
+            "**Decision:** No self-hosted GPU test jobs are scheduled because "
+            "the test-family selection resolved to none."
+        )
+    elif not include:
+        lines.append(
+            "**Decision:** No self-hosted GPU test jobs are scheduled because "
+            f"none of the selected families has a configured {platform} runner."
+        )
+    else:
+        lines.extend(
+            [
+                "**Decision:** Schedule the following self-hosted GPU tests:",
+                "",
+                "| AMDGPU family | Runner |",
+                "| --- | --- |",
+                *[
+                    f"| `{row['amdgpu_family']}` | `{row['test_runs_on']}` |"
+                    for row in include
+                ],
+            ]
+        )
+
+    lines.extend(
+        [
+            "",
+            "The build job always runs `sanity_check_wheel.py` as build-time "
+            "artifact validation before any GPU tests.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def emit_outputs(matrix: dict[str, list[dict[str, str]]]) -> None:
     gha_set_output(
         {
@@ -95,6 +174,15 @@ def main(argv: list[str]) -> None:
         help=(
             "Semicolon-separated AMDGPU families to test. Use 'auto' or leave "
             "empty to test built families. Use 'none' to skip tests."
+        ),
+    )
+    parser.add_argument(
+        "--test-level",
+        choices=PYTORCH_TEST_LEVELS,
+        default="standard",
+        help=(
+            "Test coverage level. 'none' stops after build-time wheel "
+            "validation; 'standard' runs the GPU test matrix."
         ),
     )
     parser.add_argument(
@@ -123,6 +211,17 @@ def main(argv: list[str]) -> None:
     matrix = build_test_matrix(
         amdgpu_families=test_amdgpu_families,
         platform=args.platform,
+        test_level=args.test_level,
+    )
+    gha_append_step_summary(
+        format_test_summary(
+            platform=args.platform,
+            test_level=args.test_level,
+            built_families=built_families,
+            requested_test_families=args.test_amdgpu_families.strip() or "auto",
+            resolved_test_families=test_amdgpu_families,
+            matrix=matrix,
+        )
     )
     emit_outputs(matrix)
 

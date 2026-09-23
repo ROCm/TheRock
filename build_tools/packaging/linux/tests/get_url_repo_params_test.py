@@ -120,6 +120,10 @@ class GetGpgKeyUrlTest(unittest.TestCase):
                 "https://repo.amd.com/",
                 "https://repo.amd.com/rocm/packages/gpg/rocm.gpg",
             ),
+            (
+                "https://rc.repo.amd.com/rocm/core/packages/ubuntu2404",
+                "https://rc.repo.amd.com/rocm/gpg/packages.gpg",
+            ),
         ]
         for repo_url, gpg_url in cases:
             with self.subTest(repo_url=repo_url):
@@ -140,12 +144,12 @@ class GetGpgKeyUrlFromReleaseTypeTest(unittest.TestCase):
             (
                 "prerelease",
                 "multi_arch",
-                "https://rocm.prereleases.amd.com/packages-multi-arch/gpg/rocm.gpg",
+                "https://rc.repo.amd.com/rocm/gpg/packages.gpg",
             ),
             (
                 "stable",
                 "multiarch",
-                "https://repo.amd.com/rocm/packages-multi-arch/gpg/rocm.gpg",
+                "https://stable.repo.amd.com/rocm/gpg/packages.gpg",
             ),
         ]
         for release_type, layout, expected in cases:
@@ -264,7 +268,7 @@ class GetRepoUrlPerFamilyTest(unittest.TestCase):
 
 
 class GetRepoUrlMultiArchTest(unittest.TestCase):
-    """Tests for ``get_repo_url(..., layout=multi_arch)``."""
+    """Tests for current repo.amd.com multi-arch Core package URLs."""
 
     def test_url_shapes(self):
         cases = [
@@ -273,28 +277,28 @@ class GetRepoUrlMultiArchTest(unittest.TestCase):
                 "deb",
                 "ubuntu2404",
                 "",
-                f"{_EXAMPLE}/rocm/packages-multi-arch/ubuntu2404",
+                f"{_EXAMPLE}/rocm/core/packages/ubuntu2404",
             ),
             (
                 "prerelease",
                 "deb",
                 "ubuntu2404",
                 "",
-                f"{_EXAMPLE}/packages-multi-arch/ubuntu2404",
+                f"{_EXAMPLE}/rocm/core/packages/ubuntu2404",
             ),
             (
                 "nightly",
                 "deb",
                 "ubuntu2404",
                 "20260501-25200531110",
-                f"{_EXAMPLE}/packages-multi-arch/deb/20260501-25200531110",
+                f"{_EXAMPLE}/rocm/core/packages/deb/20260501-25200531110",
             ),
             (
                 "nightly",
                 "rpm",
                 "rhel10",
                 "20260501-25200531110",
-                f"{_EXAMPLE}/packages-multi-arch/rpm/20260501-25200531110/x86_64",
+                f"{_EXAMPLE}/rocm/core/packages/rpm/20260501-25200531110/x86_64",
             ),
         ]
         for release_type, pkg_type, os_profile, sub_folder, expected in cases:
@@ -388,9 +392,7 @@ class MainSubcommandsTest(unittest.TestCase):
             ]
         )
         self.assertEqual(code, 0)
-        self.assertIn(
-            f"repo_url={_EXAMPLE}/rocm/packages-multi-arch/ubuntu2404", output
-        )
+        self.assertIn(f"repo_url={_EXAMPLE}/rocm/core/packages/ubuntu2404", output)
 
     def test_get_gpg_url_cli(self):
         code, output = _run_main_with_output(

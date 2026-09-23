@@ -29,6 +29,31 @@ else:
     logging.info(f"++ INFO: rocjpeg tests found in {ROCJPEG_TEST_PATH}")
 env = os.environ.copy()
 
+# GitHub Actions passes an empty string when a workflow input is left blank.
+TEST_TYPE = (os.getenv("TEST_TYPE") or "standard").lower()
+
+
+def test_filter_args():
+    """CTest filter for the requested category, per docs/development/test_filtering.md.
+
+    rocjpeg ships basic single-image decode tests (`jpeg-decode-fmt-*`), crop /
+    batch / batch-crop variants, one performance suite
+    (`jpeg-decode-perf-fmt-native`), and negative-API tests. quick runs the basic
+    decode-format tests as a sanity pass; standard adds the crop/batch/negative
+    correctness suites but excludes perf. The FFM (Full Function Model emulator)
+    tiers mirror their native counterparts but exclude perf at every level: perf
+    numbers off a software emulator are meaningless and the runs are
+    prohibitively slow.
+    """
+    if TEST_TYPE in ("quick", "ffm-quick"):
+        return ["-R", "jpeg-decode-fmt-"]
+    if TEST_TYPE in ("standard", "ffm-standard"):
+        return ["-E", "jpeg-decode-perf"]
+    if TEST_TYPE in ("ffm-comprehensive", "ffm-full"):
+        return ["-E", "jpeg-decode-perf"]
+    # Native comprehensive/full: run everything, including the perf suite.
+    return []
+
 
 # set env variables required for tests
 def setup_env(env):
@@ -64,10 +89,13 @@ def execute_tests(env):
     logging.info(f"++ Exec [{ROCJPEG_TEST_DIR}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, cwd=ROCJPEG_TEST_DIR, check=True, env=env)
 
+    filter_args = test_filter_args()
+    logging.info(f"++ rocjpeg test category TEST_TYPE={TEST_TYPE}")
+
     cmd = [
         "ctest",
         "-N",
-    ]
+    ] + filter_args
     logging.info(f"++ Exec [{ROCJPEG_TEST_DIR}]$ {shlex.join(cmd)}")
     ctest_list = subprocess.run(
         cmd,
@@ -84,13 +112,15 @@ def execute_tests(env):
             "Failed to determine CTest test count from `ctest -N` output"
         )
     if int(match.group(1)) == 0:
-        raise RuntimeError("CTest discovered zero rocjpeg tests")
+        raise RuntimeError(
+            f"CTest discovered zero rocjpeg tests for TEST_TYPE={TEST_TYPE}"
+        )
 
     cmd = [
         "ctest",
         "--extra-verbose",
         "--output-on-failure",
-    ]
+    ] + filter_args
     logging.info(f"++ Exec [{ROCJPEG_TEST_DIR}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, cwd=ROCJPEG_TEST_DIR, check=True, env=env)
 

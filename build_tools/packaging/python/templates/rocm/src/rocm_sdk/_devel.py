@@ -187,6 +187,23 @@ def _find_tarfile(rocm_sdk_devel_path: Path):
     return tarfile_path, tarfile_mode
 
 
+def _resolve_link_target(parent: Path, target: str) -> Path:
+    """Resolves a relative link target against parent, collapsing any '..'.
+
+    Link targets carry one '..' per component of the file's relpath, so joining
+    one onto parent verbatim yields a string far longer than the file it names.
+    Windows applies MAX_PATH to the path as passed, before '..' is collapsed, so
+    os.stat and os.link fail on that string even when the collapsed path is well
+    under the limit.
+
+    resolve() collapses '..' by walking the path rather than lexically, which
+    matters because _lock_and_expand extracts directory symlinks as-is: a
+    lexical collapse through a symlinked ancestor names a different file than
+    the OS reaches.
+    """
+    return (parent.resolve() / target).resolve()
+
+
 def _devel_link_ok(dest_path: Path, target: str) -> bool:
     """True if dest_path already exists as a hardlink to its manifest target.
 
@@ -196,7 +213,7 @@ def _devel_link_ok(dest_path: Path, target: str) -> bool:
     if dest_path.is_symlink() or not dest_path.is_file():
         return False
     try:
-        return dest_path.samefile(dest_path.parent / target)
+        return dest_path.samefile(_resolve_link_target(dest_path.parent, target))
     except OSError:
         return False
 
@@ -377,10 +394,11 @@ def _reconcile_device_links(
                     )
                     if _devel_link_ok(dest_path, link["target"]):
                         continue
-                    # Create the parent first so the relative ".." target can be
-                    # resolved through it (the OS cannot traverse a missing dir).
+                    # Create the parent first: hardlink_to needs it to exist.
                     dest_path.parent.mkdir(parents=True, exist_ok=True)
-                    hardlink_target = dest_path.parent / link["target"]
+                    hardlink_target = _resolve_link_target(
+                        dest_path.parent, link["target"]
+                    )
                     if not hardlink_target.is_file():
                         # The target ships in the same wheel as this manifest, so
                         # it should exist; skip defensively if it somehow does not.
@@ -442,7 +460,9 @@ def _lock_and_expand(
                             # copies instead of symlinks, at the cost of disk space.
                             parent_path.mkdir(parents=True, exist_ok=True)
                             symlink_target = ti.linkname
-                            hardlink_target = dest_path.parent / symlink_target
+                            hardlink_target = _resolve_link_target(
+                                parent_path, symlink_target
+                            )
                             # On Linux, preserve symlinks in top-level bin/ directory
                             PRESERVE_SYMLINKS = [
                                 "amdclang",

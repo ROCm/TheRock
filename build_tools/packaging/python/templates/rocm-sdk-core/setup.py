@@ -88,7 +88,6 @@ setup(
                 "hipify-perl=rocm_sdk_core._cli:hipify_perl",
                 "rocm_agent_enumerator=rocm_sdk_core._cli:rocm_agent_enumerator",
                 "rocminfo=rocm_sdk_core._cli:rocm_info",
-                "rocm-smi=rocm_sdk_core._cli:rocm_smi",
                 "roccoremerge=rocm_sdk_core._cli:roccoremerge",
                 "rocgdb=rocm_sdk_core._cli:rocgdb",
                 "rocpd=rocm_sdk_core._cli:rocpd",

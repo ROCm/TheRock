@@ -223,6 +223,122 @@ class GeneratePackageIndexesTest(unittest.TestCase):
             self.assertIn("visible", html)
             self.assertNotIn(".hidden", html)
 
+    def test_generate_index_html_escapes_special_characters(self) -> None:
+        """Ensure local filesystem index generation quotes/escapes filenames.
+
+        Verifies:
+        - '+' in the href is percent-encoded (quote()), matching the
+          structured PEP 503 generator's escaping.
+        - The display text is HTML-escaped (html.escape()).
+        """
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td) / "repo"
+            d.mkdir(parents=True, exist_ok=True)
+
+            (d / "pkg+cu124-1.0.whl").write_text("x", encoding="utf-8")
+
+            generate_package.generate_index_html(str(d))
+
+            html_out = (d / "index.html").read_text(encoding="utf-8")
+            self.assertIn('href="pkg%2Bcu124-1.0.whl"', html_out)
+            self.assertIn(">pkg+cu124-1.0.whl<", html_out)
+
+    def test_generate_index_html_does_not_escape_directory_names(self) -> None:
+        """Ensure local filesystem index generation leaves subdirectory names raw.
+
+        Verifies:
+        - A subdirectory entry (even one with a '+' in its name) is
+          rendered unescaped, since directory names are repo-layout
+          segments, not package names.
+        - A sibling file with a '+' in its name is still percent-encoded.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td) / "repo"
+            d.mkdir(parents=True, exist_ok=True)
+
+            (d / "x86_64+avx").mkdir()
+            (d / "pkg+cu124-1.0.whl").write_text("x", encoding="utf-8")
+
+            generate_package.generate_index_html(str(d))
+
+            html_out = (d / "index.html").read_text(encoding="utf-8")
+            self.assertIn('href="x86_64+avx"', html_out)
+            self.assertIn('href="pkg%2Bcu124-1.0.whl"', html_out)
+
+    def test_generate_index_from_s3_escapes_special_characters(self) -> None:
+        """Ensure S3-driven recursive index generation quotes/escapes filenames.
+
+        Verifies:
+        - '+' in a filename is percent-encoded in the href, with the
+          display text kept literal (HTML-escaped).
+        - Directory names are repo-layout segments (not package-derived)
+          and are rendered unescaped, unaffected by this change.
+        """
+        bucket = "b"
+        prefix = "rpm/20260224-123"
+
+        pages: list[dict[str, Any]] = [
+            {
+                "Contents": [
+                    {"Key": f"{prefix}/x86_64+avx/a+b.rpm"},
+                ]
+            }
+        ]
+
+        s3 = FakeS3(
+            list_pages_by_call={
+                ("list_objects_v2", prefix, None): pages,
+            }
+        )
+
+        generate_package.generate_index_from_s3(s3, bucket, prefix)
+
+        root_html = s3.put_body_for(f"{prefix}/index.html")
+        self.assertIn('href="x86_64+avx/index.html"', root_html)
+        self.assertIn(">x86_64+avx/<", root_html)
+
+        subdir_html = s3.put_body_for(f"{prefix}/x86_64+avx/index.html")
+        self.assertIn('href="a%2Bb.rpm"', subdir_html)
+        self.assertIn(">a+b.rpm<", subdir_html)
+
+    def test_generate_top_index_from_s3_escapes_special_characters(self) -> None:
+        """Ensure top-level S3 index generation quotes/escapes filenames.
+
+        Verifies:
+        - '+' in a top-level filename is percent-encoded in the href, with
+          the display text kept literal (HTML-escaped).
+        - '+' in a subfolder prefix is rendered unescaped, since directory
+          names are repo-layout segments (not package-derived) and are
+          unaffected by this change.
+        """
+        bucket = "b"
+        top_prefix = "rpm"
+
+        pages: list[dict[str, Any]] = [
+            {
+                "CommonPrefixes": [
+                    {"Prefix": "rpm/20260224+111/"},
+                ],
+                "Contents": [
+                    {"Key": "rpm/some+file.txt"},
+                ],
+            }
+        ]
+
+        s3 = FakeS3(
+            list_pages_by_call={
+                ("list_objects_v2", f"{top_prefix}/", "/"): pages,
+            }
+        )
+
+        generate_package.generate_top_index_from_s3(s3, bucket, top_prefix)
+
+        html_out = s3.put_body_for(f"{top_prefix}/index.html")
+        self.assertIn('href="20260224+111/index.html"', html_out)
+        self.assertIn(">20260224+111/<", html_out)
+        self.assertIn('href="some%2Bfile.txt"', html_out)
+        self.assertIn(">some+file.txt<", html_out)
+
 
 if __name__ == "__main__":
     unittest.main()

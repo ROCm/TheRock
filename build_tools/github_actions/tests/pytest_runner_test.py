@@ -3,6 +3,7 @@
 
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -71,6 +72,41 @@ class BuildMarkerExpressionTest(unittest.TestCase):
     def test_none_values_treated_as_empty(self):
         cfg = {"pytest_markers": None, "exclude_markers": None}
         self.assertEqual(pytest_runner.build_marker_expression(cfg, None), "")
+
+    def test_amdgpu_targets_substitution_in_include(self):
+        cfg = {"pytest_markers": ["{AMDGPU_TARGETS} and emu_fast"]}
+        self.assertEqual(
+            pytest_runner.build_marker_expression(cfg, "gfx1250", "gfx1250"),
+            "(gfx1250 and emu_fast) and not skip-gfx1250",
+        )
+
+    def test_amdgpu_targets_substitution_in_exclude(self):
+        cfg = {"exclude_markers": ["{AMDGPU_TARGETS}_slow"]}
+        self.assertEqual(
+            pytest_runner.build_marker_expression(cfg, None, "gfx1250"),
+            "not gfx1250_slow",
+        )
+
+    def test_amdgpu_targets_empty_drops_markers_with_token(self):
+        cfg = {"pytest_markers": ["{AMDGPU_TARGETS} and emu_fast"]}
+        self.assertEqual(
+            pytest_runner.build_marker_expression(cfg, None, ""),
+            "",
+        )
+
+    def test_amdgpu_targets_empty_keeps_markers_without_token(self):
+        cfg = {"pytest_markers": ["emu_fast", "{AMDGPU_TARGETS} and gfx1250"]}
+        self.assertEqual(
+            pytest_runner.build_marker_expression(cfg, None, ""),
+            "(emu_fast)",
+        )
+
+    def test_amdgpu_targets_no_token_is_noop(self):
+        cfg = {"pytest_markers": ["gfx1250"]}
+        self.assertEqual(
+            pytest_runner.build_marker_expression(cfg, "gfx1250", "gfx1250"),
+            "(gfx1250) and not skip-gfx1250",
+        )
 
 
 class ResolveComponentPathTest(unittest.TestCase):
@@ -175,6 +211,33 @@ class BuildEnvironmentTest(unittest.TestCase):
 
         self.assertTrue(env["PYTHONPATH"].endswith("/pre/existing"))
         self.assertIn("/pre/ld", env["LD_LIBRARY_PATH"].split(os.pathsep))
+
+    def test_ld_library_path_includes_all_llvm_triple_dirs(self):
+        # All triple subdirs must be on LD_LIBRARY_PATH in a deterministic order —
+        # not an arbitrary glob[0] that breaks when a new triple is added.
+        for var in ("PYTHONPATH", "LD_LIBRARY_PATH", "PATH"):
+            os.environ.pop(var, None)
+        with tempfile.TemporaryDirectory() as tmp:
+            rocm = Path(tmp)
+            llvm_lib = rocm / "lib" / "llvm" / "lib"
+            triple_aarch64 = llvm_lib / "aarch64-unknown-linux-gnu"
+            triple_x86 = llvm_lib / "x86_64-unknown-linux-gnu"
+            sysdeps = rocm / "lib" / "rocm_sysdeps" / "lib"
+            for d in (triple_aarch64, triple_x86, sysdeps):
+                d.mkdir(parents=True)
+
+            env = pytest_runner.build_environment(rocm, "tensilelite")
+            ld = env["LD_LIBRARY_PATH"].split(os.pathsep)
+
+            # All triple dirs present (not just one), in sorted order regardless
+            # of filesystem glob order.
+            self.assertIn(str(triple_aarch64), ld)
+            self.assertIn(str(triple_x86), ld)
+            self.assertLess(ld.index(str(triple_aarch64)), ld.index(str(triple_x86)))
+            # rocm_sysdeps and the base lib dirs are included too.
+            self.assertIn(str(sysdeps), ld)
+            self.assertIn(str(rocm / "lib"), ld)
+            self.assertIn(str(llvm_lib), ld)
 
 
 class RunPytestTest(unittest.TestCase):

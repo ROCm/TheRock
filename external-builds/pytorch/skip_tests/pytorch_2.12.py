@@ -226,10 +226,6 @@ skip_tests = {
             # TestProfiler - kineto kernel metadata missing 'grid'
             "test_kineto_kernel_metadata_in_trace",
         ],
-        "ci_sanity_check": [
-            # TestCISanityCheck - TheRock CI env differs from upstream
-            "test_env_vars_exist",
-        ],
         "dataloader": [
             # TestDataLoader - large sampler indices
             "test_large_sampler_indices",

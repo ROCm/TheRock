@@ -30,7 +30,7 @@ Typical usage to build:
 # On Linux, using the default path for the repository:
 python build_prod_wheels.py \
     --output-dir $HOME/tmp/pyout \
-    --index-url https://rocm.prereleases.amd.com/whl/gfx94X-dcgpu
+    --index-url https://rc.repo.amd.com/rocm/whl-next/
 ```
 
 ## Building Linux portable wheels

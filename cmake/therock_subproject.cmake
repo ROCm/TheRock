@@ -917,11 +917,6 @@ function(therock_cmake_subproject_activate target_name)
   list(APPEND _fprint_files "${_cmake_project_init_file}")
   list(APPEND _fprint_files "${ROCM_BUILD_FLAGS_STATE_FILE}")
 
-  # Transform build and run deps from target form (i.e. 'ROCR-Runtime' to a dependency
-  # on the stage.stamp file). These are a dependency for configure.
-  set(_configure_dep_stamps)
-  _therock_cmake_subproject_deps_to_stamp(_configure_dep_stamps stage.stamp ${_build_deps} ${_runtime_deps})
-
   # Target flags.
   set(_all_option)
   if(NOT _exclude_from_all)
@@ -958,6 +953,10 @@ function(therock_cmake_subproject_activate target_name)
     # marker file (which may just be a stamp file or may contain a unique hash
     # for this part of the build).
     message(STATUS "  DISABLING BUILD: Marked as pre-built")
+    # For prebuilt artifacts, we need runtime deps staged before copying from them.
+    set(_runtime_dep_stamps)
+    _therock_cmake_subproject_deps_to_stamp(_runtime_dep_stamps stage.stamp ${_runtime_deps})
+
     add_custom_command(
       OUTPUT "${_configure_stamp_file}"
       COMMAND "${CMAKE_COMMAND}" -E touch "${_configure_stamp_file}"
@@ -976,9 +975,15 @@ function(therock_cmake_subproject_activate target_name)
       DEPENDS
         "${_prebuilt_file}"
         "${_fileset_tool}"
+        ${_runtime_dep_stamps}
     )
   else()
     # Not pre-built: normal configure/build/stage install.
+    # Transform build and run deps from target form (i.e. 'ROCR-Runtime') to a dependency
+    # on the stage.stamp file. These are a dependency for configure.
+    set(_configure_dep_stamps)
+    _therock_cmake_subproject_deps_to_stamp(_configure_dep_stamps stage.stamp ${_build_deps} ${_runtime_deps})
+
     # configure target
     if(THEROCK_VERBOSE)
       message(STATUS "  CONFIGURE_DEPENDS: ${_transitive_configure_depend_files} ")
@@ -1755,6 +1760,29 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "set(CMAKE_CXX_FLAGS_INIT \"@CMAKE_CXX_FLAGS@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_EXE_LINKER_FLAGS_INIT \"@CMAKE_EXE_LINKER_FLAGS@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_SHARED_LINKER_FLAGS_INIT \"@CMAKE_SHARED_LINKER_FLAGS@\")\n")
+
+    # THEROCK_DEBUG_INFO_FLAGS carries super-project-wide debug-info flags
+    # (e.g. -g1 -gdwarf-4 for the asan-debug/host-asan-debug/tsan presets).
+    # It is kept separate from CMAKE_C_FLAGS/CMAKE_CXX_FLAGS above so that a
+    # subproject opting out of debug info can't also lose unrelated flags a
+    # preset might carry in CMAKE_C_FLAGS/CMAKE_CXX_FLAGS.
+    #
+    # A subproject opts out via {target_name}_GENERATE_DEBUG_INFO=OFF,
+    # falling back to THEROCK_GENERATE_DEBUG_INFO (default ON), mirroring
+    # {target_name}_SANITIZER/THEROCK_SANITIZER - e.g. amd-llvm, which is
+    # never sanitizer-instrumented in these variants (amd-llvm_SANITIZER=OFF)
+    # and gains nothing from being compiled with debug info itself.
+    set(_generate_debug_info ON)
+    if(DEFINED THEROCK_GENERATE_DEBUG_INFO)
+      set(_generate_debug_info "${THEROCK_GENERATE_DEBUG_INFO}")
+    endif()
+    if(DEFINED "${target_name}_GENERATE_DEBUG_INFO")
+      set(_generate_debug_info "${${target_name}_GENERATE_DEBUG_INFO}")
+    endif()
+    if(_generate_debug_info AND THEROCK_DEBUG_INFO_FLAGS)
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" @THEROCK_DEBUG_INFO_FLAGS@\")\n")
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" @THEROCK_DEBUG_INFO_FLAGS@\")\n")
+    endif()
   endif()
 
   # Compile half of the driver build options. The link half is emitted as

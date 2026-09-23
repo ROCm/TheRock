@@ -5,21 +5,35 @@
 # /rocm/whl-next Python index. Owner paths are public paths relative to /rocm
 # and must not include hostnames, buckets, release streams, or storage-internal
 # prefixes.
-schema_version: 2
+schema_version: 3
 
 streams:
+  # Packages use the default group unless they select a stream_group or provide
+  # an exact streams list.
   known:
     - dev
     - nightly
     - rc
+    - bkc
     - stable
     - stable-staging
-  default:
-    - dev
-    - nightly
-    - rc
-    - stable
-    - stable-staging
+  groups:
+    all-except-bkc:
+      - dev
+      - nightly
+      - rc
+      - stable
+      - stable-staging
+    all:
+      - dev
+      - nightly
+      - rc
+      - bkc
+      - stable
+      - stable-staging
+  # BKC is opt-in per package because its target-specific package set is
+  # currently limited to gfx1250.
+  default: all-except-bkc
 
 python_indexes:
   - public_base: /rocm/whl-next
@@ -72,6 +86,7 @@ python_indexes:
         owner_path: pytorch/whl-next
       amd-torch-device-gfx1250:
         owner_path: pytorch/whl-next
+        stream_group: all
       amd-torch-device-gfx900:
         owner_path: pytorch/whl-next
         streams:
@@ -137,6 +152,7 @@ python_indexes:
         owner_path: pytorch/whl-next
       amd-torchvision-device-gfx1250:
         owner_path: pytorch/whl-next
+        stream_group: all
       amd-torchvision-device-gfx900:
         owner_path: pytorch/whl-next
         streams:
@@ -162,36 +178,50 @@ python_indexes:
         owner_path: pytorch/whl-next
       apex:
         owner_path: pytorch/whl-next
+        stream_group: all
       filelock:
         owner_path: core/whl-next
+        stream_group: all
       fsspec:
         owner_path: core/whl-next
+        stream_group: all
       jax-rocm10-pjrt:
         owner_path: jax/whl-next
       jax-rocm10-plugin:
         owner_path: jax/whl-next
       jinja2:
         owner_path: core/whl-next
+        stream_group: all
       markupsafe:
         owner_path: core/whl-next
+        stream_group: all
       mpmath:
         owner_path: core/whl-next
+        stream_group: all
       networkx:
         owner_path: core/whl-next
+        stream_group: all
       numpy:
         owner_path: core/whl-next
+        stream_group: all
       pillow:
         owner_path: core/whl-next
+        stream_group: all
       rocm:
         owner_path: core/whl-next
+        stream_group: all
       rocm-bootstrap:
         owner_path: core/whl-next
+        stream_group: all
       rocm-profiler:
         owner_path: core/whl-next
+        stream_group: all
       rocm-sdk-core:
         owner_path: core/whl-next
+        stream_group: all
       rocm-sdk-devel:
         owner_path: core/whl-next
+        stream_group: all
       rocm-sdk-device-gfx1010:
         owner_path: core/whl-next
       rocm-sdk-device-gfx1011:
@@ -234,6 +264,7 @@ python_indexes:
         owner_path: core/whl-next
       rocm-sdk-device-gfx1250:
         owner_path: core/whl-next
+        stream_group: all
       rocm-sdk-device-gfx900:
         owner_path: core/whl-next
         streams:
@@ -259,17 +290,25 @@ python_indexes:
         owner_path: core/whl-next
       rocm-sdk-libraries:
         owner_path: core/whl-next
+        stream_group: all
       setuptools:
         owner_path: core/whl-next
+        stream_group: all
       sympy:
         owner_path: core/whl-next
+        stream_group: all
       torch:
         owner_path: pytorch/whl-next
+        stream_group: all
       torchaudio:
         owner_path: pytorch/whl-next
+        stream_group: all
       torchvision:
         owner_path: pytorch/whl-next
+        stream_group: all
       triton:
         owner_path: pytorch/whl-next
+        stream_group: all
       typing-extensions:
         owner_path: core/whl-next
+        stream_group: all

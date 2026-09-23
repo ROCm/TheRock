@@ -53,30 +53,32 @@ CRIT_PERCENT = 90
 
 
 def get_gpu_memory() -> list[dict]:
-    """Get AMD GPU memory using rocm-smi."""
+    """Get AMD GPU memory using amd-smi."""
     gpus = []
     try:
         result = subprocess.run(
-            ["rocm-smi", "--showmeminfo", "vram", "--json"],
+            ["amd-smi", "metric", "-m", "--json"],
             capture_output=True,
             text=True,
             timeout=5,
         )
         if result.returncode == 0:
             data = json.loads(result.stdout)
-            for card_id, card_data in data.items():
-                if card_id.startswith("card"):
-                    used = int(card_data.get("VRAM Total Used Memory (B)", 0))
-                    total = int(card_data.get("VRAM Total Memory (B)", 0))
-                    if total > 0:
-                        gpus.append(
-                            {
-                                "id": card_id,
-                                "used_gb": used / GB,
-                                "total_gb": total / GB,
-                                "percent": (used / total) * 100,
-                            }
-                        )
+            for entry in data.get("gpu_data", []):
+                mem = entry.get("mem_usage", {})
+                total_mb = mem.get("total_vram", {}).get("value", 0)
+                used_mb = mem.get("used_vram", {}).get("value", 0)
+                if total_mb > 0:
+                    total = int(total_mb * 1024 * 1024)
+                    used = int(used_mb * 1024 * 1024)
+                    gpus.append(
+                        {
+                            "id": f"gpu{entry.get('gpu', 0)}",
+                            "used_gb": used / GB,
+                            "total_gb": total / GB,
+                            "percent": (used / total) * 100,
+                        }
+                    )
     except (subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError):
         pass
     return gpus

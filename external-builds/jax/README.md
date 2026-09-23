@@ -301,10 +301,10 @@ ROCm 7 wheels need none of this.
 
 ### Gating releases with JAX tests
 
-Successful builds publish JAX wheels to the nightly multi-arch Python package
+Successful builds publish JAX wheels to the nightly aggregate Python package
 index:
 
-<https://rocm.nightlies.amd.com/whl-multi-arch/>
+<https://nightly.repo.amd.com/rocm/whl-next/>
 
 The published wheels are validated by the JAX test workflow as part of the
 nightly release process before being made available for use.

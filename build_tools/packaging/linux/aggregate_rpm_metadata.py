@@ -11,7 +11,7 @@ and/or uploads to S3.
 
 Usage:
     python aggregate_rpm_metadata.py \\
-        --source "core,https://repo.amd.com/rocm/packages-multi-arch/rhel10/x86_64,core" \\
+        --source "core,https://nightly.repo.amd.com/rocm/core/packages/rpm/20260823-12345678/x86_64,core" \\
         --source "rvs,https://d22tya8uodfbu6.cloudfront.net/nightly/rvs/rpm,rvs" \\
         [--output-dir /tmp/rpm-metadata] \\
         [--output-bucket therock-deb-rpm-test] \\

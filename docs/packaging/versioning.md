@@ -69,24 +69,28 @@ Most users are expected to use stable releases, but several other distribution
 channels are also available and may be of interest to project developers,
 users who want early previews of upcoming releases, and QA/test team members.
 
-| Distribution channel | Base URL                          | Source of builds                                                                                                                                                                                             |
-| -------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| stable releases      | https://repo.amd.com/rocm/        | Manually promoted prereleases                                                                                                                                                                                |
-| prereleases          | https://rocm.prereleases.amd.com/ | Manually triggered workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                   |
-| nightly releases     | https://rocm.nightlies.amd.com/   | Scheduled workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                            |
-| BKC releases         | TBD                               | Workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                                      |
-| dev releases         | https://rocm.devreleases.amd.com/ | Manually triggered test workflows in [TheRock](https://github.com/ROCm/TheRock) and [rockrel](https://github.com/ROCm/rockrel)                                                                               |
-| dev builds           | No central index                  | Local builds and per-commit workflows in [TheRock](https://github.com/ROCm/TheRock),<br>[rocm-libraries](https://github.com/ROCm/rocm-libraries), [rocm-systems](https://github.com/ROCm/rocm-systems), etc. |
+| Distribution channel | Base URL                           | Source of builds                                                                                                                                                                                             |
+| -------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| stable releases      | https://stable.repo.amd.com/rocm/  | Manually promoted prereleases                                                                                                                                                                                |
+| prereleases          | https://rc.repo.amd.com/rocm/      | Manually triggered workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                   |
+| nightly releases     | https://nightly.repo.amd.com/rocm/ | Scheduled workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                            |
+| BKC releases         | https://bkc.repo.amd.com/rocm/     | Workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                                      |
+| dev releases         | https://dev.repo.amd.com/rocm/     | Manually triggered test workflows in [TheRock](https://github.com/ROCm/TheRock) and [rockrel](https://github.com/ROCm/rockrel)                                                                               |
+| dev builds           | No central index                   | Local builds and per-commit workflows in [TheRock](https://github.com/ROCm/TheRock),<br>[rocm-libraries](https://github.com/ROCm/rocm-libraries), [rocm-systems](https://github.com/ROCm/rocm-systems), etc. |
 
-Each distribution channel is currently hosted on a separate release index that
-can be passed to package managers like `pip` (see
-[RELEASES.md - Installing releases using pip](../../RELEASES.md#installing-releases-using-pip)
+Each distribution channel has an aggregate Python index that can be passed to
+package managers like `pip` (see
+[RELEASES.md - Installing multi-arch Python packages](../../RELEASES.md#installing-multi-arch-python-packages)
 for details). For example:
 
 ```bash
-pip install --index-url=https://rocm.nightlies.amd.com/whl-multi-arch/ rocm
-pip install --index-url=https://rocm.devreleases.amd.com/whl-multi-arch/ rocm
+pip install --index-url=https://nightly.repo.amd.com/rocm/whl-next/ rocm
+pip install --index-url=https://dev.repo.amd.com/rocm/whl-next/ rocm
 ```
+
+The new layout starts with ROCm 10.1 nightlies and ROCm 10.0 stable releases.
+Earlier releases remain in the
+[legacy multi-arch release locations](legacy_multi_arch_releases.md).
 
 With the exception of "dev releases", each distribution channel only contains
 release artifacts of the matching release type. The "dev releases" channel
@@ -129,6 +133,21 @@ The script produces these versions for each release type:
 | nightly-bkc  | `X.Y.ZaBASEDATE+bkc.YYYYMMDD`              | `10.1.0a20260811+bkc.20260814`                                                                                                                                      |
 | dev          | `X.Y.Z.dev0+NNNN`                          | `7.10.0.dev0+efed3c3b10a5cce8578f58f8eb288582c26d18c4`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
 | dev-bkc      | `X.Y.Z.dev0+NNNN`<br>(same as regular dev) | `10.1.0.dev0+efed3c3b10a5cce8578f58f8eb288582c26d18c4`                                                                                                              |
+
+### Post releases
+
+A post release is a follow-up release of an existing package version, written
+in canonical form with a `.postN` segment. PEP 440 orders it after its base
+version and before the next patch: `7.14.0 < 7.14.0.post1 < 7.14.1`. TheRock's
+scripts do not generate these versions, but we may create one manually in
+exceptional cases to patch an individual Python package. See the official
+[Python packaging guidance](https://packaging.python.org/en/latest/specifications/version-specifiers/#post-releases)
+for what qualifies as a post release.
+
+Version comparisons in TheRock scripts and published packages should tolerate
+versions that differ only by a post-release segment. For example, `7.14.0` and
+`7.14.0.post1` should be compatible, while `7.14.0` and `7.14.1` should not.
+This lets us patch one package without republishing the entire package set.
 
 ### BKC versions
 
@@ -258,6 +277,25 @@ When working with versions please use these tools and avoid custom parsing
   '1.2.0'
   ```
 
+- [`packaging.specifiers.SpecifierSet`](https://packaging.pypa.io/en/stable/specifiers.html)
+  for testing constraints written as
+  [dependency specifiers](https://packaging.python.org/en/latest/specifications/dependency-specifiers/):
+
+  ```python
+  >>> from packaging.specifiers import SpecifierSet
+  >>> from packaging.version import Version
+  >>> same_minor = SpecifierSet("==7.14.*")
+  >>> Version("7.14.0.post1") in same_minor
+  True
+  >>> Version("7.15.0") in same_minor
+  False
+  >>> same_major_from_7_14 = SpecifierSet("~=7.14")
+  >>> Version("7.15.0") in same_major_from_7_14
+  True
+  >>> Version("8.0.0") in same_major_from_7_14
+  False
+  ```
+
 - Existing Python scripts:
 
   - [`build_tools/compute_rocm_package_version.py`](/build_tools/compute_rocm_package_version.py)
@@ -341,6 +379,38 @@ The script produces these versions for debian packages for each release type:
 | nightly-bkc  | `X.Y.Z~BASEDATE.bkc.YYYYMMDD`                | `10.1.0~20260811.bkc.20260814`                                         |
 | dev          | `X.Y.Z~devYYYYMMDD`                          | `7.10.0~dev20251124`<br>(For dev build on 2025-11-24)                  |
 | dev-bkc      | `X.Y.Z~devYYYYMMDD`<br>(same as regular dev) | `10.1.0~dev20260814`                                                   |
+
+> [!WARNING]
+> Deb package version sorting is currently different than rpm and python version
+> sorting:
+>
+> | Package type | Sort order                            |
+> | ------------ | ------------------------------------- |
+> | Python       | `stable > prerelease > nightly > dev` |
+> | rpm          | `stable > prerelease > nightly > dev` |
+> | deb          | `stable > prerelease > dev > nightly` |
+>
+> This can be checked from Python using the
+> [`python-debian` package](https://pypi.org/project/python-debian/):
+>
+> ```python
+> >>> from debian.debian_support import NativeVersion
+> >>> NativeVersion("7.10.0~20251124") > NativeVersion("7.10.0~dev20251124")
+> False
+> ```
+>
+> As a result, apt may prefer a dev package over a nightly package when both
+> release indexes are configured.
+>
+> See https://github.com/ROCm/TheRock/issues/7638 for details.
+
+### Working with Debian package versions
+
+The `python-debian` package can be used to work with debian package versions:
+
+- https://pypi.org/project/python-debian/
+- https://salsa.debian.org/python-debian-team/python-debian
+- https://python-debian-team.pages.debian.net/python-debian/html/api/debian.debian_support.html
 
 ## Native Windows package versions
 
