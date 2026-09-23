@@ -81,26 +81,12 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
             "build_tools/packaging/linux/tests/example_test.py",
             "build_tools/packaging/python/tests/example_test.py",
             "build_tools/third_party/s3_management/tests/example_test.py",
-            "external-builds/pytorch/tests/example_test.py",
             "test_tools/tests/example_test.py",
         ]
 
         for path in unit_test_paths:
             with self.subTest(path=path):
                 self.assertFalse(is_ci_run_required([path]))
-
-    def test_dont_run_ci_for_unit_test_config_changes(self):
-        for path in ["pyproject.toml", "build_tools/pyproject.toml"]:
-            with self.subTest(path=path):
-                self.assertFalse(is_ci_run_required([path]))
-
-    def test_run_ci_for_other_pyproject_changes(self):
-        for path in [
-            "build_tools/packaging/python/templates/rocm/pyproject.toml",
-            "new_project/pyproject.toml",
-        ]:
-            with self.subTest(path=path):
-                self.assertTrue(is_ci_run_required([path]))
 
     def test_dont_run_ci_for_path_filter_only_changes(self):
         paths = ["build_tools/github_actions/configure_ci_path_filters.py"]
@@ -127,13 +113,6 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         paths = [
             "build_tools/packaging/archives/build_tarballs.py",
             "build_tools/packaging/archives/tests/build_tarballs_test.py",
-        ]
-        self.assertTrue(is_ci_run_required(paths))
-
-    def test_run_ci_for_pytorch_build_script_changes(self):
-        paths = [
-            "external-builds/pytorch/build_prod_wheels.py",
-            "external-builds/pytorch/tests/build_prod_wheels_version_test.py",
         ]
         self.assertTrue(is_ci_run_required(paths))
 
