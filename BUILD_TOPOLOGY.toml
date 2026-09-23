@@ -625,13 +625,6 @@ source_paths = ["hip-tests"]
 
 # --- Math Libraries (per-arch) ---
 
-[artifacts.blas]
-artifact_group = "math-libs"
-type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "rocprofiler-sdk", "spdlog"]
-split_databases = ["rocblas", "hipblaslt"]
-source_paths = ["rocblas", "hipblas", "hipblas-common", "hipblaslt", "rocroller", "origami", "tensile", "stinkytofu"]
-
 [artifacts.rand]
 artifact_group = "math-libs"
 type = "target-specific"
@@ -649,29 +642,6 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "rand"]
 source_paths = ["rocprim", "hipcub", "rocthrust", "primbench"]
-
-[artifacts.sparse]
-artifact_group = "math-libs"
-type = "target-specific"
-artifact_deps = ["blas", "prim"]
-split_databases = ["hipsparselt"]
-source_paths = ["rocsparse", "hipsparse", "hipsparselt"]
-
-[artifacts.solver]
-artifact_group = "math-libs"
-type = "target-specific"
-artifact_deps = ["blas", "prim", "sparse", "host-suite-sparse"]
-source_paths = ["rocsolver", "hipsolver"]
-
-[artifacts.rocalution]
-artifact_group = "math-libs"
-type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "blas", "prim", "rand", "sparse"]
-
-[artifacts.rocwmma]
-artifact_group = "math-libs"
-type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "blas"]
 
 [artifacts.composable-kernel]
 artifact_group = "math-libs"
@@ -704,12 +674,6 @@ source_paths = ["mxdatagenerator"]
 
 # --- ML Libraries (per-arch) ---
 
-[artifacts.miopen]
-artifact_group = "ml-libs"
-type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "blas", "composable-kernel", "rand", "rocprofiler-sdk"]
-split_databases = ["miopen"]
-
 [artifacts.hipdnn]
 artifact_group = "ml-libs"
 type = "target-neutral"
@@ -720,23 +684,6 @@ artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "rand"]
 source_paths = ["integration-tests"]
-
-[artifacts.miopenprovider]
-artifact_group = "ml-libs"
-type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "hipdnn-integration-tests"]
-source_paths = ["miopen-provider"]
-
-[artifacts.hipblasltprovider]
-artifact_group = "ml-libs"
-type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn", "hipdnn-integration-tests"]
-source_paths = ["hipblaslt-provider"]
-
-[artifacts.hipdnn-samples]
-artifact_group = "ml-libs"
-type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider"]
 
 [artifacts.hipkernelprovider]
 artifact_group = "ml-libs"
