@@ -92,6 +92,23 @@ if(THEROCK_ENABLE_SYSDEPS_NCURSES)
   )
 endif()
 
+# Optional sysdep: libiconv.  Windows-only (Linux and macOS have iconv in libc),
+# pulled in by rocgdb.  Built static, so there is no runtime DLL and the lib
+# component stays empty: what it installs (headers, the static lib, the config)
+# is all dev.
+if(THEROCK_ENABLE_SYSDEPS_LIBICONV)
+  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/libiconv" "${CMAKE_CURRENT_BINARY_DIR}/libiconv")
+  therock_provide_artifact(sysdeps-libiconv
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-libiconv.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-libiconv
+  )
+endif()
+
 # Optional sysdep: amd-mesa
 if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
   add_subdirectory(amd-mesa)

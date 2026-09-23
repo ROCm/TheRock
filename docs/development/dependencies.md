@@ -49,6 +49,7 @@ project wide:
   - `THEROCK_BUNDLED_HWLOC`
   - `THEROCK_BUNDLED_LIBCAP`
   - `THEROCK_BUNDLED_LIBDRM`
+  - `THEROCK_BUNDLED_LIBICONV`
   - `THEROCK_BUNDLED_LIBLZMA`
   - `THEROCK_BUNDLED_LIBMNL`
   - `THEROCK_BUNDLED_LIBNL`
@@ -131,6 +132,13 @@ Supported sub-libraries: `libdrm`, `libdrm_amdgpu`
 - Canonical method: `pkg_check_modules(DRM_AMDGPU REQUIRED IMPORTED_TARGET libdrm_amdgpu)`
 - Import library: `PkgConfig::DRM_AMDGPU`
 - Vars: `DRM_AMDGPU_INCLUDE_DIRS`
+
+## libiconv
+
+Windows only: Linux has iconv in its C library.
+
+- Canonical method: `find_package(iconv)`
+- Import library: `iconv::iconv`
 
 ## liblzma
 
