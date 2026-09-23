@@ -408,6 +408,13 @@ test_matrix = {
             "linux": 3,
             "windows": 2,
         },
+        "exclude_family": {
+            "linux": [
+                # CRITICAL FAILURE (GPU MES hang): POTF2.strided_batched__double_complex causes GPU hang
+                # https://github.com/ROCm/TheRock/actions/runs/35924956371/job/107397931590
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # PRIM tests
     "rocprim": {
