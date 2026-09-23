@@ -533,8 +533,8 @@ test_matrix = {
         },
         "exclude_family": {
             "linux": [
-                # FAILURE: sddmm f16 compute tests fail with tolerance issues
-                # GTEST_FILTER doesn't work (ctest passes --gtest_filter which overrides env var)
+                # KNOWN FAILURE: sddmm f16 compute tests fail with tolerance issues
+                # individual tests fail but GTEST_FILTER plumbing not available (ctest overrides env var)
                 # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363781930
                 "gfx125X-dcgpu",
             ],
@@ -571,10 +571,6 @@ test_matrix = {
                 "gfx1153",
                 "gfx1200",
                 "gfx1201",
-                # CRITICAL FAILURE (GPU MES hang): spmm_test.spmm causes GPU hang
-                # amdgpu MES failed to respond to msg=REMOVE_QUEUE, container unkillable
-                # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363783468
-                "gfx125X-dcgpu",
             ],
             "windows": [
                 "gfx908",
@@ -656,8 +652,8 @@ test_matrix = {
         },
         "exclude_family": {
             "linux": [
-                # FAILURE: Gemm solver FP16 tests fail on gfx125X
-                # GTEST_FILTER doesn't work (ctest passes --gtest_filter which overrides env var)
+                # KNOWN FAILURE: Gemm solver FP16 tests fail on gfx125X
+                # individual tests fail but GTEST_FILTER plumbing not available (ctest overrides env var)
                 # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363782290
                 "gfx125X-dcgpu",
             ],
@@ -856,8 +852,8 @@ test_matrix = {
         },
         "exclude_family": {
             "linux": [
-                # FAILURE: TestGpuMatmulPlan and TestHipblasltMatmulPlanBuilder tests fail
-                # GTEST_FILTER doesn't work (ctest passes --gtest_filter which overrides env var)
+                # KNOWN FAILURE: TestGpuMatmulPlan and TestHipblasltMatmulPlanBuilder tests fail
+                # individual tests fail but GTEST_FILTER plumbing not available (ctest overrides env var)
                 # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363782678
                 "gfx125X-dcgpu",
             ],
