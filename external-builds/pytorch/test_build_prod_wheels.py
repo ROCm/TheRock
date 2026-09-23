@@ -206,6 +206,42 @@ class AsanEnvironmentTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "outside"):
                     bpw._setup_asan_build_env(root, "gfx942:xnack+")
 
+    def test_asan_env_accepts_unsuffixed_per_target_runtime(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            for compiler_name in ("clang", "clang++"):
+                compiler = root / "lib" / "llvm" / "bin" / compiler_name
+                compiler.parent.mkdir(parents=True, exist_ok=True)
+                compiler.touch()
+                compiler.chmod(0o755)
+            bitcode = root / "lib" / "llvm" / "amdgcn" / "bitcode"
+            bitcode.mkdir(parents=True)
+            (bitcode / "ocml.bc").touch()
+            runtime = (
+                root
+                / "lib"
+                / "llvm"
+                / "lib"
+                / "clang"
+                / "20"
+                / "lib"
+                / "x86_64-unknown-linux-gnu"
+                / "libclang_rt.asan.so"
+            )
+            runtime.parent.mkdir(parents=True)
+            runtime.touch()
+
+            def fake_capture(args, **kwargs):
+                queried = args[-1].split("=", 1)[-1]
+                if queried == "libclang_rt.asan.so":
+                    return str(runtime)
+                return queried
+
+            with mock.patch.object(bpw, "capture", side_effect=fake_capture):
+                env = bpw._setup_asan_build_env(root, "gfx942:xnack+")
+
+            self.assertTrue(env["LD_LIBRARY_PATH"].startswith(str(runtime.parent)))
+
     def test_common_asan_env_omits_gcc_warning_flags(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

@@ -130,13 +130,30 @@ def resolve_package_version(args: argparse.Namespace, manifest: dict) -> str:
     return resolved
 
 
+def _is_shared_asan_runtime_name(name: str) -> bool:
+    """True for the shared Clang ASAN runtime, with or without an arch suffix.
+
+    LLVM_ENABLE_PER_TARGET_RUNTIME_DIR installs ``libclang_rt.asan.so``.
+    The older compiler-rt layout used ``libclang_rt.asan-<arch>.so``.
+    """
+    return name == "libclang_rt.asan.so" or (
+        name.startswith("libclang_rt.asan-") and name.endswith(".so")
+    )
+
+
 def find_asan_runtime_rpath(artifacts: ArtifactCatalog) -> str:
     """Find the Clang ASAN runtime directory in staged artifacts."""
     runtime_dirs: set[str] = set()
     for relpath, entry in artifacts.pm.matches():
         relpath = PurePosixPath(relpath)
-        if entry.is_file() and relpath.match(
-            "lib/llvm/lib/clang/*/lib/linux/libclang_rt.asan-*.so"
+        parts = relpath.parts
+        # lib/llvm/lib/clang/<ver>/lib/<linux|host-triple>/<runtime>
+        if (
+            entry.is_file()
+            and _is_shared_asan_runtime_name(relpath.name)
+            and len(parts) == 8
+            and parts[:4] == ("lib", "llvm", "lib", "clang")
+            and parts[5] == "lib"
         ):
             runtime_dirs.add(relpath.parent.as_posix())
 
@@ -145,12 +162,16 @@ def find_asan_runtime_rpath(artifacts: ArtifactCatalog) -> str:
             "--asan was requested but no shared Clang ASAN runtime was found "
             "in the input artifacts"
         )
-    if len(runtime_dirs) != 1:
-        raise RuntimeError(
-            "ASAN artifacts contain multiple Clang runtime directories: "
-            + ", ".join(sorted(runtime_dirs))
-        )
-    return runtime_dirs.pop()
+    if len(runtime_dirs) == 1:
+        return runtime_dirs.pop()
+    # Prefer the per-target directory when a build still also has lib/linux.
+    preferred = [d for d in runtime_dirs if not d.endswith("/lib/linux")]
+    if len(preferred) == 1:
+        return preferred[0]
+    raise RuntimeError(
+        "ASAN artifacts contain multiple Clang runtime directories: "
+        + ", ".join(sorted(runtime_dirs))
+    )
 
 
 def _elf_dynamic_info(path: Path) -> tuple[list[str], list[str]] | None:
@@ -230,7 +251,11 @@ def validate_asan_runtime_resolution(
 ) -> None:
     """Validate that packaged ASAN-linked ELFs resolve the core runtime."""
     runtime_dir = core.platform_dir / runtime_rpath
-    runtimes = sorted(runtime_dir.glob("libclang_rt.asan-*.so"))
+    runtimes = sorted(
+        path
+        for path in runtime_dir.glob("libclang_rt.asan*.so")
+        if _is_shared_asan_runtime_name(path.name)
+    )
     if not runtimes:
         raise RuntimeError(
             f"ASAN runtime was not packaged in rocm-sdk-core at {runtime_dir}"
@@ -246,7 +271,7 @@ def validate_asan_runtime_resolution(
             if dynamic_info is None:
                 continue
             needed, rpaths = dynamic_info
-            if not any(name.startswith("libclang_rt.asan-") for name in needed):
+            if not any(_is_shared_asan_runtime_name(name) for name in needed):
                 continue
             instrumented_count += 1
             if not _rpath_resolves_directory(

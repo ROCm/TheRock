@@ -54,29 +54,71 @@ class AsanVersionResolutionTest(unittest.TestCase):
 
 
 class AsanRuntimeDiscoveryTest(unittest.TestCase):
+    def _write_runtime(self, artifact_dir: Path, *runtime_parts: str) -> None:
+        artifact = artifact_dir / "amd-llvm_lib_generic"
+        stage = artifact / "compiler" / "amd-llvm" / "stage"
+        runtime = stage.joinpath(*runtime_parts)
+        runtime.parent.mkdir(parents=True)
+        runtime.touch()
+        (artifact / "artifact_manifest.txt").write_text("compiler/amd-llvm/stage\n")
+
     def test_finds_clang_resource_directory(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             artifact_dir = Path(temp_dir)
-            artifact = artifact_dir / "base_lib_generic"
-            stage = artifact / "base" / "aux-overlay" / "stage"
-            runtime = (
-                stage
-                / "lib"
-                / "llvm"
-                / "lib"
-                / "clang"
-                / "23"
-                / "lib"
-                / "linux"
-                / "libclang_rt.asan-x86_64.so"
+            self._write_runtime(
+                artifact_dir,
+                "lib",
+                "llvm",
+                "lib",
+                "clang",
+                "23",
+                "lib",
+                "linux",
+                "libclang_rt.asan-x86_64.so",
             )
-            runtime.parent.mkdir(parents=True)
-            runtime.touch()
-            (artifact / "artifact_manifest.txt").write_text("base/aux-overlay/stage\n")
 
             self.assertEqual(
                 find_asan_runtime_rpath(ArtifactCatalog(artifact_dir)),
                 "lib/llvm/lib/clang/23/lib/linux",
+            )
+
+    def test_finds_per_target_runtime_directory(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            artifact_dir = Path(temp_dir)
+            self._write_runtime(
+                artifact_dir,
+                "lib",
+                "llvm",
+                "lib",
+                "clang",
+                "20",
+                "lib",
+                "x86_64-unknown-linux-gnu",
+                "libclang_rt.asan.so",
+            )
+
+            self.assertEqual(
+                find_asan_runtime_rpath(ArtifactCatalog(artifact_dir)),
+                "lib/llvm/lib/clang/20/lib/x86_64-unknown-linux-gnu",
+            )
+
+    def test_prefers_per_target_directory_when_both_layouts_exist(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            artifact_dir = Path(temp_dir)
+            artifact = artifact_dir / "amd-llvm_lib_generic"
+            stage = artifact / "compiler" / "amd-llvm" / "stage"
+            clang_lib = stage / "lib" / "llvm" / "lib" / "clang" / "20" / "lib"
+            linux = clang_lib / "linux" / "libclang_rt.asan-x86_64.so"
+            per_target = clang_lib / "x86_64-unknown-linux-gnu" / "libclang_rt.asan.so"
+            linux.parent.mkdir(parents=True)
+            per_target.parent.mkdir(parents=True)
+            linux.touch()
+            per_target.touch()
+            (artifact / "artifact_manifest.txt").write_text("compiler/amd-llvm/stage\n")
+
+            self.assertEqual(
+                find_asan_runtime_rpath(ArtifactCatalog(artifact_dir)),
+                "lib/llvm/lib/clang/20/lib/x86_64-unknown-linux-gnu",
             )
 
     def test_missing_runtime_is_rejected(self):
@@ -250,6 +292,44 @@ class AsanRpathValidationTest(unittest.TestCase):
                         runtime_rpath=runtime_rpath,
                         require_instrumented=True,
                     )
+
+    def test_validator_accepts_unsuffixed_per_target_runtime(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            core_dir = root / "_rocm_sdk_core"
+            runtime_rpath = "lib/llvm/lib/clang/20/lib/x86_64-unknown-linux-gnu"
+            runtime_dir = core_dir / runtime_rpath
+            runtime_dir.mkdir(parents=True)
+            (runtime_dir / "libclang_rt.asan.so").touch()
+
+            binary = root / "_rocm_sdk_libraries" / "lib" / "libfoo.so"
+            binary.parent.mkdir(parents=True)
+            binary.touch()
+            package = types.SimpleNamespace(
+                platform_dir=root / "_rocm_sdk_libraries",
+                files=types.SimpleNamespace(
+                    materialized_relpaths={"lib/libfoo.so": (None, binary)}
+                ),
+            )
+            core = types.SimpleNamespace(platform_dir=core_dir)
+            dynamic_info = (
+                ["libclang_rt.asan.so"],
+                [
+                    "$ORIGIN/../../_rocm_sdk_core/"
+                    "lib/llvm/lib/clang/20/lib/x86_64-unknown-linux-gnu"
+                ],
+            )
+
+            with mock.patch(
+                "build_python_packages._elf_dynamic_info",
+                return_value=dynamic_info,
+            ):
+                validate_asan_runtime_resolution(
+                    core=core,
+                    packages=[package],
+                    runtime_rpath=runtime_rpath,
+                    require_instrumented=True,
+                )
 
 
 if __name__ == "__main__":

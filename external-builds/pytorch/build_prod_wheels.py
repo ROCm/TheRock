@@ -989,18 +989,30 @@ def _setup_asan_build_env(rocm_dir: Path, pytorch_rocm_arch: str) -> dict[str, s
             "--asan requires ROCm device bitcode under " f"{hip_device_lib_path}"
         )
 
-    runtime_name = f"libclang_rt.asan-{platform.machine().lower()}.so"
-    runtime_text = capture([clangxx, f"-print-file-name={runtime_name}"], cwd=rocm_dir)
-    runtime_path = Path(runtime_text)
-    if (
-        not runtime_text
-        or runtime_text == runtime_name
-        or not runtime_path.is_absolute()
-        or not runtime_path.is_file()
-    ):
+    runtime_names = [
+        "libclang_rt.asan.so",
+        f"libclang_rt.asan-{platform.machine().lower()}.so",
+    ]
+    runtime_path: Path | None = None
+    last_runtime_text = ""
+    for runtime_name in runtime_names:
+        runtime_text = capture(
+            [clangxx, f"-print-file-name={runtime_name}"], cwd=rocm_dir
+        )
+        last_runtime_text = runtime_text
+        candidate = Path(runtime_text)
+        if (
+            runtime_text
+            and runtime_text != runtime_name
+            and candidate.is_absolute()
+            and candidate.is_file()
+        ):
+            runtime_path = candidate
+            break
+    if runtime_path is None:
         raise RuntimeError(
             "ROCm clang++ did not resolve its shared ASAN runtime: "
-            f"expected {runtime_name}, got {runtime_text!r}"
+            f"tried {runtime_names}, last got {last_runtime_text!r}"
         )
     try:
         runtime_path.resolve().relative_to(rocm_dir.resolve())
