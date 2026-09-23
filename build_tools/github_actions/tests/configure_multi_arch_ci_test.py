@@ -1763,6 +1763,30 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertIn("sandbox", entry["test-runs-on"])
 
+    def _host_asan_entry(self, **kwargs):
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(build_variant="host-asan", **kwargs),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(linux_families=["gfx94x"]),
+            jobs=_jobs(),
+        )
+        return result.linux.per_family_info[0]
+
+    def test_host_asan_presubmit_runs_with_the_opt_in_label(self):
+        entry = self._host_asan_entry(
+            event_name="pull_request", pr_labels=["ci:host-asan"]
+        )
+        self.assertIn("sandbox", entry["test-runs-on"])
+
+    def test_host_asan_presubmit_is_off_without_the_label(self):
+        entry = self._host_asan_entry(event_name="pull_request", pr_labels=[])
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_host_asan_postsubmit_stays_off(self):
+        """Unchanged from before; enabling it is a data edit, not a new input."""
+        entry = self._host_asan_entry(event_name="push")
+        self.assertEqual(entry["test-runs-on"], "")
+
     def test_explicit_strict_linux_dev_build(self):
         """Explicit selection creates a build config without GPU tests."""
         result = cm.expand_build_configs(

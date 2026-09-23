@@ -367,5 +367,68 @@ class TestBuildRunnerSelection(unittest.TestCase):
                     )
 
 
+class TestBuildVariantTestTriggers(unittest.TestCase):
+    """Trigger policy is data, so adding a variant or an event is an edit here
+    rather than a new workflow input.
+
+    Goes through the module rather than imported names: an earlier test in this
+    file reloads amdgpu_family_matrix, which rebinds its globals.
+    """
+
+    @property
+    def _triggers(self):
+        return amdgpu_family_matrix.build_variant_test_triggers
+
+    def _runs(self, *args, **kwargs):
+        return amdgpu_family_matrix.build_variant_runs_tests(*args, **kwargs)
+
+    def test_variants_without_a_policy_always_test(self):
+        """release is not in the table and must stay unaffected."""
+        for event in ["pull_request", "push", "schedule", "workflow_dispatch"]:
+            with self.subTest(event=event):
+                self.assertTrue(self._runs("release", event))
+
+    def test_host_asan_still_tests_on_nightly_triggers(self):
+        for event in ["schedule", "workflow_dispatch"]:
+            with self.subTest(event=event):
+                self.assertTrue(self._runs("host-asan", event))
+
+    def test_host_asan_still_skips_postsubmit(self):
+        self.assertFalse(self._runs("host-asan", "push"))
+
+    def test_host_asan_presubmit_requires_the_opt_in_label(self):
+        self.assertFalse(self._runs("host-asan", "pull_request", pr_labels=[]))
+        self.assertTrue(
+            self._runs("host-asan", "pull_request", pr_labels=["ci:host-asan"])
+        )
+
+    def test_an_unrelated_label_does_not_enable_tests(self):
+        self.assertFalse(
+            self._runs("host-asan", "pull_request", pr_labels=["ci:skip", "gfx942"])
+        )
+
+    def test_debug_variant_follows_the_same_policy(self):
+        """The gate matches on the host-asan prefix, so both forms need a rule."""
+        self.assertFalse(self._runs("host-asan-debug", "push"))
+        self.assertTrue(self._runs("host-asan-debug", "schedule"))
+
+    def test_an_event_with_no_rule_does_not_test(self):
+        self.assertFalse(self._runs("host-asan", "repository_dispatch"))
+
+    def test_a_malformed_rule_raises(self):
+        """A typo should fail the configure step, not quietly disable tests."""
+        with mock.patch.dict(self._triggers, {"bogus": {"push": "enabld"}}):
+            with self.assertRaisesRegex(ValueError, "expected 'enabled'"):
+                self._runs("bogus", "push")
+
+    def test_adding_postsubmit_needs_no_new_input(self):
+        """The design requirement from the #7780 review."""
+        with mock.patch.dict(
+            self._triggers,
+            {"host-asan": {**self._triggers["host-asan"], "push": "enabled"}},
+        ):
+            self.assertTrue(self._runs("host-asan", "push"))
+
+
 if __name__ == "__main__":
     unittest.main()

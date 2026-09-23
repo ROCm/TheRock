@@ -215,6 +215,63 @@ all_build_variants = {
     },
 }
 
+# When a build variant runs its tests, keyed by variant then event name. This
+# is the variant-level counterpart to the per-family trigger keys below
+# (nightly_check_only_for_family and friends).
+#
+# A variant with no entry runs tests on every trigger, which is what release
+# does. Within an entry, an event with no rule does not run tests.
+#
+#   "enabled"                : tests run on this event
+#   "disabled"               : tests do not run on this event
+#   {"opt_in_label": "..."}  : tests run when the PR carries that label
+#
+# Extending this is a data edit. Running a variant on postsubmit means adding
+# a "push" rule, and a new variant means adding a key -- neither needs a new
+# workflow input.
+build_variant_test_triggers = {
+    # ASAN runners are scarce, so presubmit is opt-in per PR. Repositories that
+    # want it on every PR (rocm-systems, rocm-libraries) apply the label
+    # automatically rather than setting a workflow input.
+    "host-asan": {
+        "schedule": "enabled",
+        "workflow_dispatch": "enabled",
+        "push": "disabled",
+        "pull_request": {"opt_in_label": "ci:host-asan"},
+    },
+    "host-asan-debug": {
+        "schedule": "enabled",
+        "workflow_dispatch": "enabled",
+        "push": "disabled",
+        "pull_request": {"opt_in_label": "ci:host-asan"},
+    },
+}
+
+
+def build_variant_runs_tests(
+    build_variant: str, event_name: str, pr_labels: list[str] | None = None
+) -> bool:
+    """Returns whether build_variant runs tests on event_name.
+
+    Raises ValueError if a rule is malformed, so a typo in the table fails the
+    configure step instead of silently disabling tests.
+    """
+    policy = build_variant_test_triggers.get(build_variant)
+    if policy is None:
+        return True
+
+    rule = policy.get(event_name, "disabled")
+    if rule == "enabled":
+        return True
+    if rule == "disabled":
+        return False
+    if isinstance(rule, dict) and "opt_in_label" in rule:
+        return rule["opt_in_label"] in (pr_labels or [])
+    raise ValueError(
+        f"build_variant_test_triggers[{build_variant!r}][{event_name!r}] is "
+        f"{rule!r}; expected 'enabled', 'disabled', or {{'opt_in_label': ...}}"
+    )
+
 """
 amdgpu_family_info_matrix dictionary fields:
 - test-runs-on: (required) GitHub runner label for this architecture
