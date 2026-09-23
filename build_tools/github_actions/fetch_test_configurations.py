@@ -491,7 +491,8 @@ test_matrix = {
         },
         "exclude_family": {
             "linux": [
-                # CRITICAL FAILURE (amd-smi hangs)
+                # CRITICAL FAILURE (amd-smi hangs): rocthrust test hangs during amd-smi GPU detection
+                # https://github.com/ROCm/TheRock/actions/runs/35798263253/job/106982866530
                 "gfx125X-dcgpu",
             ],
         },
@@ -713,7 +714,8 @@ test_matrix = {
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
         "exclude_family": {
             "linux": [
-                # CRITICAL FAILURE: https://github.com/ROCm/TheRock/actions/runs/35820932302/job/107052684462
+                # CRITICAL FAILURE (pytest hangs): rocprofiler-sdk test hangs during pytest collection
+                # https://github.com/ROCm/TheRock/actions/runs/35820932302/job/107052684462
                 "gfx125X-dcgpu",
             ],
         },
@@ -809,7 +811,8 @@ test_matrix = {
         },
         "exclude_family": {
             "linux": [
-                # CRITICAL FAILURE: https://github.com/ROCm/TheRock/actions/runs/35803014951/job/106997748208
+                # CRITICAL FAILURE (amd-smi hangs): miopenprovider test hangs during amd-smi GPU detection
+                # https://github.com/ROCm/TheRock/actions/runs/35803014951/job/106997748208
                 "gfx125X-dcgpu",
             ],
         },
@@ -910,7 +913,8 @@ test_matrix = {
         "container_options": ["--cap-add=SYS_PTRACE", "--cap-add=PERFMON"],
         "exclude_family": {
             "linux": [
-                # CRITICAL FAILURE (amd-smi hangs)
+                # CRITICAL FAILURE (amd-smi hangs): rocprofiler-systems test hangs during amd-smi GPU detection
+                # https://github.com/ROCm/TheRock/actions/runs/35820932302/job/107052684535
                 "gfx125X-dcgpu",
             ],
         },
@@ -1094,7 +1098,8 @@ test_matrix = {
                 "gfx906",
                 "gfx101X-all",
                 "gfx103X-all",
-                # CRITICAL FAILURE: https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038471042
+                # CRITICAL FAILURE (test hangs): hiptensor test hangs during execution
+                # https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038471042
                 "gfx125X-dcgpu",
             ],
             "windows": ["gfx900", "gfx90c", "gfx906", "gfx101X-all", "gfx103X-all"],

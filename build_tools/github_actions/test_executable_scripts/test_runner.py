@@ -145,9 +145,12 @@ COMPONENT_CTEST_EXCLUSIONS = {
 COMPONENT_GTEST_EXCLUSIONS = {
     "rocsparse": {
         "gfx125X-dcgpu": [
-            # FAILURE: sddmm f16 tests fail with tolerance issues
-            # https://github.com/ROCm/TheRock/actions/runs/35798263253/job/106982866615
-            "quick/sddmm.level3/*f16_r*",
+            # FAILURE: sddmm pure f16 compute tests fail with tolerance issues
+            # Pattern matches tests where compute_type is f16_r (not f32_r)
+            # Failing: quick/sddmm.level3/i32_i32_f16_r_f16_r_f16_r_f16_r_...
+            # Passing: quick/sddmm.level3/i32_i32_f16_r_f16_r_f32_r_f32_r_...
+            # https://github.com/ROCm/TheRock/actions/runs/35898004321/job/107306879511
+            "quick/sddmm*f16_r_f16_r_f16_r_f16_r*",
         ],
     },
     "miopen": {
