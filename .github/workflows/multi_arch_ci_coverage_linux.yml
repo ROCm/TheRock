@@ -176,6 +176,9 @@ jobs:
       rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
       release_type: ci
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      # TheRock scripts for the instrumented build; cross-repo callers pass ROCm/TheRock + ref.
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
@@ -208,6 +211,9 @@ jobs:
       rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
       release_type: ci
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      # TheRock scripts for the instrumented build; cross-repo callers pass ROCm/TheRock + ref.
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
