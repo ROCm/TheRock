@@ -578,7 +578,8 @@ test_matrix = {
                 "gfx1153",
                 "gfx1200",
                 "gfx1201",
-                # CRITICAL FAILURE (timeout causes GPU hang): spmm_test.spmm strided_batched smoke tests hang
+                # KNOWN FAILURE: spmm_test.spmm strided_batched smoke tests fail
+                # individual tests fail but GTEST_FILTER plumbing not available (ctest overrides env var)
                 # https://github.com/ROCm/TheRock/actions/runs/35920307532/job/107382567537
                 "gfx125X-dcgpu",
             ],
