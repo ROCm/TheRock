@@ -231,7 +231,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_tensilelite_common_pins_hw_common_category(self):
         """The job must run hw-common at every tier, without the tensilelite ctest stage."""
         os.environ["PROJECTS_TO_TEST"] = "tensilelite-common"
-        for test_type in ("quick", "standard", "comprehensive"):
+        for test_type in ("quick", "standard", "comprehensive", "full"):
             with self.subTest(test_type=test_type):
                 os.environ["TEST_TYPE"] = test_type
                 fetch_test_configurations.run()
