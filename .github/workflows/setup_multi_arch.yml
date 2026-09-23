@@ -217,7 +217,7 @@ jobs:
         with:
           persist-credentials: false
           repository: ROCm/therock-ci-config
-          ref: main
+          ref: users/kkhalasi/prolense-test-customer-dev
           path: ci-config
         continue-on-error: true
 
