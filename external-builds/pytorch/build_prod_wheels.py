@@ -1471,6 +1471,61 @@ def copy_libuv_to_torch_lib(pytorch_dir: Path):
     shutil.copy2(uv_dll, target_lib)
 
 
+_AOTRITON_ARCH_ANCHOR = '    message(STATUS "PYTORCH_ROCM_ARCH ${PYTORCH_ROCM_ARCH}")\n'
+_AOTRITON_ARCH_ARG = "      -DAOTRITON_TARGET_ARCH:STRING=${PYTORCH_ROCM_ARCH}\n"
+_AOTRITON_BASE_ARCH_ARG = (
+    "      -DAOTRITON_TARGET_ARCH:STRING=${__AOTRITON_BASE_ARCH}\n"
+)
+_AOTRITON_BASE_ARCH_BLOCK = """\
+    # Added by TheRock: AOTriton matches whole target tokens, so an xnack
+    # variant such as gfx942:xnack+ is filtered out even though gfx942 is
+    # supported, and configure then fails on the empty target list. Its kernel
+    # images are per-architecture and xnack-agnostic, and this code path builds
+    # the runtime only (AOTRITON_NOIMAGE_MODE=ON), so the base target is the
+    # value AOTriton actually wants.
+    set(__AOTRITON_BASE_ARCH "")
+    foreach(__aotriton_target ${PYTORCH_ROCM_ARCH})
+      string(REGEX REPLACE ":.*$" "" __aotriton_base "${__aotriton_target}")
+      list(APPEND __AOTRITON_BASE_ARCH "${__aotriton_base}")
+    endforeach()
+    list(REMOVE_DUPLICATES __AOTRITON_BASE_ARCH)
+    message(STATUS "AOTRITON_TARGET_ARCH ${__AOTRITON_BASE_ARCH}")
+"""
+
+
+def patch_aotriton_target_arch(pytorch_dir: Path) -> None:
+    """Hand AOTriton base gfx targets when it is built from source.
+
+    PyTorch only publishes prebuilt AOTriton ASAN runtimes for a couple of ROCm
+    versions. Outside those it builds the runtime from source and forwards
+    PYTORCH_ROCM_ARCH verbatim, which ASAN pins to an xnack target AOTriton
+    rejects.
+    """
+    cmake_path = pytorch_dir / "cmake" / "External" / "aotriton.cmake"
+    if not cmake_path.is_file():
+        print(f"+++ No AOTriton cmake at {cmake_path}; nothing to adjust")
+        return
+
+    text = cmake_path.read_text()
+    if "__AOTRITON_BASE_ARCH" in text:
+        return
+    if _AOTRITON_ARCH_ANCHOR not in text or _AOTRITON_ARCH_ARG not in text:
+        raise RuntimeError(
+            f"Cannot adjust AOTRITON_TARGET_ARCH in {cmake_path}: expected "
+            "upstream text is missing. PyTorch's AOTriton integration changed, "
+            "so re-check whether xnack targets still need this adjustment."
+        )
+
+    text = text.replace(
+        _AOTRITON_ARCH_ANCHOR,
+        _AOTRITON_ARCH_ANCHOR + _AOTRITON_BASE_ARCH_BLOCK,
+        1,
+    )
+    text = text.replace(_AOTRITON_ARCH_ARG, _AOTRITON_BASE_ARCH_ARG, 1)
+    cmake_path.write_text(text)
+    print(f"+++ Adjusted AOTRITON_TARGET_ARCH to base gfx targets in {cmake_path}")
+
+
 def resolve_pytorch_flash_attention(
     args: argparse.Namespace,
     env: dict[str, str],
@@ -1593,6 +1648,8 @@ def do_build_pytorch(
 
     # Enable/disable Flash Attention. ASAN uses prebuilt AOTriton +asan
     # artifacts and intentionally has no separate Triton wheel dependency.
+    if args.asan:
+        patch_aotriton_target_arch(pytorch_dir)
     use_flash_attention = resolve_pytorch_flash_attention(args, env, triton_requirement)
     # Finally update the environment with the resolved setting.
     env.update(

@@ -332,6 +332,48 @@ class AsanInstallAndFeatureTest(unittest.TestCase):
         self.assertIn("--index-url", install_command)
         self.assertIn("rocm[libraries,devel]>1.0", install_command)
 
+    def _write_aotriton_cmake(self, pytorch_dir: Path, text: str) -> Path:
+        cmake_path = pytorch_dir / "cmake" / "External" / "aotriton.cmake"
+        cmake_path.parent.mkdir(parents=True)
+        cmake_path.write_text(text)
+        return cmake_path
+
+    def test_aotriton_target_arch_drops_xnack_suffix(self):
+        upstream = (
+            '    message(STATUS "PYTORCH_ROCM_ARCH ${PYTORCH_ROCM_ARCH}")\n'
+            "\n"
+            "    ExternalProject_Add(${project}\n"
+            "      CMAKE_CACHE_ARGS\n"
+            "      -DAOTRITON_TARGET_ARCH:STRING=${PYTORCH_ROCM_ARCH}\n"
+            "    )\n"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            cmake_path = self._write_aotriton_cmake(Path(td), upstream)
+            bpw.patch_aotriton_target_arch(Path(td))
+            patched = cmake_path.read_text()
+
+            self.assertIn(
+                "-DAOTRITON_TARGET_ARCH:STRING=${__AOTRITON_BASE_ARCH}", patched
+            )
+            self.assertNotIn(
+                "-DAOTRITON_TARGET_ARCH:STRING=${PYTORCH_ROCM_ARCH}", patched
+            )
+            self.assertIn('string(REGEX REPLACE ":.*$"', patched)
+
+            # Re-running must not stack a second copy of the block.
+            bpw.patch_aotriton_target_arch(Path(td))
+            self.assertEqual(cmake_path.read_text(), patched)
+
+    def test_aotriton_patch_is_skipped_when_cmake_is_absent(self):
+        with tempfile.TemporaryDirectory() as td:
+            bpw.patch_aotriton_target_arch(Path(td))
+
+    def test_aotriton_patch_reports_unexpected_upstream_layout(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_aotriton_cmake(Path(td), "# upstream moved on\n")
+            with self.assertRaisesRegex(RuntimeError, "AOTriton integration changed"):
+                bpw.patch_aotriton_target_arch(Path(td))
+
     def test_asan_defaults_to_prebuilt_aotriton_without_triton_wheel(self):
         args = argparse.Namespace(asan=True, enable_pytorch_flash_attention=None)
         self.assertTrue(
