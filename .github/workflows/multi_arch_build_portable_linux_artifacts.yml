@@ -99,6 +99,11 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_family }}
       BUILD_DIR: build
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      # TEMPORARY (revert before merge): isolates math-libs from cache entries
+      # built with THEROCK_USE_NEW_HOSTCALL_IMPL=OFF. Those objects carry device
+      # code for the old hostcall protocol, and ccache does not hash the device
+      # bitcode, so they are served to ON builds under an unchanged key.
+      THEROCK_CCACHE_NAMESPACE_VERSION: ${{ inputs.stage_name == 'math-libs' && 'v2-pr8259' || 'v2' }}
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       TEATIME_FORCE_INTERACTIVE: 0
       RELEASE_TYPE: ${{ inputs.release_type }}

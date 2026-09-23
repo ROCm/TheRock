@@ -25,6 +25,7 @@ Typical usage for the current shell (will set the CCACHE_CONFIGPATH var):
 """
 
 import argparse
+import os
 from pathlib import Path
 import platform
 import sys
@@ -43,7 +44,12 @@ CACHE_SRV_REL = "http://bazelremote-svc-rel.bazelremote-ns.svc.cluster.local:808
 # Bump this version when making hash-affecting config changes (sloppiness,
 # compiler_check, etc.) to logically isolate new cache entries from stale
 # ones on the shared remote cache server.
-CCACHE_NAMESPACE_VERSION = "v2"
+#
+# THEROCK_CCACHE_NAMESPACE_VERSION overrides it for a single build. Use it when
+# something outside the cache key changes the output of a compile, such as the
+# contents of the device bitcode that clang links in via --hip-device-lib-path,
+# which ccache does not hash.
+CCACHE_NAMESPACE_VERSION = os.environ.get("THEROCK_CCACHE_NAMESPACE_VERSION", "v2")
 
 DEFAULT_LOG_DIR = REPO_ROOT / "build" / "logs" / "ccache"
 
