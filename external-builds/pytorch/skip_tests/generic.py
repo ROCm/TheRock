@@ -27,6 +27,9 @@ skip_tests = {
             # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI
             "test_memory_snapshot",
             "test_memory_plots",
+            # setup-python requires LD_LIBRARY_PATH, but this test launches a
+            # subprocess with an empty environment.
+            "test_allocator_backend",
             # HIP_VISIBLE_DEVICES and CUDA_VISIBLE_DEVICES not working
             # to restrict visibility of devices
             # AssertionError: String comparison failed: '8, 1' != '8, 8'

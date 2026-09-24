@@ -224,13 +224,6 @@ jobs:
           echo "CC=${ROCM_HOME}/lib/llvm/bin/clang" >> "${GITHUB_ENV}"
           echo "CXX=${ROCM_HOME}/lib/llvm/bin/clang++" >> "${GITHUB_ENV}"
 
-          # Some upstream tests clear the environment before launching Python.
-          if [[ "${RUNNER_OS}" == "Linux" ]]; then
-            PYTHON_LIB_DIR="$(python -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR"))')"
-            echo "${PYTHON_LIB_DIR}" > /etc/ld.so.conf.d/python.conf
-            ldconfig
-          fi
-
       # Here we checkout the same version of PyTorch that wheels were built from
       # so we have the right set of test source files. We _probably_ don't need
       # to run HIPIFY, apply patches, or fetch submodules, so we skip those
