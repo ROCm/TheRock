@@ -212,7 +212,9 @@ set(NCURSES_INCLUDE "")
 if(THEROCK_BUNDLE_SYSDEPS)
   find_library_prefix(gmp gmp::gmp GMP_PREFIX)
   find_library_prefix(mpfr mpfr::mpfr MPFR_PREFIX)
-  find_library_prefix(expat expat::expat EXPAT_PREFIX)
+  # --with-expat takes no prefix: expat resolves through the -L that
+  # CMAKE_SHARED_LINKER_FLAGS carries for every bundled sysdep.
+  find_package(expat REQUIRED)
   find_library_prefix(ncurses ncurses::ncurses NCURSES_PREFIX)
 
   # We need to explicitly pass ncurses' include path and set the rpath for
@@ -263,11 +265,9 @@ string(REPLACE ";" ":" PKG_CONFIG_PATH_ENV_VAR "${THEROCK_PKG_CONFIG_DIRS}")
 
 # Set conditional configure flags for bundled sysdep prefixes. When using system
 # libraries, these are left empty so autotools discovers them via pkg-config.
-set(ROCGDB_EXPAT_FLAG "")
 set(ROCGDB_GMP_FLAG "")
 set(ROCGDB_MPFR_FLAG "")
 if(THEROCK_BUNDLE_SYSDEPS)
-  set(ROCGDB_EXPAT_FLAG "--with-expat-prefix=${EXPAT_PREFIX}")
   set(ROCGDB_GMP_FLAG "--with-gmp=${GMP_PREFIX}")
   set(ROCGDB_MPFR_FLAG "--with-mpfr=${MPFR_PREFIX}")
 endif()
@@ -420,7 +420,7 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
         --with-amd-dbgapi
         ${ROCGDB_AUTO_LOAD_DIR_FLAG}
         "--with-bugurl=${ROCGDB_BUG_URL}"
-        ${ROCGDB_EXPAT_FLAG}
+        --with-expat
         "--with-gdb-datadir=${ROCGDB_DATA_DIR}"
         ${ROCGDB_GMP_FLAG}
         --with-lzma
