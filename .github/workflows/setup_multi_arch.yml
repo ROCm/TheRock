@@ -186,6 +186,7 @@ jobs:
       QUARTZ_REPORTING_WORKFLOW: setup_multi_arch.yml
       QUARTZ_WORKFLOW_POSTFIX: "- setup"
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
+      BUILD_VARIANT: ${{ inputs.build_variant }}
       PRERELEASE_VERSION: ${{ inputs.prerelease_version }}
       EXTERNAL_REPO: ${{ inputs.external_repo }}
     steps:
