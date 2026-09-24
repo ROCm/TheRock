@@ -173,6 +173,9 @@ def main(argv: list[str]) -> int:
     env = configure_environment(args, pytest_args, tests_to_skip)
 
     test_sh = args.pytorch_dir / ".ci" / "pytorch" / "test.sh"
+    custom_test_artifacts = args.pytorch_dir / "build" / "custom_test_artifacts"
+    # Source-only wheel tests do not have PyTorch's normal build directory.
+    custom_test_artifacts.mkdir(parents=True, exist_ok=True)
     print(f"Using PyTorch version: {pytorch_version}")
     print(f"Executing: bash {test_sh}", flush=True)
     result = subprocess.run(["bash", str(test_sh)], cwd=args.pytorch_dir, env=env)
