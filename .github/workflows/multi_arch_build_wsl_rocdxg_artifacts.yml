@@ -281,6 +281,7 @@ jobs:
           wsl_src_dir="${HOME}/therock-wsl-rocdxg/src"
           wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
           docker run --rm \
+            ${{ inputs.build_variant_cmake_preset == 'linux-release-tsan' && '--security-opt seccomp=unconfined' || '' }} \
             --mount "type=bind,src=${wsl_src_dir},dst=${wsl_src_dir}" \
             --mount "type=bind,src=${wsl_build_dir},dst=${wsl_build_dir}" \
             --mount "type=bind,src=${THEROCK_WIN_SDK_SHARED},dst=${THEROCK_WSL_WIN_SDK_MOUNT},readonly" \
@@ -313,6 +314,7 @@ jobs:
           wsl_src_dir="${HOME}/therock-wsl-rocdxg/src"
           wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
           docker run --rm \
+            ${{ inputs.build_variant_cmake_preset == 'linux-release-tsan' && '--security-opt seccomp=unconfined' || '' }} \
             --mount "type=bind,src=${wsl_src_dir},dst=${wsl_src_dir}" \
             --mount "type=bind,src=${wsl_build_dir},dst=${wsl_build_dir}" \
             --mount "type=bind,src=${THEROCK_WIN_SDK_SHARED},dst=${THEROCK_WSL_WIN_SDK_MOUNT},readonly" \

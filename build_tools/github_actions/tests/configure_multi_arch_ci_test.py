@@ -1737,6 +1737,34 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
 
+    def test_tsan_uses_two_gpu_families_and_disables_python(self):
+        targets = cm.TargetSelection(linux_families=["gfx94x", "gfx950"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="workflow_dispatch",
+                build_variant="tsan",
+                build_python_packages=True,
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+
+        self.assertIsNotNone(result.linux)
+        self.assertEqual(result.linux.build_variant_label, "tsan")
+        self.assertEqual(result.linux.build_variant_suffix, "tsan")
+        self.assertEqual(
+            result.linux.build_variant_cmake_preset, "linux-release-tsan"
+        )
+        self.assertFalse(result.linux.build_python_packages)
+        self.assertEqual(
+            [entry["amdgpu_family"] for entry in result.linux.per_family_info],
+            ["gfx94X-dcgpu", "gfx950-dcgpu"],
+        )
+        for entry in result.linux.per_family_info:
+            self.assertTrue(entry["test-runs-on"])
+            self.assertNotEqual(entry["test-runs-on"], result.linux.build_runs_on_large)
+
     def test_asan_debug_uses_sandbox_runner(self):
         """asan-debug variant uses sandbox runner like asan."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])
