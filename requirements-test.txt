@@ -29,3 +29,6 @@ toml>=0.10.2
 
 # build_tools/packaging/linux/tests/build_package_test.py requirement
 jinja2>=3.0.0
+
+# build_tools/build_python_packages.py ASAN ELF inspection
+pyelftools>=0.29
