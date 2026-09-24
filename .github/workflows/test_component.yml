@@ -234,7 +234,7 @@ jobs:
         # including command chains and per-command environment assignments. Callers
         # must be trusted to select code, just as they select repository/ref above.
         run: | # zizmor: ignore[template-injection]
-          ${{ fromJSON(inputs.component).test_script }}
+          python ./build_tools/memory_monitor.py -- ${{ fromJSON(inputs.component).test_script }}
 
       - name: Print test reproduction command
         if: ${{ failure() && steps.test.outcome == 'failure' }}

@@ -86,6 +86,7 @@ _BASE_CONTAINER_OPTIONS = [
 # --group-add 993,992,110 - Additional GPU-related groups
 # --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
 # -e ROCR_VISIBLE_DEVICES - Pass host's GPU isolation env var to container (used on ARC runners)
+# -e HIP_VISIBLE_DEVICES - Pass host's HIP GPU isolation env var to container
 _GPU_CONTAINER_OPTIONS = [
     "--group-add video",
     "--device /dev/kfd",
@@ -95,17 +96,20 @@ _GPU_CONTAINER_OPTIONS = [
     "--group-add 110",
     "--env-file /etc/podinfo/gha-gpu-isolation-settings",
     "-e ROCR_VISIBLE_DEVICES",
+    "-e HIP_VISIBLE_DEVICES",
     "-e KUBE_CPU_REQUEST",
 ]
 
-
-def _build_container_options(job_config: dict, platform: str) -> dict:
+def _build_container_options(
+    job_config: dict, platform: str, amdgpu_families: str | None = None
+) -> dict:
     """
     Build the final container_options string by concatenating base, GPU, and job-specific options.
 
     Args:
         job_config: The job configuration dictionary
         platform: The platform (e.g., "linux", "windows")
+        amdgpu_families: The AMDGPU family string (unused, kept for future use)
 
     Returns:
         The modified job_config with updated container_options
@@ -269,13 +273,13 @@ test_matrix = {
             "linux": 6,
             "windows": 6,
         },
-        "exclude_family": {
-            "linux": [
-                # FAILURE (rocblas-test_quick_suite crash/no gtest output, cannot filter individual tests)
-                # https://github.com/ROCm/TheRock/actions/runs/35820932302/job/107052684531
-                "gfx125X-dcgpu",
-            ],
-        },
+        # "exclude_family": {
+        #     "linux": [
+        #         # FAILURE (rocblas-test_quick_suite crash/no gtest output, cannot filter individual tests)
+        #         # https://github.com/ROCm/TheRock/actions/runs/35820932302/job/107052684531
+        #         "gfx125X-dcgpu",
+        #     ],
+        # },
     },
     "rocroller": {
         "job_name": "rocroller",
@@ -377,7 +381,7 @@ test_matrix = {
                 "gfx1030",
                 # FAILURE (3275+ gtest failures - too many to filter individually)
                 # https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038470972
-                "gfx125X-dcgpu",
+                # "gfx125X-dcgpu",
             ],
         },
     },
@@ -408,13 +412,13 @@ test_matrix = {
             "linux": 3,
             "windows": 2,
         },
-        "exclude_family": {
-            "linux": [
-                # CRITICAL FAILURE (GPU MES hang): POTF2.strided_batched__double_complex causes GPU hang
-                # https://github.com/ROCm/TheRock/actions/runs/35924956371/job/107397931590
-                "gfx125X-dcgpu",
-            ],
-        },
+        # "exclude_family": {
+        #     "linux": [
+        #         # CRITICAL FAILURE (GPU MES hang): POTF2.strided_batched__double_complex causes GPU hang
+        #         # https://github.com/ROCm/TheRock/actions/runs/35924956371/job/107397931590
+        #         "gfx125X-dcgpu",
+        #     ],
+        # },
     },
     # PRIM tests
     "rocprim": {
@@ -427,14 +431,14 @@ test_matrix = {
             "linux": 2,
             "windows": 2,
         },
-        "exclude_family": {
-            "linux": [
-                # CRITICAL FAILURE (GPU MES hang): RocprimDeviceReduceByKey.LargeSegmentCountReduceByKeyDeterministic
-                # causes GPU hang, amdgpu MES failed to respond to msg=REMOVE_QUEUE
-                # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363782145
-                "gfx125X-dcgpu",
-            ],
-        },
+        # "exclude_family": {
+        #     "linux": [
+        #         # CRITICAL FAILURE (GPU MES hang): RocprimDeviceReduceByKey.LargeSegmentCountReduceByKeyDeterministic
+        #         # causes GPU hang, amdgpu MES failed to respond to msg=REMOVE_QUEUE
+        #         # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363782145
+        #         "gfx125X-dcgpu",
+        #     ],
+        # },
     },
     "hipcub": {
         "job_name": "hipcub",
@@ -459,9 +463,9 @@ test_matrix = {
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm",
         # FAILURE (many gdb.rocm sub-test failures, test framework doesn't support GTEST_FILTER)
         # https://github.com/ROCm/TheRock/actions/runs/35784025966/job/106936788391
-        "exclude_family": {
-            "linux": ["gfx125X-dcgpu"],
-        },
+        # "exclude_family": {
+        #     "linux": ["gfx125X-dcgpu"],
+        # },
     },
     # Corefile tests require specific hardware support (GPU core dump capable runners).
     # test_runner is pre-pinned so the family-based runner selection loop skips it.
@@ -486,13 +490,13 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        "exclude_family": {
-            "linux": [
-                # FAILURE (15 test failures, custom test framework doesn't support GTEST_FILTER)
-                # https://github.com/ROCm/TheRock/actions/runs/35803014951/job/106997748160
-                "gfx125X-dcgpu",
-            ],
-        },
+        # "exclude_family": {
+        #     "linux": [
+        #         # FAILURE (15 test failures, custom test framework doesn't support GTEST_FILTER)
+        #         # https://github.com/ROCm/TheRock/actions/runs/35803014951/job/106997748160
+        #         "gfx125X-dcgpu",
+        #     ],
+        # },
     },
     "rocthrust": {
         "job_name": "rocthrust",
@@ -538,14 +542,14 @@ test_matrix = {
             "linux": 3,
             "windows": 3,
         },
-        "exclude_family": {
-            "linux": [
-                # KNOWN FAILURE: sddmm f16 compute tests fail with tolerance issues
-                # individual tests fail but GTEST_FILTER plumbing not available (ctest overrides env var)
-                # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363781930
-                "gfx125X-dcgpu",
-            ],
-        },
+        # "exclude_family": {
+        #     "linux": [
+        #         # KNOWN FAILURE: sddmm f16 compute tests fail with tolerance issues
+        #         # individual tests fail but GTEST_FILTER plumbing not available (ctest overrides env var)
+        #         # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363781930
+        #         "gfx125X-dcgpu",
+        #     ],
+        # },
     },
     "hipsparselt": {
         "job_name": "hipsparselt",
@@ -581,7 +585,7 @@ test_matrix = {
                 # KNOWN FAILURE: spmm_test.spmm strided_batched smoke tests fail
                 # individual tests fail but GTEST_FILTER plumbing not available (ctest overrides env var)
                 # https://github.com/ROCm/TheRock/actions/runs/35920307532/job/107382567537
-                "gfx125X-dcgpu",
+                # "gfx125X-dcgpu",
             ],
             "windows": [
                 "gfx908",
@@ -634,11 +638,11 @@ test_matrix = {
             "linux": 2,
             "windows": 2,
         },
-        "exclude_family": {
-            # CRITICAL FAILURE on gfx125X-dcgpu: GPU MES hang on sbrc_3D/accuracy_test.vs_fftw/real_forward_len_256_128_64_double_op
-            # https://github.com/ROCm/TheRock/actions/runs/35956605014/job/107496297188
-            "linux": ["gfx125X-dcgpu"],
-        },
+        # "exclude_family": {
+        #     # CRITICAL FAILURE on gfx125X-dcgpu: GPU MES hang on sbrc_3D/accuracy_test.vs_fftw/real_forward_len_256_128_64_double_op
+        #     # https://github.com/ROCm/TheRock/actions/runs/35956605014/job/107496297188
+        #     "linux": ["gfx125X-dcgpu"],
+        # },
     },
     "hipfft": {
         "job_name": "hipfft",
@@ -650,11 +654,11 @@ test_matrix = {
             "linux": 2,
             "windows": 2,
         },
-        "exclude_family": {
-            # CRITICAL FAILURE on gfx125X-dcgpu: GPU MES hang on pow2_1D_half/accuracy_test.vs_fftw/real_forward_len_65536_half_op_batch_1_istride_1_R_ostride_1_HI_idist_65536_odist_32769_ioffset_0_0_ooffset_0_0
-            # https://github.com/ROCm/TheRock/actions/runs/35952546851/job/107484147512
-            "linux": ["gfx125X-dcgpu"],
-        },
+        # "exclude_family": {
+        #     # CRITICAL FAILURE on gfx125X-dcgpu: GPU MES hang on pow2_1D_half/accuracy_test.vs_fftw/real_forward_len_65536_half_op_batch_1_istride_1_R_ostride_1_HI_idist_65536_odist_32769_ioffset_0_0_ooffset_0_0
+        #     # https://github.com/ROCm/TheRock/actions/runs/35952546851/job/107484147512
+        #     "linux": ["gfx125X-dcgpu"],
+        # },
     },
     # MIOpen tests
     "miopen": {
@@ -671,14 +675,14 @@ test_matrix = {
             "linux": 4,
             "windows": 4,
         },
-        "exclude_family": {
-            "linux": [
-                # KNOWN FAILURE: Gemm solver FP16 tests fail on gfx125X
-                # individual tests fail but GTEST_FILTER plumbing not available (ctest overrides env var)
-                # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363782290
-                "gfx125X-dcgpu",
-            ],
-        },
+        # "exclude_family": {
+        #     "linux": [
+        #         # KNOWN FAILURE: Gemm solver FP16 tests fail on gfx125X
+        #         # individual tests fail but GTEST_FILTER plumbing not available (ctest overrides env var)
+        #         # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363782290
+        #         "gfx125X-dcgpu",
+        #     ],
+        # },
     },
     # MIOpen dbsync (StaticFDBSync) -- GPU-free under the rocjitsu KMD interposer on a CPU runner.
     # The runner ships in the MIOpen dist (share/miopen/bin/run_dbsync_rocjitsu.py, pulled via
@@ -822,11 +826,11 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        "exclude_family": {
-            # CRITICAL FAILURE on gfx125X-dcgpu: GPU MES hang during test execution
-            # https://github.com/ROCm/TheRock/actions/runs/35937839943/job/107438940874
-            "linux": ["gfx125X-dcgpu"],
-        },
+        # "exclude_family": {
+        #     # CRITICAL FAILURE on gfx125X-dcgpu: GPU MES hang during test execution
+        #     # https://github.com/ROCm/TheRock/actions/runs/35937839943/job/107438940874
+        #     "linux": ["gfx125X-dcgpu"],
+        # },
     },
     # hipDNN samples tests
     "hipdnn-samples": {
@@ -876,14 +880,14 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        "exclude_family": {
-            "linux": [
-                # KNOWN FAILURE: TestGpuMatmulPlan and TestHipblasltMatmulPlanBuilder tests fail
-                # individual tests fail but GTEST_FILTER plumbing not available (ctest overrides env var)
-                # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363782678
-                "gfx125X-dcgpu",
-            ],
-        },
+        # "exclude_family": {
+        #     "linux": [
+        #         # KNOWN FAILURE: TestGpuMatmulPlan and TestHipblasltMatmulPlanBuilder tests fail
+        #         # individual tests fail but GTEST_FILTER plumbing not available (ctest overrides env var)
+        #         # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363782678
+        #         "gfx125X-dcgpu",
+        #     ],
+        # },
     },
     # hip-kernel-provider tests. test_hipkernelprovider.py installs the staged
     # rocKE wheels, then delegates to test_runner.py.
@@ -926,11 +930,11 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        "exclude_family": {
-            # CRITICAL FAILURE on gfx125X-dcgpu: GPU hang on bicgstab/parameterized_bicgstab.bicgstab_float/1
-            # https://github.com/ROCm/TheRock/actions/runs/35944362977/job/107459031710
-            "linux": ["gfx125X-dcgpu"],
-        },
+        # "exclude_family": {
+        #     # CRITICAL FAILURE on gfx125X-dcgpu: GPU hang on bicgstab/parameterized_bicgstab.bicgstab_float/1
+        #     # https://github.com/ROCm/TheRock/actions/runs/35944362977/job/107459031710
+        #     "linux": ["gfx125X-dcgpu"],
+        # },
     },
     # profiler tests
     "rocprofiler-compute": {
@@ -995,13 +999,13 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        "exclude_family": {
-            "linux": [
-                # FAILURE (hipErrorNoBinaryForGpu - fundamental gfx1250 arch support issue in lit tests)
-                # https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038470967
-                "gfx125X-dcgpu",
-            ],
-        },
+        # "exclude_family": {
+        #     "linux": [
+        #         # FAILURE (hipErrorNoBinaryForGpu - fundamental gfx1250 arch support issue in lit tests)
+        #         # https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038470967
+        #         "gfx125X-dcgpu",
+        #     ],
+        # },
     },
     # libhipcxx hiprtc tests
     "libhipcxx_hiprtc": {
@@ -1019,13 +1023,13 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        "exclude_family": {
-            "linux": [
-                # FAILURE (hipErrorNoBinaryForGpu - fundamental gfx1250 arch support issue in lit tests)
-                # https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861741
-                "gfx125X-dcgpu",
-            ],
-        },
+        # "exclude_family": {
+        #     "linux": [
+        #         # FAILURE (hipErrorNoBinaryForGpu - fundamental gfx1250 arch support issue in lit tests)
+        #         # https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861741
+        #         "gfx125X-dcgpu",
+        #     ],
+        # },
     },
     # hipthreads lit tests
     "hipthreads": {
@@ -1041,13 +1045,13 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        "exclude_family": {
-            "linux": [
-                # FAILURE (hipErrorNoBinaryForGpu/hsa-hotswap errors - fundamental gfx1250 arch issue)
-                # https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861504
-                "gfx125X-dcgpu",
-            ],
-        },
+        # "exclude_family": {
+        #     "linux": [
+        #         # FAILURE (hipErrorNoBinaryForGpu/hsa-hotswap errors - fundamental gfx1250 arch issue)
+        #         # https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861504
+        #         "gfx125X-dcgpu",
+        #     ],
+        # },
     },
     # hipthreads example apps (build + run consumer samples against the artifact).
     "hipthreads_examples": {
@@ -1062,13 +1066,13 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        "exclude_family": {
-            "linux": [
-                # FAILURE (hipErrorNoBinaryForGpu/hsa-hotswap errors - fundamental gfx1250 arch issue)
-                # https://github.com/ROCm/TheRock/actions/runs/35820932302/job/107052684535
-                "gfx125X-dcgpu",
-            ],
-        },
+        # "exclude_family": {
+        #     "linux": [
+        #         # FAILURE (hipErrorNoBinaryForGpu/hsa-hotswap errors - fundamental gfx1250 arch issue)
+        #         # https://github.com/ROCm/TheRock/actions/runs/35820932302/job/107052684535
+        #         "gfx125X-dcgpu",
+        #     ],
+        # },
     },
     "rocdecode": {
         "job_name": "rocdecode",
@@ -1460,7 +1464,8 @@ def run():
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)
     all_components = [
-        _build_container_options(c, platform) for c in components_with_runners
+        _build_container_options(c, platform, amdgpu_families)
+        for c in components_with_runners
     ]
 
     # Separate sanity (always a prerequisite) from the regular component matrix.
