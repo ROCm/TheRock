@@ -459,11 +459,12 @@ test_matrix = {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm",
-        # FAILURE (many gdb.rocm sub-test failures, test framework doesn't support GTEST_FILTER)
-        # https://github.com/ROCm/TheRock/actions/runs/35784025966/job/106936788391
-        # "exclude_family": {
-        #     "linux": ["gfx125X-dcgpu"],
-        # },
+        "exclude_family": {
+            "linux": [
+                # GPU tests do not honor ROCR_VISIBLE_DEVICES and utilizes other gpus during test runs. excluding
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # Corefile tests require specific hardware support (GPU core dump capable runners).
     # test_runner is pre-pinned so the family-based runner selection loop skips it.
@@ -831,10 +832,10 @@ test_matrix = {
             "windows": 1,
         },
         "exclude_family": {
-            # CRITICAL FAILURE on gfx125X-dcgpu: GPU MES hang during test execution
-            # https://github.com/ROCm/TheRock/actions/runs/35937839943/job/107438940874
-            # https://github.com/ROCm/TheRock/actions/runs/36050392815/job/107804274614
-            "linux": ["gfx125X-dcgpu"],
+            "linux": [
+                # GPU tests do not honor ROCR_VISIBLE_DEVICES and utilizes other gpus during test runs. excluding
+                "gfx125X-dcgpu",
+            ],
         },
     },
     # hipDNN samples tests
@@ -935,12 +936,6 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        "exclude_family": {
-            "linux": [
-                # PASSING on gfx125X-dcgpu
-                "gfx125X-dcgpu",
-            ],
-        },
     },
     # profiler tests
     "rocprofiler-compute": {
@@ -965,6 +960,8 @@ test_matrix = {
                 "gfx1103",
                 "gfx1200",
                 "gfx1201",
+                # GPU tests do not honor ROCR_VISIBLE_DEVICES and utilizes other gpus during test runs. excluding
+                "gfx125X-dcgpu",
             ],
         },
     },
@@ -1005,13 +1002,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        # "exclude_family": {
-        #     "linux": [
-        #         # FAILURE (hipErrorNoBinaryForGpu - fundamental gfx1250 arch support issue in lit tests)
-        #         # https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038470967
-        #         "gfx125X-dcgpu",
-        #     ],
-        # },
+        "exclude_family": {
+            "linux": [
+                # GPU tests do not honor ROCR_VISIBLE_DEVICES and utilizes other gpus during test runs. excluding
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # libhipcxx hiprtc tests
     "libhipcxx_hiprtc": {
@@ -1029,13 +1025,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        # "exclude_family": {
-        #     "linux": [
-        #         # FAILURE (hipErrorNoBinaryForGpu - fundamental gfx1250 arch support issue in lit tests)
-        #         # https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861741
-        #         "gfx125X-dcgpu",
-        #     ],
-        # },
+        "exclude_family": {
+            "linux": [
+                # GPU tests do not honor ROCR_VISIBLE_DEVICES and utilizes other gpus during test runs. excluding
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # hipthreads lit tests
     "hipthreads": {
