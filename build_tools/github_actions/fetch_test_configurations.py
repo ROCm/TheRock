@@ -780,6 +780,11 @@ test_matrix = {
         "job_name": "hipkernelprovider",
         "fetch_artifact_args": "--hipdnn --hipkernelprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 30,
+        # TODO: Use the copy in the hipkernelprovider test artifact after rocKE
+        # installs its component-owned requirements file.
+        "additional_requirements_files": [
+            "build_tools/github_actions/test_executable_scripts/requirements-test-hipkernelprovider.txt",
+        ],
         "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
