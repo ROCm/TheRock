@@ -1,0 +1,132 @@
+From: Jacob Lambert <jacob.lambert@amd.com>
+Date: Thu, 24 Sep 2026 12:00:00 -0700
+Subject: [PATCH] Revert Comgr default-cache disabling on remote filesystems
+
+This reverts commit b4c838163847b6153409843f52af9be409a6fc20.
+For customer testing with the replacement LLVM localCache fix.
+
+---
+diff --git a/amd/comgr/README.md b/amd/comgr/README.md
+index 1627d2cf636f..aadc61202a1d 100644
+--- a/amd/comgr/README.md
++++ b/amd/comgr/README.md
+@@ -195,9 +195,6 @@ By default, the cache is enabled.
+   it is directed to "$XDG_CACHE_HOME/comgr" (which defaults to
+   "$USER/.cache/comgr" on Linux, and "%LOCALAPPDATA%\cache\comgr"
+   on Microsoft Windows).
+-  When resolving this default location, if the system's cache directory resides
+-  on a remote filesystem (e.g. NFS), the cache is disabled to avoid concurrency
+-  issues on shared storage.
+ * `AMD_COMGR_CACHE_POLICY`: If assigned a value, the string is interpreted and
+   applied to the cache pruning policy. The cache is pruned only upon program
+   termination. The string format aligns with [Clang's ThinLTO cache pruning policy](https://clang.llvm.org/docs/ThinLTO.html#cache-pruning).
+diff --git a/amd/comgr/src/comgr-cache.cpp b/amd/comgr/src/comgr-cache.cpp
+index a68a5988b1e5..88870c02f2e7 100644
+--- a/amd/comgr/src/comgr-cache.cpp
++++ b/amd/comgr/src/comgr-cache.cpp
+@@ -172,9 +172,8 @@ void CommandCache::prune() {
+ }
+ 
+ std::unique_ptr<CommandCache> CommandCache::get(raw_ostream &LogS) {
+-  static std::optional<SmallString<256>> CacheDir =
+-      env::getCacheDirectory(LogS);
+-  if (!CacheDir)
++  StringRef CacheDir = env::getCacheDirectory();
++  if (CacheDir.empty())
+     return nullptr;
+ 
+   std::optional<CachePruningPolicy> Policy =
+@@ -183,7 +182,7 @@ std::unique_ptr<CommandCache> CommandCache::get(raw_ostream &LogS) {
+     return nullptr;
+ 
+   return std::unique_ptr<CommandCache>(
+-      new CommandCache(*CacheDir, *Policy, LogS));
++      new CommandCache(CacheDir, *Policy, LogS));
+ }
+ 
+ CommandCache::CommandCache(StringRef CacheDir, const CachePruningPolicy &Policy,
+diff --git a/amd/comgr/src/comgr-env.cpp b/amd/comgr/src/comgr-env.cpp
+index 994a2bded0d1..5d7b62db3f00 100644
+--- a/amd/comgr/src/comgr-env.cpp
++++ b/amd/comgr/src/comgr-env.cpp
+@@ -17,7 +17,6 @@
+ #include "llvm/Support/FileSystem.h"
+ #include "llvm/Support/Path.h"
+ #include "llvm/Support/VirtualFileSystem.h"
+-#include "llvm/Support/raw_ostream.h"
+ 
+ #include <cstdlib>
+ 
+@@ -203,33 +202,28 @@ StringRef getCachePolicy() {
+   return EnvCachePolicy ? EnvCachePolicy : "";
+ }
+ 
+-std::optional<SmallString<256>> getCacheDirectory(raw_ostream &LogS) {
++StringRef getCacheDirectory() {
+   // By default the cache is enabled
+   static const char *Enable = COMGR_GETENV("AMD_COMGR_CACHE");
+   bool CacheDisabled = StringRef(Enable) == "0";
+   if (CacheDisabled)
+-    return std::nullopt;
++    return "";
+ 
+   StringRef EnvCacheDirectory = COMGR_GETENV("AMD_COMGR_CACHE_DIR");
+   if (!EnvCacheDirectory.empty())
+-    return {EnvCacheDirectory};
++    return EnvCacheDirectory;
+ 
+-  SmallString<256> Result;
+-  if (!sys::path::cache_directory(Result))
+-    return std::nullopt;
++  // mark Result as static to keep it cached across calls
++  static SmallString<256> Result;
++  if (!Result.empty())
++    return Result;
+ 
+-  // If the cache directory is mounted on a remote filesystem, disable the
+-  // cache due to concurrency issues. We saw some issues where a SIGBUS was
+-  // thrown when there was contention on the cache.
+-  if (!sys::fs::is_local(Result)) {
+-    if (shouldEmitVerboseLogs())
+-      LogS << "Comgr cache: default directory '" << Result
+-           << "' is not on a local filesystem; disabling cache.\n";
+-    return std::nullopt;
++  if (sys::path::cache_directory(Result)) {
++    sys::path::append(Result, "comgr");
++    return Result;
+   }
+ 
+-  sys::path::append(Result, "comgr");
+-  return {std::move(Result)};
++  return "";
+ }
+ 
+ StringRef getDriverOptionsAppend() {
+diff --git a/amd/comgr/src/comgr-env.h b/amd/comgr/src/comgr-env.h
+index a5fd9cdf7ecf..37b533f2c1cb 100644
+--- a/amd/comgr/src/comgr-env.h
++++ b/amd/comgr/src/comgr-env.h
+@@ -9,13 +9,8 @@
+ #ifndef COMGR_ENV_H
+ #define COMGR_ENV_H
+ 
+-#include "llvm/ADT/SmallString.h"
+ #include "llvm/ADT/StringRef.h"
+ 
+-namespace llvm {
+-class raw_ostream;
+-} // namespace llvm
+-
+ namespace COMGR {
+ namespace env {
+ 
+@@ -76,8 +71,7 @@ llvm::StringRef getCachePolicy();
+ /// If environment variable AMD_COMGR_CACHE_DIR is set, return the environment
+ /// variable, otherwise return the default path: On Linux it's typically
+ /// $HOME/.cache/comgr_cache (depends on XDG_CACHE_HOME)
+-std::optional<llvm::SmallString<256>>
+-getCacheDirectory(llvm::raw_ostream &LogS);
++llvm::StringRef getCacheDirectory();
+ 
+ /// If environment variable AMD_COMGR_DRIVER_OPTIONS_APPEND is set, return the
+ /// space-separated options to append to clang driver invocations.

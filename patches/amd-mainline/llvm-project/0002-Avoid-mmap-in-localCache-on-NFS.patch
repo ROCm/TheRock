@@ -1,0 +1,25 @@
+From: Juan Manuel Martinez Caamano <jmartinezcaamao@gmail.com>
+Date: Thu, 24 Sep 2026 12:00:00 -0700
+Subject: [PATCH] [Support][Caching] Avoid mmap in localCache on NFS
+
+Apply the net change from https://github.com/llvm/llvm-project/pull/220936
+at head fa81c23f4e7eba42e2aff9109da5ec5f4eb51b78.
+
+---
+diff --git a/llvm/lib/Support/Caching.cpp b/llvm/lib/Support/Caching.cpp
+--- a/llvm/lib/Support/Caching.cpp
++++ b/llvm/lib/Support/Caching.cpp
+@@ -50,10 +50,12 @@ Expected<FileCache> llvm::localCache(const Twine &CacheNameRef,
+         Twine(EntryPath), sys::fs::OF_UpdateAtime, &ResultPath);
+     std::error_code EC;
+     if (FDOrErr) {
++      bool IsNFS = !sys::fs::is_local(CacheDirectoryPath);
+       ErrorOr<std::unique_ptr<MemoryBuffer>> MBOrErr =
+           MemoryBuffer::getOpenFile(*FDOrErr, EntryPath,
+                                     /*FileSize=*/-1,
+-                                    /*RequiresNullTerminator=*/false);
++                                    /*RequiresNullTerminator=*/IsNFS,
++                                    /*IsVolatile=*/IsNFS);
+       sys::fs::closeFile(*FDOrErr);
+       if (MBOrErr) {
+         AddBuffer(Task, ModuleName, std::move(*MBOrErr));
