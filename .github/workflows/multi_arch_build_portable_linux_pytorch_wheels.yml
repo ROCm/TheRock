@@ -75,6 +75,10 @@ on:
         description: 'Release type; selects the S3 bucket.'
         type: string
         required: true
+      build_variant:
+        description: "Build variant (release or asan)."
+        type: string
+        default: "release"
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -166,6 +170,13 @@ on:
         options:
           - dev
         default: dev
+      build_variant:
+        description: "Build variant"
+        type: choice
+        options:
+          - release
+          - asan
+        default: release
       repository:
         description: >-
           TheRock repository to check out the build scripts/workflow from (NOT
@@ -231,6 +242,7 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       CACHE_TYPE: ${{ inputs.cache_type }}
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
+      BUILD_VARIANT: ${{ inputs.build_variant }}
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       optional_build_prod_arguments: ""
       # TODO: Move the sccache bucket and IAM role mapping into a shared script.
@@ -294,6 +306,9 @@ jobs:
       - name: Install python deps for CI
         run: |
           pip install -r external-builds/pytorch/requirements-ci.txt
+          if [ "${BUILD_VARIANT}" = "asan" ]; then
+            pip install "setuptools>=70.2" wheel
+          fi
 
       - name: Checkout PyTorch source repos (nightly)
         if: ${{ inputs.pytorch_git_ref == 'nightly' }}
@@ -396,6 +411,18 @@ jobs:
           elif [ "${CACHE_TYPE}" = "ccache" ]; then
             cache_flag="--use-ccache"
           fi
+          variant_args=()
+          if [ "${BUILD_VARIANT}" = "asan" ]; then
+            AMDGPU_TARGETS="gfx942:xnack+"
+            variant_args+=(
+              --asan
+              --rocm-extras=device
+              --no-build-triton
+              --no-build-pytorch-audio
+              --no-build-pytorch-vision
+              --no-build-apex
+            )
+          fi
 
           # build_prod_wheels.py forwards each of these to pip and ignores an
           # empty value, so pass both and supply whichever source applies:
@@ -412,6 +439,7 @@ jobs:
             ${cache_flag} \
             --release-type="${BUILD_RELEASE_TYPE}" \
             --pytorch-rocm-arch "${AMDGPU_TARGETS}" \
+            "${variant_args[@]}" \
             ${{ env.optional_build_prod_arguments }}
 
       - name: Report cache stats
@@ -438,11 +466,13 @@ jobs:
       # The outer actions/checkout skips submodules for speed, so pull in
       # rocm-systems only when we actually need it.
       - name: Init rocm-systems submodule
+        if: ${{ inputs.build_variant != 'asan' }}
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git submodule update --init --depth=1 rocm-systems
 
       - name: Install kpack tooling
+        if: ${{ inputs.build_variant != 'asan' }}
         run: |
           pip install \
             -e rocm-systems/python/rocm-bootstrap \
@@ -452,6 +482,7 @@ jobs:
       # rocm_kpack.tools.split_python_wheels flow into build_prod_wheels.py and
       # document the standalone developer workflow.
       - name: Split fat wheels (torch + torchvision)
+        if: ${{ inputs.build_variant != 'asan' }}
         run: |
           # The splitter writes the host wheel under the same filename as
           # the input, so relocate each fat wheel out of PACKAGE_DIST_DIR
@@ -511,6 +542,7 @@ jobs:
           python build_tools/github_actions/publish_pytorch_to_release_bucket.py \
             --source-dir="${PACKAGE_DIST_DIR}" \
             --release-type="${BUILD_RELEASE_TYPE}" \
+            --build-variant="${BUILD_VARIANT}" \
             --structured
 
       - name: Capture job summary

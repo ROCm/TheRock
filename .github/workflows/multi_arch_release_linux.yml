@@ -177,10 +177,12 @@ jobs:
   publish_to_release_buckets:
     needs: [build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages]
     name: Publish to Release Buckets
-    if: ${{ !failure() && !cancelled() && (inputs.build_variant == 'asan' || needs.build_python_packages.result == 'success') }}
+    if: ${{ !failure() && !cancelled() && needs.build_python_packages.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
+    outputs:
+      package_index_url: ${{ steps.publish.outputs.package_index_url }}
     env:
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
       BUILD_VARIANT: ${{ inputs.build_variant }}
@@ -207,8 +209,9 @@ jobs:
           product: core # 'core' for the rocm-sdk, as opposed to 'pytorch', 'jax', etc.
 
       - name: Copy to release buckets
+        id: publish
         env:
-          KPACK_SPLIT: ${{ inputs.build_variant == 'asan' && 'true' || needs.build_python_packages.outputs.kpack_split }}
+          KPACK_SPLIT: ${{ needs.build_python_packages.outputs.kpack_split }}
         run: |
           python build_tools/github_actions/publish_rocm_to_release_buckets.py \
             --run-id="${{ github.run_id }}" \
@@ -286,7 +289,7 @@ jobs:
   trigger_release_pytorch_wheels:
     needs: [build_python_packages, publish_to_release_buckets]
     name: Trigger Release PyTorch Wheels
-    if: ${{ inputs.build_variant != 'asan' && inputs.build_pytorch != false && fromJSON(inputs.build_config).build_pytorch == true }}
+    if: ${{ inputs.build_pytorch != false && fromJSON(inputs.build_config).build_pytorch == true }}
     runs-on: ubuntu-24.04
     permissions:
       actions: write
@@ -298,34 +301,15 @@ jobs:
           inputs: |
             { "amdgpu_families": "${{ fromJSON(inputs.build_config).dist_amdgpu_families }}",
               "rocm_version": "${{ inputs.rocm_package_version }}",
-              "rocm_package_find_links_url": "${{ needs.build_python_packages.outputs.package_find_links_url }}",
+              "rocm_package_index_url": "${{ needs.publish_to_release_buckets.outputs.package_index_url }}",
               "release_type": "${{ inputs.release_type }}",
+              "build_variant": "${{ inputs.build_variant }}",
               "run_full_pytorch_tests": "${{ inputs.run_full_pytorch_tests }}",
               "ref": "${{ inputs.ref || '' }}",
-              "python_version": "${{ inputs.python_version }}",
+              "python_version": "${{ inputs.build_variant == 'asan' && (inputs.python_version || '3.12') || inputs.python_version }}",
               "build_runs_on": "${{ fromJSON(inputs.build_config).build_runs_on }}",
               "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
-
-  build_asan_pytorch_wheel:
-    needs: [build_artifacts]
-    name: Build ASAN PyTorch Wheel
-    if: ${{ inputs.build_variant == 'asan' && inputs.build_pytorch != false && fromJSON(inputs.build_config).build_pytorch == true }}
-    uses: ./.github/workflows/multi_arch_build_linux_asan_pytorch_wheels.yml
-    secrets: inherit
-    with:
-      artifact_run_id: ${{ github.run_id }}
-      amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
-      python_version: ${{ inputs.python_version || '3.12' }}
-      pytorch_git_ref: nightly
-      release_type: ${{ inputs.release_type }}
-      repository: ${{ inputs.repository || github.repository }}
-      ref: ${{ inputs.ref }}
-      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
-      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
-    permissions:
-      contents: read
-      id-token: write
 
   # The JAX release workflow publishes its wheels to the release index, then tests
   # from that index. Wait for the corresponding ROCm release to be published before
@@ -358,7 +342,7 @@ jobs:
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_native_install, trigger_release_pytorch_wheels, build_asan_pytorch_wheel, trigger_release_jax_wheels]
+    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_native_install, trigger_release_pytorch_wheels, trigger_release_jax_wheels]
     name: "Quartz - completed - release Linux"
     runs-on: ubuntu-24.04
     timeout-minutes: 10

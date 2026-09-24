@@ -40,6 +40,10 @@ on:
         description: "Release type used for package publishing."
         type: string
         default: ""
+      build_variant:
+        description: "Build variant (release or asan)."
+        type: string
+        default: "release"
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -81,6 +85,9 @@ on:
       release_type:
         type: string
         default: ci
+      build_variant:
+        type: string
+        default: "release"
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -129,6 +136,7 @@ jobs:
       WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
       PACKAGE_VERSION: ${{ inputs.package_version }}
       RELEASE_TYPE: ${{ inputs.release_type }}
+      BUILD_VARIANT: ${{ inputs.build_variant }}
       OUTPUT_ROOT: "${{ github.workspace }}"
       ARTIFACTS_DIR: "${{ github.workspace }}/artifacts"
       PACKAGES_DIR: "${{ github.workspace }}/packages"
@@ -180,13 +188,19 @@ jobs:
           fi
 
       - name: Build Python packages
+        shell: bash
         run: |
+          EXTRA_ARGS=()
+          if [ "${BUILD_VARIANT}" = "asan" ]; then
+            EXTRA_ARGS+=(--asan)
+          fi
           python ./build_tools/build_python_packages.py \
             --artifact-dir="${ARTIFACTS_DIR}" \
             --dest-dir="${PACKAGES_DIR}" \
             --version="${PACKAGE_VERSION}" \
             --linux-amdgpu-families="${LINUX_AMDGPU_FAMILIES}" \
-            --windows-amdgpu-families="${WINDOWS_AMDGPU_FAMILIES}"
+            --windows-amdgpu-families="${WINDOWS_AMDGPU_FAMILIES}" \
+            "${EXTRA_ARGS[@]}"
 
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_artifacts_credentials

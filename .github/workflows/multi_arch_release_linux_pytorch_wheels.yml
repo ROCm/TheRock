@@ -36,6 +36,10 @@ on:
         description: 'Release type; selects the S3 bucket'
         type: string
         required: true
+      build_variant:
+        description: "Build variant (release or asan)."
+        type: string
+        default: "release"
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -94,6 +98,13 @@ on:
         options:
           - dev
         default: dev
+      build_variant:
+        description: "Build variant"
+        type: choice
+        options:
+          - release
+          - asan
+        default: release
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -148,6 +159,7 @@ jobs:
     env:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
+      BUILD_VARIANT: ${{ inputs.build_variant }}
       PYTHON_VERSION: ${{ inputs.python_version }}
 
     steps:
@@ -171,12 +183,18 @@ jobs:
 
       - name: Generate PyTorch matrix
         id: matrix
+        shell: bash
         run: |
+          EXTRA_ARGS=()
+          if [ "${BUILD_VARIANT}" = "asan" ]; then
+            EXTRA_ARGS+=(--pytorch-git-refs=nightly)
+          fi
           python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
             --python-versions="${PYTHON_VERSION}" \
             --platform=linux \
             --release-type="${BUILD_RELEASE_TYPE}" \
-            --amdgpu-families="${AMDGPU_FAMILIES}"
+            --amdgpu-families="${AMDGPU_FAMILIES}" \
+            "${EXTRA_ARGS[@]}"
 
   build_pytorch_wheels:
     needs: setup_matrix
@@ -198,13 +216,14 @@ jobs:
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
       test_amdgpu_families: ${{ matrix.test_amdgpu_families }}
-      test_level: ${{ matrix.test_level }}
+      test_level: ${{ inputs.build_variant == 'asan' && 'none' || matrix.test_level }}
       python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       rocm_version: ${{ inputs.rocm_version }}
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
       rocm_package_index_url: ${{ inputs.rocm_package_index_url }}
       release_type: ${{ inputs.release_type }}
+      build_variant: ${{ inputs.build_variant }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
       cache_type: ${{ inputs.cache_type }}

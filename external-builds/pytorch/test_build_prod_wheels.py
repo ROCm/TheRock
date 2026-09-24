@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: MIT
 
 import argparse
-import json
 import os
 from pathlib import Path
 import sys
@@ -16,100 +15,64 @@ import build_prod_wheels as bpw
 
 
 class AsanVersionTest(unittest.TestCase):
-    def test_rocm_10_2_asan_suffix_is_unique(self):
+    def test_dev_asan_suffix_preserves_full_version(self):
         self.assertEqual(
-            bpw.get_asan_version_suffix("10.2.0+asan.20260807"),
-            "+rocm10.2.asan.20260807",
+            bpw.get_version_suffix_for_installed_rocm_package(
+                "10.2.0.dev0+abcdef.asan"
+            ),
+            "+devrocm10.2.0.dev0-abcdef.asan",
+        )
+
+    def test_nightly_asan_suffix_preserves_full_version(self):
+        self.assertEqual(
+            bpw.get_version_suffix_for_installed_rocm_package("10.2.0a20260807+asan"),
+            "+rocm10.2.0a20260807-asan",
+        )
+
+    def test_release_asan_suffix_preserves_full_version(self):
+        self.assertEqual(
+            bpw.get_version_suffix_for_installed_rocm_package("10.2.0+asan"),
+            "+rocm10.2.0-asan",
         )
 
     def test_release_sdk_is_rejected(self):
-        with self.assertRaisesRegex(RuntimeError, "uniquely labelled"):
+        with self.assertRaisesRegex(RuntimeError, "ASAN-labelled"):
             bpw.validate_asan_rocm_version("10.2.0")
 
     def test_old_branch_version_is_rejected(self):
         with self.assertRaisesRegex(RuntimeError, "ROCm 10.2"):
-            bpw.validate_asan_rocm_version("7.15.0+asan.20260807")
+            bpw.validate_asan_rocm_version("7.15.0+asan")
 
-    def test_conflicting_explicit_suffix_is_rejected(self):
-        with self.assertRaisesRegex(RuntimeError, "collide"):
-            bpw.resolve_asan_version_suffix("10.2.0+asan.20260807", "+rocm10.2")
+    def test_labelled_version_is_accepted(self):
+        bpw.validate_asan_rocm_version("10.2.0a20260807+asan")
 
 
-class LocalAsanIndexTest(unittest.TestCase):
-    def _write_manifest(self, root: Path, *, version="10.2.0+asan.20260807"):
-        index = root / "whl-asan" / "gfx942-all"
-        index.mkdir(parents=True)
-        packages = []
-        for project in sorted(bpw.ASAN_REQUIRED_LOCAL_PACKAGES):
-            filename = f"{project}-{version}.pkg"
-            (index / filename).touch()
-            packages.append(
-                {
-                    "normalized_project": project,
-                    "version": version,
-                    "filename": filename,
-                    "size": 0,
-                }
-            )
-        (index / "index-manifest.json").write_text(
-            json.dumps(
-                {
-                    "index_kind": "local-only",
-                    "relative_path": "whl-asan/gfx942-all",
-                    "packages": packages,
-                }
-            )
-        )
-        (index / "index.html").touch()
-        return index
-
-    def test_accepts_phase1_directory_or_index_page(self):
-        with tempfile.TemporaryDirectory() as td:
-            index = self._write_manifest(Path(td))
-            expected = "10.2.0+asan.20260807"
-            self.assertEqual(bpw.validate_local_asan_index(str(index)), expected)
-            self.assertEqual(
-                bpw.validate_local_asan_index(str(index / "index.html")), expected
-            )
-
-    def test_rejects_incomplete_package_set(self):
-        with tempfile.TemporaryDirectory() as td:
-            index = self._write_manifest(Path(td))
-            manifest_path = index / "index-manifest.json"
-            manifest = json.loads(manifest_path.read_text())
-            manifest["packages"].pop()
-            manifest_path.write_text(json.dumps(manifest))
-            with self.assertRaisesRegex(ValueError, "missing required packages"):
-                bpw.validate_local_asan_index(str(index))
-
-    def test_build_validation_pins_local_version_and_defaults_arch(self):
+class AsanPackageSourceTest(unittest.TestCase):
+    def test_build_validation_accepts_published_index_and_defaults_arch(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            index = self._write_manifest(root)
             pytorch_dir = root / "pytorch"
             pytorch_dir.mkdir()
-            args = self._build_args(pytorch_dir, index)
+            args = self._build_args(pytorch_dir)
             parser = argparse.ArgumentParser()
 
             bpw.validate_build_args(parser, args)
 
             self.assertEqual(args.pytorch_rocm_arch, "gfx942:xnack+")
-            self.assertEqual(args.rocm_sdk_version, "==10.2.0+asan.20260807")
-            self.assertEqual(args.asan_index_version, "10.2.0+asan.20260807")
+            self.assertEqual(args.rocm_sdk_version, "==10.2.0a20260807+asan")
 
-    def test_build_validation_rejects_remote_index(self):
+    def test_build_validation_requires_exact_version(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            index = self._write_manifest(root)
             pytorch_dir = root / "pytorch"
             pytorch_dir.mkdir()
-            args = self._build_args(pytorch_dir, index)
-            args.index_url = "https://example.invalid/simple"
+            args = self._build_args(pytorch_dir)
+            args.rocm_sdk_version = ">1.0"
             with self.assertRaises(SystemExit):
                 bpw.validate_build_args(argparse.ArgumentParser(), args)
 
     @staticmethod
-    def _build_args(pytorch_dir: Path, index: Path):
+    def _build_args(pytorch_dir: Path):
         return argparse.Namespace(
             asan=True,
             pytorch_dir=pytorch_dir,
@@ -124,10 +87,10 @@ class LocalAsanIndexTest(unittest.TestCase):
             enable_pytorch_flash_attention=None,
             rocm_extras="",
             pytorch_rocm_arch=None,
-            index_url=None,
+            index_url="https://example.invalid/whl-next-asan/",
             install_rocm=True,
-            find_links=str(index),
-            rocm_sdk_version=">1.0",
+            find_links=None,
+            rocm_sdk_version="==10.2.0a20260807+asan",
         )
 
 
@@ -284,29 +247,29 @@ class AsanInstallAndFeatureTest(unittest.TestCase):
         ):
             bpw.validate_asan_bootstrap_requirements()
 
-    def test_install_is_offline_and_includes_single_target_device(self):
+    def test_asan_install_uses_published_index_and_single_target_device(self):
         args = argparse.Namespace(
             asan=True,
             pip_cache_dir=None,
             pre=True,
-            index_url=None,
-            find_links="/local/whl-asan/gfx942-all/index.html",
-            rocm_sdk_version="==10.2.0+asan.20260807",
+            index_url="https://example.invalid/whl-next-asan/",
+            find_links=None,
+            rocm_sdk_version="==10.2.0a20260807+asan",
             rocm_extras="device",
-            no_index=True,
+            no_index=False,
         )
         with mock.patch.object(bpw, "run_command") as run, mock.patch.object(
-            bpw, "get_rocm_sdk_version", return_value="10.2.0+asan.20260807"
+            bpw, "get_rocm_sdk_version", return_value="10.2.0a20260807+asan"
         ), mock.patch.object(bpw, "validate_asan_bootstrap_requirements"):
             bpw.do_install_rocm(args)
         install_command = next(
             call.args[0] for call in run.call_args_list if "install" in call.args[0]
         )
-        self.assertIn("--no-index", install_command)
+        self.assertNotIn("--no-index", install_command)
         self.assertIn("--no-build-isolation", install_command)
-        self.assertIn("--find-links", install_command)
+        self.assertIn("--index-url", install_command)
         self.assertIn(
-            "rocm[libraries,devel,device]==10.2.0+asan.20260807", install_command
+            "rocm[libraries,devel,device]==10.2.0a20260807+asan", install_command
         )
 
     def test_release_install_preserves_index_and_extras_behavior(self):

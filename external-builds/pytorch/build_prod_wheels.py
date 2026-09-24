@@ -204,13 +204,6 @@ ASAN_SUPPORTED_ROCM = (10, 2)
 ASAN_SUPPORTED_ARCH = "gfx942:xnack+"
 ASAN_DEFAULT_OPTIONS = "detect_leaks=0:abort_on_error=1:print_stacktrace=1"
 ASAN_CMAKE_ARGS = ("-DCMAKE_CXX_SCAN_FOR_MODULES=OFF",)
-ASAN_REQUIRED_LOCAL_PACKAGES = {
-    "rocm",
-    "rocm-sdk-core",
-    "rocm-sdk-devel",
-    "rocm-sdk-device-gfx942",
-    "rocm-sdk-libraries",
-}
 ASAN_BOOTSTRAP_REQUIREMENTS = {
     "setuptools": SpecifierSet(">=70.2"),
     "wheel": SpecifierSet(""),
@@ -311,8 +304,11 @@ def get_installed_package_version(dist_package_name: str) -> str:
     )
 
 
-def get_version_suffix_for_installed_rocm_package() -> str:
-    rocm_version = get_installed_package_version("rocm")
+def get_version_suffix_for_installed_rocm_package(
+    rocm_version: str | None = None,
+) -> str:
+    if rocm_version is None:
+        rocm_version = get_installed_package_version("rocm")
     print(f"Computing version suffix for installed rocm package: {rocm_version}")
     # Compute a version suffix to be used as a local version identifier:
     # https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers
@@ -332,99 +328,11 @@ def validate_asan_rocm_version(rocm_version: str) -> None:
             "--asan currently requires a ROCm 10.2 SDK; " f"found {rocm_version!r}"
         )
     local_parts = (parsed_version.local or "").split(".")
-    if not local_parts or local_parts[0] != "asan" or len(local_parts) < 2:
+    if "asan" not in local_parts:
         raise RuntimeError(
-            "--asan requires a uniquely labelled ROCm ASAN SDK version "
-            f"(expected 10.2.x+asan.<build-id>, found {rocm_version!r})"
+            "--asan requires an ASAN-labelled ROCm SDK version "
+            f"(expected a local 'asan' segment, found {rocm_version!r})"
         )
-
-
-def get_asan_version_suffix(rocm_version: str) -> str:
-    """Derive a collision-resistant torch local version from an ASAN SDK."""
-    validate_asan_rocm_version(rocm_version)
-    parsed_version = parse(rocm_version)
-    major, minor = parsed_version.release[:2]
-    return f"+rocm{major}.{minor}.{parsed_version.local}"
-
-
-def resolve_asan_version_suffix(rocm_version: str, explicit_suffix: str | None) -> str:
-    expected_suffix = get_asan_version_suffix(rocm_version)
-    if explicit_suffix and explicit_suffix != expected_suffix:
-        raise RuntimeError(
-            "--asan refuses an explicit torch version suffix that could "
-            "collide with or misidentify the SDK: "
-            f"expected {expected_suffix!r}, found {explicit_suffix!r}"
-        )
-    return expected_suffix
-
-
-def validate_local_asan_index(find_links: str) -> str:
-    """Validate the Phase 1 local index and return its coherent SDK version."""
-    index_path = Path(find_links).expanduser()
-    index_dir = index_path.parent if index_path.name == "index.html" else index_path
-    manifest_path = index_dir / "index-manifest.json"
-    if not index_dir.is_dir() or not manifest_path.is_file():
-        raise ValueError(
-            "--asan --install-rocm requires a local Phase 1 index directory "
-            "(or its index.html) containing index-manifest.json; "
-            f"not found at {index_dir}"
-        )
-
-    try:
-        manifest = json.loads(manifest_path.read_text())
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError(f"Invalid local ASAN index manifest {manifest_path}: {exc}")
-    if manifest.get("index_kind") != "local-only":
-        raise ValueError(
-            f"ASAN index manifest must declare index_kind='local-only': {manifest_path}"
-        )
-    if manifest.get("relative_path") != "whl-asan/gfx942-all":
-        raise ValueError(
-            "ASAN index must be the gfx942 family index at "
-            f"whl-asan/gfx942-all: {manifest_path}"
-        )
-
-    packages = manifest.get("packages")
-    if not isinstance(packages, list):
-        raise ValueError(f"ASAN index manifest has no package list: {manifest_path}")
-    for package in packages:
-        if not isinstance(package, dict):
-            raise ValueError(
-                f"ASAN index manifest contains a malformed package: {manifest_path}"
-            )
-        filename = package.get("filename")
-        if (
-            not isinstance(filename, str)
-            or Path(filename).name != filename
-            or not (index_dir / filename).is_file()
-        ):
-            raise ValueError(
-                f"ASAN index package file is missing or invalid: {filename!r}"
-            )
-        declared_size = package.get("size")
-        if (
-            declared_size is not None
-            and (index_dir / filename).stat().st_size != declared_size
-        ):
-            raise ValueError(
-                f"ASAN index package size does not match its manifest: {filename}"
-            )
-    projects = {package.get("normalized_project") for package in packages}
-    missing = sorted(ASAN_REQUIRED_LOCAL_PACKAGES - projects)
-    if missing:
-        raise ValueError(
-            f"ASAN index is missing required packages {missing}: {manifest_path}"
-        )
-    versions = {package.get("version") for package in packages}
-    if len(versions) != 1 or None in versions:
-        raise ValueError(
-            f"ASAN index packages do not have one coherent version: {manifest_path}"
-        )
-    version = versions.pop()
-    if not isinstance(version, str):
-        raise ValueError(f"ASAN index contains an invalid version: {version!r}")
-    validate_asan_rocm_version(version)
-    return version
 
 
 def validate_asan_bootstrap_requirements() -> None:
@@ -762,32 +670,15 @@ def validate_build_args(
         )
     args.pytorch_rocm_arch = ASAN_SUPPORTED_ARCH
 
-    if args.index_url:
-        parser.error(
-            "--asan local mode does not accept --index-url; use the Phase 1 "
-            "index with --find-links to prevent mixing release packages"
-        )
     if args.install_rocm:
-        if not args.find_links:
+        if not args.find_links and not args.index_url:
             parser.error(
-                "--asan --install-rocm requires --find-links pointing to the "
-                "local Phase 1 whl-asan/gfx942-all index"
+                "--asan --install-rocm requires an isolated ASAN package source "
+                "via --index-url or --find-links"
             )
-        try:
-            index_version = validate_local_asan_index(args.find_links)
-            requested_versions = SpecifierSet(args.rocm_sdk_version)
-        except (ValueError, RuntimeError) as exc:
-            parser.error(str(exc))
-        if not requested_versions.contains(index_version, prereleases=True):
-            parser.error(
-                f"--rocm-sdk-version {args.rocm_sdk_version!r} excludes local "
-                f"ASAN SDK {index_version}"
-            )
-        # Install an exact coherent set even when the caller used the default
-        # broad selector. This prevents a future local index addition from
-        # silently changing the toolchain used by a retry.
-        args.rocm_sdk_version = f"=={index_version}"
-        args.asan_index_version = index_version
+        requested_versions = SpecifierSet(args.rocm_sdk_version)
+        if not str(requested_versions).startswith("=="):
+            parser.error("--asan requires an exact --rocm-sdk-version selector")
 
 
 def do_install_rocm(args: argparse.Namespace):
@@ -819,12 +710,11 @@ def do_install_rocm(args: argparse.Namespace):
         "install",
         "--force-reinstall",
     ]
-    if getattr(args, "asan", False) or getattr(args, "no_index", False):
+    if getattr(args, "no_index", False):
         pip_args.append("--no-index")
     if getattr(args, "asan", False):
-        # The local Phase 1 index intentionally contains only the ROCm package
-        # set, not generic build dependencies. Reuse the explicitly prepared
-        # environment when pip builds the selector sdist.
+        # Reuse the explicitly prepared environment when pip builds the
+        # selector sdist.
         pip_args.append("--no-build-isolation")
     if args.pre:
         pip_args.extend(["--pre"])
@@ -1075,7 +965,7 @@ def _setup_asan_build_env(rocm_dir: Path, pytorch_rocm_arch: str) -> dict[str, s
         # scikit-build-core forwards CMAKE_ARGS to its configure invocation.
         # CMake 4.4 otherwise enables C++20 dependency scanning automatically
         # and requires clang-scan-deps, which is intentionally absent from the
-        # Phase 1 ROCm devel wheel.
+        # ROCm devel wheel.
         "CMAKE_ARGS": cmake_args,
         # Private hand-off to do_build. It is removed before the environment is
         # passed to any build subprocess and used only for the post-build import
@@ -1143,15 +1033,16 @@ def do_build(args: argparse.Namespace):
     rocm_sdk_version = get_rocm_sdk_version()
     if args.asan:
         validate_asan_rocm_version(rocm_sdk_version)
-        args.version_suffix = resolve_asan_version_suffix(
-            rocm_sdk_version, args.version_suffix
+        expected_suffix = get_version_suffix_for_installed_rocm_package(
+            rocm_sdk_version
         )
-        index_version = getattr(args, "asan_index_version", None)
-        if index_version and index_version != rocm_sdk_version:
+        if args.version_suffix and args.version_suffix != expected_suffix:
             raise RuntimeError(
-                f"Installed ROCm SDK {rocm_sdk_version} does not match local "
-                f"ASAN index {index_version}"
+                "--asan refuses an explicit torch version suffix that could "
+                "misidentify the SDK: "
+                f"expected {expected_suffix!r}, found {args.version_suffix!r}"
             )
+        args.version_suffix = expected_suffix
     elif not args.version_suffix:
         args.version_suffix = get_version_suffix_for_installed_rocm_package()
     cmake_prefix = get_rocm_path("cmake")
@@ -1533,7 +1424,7 @@ def resolve_pytorch_flash_attention(
 ) -> bool:
     """Resolve Flash Attention without conflating Triton and AOTriton."""
     if args.asan:
-        # Phase 2 does not build a separate Triton wheel. PyTorch's AOTriton
+        # ASAN mode does not build a separate Triton wheel. PyTorch's AOTriton
         # CMake integration selects its prebuilt +asan runtime/images when
         # USE_ASAN=1. Keep that proven gfx942 path enabled by default while
         # retaining an explicit opt-out for diagnostics.
@@ -1971,9 +1862,9 @@ def main(argv: list[str]):
         "--asan",
         action="store_true",
         default=False,
-        help="Build a ROCm 10.2 gfx942:xnack+ torch ASAN wheel from the local "
-        "Phase 1 SDK index. Enables ROCm Clang and strict SDK/runtime preflight; "
-        "Triton, sibling wheels, and remote package indexes are excluded.",
+        help="Build a ROCm 10.2 gfx942:xnack+ torch ASAN wheel from an isolated "
+        "ASAN SDK index. Enables ROCm Clang and strict SDK/runtime preflight; "
+        "Triton and sibling wheels are excluded.",
     )
     build_p.add_argument(
         "--output-dir",
