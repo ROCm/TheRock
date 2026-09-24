@@ -34,6 +34,9 @@ skip_tests = {
             # to restrict visibility of devices
             # AssertionError: String comparison failed: '8, 1' != '8, 8'
             "test_device_count_not_cached_pre_init",
+            # The OOM subprocess can select a GPU hidden by the runner's HSA
+            # visibility policy and exits before checking allocator logs.
+            "test_oom_retry_message_logged_at_info",
             # empty_stats() in test_cuda.py does not match stats returned
             # Returned is:
             # OrderedDict({'allocated_bytes.allocated': 0, 'allocated_bytes.current': 0, 'allocated_bytes.freed': 0,
