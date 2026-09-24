@@ -634,6 +634,11 @@ test_matrix = {
             "linux": 2,
             "windows": 2,
         },
+        "exclude_family": {
+            # CRITICAL FAILURE on gfx125X-dcgpu: GPU MES hang on sbrc_3D/accuracy_test.vs_fftw/real_forward_len_256_128_64_double_op
+            # https://github.com/ROCm/TheRock/actions/runs/35956605014/job/107496297188
+            "linux": ["gfx125X-dcgpu"],
+        },
     },
     "hipfft": {
         "job_name": "hipfft",
