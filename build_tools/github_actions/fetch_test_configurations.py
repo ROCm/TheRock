@@ -1420,7 +1420,7 @@ def run():
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)
     all_components = [
-        _build_container_options(c, platform, amdgpu_families)
+        _build_container_options(c, platform)
         for c in components_with_runners
     ]
 
