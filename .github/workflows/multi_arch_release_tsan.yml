@@ -1,0 +1,107 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Release entry point for host-only TSAN instrumentation. Tests are synchronous;
+# publication and native packaging stay disabled until an isolated TSAN package
+# namespace has been qualified.
+name: Multi-Arch Release TSAN
+
+on:
+  workflow_call:
+    inputs:
+      release_type:
+        description: "Release type used for artifact storage."
+        type: string
+        required: true
+      prerelease_version:
+        type: string
+        default: ""
+      linux_amdgpu_families:
+        description: "Linux GPU families to build and test."
+        type: string
+        default: "all"
+      ref:
+        description: "TheRock branch, tag, or SHA. Empty = current ref."
+        type: string
+        default: ""
+      repository:
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: "Qualification artifacts use the dev bucket."
+        type: choice
+        options: [dev]
+        default: dev
+      linux_amdgpu_families:
+        description: "Linux GPU families to build and test."
+        type: string
+        default: "all"
+      ref:
+        description: "TheRock branch, tag, or SHA. Empty = current ref."
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  actions: read
+
+run-name: >-
+  Multi-Arch Release TSAN (${{ inputs.release_type || 'dev' }})
+  | Linux artifacts: ${{ inputs.linux_amdgpu_families || 'all' }}
+
+jobs:
+  setup:
+    uses: ./.github/workflows/setup_multi_arch.yml
+    with:
+      build_variant: "tsan"
+      release_type: ${{ inputs.release_type || 'dev' }}
+      prerelease_version: ${{ inputs.prerelease_version }}
+      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || 'all' }}
+      windows_amdgpu_families: "none"
+      build_python_packages: false
+      build_pytorch: false
+      build_jax: false
+      build_native_linux: false
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref }}
+    secrets: inherit
+
+  linux_build_and_test:
+    name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
+    needs: setup
+    if: ${{ needs.setup.outputs.linux_build_config != '' }}
+    uses: ./.github/workflows/multi_arch_ci_linux.yml
+    secrets: inherit
+    with:
+      build_config: ${{ needs.setup.outputs.linux_build_config }}
+      test_labels: ""
+      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
+      rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
+      rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
+      test_type: comprehensive
+      release_type: ${{ inputs.release_type || 'dev' }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ needs.setup.outputs.ref }}
+    permissions:
+      contents: read
+      id-token: write
+
+  release_tsan_summary:
+    name: Release TSAN Summary
+    if: always()
+    needs: [setup, linux_build_and_test]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+      - name: Evaluate workflow results
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python build_tools/github_actions/workflow_summary.py \
+            --needs-json '${{ toJSON(needs) }}'

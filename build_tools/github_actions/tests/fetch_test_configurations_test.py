@@ -584,6 +584,33 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         fetch_test_configurations.run()
         self.assertEqual(self.gha_output["platform"], "linux")
 
+    def test_tsan_uses_the_regular_comprehensive_matrix(self):
+        os.environ["TEST_TYPE"] = "comprehensive"
+        os.environ["BUILD_VARIANT"] = "release"
+        fetch_test_configurations.run()
+        baseline_sanity = json.loads(self.gha_output["sanity_component"])
+        baseline = {
+            (job["job_name"], job["test_script"], job["total_shards"])
+            for job in self._get_components()
+        }
+
+        os.environ["BUILD_VARIANT"] = "tsan"
+        fetch_test_configurations.run()
+        tsan_sanity = json.loads(self.gha_output["sanity_component"])
+        tsan_components = self._get_components()
+        tsan = {
+            (job["job_name"], job["test_script"], job["total_shards"])
+            for job in tsan_components
+        }
+
+        self.assertEqual(tsan, baseline)
+        self.assertEqual(tsan_sanity["test_script"], baseline_sanity["test_script"])
+        self.assertEqual(tsan_sanity["test_type"], "comprehensive")
+        self.assertIn("rocblas", {job["job_name"] for job in tsan_components})
+        self.assertTrue(
+            any("/dev/kfd" in job["container_options"] for job in tsan_components)
+        )
+
     def test_container_options_on_windows_is_string_not_list(self):
         # Regression: a list value here caused
         # `options: ${{ fromJSON(...).container_options }}` in test_component.yml
