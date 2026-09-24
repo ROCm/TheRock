@@ -210,6 +210,20 @@ jobs:
             --index-url="${PACKAGE_INDEX_URL}" \
             --activate-in-future-github-actions-steps
 
+      - name: Initialize ROCm SDK environment
+        run: |
+          rocm-sdk init
+          ROCM_HOME="$(rocm-sdk path --root)"
+          ROCM_BIN="$(rocm-sdk path --bin)"
+
+          echo "${ROCM_BIN}" >> "${GITHUB_PATH}"
+          echo "ROCM_PATH=${ROCM_HOME}" >> "${GITHUB_ENV}"
+          echo "ROCM_HOME=${ROCM_HOME}" >> "${GITHUB_ENV}"
+          echo "HIP_DEVICE_LIB_PATH=${ROCM_HOME}/lib/llvm/amdgcn/bitcode" >> "${GITHUB_ENV}"
+          echo "ROCM_DEVICE_LIB_PATH=${ROCM_HOME}/lib/llvm/amdgcn/bitcode" >> "${GITHUB_ENV}"
+          echo "CC=${ROCM_HOME}/lib/llvm/bin/clang" >> "${GITHUB_ENV}"
+          echo "CXX=${ROCM_HOME}/lib/llvm/bin/clang++" >> "${GITHUB_ENV}"
+
       # Here we checkout the same version of PyTorch that wheels were built from
       # so we have the right set of test source files. We _probably_ don't need
       # to run HIPIFY, apply patches, or fetch submodules, so we skip those
