@@ -376,7 +376,7 @@ test_matrix = {
                 "gfx1030",
                 # FAILURE (3275+ gtest failures - too many to filter individually)
                 # https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038470972
-                # "gfx125X-dcgpu",
+                "gfx125X-dcgpu",
             ],
         },
     },
