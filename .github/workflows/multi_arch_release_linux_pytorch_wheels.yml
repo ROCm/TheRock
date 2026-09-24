@@ -60,6 +60,10 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      pytorch_git_refs:
+        description: "PyTorch refs to build (empty for the release-type default matrix)"
+        type: string
+        default: ""
       run_full_pytorch_tests:
         description: Run full PyTorch tests after scheduled nightly wheel builds complete.
         type: boolean
@@ -126,6 +130,10 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      pytorch_git_refs:
+        description: "PyTorch refs to build (empty for the release-type default matrix)"
+        type: string
+        default: ""
       run_full_pytorch_tests:
         description: Run full PyTorch tests after scheduled nightly wheel builds complete.
         type: boolean
@@ -161,6 +169,8 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
       PYTHON_VERSION: ${{ inputs.python_version }}
+      PYTORCH_GIT_REFS: ${{ inputs.pytorch_git_refs }}
+      ASAN: ${{ inputs.asan }}
 
     steps:
       - name: "Quartz - started - release PyTorch wheels"
@@ -185,8 +195,15 @@ jobs:
       - name: Generate PyTorch matrix
         id: matrix
         run: |
+          python_versions="${PYTHON_VERSION}"
+          pytorch_git_refs="${PYTORCH_GIT_REFS}"
+          if [[ "${ASAN}" == "true" ]]; then
+            python_versions="${python_versions:-3.12}"
+            pytorch_git_refs="${pytorch_git_refs:-release/2.14}"
+          fi
           python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
-            --python-versions="${PYTHON_VERSION}" \
+            --python-versions="${python_versions}" \
+            --pytorch-git-refs="${pytorch_git_refs}" \
             --platform=linux \
             --release-type="${BUILD_RELEASE_TYPE}" \
             --amdgpu-families="${AMDGPU_FAMILIES}"

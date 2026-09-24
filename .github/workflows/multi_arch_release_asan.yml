@@ -44,9 +44,9 @@ on:
         type: boolean
         default: true
       python_version:
-        description: "Single Python version for wheel builds (empty for full matrix)"
+        description: "Single Python version for wheel builds (empty for ASAN default 3.12)"
         type: string
-        default: ""
+        default: "3.12"
   workflow_dispatch:
     inputs:
       release_type:
@@ -70,9 +70,9 @@ on:
         type: boolean
         default: false
       python_version:
-        description: "Single Python version for wheel builds (empty for full matrix)"
+        description: "Single Python version for wheel builds (ASAN default: 3.12)"
         type: string
-        default: ""
+        default: "3.12"
 
 permissions:
   contents: read
