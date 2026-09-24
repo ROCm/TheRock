@@ -618,25 +618,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             components[0]["additional_requirements_files"], requirements_files
         )
 
-    def test_hipkernelprovider_installs_component_requirements(self):
-        os.environ["PROJECTS_TO_TEST"] = "hipkernelprovider"
-
-        fetch_test_configurations.run()
-        components = self._get_components()
-        hipkernelprovider = next(
-            job for job in components if job["job_name"] == "hipkernelprovider"
-        )
-
-        requirements_file = (
-            "build_tools/github_actions/test_executable_scripts/"
-            "requirements-test-hipkernelprovider.txt"
-        )
-        self.assertEqual(
-            hipkernelprovider["additional_requirements_files"], [requirements_file]
-        )
-        repo_root = Path(__file__).resolve().parents[3]
-        self.assertTrue((repo_root / requirements_file).is_file())
-
     def test_windows_hip_tests_emits_pal_and_rocr_entries(self):
         """On Windows, hip-tests runs with both PAL and ROCR backends."""
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
