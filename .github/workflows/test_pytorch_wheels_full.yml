@@ -365,17 +365,33 @@ jobs:
           python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           pip freeze
 
-      # The distributed hang diagnostics shell out to `py-spy dump --native` for
-      # ranks wedged in C. Attaching needs ptrace, which some containers refuse;
-      # probe it here rather than finding out hours into a run.
-      - name: Verify py-spy can attach
+      # _dump_native_stack (torch/testing/_internal/common_distributed.py) tries
+      # gdb first and only falls back to py-spy, so gdb decides what we get. It
+      # is worth having: py-spy's unwinder stops at the innermost frame inside
+      # libhsa-runtime64 (rocr::core::BusyWaitSignal::WaitRelaxed), which says
+      # only "waiting on the GPU" and not which HIP call is waiting. gdb walks
+      # through it and gives the ROCm/HIP callers underneath.
+      - name: Install gdb
+        run: |
+          if command -v apt-get >/dev/null; then
+            apt-get update && apt-get install -y --no-install-recommends gdb
+          fi
+
+      # Attaching to another process needs ptrace, which some containers refuse;
+      # probe it here rather than finding out hours into a run. gdb is probed
+      # because it is the path the diagnostics actually take, and its unwind of
+      # a live process is also the slow one relative to the 30s timeout
+      # _dump_native_stack allows.
+      - name: Verify the native stack dumpers can attach
         continue-on-error: true
         run: |
           python -c "import time; time.sleep(60)" &
           probe=$!
           sleep 3
+          time gdb -p "$probe" -batch -ex "thread apply all bt" -ex detach \
+            || echo "gdb cannot attach"
           py-spy dump --native --pid "$probe" \
-            || echo "py-spy cannot attach; native stacks will be unavailable"
+            || echo "py-spy cannot attach"
           kill "$probe" 2>/dev/null || true
 
       - name: Runner health status
