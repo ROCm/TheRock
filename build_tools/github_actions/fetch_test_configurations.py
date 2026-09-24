@@ -916,6 +916,11 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            # CRITICAL FAILURE on gfx125X-dcgpu: GPU hang on bicgstab/parameterized_bicgstab.bicgstab_float/1
+            # https://github.com/ROCm/TheRock/actions/runs/35944362977/job/107459031710
+            "linux": ["gfx125X-dcgpu"],
+        },
     },
     # profiler tests
     "rocprofiler-compute": {
