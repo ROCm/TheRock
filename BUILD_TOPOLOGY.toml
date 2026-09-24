@@ -523,7 +523,7 @@ source_paths = ["rocm-core", "rocm-smi-lib", "rocprofiler-register"]
 [artifacts.amd-llvm]
 artifact_group = "compiler"
 type = "target-neutral"
-artifact_deps = ["sysdeps"]
+artifact_deps = ["sysdeps", "sysdeps-hwloc"]
 feature_name = "COMPILER"
 feature_group = "ALL"
 
