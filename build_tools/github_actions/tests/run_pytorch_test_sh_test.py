@@ -66,6 +66,7 @@ class ConfigureEnvironmentTest(unittest.TestCase):
                 )
 
         self.assertEqual(env["TEST_CONFIG"], "default")
+        self.assertEqual(env["IN_WHEEL_TEST"], "1")
         self.assertEqual(env["SHARD_NUMBER"], "2")
         self.assertEqual(env["NUM_TEST_SHARDS"], "6")
         self.assertEqual(env["TESTS_TO_INCLUDE"], "test_nn test_torch")

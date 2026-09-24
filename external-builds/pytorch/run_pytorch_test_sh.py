@@ -116,6 +116,7 @@ def configure_environment(
     env.setdefault("PYTORCH_TESTING_DEVICE_ONLY_FOR", "cuda")
     env.setdefault("PYTORCH_PRINT_REPRO_ON_FAILURE", "0")
     env["MIOPEN_CUSTOM_CACHE_DIR"] = tempfile.mkdtemp()
+    env["IN_WHEEL_TEST"] = "1"
     env["TEST_CONFIG"] = args.test_config
 
     if args.test_config != "distributed":
