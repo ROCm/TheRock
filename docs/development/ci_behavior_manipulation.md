@@ -14,21 +14,26 @@ The CI pipelines test a growing set of GPU targets depending on trigger type/fre
 
 ### Path-based skip CI
 
-CI is skipped when only documentation or metadata files change. TheRock uses
-built-in patterns in [`configure_ci_path_filters.py`](../../build_tools/github_actions/configure_ci_path_filters.py).
+CI is skipped when only documentation or metadata files change. Skip-CI patterns
+are configured via TOML files in [`build_tools/github_actions/`](../../build_tools/github_actions/):
 
-External repos (e.g., rocm-libraries) define their own patterns via a TOML config:
+- **[`skip-ci-base.toml`](../../build_tools/github_actions/skip-ci-base.toml)**: Universal patterns
+  that apply to ALL repositories (e.g., `*.md`, `CODEOWNERS`, `.gitignore`)
+- **[`skip-ci-config.toml`](../../build_tools/github_actions/skip-ci-config.toml)**: TheRock-specific
+  extension patterns (e.g., `dockerfiles/*`, `skills/*`, `experimental/*`)
+
+External repos (e.g., rocm-libraries) can define their own extension patterns that
+are combined with the base patterns:
 
 ```toml
 # .github/skip-ci-config.toml
 version = 1
 
 [skip_ci]
+# Repo-specific patterns (base patterns like *.md are inherited automatically)
 common = [
-    "*.md",
-    "docs/*",
-    ".gitignore",
     "projects/*/docs/*",
+    "scripts/dev-tools/*",
 ]
 linux = []   # Additional patterns for Linux-only skip
 windows = [] # Additional patterns for Windows-only skip

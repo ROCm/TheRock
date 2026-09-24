@@ -1,0 +1,91 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# TheRock-specific skip-CI patterns.
+# These extend the base patterns in skip-ci-base.toml.
+#
+# Changes matching these patterns don't trigger CI build/test workflows.
+
+version = 1
+
+[skip_ci]
+# Patterns that apply to all platforms
+common = [
+    # TheRock documentation
+    "rocm-docs",
+    "*.mdc",
+    "*.pre-commit-config.*",
+
+    # Scanner configs consumed by security scan workflows, no impact on CI
+    "build_tools/scan_tools/*",
+
+    # Changes to dockerfiles do not currently affect CI workflows directly.
+    # Docker images are built and published after commits are pushed, then
+    # workflows can be updated to use the new image sha256 values.
+    "dockerfiles/*",
+
+    # Changes to experimental code do not run standard build/test workflows
+    "experimental/*",
+
+    # AI skills and developer utilities - no impact on CI
+    "skills/*",
+
+    # This module runs in the lightweight setup job before build jobs are
+    # enabled. Its behavior is covered by unit tests, while running the full
+    # ROCm build would not provide additional validation of the path filters.
+    "build_tools/github_actions/configure_ci_path_filters.py",
+
+    # Unit-test-only directories exercised by .github/workflows/unit_tests.yml.
+    # Keep these in sync with the pytest invocations in that workflow and the
+    # testpaths in pyproject.toml files. These are intentionally explicit
+    # directory roots: other test paths exercise built ROCm packages in CI.
+    "build_tools/tests/*",
+    "build_tools/github_actions/tests/*",
+    "build_tools/packaging/archives/tests/*",
+    "build_tools/packaging/linux/tests/*",
+    "build_tools/packaging/python/tests/*",
+    "build_tools/third_party/s3_management/tests/*",
+    "test_tools/tests/*",
+]
+
+# Additional patterns for Linux-only skip
+linux = []
+
+# Additional patterns for Windows-only skip
+windows = []
+
+# GitHub workflow files that are used by CI workflows. Changes to any of
+# these trigger CI runs. This is an explicit list (not glob patterns) so that
+# unrelated workflows are never accidentally included.
+#
+# This list is maintained manually and a unit test verifies that every
+# workflow transitively called by multi_arch_ci.yml is listed here.
+#
+# TODO: Compute this set dynamically by scanning workflow files for
+# ``uses: ./.github/workflows/...`` references instead of maintaining it
+# by hand.
+[ci_workflows]
+filenames = [
+    "build_portable_linux_python_packages.yml",
+    "build_windows_python_packages.yml",
+    "manifest-diff.yml",
+    "multi_arch_build_native_linux_packages.yml",
+    "multi_arch_build_portable_linux_artifacts.yml",
+    "multi_arch_build_portable_linux_pytorch_wheels_ci.yml",
+    "multi_arch_build_linux_jax_wheels_ci.yml",
+    "multi_arch_build_portable_linux.yml",
+    "multi_arch_build_windows_artifacts.yml",
+    "multi_arch_build_windows_pytorch_wheels_ci.yml",
+    "multi_arch_build_windows.yml",
+    "multi_arch_build_wsl_rocdxg_artifacts.yml",
+    "multi_arch_ci_linux.yml",
+    "multi_arch_ci_windows.yml",
+    "multi_arch_ci.yml",
+    "setup_multi_arch.yml",
+    "test_artifacts_structure.yml",
+    "test_artifacts.yml",
+    "test_component.yml",
+    "test_multi_arch_linux_jax_wheels.yml",
+    "test_native_linux_packages_install.yml",
+    "test_rocm_wheels.yml",
+]
