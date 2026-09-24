@@ -816,6 +816,36 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIn("rocdecode", names)
         self.assertIn("rocjpeg", names)
 
+    def test_rocgdb_label_matches_single_arch_full_list(self):
+        # The `rocgdb` label must expand to the same test set ROCgdb single-arch
+        # CI runs (therock-ci.yml): base cpu/gpu/corefile plus the -O3, -O3 -flto,
+        # check-read1, check-readmore and hip-board variants.
+        os.environ["AMDGPU_FAMILIES"] = "gfx94X"
+        os.environ["TEST_LABELS"] = json.dumps(["rocgdb"])
+
+        fetch_test_configurations.run()
+        names = {job["job_name"] for job in self._get_components()}
+
+        expected = {
+            "rocgdb-cpu",
+            "rocgdb-gpu",
+            "rocgdb-corefile",
+            "rocgdb-gpu-o3",
+            "rocgdb-corefile-o3",
+            "rocgdb-gpu-lto",
+            "rocgdb-corefile-lto",
+            "rocgdb-cpu-check-read1",
+            "rocgdb-gpu-check-read1",
+            "rocgdb-corefile-check-read1",
+            "rocgdb-cpu-check-readmore",
+            "rocgdb-gpu-check-readmore",
+            "rocgdb-corefile-check-readmore",
+            "rocgdb-hip-board",
+        }
+        self.assertEqual(names, expected)
+        # rocr-debug-agent is built but not part of the rocgdb test label.
+        self.assertNotIn("rocr-debug-agent", names)
+
 
 if __name__ == "__main__":
     unittest.main()

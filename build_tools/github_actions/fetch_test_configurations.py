@@ -55,7 +55,24 @@ def _get_artifact_path(artifact_path: str) -> str:
 # keys it expands to. Use this when a single label should select multiple
 # related jobs without relying on name-prefix inference.
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
-    "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
+    # Mirrors ROCgdb single-arch CI (therock-ci.yml): base cpu/gpu/corefile plus
+    # the -O3, -O3 -flto, check-read1, check-readmore and hip-board variants.
+    "rocgdb": [
+        "rocgdb-cpu",
+        "rocgdb-gpu",
+        "rocgdb-corefile",
+        "rocgdb-gpu-o3",
+        "rocgdb-corefile-o3",
+        "rocgdb-gpu-lto",
+        "rocgdb-corefile-lto",
+        "rocgdb-cpu-check-read1",
+        "rocgdb-gpu-check-read1",
+        "rocgdb-corefile-check-read1",
+        "rocgdb-cpu-check-readmore",
+        "rocgdb-gpu-check-readmore",
+        "rocgdb-corefile-check-readmore",
+        "rocgdb-hip-board",
+    ],
     "tensilelite": ["tensilelite", "tensilelite-common"],
 }
 
@@ -466,6 +483,85 @@ test_matrix = {
         "include_family": {
             "linux": ["gfx942"],
         },
+    },
+    # --- ROCgdb test variants (parity with single-arch therock-ci.yml) ---
+    # -O3 optimization (single-arch: Test GPU (-O3), on rocgdb-gpu + rocgdb-corefile).
+    "rocgdb-gpu-o3": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-gpu-o3",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm --optimization=-O3",
+    },
+    "rocgdb-corefile-o3": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-corefile-o3",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm/runtime-core.exp --optimization=-O3",
+        "test_runner": "linux-gfx942-gpu-rocm-mathlib",
+        "include_family": {
+            "linux": ["gfx942"],
+        },
+    },
+    # -O3 -flto (single-arch: Test GPU (-O3 -flto)).
+    "rocgdb-gpu-lto": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-gpu-lto",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm --optimization='-O3 -flto'",
+    },
+    "rocgdb-corefile-lto": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-corefile-lto",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm/runtime-core.exp --optimization='-O3 -flto'",
+        "test_runner": "linux-gfx942-gpu-rocm-mathlib",
+        "include_family": {
+            "linux": ["gfx942"],
+        },
+    },
+    # check-read1 (single-arch: Test check-read1, on the default cpu/gpu/corefile set).
+    "rocgdb-cpu-check-read1": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-cpu-check-read1",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --tests gdb.dwarf2 --check-type check-read1",
+        "linux_cpu_runner": True,
+    },
+    "rocgdb-gpu-check-read1": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-gpu-check-read1",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm --check-type check-read1",
+    },
+    "rocgdb-corefile-check-read1": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-corefile-check-read1",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm/runtime-core.exp --check-type check-read1",
+        "test_runner": "linux-gfx942-gpu-rocm-mathlib",
+        "include_family": {
+            "linux": ["gfx942"],
+        },
+    },
+    # check-readmore (single-arch: Test check-readmore).
+    "rocgdb-cpu-check-readmore": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-cpu-check-readmore",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --tests gdb.dwarf2 --check-type check-readmore",
+        "linux_cpu_runner": True,
+    },
+    "rocgdb-gpu-check-readmore": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-gpu-check-readmore",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm --check-type check-readmore",
+    },
+    "rocgdb-corefile-check-readmore": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-corefile-check-readmore",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm/runtime-core.exp --check-type check-readmore",
+        "test_runner": "linux-gfx942-gpu-rocm-mathlib",
+        "include_family": {
+            "linux": ["gfx942"],
+        },
+    },
+    # hip board target (single-arch: Test GPU (hip board), on rocgdb-gpu).
+    "rocgdb-hip-board": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-hip-board",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --runtestflags=--target_board=hip --tests gdb.base/attach.exp gdb.base/start.exp gdb.base/callfuncs.exp gdb.base/consecutive-step-over.exp gdb.base/ending-run.exp gdb.base/finish.exp gdb.base/hbreak.exp gdb.base/signals.exp gdb.base/step-test.exp gdb.base/watchpoint.exp",
     },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
