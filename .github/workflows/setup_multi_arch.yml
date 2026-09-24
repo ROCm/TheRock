@@ -278,6 +278,7 @@ jobs:
         run: |
           python ./build_tools/compute_rocm_package_version.py \
             --release-type="${BUILD_RELEASE_TYPE}" \
+            --build-variant="${BUILD_VARIANT}" \
             --prerelease-version="${PRERELEASE_VERSION}" \
             --override-git-sha="${CHECKOUT_COMMIT}"
 

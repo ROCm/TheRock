@@ -40,8 +40,8 @@ Sample usage:
   python compute_rocm_package_version.py --release-type=nightly --override-base-version=7.99.0
   # 7.99.0a20251021
 
-  python compute_rocm_package_version.py --release-type=asan --asan-build-id=20260807
-  # rocm_package_version=10.1.0+asan.20260807
+  python compute_rocm_package_version.py --release-type=nightly --build-variant=asan
+  # rocm_package_version=10.1.0a20260807+asan
 """
 
 import argparse
@@ -50,7 +50,6 @@ from datetime import datetime
 from pathlib import Path
 import json
 import os
-import re
 import subprocess
 import sys
 from typing import Any
@@ -141,28 +140,6 @@ def get_current_date():
     return datetime.today().strftime("%Y%m%d")
 
 
-def normalize_asan_build_id(build_id: str | None) -> str:
-    """Return a PEP 440 local-version-safe ASAN build identifier.
-
-    ASAN wheels are intentionally isolated from release wheels with a local
-    version of the form ``+asan.<build-id>``. Dots, hyphens and underscores
-    are equivalent separators under PEP 440, so normalize all of them to dots
-    to keep filenames and dependency pins deterministic.
-    """
-    if build_id is None:
-        return get_current_date()
-
-    build_id = build_id.strip()
-    if not build_id:
-        raise ValueError("ASAN build ID must not be empty")
-    if not re.fullmatch(r"[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*", build_id):
-        raise ValueError(
-            "ASAN build ID must contain only alphanumeric components separated "
-            "by '.', '-' or '_'"
-        )
-    return re.sub(r"[._-]+", ".", build_id).lower()
-
-
 def compute_version(
     package_type: str = "wheel",
     release_type: str | None = None,
@@ -171,13 +148,13 @@ def compute_version(
     override_base_version: str | None = None,
     override_git_sha: str | None = None,
     version_data: Mapping[str, Any] | None = None,
-    asan_build_id: str | None = None,
+    build_variant: str = "release",
 ) -> str:
     """Compute package version based on package type and release type.
 
     Args:
         package_type: Type of package ("wheel", "deb", or "rpm")
-        release_type: Release type ("asan", "ci", "dev", "dev-bkc", "nightly",
+        release_type: Release type ("ci", "dev", "dev-bkc", "nightly",
             "nightly-bkc", "prerelease", or "release")
         custom_version_suffix: Custom suffix to override automatic suffix
         prerelease_version: Prerelease version number
@@ -185,16 +162,16 @@ def compute_version(
         override_git_sha: Explicit git SHA override, forwarded to get_git_sha().
             See get_git_sha() for details on when this is needed.
         version_data: Contents of version.json. Loaded automatically when required.
-        asan_build_id: Optional ASAN wheel build identifier. Defaults to the
-            current date and is only valid with ``release_type="asan"``.
+        build_variant: Orthogonal build variant. ``asan`` adds an ASAN
+            local-version marker to wheel versions.
 
     Returns:
         Computed version string appropriate for the package type
     """
     if version_data is None:
         version_data = load_version_file()
-    if asan_build_id is not None and release_type != "asan":
-        raise ValueError("asan_build_id requires release_type='asan'")
+    if build_variant not in ("release", "asan"):
+        raise ValueError(f"Unsupported build variant {build_variant!r}")
 
     if override_base_version:
         base_version = override_base_version
@@ -220,8 +197,6 @@ def compute_version(
             # Trust the custom suffix to satisfy the general rules:
             # https://packaging.python.org/en/latest/specifications/version-specifiers/
             version_suffix = custom_version_suffix
-        elif release_type == "asan":
-            version_suffix = f"+asan.{normalize_asan_build_id(asan_build_id)}"
         elif release_type == "release":
             version_suffix = ""
         elif release_type in ("ci", "dev", "dev-bkc"):
@@ -246,14 +221,15 @@ def compute_version(
         _log(f"Version suffix: '{version_suffix}'")
 
         rocm_package_version = base_version + version_suffix
+        if build_variant == "asan":
+            separator = "." if "+" in rocm_package_version else "+"
+            rocm_package_version += f"{separator}asan"
         _log(f"Full version  : '{rocm_package_version}'")
 
         return rocm_package_version
 
     # Handle native packages (deb/rpm)
     else:  # package_type in ["deb", "rpm"]
-        if release_type == "asan":
-            raise ValueError("ASAN package versions are only supported for wheels")
         if custom_version_suffix:
             # Custom suffix uses the provided value
             version_suffix_str = f"{custom_version_suffix}"
@@ -304,7 +280,6 @@ def main(argv):
         "--release-type",
         type=str,
         choices=[
-            "asan",
             "ci",
             "dev",
             "dev-bkc",
@@ -314,8 +289,7 @@ def main(argv):
             "release",
         ],
         help=(
-            "The type of package version to produce. "
-            "'ci' uses dev-style versions; 'asan' is wheel-only."
+            "The type of package version to produce. " "'ci' uses dev-style versions."
         ),
     )
     release_type_group.add_argument(
@@ -343,11 +317,10 @@ def main(argv):
     )
 
     parser.add_argument(
-        "--asan-build-id",
-        help=(
-            "Build identifier for --release-type=asan (defaults to YYYYMMDD). "
-            "The wheel version is <base>+asan.<build-id>."
-        ),
+        "--build-variant",
+        choices=["release", "asan"],
+        default="release",
+        help="Orthogonal build variant. 'asan' adds an ASAN local-version marker.",
     )
 
     args = parser.parse_args(argv)
@@ -362,16 +335,8 @@ def main(argv):
 
     version_data = load_version_file()
 
-    if args.release_type != "asan" and args.asan_build_id:
-        parser.error("--asan-build-id requires --release-type=asan")
-
-    # ASAN packaging is deliberately wheel-only. Native package production is
-    # a separate release pipeline and must not accidentally consume this local
-    # version scheme.
     outputs = {}
-    package_types = (
-        ["wheel"] if args.release_type == "asan" else ["wheel", "deb", "rpm"]
-    )
+    package_types = ["wheel", "deb", "rpm"]
     for pkg_type in package_types:
         version = compute_version(
             package_type=pkg_type,
@@ -381,7 +346,7 @@ def main(argv):
             override_base_version=args.override_base_version,
             override_git_sha=args.override_git_sha,
             version_data=version_data,
-            asan_build_id=args.asan_build_id,
+            build_variant=args.build_variant,
         )
 
         # Set appropriate output variable based on package type
