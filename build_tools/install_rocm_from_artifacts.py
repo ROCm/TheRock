@@ -387,10 +387,6 @@ def retrieve_artifacts_by_run_id(args):
         "core-amdsmi_lib",
         "core-hip_lib",
         "core-hip_dev",
-        # _run carries clr's executables, e.g. bin/hrr-playback, which
-        # hip-tests' catch/unit/hrr CMake resolves from ${ROCM_PATH}/bin and
-        # hard-fails without.
-        "core-hip_run",
         "core-kpack_lib",
         "core-ocl_lib",
         "core-ocl_dev",
@@ -429,6 +425,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_systems,
             args.rocprofiler_systems_examples,
             args.rocrtst,
+            args.hip_tests,
             args.rocalution,
             args.kfdtest,
             args.rocwmma,
@@ -565,6 +562,10 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocalution:
             extra_artifacts.append("rocalution")
             argv.append("rocalution_dev")
+        if args.hip_tests:
+            # catch/unit/hrr resolves bin/hrr-playback from ${ROCM_PATH}/bin and
+            # hard-fails without it; the executable ships in clr's _run artifact.
+            argv.append("core-hip_run")
         if args.kfdtest:
             extra_artifacts.append("kfdtest")
             # kfdtest depends on llvm-dev
@@ -1021,6 +1022,13 @@ def main(argv):
         "--kfdtest",
         default=False,
         help="Include 'kfdtest' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hip-tests",
+        default=False,
+        help="Include artifacts needed to build and run 'hip-tests'",
         action=argparse.BooleanOptionalAction,
     )
 
