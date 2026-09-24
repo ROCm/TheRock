@@ -27,14 +27,15 @@ class AsanVersionTest(unittest.TestCase):
             bpw.validate_asan_rocm_version("10.1.0")
 
     def test_old_branch_version_is_rejected(self):
-        with self.assertRaisesRegex(RuntimeError, "ROCm 10.1"):
+        with self.assertRaisesRegex(RuntimeError, "ROCm 10.1 or newer"):
             bpw.validate_asan_rocm_version("7.15.0+asan.20260807")
+
+    def test_newer_asan_sdk_is_accepted(self):
+        bpw.validate_asan_rocm_version("10.2.0+asan.20260924")
 
     def test_conflicting_explicit_suffix_is_rejected(self):
         with self.assertRaisesRegex(RuntimeError, "collide"):
-            bpw.resolve_asan_version_suffix(
-                "10.1.0+asan.20260807", "+rocm10.1"
-            )
+            bpw.resolve_asan_version_suffix("10.1.0+asan.20260807", "+rocm10.1")
 
 
 class LocalAsanIndexTest(unittest.TestCase):
@@ -107,6 +108,34 @@ class LocalAsanIndexTest(unittest.TestCase):
             pytorch_dir.mkdir()
             args = self._build_args(pytorch_dir, index)
             args.index_url = "https://example.invalid/simple"
+            with self.assertRaises(SystemExit):
+                bpw.validate_build_args(argparse.ArgumentParser(), args)
+
+    def test_build_validation_accepts_exact_remote_find_links(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            index = self._write_manifest(root)
+            pytorch_dir = root / "pytorch"
+            pytorch_dir.mkdir()
+            args = self._build_args(pytorch_dir, index)
+            args.find_links = "https://example.invalid/asan/index.html"
+            args.rocm_sdk_version = "==10.2.0+asan.20260924"
+
+            bpw.validate_build_args(argparse.ArgumentParser(), args)
+
+            self.assertEqual(args.rocm_sdk_version, "==10.2.0+asan.20260924")
+            self.assertEqual(args.asan_index_version, "10.2.0+asan.20260924")
+
+    def test_build_validation_rejects_unpinned_remote_find_links(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            index = self._write_manifest(root)
+            pytorch_dir = root / "pytorch"
+            pytorch_dir.mkdir()
+            args = self._build_args(pytorch_dir, index)
+            args.find_links = "https://example.invalid/asan/index.html"
+            args.rocm_sdk_version = ">=10.1"
+
             with self.assertRaises(SystemExit):
                 bpw.validate_build_args(argparse.ArgumentParser(), args)
 
@@ -199,8 +228,7 @@ class AsanEnvironmentTest(unittest.TestCase):
             )
 
     def test_runtime_outside_sdk_is_rejected(self):
-        with tempfile.TemporaryDirectory() as sdk_td, tempfile.TemporaryDirectory(
-        ) as rt_td:
+        with tempfile.TemporaryDirectory() as sdk_td, tempfile.TemporaryDirectory() as rt_td:
             root = Path(sdk_td)
             self._make_sdk(root)
             runtime = Path(rt_td) / "libclang_rt.asan-x86_64.so"

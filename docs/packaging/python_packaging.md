@@ -159,8 +159,6 @@ rocm_sdk_devel-10.1.0+asan.20260807-*.whl
 `build_python_packages.py` only writes local files. It does not upload or
 promote packages. Also note that it consumes TheRock's structured `artifacts/`
 directory, not an already-flattened `therock-dist-*.tar.gz` SDK archive.
-See [Local ASan Python Package Index](local_asan_index.md) to stage the result
-under an isolated `whl-asan/gfx942-all/` tree and install it offline.
 
 ### Building from CI Artifacts
 

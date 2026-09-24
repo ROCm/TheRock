@@ -160,6 +160,7 @@ import sys
 import tarfile
 import tempfile
 import textwrap
+import urllib.parse
 import urllib.request
 
 script_dir = Path(__file__).resolve().parent
@@ -200,7 +201,7 @@ LINUX_LIBRARY_PRELOADS = [
     "hipfile",
 ]
 
-ASAN_SUPPORTED_ROCM = (10, 1)
+ASAN_MINIMUM_ROCM = (10, 1)
 ASAN_SUPPORTED_ARCH = "gfx942:xnack+"
 ASAN_DEFAULT_OPTIONS = "detect_leaks=0:abort_on_error=1:print_stacktrace=1"
 ASAN_CMAKE_ARGS = ("-DCMAKE_CXX_SCAN_FOR_MODULES=OFF",)
@@ -327,9 +328,9 @@ def get_version_suffix_for_installed_rocm_package() -> str:
 def validate_asan_rocm_version(rocm_version: str) -> None:
     """Reject a release or incompatible ROCm SDK before an ASAN build."""
     parsed_version = parse(rocm_version)
-    if tuple(parsed_version.release[:2]) != ASAN_SUPPORTED_ROCM:
+    if tuple(parsed_version.release[:2]) < ASAN_MINIMUM_ROCM:
         raise RuntimeError(
-            "--asan currently requires a ROCm 10.1 SDK; "
+            "--asan currently requires a ROCm 10.1 or newer SDK; "
             f"found {rocm_version!r}"
         )
     local_parts = (parsed_version.local or "").split(".")
@@ -348,9 +349,7 @@ def get_asan_version_suffix(rocm_version: str) -> str:
     return f"+rocm{major}.{minor}.{parsed_version.local}"
 
 
-def resolve_asan_version_suffix(
-    rocm_version: str, explicit_suffix: str | None
-) -> str:
+def resolve_asan_version_suffix(rocm_version: str, explicit_suffix: str | None) -> str:
     expected_suffix = get_asan_version_suffix(rocm_version)
     if explicit_suffix and explicit_suffix != expected_suffix:
         raise RuntimeError(
@@ -426,6 +425,27 @@ def validate_local_asan_index(find_links: str) -> str:
     version = versions.pop()
     if not isinstance(version, str):
         raise ValueError(f"ASAN index contains an invalid version: {version!r}")
+    validate_asan_rocm_version(version)
+    return version
+
+
+def resolve_asan_find_links_version(find_links: str, rocm_sdk_version: str) -> str:
+    """Resolve the coherent ASAN SDK version from local or CI find-links."""
+    parsed_url = urllib.parse.urlparse(find_links)
+    if parsed_url.scheme not in ("http", "https"):
+        return validate_local_asan_index(find_links)
+
+    requested_versions = list(SpecifierSet(rocm_sdk_version))
+    if (
+        len(requested_versions) != 1
+        or requested_versions[0].operator != "=="
+        or "*" in requested_versions[0].version
+    ):
+        raise ValueError(
+            "remote ASAN --find-links requires an exact "
+            "--rocm-sdk-version ==<version> pin"
+        )
+    version = requested_versions[0].version
     validate_asan_rocm_version(version)
     return version
 
@@ -774,16 +794,18 @@ def validate_build_args(
         if not args.find_links:
             parser.error(
                 "--asan --install-rocm requires --find-links pointing to the "
-                "local Phase 1 whl-asan/gfx942-all index"
+                "Phase 1 ASAN package index"
             )
         try:
-            index_version = validate_local_asan_index(args.find_links)
+            index_version = resolve_asan_find_links_version(
+                args.find_links, args.rocm_sdk_version
+            )
             requested_versions = SpecifierSet(args.rocm_sdk_version)
         except (ValueError, RuntimeError) as exc:
             parser.error(str(exc))
         if not requested_versions.contains(index_version, prereleases=True):
             parser.error(
-                f"--rocm-sdk-version {args.rocm_sdk_version!r} excludes local "
+                f"--rocm-sdk-version {args.rocm_sdk_version!r} excludes "
                 f"ASAN SDK {index_version}"
             )
         # Install an exact coherent set even when the caller used the default
@@ -825,9 +847,9 @@ def do_install_rocm(args: argparse.Namespace):
     if getattr(args, "asan", False) or getattr(args, "no_index", False):
         pip_args.append("--no-index")
     if getattr(args, "asan", False):
-        # The local Phase 1 index intentionally contains only the ROCm package
-        # set, not generic build dependencies. Reuse the explicitly prepared
-        # environment when pip builds the selector sdist.
+        # Phase 1 indexes intentionally contain only the ROCm package set, not
+        # generic build dependencies. Reuse the explicitly prepared environment
+        # when pip builds the selector sdist.
         pip_args.append("--no-build-isolation")
     if args.pre:
         pip_args.extend(["--pre"])
@@ -987,18 +1009,13 @@ def _setup_asan_build_env(rocm_dir: Path, pytorch_rocm_arch: str) -> dict[str, s
             )
 
     hip_device_lib_path = rocm_dir / "lib" / "llvm" / "amdgcn" / "bitcode"
-    if not hip_device_lib_path.is_dir() or not any(
-        hip_device_lib_path.glob("*.bc")
-    ):
+    if not hip_device_lib_path.is_dir() or not any(hip_device_lib_path.glob("*.bc")):
         raise RuntimeError(
-            "--asan requires ROCm device bitcode under "
-            f"{hip_device_lib_path}"
+            "--asan requires ROCm device bitcode under " f"{hip_device_lib_path}"
         )
 
     runtime_name = f"libclang_rt.asan-{platform.machine().lower()}.so"
-    runtime_text = capture(
-        [clangxx, f"-print-file-name={runtime_name}"], cwd=rocm_dir
-    )
+    runtime_text = capture([clangxx, f"-print-file-name={runtime_name}"], cwd=rocm_dir)
     runtime_path = Path(runtime_text)
     if (
         not runtime_text
@@ -1018,9 +1035,11 @@ def _setup_asan_build_env(rocm_dir: Path, pytorch_rocm_arch: str) -> dict[str, s
         # its resource dir through the equivalent lib copy. Accept only when
         # the reported suffix also exists below this exact SDK payload root.
         try:
-            payload_index = len(runtime_path.parts) - 1 - list(
-                reversed(runtime_path.parts)
-            ).index(rocm_dir.name)
+            payload_index = (
+                len(runtime_path.parts)
+                - 1
+                - list(reversed(runtime_path.parts)).index(rocm_dir.name)
+            )
             payload_relative = Path(*runtime_path.parts[payload_index + 1 :])
         except ValueError:
             payload_relative = Path()
@@ -1587,9 +1606,7 @@ def do_build_pytorch(
 
     # Enable/disable Flash Attention. ASAN uses prebuilt AOTriton +asan
     # artifacts and intentionally has no separate Triton wheel dependency.
-    use_flash_attention = resolve_pytorch_flash_attention(
-        args, env, triton_requirement
-    )
+    use_flash_attention = resolve_pytorch_flash_attention(args, env, triton_requirement)
     # Finally update the environment with the resolved setting.
     env.update(
         {

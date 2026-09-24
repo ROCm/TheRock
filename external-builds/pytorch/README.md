@@ -190,13 +190,15 @@ mix/match build steps.
     --output-dir $HOME/tmp/pyout
   ```
 
-### Local ROCm 10.1 ASAN torch wheel
+### ROCm ASAN torch wheel
 
 Phase 2 has a deliberately isolated `--asan` mode for a torch-only
-`gfx942:xnack+` build. It consumes the local index produced by Phase 1 and
-passes `--no-index` to pip, so release ROCm packages cannot be selected as a
-fallback. The single-target selector's `device` extra is added automatically
-and must resolve `rocm-sdk-device-gfx942`.
+`gfx942:xnack+` build using ROCm 10.1 or newer. It consumes the local index
+produced by Phase 1, or an HTTPS artifact index with an exact
+`--rocm-sdk-version ==<version>+asan.<build-id>` pin, and passes `--no-index`
+to pip so release ROCm packages cannot be selected as a fallback. The
+single-target selector's `device` extra is added automatically and must resolve
+`rocm-sdk-device-gfx942`.
 
 The Phase 1 index contains only ROCm artifacts, so prepare the current Python
 environment with the selector sdist's build dependencies before running the

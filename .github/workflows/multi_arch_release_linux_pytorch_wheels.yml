@@ -36,6 +36,10 @@ on:
         description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
         type: string
         default: ""
+      asan:
+        description: "Build a torch-only ASAN wheel from ASAN ROCm packages"
+        type: boolean
+        default: false
       release_type:
         description: 'Release type; selects the S3 bucket'
         type: string
@@ -92,6 +96,10 @@ on:
         description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
         type: string
         default: ""
+      asan:
+        description: "Build a torch-only ASAN wheel from ASAN ROCm packages"
+        type: boolean
+        default: false
       release_type:
         description: 'Release type; ordinary developer-triggered jobs should use "dev"'
         type: choice
@@ -209,6 +217,7 @@ jobs:
       rocm_version: ${{ inputs.rocm_version }}
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
       rocm_package_index_url: ${{ inputs.rocm_package_index_url }}
+      asan: ${{ inputs.asan }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
@@ -217,7 +226,7 @@ jobs:
       # The reusable build workflow dispatches the full PyTorch test suite for
       # each successfully built (nightly, gfx94X-dcgpu, py3.12) ref using that
       # build's own torch_version output (#5777).
-      run_full_pytorch_tests: ${{ inputs.run_full_pytorch_tests }}
+      run_full_pytorch_tests: ${{ inputs.run_full_pytorch_tests && !inputs.asan }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:

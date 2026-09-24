@@ -15,6 +15,8 @@
 #     under v5/rocm/pytorch/whl-next/
 #     via publish_pytorch_to_release_bucket.py (pip-compatible index generation
 #     happens server-side).
+#   - With asan=true, build only torch for gfx942:xnack+, skip kpack/release
+#     publication/tests, and retain the wheel as a workflow artifact.
 #
 # For convergence with CI and testing plans see:
 # * https://github.com/ROCm/TheRock/issues/3332
@@ -75,6 +77,10 @@ on:
         description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
         type: string
         default: ""
+      asan:
+        description: "Build a torch-only ASAN wheel from ASAN ROCm packages"
+        type: boolean
+        default: false
       release_type:
         description: 'Release type; selects the S3 bucket.'
         type: string
@@ -164,6 +170,10 @@ on:
           index.
         type: string
         default: ""
+      asan:
+        description: "Build a torch-only ASAN wheel from ASAN ROCm packages"
+        type: boolean
+        default: false
       release_type:
         description: 'Release type; developer-triggered jobs should use "dev".'
         type: choice
@@ -234,6 +244,7 @@ jobs:
       ROCM_VERSION: ${{ inputs.rocm_version }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       CACHE_TYPE: ${{ inputs.cache_type }}
+      ASAN: ${{ inputs.asan }}
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       optional_build_prod_arguments: ""
@@ -347,8 +358,13 @@ jobs:
       # GITHUB_ENV (--rocm-sdk-version, --version-suffix).
       - name: Determine optional arguments passed to `build_prod_wheels.py`
         run: |
-          python build_tools/github_actions/determine_version.py \
-            --rocm-version "${ROCM_VERSION}"
+          if [[ "${ASAN}" == "true" ]]; then
+            echo "optional_build_prod_arguments=--rocm-sdk-version ==${ROCM_VERSION}" \
+              >> "${GITHUB_ENV}"
+          else
+            python build_tools/github_actions/determine_version.py \
+              --rocm-version "${ROCM_VERSION}"
+          fi
 
       - name: Configure AWS Credentials for sccache
         if: ${{ inputs.cache_type == 'sccache' && github.repository_owner == 'ROCm' }}
@@ -389,7 +405,7 @@ jobs:
         env:
           # Use the index if given; else the find-links page; else default to
           # the nightly repo.amd.com aggregate index (both empty is the bare-dispatch case).
-          ROCM_INDEX_URL: ${{ inputs.rocm_package_index_url || (inputs.rocm_package_find_links_url == '' && 'https://nightly.repo.amd.com/rocm/whl-next' || '') }}
+          ROCM_INDEX_URL: ${{ !inputs.asan && (inputs.rocm_package_index_url || (inputs.rocm_package_find_links_url == '' && 'https://nightly.repo.amd.com/rocm/whl-next' || '')) || '' }}
           ROCM_FIND_LINKS: ${{ inputs.rocm_package_find_links_url }}
           AMDGPU_TARGETS: ${{ steps.expand.outputs.targets }}
         # determine_version.py emits multiple arguments from a parsed ROCm version.
@@ -400,6 +416,18 @@ jobs:
             cache_flag="--use-sccache"
           elif [ "${CACHE_TYPE}" = "ccache" ]; then
             cache_flag="--use-ccache"
+          fi
+
+          asan_flags=()
+          if [[ "${ASAN}" == "true" ]]; then
+            AMDGPU_TARGETS="gfx942:xnack+"
+            asan_flags+=(
+              --asan
+              --no-build-triton
+              --no-build-pytorch-audio
+              --no-build-pytorch-vision
+              --no-build-apex
+            )
           fi
 
           # build_prod_wheels.py forwards each of these to pip and ignores an
@@ -417,6 +445,7 @@ jobs:
             ${cache_flag} \
             --release-type="${BUILD_RELEASE_TYPE}" \
             --pytorch-rocm-arch "${AMDGPU_TARGETS}" \
+            "${asan_flags[@]}" \
             ${{ env.optional_build_prod_arguments }}
 
       - name: Report cache stats
@@ -433,6 +462,7 @@ jobs:
           fi
 
       - name: Sanity check wheel
+        if: ${{ !inputs.asan }}
         run: |
           python external-builds/pytorch/sanity_check_wheel.py \
             "${PACKAGE_DIST_DIR}"/
@@ -443,11 +473,13 @@ jobs:
       # The outer actions/checkout skips submodules for speed, so pull in
       # rocm-systems only when we actually need it.
       - name: Init rocm-systems submodule
+        if: ${{ !inputs.asan }}
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git submodule update --init --depth=1 rocm-systems
 
       - name: Install kpack tooling
+        if: ${{ !inputs.asan }}
         run: |
           pip install \
             -e rocm-systems/python/rocm-bootstrap \
@@ -457,6 +489,7 @@ jobs:
       # rocm_kpack.tools.split_python_wheels flow into build_prod_wheels.py and
       # document the standalone developer workflow.
       - name: Split fat wheels (torch + torchvision)
+        if: ${{ !inputs.asan }}
         run: |
           # The splitter writes the host wheel under the same filename as
           # the input, so relocate each fat wheel out of PACKAGE_DIST_DIR
@@ -505,18 +538,29 @@ jobs:
             --dist-dir "${PACKAGE_DIST_DIR}"
 
       - name: Configure AWS Credentials
+        if: ${{ !inputs.asan }}
         uses: ./.github/actions/configure_aws_product_publication_credentials
         with:
           release_type: ${{ inputs.release_type }}
           product: pytorch
 
       - name: Upload PyTorch wheels to release bucket
+        if: ${{ !inputs.asan }}
         id: publish-pytorch-wheels
         run: |
           python build_tools/github_actions/publish_pytorch_to_release_bucket.py \
             --source-dir="${PACKAGE_DIST_DIR}" \
             --release-type="${BUILD_RELEASE_TYPE}" \
             --structured
+
+      - name: Upload ASAN torch wheel artifact
+        if: ${{ inputs.asan }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: torch-asan-${{ steps.pytorch-versions.outputs.torch_version }}-py${{ inputs.python_version }}
+          path: ${{ env.PACKAGE_DIST_DIR }}/torch-*.whl
+          if-no-files-found: error
+          compression-level: 0
 
       - name: Capture job summary
         id: summary
@@ -525,6 +569,7 @@ jobs:
 
   configure_pytorch_tests:
     name: Configure PyTorch Tests | ${{ inputs.test_level }}
+    if: ${{ !inputs.asan }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -574,7 +619,7 @@ jobs:
     # Keep this name static: GitHub does not expand matrix expressions when
     # the job is skipped before matrix evaluation (for example, for none).
     name: Test PyTorch Wheels
-    if: ${{ needs.configure_pytorch_tests.outputs.enabled == 'true' }}
+    if: ${{ !inputs.asan && needs.configure_pytorch_tests.outputs.enabled == 'true' }}
     needs: [build_pytorch_wheels, configure_pytorch_tests]
     permissions:
       contents: read
@@ -608,6 +653,7 @@ jobs:
     if: >-
       ${{
         inputs.run_full_pytorch_tests &&
+        !inputs.asan &&
         inputs.python_version == '3.12' &&
         contains(inputs.amdgpu_families, 'gfx94X-dcgpu')
       }}

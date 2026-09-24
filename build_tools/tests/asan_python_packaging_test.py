@@ -171,10 +171,7 @@ class AsanRpathValidationTest(unittest.TestCase):
                 "build_python_packages._elf_dynamic_info",
                 return_value=(
                     ["libclang_rt.asan-x86_64.so"],
-                    [
-                        "$ORIGIN/../../_rocm_sdk_core/"
-                        "lib/llvm/lib/clang/23/lib/linux"
-                    ],
+                    ["$ORIGIN/../../_rocm_sdk_core/" "lib/llvm/lib/clang/23/lib/linux"],
                 ),
             ):
                 validate_asan_runtime_resolution(
@@ -200,7 +197,7 @@ class AsanRpathValidationTest(unittest.TestCase):
                 platform_dir=root / "_rocm_sdk_libraries",
                 files=types.SimpleNamespace(
                     materialized_relpaths={"lib/libfoo.so": (None, binary)}
-                )
+                ),
             )
             core = types.SimpleNamespace(platform_dir=core_dir)
             dynamic_info = (
@@ -235,7 +232,7 @@ class AsanRpathValidationTest(unittest.TestCase):
                 platform_dir=root / "_rocm_sdk_libraries",
                 files=types.SimpleNamespace(
                     materialized_relpaths={"lib/libfoo.so": (None, binary)}
-                )
+                ),
             )
             core = types.SimpleNamespace(platform_dir=core_dir)
 
