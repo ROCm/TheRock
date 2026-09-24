@@ -23,15 +23,9 @@ import json
 import logging
 import os
 import platform as platform_module
-import sys
-from copy import deepcopy
 from pathlib import Path
 
-# Add tests directory to path for extended_tests imports
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
 from github_actions_api import *
-from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
-from extended_tests.functional.functional_test_matrix import functional_matrix
 from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
     select_weighted_label,
@@ -62,6 +56,7 @@ def _get_artifact_path(artifact_path: str) -> str:
 # related jobs without relying on name-prefix inference.
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
+    "tensilelite": ["tensilelite", "tensilelite-common"],
 }
 
 
@@ -209,11 +204,6 @@ _rocgdb_common = {
 # not in the list; omit the field to run on every tier (the default). For example, a
 # component whose suite is too slow for the quick sanity tier opts out of it with:
 #   "test_types": ["standard", "comprehensive", "full"]
-#
-# rocprofiler-sdk SPM: the default rocprofiler-sdk job and rocprofiler-sdk-spm share
-# one artifact but use different runners. SPM-labeled tests run on a pinned gfx94x
-# runner; the default job excludes them via --ctest-label-exclude spm. Preflight
-# and spm labels live in the companion rocm-systems rocprofiler-sdk PR.
 
 test_matrix = {
     # Sanity tests - always run first as a prerequisite for other component tests
@@ -322,6 +312,39 @@ test_matrix = {
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
+        },
+    },
+    # TensileLite common GEMM tests (Tensile/Tests/common) on real hardware,
+    # matching Math CI's `preliminary` `-m common` stage. A separate job rather
+    # than another stage chained onto "tensilelite", so a unit-test failure
+    # cannot hide the GEMM result.
+    #
+    # include_family is opt-in on purpose: selection inside the suite works by
+    # each config declaring skip-gfxNNNN, and that list only covers the
+    # architectures registered in tensilelite's pytest.ini. A family with no
+    # declarations (e.g. gfx1103, gfx115X) would try to run all ~417 configs.
+    #
+    # In Math CI (4 xdist workers) this suite takes up to 2h03 on gfx950 and
+    # 64 min on gfx942. Only gfx942 is on the PR path (gfx950 and gfx90a are
+    # postsubmit, gfx120X-all is nightly), so it runs unsharded; the timeout is
+    # sized for gfx950.
+    #
+    # Until the pinned rocm-libraries ships the hw-common category,
+    # pytest_runner.py skips this job with a warning instead of failing.
+    "tensilelite-common": {
+        "job_name": "tensilelite-common",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 180,
+        "additional_requirements_files": [
+            "build_tools/github_actions/test_executable_scripts/requirements-test-tensilelite.txt",
+        ],
+        "test_script": f"TEST_CATEGORY=hw-common python {_get_script_path('pytest_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        "include_family": {
+            "linux": ["gfx90a", "gfx94X-dcgpu", "gfx950-dcgpu", "gfx120X-all"],
         },
     },
     "origami": {
@@ -669,7 +692,7 @@ test_matrix = {
         "additional_requirements_files": [
             _get_artifact_path("share/rocprofiler-sdk/tests/requirements.txt"),
         ],
-        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --enable-cdash --ctest-label-exclude spm",
+        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --enable-cdash",
         "platform": ["linux"],
         "container_options": ["--cap-add=SYS_PTRACE"],
         "total_shards_dict": {
@@ -679,31 +702,6 @@ test_matrix = {
         # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
         # the specialized openmpi image.
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
-    },
-    # rocprofiler-sdk SPM tests: same artifact as rocprofiler-sdk above, but only
-    # CTest tests labeled "spm" run here on a pinned gfx94x runner (driver preflight
-    # in the companion rocm-systems PR). To disable scheduling, comment out this entry.
-    "rocprofiler-sdk-spm": {
-        "job_name": "rocprofiler-sdk-spm",
-        "fetch_artifact_args": "--rocprofiler-sdk --tests",
-        "timeout_minutes": 30,
-        "additional_requirements_files": [
-            _get_artifact_path("share/rocprofiler-sdk/tests/requirements.txt"),
-        ],
-        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --ctest-label spm",
-        "platform": ["linux"],
-        "container_options": ["--cap-add=SYS_PTRACE"],
-        "total_shards_dict": {
-            "linux": 1,
-        },
-        # rocprofv3 mpi-ranks tests gate on find_package(MPI) and launch under
-        # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
-        # the specialized openmpi image.
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
-        "test_runner": "linux-gfx942-gpu-rocm-profiler",
-        "include_family": {
-            "linux": ["gfx94X-dcgpu"],
-        },
     },
     # hipDNN tests
     "hipdnn": {
@@ -782,6 +780,11 @@ test_matrix = {
         "job_name": "hipkernelprovider",
         "fetch_artifact_args": "--hipdnn --hipkernelprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 30,
+        # TODO: Use the copy in the hipkernelprovider test artifact after rocKE
+        # installs its component-owned requirements file.
+        "additional_requirements_files": [
+            "build_tools/github_actions/test_executable_scripts/requirements-test-hipkernelprovider.txt",
+        ],
         "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -1024,7 +1027,6 @@ def run():
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     test_type = os.getenv("TEST_TYPE", "standard")
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
-    run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
     build_variant = os.getenv("BUILD_VARIANT", "release")
 
     # Get runner config for per-component runner selection
@@ -1054,34 +1056,14 @@ def run():
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
-    # Build the selected test matrix:
-    # 1) Start from regular tests
-    # 2) Optionally merge extended tests (functional + benchmarks)
-    selected_matrix: dict = deepcopy(test_matrix)
-    logging.info(f"Using test_matrix ({len(selected_matrix)} test(s))")
-
-    if run_extended_tests and functional_matrix:
-        logging.info(
-            f"Merging {len(functional_matrix)} functional test(s) into test matrix"
-        )
-        for key, value in functional_matrix.items():
-            selected_matrix[key] = deepcopy(value)
-
-    if run_extended_tests and benchmark_matrix:
-        logging.info(
-            f"Merging {len(benchmark_matrix)} benchmark test(s) into test matrix"
-        )
-        for key, value in benchmark_matrix.items():
-            entry = deepcopy(value)
-            entry["is_benchmark"] = True
-            selected_matrix[key] = entry
+    logging.info(f"Using test_matrix ({len(test_matrix)} test(s))")
 
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in projects_to_test.split(",")]
 
     all_components = []
-    for key in selected_matrix:
-        job_name = selected_matrix[key]["job_name"]
+    for key in test_matrix:
+        job_name = test_matrix[key]["job_name"]
 
         # Resolve the individual gfx targets for the current family once, so both
         # include_family and exclude_family can match either the family group
@@ -1099,7 +1081,7 @@ def run():
         # whether a job runs: it runs only when it matches an include (if any are
         # listed for this platform) and matches no exclude. Matching is exact
         # membership.
-        _include_list = selected_matrix[key].get("include_family", {}).get(platform, [])
+        _include_list = test_matrix[key].get("include_family", {}).get(platform, [])
         if _include_list and not _family_matches(
             _include_list, amdgpu_families, _family_gfx_targets
         ):
@@ -1109,7 +1091,7 @@ def run():
             )
             continue
 
-        _exclude_list = selected_matrix[key].get("exclude_family", {}).get(platform, [])
+        _exclude_list = test_matrix[key].get("exclude_family", {}).get(platform, [])
         if _exclude_list and _family_matches(
             _exclude_list, amdgpu_families, _family_gfx_targets
         ):
@@ -1134,7 +1116,7 @@ def run():
         # "test_types". Skip it entirely (schedule no job) for any TEST_TYPE not in
         # the list -- e.g. miopen-dbsync runs standard/comprehensive/full only, never
         # quick. Omit the field to run on every tier.
-        allowed_test_types = selected_matrix[key].get("test_types")
+        allowed_test_types = test_matrix[key].get("test_types")
         if allowed_test_types and test_type not in allowed_test_types:
             logging.info(
                 f"Excluding job {job_name}: test_type {test_type} not in {allowed_test_types}"
@@ -1144,7 +1126,7 @@ def run():
         # If the test is enabled for a particular platform and a particular (or all) projects are selected.
         # Note: Sanity goes through the same all_components loop as other components, but is separated
         # into its own sanity_component GHA output after the loop (see gha_set_output below).
-        if platform in selected_matrix[key]["platform"] and (
+        if platform in test_matrix[key]["platform"] and (
             key == "sanity" or key in project_array or "*" in project_array
         ):
             logging.info(f"Including job {job_name} with test_type {test_type}")
@@ -1152,7 +1134,7 @@ def run():
             # Hip-tests on Windows run with both PAL and ROCR backends.
             # See: https://github.com/ROCm/TheRock/issues/3587
             if key == "hip-tests" and platform == "windows":
-                base = selected_matrix[key]
+                base = test_matrix[key]
                 total_shards = base.get("total_shards_dict", {}).get(platform, 1)
                 if test_type == "quick":
                     total_shards = 1
@@ -1188,7 +1170,7 @@ def run():
                 all_components.append(rocr_entry)
                 continue
 
-            job_config_data = {**_common_settings, **selected_matrix[key]}
+            job_config_data = {**_common_settings, **test_matrix[key]}
             job_config_data["test_type"] = test_type
 
             # tensilelite: append the tensilelite/tests C++ gtest suite (run via
@@ -1217,13 +1199,11 @@ def run():
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
             # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index
-            # Note: Benchmarks always have total_shards=1 (no sharding)
             total_shards = job_config_data.get("total_shards_dict", {}).get(platform, 1)
             job_config_data["shard_arr"] = [i + 1 for i in range(total_shards)]
             job_config_data["total_shards"] = total_shards
 
             # If the test type is quick tests, we only need one shard for the test job
-            # Note: Benchmarks always use test_type="full" but have total_shards=1 anyway
             if test_type == "quick":
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
@@ -1231,7 +1211,7 @@ def run():
             # If the test requires multi GPU testing, we use a multi-GPU test runner for this specific test
             # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
             # If the multi GPU test runner is not enabled, we will skip the test
-            if "multi_gpu" in selected_matrix[key]:
+            if "multi_gpu" in test_matrix[key]:
                 # TEMPORARY: Skip multi-GPU tests for quick runs until capacity is restored.
                 # Jobs that require multi-GPU runners (defined via "multi_gpu" in their config)
                 # only run on standard, comprehensive, or full tiers.
@@ -1242,8 +1222,8 @@ def run():
                     continue
 
                 if (
-                    platform in selected_matrix[key]["multi_gpu"]
-                    and amdgpu_families in selected_matrix[key]["multi_gpu"][platform]
+                    platform in test_matrix[key]["multi_gpu"]
+                    and amdgpu_families in test_matrix[key]["multi_gpu"][platform]
                 ):
                     # Mark this component as needing a multi-GPU runner.
                     # The actual runner selection is done in the per-component loop below.

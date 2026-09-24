@@ -22,9 +22,6 @@ on:
         default: ""
       test_runs_on:
         type: string
-      benchmark_runs_on:
-        type: string
-        default: ""
       sanity_check_only_for_family:
         type: boolean
         default: false
@@ -32,9 +29,6 @@ on:
         type: string
       test_labels:
         type: string
-      run_extended_tests:
-        type: string
-        default: 'false'
       changed_projects:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
@@ -83,9 +77,6 @@ on:
         default: ""
       test_runs_on:
         type: string
-      benchmark_runs_on:
-        type: string
-        default: ""
       sanity_check_only_for_family:
         type: boolean
         default: false
@@ -93,9 +84,6 @@ on:
         type: string
       test_labels:
         type: string
-      run_extended_tests:
-        type: string
-        default: 'false'
       changed_projects:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
@@ -190,7 +178,6 @@ jobs:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
-          RUN_EXTENDED_TESTS: ${{ inputs.run_extended_tests }}
           PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
           CI_CONFIG_PATH: ci-config
           BUILD_VARIANT: ${{ inputs.build_variant }}
@@ -251,9 +238,8 @@ jobs:
       #      Only applies to workflow_dispatch events (not PR/workflow_call chains).
       #      Bot-triggered runs (e.g., nightly from rockrel) skip this and use rules below.
       #   2. Multi-GPU components use the multi-GPU runner (required for correct execution)
-      #   3. Benchmark components use the dedicated benchmark runner
-      #   4. CPU-only components use standard GitHub runners (aws-linux-scale-rocm-prod)
-      #   5. Per-component runner (set by fetch_test_configurations.py)
+      #   3. CPU-only components use standard GitHub runners (aws-linux-scale-rocm-prod)
+      #   4. Per-component runner (set by fetch_test_configurations.py)
       test_runs_on: >-
         ${{
           (github.event_name == 'workflow_dispatch' &&
@@ -262,9 +248,6 @@ jobs:
             inputs.test_runs_on) ||
           (matrix.components.multi_gpu_runner != '' &&
             matrix.components.multi_gpu_runner) ||
-          (matrix.components.is_benchmark == true &&
-            inputs.benchmark_runs_on != '' &&
-            inputs.benchmark_runs_on) ||
           (matrix.components.linux_cpu_runner == true &&
             'aws-linux-scale-rocm-prod') ||
           matrix.components.test_runner
