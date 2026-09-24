@@ -848,6 +848,14 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # KNOWN FAILURE: TestGpuMatmulPlan and TestHipblasltMatmulPlanBuilder tests fail
+                # individual tests fail but GTEST_FILTER plumbing not available (ctest overrides env var)
+                # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363782678
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # hip-kernel-provider tests. test_hipkernelprovider.py installs the staged
     # rocKE wheels, then delegates to test_runner.py.
