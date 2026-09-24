@@ -214,6 +214,12 @@ class TestProductReleaseHelpers(unittest.TestCase):
                     get_release_package_index_url(release_type), expected_url
                 )
 
+    def test_release_package_index_url_accepts_isolated_index(self):
+        self.assertEqual(
+            get_release_package_index_url("dev", "whl-next-asan", product="core"),
+            "https://dev.repo.amd.com/rocm/core/whl-next-asan/",
+        )
+
     def test_invalid_product_release_type_raises(self):
         with self.assertRaises(ValueError) as cm:
             get_product_release_bucket_config("weekly", "core")

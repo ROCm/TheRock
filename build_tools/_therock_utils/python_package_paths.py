@@ -8,11 +8,12 @@ product-local package directories:
 
     <product>/<index>/<normalized-package>/<filename>
 
-where <index> is ``whl`` or ``whl-next``. Release stream (dev/nightly/
-prerelease) is selected by the target bucket, never encoded in the path. This
-module computes the per-file destination keys the release publishers use when
-run with ``--structured``; the generator in ``manage_structured.py`` later
-discovers and indexes those directories.
+where <index> is ``whl``, ``whl-next``, or the isolated
+``whl-next-asan`` variant. Release stream (dev/nightly/prerelease) is selected
+by the target bucket, never encoded in the path. This module computes the
+per-file destination keys the release publishers use when run with
+``--structured``; the generator in ``manage_structured.py`` later discovers
+and indexes those directories.
 
 pep503_normalize + package-name extraction here intentionally mirror
 manage_structured.py so producer output round-trips through its
@@ -38,7 +39,7 @@ from packaging.utils import (
 ACCEPTED_FILE_EXTENSIONS = (".whl", ".tar.gz", ".zip")
 
 # Valid aggregate index names (the second path segment).
-INDEX_NAMES = ("whl", "whl-next")
+INDEX_NAMES = ("whl", "whl-next", "whl-next-asan")
 DEFAULT_INDEX = "whl-next"
 
 # repo.amd.com release streams and the per-product bucket naming scheme:

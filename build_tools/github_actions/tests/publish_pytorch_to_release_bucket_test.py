@@ -198,6 +198,37 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
         )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_files")
+    @mock.patch("github_actions.publish_pytorch_to_release_bucket.gha_set_output")
+    def test_structured_asan_uses_isolated_index(
+        self, mock_set_output, mock_upload_files
+    ):
+        self._touch("torch-2.10.0+rocm10.2.0.asan-cp312-cp312-linux_x86_64.whl")
+        mock_upload_files.return_value = 1
+        main(
+            [
+                "--source-dir",
+                os.fspath(self.source_dir),
+                "--release-type",
+                "dev",
+                "--build-variant",
+                "asan",
+                "--structured",
+                "--dry-run",
+            ]
+        )
+
+        (uploads,) = mock_upload_files.call_args.args
+        _source, dest = uploads[0]
+        self.assertIn("v5/rocm/pytorch/whl-next-asan/torch/", dest.relative_path)
+        mock_set_output.assert_called_once_with(
+            {
+                "package_index_url": (
+                    "https://dev.repo.amd.com/rocm/pytorch/whl-next-asan/"
+                )
+            }
+        )
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_files")
     def test_structured_raises_when_no_wheels(self, mock_upload_files):
         # Empty source dir: the planner yields nothing and the script fails
         # fast without calling the backend.

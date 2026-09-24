@@ -225,10 +225,18 @@ def get_product_release_bucket_config(
     )
 
 
-def get_release_package_index_url(release_type: str) -> str:
-    """Return the aggregate pip index URL for a final release stream."""
+def get_release_package_index_url(
+    release_type: str, index: str = "whl-next", product: str | None = None
+) -> str:
+    """Return an aggregate or product-local pip index URL."""
     stream = get_release_stream(release_type)
-    return f"https://{stream}.repo.amd.com/rocm/whl-next/"
+    if product is not None and product not in _ALLOWED_RELEASE_PRODUCTS:
+        raise ValueError(
+            f"product={product!r} is invalid, "
+            f"expected one of {_ALLOWED_RELEASE_PRODUCTS}"
+        )
+    product_path = f"{product}/" if product else ""
+    return f"https://{stream}.repo.amd.com/rocm/{product_path}{index}/"
 
 
 def get_artifacts_bucket_config_for_workflow_run(

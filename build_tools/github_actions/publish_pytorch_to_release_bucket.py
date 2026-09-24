@@ -83,6 +83,12 @@ def main(argv: list[str]) -> None:
         help="Release type used to select the destination Python bucket",
     )
     parser.add_argument(
+        "--build-variant",
+        choices=["release", "asan"],
+        default="release",
+        help="Build variant; ASAN wheels publish to the isolated ASAN index.",
+    )
+    parser.add_argument(
         "--structured",
         action="store_true",
         help="Publish wheels into product-local package directories "
@@ -105,11 +111,16 @@ def main(argv: list[str]) -> None:
         raise FileNotFoundError(f"Source directory not found: {args.source_dir}")
 
     backend = create_storage_backend(dry_run=args.dry_run)
+    index = "whl-next-asan" if args.build_variant == "asan" else args.python_index
 
     if args.structured:
         bucket = get_product_release_bucket_config(args.release_type, "pytorch")
-        _publish_structured(args.source_dir, bucket.name, args.python_index, backend)
-        package_index_url = get_release_package_index_url(args.release_type)
+        _publish_structured(args.source_dir, bucket.name, index, backend)
+        package_index_url = get_release_package_index_url(
+            args.release_type,
+            index,
+            product="pytorch" if args.build_variant == "asan" else None,
+        )
     else:
         bucket = get_release_bucket_config(args.release_type, "python")
         dest = StorageLocation(bucket.name, "v4/whl")

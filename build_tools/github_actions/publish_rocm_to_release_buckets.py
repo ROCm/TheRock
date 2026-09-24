@@ -45,8 +45,8 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
 
 ASAN build variant:
 
-    For ASAN builds (--build-variant asan), python packages are skipped and
-    tarballs/native packages are published to separate paths:
+    For ASAN builds (--build-variant asan), all products are published to
+    separate paths:
 
     s3://therock-dev-artifacts/12345-linux/tarballs/
       -> s3://therock-repo-amd-dev-core/v5/rocm/core/tarball-asan/
@@ -54,6 +54,8 @@ ASAN build variant:
       -> s3://therock-repo-amd-dev-core/v5/rocm/core/packages-asan/deb/20250101-12345/
     s3://therock-dev-artifacts/12345-linux/packages/rpm/
       -> s3://therock-repo-amd-dev-core/v5/rocm/core/packages-asan/rpm/20250101-12345/
+    s3://therock-dev-artifacts/12345-linux/python/
+      -> s3://therock-repo-amd-dev-core/v5/rocm/core/whl-next-asan/<package>/
 
 Test usage:
     python build_tools/github_actions/publish_rocm_to_release_buckets.py \\
@@ -72,12 +74,14 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from _therock_utils.s3_buckets import (
     get_product_release_bucket_config,
+    get_release_package_index_url,
     get_release_bucket_config,
 )
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.python_package_paths import plan_key_copies
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from github_actions.github_actions_api import gha_set_output
 
 logger = logging.getLogger(__name__)
 
@@ -311,7 +315,6 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--python-index",
         default="whl-next",
-        choices=["whl", "whl-next"],
         help="Product-local index name for structured Python publishing "
         "(default: whl-next). Selects the v5/rocm/core/<index>/ path segment.",
     )
@@ -327,8 +330,8 @@ def main(argv: list[str]) -> None:
         "--build-variant",
         default="release",
         choices=["release", "asan", "asan-debug", "host-asan", "host-asan-debug"],
-        help="Build variant (default: release). ASAN builds skip python packages "
-        "and publish native packages to separate paths. The '-debug' variants "
+        help="Build variant (default: release). ASAN builds publish Python and "
+        "native packages to separate paths. The '-debug' variants "
         "(RelWithDebInfo + line-number debug info) publish to the same paths "
         "as their non-debug counterpart.",
     )
@@ -345,17 +348,24 @@ def main(argv: list[str]) -> None:
     is_asan = _is_asan_variant(args.build_variant)
 
     publish_tarballs(artifacts_root, args.release_type, backend, args.build_variant)
-    if not is_asan:
-        publish_python_packages(
-            artifacts_root,
-            args.release_type,
-            backend,
-            kpack_split,
-            structured=args.structured,
-            index=args.python_index,
-        )
-    else:
-        logger.info("Skipping python packages for ASAN build variant")
+    python_index = "whl-next-asan" if is_asan else args.python_index
+    publish_python_packages(
+        artifacts_root,
+        args.release_type,
+        backend,
+        kpack_split,
+        structured=args.structured,
+        index=python_index,
+    )
+    gha_set_output(
+        {
+            "package_index_url": get_release_package_index_url(
+                args.release_type,
+                python_index,
+                product="core" if is_asan else None,
+            )
+        }
+    )
     if artifacts_root.platform == "linux" and not args.skip_native_packages:
         publish_native_linux_packages(
             artifacts_root, args.release_type, backend, args.build_variant
