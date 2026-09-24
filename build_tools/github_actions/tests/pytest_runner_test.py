@@ -147,6 +147,35 @@ class ResolveTestCategoryTest(unittest.TestCase):
             self.assertEqual(pytest_runner.resolve_test_category(), "quick")
 
 
+class LookupCategoryTest(unittest.TestCase):
+    CATEGORIES = {"quick": {"test_paths": ["unit"]}}
+
+    def test_returns_defined_category(self):
+        with mock.patch.dict(os.environ, {"TEST_TYPE": "quick"}, clear=True):
+            self.assertEqual(
+                pytest_runner.lookup_category(self.CATEGORIES, "quick"),
+                {"test_paths": ["unit"]},
+            )
+
+    def test_pinned_category_missing_skips_with_warning(self):
+        env = {"TEST_CATEGORY": "hw-common", "TEST_TYPE": "standard"}
+        with mock.patch.dict(os.environ, env, clear=True), mock.patch(
+            "builtins.print"
+        ) as fake_print:
+            with self.assertRaises(SystemExit) as ctx:
+                pytest_runner.lookup_category(self.CATEGORIES, "hw-common")
+        self.assertEqual(ctx.exception.code, 0)
+        printed = " ".join(str(c.args[0]) for c in fake_print.call_args_list)
+        self.assertIn("::warning", printed)
+        self.assertIn("hw-common", printed)
+
+    def test_missing_tier_still_fails(self):
+        with mock.patch.dict(os.environ, {"TEST_TYPE": "standard"}, clear=True):
+            with self.assertRaises(SystemExit) as ctx:
+                pytest_runner.lookup_category(self.CATEGORIES, "standard")
+        self.assertNotEqual(ctx.exception.code, 0)
+
+
 class GetEnvIntOverrideTest(unittest.TestCase):
     def test_unset_returns_zero(self):
         with mock.patch.dict(os.environ, {}, clear=True):

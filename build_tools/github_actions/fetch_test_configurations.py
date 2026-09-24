@@ -334,6 +334,9 @@ test_matrix = {
     # 64 min on gfx942. Only gfx942 is on the PR path (gfx950 and gfx90a are
     # postsubmit, gfx120X-all is nightly), so it runs unsharded; the timeout is
     # sized for gfx950.
+    #
+    # Until the pinned rocm-libraries ships the hw-common category,
+    # pytest_runner.py skips this job with a warning instead of failing.
     "tensilelite-common": {
         "job_name": "tensilelite-common",
         "fetch_artifact_args": "--blas --tests",
