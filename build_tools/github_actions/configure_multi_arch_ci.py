@@ -101,44 +101,28 @@ _EXTERNAL_REPO_CONFIG_DIR = "external-repo-config"
 
 
 def _load_skip_ci_patterns_from_toml(config_path: str) -> Optional[list[str]]:
-    """Load skip CI patterns from external repo's TOML config file."""
+    """Load skip CI patterns from base config + external repo's TOML config file.
+
+    Loads patterns from:
+    1. Base config (skip-ci-base.toml in TheRock) - universal patterns for all repos
+    2. External repo's extension config - repo-specific patterns
+    """
+    from configure_ci_path_filters import load_skip_ci_config
+
     # The external repo config is checked out to external-repo-config/
     full_path = Path(_EXTERNAL_REPO_CONFIG_DIR) / config_path
     if not full_path.exists():
         print(f"  Skip CI config not found: {full_path}")
+        # Still load base patterns even if extension config is missing
+        base_patterns, _ = load_skip_ci_config(extension_config_path=full_path)
+        if base_patterns:
+            print(f"  Using {len(base_patterns)} base skip-CI patterns only")
+            return base_patterns
         return None
 
-    if tomllib is None:
-        print("  Warning: tomllib not available, cannot read TOML config")
-        return None
-
-    try:
-        with open(full_path, "rb") as f:
-            config = tomllib.load(f)
-    except Exception as e:
-        print(f"  Warning: Failed to parse TOML config: {e}")
-        return None
-
-    skip_ci = config.get("skip_ci", {})
-    patterns: list[str] = []
-
-    # Common patterns apply to all platforms
-    common = skip_ci.get("common", [])
-    if isinstance(common, list):
-        patterns.extend(common)
-
-    # Platform-specific patterns (can be extended based on RUNNER_OS)
-    runner_os = os.environ.get("RUNNER_OS", "").lower()
-    if runner_os == "linux":
-        linux_patterns = skip_ci.get("linux", [])
-        if isinstance(linux_patterns, list):
-            patterns.extend(linux_patterns)
-    elif runner_os == "windows":
-        windows_patterns = skip_ci.get("windows", [])
-        if isinstance(windows_patterns, list):
-            patterns.extend(windows_patterns)
-
-    print(f"  Loaded {len(patterns)} skip CI patterns from {config_path}")
+    # Load base + extension patterns using the shared loader
+    patterns, _ = load_skip_ci_config(extension_config_path=full_path)
+    print(f"  Loaded {len(patterns)} total skip CI patterns (base + {config_path})")
     return patterns
 
 

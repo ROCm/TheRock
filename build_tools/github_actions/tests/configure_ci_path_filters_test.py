@@ -11,7 +11,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from configure_ci_path_filters import (
-    _GITHUB_WORKFLOWS_CI_FILENAMES,
+    get_ci_workflow_filenames,
     get_git_commit_hash,
     get_git_modified_paths,
     is_ci_run_required,
@@ -218,28 +218,30 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         self.assertEqual(get_git_commit_hash(base_sha), base_sha)
 
     def test_ci_workflow_filenames_cover_all_transitive_uses(self):
-        """_GITHUB_WORKFLOWS_CI_FILENAMES must exactly match the set of
-        workflows transitively called by multi_arch_ci.yml.
+        """CI workflow filenames in skip-ci-config.toml must exactly match
+        the set of workflows transitively called by multi_arch_ci.yml.
 
         This is a change-detector test that can be removed if
-        _GITHUB_WORKFLOWS_CI_FILENAMES is computed dynamically instead of
+        ci_workflows.filenames is computed dynamically instead of
         maintained by hand.
 
-        If this test fails, update _GITHUB_WORKFLOWS_CI_FILENAMES in
-        configure_ci_path_filters.py to match the actual workflow tree.
+        If this test fails, update ci_workflows.filenames in
+        build_tools/github_actions/skip-ci-config.toml to match the actual
+        workflow tree.
         """
+        ci_workflow_filenames = get_ci_workflow_filenames()
         all_used = get_transitive_workflow_uses(["multi_arch_ci.yml"])
-        missing = all_used - _GITHUB_WORKFLOWS_CI_FILENAMES
-        stale = _GITHUB_WORKFLOWS_CI_FILENAMES - all_used
+        missing = all_used - ci_workflow_filenames
+        stale = ci_workflow_filenames - all_used
         errors = []
         if missing:
             errors.append(
-                "Missing (add to _GITHUB_WORKFLOWS_CI_FILENAMES):\n"
+                "Missing (add to ci_workflows.filenames in skip-ci-config.toml):\n"
                 + "\n".join(f"  - {f}" for f in sorted(missing))
             )
         if stale:
             errors.append(
-                "Stale (remove from _GITHUB_WORKFLOWS_CI_FILENAMES):\n"
+                "Stale (remove from ci_workflows.filenames in skip-ci-config.toml):\n"
                 + "\n".join(f"  - {f}" for f in sorted(stale))
             )
         if errors:
@@ -423,9 +425,9 @@ class ExternalRepoPathFiltersTest(unittest.TestCase):
         )
 
     def test_no_patterns_uses_therock_defaults(self):
-        """If no skip_patterns provided, uses TheRock's built-in patterns."""
-        # With no skip_patterns, falls back to TheRock's _SKIPPABLE_PATH_PATTERNS
-        # README.md matches *.md pattern in TheRock's defaults
+        """If no skip_patterns provided, uses TheRock's TOML config patterns."""
+        # With no skip_patterns, loads patterns from skip-ci-base.toml + skip-ci-config.toml
+        # README.md matches *.md pattern in base config
         self.assertFalse(is_ci_run_required(["README.md"], skip_patterns=None))
         # Source file requires CI
         self.assertTrue(is_ci_run_required(["src/lib.cpp"], skip_patterns=None))
