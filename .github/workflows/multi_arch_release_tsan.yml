@@ -97,8 +97,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ needs.setup.outputs.ref }}
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
       - name: Evaluate workflow results
         env:
           GITHUB_TOKEN: ${{ github.token }}
