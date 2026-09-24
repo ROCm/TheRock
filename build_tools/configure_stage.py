@@ -485,4 +485,7 @@ def main(argv: List[str] = None):
 
 
 if __name__ == "__main__":
+    from strict_bringup_exclusions import main as apply_strict_exclusions
+
+    apply_strict_exclusions()
     main(sys.argv[1:])

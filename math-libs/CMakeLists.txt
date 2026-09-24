@@ -1,6 +1,12 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# Keep primitive libraries enabled; only strict test compilation is blocked.
+set(_strict_primitive_testing ${THEROCK_BUILD_TESTING})
+if("gfx1250-strict" IN_LIST THEROCK_AMDGPU_TARGETS)
+  set(_strict_primitive_testing OFF)
+endif()
+
 set(_primlibs_benchmark_enable ${THEROCK_BUILD_TESTING})
 set(_primlibs_benchmark_deps)
 set(_primlibs_benchmark_includes)
@@ -127,7 +133,7 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_provide_package(rocPRIM rocprim lib/cmake/rocprim)
   therock_cmake_subproject_activate(rocPRIM)
 
-  if(THEROCK_BUILD_TESTING)
+  if(_strict_primitive_testing)
     ##############################################################################
     # rocPRIM tests
     ##############################################################################
@@ -174,7 +180,7 @@ if(THEROCK_ENABLE_PRIM)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      -DBUILD_TEST=${THEROCK_BUILD_TESTING}
+      -DBUILD_TEST=${_strict_primitive_testing}
       -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
     CMAKE_INCLUDES
       ${_primlibs_benchmark_includes}
@@ -232,7 +238,7 @@ if(THEROCK_ENABLE_PRIM)
     rocThrust
   )
 
-  if(THEROCK_BUILD_TESTING)
+  if(_strict_primitive_testing)
     list(APPEND _prim_subproject_deps rocPRIM_tests)
   endif()
 
@@ -345,8 +351,11 @@ if(THEROCK_ENABLE_FFT)
   )
 endif(THEROCK_ENABLE_FFT)
 
-if(THEROCK_ENABLE_BLAS)
+if(THEROCK_ENABLE_SUPPORT)
   add_subdirectory(support)
+endif()
+
+if(THEROCK_ENABLE_BLAS)
   add_subdirectory(BLAS)
 endif()
 
