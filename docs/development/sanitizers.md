@@ -9,6 +9,9 @@ Sanitizers can be enabled via the `THEROCK_SANITIZER` variable. We will be exten
   - You don't have xnack-capable hardware (gfx942, gfx950)
   - You want faster builds (no xnack+ kernel variants)
   - You only need to catch host-side memory errors
+- `TSAN` : Enables host-side ThreadSanitizer (`-fsanitize=thread`) without
+  instrumenting device compilation or changing GPU targets. The multi-architecture
+  TSAN workflow uses the regular per-family GPU runners and component matrix.
 - `OFF` : Explicitly disable sanitizers.
 
 The sanitizer selection can be controlled per project by using a variable of the form `{subproject}_SANITIZER={VALUE}`. This is most commonly used to disable santiziers for specific projects once enabled globally.
@@ -21,6 +24,8 @@ In order to simplify use, the following presets are available for setting up spe
 
 - `--preset linux-release-asan`: Full ASAN build with both host and device instrumentation. Enables ASAN globally and selectively disables it for the compiler and certain system libraries that are not yet ready for generic sanitizer builds. Requires xnack-capable hardware (gfx942, gfx950) at runtime.
 - `--preset linux-release-host-asan`: Host-only ASAN build without device-side instrumentation. Same as above but GPU_TARGETS are not modified to include xnack+ variants. Can run on any GPU hardware.
+- `--preset linux-release-tsan`: Host-only TSAN build with debug line
+  information for actionable race reports. GPU targets remain unchanged.
 - TODO: compiler-asan preset: We will enable a build mode such that the compiler and base libraries can also be instrumented. We will use this for qualifying compiler builds but not generally for *using* the compiler.
 
 ## Sanitizer Aware Project Development
@@ -38,8 +43,8 @@ Some sub-projects have strict gfx target checks that do not allow these extends 
 
 When a project is configured for sanitizers, it will have certain variables injected into it. While it is often possible to not require projects to have any special knowledge of what sanitizer they were compiled for, some do need to know. For these cases, it can be necessary to use these special variables so injected.
 
-- `THEROCK_SANITIZER={ASAN|HOST_ASAN}` : Set if a sanitizer is active for the project and indicates which one. `ASAN` enables both host and device ASAN; `HOST_ASAN` enables host-only ASAN.
-- `THEROCK_SANITIZER_LAUNCHER` : If invoking certain tools at build time that dynamically link to a shared library compiled with a sanitizer, you need to prefix it with this value as `${THEROCK_SANITIZER_LAUNCHER}` (not surrounded in quotes so it can expand to multiple terms). This is most commonly needed for invoking system-python and importing native extensions that were built in the project with ASAN. This is set for both `ASAN` and `HOST_ASAN` modes.
+- `THEROCK_SANITIZER={ASAN|HOST_ASAN|TSAN}` : Set if a sanitizer is active for the project and indicates which one. `TSAN` instruments host code only.
+- `THEROCK_SANITIZER_LAUNCHER` : If invoking certain tools at build time that dynamically link to a shared library compiled with a sanitizer, you need to prefix it with this value as `${THEROCK_SANITIZER_LAUNCHER}` (not surrounded in quotes so it can expand to multiple terms). This is most commonly needed for invoking system-python and importing native extensions that were built in the project with ASAN. This is set for all supported ASAN and TSAN modes.
 
 You are recommended to code defensively with patterns like:
 
@@ -181,4 +186,10 @@ export LD_PRELOAD="${ASAN_LIB_PATH%/*}/$ASAN_LIB_NAME:${ROCM_ASAN_PATH}/lib/liba
 
 ## Troubleshooting
 
-TODO: Add troubleshooting tips here.
+The multi-architecture TSAN workflows use the regular test artifact
+matrix, per-family GPU runners, component test scripts, and sharding. They run
+the comprehensive test tier. The TSAN runtime and symbolizer are resolved from
+the fetched artifact tree; TSAN is not injected into the Python/shell harness
+with `LD_PRELOAD`. Prebuilt-stage reuse and package publication are disabled
+during qualification so an uninstrumented baseline cannot be mixed into the
+result.
