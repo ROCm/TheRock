@@ -203,10 +203,10 @@ jobs:
           DEVICE_EXTRAS: ${{ steps.expand.outputs.device_extras }}
         run: |
           # The torch wheel already depends on the matching rocm runtime
-          # packages (PYTORCH_EXTRA_INSTALL_REQUIREMENTS pins rocm[libraries]),
-          # so installing torch is enough to pull the ROCm runtime.
+          # packages. test.sh also builds test dependencies such as torchvision,
+          # so install the matching ROCm development packages.
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION}" \
+            --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION} rocm[devel,${DEVICE_EXTRAS}]" \
             --index-url="${PACKAGE_INDEX_URL}" \
             --activate-in-future-github-actions-steps
 
