@@ -3,6 +3,7 @@
 
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -118,6 +119,62 @@ class ResolveComponentPathTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             pytest_runner.resolve_component_path("bogus", Path("/opt/rocm"))
 
+    def test_tensilelite_common_shares_tensilelite_install_tree(self):
+        rocm = Path("/opt/rocm")
+        self.assertEqual(
+            pytest_runner.resolve_component_path("tensilelite-common", rocm),
+            pytest_runner.resolve_component_path("tensilelite", rocm),
+        )
+
+
+class ResolveTestCategoryTest(unittest.TestCase):
+    def test_test_category_overrides_test_type(self):
+        env = {"TEST_CATEGORY": "hw-common", "TEST_TYPE": "standard"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(pytest_runner.resolve_test_category(), "hw-common")
+
+    def test_falls_back_to_test_type(self):
+        with mock.patch.dict(os.environ, {"TEST_TYPE": "standard"}, clear=True):
+            self.assertEqual(pytest_runner.resolve_test_category(), "standard")
+
+    def test_blank_test_category_falls_back_to_test_type(self):
+        env = {"TEST_CATEGORY": "", "TEST_TYPE": "comprehensive"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(pytest_runner.resolve_test_category(), "comprehensive")
+
+    def test_defaults_to_quick(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(pytest_runner.resolve_test_category(), "quick")
+
+
+class LookupCategoryTest(unittest.TestCase):
+    CATEGORIES = {"quick": {"test_paths": ["unit"]}}
+
+    def test_returns_defined_category(self):
+        with mock.patch.dict(os.environ, {"TEST_TYPE": "quick"}, clear=True):
+            self.assertEqual(
+                pytest_runner.lookup_category(self.CATEGORIES, "quick"),
+                {"test_paths": ["unit"]},
+            )
+
+    def test_pinned_category_missing_skips_with_warning(self):
+        env = {"TEST_CATEGORY": "hw-common", "TEST_TYPE": "standard"}
+        with mock.patch.dict(os.environ, env, clear=True), mock.patch(
+            "builtins.print"
+        ) as fake_print:
+            with self.assertRaises(SystemExit) as ctx:
+                pytest_runner.lookup_category(self.CATEGORIES, "hw-common")
+        self.assertEqual(ctx.exception.code, 0)
+        printed = " ".join(str(c.args[0]) for c in fake_print.call_args_list)
+        self.assertIn("::warning", printed)
+        self.assertIn("hw-common", printed)
+
+    def test_missing_tier_still_fails(self):
+        with mock.patch.dict(os.environ, {"TEST_TYPE": "standard"}, clear=True):
+            with self.assertRaises(SystemExit) as ctx:
+                pytest_runner.lookup_category(self.CATEGORIES, "standard")
+        self.assertNotEqual(ctx.exception.code, 0)
+
 
 class GetEnvIntOverrideTest(unittest.TestCase):
     def test_unset_returns_zero(self):
@@ -210,6 +267,33 @@ class BuildEnvironmentTest(unittest.TestCase):
 
         self.assertTrue(env["PYTHONPATH"].endswith("/pre/existing"))
         self.assertIn("/pre/ld", env["LD_LIBRARY_PATH"].split(os.pathsep))
+
+    def test_ld_library_path_includes_all_llvm_triple_dirs(self):
+        # All triple subdirs must be on LD_LIBRARY_PATH in a deterministic order —
+        # not an arbitrary glob[0] that breaks when a new triple is added.
+        for var in ("PYTHONPATH", "LD_LIBRARY_PATH", "PATH"):
+            os.environ.pop(var, None)
+        with tempfile.TemporaryDirectory() as tmp:
+            rocm = Path(tmp)
+            llvm_lib = rocm / "lib" / "llvm" / "lib"
+            triple_aarch64 = llvm_lib / "aarch64-unknown-linux-gnu"
+            triple_x86 = llvm_lib / "x86_64-unknown-linux-gnu"
+            sysdeps = rocm / "lib" / "rocm_sysdeps" / "lib"
+            for d in (triple_aarch64, triple_x86, sysdeps):
+                d.mkdir(parents=True)
+
+            env = pytest_runner.build_environment(rocm, "tensilelite")
+            ld = env["LD_LIBRARY_PATH"].split(os.pathsep)
+
+            # All triple dirs present (not just one), in sorted order regardless
+            # of filesystem glob order.
+            self.assertIn(str(triple_aarch64), ld)
+            self.assertIn(str(triple_x86), ld)
+            self.assertLess(ld.index(str(triple_aarch64)), ld.index(str(triple_x86)))
+            # rocm_sysdeps and the base lib dirs are included too.
+            self.assertIn(str(sysdeps), ld)
+            self.assertIn(str(rocm / "lib"), ld)
+            self.assertIn(str(llvm_lib), ld)
 
 
 class RunPytestTest(unittest.TestCase):

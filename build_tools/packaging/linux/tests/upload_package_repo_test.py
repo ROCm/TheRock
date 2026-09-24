@@ -4,13 +4,14 @@
 
 """Unit tests for ``upload_package_repo.py``.
 
-Regression guards for Issue #6540 and the simplified upload path: local repo
-metadata is built once and uploaded by ``upload_to_s3`` (no S3 merge/regen).
+Regression guards for Issue #6540 upload path: metadata is always uploaded;
+package dedupe skips only ``.deb`` / ``.rpm`` files.
 
 Coverage:
 
-  - ``generate_release_file_with_checksums`` — DEB ``Release`` has checksum sections
-  - ``upload_to_s3`` — uploads ``repodata/``; dedupes ``.rpm`` only (not metadata)
+  - ``upload_to_s3`` — uploads ``repodata/``; optional ``dedupe=True`` skips ``.rpm`` only
+  - ``upload_to_s3(dedupe=False)`` — overwrites existing ``.rpm`` keys (CI default)
+  - ``_resolve_upload_target`` — CI path returns ``dedupe=False``
   - ``s3_object_exists`` — ``head_object`` success and 404 handling (dedupe helper)
   - ``_package_install_url`` — RPM baseurl includes ``x86_64/``
 
@@ -28,7 +29,6 @@ Run::
         -p 'upload_package_repo_test.py' -v
 """
 
-import gzip
 import os
 import sys
 import tempfile
@@ -74,30 +74,6 @@ upload_repo = _import_upload_package_repo()
 
 TEST_BUCKET = "therock-test-bucket"
 TEST_PREFIX = "12345-linux/packages/rpm/20250825-12345"
-TEST_JOB_TYPE = "nightly"
-
-
-class GenerateReleaseFileTest(unittest.TestCase):
-    """Tests for ``generate_release_file_with_checksums()`` (DEB upload-ready Release)."""
-
-    def test_release_includes_checksum_sections(self) -> None:
-        """Release must include MD5/SHA256 sections before ``upload_to_s3`` uploads it."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            dists_dir = Path(temp_dir) / "main" / "binary-amd64"
-            dists_dir.mkdir(parents=True)
-            (dists_dir / "Packages").write_text("Package: demo\n", encoding="utf-8")
-            with gzip.open(dists_dir / "Packages.gz", "wb") as handle:
-                handle.write(b"Package: demo\n")
-
-            release_file = Path(temp_dir) / "Release"
-            upload_repo.generate_release_file_with_checksums(
-                release_file, TEST_JOB_TYPE, dists_dir
-            )
-            release_text = release_file.read_text(encoding="utf-8")
-
-        self.assertIn("MD5Sum:", release_text)
-        self.assertIn("SHA256:", release_text)
-        self.assertIn("main/binary-amd64/Packages", release_text)
 
 
 class UploadToS3Test(unittest.TestCase):
@@ -126,6 +102,57 @@ class UploadToS3Test(unittest.TestCase):
         uploaded_keys = [call.args[2] for call in s3.upload_file.call_args_list]
         self.assertIn(f"{TEST_PREFIX}/x86_64/repodata/repomd.xml", uploaded_keys)
         self.assertNotIn(f"{TEST_PREFIX}/x86_64/pkg-a.rpm", uploaded_keys)
+
+    @patch("upload_package_repo.boto3.client")
+    @patch.object(upload_repo, "s3_object_exists", return_value=True)
+    def test_dedupe_false_overwrites_existing_rpm(
+        self, mock_exists: MagicMock, mock_boto_client: MagicMock
+    ) -> None:
+        """CI re-run must replace S3 RPMs even when the key already exists."""
+        s3 = MagicMock()
+        mock_boto_client.return_value = s3
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            arch_dir = package_dir / "x86_64"
+            arch_dir.mkdir(parents=True)
+            (arch_dir / "pkg-a.rpm").write_bytes(b"rpm-v2")
+            (arch_dir / "repodata").mkdir()
+            (arch_dir / "repodata" / "repomd.xml").write_text(
+                "<repomd/>", encoding="utf-8"
+            )
+
+            upload_repo.upload_to_s3(
+                str(package_dir), TEST_BUCKET, TEST_PREFIX, dedupe=False
+            )
+
+        mock_exists.assert_not_called()
+        uploaded_keys = [call.args[2] for call in s3.upload_file.call_args_list]
+        self.assertIn(f"{TEST_PREFIX}/x86_64/pkg-a.rpm", uploaded_keys)
+        self.assertIn(f"{TEST_PREFIX}/x86_64/repodata/repomd.xml", uploaded_keys)
+
+
+class ResolveUploadTargetTest(unittest.TestCase):
+    """CI ``--run-id`` uploads must not skip existing package objects."""
+
+    @patch.object(upload_repo, "WorkflowOutputRoot")
+    def test_ci_path_disables_dedupe(self, mock_root_cls: MagicMock) -> None:
+        loc = MagicMock()
+        loc.bucket = TEST_BUCKET
+        loc.relative_path = "35652120474-linux/packages/rpm"
+        mock_root_cls.from_workflow_run.return_value.native_linux_packages.return_value = (
+            loc
+        )
+        args = types.SimpleNamespace(run_id="35652120474")
+
+        bucket, prefix, install_url, dedupe = upload_repo._resolve_upload_target(
+            args, "rpm"
+        )
+
+        self.assertEqual(bucket, TEST_BUCKET)
+        self.assertEqual(prefix, loc.relative_path)
+        self.assertTrue(install_url.endswith("/x86_64"))
+        self.assertFalse(dedupe)
 
 
 class S3ObjectExistsTest(unittest.TestCase):

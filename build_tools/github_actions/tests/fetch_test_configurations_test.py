@@ -173,6 +173,93 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         )
 
     # -----------------------
+    # tensilelite ctest-stage gating (AIHPBLAS-4410)
+    # -----------------------
+
+    def test_tensilelite_standard_appends_ctest_stage(self):
+        """TEST_TYPE=standard should append the ctest stage and extend the timeout."""
+        os.environ["PROJECTS_TO_TEST"] = "tensilelite"
+        os.environ["TEST_TYPE"] = "standard"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        tensilelite = next(j for j in components if j["job_name"] == "tensilelite")
+        self.assertIn(
+            "TEST_COMPONENT=hipblaslt-tensilelite", tensilelite["test_script"]
+        )
+        self.assertIn("test_runner.py", tensilelite["test_script"])
+        self.assertEqual(tensilelite["timeout_minutes"], 30)
+
+    def test_tensilelite_quick_omits_ctest_stage(self):
+        """TEST_TYPE=quick should not append the ctest stage or extend the timeout."""
+        os.environ["PROJECTS_TO_TEST"] = "tensilelite"
+        os.environ["TEST_TYPE"] = "quick"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        tensilelite = next(j for j in components if j["job_name"] == "tensilelite")
+        self.assertNotIn(
+            "TEST_COMPONENT=hipblaslt-tensilelite", tensilelite["test_script"]
+        )
+        self.assertEqual(tensilelite["timeout_minutes"], 15)
+
+    # -----------------------
+    # tensilelite-common (Tensile/Tests/common on real hardware)
+    # -----------------------
+
+    def test_tensilelite_common_runs_only_on_opted_in_families(self):
+        """Families without skip-gfxNNNN coverage would run every config, so the job is opt-in."""
+        os.environ["PROJECTS_TO_TEST"] = "tensilelite-common"
+        expected = {
+            "gfx90a": True,
+            "gfx94X-dcgpu": True,
+            "gfx950-dcgpu": True,
+            "gfx120X-all": True,
+            "gfx110X-all": False,
+            "gfx1151": False,
+            "gfx1150": False,
+        }
+        for family, selected in expected.items():
+            with self.subTest(family=family):
+                os.environ["AMDGPU_FAMILIES"] = family
+                self.assertEqual(
+                    "tensilelite-common" in self._selected_names(), selected
+                )
+
+    def test_tensilelite_common_pins_hw_common_category(self):
+        """The job must run hw-common at every tier, without the tensilelite ctest stage."""
+        os.environ["PROJECTS_TO_TEST"] = "tensilelite-common"
+        for test_type in ("quick", "standard", "comprehensive", "full"):
+            with self.subTest(test_type=test_type):
+                os.environ["TEST_TYPE"] = test_type
+                fetch_test_configurations.run()
+                job = next(
+                    j
+                    for j in self._get_components()
+                    if j["job_name"] == "tensilelite-common"
+                )
+                self.assertTrue(
+                    job["test_script"].startswith("TEST_CATEGORY=hw-common ")
+                )
+                self.assertIn("pytest_runner.py", job["test_script"])
+                self.assertNotIn(
+                    "TEST_COMPONENT=hipblaslt-tensilelite", job["test_script"]
+                )
+                self.assertEqual(job["timeout_minutes"], 180)
+
+    def test_tensilelite_label_selects_unit_and_common_jobs(self):
+        os.environ["TEST_LABELS"] = json.dumps(["test:tensilelite"])
+        names = self._selected_names()
+        self.assertIn("tensilelite", names)
+        self.assertIn("tensilelite-common", names)
+
+    def test_tensilelite_common_label_selects_only_common_job(self):
+        os.environ["TEST_LABELS"] = json.dumps(["test:tensilelite-common"])
+        self.assertEqual(self._selected_names(), {"tensilelite-common"})
+
+    # -----------------------
     # Exclude-family logic
     # -----------------------
 
@@ -275,6 +362,39 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["PROJECTS_TO_TEST"] = "rocgdb-corefile"
         os.environ["AMDGPU_FAMILIES"] = "gfx1150"
         self.assertNotIn("rocgdb-corefile", self._selected_names())
+
+    # -----------------------
+    # test_types tier gating
+    # -----------------------
+
+    def test_test_types_excludes_disallowed_tier(self):
+        # A component that opts out of the quick tier is not scheduled on quick.
+        os.environ["TEST_TYPE"] = "quick"
+        self._inject_job("tt-gated", test_types=["standard", "comprehensive", "full"])
+        self.assertNotIn("tt-gated", self._selected_names())
+
+    def test_test_types_includes_allowed_tier(self):
+        # The same component runs on a tier that is in its list.
+        os.environ["TEST_TYPE"] = "standard"
+        self._inject_job("tt-gated", test_types=["standard", "comprehensive", "full"])
+        self.assertIn("tt-gated", self._selected_names())
+
+    def test_test_types_omitted_runs_on_all_tiers(self):
+        # Without "test_types", a component runs on every tier, including quick.
+        os.environ["TEST_TYPE"] = "quick"
+        self._inject_job("tt-ungated")
+        self.assertIn("tt-ungated", self._selected_names())
+
+    def test_miopen_dbsync_declares_non_quick_tiers(self):
+        # miopen-dbsync is a slow specialist check gated to standard/comprehensive/full.
+        config = fetch_test_configurations.test_matrix["miopen-dbsync"]
+        self.assertEqual(config["test_types"], ["standard", "comprehensive", "full"])
+
+    def test_miopen_dbsync_excluded_on_quick(self):
+        # Integration: the real entry is not scheduled on the quick tier.
+        os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync"
+        os.environ["TEST_TYPE"] = "quick"
+        self.assertNotIn("miopen-dbsync", self._selected_names())
 
     # -----------------------
     # Functional test merging via run_extended_tests
@@ -438,9 +558,65 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertNotIn("rccl", names)
 
+    def test_multi_gpu_job_excluded_for_quick_tests(self):
+        """Multi-GPU tests are skipped on quick runs (temporary capacity constraint)."""
+        os.environ["TEST_TYPE"] = "quick"
+
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        # Multi-GPU jobs like rccl/rocshmem should be excluded for quick runs
+        self.assertNotIn("rccl", names)
+        self.assertNotIn("rocshmem", names)
+
+    def test_multi_gpu_job_included_for_standard_tests(self):
+        """Multi-GPU tests run on standard (and higher) tiers."""
+        os.environ["TEST_TYPE"] = "standard"
+
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        # Both multi-GPU jobs should be included for standard tier
+        self.assertIn("rccl", names)
+        self.assertIn("rocshmem", names)
+
     # -----------------------
     # Output contract
     # -----------------------
+
+    def test_additional_requirements_files_are_preserved_in_output(self):
+        requirements_files = [
+            "share/example/requirements.txt",
+            "share/example/requirements-test.txt",
+        ]
+        self._inject_job(
+            "custom-requirements",
+            additional_requirements_files=requirements_files,
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        self.assertEqual(len(components), 1)
+        self.assertEqual(
+            components[0]["additional_requirements_files"], requirements_files
+        )
 
     def test_windows_hip_tests_emits_pal_and_rocr_entries(self):
         """On Windows, hip-tests runs with both PAL and ROCR backends."""
@@ -507,59 +683,37 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     # ASAN sandbox runner selection
     # -----------------------
 
-    def test_asan_build_uses_sandbox_runner(self):
-        """ASAN builds should use test-runs-on-sandbox when available."""
-        os.environ["BUILD_VARIANT"] = "asan"
-        os.environ["PROJECTS_TO_TEST"] = "rocblas"
+    def test_asan_family_builds_use_sandbox_runner(self):
+        """ASAN-family builds should use test-runs-on-sandbox when available.
 
-        def fake_get_all_families(_):
-            return {
-                "gfx94x": {
-                    "linux": {
-                        "test-runs-on": "linux-gfx942-prod",
-                        "test-runs-on-labels": [
-                            {"label": "linux-gfx942-a", "count": 5},
-                            {"label": "linux-gfx942-b", "count": 5},
-                        ],
-                        "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
+        Covers "asan", "host-asan", and their "-debug" (RelWithDebInfo +
+        line-number debug info) counterparts — all route to the sandbox
+        runner, not the regular runner pool.
+        """
+        for build_variant in ("asan", "host-asan", "asan-debug", "host-asan-debug"):
+            with self.subTest(build_variant=build_variant):
+                os.environ["BUILD_VARIANT"] = build_variant
+                os.environ["PROJECTS_TO_TEST"] = "hipblas"
+
+                def fake_get_all_families(_):
+                    return {
+                        "gfx94x": {
+                            "linux": {
+                                "test-runs-on": "linux-gfx942-prod",
+                                "test-runs-on-sandbox": "linux-sandbox-runner",
+                            }
+                        }
                     }
-                }
-            }
 
-        fetch_test_configurations.get_all_families_for_trigger_types = (
-            fake_get_all_families
-        )
+                fetch_test_configurations.get_all_families_for_trigger_types = (
+                    fake_get_all_families
+                )
 
-        fetch_test_configurations.run()
-        components = self._get_components()
+                fetch_test_configurations.run()
+                components = self._get_components()
 
-        rocblas = next(j for j in components if j["job_name"] == "rocblas")
-        self.assertEqual(rocblas["test_runner"], "linux-mi325-gpu-rocm-cpu-sandbox")
-
-    def test_host_asan_build_uses_sandbox_runner(self):
-        """host-asan builds should also use test-runs-on-sandbox."""
-        os.environ["BUILD_VARIANT"] = "host-asan"
-        os.environ["PROJECTS_TO_TEST"] = "hipblas"
-
-        def fake_get_all_families(_):
-            return {
-                "gfx94x": {
-                    "linux": {
-                        "test-runs-on": "linux-gfx942-prod",
-                        "test-runs-on-sandbox": "linux-sandbox-runner",
-                    }
-                }
-            }
-
-        fetch_test_configurations.get_all_families_for_trigger_types = (
-            fake_get_all_families
-        )
-
-        fetch_test_configurations.run()
-        components = self._get_components()
-
-        hipblas = next(j for j in components if j["job_name"] == "hipblas")
-        self.assertEqual(hipblas["test_runner"], "linux-sandbox-runner")
+                hipblas = next(j for j in components if j["job_name"] == "hipblas")
+                self.assertEqual(hipblas["test_runner"], "linux-sandbox-runner")
 
     def test_release_build_uses_count_runner(self):
         """Release builds should use count-based runner labels, not sandbox."""

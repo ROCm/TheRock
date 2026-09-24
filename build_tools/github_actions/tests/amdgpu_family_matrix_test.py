@@ -9,6 +9,7 @@ import sys
 import unittest
 from pathlib import Path
 from unittest import mock
+from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
@@ -22,6 +23,7 @@ from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
     get_build_runner_labels,
     load_external_runner_config,
+    select_build_runner,
 )
 
 
@@ -275,6 +277,94 @@ class TestExternalConfig(unittest.TestCase):
         # Non-runner keys should come from local definitions
         self.assertEqual(result["gfx94x"]["linux"]["family"], "gfx94X-dcgpu")
         self.assertIn("asan", result["gfx94x"]["linux"]["build_variants"])
+
+    def test_load_external_runner_config_v2_api_success(self):
+        """load_external_runner_config successfully calls load_config(version=2)."""
+        # Create a mock config object that mimics the v2 API
+        mock_config = mock.MagicMock()
+        mock_config.get_gpu_runner_labels.return_value = {
+            "gfx94x": {
+                "linux": {"test-runs-on": "v2-runner-label"},
+            }
+        }
+        mock_config.build_runners = {
+            "linux": {"default": [{"label": "v2-build-runner", "weight": 1.0}]}
+        }
+
+        # Create mock ci_config_api module
+        mock_ci_config_api = mock.MagicMock()
+        mock_ci_config_api.load_config.return_value = mock_config
+
+        os.environ["CI_CONFIG_PATH"] = "/fake/config/path"
+
+        with mock.patch.dict(sys.modules, {"ci_config_api": mock_ci_config_api}):
+            # Need to reimport to pick up the mocked module
+            import importlib
+
+            importlib.reload(amdgpu_family_matrix)
+            result = amdgpu_family_matrix.load_external_runner_config()
+
+        # Verify load_config was called with version=2
+        mock_ci_config_api.load_config.assert_called_once()
+        call_kwargs = mock_ci_config_api.load_config.call_args
+        self.assertEqual(call_kwargs.kwargs.get("version"), 2)
+
+        # Verify the result structure
+        self.assertIsNotNone(result)
+        self.assertIn("runner_labels", result)
+        self.assertIn("build_runners", result)
+        self.assertEqual(
+            result["runner_labels"]["gfx94x"]["linux"]["test-runs-on"],
+            "v2-runner-label",
+        )
+        self.assertEqual(
+            result["build_runners"]["linux"]["default"][0]["label"],
+            "v2-build-runner",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Build runner selection
+# ---------------------------------------------------------------------------
+
+
+class TestBuildRunnerSelection(unittest.TestCase):
+    """Tests for select_build_runner() in amdgpu_family_matrix.py.
+
+    CI_CONFIG_PATH is cleared to ensure tests use local definitions only.
+    """
+
+    def setUp(self):
+        self._orig_env = os.environ.copy()
+        if "CI_CONFIG_PATH" in os.environ:
+            del os.environ["CI_CONFIG_PATH"]
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self._orig_env)
+
+    def test_select_build_runner(self):
+        """select_build_runner() returns the correct label for each platform/variant/size."""
+        cases = [
+            # (platform, variant, size, expected_runner_label)
+            ("linux", "release", "large", "aws-linux-scale-rocm-prod"),
+            ("windows", "release", "large", "azure-windows-scale-rocm"),
+            # Sanitizer builds always use the large runner regardless of requested size
+            ("linux", "asan", "small", "aws-linux-scale-rocm-large"),
+            ("linux", "tsan", "medium", "aws-linux-scale-rocm-large"),
+            ("linux", "release", "small", "aws-linux-scale-rocm-small"),
+            # Windows has no small/medium pool — falls back to the Windows default
+            ("windows", "release", "small", "azure-windows-scale-rocm"),
+            ("linux", "release", "medium", "aws-linux-scale-rocm-medium"),
+            ("windows", "release", "medium", "azure-windows-scale-rocm"),
+        ]
+        with patch("random.random", return_value=0.5):
+            for platform, variant, size, expected in cases:
+                with self.subTest(platform=platform, variant=variant, size=size):
+                    self.assertEqual(
+                        select_build_runner(platform, variant, size=size),
+                        expected,
+                    )
 
 
 if __name__ == "__main__":

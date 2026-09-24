@@ -20,6 +20,19 @@ _VERBOSE = os.getenv("ROCM_SDK_VERBOSE", "0") == "1"
 
 CACHED_TARGET_FAMILY: str | None = None
 
+# BEGIN SHARED TARGET METADATA
+# Build-time import only. render_dist_info() replaces this marked block with
+# the shared metadata source before packaging; installed SDK packages do not
+# depend on _therock_utils or rocm_bootstrap.
+from _therock_utils.sdk_targets import (
+    canonical_target,
+    package_owner,
+    group_package_targets,
+    architectural_family,
+)
+
+# END SHARED TARGET METADATA
+
 
 class LibraryEntry:
     """Defines a public library that can be located by name within the overall
@@ -96,8 +109,9 @@ class PackageEntry:
             )
         kwargs = {}
         if target_family is not None:
-            # Strip xnack suffix (e.g., 'gfx942:xnack+' -> 'gfx942') for valid package names
-            kwargs["target_family"] = target_family.split(":")[0]
+            # Shared-owner payload merging requires kpack-split packaging.
+            # Legacy per-target packages do not merge targets sharing a package name.
+            kwargs["target_family"] = package_owner(target_family)
         return self.dist_package_template.format(**kwargs)
 
     def get_dist_package_require(self, target_family: str | None = None) -> str:
@@ -145,12 +159,17 @@ def discover_current_target_family() -> str | None:
             for arch in arch_set:
                 # There may be multiple architecture supported on the system.
                 # This will select the first matching family.
-                arch_family = arch[:-1] + "X"
+                canonical_arch = canonical_target(arch)
+                arch_family = architectural_family(canonical_arch)
+                if arch_family is None:
+                    arch_family = canonical_arch[:-1] + "X"
                 for suffix in suffixes:
                     target_family = arch_family + suffix
                     if target_family in AVAILABLE_TARGET_FAMILIES:
                         return target_family
-                if arch in AVAILABLE_TARGET_FAMILIES:
+                if package_owner(arch) in group_package_targets(
+                    AVAILABLE_TARGET_FAMILIES
+                ):
                     return arch
     except subprocess.CalledProcessError as e:
         if _VERBOSE:
@@ -183,7 +202,9 @@ def determine_target_family() -> str:
         if target_family is None:
             target_family = DEFAULT_TARGET_FAMILY
     assert target_family is not None
-    if target_family not in AVAILABLE_TARGET_FAMILIES:
+    if package_owner(target_family) not in group_package_targets(
+        AVAILABLE_TARGET_FAMILIES
+    ):
         raise ValueError(
             f"Requested ROCM_SDK_TARGET_FAMILY={target_family} is "
             f"not available in the distribution (available: "
@@ -269,7 +290,6 @@ LibraryEntry(
 )
 LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
 LibraryEntry("rocm_kpack", "core", "librocm_kpack.so*", "rocm_kpack*.dll")
-LibraryEntry("rocm_smi64", "core", "librocm_smi64.so*", "")
 LibraryEntry("rocdecode", "core", "librocdecode.so*", "")
 LibraryEntry("rocjpeg", "core", "librocjpeg.so*", "")
 LibraryEntry("amd_smi", "core", "libamd_smi.so*", "")
@@ -331,11 +351,11 @@ def get_target_family_platform_marker(target_family: str) -> str:
     """
     if not LINUX_TARGET_FAMILIES or not WINDOWS_TARGET_FAMILIES:
         return ""
-    # Compare base targets (strip xnack suffix) since platform lists may contain
-    # xnack-suffixed entries like 'gfx942:xnack+' while we receive base targets.
-    base_target = target_family.split(":")[0]
-    linux_base_targets = {t.split(":")[0] for t in LINUX_TARGET_FAMILIES}
-    windows_base_targets = {t.split(":")[0] for t in WINDOWS_TARGET_FAMILIES}
+    # Availability belongs to package owners; selected target identities remain
+    # in the platform lists and do not imply which payloads the wheel contains.
+    base_target = package_owner(target_family)
+    linux_base_targets = set(group_package_targets(LINUX_TARGET_FAMILIES))
+    windows_base_targets = set(group_package_targets(WINDOWS_TARGET_FAMILIES))
     in_linux = base_target in linux_base_targets
     in_windows = base_target in windows_base_targets
     if in_linux and not in_windows:
@@ -358,9 +378,7 @@ def build_per_target_extras() -> "dict[str, list[str]]":
     the generic extras already in setup.py's EXTRAS_REQUIRE suffice).
     """
     result: dict[str, list[str]] = {}
-    # Deduplicate by base target (strip xnack suffix) to avoid redundant iterations
-    # when both 'gfx942' and 'gfx942:xnack+' exist in AVAILABLE_TARGET_FAMILIES.
-    base_targets = sorted(set(tf.split(":")[0] for tf in AVAILABLE_TARGET_FAMILIES))
+    base_targets = sorted(group_package_targets(AVAILABLE_TARGET_FAMILIES))
     if len(base_targets) <= 1:
         return result
     for pkg in ALL_PACKAGES.values():
