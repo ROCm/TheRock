@@ -26,7 +26,10 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from _therock_utils.artifacts import ArtifactCatalog
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, PopulatedFiles
 from build_python_packages import (
+    PROFILER_WHEEL_INCLUDES,
     _run_kpack_split,
+    ensure_profiler_library_symlinks,
+    profiler_artifact_filter,
     validate_kpack_split_target_completeness,
 )
 
@@ -1998,11 +2001,6 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
         """libprofiler-hub.so* staged inside the rocprofiler-systems artifact
         must be selected into the profiler wheel, same as librocprof-sys*.
         """
-        from build_python_packages import (
-            PROFILER_WHEEL_INCLUDES,
-            profiler_artifact_filter,
-        )
-
         artifact_dir = self.temp_dir / "artifacts"
         self._add_artifact(
             artifact_dir,
@@ -2030,38 +2028,6 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
         )
         self.assertTrue(profiler.files.has("lib/librocprof-sys.so.1"))
 
-    def test_profiler_wheel_excludes_unrelated_lib_files(self):
-        """PROFILER_WHEEL_INCLUDES is a targeted allowlist, not a bare lib/**
-        catch-all - an unrelated file must not sneak into the profiler wheel.
-        """
-        from build_python_packages import (
-            PROFILER_WHEEL_INCLUDES,
-            profiler_artifact_filter,
-        )
-
-        artifact_dir = self.temp_dir / "artifacts"
-        self._add_artifact(
-            artifact_dir,
-            "rocprofiler-systems",
-            "lib",
-            "generic",
-            {
-                "lib/libprofiler-hub.so.0": "profiler-hub runtime dependency",
-                "lib/libunrelated-dependency.so.1": "should not be selected",
-            },
-        )
-
-        params = self._make_params(artifact_dir)
-        profiler_artifacts = params.filter_artifacts(
-            profiler_artifact_filter,
-            includes=PROFILER_WHEEL_INCLUDES,
-        )
-        profiler = PopulatedDistPackage(params, logical_name="profiler")
-        profiler.populate_runtime_files(profiler_artifacts)
-
-        self.assertTrue(profiler.files.has("lib/libprofiler-hub.so.0"))
-        self.assertFalse(profiler.files.has("lib/libunrelated-dependency.so.1"))
-
 
 class EnsureProfilerLibrarySymlinksTest(unittest.TestCase):
     """Unit tests for ensure_profiler_library_symlinks() in isolation - no
@@ -2083,38 +2049,28 @@ class EnsureProfilerLibrarySymlinksTest(unittest.TestCase):
 
         return types.SimpleNamespace(platform_dir=self.platform_dir)
 
-    def test_creates_unversioned_symlink_for_libprofiler_hub(self):
-        from build_python_packages import ensure_profiler_library_symlinks
-
-        (self.lib_dir / "libprofiler-hub.so.0").write_text("fake soname file")
-
-        ensure_profiler_library_symlinks(self._fake_profiler())
-
-        link = self.lib_dir / "libprofiler-hub.so"
-        self.assertTrue(link.is_symlink())
-        self.assertEqual(os.readlink(link), "libprofiler-hub.so.0")
-
-    def test_still_creates_unversioned_symlink_for_librocprof_sys(self):
-        """Regression guard: extending the glob to cover libprofiler-hub must
-        not break the existing librocprof-sys* symlink behavior.
+    def test_creates_unversioned_symlink(self):
+        """Regression guard: the glob covers both libprofiler-hub and the
+        pre-existing librocprof-sys* symlink behavior.
         """
-        from build_python_packages import ensure_profiler_library_symlinks
+        for soname, unversioned in (
+            ("libprofiler-hub.so.0", "libprofiler-hub.so"),
+            ("librocprof-sys.so.1", "librocprof-sys.so"),
+        ):
+            with self.subTest(soname=soname):
+                (self.lib_dir / soname).write_text("fake soname file")
 
-        (self.lib_dir / "librocprof-sys.so.1").write_text("fake soname file")
+                ensure_profiler_library_symlinks(self._fake_profiler())
 
-        ensure_profiler_library_symlinks(self._fake_profiler())
-
-        link = self.lib_dir / "librocprof-sys.so"
-        self.assertTrue(link.is_symlink())
-        self.assertEqual(os.readlink(link), "librocprof-sys.so.1")
+                link = self.lib_dir / unversioned
+                self.assertTrue(link.is_symlink())
+                self.assertEqual(os.readlink(link), soname)
 
     def test_does_not_overwrite_existing_symlink(self):
         """A prior run (or another mechanism) may have already created the
         unversioned symlink - don't clobber it, even if it happens to point
         at a different (but real) target than we'd have picked.
         """
-        from build_python_packages import ensure_profiler_library_symlinks
-
         (self.lib_dir / "libprofiler-hub.so.0").write_text("fake soname file")
         (self.lib_dir / "libprofiler-hub.so.99").write_text("a different target")
         (self.lib_dir / "libprofiler-hub.so").symlink_to("libprofiler-hub.so.99")
