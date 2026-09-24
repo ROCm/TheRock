@@ -387,6 +387,10 @@ def retrieve_artifacts_by_run_id(args):
         "core-amdsmi_lib",
         "core-hip_lib",
         "core-hip_dev",
+        # _run carries clr's executables, e.g. bin/hrr-playback, which
+        # hip-tests' catch/unit/hrr CMake resolves from ${ROCM_PATH}/bin and
+        # hard-fails without.
+        "core-hip_run",
         "core-kpack_lib",
         "core-ocl_lib",
         "core-ocl_dev",
