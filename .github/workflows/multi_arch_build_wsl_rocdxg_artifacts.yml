@@ -59,6 +59,9 @@ jobs:
     name: ${{ inputs.stage_display_name }}
     runs-on:
       group: ROCR-Runtime-libhsakmt-WSL
+      # Branch-only test override: keep the existing WSL runner group, but require the
+      # CPU-only WSL pool label so this reusable workflow lands on the new infra.
+      labels: wsl-cpu-rocm
     timeout-minutes: ${{ inputs.timeout_minutes }}
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
