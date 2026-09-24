@@ -90,9 +90,11 @@ Benefits:
 
 ```yaml
 - name: Process artifacts
+  env:
+    AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
   run: |
     python build_tools/process_artifacts.py \
-      --families "${{ inputs.amdgpu_families }}" \
+      --families "${AMDGPU_FAMILIES}" \
       --artifact-dir artifacts \
       --install-dir install
 ```
@@ -102,8 +104,10 @@ Benefits:
 ```yaml
 - name: Process artifacts
   shell: bash
+  env:
+    AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
   run: |
-    for family in $(echo "${{ inputs.amdgpu_families }}" | tr ',' ' '); do
+    for family in $(echo "${AMDGPU_FAMILIES}" | tr ',' ' '); do
       if [[ -f "artifacts/${family}/rocm.tar.gz" ]]; then
         tar -xzf "artifacts/${family}/rocm.tar.gz" -C "install/${family}"
         echo "Extracted ${family}"
@@ -220,4 +224,236 @@ jobs:
 
       - name: Run tests on GPU
         run: build_tools/github_actions/test_executable_scripts/test_hipblas.py
+```
+
+### Security guidelines
+
+Use [zizmor](https://docs.zizmor.sh/) to check workflows and composite actions.
+See its [audit reference](https://docs.zizmor.sh/audits/) for rule details.
+
+```bash
+# See https://docs.zizmor.sh/installation/ for other options
+pip install zizmor
+
+# Check workflows and composite actions locally.
+zizmor --offline .github
+
+# Recheck a workflow after editing it.
+zizmor --offline .github/workflows/multi_arch_ci.yml
+```
+
+Confirm the findings you addressed no longer appear; unrelated findings may
+still produce a nonzero exit code. `--offline` skips audits requiring network
+access. Add `--no-ignores` to inspect suppressed findings too.
+
+#### Security - Avoid template injection
+
+Pass input values through step environment variables instead of inserting
+`${{ ... }}` expressions into `run:`. GitHub expands expressions before the
+shell parses the script, so even a quoted expression can execute injected code.
+See [template-injection](https://docs.zizmor.sh/audits/#template-injection).
+
+✅ **Preferred:**
+
+```yaml
+# Here, a value such as `$(cat file.txt)` is passed literally to Python.
+- name: Process artifacts
+  shell: bash
+  env:
+    AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+  run: |
+    python build_tools/process_artifacts.py --families "${AMDGPU_FAMILIES}"
+```
+
+❌ **Avoid:**
+
+```yaml
+# Here, a value such as `$(cat file.txt)` is executed by the shell (!).
+- name: Process artifacts
+  run: |
+    python build_tools/process_artifacts.py --families "${{ inputs.amdgpu_families }}"
+```
+
+**Exceptions:** A value intentionally supplying shell-quoted arguments or a
+script may require direct expansion. Only allow this when its source is trusted
+to supply executable code. Document that assumption beside a local suppression:
+
+```yaml
+- name: Configure
+  # The caller is trusted to supply executable build options, including shell syntax.
+  run: | # zizmor: ignore[template-injection]
+    cmake -B build ${{ inputs.cmake_args }}
+```
+
+#### Security - Disable checkout credential persistence
+
+Set `persist-credentials: false` on `actions/checkout` unless later Git
+operations need authentication. This limits credential exposure to subsequent
+steps and uploaded artifacts. See the
+[checkout configuration reference](https://github.com/actions/checkout#usage)
+and [artipacked](https://docs.zizmor.sh/audits/#artipacked).
+
+```diff
+  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    with:
++     persist-credentials: false
+```
+
+**Exceptions:** If later Git operations need the checkout credentials, set
+`persist-credentials: true` explicitly and add a comment naming the step that
+needs them, such as a step that pushes a branch.
+
+#### Security - Limit usage and forwarding of secrets
+
+Minimize reliance on secrets for two reasons:
+
+- **Contributor compatibility:** `pull_request` runs from forks do not normally
+  receive repository or organization secrets. Keep core build and test paths
+  working without secrets so both internal _and external_ contributors can use
+  workflows.
+- **Security:** Give workflows only the credentials and permissions they need
+  to reduce the attack surface and impact of compromised code.
+
+To address zizmor's [secrets-inherit](https://docs.zizmor.sh/audits/#secrets-inherit)
+findings:
+
+- **If no secrets are needed:** Omit `secrets:` lines and add a short comment
+  highlighting it, as below.
+- **If specific secrets are needed:** Forward them by name and declare them in the
+  callee's `on.workflow_call.secrets`.
+- **Intentional inheritance:** Higher-trust entry points may use
+  `secrets: inherit` to avoid repeating secret mappings across nested workflows.
+  Child workflows may also inherit a limited set of secrets explicitly forwarded
+  by a limited-trust entry point. Add a short comment explaining the trust level
+  or caller-imposed limits and suppress the finding with
+  `# zizmor: ignore[secrets-inherit]`.
+
+✅ **Preferred:**
+
+When the called workflow needs no secrets, omit forwarding and document why.
+
+```yaml
+on:
+  pull_request:
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+    # Note: not using 'secrets: inherit' here; no secrets are needed.
+```
+
+✅ **Preferred:**
+
+When a workflow needs secrets, explicitly forward them and declare them in the
+callee's `on.workflow_call.secrets`.
+Across a workflow chain, each call must repeat the mappings and each callee must
+repeat the declarations.
+
+> [!TIP]
+> Using `secrets: inherit` can avoid this duplication in higher-trust workflows
+> or when a limited-trust entry point restricts the forwarded set (see below).
+
+```yaml
+# .github/workflows/release.yml (caller)
+on:
+  workflow_dispatch:
+
+jobs:
+  notify:
+    uses: ./.github/workflows/notify.yml
+    secrets:
+      GH_APP_HAULY_CID: ${{ secrets.GH_APP_HAULY_CID }}
+      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+```
+
+```yaml
+# .github/workflows/notify.yml (callee)
+on:
+  workflow_call:
+    secrets:
+      GH_APP_HAULY_CID:
+        required: true
+      GH_APP_HAULY_PRIVATE_KEY:
+        required: true
+
+jobs:
+  notify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Notify Quartz
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+          run_phase: started
+          reporting_workflow: notify.yml
+```
+
+🟡 **Acceptable with tradeoffs:**
+
+Higher-trust entry points may inherit secrets to avoid repeating mappings
+across nested workflows.
+
+```yaml
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  build:
+    # Higher-trust entry points: triggered by maintainers or automation.
+    uses: ./.github/workflows/build.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+```
+
+Child workflows may also inherit secrets after a limited-trust entry point
+explicitly restricts the forwarded set. Here, nested calls receive only the two
+named credentials. Fork PRs still lack these secrets, so secret-dependent
+notifications must handle their absence.
+
+```yaml
+# .github/workflows/ci.yml
+on:
+  pull_request:
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+    secrets:
+      GH_APP_HAULY_CID: ${{ secrets.GH_APP_HAULY_CID }}
+      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+```
+
+```yaml
+# .github/workflows/test.yml
+on:
+  workflow_call:
+    secrets:
+      # The PR entry point explicitly limits the forwarded set.
+      GH_APP_HAULY_CID:
+        required: false
+      GH_APP_HAULY_PRIVATE_KEY:
+        required: false
+
+jobs:
+  component:
+    uses: ./.github/workflows/test_component.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+```
+
+❌ **Avoid:**
+
+Do not forward all available secrets to a workflow that does not need them.
+
+```yaml
+on:
+  pull_request:
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+    secrets: inherit
 ```

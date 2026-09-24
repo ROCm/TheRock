@@ -12,8 +12,7 @@ List available packages:
     python generate_msi_wxs.py --list
 
 Generate from CI artifacts (recommended):
-    python generate_msi_wxs.py --package runtime \\
-        --artifacts-url https://therock-nightly-artifacts.s3.amazonaws.com/<run-id>-windows
+    python generate_msi_wxs.py --package runtime --run-id <run-id>
 
 Generate from a local build:
     python generate_msi_wxs.py --package runtime --build build/
@@ -37,23 +36,20 @@ import argparse
 import hashlib
 import json
 import os
+import subprocess
 import sys
-import tarfile
 import urllib.request
 import uuid
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import pyzstd
-import yaml
-
 # Add build_tools/ to sys.path so _therock_utils can be imported.
 BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent.parent
 if str(BUILD_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(BUILD_TOOLS_DIR))
 
-from _therock_utils.artifacts import ArtifactCatalog, ArtifactName, ArtifactPopulator
+from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
 
 
 # ---------------------------------------------------------------------------
@@ -99,9 +95,11 @@ class PackageDef:
 
     # DLL filenames to install into the Windows System32 directory as a
     # default-enabled "legacy install" feature (for applications that load
-    # ROCm DLLs from System32 rather than PATH). Each name is resolved against
-    # the extracted artifacts and the _legacy/bin cache fallback. Empty means
-    # the package emits no legacy feature.
+    # ROCm DLLs from System32 rather than PATH). Current runtime DLLs are
+    # resolved from the extracted artifacts; the legacy driver-supplied DLLs
+    # (amdhip64_6.dll, amd_comgr_2.dll) come from the rocm-systems source
+    # checkout (see resolve_legacy_dlls). This script does not fetch any of
+    # them. Empty means the package emits no System32 install feature.
     legacy_system32_dlls: list[str] = None
 
     def __post_init__(self):
@@ -186,87 +184,52 @@ STANDARD_DIR_TOKENS: set[str] = {
 
 
 def fetch_artifacts(
-    artifacts_url: str,
-    artifact_names: list[str],
-    components: set[str],
+    run_id: str,
     dest_dir: Path,
+    run_github_repo: str | None = None,
 ) -> Path:
-    """Download and extract artifact tarballs from a remote URL into dest_dir.
+    """Fetch generic (host) artifacts for a CI run into dest_dir/artifacts.
 
-    For each (artifact, component) pair, downloads:
-        {artifacts_url}/{artifact}_{component}_generic.tar.zst
-    and extracts it into dest_dir/_extracted/{artifact}_{component}_generic/,
-    preserving the internal layout (basedir paths from artifact_manifest.txt).
-    The artifact_manifest.txt is also written to disk so ArtifactCatalog can
-    read it.
+    Delegates to build_tools/artifact_manager.py (the shared artifact-fetch
+    tool, as build_tarballs.py does) rather than reimplementing download and
+    extraction. It resolves the S3 bucket from the run id, downloads the generic
+    (host) lib-component artifacts, and extracts each archive to
+        dest_dir/artifacts/{name}_{component}_{family}/
+    with an artifact_manifest.txt that ArtifactCatalog reads. The package's
+    ArtifactCatalog filter selects only the artifacts it needs from that set.
 
-    Returns the _extracted/ directory.
+    Downloads and extractions are cached under dest_dir so repeat runs reuse
+    them. Returns the dest_dir/artifacts directory.
     """
-
-    def _open_zst(path: Path):
-        return tarfile.TarFile(fileobj=pyzstd.ZstdFile(path, "rb"), mode="r")
-
-    artifacts_url = artifacts_url.rstrip("/")
-    download_dir = dest_dir / "_downloads"
-    extract_dir = dest_dir / "_extracted"
-    download_dir.mkdir(parents=True, exist_ok=True)
-    extract_dir.mkdir(parents=True, exist_ok=True)
-
-    for artifact_name in artifact_names:
-        for component in sorted(components):
-            filename = f"{artifact_name}_{component}_generic.tar.zst"
-            url = f"{artifacts_url}/{filename}"
-            local_path = download_dir / filename
-
-            if local_path.exists():
-                print(f"  Cached:    {filename}")
-            else:
-                print(f"  Fetching:  {filename}")
-                tmp_path = local_path.with_suffix(".tmp")
-                try:
-                    urllib.request.urlretrieve(url, tmp_path)
-                except urllib.error.HTTPError as e:
-                    tmp_path.unlink(missing_ok=True)
-                    # 404 is expected: not every artifact publishes every
-                    # component (e.g. Windows-only components have no Linux
-                    # tarball). Any other HTTP error is a real failure.
-                    if e.code == 404:
-                        print(f"  Skipped:   {filename} (not found)")
-                        continue
-                    sys.exit(f"Error fetching {url}: HTTP {e.code} {e.reason}")
-                except Exception:
-                    tmp_path.unlink(missing_ok=True)
-                    raise
-                tmp_path.rename(local_path)
-
-            artifact_out = extract_dir / f"{artifact_name}_{component}_generic"
-            manifest_path = artifact_out / "artifact_manifest.txt"
-            already_extracted = artifact_out.exists()
-            if already_extracted and manifest_path.exists():
-                print(f"  Extracted: {filename} (cached)")
-                continue
-            artifact_out.mkdir(parents=True, exist_ok=True)
-            # Read manifest from first tar member and write it to disk so
-            # ArtifactCatalog can find it, then extract the rest of the files.
-            with _open_zst(local_path) as tf:
-                manifest_member = tf.next()
-                if (
-                    manifest_member is None
-                    or manifest_member.name != "artifact_manifest.txt"
-                ):
-                    sys.exit(
-                        f"Archive {filename} missing artifact_manifest.txt as first member"
-                    )
-                manifest_text = tf.extractfile(manifest_member).read().decode()
-                manifest_path.write_text(manifest_text)
-            if already_extracted:
-                print(f"  Manifest:  {filename} (files already present)")
-            else:
-                print(f"  Extracting {filename}...")
-                populator = ArtifactPopulator(output_path=artifact_out, flatten=False)
-                populator(local_path)
-
-    return extract_dir
+    # Cache the downloaded .tar.zst archives (the expensive part) across runs.
+    # extract mode re-extracts each run; artifact_manager only supports its
+    # extraction cache in --flatten mode, which is not the per-artifact layout
+    # ArtifactCatalog reads.
+    download_cache = dest_dir / "_downloads"
+    # Only the lib component is packaged today (PACKAGE_COMPONENTS); exclude the
+    # rest so the fetch stays small. Additional components can be pulled in once
+    # more MSI packages are scoped.
+    exclude_components = sorted(
+        {"run", "dev", "dbg", "doc", "test"} - PACKAGE_COMPONENTS
+    )
+    cmd = [
+        sys.executable,
+        str(BUILD_TOOLS_DIR / "artifact_manager.py"),
+        "fetch",
+        f"--run-id={run_id}",
+        # MSI packaging is Windows-only; never fetch other platforms' artifacts.
+        "--platform=windows",
+        "--stage=all",
+        "--generic-only",
+        f"--exclude-components={','.join(exclude_components)}",
+        f"--output-dir={dest_dir}",
+        f"--download-cache-dir={download_cache}",
+    ]
+    if run_github_repo:
+        cmd.append(f"--run-github-repo={run_github_repo}")
+    print(f"Fetching artifacts for run {run_id} (windows) ...")
+    subprocess.run(cmd, check=True)
+    return dest_dir / "artifacts"
 
 
 def collect_files_from_catalog(
@@ -285,7 +248,7 @@ def collect_files_from_catalog(
     if not artifact_dir.is_dir():
         print(
             f"Warning: artifact directory not found: {artifact_dir}\n"
-            "Run a Windows build or provide --artifacts-url.",
+            "Run a Windows build or provide --run-id.",
             file=sys.stderr,
         )
         return []
@@ -337,85 +300,32 @@ def collect_files_from_catalog(
     return sorted((Path(r), s) for r, s in seen.items())
 
 
-def fetch_legacy_dlls_from_dvc(
-    dest_dir: Path,
-    repo_root: Path,
-) -> None:
-    """Download legacy DLLs tracked by DVC in rocm-systems into dest_dir.
-
-    Reads *.dvc pointer files from
-    rocm-systems/shared/amdgpu-windows-interop/legacy/ and fetches each DLL
-    from the DVC S3 remote (s3://therock-dvc/rocm-systems, anonymous) into
-    dest_dir. The S3 object key is derived from the md5 hash in the pointer
-    file: <md5[:2]>/<md5[2:]>.
-
-    dest_dir is the _legacy/bin/ path that resolve_legacy_dlls() searches as
-    its fallback. Missing DLLs are warned and skipped; a DVC fetch failure
-    does not abort the generator.
-    """
-    dvc_dir = (
-        repo_root / "rocm-systems" / "shared" / "amdgpu-windows-interop" / "legacy"
-    )
-    if not dvc_dir.is_dir():
-        print(
-            f"Warning: rocm-systems legacy DVC dir not found: {dvc_dir}\n"
-            "  (submodule not initialized? run: git submodule update --init rocm-systems)",
-            file=sys.stderr,
-        )
-        return
-
-    dvc_remote = "https://therock-dvc.s3.us-east-2.amazonaws.com/rocm-systems/files/md5"
-    dest_dir.mkdir(parents=True, exist_ok=True)
-
-    for dvc_file in sorted(dvc_dir.glob("*.dvc")):
-        dll_name = dvc_file.stem  # e.g. amdhip64_6.dll
-        dest = dest_dir / dll_name
-        if dest.exists():
-            print(f"  Cached:    {dll_name} (legacy DVC)")
-            continue
-
-        try:
-            data = yaml.safe_load(dvc_file.read_text(encoding="utf-8"))
-            md5 = data["outs"][0]["md5"]
-        except Exception as e:
-            print(
-                f"Warning: could not parse {dvc_file.name}: {e}",
-                file=sys.stderr,
-            )
-            continue
-
-        s3_key = f"{md5[:2]}/{md5[2:]}"
-        url = f"{dvc_remote}/{s3_key}"
-        print(f"  Fetching:  {dll_name} (legacy DVC, md5={md5[:8]}...)")
-        try:
-            urllib.request.urlretrieve(url, dest)
-        except Exception as e:
-            print(
-                f"Warning: failed to fetch legacy DLL {dll_name} from {url}: {e}",
-                file=sys.stderr,
-            )
-            dest.unlink(missing_ok=True)
-
-
 def resolve_legacy_dlls(
     artifact_dir: Path,
     dll_names: list[str],
+    repo_root: Path,
 ) -> list[tuple[str, Path]]:
-    """Resolve legacy System32 DLLs to concrete source paths.
+    """Resolve the System32 install feature's DLLs to concrete source paths.
 
     Each name is searched for (by basename) first among the extracted
-    artifacts in artifact_dir, then in the _legacy/bin cache fallback
-    (a sibling of artifact_dir, i.e. <cache>/_legacy/bin). Driver-sourced
-    DLLs like amdhip64_6.dll and amd_comgr_2.dll live only in the fallback.
+    artifacts in artifact_dir, then in the rocm-systems source checkout at
+    shared/amdgpu-windows-interop/legacy/. The current runtime DLLs
+    (amdhip64_7.dll, amd_comgr.dll, rocm_kpack.dll) come from the artifacts;
+    only the legacy driver-supplied DLLs (amdhip64_6.dll, amd_comgr_2.dll) live
+    in that source dir, where the build's DVC pull materializes them — this
+    script does not fetch them; their presence is a prerequisite for including
+    them in the MSI.
 
-    Returns a list of (dll_name, source_path). Missing DLLs are reported as
-    a warning and skipped so the generator never fails on an absent legacy
-    DLL.
+    Returns a list of (dll_name, source_path). Their presence is a
+    prerequisite, so a DLL that cannot be found in either location is a fatal
+    error (the MSI must not silently ship without its declared System32 DLLs).
     """
     if not dll_names:
         return []
 
-    legacy_fallback = artifact_dir.parent / "_legacy" / "bin"
+    legacy_fallback = (
+        repo_root / "rocm-systems" / "shared" / "amdgpu-windows-interop" / "legacy"
+    )
     resolved: list[tuple[str, Path]] = []
     for name in dll_names:
         found: Path | None = None
@@ -429,12 +339,13 @@ def resolve_legacy_dlls(
             if fallback.is_file():
                 found = fallback
         if found is None:
-            print(
-                f"Warning: legacy DLL not found, skipping: {name} "
-                f"(searched {artifact_dir} and {legacy_fallback})",
-                file=sys.stderr,
+            raise FileNotFoundError(
+                f"System32 DLL not found: {name} "
+                f"(searched {artifact_dir} and {legacy_fallback}). "
+                "These DLLs are a prerequisite; ensure the artifacts and the "
+                "rocm-systems DVC files are present (e.g. run fetch_sources.py "
+                "--dvc-projects rocm-systems)."
             )
-            continue
         resolved.append((name, found))
     return resolved
 
@@ -499,25 +410,23 @@ def parse_args() -> argparse.Namespace:
         help="List available package names and exit.",
     )
     parser.add_argument(
-        "--artifacts-url",
+        "--run-id",
         default=None,
-        metavar="URL",
+        metavar="RUN_ID",
         help=(
-            "Base URL of a TheRock artifact storage directory containing "
-            "{name}_{component}_generic.tar.zst files. When set, artifacts "
-            "are downloaded and extracted into --artifacts-cache-dir and used "
-            "as stage trees instead of --build-root. "
-            "Example: https://therock-nightly-artifacts.s3.amazonaws.com/27315369389-windows"
+            "GitHub Actions run id to fetch artifacts from. When set, artifacts "
+            "are fetched via build_tools/artifact_manager.py into "
+            "--artifacts-cache-dir and used instead of --build-root. The S3 "
+            "bucket is resolved from the run id; public artifacts need no "
+            "credentials. Example: 27315369389"
         ),
     )
     parser.add_argument(
-        "--fetch-legacy-dlls",
-        action=argparse.BooleanOptionalAction,
+        "--run-github-repo",
         default=None,
+        metavar="OWNER/REPO",
         help=(
-            "Fetch legacy DLLs from DVC (rocm-systems submodule) into the "
-            "_legacy/bin cache used by the legacy System32 install feature. "
-            "Defaults to True when --artifacts-url is set, False otherwise."
+            "Repository that owns --run-id (for fork runs). " "Default: ROCm/TheRock."
         ),
     )
     parser.add_argument(
@@ -527,7 +436,7 @@ def parse_args() -> argparse.Namespace:
         metavar="PATH",
         help=(
             "Directory for downloaded and extracted artifacts when using "
-            "--artifacts-url. Defaults to <script-dir>/artifact-cache. "
+            "--run-id. Defaults to <script-dir>/artifact-cache. "
             "Reuse this dir across runs to avoid re-downloading."
         ),
     )
@@ -538,7 +447,18 @@ def parse_args() -> argparse.Namespace:
         metavar="PATH",
         help=(
             "CMake build directory. Artifacts are read from <build-root>/artifacts/. "
-            f"Default: {default_build}. Ignored when --artifacts-url is set."
+            f"Default: {default_build}. Ignored when --run-id is set."
+        ),
+    )
+    parser.add_argument(
+        "--repo-root",
+        type=Path,
+        default=repo_root,
+        metavar="PATH",
+        help=(
+            "TheRock repo root. Used to locate the rocm-systems source checkout "
+            "for the legacy driver DLLs (shared/amdgpu-windows-interop/legacy). "
+            f"Default: {repo_root}."
         ),
     )
     parser.add_argument(
@@ -689,42 +609,33 @@ class WixDocument:
 def resolve_package_inputs(args: argparse.Namespace) -> PackageInputs:
     """Gather artifacts and payload/legacy file lists for the selected package.
 
-    Downloads artifacts when --artifacts-url is set and fetches legacy DLLs from
-    DVC when applicable, then enumerates the concrete files to install.
+    Fetches artifacts when --run-id is set, then enumerates the concrete files
+    to install. Legacy System32 DLLs are read from wherever they already exist
+    (the extracted artifacts, or the rocm-systems source checkout for the
+    driver-supplied ones) — this script never fetches them; see
+    resolve_legacy_dlls().
     """
     package = PACKAGES[args.package]
 
-    if args.artifacts_url:
-        print(f"Fetching artifacts from {args.artifacts_url} ...")
+    if args.run_id:
         artifact_dir = fetch_artifacts(
-            artifacts_url=args.artifacts_url,
-            artifact_names=package.artifacts,
-            components=PACKAGE_COMPONENTS,
+            run_id=args.run_id,
             dest_dir=args.artifacts_cache_dir,
+            run_github_repo=args.run_github_repo,
         )
-        legacy_bin = args.artifacts_cache_dir / "_legacy" / "bin"
     else:
         # Local build: artifacts live at build/artifacts/{name}_{component}_generic/
         artifact_dir = args.build_root / "artifacts"
-        legacy_bin = args.build_root / "_legacy" / "bin"
-
-    # --fetch-legacy-dlls defaults to True in --artifacts-url mode, False for a
-    # local build. Skip entirely when the package declares no legacy DLLs.
-    fetch_legacy = args.fetch_legacy_dlls
-    if fetch_legacy is None:
-        fetch_legacy = bool(args.artifacts_url)
-    if fetch_legacy and package.legacy_system32_dlls:
-        print("Fetching legacy DLLs from DVC ...")
-        fetch_legacy_dlls_from_dvc(
-            dest_dir=legacy_bin,
-            repo_root=Path(__file__).parent.parent.parent.parent,
-        )
 
     return PackageInputs(
         package=package,
         version=args.package_version,
         files=collect_files_from_catalog(artifact_dir, package),
-        legacy_dlls=resolve_legacy_dlls(artifact_dir, package.legacy_system32_dlls),
+        legacy_dlls=resolve_legacy_dlls(
+            artifact_dir,
+            package.legacy_system32_dlls,
+            repo_root=args.repo_root,
+        ),
     )
 
 
