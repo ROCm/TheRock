@@ -812,6 +812,11 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            # CRITICAL FAILURE on gfx125X-dcgpu: GPU MES hang during test execution
+            # https://github.com/ROCm/TheRock/actions/runs/35937839943/job/107438940874
+            "linux": ["gfx125X-dcgpu"],
+        },
     },
     # hipDNN samples tests
     "hipdnn-samples": {
