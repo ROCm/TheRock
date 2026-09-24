@@ -59,11 +59,11 @@ def rocm_info_output():
 
 @pytest.fixture(scope="session")
 def clinfo_output() -> str:
+    env = os.environ.copy()
     if is_windows():
         vendor = THEROCK_BIN_DIR / "amdocl64.dll"
         if not vendor.is_file():
             raise FileNotFoundError(f"OpenCL vendor runtime not found: {vendor}")
-        env = os.environ.copy()
         env["PATH"] = str(THEROCK_BIN_DIR) + os.pathsep + env.get("PATH", "")
         # The system ICD loader can fall back to a registered driver. Load the
         # built vendor directly via clinfo's application-local OpenCL.dll.
@@ -79,9 +79,9 @@ def clinfo_output() -> str:
     if not vendor.is_file():
         raise FileNotFoundError(f"OpenCL vendor runtime not found: {vendor}")
 
-    env = os.environ.copy()
     # Support both the distro ocl-icd loader and the Khronos loader without
     # depending on system-wide ICD registration.
+    env["OCL_ICD_VENDORS"] = str(vendor)
     env["OCL_ICD_FILENAMES"] = str(vendor)
     library_dirs = (lib_dir, lib_dir / "llvm" / "lib", lib_dir / "rocm_sysdeps" / "lib")
     library_path = [str(path) for path in library_dirs if path.is_dir()]
@@ -89,10 +89,7 @@ def clinfo_output() -> str:
         library_path.append(env["LD_LIBRARY_PATH"])
     env["LD_LIBRARY_PATH"] = os.pathsep.join(library_path)
 
-    with tempfile.TemporaryDirectory(prefix="therock-ocl-icd-") as icd_dir:
-        (Path(icd_dir) / "amdocl64.icd").write_text(f"{vendor}\n", encoding="utf-8")
-        env["OCL_ICD_VENDORS"] = icd_dir
-        return run_command([str(THEROCK_BIN_DIR / "clinfo")], env=env).stdout
+    return run_command([str(THEROCK_BIN_DIR / "clinfo")], env=env).stdout
 
 
 class TestROCmSanity:
