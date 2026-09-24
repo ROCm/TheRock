@@ -1621,7 +1621,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
 
-    def test_host_tsan_uses_two_families_build_runner_and_disables_python(self):
+    def test_host_tsan_uses_two_gpu_families_and_disables_python(self):
         targets = cm.TargetSelection(linux_families=["gfx94x", "gfx950"])
         result = cm.expand_build_configs(
             ci_inputs=self._inputs(
@@ -1646,7 +1646,8 @@ class TestExpandBuildConfigs(unittest.TestCase):
             ["gfx94X-dcgpu", "gfx950-dcgpu"],
         )
         for entry in result.linux.per_family_info:
-            self.assertEqual(entry["test-runs-on"], result.linux.build_runs_on)
+            self.assertTrue(entry["test-runs-on"])
+            self.assertNotEqual(entry["test-runs-on"], result.linux.build_runs_on)
 
     def test_asan_debug_uses_sandbox_runner(self):
         """asan-debug variant uses sandbox runner like asan."""

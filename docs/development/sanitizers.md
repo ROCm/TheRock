@@ -11,8 +11,8 @@ Sanitizers can be enabled via the `THEROCK_SANITIZER` variable. We will be exten
   - You only need to catch host-side memory errors
 - `HOST_TSAN` : Enables host-side ThreadSanitizer (`-fsanitize=thread`) without
   instrumenting device compilation or changing GPU targets. This is the mode
-  used by the multi-architecture host-TSAN workflow; its tests run on CPU
-  infrastructure from an explicit allowlist.
+  used by the multi-architecture host-TSAN workflow. Tests use the regular
+  per-family GPU runners and component matrix.
 - `TSAN` : Legacy full-scope ThreadSanitizer mode. It may pass sanitizer flags
   through device compilation and is not the supported mode for host-only CI.
 - `OFF` : Explicitly disable sanitizers.
@@ -189,19 +189,10 @@ export LD_PRELOAD="${ASAN_LIB_PATH%/*}/$ASAN_LIB_NAME:${ROCM_ASAN_PATH}/lib/liba
 
 ## Troubleshooting
 
-Host-TSAN executables must link the compiler-rt TSAN runtime directly. The CI
-test environment intentionally does not put TSAN in `LD_PRELOAD`, because that
-would instrument the Python/shell harness rather than prove the component under
-test is correctly linked. The workflow first runs a clean atomic canary and a
-deterministically racy canary; the second must emit a TSAN data-race report and
-exit with code 86 before component tests are admitted.
-
-The manual `multi_arch_ci_tsan.yml` and reusable
-`multi_arch_release_tsan.yml` workflows build the supported `gfx94x` and
-`gfx950` artifact families, then run the CPU suite once from a single artifact
-carrier. The current fail-closed allowlist is `rocroller`, `origami`,
-`rocrand`, `hiprand`, `rocsparse`, `rocprim`, `rocthrust`, and `hipfile`, plus
-the sanitizer canary. GPU device nodes, multi-GPU settings, sharding, and
-device-only tests are not inherited. Prebuilt-stage reuse and package
-publication are disabled during qualification so an uninstrumented baseline
-cannot be mixed into the result.
+The multi-architecture host-TSAN workflows use the regular test artifact
+matrix, per-family GPU runners, component test scripts, and sharding. They run
+the comprehensive test tier. The TSAN runtime and symbolizer are resolved from
+the fetched artifact tree; TSAN is not injected into the Python/shell harness
+with `LD_PRELOAD`. Prebuilt-stage reuse and package publication are disabled
+during qualification so an uninstrumented baseline cannot be mixed into the
+result.

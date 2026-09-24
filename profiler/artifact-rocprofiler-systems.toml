@@ -24,13 +24,8 @@ exclude = [
 include = [
   "share/doc/rocprofiler-systems/**"
 ]
-# Pytest/CTest integration payload plus the explicitly installed native
-# rocprof-sys-unit-tests binary. Example workload binaries remain in the
-# separate rocprofiler-systems-examples artifact.
+# Test binaries lie under rocprofiler-systems-examples artifact
 [components.test."profiler/rocprofiler-systems/stage"]
 include = [
-  "lib/rocprofiler-systems/libgmock.so*",
-  "lib/rocprofiler-systems/libgtest.so*",
-  "lib/rocprofiler-systems/libgtest_main.so*",
   "share/rocprofiler-systems/tests/**",
 ]

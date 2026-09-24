@@ -24,10 +24,6 @@ on:
       sanity_check_only_for_family:
         type: boolean
         default: false
-      host_only:
-        description: "Run an explicitly admitted CPU-only host sanitizer matrix."
-        type: boolean
-        default: false
       test_type:
         type: string
       test_labels:
@@ -90,10 +86,6 @@ on:
       sanity_check_only_for_family:
         type: boolean
         default: false
-      host_only:
-        description: "Run an explicitly admitted CPU-only host sanitizer matrix."
-        type: boolean
-        default: false
       test_type:
         type: string
       test_labels:
@@ -133,8 +125,8 @@ run-name: Test Artifacts (${{ inputs.amdgpu_families }}, ${{ inputs.release_type
 jobs:
   configure_test_matrix:
     name: "Configure test matrix (${{ inputs.amdgpu_families }})"
-    # Host-only tests receive the build runner directly and do not need a GPU runner.
-    if: ${{ inputs.test_runs_on != '' || inputs.host_only }}
+    # if there is a test machine available
+    if: ${{ inputs.test_runs_on != '' }}
     runs-on: ubuntu-24.04
     outputs:
       sanity_component: ${{ steps.configure.outputs.sanity_component }}
@@ -142,12 +134,6 @@ jobs:
       platform: ${{ steps.configure.outputs.platform }}
       shard_arr: ${{ steps.configure.outputs.shard_arr }}
     steps:
-      - name: Validate host-only runner selection
-        if: ${{ inputs.host_only && inputs.test_runs_on == '' }}
-        run: |
-          echo "::error::host_only requires an explicit CPU test_runs_on value"
-          exit 1
-
       - name: "Quartz - started - test ROCm artifacts"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
@@ -201,10 +187,9 @@ jobs:
           PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
           CI_CONFIG_PATH: ci-config
           BUILD_VARIANT: ${{ inputs.build_variant }}
-          HOST_ONLY_TESTS: ${{ inputs.host_only }}
         run: |
           python ./build_tools/github_actions/fetch_test_configurations.py \
-            --platform=${{ inputs.host_only && 'linux' || (contains(inputs.test_runs_on, 'windows') && 'windows' || 'linux') }}
+            --platform=${{ contains(inputs.test_runs_on, 'windows') && 'windows' || 'linux' }}
 
   test_sanity_check:
     name: 'Test Sanity Check'
@@ -219,7 +204,7 @@ jobs:
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
       # For workflow_dispatch, honor the explicit test_runs_on input if provided.
       # Otherwise, use the runner selected by fetch_test_configurations.py.
-      test_runs_on: ${{ inputs.host_only && inputs.test_runs_on || (github.event_name == 'workflow_dispatch' && inputs.test_runs_on) || fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner }}
+      test_runs_on: ${{ (github.event_name == 'workflow_dispatch' && inputs.test_runs_on) || fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
       component: ${{ needs.configure_test_matrix.outputs.sanity_component }}
       release_type: ${{ inputs.release_type }}
@@ -264,7 +249,6 @@ jobs:
       #   5. Per-component runner (set by fetch_test_configurations.py)
       test_runs_on: >-
         ${{
-          (inputs.host_only && inputs.test_runs_on) ||
           (github.event_name == 'workflow_dispatch' &&
             !contains(github.actor, 'github-actions') &&
             inputs.test_runs_on != '' &&

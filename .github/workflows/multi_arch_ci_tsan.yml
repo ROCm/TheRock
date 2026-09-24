@@ -3,14 +3,13 @@
 
 name: Multi-Arch CI Host TSAN
 
-# Keep this qualification workflow manual until the admitted CPU-only suite
-# has produced stable green runs.
+# Keep this qualification workflow manual while the per-family test suite is validated.
 on:
   workflow_dispatch:
     inputs:
       linux_amdgpu_families:
         type: string
-        description: "Linux artifact families to build. Tests remain CPU-only."
+        description: "Linux GPU families to build and test."
         default: "all"
 
 permissions:
@@ -59,7 +58,7 @@ jobs:
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
-      test_type: host-tsan
+      test_type: comprehensive
     permissions:
       contents: read
       id-token: write

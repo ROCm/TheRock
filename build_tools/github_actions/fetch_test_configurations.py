@@ -922,136 +922,6 @@ test_matrix = {
 }
 
 
-# Initial fail-closed HOST_TSAN admission. Each entry is known to run without
-# GPU device nodes in the current tree. Broader component coverage must be
-# added explicitly alongside a positive host-only test manifest and inventory
-# assertion; it must not inherit the ordinary comprehensive GPU matrix.
-HOST_TSAN_COMPONENTS = {
-    "sanity": {
-        "test_script": f"python {_get_script_path('test_host_tsan_sanity.py')}",
-        "timeout_minutes": 10,
-    },
-    "hip-tests": {
-        "test_script": f"python {_get_script_path('test_hiptests_host_tsan.py')}",
-        "timeout_minutes": 15,
-    },
-    "rocroller": {
-        "test_script": f"python {_get_script_path('test_rocroller_host_tsan.py')}",
-        "timeout_minutes": 15,
-    },
-    "origami": {
-        "test_script": f"python {_get_script_path('test_ctest_host_tsan.py')}",
-        "timeout_minutes": 10,
-    },
-    "rocrand": {
-        "test_script": f"python {_get_script_path('test_native_host_tsan.py')}",
-        "timeout_minutes": 5,
-    },
-    "hiprand": {
-        "test_script": f"python {_get_script_path('test_native_host_tsan.py')}",
-        "timeout_minutes": 5,
-    },
-    "rocsparse": {
-        "test_script": f"python {_get_script_path('test_native_host_tsan.py')}",
-        "timeout_minutes": 5,
-    },
-    "rocprim": {
-        "test_script": f"python {_get_script_path('test_native_host_tsan.py')}",
-        "timeout_minutes": 15,
-    },
-    "rocthrust": {
-        "test_script": f"python {_get_script_path('test_native_host_tsan.py')}",
-        "timeout_minutes": 5,
-    },
-    "rocrtst": {
-        "test_script": f"python {_get_script_path('test_native_host_tsan.py')}",
-        "timeout_minutes": 5,
-    },
-    # Exact host-only microtest binaries; no librccl or HIP runtime execution.
-    "rccl": {
-        "test_script": f"python {_get_script_path('test_rccl_host_tsan.py')}",
-        "timeout_minutes": 20,
-    },
-    # Environment parsing only; exclude rocSHMEM's MPI/GPU CTest suites.
-    "rocshmem": {
-        "test_script": f"python {_get_script_path('test_native_host_tsan.py')}",
-        "timeout_minutes": 5,
-    },
-    # Native parser/common/code-object unit binaries only; services, tools, and
-    # GPU sampling integration tests remain excluded.
-    "rocprofiler-sdk": {
-        "test_script": f"python {_get_script_path('test_profiler_host_tsan.py')}",
-        "timeout_minutes": 10,
-    },
-    # Two exact native unit binaries; workload and counter-collection tests are
-    # not selected in this device-free lane.
-    "rocprofiler-compute": {
-        "test_script": f"python {_get_script_path('test_profiler_host_tsan.py')}",
-        "timeout_minutes": 10,
-    },
-    # The monolithic unit binary is CPU-only. Integration, sampling, and
-    # profiling-tool tests are deliberately excluded from this no-device job.
-    "rocprofiler-systems": {
-        "test_script": f"python {_get_script_path('test_profiler_host_tsan.py')}",
-        "timeout_minutes": 15,
-    },
-    # Mock-backed unit tests only; system/stress labels are not selected.
-    "hipfile": {
-        "test_script": f"python {_get_script_path('test_ctest_host_tsan.py')}",
-        "timeout_minutes": 15,
-    },
-    # Only the CPU bitstream reader is selected. Hardware decode and VA-API
-    # tests remain excluded from this device-free lane.
-    "rocdecode": {
-        "test_script": f"python {_get_script_path('test_media_host_tsan.py')}",
-        "timeout_minutes": 10,
-    },
-    # Only JPEG stream parsing is selected. Decoder construction requires HIP
-    # and a VCN device and is deliberately not part of this job.
-    "rocjpeg": {
-        "test_script": f"python {_get_script_path('test_media_host_tsan.py')}",
-        "timeout_minutes": 10,
-    },
-    # Exact three-test host inventory. The paired rocm-libraries correction
-    # keeps RPP_HOST_BACKEND construction/destruction independent of HIP.
-    "rpp": {
-        "test_script": f"python {_get_script_path('test_rpp_host_tsan.py')}",
-        "timeout_minutes": 60,
-    },
-    # Generic DWARF debugger coverage only (273 exact .exp files). GPU, GPU
-    # core-file and debug-agent suites stay excluded. ptrace is required for a
-    # CPU debugger but does not expose any GPU device node.
-    "rocgdb-cpu": {
-        "test_script": f"python {_get_script_path('test_rocgdb_host_tsan.py')}",
-        "timeout_minutes": 90,
-        "host_container_options": ["--cap-add=SYS_PTRACE"],
-    },
-}
-
-
-def _host_tsan_matrix() -> dict:
-    """Return the explicit CPU-only host-TSAN component matrix."""
-    result = {}
-    for key, overrides in HOST_TSAN_COMPONENTS.items():
-        entry = deepcopy(test_matrix[key])
-        entry.update(overrides)
-        entry["platform"] = ["linux"]
-        entry["linux_cpu_runner"] = True
-        entry["total_shards_dict"] = {"linux": 1}
-        entry.pop("multi_gpu", None)
-        entry.pop("include_family", None)
-        entry.pop("exclude_family", None)
-        # Do not inherit per-component device-oriented privileges or host
-        # mounts (the ordinary sanity job, for example, requests SYS_MODULE
-        # and /lib/modules). _build_container_options() will add only the
-        # common unprivileged container settings for these CPU jobs.
-        entry.pop("container_options", None)
-        if "host_container_options" in entry:
-            entry["container_options"] = entry.pop("host_container_options")
-        result[key] = entry
-    return result
-
-
 def run():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -1068,12 +938,6 @@ def run():
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
     build_variant = os.getenv("BUILD_VARIANT", "release")
-    host_only_tests = str2bool(os.getenv("HOST_ONLY_TESTS", "false"))
-
-    if host_only_tests and platform != "linux":
-        raise ValueError("HOST_ONLY_TESTS is supported only on Linux")
-    if host_only_tests and not build_variant.startswith("host-tsan"):
-        raise ValueError("HOST_ONLY_TESTS currently requires a host-tsan build variant")
 
     # Get runner config for per-component runner selection
     # This enables better load distribution across runner pools
@@ -1105,16 +969,8 @@ def run():
     # Build the selected test matrix:
     # 1) Start from regular tests
     # 2) Optionally merge extended tests (functional + benchmarks)
-    if host_only_tests:
-        selected_matrix = _host_tsan_matrix()
-        test_type = "host-tsan"
-        run_extended_tests = False
-        logging.info(
-            f"Using explicit host-TSAN CPU matrix ({len(selected_matrix)} test(s))"
-        )
-    else:
-        selected_matrix = deepcopy(test_matrix)
-        logging.info(f"Using test_matrix ({len(selected_matrix)} test(s))")
+    selected_matrix: dict = deepcopy(test_matrix)
+    logging.info(f"Using test_matrix ({len(selected_matrix)} test(s))")
 
     if run_extended_tests and functional_matrix:
         logging.info(
@@ -1182,11 +1038,7 @@ def run():
             for label in parsed_test_labels
             for member in TEST_LABEL_GROUPS.get(label, [label])
         ]
-        if (
-            expanded_test_labels
-            and key != "sanity"
-            and key not in expanded_test_labels
-        ):
+        if key != "sanity" and expanded_test_labels and key not in expanded_test_labels:
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
             continue
 
@@ -1318,11 +1170,7 @@ def run():
     components_with_runners = []
     for component in all_components:
         job_name = component.get("job_name", "unknown")
-        if host_only_tests:
-            # Non-empty sentinel for the reusable workflow's sanity prerequisite.
-            # test_artifacts.yml routes every admitted job to CPU infrastructure.
-            component["test_runner"] = "host-only"
-        elif "multi_gpu_runner" in component:
+        if "multi_gpu_runner" in component:
             # Multi-GPU components use multi-GPU runner labels
             if test_runs_on_multi_gpu_labels:
                 component["multi_gpu_runner"] = select_weighted_label(

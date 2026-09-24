@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Release entry point for host-only TSAN qualification. Tests are synchronous;
+# Release entry point for host-only TSAN instrumentation. Tests are synchronous;
 # publication and native packaging stay disabled until an isolated TSAN package
 # namespace has been qualified.
 name: Multi-Arch Release Host TSAN
@@ -17,7 +17,7 @@ on:
         type: string
         default: ""
       linux_amdgpu_families:
-        description: "Linux artifact families to build. Tests remain CPU-only."
+        description: "Linux GPU families to build and test."
         type: string
         default: "all"
       ref:
@@ -35,7 +35,7 @@ on:
         options: [dev]
         default: dev
       linux_amdgpu_families:
-        description: "Linux artifact families to build. Tests remain CPU-only."
+        description: "Linux GPU families to build and test."
         type: string
         default: "all"
       ref:
@@ -80,7 +80,7 @@ jobs:
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
-      test_type: host-tsan
+      test_type: comprehensive
       release_type: ${{ inputs.release_type || 'dev' }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ needs.setup.outputs.ref }}

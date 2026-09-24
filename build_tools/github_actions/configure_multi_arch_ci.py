@@ -1288,16 +1288,8 @@ def _expand_build_config_for_platform(
                     f"runner available, disabling tests"
                 )
 
-        # Host-only sanitizer suites run on CPU infrastructure. Keep a non-empty
-        # runner sentinel here so the downstream test workflow is dispatched;
-        # every admitted component is explicitly routed to a CPU runner.
-        if build_variant.startswith("host-tsan"):
-            test_runs_on = select_build_runner("linux", build_variant)
-            print(
-                f"  {family_name}: using host-tsan CPU runner: {test_runs_on}"
-            )
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
-        elif build_variant.startswith("host-asan"):
+        if build_variant.startswith("host-asan"):
             # Run host-asan tests only on nightly (schedule or workflow_dispatch)
             # due to limited ASAN runner capacity and stability concerns.
             if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):

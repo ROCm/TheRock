@@ -25,7 +25,7 @@ class HostTsanProfilerPreparationTest(unittest.TestCase):
         ):
             self.assertNotIn(f"{component}_SANITIZER", cache)
 
-        # These dependencies remain deliberately outside this phase.
+        # These dependencies retain their explicit sanitizer overrides.
         self.assertEqual(cache["aqlprofile_SANITIZER"], "OFF")
         self.assertEqual(cache["rocprof-trace-decoder_SANITIZER"], "OFF")
         self.assertEqual(cache["roctracer_SANITIZER"], "OFF")
@@ -54,25 +54,6 @@ class HostTsanProfilerPreparationTest(unittest.TestCase):
         self.assertIn('set(ENABLE_SANITIZER "OFF"', hook)
         self.assertNotIn("unset(GPU_TARGETS)", hook)
         self.assertNotIn('set(ENABLE_SANITIZER "TSAN"', hook)
-
-    def test_rocprofiler_systems_unit_binary_is_relocatable_and_packaged(self):
-        hook = (
-            THEROCK_DIR / "profiler" / "post_hook_rocprofiler-systems.cmake"
-        ).read_text()
-        destination = "share/rocprofiler-systems/tests/unit-tests/bin"
-        self.assertIn("if(TARGET rocprof-sys-unit-tests)", hook)
-        self.assertIn("THEROCK_INSTALL_RPATH_ORIGIN", hook)
-        self.assertGreaterEqual(hook.count(destination), 2)
-        self.assertIn("COMPONENT rocprofiler-systems-tests", hook)
-        self.assertIn("foreach(_target gtest gtest_main gmock)", hook)
-        self.assertIn("LIBRARY DESTINATION lib/rocprofiler-systems", hook)
-
-        artifact = (
-            THEROCK_DIR / "profiler" / "artifact-rocprofiler-systems.toml"
-        ).read_text()
-        self.assertIn('"share/rocprofiler-systems/tests/**"', artifact)
-        for library in ("libgtest.so*", "libgtest_main.so*", "libgmock.so*"):
-            self.assertIn(library, artifact)
 
 
 if __name__ == "__main__":

@@ -194,13 +194,6 @@ jobs:
           python ./build_tools/install_additional_requirements.py \
             --requirements-files ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
 
-      - name: Verify direct host-TSAN linkage
-        if: ${{ startsWith(inputs.build_variant, 'host-tsan') && fromJSON(inputs.component).job_name != 'sanity' }}
-        run: |
-          python ./build_tools/github_actions/test_executable_scripts/verify_host_tsan_linkage.py \
-            --rocm-root "${{ env.OUTPUT_ARTIFACTS_DIR }}" \
-            --component "${{ fromJSON(inputs.component).job_name }}"
-
       # Set thread limits from KUBE_CPU_REQUEST (Kubernetes-injected) to avoid oversubscription.
       # Must be done at runtime since container env vars aren't in GitHub's env context.
       - name: Set thread limits
