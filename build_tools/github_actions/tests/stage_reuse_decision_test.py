@@ -98,6 +98,57 @@ class FakeTopology:
         return []
 
 
+class PartialReuseTopology(FakeTopology):
+    """Topology with two unaffected stages for partial-reuse validation."""
+
+    def __init__(self):
+        super().__init__()
+
+        self.build_stages["profiler-apps"] = _FakeStage(["profiler-group"])
+        self.artifact_groups["profiler-group"] = type(
+            "G",
+            (),
+            {"source_sets": ["systems"]},
+        )()
+        self.artifacts.update(
+            {
+                "rocprofiler-sdk": _FakeArtifact("target-neutral"),
+                "rocprofiler-systems": _FakeArtifact("target-neutral"),
+            }
+        )
+
+    def get_source_set_to_artifact_groups(self):
+        return {
+            "core": ["base-group"],
+            "libs": ["blas-group"],
+            "systems": ["profiler-group"],
+        }
+
+    def get_artifact_group_to_build_stages(self):
+        return {
+            "base-group": ["compiler-runtime"],
+            "blas-group": ["math-libs"],
+            "profiler-group": ["profiler-apps"],
+        }
+
+    def get_artifact_group_to_artifacts(self):
+        return {
+            "base-group": ["base"],
+            "blas-group": ["blas"],
+            "profiler-group": [
+                "rocprofiler-sdk",
+                "rocprofiler-systems",
+            ],
+        }
+
+    def get_artifacts_in_group(self, group_name):
+        return {
+            "base-group": [],
+            "blas-group": [],
+            "profiler-group": [],
+        }.get(group_name, [])
+
+
 def _baseline(run_id, matched_filenames):
     summary = WorkflowRunSummary(
         repository="ROCm/TheRock",
@@ -195,6 +246,36 @@ class AvailabilityGateTest(unittest.TestCase):
         self.assertIn("available in baseline", joined)
         self.assertIn("WOULD be skipped", joined)
 
+    def test_artifact_level_availability_with_selected_baseline(self):
+        plan = srd.StageReusePlan(
+            candidate_stages=("compiler-runtime",),
+            rebuild_stages=("math-libs",),
+            full_rebuild_required=False,
+            reasons=(),
+            impacted_artifacts=("blas",),
+            reusable_artifacts=("base",),
+            artifact_level_analysis=True,
+        )
+
+        with patch.object(srd, "plan_stage_reuse", return_value=plan):
+            result = compute_auto_stage_reuse(
+                changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+                mode=StageReuseMode.DRY_RUN,
+                linux_amdgpu_families=["generic"],
+                topology=FakeTopology(),
+                baseline_selector=_selector(
+                    _baseline(
+                        "123",
+                        ["base_lib_generic.tar.zst"],
+                    )
+                ),
+            )
+
+        self.assertEqual(result.baseline_run_id, "123")
+        self.assertTrue(result.artifact_level_analysis)
+        self.assertEqual(result.reusable_artifacts, ("base",))
+        self.assertEqual(result.rebuild_artifacts, ("blas",))
+
     def test_dry_run_unaffected_but_artifacts_missing_rebuilds(self):
         # compiler-runtime unaffected, but baseline only has blas (not base).
         result = compute_auto_stage_reuse(
@@ -208,7 +289,7 @@ class AvailabilityGateTest(unittest.TestCase):
         self.assertIn("compiler-runtime", result.unavailable_stages)
         self.assertEqual(result.available_stages, ())
         joined = "\n".join(result.report_lines)
-        self.assertIn("artifacts not in baseline", joined)
+        self.assertIn("artifacts not in selected baseline", joined)
 
     def test_no_baseline_found_rebuilds_candidates(self):
         result = compute_auto_stage_reuse(
@@ -223,7 +304,8 @@ class AvailabilityGateTest(unittest.TestCase):
         self.assertIsNone(result.baseline_run_id)
         joined = "\n".join(result.report_lines)
         # When no baseline is found, we now report it as "no commit-compatible baseline"
-        self.assertIn("no commit-compatible baseline", joined)
+        self.assertIn("no usable baseline run found", joined)
+        self.assertNotIn("all candidate runs are newer", joined)
 
     def test_target_neutral_artifact_only_requires_generic(self):
         result = compute_auto_stage_reuse(
@@ -276,6 +358,64 @@ class AvailabilityGateTest(unittest.TestCase):
                 topology=FakeTopology(),
                 baseline_selector=boom,
             )
+
+    def test_incomplete_stage_does_not_block_complete_stage(self):
+        captured_requirements = {}
+
+        def selector(requirements_by_stage):
+            captured_requirements.update(requirements_by_stage)
+            return _baseline(
+                "123",
+                [
+                    "base_lib_generic.tar.zst",
+                    "rocprofiler-sdk_lib_generic.tar.zst",
+                ],
+            )
+
+        result = compute_auto_stage_reuse(
+            changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+            mode=StageReuseMode.DRY_RUN,
+            linux_amdgpu_families=["generic"],
+            topology=PartialReuseTopology(),
+            baseline_selector=selector,
+        )
+
+        self.assertEqual(
+            set(captured_requirements),
+            {
+                "compiler-runtime",
+                "profiler-apps",
+            },
+        )
+        self.assertEqual(
+            {
+                (
+                    requirement.name,
+                    requirement.target_family,
+                )
+                for requirement in captured_requirements["compiler-runtime"]
+            },
+            {
+                ("base", "generic"),
+            },
+        )
+        self.assertEqual(
+            {
+                (
+                    requirement.name,
+                    requirement.target_family,
+                )
+                for requirement in captured_requirements["profiler-apps"]
+            },
+            {
+                ("rocprofiler-sdk", "generic"),
+                ("rocprofiler-systems", "generic"),
+            },
+        )
+
+        self.assertIn("compiler-runtime", result.available_stages)
+        self.assertIn("profiler-apps", result.unavailable_stages)
+        self.assertEqual(result.baseline_run_id, "123")
 
 
 class GuardrailTest(unittest.TestCase):
@@ -355,7 +495,11 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
             ),
         ):
             selector = srd._default_baseline_selector(platform="linux")
-            result = selector([("base", "generic")])
+            result = selector(
+                {
+                    "compiler-runtime": (srd.RequiredArtifact("base", "generic"),),
+                }
+            )
 
         return captured, result
 
@@ -373,9 +517,17 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
         )
         # Real history passed through (NOT an empty list).
         self.assertEqual(
-            captured["ordered_commit_shas"], ["sha-current", "sha-old", "sha-older"]
+            captured["ordered_commit_shas"],
+            ["sha-current", "sha-old", "sha-older"],
         )
         self.assertEqual(captured["current_commit_sha"], "sha-current")
+        self.assertEqual(
+            captured["required_artifact_groups"],
+            {
+                "compiler-runtime": (srd.RequiredArtifact("base", "generic"),),
+            },
+        )
+        self.assertNotIn("required_artifacts", captured)
 
     def test_empty_history_disables_commit_rule(self):
         def fake_history(**kwargs):
@@ -566,6 +718,8 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
         self.assertEqual(result.platform_available["linux"], ("compiler-runtime",))
         self.assertEqual(result.platform_available["windows"], ())
         joined = "\n".join(result.report_lines)
+        self.assertIn("artifacts not in selected baseline", joined)
+        self.assertNotIn("all candidate runs are newer", joined)
         self.assertIn("missing on: windows", joined)
 
     def test_stage_reused_when_present_on_both_platforms(self):
@@ -593,9 +747,11 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
         }
 
         def selector_factory(platform):
-            def selector(required):
+            def selector(requirements_by_stage):
                 captured_required[platform] = {
-                    (artifact.name, artifact.target_family) for artifact in required
+                    (artifact.name, artifact.target_family)
+                    for stage_requirements in requirements_by_stage.values()
+                    for artifact in stage_requirements
                 }
                 return per_platform[platform]
 

@@ -19,7 +19,7 @@ Example:
         ...
 """
 
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import logging
@@ -233,6 +233,31 @@ def _dedupe_required_artifacts(
     if not result:
         raise ValueError("required_artifacts must contain at least one value")
     return tuple(result)
+
+
+def _normalize_required_artifact_groups(
+    required_artifact_groups: Mapping[str, Iterable[RequiredArtifact]],
+) -> dict[str, tuple[RequiredArtifact, ...]]:
+    """Normalize independently reusable artifact requirement groups."""
+
+    result: dict[str, tuple[RequiredArtifact, ...]] = {}
+
+    for group_name, required_artifacts in required_artifact_groups.items():
+        normalized_name = group_name.strip()
+        if not normalized_name:
+            raise ValueError("required_artifact_groups must have non-empty group names")
+        if normalized_name in result:
+            raise ValueError(
+                "required_artifact_groups contains duplicate group name: "
+                f"{normalized_name}"
+            )
+
+        result[normalized_name] = _dedupe_required_artifacts(required_artifacts)
+
+    if not result:
+        raise ValueError("required_artifact_groups must contain at least one group")
+
+    return result
 
 
 def _dedupe_nonempty_strings(
@@ -683,7 +708,8 @@ def validate_run_recency(
 
 def select_baseline_run(
     *,
-    required_artifacts: Iterable[RequiredArtifact],
+    required_artifacts: Iterable[RequiredArtifact] | None = None,
+    required_artifact_groups: Mapping[str, Iterable[RequiredArtifact]] | None = None,
     github_repository: str = "ROCm/TheRock",
     workflow_name: str = "multi_arch_ci.yml",
     branch: str = "main",
@@ -702,8 +728,11 @@ def select_baseline_run(
     """Select the newest workflow run with healthy build jobs and artifacts.
 
     Args:
-        required_artifacts: Artifact/family pairs that must be present in the
-            baseline run output.
+        required_artifacts: Artifact/family pairs that must all be present.
+            Mutually exclusive with ``required_artifact_groups``.
+        required_artifact_groups: Named independently reusable requirement
+            groups. A candidate is artifact-usable when at least one complete
+            group is present. Mutually exclusive with ``required_artifacts``.
         github_repository: Repository in ``owner/repo`` format.
         workflow_name: Workflow filename to search.
         branch: Branch to search.
@@ -734,13 +763,31 @@ def select_baseline_run(
             run.
 
     Returns:
-        The first completed candidate run that has healthy required jobs and
-        all required artifact/family pairs, or ``None`` if no valid baseline is
-        found.
+        The first completed candidate run that passes the compatibility,
+        recency, and job-health gates and satisfies the requested artifact
+        policy, or ``None`` if no valid baseline is found.
     """
     # Validate these early so a missing requirement is a caller error instead of
     # being discovered only after GitHub/API work.
-    requirements = _dedupe_required_artifacts(required_artifacts)
+    if (required_artifacts is None) == (required_artifact_groups is None):
+        raise ValueError(
+            "exactly one of required_artifacts or "
+            "required_artifact_groups must be provided"
+        )
+
+    artifact_groups: dict[str, tuple[RequiredArtifact, ...]] | None = None
+
+    if required_artifact_groups is not None:
+        artifact_groups = _normalize_required_artifact_groups(required_artifact_groups)
+        requirements = _dedupe_required_artifacts(
+            artifact
+            for group_requirements in artifact_groups.values()
+            for artifact in group_requirements
+        )
+    else:
+        assert required_artifacts is not None
+        requirements = _dedupe_required_artifacts(required_artifacts)
+
     required_jobs = _dedupe_nonempty_strings(
         required_successful_job_name_substrings,
         field_name="required_successful_job_name_substrings",
@@ -875,15 +922,15 @@ def select_baseline_run(
             artifact_lookup_seconds,
         )
 
-        if not availability.is_valid:
-            missing_pairs = sorted(
-                f"{artifact.name}/{artifact.target_family}"
-                for artifact in availability.missing_artifacts
-            )
-            missing_families = sorted(
-                {artifact.target_family for artifact in availability.missing_artifacts}
-            )
+        missing_pairs = sorted(
+            f"{artifact.name}/{artifact.target_family}"
+            for artifact in availability.missing_artifacts
+        )
+        missing_families = sorted(
+            {artifact.target_family for artifact in availability.missing_artifacts}
+        )
 
+        if not availability.is_valid:
             logger.info(
                 "[BASELINE] missing required artifact pairs: "
                 "platform=%s run_id=%s pairs=%s",
@@ -892,6 +939,37 @@ def select_baseline_run(
                 missing_pairs,
             )
 
+        complete_artifact_groups: tuple[str, ...] = ()
+        incomplete_artifact_groups: tuple[str, ...] = ()
+
+        if artifact_groups is not None:
+            missing_artifacts = set(availability.missing_artifacts)
+
+            complete_artifact_groups = tuple(
+                group_name
+                for group_name, group_requirements in artifact_groups.items()
+                if not missing_artifacts.intersection(group_requirements)
+            )
+            incomplete_artifact_groups = tuple(
+                group_name
+                for group_name in artifact_groups
+                if group_name not in complete_artifact_groups
+            )
+
+            artifact_requirements_satisfied = bool(complete_artifact_groups)
+
+            logger.info(
+                "[BASELINE] artifact group availability: "
+                "platform=%s run_id=%s complete=%s incomplete=%s",
+                platform,
+                run_id,
+                list(complete_artifact_groups),
+                list(incomplete_artifact_groups),
+            )
+        else:
+            artifact_requirements_satisfied = availability.is_valid
+
+        if not artifact_requirements_satisfied:
             logger.info(
                 "[BASELINE] rejecting candidate: platform=%s run_id=%s "
                 "missing_artifact_pairs=%d/%d missing_families=%s total=%.2fs",
@@ -910,14 +988,28 @@ def select_baseline_run(
             workflow_name=workflow_name,
         )
 
-        logger.info(
-            "[BASELINE] selected candidate: platform=%s run_id=%s "
-            "required_artifact_pairs=%d total=%.2fs",
-            platform,
-            run_id,
-            len(availability.required_artifacts),
-            time.monotonic() - candidate_start,
-        )
+        if artifact_groups is None:
+            logger.info(
+                "[BASELINE] selected candidate: platform=%s run_id=%s "
+                "required_artifact_pairs=%d total=%.2fs",
+                platform,
+                run_id,
+                len(availability.required_artifacts),
+                time.monotonic() - candidate_start,
+            )
+        else:
+            logger.info(
+                "[BASELINE] selected candidate: platform=%s run_id=%s "
+                "available_artifact_pairs=%d/%d "
+                "complete_artifact_groups=%s total=%.2fs",
+                platform,
+                run_id,
+                len(availability.required_artifacts)
+                - len(availability.missing_artifacts),
+                len(availability.required_artifacts),
+                list(complete_artifact_groups),
+                time.monotonic() - candidate_start,
+            )
 
         return BaselineRun(
             source_ref=source_ref,
