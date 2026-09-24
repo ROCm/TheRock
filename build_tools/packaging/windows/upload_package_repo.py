@@ -37,7 +37,7 @@ PLATFORM = "windows"
 
 def upload_package_repo(run_id: str, package_dir: Path, dry_run: bool) -> None:
     if not package_dir.is_dir():
-        sys.exit(f"Error: package dir not found: {package_dir}")
+        raise FileNotFoundError(f"package dir not found: {package_dir}")
 
     output_root = WorkflowOutputRoot.from_workflow_run(run_id=run_id, platform=PLATFORM)
     dest = output_root.native_windows_packages("msi")
