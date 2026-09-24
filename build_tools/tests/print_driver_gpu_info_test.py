@@ -67,8 +67,14 @@ class IsWslTest(unittest.TestCase):
 
 
 class RunSanityTest(unittest.TestCase):
-    def test_wsl_skips_amd_smi_and_kfd(self):
-        """On WSL neither amd-smi nor /dev/kfd exists; rocminfo still runs."""
+    def test_wsl_runs_amd_smi_and_rocminfo_but_skips_kfd(self):
+        """On WSL the driver tools work; only the KFD ioctl cannot.
+
+        Verified empirically (actions/runs/36042414950): with the wsl-rocdxg
+        artifact installed, amd-smi static and rocminfo both succeed, and
+        /dev/kfd is the only thing genuinely missing. Skipping more than that
+        would throw away real GPU validation.
+        """
         import print_driver_gpu_info as m
 
         ran = []
@@ -82,8 +88,19 @@ class RunSanityTest(unittest.TestCase):
             rc = m.run_sanity("Linux")
 
         self.assertEqual(rc, 0)
+        self.assertIn("amd-smi", ran)
         self.assertIn("rocminfo", ran)
-        self.assertNotIn("amd-smi", ran)
+
+    def test_bare_metal_linux_missing_kfd_still_fails(self):
+        """Off WSL, a missing /dev/kfd must remain a hard failure."""
+        import print_driver_gpu_info as m
+
+        with patch.object(m, "_is_wsl", return_value=False), patch.object(
+            m, "run_command_with_search"
+        ), patch("os.path.exists", return_value=False):
+            rc = m.run_sanity("Linux")
+
+        self.assertEqual(rc, 1)
 
     def test_bare_metal_linux_still_runs_amd_smi(self):
         """The existing Linux path must be unchanged."""

@@ -11,7 +11,9 @@ On Linux:
   - report the KFD IOCTL version and warn if outside the range required by rocdbgapi (>= 1.13 and < 2.0)
 
 On Linux inside WSL:
-  - run "rocminfo" only
+  - as above, except the KFD IOCTL check is skipped: WSL has no amdgpu kernel
+    driver and no /dev/kfd. amd-smi and rocminfo do work, provided the
+    wsl-rocdxg artifact is installed.
 
 On Windows:
   - run "hipInfo.exe"
@@ -143,27 +145,6 @@ def run_sanity(os_name: str) -> int:
             args=[],
             extra_command_search_paths=[bin_dir],
         )
-    elif _is_wsl():
-        # WSL: the GPU is paravirtualized as /dev/dxg. There is no amdgpu kernel
-        # driver in the guest, so amd-smi (which queries the driver over /dev/kfd
-        # and sysfs) and the KFD ioctl cannot work by construction - amd-smi exits
-        # 255. rocminfo does work, because the ROCr runtime is WSL-aware and
-        # reaches the GPU through /dev/dxg, so it stays as the real check that a
-        # usable GPU is present.
-        log(f"WSL detected ({_DXG_DEVICE} present): GPU is paravirtualized.")
-        log("Skipping amd-smi and the KFD IOCTL check: no amdgpu driver in the guest.")
-        run_command_with_search(
-            label="rocminfo",
-            command="rocminfo",
-            args=[],
-            extra_command_search_paths=[bin_dir],
-        )
-        run_command_with_search(
-            label="Kernel version",
-            command="uname",
-            args=["-r"],
-            extra_command_search_paths=[bin_dir],
-        )
     else:
         # Linux: amd-smi static + rocminfo
         run_command_with_search(
@@ -198,30 +179,41 @@ def run_sanity(os_name: str) -> int:
         )
 
         log("\n=== KFD IOCTL version ===")
-        if not os.path.exists(_KFD_DEVICE):
+        if _is_wsl():
+            # WSL has no amdgpu kernel driver: the GPU is paravirtualized and
+            # /dev/kfd does not exist, so this ioctl cannot be answered. Verified
+            # empirically - with the wsl-rocdxg artifacts present, amd-smi and
+            # rocminfo both work here, and this check is the only one that fails
+            # (actions/runs/36042414950).
+            log(
+                f"Skipping: running under WSL ({_DXG_DEVICE} present), "
+                "no amdgpu driver and no /dev/kfd in the guest."
+            )
+        elif not os.path.exists(_KFD_DEVICE):
             log(f"error: {_KFD_DEVICE} not found — is the AMDGPU driver loaded?")
             return 1
-        try:
-            major, minor = _get_kfd_version()
-            too_old = (major, minor) < _KFD_VERSION_MIN
-            too_new = (major, minor) >= _KFD_VERSION_MAX
-            if too_old:
-                status = "NOT supported (too old)"
-            elif too_new:
-                status = "NOT supported (warning: newer than tested range)"
-            else:
-                status = "supported"
-            log(f"KFD IOCTL version: {major}.{minor} ({status})")
-            log(
-                f"Required range for rocdbgapi: "
-                f">= {_KFD_VERSION_MIN[0]}.{_KFD_VERSION_MIN[1]}"
-                f" and < {_KFD_VERSION_MAX[0]}.{_KFD_VERSION_MAX[1]}"
-            )
-            if too_old:
+        else:
+            try:
+                major, minor = _get_kfd_version()
+                too_old = (major, minor) < _KFD_VERSION_MIN
+                too_new = (major, minor) >= _KFD_VERSION_MAX
+                if too_old:
+                    status = "NOT supported (too old)"
+                elif too_new:
+                    status = "NOT supported (warning: newer than tested range)"
+                else:
+                    status = "supported"
+                log(f"KFD IOCTL version: {major}.{minor} ({status})")
+                log(
+                    f"Required range for rocdbgapi: "
+                    f">= {_KFD_VERSION_MIN[0]}.{_KFD_VERSION_MIN[1]}"
+                    f" and < {_KFD_VERSION_MAX[0]}.{_KFD_VERSION_MAX[1]}"
+                )
+                if too_old:
+                    return 1
+            except OSError as e:
+                log(f"error: failed to query KFD version: {e}")
                 return 1
-        except OSError as e:
-            log(f"error: failed to query KFD version: {e}")
-            return 1
 
     log("\n=== End of sanity check ===")
     return 0
