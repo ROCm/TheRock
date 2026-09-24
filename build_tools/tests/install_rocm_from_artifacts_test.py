@@ -70,6 +70,14 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         argv = self._run_main(["--mirage"])
         self.assertIn("mirage_run", argv)
 
+    def test_hip_tests_flag_includes_core_hip_run(self):
+        argv = self._run_main(["--hip-tests"])
+        self.assertIn("core-hip_run", argv)
+
+    def test_core_hip_run_is_not_in_the_base_set(self):
+        argv = self._run_main(["--base-only"])
+        self.assertNotIn("core-hip_run", argv)
+
     def test_base_only_includes_rocjitsu_hotswap(self):
         argv = self._run_main(["--base-only"])
         self.assertIn("rocjitsu-hotswap_lib", argv)
