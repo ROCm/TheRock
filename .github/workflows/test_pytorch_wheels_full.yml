@@ -365,6 +365,19 @@ jobs:
           python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           pip freeze
 
+      # The distributed hang diagnostics shell out to `py-spy dump --native` for
+      # ranks wedged in C. Attaching needs ptrace, which some containers refuse;
+      # probe it here rather than finding out hours into a run.
+      - name: Verify py-spy can attach
+        continue-on-error: true
+        run: |
+          python -c "import time; time.sleep(60)" &
+          probe=$!
+          sleep 3
+          py-spy dump --native --pid "$probe" \
+            || echo "py-spy cannot attach; native stacks will be unavailable"
+          kill "$probe" 2>/dev/null || true
+
       - name: Runner health status
         run: |
           ./build_tools/health_status.py

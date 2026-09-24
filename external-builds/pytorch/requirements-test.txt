@@ -8,3 +8,8 @@ hypothesis
 ninja
 numpy
 psutil
+# Lets MultiProcessTestCase._dump_native_stack report C frames for a rank wedged
+# inside a native call. faulthandler only walks Python frames, so without this
+# the deepest thing a hung distributed rank can tell us is which Python line it
+# entered native code from.
+py-spy
