@@ -17,10 +17,13 @@ on:
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       package_index_url:
-        description: Python package index URL to test, typically a repo.amd.com aggregate whl-next index
-        required: true
+        description: Python package index URL. Defaults to nightly whl-next when neither package URL is supplied.
         type: string
-        default: "https://nightly.repo.amd.com/rocm/whl-next/"
+        default: ""
+      package_find_links_url:
+        description: Flat pip --find-links page containing CI wheels (e.g. a run-scoped python/index.html).
+        type: string
+        default: ""
       python_version:
         required: true
         type: string
@@ -69,8 +72,13 @@ on:
         required: true
         type: string
       package_index_url:
-        required: true
+        description: Python package index URL. Defaults to nightly whl-next when neither package URL is supplied.
         type: string
+        default: ""
+      package_find_links_url:
+        description: Flat pip --find-links page containing CI wheels.
+        type: string
+        default: ""
       python_version:
         required: true
         type: string
@@ -137,7 +145,8 @@ jobs:
       GPU_POLICY: ${{ inputs.gpu_policy }}
       TORCH_VERSION: ${{ inputs.torch_version }}
       PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
-      PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
+      PACKAGE_INDEX_URL: ${{ inputs.package_index_url || (inputs.package_find_links_url == '' && 'https://nightly.repo.amd.com/rocm/whl-next/' || '') }}
+      PACKAGE_FIND_LINKS_URL: ${{ inputs.package_find_links_url }}
       QUARTZ_REPORTING_WORKFLOW: test_pytorch_wheels.yml
       QUARTZ_WORKFLOW_POSTFIX: "- test PyTorch wheels"
       VENV_DIR: ${{ github.workspace }}/.venv
@@ -191,6 +200,7 @@ jobs:
             --torch-version="${TORCH_VERSION}" \
             --pytorch-git-ref="${PYTORCH_GIT_REF}" \
             --index-url="${PACKAGE_INDEX_URL}" \
+            --find-links="${PACKAGE_FIND_LINKS_URL}" \
             --device-extras="${DEVICE_EXTRAS}"
 
       - name: Set git options
@@ -209,6 +219,7 @@ jobs:
           python build_tools/setup_venv.py ${VENV_DIR} \
             --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION}" \
             --index-url="${PACKAGE_INDEX_URL}" \
+            --find-links="${PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
 
       # Here we checkout the same version of PyTorch that wheels were built from
