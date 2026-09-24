@@ -60,8 +60,9 @@ jobs:
       summary: ${{ steps.summary.outputs.summary }}
     container:
       # If the component has specified an alternate image, honor that option.
-      # Otherwise use the default image.
-      image: >-
+      # Otherwise use the default image. Images are supplied by the trusted test
+      # matrix or caller; this reusable workflow cannot pin a literal image.
+      image: >- # zizmor: ignore[unpinned-images]
         ${{ inputs.platform == 'linux' &&
             (fromJSON(inputs.component).container_image || inputs.default_container_image)
             || null
@@ -118,7 +119,7 @@ jobs:
         run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
 
       - name: Pre-job cleanup GPU processes on Linux
-        if: ${{ runner.os == 'Linux' }}
+        if: ${{ runner.os == 'Linux' && !fromJSON(inputs.component).linux_cpu_runner }}
         timeout-minutes: 5
         run: bash ./prejob/build_tools/github_actions/cleanup_processes.sh
 
@@ -130,10 +131,10 @@ jobs:
           ref: ${{ inputs.ref }}
 
       - name: Run setup test environment workflow
-        timeout-minutes: ${{ inputs.build_variant == 'asan' && 60 || 15 }}
+        timeout-minutes: ${{ contains(inputs.build_variant, 'san') && 60 || 15 }}
         env:
           RETRY_THIS_STEP: "true"
-          STEP_TIMEOUT_MINUTES: ${{ inputs.build_variant == 'asan' && '60' || '15' }}
+          STEP_TIMEOUT_MINUTES: ${{ contains(inputs.build_variant, 'san') && '60' || '15' }}
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
@@ -158,9 +159,15 @@ jobs:
         # TODO(#3755): Clean this up after final sanitizer environment variable flags are determined
         # Must run before sanity check so ASAN_RUNTIME_PATH is available for LD_PRELOAD
       - name: Enable sanitizer-specific test flags
-        if: ${{ contains(inputs.artifact_group, 'asan') }}
+        if: ${{ contains(inputs.build_variant, 'asan') }}
         run: |
           python ./build_tools/github_actions/configure_asan_env.py \
+            --artifacts-dir "${{ env.OUTPUT_ARTIFACTS_DIR }}"
+
+      - name: Enable TSAN-specific test flags
+        if: ${{ inputs.build_variant == 'tsan' }}
+        run: |
+          python ./build_tools/github_actions/configure_tsan_env.py \
             --artifacts-dir "${{ env.OUTPUT_ARTIFACTS_DIR }}"
 
       - name: Driver / GPU sanity check
@@ -216,8 +223,10 @@ jobs:
           # Default unset components to the platform backend, mirroring the runtime fix
           # in ROCm/rocm-systems#8050 (Windows -> PAL, Linux -> ROCr).
           GPU_ENABLE_PAL: ${{ fromJSON(inputs.component).gpu_enable_pal || (inputs.platform == 'windows' && '1' || '0') }}
-          RETRY_THIS_STEP: "true"
-          RETRY_COUNT: "1"
+          # A sanitizer race may be nondeterministic. Never retry TSAN
+          # execution into a false green result.
+          RETRY_THIS_STEP: ${{ inputs.build_variant == 'tsan' && 'false' || 'true' }}
+          RETRY_COUNT: ${{ inputs.build_variant == 'tsan' && '0' || '1' }}
           RETRY_DELAY: "7"
           STEP_TIMEOUT_MINUTES: ${{ fromJSON(inputs.component).timeout_minutes }}
           STEP_NAME: >-
@@ -255,7 +264,7 @@ jobs:
             --additional-requirements-files="${REQUIREMENTS_FILES}"
 
       - name: Post-job cleanup GPU processes on Linux
-        if: ${{ always() && runner.os == 'Linux' }}
+        if: ${{ always() && runner.os == 'Linux' && !fromJSON(inputs.component).linux_cpu_runner }}
         timeout-minutes: 5
         run: bash ./build_tools/github_actions/cleanup_processes.sh
 
