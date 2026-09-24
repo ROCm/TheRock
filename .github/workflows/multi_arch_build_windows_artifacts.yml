@@ -274,7 +274,7 @@ jobs:
       # variable, or touch the release file the step prints, to end a hold
       # early.
       - name: Hold runner for live debugging
-        if: ${{ failure() && vars.WINDOWS_DEBUG_HOLD_MINUTES != '' && vars.WINDOWS_DEBUG_HOLD_MINUTES != '0' }}
+        if: ${{ !cancelled() && vars.WINDOWS_DEBUG_HOLD_MINUTES != '' && vars.WINDOWS_DEBUG_HOLD_MINUTES != '0' }}
         shell: pwsh
         env:
           HOLD_MINUTES: ${{ vars.WINDOWS_DEBUG_HOLD_MINUTES }}
