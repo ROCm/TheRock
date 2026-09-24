@@ -645,6 +645,11 @@ test_matrix = {
             "linux": 2,
             "windows": 2,
         },
+        "exclude_family": {
+            # CRITICAL FAILURE on gfx125X-dcgpu: GPU MES hang on pow2_1D_half/accuracy_test.vs_fftw/real_forward_len_65536_half_op_batch_1_istride_1_R_ostride_1_HI_idist_65536_odist_32769_ioffset_0_0_ooffset_0_0
+            # https://github.com/ROCm/TheRock/actions/runs/35952546851/job/107484147512
+            "linux": ["gfx125X-dcgpu"],
+        },
     },
     # MIOpen tests
     "miopen": {
