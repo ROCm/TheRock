@@ -98,16 +98,13 @@ _GPU_CONTAINER_OPTIONS = [
     "-e KUBE_CPU_REQUEST",
 ]
 
-def _build_container_options(
-    job_config: dict, platform: str, amdgpu_families: str | None = None
-) -> dict:
+def _build_container_options(job_config: dict, platform: str) -> dict:
     """
     Build the final container_options string by concatenating base, GPU, and job-specific options.
 
     Args:
         job_config: The job configuration dictionary
         platform: The platform (e.g., "linux", "windows")
-        amdgpu_families: The AMDGPU family string (unused, kept for future use)
 
     Returns:
         The modified job_config with updated container_options
@@ -474,13 +471,13 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        # "exclude_family": {
-        #     "linux": [
-        #         # FAILURE (15 test failures, custom test framework doesn't support GTEST_FILTER)
-        #         # https://github.com/ROCm/TheRock/actions/runs/35803014951/job/106997748160
-        #         "gfx125X-dcgpu",
-        #     ],
-        # },
+        "exclude_family": {
+            "linux": [
+                # FAILURE (15 test failures, custom test framework doesn't support GTEST_FILTER)
+                # https://github.com/ROCm/TheRock/actions/runs/35803014951/job/106997748160
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "rocthrust": {
         "job_name": "rocthrust",
@@ -526,14 +523,14 @@ test_matrix = {
             "linux": 3,
             "windows": 3,
         },
-        # "exclude_family": {
-        #     "linux": [
-        #         # KNOWN FAILURE: sddmm f16 compute tests fail with tolerance issues
-        #         # individual tests fail but GTEST_FILTER plumbing not available (ctest overrides env var)
-        #         # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363781930
-        #         "gfx125X-dcgpu",
-        #     ],
-        # },
+        "exclude_family": {
+            "linux": [
+                # KNOWN FAILURE: sddmm f16 compute tests fail with tolerance issues
+                # individual tests fail but GTEST_FILTER plumbing not available (ctest overrides env var)
+                # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363781930
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "hipsparselt": {
         "job_name": "hipsparselt",
@@ -566,10 +563,6 @@ test_matrix = {
                 "gfx1153",
                 "gfx1200",
                 "gfx1201",
-                # KNOWN FAILURE: spmm_test.spmm strided_batched smoke tests fail
-                # individual tests fail but GTEST_FILTER plumbing not available (ctest overrides env var)
-                # https://github.com/ROCm/TheRock/actions/runs/35920307532/job/107382567537
-                # "gfx125X-dcgpu",
             ],
             "windows": [
                 "gfx908",
@@ -649,14 +642,14 @@ test_matrix = {
             "linux": 4,
             "windows": 4,
         },
-        # "exclude_family": {
-        #     "linux": [
-        #         # KNOWN FAILURE: Gemm solver FP16 tests fail on gfx125X
-        #         # individual tests fail but GTEST_FILTER plumbing not available (ctest overrides env var)
-        #         # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363782290
-        #         "gfx125X-dcgpu",
-        #     ],
-        # },
+        "exclude_family": {
+            "linux": [
+                # KNOWN FAILURE: Gemm solver FP16 tests fail on gfx125X
+                # individual tests fail but GTEST_FILTER plumbing not available (ctest overrides env var)
+                # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363782290
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # MIOpen dbsync (StaticFDBSync) -- GPU-free under the rocjitsu KMD interposer on a CPU runner.
     # The runner ships in the MIOpen dist (share/miopen/bin/run_dbsync_rocjitsu.py, pulled via
@@ -855,14 +848,6 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        # "exclude_family": {
-        #     "linux": [
-        #         # KNOWN FAILURE: TestGpuMatmulPlan and TestHipblasltMatmulPlanBuilder tests fail
-        #         # individual tests fail but GTEST_FILTER plumbing not available (ctest overrides env var)
-        #         # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363782678
-        #         "gfx125X-dcgpu",
-        #     ],
-        # },
     },
     # hip-kernel-provider tests. test_hipkernelprovider.py installs the staged
     # rocKE wheels, then delegates to test_runner.py.
@@ -1035,12 +1020,6 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
-        },
-        "exclude_family": {
-            "linux": [
-                # PASSING on gfx125X-dcgpu
-                "gfx125X-dcgpu",
-            ],
         },
     },
     "rocdecode": {
