@@ -405,6 +405,17 @@ def parse_args() -> argparse.Namespace:
         help="Package to generate. Use --list to see available packages.",
     )
     parser.add_argument(
+        "--packages",
+        metavar="NAME[,NAME...]",
+        default=None,
+        help=(
+            "Comma-separated list of packages to generate in one invocation "
+            "(e.g. 'runtime,core'). Choices are the same as --package. "
+            "Mutually exclusive with --package. With more than one package, "
+            "--output-dir is required (--output names a single file)."
+        ),
+    )
+    parser.add_argument(
         "--list",
         action="store_true",
         help="List available package names and exit.",
@@ -467,8 +478,21 @@ def parse_args() -> argparse.Namespace:
         default=None,
         metavar="PATH",
         help=(
-            "Destination path for the generated .wxs file. "
+            "Destination path for the generated .wxs file. Names a single file, "
+            "so it cannot be combined with --output-dir or multiple packages. "
             "Default: <script-dir>/<output-stem>.wxs"
+        ),
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help=(
+            "Directory to write generated .wxs files into, each named "
+            "<output-stem>.wxs from the package definition (so callers need not "
+            "compute the filename). Mutually exclusive with --output; required "
+            "when generating more than one package."
         ),
     )
     parser.add_argument(
@@ -510,15 +534,42 @@ def parse_args() -> argparse.Namespace:
             print(f"  {name:<20} {pkg.description}")
         sys.exit(0)
 
-    if not args.package:
-        parser.error("--package is required (use --list to see options)")
+    # --package and --packages are mutually exclusive; exactly one is required.
+    if args.package and args.packages:
+        parser.error("use either --package or --packages, not both")
+    if not args.package and not args.packages:
+        parser.error("--package or --packages is required (use --list to see options)")
 
-    if args.output is None:
-        pkg = PACKAGES[args.package]
-        args.output = script_dir / f"{pkg.output_stem}.wxs"
+    # Normalize to a validated, de-duplicated list preserving first-seen order.
+    if args.packages:
+        names = [p.strip() for p in args.packages.split(",") if p.strip()]
+        if not names:
+            parser.error("--packages was empty")
+        invalid = [n for n in names if n not in PACKAGES]
+        if invalid:
+            parser.error(
+                f"invalid package(s): {', '.join(invalid)} "
+                f"(choose from {', '.join(PACKAGES)})"
+            )
+        seen: set[str] = set()
+        args.package_list = [n for n in names if not (n in seen or seen.add(n))]
+    else:
+        args.package_list = [args.package]
+
+    # --output names a single file: it cannot combine with --output-dir or with
+    # more than one package.
+    if args.output is not None and args.output_dir is not None:
+        parser.error("--output and --output-dir are mutually exclusive")
+    if args.output is not None and len(args.package_list) > 1:
+        parser.error(
+            "--output takes a single file; use --output-dir with multiple packages"
+        )
 
     if args.artifacts_cache_dir is None:
         args.artifacts_cache_dir = script_dir / "artifact-cache"
+
+    # Where build_all() writes when neither --output nor --output-dir is given.
+    args.default_output_dir = script_dir
 
     return args
 
@@ -606,26 +657,38 @@ class WixDocument:
     directory_cache: dict[str, ET.Element] = field(default_factory=dict)
 
 
-def resolve_package_inputs(args: argparse.Namespace) -> PackageInputs:
-    """Gather artifacts and payload/legacy file lists for the selected package.
+def resolve_artifact_dir(args: argparse.Namespace) -> Path:
+    """Return the directory of extracted artifacts for the selected source.
 
-    Fetches artifacts when --run-id is set, then enumerates the concrete files
-    to install. Legacy System32 DLLs are read from wherever they already exist
-    (the extracted artifacts, or the rocm-systems source checkout for the
-    driver-supplied ones) — this script never fetches them; see
-    resolve_legacy_dlls().
+    Fetches from the CI run when --run-id is set (once; the fetch is not
+    package-specific), otherwise points at the local build tree. Callers that
+    build several packages should resolve this once and reuse it.
     """
-    package = PACKAGES[args.package]
-
     if args.run_id:
-        artifact_dir = fetch_artifacts(
+        return fetch_artifacts(
             run_id=args.run_id,
             dest_dir=args.artifacts_cache_dir,
             run_github_repo=args.run_github_repo,
         )
-    else:
-        # Local build: artifacts live at build/artifacts/{name}_{component}_generic/
-        artifact_dir = args.build_root / "artifacts"
+    # Local build: artifacts live at build/artifacts/{name}_{component}_generic/
+    return args.build_root / "artifacts"
+
+
+def resolve_package_inputs(
+    args: argparse.Namespace, artifact_dir: Path | None = None
+) -> PackageInputs:
+    """Gather artifacts and payload/legacy file lists for the selected package.
+
+    ``artifact_dir`` is the extracted-artifacts directory; when omitted it is
+    resolved from ``args`` (which fetches when --run-id is set). Legacy System32
+    DLLs are read from wherever they already exist (the extracted artifacts, or
+    the rocm-systems source checkout for the driver-supplied ones) — this script
+    never fetches them; see resolve_legacy_dlls().
+    """
+    package = PACKAGES[args.package]
+
+    if artifact_dir is None:
+        artifact_dir = resolve_artifact_dir(args)
 
     return PackageInputs(
         package=package,
@@ -968,9 +1031,14 @@ def write_wxs(root: ET.Element, output_path: Path) -> None:
         tree.write(f, encoding="utf-8", xml_declaration=False)
 
 
-def build_wxs(args: argparse.Namespace) -> None:
-    """Generate a WiX v4 .wxs source file for the selected package."""
-    inputs = resolve_package_inputs(args)
+def build_wxs(args: argparse.Namespace, artifact_dir: Path | None = None) -> None:
+    """Generate a WiX v4 .wxs source file for the selected package.
+
+    ``artifact_dir`` is threaded through to resolve_package_inputs so a caller
+    building several packages can fetch the (package-independent) artifacts once
+    and reuse the extracted directory.
+    """
+    inputs = resolve_package_inputs(args, artifact_dir)
     layout = resolve_install_layout(args, inputs.version)
 
     doc = create_wix_document(inputs.package, inputs.version)
@@ -988,5 +1056,28 @@ def build_wxs(args: argparse.Namespace) -> None:
     print(f"Install:  {layout.display_path}")
 
 
+def build_all(args: argparse.Namespace) -> None:
+    """Generate one .wxs per requested package.
+
+    Resolves (and, for --run-id, fetches) the artifacts once — the fetch is not
+    package-specific — then loops over args.package_list, writing each package's
+    .wxs to its resolved output path.
+    """
+    artifact_dir = resolve_artifact_dir(args)
+    explicit_output = args.output  # Set only for single-package --output.
+    for pkg_name in args.package_list:
+        args.package = pkg_name
+        if explicit_output is not None:
+            args.output = explicit_output
+        else:
+            out_dir = (
+                args.output_dir
+                if args.output_dir is not None
+                else args.default_output_dir
+            )
+            args.output = out_dir / f"{PACKAGES[pkg_name].output_stem}.wxs"
+        build_wxs(args, artifact_dir)
+
+
 if __name__ == "__main__":
-    build_wxs(parse_args())
+    build_all(parse_args())
