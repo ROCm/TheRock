@@ -137,20 +137,6 @@ COMPONENT_CTEST_EXCLUSIONS = {
     },
 }
 
-# NOTE: GTEST_FILTER environment variable does NOT work for components where
-# ctest passes its own --gtest_filter argument (which overrides the env var).
-# For those components, we must either:
-#   1. Exclude the entire component via fetch_test_configurations.py exclude_family
-#   2. Use COMPONENT_CTEST_EXCLUSIONS (but this excludes entire ctest targets, not
-#      individual gtest sub-tests)
-#   3. Request upstream changes to add exclusion labels in test_categories.yml
-#
-# Components affected: hipblasltprovider, rocsparse, miopen (they use --gtest_filter
-# in their CTestTestfile.cmake which overrides GTEST_FILTER env var)
-COMPONENT_GTEST_EXCLUSIONS = {
-    # Currently empty - GTEST_FILTER doesn't work due to ctest passing --gtest_filter
-    # See: https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363782678
-}
 use_gtest_only_sharding = test_component_job_name in GTEST_ONLY_SHARDING_COMPONENTS
 
 # CTest runs serially by default; per-GPU overrides can be added below.
@@ -168,16 +154,6 @@ environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
 environ_vars["ROCM_PATH"] = str(ROCM_PATH)
-
-# Apply per-component, per-GPU-family gtest exclusions via GTEST_FILTER.
-# This excludes specific failing gtest sub-tests while allowing the rest to run.
-gtest_exclusions = COMPONENT_GTEST_EXCLUSIONS.get(test_component_job_name, {})
-if AMDGPU_FAMILIES and AMDGPU_FAMILIES in gtest_exclusions:
-    exclude_patterns = gtest_exclusions[AMDGPU_FAMILIES]
-    if exclude_patterns:
-        gtest_filter = "*-" + ":".join(exclude_patterns)
-        environ_vars["GTEST_FILTER"] = gtest_filter
-        print(f"# Excluding gtest tests via GTEST_FILTER: {exclude_patterns}")
 
 # Component-specific ENV VARs/PATHs applied on top of defaults.
 #
