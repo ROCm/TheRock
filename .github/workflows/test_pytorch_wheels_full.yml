@@ -215,9 +215,8 @@ jobs:
     defaults:
       run:
         shell: bash
-    # These env vars are set at the job level so they are available to all steps
-    # (e.g. export_test_times.py, run_pytorch_tests_full.py). The Python script
-    # uses os.environ.setdefault() so values set here take precedence.
+    # These env vars are available to export_test_times.py and the test.sh
+    # adapter. Values set here take precedence over adapter defaults.
     env:
       PYTORCH_GIT_REPO: ${{ inputs.pytorch_git_repo }}
       PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
@@ -373,7 +372,7 @@ jobs:
       - name: (Linux) Run PyTorch full test suite
         if: ${{ runner.os == 'Linux' }}
         run: |
-          python ./external-builds/pytorch/run_pytorch_tests_full.py \
+          python ./external-builds/pytorch/run_pytorch_test_sh.py \
             --test-config "${MATRIX_TEST_CONFIG}" \
             --device-query "${DEVICE_QUERY}" \
             --gpu-policy "${GPU_POLICY}" \

@@ -129,9 +129,8 @@ jobs:
     defaults:
       run:
         shell: bash
-    # run_pytorch_tests_full.py already sets CI, PYTORCH_TEST_WITH_ROCM,
-    # PYTORCH_TESTING_DEVICE_ONLY_FOR and TEST_CONFIG (via --test-config)
-    # itself, so we only set the extras the runner does not manage.
+    # The test.sh adapter sets PyTorch CI variables and preserves TheRock's
+    # GPU selection and skip-list policy.
     env:
       DEVICE_QUERY: ${{ inputs.device_query }}
       GPU_POLICY: ${{ inputs.gpu_policy }}
@@ -262,15 +261,11 @@ jobs:
             --log-cli-level=INFO \
             -v
 
-      # Rather than calling pytest or PyTorch's run_test.py directly, we use a
-      # test runner script that invokes run_test.py after first handling our
-      # custom skip-list integration, serialized execution, GPU selection, and
-      # more. The list of included test suites is limited here compared to in
-      # test_pytorch_wheels_full.yml.
+      # The list of included suites is limited compared to the full workflow.
       - name: Run PyTorch tests
         timeout-minutes: 120
         run: |
-          python ./external-builds/pytorch/run_pytorch_tests_full.py \
+          python ./external-builds/pytorch/run_pytorch_test_sh.py \
             --test-config default \
             --device-query "${DEVICE_QUERY}" \
             --gpu-policy "${GPU_POLICY}" \
