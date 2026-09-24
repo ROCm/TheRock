@@ -10,6 +10,9 @@ On Linux:
   - run "rocminfo"
   - report the KFD IOCTL version and warn if outside the range required by rocdbgapi (>= 1.13 and < 2.0)
 
+On Linux inside WSL:
+  - run "rocminfo" only
+
 On Windows:
   - run "hipInfo.exe"
 
@@ -38,8 +41,32 @@ _KFD_DEVICE = "/dev/kfd"
 _KFD_VERSION_MIN = (1, 13)
 _KFD_VERSION_MAX = (2, 0)  # exclusive
 
+# GPU paravirtualization device presented to a WSL2 guest. See _is_wsl().
+_DXG_DEVICE = "/dev/dxg"
+
 # TODO(#7659): Re-enable once rocminfo is fixed for gfx125X-dcgpu
 _ROCMINFO_EXCLUDED_FAMILIES = ["gfx125X-dcgpu"]
+
+
+def _is_wsl() -> bool:
+    """True when running inside a WSL2 guest with a paravirtualized GPU.
+
+    WSL reports platform.system() == "Linux", so without this check a WSL
+    runner takes the bare-metal Linux path and fails: the GPU arrives through
+    GPU-PV as /dev/dxg, and there is no amdgpu kernel driver, no /dev/kfd and
+    no /dev/dri to talk to.
+
+    Both conditions are required. /proc/version alone would also match a WSL
+    instance with no GPU passed through, where the GPU checks *should* still
+    fail loudly rather than be skipped.
+    """
+    if not os.path.exists(_DXG_DEVICE):
+        return False
+    try:
+        with open("/proc/version") as f:
+            return "microsoft" in f.read().lower()
+    except OSError:
+        return False
 
 
 def _get_kfd_version() -> Tuple[int, int]:
@@ -135,6 +162,27 @@ def run_sanity(os_name: str) -> int:
             label="hipInfo.exe",
             command="hipInfo.exe",
             args=[],
+            extra_command_search_paths=[bin_dir],
+        )
+    elif _is_wsl():
+        # WSL: the GPU is paravirtualized as /dev/dxg. There is no amdgpu kernel
+        # driver in the guest, so amd-smi (which queries the driver over /dev/kfd
+        # and sysfs) and the KFD ioctl cannot work by construction - amd-smi exits
+        # 255. rocminfo does work, because the ROCr runtime is WSL-aware and
+        # reaches the GPU through /dev/dxg, so it stays as the real check that a
+        # usable GPU is present.
+        log(f"WSL detected ({_DXG_DEVICE} present): GPU is paravirtualized.")
+        log("Skipping amd-smi and the KFD IOCTL check: no amdgpu driver in the guest.")
+        run_command_with_search(
+            label="rocminfo",
+            command="rocminfo",
+            args=[],
+            extra_command_search_paths=[bin_dir],
+        )
+        run_command_with_search(
+            label="Kernel version",
+            command="uname",
+            args=["-r"],
             extra_command_search_paths=[bin_dir],
         )
     else:
