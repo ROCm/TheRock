@@ -735,7 +735,6 @@ artifact_group = "media-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "base", "sysdeps", "sysdeps-amd-mesa"]
 feature_group = "MEDIA_LIBS" # Controlled by THEROCK_ENABLE_MEDIA_LIBS
-disable_platforms = ["windows"]
 
 [artifacts.rocjpeg]
 artifact_group = "media-libs"

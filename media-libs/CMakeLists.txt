@@ -6,6 +6,13 @@ if(THEROCK_ENABLE_ROCDECODE AND THEROCK_ENABLE_SYSDEPS_AMD_MESA)
   # rocdecode library
   ##############################################################################
 
+  # rocprofiler-register is not built on Windows (see base/CMakeLists.txt), and
+  # rocDecode disables its rocprofiler-register integration there.
+  set(_rocdecode_rocprofiler_register_dep rocprofiler-register)
+  if(WIN32)
+    set(_rocdecode_rocprofiler_register_dep)
+  endif()
+
   therock_cmake_subproject_declare(rocdecode
     USE_DIST_AMDGPU_TARGETS
     BACKGROUND_BUILD
@@ -17,7 +24,7 @@ if(THEROCK_ENABLE_ROCDECODE AND THEROCK_ENABLE_SYSDEPS_AMD_MESA)
     COMPILER_TOOLCHAIN
       amd-hip
     RUNTIME_DEPS
-      rocprofiler-register
+      ${_rocdecode_rocprofiler_register_dep}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_AMDMESA}
       hip-clr
