@@ -62,6 +62,7 @@ def _get_artifact_path(artifact_path: str) -> str:
 # related jobs without relying on name-prefix inference.
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
+    "tensilelite": ["tensilelite", "tensilelite-common"],
 }
 
 
@@ -209,11 +210,6 @@ _rocgdb_common = {
 # not in the list; omit the field to run on every tier (the default). For example, a
 # component whose suite is too slow for the quick sanity tier opts out of it with:
 #   "test_types": ["standard", "comprehensive", "full"]
-#
-# rocprofiler-sdk SPM: the default rocprofiler-sdk job and rocprofiler-sdk-spm share
-# one artifact but use different runners. SPM-labeled tests run on a pinned gfx94x
-# runner; the default job excludes them via --ctest-label-exclude spm. Preflight
-# and spm labels live in the companion rocm-systems rocprofiler-sdk PR.
 
 test_matrix = {
     # Sanity tests - always run first as a prerequisite for other component tests
@@ -322,6 +318,39 @@ test_matrix = {
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
+        },
+    },
+    # TensileLite common GEMM tests (Tensile/Tests/common) on real hardware,
+    # matching Math CI's `preliminary` `-m common` stage. A separate job rather
+    # than another stage chained onto "tensilelite", so a unit-test failure
+    # cannot hide the GEMM result.
+    #
+    # include_family is opt-in on purpose: selection inside the suite works by
+    # each config declaring skip-gfxNNNN, and that list only covers the
+    # architectures registered in tensilelite's pytest.ini. A family with no
+    # declarations (e.g. gfx1103, gfx115X) would try to run all ~417 configs.
+    #
+    # In Math CI (4 xdist workers) this suite takes up to 2h03 on gfx950 and
+    # 64 min on gfx942. Only gfx942 is on the PR path (gfx950 and gfx90a are
+    # postsubmit, gfx120X-all is nightly), so it runs unsharded; the timeout is
+    # sized for gfx950.
+    #
+    # Until the pinned rocm-libraries ships the hw-common category,
+    # pytest_runner.py skips this job with a warning instead of failing.
+    "tensilelite-common": {
+        "job_name": "tensilelite-common",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 180,
+        "additional_requirements_files": [
+            "build_tools/github_actions/test_executable_scripts/requirements-test-tensilelite.txt",
+        ],
+        "test_script": f"TEST_CATEGORY=hw-common python {_get_script_path('pytest_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        "include_family": {
+            "linux": ["gfx90a", "gfx94X-dcgpu", "gfx950-dcgpu", "gfx120X-all"],
         },
     },
     "origami": {
@@ -665,11 +694,11 @@ test_matrix = {
     "rocprofiler-sdk": {
         "job_name": "rocprofiler-sdk",
         "fetch_artifact_args": "--tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 20,
         "additional_requirements_files": [
             _get_artifact_path("share/rocprofiler-sdk/tests/requirements.txt"),
         ],
-        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --enable-cdash --ctest-label-exclude spm",
+        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --enable-cdash",
         "platform": ["linux"],
         "container_options": ["--cap-add=SYS_PTRACE"],
         "total_shards_dict": {
@@ -679,31 +708,6 @@ test_matrix = {
         # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
         # the specialized openmpi image.
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
-    },
-    # rocprofiler-sdk SPM tests: same artifact as rocprofiler-sdk above, but only
-    # CTest tests labeled "spm" run here on a pinned gfx94x runner (driver preflight
-    # in the companion rocm-systems PR). To disable scheduling, comment out this entry.
-    "rocprofiler-sdk-spm": {
-        "job_name": "rocprofiler-sdk-spm",
-        "fetch_artifact_args": "--rocprofiler-sdk --tests",
-        "timeout_minutes": 30,
-        "additional_requirements_files": [
-            _get_artifact_path("share/rocprofiler-sdk/tests/requirements.txt"),
-        ],
-        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --ctest-label spm",
-        "platform": ["linux"],
-        "container_options": ["--cap-add=SYS_PTRACE"],
-        "total_shards_dict": {
-            "linux": 1,
-        },
-        # rocprofv3 mpi-ranks tests gate on find_package(MPI) and launch under
-        # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
-        # the specialized openmpi image.
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
-        "test_runner": "linux-gfx942-gpu-rocm-profiler",
-        "include_family": {
-            "linux": ["gfx94X-dcgpu"],
-        },
     },
     # hipDNN tests
     "hipdnn": {

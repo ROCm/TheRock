@@ -8,6 +8,10 @@
 # * https://github.com/ROCm/TheRock/issues/3332
 # * https://github.com/ROCm/TheRock/issues/3291
 
+# Notes on security:
+#   * Higher-trust entry points: manual runs and automation from https://github.com/ROCm/rockrel.
+#   * Inherit Quartz credentials through nested workflows without repeating mappings.
+
 name: Multi-Arch Release Linux PyTorch Wheels
 
 on:
@@ -166,6 +170,7 @@ jobs:
         timeout-minutes: 15
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
@@ -194,7 +199,7 @@ jobs:
       # request more permissions than its caller grants).
       actions: write
     uses: ./.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
       test_amdgpu_families: ${{ matrix.test_amdgpu_families }}

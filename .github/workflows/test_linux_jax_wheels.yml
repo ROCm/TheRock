@@ -171,12 +171,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Checkout rocm-jax (plugin + build scripts)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           path: rocm-jax
           repository: ROCm/rocm-jax
           ref: ${{ inputs.jax_ref }}
@@ -184,6 +186,7 @@ jobs:
       - name: Checkout JAX extended tests repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           path: jax
           repository: ROCm/jax
           ref: ${{ inputs.jax_ref }}
