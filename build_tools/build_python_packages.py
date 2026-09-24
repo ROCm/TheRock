@@ -26,12 +26,10 @@ import json
 import os
 from pathlib import Path
 from pathlib import PurePosixPath
-import re
 import subprocess
 import sys
 
-from elftools.common.exceptions import ELFError
-from elftools.elf.elffile import ELFFile
+from packaging.version import Version
 
 from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
@@ -74,23 +72,12 @@ def load_therock_manifest(artifact_dir: Path) -> dict:
     return json.loads(manifest_path.read_text())
 
 
-def _asan_build_id_from_manifest(manifest: dict) -> str | None:
-    """Derive a stable build ID from a nightly artifact manifest."""
-    package_version = manifest.get("rocm_package_version", "")
-    match = re.search(r"(?:a|rc)(\d{8,})$", package_version)
-    return match.group(1) if match else None
-
-
 def resolve_package_version(args: argparse.Namespace, manifest: dict) -> str:
     """Resolve the package version, enforcing ASAN/release isolation."""
     import compute_rocm_package_version
 
     is_asan = getattr(args, "asan", False)
-    asan_build_id = getattr(args, "asan_build_id", None)
     version = getattr(args, "version", "")
-
-    if asan_build_id and not is_asan:
-        raise ValueError("--asan-build-id requires --asan")
 
     if not is_asan:
         if version:
@@ -109,22 +96,20 @@ def resolve_package_version(args: argparse.Namespace, manifest: dict) -> str:
         )
 
     if version:
-        expected = re.compile(
-            rf"^{re.escape(base_version)}\+asan\.[a-z0-9]+(?:\.[a-z0-9]+)*$"
-        )
-        if not expected.fullmatch(version):
+        parsed = Version(version)
+        if parsed.release != Version(base_version).release or "asan" not in (
+            parsed.local or ""
+        ).split("."):
             raise ValueError(
-                "--asan requires a canonical ASAN wheel version matching "
-                f"{base_version}+asan.<build-id>; got {version!r}"
+                "--asan requires a channel-preserving version for the artifact "
+                f"base {base_version} with a local 'asan' segment; got {version!r}"
             )
         return version
 
-    if asan_build_id is None:
-        asan_build_id = _asan_build_id_from_manifest(manifest)
     resolved = compute_rocm_package_version.compute_version(
-        release_type="asan",
+        release_type="release",
+        build_variant="asan",
         override_base_version=base_version,
-        asan_build_id=asan_build_id,
     )
     print(f"::: ASAN wheel version defaulting to {resolved}")
     return resolved
@@ -171,134 +156,6 @@ def find_asan_runtime_rpath(artifacts: ArtifactCatalog) -> str:
     raise RuntimeError(
         "ASAN artifacts contain multiple Clang runtime directories: "
         + ", ".join(sorted(runtime_dirs))
-    )
-
-
-def _elf_dynamic_info(path: Path) -> tuple[list[str], list[str]] | None:
-    """Return an ELF's NEEDED entries and RPATH/RUNPATH entries."""
-    try:
-        with path.open("rb") as stream:
-            elf = ELFFile(stream)
-            dynamic = elf.get_section_by_name(".dynamic")
-            if dynamic is None:
-                return ([], [])
-            needed: list[str] = []
-            rpaths: list[str] = []
-            for tag in dynamic.iter_tags():
-                if tag.entry.d_tag == "DT_NEEDED":
-                    needed.append(tag.needed)
-                elif tag.entry.d_tag == "DT_RPATH":
-                    rpaths.extend(tag.rpath.split(":"))
-                elif tag.entry.d_tag == "DT_RUNPATH":
-                    rpaths.extend(tag.runpath.split(":"))
-            return needed, rpaths
-    except (ELFError, OSError, ValueError):
-        return None
-
-
-def _rpath_resolves_directory(
-    *,
-    binary_path: Path,
-    rpaths: list[str],
-    expected_dir: Path,
-    binary_platform_root: Path | None = None,
-    expected_platform_root: Path | None = None,
-) -> bool:
-    """Checks an ELF RPATH against its directory in the installed wheel set.
-
-    Package staging directories are isolated from each other, but the contents
-    of every package's ``platform/`` directory are merged into one
-    site-packages directory when the wheels are installed. When platform roots
-    are supplied, project both paths into that common layout before resolving
-    ``$ORIGIN``. Omitting them retains the direct filesystem check used for
-    paths that are already in a merged layout.
-    """
-    if (binary_platform_root is None) != (expected_platform_root is None):
-        raise ValueError(
-            "binary_platform_root and expected_platform_root must be supplied together"
-        )
-
-    if binary_platform_root is not None and expected_platform_root is not None:
-        install_root = Path("/site-packages")
-        try:
-            binary_path = install_root / binary_path.resolve().relative_to(
-                binary_platform_root.resolve()
-            )
-            expected_dir = install_root / expected_dir.resolve().relative_to(
-                expected_platform_root.resolve()
-            )
-        except ValueError:
-            return False
-
-    expected_dir = expected_dir.resolve()
-    for rpath in rpaths:
-        for origin_syntax in ("$ORIGIN", "${ORIGIN}"):
-            if not rpath.startswith(origin_syntax):
-                continue
-            relative = rpath[len(origin_syntax) :].lstrip("/")
-            candidate = Path(os.path.normpath(binary_path.parent / relative))
-            if candidate.resolve() == expected_dir:
-                return True
-    return False
-
-
-def validate_asan_runtime_resolution(
-    *,
-    core: PopulatedDistPackage,
-    packages: list[PopulatedDistPackage],
-    runtime_rpath: str,
-    require_instrumented: bool,
-) -> None:
-    """Validate that packaged ASAN-linked ELFs resolve the core runtime."""
-    runtime_dir = core.platform_dir / runtime_rpath
-    runtimes = sorted(
-        path
-        for path in runtime_dir.glob("libclang_rt.asan*.so")
-        if _is_shared_asan_runtime_name(path.name)
-    )
-    if not runtimes:
-        raise RuntimeError(
-            f"ASAN runtime was not packaged in rocm-sdk-core at {runtime_dir}"
-        )
-
-    instrumented_count = 0
-    unresolved: list[Path] = []
-    for package in packages:
-        for _, path in package.files.materialized_relpaths.values():
-            if not path.is_file():
-                continue
-            dynamic_info = _elf_dynamic_info(path)
-            if dynamic_info is None:
-                continue
-            needed, rpaths = dynamic_info
-            if not any(_is_shared_asan_runtime_name(name) for name in needed):
-                continue
-            instrumented_count += 1
-            if not _rpath_resolves_directory(
-                binary_path=path,
-                rpaths=rpaths,
-                expected_dir=runtime_dir,
-                binary_platform_root=package.platform_dir.parent,
-                expected_platform_root=core.platform_dir.parent,
-            ):
-                unresolved.append(path)
-
-    if unresolved:
-        paths = "\n  ".join(str(path) for path in unresolved[:20])
-        extra = (
-            "" if len(unresolved) <= 20 else f"\n  ... ({len(unresolved) - 20} more)"
-        )
-        raise RuntimeError(
-            "ASAN-linked packaged ELFs cannot resolve the rocm-sdk-core "
-            f"runtime directory:\n  {paths}{extra}"
-        )
-    if require_instrumented and not instrumented_count:
-        raise RuntimeError(
-            "--asan was requested but no packaged ELF links the shared ASAN runtime"
-        )
-    print(
-        "::: ASAN RPATH validation passed: "
-        f"{instrumented_count} instrumented ELF(s), runtime {runtime_rpath}"
     )
 
 
@@ -631,13 +488,6 @@ def _run_kpack_split(
     # Build core + libraries wheels. The rocm, rocm-sdk-devel, and
     # rocm-sdk-device staging dirs do not exist yet, so the default scan
     # in build_packages will not accidentally include them.
-    if asan_runtime_rpath:
-        validate_asan_runtime_resolution(
-            core=core,
-            packages=list(params.populated_packages),
-            runtime_rpath=asan_runtime_rpath,
-            require_instrumented=True,
-        )
     if args.build_packages:
         build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
 
@@ -658,13 +508,6 @@ def _run_kpack_split(
                 and device_artifact_filter(target, an),
             )
         )
-        if asan_runtime_rpath:
-            validate_asan_runtime_resolution(
-                core=core,
-                packages=[dev],
-                runtime_rpath=asan_runtime_rpath,
-                require_instrumented=False,
-            )
         if args.build_packages:
             build_packages(
                 args.dest_dir,
@@ -750,13 +593,6 @@ def _run_legacy(
     # Build non-devel, non-meta wheels first — the rocm and rocm-sdk-devel
     # staging dirs do not exist yet, so the default scan in build_packages
     # will not accidentally include them.
-    if asan_runtime_rpath:
-        validate_asan_runtime_resolution(
-            core=core,
-            packages=list(params.populated_packages),
-            runtime_rpath=asan_runtime_rpath,
-            require_instrumented=True,
-        )
     if args.build_packages:
         build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
 
@@ -978,14 +814,6 @@ def main(argv: list[str]):
         help=(
             "Build locally versioned ASAN wheels, require the shared Clang "
             "ASAN runtime, and validate cross-wheel runtime RPATHs"
-        ),
-    )
-    p.add_argument(
-        "--asan-build-id",
-        default=None,
-        help=(
-            "Build identifier for --asan (defaults to the source artifact's "
-            "nightly date, then today's date)"
         ),
     )
     p.add_argument(

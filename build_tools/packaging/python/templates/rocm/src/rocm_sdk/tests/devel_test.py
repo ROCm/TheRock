@@ -6,9 +6,11 @@
 """Installation package tests for the core package."""
 
 import importlib
+import mmap
 import os
 from pathlib import Path
 import platform
+import re
 import subprocess
 import sys
 import unittest
@@ -206,6 +208,75 @@ class ROCmDevelTest(unittest.TestCase):
                 )
 
                 subprocess.check_call([sys.executable, "-c", command, str(so_path)])
+
+    @unittest.skipIf(platform.system() != "Linux", "ELF validation is Linux-only")
+    def testAsanRuntimeResolution(self):
+        """ASAN-linked ELFs must resolve the shared runtime shipped by core."""
+        from rocm_sdk._devel import get_devel_root
+
+        root = get_devel_root()
+        runtime_paths = sorted(
+            path
+            for path in (root / "lib" / "llvm" / "lib" / "clang").glob(
+                "*/lib/*/libclang_rt.asan*.so"
+            )
+            if path.is_file()
+        )
+        if not runtime_paths:
+            self.skipTest("not an ASAN ROCm installation")
+
+        readelf = root / "lib" / "llvm" / "bin" / "llvm-readelf"
+        self.assertTrue(readelf.is_file(), msg=f"Expected {readelf} to exist")
+        runtime_dirs = {path.parent.resolve() for path in runtime_paths}
+        instrumented = []
+        unresolved = []
+
+        for path in root.rglob("*"):
+            if not path.is_file() or path in runtime_paths:
+                continue
+            try:
+                with path.open("rb") as stream:
+                    if stream.read(4) != b"\x7fELF":
+                        continue
+                    with mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as data:
+                        if data.find(b"libclang_rt.asan") < 0:
+                            continue
+            except OSError:
+                continue
+
+            output = subprocess.check_output(
+                [readelf, "-d", path], stderr=subprocess.STDOUT, text=True
+            )
+            needed = re.findall(
+                r"\(NEEDED\).*\[(libclang_rt\.asan[^\]]*\.so)\]", output
+            )
+            if not needed:
+                continue
+            instrumented.append(path)
+            path_entries = []
+            for value in re.findall(r"\((?:RPATH|RUNPATH)\).*\[([^\]]*)\]", output):
+                path_entries.extend(value.split(":"))
+
+            resolved_dirs = set()
+            for entry in path_entries:
+                expanded = entry.replace("${ORIGIN}", str(path.parent)).replace(
+                    "$ORIGIN", str(path.parent)
+                )
+                resolved_dirs.add(Path(os.path.normpath(expanded)).resolve())
+            if runtime_dirs.isdisjoint(resolved_dirs):
+                unresolved.append(path)
+
+        self.assertTrue(
+            instrumented,
+            msg="ASAN runtime is installed but no ELF links against it",
+        )
+        self.assertFalse(
+            unresolved,
+            msg=(
+                "ASAN-linked ELFs cannot resolve the packaged runtime:\n  "
+                + "\n  ".join(str(path) for path in unresolved[:20])
+            ),
+        )
 
     def testLibrariesMirroredIntoDevel(self):
         """Every file in the libraries platform tree must also appear in the
