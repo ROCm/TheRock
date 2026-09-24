@@ -33,6 +33,9 @@ import subprocess
 import sys
 from typing import List, Optional, Tuple
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _therock_utils.os_util import DXG_DEVICE as _DXG_DEVICE, is_wsl_gpu as _is_wsl
+
 
 # AMDKFD_IOC_GET_VERSION = _IOR('K', 0x01, struct { u32 major; u32 minor; })
 # _IOR: direction=0x80, size=8, type='K'=0x4b, nr=0x01 -> 0x80084b01
@@ -41,32 +44,8 @@ _KFD_DEVICE = "/dev/kfd"
 _KFD_VERSION_MIN = (1, 13)
 _KFD_VERSION_MAX = (2, 0)  # exclusive
 
-# GPU paravirtualization device presented to a WSL2 guest. See _is_wsl().
-_DXG_DEVICE = "/dev/dxg"
-
 # TODO(#7659): Re-enable once rocminfo is fixed for gfx125X-dcgpu
 _ROCMINFO_EXCLUDED_FAMILIES = ["gfx125X-dcgpu"]
-
-
-def _is_wsl() -> bool:
-    """True when running inside a WSL2 guest with a paravirtualized GPU.
-
-    WSL reports platform.system() == "Linux", so without this check a WSL
-    runner takes the bare-metal Linux path and fails: the GPU arrives through
-    GPU-PV as /dev/dxg, and there is no amdgpu kernel driver, no /dev/kfd and
-    no /dev/dri to talk to.
-
-    Both conditions are required. /proc/version alone would also match a WSL
-    instance with no GPU passed through, where the GPU checks *should* still
-    fail loudly rather than be skipped.
-    """
-    if not os.path.exists(_DXG_DEVICE):
-        return False
-    try:
-        with open("/proc/version") as f:
-            return "microsoft" in f.read().lower()
-    except OSError:
-        return False
 
 
 def _get_kfd_version() -> Tuple[int, int]:
