@@ -49,18 +49,25 @@ jobs:
       contents: read
       pull-requests: write
 
+    env:
+      INPUT_SUBMODULE: ${{ github.event.inputs.submodule || 'all' }}
+
     steps:
       - name: Checkout ROCm/TheRock
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Bump automation pushes from temporary clones authenticated with GitHub App tokens.
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Select scheduled submodule
         id: schedule
         if: github.event_name == 'schedule'
+        env:
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
         run: |
           submodules=()
-          case "${{ github.event.schedule }}" in
+          case "${EVENT_SCHEDULE}" in
             "0 */12 * * *") submodules+=("rocgdb" "mesa-fork") ;;
             "0 7 * * *") submodules+=("rocm-systems" "rocm-libraries") ;;
             "0 16 * * *") submodules+=("rocm-systems") ;;
@@ -96,43 +103,49 @@ jobs:
         run: |
           pip install requests
 
+      # The script authenticates temporary clones and pushes with SYSTEMS_TOKEN or LIBRARIES_TOKEN
+      # from the GitHub App token steps above; it does not use checkout credentials.
       - name: Run scheduled bump automation
         if: github.event_name == 'schedule' && steps.schedule.outputs.submodules != ''
+        env:
+          SCHEDULE_SUBMODULES: ${{ steps.schedule.outputs.submodules }}
+          SYSTEMS_TOKEN: ${{ steps.systems-token.outputs.token }}
+          LIBRARIES_TOKEN: ${{ steps.librarian-token.outputs.token }}
         run: |
-          for submodule in ${{ steps.schedule.outputs.submodules }}; do
+          for submodule in ${SCHEDULE_SUBMODULES}; do
             python3 build_tools/github_actions/bump_automation.py \
               --event_type "schedule" \
               --submodule "${submodule}" \
-              --systems_token "${{ steps.systems-token.outputs.token }}" \
-              --libraries_token "${{ steps.librarian-token.outputs.token }}" \
-              --rocgdb_token "${{ steps.systems-token.outputs.token }}" \
-              --mesa_token "${{ steps.systems-token.outputs.token }}"
+              --systems_token "${SYSTEMS_TOKEN}" \
+              --libraries_token "${LIBRARIES_TOKEN}" \
+              --rocgdb_token "${SYSTEMS_TOKEN}" \
+              --mesa_token "${SYSTEMS_TOKEN}"
           done
 
       # With pin_before/pin_after set, replays the push-event ref/pin update
       # for one submodule without opening a new "Bump <submodule>" PR in
       # TheRock (e.g. to apply a bump_automation.py fix to an already-landed
       # bump). Otherwise runs a normal bump like the scheduled step.
+      # Temporary clones and pushes use SYSTEMS_TOKEN or LIBRARIES_TOKEN from the App token steps.
       - name: Run manually dispatched bump automation
         if: github.event_name == 'workflow_dispatch'
         env:
-          # Free-form operator input: expand as quoted shell variables, never
-          # interpolate into the script text (shell injection).
-          SUBMODULE: ${{ github.event.inputs.submodule || 'all' }}
           PIN_BEFORE: ${{ github.event.inputs.pin_before }}
           PIN_AFTER: ${{ github.event.inputs.pin_after }}
+          SYSTEMS_TOKEN: ${{ steps.systems-token.outputs.token }}
+          LIBRARIES_TOKEN: ${{ steps.librarian-token.outputs.token }}
         run: |
           token_args=(
-            --systems_token "${{ steps.systems-token.outputs.token }}"
-            --libraries_token "${{ steps.librarian-token.outputs.token }}"
-            --rocgdb_token "${{ steps.systems-token.outputs.token }}"
-            --mesa_token "${{ steps.systems-token.outputs.token }}"
+            --systems_token "${SYSTEMS_TOKEN}"
+            --libraries_token "${LIBRARIES_TOKEN}"
+            --rocgdb_token "${SYSTEMS_TOKEN}"
+            --mesa_token "${SYSTEMS_TOKEN}"
           )
 
           if [[ -z "${PIN_BEFORE}" && -z "${PIN_AFTER}" ]]; then
             python3 build_tools/github_actions/bump_automation.py \
               --event_type "schedule" \
-              --submodule "${SUBMODULE}" \
+              --submodule "${INPUT_SUBMODULE}" \
               "${token_args[@]}"
             exit 0
           fi
@@ -144,7 +157,7 @@ jobs:
             echo "::error::pin_before and pin_after must both be full 40-character lowercase commit SHAs (got pin_before='${PIN_BEFORE}' pin_after='${PIN_AFTER}')."
             exit 1
           fi
-          if [[ "${SUBMODULE}" == "all" ]]; then
+          if [[ "${INPUT_SUBMODULE}" == "all" ]]; then
             echo "::error::submodule must name one specific submodule (not 'all') when pin_before/pin_after are set."
             exit 1
           fi
@@ -153,29 +166,36 @@ jobs:
             --event_type "push" \
             --before "${PIN_BEFORE}" \
             --after "${PIN_AFTER}" \
-            --only-submodule "${SUBMODULE}" \
+            --only-submodule "${INPUT_SUBMODULE}" \
             --skip-next-bump \
             "${token_args[@]}"
 
+      # Temporary clones and pushes use SYSTEMS_TOKEN or LIBRARIES_TOKEN from the App token steps.
       - name: Run push automation
         if: github.event_name == 'push'
+        env:
+          SYSTEMS_TOKEN: ${{ steps.systems-token.outputs.token }}
+          LIBRARIES_TOKEN: ${{ steps.librarian-token.outputs.token }}
         run: |
           python3 build_tools/github_actions/bump_automation.py \
             --event_type "push" \
             --before "${{ github.event.before }}" \
             --after "${{ github.sha }}" \
-            --systems_token "${{ steps.systems-token.outputs.token }}" \
-            --libraries_token "${{ steps.librarian-token.outputs.token }}" \
-            --rocgdb_token "${{ steps.systems-token.outputs.token }}" \
-            --mesa_token "${{ steps.systems-token.outputs.token }}"
+            --systems_token "${SYSTEMS_TOKEN}" \
+            --libraries_token "${LIBRARIES_TOKEN}" \
+            --rocgdb_token "${SYSTEMS_TOKEN}" \
+            --mesa_token "${SYSTEMS_TOKEN}"
 
       - name: Post bump breadcrumbs to upstream PRs
         if: github.event_name == 'push'
         continue-on-error: true
+        env:
+          SYSTEMS_TOKEN: ${{ steps.systems-token.outputs.token }}
+          LIBRARIES_TOKEN: ${{ steps.librarian-token.outputs.token }}
         run: |
           python3 build_tools/github_actions/post_bump_breadcrumbs.py \
             --before "${{ github.event.before }}" \
             --after "${{ github.sha }}" \
-            --systems_token "${{ steps.systems-token.outputs.token }}" \
-            --libraries_token "${{ steps.librarian-token.outputs.token }}" \
-            --rocgdb_token "${{ steps.systems-token.outputs.token }}"
+            --systems_token "${SYSTEMS_TOKEN}" \
+            --libraries_token "${LIBRARIES_TOKEN}" \
+            --rocgdb_token "${SYSTEMS_TOKEN}"
