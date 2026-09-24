@@ -1022,7 +1022,7 @@ class HandlePushTest(unittest.TestCase):
         mock_bump.assert_called_once_with("rocm-libraries", "libraries-token")
 
     def test_only_submodule_translates_rocgdb_alias(self):
-        """--only_submodule's CLI-facing "rocgdb"/"mesa-fork" values are not
+        """--only-submodule's CLI-facing "rocgdb"/"mesa-fork" values are not
         SUBMODULE_CONFIG keys (the real paths are nested); handle_push must
         translate through ONLY_SUBMODULE_ALIASES or it KeyErrors indexing
         SUBMODULE_CONFIG[changed]."""
@@ -1052,10 +1052,10 @@ class HandlePushTest(unittest.TestCase):
         )
         mock_tmp.assert_not_called()
 
-    def test_skip_next_bump_does_not_queue_next_bump(self):
+    def test_skip_next_bump_does_not_open_next_bump(self):
         """The manual replay path sets skip_next_bump so it never opens a new
         Bump <submodule> PR in TheRock after updating the downstream pin,
-        unlike a real push event which always queues the next bump."""
+        unlike a real push event which always opens the next bump PR."""
         with patch("bump_automation.get_submodule_sha", return_value="oldsha1234567"):
             with patch("bump_automation.close_stale_prs"):
                 with patch(

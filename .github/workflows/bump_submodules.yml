@@ -18,19 +18,11 @@ on:
           - rocgdb
           - mesa-fork
       pin_before:
-        description: >-
-          Manual pin-bump replay only (leave empty otherwise): a TheRock SHA
-          where `submodule`'s pinned commit differs from pin_after. Required
-          together with pin_after to replay the push-event ref/pin update for
-          `submodule` (e.g. rocm-libraries) without opening a new "Bump
-          <submodule>" submodule PR. `submodule` must be a specific submodule
-          (not "all") when this is set.
+        description: 'Pin-only replay: TheRock SHA before the submodule bump (leave empty for a normal bump)'
         required: false
         default: ''
       pin_after:
-        description: >-
-          Manual pin-bump replay only (leave empty otherwise): the TheRock
-          SHA to pin `submodule`'s CI to. Required together with pin_before.
+        description: 'Pin-only replay: TheRock SHA to pin the submodule CI to'
         required: false
         default: ''
   schedule:
@@ -76,29 +68,6 @@ jobs:
           esac
           echo "submodules=${submodules[*]}" >> "${GITHUB_OUTPUT}"
 
-      # Guards the manual pin-bump replay inputs before any automation runs:
-      # pin_before/pin_after must be supplied together (a partial pair would
-      # otherwise make both the "dispatched bump" and "pin-only replay" steps
-      # below skip silently, doing nothing), and submodule must name one
-      # specific submodule since --only_submodule rejects "all".
-      - name: Validate manual pin replay inputs
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          PIN_BEFORE: ${{ github.event.inputs.pin_before }}
-          PIN_AFTER: ${{ github.event.inputs.pin_after }}
-          PIN_SUBMODULE: ${{ github.event.inputs.submodule }}
-        run: |
-          if [[ -n "${PIN_BEFORE}" || -n "${PIN_AFTER}" ]]; then
-            if [[ -z "${PIN_BEFORE}" || -z "${PIN_AFTER}" ]]; then
-              echo "::error::pin_before and pin_after must both be set together (got pin_before='${PIN_BEFORE}' pin_after='${PIN_AFTER}')."
-              exit 1
-            fi
-            if [[ "${PIN_SUBMODULE}" == "all" ]]; then
-              echo "::error::submodule must name one specific submodule (not 'all') when pin_before/pin_after are set."
-              exit 1
-            fi
-          fi
-
       - name: Setup Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -140,51 +109,53 @@ jobs:
               --mesa_token "${{ steps.systems-token.outputs.token }}"
           done
 
+      # With pin_before/pin_after set, replays the push-event ref/pin update
+      # for one submodule without opening a new "Bump <submodule>" PR in
+      # TheRock (e.g. to apply a bump_automation.py fix to an already-landed
+      # bump). Otherwise runs a normal bump like the scheduled step.
       - name: Run manually dispatched bump automation
-        if: >-
-          github.event_name == 'workflow_dispatch' &&
-          github.event.inputs.pin_before == '' &&
-          github.event.inputs.pin_after == ''
-        run: |
-          python3 build_tools/github_actions/bump_automation.py \
-            --event_type "schedule" \
-            --submodule "${{ github.event.inputs.submodule || 'all' }}" \
-            --systems_token "${{ steps.systems-token.outputs.token }}" \
-            --libraries_token "${{ steps.librarian-token.outputs.token }}" \
-            --rocgdb_token "${{ steps.systems-token.outputs.token }}" \
-            --mesa_token "${{ steps.systems-token.outputs.token }}"
-
-      # Manually replays the push-event ref/pin update for one submodule
-      # (operator-supplied pin_before/pin_after) without opening a new "Bump
-      # <submodule>" PR in TheRock. Useful for re-running a bump_automation.py
-      # fix against an already-landed submodule bump instead of waiting for
-      # the next real one.
-      - name: Run manual pin-only bump automation
-        if: >-
-          github.event_name == 'workflow_dispatch' &&
-          github.event.inputs.pin_before != '' &&
-          github.event.inputs.pin_after != ''
+        if: github.event_name == 'workflow_dispatch'
         env:
-          # workflow_dispatch string inputs are arbitrary operator-supplied
-          # text, not a fixed choice list, so they must be passed through
-          # env and expanded as quoted shell variables below rather than
-          # interpolated directly into the script text: a value containing a
-          # quote or command substitution could otherwise break out of its
-          # argument and run commands in a job holding App-derived tokens.
+          # Free-form operator input: expand as quoted shell variables, never
+          # interpolate into the script text (shell injection).
+          SUBMODULE: ${{ github.event.inputs.submodule || 'all' }}
           PIN_BEFORE: ${{ github.event.inputs.pin_before }}
           PIN_AFTER: ${{ github.event.inputs.pin_after }}
-          PIN_SUBMODULE: ${{ github.event.inputs.submodule }}
         run: |
+          token_args=(
+            --systems_token "${{ steps.systems-token.outputs.token }}"
+            --libraries_token "${{ steps.librarian-token.outputs.token }}"
+            --rocgdb_token "${{ steps.systems-token.outputs.token }}"
+            --mesa_token "${{ steps.systems-token.outputs.token }}"
+          )
+
+          if [[ -z "${PIN_BEFORE}" && -z "${PIN_AFTER}" ]]; then
+            python3 build_tools/github_actions/bump_automation.py \
+              --event_type "schedule" \
+              --submodule "${SUBMODULE}" \
+              "${token_args[@]}"
+            exit 0
+          fi
+
+          # Lowercase only: bump_automation.py matches existing pins with a
+          # lowercase SHA regex, so an uppercase pin would never be updated.
+          sha_re='^[0-9a-f]{40}$'
+          if [[ ! "${PIN_BEFORE}" =~ ${sha_re} || ! "${PIN_AFTER}" =~ ${sha_re} ]]; then
+            echo "::error::pin_before and pin_after must both be full 40-character lowercase commit SHAs (got pin_before='${PIN_BEFORE}' pin_after='${PIN_AFTER}')."
+            exit 1
+          fi
+          if [[ "${SUBMODULE}" == "all" ]]; then
+            echo "::error::submodule must name one specific submodule (not 'all') when pin_before/pin_after are set."
+            exit 1
+          fi
+
           python3 build_tools/github_actions/bump_automation.py \
             --event_type "push" \
             --before "${PIN_BEFORE}" \
             --after "${PIN_AFTER}" \
-            --only_submodule "${PIN_SUBMODULE}" \
-            --skip_next_bump \
-            --systems_token "${{ steps.systems-token.outputs.token }}" \
-            --libraries_token "${{ steps.librarian-token.outputs.token }}" \
-            --rocgdb_token "${{ steps.systems-token.outputs.token }}" \
-            --mesa_token "${{ steps.systems-token.outputs.token }}"
+            --only-submodule "${SUBMODULE}" \
+            --skip-next-bump \
+            "${token_args[@]}"
 
       - name: Run push automation
         if: github.event_name == 'push'

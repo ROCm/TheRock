@@ -107,6 +107,13 @@ SUBMODULE_CONFIG = {
     },
 }
 
+# Maps the short --only-submodule CLI values that aren't SUBMODULE_CONFIG keys
+# (their real paths are nested) to their SUBMODULE_CONFIG key.
+ONLY_SUBMODULE_ALIASES = {
+    "rocgdb": "debug-tools/rocgdb/source",
+    "mesa-fork": "third-party/sysdeps/common/mesa-fork",
+}
+
 
 def _clone_url(repo: str, token: str) -> str:
     return f"https://x-access-token:{token}@github.com/{repo}.git"
@@ -702,17 +709,6 @@ def create_therock_bump(submodule: str, token: str) -> None:
         os.chdir(original_cwd)
 
 
-# Maps the short --only_submodule CLI value to its SUBMODULE_CONFIG key.
-# "rocm-systems"/"rocm-libraries" already are the canonical keys, but
-# "rocgdb" and "mesa-fork" are not (their real paths are nested under the
-# submodule tree), so handle_push must translate before indexing
-# SUBMODULE_CONFIG or it KeyErrors.
-ONLY_SUBMODULE_ALIASES = {
-    "rocgdb": "debug-tools/rocgdb/source",
-    "mesa-fork": "third-party/sysdeps/common/mesa-fork",
-}
-
-
 def handle_schedule(tokens: dict[str, str], submodule: str = "all") -> None:
     """Create bump PRs for the specified submodule(s)."""
     if submodule in ("all", "rocm-systems"):
@@ -737,7 +733,7 @@ def handle_push(
     `only_submodule` and `skip_next_bump` exist for the manual
     `workflow_dispatch` replay path in bump_submodules.yml (operator-supplied
     `pin_before`/`pin_after`), which re-runs the ref/pin-update half of this
-    function for one specific submodule without also queuing a new "Bump
+    function for one specific submodule without also opening a new "Bump
     <submodule>" PR in TheRock. Real push events never set either.
     """
     changed = ONLY_SUBMODULE_ALIASES.get(only_submodule, only_submodule)
@@ -842,7 +838,7 @@ def handle_push(
     os.chdir(original_cwd)
 
     if skip_next_bump:
-        print(f"[INFO] skip_next_bump set, not queuing a new Bump {changed} PR")
+        print(f"[INFO] skip_next_bump set, not opening a new Bump {changed} PR")
         return
 
     # Immediately queue the next bump PR so the cycle continues without
@@ -865,7 +861,7 @@ def main() -> None:
     parser.add_argument("--before")
     parser.add_argument("--after")
     parser.add_argument(
-        "--only_submodule",
+        "--only-submodule",
         default=None,
         choices=["rocm-systems", "rocm-libraries", "rocgdb", "mesa-fork"],
         help=(
@@ -877,12 +873,12 @@ def main() -> None:
         ),
     )
     parser.add_argument(
-        "--skip_next_bump",
+        "--skip-next-bump",
         action="store_true",
         help=(
-            "Manual workflow_dispatch replay only: skip queuing a new "
+            "Manual workflow_dispatch replay only: don't open a new "
             "Bump <submodule> PR in TheRock after updating the downstream "
-            "ref/pins. Real push events always queue the next bump."
+            "ref/pins. Real push events always open the next bump PR."
         ),
     )
     parser.add_argument("--systems_token", required=True)
