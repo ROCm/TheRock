@@ -271,13 +271,13 @@ test_matrix = {
             "linux": 6,
             "windows": 6,
         },
-        # "exclude_family": {
-        #     "linux": [
-        #         # FAILURE (rocblas-test_quick_suite crash/no gtest output, cannot filter individual tests)
-        #         # https://github.com/ROCm/TheRock/actions/runs/35820932302/job/107052684531
-        #         "gfx125X-dcgpu",
-        #     ],
-        # },
+        "exclude_family": {
+            "linux": [
+                # KNOWN FAILURE (rocblas-test_quick_suite crash/no gtest output, cannot filter individual tests)
+                # https://github.com/ROCm/TheRock/actions/runs/35820932302/job/107052684531
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "rocroller": {
         "job_name": "rocroller",
@@ -812,6 +812,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # PASSING on gfx125X-dcgpu
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # hipDNN integration tests (unit tests for the integration test harness)
     "hipdnn-integration-tests": {
@@ -824,11 +830,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        # "exclude_family": {
-        #     # CRITICAL FAILURE on gfx125X-dcgpu: GPU MES hang during test execution
-        #     # https://github.com/ROCm/TheRock/actions/runs/35937839943/job/107438940874
-        #     "linux": ["gfx125X-dcgpu"],
-        # },
+        "exclude_family": {
+            # CRITICAL FAILURE on gfx125X-dcgpu: GPU MES hang during test execution
+            # https://github.com/ROCm/TheRock/actions/runs/35937839943/job/107438940874
+            # https://github.com/ROCm/TheRock/actions/runs/36050392815/job/107804274614
+            "linux": ["gfx125X-dcgpu"],
+        },
     },
     # hipDNN samples tests
     "hipdnn-samples": {
@@ -928,11 +935,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        # "exclude_family": {
-        #     # CRITICAL FAILURE on gfx125X-dcgpu: GPU hang on bicgstab/parameterized_bicgstab.bicgstab_float/1
-        #     # https://github.com/ROCm/TheRock/actions/runs/35944362977/job/107459031710
-        #     "linux": ["gfx125X-dcgpu"],
-        # },
+        "exclude_family": {
+            "linux": [
+                # PASSING on gfx125X-dcgpu
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # profiler tests
     "rocprofiler-compute": {
@@ -1043,13 +1051,13 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        # "exclude_family": {
-        #     "linux": [
-        #         # FAILURE (hipErrorNoBinaryForGpu/hsa-hotswap errors - fundamental gfx1250 arch issue)
-        #         # https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861504
-        #         "gfx125X-dcgpu",
-        #     ],
-        # },
+        "exclude_family": {
+            "linux": [
+                # KNOWN FAILURE (hipErrorNoBinaryForGpu/hsa-hotswap errors - fundamental gfx1250 arch issue)
+                # https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861504
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # hipthreads example apps (build + run consumer samples against the artifact).
     "hipthreads_examples": {
@@ -1064,13 +1072,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        # "exclude_family": {
-        #     "linux": [
-        #         # FAILURE (hipErrorNoBinaryForGpu/hsa-hotswap errors - fundamental gfx1250 arch issue)
-        #         # https://github.com/ROCm/TheRock/actions/runs/35820932302/job/107052684535
-        #         "gfx125X-dcgpu",
-        #     ],
-        # },
+        "exclude_family": {
+            "linux": [
+                # PASSING on gfx125X-dcgpu
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "rocdecode": {
         "job_name": "rocdecode",
@@ -1120,6 +1127,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+        "exclude_family": {
+            "linux": [
+                # PASSING on gfx125X-dcgpu
+                "gfx125X-dcgpu",
+            ],
         },
     },
     # rocrtst tests
