@@ -410,13 +410,6 @@ test_matrix = {
             "linux": 3,
             "windows": 2,
         },
-        # "exclude_family": {
-        #     "linux": [
-        #         # CRITICAL FAILURE (GPU MES hang): POTF2.strided_batched__double_complex causes GPU hang
-        #         # https://github.com/ROCm/TheRock/actions/runs/35924956371/job/107397931590
-        #         "gfx125X-dcgpu",
-        #     ],
-        # },
     },
     # PRIM tests
     "rocprim": {
@@ -429,14 +422,6 @@ test_matrix = {
             "linux": 2,
             "windows": 2,
         },
-        # "exclude_family": {
-        #     "linux": [
-        #         # CRITICAL FAILURE (GPU MES hang): RocprimDeviceReduceByKey.LargeSegmentCountReduceByKeyDeterministic
-        #         # causes GPU hang, amdgpu MES failed to respond to msg=REMOVE_QUEUE
-        #         # https://github.com/ROCm/TheRock/actions/runs/35914840519/job/107363782145
-        #         "gfx125X-dcgpu",
-        #     ],
-        # },
     },
     "hipcub": {
         "job_name": "hipcub",
@@ -637,11 +622,6 @@ test_matrix = {
             "linux": 2,
             "windows": 2,
         },
-        # "exclude_family": {
-        #     # CRITICAL FAILURE on gfx125X-dcgpu: GPU MES hang on sbrc_3D/accuracy_test.vs_fftw/real_forward_len_256_128_64_double_op
-        #     # https://github.com/ROCm/TheRock/actions/runs/35956605014/job/107496297188
-        #     "linux": ["gfx125X-dcgpu"],
-        # },
     },
     "hipfft": {
         "job_name": "hipfft",
@@ -653,11 +633,6 @@ test_matrix = {
             "linux": 2,
             "windows": 2,
         },
-        # "exclude_family": {
-        #     # CRITICAL FAILURE on gfx125X-dcgpu: GPU MES hang on pow2_1D_half/accuracy_test.vs_fftw/real_forward_len_65536_half_op_batch_1_istride_1_R_ostride_1_HI_idist_65536_odist_32769_ioffset_0_0_ooffset_0_0
-        #     # https://github.com/ROCm/TheRock/actions/runs/35952546851/job/107484147512
-        #     "linux": ["gfx125X-dcgpu"],
-        # },
     },
     # MIOpen tests
     "miopen": {
@@ -812,12 +787,6 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
-        },
-        "exclude_family": {
-            "linux": [
-                # PASSING on gfx125X-dcgpu
-                "gfx125X-dcgpu",
-            ],
         },
     },
     # hipDNN integration tests (unit tests for the integration test harness)
@@ -1122,12 +1091,6 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
-        },
-        "exclude_family": {
-            "linux": [
-                # PASSING on gfx125X-dcgpu
-                "gfx125X-dcgpu",
-            ],
         },
     },
     # rocrtst tests
