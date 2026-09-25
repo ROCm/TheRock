@@ -129,7 +129,7 @@ set(THEROCK_COMGR_DLL_NAME "" CACHE STRING "Override the Comgr DLL name for the 
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
 option(THEROCK_ASAN_COMPACT
-  "Apply compact ASAN flags (outline instrumentation, -Oz, compressed line tables, offload compress, GC sections, LTO)"
+  "Apply compact ASAN flags (outline instrumentation, -Oz, compressed line tables, offload compress, GC sections, LTO). Requires a fresh build directory; do not toggle in an existing tree."
   OFF)
 
 # Options to control the concurrency for building LLVM.

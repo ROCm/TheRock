@@ -97,18 +97,20 @@ function(therock_sanitizer_configure
 
     # Compact ASAN: shrink host+device objects. Injected here (not via
     # super-project CMAKE_CXX_FLAGS) so gcc sysdeps never see clang/HIP-only
-    # flags like --offload-compress.
+    # flags like --offload-compress which is HIP-only
     if(THEROCK_ASAN_COMPACT AND (_sanitizer STREQUAL "ASAN" OR _sanitizer STREQUAL "HOST_ASAN"))
       # -Oz must replace the default Release -O3 (FLAGS_<CONFIG> is appended
       # after FLAGS_INIT). -Wl,--gc-sections is a link flag only.
       string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -fsanitize-address-outline-instrumentation -gz -gline-tables-only -fdata-sections -ffunction-sections -flto\")\n")
-      string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -fsanitize-address-outline-instrumentation -gz -gline-tables-only --offload-compress -fdata-sections -ffunction-sections -flto\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -fsanitize-address-outline-instrumentation -gz -gline-tables-only -fdata-sections -ffunction-sections -flto\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_HIP_FLAGS_INIT \" --offload-compress\")\n")
+      string(APPEND _stanza "add_compile_options($<$<COMPILE_LANGUAGE:HIP>:--offload-compress>)\n")
       string(APPEND _stanza "set(CMAKE_C_FLAGS_RELEASE \"-Oz -DNDEBUG\" CACHE STRING \"\" FORCE)\n")
       string(APPEND _stanza "set(CMAKE_CXX_FLAGS_RELEASE \"-Oz -DNDEBUG\" CACHE STRING \"\" FORCE)\n")
       string(APPEND _stanza "string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT \" -flto -Wl,--gc-sections\")\n")
       string(APPEND _stanza "string(APPEND CMAKE_SHARED_LINKER_FLAGS_INIT \" -flto -Wl,--gc-sections\")\n")
       string(APPEND _stanza "string(APPEND CMAKE_MODULE_LINKER_FLAGS_INIT \" -flto -Wl,--gc-sections\")\n")
-      string(APPEND _stanza "message(STATUS \"ASAN compact flags enabled\")\n")
+      string(APPEND _stanza "message(STATUS \"ASAN compact flags enabled (fresh build directory required; do not toggle THEROCK_ASAN_COMPACT in place)\")\n")
     endif()
 
     # Action at a distance: Signal that the sub-project should extend its build and install
