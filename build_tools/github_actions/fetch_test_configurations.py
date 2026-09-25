@@ -508,6 +508,13 @@ test_matrix = {
             "linux": 3,
             "windows": 3,
         },
+        "exclude_family": {
+            "linux": [
+                # CRITICAL FAILURE (hang): test causes hang during execution
+                # https://github.com/ROCm/TheRock/actions/runs/36174684654/job/108202860306
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "rocsparse": {
         "job_name": "rocsparse",
