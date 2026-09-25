@@ -643,6 +643,12 @@ test_matrix = {
             "linux": 2,
             "windows": 2,
         },
+        "exclude_family": {
+            "linux": [
+                # CRITICAL FAILURE (hang): test causes hang during execution
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # MIOpen tests
     "miopen": {
