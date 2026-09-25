@@ -26,6 +26,7 @@ from pathlib import PurePosixPath
 from typing import Dict, FrozenSet, List, Optional, Sequence, Set, Tuple
 
 from _therock_utils.build_topology import BuildTopology, SourceSet
+from github_actions.configure_ci_path_filters import is_path_skippable
 
 
 @dataclass(frozen=True)
@@ -122,6 +123,18 @@ class StageImpactAnalyzer:
             for item in changed_inputs
             if item and item.strip()
         )
+
+        # Paths the CI-skip filter already declares inert cannot affect a build
+        # stage, so drop them before analysis: otherwise they either trip a
+        # conservative prefix (build_tools/tests/ is under "build_tools/") or
+        # count as unmapped inputs, and either way force a full rebuild.
+        # Only applied while real work remains -- an all-inert change never
+        # reaches stage analysis, since CI is skipped outright.
+        considered_inputs = tuple(
+            item for item in normalized_inputs if not is_path_skippable(item)
+        )
+        if considered_inputs:
+            normalized_inputs = considered_inputs
 
         reasons: List[str] = []
         unmatched_inputs: List[str] = []

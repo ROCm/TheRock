@@ -23,7 +23,6 @@ import subprocess
 import sys
 from typing import Iterable, Optional
 
-
 _FULL_GIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
@@ -150,6 +149,15 @@ def get_git_submodule_paths(repo_root: Optional[str] = None) -> Optional[Iterabl
             file=sys.stderr,
         )
         return []
+
+
+def is_path_skippable(path: str) -> bool:
+    """Checks if a path is declared unable to affect CI build/test workflows.
+
+    Shared with stage-impact analysis so both consumers agree on which paths
+    are inert.
+    """
+    return _is_path_skippable(path)
 
 
 def is_ci_run_required(paths: Optional[Iterable[str]]) -> bool:
