@@ -102,10 +102,6 @@ jobs:
       AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
       ARTIFACT_GROUP: ${{ inputs.artifact_group }}
       BUILD_VARIANT: ${{ inputs.build_variant }}
-      # Benchmark results DB endpoints. Only needed for nightly benchmark
-      # submission; PR/push runs fail retrieval gracefully and skip submission.
-      BENCHMARK_DB_URL: ${{ secrets.BENCHMARK_DB_URL }}
-      BENCHMARK_DB_FALLBACK_URL: ${{ secrets.BENCHMARK_DB_FALLBACK_URL }}
     steps:
       - name: "Fetch 'build_tools' from repository"
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

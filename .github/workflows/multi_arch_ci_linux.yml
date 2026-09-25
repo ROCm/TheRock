@@ -161,7 +161,7 @@ jobs:
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
       test_runs_on: ${{ matrix.family_info.test-runs-on }}
-      test_type: ${{ inputs.test_type }}
+      test_type: ${{ matrix.family_info.test_type || inputs.test_type }}
       # Per-family test_labels override global test_labels when specified
       # Convert array to JSON string for workflow input compatibility
       test_labels: ${{ matrix.family_info.test_labels_for_family && toJSON(matrix.family_info.test_labels_for_family) || inputs.test_labels }}
