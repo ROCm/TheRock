@@ -534,8 +534,13 @@ jobs:
       - name: Write PyTorch package version outputs
         id: pytorch-versions
         run: |
+          torch_only_flag=()
+          if [[ "${ASAN}" == "true" ]]; then
+            torch_only_flag+=(--torch-only)
+          fi
           python build_tools/github_actions/write_torch_versions.py \
-            --dist-dir "${PACKAGE_DIST_DIR}"
+            --dist-dir "${PACKAGE_DIST_DIR}" \
+            "${torch_only_flag[@]}"
 
       - name: Configure AWS Credentials
         if: ${{ !inputs.asan }}
