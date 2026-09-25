@@ -79,6 +79,31 @@ class AsanRuntimeDiscoveryTest(unittest.TestCase):
                 "lib/llvm/lib/clang/23/lib/linux",
             )
 
+    def test_finds_per_target_runtime_directory(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            artifact_dir = Path(temp_dir)
+            artifact = artifact_dir / "base_lib_generic"
+            stage = artifact / "base" / "aux-overlay" / "stage"
+            runtime = (
+                stage
+                / "lib"
+                / "llvm"
+                / "lib"
+                / "clang"
+                / "23"
+                / "lib"
+                / "x86_64-unknown-linux-gnu"
+                / "libclang_rt.asan.so"
+            )
+            runtime.parent.mkdir(parents=True)
+            runtime.touch()
+            (artifact / "artifact_manifest.txt").write_text("base/aux-overlay/stage\n")
+
+            self.assertEqual(
+                find_asan_runtime_rpath(ArtifactCatalog(artifact_dir)),
+                "lib/llvm/lib/clang/23/lib/x86_64-unknown-linux-gnu",
+            )
+
     def test_missing_runtime_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             with self.assertRaisesRegex(RuntimeError, "no shared Clang ASAN"):
@@ -250,6 +275,43 @@ class AsanRpathValidationTest(unittest.TestCase):
                         runtime_rpath=runtime_rpath,
                         require_instrumented=True,
                     )
+
+    def test_validator_accepts_per_target_runtime(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            core_dir = root / "_rocm_sdk_core"
+            runtime_rpath = "lib/llvm/lib/clang/23/lib/x86_64-unknown-linux-gnu"
+            runtime_dir = core_dir / runtime_rpath
+            runtime_dir.mkdir(parents=True)
+            (runtime_dir / "libclang_rt.asan.so").touch()
+
+            binary = root / "_rocm_sdk_libraries" / "lib" / "libfoo.so"
+            binary.parent.mkdir(parents=True)
+            binary.touch()
+            package = types.SimpleNamespace(
+                platform_dir=root / "_rocm_sdk_libraries",
+                files=types.SimpleNamespace(
+                    materialized_relpaths={"lib/libfoo.so": (None, binary)}
+                ),
+            )
+            core = types.SimpleNamespace(platform_dir=core_dir)
+
+            with mock.patch(
+                "build_python_packages._elf_dynamic_info",
+                return_value=(
+                    ["libclang_rt.asan.so"],
+                    [
+                        "$ORIGIN/../../_rocm_sdk_core/"
+                        "lib/llvm/lib/clang/23/lib/x86_64-unknown-linux-gnu"
+                    ],
+                ),
+            ):
+                validate_asan_runtime_resolution(
+                    core=core,
+                    packages=[package],
+                    runtime_rpath=runtime_rpath,
+                    require_instrumented=True,
+                )
 
 
 if __name__ == "__main__":

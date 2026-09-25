@@ -130,14 +130,50 @@ def resolve_package_version(args: argparse.Namespace, manifest: dict) -> str:
     return resolved
 
 
+def _is_shared_asan_runtime(relpath: PurePosixPath) -> bool:
+    """Return True for the shared Clang ASAN runtime in either LLVM layout.
+
+    ``LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON`` (TheRock after #8077) installs
+    ``lib/llvm/lib/clang/<ver>/lib/<triple>/libclang_rt.asan.so``.
+    ``OFF`` installs ``lib/llvm/lib/clang/<ver>/lib/linux/libclang_rt.asan-<arch>.so``.
+    """
+    name = relpath.name
+    if name == "libclang_rt.asan.so":
+        return bool(relpath.match("lib/llvm/lib/clang/*/lib/*/libclang_rt.asan.so"))
+    if name.startswith("libclang_rt.asan-") and name.endswith(".so"):
+        return bool(
+            relpath.match("lib/llvm/lib/clang/*/lib/linux/libclang_rt.asan-*.so")
+        )
+    return False
+
+
+def _is_asan_runtime_needed(needed: list[str]) -> bool:
+    """Return True if an ELF DT_NEEDED list links the shared ASAN runtime."""
+    return any(
+        name == "libclang_rt.asan.so" or name.startswith("libclang_rt.asan-")
+        for name in needed
+    )
+
+
+def _packaged_asan_runtimes(runtime_dir: Path) -> list[Path]:
+    """Return shared ASAN runtime files packaged in *runtime_dir*."""
+    return sorted(
+        path
+        for path in runtime_dir.iterdir()
+        if path.is_file()
+        and (
+            path.name == "libclang_rt.asan.so"
+            or (path.name.startswith("libclang_rt.asan-") and path.name.endswith(".so"))
+        )
+    )
+
+
 def find_asan_runtime_rpath(artifacts: ArtifactCatalog) -> str:
     """Find the Clang ASAN runtime directory in staged artifacts."""
     runtime_dirs: set[str] = set()
     for relpath, entry in artifacts.pm.matches():
         relpath = PurePosixPath(relpath)
-        if entry.is_file() and relpath.match(
-            "lib/llvm/lib/clang/*/lib/linux/libclang_rt.asan-*.so"
-        ):
+        if entry.is_file() and _is_shared_asan_runtime(relpath):
             runtime_dirs.add(relpath.parent.as_posix())
 
     if not runtime_dirs:
@@ -230,7 +266,7 @@ def validate_asan_runtime_resolution(
 ) -> None:
     """Validate that packaged ASAN-linked ELFs resolve the core runtime."""
     runtime_dir = core.platform_dir / runtime_rpath
-    runtimes = sorted(runtime_dir.glob("libclang_rt.asan-*.so"))
+    runtimes = _packaged_asan_runtimes(runtime_dir)
     if not runtimes:
         raise RuntimeError(
             f"ASAN runtime was not packaged in rocm-sdk-core at {runtime_dir}"
@@ -246,7 +282,7 @@ def validate_asan_runtime_resolution(
             if dynamic_info is None:
                 continue
             needed, rpaths = dynamic_info
-            if not any(name.startswith("libclang_rt.asan-") for name in needed):
+            if not _is_asan_runtime_needed(needed):
                 continue
             instrumented_count += 1
             if not _rpath_resolves_directory(

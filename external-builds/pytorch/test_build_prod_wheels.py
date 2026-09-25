@@ -212,6 +212,36 @@ class AsanEnvironmentTest(unittest.TestCase):
                 "-DCMAKE_CXX_SCAN_FOR_MODULES=OFF",
             )
 
+    def test_asan_env_resolves_per_target_runtime(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            self._make_sdk(root)
+            runtime = (
+                root
+                / "lib"
+                / "llvm"
+                / "lib"
+                / "clang"
+                / "23"
+                / "lib"
+                / "x86_64-unknown-linux-gnu"
+                / "libclang_rt.asan.so"
+            )
+            runtime.parent.mkdir(parents=True, exist_ok=True)
+            runtime.touch()
+
+            def fake_capture(args, cwd):
+                name = args[-1].split("=", 1)[1]
+                if name == "libclang_rt.asan.so":
+                    return str(runtime)
+                return name
+
+            with mock.patch.object(bpw, "capture", side_effect=fake_capture):
+                env = bpw._setup_asan_build_env(root, "gfx942:xnack+")
+
+            self.assertEqual(env["_THEROCK_ASAN_RUNTIME_PATH"], str(runtime))
+            self.assertTrue(env["LD_LIBRARY_PATH"].startswith(str(runtime.parent)))
+
     def test_asan_cmake_args_preserve_caller_arguments(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
