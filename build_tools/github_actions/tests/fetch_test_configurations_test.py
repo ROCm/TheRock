@@ -22,6 +22,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         # Save sys.argv so tests don't leak state
         self._orig_argv = sys.argv.copy()
         # Save module-level attributes that tests may change
+        self._orig_functional_matrix = fetch_test_configurations.functional_matrix
+        self._orig_benchmark_matrix = fetch_test_configurations.benchmark_matrix
         self._orig_get_all_families = (
             fetch_test_configurations.get_all_families_for_trigger_types
         )
@@ -50,6 +52,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ.update(self._orig_env)
         sys.argv = self._orig_argv
         # Restore module-level attributes
+        fetch_test_configurations.functional_matrix = self._orig_functional_matrix
+        fetch_test_configurations.benchmark_matrix = self._orig_benchmark_matrix
         fetch_test_configurations.get_all_families_for_trigger_types = (
             self._orig_get_all_families
         )
@@ -202,60 +206,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(tensilelite["timeout_minutes"], 15)
 
     # -----------------------
-    # tensilelite-common (Tensile/Tests/common on real hardware)
-    # -----------------------
-
-    def test_tensilelite_common_runs_only_on_opted_in_families(self):
-        """Families without skip-gfxNNNN coverage would run every config, so the job is opt-in."""
-        os.environ["PROJECTS_TO_TEST"] = "tensilelite-common"
-        expected = {
-            "gfx90a": True,
-            "gfx94X-dcgpu": True,
-            "gfx950-dcgpu": True,
-            "gfx120X-all": True,
-            "gfx110X-all": False,
-            "gfx1151": False,
-            "gfx1150": False,
-        }
-        for family, selected in expected.items():
-            with self.subTest(family=family):
-                os.environ["AMDGPU_FAMILIES"] = family
-                self.assertEqual(
-                    "tensilelite-common" in self._selected_names(), selected
-                )
-
-    def test_tensilelite_common_pins_hw_common_category(self):
-        """The job must run hw-common at every tier, without the tensilelite ctest stage."""
-        os.environ["PROJECTS_TO_TEST"] = "tensilelite-common"
-        for test_type in ("quick", "standard", "comprehensive", "full"):
-            with self.subTest(test_type=test_type):
-                os.environ["TEST_TYPE"] = test_type
-                fetch_test_configurations.run()
-                job = next(
-                    j
-                    for j in self._get_components()
-                    if j["job_name"] == "tensilelite-common"
-                )
-                self.assertTrue(
-                    job["test_script"].startswith("TEST_CATEGORY=hw-common ")
-                )
-                self.assertIn("pytest_runner.py", job["test_script"])
-                self.assertNotIn(
-                    "TEST_COMPONENT=hipblaslt-tensilelite", job["test_script"]
-                )
-                self.assertEqual(job["timeout_minutes"], 180)
-
-    def test_tensilelite_label_selects_unit_and_common_jobs(self):
-        os.environ["TEST_LABELS"] = json.dumps(["test:tensilelite"])
-        names = self._selected_names()
-        self.assertIn("tensilelite", names)
-        self.assertIn("tensilelite-common", names)
-
-    def test_tensilelite_common_label_selects_only_common_job(self):
-        os.environ["TEST_LABELS"] = json.dumps(["test:tensilelite-common"])
-        self.assertEqual(self._selected_names(), {"tensilelite-common"})
-
-    # -----------------------
     # Exclude-family logic
     # -----------------------
 
@@ -360,37 +310,76 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertNotIn("rocgdb-corefile", self._selected_names())
 
     # -----------------------
-    # test_types tier gating
+    # Functional test merging via run_extended_tests
     # -----------------------
 
-    def test_test_types_excludes_disallowed_tier(self):
-        # A component that opts out of the quick tier is not scheduled on quick.
-        os.environ["TEST_TYPE"] = "quick"
-        self._inject_job("tt-gated", test_types=["standard", "comprehensive", "full"])
-        self.assertNotIn("tt-gated", self._selected_names())
+    def _setup_functional_test(self):
+        """Common setup for functional tests: fake matrix + isolate from other components."""
+        os.environ["PROJECTS_TO_TEST"] = "func1"
+        fetch_test_configurations.functional_matrix = {
+            "func1": {
+                "job_name": "func1",
+                "platform": ["linux"],
+                "total_shards": 1,
+            }
+        }
 
-    def test_test_types_includes_allowed_tier(self):
-        # The same component runs on a tier that is in its list.
-        os.environ["TEST_TYPE"] = "standard"
-        self._inject_job("tt-gated", test_types=["standard", "comprehensive", "full"])
-        self.assertIn("tt-gated", self._selected_names())
+    def test_functional_merged_when_enabled(self):
+        os.environ["RUN_EXTENDED_TESTS"] = "true"
+        self._setup_functional_test()
 
-    def test_test_types_omitted_runs_on_all_tiers(self):
-        # Without "test_types", a component runs on every tier, including quick.
-        os.environ["TEST_TYPE"] = "quick"
-        self._inject_job("tt-ungated")
-        self.assertIn("tt-ungated", self._selected_names())
+        fetch_test_configurations.run()
+        components = self._get_components()
 
-    def test_miopen_dbsync_declares_non_quick_tiers(self):
-        # miopen-dbsync is a slow specialist check gated to standard/comprehensive/full.
-        config = fetch_test_configurations.test_matrix["miopen-dbsync"]
-        self.assertEqual(config["test_types"], ["standard", "comprehensive", "full"])
+        self.assertEqual(len(components), 1)
+        self.assertEqual(components[0]["job_name"], "func1")
 
-    def test_miopen_dbsync_excluded_on_quick(self):
-        # Integration: the real entry is not scheduled on the quick tier.
-        os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync"
-        os.environ["TEST_TYPE"] = "quick"
-        self.assertNotIn("miopen-dbsync", self._selected_names())
+    def test_functional_not_merged_when_disabled(self):
+        os.environ["RUN_EXTENDED_TESTS"] = "false"
+        self._setup_functional_test()
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertNotIn("func1", names)
+
+    # -----------------------
+    # Benchmark merging via run_extended_tests
+    # -----------------------
+
+    def _setup_benchmark_test(self):
+        """Common setup for benchmark tests: fake matrix + isolate from other components."""
+        os.environ["PROJECTS_TO_TEST"] = "bench1"
+        fetch_test_configurations.benchmark_matrix = {
+            "bench1": {
+                "job_name": "bench1",
+                "platform": ["linux"],
+                "total_shards_dict": {"linux": 1},
+            }
+        }
+
+    def test_benchmarks_merged_when_extended_tests_enabled(self):
+        os.environ["RUN_EXTENDED_TESTS"] = "true"
+        self._setup_benchmark_test()
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        self.assertEqual(len(components), 1)
+        self.assertEqual(components[0]["job_name"], "bench1")
+        self.assertTrue(components[0]["is_benchmark"])
+        self.assertEqual(components[0]["test_type"], "full")
+
+    def test_benchmarks_not_merged_when_extended_tests_disabled(self):
+        os.environ["RUN_EXTENDED_TESTS"] = "false"
+        self._setup_benchmark_test()
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertNotIn("bench1", names)
 
     # -----------------------
     # Multi-GPU logic (RCCL)
@@ -482,6 +471,86 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertNotIn("rccl", names)
 
+    def test_fft_multi_gpu_jobs_included_for_full(self):
+        """hipfft/rocfft multi-GPU split jobs are scheduled on multi-GPU runners
+        for the full tier when the family supports it."""
+
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("hipfft-multi-gpu", names)
+        self.assertIn("rocfft-multi-gpu", names)
+        for name in ("hipfft-multi-gpu", "rocfft-multi-gpu"):
+            job = next(j for j in components if j["job_name"] == name)
+            self.assertEqual(job["multi_gpu_runner"], "linux-mi300-mgpu")
+
+    def test_fft_multi_gpu_selected_via_base_project_label(self):
+        """`test:hipfft`/`test:rocfft` labels select the multi-GPU variants too,
+        since they declare base_project even though they have no label of their own."""
+        os.environ["TEST_LABELS"] = json.dumps(["test:hipfft", "test:rocfft"])
+
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("hipfft-multi-gpu", names)
+        self.assertIn("rocfft-multi-gpu", names)
+
+    def test_fft_multi_gpu_selected_via_projects_to_test(self):
+        """PROJECTS_TO_TEST=hipfft selects the hipfft multi-GPU variant too."""
+        os.environ["PROJECTS_TO_TEST"] = "hipfft"
+
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("hipfft", names)
+        self.assertIn("hipfft-multi-gpu", names)
+        self.assertNotIn("rocfft-multi-gpu", names)
+
+    def test_fft_multi_gpu_jobs_excluded_for_quick(self):
+        """The FFT multi-GPU split jobs only run for comprehensive/full tiers, so
+        they are skipped for quick (but the single-GPU fft jobs still run)."""
+        os.environ["TEST_TYPE"] = "quick"
+
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertNotIn("hipfft-multi-gpu", names)
+        self.assertNotIn("rocfft-multi-gpu", names)
+        self.assertIn("hipfft", names)
+        self.assertIn("rocfft", names)
+
     def test_multi_gpu_job_excluded_for_quick_tests(self):
         """Multi-GPU tests are skipped on quick runs (temporary capacity constraint)."""
         os.environ["TEST_TYPE"] = "quick"
@@ -523,24 +592,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     # -----------------------
     # Output contract
     # -----------------------
-
-    def test_additional_requirements_files_are_preserved_in_output(self):
-        requirements_files = [
-            "share/example/requirements.txt",
-            "share/example/requirements-test.txt",
-        ]
-        self._inject_job(
-            "custom-requirements",
-            additional_requirements_files=requirements_files,
-        )
-
-        fetch_test_configurations.run()
-        components = self._get_components()
-
-        self.assertEqual(len(components), 1)
-        self.assertEqual(
-            components[0]["additional_requirements_files"], requirements_files
-        )
 
     def test_windows_hip_tests_emits_pal_and_rocr_entries(self):
         """On Windows, hip-tests runs with both PAL and ROCR backends."""
@@ -815,6 +866,60 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertIn("rocdecode", names)
         self.assertIn("rocjpeg", names)
+
+    # -----------------------
+    # rocprofiler-sdk SPM
+    # -----------------------
+
+    def test_rocprofiler_sdk_spm_pre_pinned_runner_is_not_overwritten(self):
+        """Pre-pinned test_runner must survive family runner selection."""
+        os.environ["PROJECTS_TO_TEST"] = "rocprofiler-sdk-spm"
+        os.environ["BUILD_VARIANT"] = "release"
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx942-prod",
+                        "test-runs-on-labels": [
+                            {"label": "linux-gfx942-weighted", "weight": 1.0},
+                        ],
+                        "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        spm = next(j for j in components if j["job_name"] == "rocprofiler-sdk-spm")
+        self.assertEqual(
+            spm["test_runner"],
+            "linux-gfx942-gpu-rocm-profiler",
+        )
+
+    def test_rocprofiler_sdk_excludes_spm_label_in_script(self):
+        os.environ["PROJECTS_TO_TEST"] = "rocprofiler-sdk"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        sdk = next(j for j in components if j["job_name"] == "rocprofiler-sdk")
+        self.assertIn("--ctest-label-exclude spm", sdk["test_script"])
+
+    def test_rocprofiler_sdk_spm_excluded_outside_include_family(self):
+        os.environ["PROJECTS_TO_TEST"] = "rocprofiler-sdk-spm"
+        os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+        names = {j["job_name"] for j in components}
+
+        self.assertNotIn("rocprofiler-sdk-spm", names)
 
 
 if __name__ == "__main__":

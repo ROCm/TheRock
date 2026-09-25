@@ -1,0 +1,154 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Test Results Payload Schema",
+  "description": "Schema for validating test results payload submitted to the API",
+  "type": "object",
+  "required": [
+    "test_environment",
+    "bm_config",
+    "results"
+  ],
+  "properties": {
+    "test_environment": {
+      "type": "string",
+      "description": "The test environment type (e.g., bare_metal, docker, vm)"
+    },
+    "bm_config": {
+      "type": "object",
+      "description": "Bare metal/system configuration details",
+      "required": [
+        "os_name",
+        "cpu_model_name",
+        "cpu_cores"
+      ],
+      "properties": {
+        "os_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Operating system name"
+        },
+        "cpu_model_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "CPU model name"
+        },
+        "cpu_cores": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of CPU cores"
+        }
+      }
+    },
+    "build_info": {
+      "type": "object",
+      "description": "Build information (optional)"
+    },
+    "deployment_info": {
+      "type": "object",
+      "description": "Deployment information (optional)"
+    },
+    "results": {
+      "type": "array",
+      "description": "Array of test results",
+      "items": {
+        "type": "object",
+        "required": [
+          "test_result",
+          "test_start_time",
+          "test_execution_time",
+          "test_log",
+          "test_metrics",
+          "test_config"
+        ],
+        "properties": {
+          "test_result": {
+            "type": "string",
+            "enum": [
+              "PASS",
+              "FAIL"
+            ],
+            "description": "Overall test result status"
+          },
+          "test_start_time": {
+            "type": "string",
+            "description": "Test start time in ISO format"
+          },
+          "test_execution_time": {
+            "type": "number",
+            "description": "Test execution duration in seconds"
+          },
+          "test_log": {
+            "type": "string",
+            "description": "Test execution log"
+          },
+          "test_metrics": {
+            "type": "array",
+            "description": "Array of test performance metrics",
+            "items": {
+              "type": "object",
+              "properties": {
+                "metric_name": {
+                  "type": "string",
+                  "description": "Metric name"
+                },
+                "score": {
+                  "type": "number",
+                  "description": "Performance score/metric value"
+                },
+                "unit": {
+                  "type": "string",
+                  "description": "Unit of measurement for the score"
+                },
+                "flag": {
+                  "type": "string",
+                  "description": "Flag indicating if higher (H) or lower (L) is better"
+                },
+                "primary": {
+                  "type": "boolean",
+                  "description": "Whether this is the primary metric"
+                }
+              },
+              "required": [
+                "score",
+                "unit",
+                "flag"
+              ]
+            }
+          },
+          "test_config": {
+            "type": "object",
+            "description": "Test configuration details",
+            "required": [
+              "test_name",
+              "sub_test_name",
+              "python_version",
+              "environment_dependencies"
+            ],
+            "properties": {
+              "test_name": {
+                "type": "string",
+                "description": "Test name"
+              },
+              "sub_test_name": {
+                "type": "string",
+                "description": "Sub-test name"
+              },
+              "python_version": {
+                "type": "string",
+                "description": "Python version used"
+              },
+              "environment_dependencies": {
+                "type": "array",
+                "description": "List of environment dependencies",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      }
+    }
+  }
+}
