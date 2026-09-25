@@ -2028,6 +2028,36 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
         )
         self.assertTrue(profiler.files.has("lib/librocprof-sys.so.1"))
 
+    def test_profiler_wheel_has_working_symlink_after_full_pipeline(self):
+        """End-to-end: populate_runtime_files() followed by
+        ensure_profiler_library_symlinks(), matching the call sequence in
+        build_python_packages.py. Neither step alone proves the wheel ends up
+        with a loadable libprofiler-hub.so - the dynamic linker needs the
+        unversioned symlink on disk, not just the SONAME file tracked in
+        profiler.files.
+        """
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "rocprofiler-systems",
+            "lib",
+            "generic",
+            {"lib/libprofiler-hub.so.0": "profiler-hub runtime dependency"},
+        )
+
+        params = self._make_params(artifact_dir)
+        profiler_artifacts = params.filter_artifacts(
+            profiler_artifact_filter,
+            includes=PROFILER_WHEEL_INCLUDES,
+        )
+        profiler = PopulatedDistPackage(params, logical_name="profiler")
+        profiler.populate_runtime_files(profiler_artifacts)
+        ensure_profiler_library_symlinks(profiler)
+
+        link = profiler.platform_dir / "lib" / "libprofiler-hub.so"
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(os.readlink(link), "libprofiler-hub.so.0")
+
 
 class EnsureProfilerLibrarySymlinksTest(unittest.TestCase):
     """Unit tests for ensure_profiler_library_symlinks() in isolation - no
@@ -2079,6 +2109,21 @@ class EnsureProfilerLibrarySymlinksTest(unittest.TestCase):
 
         link = self.lib_dir / "libprofiler-hub.so"
         self.assertEqual(os.readlink(link), "libprofiler-hub.so.99")
+
+    def test_does_not_overwrite_existing_regular_file(self):
+        """The unversioned name may already exist as a real file rather than
+        a symlink (e.g. vendored directly by a dependency's own install
+        rules) - ensure_profiler_library_symlinks() must not replace it with
+        a symlink, since link.exists() is true for regular files too.
+        """
+        (self.lib_dir / "libprofiler-hub.so.0").write_text("fake soname file")
+        (self.lib_dir / "libprofiler-hub.so").write_text("a real, non-symlink file")
+
+        ensure_profiler_library_symlinks(self._fake_profiler())
+
+        link = self.lib_dir / "libprofiler-hub.so"
+        self.assertFalse(link.is_symlink())
+        self.assertEqual(link.read_text(), "a real, non-symlink file")
 
 
 # ---------------------------------------------------------------------------
