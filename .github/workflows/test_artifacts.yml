@@ -62,6 +62,14 @@ on:
           - host-asan
           - host-asan-debug
         default: release
+      ci_config_ref:
+        description: >-
+          Ref of ROCm/therock-ci-config to read runner labels from. Defaults to
+          main. Point this at a branch to try alternative runner pools without
+          overriding test_runs_on per dispatch.
+        required: false
+        default: main
+        type: string
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -113,6 +121,10 @@ on:
         description: "Build variant (e.g., release, asan)."
         type: string
         default: "release"
+      ci_config_ref:
+        description: "Ref of ROCm/therock-ci-config to read runner labels from."
+        type: string
+        default: "main"
       quartz_tracking_id:
         type: string
         default: ""
@@ -162,7 +174,7 @@ jobs:
         with:
           persist-credentials: false
           repository: ROCm/therock-ci-config
-          ref: main
+          ref: ${{ inputs.ci_config_ref || 'main' }}
           path: ci-config
         continue-on-error: true
 
