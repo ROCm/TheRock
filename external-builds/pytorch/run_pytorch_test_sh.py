@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
 import platform
 import shlex
@@ -19,11 +20,26 @@ from pytorch_utils import (
     detect_pytorch_version,
     reconcile_agent_visibility_env,
 )
-from skip_tests.create_skip_tests import get_tests
 
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 PYTEST_TIMEOUT_SECONDS = 900
+
+
+def load_get_tests():
+    """Load PyTorch's skip generator without colliding with sibling packages."""
+    module_path = THIS_SCRIPT_DIR / "skip_tests" / "create_skip_tests.py"
+    spec = importlib.util.spec_from_file_location(
+        "pytorch_create_skip_tests", module_path
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load skip generator from {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.get_tests
+
+
+get_tests = load_get_tests()
 
 # Match generated-stats keys used by PyTorch's test sharding.
 AMDGPU_FAMILY_TO_BUILD_ENV = {
