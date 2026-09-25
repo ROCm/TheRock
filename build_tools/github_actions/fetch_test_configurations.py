@@ -770,6 +770,13 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # CRITICAL FAILURE (MES hang): TestGpuLayernormBwdRefValidation.AcceptsValidParamsNormalizeDimThree5D
+                # causes MES queue hang. Related: ROCM-31227
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # hipDNN install/consumption tests
     "hipdnn_install": {
