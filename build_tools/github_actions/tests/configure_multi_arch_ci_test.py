@@ -2071,12 +2071,14 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         workflow_path = WORKFLOWS_DIR / "multi_arch_ci_linux.yml"
         yaml_fields = self._extract_build_config_fields(workflow_path)
         python_fields = {f.name for f in fields(cm.BuildConfig)}
+        unused_fields = set()
         self.assertEqual(
             yaml_fields,
-            python_fields,
+            python_fields - unused_fields,
             f"BuildConfig fields mismatch with {workflow_path.name}.\n"
             f"  In YAML but not Python: {yaml_fields - python_fields}\n"
-            f"  In Python but not YAML: {python_fields - yaml_fields}",
+            f"  In Python but not YAML: "
+            f"{python_fields - yaml_fields - unused_fields}",
         )
 
     def test_windows_workflow_uses_all_ci_fields(self):
@@ -2090,6 +2092,7 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
             "build_native_linux",
             "build_jax",
             "jax_build_matrix",
+            "test_matrix_by_family",
         }
         self.assertEqual(
             yaml_fields,

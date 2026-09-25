@@ -123,6 +123,42 @@ jobs:
       contents: read
       id-token: write
 
+  # Python package tests are grouped by AMDGPU family. The reusable workflow
+  # expands the Python/container matrix internally for the selected family.
+  test_python_packages_per_family:
+    needs: [build_python_packages]
+    name: Test Windows Python Packages (${{ matrix.family_info.amdgpu_family }})
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        toJSON(
+          fromJSON(inputs.build_config).test_python_packages_matrix
+        ) != '[]'
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
+
+    uses: ./.github/workflows/test_rocm_wheels_matrix.yml
+    secrets: inherit
+    with:
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
+      matrix: >-
+        ${{
+          toJSON(
+            fromJSON(inputs.build_config).test_python_packages_matrix
+          )
+        }}
+      package_find_links_url: >-
+        ${{ needs.build_python_packages.outputs.package_find_links_url }}
+      kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
+      rocm_version: ${{ inputs.rocm_package_version }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref }}
+
   publish_to_release_buckets:
     needs: [build_tarballs, build_python_packages]
     name: Publish to Release Buckets
@@ -225,7 +261,7 @@ jobs:
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [build_artifacts, build_tarballs, build_python_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_release_pytorch_wheels]
+    needs: [build_artifacts, build_tarballs, build_python_packages, publish_to_release_buckets, test_python_packages_per_family, trigger_test_artifacts_per_family, trigger_release_pytorch_wheels]
     name: "Quartz - completed - release Windows"
     runs-on: ubuntu-24.04
     timeout-minutes: 10

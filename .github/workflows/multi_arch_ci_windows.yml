@@ -13,6 +13,12 @@ on:
       BENCHMARK_DB_FALLBACK_URL:
         required: false
     inputs:
+      quartz_tracking_id:
+        description: Quartz tracking ID
+        required: false
+        type: string
+        default: ""
+
       build_config:
         type: string
         description: >-
@@ -191,33 +197,28 @@ jobs:
       contents: read
       id-token: write
 
-  test_python_packages_per_family:
+  test_python_packages:
     needs: [build_python_packages]
-    name: Test Python
-    if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) != '[]' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(inputs.build_config).test_python_packages_matrix }}
-    uses: ./.github/workflows/test_rocm_wheels.yml
-    # Note: not using 'secrets: inherit' here; no secrets are needed.
+    name: Test Python Packages
+    if: ${{ !failure() && !cancelled() && toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) != '[]' }}
+
+    uses: ./.github/workflows/test_rocm_wheels_matrix.yml
+    secrets: inherit
     with:
-      amdgpu_family: ${{ matrix.amdgpu_family }}
-      test_runs_on: ${{ matrix.test_runs_on }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      matrix: >-
+        ${{
+          toJSON(
+            fromJSON(inputs.build_config).test_python_packages_matrix
+          )
+        }}
+
       # TODO: Simplify to just `needs.build_python_packages.outputs.package_find_links_url`
       # once kpack split is always enabled.
       package_find_links_url: >-
-        ${{
-          needs.build_python_packages.outputs.kpack_split == 'true'
-          && needs.build_python_packages.outputs.package_find_links_url
-          || format('{0}/{1}/index.html',
-              needs.build_python_packages.outputs.package_find_links_url,
-              matrix.amdgpu_family)
-        }}
-      python_version: ${{ matrix.python_version }}
+        ${{ needs.build_python_packages.outputs.package_find_links_url }}
+      kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       rocm_version: ${{ inputs.rocm_package_version }}
-      container_image_name: ${{ matrix.container_image_name }}
-      container_image_url: ${{ matrix.container_image_url }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
 

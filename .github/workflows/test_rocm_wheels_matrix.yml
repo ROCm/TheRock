@@ -1,0 +1,132 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Test ROCm Wheels Matrix
+
+on:
+  workflow_call:
+    inputs:
+      quartz_tracking_id:
+        description: Quartz tracking ID
+        required: false
+        type: string
+        default: ""
+
+      matrix:
+        description: JSON ROCm wheel test matrix
+        required: true
+        type: string
+
+      amdgpu_family:
+        description: Optional AMDGPU family filter
+        required: false
+        type: string
+        default: ""
+
+      package_find_links_url:
+        description: Base package index URL
+        required: true
+        type: string
+
+      kpack_split:
+        description: "'true' if the package index is kpack-split"
+        required: true
+        type: string
+
+      rocm_version:
+        description: ROCm version to test
+        required: true
+        type: string
+
+      repository:
+        description: Repository to checkout
+        required: false
+        type: string
+        default: ""
+
+      ref:
+        description: Ref to checkout
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  configure_matrix:
+    name: Configure ROCm wheel matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.filter.outputs.matrix }}
+    steps:
+      - name: Filter matrix
+        id: filter
+        env:
+          INPUT_MATRIX: ${{ inputs.matrix }}
+          AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+
+          rows = json.loads(os.environ["INPUT_MATRIX"])
+          family = os.environ["AMDGPU_FAMILY"]
+
+          if family:
+              rows = [
+                  row
+                  for row in rows
+                  if row["amdgpu_family"] == family
+              ]
+
+          with open(
+              os.environ["GITHUB_OUTPUT"],
+              "a",
+              encoding="utf-8",
+          ) as output:
+              print(f"matrix={json.dumps(rows)}", file=output)
+          PY
+
+  test_rocm_wheels:
+    name: >-
+      Test ROCm wheels |
+      ${{ matrix.amdgpu_family }} |
+      py${{ matrix.python_version }} |
+      ${{ matrix.container_image_name }}
+    needs: [configure_matrix]
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        needs.configure_matrix.outputs.matrix != '[]'
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.configure_matrix.outputs.matrix) }}
+
+    uses: ./.github/workflows/test_rocm_wheels.yml
+    secrets: inherit
+    with:
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      amdgpu_family: ${{ matrix.amdgpu_family }}
+      test_runs_on: ${{ matrix.test_runs_on }}
+      package_find_links_url: >-
+        ${{
+          inputs.kpack_split == 'true'
+          &&
+          inputs.package_find_links_url
+          ||
+          format(
+            '{0}/{1}/index.html',
+            inputs.package_find_links_url,
+            matrix.amdgpu_family
+          )
+        }}
+      python_version: ${{ matrix.python_version }}
+      rocm_version: ${{ inputs.rocm_version }}
+      container_image_name: ${{ matrix.container_image_name }}
+      container_image_url: ${{ matrix.container_image_url }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref }}

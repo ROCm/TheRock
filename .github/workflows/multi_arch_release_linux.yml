@@ -283,6 +283,41 @@ jobs:
               "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
+  # Python package tests are grouped by AMDGPU family. The reusable workflow
+  # expands and filters the Python/container matrix internally.
+  trigger_test_wheels_per_family:
+    needs: [build_python_packages]
+    name: Test Wheels (${{ matrix.family_info.amdgpu_family }})
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        toJSON(fromJSON(inputs.build_config).test_python_packages_matrix)
+        != '[]'
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
+
+    uses: ./.github/workflows/test_rocm_wheels_matrix.yml
+    secrets: inherit
+    with:
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
+      matrix: >-
+        ${{
+          toJSON(
+            fromJSON(inputs.build_config).test_python_packages_matrix
+          )
+        }}
+      package_find_links_url: >-
+        ${{ needs.build_python_packages.outputs.package_find_links_url }}
+      kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
+      rocm_version: ${{ inputs.rocm_package_version }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref }}
+
 
   # The PyTorch release workflow publishes its wheels to the release index, then
   # tests from that index. Wait for the corresponding ROCm release to be published
@@ -344,7 +379,7 @@ jobs:
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_native_install, trigger_release_pytorch_wheels, trigger_release_jax_wheels]
+    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_native_install, trigger_test_wheels_per_family, trigger_release_pytorch_wheels, trigger_release_jax_wheels]
     name: "Quartz - completed - release Linux"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
