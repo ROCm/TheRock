@@ -224,7 +224,7 @@ test_matrix = {
     # hip-tests
     "hip-tests": {
         "job_name": "hip-tests",
-        "fetch_artifact_args": "--tests",
+        "fetch_artifact_args": "--hip-tests --tests",
         "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_hiptests.py')}",
         "platform": ["linux", "windows"],
