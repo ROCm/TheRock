@@ -192,7 +192,9 @@ jobs:
           python ./build_tools/print_driver_gpu_info.py
 
       - name: Setup Additional Requirements
-        if: ${{ fromJSON(inputs.component).additional_requirements_files != '' }}
+        # First-element check skips cleanly when the list is empty ([]) or the
+        # key is absent, without depending on how an empty list coerces to ''.
+        if: ${{ fromJSON(inputs.component).additional_requirements_files[0] != '' }}
         run: |
           python ./build_tools/install_additional_requirements.py \
             --requirements-files ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}

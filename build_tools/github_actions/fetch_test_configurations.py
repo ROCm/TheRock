@@ -149,9 +149,10 @@ def _family_matches(
     )
 
 
-# Common settings applied to all jobs. Kept empty so components omit keys they
-# do not set (an empty additional_requirements_files trips the `!= ''` guard).
-_common_settings = {}
+# Common settings applied to all jobs
+_common_settings = {
+    "additional_requirements_files": [],
+}
 
 # Common settings for rocgdb jobs
 _rocgdb_common = {
