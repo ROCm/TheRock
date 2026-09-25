@@ -92,6 +92,14 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         config = fetch_test_configurations.test_matrix["rocprofiler-sdk"]
         self.assertIn("--enable-cdash", config["test_script"])
 
+    def test_sanity_selects_its_artifacts_on_both_platforms(self):
+        for platform in ["linux", "windows"]:
+            with self.subTest(platform=platform):
+                sys.argv = ["fetch_test_configurations.py", f"--platform={platform}"]
+                fetch_test_configurations.run()
+                sanity = json.loads(self.gha_output["sanity_component"])
+                self.assertEqual(sanity["fetch_artifact_args"], "--sanity")
+
     def test_single_project_filter(self):
         os.environ["PROJECTS_TO_TEST"] = "hipblas"
 

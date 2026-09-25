@@ -74,6 +74,25 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         argv = self._run_main(["--base-only"])
         self.assertIn("rocjitsu-hotswap_lib", argv)
 
+    def test_sanity_adds_clinfo_to_base_artifacts(self):
+        base_argv = self._run_main(["--base-only"])
+        sanity_argv = self._run_main(["--sanity"])
+        self.assertNotIn("core-ocl_run", base_argv)
+        self.assertEqual(sanity_argv, base_argv + ["core-ocl_run"])
+
+    def test_component_selection_excludes_clinfo(self):
+        for component in ["--blas", "--fft", "--rocprofiler-sdk"]:
+            with self.subTest(component=component):
+                argv = self._run_main([component, "--tests"])
+                self.assertIn("core-ocl_lib", argv)
+                self.assertNotIn("core-ocl_run", argv)
+
+    def test_sanity_combines_with_component_selection(self):
+        argv = self._run_main(["--sanity", "--blas", "--tests"])
+        self.assertIn("core-ocl_run", argv)
+        self.assertIn("blas_lib", argv)
+        self.assertIn("blas_test", argv)
+
     def test_hipdnn_integration_tests_includes_rocrand(self):
         # The hipdnn_gpu_ref_tests binary links librocrand for GPU tensor data
         # generation, so the test runners must fetch the rand artifact even
@@ -372,6 +391,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         dry_run=False,
         run_github_repo=None,
         base_only=False,
+        sanity=False,
         aqlprofile=False,
         blas=False,
         debug_tools=False,

@@ -219,7 +219,7 @@ test_matrix = {
     # Sanity tests - always run first as a prerequisite for other component tests
     "sanity": {
         "job_name": "sanity",
-        "fetch_artifact_args": "--base-only",
+        "fetch_artifact_args": "--sanity",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_sanity.py')}",
         "platform": ["linux", "windows"],
