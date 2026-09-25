@@ -299,10 +299,8 @@ test_matrix = {
         "job_name": "tensilelite",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 15,
-        # TODO: Use "build/share/hipblaslt/tensilelite/requirements-test.txt" after
-        # https://github.com/ROCm/rocm-libraries/pull/11396 is integrated.
         "additional_requirements_files": [
-            "build_tools/github_actions/test_executable_scripts/requirements-test-tensilelite.txt",
+            _get_artifact_path("share/hipblaslt/tensilelite/requirements-test.txt"),
         ],
         # Python/pytest suite only (rocisa + TensileLite unit). The C++ gtest
         # suite (tensilelite/tests) is appended below for TEST_TYPE != quick;
@@ -336,7 +334,7 @@ test_matrix = {
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 180,
         "additional_requirements_files": [
-            "build_tools/github_actions/test_executable_scripts/requirements-test-tensilelite.txt",
+            _get_artifact_path("share/hipblaslt/tensilelite/requirements-test.txt"),
         ],
         "test_script": f"TEST_CATEGORY=hw-common python {_get_script_path('pytest_runner.py')}",
         "platform": ["linux"],
@@ -780,6 +778,11 @@ test_matrix = {
         "job_name": "hipkernelprovider",
         "fetch_artifact_args": "--hipdnn --hipkernelprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 30,
+        # TODO: Use the copy in the hipkernelprovider test artifact after rocKE
+        # installs its component-owned requirements file.
+        "additional_requirements_files": [
+            "build_tools/github_actions/test_executable_scripts/requirements-test-hipkernelprovider.txt",
+        ],
         "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
