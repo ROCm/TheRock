@@ -129,8 +129,9 @@ jobs:
     defaults:
       run:
         shell: bash
-    # The test.sh adapter sets PyTorch CI variables and preserves TheRock's
-    # GPU selection and skip-list policy.
+    # run_pytorch_tests_full.py already sets CI, PYTORCH_TEST_WITH_ROCM,
+    # PYTORCH_TESTING_DEVICE_ONLY_FOR and TEST_CONFIG (via --test-config)
+    # itself, so we only set the extras the runner does not manage.
     env:
       DEVICE_QUERY: ${{ inputs.device_query }}
       GPU_POLICY: ${{ inputs.gpu_policy }}
@@ -203,26 +204,12 @@ jobs:
           DEVICE_EXTRAS: ${{ steps.expand.outputs.device_extras }}
         run: |
           # The torch wheel already depends on the matching rocm runtime
-          # packages. test.sh also builds test dependencies such as torchvision,
-          # so install the matching ROCm development packages.
+          # packages (PYTORCH_EXTRA_INSTALL_REQUIREMENTS pins rocm[libraries]),
+          # so installing torch is enough to pull the ROCm runtime.
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION} rocm[devel,${DEVICE_EXTRAS}]" \
+            --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION}" \
             --index-url="${PACKAGE_INDEX_URL}" \
             --activate-in-future-github-actions-steps
-
-      - name: Initialize ROCm SDK environment
-        run: |
-          rocm-sdk init
-          ROCM_HOME="$(rocm-sdk path --root)"
-          ROCM_BIN="$(rocm-sdk path --bin)"
-
-          echo "${ROCM_BIN}" >> "${GITHUB_PATH}"
-          echo "ROCM_PATH=${ROCM_HOME}" >> "${GITHUB_ENV}"
-          echo "ROCM_HOME=${ROCM_HOME}" >> "${GITHUB_ENV}"
-          echo "HIP_DEVICE_LIB_PATH=${ROCM_HOME}/lib/llvm/amdgcn/bitcode" >> "${GITHUB_ENV}"
-          echo "ROCM_DEVICE_LIB_PATH=${ROCM_HOME}/lib/llvm/amdgcn/bitcode" >> "${GITHUB_ENV}"
-          echo "CC=${ROCM_HOME}/lib/llvm/bin/clang" >> "${GITHUB_ENV}"
-          echo "CXX=${ROCM_HOME}/lib/llvm/bin/clang++" >> "${GITHUB_ENV}"
 
       # Here we checkout the same version of PyTorch that wheels were built from
       # so we have the right set of test source files. We _probably_ don't need
@@ -275,11 +262,15 @@ jobs:
             --log-cli-level=INFO \
             -v
 
-      # The list of included suites is limited compared to the full workflow.
+      # Rather than calling pytest or PyTorch's run_test.py directly, we use a
+      # test runner script that invokes run_test.py after first handling our
+      # custom skip-list integration, serialized execution, GPU selection, and
+      # more. The list of included test suites is limited here compared to in
+      # test_pytorch_wheels_full.yml.
       - name: Run PyTorch tests
         timeout-minutes: 120
         run: |
-          python ./external-builds/pytorch/run_pytorch_test_sh.py \
+          python ./external-builds/pytorch/run_pytorch_tests_full.py \
             --test-config default \
             --device-query "${DEVICE_QUERY}" \
             --gpu-policy "${GPU_POLICY}" \
