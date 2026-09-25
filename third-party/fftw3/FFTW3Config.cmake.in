@@ -1,0 +1,33 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# configure_file() substitutions:
+#   @_package_name@  FFTW3 or FFTW3f
+#   @_library_name@  fftw3 or fftw3f
+
+# Traverse from lib/cmake/<name> to the install prefix.
+get_filename_component(_fftw_import_prefix "${CMAKE_CURRENT_LIST_DIR}" PATH)
+get_filename_component(_fftw_import_prefix "${_fftw_import_prefix}" PATH)
+get_filename_component(_fftw_import_prefix "${_fftw_import_prefix}" PATH)
+if(_fftw_import_prefix STREQUAL "/")
+  set(_fftw_import_prefix "")
+endif()
+
+set(@_package_name@_INCLUDE_DIRS "${_fftw_import_prefix}/include")
+set(@_package_name@_LIBRARY_DIRS "${_fftw_import_prefix}/lib")
+
+if(NOT TARGET FFTW3::@_library_name@)
+  add_library(FFTW3::@_library_name@ SHARED IMPORTED)
+  # One library is installed for every configuration.
+  set_target_properties(FFTW3::@_library_name@ PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${_fftw_import_prefix}/include"
+    IMPORTED_LOCATION "${_fftw_import_prefix}/lib/lib@_library_name@.so"
+    IMPORTED_LOCATION_DEBUG "${_fftw_import_prefix}/lib/lib@_library_name@.so"
+    IMPORTED_LOCATION_MINSIZEREL "${_fftw_import_prefix}/lib/lib@_library_name@.so"
+    IMPORTED_LOCATION_RELEASE "${_fftw_import_prefix}/lib/lib@_library_name@.so"
+    IMPORTED_LOCATION_RELWITHDEBINFO "${_fftw_import_prefix}/lib/lib@_library_name@.so"
+  )
+endif()
+
+set(@_package_name@_FOUND TRUE)
+unset(_fftw_import_prefix)
