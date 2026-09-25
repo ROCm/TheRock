@@ -329,6 +329,13 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # CRITICAL FAILURE (hang): test causes hang during execution
+                # https://github.com/ROCm/TheRock/actions/runs/36185080189/job/108239321671
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     "origami": {
         "job_name": "origami",
