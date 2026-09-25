@@ -57,11 +57,10 @@ permissions:
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
-    runs-on:
-      group: ROCR-Runtime-libhsakmt-WSL
-      # Branch-only test override: keep the existing WSL runner group, but require the
-      # CPU-only WSL pool label so this reusable workflow lands on the new infra.
-      labels: wsl-cpu-rocm
+    # Branch-only test override: route to the TEST CPU-only WSL pool by its own label.
+    # That scale set lives in the Default runner group, not ROCR-Runtime-libhsakmt-WSL, so it
+    # never joins the production group's routing. Revert to the group before merging.
+    runs-on: wsl-cpu-rocm-test
     timeout-minutes: ${{ inputs.timeout_minutes }}
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
