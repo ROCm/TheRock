@@ -563,6 +563,9 @@ test_matrix = {
                 "gfx1153",
                 "gfx1200",
                 "gfx1201",
+                # KNOWN FAILURE (timeout): Quick suite exceeds 900s on FP16 strided-batched clipped-ReLU
+                # Related: ROCM-28013
+                "gfx125X-dcgpu",
             ],
             "windows": [
                 "gfx908",
