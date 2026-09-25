@@ -140,8 +140,13 @@ run-name: Test Artifacts (${{ inputs.amdgpu_families }}, ${{ inputs.release_type
 jobs:
   configure_test_matrix:
     name: "Configure test matrix (${{ inputs.amdgpu_families }})"
-    # if there is a test machine available
-    if: ${{ inputs.test_runs_on != '' }}
+    # Run if there is a test machine available: either named explicitly via
+    # test_runs_on, or supplied by the runner labels in a non-default
+    # therock-ci-config ref. On push, inputs are empty and ci_config_ref is ''
+    # (not 'main'), so the second clause is false and behaviour is unchanged.
+    if: >-
+      ${{ inputs.test_runs_on != '' ||
+          (inputs.ci_config_ref != '' && inputs.ci_config_ref != 'main') }}
     runs-on: ubuntu-24.04
     outputs:
       sanity_component: ${{ steps.configure.outputs.sanity_component }}
@@ -212,6 +217,10 @@ jobs:
           # WSL /dev/dxg pools) must be derived from the same value.
           TEST_RUNS_ON: ${{ inputs.test_runs_on }}
         run: |
+          # Platform is inferred from the explicit runner label. When
+          # test_runs_on is empty (labels come from ci_config_ref instead) this
+          # defaults to linux, which is correct for the WSL pools; a Windows
+          # pool selected purely via ci-config would still need test_runs_on.
           python ./build_tools/github_actions/fetch_test_configurations.py \
             --platform=${{ contains(inputs.test_runs_on, 'windows') && 'windows' || 'linux' }}
 
