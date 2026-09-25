@@ -91,6 +91,35 @@ class RunSanityTest(unittest.TestCase):
         self.assertIn("amd-smi", ran)
         self.assertIn("rocminfo", ran)
 
+    def test_wsl_reports_gpu_pv_interface_instead_of_kfd(self):
+        """The WSL path should report the GPU-PV interface, not an empty skip.
+
+        The KFD version exists to answer "what driver interface am I talking
+        to". Under WSL the equivalent is the GPU-PV/WDDM driver, so report
+        /dev/dxg and the WSL kernel rather than printing nothing useful.
+        """
+        import print_driver_gpu_info as m
+
+        out = []
+        with patch.object(m, "_is_wsl", return_value=True), patch.object(
+            m, "run_command_with_search"
+        ), patch.object(
+            m,
+            "_get_wsl_kernel",
+            return_value="Linux version 6.18.33.2-microsoft-standard-WSL2",
+        ), patch.object(
+            m, "log", side_effect=lambda s="": out.append(str(s))
+        ):
+            rc = m.run_sanity("Linux")
+
+        joined = "\n".join(out)
+        self.assertEqual(rc, 0)
+        self.assertIn("GPU-PV (WSL) interface", joined)
+        self.assertIn("/dev/dxg", joined)
+        self.assertIn("microsoft-standard-WSL2", joined)
+        # The misleading bare "KFD IOCTL version" header must not appear.
+        self.assertNotIn("=== KFD IOCTL version ===", joined)
+
     def test_bare_metal_linux_missing_kfd_still_fails(self):
         """Off WSL, a missing /dev/kfd must remain a hard failure."""
         import print_driver_gpu_info as m
