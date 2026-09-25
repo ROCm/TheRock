@@ -540,12 +540,27 @@ The CODEOWNERS entry is not a file in `fortran/` either; it is a line in the pro
 <prefix>/
    lib/fortran/<compiler>/       librocblas_fortran.a, libhip_fortran.a, ...
    include/fortran/<compiler>/   rocblas.mod, hip.mod, ...
+   share/rocblas/fortran/        rocblas.F90          ← the generated source
    lib/cmake/rocblas/            roc::rocblas_fortran
    lib/cmake/hip/                hip::hip_fortran
 ```
 
 There is no `hipfort/<backend>/` nesting: the packaged track has a single backend, so the `.mod` files sit directly under `include/fortran/<compiler>/`.
 `find_package(rocblas)` resolves the subdirectory matching the consuming project's compiler.
+
+**The generated `.F90` installs too, under `share/<lib>/fortran/`.**
+A user on a compiler other than the one ROCm ships bindings for has to build the binding themselves, and shipping the source means they do not have to clone a monorepo to get it.
+It also removes a failure mode: source obtained separately can be generated from a different ROCm than the installed `.so`, which surfaces as an undefined symbol at link time or, worse, as an interface that differs silently from the one the caller meant.
+Installed source matches the installed library by construction.
+
+`share/<lib>/fortran/` rather than `include/`, for three reasons.
+
+- **It is not in the compiler-partitioned tree.** Every entry under `include/fortran/` answers "which compiler is this for?", and the `.F90` is the one artifact that is compiler-*independent*. Placing it there is a level error, and a concrete one: a config that enumerates `include/fortran/*` to report which compilers are installed would list `rocblas.F90` as if it were a compiler, and the user would be invited to select it.
+- **Room to grow.** If the Fortran side ever ships more than the module (a second module, an example), `share/<lib>/fortran/` holds them together. `include/<lib>/` would scatter them among C headers.
+- **Packaging.** `include/` is the development-headers namespace that tooling walks; a Fortran source in it is noise for anything scanning the include path. `share/` is defined as architecture-independent read-only data, which is what a source file is.
+
+This is a deliberate break from where the hand-written modules used to live (`include/rocsparse/rocsparse.f90`, `include/hipblas/hipblas_module.f90`).
+Those were headers-by-convention that a user compiled into their own build; the generated module is a source artifact of the library, and the filenames change in the move anyway, so there is no drop-in path to preserve.
 
 ### Tests and documentation
 
