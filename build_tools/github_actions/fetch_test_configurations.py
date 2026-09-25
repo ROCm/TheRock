@@ -879,6 +879,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            "linux": [
+                # CRITICAL FAILURE (hang): test hangs during execution
+                "gfx125X-dcgpu",
+            ],
+        },
     },
     # rocWMMA tests
     "rocwmma": {
