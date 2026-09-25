@@ -686,8 +686,10 @@ class BuildConfig:
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
     pytorch_build_matrix: list[dict[str, str]] = field(default_factory=list)
     jax_build_matrix: list[dict[str, str]] = field(default_factory=list)
-    # Build runner label for this platform/variant combination
-    build_runs_on: str = ""
+    # Build runner labels for this platform/variant combination
+    build_runs_on_large: str = ""
+    build_runs_on_small: str = ""
+    build_runs_on_medium: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
     # Stages excluded from the build graph entirely (no build, no artifact copy).
@@ -857,7 +859,7 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 
     - pull_request: Smallest default set (presubmit families). Designed for
       fast feedback on proposed changes. PR labels can opt in to additional
-      families (gfx* labels) or the full set (ci:run-all-archs).
+      families (ci:gfx* labels) or the full set (ci:run-all-archs).
     - push: Broader coverage (presubmit + postsubmit families). Runs on
       code that has landed, so we want more thorough validation than PRs
       without paying the full nightly cost.
@@ -920,7 +922,7 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
         print("  Using caller-supplied GPU families")
     elif ci_inputs.is_pull_request:
         # Smallest default set for fast PR feedback. PR labels can extend
-        # the set below (gfx* for individual families, ci:run-all-archs
+        # the set below (ci:gfx* for individual families, ci:run-all-archs
         # for everything).
         defaults = list(get_all_families_for_trigger_types(["presubmit"]).keys())
         linux_names = list(defaults)
@@ -966,12 +968,13 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 windows_names = list(all_families.keys())
                 print("  Label 'ci:run-all-archs' -> all families")
                 break
-            if label.lower().startswith("gfx"):
+            if label.lower().startswith("ci:gfx"):
                 # Trim suffixes from labels since amdgpu_family_matrix.py
                 # specifies families with no suffix (e.g. `gfx94x`) but
-                # we have some labels like `gfx94X-dcgpu` or `gfx103X-linux`.
+                # we have some labels like `ci:gfx94X-dcgpu` or `ci:gfx103X-linux`.
                 # Family keys are lowercase, so normalize the target.
-                target = label.split("-")[0].lower()
+                # Strip ci: prefix, then split on dash to get the base family.
+                target = label.lower().removeprefix("ci:").split("-")[0]
                 linux_names.append(target)
                 windows_names.append(target)
                 print(f"  Label '{label}' -> adding target {target}")
@@ -1392,10 +1395,11 @@ def _expand_build_config_for_platform(
         # label (e.g., gfx950-dcgpu, gfx125X-dcgpu) is present on the PR.
         # This allows families with limited hardware to have tests opt-in via
         # PR labels rather than always running. Builds always run regardless.
-        # push and workflow_dispatch bypass this check (postsubmit always runs tests).
+        # workflow_dispatch bypasses this check (manual triggers always run tests).
+        # Both pull_request and push triggers respect this flag.
         if (
             platform_info.get("trigger_test_label_only", False)
-            and ci_inputs.is_pull_request
+            and not ci_inputs.is_workflow_dispatch
         ):
             family_label = platform_info["family"]
             if family_label not in ci_inputs.pr_labels:
@@ -1445,7 +1449,9 @@ def _expand_build_config_for_platform(
     suffix = variant_config.get("build_variant_suffix", "")
 
     # Select build runner using weighted distribution
-    build_runs_on = select_build_runner(platform, build_variant)
+    build_runs_on_large = select_build_runner(platform, build_variant, size="large")
+    build_runs_on_small = select_build_runner(platform, build_variant, size="small")
+    build_runs_on_medium = select_build_runner(platform, build_variant, size="medium")
 
     pytorch_build_matrix: list[dict[str, str]] = []
     build_pytorch = jobs.build_pytorch.action == JobAction.RUN
@@ -1520,7 +1526,9 @@ def _expand_build_config_for_platform(
         build_jax=build_jax,
         pytorch_build_matrix=pytorch_build_matrix,
         jax_build_matrix=jax_build_matrix,
-        build_runs_on=build_runs_on,
+        build_runs_on_large=build_runs_on_large,
+        build_runs_on_small=build_runs_on_small,
+        build_runs_on_medium=build_runs_on_medium,
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         skip_stages=jobs.build_rocm.skipped_stages,

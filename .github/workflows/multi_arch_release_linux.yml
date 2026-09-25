@@ -1,6 +1,10 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# Notes on security:
+#   * Inherit caller-provided Quartz credentials from higher-trust release entry points.
+#     This avoids repeating secret mappings across nested workflows.
+
 name: Multi-Arch Release Linux
 
 on:
@@ -80,7 +84,7 @@ jobs:
   build_artifacts:
     name: Build Artifacts
     uses: ./.github/workflows/multi_arch_build_portable_linux.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       matrix_per_family_json: ${{ toJSON(fromJSON(inputs.build_config).per_family_info) }}
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -88,7 +92,9 @@ jobs:
       build_variant_label: ${{ fromJSON(inputs.build_config).build_variant_label }}
       build_variant_cmake_preset: ${{ fromJSON(inputs.build_config).build_variant_cmake_preset }}
       build_variant_suffix: ${{ fromJSON(inputs.build_config).build_variant_suffix }}
-      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
+      build_runs_on_large: ${{ fromJSON(inputs.build_config).build_runs_on_large }}
+      build_runs_on_small: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
+      build_runs_on_medium: ${{ fromJSON(inputs.build_config).build_runs_on_medium }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
@@ -102,7 +108,7 @@ jobs:
     needs: [build_artifacts]
     name: Build Tarballs
     uses: ./.github/workflows/multi_arch_build_tarballs.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       platform: linux
@@ -119,7 +125,7 @@ jobs:
     needs: [build_artifacts]
     name: Build Python Packages
     uses: ./.github/workflows/build_portable_linux_python_packages.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -139,7 +145,7 @@ jobs:
     needs: [build_artifacts]
     name: Build DEB Packages
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       artifact_run_id: ${{ github.run_id }}
@@ -158,7 +164,7 @@ jobs:
     needs: [build_artifacts]
     name: Build RPM Packages
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       artifact_run_id: ${{ github.run_id }}
@@ -186,7 +192,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
@@ -238,7 +246,7 @@ jobs:
               "amdgpu_families": "${{ matrix.family_info.amdgpu_family }}",
               "amdgpu_targets": "${{ matrix.family_info.amdgpu_targets }}",
               "test_runs_on": "${{ matrix.family_info.test-runs-on }}",
-              "test_type": "${{ inputs.test_type }}",
+              "test_type": "${{ matrix.family_info.test_type || inputs.test_type }}",
               "release_type": "${{ inputs.release_type }}",
               "repository": "${{ inputs.repository }}",
               "ref": "${{ inputs.ref }}",
@@ -336,7 +344,7 @@ jobs:
               "run_full_pytorch_tests": "${{ inputs.run_full_pytorch_tests }}",
               "ref": "${{ inputs.ref || '' }}",
               "python_version": "${{ inputs.python_version }}",
-              "build_runs_on": "${{ fromJSON(inputs.build_config).build_runs_on }}",
+              "build_runs_on": "${{ fromJSON(inputs.build_config).build_runs_on_large }}",
               "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 

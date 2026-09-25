@@ -35,7 +35,7 @@ on:
         description: rocm-jax repository ref/branch to check out
         required: false
         type: string
-        default: "rocm-jaxlib-v0.11.1"
+        default: "rocm-jaxlib-v0.11.2"
       jax_version:
         description: "Base JAX version (e.g. 0.8.2) for installing jax from PyPI. Extracted from built wheels by write_jax_versions.py."
         required: false
@@ -109,7 +109,7 @@ on:
         description: rocm-jax repository ref/branch to check out
         required: false
         type: string
-        default: "rocm-jaxlib-v0.11.1"
+        default: "rocm-jaxlib-v0.11.2"
       jax_version:
         description: "Base JAX version (e.g. 0.8.2). Leave empty to auto-detect from rocm-jax requirements."
         required: false
@@ -171,12 +171,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Checkout rocm-jax (plugin + build scripts)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           path: rocm-jax
           repository: ROCm/rocm-jax
           ref: ${{ inputs.jax_ref }}
@@ -184,6 +186,7 @@ jobs:
       - name: Checkout JAX extended tests repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           path: jax
           repository: ROCm/jax
           ref: ${{ inputs.jax_ref }}

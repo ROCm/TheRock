@@ -14,9 +14,17 @@
 # - Tests only gfx94x (Linux) and gfx110x (Windows) with quick/standard test type
 # - No ASAN tests (build only for downstream consumption)
 
+# Notes on security:
+#   * Higher-trust entry point: manually triggered by maintainers.
+#   * Inherit secrets to avoid repeating mappings across nested workflows.
+
 name: Compiler Daily Bump
 
 on:
+  schedule:
+    # Run daily at 1:30 AM ET (5:30 AM UTC, or 6:30 AM UTC during DST)
+    # Using 5:30 AM UTC which is 1:30 AM ET during standard time
+    - cron: "30 5 * * *"
   workflow_dispatch:
     inputs:
       branch_suffix:
@@ -58,7 +66,7 @@ permissions:
 
 run-name: >-
   Compiler Bump (${{ inputs.branch_suffix || 'COT' }})
-  | Test: ${{ inputs.test_type || 'quick' }}
+  | Test: ${{ inputs.test_type || 'standard' }}
   ${{ inputs.build_only && '| Build Only' || '' }}
 
 jobs:
@@ -90,6 +98,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
+          # Retain GITHUB_TOKEN for the "Create and push branch" step below.
+          persist-credentials: true
           fetch-depth: 0
 
       - name: Initialize compiler submodules
@@ -135,6 +145,7 @@ jobs:
           echo "| SPIRV-LLVM-Translator | ${SPIRV_REF} | \`${SPIRV_SHA:0:12}\` |" >> "$GITHUB_STEP_SUMMARY"
           cd ../..
 
+      # git push uses GITHUB_TOKEN persisted by "Checkout TheRock".
       - name: Create and push branch
         id: create-branch
         env:
@@ -184,14 +195,14 @@ jobs:
       build_jax: true
       repository: ${{ github.repository }}
       ref: ${{ needs.create-branch.outputs.branch_name }}
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
 
   build-linux:
     name: Build Linux Release
     needs: [create-branch, setup-linux]
     if: ${{ inputs.dry_run != true && needs.setup-linux.outputs.linux_build_config != '' }}
     uses: ./.github/workflows/multi_arch_build_portable_linux.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       matrix_per_family_json: ${{ toJSON(fromJSON(needs.setup-linux.outputs.linux_build_config).per_family_info) }}
       dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
@@ -199,7 +210,9 @@ jobs:
       build_variant_label: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_variant_label }}
       build_variant_cmake_preset: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_variant_cmake_preset }}
       build_variant_suffix: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_variant_suffix }}
-      build_runs_on: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on }}
+      build_runs_on_large: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_large }}
+      build_runs_on_small: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_small }}
+      build_runs_on_medium: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_medium }}
       rocm_package_version: ${{ needs.setup-linux.outputs.rocm_package_version }}
       release_type: dev
       repository: ${{ github.repository }}
@@ -210,7 +223,7 @@ jobs:
     needs: [create-branch, setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
     uses: ./.github/workflows/multi_arch_build_tarballs.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
       platform: linux
@@ -224,7 +237,7 @@ jobs:
     needs: [create-branch, setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
     uses: ./.github/workflows/build_portable_linux_python_packages.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_group: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
@@ -241,7 +254,7 @@ jobs:
     needs: [create-branch, setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
       artifact_run_id: ${{ github.run_id }}
@@ -257,7 +270,7 @@ jobs:
     needs: [create-branch, setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
       artifact_run_id: ${{ github.run_id }}
@@ -278,6 +291,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
+          persist-credentials: false
           ref: ${{ needs.setup-linux.outputs.ref }}
 
       - name: Setup Python
@@ -306,6 +320,51 @@ jobs:
             --structured \
             --build-variant="release"
 
+  # PyTorch wheels - triggered after Linux Python packages are published
+  trigger-linux-pytorch-wheels:
+    name: Trigger Linux PyTorch Wheels
+    needs: [create-branch, setup-linux, build-linux-python-packages, publish-linux-artifacts]
+    if: ${{ inputs.dry_run != true && needs.publish-linux-artifacts.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Trigger PyTorch Build
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: multi_arch_release_linux_pytorch_wheels.yml
+          inputs: |
+            {
+              "amdgpu_families": "${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}",
+              "rocm_version": "${{ needs.setup-linux.outputs.rocm_package_version }}",
+              "rocm_package_find_links_url": "${{ needs.build-linux-python-packages.outputs.package_find_links_url }}",
+              "release_type": "dev",
+              "run_full_pytorch_tests": "false",
+              "ref": "${{ needs.create-branch.outputs.branch_name }}",
+              "python_version": "3.12,3.13,3.14",
+              "build_runs_on": "${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_large }}"
+            }
+
+  # JAX wheels - triggered after Linux Python packages are published
+  trigger-linux-jax-wheels:
+    name: Trigger Linux JAX Wheels
+    needs: [create-branch, setup-linux, build-linux-python-packages, publish-linux-artifacts]
+    if: ${{ inputs.dry_run != true && needs.publish-linux-artifacts.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Trigger JAX Build
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: multi_arch_release_linux_jax_wheels.yml
+          inputs: |
+            {
+              "test_amdgpu_family": "${{ contains(fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families, 'gfx94X-dcgpu') && 'gfx94X-dcgpu' || '' }}",
+              "release_type": "dev",
+              "rocm_version": "${{ needs.setup-linux.outputs.rocm_package_version }}",
+              "rocm_package_find_links_url": "${{ needs.build-linux-python-packages.outputs.package_find_links_url }}",
+              "repository": "${{ github.repository }}",
+              "ref": "${{ needs.create-branch.outputs.branch_name }}",
+              "python_version": "3.12,3.13,3.14"
+            }
+
   # ==========================================================================
   # Phase 2 - Windows: Build and packaging
   # ==========================================================================
@@ -319,18 +378,18 @@ jobs:
       release_type: dev
       linux_amdgpu_families: "none"
       windows_amdgpu_families: "all"
-      build_pytorch: false
-      build_jax: false
+      build_pytorch: true
+      build_jax: true
       repository: ${{ github.repository }}
       ref: ${{ needs.create-branch.outputs.branch_name }}
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
 
   build-windows:
     name: Build Windows Release
     needs: [create-branch, setup-windows]
     if: ${{ inputs.dry_run != true && needs.setup-windows.outputs.windows_build_config != '' }}
     uses: ./.github/workflows/multi_arch_build_windows.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       matrix_per_family_json: ${{ toJSON(fromJSON(needs.setup-windows.outputs.windows_build_config).per_family_info) }}
       dist_amdgpu_families: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).dist_amdgpu_families }}
@@ -338,7 +397,9 @@ jobs:
       build_variant_label: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_variant_label }}
       build_variant_cmake_preset: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_variant_cmake_preset }}
       build_variant_suffix: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_variant_suffix }}
-      build_runs_on: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on }}
+      build_runs_on_large: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on_large }}
+      build_runs_on_small: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on_small }}
+      build_runs_on_medium: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on_medium }}
       rocm_package_version: ${{ needs.setup-windows.outputs.rocm_package_version }}
       release_type: dev
       repository: ${{ github.repository }}
@@ -349,7 +410,7 @@ jobs:
     needs: [create-branch, setup-windows, build-windows]
     if: ${{ inputs.dry_run != true && needs.build-windows.result == 'success' }}
     uses: ./.github/workflows/multi_arch_build_tarballs.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       dist_amdgpu_families: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).dist_amdgpu_families }}
       platform: windows
@@ -363,7 +424,7 @@ jobs:
     needs: [create-branch, setup-windows, build-windows]
     if: ${{ inputs.dry_run != true && needs.build-windows.result == 'success' }}
     uses: ./.github/workflows/build_windows_python_packages.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_group: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).dist_amdgpu_families }}
@@ -385,6 +446,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
+          persist-credentials: false
           ref: ${{ needs.setup-windows.outputs.ref }}
 
       - name: Setup Python
@@ -413,8 +475,30 @@ jobs:
             --structured \
             --build-variant="release"
 
+  # PyTorch wheels for Windows - triggered after Windows Python packages are published
+  trigger-windows-pytorch-wheels:
+    name: Trigger Windows PyTorch Wheels
+    needs: [create-branch, setup-windows, build-windows-python-packages, publish-windows-artifacts]
+    if: ${{ inputs.dry_run != true && needs.publish-windows-artifacts.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Trigger PyTorch Build
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: multi_arch_release_windows_pytorch_wheels.yml
+          inputs: |
+            {
+              "amdgpu_families": "${{ fromJSON(needs.setup-windows.outputs.windows_build_config).dist_amdgpu_families }}",
+              "rocm_version": "${{ needs.setup-windows.outputs.rocm_package_version }}",
+              "rocm_package_find_links_url": "${{ needs.build-windows-python-packages.outputs.package_find_links_url }}",
+              "release_type": "dev",
+              "ref": "${{ needs.create-branch.outputs.branch_name }}",
+              "python_version": "3.12,3.13,3.14",
+              "build_runs_on": "${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on_large }}"
+            }
+
   # ==========================================================================
-  # Phase 2 - ASAN: Dispatch as separate workflow (gets its own run_id)
+  # Phase 3 - ASAN: Dispatch as separate workflow (gets its own run_id)
   # ==========================================================================
   dispatch-asan-build:
     name: Dispatch ASAN Build
@@ -480,7 +564,7 @@ jobs:
               "amdgpu_families": "gfx94X-dcgpu",
               "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
               "test_runs_on": "${{ steps.family-info.outputs.test_runs_on }}",
-              "test_type": "${{ inputs.test_type || 'quick' }}",
+              "test_type": "${{ inputs.test_type || 'standard' }}",
               "release_type": "dev",
               "repository": "${{ github.repository }}",
               "ref": "${{ needs.create-branch.outputs.branch_name }}",
@@ -525,7 +609,7 @@ jobs:
               "amdgpu_families": "gfx110X-all",
               "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
               "test_runs_on": "${{ steps.family-info.outputs.test_runs_on }}",
-              "test_type": "${{ inputs.test_type || 'quick' }}",
+              "test_type": "${{ inputs.test_type || 'standard' }}",
               "release_type": "dev",
               "repository": "${{ github.repository }}",
               "ref": "${{ needs.create-branch.outputs.branch_name }}",
@@ -554,11 +638,14 @@ jobs:
       - build-linux-native-deb-packages
       - build-linux-native-rpm-packages
       - publish-linux-artifacts
+      - trigger-linux-pytorch-wheels
+      - trigger-linux-jax-wheels
       - setup-windows
       - build-windows
       - build-windows-tarballs
       - build-windows-python-packages
       - publish-windows-artifacts
+      - trigger-windows-pytorch-wheels
       - dispatch-asan-build
       - trigger-linux-tests
       - trigger-windows-tests
@@ -572,6 +659,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
         timeout-minutes: 15
 
       - name: Setup Python
@@ -735,6 +824,36 @@ jobs:
             echo "- :fast_forward: ASAN Build skipped" >> "$GITHUB_STEP_SUMMARY"
           fi
 
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Downstream Wheels" >> "$GITHUB_STEP_SUMMARY"
+
+          # Linux PyTorch wheels
+          if [ "${{ needs.trigger-linux-pytorch-wheels.result }}" == "success" ]; then
+            echo "- :white_check_mark: Linux PyTorch wheels triggered" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.trigger-linux-pytorch-wheels.result }}" == "failure" ]; then
+            echo "- :x: Linux PyTorch wheels trigger failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.trigger-linux-pytorch-wheels.result }}" == "skipped" ]; then
+            echo "- :fast_forward: Linux PyTorch wheels skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Linux JAX wheels
+          if [ "${{ needs.trigger-linux-jax-wheels.result }}" == "success" ]; then
+            echo "- :white_check_mark: Linux JAX wheels triggered" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.trigger-linux-jax-wheels.result }}" == "failure" ]; then
+            echo "- :x: Linux JAX wheels trigger failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.trigger-linux-jax-wheels.result }}" == "skipped" ]; then
+            echo "- :fast_forward: Linux JAX wheels skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Windows PyTorch wheels
+          if [ "${{ needs.trigger-windows-pytorch-wheels.result }}" == "success" ]; then
+            echo "- :white_check_mark: Windows PyTorch wheels triggered" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.trigger-windows-pytorch-wheels.result }}" == "failure" ]; then
+            echo "- :x: Windows PyTorch wheels trigger failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.trigger-windows-pytorch-wheels.result }}" == "skipped" ]; then
+            echo "- :fast_forward: Windows PyTorch wheels skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
           # Dry run note
           if [ "${{ inputs.dry_run }}" == "true" ]; then
             echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -768,7 +887,7 @@ jobs:
           echo "### Configuration" >> "$GITHUB_STEP_SUMMARY"
           echo "| Setting | Value |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---------|-------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Test Type | \`${{ inputs.test_type || 'quick' }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Test Type | \`${{ inputs.test_type || 'standard' }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Build Only | \`${{ inputs.build_only || 'false' }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Linux Test Family | \`gfx94X-dcgpu\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Windows Test Family | \`gfx110X-all\` |" >> "$GITHUB_STEP_SUMMARY"

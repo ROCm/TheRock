@@ -181,14 +181,14 @@ class TestCIInputsFromEnviron(unittest.TestCase):
             event_payload={
                 "pull_request": {
                     "labels": [
-                        {"name": "gfx950", "id": 1},
+                        {"name": "ci:gfx950", "id": 1},
                         {"name": "test:rocprim", "id": 2},
                     ]
                 }
             },
             commit_ref="feature-branch",
         )
-        self.assertEqual(inputs.pr_labels, ["gfx950", "test:rocprim"])
+        self.assertEqual(inputs.pr_labels, ["ci:gfx950", "test:rocprim"])
         self.assertEqual(inputs.base_ref, "HEAD^")
 
     def test_pull_request_test_labels_extracted_to_test_labels(self):
@@ -200,7 +200,7 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                     "labels": [
                         {"name": "test:rccl", "id": 1},
                         {"name": "test:rocprim", "id": 2},
-                        {"name": "gfx950", "id": 3},
+                        {"name": "ci:gfx950", "id": 3},
                     ]
                 }
             },
@@ -987,7 +987,7 @@ class TestSelectTargets(unittest.TestCase):
             base_ref="HEAD^",
             build_variant="release",
             # gfx906 is nightly-only, not in presubmit+postsubmit defaults
-            pr_labels=["gfx906"],
+            pr_labels=["ci:gfx906"],
         )
         result_without = cm.select_targets(inputs_without)
         result_with = cm.select_targets(inputs_with)
@@ -1009,14 +1009,14 @@ class TestSelectTargets(unittest.TestCase):
         self.assertIn("gfx906", result.linux_families)
 
     def test_pull_request_unknown_gfx_label_raises(self):
-        """PR with an unknown gfx label fails fast."""
+        """PR with an unknown ci:gfx label fails fast."""
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^",
             build_variant="release",
-            pr_labels=["gfx9999"],
+            pr_labels=["ci:gfx9999"],
         )
         with self.assertRaises(ValueError, msg="Unknown GPU families"):
             cm.select_targets(inputs)
@@ -2114,7 +2114,7 @@ class TestFamilyTestFilters(unittest.TestCase):
 
     # Mock family matrix for testing trigger_test_label_only behavior.
     # Family keys use "mock-" prefix to avoid conflict with label parsing
-    # (labels starting with "gfx" get special handling in select_targets).
+    # (labels starting with "ci:gfx" get special handling in select_targets).
     MOCK_FAMILIES_TRIGGER_TEST_LABEL = {
         # Presubmit family - always runs on PRs
         "mock-presubmit": {
@@ -2203,8 +2203,12 @@ class TestFamilyTestFilters(unittest.TestCase):
             self.assertIsNotNone(family_info)
             self.assertEqual(family_info["test-runs-on"], "")
 
-    def test_trigger_test_label_only_push_always_runs_tests(self):
-        """Push (postsubmit) always runs tests regardless of trigger_test_label_only."""
+    def test_trigger_test_label_only_push_with_label_runs_tests(self):
+        """Push (postsubmit) with label runs tests when trigger_test_label_only is set.
+
+        This tests the case where an external caller (like rocm-libraries) passes
+        pr_labels to the push event, allowing tests to run for specific families.
+        """
         with patch(
             "configure_multi_arch_ci.get_all_families_for_trigger_types",
             side_effect=self._mock_get_all_families,
@@ -2215,11 +2219,14 @@ class TestFamilyTestFilters(unittest.TestCase):
                 commit_ref="main",
                 base_ref="HEAD^",
                 build_variant="release",
+                pr_labels=["mock-postsubmit-labeled"],  # Label passed by caller
+                linux_amdgpu_families=["mock-postsubmit-labeled"],
             )
             outputs = cm.configure(ci_inputs, cm.GitContext.empty())
             family_info = self._find_family_info(outputs, "mock-postsubmit-labeled")
 
             self.assertIsNotNone(family_info)
+            # Push events WITH labels should run tests
             self.assertNotEqual(family_info["test-runs-on"], "")
 
     def test_trigger_test_label_only_workflow_dispatch_always_runs_tests(self):
@@ -2393,59 +2400,6 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
                 gfx103x_info = builds.linux.per_family_info[0]
                 # Should always use the primary label
                 self.assertEqual(gfx103x_info["test-runs-on"], "linux-gfx1030-gpu-rocm")
-
-
-# ---------------------------------------------------------------------------
-# Build runner selection
-# ---------------------------------------------------------------------------
-
-
-class TestBuildRunnerSelection(unittest.TestCase):
-    """Test count-based random selection of build runners (Azure vs AWS).
-
-    These tests validate local amdgpu_family_matrix.py definitions.
-    CI_CONFIG_PATH is cleared to ensure external config is not loaded.
-    """
-
-    def setUp(self):
-        self._orig_env = os.environ.copy()
-        # Ensure tests use local fallback, not external config
-        if "CI_CONFIG_PATH" in os.environ:
-            del os.environ["CI_CONFIG_PATH"]
-
-    def tearDown(self):
-        os.environ.clear()
-        os.environ.update(self._orig_env)
-
-    def test_select_build_runner_weight_selection(self):
-        """Test weight-based selection for build runners."""
-        from amdgpu_family_matrix import select_build_runner
-
-        # With only one runner (weight=1.0), any random value selects it
-        with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod"
-            )
-
-        # Windows still uses Azure
-        with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_build_runner("windows", "release"), "azure-windows-scale-rocm"
-            )
-
-    def test_select_build_runner_sanitizer_uses_large_runner(self):
-        """Sanitizer builds (asan/tsan) should use AWS large runner."""
-        from amdgpu_family_matrix import select_build_runner
-
-        with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_build_runner("linux", "asan"),
-                "aws-linux-scale-rocm-large",
-            )
-            self.assertEqual(
-                select_build_runner("linux", "tsan"),
-                "aws-linux-scale-rocm-large",
-            )
 
 
 if __name__ == "__main__":
