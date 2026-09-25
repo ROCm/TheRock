@@ -883,8 +883,13 @@ test_matrix = {
             "windows": 2,
         },
         "exclude_family": {
-            # rocWMMA does not support gfx103X (see TheRock#1944)
-            "linux": ["gfx1030"],
+            "linux": [
+                # rocWMMA does not support gfx103X (see TheRock#1944)
+                "gfx1030",
+                # CRITICAL FAILURE (GPU hang): rocwmma test causes GPU hang during parallel test execution
+                # https://github.com/ROCm/TheRock/actions/runs/36077293577
+                "gfx125X-dcgpu",
+            ],
         },
     },
     # rocALUTION tests
