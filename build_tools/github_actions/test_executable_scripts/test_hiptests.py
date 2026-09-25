@@ -27,7 +27,6 @@ CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_t
 # Importing is_asan from amdgpu_family_matrix.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from amdgpu_family_matrix import is_asan
-from configure_asan_env import resolve_asan_runtime
 
 env = os.environ.copy()
 
@@ -108,10 +107,26 @@ GENERIC_TEST_TO_IGNORE = [
 
 
 def get_asan_lib_path():
+    # Whether clang installs libclang_rt.asan.so or libclang_rt.asan-<arch>.so
+    # depends on LLVM_ENABLE_PER_TARGET_RUNTIME_DIR, and TheRock has flipped
+    # between the two (#8077), so try both. clang echoes the name back when it
+    # cannot find the file, hence the is_file() check.
     clang = Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "clang++"
-    runtime = resolve_asan_runtime(clang)
-    logging.info(f"++ Resolved ASAN runtime via {clang}: {runtime}")
-    return str(runtime)
+    for name in ("libclang_rt.asan.so", f"libclang_rt.asan-{platform.machine()}.so"):
+        result = subprocess.run(
+            [str(clang), f"-print-file-name={name}"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        candidate = Path(result.stdout.strip())
+        if candidate.is_file():
+            logging.info(f"++ Resolved ASAN runtime via {clang}: {candidate}")
+            return str(candidate.resolve())
+    raise RuntimeError(
+        f"ASAN runtime not found via {clang}; "
+        "the build under test is probably not ASAN-instrumented"
+    )
 
 
 def copy_dlls_exe_path():

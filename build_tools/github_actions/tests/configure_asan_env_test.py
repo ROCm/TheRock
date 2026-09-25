@@ -77,18 +77,26 @@ def _make_artifacts(
     """Builds a fake artifact tree; returns the artifacts dir."""
     artifacts = root / "build"
     runtime_path = artifacts / "lib" / "llvm" / "lib" / "clang" / "24" / "asan.so"
+    symbolizer_path = artifacts / "llvm" / "bin" / "llvm-symbolizer"
     if runtime:
         runtime_path.parent.mkdir(parents=True, exist_ok=True)
         runtime_path.write_text("")
+    if symbolizer:
+        _make_executable(symbolizer_path, "#!/bin/sh\n")
     if clang:
         _make_clang_stub(
             artifacts / "llvm" / "bin" / "clang",
             runtime=runtime_path if runtime else None,
             runtime_name=runtime_name,
+            symbolizer=symbolizer_path if symbolizer else None,
         )
-    if symbolizer:
-        _make_executable(artifacts / "llvm" / "bin" / "llvm-symbolizer", "#!/bin/sh\n")
+    (artifacts / "llvm" / "bin").mkdir(parents=True, exist_ok=True)
     return artifacts
+
+
+def _artifact_bin(artifacts: Path) -> Path:
+    """The directory an artifact-tree caller is expected to put on PATH."""
+    return artifacts / "llvm" / "bin"
 
 
 def _make_python_install(root: Path, *, compiler="amdclang++", **kwargs) -> Path:
@@ -132,11 +140,15 @@ class _IsolatedPath:
 
 
 class TestArtifactTree(unittest.TestCase):
+    """The caller puts the extracted llvm/bin on PATH; only LD_LIBRARY_PATH
+    still needs the artifacts directory itself."""
+
     @requires_posix
     def test_resolves_runtime_and_symbolizer(self):
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = _make_artifacts(Path(tmp))
-            env, warnings = resolve_asan_env(artifacts)
+            with _IsolatedPath(_artifact_bin(artifacts)):
+                env, warnings = resolve_asan_env(artifacts)
 
             self.assertEqual(warnings, [])
             self.assertTrue(env["ASAN_RUNTIME_PATH"].endswith("asan.so"))
@@ -147,7 +159,8 @@ class TestArtifactTree(unittest.TestCase):
         """#8077 reintroduced libclang_rt.asan-<arch>.so; both spellings ship."""
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = _make_artifacts(Path(tmp), runtime_name=ARCH_RUNTIME)
-            env, _ = resolve_asan_env(artifacts)
+            with _IsolatedPath(_artifact_bin(artifacts)):
+                env, _ = resolve_asan_env(artifacts)
 
             self.assertTrue(env["ASAN_RUNTIME_PATH"].endswith("asan.so"))
 
@@ -155,7 +168,8 @@ class TestArtifactTree(unittest.TestCase):
     def test_static_values_are_always_exported(self):
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = _make_artifacts(Path(tmp))
-            env, _ = resolve_asan_env(artifacts)
+            with _IsolatedPath(_artifact_bin(artifacts)):
+                env, _ = resolve_asan_env(artifacts)
             for key, value in STATIC_ASAN_ENV.items():
                 self.assertEqual(env[key], value)
 
@@ -171,7 +185,10 @@ class TestArtifactTree(unittest.TestCase):
             cwd = os.getcwd()
             os.chdir(tmp)
             try:
-                env, _ = resolve_asan_env(Path("./build"))
+                # Relative PATH entry too, so nothing in the chain is absolute
+                # until the script resolves it.
+                with _IsolatedPath(Path("./build/llvm/bin")):
+                    env, _ = resolve_asan_env(Path("./build"))
             finally:
                 os.chdir(cwd)
 
@@ -182,7 +199,8 @@ class TestArtifactTree(unittest.TestCase):
     def test_library_path_covers_lib_and_sysdeps(self):
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = _make_artifacts(Path(tmp))
-            env, _ = resolve_asan_env(artifacts)
+            with _IsolatedPath(_artifact_bin(artifacts)):
+                env, _ = resolve_asan_env(artifacts)
 
             self.assertIn("rocm_sysdeps", env["LD_LIBRARY_PATH"])
 
@@ -190,7 +208,8 @@ class TestArtifactTree(unittest.TestCase):
     def test_missing_symbolizer_warns_but_keeps_runtime(self):
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = _make_artifacts(Path(tmp), symbolizer=False)
-            env, warnings = resolve_asan_env(artifacts)
+            with _IsolatedPath(_artifact_bin(artifacts)):
+                env, warnings = resolve_asan_env(artifacts)
 
             self.assertIn("ASAN_RUNTIME_PATH", env)
             self.assertNotIn("ASAN_SYMBOLIZER_PATH", env)
@@ -203,21 +222,25 @@ class TestFailFast(unittest.TestCase):
     def test_missing_clang_raises(self):
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = _make_artifacts(Path(tmp), clang=False)
-            with self.assertRaisesRegex(AsanEnvironmentError, "clang not found"):
-                resolve_asan_env(artifacts)
+            with _IsolatedPath(_artifact_bin(artifacts)):
+                with self.assertRaisesRegex(AsanEnvironmentError, "on PATH"):
+                    resolve_asan_env(artifacts)
 
     @requires_posix
     def test_missing_runtime_raises(self):
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = _make_artifacts(Path(tmp), runtime=False)
-            with self.assertRaisesRegex(AsanEnvironmentError, "not ASAN-instrumented"):
-                resolve_asan_env(artifacts)
+            with _IsolatedPath(_artifact_bin(artifacts)):
+                with self.assertRaisesRegex(
+                    AsanEnvironmentError, "not ASAN-instrumented"
+                ):
+                    resolve_asan_env(artifacts)
 
     def test_missing_compiler_on_path_raises(self):
         with tempfile.TemporaryDirectory() as tmp:
             bin_dir = _make_python_install(Path(tmp), clang=False)
             with _IsolatedPath(bin_dir):
-                with self.assertRaisesRegex(AsanEnvironmentError, "rocm-sdk-core"):
+                with self.assertRaisesRegex(AsanEnvironmentError, "on PATH"):
                     resolve_asan_env()
 
 
@@ -288,9 +311,7 @@ class TestLeakSuppressions(unittest.TestCase):
             artifacts = _make_artifacts(Path(tmp))
             env, _ = resolve_asan_env(artifacts)
 
-            self.assertEqual(
-                env["LSAN_OPTIONS"], f"suppressions={LSAN_SUPPRESSIONS}"
-            )
+            self.assertEqual(env["LSAN_OPTIONS"], f"suppressions={LSAN_SUPPRESSIONS}")
 
     def test_interpreter_allocator_is_suppressed(self):
         """_PyMem_RawMalloc is what rocm-sdk wheel tests actually report."""
