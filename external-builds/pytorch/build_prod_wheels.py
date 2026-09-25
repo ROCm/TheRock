@@ -429,10 +429,16 @@ def validate_local_asan_index(find_links: str) -> str:
     return version
 
 
+def is_remote_find_links(find_links: str | None) -> bool:
+    """True when --find-links is an HTTP(S) index rather than a local directory."""
+    if not find_links:
+        return False
+    return urllib.parse.urlparse(find_links).scheme in ("http", "https")
+
+
 def resolve_asan_find_links_version(find_links: str, rocm_sdk_version: str) -> str:
     """Resolve the coherent ASAN SDK version from local or CI find-links."""
-    parsed_url = urllib.parse.urlparse(find_links)
-    if parsed_url.scheme not in ("http", "https"):
+    if not is_remote_find_links(find_links):
         return validate_local_asan_index(find_links)
 
     requested_versions = list(SpecifierSet(rocm_sdk_version))
@@ -816,7 +822,13 @@ def validate_build_args(
 
 
 def do_install_rocm(args: argparse.Namespace):
-    if getattr(args, "asan", False):
+    asan = getattr(args, "asan", False)
+    # Local Phase 1 indexes contain only ROCm artifacts, so the selector sdist
+    # is built with --no-build-isolation against preinstalled setuptools/wheel.
+    # CI find-links URLs are not that layout: skip the local bootstrap gate and
+    # let pip use build isolation (and PyPI) for the selector sdist.
+    local_asan = asan and not is_remote_find_links(getattr(args, "find_links", None))
+    if local_asan:
         validate_asan_bootstrap_requirements()
 
     # Because the rocm package caches current GPU selection and such, we
@@ -844,9 +856,9 @@ def do_install_rocm(args: argparse.Namespace):
         "install",
         "--force-reinstall",
     ]
-    if getattr(args, "asan", False) or getattr(args, "no_index", False):
+    if local_asan or getattr(args, "no_index", False):
         pip_args.append("--no-index")
-    if getattr(args, "asan", False):
+    if local_asan:
         # Phase 1 indexes intentionally contain only the ROCm package set, not
         # generic build dependencies. Reuse the explicitly prepared environment
         # when pip builds the selector sdist.

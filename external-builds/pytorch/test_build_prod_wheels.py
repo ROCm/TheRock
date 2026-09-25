@@ -334,6 +334,54 @@ class AsanInstallAndFeatureTest(unittest.TestCase):
             "rocm[libraries,devel,device]==10.1.0+asan.20260807", install_command
         )
 
+    def test_local_asan_install_checks_bootstrap_gate(self):
+        args = argparse.Namespace(
+            asan=True,
+            pip_cache_dir=None,
+            pre=True,
+            index_url=None,
+            find_links="/local/whl-asan/gfx942-all/index.html",
+            rocm_sdk_version="==10.1.0+asan.20260807",
+            rocm_extras="device",
+            no_index=True,
+        )
+        with mock.patch.object(bpw, "run_command"), mock.patch.object(
+            bpw, "get_rocm_sdk_version", return_value="10.1.0+asan.20260807"
+        ), mock.patch.object(
+            bpw, "validate_asan_bootstrap_requirements"
+        ) as bootstrap:
+            bpw.do_install_rocm(args)
+        bootstrap.assert_called_once()
+
+    def test_remote_asan_install_skips_local_bootstrap_gate(self):
+        args = argparse.Namespace(
+            asan=True,
+            pip_cache_dir=None,
+            pre=True,
+            index_url=None,
+            find_links="https://example.invalid/36142888996-linux/python/index.html",
+            rocm_sdk_version="==10.2.0+asan.36142888996",
+            rocm_extras="device",
+            no_index=False,
+        )
+        with mock.patch.object(bpw, "run_command") as run, mock.patch.object(
+            bpw, "get_rocm_sdk_version", return_value="10.2.0+asan.36142888996"
+        ), mock.patch.object(
+            bpw, "validate_asan_bootstrap_requirements"
+        ) as bootstrap:
+            bpw.do_install_rocm(args)
+        bootstrap.assert_not_called()
+        install_command = next(
+            call.args[0] for call in run.call_args_list if "install" in call.args[0]
+        )
+        self.assertNotIn("--no-build-isolation", install_command)
+        self.assertNotIn("--no-index", install_command)
+        self.assertIn("--find-links", install_command)
+        self.assertIn(
+            "rocm[libraries,devel,device]==10.2.0+asan.36142888996",
+            install_command,
+        )
+
     def test_release_install_preserves_index_and_extras_behavior(self):
         args = argparse.Namespace(
             asan=False,
