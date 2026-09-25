@@ -28,3 +28,6 @@ toml>=0.10.2
 
 # build_tools/packaging/linux/tests/build_package_test.py requirement
 jinja2>=3.0.0
+
+# Dependencies for build_tools/packaging/tests.
+-r build_tools/packaging/requirements.txt

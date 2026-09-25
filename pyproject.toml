@@ -1,0 +1,52 @@
+[tool.pytest.ini_options]
+testpaths = [
+    "build_tools/tests",
+    "build_tools/github_actions/tests",
+    "build_tools/packaging/tests",
+    "build_tools/packaging/archives/tests",
+    "build_tools/packaging/linux/tests",
+    "build_tools/packaging/python/tests",
+    "build_tools/packaging/windows/tests",
+    "build_tools/third_party/s3_management/tests",
+    "external-builds/pytorch/tests",
+    "test_tools/tests",
+    "skills/therock_pr_bot/policy_check_test.py",
+]
+python_files = ["*_test.py"]
+addopts = [
+    "-ra",
+    "-m", "not manual",
+]
+markers = [
+    "manual: expensive or environment-dependent tests that require explicit opt-in with -m manual",
+]
+
+[tool.coverage.run]
+data_file = "build/.coverage"
+source = ["build_tools"]
+omit = [
+    "build_tools/tests/*",
+    "build_tools/github_actions/tests/*",
+    "build_tools/packaging/tests/*",
+    "build_tools/packaging/archives/tests/*",
+    "build_tools/packaging/linux/tests/*",
+    "build_tools/packaging/python/tests/*",
+    "build_tools/packaging/windows/tests/*",
+    "build_tools/third_party/s3_management/tests/*",
+    "external-builds/pytorch/tests/*",
+    "test_tools/tests/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+precision = 2
+sort = "Cover"
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+
+[tool.coverage.html]
+directory = "build/coverage-html"
