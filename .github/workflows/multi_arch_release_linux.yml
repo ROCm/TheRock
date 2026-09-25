@@ -292,32 +292,21 @@ jobs:
       matrix:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
 
-    uses: ./.github/workflows/test_python_packages_per_family.yml
+    uses: ./.github/workflows/test_rocm_wheels_matrix.yml
     secrets: inherit
     with:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
-      test_runs_on: ${{ matrix.family_info['test-runs-on'] }}
-      test_matrix: >-
+      matrix: >-
         ${{
           toJSON(
-            fromJSON(inputs.build_config).test_matrix_by_family
-            [matrix.family_info.amdgpu_family]
+            fromJSON(inputs.build_config).test_python_packages_matrix
           )
         }}
       package_find_links_url: >-
-        ${{
-          needs.build_python_packages.outputs.kpack_split == 'true'
-          &&
-          needs.build_python_packages.outputs.package_find_links_url
-          ||
-          format(
-            '{0}/{1}/index.html',
-            needs.build_python_packages.outputs.package_find_links_url,
-            matrix.family_info.amdgpu_family
-          )
-        }}
-      rocm_package_version: ${{ inputs.rocm_package_version }}
+        ${{ needs.build_python_packages.outputs.package_find_links_url }}
+      kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
+      rocm_version: ${{ inputs.rocm_package_version }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
 

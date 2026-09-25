@@ -684,7 +684,6 @@ class BuildConfig:
     build_pytorch: bool
     build_jax: bool
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
-    test_matrix_by_family: dict[str, list[dict[str, str]]] = field(default_factory=dict)
     pytorch_build_matrix: list[dict[str, str]] = field(default_factory=list)
     jax_build_matrix: list[dict[str, str]] = field(default_factory=list)
     # Build runner label for this platform/variant combination
@@ -1246,19 +1245,6 @@ def decide_jobs(
 # ---------------------------------------------------------------------------
 
 
-def group_test_matrix_by_family(
-    test_matrix: list[dict[str, str]],
-) -> dict[str, list[dict[str, str]]]:
-    """Group Python package test rows by AMDGPU family."""
-    matrix_by_family: dict[str, list[dict[str, str]]] = {}
-
-    for row in test_matrix:
-        family = row["amdgpu_family"]
-        matrix_by_family.setdefault(family, []).append(row)
-
-    return matrix_by_family
-
-
 def _expand_build_config_for_platform(
     families: list[str],
     platform: str,
@@ -1489,7 +1475,6 @@ def _expand_build_config_for_platform(
         per_family_info=per_family_info,
         platform=platform,
     )
-    test_matrix_by_family = group_test_matrix_by_family(test_python_packages_matrix)
 
     # ASAN builds native Linux packages (deb/rpm) but not Python packages.
     # The build_python_packages input allows callers to disable Python packages.
@@ -1537,7 +1522,6 @@ def _expand_build_config_for_platform(
         jax_build_matrix=jax_build_matrix,
         build_runs_on=build_runs_on,
         test_python_packages_matrix=test_python_packages_matrix,
-        test_matrix_by_family=test_matrix_by_family,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         skip_stages=jobs.build_rocm.skipped_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,

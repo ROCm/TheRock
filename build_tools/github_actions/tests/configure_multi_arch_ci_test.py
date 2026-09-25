@@ -1737,34 +1737,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
 
-    def test_python_package_matrix_is_grouped_by_family(self):
-        targets = cm.TargetSelection(
-            linux_families=["gfx94x"],
-            windows_families=["gfx110x"],
-        )
-
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(),
-            git_context=cm.GitContext.empty(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-
-        linux_config = result.linux
-        self.assertIsNotNone(linux_config)
-
-        flat_matrix = linux_config.test_python_packages_matrix
-        grouped_matrix = linux_config.test_matrix_by_family
-
-        self.assertEqual(
-            sum(len(rows) for rows in grouped_matrix.values()),
-            len(flat_matrix),
-        )
-
-        for family, rows in grouped_matrix.items():
-            self.assertTrue(rows)
-            self.assertTrue(all(row["amdgpu_family"] == family for row in rows))
-
     def test_asan_debug_uses_sandbox_runner(self):
         """asan-debug variant uses sandbox runner like asan."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])
@@ -2099,9 +2071,7 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         workflow_path = WORKFLOWS_DIR / "multi_arch_ci_linux.yml"
         yaml_fields = self._extract_build_config_fields(workflow_path)
         python_fields = {f.name for f in fields(cm.BuildConfig)}
-        unused_fields = {
-            "test_matrix_by_family",
-        }
+        unused_fields = set()
         self.assertEqual(
             yaml_fields,
             python_fields - unused_fields,
@@ -2131,57 +2101,6 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
             f"  In YAML but not Python: {yaml_fields - python_fields}\n"
             f"  In Python but not YAML: {python_fields - yaml_fields - unused_fields}",
         )
-
-
-class TestPythonPackageTestMatrices(unittest.TestCase):
-    """Test Python package test matrix grouping and family matrices."""
-
-    def test_group_test_matrix_by_family(self):
-        test_matrix = [
-            {
-                "amdgpu_family": "gfx94X-dcgpu",
-                "python_version": "3.12",
-            },
-            {
-                "amdgpu_family": "gfx94X-dcgpu",
-                "python_version": "3.13",
-            },
-            {
-                "amdgpu_family": "gfx120X-all",
-                "python_version": "3.12",
-            },
-        ]
-
-        result = cm.group_test_matrix_by_family(test_matrix)
-
-        self.assertEqual(
-            set(result),
-            {"gfx94X-dcgpu", "gfx120X-all"},
-        )
-        self.assertEqual(len(result["gfx94X-dcgpu"]), 2)
-        self.assertEqual(len(result["gfx120X-all"]), 1)
-
-    def test_group_test_matrix_by_family_preserves_rows(self):
-        test_matrix = [
-            {
-                "amdgpu_family": "gfx94X-dcgpu",
-                "python_version": "3.12",
-            },
-            {
-                "amdgpu_family": "gfx94X-dcgpu",
-                "python_version": "3.13",
-            },
-            {
-                "amdgpu_family": "gfx120X-all",
-                "python_version": "3.12",
-            },
-        ]
-
-        result = cm.group_test_matrix_by_family(test_matrix)
-
-        grouped_row_count = sum(len(rows) for rows in result.values())
-
-        self.assertEqual(grouped_row_count, len(test_matrix))
 
 
 class TestFamilyTestFilters(unittest.TestCase):
