@@ -7,10 +7,9 @@
 # builds one instrumented Linux stack for every coverage-enabled project, then
 # fans out to multi_arch_ci_coverage_report.yml once per project.
 #
-# Mirrors the nightly pattern: the nightly dispatches multi_arch_ci_linux.yml
-# directly; trigger_coverage_linux in the nightly dispatches this workflow
-# directly. A future Windows mirror copies this file, swapping the build
-# reusable and runners; multi_arch_ci_coverage_report.yml is reused unchanged.
+# The rocm-libraries nightly invokes this via a cross-repo reusable `uses:` call.
+# A future Windows mirror copies this file, swapping the build reusable and
+# runners; multi_arch_ci_coverage_report.yml is reused unchanged.
 #
 # Currently targets gfx94X-dcgpu; change-based selection and multi-arch come later.
 

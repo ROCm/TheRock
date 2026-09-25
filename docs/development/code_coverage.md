@@ -122,7 +122,7 @@ component, object globs, and Codecov flag for every onboarded project.
 ### Dispatching a run
 
 Start from the Actions tab or `gh` CLI, or let the rocm-libraries nightly
-dispatch it via a GitHub App token. There is no cron trigger.
+call it via a cross-repo reusable `uses:` workflow call. There is no cron trigger.
 
 Pass a recent nightly run id as `baseline_run_id` (keep `baseline_release_type`
 at `nightly`) and set `projects_to_test`; other inputs use sensible defaults.
