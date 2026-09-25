@@ -310,10 +310,11 @@ def _append_build_observability(
         f"> Resource profiling: {status} for this run — when ON, each report also "
         "embeds a CPU/memory usage timeline (`resource_info.py` wraps ccache as the "
         "compiler launcher, so ccache still caches); when OFF, reports contain ninja "
-        "build timings only. Profiling defaults ON for all builds. Force it via the "
-        '`force_resource_profiling` workflow_dispatch input: `"false"` to force off, '
-        '`"true"` or empty to keep the default (on). Each link 404s until its stage '
-        "uploads its logs; Linux only for now; prebuilt and skipped stages are omitted."
+        "build timings only. Profiling defaults ON for `nightly` builds and OFF "
+        "otherwise. Force it via the `force_resource_profiling` workflow_dispatch "
+        'input: `"true"` to force on, `"false"` to force off, empty for the default. '
+        "Each link 404s until its stage uploads its logs; Linux only for now; "
+        "prebuilt and skipped stages are omitted."
     )
     lines.append("")
 
@@ -324,11 +325,16 @@ def _resource_profiling_enabled(ci_inputs: CIInputs) -> bool:
     Mirrors the ENABLE_RESOURCE_PROFILING gate in
     multi_arch_build_portable_linux_artifacts.yml so the summary reports the
     effective state:
+      force == "true"  -> on
       force == "false" -> off
-      otherwise        -> on (default)
+      otherwise        -> on for release_type nightly, else off
     """
     force = (ci_inputs.force_resource_profiling or "").strip().lower()
-    return force != "false"
+    if force == "true":
+        return True
+    if force == "false":
+        return False
+    return ci_inputs.release_type == "nightly"
 
 
 def _append_build_pytorch(lines: list[str], outputs: CIOutputs) -> None:

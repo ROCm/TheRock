@@ -89,8 +89,9 @@ on:
         default: ""
       force_resource_profiling:
         description: >-
-          Override for resource-usage profiling. "false" forces it off; "true"
-          or "" (default) keeps it on for all builds. See #7692.
+          Override for resource-usage profiling. "true" forces it on, "false"
+          forces it off, and "" (default) enables it for nightly builds only.
+          See #7692.
         type: string
         default: ""
 

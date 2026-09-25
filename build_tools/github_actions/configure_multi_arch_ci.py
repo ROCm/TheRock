@@ -250,7 +250,7 @@ class CIInputs:
 
     # Resource-usage profiling override for the build observability report
     # (Linux builds only): "true" forces it on, "false" forces it off, and ""
-    # (default) falls back to the release_type gate (nightly/release only).
+    # (default) falls back to the release_type gate (nightly only).
     # See #7692. Mirrors the ENABLE_RESOURCE_PROFILING gate in
     # multi_arch_build_portable_linux_artifacts.yml so the summary can report the
     # effective state.

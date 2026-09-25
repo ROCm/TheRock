@@ -53,7 +53,7 @@ on:
       force_resource_profiling:
         type: string
         default: ""
-        description: 'Resource-usage profiling override (Linux builds): "false" = force off, "true" or empty = default (on for all builds). See #7692.'
+        description: 'Resource-usage profiling override (Linux builds): "true" = force on, "false" = force off, empty = default (nightly only). See #7692.'
       # --- Artifact reuse ---
       prebuilt_stages:
         type: string

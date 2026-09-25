@@ -78,8 +78,9 @@ on:
         default: ""
       force_resource_profiling:
         description: >-
-          Override for resource-usage profiling. "false" forces it off; "true"
-          or "" (default) keeps it on for all builds. See #7692.
+          Override for resource-usage profiling. "true" forces it on, "false"
+          forces it off, and "" (default) enables it for nightly builds only.
+          See #7692.
         type: string
         default: ""
 
@@ -105,13 +106,16 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_family }}
       ROCM_PACKAGE_VERSION: ${{ inputs.rocm_package_version }}
       RELEASE_TYPE: ${{ inputs.release_type }}
-      # Resource-usage profiling (resource_info.py as the compiler launcher)
-      # wraps ccache (ccache still caches), so it is enabled by default for all
-      # builds and each build_observability.html embeds a CPU/memory usage
-      # timeline. A run can force it off via the force_resource_profiling input
-      # ("false"); "true" (or empty) keeps it on. See #7692.
+      # Resource-usage profiling (resource_info.py as the compiler launcher,
+      # wrapping ccache) adds a CPU/memory timeline to build_observability.html.
+      # Nightly builds give enough resource signal, so it defaults on for
+      # nightly only; other builds use ccache directly. A run can override this
+      # via the force_resource_profiling input ("true"/"false"). See #7692.
       ENABLE_RESOURCE_PROFILING: >-
-        ${{ inputs.force_resource_profiling != 'false' && 'true' || 'false' }}
+        ${{ (inputs.force_resource_profiling == 'true'
+             || (inputs.force_resource_profiling != 'false'
+                 && inputs.release_type == 'nightly'))
+            && 'true' || 'false' }}
       REBUILD_ARTIFACTS: ${{ inputs.rebuild_artifacts }}
       STAGE_NAME: ${{ inputs.stage_name }}
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
@@ -265,6 +269,29 @@ jobs:
           echo "Artifacts:"
           ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
+      # Aggregate resource_info.py per-command logs into comp-summary.html. This
+      # is a dedicated non-blocking step so a missing summary, or one built from
+      # zero per-command logs (finalize still emits an all-zero table from
+      # BUILD_TOPOLOGY.toml), is flagged with a warning annotation and a failed
+      # step instead of silently shipping a build_observability.html without
+      # real resource info.
+      - name: Finalize resource profiling
+        if: ${{ !cancelled() && env.ENABLE_RESOURCE_PROFILING == 'true' }}
+        continue-on-error: true
+        run: |
+          PROF_DIR="${BUILD_DIR}/logs/therock-build-prof"
+          python3 build_tools/resource_info.py --finalize
+          LOG_COUNT="$(find "${PROF_DIR}" -maxdepth 1 -name '*.log' 2>/dev/null | wc -l)"
+          if [ "${LOG_COUNT}" -eq 0 ]; then
+            echo "::warning title=Resource profiling::No per-command logs in ${PROF_DIR}; resource_info.py was likely not used as the compiler launcher, so the resource report is empty."
+            exit 1
+          fi
+          if [ ! -s "${PROF_DIR}/comp-summary.html" ]; then
+            echo "::warning title=Resource profiling::comp-summary.html missing or empty in ${PROF_DIR} (${LOG_COUNT} per-command logs); build_observability.html will lack resource info."
+            exit 1
+          fi
+          echo "comp-summary.html generated from ${LOG_COUNT} per-command logs."
+
       # Generate the per-stage build_observability.html report from this stage's
       # .ninja_log (and comp-summary.html when resource profiling is enabled).
       # The report lands in ${BUILD_DIR}/logs and is uploaded by "Upload stage
@@ -274,9 +301,6 @@ jobs:
       - name: Analyze build times
         if: ${{ !cancelled() }}
         run: |
-          if [ "${ENABLE_RESOURCE_PROFILING}" = "true" ]; then
-            python3 build_tools/resource_info.py --finalize || true
-          fi
           python3 build_tools/analyze_build_times.py --build-dir "${BUILD_DIR}"
 
       - name: Test Packaging
