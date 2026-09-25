@@ -898,6 +898,11 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            # CRITICAL FAILURE (GPU hang): rocalution test causes MES queue hang during parallel test execution
+            # https://github.com/ROCm/TheRock/actions/runs/36077293577
+            "linux": ["gfx125X-dcgpu"],
+        },
     },
     # profiler tests
     "rocprofiler-compute": {
