@@ -60,6 +60,50 @@ on:
         description: "Ref/SHA of this workflow's scripts. Cross-repo callers pass the ref they pinned in uses:."
         default: ""
 
+  # Required so cross-repo callers (rocm-libraries nightly) can invoke via `uses:`.
+  workflow_call:
+    inputs:
+      baseline_run_id:
+        type: string
+        description: "Regular nightly run id supplying the non-instrumented dependencies. Empty tests this run's own instrumented stack end to end."
+        default: ""
+      baseline_release_type:
+        type: string
+        description: "Release channel baseline_run_id published to; artifacts are bucketed by channel."
+        default: "nightly"
+      baseline_repository:
+        type: string
+        description: "Repository owning baseline_run_id (owner/repo). Release nightlies come from ROCm/rockrel; empty means this repository."
+        default: ""
+      projects_to_test:
+        type: string
+        description: "Comma-separated coverage projects (e.g. hiprand), case-insensitive. Alias: rocm_libraries_all. Empty = every buildable project. rccl/rocshmem require a comm-libs build job (not present), so rocm_systems_all and all are rejected."
+        default: ""
+      amdgpu_families:
+        type: string
+        description: "Comma-separated GPU families to collect coverage on."
+        default: "gfx94X-dcgpu"
+      coverage_config_source:
+        type: string
+        description: "Repository and ref holding the per-project coverage metadata."
+        default: "ROCm/rocm-libraries@main"
+      test_type:
+        type: string
+        description: "Test type to run against the instrumented build."
+        default: "standard"
+      quartz_tracking_id:
+        type: string
+        description: "Leave empty. Reserved for release tracking."
+        default: ""
+      repository:
+        type: string
+        description: "Repository holding this workflow's scripts. Empty defaults to github.repository; cross-repo callers pass ROCm/TheRock."
+        default: ""
+      ref:
+        type: string
+        description: "Ref/SHA of this workflow's scripts. Cross-repo callers pass the ref they pinned in uses:."
+        default: ""
+
 permissions:
   contents: read
 
