@@ -93,6 +93,65 @@ _GPU_CONTAINER_OPTIONS = [
     "-e KUBE_CPU_REQUEST",
 ]
 
+# GPU container options for runners where the GitHub runner lives inside a WSL2
+# distro on a Windows GPU host (see the wsl-* pools in TheRock-Infra).
+#
+# WSL exposes the GPU through GPU paravirtualization as a single /dev/dxg node.
+# There is NO /dev/kfd and NO /dev/dri, so the standard options above cannot be
+# reused - Docker fails to create the container at all when asked to pass through
+# a device node that does not exist. The host groups (video, 993, 992, 110) and
+# the OSSCI podinfo env-file are likewise absent inside WSL.
+#
+# --device /dev/dxg - the paravirtualized GPU device
+# -v /usr/lib/wsl:/usr/lib/wsl - WSL driver libraries and drivers, which the ROCm
+#   runtime dlopen()s to reach the GPU; they exist only on the WSL host
+# -e LD_LIBRARY_PATH - so the mounted WSL libraries are actually searched. Test
+#   scripts prepend to this rather than replace it, so it composes.
+#
+# This mirrors the recipe documented in TheRock-Infra's build_golden_image.ps1
+# for the w11-wsl-* images.
+_WSL_GPU_CONTAINER_OPTIONS = [
+    "--device /dev/dxg",
+    "-v /usr/lib/wsl:/usr/lib/wsl",
+    "-e LD_LIBRARY_PATH=/usr/lib/wsl/lib",
+]
+
+# Substring identifying a runner label whose GitHub runner process runs inside WSL.
+# TheRock-Infra names these pools wsl-<arch>-gpu-rocm (plus a -test twin).
+_WSL_RUNNER_LABEL_MARKER = "wsl-"
+
+
+def _is_wsl_label(label) -> bool:
+    """Return True if a runner label identifies a WSL-hosted pool.
+
+    Matches on prefix, not substring: ephemeral runner names carry a random
+    suffix that can contain these letters by coincidence (for example
+    ...-1gpu-rocm-scale-runner-3wsl is an ordinary bare-metal runner).
+    """
+    return isinstance(label, str) and label.startswith(_WSL_RUNNER_LABEL_MARKER)
+
+
+def _is_wsl_runner(job_config: dict) -> bool:
+    """Return True if this job is scheduled onto a WSL-hosted runner.
+
+    A workflow_dispatch run can override the runner for every component via the
+    test_runs_on input, which test_artifacts.yml forwards as TEST_RUNS_ON. That
+    override wins in test_component.yml's runs-on expression, so it has to win
+    here too - otherwise a manual dispatch onto a WSL pool would still be handed
+    the bare-metal /dev/kfd device set and fail to start the container.
+
+    Otherwise fall back to the label resolved during runner selection, which
+    runs before container options are built.
+    """
+    dispatch_override = os.getenv("TEST_RUNS_ON", "").strip()
+    if dispatch_override:
+        return _is_wsl_label(dispatch_override)
+
+    return any(
+        _is_wsl_label(job_config.get(key))
+        for key in ("test_runner", "multi_gpu_runner")
+    )
+
 
 def _build_container_options(job_config: dict, platform: str) -> dict:
     """
@@ -116,9 +175,14 @@ def _build_container_options(job_config: dict, platform: str) -> dict:
     # Start with base options (always applied on Linux)
     options_parts = _BASE_CONTAINER_OPTIONS.copy()
 
-    # Add GPU-specific options unless this is a CPU-only runner
+    # Add GPU-specific options unless this is a CPU-only runner.
+    # WSL-hosted runners get a different device set: the GPU arrives as /dev/dxg
+    # via GPU paravirtualization, and /dev/kfd + /dev/dri do not exist there.
     if not job_config.get("linux_cpu_runner", False):
-        options_parts.extend(_GPU_CONTAINER_OPTIONS)
+        if _is_wsl_runner(job_config):
+            options_parts.extend(_WSL_GPU_CONTAINER_OPTIONS)
+        else:
+            options_parts.extend(_GPU_CONTAINER_OPTIONS)
 
     # Add any job-specific container options
     if "container_options" in job_config:

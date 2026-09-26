@@ -74,6 +74,24 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         argv = self._run_main(["--base-only"])
         self.assertIn("rocjitsu-hotswap_lib", argv)
 
+    def test_base_only_on_wsl_includes_wsl_rocdxg(self):
+        """WSL needs the libhsakmt WSL build to reach the GPU via /dev/dxg.
+
+        Without it the bare-metal libhsakmt in core-runtime is used and rocminfo
+        exits non-zero with no output, because there is no amdgpu driver in the
+        guest. Observed on actions/runs/36035911215.
+        """
+        with mock.patch.object(mod, "is_wsl_gpu", return_value=True):
+            argv = self._run_main(["--base-only"])
+        self.assertIn("wsl-rocdxg_lib", argv)
+        # The ordinary base set must still be requested.
+        self.assertIn("core-runtime_lib", argv)
+
+    def test_base_only_off_wsl_excludes_wsl_rocdxg(self):
+        with mock.patch.object(mod, "is_wsl_gpu", return_value=False):
+            argv = self._run_main(["--base-only"])
+        self.assertNotIn("wsl-rocdxg_lib", argv)
+
     def test_hipdnn_integration_tests_includes_rocrand(self):
         # The hipdnn_gpu_ref_tests binary links librocrand for GPU tensor data
         # generation, so the test runners must fetch the rand artifact even
