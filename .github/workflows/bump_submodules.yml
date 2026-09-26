@@ -17,6 +17,14 @@ on:
           - rocm-libraries
           - rocgdb
           - mesa-fork
+      pin_before:
+        description: 'Pin-only replay: TheRock SHA before the submodule bump (leave empty for a normal bump)'
+        required: false
+        default: ''
+      pin_after:
+        description: 'Pin-only replay: TheRock SHA to pin the submodule CI to'
+        required: false
+        default: ''
   schedule:
     - cron: "0 */12 * * *" # Existing cadence: rocgdb and mesa-fork. UTC: 12AM/12PM; Eastern: 8PM/8AM; Pacific: 5PM/5AM.
     - cron: "0 7 * * *" # rocm-systems and rocm-libraries. UTC: 7AM; Eastern: 3AM; Pacific: 12AM.
@@ -114,20 +122,53 @@ jobs:
               --mesa_token "${SYSTEMS_TOKEN}"
           done
 
+      # With pin_before/pin_after set, replays the push-event ref/pin update
+      # for one submodule without opening a new "Bump <submodule>" PR in
+      # TheRock (e.g. to apply a bump_automation.py fix to an already-landed
+      # bump). Otherwise runs a normal bump like the scheduled step.
       # Temporary clones and pushes use SYSTEMS_TOKEN or LIBRARIES_TOKEN from the App token steps.
       - name: Run manually dispatched bump automation
         if: github.event_name == 'workflow_dispatch'
         env:
+          PIN_BEFORE: ${{ github.event.inputs.pin_before }}
+          PIN_AFTER: ${{ github.event.inputs.pin_after }}
           SYSTEMS_TOKEN: ${{ steps.systems-token.outputs.token }}
           LIBRARIES_TOKEN: ${{ steps.librarian-token.outputs.token }}
         run: |
-          python3 build_tools/github_actions/bump_automation.py \
-            --event_type "schedule" \
-            --submodule "${INPUT_SUBMODULE}" \
-            --systems_token "${SYSTEMS_TOKEN}" \
-            --libraries_token "${LIBRARIES_TOKEN}" \
-            --rocgdb_token "${SYSTEMS_TOKEN}" \
+          token_args=(
+            --systems_token "${SYSTEMS_TOKEN}"
+            --libraries_token "${LIBRARIES_TOKEN}"
+            --rocgdb_token "${SYSTEMS_TOKEN}"
             --mesa_token "${SYSTEMS_TOKEN}"
+          )
+
+          if [[ -z "${PIN_BEFORE}" && -z "${PIN_AFTER}" ]]; then
+            python3 build_tools/github_actions/bump_automation.py \
+              --event_type "schedule" \
+              --submodule "${INPUT_SUBMODULE}" \
+              "${token_args[@]}"
+            exit 0
+          fi
+
+          # Lowercase only: bump_automation.py matches existing pins with a
+          # lowercase SHA regex, so an uppercase pin would never be updated.
+          sha_re='^[0-9a-f]{40}$'
+          if [[ ! "${PIN_BEFORE}" =~ ${sha_re} || ! "${PIN_AFTER}" =~ ${sha_re} ]]; then
+            echo "::error::pin_before and pin_after must both be full 40-character lowercase commit SHAs (got pin_before='${PIN_BEFORE}' pin_after='${PIN_AFTER}')."
+            exit 1
+          fi
+          if [[ "${INPUT_SUBMODULE}" == "all" ]]; then
+            echo "::error::submodule must name one specific submodule (not 'all') when pin_before/pin_after are set."
+            exit 1
+          fi
+
+          python3 build_tools/github_actions/bump_automation.py \
+            --event_type "push" \
+            --before "${PIN_BEFORE}" \
+            --after "${PIN_AFTER}" \
+            --only-submodule "${INPUT_SUBMODULE}" \
+            --skip-next-bump \
+            "${token_args[@]}"
 
       # Temporary clones and pushes use SYSTEMS_TOKEN or LIBRARIES_TOKEN from the App token steps.
       - name: Run push automation

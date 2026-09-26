@@ -109,6 +109,13 @@ SUBMODULE_CONFIG = {
     },
 }
 
+# Maps the short --only-submodule CLI values that aren't SUBMODULE_CONFIG keys
+# (their real paths are nested) to their SUBMODULE_CONFIG key.
+ONLY_SUBMODULE_ALIASES = {
+    "rocgdb": "debug-tools/rocgdb/source",
+    "mesa-fork": "third-party/sysdeps/common/mesa-fork",
+}
+
 
 def _clone_url(repo: str, token: str) -> str:
     return f"https://x-access-token:{token}@github.com/{repo}.git"
@@ -716,13 +723,27 @@ def handle_schedule(tokens: dict[str, str], submodule: str = "all") -> None:
         create_therock_bump("third-party/sysdeps/common/mesa-fork", tokens["mesa-fork"])
 
 
-def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
-    """Push event: update TheRock refs, close stale PRs, create next bump PR."""
-    changed = None
-    for path in SUBMODULE_CONFIG:
-        if submodule_changed(before, after, path):
-            changed = path
-            break
+def handle_push(
+    before: str,
+    after: str,
+    tokens: dict[str, str],
+    only_submodule: str | None = None,
+    skip_next_bump: bool = False,
+) -> None:
+    """Push event: update TheRock refs, close stale PRs, create next bump PR.
+
+    `only_submodule` and `skip_next_bump` exist for the manual
+    `workflow_dispatch` replay path in bump_submodules.yml (operator-supplied
+    `pin_before`/`pin_after`), which re-runs the ref/pin-update half of this
+    function for one specific submodule without also opening a new "Bump
+    <submodule>" PR in TheRock. Real push events never set either.
+    """
+    changed = ONLY_SUBMODULE_ALIASES.get(only_submodule, only_submodule)
+    if changed is None:
+        for path in SUBMODULE_CONFIG:
+            if submodule_changed(before, after, path):
+                changed = path
+                break
     if not changed:
         print("[INFO] No monitored submodule changed")
         return
@@ -818,6 +839,10 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
 
     os.chdir(original_cwd)
 
+    if skip_next_bump:
+        print(f"[INFO] skip_next_bump set, not opening a new Bump {changed} PR")
+        return
+
     # Immediately queue the next bump PR so the cycle continues without
     # waiting for the next scheduled run.
     print(f"[INFO] Creating next bump PR for {changed} after merge")
@@ -837,6 +862,27 @@ def main() -> None:
     )
     parser.add_argument("--before")
     parser.add_argument("--after")
+    parser.add_argument(
+        "--only-submodule",
+        default=None,
+        choices=["rocm-systems", "rocm-libraries", "rocgdb", "mesa-fork"],
+        help=(
+            "Manual workflow_dispatch replay only: treat this submodule as "
+            "the one that changed between --before/--after, instead of "
+            "auto-detecting it. Lets an operator re-run the ref/pin-update "
+            "half of a push event (e.g. to pick up a bump_automation.py fix) "
+            "without a real submodule-bump commit landing on main."
+        ),
+    )
+    parser.add_argument(
+        "--skip-next-bump",
+        action="store_true",
+        help=(
+            "Manual workflow_dispatch replay only: don't open a new "
+            "Bump <submodule> PR in TheRock after updating the downstream "
+            "ref/pins. Real push events always open the next bump PR."
+        ),
+    )
     parser.add_argument("--systems_token", required=True)
     parser.add_argument("--libraries_token", required=True)
     parser.add_argument("--rocgdb_token", required=True)
@@ -856,7 +902,13 @@ def main() -> None:
     if args.event_type == "schedule":
         handle_schedule(tokens, args.submodule)
     elif args.event_type == "push":
-        handle_push(args.before, args.after, tokens)
+        handle_push(
+            args.before,
+            args.after,
+            tokens,
+            only_submodule=args.only_submodule,
+            skip_next_bump=args.skip_next_bump,
+        )
 
 
 if __name__ == "__main__":
