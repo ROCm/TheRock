@@ -65,6 +65,17 @@ jobs:
         name: coverage-report-${{ matrix.runs-on }}
         path: build/coverage-html/
 
+    # Report-only: the real-tree consumer-graph checks (committed-graph superset
+    # invariant + subtree-map coverage) are opt-in via CONSUMER_GRAPH_ENFORCE so
+    # they never block an unrelated PR. `continue-on-error` keeps them non-gating
+    # while still visible. The synthetic unit tests already run in "Test build_tools".
+    - name: "Consumer graph enforcement tests (report-only)"
+      continue-on-error: true
+      working-directory: build_tools/consumer_graph
+      env:
+        CONSUMER_GRAPH_ENFORCE: "1"
+      run: python -m pytest -vv tests/analyzer_test.py
+
   unit_tests_summary:
     name: Unit Tests Summary
     if: always()
