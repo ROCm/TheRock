@@ -430,7 +430,7 @@ class TestDebugToolsAmdLlvmDev(unittest.TestCase):
 
 
 class TestRocprofilerSystemsHipfile(unittest.TestCase):
-    """librocprof-sys.so DT_NEEDED libhipfile.so.0."""
+    """--rocprofiler-systems fetches hipfile for sample-time dlopen telemetry."""
 
     def test_rocprofiler_systems_includes_hipfile(self) -> None:
         argv = _captured_fetch_argv(_make_run_id_args(rocprofiler_systems=True))

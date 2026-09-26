@@ -209,7 +209,7 @@ artifact_groups = ["dctools-core"]
 # depends_on = ["math-libs"]  # Will need math/ML libraries
 
 [build_stages.profiler-apps]
-description = "Profiler applications (depends on profiler-core)"
+description = "Profiler applications (depends on profiler-core and storage-libs)"
 artifact_groups = ["profiler-apps"]
 
 [build_stages.media-libs]
@@ -341,7 +341,7 @@ source_sets = ["base", "rocm-systems"]  # RDC uses amdsmi from core-amdsmi
 [artifact_groups.profiler-apps]
 description = "Profiler applications and analysis tools"
 type = "generic"
-artifact_group_deps = ["profiler-core", "compiler", "core-amdsmi"]
+artifact_group_deps = ["profiler-core", "compiler", "core-amdsmi", "storage-libs"]
 source_sets = ["rocm-systems"]
 
 [artifact_groups.cv-libs]
