@@ -563,6 +563,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rocalution")
             argv.append("rocalution_dev")
         if args.hip_tests:
+            # Only a _test artifact is produced; it carries share/hip/catch_tests.
+            argv.append("core-hiptests_test")
             # Contains bin/hrr-playback, needed by catch/unit/hrr.
             argv.append("core-hip_run")
         if args.kfdtest:
