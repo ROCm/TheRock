@@ -1,0 +1,10 @@
+[options]
+unmatched_exclude = [
+  "lib/rocm_sysdeps/share/locale/**",
+  "lib/rocm_sysdeps/share/man/**",
+  "lib/rocm_sysdeps/share/doc/**",
+]
+
+# lttng-ust
+[components.lib."third-party/sysdeps/linux/lttng-ust/build/stage"]
+[components.dev."third-party/sysdeps/linux/lttng-ust/build/stage"]
