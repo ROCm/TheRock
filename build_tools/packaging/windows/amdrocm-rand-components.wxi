@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Components -->
+
+  <!-- Contents of directory bin -->
+  <ComponentGroup Id="cg_amdrocm_rand_b" Directory="amdrocm_rand_b">
+    <Component Id="c_amdrocm_rand_b_h.dll" Guid="*">
+      <File Id="f_amdrocm_rand_b_h.dll" Source="$(var.BuildRoot)/math-libs/hipRAND/dist/bin/hiprand.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_rand_b_r.dll" Guid="*">
+      <File Id="f_amdrocm_rand_b_r.dll" Source="$(var.BuildRoot)/math-libs/hipRAND/dist/bin/rocrand.dll" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+</Include>

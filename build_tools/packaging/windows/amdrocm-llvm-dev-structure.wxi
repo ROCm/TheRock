@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Directory map -->
+    <Directory Id="amdrocm_llvm_dev_l" Name="lib">
+      <Directory Id="amdrocm_llvm_dev_ll" Name="llvm">
+        <Directory Id="amdrocm_llvm_dev_lli" Name="include">
+          <Directory Id="amdrocm_llvm_dev_lliL" Name="LLVMSPIRVLib" />
+          <Directory Id="amdrocm_llvm_dev_llicc" Name="clang-c" />
+          <Directory Id="amdrocm_llvm_dev_llict" Name="clang-tidy" />
+          <Directory Id="amdrocm_llvm_dev_llic" Name="clang">
+            <Directory Id="amdrocm_llvm_dev_llicA" Name="APINotes" />
+            <Directory Id="amdrocm_llvm_dev_lillinclAS" Name="AST" />
+            <Directory Id="amdrocm_llvm_dev_libllvincclaAST" Name="ASTMatchers" />
+            <Directory Id="amdrocm_llvm_dev_lillinclAn" Name="Analysis" />
+            <Directory Id="amdrocm_llvm_dev_llicB" Name="Basic" />
+            <Directory Id="amdrocm_llvm_dev_llicC" Name="CIR" />
+            <Directory Id="amdrocm_llvm_dev_lillinclCo" Name="CodeGen" />
+            <Directory Id="amdrocm_llvm_dev_libllvincclaCon" Name="Config" />
+            <Directory Id="amdrocm_llvm_dev_lillinclCr" Name="CrossTU" />
+            <Directory Id="amdrocm_llvm_dev_llicD" Name="DependencyScanning" />
+            <Directory Id="amdrocm_llvm_dev_lillinclDi" Name="DirectoryWatcher" />
+            <Directory Id="amdrocm_llvm_dev_lillinclDr" Name="Driver" />
+            <Directory Id="amdrocm_llvm_dev_llicE" Name="Edit" />
+            <Directory Id="amdrocm_llvm_dev_lillinclEx" Name="ExtractAPI" />
+            <Directory Id="amdrocm_llvm_dev_llicF" Name="Format" />
+            <Directory Id="amdrocm_llvm_dev_lillinclFr" Name="Frontend" />
+            <Directory Id="amdrocm_llvm_dev_libllvincclaFro" Name="FrontendTool" />
+            <Directory Id="amdrocm_llvm_dev_llicI" Name="Index" />
+            <Directory Id="amdrocm_llvm_dev_lillinclIn" Name="IndexSerialization" />
+            <Directory Id="amdrocm_llvm_dev_libllvincclaIns" Name="InstallAPI" />
+            <Directory Id="amdrocm_llvm_dev_libllvincclaInt" Name="Interpreter" />
+            <Directory Id="amdrocm_llvm_dev_llicL" Name="Lex" />
+            <Directory Id="amdrocm_llvm_dev_llicO" Name="Options" />
+            <Directory Id="amdrocm_llvm_dev_llicP" Name="Parse" />
+            <Directory Id="amdrocm_llvm_dev_llicR" Name="Rewrite" />
+            <Directory Id="amdrocm_llvm_dev_llicS" Name="ScalableStaticAnalysisFramework" />
+            <Directory Id="amdrocm_llvm_dev_lillinclSe" Name="Sema" />
+            <Directory Id="amdrocm_llvm_dev_libllvincclaSer" Name="Serialization" />
+            <Directory Id="amdrocm_llvm_dev_lillinclSt" Name="StaticAnalyzer" />
+            <Directory Id="amdrocm_llvm_dev_lillinclSu" Name="Support" />
+            <Directory Id="amdrocm_llvm_dev_llicT" Name="Testing" />
+            <Directory Id="amdrocm_llvm_dev_lillinclTo" Name="Tooling" />
+            <Directory Id="amdrocm_llvm_dev_llicU" Name="UnifiedSymbolResolution" />
+          </Directory>
+          <Directory Id="amdrocm_llvm_dev_llil" Name="lld" />
+          <Directory Id="amdrocm_llvm_dev_llilc" Name="llvm-c" />
+          <Directory Id="amdrocm_llvm_dev_lillinll" Name="llvm" />
+        </Directory>
+        <Directory Id="amdrocm_llvm_dev_lll" Name="lib">
+          <Directory Id="amdrocm_llvm_dev_lllc" Name="clang">
+            <Directory Id="amdrocm_llvm_dev_lllc2" Name="23">
+              <Directory Id="amdrocm_llvm_dev_lllc2i" Name="include">
+                <Directory Id="amdrocm_llvm_dev_lllc2illw" Name="llvm_libc_wrappers" />
+                <Directory Id="amdrocm_llvm_dev_lllc2ilow" Name="llvm_offload_wrappers" />
+                <Directory Id="amdrocm_llvm_dev_lllc2iow" Name="openmp_wrappers" />
+              </Directory>
+            </Directory>
+          </Directory>
+          <Directory Id="amdrocm_llvm_dev_lilllicm" Name="cmake">
+            <Directory Id="amdrocm_llvm_dev_lllcA" Name="AMDDeviceLibs" />
+            <Directory Id="amdrocm_llvm_dev_lllcc" Name="clang" />
+            <Directory Id="amdrocm_llvm_dev_lllcl" Name="lld" />
+            <Directory Id="amdrocm_llvm_dev_lilllicmll" Name="llvm" />
+          </Directory>
+          <Directory Id="amdrocm_llvm_dev_lllp" Name="pkgconfig" />
+        </Directory>
+      </Directory>
+    </Directory>
+</Include>

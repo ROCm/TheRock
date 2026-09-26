@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <ComponentGroupRef Id="cg_amdrocm_runtime_dev_c" />
+  <ComponentGroupRef Id="cg_amdrocm_runtime_dev_ih" />
+  <ComponentGroupRef Id="cg_amdrocm_runtime_dev_irk" />
+  <ComponentGroupRef Id="cg_amdrocm_runtime_dev_lchl" />
+  <ComponentGroupRef Id="cg_amdrocm_runtime_dev_lch" />
+  <ComponentGroupRef Id="cg_amdrocm_runtime_dev_licmhi" />
+  <ComponentGroupRef Id="cg_amdrocm_runtime_dev_lcl" />
+  <ComponentGroupRef Id="cg_amdrocm_runtime_dev_lcrc" />
+  <ComponentGroupRef Id="cg_amdrocm_runtime_dev_lcrk" />
+  <ComponentGroupRef Id="cg_amdrocm_runtime_dev_sdrc" />
+</Include>

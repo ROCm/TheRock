@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Components -->
+
+  <!-- Contents of directory include -->
+  <ComponentGroup Id="cg_amdrocm_ck_i" Directory="amdrocm_ck_i">
+    <Component Id="c_amdrocm_ck_i_g.h" Guid="*">
+      <File Id="f_amdrocm_ck_i_g.h" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/getopt.h" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory include\ck -->
+  <ComponentGroup Id="cg_amdrocm_ck_ic" Directory="amdrocm_ck_ic">
+    <Files Include="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/**/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\ck_tile -->
+  <ComponentGroup Id="cg_amdrocm_ck_inckti" Directory="amdrocm_ck_inckti">
+    <Files Include="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/**/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\half -->
+  <ComponentGroup Id="cg_amdrocm_ck_ih" Directory="amdrocm_ck_ih">
+    <Files Include="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/half/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\composable_kernel -->
+  <ComponentGroup Id="cg_amdrocm_ck_lcck" Directory="amdrocm_ck_lcck">
+    <Files Include="$(var.BuildRoot)/ml-libs/composable_kernel/dist/lib/cmake/composable_kernel/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory share\doc\composablekernel -->
+  <ComponentGroup Id="cg_amdrocm_ck_sdc" Directory="amdrocm_ck_sdc">
+    <Component Id="c_amdrocm_ck_sdc_L" Guid="*">
+      <File Id="f_amdrocm_ck_sdc_L" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/share/doc/composablekernel/LICENSE" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+</Include>

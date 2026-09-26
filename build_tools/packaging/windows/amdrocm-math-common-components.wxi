@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Components -->
+
+  <!-- Contents of directory bin -->
+  <ComponentGroup Id="cg_amdrocm_math_common_b" Directory="amdrocm_math_common_b">
+    <Component Id="c_amdrocm_math_common_b_ro.dll" Guid="*">
+      <File Id="f_amdrocm_math_common_b_ro.dll" Source="$(var.BuildRoot)/third-party/host-blas/host-blas/dist/bin/rocm-openblas.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_math_common_b_roop.dll" Guid="*">
+      <File Id="f_amdrocm_math_common_b_roop.dll" Source="$(var.BuildRoot)/third-party/host-blas/host-blas64/dist/bin/rocm-openblas64.dll" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+</Include>

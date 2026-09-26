@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <ComponentGroupRef Id="cg_amdrocm_math_common_b" />
+</Include>

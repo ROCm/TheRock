@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Directory map -->
+    <Directory Id="amdrocm_blas_dev_i" Name="include">
+      <Directory Id="amdrocm_blas_dev_ih" Name="hipblas" />
+      <Directory Id="amdrocm_blas_dev_inhi" Name="hipblaslt" />
+      <Directory Id="amdrocm_blas_dev_ir" Name="rocblas" />
+    </Directory>
+    <Directory Id="amdrocm_blas_dev_l" Name="lib">
+      <Directory Id="amdrocm_blas_dev_lc" Name="cmake">
+        <Directory Id="amdrocm_blas_dev_lch" Name="hipblas" />
+        <Directory Id="amdrocm_blas_dev_licmhi" Name="hipblaslt" />
+        <Directory Id="amdrocm_blas_dev_lcr" Name="rocblas" />
+      </Directory>
+    </Directory>
+</Include>
