@@ -441,6 +441,7 @@ def retrieve_artifacts_by_run_id(args):
         extra_artifacts = []
         if args.sanity:
             argv.append("core-ocl_run")  # clinfo for the OpenCL sanity test
+            argv.append("hipify_run")  # hipify-clang for the HIPIFY sanity test
         if args.aqlprofile:
             extra_artifacts.append("aqlprofile")
         if args.blas:
@@ -1068,7 +1069,7 @@ def main(argv):
     artifacts_group.add_argument(
         "--sanity",
         default=False,
-        help="Include base artifacts and clinfo for sanity tests",
+        help="Include base artifacts, clinfo, and hipify-clang for sanity tests",
         action=argparse.BooleanOptionalAction,
     )
     artifacts_group.add_argument(
