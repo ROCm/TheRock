@@ -81,7 +81,7 @@ add_custom_target(
   COMMAND
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
-    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
+    "${Python3_EXECUTABLE}" "${THEROCK_SOURCE_DIR}/build_tools/copy_dir_with_timestamps.py" "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
     ${patch_source_commands}
   COMMAND
