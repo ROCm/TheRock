@@ -1,4 +1,4 @@
-# TheRock PR Bot — Policy FAQ Doc
+# TheRock PR Bot — Policy FAQ Document
 
 **TheRock PR Bot** is an automated Pull Request (PR) gatekeeper.
 On every Pull Request, it runs a set of policy checks — PR description,
