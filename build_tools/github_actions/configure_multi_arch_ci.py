@@ -248,6 +248,9 @@ class CIInputs:
     # Non-empty when an external repo calls TheRock workflows
     external_repo: str = ""
 
+    # Allows the host-asan build variant CI to run on pull_request events
+    asan_presubmit: bool = False
+
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
         print("CIInputs:")
@@ -315,6 +318,7 @@ class CIInputs:
         build_native_linux = (
             os.environ.get("BUILD_NATIVE_LINUX", "true").lower() != "false"
         )
+        asan_presubmit = os.environ.get("ASAN_PRESUBMIT", "false").lower() == "true"
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
@@ -398,6 +402,7 @@ class CIInputs:
             build_pytorch=build_pytorch,
             build_jax=build_jax,
             build_native_linux=build_native_linux,
+            asan_presubmit=asan_presubmit,
             python_versions=[python_version] if python_version else [],
             pr_labels=pr_labels,
             linux_amdgpu_families=_parse_comma_list(
@@ -1319,13 +1324,24 @@ def _expand_build_config_for_platform(
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant.startswith("host-asan"):
-            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+            # host-asan tests are resource intensive so they run on the
+            # following triggers:
+            #   trigger           | conditions
+            #   ----------------- | --------------
+            #   schedule:         | always enabled
+            #   workflow_dispatch | always enabled
+            #   push              | never enabled
+            #   pull_request      | enabled for external repos that set the
+            #                     | 'asan_presubmit' opt-in
+            if not (
+                ci_inputs.is_schedule
+                or ci_inputs.is_workflow_dispatch
+                or (ci_inputs.external_repo and ci_inputs.asan_presubmit)
+            ):
                 test_runs_on = ""
                 print(
-                    f"  {family_name}: host-asan tests only run on nightly, "
-                    f"disabling tests"
+                    f"  {family_name}: host-asan tests run on nightly or for "
+                    f"external repo presubmits, disabling tests"
                 )
             elif "test-runs-on-sandbox" in platform_info:
                 test_runs_on = platform_info["test-runs-on-sandbox"]
