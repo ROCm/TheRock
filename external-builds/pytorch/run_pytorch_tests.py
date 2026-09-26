@@ -311,7 +311,12 @@ def main() -> int:
 
         retcode = pytest.main(pytest_args)
         print(f"Pytest finished with return code: {retcode}")
-        return retcode
+        # Force-exit immediately. PyTorch's pytest is known to hang after
+        # all test files complete due to leaked daemon threads or orphan child
+        # processes (https://github.com/ROCm/TheRock/issues/999). os._exit()
+        # terminates without waiting for threads or running atexit handlers.
+        os._exit(retcode if retcode >= 0 else 1)
+
     except (ValueError, IndexError) as e:
         print(f"[ERROR] Exception in PyTorch unit-tests runner: {e}")
         sys.exit(1)
