@@ -1,0 +1,41 @@
+From b6e3699a16264ec132855baa872ac3b826a77d95 Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Sat, 26 Sep 2026 09:17:36 -0500
+Subject: [PATCH] Integrate ROCm/rocm-libraries#12614: fix(rocprim): Do not
+ reference gfx1250-strict if not supported by compiler
+
+---
+ .../rocprim/rocprim/include/rocprim/config.hpp  | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/projects/rocprim/rocprim/include/rocprim/config.hpp b/projects/rocprim/rocprim/include/rocprim/config.hpp
+index f6d2d3fcec..992b237b57 100644
+--- a/projects/rocprim/rocprim/include/rocprim/config.hpp
++++ b/projects/rocprim/rocprim/include/rocprim/config.hpp
+@@ -161,7 +161,22 @@
+     #if !defined(ROCPRIM_THREAD_STORE_USE_CACHE_MODIFIERS)
+         #define ROCPRIM_THREAD_STORE_USE_CACHE_MODIFIERS 1
+     #endif
+-    #define ROCPRIM_IS_CDNA5() __builtin_amdgcn_processor_is("gfx1250") || __builtin_amdgcn_processor_is("gfx1250-strict")
++    #if defined(ROCPRIM_TARGET_SPIRV)
++        // Preserve late target selection for AMDGPU SPIR-V.
++        #define ROCPRIM_IS_CDNA5()                                \
++            (__builtin_amdgcn_processor_is("gfx1250")             \
++             || __builtin_amdgcn_processor_is("gfx1250-strict"))
++    #else
++        // Concrete AMDGPU compilation already knows the target architecture
++        // from preprocessor macros (see ROCPRIM_TARGET_CDNA5 above), so use
++        // that instead of asking the builtin about a processor string that
++        // older compilers may not recognize (e.g. "gfx1250-strict").
++        #if defined(ROCPRIM_TARGET_CDNA5)
++            #define ROCPRIM_IS_CDNA5() 1
++        #else
++            #define ROCPRIM_IS_CDNA5() 0
++        #endif
++    #endif
+     #define ROCPRIM_IS_CDNA4() __builtin_amdgcn_processor_is("gfx950")
+     #define ROCPRIM_IS_CDNA3()                                                              \
+         (__builtin_amdgcn_processor_is("gfx942") || __builtin_amdgcn_processor_is("gfx950") \
+-- 
+2.43.0
+

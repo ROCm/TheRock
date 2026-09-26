@@ -1,0 +1,150 @@
+From 39815693375b2d18884e308eb530da1e919234ec Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Sat, 26 Sep 2026 09:20:23 -0500
+Subject: [PATCH] Integrate ROCm/rocm-libraries#12321: feat(rocblas): Select
+ tensile gfx1250-strict library according to revision
+
+---
+ .../rocblas/library/src/include/utility.hpp   |  3 ++
+ .../rocblas/library/src/rocblas_auxiliary.cpp | 28 +++++++++++++++
+ projects/rocblas/library/src/tensile_host.cpp | 34 +++++++++++++------
+ 3 files changed, 55 insertions(+), 10 deletions(-)
+
+diff --git a/projects/rocblas/library/src/include/utility.hpp b/projects/rocblas/library/src/include/utility.hpp
+index 3ec82e01282..b276fc02120 100644
+--- a/projects/rocblas/library/src/include/utility.hpp
++++ b/projects/rocblas/library/src/include/utility.hpp
+@@ -809,6 +809,9 @@ ROCBLAS_INTERNAL_EXPORT std::string rocblas_internal_get_arch_name();
+ // for internal use, fetch xnack mode
+ std::string rocblas_internal_get_xnack_mode();
+ 
++// for internal use, whether the device revision requires the strict library
++bool rocblas_internal_is_strict_target(int device);
++
+ // for internal use during testing, whether to skip actual kernel launch
+ ROCBLAS_INTERNAL_EXPORT bool rocblas_internal_tensile_debug_skip_launch();
+ 
+diff --git a/projects/rocblas/library/src/rocblas_auxiliary.cpp b/projects/rocblas/library/src/rocblas_auxiliary.cpp
+index 295dfe67388..5d2ca1eef16 100644
+--- a/projects/rocblas/library/src/rocblas_auxiliary.cpp
++++ b/projects/rocblas/library/src/rocblas_auxiliary.cpp
+@@ -998,6 +998,34 @@ std::string rocblas_internal_get_xnack_mode()
+     return XnackMode<hipDeviceProp_t>{}(deviceProperties);
+ }
+ 
++// Internal use. True when the device's revision requires the strict device
++// library. Kept revision-numeric and codename-neutral on purpose.
++bool rocblas_internal_is_strict_target(int deviceId)
++{
++    // Test/CI override: force strict-catalog selection on a strict-capable device.
++    static const bool force_strict = [] {
++        const char* e = std::getenv("ROCBLAS_TENSILE_STRICT");
++        return e && strtol(e, nullptr, 0) != 0;
++    }();
++
++    hipDeviceProp_t deviceProperties;
++    if(hipGetDeviceProperties(&deviceProperties, deviceId) != hipSuccess)
++        return false;
++
++    // The strict identity currently only applies to gfx1250 silicon.
++    if(std::string(deviceProperties.gcnArchName).find("gfx1250") == std::string::npos)
++        return false;
++
++    if(force_strict)
++        return true;
++
++    // Revision-gated: the strict device library targets the earliest silicon
++    // revision, which reports asicRevision 0 (confirmed against ROCr agent
++    // enumeration); later revisions use the regular library.
++    static constexpr int c_strict_asic_revision = 0;
++    return deviceProperties.asicRevision == c_strict_asic_revision;
++}
++
+ /*******************************************************************************
+  * exported. Whether to skip buffer alloc/init/copy when tracing kernel names in Tensile *
+  *******************************************************************************/
+diff --git a/projects/rocblas/library/src/tensile_host.cpp b/projects/rocblas/library/src/tensile_host.cpp
+index 830335c41ef..fa2abe723f1 100644
+--- a/projects/rocblas/library/src/tensile_host.cpp
++++ b/projects/rocblas/library/src/tensile_host.cpp
+@@ -860,6 +860,18 @@ namespace
+             static std::string base_path;
+             static int         determined_path{determine_tensile_base_path(base_path)};
+ 
++            // The device predicate name stays `processor` (matches the physical
++            // device for Tensile solution selection); the catalog key may diverge
++            // to select the strict device library by GPU revision. The strict
++            // variant is the base arch with a "-strict" suffix.
++            std::string catalog_key    = processor;
++            std::string strict_catalog = processor + "-strict";
++            if(rocblas_internal_is_strict_target(deviceId)
++               && TestPath(base_path + "/" + strict_catalog))
++            {
++                catalog_key = strict_catalog;
++            }
++
+             path = base_path;
+             // Probe subdirectories from most-specific to least-specific so that shard
+             // overlays compose correctly regardless of how TheRock splits arch builds:
+@@ -870,29 +882,29 @@ namespace
+             std::string xnack_mode   = rocblas_internal_get_xnack_mode();
+             if(!xnack_mode.empty())
+             {
+-                std::string processor_xnack = processor + "-" + xnack_mode;
++                std::string processor_xnack = catalog_key + "-" + xnack_mode;
+                 if(TestPath(path + "/" + processor_xnack))
+                 {
+                     path += "/" + processor_xnack;
+                     found_subdir = true;
+                 }
+             }
+-            if(!found_subdir && TestPath(path + "/" + processor))
+-                path += "/" + processor;
++            if(!found_subdir && TestPath(path + "/" + catalog_key))
++                path += "/" + catalog_key;
+ 
+ #ifdef TENSILE_YAML
+-            tensileLibraryPath = path + "/TensileLibrary_lazy_" + processor + ".yaml";
++            tensileLibraryPath = path + "/TensileLibrary_lazy_" + catalog_key + ".yaml";
+ #else
+-            tensileLibraryPath = path + "/TensileLibrary_lazy_" + processor + ".dat";
++            tensileLibraryPath = path + "/TensileLibrary_lazy_" + catalog_key + ".dat";
+ #endif
+             if(!TestPath(tensileLibraryPath))
+             {
+                 tensile_lazy_load_enabled = false;
+ 
+ #ifdef TENSILE_YAML
+-                tensileLibraryPath = path + "/TensileLibrary_" + processor + ".yaml";
++                tensileLibraryPath = path + "/TensileLibrary_" + catalog_key + ".yaml";
+ #else
+-                tensileLibraryPath = path + "/TensileLibrary_" + processor + ".dat";
++                tensileLibraryPath = path + "/TensileLibrary_" + catalog_key + ".dat";
+ #endif
+                 if(!TestPath(tensileLibraryPath))
+                 {
+@@ -973,7 +985,7 @@ namespace
+             if(!tensile_lazy_load_enabled || rocblas_initialize_called())
+             {
+                 // only load modules for the current architecture
+-                auto dir = path + "/*" + processor + "*co";
++                auto dir = path + "/*" + catalog_key + "*co";
+ 
+                 // Get current xnack mode
+                 std::string xnack = rocblas_internal_get_xnack_mode();
+@@ -1055,8 +1067,10 @@ namespace
+             }
+ 
+             {
+-                // initialize adapter for lazy loading or experimental code objects
+-                PRINT_IF_HIP_ERROR(adapter.initializeLazyLoading(processor, path));
++                // initialize adapter for lazy loading or experimental code objects.
++                // Uses catalog_key (not processor) because the helper kernel's on-disk
++                // name carries the compiler-target arch, i.e. the -strict variant under strict.
++                PRINT_IF_HIP_ERROR(adapter.initializeLazyLoading(catalog_key, path));
+ 
+                 // Load library for this specific architecture if not already loaded
+ 
+-- 
+2.43.0
+

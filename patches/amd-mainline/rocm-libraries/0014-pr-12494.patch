@@ -1,0 +1,80 @@
+From 8c37e9a14ea5393e823a8a4de16a141516831104 Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Sat, 26 Sep 2026 09:22:02 -0500
+Subject: [PATCH] Integrate ROCm/rocm-libraries#12494: feat(rocsparse): add
+ gfx1250-strict- #12481
+
+---
+ projects/rocalution/CHANGELOG.md   | 5 +++++
+ projects/rocalution/CMakeLists.txt | 1 +
+ projects/rocsparse/CHANGELOG.md    | 3 +++
+ projects/rocsparse/CMakeLists.txt  | 4 ++--
+ 4 files changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/projects/rocalution/CHANGELOG.md b/projects/rocalution/CHANGELOG.md
+index 7b891d09c6..2722822aa1 100644
+--- a/projects/rocalution/CHANGELOG.md
++++ b/projects/rocalution/CHANGELOG.md
+@@ -12,6 +12,11 @@ Full documentation for rocALUTION is available at [https://rocm.docs.amd.com/pro
+ ### Resolved issues
+ * Fixed the Smoothed-Aggregation AMG preconditioner not falling back to the host when the prolongation fill failed on the accelerator or in a non-CSR format.
+ 
++## (Unreleased) rocALUTION 4.1.1
++
++### Added
++* Added support for the `gfx1250-strict` architecture.
++
+ ## rocALUTION 4.1.0 for ROCm 7.2.0
+ 
+ ### Added
+diff --git a/projects/rocalution/CMakeLists.txt b/projects/rocalution/CMakeLists.txt
+index c0ea7d911b..cc80cabb1d 100644
+--- a/projects/rocalution/CMakeLists.txt
++++ b/projects/rocalution/CMakeLists.txt
+@@ -113,6 +113,7 @@ else()
+     gfx1153
+     gfx1200
+     gfx1201
++    gfx1250-strict
+   )
+ endif()
+ if(AMDGPU_TARGETS AND NOT GPU_TARGETS)
+diff --git a/projects/rocsparse/CHANGELOG.md b/projects/rocsparse/CHANGELOG.md
+index d9c6996392..552449840f 100644
+--- a/projects/rocsparse/CHANGELOG.md
++++ b/projects/rocsparse/CHANGELOG.md
+@@ -5,6 +5,9 @@ Documentation for rocSPARSE is available at
+ 
+ ## (Unreleased) rocSPARSE 5.2.0
+ 
++### Added
++* Added support for the `gfx1250-strict` architecture.
++
+ ### Resolved issues
+ * Fixed an overflow issue in `rocsparse_roti` and the generic `rocsparse_rot` routine. When using 64-bit indices and `nnz` >= `2^32`, a 32-bit element-index calculation could overflow, leaving some elements unrotated and causing low-index elements to be processed with incorrect data. The kernel now computes element indices in 64-bit arithmetic and uses a grid-stride loop with the launch grid clamped to the device limit.
+ * Fixed an overflow issue in `rocsparse_Xsctr` and the generic `rocsparse_scatter` routine. When using 64-bit indices and `nnz` >= `2^32`, a 32-bit element-index calculation could overflow and prevent some elements from being scattered. The kernel now computes element indices in 64-bit arithmetic and uses a grid-stride loop with the launch grid clamped to the device limit.
+diff --git a/projects/rocsparse/CMakeLists.txt b/projects/rocsparse/CMakeLists.txt
+index 9fb2081c45..27453dc7d6 100644
+--- a/projects/rocsparse/CMakeLists.txt
++++ b/projects/rocsparse/CMakeLists.txt
+@@ -187,7 +187,7 @@ if(COMMAND rocm_check_target_ids)
+                   "gfx90a:xnack-;gfx90a:xnack+;gfx942;gfx950"
+                   "gfx1030;gfx1100;gfx1101;gfx1102"
+                   "gfx1150;gfx1151;gfx1152;gfx1153"
+-                  "gfx1200;gfx1201;gfx1250")
++                  "gfx1200;gfx1201;gfx1250;gfx1250-strict")
+     endif()
+ else()
+     # Use target ID syntax if supported for GPU_TARGETS
+@@ -195,7 +195,7 @@ else()
+         set(DEFAULT_GPU_TARGETS "gfx803;gfx900:xnack-;gfx906:xnack-;gfx908:xnack-"
+                                 "gfx1030;gfx1100;gfx1101;gfx1102"
+                                 "gfx1150;gfx1151;gfx1152;gfx1153"
+-                                "gfx1200;gfx1201;gfx1250")
++                                "gfx1200;gfx1201;gfx1250;gfx1250-strict")
+     else()
+         set(DEFAULT_GPU_TARGETS "gfx803;gfx900;gfx906;gfx908")
+     endif()
+-- 
+2.43.0
+

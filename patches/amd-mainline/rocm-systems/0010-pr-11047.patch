@@ -1,0 +1,493 @@
+From 0a35809bc9018f11b13a293ccdcd049276b19758 Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Sat, 26 Sep 2026 09:17:22 -0500
+Subject: [PATCH] Integrate ROCm/rocm-systems#11047: feat(rocr): Report SDMA
+ queue faults through the queue error callback
+
+---
+ .../rocrtst/suites/functional/queue_create.cc | 121 ++++++++++++++++++
+ .../rocrtst/suites/functional/queue_create.h  |   8 ++
+ .../rocrtst/suites/test_common/main.cc        |   7 +
+ .../hsa-runtime/core/inc/amd_sdma_queue.h     |  11 +-
+ .../runtime/hsa-runtime/core/inc/runtime.h    |  46 +++++++
+ .../core/runtime/amd_sdma_queue.cpp           |  15 ++-
+ .../hsa-runtime/core/runtime/hsa_ext_amd.cpp  |   7 +-
+ .../hsa-runtime/core/runtime/runtime.cpp      |  79 +++++++++++-
+ .../runtime/hsa-runtime/inc/hsa_ext_amd.h     |   9 +-
+ 9 files changed, 296 insertions(+), 7 deletions(-)
+
+diff --git a/projects/rocr-runtime/rocrtst/suites/functional/queue_create.cc b/projects/rocr-runtime/rocrtst/suites/functional/queue_create.cc
+index 6e51dfb70c..9c75ec98f1 100644
+--- a/projects/rocr-runtime/rocrtst/suites/functional/queue_create.cc
++++ b/projects/rocr-runtime/rocrtst/suites/functional/queue_create.cc
+@@ -4,6 +4,11 @@
+  * SPDX-License-Identifier: MIT
+  */
+ 
++#include <unistd.h>
++
++#include <atomic>
++#include <cstring>
++
+ #include "suites/functional/queue_create.h"
+ #include "hsa/hsa_ext_amd.h"
+ #include "hsa/hsa.h"
+@@ -16,6 +21,41 @@ static constexpr uint32_t kQueueSizeBytes =
+     kQueueSizePackets * sizeof(hsa_kernel_dispatch_packet_t);
+ static constexpr uint32_t kSdmaQueueSizeBytes = 4096;
+ 
++namespace {
++
++// SDMA write-linear ("write untiled") packet. Declared here because this is the
++// only packet rocrtst builds by hand for an SDMA queue.
++struct SdmaWriteLinearPacket {
++  uint32_t header;
++  uint32_t dst_addr_lo;
++  uint32_t dst_addr_hi;
++  uint32_t count;
++  uint32_t data0;
++};
++
++constexpr uint32_t kSdmaOpWrite = 2;
++constexpr uint32_t kSdmaSubOpWriteLinear = 0;
++
++// Bytes withheld from the ring when submitting the malformed packet, matching
++// the packetSizeOffset KFDNegativeTest uses to provoke an SDMA queue reset.
++constexpr uint32_t kSdmaBadPacketByteOffset = 6;
++
++// Records what the queue's asynchronous error callback observed.
++struct SdmaErrorCallbackState {
++  std::atomic<uint32_t> invocations{0};
++  hsa_status_t status{HSA_STATUS_SUCCESS};
++  hsa_queue_t* source{nullptr};
++};
++
++void SdmaErrorCallback(hsa_status_t status, hsa_queue_t* source, void* data) {
++  auto* state = reinterpret_cast<SdmaErrorCallbackState*>(data);
++  state->status = status;
++  state->source = source;
++  state->invocations.fetch_add(1, std::memory_order_release);
++}
++
++}  // namespace
++
+ static bool VerifySquareResult(uint32_t* ar, size_t sz) {
+   for (size_t i = 0; i < sz; ++i) {
+     if (i * i != ar[i]) {
+@@ -356,6 +396,87 @@ void QueueCreateTest::SdmaQueueCreateDestroyTest() {
+ #endif
+ }
+ 
++void QueueCreateTest::SdmaQueueErrorCallbackTest() {
++  ASSERT_SUCCESS(rocrtst::SetDefaultAgents(this));
++  ASSERT_SUCCESS(rocrtst::SetPoolsTypical(this));
++
++  // Destination of the malformed write. The engine never retires the packet, so
++  // the contents are never inspected.
++  hsa_agent_t ag_list[2] = {*gpu_device1(), *cpu_device()};
++  void* dst_buffer = nullptr;
++  ASSERT_SUCCESS(hsa_amd_memory_pool_allocate(cpu_pool(), sizeof(uint32_t), 0, &dst_buffer));
++  ASSERT_SUCCESS(hsa_amd_agents_allow_access(2, ag_list, NULL, dst_buffer));
++
++  SdmaErrorCallbackState state;
++
++  hsa_amd_queue_create_desc_t desc = {};
++  desc.version = HSA_AMD_QUEUE_CREATE_DESC_VERSION;
++  desc.engine_type = HSA_AMD_QUEUE_ENGINE_SDMA;
++  desc.queue_size_bytes = kSdmaQueueSizeBytes;
++  desc.priority = HSA_AMD_QUEUE_PRIORITY_NORMAL;
++  desc.flags = static_cast<hsa_amd_queue_create_flag_t>(HSA_AMD_QUEUE_CREATE_SYSTEM_MEM);
++  desc.engine.sdma.sdma_engine_id = HSA_AMD_SDMA_ENGINE_ID_ANY;
++  desc.callback = SdmaErrorCallback;
++  desc.callback_data = &state;
++
++  hsa_status_t status = hsa_amd_queue_create(*gpu_device1(), &desc, 1);
++  if (status == HSA_STATUS_ERROR_INVALID_QUEUE_CREATION) {
++    printf("  SdmaQueueErrorCallbackTest: SKIPPED (agent or driver does not support "
++           "SDMA queue creation)\n");
++    ASSERT_SUCCESS(hsa_amd_memory_pool_free(dst_buffer));
++    return;
++  }
++  ASSERT_SUCCESS(status);
++  ASSERT_NE(desc.queue, nullptr);
++
++  hsa_queue_t* queue = desc.queue;
++  const uint64_t dst_address = reinterpret_cast<uint64_t>(dst_buffer);
++
++  SdmaWriteLinearPacket pkt = {};
++  pkt.header = kSdmaOpWrite | (kSdmaSubOpWriteLinear << 8);
++  pkt.dst_addr_lo = static_cast<uint32_t>(dst_address);
++  pkt.dst_addr_hi = static_cast<uint32_t>(dst_address >> 32);
++  // The count field holds dwords minus one, so 0 requests a single dword.
++  pkt.count = 0;
++  pkt.data0 = 0;
++
++  memcpy(queue->base_address, &pkt, sizeof(pkt));
++
++  // Publish fewer bytes than the packet the engine will parse. The engine is
++  // left reading a truncated packet and hangs, which is what makes the driver
++  // reset the queue once it is destroyed. SDMA write and read pointers are byte
++  // offsets, so the doorbell value is a byte count.
++  const uint32_t published_bytes = sizeof(pkt) - kSdmaBadPacketByteOffset;
++  hsa_signal_store_screlease(queue->doorbell_signal, published_bytes);
++
++  // Give the engine time to fetch the malformed packet and hang on it.
++  usleep(50 * 1000);
++
++  ASSERT_SUCCESS(hsa_queue_destroy(queue));
++
++  // The queue reset is triggered by the destroy above, so the notification is
++  // expected to arrive after the queue is already gone.
++  const int kCallbackTimeoutMs = 10000;
++  const int kPollIntervalMs = 10;
++  for (int waited_ms = 0;
++       state.invocations.load(std::memory_order_acquire) == 0 && waited_ms < kCallbackTimeoutMs;
++       waited_ms += kPollIntervalMs) {
++    usleep(kPollIntervalMs * 1000);
++  }
++
++  ASSERT_EQ(state.invocations.load(std::memory_order_acquire), 1u)
++      << "No error callback within " << kCallbackTimeoutMs
++      << " ms of destroying the queue. This requires a driver that supports "
++         "per-SDMA-queue reset.";
++  EXPECT_EQ(state.status, HSA_STATUS_ERROR_EXCEPTION);
++  EXPECT_EQ(state.source, queue);
++
++  printf("  SdmaQueueErrorCallbackTest: error callback reported status %d for queue %p\n",
++         state.status, state.source);
++
++  ASSERT_SUCCESS(hsa_amd_memory_pool_free(dst_buffer));
++}
++
+ void QueueCreateTest::InvalidArgsTest() {
+   ASSERT_SUCCESS(rocrtst::SetDefaultAgents(this));
+   ASSERT_SUCCESS(rocrtst::SetPoolsTypical(this));
+diff --git a/projects/rocr-runtime/rocrtst/suites/functional/queue_create.h b/projects/rocr-runtime/rocrtst/suites/functional/queue_create.h
+index 9be40f1299..fc27d95b8a 100644
+--- a/projects/rocr-runtime/rocrtst/suites/functional/queue_create.h
++++ b/projects/rocr-runtime/rocrtst/suites/functional/queue_create.h
+@@ -36,6 +36,14 @@ class QueueCreateTest : public TestBase {
+   /// hsa_queue_t can be destroyed through the standard queue API.
+   void SdmaQueueCreateDestroyTest();
+ 
++  /// @brief Submit a malformed SDMA packet, destroy the queue to make the
++  /// driver reset it, and verify the queue's error callback reports the
++  /// resulting hardware exception.
++  ///
++  /// @note This test deliberately hangs an SDMA engine and relies on the
++  /// driver resetting only the offending queue.
++  void SdmaQueueErrorCallbackTest();
++
+   /// @brief Validate descriptor argument checks for hsa_amd_queue_create.
+   void InvalidArgsTest();
+ 
+diff --git a/projects/rocr-runtime/rocrtst/suites/test_common/main.cc b/projects/rocr-runtime/rocrtst/suites/test_common/main.cc
+index 7af5b098de..f09762d93f 100644
+--- a/projects/rocr-runtime/rocrtst/suites/test_common/main.cc
++++ b/projects/rocr-runtime/rocrtst/suites/test_common/main.cc
+@@ -844,6 +844,13 @@ TEST(rocrtstFunc, Queue_Create_SDMA_Create_Destroy_Test) {
+   RunCustomTestEpilog(&qt);
+ }
+ 
++TEST(rocrtstFunc, Queue_Create_SDMA_Error_Callback_Test) {
++  QueueCreateTest qt;
++  if (!RunCustomTestProlog(&qt)) return;
++  qt.SdmaQueueErrorCallbackTest();
++  RunCustomTestEpilog(&qt);
++}
++
+ TEST(rocrtstFunc, Queue_Create_Invalid_Args_Test) {
+   QueueCreateTest qt;
+   if (!RunCustomTestProlog(&qt)) return;
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/inc/amd_sdma_queue.h b/projects/rocr-runtime/runtime/hsa-runtime/core/inc/amd_sdma_queue.h
+index 4ee5ffce48..b7510c5cbf 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/inc/amd_sdma_queue.h
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/inc/amd_sdma_queue.h
+@@ -53,7 +53,10 @@ class SdmaQueue : public core::Queue, private core::LocalSignal, public core::Do
+   /// @param[in] size_bytes Size of the queue ring buffer in bytes.
+   /// @param[in] flags Queue memory placement flags.
+   /// @param[in] sdma_engine_id SDMA engine index, or -1 for runtime selection.
+-  SdmaQueue(core::Agent* agent, size_t size_bytes, uint64_t flags, int32_t sdma_engine_id);
++  /// @param[in] callback Asynchronous error callback, or nullptr for none.
++  /// @param[in] err_data Application data passed to @p callback.
++  SdmaQueue(core::Agent* agent, size_t size_bytes, uint64_t flags, int32_t sdma_engine_id,
++            core::HsaEventCallback callback = nullptr, void* err_data = nullptr);
+   ~SdmaQueue() override;
+ 
+   /// @brief Create the backing KFD SDMA queue and populate the public handle.
+@@ -135,6 +138,12 @@ class SdmaQueue : public core::Queue, private core::LocalSignal, public core::Do
+   HsaQueueResource queue_resource_;
+   int32_t sdma_engine_id_;
+   bool active_;
++
++  // Asynchronous error callback. SDMA queues cannot report a per-queue error
++  // reason, so the runtime holds this registration and drives it from the
++  // agent's hardware exception handler.
++  core::HsaEventCallback errors_callback_;
++  void* errors_data_;
+ };
+ 
+ }  // namespace AMD
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/inc/runtime.h b/projects/rocr-runtime/runtime/hsa-runtime/core/inc/runtime.h
+index 3b65a26c18..0f7196230c 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/inc/runtime.h
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/inc/runtime.h
+@@ -45,6 +45,7 @@
+ #ifndef HSA_RUNTME_CORE_INC_RUNTIME_H_
+ #define HSA_RUNTME_CORE_INC_RUNTIME_H_
+ 
++#include <chrono>
+ #include <cstdint>
+ #include <vector>
+ #include <map>
+@@ -545,6 +546,28 @@ class Runtime {
+ 
+   void InternalQueueCreateNotify(const hsa_queue_t* queue, hsa_agent_t agent);
+ 
++  /// @brief Track the asynchronous error callback of an SDMA queue on @p node_id.
++  ///
++  /// SDMA faults are reported by the driver as device-level hardware
++  /// exceptions rather than through a per-queue error reason, so the runtime
++  /// keeps its own registry to fan an exception out to the queues that asked
++  /// to be told about it. Registering a null @p callback is a no-op.
++  void RegisterSdmaErrorHandler(hsa_queue_t* queue, uint32_t node_id, HsaEventCallback callback,
++                                void* data);
++
++  /// @brief Stop tracking the error callback of a destroyed SDMA queue.
++  ///
++  /// Destroying a hung SDMA queue is what prompts the driver to reset it, so
++  /// the resulting exception normally arrives after the queue is gone. The
++  /// registration is therefore kept for a grace period and the callback may
++  /// still run afterwards, receiving the now-stale queue pointer.
++  void DetachSdmaErrorHandler(hsa_queue_t* queue);
++
++  /// @brief Report @p error to the SDMA error callbacks registered on @p node_id.
++  ///
++  /// @retval true if at least one callback was invoked.
++  bool NotifySdmaErrorHandlers(uint32_t node_id, hsa_status_t error);
++
+   SharedSignalPool_t* GetSharedSignalPool() { return &SharedSignalPool; }
+ 
+   InterruptSignal::EventPool* GetEventPool() { return &EventPool; }
+@@ -888,6 +911,22 @@ class Runtime {
+   std::vector<std::pair<AMD::callback_t<hsa_amd_system_event_callback_t>, void*>>
+   GetSystemEventHandlers();
+ 
++  // @brief Asynchronous error callback registered by an SDMA queue.
++  struct SdmaErrorHandler {
++    hsa_queue_t* queue;
++    uint32_t node_id;
++    AMD::callback_t<HsaEventCallback> callback;
++    void* data;
++    // Set once the queue has been destroyed. The entry outlives the queue so
++    // that a reset triggered by the destruction can still be reported.
++    bool detached;
++    std::chrono::steady_clock::time_point detach_time;
++  };
++
++  // @brief Drop detached SDMA error handlers whose grace period has expired.
++  // The caller must hold ::sdma_error_lock_.
++  void PruneSdmaErrorHandlers();
++
+   /// @brief Get the index of ::link_matrix_.
+   /// @param [in] node_id_from Node id of the source node.
+   /// @param [in] node_id_to Node id of the destination node.
+@@ -1000,6 +1039,13 @@ class Runtime {
+   // System event handler lock
+   std::mutex system_event_lock_;
+ 
++  // Error callbacks of SDMA queues, indexed linearly. Entries persist past
++  // queue destruction for a grace period, see ::DetachSdmaErrorHandler.
++  std::vector<SdmaErrorHandler> sdma_error_handlers_;
++
++  // SDMA error handler registry lock
++  std::mutex sdma_error_lock_;
++
+   // Internal queue creation notifier
+   AMD::callback_t<hsa_amd_runtime_queue_notifier> internal_queue_create_notifier_;
+ 
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_sdma_queue.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_sdma_queue.cpp
+index 260660c1f2..6060dfbf7b 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_sdma_queue.cpp
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_sdma_queue.cpp
+@@ -52,7 +52,8 @@ core::SharedQueue* AllocateSdmaSharedQueue(core::Agent* agent, uint64_t flags) {
+ 
+ }  // namespace
+ 
+-SdmaQueue::SdmaQueue(core::Agent* agent, size_t size_bytes, uint64_t flags, int32_t sdma_engine_id)
++SdmaQueue::SdmaQueue(core::Agent* agent, size_t size_bytes, uint64_t flags, int32_t sdma_engine_id,
++                     core::HsaEventCallback callback, void* err_data)
+     : core::Queue(AllocateSdmaSharedQueue(agent, flags), flags,
+                   !static_cast<AMD::GpuAgent*>(agent)->is_xgmi_cpu_gpu(), agent),
+       core::LocalSignal(0, false),
+@@ -64,11 +65,18 @@ SdmaQueue::SdmaQueue(core::Agent* agent, size_t size_bytes, uint64_t flags, int3
+       queue_rptr_(nullptr),
+       queue_doorbell_(nullptr),
+       sdma_engine_id_(sdma_engine_id),
+-      active_(false) {
++      active_(false),
++      errors_callback_(callback),
++      errors_data_(err_data) {
+   memset(&queue_resource_, 0, sizeof(queue_resource_));
+ }
+ 
+ SdmaQueue::~SdmaQueue() {
++  // Detach before tearing the queue down: destroying a queue whose packets hung
++  // the engine is what triggers the driver's reset, so the exception arrives
++  // after this point and must still find the registration.
++  core::Runtime::runtime_singleton_->DetachSdmaErrorHandler(public_handle());
++
+   hsa_status_t err = Inactivate();
+   assert(err == HSA_STATUS_SUCCESS && "Destroy SDMA queue failed.");
+   (void)err;
+@@ -189,6 +197,9 @@ hsa_status_t SdmaQueue::Initialize() {
+   signal_.hardware_doorbell_ptr = queue_doorbell_;
+   signal_.queue_ptr = &amd_queue_;
+ 
++  core::Runtime::runtime_singleton_->RegisterSdmaErrorHandler(
++      public_handle(), agent->node_id(), errors_callback_, errors_data_);
++
+   return HSA_STATUS_SUCCESS;
+ }
+ 
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/hsa_ext_amd.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/hsa_ext_amd.cpp
+index 4bd51b669e..fe1b0c5acf 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/hsa_ext_amd.cpp
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/hsa_ext_amd.cpp
+@@ -2505,7 +2505,12 @@ hsa_status_t hsa_amd_queue_create(hsa_agent_t agent_handle,
+         sdma_engine_id = static_cast<int32_t>(sp.sdma_engine_id);
+       }
+ 
+-      auto* sdma_queue = new AMD::SdmaQueue(agent, d.queue_size_bytes, d.flags, sdma_engine_id);
++      // Unlike compute queues, an SDMA queue without a caller-supplied callback
++      // is left with no handler at all. Substituting the runtime's default
++      // handler would make every SDMA hardware exception look handled and
++      // suppress the abort that reports it.
++      auto* sdma_queue = new AMD::SdmaQueue(agent, d.queue_size_bytes, d.flags, sdma_engine_id,
++                                            d.callback, d.callback_data);
+       status = sdma_queue->Initialize();
+       if (status != HSA_STATUS_SUCCESS) {
+         sdma_queue->Destroy();
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
+index 2d696a90b8..a8d4d91eac 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
+@@ -2504,11 +2504,25 @@ bool Runtime::HwExceptionHandler(hsa_signal_value_t val, void* arg) {
+     }
+   }
+ 
+-  if (custom_handler_status != HSA_STATUS_SUCCESS) {
++  // An SDMA queue fault surfaces here rather than through a per-queue error
++  // reason, because SDMA queues have no context save area to carry one. Report
++  // it to the error callbacks registered through hsa_amd_queue_create so those
++  // queues get the same notification an AQL queue would receive.
++  const bool ecc = (exception.ResetCause == HSA_EVENTID_HW_EXCEPTION_ECC);
++  // A queue callback only stands in for the abort below when the device is
++  // still usable. An ECC/RAS error is reported for information but remains
++  // fatal.
++  const bool sdma_handled =
++      runtime_singleton_->NotifySdmaErrorHandlers(exception.NodeId,
++                                                  ecc ? HSA_STATUS_ERROR
++                                                      : HSA_STATUS_ERROR_EXCEPTION) &&
++      !ecc;
++
++  if (custom_handler_status != HSA_STATUS_SUCCESS && !sdma_handled) {
+     core::Agent* faultingAgent = runtime_singleton_->agents_by_node_[exception.NodeId][0];
+     fprintf(stderr, "HW Exception by GPU node-%u (Agent handle: %p) reason :%s\n", exception.NodeId,
+             reinterpret_cast<void*>(faultingAgent->public_handle().handle),
+-            (exception.ResetCause == HSA_EVENTID_HW_EXCEPTION_ECC) ? "ECC" : "GPU Hang");
++            ecc ? "ECC" : "GPU Hang");
+ 
+     assert(false && "GPU HW Exception");
+     std::abort();
+@@ -3417,6 +3431,67 @@ Runtime::GetSystemEventHandlers() {
+   return system_event_handlers_;
+ }
+ 
++// A hung SDMA queue is only reset once the queue is destroyed, so the exception
++// typically arrives after the application has dropped its handle. Error
++// callbacks stay registered this long past destruction.
++static const std::chrono::seconds kSdmaErrorHandlerGrace(10);
++
++void Runtime::RegisterSdmaErrorHandler(hsa_queue_t* queue, uint32_t node_id,
++                                       HsaEventCallback callback, void* data) {
++  if (callback == nullptr) return;
++
++  std::lock_guard<std::mutex> lock(sdma_error_lock_);
++  PruneSdmaErrorHandlers();
++  sdma_error_handlers_.push_back({queue, node_id, AMD::callback_t<HsaEventCallback>(callback), data,
++                                  false, std::chrono::steady_clock::time_point()});
++}
++
++void Runtime::DetachSdmaErrorHandler(hsa_queue_t* queue) {
++  std::lock_guard<std::mutex> lock(sdma_error_lock_);
++  for (auto& handler : sdma_error_handlers_) {
++    if (handler.queue == queue && !handler.detached) {
++      handler.detached = true;
++      handler.detach_time = std::chrono::steady_clock::now();
++    }
++  }
++  PruneSdmaErrorHandlers();
++}
++
++bool Runtime::NotifySdmaErrorHandlers(uint32_t node_id, hsa_status_t error) {
++  std::vector<SdmaErrorHandler> handlers;
++  {
++    std::lock_guard<std::mutex> lock(sdma_error_lock_);
++    PruneSdmaErrorHandlers();
++    for (const auto& handler : sdma_error_handlers_) {
++      if (handler.node_id == node_id) handlers.push_back(handler);
++    }
++    // A destroyed queue cannot fault twice, so report it once and forget it.
++    sdma_error_handlers_.erase(
++        std::remove_if(sdma_error_handlers_.begin(), sdma_error_handlers_.end(),
++                       [node_id](const SdmaErrorHandler& handler) {
++                         return handler.detached && handler.node_id == node_id;
++                       }),
++        sdma_error_handlers_.end());
++  }
++
++  for (auto& handler : handlers) {
++    handler.callback(error, handler.queue, handler.data);
++  }
++
++  return !handlers.empty();
++}
++
++void Runtime::PruneSdmaErrorHandlers() {
++  const auto now = std::chrono::steady_clock::now();
++  sdma_error_handlers_.erase(
++      std::remove_if(sdma_error_handlers_.begin(), sdma_error_handlers_.end(),
++                     [&now](const SdmaErrorHandler& handler) {
++                       return handler.detached &&
++                              (now - handler.detach_time) > kSdmaErrorHandlerGrace;
++                     }),
++      sdma_error_handlers_.end());
++}
++
+ hsa_status_t Runtime::SetInternalQueueCreateNotifier(hsa_amd_runtime_queue_notifier callback,
+                                                      void* user_data) {
+   if (internal_queue_create_notifier_) {
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/inc/hsa_ext_amd.h b/projects/rocr-runtime/runtime/hsa-runtime/inc/hsa_ext_amd.h
+index 7b8c7a9502..66f6a7c783 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/inc/hsa_ext_amd.h
++++ b/projects/rocr-runtime/runtime/hsa-runtime/inc/hsa_ext_amd.h
+@@ -3929,7 +3929,14 @@ typedef struct hsa_amd_queue_create_desc_s {
+   uint32_t queue_size_bytes;
+   /** Dispatch and wavefront scheduling priority. HSA_AMD_QUEUE_PRIORITY_NORMAL = default. */
+   hsa_amd_queue_priority_t priority;
+-  /** Callback invoked by the runtime for asynchronous queue errors. May be NULL. */
++  /** Callback invoked by the runtime for asynchronous queue errors. May be NULL.
++   *
++   *  For ::HSA_AMD_QUEUE_ENGINE_SDMA the callback may run after
++   *  ::hsa_queue_destroy has returned, because destroying a queue whose packets
++   *  hung the engine is what prompts the driver to reset it. In that case
++   *  @c source is the destroyed queue's former handle and must be compared but
++   *  not dereferenced. The runtime stops reporting errors for a destroyed queue
++   *  shortly after it is destroyed. */
+   void (*callback)(hsa_status_t status, hsa_queue_t *source, void *data);
+   /** Application data passed to @c callback. May be NULL. */
+   void *callback_data;
+-- 
+2.43.0
+
