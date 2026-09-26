@@ -59,7 +59,7 @@ Of particular note, from the LLVM AI Tool Use Policy:
 
 When posting significant portions of AI-generated content on issues or pull
 requests, we also encourage contributors to clearly disclose which sections
-of a comment are human or AI-generated (e.g. using a code or quote block, or
+of a comment are human or AI-generated (e.g., using a code or quote block, or
 by posting the output to https://gist.github.com/) along with accompanying
 human commentary explaining the relevance and accuracy of the content.
 
