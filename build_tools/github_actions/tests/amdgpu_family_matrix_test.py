@@ -348,15 +348,15 @@ class TestBuildRunnerSelection(unittest.TestCase):
         cases = [
             # (platform, variant, size, expected_runner_label)
             ("linux", "release", "large", "aws-linux-scale-rocm-prod"),
-            ("windows", "release", "large", "azure-windows-scale-rocm"),
+            ("windows", "release", "large", "aws-windows-scale-rocm-prod-mix"),
             # Sanitizer builds always use the large runner regardless of requested size
             ("linux", "asan", "small", "aws-linux-scale-rocm-large"),
             ("linux", "tsan", "medium", "aws-linux-scale-rocm-large"),
             ("linux", "release", "small", "aws-linux-scale-rocm-small"),
             # Windows has no small/medium pool — falls back to the Windows default
-            ("windows", "release", "small", "azure-windows-scale-rocm"),
+            ("windows", "release", "small", "aws-windows-scale-rocm-prod-mix"),
             ("linux", "release", "medium", "aws-linux-scale-rocm-medium"),
-            ("windows", "release", "medium", "azure-windows-scale-rocm"),
+            ("windows", "release", "medium", "aws-windows-scale-rocm-prod-mix"),
         ]
         with patch("random.random", return_value=0.5):
             for platform, variant, size, expected in cases:
