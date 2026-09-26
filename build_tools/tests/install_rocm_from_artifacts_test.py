@@ -78,7 +78,7 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         base_argv = self._run_main(["--base-only"])
         sanity_argv = self._run_main(["--sanity"])
         self.assertNotIn("core-ocl_run", base_argv)
-        self.assertEqual(sanity_argv, base_argv + ["core-ocl_run"])
+        self.assertEqual(sanity_argv, base_argv + ["core-ocl_run", "hipify_run"])
 
     def test_component_selection_excludes_clinfo(self):
         for component in ["--blas", "--fft", "--rocprofiler-sdk"]:
