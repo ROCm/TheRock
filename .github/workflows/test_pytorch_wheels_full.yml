@@ -200,7 +200,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare_matrix.outputs.matrix) }}
     container:
-      image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
+      image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }} # zizmor: ignore[unpinned-images]
       # SYS_PTRACE is required by PyTorch's test infra which uses gdb to
       # collect stack traces on segfaults and hangs (torch/testing/_internal).
       options: --shm-size=10g
@@ -215,9 +215,8 @@ jobs:
     defaults:
       run:
         shell: bash
-    # These env vars are set at the job level so they are available to all steps
-    # (e.g. export_test_times.py, run_pytorch_tests_full.py). The Python script
-    # uses os.environ.setdefault() so values set here take precedence.
+    # These env vars are available to export_test_times.py and the test.sh
+    # adapter. Values set here take precedence over adapter defaults.
     env:
       PYTORCH_GIT_REPO: ${{ inputs.pytorch_git_repo }}
       PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
@@ -373,7 +372,7 @@ jobs:
       - name: (Linux) Run PyTorch full test suite
         if: ${{ runner.os == 'Linux' }}
         run: |
-          python ./external-builds/pytorch/run_pytorch_tests_full.py \
+          python ./external-builds/pytorch/run_pytorch_test_sh.py \
             --test-config "${MATRIX_TEST_CONFIG}" \
             --device-query "${DEVICE_QUERY}" \
             --gpu-policy "${GPU_POLICY}" \
@@ -437,7 +436,9 @@ jobs:
           persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
-          sparse-checkout: external-builds/pytorch/summarize_test_results.py
+          sparse-checkout: |
+            build_tools/github_actions/capture_job_summary.py
+            external-builds/pytorch/summarize_test_results.py
 
       - name: Download all test report artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
