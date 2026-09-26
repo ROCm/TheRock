@@ -56,6 +56,10 @@ on:
         type: boolean
         default: true
         description: "Build native Linux packages and run install tests"
+      force_resource_profiling:
+        type: string
+        default: ""
+        description: 'Resource-usage profiling override (Linux builds): "true" = force on, "false" = force off, empty = default (nightly only). See #7692.'
       # --- Artifact reuse ---
       prebuilt_stages:
         type: string
@@ -132,6 +136,7 @@ jobs:
       build_jax: ${{ github.event_name != 'workflow_dispatch' || inputs.build_jax }}
       build_native_linux: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_linux }}
       build_stages: ${{ inputs.build_stages || '' }}
+      force_resource_profiling: ${{ inputs.force_resource_profiling || '' }}
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
@@ -150,6 +155,7 @@ jobs:
       rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       changed_projects: ${{ inputs.changed_projects || '' }}
+      force_resource_profiling: ${{ inputs.force_resource_profiling || '' }}
     permissions:
       contents: read
       id-token: write
