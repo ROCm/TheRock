@@ -24,7 +24,9 @@ Usage:
 
 Outputs (to $GITHUB_OUTPUT):
     changed_projects: Comma-separated list of changed project paths
-    run_all_tests: "true" if CI files changed (run full test suite)
+    run_all_tests: "true" for schedule/dispatch, shared CI changes,
+                workflow changes outside rocm-libraries, or when
+                changed projects cannot be determined safely
     skip_tests: "true" if only docs/skippable files changed
 """
 
@@ -64,9 +66,13 @@ SKIPPABLE_PATH_PATTERNS = [
     "shared/*/docs/*",
 ]
 
-# Patterns that trigger a full test run when changed (CI infrastructure)
-FULL_TEST_TRIGGER_PATTERNS = [
+# Only rocm-libraries workflow changes are scoped to its projects.
+CALLER_WORKFLOW_TRIGGER_PATTERNS = [
     ".github/workflows/therock*",
+]
+
+# Changes to project discovery or shared test logic retain global coverage.
+FULL_TEST_TRIGGER_PATTERNS = [
     ".github/scripts/therock*",
     ".github/scripts/get_changed_projects.py",
     ".github/scripts/ci_utils.py",
@@ -335,11 +341,51 @@ def configure(
 
     logger.info(f"Modified paths: {len(modified_paths)} files")
 
-    # Check if CI files changed (run all tests)
+    # Shared CI and test-selection changes can affect other repositories.
     if matches_patterns(modified_paths, FULL_TEST_TRIGGER_PATTERNS):
-        logger.info("CI files changed - running all tests")
+        logger.info("Shared CI files changed - running all tests")
         return ConfigureResult(
             changed_projects="", run_all_tests=True, skip_tests=False
+        )
+
+    # Scope rocm-libraries workflow changes to its configured projects.
+    if matches_patterns(modified_paths, CALLER_WORKFLOW_TRIGGER_PATTERNS):
+        if github_repo.lower() != "rocm/rocm-libraries":
+            logger.info("Workflow changed outside rocm-libraries - running all tests")
+            return ConfigureResult(
+                changed_projects="", run_all_tests=True, skip_tests=False
+            )
+
+        config = load_repo_config(config_path)
+        if not config:
+            logger.warning("No config loaded - running all tests")
+            return ConfigureResult(
+                changed_projects="", run_all_tests=True, skip_tests=False
+            )
+
+        own_projects = get_valid_prefixes(config)
+
+        # A second, unknown change must retain the conservative full run.
+        other_paths = {
+            path
+            for path in modified_paths
+            if not matches_patterns([path], CALLER_WORKFLOW_TRIGGER_PATTERNS)
+        }
+        unclassified = get_unclassified_paths(other_paths, own_projects)
+        if unclassified:
+            logger.info(
+                f"Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
+                " - running all tests"
+            )
+            return ConfigureResult(
+                changed_projects="", run_all_tests=True, skip_tests=False
+            )
+
+        logger.info("rocm-libraries workflow changed - testing rocm-libraries projects")
+        return ConfigureResult(
+            changed_projects=",".join(sorted(own_projects)),
+            run_all_tests=False,
+            skip_tests=False,
         )
 
     # Check if only skippable files changed
