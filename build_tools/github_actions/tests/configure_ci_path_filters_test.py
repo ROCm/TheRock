@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -13,6 +14,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from configure_ci_path_filters import (
     _GITHUB_WORKFLOWS_CI_FILENAMES,
     get_git_commit_hash,
+    get_git_first_parent_history,
     get_git_modified_paths,
     is_ci_run_required,
 )
@@ -212,6 +214,68 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         mock_run.side_effect = run_side_effect
 
         self.assertEqual(get_git_commit_hash(base_sha), base_sha)
+
+    def test_first_parent_history_for_synthetic_pr_merge(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo = Path(temp_dir)
+
+            def git(*args: str) -> str:
+                return subprocess.run(
+                    ["git", *args],
+                    cwd=repo,
+                    stdout=subprocess.PIPE,
+                    check=True,
+                    text=True,
+                    timeout=60,
+                ).stdout.strip()
+
+            def commit(filename: str, contents: str, message: str) -> str:
+                (repo / filename).write_text(contents)
+                git("add", filename)
+                git("commit", "-m", message)
+                return git("rev-parse", "HEAD")
+
+            git("init", "-b", "main")
+            git("config", "user.name", "Stage Reuse Test")
+            git("config", "user.email", "stage-reuse@example.com")
+
+            ancestor_a = commit("root.txt", "A\n", "A")
+            pr_base_b = commit("base.txt", "B\n", "B")
+
+            git("checkout", "-b", "pull-request")
+            pr_head_h = commit("feature.txt", "H\n", "H")
+
+            git("checkout", "main")
+            newer_main_c = commit("main.txt", "C\n", "C")
+
+            git("checkout", "-b", "synthetic-merge", pr_base_b)
+            git("merge", "--no-ff", "pull-request", "-m", "Synthetic PR merge")
+            synthetic_merge_m = git("rev-parse", "HEAD")
+
+            history = get_git_first_parent_history(
+                synthetic_merge_m,
+                max_count=50,
+                repo_root=temp_dir,
+            )
+
+            self.assertEqual(
+                history,
+                [synthetic_merge_m, pr_base_b, ancestor_a],
+            )
+            self.assertNotIn(pr_head_h, history)
+            self.assertNotIn(newer_main_c, history)
+
+            # A normal post-commit run follows the main branch directly.
+            main_history = get_git_first_parent_history(
+                newer_main_c,
+                max_count=50,
+                repo_root=temp_dir,
+            )
+
+            self.assertEqual(
+                main_history,
+                [newer_main_c, pr_base_b, ancestor_a],
+            )
 
     def test_ci_workflow_filenames_cover_all_transitive_uses(self):
         """_GITHUB_WORKFLOWS_CI_FILENAMES must exactly match the set of

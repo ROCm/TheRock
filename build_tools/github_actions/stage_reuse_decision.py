@@ -50,14 +50,15 @@ are set by ``setup_multi_arch.yml`` and form the stage-reuse interface:
                                    commit-compatibility rule when set.
 * ``STAGE_REUSE_MAX_AGE_HOURS``  - recency window in hours; disables the recency
                                    rule when unset.
-* ``STAGE_REUSE_COMMIT_HISTORY`` - number of branch commits to fetch for
-                                   ancestry (default ``50``).
+* ``STAGE_REUSE_COMMIT_HISTORY`` - number of first-parent commits to inspect
+                                   for ancestry (default ``50``).
 """
 
 import enum
 import os
 import logging
 import functools
+import subprocess
 import sys
 import baseline_runs
 import github_actions_api
@@ -77,6 +78,7 @@ from _therock_utils.cmake_amdgpu_targets import (
 )
 from artifact_manager import ARTIFACT_COMPONENTS
 from baseline_runs import BaselineRun, RequiredArtifact
+from configure_ci_path_filters import get_git_first_parent_history
 from github_actions_api import GitHubAPIError
 from stage_impact import analyze_stage_impact
 
@@ -758,55 +760,40 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
         history_count = max(1, int(history_count_raw))
     except ValueError:
         history_count = 50
-    # The commit-compatibility rule needs the branch history (newest-first) to
-    # establish ancestry. select_baseline_run only accepts a candidate whose
-    # head_sha is `same` or `ancestor` of current_commit_sha; with an EMPTY
-    # window every candidate resolves to `unknown` and is rejected, so reuse
-    # never activates. Fetch the real history here.
+    # Walk first-parent history from the commit being built. For a pull request,
+    # this starts at GitHub's synthetic merge commit and then follows the base
+    # branch, excluding commits reachable only through the PR-head parent.
     #
-    # For external repos (THEROCK_REPOSITORY != GITHUB_REPOSITORY), we must be
-    # strict: if commit history cannot be fetched, fail closed by returning a
-    # selector that always returns None (no baseline). This ensures we don't
-    # select incompatible baselines when building against a pinned TheRock commit.
-    #
-    # For same-repo runs, we can be lenient: disable the commit rule and let
-    # recency/artifact availability gate the selection.
-    is_external_repo = github_repository != os.environ.get("GITHUB_REPOSITORY", "")
+    # If history cannot be read, fail closed for both same-repository and
+    # external-repository runs. Reuse must not proceed without confirming that
+    # the baseline commit is compatible with the commit being built.
     ordered_commit_shas = None
     effective_commit_sha = current_commit_sha
+
     if current_commit_sha is not None:
         try:
-            ordered_commit_shas = github_actions_api.gha_query_recent_branch_commits(
-                github_repository_name=github_repository,
-                branch=branch,
+            ordered_commit_shas = get_git_first_parent_history(
+                current_commit_sha,
                 max_count=history_count,
             )
-        except GitHubAPIError as exc:
-            if is_external_repo:
-                logger.warning(
-                    "%s could not fetch branch history for external repo (%s); "
-                    "failing closed - no baseline will be selected.",
-                    LOG_PREFIX,
-                    exc,
-                )
-                return lambda required_artifacts: None
+        except (OSError, subprocess.SubprocessError) as exc:
             logger.warning(
-                "%s could not fetch branch history (%s); "
-                "skipping commit-compatibility rule.",
+                "%s could not read first-parent history from commit %s (%s); "
+                "failing closed - no baseline will be selected.",
                 LOG_PREFIX,
+                current_commit_sha,
                 exc,
             )
-            ordered_commit_shas = None
+            return lambda required_artifacts: None
+
         if not ordered_commit_shas:
-            if is_external_repo:
-                logger.warning(
-                    "%s empty branch history for external repo; "
-                    "failing closed - no baseline will be selected.",
-                    LOG_PREFIX,
-                )
-                return lambda required_artifacts: None
-            effective_commit_sha = None
-            ordered_commit_shas = None
+            logger.warning(
+                "%s empty first-parent history for commit %s; "
+                "failing closed - no baseline will be selected.",
+                LOG_PREFIX,
+                current_commit_sha,
+            )
+            return lambda required_artifacts: None
 
     # A functools.partial binds the resolved configuration to
     # select_baseline_run; the only free argument is required_artifacts, which
