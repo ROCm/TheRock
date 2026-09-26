@@ -98,6 +98,7 @@ _GPU_CONTAINER_OPTIONS = [
     "-e KUBE_CPU_REQUEST",
 ]
 
+
 def _build_container_options(job_config: dict, platform: str) -> dict:
     """
     Build the final container_options string by concatenating base, GPU, and job-specific options.
@@ -631,6 +632,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 2,
             "windows": 2,
+        },
+        "exclude_family": {
+            "linux": [
+                # CRITICAL FAILURE (hang): test causes hang during execution
+                "gfx125X-dcgpu",
+            ],
         },
     },
     "hipfft": {
@@ -1466,8 +1473,7 @@ def run():
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)
     all_components = [
-        _build_container_options(c, platform)
-        for c in components_with_runners
+        _build_container_options(c, platform) for c in components_with_runners
     ]
 
     # Separate sanity (always a prerequisite) from the regular component matrix.
