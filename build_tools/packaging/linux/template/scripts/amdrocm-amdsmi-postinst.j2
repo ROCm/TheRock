@@ -1,0 +1,102 @@
+#!/bin/bash
+#
+# Register the staged amdsmi Python module with the system interpreter.
+#
+# The package ships the module as ordinary files under
+# <prefix>/share/amd_smi/amdsmi. Nothing in the payload puts that directory on
+# sys.path, so `import amdsmi` fails even though the files are installed. A
+# .pth file naming the directory is the standard way to fix that, and it keeps
+# the module where it was installed: amdsmi_wrapper.py locates libamd_smi.so by
+# a path relative to its own file, so copying the module into site-packages
+# would pair it with whichever library the dynamic linker found first.
+#
+# The path recorded is /opt/rocm/share/amd_smi -- the update-alternatives link,
+# not this package's versioned prefix. Each prefix owns a separate .pth file;
+# Python's site module deduplicates their identical target paths.
+
+is_debian_like() {
+    local id_like="$1"
+    case " $id_like " in
+        (*" debian "*|*" ubuntu "*)
+            return 0
+            ;;
+        (*)
+            return 1
+            ;;
+    esac
+}
+
+# Debian installs distribution packages into .../dist-packages, which the
+# default sysconfig scheme does not report: there, purelib is the /usr/local
+# tree reserved for locally built software. Ask for the deb_system scheme first
+# and fall back to posix_prefix, which is what RPM distros use, then to
+# whatever purelib reports.
+registration_path() {
+    /usr/bin/python3 - "$1" <<'PY' 2>/dev/null
+import hashlib
+from pathlib import Path
+import sys
+import sysconfig
+
+for scheme in ("deb_system", "posix_prefix"):
+    if scheme in sysconfig.get_scheme_names():
+        path = sysconfig.get_path("purelib", scheme)
+        if path:
+            break
+else:
+    path = sysconfig.get_paths()["purelib"]
+
+# Install and removal must use the same literal prefix, without resolving aliases.
+identity = hashlib.sha256(sys.argv[1].encode("utf-8")).hexdigest()
+print(Path(path) / f"amdrocm-amdsmi-{identity}.pth")
+PY
+}
+
+do_register_python_module() {
+    [ -x /usr/bin/python3 ] || return 0
+
+    {% if target == "deb" %}
+       PKG_INSTALL_PREFIX={{ install_prefix }}
+    {% else %}
+       PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
+    {% endif %}
+
+    local share_dir site_dir pth tmp
+    # The prefix is the registration's identity. An empty one would give every
+    # co-installed version the same identity, and they would fight over one file.
+    [ -n "$PKG_INSTALL_PREFIX" ] || return 0
+    # Core's alternatives root stays /opt/rocm even when RPM relocates the payload.
+    share_dir="/opt/rocm/share/amd_smi"
+
+    pth="$(registration_path "$PKG_INSTALL_PREFIX")" || return 0
+    [ -n "$pth" ] || return 0
+    site_dir="$(dirname "$pth")"
+    mkdir -p "$site_dir" || return 0
+
+    # Write via a fresh temp file and rename. A plain redirect follows a
+    # pre-existing symlink, which would let anything able to create a file here
+    # redirect a root-owned write elsewhere; rename replaces the link itself.
+    # mktemp rather than a PID-derived name so the target cannot be guessed and
+    # pre-created. Re-running replaces only this prefix's registration.
+    tmp="$(mktemp "$pth.XXXXXX" 2>/dev/null)" || return 0
+    printf '%s\n' "$share_dir" > "$tmp" || { rm -f "$tmp"; return 0; }
+    chmod 644 "$tmp" || true
+    mv -f "$tmp" "$pth" || { rm -f "$tmp"; return 0; }
+}
+
+if [ -e /etc/os-release ] && source /etc/os-release && is_debian_like "${ID_LIKE:-$ID}"
+then
+    case "$1" in
+       (configure)
+       do_register_python_module
+       ;;
+       (abort-upgrade|abort-remove|abort-deconfigure)
+           echo "$1"
+       ;;
+       (*)
+          exit 0
+       ;;
+    esac
+else
+    do_register_python_module
+fi
