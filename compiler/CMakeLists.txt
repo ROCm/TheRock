@@ -146,7 +146,10 @@ if(THEROCK_ENABLE_COMPILER)
       -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DOPENMP_ENABLE_LIBOMPTARGET=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DLIBOMPTARGET_BUILD_DEVICE_FORTRT=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DFLANG_RUNTIME_F128_MATH_LIB=libquadmath
+      # FLANG_RUNTIME_F128_MATH_LIB is host-architecture dependent and is
+      # selected in pre_hook_amd-llvm.cmake. Do not pass it as a CMAKE_ARGS -D
+      # here: a -D value is written to the cache before the pre-hook runs and
+      # would shadow the per-host selection made there.
       -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=${THEROCK_CONDITION_IS_NON_WINDOWS}
       # ASAN features.
       # Note that building AMDGPU ASAN extensions depends on various runtime headers
