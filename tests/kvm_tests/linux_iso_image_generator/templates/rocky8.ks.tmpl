@@ -1,0 +1,71 @@
+#version=RHEL8
+text
+cdrom
+reboot
+firstboot --disable
+
+lang {{LANG}}
+keyboard {{KEYBOARD}}
+timezone {{TIMEZONE}} --utc
+network --bootproto=dhcp --device=link --activate
+
+rootpw --lock
+user --name={{USER_NAME}} --lock --groups=wheel
+sshkey --username={{USER_NAME}} "{{SSH_AUTHORIZED_PUBLIC_KEY}}"
+
+firewall --enabled --service=ssh
+selinux --enforcing
+services --enabled=sshd,chronyd
+
+zerombr
+clearpart --all --initlabel
+reqpart
+part /boot --fstype=xfs --size=1536
+part swap --recommended
+part / --fstype=xfs --size=30720 --grow
+
+%packages
+@^minimal-environment
+sudo
+openssh-server
+openssh-clients
+vim-minimal
+net-tools
+%end
+
+%post --erroronfail --log=/root/ks-post.log
+hostnamectl set-hostname "{{HOSTNAME}}"
+
+if [ "{{DISABLE_SUDO_PASSWORD_PROMPT}}" = "true" ]; then
+  cat > /etc/sudoers.d/90-{{USER_NAME}}-nopasswd <<'EOF'
+{{USER_NAME}} ALL=(ALL) NOPASSWD: ALL
+EOF
+  chmod 0440 /etc/sudoers.d/90-{{USER_NAME}}-nopasswd
+fi
+
+if [ "{{ENABLE_SSHD}}" = "true" ]; then
+  systemctl enable sshd
+fi
+
+if command -v firewall-offline-cmd >/dev/null 2>&1; then
+  firewall-offline-cmd --add-service=ssh || true
+  if [ "{{ALLOW_PING_ICMP}}" = "true" ]; then
+    firewall-offline-cmd --remove-icmp-block=echo-request || true
+    firewall-offline-cmd --add-rich-rule='rule protocol value="icmp" accept' || true
+  fi
+fi
+
+mkdir -p /etc/ssh/sshd_config.d
+cat > /etc/ssh/sshd_config.d/80-global-key-only.conf <<'EOF'
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+PubkeyAuthentication yes
+PermitEmptyPasswords no
+EOF
+chmod 0644 /etc/ssh/sshd_config.d/80-global-key-only.conf
+
+if [ "{{DISABLE_USER_PASSWORD_AUTH}}" = "true" ]; then
+  passwd -l {{USER_NAME}} || true
+fi
+%end
