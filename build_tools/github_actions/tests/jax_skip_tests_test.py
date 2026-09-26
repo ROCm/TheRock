@@ -41,6 +41,24 @@ class DataFilesTest(unittest.TestCase):
 
         self.assertEqual([f.name for f in files], ["generic.py"])
 
+    def test_a_nightly_version_reads_its_release_file(self):
+        # A tip build is versioned as the nightly it pairs with, and what fails
+        # on it is what fails on the release that nightly leads to.
+        files = create_skip_tests.data_files(
+            f"{FILTERED_VERSION}.dev20260914+rocm7.14.0a20260914"
+        )
+
+        self.assertEqual(
+            [f.name for f in files], ["generic.py", f"jax_{FILTERED_VERSION}.py"]
+        )
+
+    def test_a_branch_name_names_no_file(self):
+        # jax_version_from_ref leaves a branch alone, and there is no
+        # jax_main.py to find.
+        files = create_skip_tests.data_files("main")
+
+        self.assertEqual([f.name for f in files], ["generic.py"])
+
     def test_all_loads_every_version_file(self):
         files = create_skip_tests.data_files("all")
 

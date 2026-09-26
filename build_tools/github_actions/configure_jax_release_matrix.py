@@ -57,20 +57,40 @@ JAX_REF_CONFIGS = {
         # JAX dropped Python 3.11 support in 0.11.0.
         "exclude_python_versions": ["3.11"],
     },
+    # Upstream JAX at its moving tip, built against the ROCm of the same run
+    # (tip vs tip), the way PyTorch's "nightly" ref is a row of its release
+    # matrix. Release types other than prerelease include it (RELEASE_JAX_REFS).
+    # The manylinux Dockerfile comes from rocm-jax's default branch, since
+    # rocm-jax has no ref named "main" and the Dockerfile has no JAX-version
+    # coupling.
+    "jax-main": {
+        "jax_ref": "main",
+        "jax_repository": "jax-ml/jax",
+        "rocm_jax_ref": "rocm-jax-infra",
+        "gfx_arch": "device-all",
+        "jax_label": "tip",
+        # main has no release on PyPI, so the plugin is versioned as the JAX
+        # nightly it is tested against (see resolve_jax_nightly_version.py).
+        "wheel_type": "nightly",
+        # JAX dropped Python 3.11 support in 0.11.0.
+        "exclude_python_versions": ["3.11"],
+    },
 }
 
-# Keep release behavior equivalent to the old generate_jax_matrix(None):
-# all release refs across all release Python versions.
-#
-# TODO: separate out nightly/dev/prerelease JAX refs if those release types
-# should differ later.
-RELEASE_JAX_REFS = {
+# Refs for the "prerelease" release type: versions we support, and nothing
+# whose content can change under us on the way to a release.
+RELEASE_STABLE_JAX_REFS = {
     "linux": [
         "rocm-jaxlib-v0.10.2",
         "rocm-jaxlib-v0.11.0",
         "rocm-jaxlib-v0.11.1",
         "rocm-jaxlib-v0.11.2",
     ],
+}
+
+# Refs for the other release types: stable refs + upstream tip.
+RELEASE_JAX_REFS = {
+    platform: [*refs, "jax-main"] for platform, refs in RELEASE_STABLE_JAX_REFS.items()
 }
 
 # CI builds a single, stable JAX ref to keep the CI runner load low; the base
@@ -101,6 +121,8 @@ def _default_python_versions(*, release_type: str, platform: str) -> list[str]:
 def _default_jax_refs(*, release_type: str, platform: str) -> list[str]:
     if release_type == "ci":
         return list(CI_JAX_REFS[platform])
+    if release_type == "prerelease":
+        return list(RELEASE_STABLE_JAX_REFS[platform])
     return list(RELEASE_JAX_REFS[platform])
 
 
@@ -124,13 +146,25 @@ def generate_jax_matrix(
                 {
                     "python_version": py,
                     "jax_ref": ref_cfg["jax_ref"],
-                    # The ref without its prefix, for job names.
-                    "jax_label": ref_cfg["jax_ref"].removeprefix("rocm-jaxlib-v"),
+                    # The ref without its prefix, for job names, unless the
+                    # config names a label (a branch has no version to show).
+                    "jax_label": ref_cfg.get(
+                        "jax_label", ref_cfg["jax_ref"].removeprefix("rocm-jaxlib-v")
+                    ),
                     "jax_repository": ref_cfg["jax_repository"],
+                    # The ROCm/rocm-jax ref holding the manylinux Dockerfile. A
+                    # release tag exists under the same name in both
+                    # repositories, so this defaults to jax_ref.
+                    "rocm_jax_ref": ref_cfg.get("rocm_jax_ref", ref_cfg["jax_ref"]),
                     # gfx_arch selects the ROCm device package for the manylinux
                     # build (e.g. device-all). This direct lookup raises
                     # KeyError if JAX_REF_CONFIGS omits the key.
                     "gfx_arch": ref_cfg["gfx_arch"],
+                    # How the plugin wheel is versioned: "release" stamps the
+                    # ref's own version, "nightly" stamps a published JAX
+                    # nightly's version so the test job can install jax/jaxlib
+                    # to match. Release tags have a release on PyPI.
+                    "wheel_type": ref_cfg.get("wheel_type", "release"),
                 }
             )
 

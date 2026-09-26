@@ -101,6 +101,7 @@ jobs:
       jax_matrix: ${{ steps.matrix.outputs.jax_matrix }}
     env:
       PYTHON_VERSION: ${{ inputs.python_version }}
+      RELEASE_TYPE: ${{ inputs.release_type }}
 
     steps:
       - name: "Quartz - started - release JAX wheels"
@@ -126,6 +127,7 @@ jobs:
         id: matrix
         run: |
           python ./build_tools/github_actions/configure_jax_release_matrix.py \
+            --release-type="${RELEASE_TYPE}" \
             --python-versions="${PYTHON_VERSION}"
 
   build_jax_wheels:
@@ -147,6 +149,8 @@ jobs:
       python_version: ${{ matrix.python_version }}
       jax_ref: ${{ matrix.jax_ref }}
       jax_repository: ${{ matrix.jax_repository }}
+      rocm_jax_ref: ${{ matrix.rocm_jax_ref }}
+      wheel_type: ${{ matrix.wheel_type }}
       gfx_arch: ${{ matrix.gfx_arch }}
       rocm_version: ${{ inputs.rocm_version }}
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}

@@ -12,6 +12,7 @@ import configure_jax_release_matrix as m
 from workflow_utils import (
     WORKFLOWS_DIR,
     get_matrix_references,
+    get_workflow_call_inputs,
     get_workflow_job,
     load_workflow,
 )
@@ -32,7 +33,15 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertGreater(len(jax_refs), 1)
         self.assertEqual(
             set(matrix[0]),
-            {"python_version", "jax_ref", "jax_label", "jax_repository", "gfx_arch"},
+            {
+                "python_version",
+                "jax_ref",
+                "jax_label",
+                "jax_repository",
+                "rocm_jax_ref",
+                "gfx_arch",
+                "wheel_type",
+            },
         )
 
     def test_explicit_python_version_narrows_matrix(self):
@@ -59,7 +68,85 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertEqual(matrix[0]["jax_ref"], "rocm-jaxlib-v0.10.2")
         self.assertEqual(matrix[0]["jax_label"], "0.10.2")
         self.assertEqual(matrix[0]["jax_repository"], "ROCm/jax")
+        self.assertEqual(matrix[0]["rocm_jax_ref"], "rocm-jaxlib-v0.10.2")
         self.assertEqual(matrix[0]["gfx_arch"], "device-all")
+        self.assertEqual(matrix[0]["wheel_type"], "release")
+
+    def test_release_refs_check_out_rocm_jax_at_the_jax_ref(self):
+        # A release tag exists under the same name in ROCm/jax and
+        # ROCm/rocm-jax, so a ref config that names no rocm_jax_ref keeps the
+        # two checkouts on one ref, as the workflows did before the key existed.
+        # Only tip names a rocm_jax_ref of its own, and prerelease omits it.
+        matrix = m.generate_jax_matrix_for_release_type(
+            release_type="prerelease",
+            platform="linux",
+        )
+
+        self.assertGreater(len(matrix), 0)
+        for row in matrix:
+            self.assertEqual(row["rocm_jax_ref"], row["jax_ref"])
+
+    def test_jax_main_ref_builds_upstream_with_rocm_jax_default_branch(self):
+        # Upstream main has no rocm-jax ref of the same name, so the tip config
+        # pins the Dockerfile checkout separately and names its own label.
+        matrix = m.generate_jax_matrix(
+            jax_refs=["jax-main"],
+            python_versions=["3.11", "3.12"],
+        )
+
+        self.assertEqual(len(matrix), 1)
+        self.assertEqual(matrix[0]["python_version"], "3.12")
+        self.assertEqual(matrix[0]["jax_ref"], "main")
+        self.assertEqual(matrix[0]["jax_label"], "tip")
+        self.assertEqual(matrix[0]["jax_repository"], "jax-ml/jax")
+        self.assertEqual(matrix[0]["rocm_jax_ref"], "rocm-jax-infra")
+        self.assertEqual(matrix[0]["wheel_type"], "nightly")
+
+    def test_release_refs_build_release_wheels(self):
+        # Every pinned ref has a jax/jaxlib release on PyPI, so its plugin
+        # carries the release version; only the tip config opts into nightly
+        # versioning, and a config that names nothing gets "release".
+        matrix = m.generate_jax_matrix_for_release_type(
+            release_type="prerelease",
+            platform="linux",
+        )
+
+        self.assertGreater(len(matrix), 0)
+        for row in matrix:
+            self.assertEqual(row["wheel_type"], "release")
+
+    def test_prerelease_builds_stable_refs_only(self):
+        # A prerelease is a candidate for something we ship, so nothing in it
+        # may change between two runs. Upstream tip moves, so it is left out.
+        matrix = m.generate_jax_matrix_for_release_type(
+            release_type="prerelease",
+            platform="linux",
+        )
+
+        self.assertGreater(len(matrix), 0)
+        self.assertNotIn("main", {row["jax_ref"] for row in matrix})
+
+    def test_release_types_other_than_prerelease_build_tip(self):
+        # Tip against the ROCm of the same run is a row of the matrix, the way
+        # PyTorch's "nightly" ref is, so a break shows up as a failed cell.
+        for release_type in set(m.RELEASE_TYPES) - {"ci", "prerelease"}:
+            with self.subTest(release_type=release_type):
+                matrix = m.generate_jax_matrix_for_release_type(
+                    release_type=release_type,
+                    platform="linux",
+                )
+                self.assertIn("main", {row["jax_ref"] for row in matrix})
+
+    def test_ci_never_builds_a_moving_ref(self):
+        # A pull request is judged against refs whose content is fixed;
+        # upstream moving under it would fail CI outside the author's control.
+        matrix = m.generate_jax_matrix_for_release_type(
+            release_type="ci",
+            platform="linux",
+        )
+
+        self.assertGreater(len(matrix), 0)
+        self.assertNotIn("main", {row["jax_ref"] for row in matrix})
 
     def test_generated_rows_cover_workflow_matrix_inputs(self):
         # workflow file like:
@@ -77,25 +164,53 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         # every row in the generated matrix. It intentionally does not check
         # that every generated key is consumed by each workflow; if we want to
         # enforce exact schemas, do that with generator-local tests.
-        workflow = load_workflow(
-            WORKFLOWS_DIR / "multi_arch_release_linux_jax_wheels.yml"
-        )
-        job = get_workflow_job(workflow, "build_jax_wheels")
-        matrix_references = get_matrix_references(job["with"])
-
         matrix = m.generate_jax_matrix_for_release_type(
             release_type="dev",
             platform="linux",
             python_versions=["3.12"],
         )
-
         self.assertGreater(len(matrix), 0)
-        for row in matrix:
-            # This checks the row schema, not whether values are truthy. Empty
-            # values are allowed, such as gfx_arch="" for native JAX builds.
-            # Undefined values are not: if the workflow reads `matrix.unknown`,
-            # this test fails until the generator emits that key for every row.
-            self.assertEqual(matrix_references - set(row), set())
+
+        # Both matrix consumers: the release entry point and the CI entry point.
+        for workflow_name in [
+            "multi_arch_release_linux_jax_wheels.yml",
+            "multi_arch_ci_linux.yml",
+        ]:
+            with self.subTest(workflow=workflow_name):
+                workflow = load_workflow(WORKFLOWS_DIR / workflow_name)
+                job = get_workflow_job(workflow, "build_jax_wheels")
+                matrix_references = get_matrix_references(job["with"])
+                self.assertGreater(len(matrix_references), 0)
+
+                for row in matrix:
+                    # This checks the row schema, not whether values are
+                    # truthy. Empty values are allowed, such as gfx_arch=""
+                    # for native JAX builds. Undefined values are not: if the
+                    # workflow reads `matrix.unknown`, this test fails until
+                    # the generator emits that key for every row.
+                    self.assertEqual(matrix_references - set(row), set())
+
+    def test_build_workflows_accept_generated_row_keys(self):
+        # Both build workflows must accept any row the generator can emit, so
+        # a ref config can be moved between the CI and release defaults (or
+        # dispatched to either build workflow) without a workflow change. Every
+        # row key except jax_label, which only names the calling job, is an
+        # input on each build workflow; the callers forward what they need.
+        matrix = m.generate_jax_matrix(
+            jax_refs=["rocm-jaxlib-v0.11.1", "jax-main"],
+            python_versions=["3.12"],
+        )
+        self.assertEqual(len(matrix), 2)
+        row_keys = set().union(*(set(row) for row in matrix)) - {"jax_label"}
+        self.assertIn("wheel_type", row_keys)
+
+        for workflow_name in [
+            "multi_arch_build_linux_jax_wheels.yml",
+            "multi_arch_build_linux_jax_wheels_ci.yml",
+        ]:
+            with self.subTest(workflow=workflow_name):
+                workflow = load_workflow(WORKFLOWS_DIR / workflow_name)
+                self.assertEqual(row_keys - get_workflow_call_inputs(workflow), set())
 
     def test_ref_excluded_python_versions_are_filtered(self):
         # exclude_python_versions in JAX_REF_CONFIGS drops those Python versions
