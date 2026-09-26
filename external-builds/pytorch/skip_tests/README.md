@@ -47,6 +47,21 @@ skip_tests = {
 }
 ```
 
+The same files may also define `exclude_modules`, which drops whole test
+modules before pytest collects them:
+
+```py
+exclude_modules = {
+    "common": [ <PyTorch test module paths> ],
+}
+```
+
+Reach for this only when a module hangs or crashes during import or collection,
+where the `-k` expression built from `skip_tests` cannot intervene. Entries are
+paths relative to PyTorch's `test/` directory, such as
+`inductor/test_max_autotune`, and a module missing from the checkout is ignored.
+Prefer `skip_tests` whenever the failure is limited to specific test cases.
+
 `Amdgpu family short form` is the minimum entry needed to match the right architecture. E.g.
 
 - `gfx94` to match `gf94X-dcgpu` and its arch `gfx942`

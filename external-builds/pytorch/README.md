@@ -294,11 +294,44 @@ python run_pytorch_tests.py --amdgpu-family=gfx1201 --device-query all --gpu-pol
 
 Tests can also be run by following the ROCm documentation at
 https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation.
+
 For example:
 
 ```bash
 PYTORCH_TEST_WITH_ROCM=1 python pytorch/test/run_test.py --include test_torch
 ```
+
+#### Running tests through PyTorch's test.sh
+
+[`run_pytorch_test_sh.py`](run_pytorch_test_sh.py) runs the same tests through
+PyTorch's own CI entry point, `pytorch/.ci/pytorch/test.sh`, instead of invoking
+pytest directly. This is what Linux CI uses for the full test suite, so that
+sharding, test selection and reporting match upstream rather than being
+reimplemented here. It accepts the same GPU selection flags as
+`run_pytorch_tests.py` and translates them into the environment variables
+`test.sh` expects.
+
+```bash
+# Install test dependencies
+python -m pip install -r pytorch/.ci/docker/requirements-ci.txt
+
+# Run the default config
+python run_pytorch_test_sh.py
+
+# Shard 2 of 6 for a specific GPU family, as CI runs it
+python run_pytorch_test_sh.py \
+  --amdgpu-family=gfx94X-dcgpu --test-config=default --shard=2 --num-shards=6
+
+# Distributed config (implies --device-query all --gpu-policy all)
+python run_pytorch_test_sh.py --test-config=distributed
+
+# Limit to specific test modules, and pass pytest args through
+python run_pytorch_test_sh.py --include test_nn test_torch -- -v
+```
+
+Test exclusions come from [`skip_tests/`](skip_tests/): individual cases via
+`skip_tests` and whole modules via `exclude_modules`. See
+[`skip_tests/README.md`](skip_tests/README.md).
 
 ## Nightly releases
 

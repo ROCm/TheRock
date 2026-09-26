@@ -26,7 +26,7 @@ THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 PYTEST_TIMEOUT_SECONDS = 900
 
 
-def load_get_tests():
+def load_skip_generator():
     """Load PyTorch's skip generator without colliding with sibling packages."""
     module_path = THIS_SCRIPT_DIR / "skip_tests" / "create_skip_tests.py"
     spec = importlib.util.spec_from_file_location(
@@ -36,10 +36,12 @@ def load_get_tests():
         raise ImportError(f"Could not load skip generator from {module_path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.get_tests
+    return module
 
 
-get_tests = load_get_tests()
+_skip_generator = load_skip_generator()
+get_tests = _skip_generator.get_tests
+get_excluded_modules = _skip_generator.get_excluded_modules
 
 # Match generated-stats keys used by PyTorch's test sharding.
 AMDGPU_FAMILY_TO_BUILD_ENV = {
@@ -49,16 +51,6 @@ AMDGPU_FAMILY_TO_BUILD_ENV = {
     "gfx110X-all": "linux-jammy-rocm-py3.10-navi31",
 }
 ROCM_BUILD_ENVIRONMENT_DEFAULT = "linux-noble-rocm-py3.12-mi300"
-
-# Exclude modules that can hang or crash before pytest-timeout intervenes.
-EXCLUDED_TEST_MODULES = [
-    "nn/test_convolution",
-    "inductor/test_max_autotune",
-    "inductor/test_torchinductor_opinfo_properties",
-    "inductor/test_compiled_autograd",
-    "dynamo/test_dynamic_shapes",
-    "functorch/test_control_flow",
-]
 
 
 def parse_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
@@ -119,6 +111,7 @@ def configure_environment(
     args: argparse.Namespace,
     pytest_args: list[str],
     tests_to_skip: str,
+    excluded_modules: list[str],
 ) -> dict[str, str]:
     env = os.environ.copy()
     env.setdefault("CI", "1")
@@ -145,7 +138,7 @@ def configure_environment(
 
     test_dir = args.pytorch_dir / "test"
     excluded = [
-        name for name in EXCLUDED_TEST_MODULES if (test_dir / f"{name}.py").is_file()
+        name for name in excluded_modules if (test_dir / f"{name}.py").is_file()
     ]
     excluded.extend(args.exclude or [])
     if excluded:
@@ -187,7 +180,12 @@ def main(argv: list[str]) -> int:
         platform=platform.system(),
         create_skip_list=not args.debug,
     )
-    env = configure_environment(args, pytest_args, tests_to_skip)
+    excluded_modules = get_excluded_modules(
+        amdgpu_family=selected_archs,
+        pytorch_version=pytorch_version,
+        platform=platform.system(),
+    )
+    env = configure_environment(args, pytest_args, tests_to_skip, excluded_modules)
 
     test_sh = args.pytorch_dir / ".ci" / "pytorch" / "test.sh"
     custom_test_artifacts = args.pytorch_dir / "build" / "custom_test_artifacts"

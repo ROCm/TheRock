@@ -63,6 +63,7 @@ class ConfigureEnvironmentTest(unittest.TestCase):
                     self.args(pytorch_dir),
                     ["--continue-on-collection-errors"],
                     "not flaky_test",
+                    ["nn/test_convolution", "inductor/test_max_autotune"],
                 )
 
         self.assertEqual(env["TEST_CONFIG"], "default")
@@ -85,6 +86,24 @@ class ConfigureEnvironmentTest(unittest.TestCase):
                 "900",
             ],
         )
+
+
+class ExcludedModulesTest(unittest.TestCase):
+    def test_reads_exclusions_from_skip_tests(self):
+        modules = runner.get_excluded_modules(
+            amdgpu_family=["gfx942"], pytorch_version="2.15", platform="Linux"
+        )
+        self.assertIn("nn/test_convolution", modules)
+        self.assertIn("inductor/test_max_autotune", modules)
+
+    def test_exclusions_are_module_paths_not_test_cases(self):
+        skips = runner.get_tests(
+            amdgpu_family=["gfx942"], pytorch_version="2.15", platform="Linux"
+        )
+        for module in runner.get_excluded_modules(
+            amdgpu_family=["gfx942"], pytorch_version="2.15", platform="Linux"
+        ):
+            self.assertNotIn(module, skips)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,24 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# Whole test modules dropped before pytest collects them. Use this only when a
+# module hangs or crashes during import or collection, where the `-k` expression
+# built from skip_tests below cannot intervene. Prefer skip_tests otherwise.
+exclude_modules = {
+    "common": [
+        # Hangs past the pytest-timeout threshold on MIOpen convolution
+        # autotuning; the timeout thread cannot interrupt the native call.
+        "nn/test_convolution",
+        # Inductor autotuning compiles in subprocesses that can outlive or
+        # crash the worker, taking the shard's report with them.
+        "inductor/test_max_autotune",
+        "inductor/test_torchinductor_opinfo_properties",
+        "inductor/test_compiled_autograd",
+        "dynamo/test_dynamic_shapes",
+        "functorch/test_control_flow",
+    ],
+}
+
 skip_tests = {
     "gfx950": {
         "cuda": {
