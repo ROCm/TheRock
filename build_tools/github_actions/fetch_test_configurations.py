@@ -209,7 +209,7 @@ test_matrix = {
     # Sanity tests - always run first as a prerequisite for other component tests
     "sanity": {
         "job_name": "sanity",
-        "fetch_artifact_args": "--base-only",
+        "fetch_artifact_args": "--sanity",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_sanity.py')}",
         "platform": ["linux", "windows"],
@@ -217,6 +217,8 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        # Supply the system OpenCL ICD loader for clinfo (Linux only).
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:b4966196b9cec5742776504fd76e7deb4d3765471da687354be9edcaf689c151",
         # Running docker with cap-add and -v /lib/modules, by recommendation of GitHub:
         # https://rocm.docs.amd.com/projects/amdsmi/en/amd-staging/how-to/setup-docker-container.html
         "container_options": ["--cap-add SYS_MODULE", "-v /lib/modules:/lib/modules"],

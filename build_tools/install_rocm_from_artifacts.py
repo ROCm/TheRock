@@ -398,6 +398,7 @@ def retrieve_artifacts_by_run_id(args):
         argv.extend(base_artifact_patterns)
     elif any(
         [
+            args.sanity,
             args.aqlprofile,
             args.blas,
             args.debug_tools,
@@ -438,6 +439,8 @@ def retrieve_artifacts_by_run_id(args):
         argv.extend(base_artifact_patterns)
 
         extra_artifacts = []
+        if args.sanity:
+            argv.append("core-ocl_run")  # clinfo for the OpenCL sanity test
         if args.aqlprofile:
             extra_artifacts.append("aqlprofile")
         if args.blas:
@@ -1055,6 +1058,12 @@ def main(argv):
         action=argparse.BooleanOptionalAction,
     )
 
+    artifacts_group.add_argument(
+        "--sanity",
+        default=False,
+        help="Include base artifacts and clinfo for sanity tests",
+        action=argparse.BooleanOptionalAction,
+    )
     artifacts_group.add_argument(
         "--base-only", help="Include only base artifacts", action="store_true"
     )
