@@ -291,6 +291,144 @@ if(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
 endif(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
 
 ##############################################################################
+# profiler-hub
+##############################################################################
+if(THEROCK_ENABLE_PROFILER_HUB)
+  set(_profiler_hub_source_dir
+    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/profilers/profiler-hub")
+  set(_profiler_hub_build_deps therock-spdlog therock-fmt therock-nlohmann-json)
+  if(THEROCK_BUILD_TESTING)
+    list(APPEND _profiler_hub_build_deps therock-googletest)
+  endif()
+
+  therock_cmake_subproject_declare(profiler-hub
+    DISABLE_AMDGPU_TARGETS
+    COMPILER_TOOLCHAIN amd-llvm
+    EXTERNAL_SOURCE_DIR "${_profiler_hub_source_dir}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/profiler-hub"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DPROFILER_HUB_BUILD_TESTS=${THEROCK_BUILD_TESTING}
+      -DPROFILER_HUB_BUILD_BENCHMARKS=OFF
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    # Build inputs that glob_c_sources does not reach: the CMake modules, the
+    # configure_file templates and the subdirectory CMakeLists.txt files. Only
+    # the top-level CMakeLists.txt is an implicit dependency of the configure
+    # stamp, so without these an edit to any of them leaves the stamp valid.
+    EXTRA_DEPENDS
+      "${_profiler_hub_source_dir}/cmake/Findprofiler-hub.cmake"
+      "${_profiler_hub_source_dir}/cmake/benchmark.cmake"
+      "${_profiler_hub_source_dir}/cmake/coverage.cmake"
+      "${_profiler_hub_source_dir}/cmake/fmt.cmake"
+      "${_profiler_hub_source_dir}/cmake/gtest.cmake"
+      "${_profiler_hub_source_dir}/cmake/nlohmann_json.cmake"
+      "${_profiler_hub_source_dir}/cmake/profiler-hub-config.cmake.in"
+      "${_profiler_hub_source_dir}/cmake/rocprofiler-sdk-rocpd.cmake"
+      "${_profiler_hub_source_dir}/cmake/spdlog.cmake"
+      "${_profiler_hub_source_dir}/cmake/sqlite3.cmake"
+      "${_profiler_hub_source_dir}/source/CMakeLists.txt"
+      "${_profiler_hub_source_dir}/source/data_storage/CMakeLists.txt"
+      "${_profiler_hub_source_dir}/source/data_storage/schema/rocpd_schema.in"
+      "${_profiler_hub_source_dir}/source/queries/CMakeLists.txt"
+      "${_profiler_hub_source_dir}/tests/CMakeLists.txt"
+      "${_profiler_hub_source_dir}/tests/benchmarks/CMakeLists.txt"
+      "${_profiler_hub_source_dir}/tests/unit/CMakeLists.txt"
+    BUILD_DEPS
+      ${_profiler_hub_build_deps}
+    RUNTIME_DEPS
+      ${THEROCK_BUNDLED_SQLITE3}
+    INSTALL_RPATH_DIRS
+      lib/rocm_sysdeps/lib
+      lib/llvm/lib
+      lib
+    INTERFACE_INCLUDE_DIRS
+      include
+    INTERFACE_LINK_DIRS
+      lib
+  )
+  therock_cmake_subproject_glob_c_sources(profiler-hub
+    SUBDIRS .
+  )
+  therock_cmake_subproject_provide_package(profiler-hub profiler-hub lib/cmake/profiler-hub)
+  therock_cmake_subproject_activate(profiler-hub)
+
+  therock_cmake_subproject_build_test(profiler-hub
+    COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure --no-tests=error
+  )
+
+  therock_test_validate_shared_lib(PATH ${CMAKE_CURRENT_BINARY_DIR}/profiler-hub/dist/lib
+    LIB_NAMES
+      libprofiler-hub.so
+  )
+
+  # The artifact target cannot supply this filtered tree: it emits one command for
+  # all components, and the test component holds the executable built from it.
+  set(_profiler_hub_test_dir "${CMAKE_CURRENT_BINARY_DIR}/profiler-hub-install-test")
+  set(_profiler_hub_test_components "${_profiler_hub_test_dir}/artifact/components")
+  set(_profiler_hub_test_prefix "${_profiler_hub_test_dir}/artifact/prefix")
+  set(_profiler_hub_test_stamp "${_profiler_hub_test_dir}/artifact/prefix.stamp")
+  set(_profiler_hub_fileset_tool "${THEROCK_SOURCE_DIR}/build_tools/fileset_tool.py")
+  get_target_property(_profiler_hub_stamp_dir profiler-hub THEROCK_STAMP_DIR)
+  add_custom_command(
+    OUTPUT "${_profiler_hub_test_stamp}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -rf
+      "${_profiler_hub_test_components}" "${_profiler_hub_test_prefix}"
+    COMMAND "${Python3_EXECUTABLE}" "${_profiler_hub_fileset_tool}" artifact
+      --root-dir "${THEROCK_BINARY_DIR}"
+      --descriptor "${CMAKE_CURRENT_SOURCE_DIR}/artifact-profiler-hub.toml"
+      --artifact-name profiler-hub
+      dev "${_profiler_hub_test_components}/dev"
+      lib "${_profiler_hub_test_components}/lib"
+    COMMAND "${Python3_EXECUTABLE}" "${_profiler_hub_fileset_tool}" artifact-flatten
+      -o "${_profiler_hub_test_prefix}"
+      "${_profiler_hub_test_components}/dev" "${_profiler_hub_test_components}/lib"
+    COMMAND "${CMAKE_COMMAND}" -E touch "${_profiler_hub_test_stamp}"
+    DEPENDS
+      "${_profiler_hub_stamp_dir}/stage.stamp"
+      "${CMAKE_CURRENT_SOURCE_DIR}/artifact-profiler-hub.toml"
+      "${_profiler_hub_fileset_tool}"
+    COMMENT "Assembling profiler-hub artifact tree for the install test"
+    VERBATIM
+  )
+
+  # Deliberately no BUILD_DEPS or RUNTIME_DEPS: either installs the super-project
+  # find_package provider, which would resolve profiler-hub from the unfiltered
+  # dist tree and mask the omission this test detects.
+  therock_cmake_subproject_declare(profiler-hub-install-test
+    DISABLE_AMDGPU_TARGETS
+    COMPILER_TOOLCHAIN amd-llvm
+    FPRINT_SOURCE_HASH
+    EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/profiler-hub-install-test"
+    BINARY_DIR "${_profiler_hub_test_dir}"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      "-DPROFILER_HUB_ARTIFACT_PREFIX=${_profiler_hub_test_prefix}"
+    EXTRA_DEPENDS
+      "${_profiler_hub_test_stamp}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/profiler-hub-install-test/test_template.cpp.in"
+    INSTALL_RPATH_DIRS
+      lib
+  )
+  therock_cmake_subproject_activate(profiler-hub-install-test)
+
+  therock_provide_artifact(profiler-hub
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-profiler-hub.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+      test
+    SUBPROJECT_DEPS
+      profiler-hub
+      profiler-hub-install-test
+  )
+endif(THEROCK_ENABLE_PROFILER_HUB)
+
+##############################################################################
 # rocprofiler-systems
 ##############################################################################
 if(THEROCK_ENABLE_ROCPROFSYS)
@@ -314,6 +452,11 @@ if(THEROCK_ENABLE_ROCPROFSYS)
     list(JOIN _rocprofsys_detected_python_versions "\;" _ROCPROFSYS_PYTHON_VERSIONS_STR)
     message(STATUS "Detected Python versions for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_VERSIONS_STR}")
     message(STATUS "Detected Python root dirs for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}")
+  endif()
+
+  set(_rocprofsys_profiler_hub_dep "")
+  if(THEROCK_ENABLE_PROFILER_HUB)
+    set(_rocprofsys_profiler_hub_dep profiler-hub)
   endif()
 
   # When libiberty is bundled; otherwise let rocprofiler-systems build its own.
@@ -361,6 +504,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       amdsmi
       aqlprofile
       hip-clr
+      ${_rocprofsys_profiler_hub_dep}
       rocprofiler-register
       rocprofiler-sdk
       ${THEROCK_BUNDLED_LIBIBERTY}
