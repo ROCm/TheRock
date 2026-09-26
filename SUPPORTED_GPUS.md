@@ -19,6 +19,16 @@ See also the [ROCm Device Support Wishlist GitHub Discussion](https://github.com
 >
 > - *Sanity-Tested* means "either in CI or some light form of manual QA has been performed".
 > - *Release-Ready* means "it is supported and tested as part of our overall release process".
+>
+> For this table, a GPU target is marked **Build Passing** when its runtime tarball
+> is published in the [nightly multi-architecture index](https://rocm.nightlies.amd.com/tarball-multi-arch/).
+> **Sanity Tested** requires a successful target-specific CI test job or manual QA;
+> publishing a `-tests` tarball alone does not establish that tests passed. The
+> [release multi-architecture index](https://repo.amd.com/rocm/tarball-multi-arch/)
+> shows published release tarballs; **Release Ready** still means the target is
+> supported and tested as part of the overall release process.
+> Family tarballs (for example, `gfx120X-all`) apply to each matching LLVM target
+> listed below.
 
 > [!WARNING]
 > A ✅ in the **Build Passing** column only indicates that a wheel or tarball
@@ -34,10 +44,11 @@ See also the [ROCm Device Support Wishlist GitHub Discussion](https://github.com
 
 | Architecture | LLVM target | Build Passing | Sanity Tested | Release Ready |
 | ------------ | ----------- | ------------- | ------------- | ------------- |
-| **CDNA4**    | **gfx950**  | ✅            |               |               |
+| **CDNA5**    | **gfx1250** | ✅            | ✅            |               |
+| **CDNA4**    | **gfx950**  | ✅            | ✅            | ✅            |
 | **CDNA3**    | **gfx942**  | ✅            | ✅            | ✅            |
-| CDNA2        | gfx90a      | ✅            |               |               |
-| CDNA         | gfx908      | ✅            |               |               |
+| CDNA2        | gfx90a      | ✅            | ✅            | ✅            |
+| CDNA         | gfx908      | ✅            | ✅            | ✅            |
 | GCN5.1       | gfx906      | ✅            |               |               |
 | GCN5.0       | gfx900      | ✅            |               |               |
 
@@ -47,7 +58,7 @@ See also the [ROCm Device Support Wishlist GitHub Discussion](https://github.com
 | ------------ | ----------- | ------------- | ------------- | ------------- |
 | **RDNA4**    | **gfx1201** | ✅            | ✅            | ✅            |
 | **RDNA4**    | **gfx1200** | ✅            | ✅            | ✅            |
-| **RDNA3.5**  | **gfx1153** | ✅            |               |               |
+| **RDNA3.5**  | **gfx1153** | ✅            | ✅            | ✅            |
 | **RDNA3.5**  | **gfx1152** | ✅            | ✅            | ✅            |
 | **RDNA3.5**  | **gfx1151** | ✅            | ✅            | ✅            |
 | **RDNA3.5**  | **gfx1150** | ✅            | ✅            | ✅            |
@@ -77,9 +88,9 @@ Check [windows_support.md](https://github.com/ROCm/TheRock/blob/main/docs/develo
 
 | Architecture | LLVM target | Build Passing | Sanity Tested | Release Ready |
 | ------------ | ----------- | ------------- | ------------- | ------------- |
-| **RDNA4**    | **gfx1201** | ✅            |               |               |
-| **RDNA4**    | **gfx1200** | ✅            |               |               |
-| **RDNA3.5**  | **gfx1153** | ✅            |               |               |
+| **RDNA4**    | **gfx1201** | ✅            | ✅            | ✅            |
+| **RDNA4**    | **gfx1200** | ✅            | ✅            | ✅            |
+| **RDNA3.5**  | **gfx1153** | ✅            | ✅            | ✅            |
 | **RDNA3.5**  | **gfx1152** | ✅            | ✅            | ✅            |
 | **RDNA3.5**  | **gfx1151** | ✅            | ✅            | ✅            |
 | **RDNA3.5**  | **gfx1150** | ✅            | ✅            | ✅            |
@@ -100,3 +111,10 @@ Check [windows_support.md](https://github.com/ROCm/TheRock/blob/main/docs/develo
 | GCN5.1       | gfx906      | ✅            |               |               |
 | GCN5.0       | gfx90c      | ✅            |               |               |
 | GCN5.0       | gfx900      | ✅            |               |               |
+
+### AMD Instinct - Windows
+
+| Architecture | LLVM target | Build Passing | Sanity Tested | Release Ready |
+| ------------ | ----------- | ------------- | ------------- | ------------- |
+| CDNA2        | gfx90a      | ✅            |               |               |
+| CDNA         | gfx908      | ✅            |               |               |
