@@ -127,7 +127,7 @@ option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" OFF)
 set(THEROCK_COMGR_DLL_NAME "" CACHE STRING "Override the Comgr DLL name for the comgr build and CLR load (e.g. amd_comgr_opencl.dll); empty = component default")
 
-set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
+set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' host+device, 'HOST_ASAN' host-only address, 'TSAN' host-only thread)")
 
 # Options to control the concurrency for building LLVM.
 set(FLANG_PARALLEL_COMPILE_JOBS "" CACHE STRING "Limit parallel compile jobs for Flang (reduces memory usage on systems with many cores)")

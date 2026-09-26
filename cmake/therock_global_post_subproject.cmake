@@ -43,8 +43,8 @@ if(THEROCK_USER_POST_HOOK)
   include("${THEROCK_USER_POST_HOOK}")
 endif()
 
-# Performs post-processing on a dynamically linked target (executables and
-# shared libraries) for rpath settings.
+# Performs post-processing on a dynamically linked target (executables, shared
+# libraries, and loadable modules) for rpath settings.
 # Unless if disabled by the global NO_INSTALL_RPATH on the project or locally
 # via THEROCK_NO_INSTALL_RPATH target property, performs default installation
 # RPATH assignment.
@@ -64,7 +64,7 @@ function(_therock_post_process_rpath_target target)
   if(NOT _origin)
     if(target_type STREQUAL "EXECUTABLE")
       set(_origin "${THEROCK_INSTALL_RPATH_EXECUTABLE_DIR}")
-    elseif(target_type STREQUAL "SHARED_LIBRARY")
+    elseif(target_type STREQUAL "SHARED_LIBRARY" OR target_type STREQUAL "MODULE_LIBRARY")
       set(_origin "${THEROCK_INSTALL_RPATH_LIBRARY_DIR}")
     else()
       message(FATAL_ERROR "Unhandled target type ${target_type}")
@@ -82,18 +82,24 @@ function(_therock_post_process_rpath_target target)
 endfunction()
 
 
-# Iterate over all shared library and executable targets and set default RPATH
-# (unless if globally disabled for the subproject).
+# Iterate over all dynamically linked targets and set the default RPATH (unless
+# globally disabled for the subproject).
 block(SCOPE_FOR VARIABLES)
   if(NOT THEROCK_NO_INSTALL_RPATH)
-    foreach(target ${THEROCK_EXECUTABLE_TARGETS} ${THEROCK_SHARED_LIBRARY_TARGETS})
+    # Python/native extension modules are loaded during several component
+    # builds. Sanitized modules need the same compiler-rt build/install RPATH
+    # treatment as ordinary shared libraries or their build-time imports fail.
+    foreach(target
+        ${THEROCK_EXECUTABLE_TARGETS}
+        ${THEROCK_SHARED_LIBRARY_TARGETS}
+        ${THEROCK_MODULE_TARGETS})
       _therock_post_process_rpath_target(${target})
     endforeach()
   endif()
 endblock()
 
-# Process all shared library and executable targets and emit install time code
-# to process their build id and split debug files out.
+# Process all dynamically linked targets and emit install-time code to process
+# their build IDs and split debug files out.
 if(THEROCK_SPLIT_DEBUG_INFO AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
   include(CMakeFindBinUtils)
   block(SCOPE_FOR POLICIES VARIABLES)
