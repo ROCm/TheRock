@@ -215,6 +215,59 @@ all_build_variants = {
     },
 }
 
+# When a build variant runs its tests, keyed by variant then event name. This
+# is the variant-level counterpart to the per-family trigger keys below
+# (nightly_check_only_for_family and friends).
+#
+# A variant with no entry runs tests on every trigger, which is what release
+# does. Within an entry, an event with no rule does not run tests.
+#
+#   "enabled"   : tests run on this event
+#   "disabled"  : tests do not run on this event
+#
+# Extending this is a data edit. Running a variant on postsubmit means adding
+# a "push" rule, and a new variant means adding a key -- neither needs a new
+# workflow input.
+build_variant_test_triggers = {
+    # Presubmit is enabled because reaching this gate already means the caller
+    # asked for a host-asan build, so disabling the tests would pay for the
+    # build and discard the signal. See ROCm/TheRock#7202. Postsubmit stays off
+    # because nightly already covers it.
+    "host-asan": {
+        "schedule": "enabled",
+        "workflow_dispatch": "enabled",
+        "push": "disabled",
+        "pull_request": "enabled",
+    },
+    "host-asan-debug": {
+        "schedule": "enabled",
+        "workflow_dispatch": "enabled",
+        "push": "disabled",
+        "pull_request": "enabled",
+    },
+}
+
+
+def build_variant_runs_tests(build_variant: str, event_name: str) -> bool:
+    """Returns whether build_variant runs tests on event_name.
+
+    Raises ValueError if a rule is malformed, so a typo in the table fails the
+    configure step instead of silently disabling tests.
+    """
+    policy = build_variant_test_triggers.get(build_variant)
+    if policy is None:
+        return True
+
+    rule = policy.get(event_name, "disabled")
+    if rule == "enabled":
+        return True
+    if rule == "disabled":
+        return False
+    raise ValueError(
+        f"build_variant_test_triggers[{build_variant!r}][{event_name!r}] is "
+        f"{rule!r}; expected 'enabled' or 'disabled'"
+    )
+
 """
 amdgpu_family_info_matrix dictionary fields:
 - test-runs-on: (required) GitHub runner label for this architecture

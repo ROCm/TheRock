@@ -59,6 +59,7 @@ from _therock_utils.build_topology import get_topology
 
 from amdgpu_family_matrix import (
     all_build_variants,
+    build_variant_runs_tests,
     get_all_families_for_trigger_types,
     select_build_runner,
 )
@@ -1319,13 +1320,13 @@ def _expand_build_config_for_platform(
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant.startswith("host-asan"):
-            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+            # Which triggers run host-asan tests is declared in
+            # build_variant_test_triggers, beside the per-family trigger keys.
+            if not build_variant_runs_tests(build_variant, ci_inputs.event_name):
                 test_runs_on = ""
                 print(
-                    f"  {family_name}: host-asan tests only run on nightly, "
-                    f"disabling tests"
+                    f"  {family_name}: {build_variant} does not run tests on "
+                    f"{ci_inputs.event_name}, disabling tests"
                 )
             elif "test-runs-on-sandbox" in platform_info:
                 test_runs_on = platform_info["test-runs-on-sandbox"]
