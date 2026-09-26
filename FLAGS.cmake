@@ -126,7 +126,7 @@ therock_declare_flag(
 
 therock_declare_flag(
   NAME FFTW3_AUTOTOOLS_BUILD
-  DEFAULT_VALUE OFF
+  DEFAULT_VALUE ON
   DESCRIPTION "Build third-party fftw3 with autotools on Linux. Ignored on Windows."
 )
 
