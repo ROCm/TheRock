@@ -461,9 +461,6 @@ if(THEROCK_ENABLE_SOLVER)
   ##############################################################################
 
   set(hipSOLVER_optional_deps)
-  if(THEROCK_BUILD_TESTING)
-    list(APPEND hipSOLVER_optional_deps therock-host-blas)
-  endif()
 
   if(WIN32)
     set(hipSOLVER_build_with_sparse "OFF")
@@ -486,6 +483,7 @@ if(THEROCK_ENABLE_SOLVER)
         -DBUILD_WITH_SPARSE=${hipSOLVER_build_with_sparse}
         -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
         -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
+        -DHIPSOLVER_INTERNAL_LAPACK_BUILD=OFF
         -DHIPSOLVER_FIND_PACKAGE_LAPACK_CONFIG=OFF
         -DEXPORT_FORTRAN_BINDINGS=OFF
       COMPILER_TOOLCHAIN
@@ -498,6 +496,8 @@ if(THEROCK_ENABLE_SOLVER)
         rocBLAS
         rocSOLVER
         rocSPARSE
+        # GEEV uses CPU LAPACK even when client tests are disabled.
+        therock-host-blas
         ${hipSOLVER_optional_deps}
   )
   therock_cmake_subproject_glob_c_sources(hipSOLVER
