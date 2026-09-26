@@ -358,7 +358,7 @@ amdgpu_family_info_matrix_postsubmit = {
             "test-runs-on": "linux-gfx90a-1gpu-ossci-rocm",
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
-            "build_variants": ["release"],
+            "build_variants": ["release", "asan-debug"],
             # Only run tests when gfx90a label is present on PR
             "trigger_test_label_only": True,
         },
