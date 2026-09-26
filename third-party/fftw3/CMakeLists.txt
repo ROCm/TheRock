@@ -6,6 +6,7 @@ therock_subproject_fetch(therock-fftw3-sources
   # Originally mirrored from: https://fftw.org/fftw-3.3.10.tar.gz
   URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/fftw-3.3.10.tar.gz
   URL_HASH SHA256=56c932549852cddcfafdab3820b0200c7742675be92179e59e6215b340e26467
+  PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/build_tools/patch_third_party_source.py ${CMAKE_SOURCE_DIR}/patches/third-party/fftw3
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
