@@ -1,0 +1,33 @@
+# LeakSanitizer suppressions for ASAN-instrumented ROCm test jobs.
+#
+# Preloading the ASAN runtime puts the interpreter under LeakSanitizer even
+# though CPython itself is not instrumented, so its ordinary startup and import
+# allocations get reported as leaks. Suppressing those keeps leak detection on
+# for ROCm libraries, which is the code these jobs are actually testing.
+#
+# A suppression matches when any frame in the allocation stack matches by
+# function name, source file name, or module name. Prefer adding a narrow entry
+# here over setting detect_leaks=0, which would hide ROCm leaks too.
+
+# CPython when it links libpython as a shared object.
+leak:libpython
+
+# CPython's allocators, for interpreters that link it statically but keep
+# symbols. _PyMem_RawMalloc is the one that shows up in rocm-sdk wheel tests.
+leak:_PyMem_Raw
+leak:_PyObject_Malloc
+leak:_PyObject_Realloc
+leak:PyMem_Raw
+leak:PyObject_Malloc
+leak:PyObject_Realloc
+
+# Interpreter state that is allocated once and intentionally never freed.
+leak:_PyRuntimeState_Init
+leak:_PyUnicode_New
+leak:PyUnicode_New
+
+# Extension module initialization. Modules are loaded for the life of the
+# process, so their module objects and method tables are never released.
+leak:_imp_create_dynamic
+leak:PyInit_
+leak:PyModule_Create
