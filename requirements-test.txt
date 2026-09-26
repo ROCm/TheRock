@@ -23,6 +23,9 @@ python-magic==0.4.27; sys_platform != "win32"
 # build_tools/memory_monitor.py requirement
 psutil==7.1.3
 
+# build_tools/build_python_packages.py requirement
+pyelftools>=0.29
+
 # test_artifacts_covered_by_packages requirement
 toml>=0.10.2
 
