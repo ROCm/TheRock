@@ -53,15 +53,19 @@ selected.
 
 Automatic reuse is **disabled** when no build platform is selected.
 
+In Multi-Arch CI, pull requests run in `reuse-stage` and every other trigger
+runs in `dry-run`. Pushes deliberately keep building every stage: a push that
+reused stages would not produce the artifacts a later pull request reuses.
+
 ### Inputs
 
-| Input                        | Default   | Purpose                                                                                                |
-| ---------------------------- | --------- | ------------------------------------------------------------------------------------------------------ |
-| `stage_reuse_mode`           | `dry-run` | `dry-run` (report only) or `reuse-stage` (auto-reuse unaffected stages).                               |
-| `stage_reuse_max_age_hours`  | `72`      | Reject baseline runs older than this many hours (recency window).                                      |
-| `stage_reuse_commit_history` | `50`      | Number of recent branch commits to fetch when establishing ancestry for the commit-compatibility rule. |
-| `prebuilt_stages`            | `""`      | Manual, comma-separated stages to reuse (or `all`). Always honored, independent of `stage_reuse_mode`. |
-| `baseline_run_id`            | `""`      | Run ID to copy manually-listed `prebuilt_stages` artifacts from.                                       |
+| Input                        | Default   | Purpose                                                                                                                        |
+| ---------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `stage_reuse_mode`           | `dry-run` | `dry-run` (report only) or `reuse-stage` (auto-reuse unaffected stages). Multi-Arch CI passes `reuse-stage` for pull requests. |
+| `stage_reuse_max_age_hours`  | `72`      | Reject baseline runs older than this many hours (recency window).                                                              |
+| `stage_reuse_commit_history` | `50`      | Number of recent branch commits to fetch when establishing ancestry for the commit-compatibility rule.                         |
+| `prebuilt_stages`            | `""`      | Manual, comma-separated stages to reuse (or `all`). Always honored, independent of `stage_reuse_mode`.                         |
+| `baseline_run_id`            | `""`      | Run ID to copy manually-listed `prebuilt_stages` artifacts from.                                                               |
 
 Example `workflow_call` from a component CI:
 
@@ -86,7 +90,10 @@ A baseline run is only used when it is:
   (default `multi_arch_ci.yml`),
 - recent enough (`stage_reuse_max_age_hours`),
 - commit-compatible — its commit is the same as, or an ancestor of, the current
-  commit (established from the last `stage_reuse_commit_history` commits), and
+  commit (established from the last `stage_reuse_commit_history` commits). On a
+  pull request the "current commit" is the base commit rather than the checked
+  out merge commit, which is not on the baseline branch and so cannot be placed
+  in that history; and
 - healthy — its `Build` jobs succeeded and it contains every required artifact
   for every platform being built.
 
