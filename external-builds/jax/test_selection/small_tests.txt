@@ -22,6 +22,7 @@ tests/lax_scipy_test.py
 tests/lax_test.py
 tests/layout_test.py
 tests/linalg_test.py
+tests/logging_test.py
 tests/memories_test.py
 tests/nn_test.py
 tests/ode_test.py
