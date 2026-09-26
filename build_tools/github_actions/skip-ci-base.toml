@@ -1,0 +1,30 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Base skip-CI patterns that apply to ALL repositories using TheRock CI.
+# These are universal patterns for files that never affect build/test workflows.
+#
+# Individual repos (including TheRock) can extend these with their own
+# skip-ci-config.toml for repo-specific patterns.
+
+version = 1
+
+[skip_ci]
+# Patterns that apply to all platforms
+common = [
+    # Documentation and metadata
+    "*.md",
+    "*.gitignore",
+    "*CODEOWNERS",
+    "*LICENSE",
+    "docs/*",
+
+    # GitHub metadata that doesn't affect CI
+    ".github/dependabot.yml",
+]
+
+# Additional patterns for Linux-only skip (currently none)
+linux = []
+
+# Additional patterns for Windows-only skip (currently none)
+windows = []

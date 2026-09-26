@@ -11,7 +11,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from configure_ci_path_filters import (
-    _GITHUB_WORKFLOWS_CI_FILENAMES,
+    get_ci_workflow_filenames,
     get_git_commit_hash,
     get_git_modified_paths,
     is_ci_run_required,
@@ -214,32 +214,219 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         self.assertEqual(get_git_commit_hash(base_sha), base_sha)
 
     def test_ci_workflow_filenames_cover_all_transitive_uses(self):
-        """_GITHUB_WORKFLOWS_CI_FILENAMES must exactly match the set of
-        workflows transitively called by multi_arch_ci.yml.
+        """CI workflow filenames in skip-ci-config.toml must exactly match
+        the set of workflows transitively called by multi_arch_ci.yml.
 
         This is a change-detector test that can be removed if
-        _GITHUB_WORKFLOWS_CI_FILENAMES is computed dynamically instead of
+        ci_workflows.filenames is computed dynamically instead of
         maintained by hand.
 
-        If this test fails, update _GITHUB_WORKFLOWS_CI_FILENAMES in
-        configure_ci_path_filters.py to match the actual workflow tree.
+        If this test fails, update ci_workflows.filenames in
+        build_tools/github_actions/skip-ci-config.toml to match the actual
+        workflow tree.
         """
+        ci_workflow_filenames = get_ci_workflow_filenames()
         all_used = get_transitive_workflow_uses(["multi_arch_ci.yml"])
-        missing = all_used - _GITHUB_WORKFLOWS_CI_FILENAMES
-        stale = _GITHUB_WORKFLOWS_CI_FILENAMES - all_used
+        missing = all_used - ci_workflow_filenames
+        stale = ci_workflow_filenames - all_used
         errors = []
         if missing:
             errors.append(
-                "Missing (add to _GITHUB_WORKFLOWS_CI_FILENAMES):\n"
+                "Missing (add to ci_workflows.filenames in skip-ci-config.toml):\n"
                 + "\n".join(f"  - {f}" for f in sorted(missing))
             )
         if stale:
             errors.append(
-                "Stale (remove from _GITHUB_WORKFLOWS_CI_FILENAMES):\n"
+                "Stale (remove from ci_workflows.filenames in skip-ci-config.toml):\n"
                 + "\n".join(f"  - {f}" for f in sorted(stale))
             )
         if errors:
             self.fail("\n".join(errors))
+
+
+class ExternalRepoPathFiltersTest(unittest.TestCase):
+    """Tests for is_ci_run_required with external repo skip_patterns."""
+
+    # Test patterns that simulate what external repos would provide
+    TEST_SKIP_PATTERNS = [
+        "docs/*",
+        "*.md",
+        "*.rst",
+        ".gitignore",
+        "*/.gitignore",
+        "*CODEOWNERS",
+        "*LICENSE",
+        "projects/*/docs/*",
+        "shared/*/docs/*",
+        "experimental/*",
+        "*.clinerules",
+        "*.cursorrules",
+        "*.mdc",
+    ]
+
+    def test_none_changed_files_requires_ci(self):
+        """None changed_files means unknown changes, run CI to be safe."""
+        self.assertTrue(is_ci_run_required(None, skip_patterns=self.TEST_SKIP_PATTERNS))
+
+    def test_empty_changed_files_skips_ci(self):
+        """Empty changed_files means no changes, skip CI."""
+        self.assertFalse(is_ci_run_required([], skip_patterns=self.TEST_SKIP_PATTERNS))
+
+    def test_only_markdown_files_skips_ci(self):
+        """Only markdown files changed, skip CI."""
+        self.assertFalse(
+            is_ci_run_required(["README.md"], skip_patterns=self.TEST_SKIP_PATTERNS)
+        )
+        self.assertFalse(
+            is_ci_run_required(
+                ["README.md", "docs/guide.md", "CHANGELOG.md"],
+                skip_patterns=self.TEST_SKIP_PATTERNS,
+            )
+        )
+
+    def test_only_rst_files_skips_ci(self):
+        """Only RST files changed, skip CI."""
+        self.assertFalse(
+            is_ci_run_required(
+                ["docs/index.rst"], skip_patterns=self.TEST_SKIP_PATTERNS
+            )
+        )
+
+    def test_only_docs_directory_skips_ci(self):
+        """Only docs directory changes, skip CI."""
+        self.assertFalse(
+            is_ci_run_required(
+                ["docs/guide.md", "docs/api/index.rst"],
+                skip_patterns=self.TEST_SKIP_PATTERNS,
+            )
+        )
+
+    def test_only_gitignore_skips_ci(self):
+        """Only .gitignore files changed, skip CI."""
+        self.assertFalse(
+            is_ci_run_required([".gitignore"], skip_patterns=self.TEST_SKIP_PATTERNS)
+        )
+        self.assertFalse(
+            is_ci_run_required(
+                ["projects/rocblas/.gitignore"],
+                skip_patterns=self.TEST_SKIP_PATTERNS,
+            )
+        )
+
+    def test_only_project_docs_skips_ci(self):
+        """Only project-specific docs changed, skip CI."""
+        self.assertFalse(
+            is_ci_run_required(
+                ["projects/rocblas/docs/README.md", "shared/utils/docs/guide.rst"],
+                skip_patterns=self.TEST_SKIP_PATTERNS,
+            )
+        )
+
+    def test_only_experimental_skips_ci(self):
+        """Only experimental files changed, skip CI."""
+        self.assertFalse(
+            is_ci_run_required(
+                ["experimental/new_feature.cpp"],
+                skip_patterns=self.TEST_SKIP_PATTERNS,
+            )
+        )
+
+    def test_only_ai_rules_skips_ci(self):
+        """Only AI/editor rules files changed, skip CI."""
+        self.assertFalse(
+            is_ci_run_required(
+                [".clinerules", ".cursorrules", "CLAUDE.mdc"],
+                skip_patterns=self.TEST_SKIP_PATTERNS,
+            )
+        )
+
+    def test_source_file_requires_ci(self):
+        """Source file change requires CI."""
+        self.assertTrue(
+            is_ci_run_required(
+                ["projects/rocblas/src/lib.cpp"],
+                skip_patterns=self.TEST_SKIP_PATTERNS,
+            )
+        )
+
+    def test_cmake_file_requires_ci(self):
+        """CMake file change requires CI."""
+        self.assertTrue(
+            is_ci_run_required(
+                ["CMakeLists.txt"], skip_patterns=self.TEST_SKIP_PATTERNS
+            )
+        )
+
+    def test_python_script_requires_ci(self):
+        """Python script change requires CI."""
+        self.assertTrue(
+            is_ci_run_required(
+                ["scripts/build.py"], skip_patterns=self.TEST_SKIP_PATTERNS
+            )
+        )
+
+    def test_mixed_skippable_and_non_skippable_requires_ci(self):
+        """Mix of skippable and non-skippable requires CI."""
+        self.assertTrue(
+            is_ci_run_required(
+                ["README.md", "projects/rocblas/src/lib.cpp"],
+                skip_patterns=self.TEST_SKIP_PATTERNS,
+            )
+        )
+
+    def test_github_workflow_requires_ci(self):
+        """GitHub workflow file requires CI (not in skippable patterns)."""
+        self.assertTrue(
+            is_ci_run_required(
+                [".github/workflows/ci.yml"], skip_patterns=self.TEST_SKIP_PATTERNS
+            )
+        )
+
+    def test_codeowners_skips_ci(self):
+        """CODEOWNERS file is skippable."""
+        self.assertFalse(
+            is_ci_run_required(["CODEOWNERS"], skip_patterns=self.TEST_SKIP_PATTERNS)
+        )
+        self.assertFalse(
+            is_ci_run_required(
+                [".github/CODEOWNERS"], skip_patterns=self.TEST_SKIP_PATTERNS
+            )
+        )
+
+    def test_license_skips_ci(self):
+        """LICENSE file is skippable."""
+        self.assertFalse(
+            is_ci_run_required(["LICENSE"], skip_patterns=self.TEST_SKIP_PATTERNS)
+        )
+        self.assertFalse(
+            is_ci_run_required(["LICENSE.md"], skip_patterns=self.TEST_SKIP_PATTERNS)
+        )
+
+    def test_repo_name_included_in_logging(self):
+        """Repo name is used in logging output."""
+        # This is a smoke test - just verify it doesn't crash
+        self.assertTrue(
+            is_ci_run_required(
+                ["src/lib.cpp"],
+                skip_patterns=self.TEST_SKIP_PATTERNS,
+                repo_name="rocm-libraries",
+            )
+        )
+        self.assertFalse(
+            is_ci_run_required(
+                ["README.md"],
+                skip_patterns=self.TEST_SKIP_PATTERNS,
+                repo_name="rocm-systems",
+            )
+        )
+
+    def test_no_patterns_uses_therock_defaults(self):
+        """If no skip_patterns provided, uses TheRock's TOML config patterns."""
+        # With no skip_patterns, loads patterns from skip-ci-base.toml + skip-ci-config.toml
+        # README.md matches *.md pattern in base config
+        self.assertFalse(is_ci_run_required(["README.md"], skip_patterns=None))
+        # Source file requires CI
+        self.assertTrue(is_ci_run_required(["src/lib.cpp"], skip_patterns=None))
 
 
 if __name__ == "__main__":

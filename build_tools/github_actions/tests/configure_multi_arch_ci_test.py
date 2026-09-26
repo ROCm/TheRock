@@ -358,15 +358,132 @@ class TestShouldSkipCI(unittest.TestCase):
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
     @patch("configure_multi_arch_ci.is_ci_run_required")
-    def test_external_repo_skips_path_filter(self, mock_filter):
-        """External repo builds skip path filtering and always run CI."""
+    def test_external_repo_no_skip_config_runs_ci(self, mock_filter):
+        """External repo without skip_ci_config runs CI (uses stage reuse)."""
+        mock_filter.return_value = True  # CI required
         inputs = self._inputs(
-            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123","event_name":"pull_request"}'
         )
         git = cm.GitContext(changed_files=["rocm-libraries"])
         self.assertFalse(cm.should_skip_ci(inputs, git))
-        # Path filter should not be called for external repos
-        mock_filter.assert_not_called()
+        # is_ci_run_required is still called with None patterns
+        mock_filter.assert_called_once()
+
+    @patch("configure_multi_arch_ci.is_ci_run_required")
+    def test_external_repo_checkout_missing_runs_ci(self, mock_filter):
+        """External repo with missing checkout runs CI (can't git diff)."""
+        mock_filter.return_value = True  # CI required (conservative)
+        inputs = self._inputs(
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123","event_name":"pull_request","skip_ci_config":".github/skip-ci-config.toml"}'
+        )
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        # Without checkout, changed_files is None, so CI runs conservatively
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    @patch("configure_multi_arch_ci.is_ci_run_required")
+    def test_external_repo_changed_files_skippable_skips(self, mock_ci_required):
+        """External repo with skippable changed_files skips CI."""
+        mock_ci_required.return_value = False
+        inputs = self._inputs(
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123","event_name":"pull_request","skip_ci_config":".github/skip-ci-config.toml"}'
+        )
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        # Note: This test mocks is_ci_run_required, so the actual git diff logic is bypassed
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+        mock_ci_required.assert_called_once()
+
+    @patch("configure_multi_arch_ci.is_ci_run_required")
+    def test_external_repo_changed_files_non_skippable_runs(self, mock_ci_required):
+        """External repo with non-skippable changed_files runs CI."""
+        mock_ci_required.return_value = True
+        inputs = self._inputs(
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123","event_name":"pull_request","skip_ci_config":".github/skip-ci-config.toml"}'
+        )
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+        mock_ci_required.assert_called_once()
+
+    def test_external_repo_invalid_json_raises(self):
+        """External repo with invalid JSON raises ValueError."""
+        inputs = self._inputs(external_repo="not valid json")
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        with self.assertRaises(ValueError) as ctx:
+            cm.should_skip_ci(inputs, git)
+        self.assertIn("Invalid external_repo JSON", str(ctx.exception))
+
+    def test_external_repo_schedule_event_runs_ci_conservatively(self):
+        """External repo with schedule event runs CI (no diff available).
+
+        When event_name is schedule/workflow_dispatch, there's no meaningful
+        base to diff against, so CI must run conservatively.
+        """
+        inputs = self._inputs(
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123","event_name":"schedule","skip_ci_config":".github/skip-ci-config.toml"}'
+        )
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        # Must NOT skip - schedule event has no diff
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    @patch("configure_multi_arch_ci.is_ci_run_required")
+    @patch("configure_multi_arch_ci.get_git_modified_paths")
+    @patch("configure_multi_arch_ci.Path")
+    def test_external_repo_empty_diff_skips(
+        self, mock_path, mock_git_diff, mock_ci_required
+    ):
+        """External repo with empty git diff can skip CI."""
+        # Mock the path to exist
+        mock_path_instance = mock_path.return_value
+        mock_path_instance.exists.return_value = True
+        mock_path_instance.is_dir.return_value = True
+        mock_git_diff.return_value = []
+        mock_ci_required.return_value = False
+        inputs = self._inputs(
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123","event_name":"pull_request","skip_ci_config":".github/skip-ci-config.toml"}'
+        )
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        # Can skip - empty diff means nothing to build/test
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+
+    def test_external_repo_skip_ci_config_missing_file_runs_ci(self):
+        """External repo with skip_ci_config pointing to missing file runs CI."""
+        inputs = self._inputs(
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123","changed_files":["README.md"],"skip_ci_config":".github/nonexistent.toml"}'
+        )
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        # Should not skip - config file not found, run CI conservatively
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    @patch("configure_multi_arch_ci.get_git_modified_paths")
+    def test_external_repo_skip_ci_config_with_toml(self, mock_git_diff):
+        """External repo with skip_ci_config TOML file loads patterns."""
+        import shutil
+
+        # Mock git diff to return skippable files
+        mock_git_diff.return_value = ["README.md", "docs/guide.md"]
+
+        # Create external-repo-config directory with the TOML file
+        config_dir = Path("external-repo-config/.github")
+        config_dir.mkdir(parents=True, exist_ok=True)
+        config_path = config_dir / "skip-ci-config.toml"
+
+        try:
+            config_path.write_text(
+                """
+version = 1
+
+[skip_ci]
+common = ["*.md", "docs/*"]
+"""
+            )
+            inputs = self._inputs(
+                external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123","event_name":"pull_request","skip_ci_config":".github/skip-ci-config.toml"}'
+            )
+            git = cm.GitContext(changed_files=["rocm-libraries"])
+            # Should skip - all files match skip patterns from TOML
+            self.assertTrue(cm.should_skip_ci(inputs, git))
+        finally:
+            # Cleanup
+            shutil.rmtree("external-repo-config", ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------

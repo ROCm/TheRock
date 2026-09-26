@@ -52,6 +52,16 @@ import os
 import sys
 from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
+from typing import Optional
+
+# Try tomllib (Python 3.11+), fall back to tomli
+try:
+    import tomllib
+except ImportError:
+    try:
+        import tomli as tomllib
+    except ImportError:
+        tomllib = None  # type: ignore
 
 # Add parent directory to path for _therock_utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -85,6 +95,100 @@ from stage_reuse_decision import (
 )
 
 _NULL_GIT_SHA = "0" * 40
+
+# Default path where external repo config is checked out in setup_multi_arch.yml
+_EXTERNAL_REPO_CONFIG_DIR = "external-repo-config"
+
+
+def _load_skip_ci_patterns_from_toml(config_path: str) -> Optional[list[str]]:
+    """Load skip CI patterns from base config + external repo's TOML config file.
+
+    Loads patterns from:
+    1. Base config (skip-ci-base.toml in TheRock) - universal patterns for all repos
+    2. External repo's extension config - repo-specific patterns
+    """
+    from configure_ci_path_filters import load_skip_ci_config
+
+    # The external repo config is checked out to external-repo-config/
+    full_path = Path(_EXTERNAL_REPO_CONFIG_DIR) / config_path
+    if not full_path.exists():
+        print(f"  Skip CI config not found: {full_path}")
+        # Still load base patterns even if extension config is missing
+        base_patterns, _ = load_skip_ci_config(extension_config_path=full_path)
+        if base_patterns:
+            print(f"  Using {len(base_patterns)} base skip-CI patterns only")
+            return base_patterns
+        return None
+
+    # Load base + extension patterns using the shared loader
+    patterns, _ = load_skip_ci_config(extension_config_path=full_path)
+    print(f"  Loaded {len(patterns)} total skip CI patterns (base + {config_path})")
+    return patterns
+
+
+def _compute_changed_projects_from_files(
+    changed_files: list[str],
+    projects_config_path: str,
+) -> list[str]:
+    """Compute changed projects from changed files using external repo config.
+
+    Maps changed file paths (e.g., "projects/rocprim/src/foo.cpp") to project
+    paths (e.g., "projects/rocprim") using the repos-config.json structure.
+
+    Args:
+        changed_files: List of changed file paths from git diff.
+        projects_config_path: Path to repos-config.json relative to external repo.
+
+    Returns:
+        List of unique changed project paths (e.g., ["projects/rocprim", "projects/hipcub"]).
+    """
+    full_path = Path(_EXTERNAL_REPO_CONFIG_DIR) / projects_config_path
+    if not full_path.exists():
+        print(f"  Projects config not found: {full_path}")
+        return []
+
+    try:
+        with open(full_path, "r") as f:
+            config = json.load(f)
+    except Exception as e:
+        print(f"  Warning: Failed to parse projects config: {e}")
+        return []
+
+    # Build set of valid project prefixes from repos-config.json.
+    # Each entry has "category" (e.g., "projects") and "name" (e.g., "rocprim").
+    # The full prefix is "category/name" (e.g., "projects/rocprim").
+    valid_prefixes: set[str] = set()
+    repositories = config.get("repositories", [])
+    for entry in repositories:
+        category = entry.get("category", "")
+        name = entry.get("name", "")
+        if category and name:
+            valid_prefixes.add(f"{category}/{name}")
+
+    if not valid_prefixes:
+        print("  Warning: No valid project prefixes found in config")
+        return []
+
+    # Sort prefixes by specificity (longest first) so nested projects match first.
+    # e.g., "projects/hipblaslt/tensilelite" should match before "projects/hipblaslt"
+    prefixes_by_specificity = sorted(
+        valid_prefixes, key=lambda p: p.count("/"), reverse=True
+    )
+
+    # Find matched projects from changed files
+    matched_projects: set[str] = set()
+    for path in changed_files:
+        segments = path.split("/")
+        for prefix in prefixes_by_specificity:
+            prefix_segments = prefix.split("/")
+            if segments[: len(prefix_segments)] == prefix_segments:
+                matched_projects.add(prefix)
+                break
+
+    result = sorted(matched_projects)
+    print(f"  Computed {len(result)} changed projects from {len(changed_files)} files")
+    return result
+
 
 # ---------------------------------------------------------------------------
 # Input parsing helpers
@@ -768,18 +872,91 @@ def should_skip_ci(
     - 'ci:skip' PR label
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
+    - ASAN builds on PRs without ci:asan or ci:host-asan labels
 
-    For external repo builds, path filtering is skipped since the external repo
-    name is used for stage reuse analysis, not for CI skip decisions.
+    For external repo builds, path filtering uses changed_files and
+    skip_ci_patterns from the external_repo JSON (both must be provided).
+    Schedule and workflow_dispatch runs always run CI.
     """
+    # 1. Common skip behavior
     if "ci:skip" in ci_inputs.pr_labels:
         print("  Skipping: 'ci:skip' PR label")
         return True
 
-    # Skip ASAN on PRs unless an enabling label is present.
-    # This avoids running expensive ASAN builds on every PR.
-    # Labels that enable ASAN CI:
-    #   - ci:asan / ci:host-asan: explicit opt-in for ASAN testing
+    # 2. Path filter skipping - check before ASAN label logic so we don't print
+    #    "Running: ASAN CI triggered by PR label" when CI will be skipped anyway.
+
+    # 2a. External repo builds: run git diff in the external repo checkout to get
+    # changed files, then evaluate against skip patterns from the TOML config.
+    # This allows external repos to skip TheRock CI when only docs/metadata
+    # files are changed.
+    if ci_inputs.external_repo:
+        try:
+            external_repo = json.loads(ci_inputs.external_repo)
+        except (json.JSONDecodeError, TypeError) as e:
+            raise ValueError(
+                f"Invalid external_repo JSON: {ci_inputs.external_repo!r}"
+            ) from e
+
+        # Validate external_repo is a dict
+        if not isinstance(external_repo, dict):
+            raise ValueError(
+                f"external_repo must be a JSON object, got: {type(external_repo).__name__}"
+            )
+
+        repo_name = external_repo.get("repository", "").split("/")[-1]
+
+        # Get changed_files via git diff in external repo checkout.
+        changed_files: list[str] | None = None
+        external_repo_path = Path(_EXTERNAL_REPO_CONFIG_DIR)
+        base_ref = external_repo.get("base_ref")
+        event_name = external_repo.get("event_name", "")
+
+        if event_name in ("schedule", "workflow_dispatch"):
+            print(f"  External repo {repo_name}: {event_name} event, no diff available")
+            changed_files = None
+        elif external_repo_path.exists() and external_repo_path.is_dir():
+            if not base_ref:
+                base_ref = "HEAD^"
+            print(f"  External repo {repo_name}: computing changed files...")
+            changed_files = list(
+                get_git_modified_paths(base_ref, cwd=str(external_repo_path)) or []
+            )
+            if changed_files is not None:
+                print(
+                    f"  External repo {repo_name}: {len(changed_files)} file(s) changed"
+                )
+        else:
+            print(
+                f"  External repo {repo_name}: checkout not found at {external_repo_path}"
+            )
+
+        # Get skip patterns from TOML config file
+        skip_ci_config = external_repo.get("skip_ci_config")
+        skip_ci_patterns = None
+
+        if skip_ci_config:
+            # Load patterns from external repo's TOML config file
+            # (checked out to external-repo-config/ by setup_multi_arch.yml)
+            skip_ci_patterns = _load_skip_ci_patterns_from_toml(skip_ci_config)
+
+        # Evaluate skip logic using unified is_ci_run_required().
+        # Pass skip_patterns to use external repo's TOML patterns.
+        if not is_ci_run_required(changed_files, skip_ci_patterns, repo_name):
+            print("  External repo build: CI can be skipped")
+            return True
+        # If we reach here, CI is required. Continue to ASAN checks.
+        # Stage reuse will optimize builds regardless.
+
+    # 2b. Local repo (TheRock): check changed files against built-in skip patterns.
+    # Pass skip_patterns=None to use _SKIPPABLE_PATH_PATTERNS.
+    if not ci_inputs.external_repo and git_context.changed_files is not None:
+        print(f"  Checking {len(git_context.changed_files)} changed file(s)...")
+        if not is_ci_run_required(git_context.changed_files):
+            print("  TheRock: CI can be skipped")
+            return True
+
+    # 3. ASAN skip - only evaluated if path filtering didn't skip CI
     has_asan_label = (
         "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
     )
@@ -795,28 +972,6 @@ def should_skip_ci(
 
     if has_asan_label and ci_inputs.build_variant == "asan":
         print("  Running: ASAN CI triggered by PR label")
-
-    # External repo builds skip path filtering - they always run CI and use
-    # stage reuse to determine which stages to rebuild.
-    # TODO(#3343): Reuse skip path filters from external repos to short-circuit
-    # CI for docs-only changes, experimental projects, etc.
-    if ci_inputs.external_repo:
-        print("  External repo build: skipping path filter checks, using stage reuse")
-        return False
-
-    # If we have a list of changed files (push/pull_request events), check if
-    # CI should run for that set of changed files. For example: if only .md
-    # files are changed, skip CI.
-    if git_context.changed_files is not None:
-        print(
-            f"  Checking {len(git_context.changed_files)} changed file(s) "
-            f"against path filters..."
-        )
-        if not is_ci_run_required(git_context.changed_files):
-            print("  Skipping: no CI-relevant files changed")
-            return True
-        else:
-            print("  CI-relevant files changed, running CI")
 
     return False
 
@@ -1687,6 +1842,8 @@ def write_outputs(
         "test_type": test_type,
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,
+        # Changed projects for granular test filtering (computed from external repo git diff)
+        "changed_projects": ",".join(ci_inputs.changed_projects),
     }
     gha_set_output(output_vars)
 
@@ -1786,6 +1943,39 @@ def main():
             )
         external_repo_name = repo_full_name.split("/")[-1]
         git_context = GitContext.from_external_repo(external_repo_name)
+
+        # If changed_projects not provided externally but projects_config is specified,
+        # compute changed_projects from external repo's changed files.
+        # This enables granular artifact-level reuse for external repos.
+        projects_config = external_repo.get("projects_config")
+        if not ci_inputs.changed_projects and projects_config:
+            external_repo_path = Path(_EXTERNAL_REPO_CONFIG_DIR)
+            base_ref = external_repo.get("base_ref")
+            event_name = external_repo.get("event_name", "")
+
+            # Only compute for PR/push events, not schedule/workflow_dispatch
+            if event_name not in ("schedule", "workflow_dispatch"):
+                if external_repo_path.exists() and external_repo_path.is_dir():
+                    if not base_ref:
+                        base_ref = "HEAD^"
+                    print(
+                        f"\n=== Computing changed projects from {external_repo_name} ==="
+                    )
+                    changed_files = list(
+                        get_git_modified_paths(base_ref, cwd=str(external_repo_path))
+                        or []
+                    )
+                    if changed_files:
+                        computed_projects = _compute_changed_projects_from_files(
+                            changed_files, projects_config
+                        )
+                        if computed_projects:
+                            # Use dataclass replace to update ci_inputs immutably
+                            ci_inputs = replace(
+                                ci_inputs, changed_projects=computed_projects
+                            )
+                            print(f"  Changed projects: {', '.join(computed_projects)}")
+                        print()
     elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.

@@ -12,10 +12,42 @@ The CI pipelines test a growing set of GPU targets depending on trigger type/fre
 | `push`         | <ul><li>`amdgpu_family_info_matrix_presubmit`</li><li>`amdgpu_family_info_matrix_postsubmit`</li></ul>                                             | High priority targets with limited test runners |
 | `schedule`     | <ul><li>`amdgpu_family_info_matrix_presubmit`</li><li>`amdgpu_family_info_matrix_postsubmit`</li><li>`amdgpu_family_info_matrix_nightly`</li></ul> | All targets, even those that fail to build      |
 
+### Path-based skip CI
+
+CI is skipped when only documentation or metadata files change. Skip-CI patterns
+are configured via TOML files in [`build_tools/github_actions/`](../../build_tools/github_actions/):
+
+- **[`skip-ci-base.toml`](../../build_tools/github_actions/skip-ci-base.toml)**: Universal patterns
+  that apply to ALL repositories (e.g., `*.md`, `CODEOWNERS`, `.gitignore`)
+- **[`skip-ci-config.toml`](../../build_tools/github_actions/skip-ci-config.toml)**: TheRock-specific
+  extension patterns (e.g., `dockerfiles/*`, `skills/*`, `experimental/*`)
+
+External repos (e.g., rocm-libraries) can define their own extension patterns that
+are combined with the base patterns:
+
+```toml
+# .github/skip-ci-config.toml
+version = 1
+
+[skip_ci]
+# Repo-specific patterns (base patterns like *.md are inherited automatically)
+common = [
+    "projects/*/docs/*",
+    "scripts/dev-tools/*",
+]
+linux = []   # Additional patterns for Linux-only skip
+windows = [] # Additional patterns for Windows-only skip
+```
+
+Pass the config path in `external_repo` JSON when calling TheRock workflows:
+
+```json
+{"repository": "ROCm/rocm-libraries", "ref": "...", "skip_ci_config": ".github/skip-ci-config.toml"}
+```
+
 ### Pull request
 
-CI runs on pull requests if modified files pass the filters in
-[`configure_ci_path_filters.py`](../../build_tools/github_actions/configure_ci_path_filters.py).
+CI runs on pull requests if modified files pass the path filters described above.
 
 The following labels may be added to a pull request to modify CI behavior:
 
@@ -32,8 +64,7 @@ The following labels may be added to a pull request to modify CI behavior:
 
 ### Push
 
-CI runs on pushes to `main` if modified files pass the filters in
-[`configure_ci_path_filters.py`](../../build_tools/github_actions/configure_ci_path_filters.py).
+CI runs on pushes to `main` if modified files pass the path filters described above.
 
 ### Schedule
 
