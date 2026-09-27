@@ -1,15 +1,40 @@
-From b6e3699a16264ec132855baa872ac3b826a77d95 Mon Sep 17 00:00:00 2001
+From a3457e947649f7014c0182a2ec84147c12aab9f7 Mon Sep 17 00:00:00 2001
 From: therockbot <therockbot@amd.com>
-Date: Sat, 26 Sep 2026 09:17:36 -0500
-Subject: [PATCH] Integrate ROCm/rocm-libraries#12614: fix(rocprim): Do not
- reference gfx1250-strict if not supported by compiler
+Date: Sun, 27 Sep 2026 12:00:00 +0000
+Subject: [PATCH] Integrate ROCm/rocm-libraries#12614
+
+Source: https://github.com/ROCm/rocm-libraries/pull/12614
+Head: a3457e947649f7014c0182a2ec84147c12aab9f7
 
 ---
- .../rocprim/rocprim/include/rocprim/config.hpp  | 17 ++++++++++++++++-
- 1 file changed, 16 insertions(+), 1 deletion(-)
-
+diff --git a/projects/rocprim/CHANGELOG.md b/projects/rocprim/CHANGELOG.md
+index 57c6f5b522a0..a35c9c355ef4 100644
+--- a/projects/rocprim/CHANGELOG.md
++++ b/projects/rocprim/CHANGELOG.md
+@@ -2,7 +2,7 @@
+ 
+ Full documentation for rocPRIM is available at [https://rocm.docs.amd.com/projects/rocPRIM/en/latest/](https://rocm.docs.amd.com/projects/rocPRIM/en/latest/).
+ 
+-## rocPRIM 5.0.0 for ROCm 10.2.0
++## rocPRIM 4.8.0 for ROCm 10.2.0
+ 
+ ### Added
+ 
+diff --git a/projects/rocprim/CMakeLists.txt b/projects/rocprim/CMakeLists.txt
+index 6cbe2362240c..fadcc4058b7e 100644
+--- a/projects/rocprim/CMakeLists.txt
++++ b/projects/rocprim/CMakeLists.txt
+@@ -193,7 +193,7 @@ list(APPEND CMAKE_PREFIX_PATH ${ROCM_PATH} ${ROCM_PATH}/hip ${ROCM_PATH}/llvm ${
+ find_package(hip REQUIRED CONFIG PATHS ${HIP_DIR} ${ROCM_PATH} /opt/rocm)
+ 
+ # Setup VERSION
+-set(VERSION_STRING "5.0.0")
++set(VERSION_STRING "4.8.0")
+ rocm_setup_version(VERSION ${VERSION_STRING})
+ math(EXPR rocprim_VERSION_NUMBER "${rocprim_VERSION_MAJOR} * 100000 + ${rocprim_VERSION_MINOR} * 100 + ${rocprim_VERSION_PATCH}")
+ 
 diff --git a/projects/rocprim/rocprim/include/rocprim/config.hpp b/projects/rocprim/rocprim/include/rocprim/config.hpp
-index f6d2d3fcec..992b237b57 100644
+index f6d2d3fcecb8..992b237b57a8 100644
 --- a/projects/rocprim/rocprim/include/rocprim/config.hpp
 +++ b/projects/rocprim/rocprim/include/rocprim/config.hpp
 @@ -161,7 +161,22 @@
@@ -36,6 +61,3 @@ index f6d2d3fcec..992b237b57 100644
      #define ROCPRIM_IS_CDNA4() __builtin_amdgcn_processor_is("gfx950")
      #define ROCPRIM_IS_CDNA3()                                                              \
          (__builtin_amdgcn_processor_is("gfx942") || __builtin_amdgcn_processor_is("gfx950") \
--- 
-2.43.0
-

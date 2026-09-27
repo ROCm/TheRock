@@ -1,0 +1,238 @@
+From b449c8c1a4914e7f48c35e66a5586485c6aba820 Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Sun, 27 Sep 2026 12:00:00 +0000
+Subject: [PATCH] Integrate ROCm/rocm-libraries#12579
+
+Source: https://github.com/ROCm/rocm-libraries/pull/12579
+Head: b449c8c1a4914e7f48c35e66a5586485c6aba820
+
+---
+diff --git a/shared/stinkytofu/src/transforms/asm/dag/CDNA5.hpp b/shared/stinkytofu/src/transforms/asm/dag/CDNA5.hpp
+index 3b76f6e75f30..31708565c6f0 100644
+--- a/shared/stinkytofu/src/transforms/asm/dag/CDNA5.hpp
++++ b/shared/stinkytofu/src/transforms/asm/dag/CDNA5.hpp
+@@ -397,15 +397,10 @@ class CDNA5ReadyQueue : public ReadyQueue {
+     int crossBBGlobalReadResidual_ = 0;
+ 
+     InFlightQueue dsReadInflight_;
+-    int crossBBDsReadCount_ = 0;
+-    int crossBBDsReadResidual_ = 0;
+-    // TEMPORARILY DISABLED: measured ~4.7% real regression on mxf8_tn_medium
+-    // (real gfx1250 hardware, reproduced twice). Isolated by bisection to just
+-    // this seeding call; every other commit in this PR ruled out. The carry
+-    // itself is believed correct in principle (mirrors globalReadInflight_'s
+-    // existing cross-BB carry) -- needs re-validation against hardware before
+-    // re-enabling.
+-    static constexpr bool kEnableDsReadCrossBBCarry = false;
++    // Each ds_load credit's own remaining drain latency, carried whole from the
++    // predecessor BB (see BBScheduleState::dsReadResiduals). Not collapsed to a
++    // count/worst-case pair -- see InFlightQueue::seed(vector<int>).
++    std::vector<int> crossBBDsReadResiduals_;
+ 
+     // Rule (4) ds_load issue cap (dagFeatures.dsReadPerCap), as a sliding
+     // window on the real timeline: depth = the ceiling N, entry lifetime = the
+@@ -2225,10 +2220,11 @@ void CDNA5ReadyQueue::onInit(IRList::iterator regionStart, IRList::iterator regi
+         globalReadInflight_.seed(crossBBGlobalReadCount_, crossBBGlobalReadResidual_);
+     // Same credit-pool seeding for the ds_load (LDS return queue) pacer, so a
+     // real loop re-entry doesn't model the queue as empty while hardware still
+-    // has the prior iteration's tail draining (see crossBBDsReadCount_).
+-    // kEnableDsReadCrossBBCarry: temporarily disabled, see its declaration.
+-    if (kEnableDsReadCrossBBCarry && dsReadQueueDepth() > 0 && crossBBDsReadCount_ > 0)
+-        dsReadInflight_.seed(crossBBDsReadCount_, crossBBDsReadResidual_);
++    // has the prior iteration's tail draining -- each credit keeps its own
++    // remaining drain latency (see crossBBDsReadResiduals_) rather than
++    // collapsing to one worst-case value.
++    if (dsReadQueueDepth() > 0 && !crossBBDsReadResiduals_.empty())
++        dsReadInflight_.seed(crossBBDsReadResiduals_);
+ }
+ 
+ // KNOWN LIMITATION: on the scheduler's single RPO pass this currently carries
+@@ -2247,18 +2243,21 @@ void CDNA5ReadyQueue::restoreCrossBBStateFromLoop() {
+     crossBBDsResiduals_.clear();
+     crossBBGlobalReadCount_ = 0;
+     crossBBGlobalReadResidual_ = 0;
+-    crossBBDsReadCount_ = 0;
+-    crossBBDsReadResidual_ = 0;
++    crossBBDsReadResiduals_.clear();
+     const Loop* loop = getLoop();
+     if (!currentBB_ || !loop || !loop->contains(currentBB_) || !getAnalysisCache()) return;
+ 
+     // Global-read credits: loop predecessors take priority over non-loop ones
+     // (the loop body runs many iterations, so its carried state governs steady
+-    // state). Take the max within the chosen group on BOTH axes — occupancy and
+-    // residual drain — so no predecessor path is left over-issuing. ds_load
+-    // credits follow the identical rule.
++    // state). Take the max within the chosen group on both axes — occupancy and
++    // residual drain — so no predecessor path is left over-issuing.
++    //
++    // ds_load credits follow the same loop-vs-non-loop priority, but keep each
++    // credit's own residual instead of collapsing to a count/worst-case pair:
++    // within the chosen group, the predecessor with more credits still in
++    // flight is the more-constrained one, so its whole residual list wins.
+     int loopCount = 0, loopRes = 0, nonLoopCount = 0, nonLoopRes = 0;
+-    int dsLoopCount = 0, dsLoopRes = 0, dsNonLoopCount = 0, dsNonLoopRes = 0;
++    std::vector<int> dsLoopResiduals, dsNonLoopResiduals;
+     bool sawLoopPred = false;
+ 
+     for (BasicBlock* pred : currentBB_->getPredecessors()) {
+@@ -2271,19 +2270,18 @@ void CDNA5ReadyQueue::restoreCrossBBStateFromLoop() {
+             sawLoopPred = true;
+             loopCount = std::max(loopCount, state->globalReadInflightCount);
+             loopRes = std::max(loopRes, state->globalReadResidual);
+-            dsLoopCount = std::max(dsLoopCount, state->dsReadInflightCount);
+-            dsLoopRes = std::max(dsLoopRes, state->dsReadResidual);
++            if (state->dsReadResiduals.size() > dsLoopResiduals.size())
++                dsLoopResiduals = state->dsReadResiduals;
+         } else {
+             nonLoopCount = std::max(nonLoopCount, state->globalReadInflightCount);
+             nonLoopRes = std::max(nonLoopRes, state->globalReadResidual);
+-            dsNonLoopCount = std::max(dsNonLoopCount, state->dsReadInflightCount);
+-            dsNonLoopRes = std::max(dsNonLoopRes, state->dsReadResidual);
++            if (state->dsReadResiduals.size() > dsNonLoopResiduals.size())
++                dsNonLoopResiduals = state->dsReadResiduals;
+         }
+     }
+     crossBBGlobalReadCount_ = sawLoopPred ? loopCount : nonLoopCount;
+     crossBBGlobalReadResidual_ = sawLoopPred ? loopRes : nonLoopRes;
+-    crossBBDsReadCount_ = sawLoopPred ? dsLoopCount : dsNonLoopCount;
+-    crossBBDsReadResidual_ = sawLoopPred ? dsLoopRes : dsNonLoopRes;
++    crossBBDsReadResiduals_ = sawLoopPred ? dsLoopResiduals : dsNonLoopResiduals;
+ }
+ 
+ void CDNA5ReadyQueue::onFinishBB() {
+@@ -2302,9 +2300,9 @@ void CDNA5ReadyQueue::onFinishBB() {
+     });
+     dsBindNeither_ = dsBindCapOnly_ = dsBindQueueOnly_ = dsBindBoth_ = 0;
+     if (!currentBB_ || !getAnalysisCache()) return;
+-    getAnalysisCache()->store(currentBB_, {0, regDataReadyCounters, globalReadInflight_.size(),
+-                                           globalReadInflight_.maxResidual(),
+-                                           dsReadInflight_.size(), dsReadInflight_.maxResidual()});
++    getAnalysisCache()->store(currentBB_,
++                              {0, regDataReadyCounters, globalReadInflight_.size(),
++                               globalReadInflight_.maxResidual(), dsReadInflight_.residuals()});
+ }
+ 
+ // Per scheduling region. Rule (4): per-WMMA-window DS cap (computed in
+diff --git a/shared/stinkytofu/src/transforms/asm/dag/InFlightQueue.hpp b/shared/stinkytofu/src/transforms/asm/dag/InFlightQueue.hpp
+index f07f52bbc9fa..da2e2af922de 100644
+--- a/shared/stinkytofu/src/transforms/asm/dag/InFlightQueue.hpp
++++ b/shared/stinkytofu/src/transforms/asm/dag/InFlightQueue.hpp
+@@ -25,6 +25,7 @@
+ #include <algorithm>
+ #include <cmath>
+ #include <deque>
++#include <vector>
+ 
+ namespace stinkytofu {
+ 
+@@ -102,6 +103,16 @@ class InFlightQueue {
+         nextIssueTick_ = -1.0;
+     }
+ 
++    // Seed with each entry's own residual (as captured by residuals()), so a
++    // predecessor's occupancy carries over without collapsing every entry to
++    // one worst-case value. Same throttle-clock caveat as the (count, residual)
++    // overload above.
++    void seed(const std::vector<int>& residuals) {
++        expiries_.clear();
++        for (int r : residuals) expiries_.push_back(currentTime_ + r);
++        nextIssueTick_ = -1.0;
++    }
++
+     // Wait cycles to satisfy the active saturated-queue pacing interval.
+     // Returns 0 below queue depth or when the interval is invalid.
+     int throttleWait() const {
+@@ -137,6 +148,17 @@ class InFlightQueue {
+         return std::max(0, *std::max_element(expiries_.begin(), expiries_.end()) - currentTime_);
+     }
+ 
++    // Remaining cycles until each currently in-flight entry expires, oldest
++    // first (the order push() built them in). Pairs with seed(vector<int>) to
++    // carry occupancy across a BB boundary without collapsing to one value.
++    std::vector<int> residuals() const {
++        evict();
++        std::vector<int> out;
++        out.reserve(expiries_.size());
++        for (int e : expiries_) out.push_back(std::max(0, e - currentTime_));
++        return out;
++    }
++
+    private:
+     double activeThrottleInterval() const {
+         const int occupancy = (int)expiries_.size();
+diff --git a/shared/stinkytofu/src/transforms/asm/dag/ReadyQueue.hpp b/shared/stinkytofu/src/transforms/asm/dag/ReadyQueue.hpp
+index f55a4fa4b48d..c5a0816e1f65 100644
+--- a/shared/stinkytofu/src/transforms/asm/dag/ReadyQueue.hpp
++++ b/shared/stinkytofu/src/transforms/asm/dag/ReadyQueue.hpp
+@@ -152,12 +152,13 @@ struct BBScheduleState {
+     // successor BBs in a loop. Kept separate from dsResiduals.
+     int globalReadInflightCount = 0;  // credits still in flight at BB end
+     int globalReadResidual = 0;       // max remaining drain latency among them
+-    // Cross-BB ds_load (LDS return queue) credit state, same shape as the
+-    // global-read pair above. Carried to successor BBs in a loop so a fresh
+-    // region doesn't model the LDS queue as empty when hardware still has the
+-    // prior iteration's tail draining.
+-    int dsReadInflightCount = 0;  // credits still in flight at BB end
+-    int dsReadResidual = 0;       // max remaining drain latency among them
++    // Cross-BB ds_load (LDS return queue) credit state: each credit's own
++    // remaining drain latency at BB end (InFlightQueue::residuals()), carried
++    // to successor BBs in a loop so a fresh region doesn't model the LDS queue
++    // as empty when hardware still has the prior iteration's tail draining.
++    // Kept as the full per-entry list, not collapsed to a count/worst-case
++    // pair, so seeding doesn't overstate how long every entry has left.
++    std::vector<int> dsReadResiduals;
+ };
+ 
+ // Cache for cross-BB scheduling state. Lives in the scheduler's run() scope
+diff --git a/shared/stinkytofu/tests/unit/asm/InFlightQueueTest.cpp b/shared/stinkytofu/tests/unit/asm/InFlightQueueTest.cpp
+index b1227facf068..eaf249d9cb59 100644
+--- a/shared/stinkytofu/tests/unit/asm/InFlightQueueTest.cpp
++++ b/shared/stinkytofu/tests/unit/asm/InFlightQueueTest.cpp
+@@ -153,3 +153,47 @@ TEST(InFlightQueue, IssueCapSeedsAcrossRegionBoundary) {
+     InFlightQueue noCarry(/*depth=*/3);
+     EXPECT_FALSE(noCarry.full()) << "without the carry the window starts empty";
+ }
++
++// ---------------------------------------------------------------------------
++// Per-entry residual carry (residuals() / seed(vector<int>)): a cross-BB carry
++// that keeps each credit's own remaining drain latency instead of collapsing
++// every entry to one worst-case value.
++// ---------------------------------------------------------------------------
++
++TEST(InFlightQueue, ResidualsReportsEachEntrysOwnRemainingLatency) {
++    InFlightQueue queue(/*depth=*/0);
++    queue.push(/*drainLatency=*/2);
++    queue.push(/*drainLatency=*/4);
++    queue.push(/*drainLatency=*/10);
++
++    EXPECT_EQ(queue.residuals(), (std::vector<int>{2, 4, 10}))
++        << "oldest-first, matching push order, not sorted or collapsed to one value";
++}
++
++TEST(InFlightQueue, SeedFromResidualsRecreatesEachEntrysOwnLatency) {
++    InFlightQueue prev(/*depth=*/0);
++    prev.push(/*drainLatency=*/2);
++    prev.push(/*drainLatency=*/4);
++    prev.push(/*drainLatency=*/10);
++
++    InFlightQueue next(/*depth=*/3);
++    next.seed(prev.residuals());
++
++    // A (count, worst-case) seed would have reported minResidual == maxResidual
++    // == 10 for all three; the per-entry carry preserves the spread instead.
++    EXPECT_EQ(next.size(), 3);
++    EXPECT_EQ(next.minResidual(), 2);
++    EXPECT_EQ(next.maxResidual(), 10);
++}
++
++TEST(InFlightQueue, SeedFromResidualsDrainsEntriesAtTheirOwnTimeNotTheWorstCase) {
++    InFlightQueue next(/*depth=*/3);
++    next.seed(std::vector<int>{2, 4, 10});
++    ASSERT_TRUE(next.full());
++
++    // The (count, worst-case) form would keep all three around for 10 cycles;
++    // the shortest-lived carried entry must retire on its own schedule.
++    next.advance(2);
++    EXPECT_EQ(next.size(), 2) << "the entry seeded with residual 2 has drained";
++    EXPECT_FALSE(next.full());
++}

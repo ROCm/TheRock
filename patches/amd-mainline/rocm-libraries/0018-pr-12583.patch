@@ -1,0 +1,810 @@
+From 02958b9f87ac46ebb6833ea5adf008a61435e71a Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Sun, 27 Sep 2026 12:00:00 +0000
+Subject: [PATCH] Integrate ROCm/rocm-libraries#12583
+
+Source: https://github.com/ROCm/rocm-libraries/pull/12583
+Head: 02958b9f87ac46ebb6833ea5adf008a61435e71a
+
+---
+diff --git a/shared/stinkytofu/include/stinkytofu/hardware/HWModel.hpp b/shared/stinkytofu/include/stinkytofu/hardware/HWModel.hpp
+index b98b4f9b64a2..ca4625be0bac 100644
+--- a/shared/stinkytofu/include/stinkytofu/hardware/HWModel.hpp
++++ b/shared/stinkytofu/include/stinkytofu/hardware/HWModel.hpp
+@@ -145,31 +145,62 @@ constexpr int kArchKeyGfx1250 = archKey({12, 5, 0});
+ // table.
+ constexpr int kArchKeyGfx1250v0 = archKey({12, 5, 1});
+ 
++/// Effective ds issue cost in cycles for one wave, given how many waves are
++/// resident. \p issueCycles is the ISA cost (single-wave); \p numWaves is
++/// GemmTileConfig::NumWaves.
++///
++/// Waves are assumed to pair onto a pipe as soon as there are enough of them to
++/// fill one, so two waves on a 2-wave-per-pipe part contend rather than landing
++/// on separate pipes. That is the conservative reading and it is UNVERIFIED for
++/// exactly NumWaves == 2 -- the ends (1 wave, 4 waves) are known, the middle is
++/// not. If hardware turns out to spread instead, this becomes
++/// ceilDiv(numWaves, pipeCount) and NumWaves == 2 drops back to the ISA cost.
++int dsIssueCyclesForWaves(const HWModel& hw, int issueCycles, int numWaves);
++
+ /// One LDS read in an ordered burst for mixed-type drain estimation.
+-/// Callers resolve per-opcode throughput / max-drain from HwInstDesc (with
+-/// HWModel.lds defaults when the desc fields are 0) before pushing an entry.
+ struct DsLoadDrainEntry {
+     int latency = 0;
+     int throughput = 0;
+     int maxDrain = 0;
++    /// Real per-load issue spacing: already passed through
++    /// dsIssueCyclesForWaves at construction (see makeDsLoadDrainEntry), not
++    /// the bare ISA number (DsLoadDrainInputs::isaIssueCycles). Named
++    /// differently from that raw field, and computed once here, so no
++    /// consumer can read this and forget to apply the wave-sharing
++    /// multiplier.
++    int issueSpacing = 0;
+ };
+ 
+-/// Resolve a drain-model entry from an instruction's latency and optional
+-/// HwInstDesc overrides. \p dsThroughput / \p dsMaxDrain of 0 select the
+-/// arch defaults on \p hw.
+-inline DsLoadDrainEntry makeDsLoadDrainEntry(const HWModel& hw, int latency, int dsThroughput,
+-                                             int dsMaxDrain) {
+-    return {
+-        .latency = latency > 0 ? latency : hw.lds.readDrainLatency,
+-        .throughput = dsThroughput > 0 ? dsThroughput : hw.lds.dsLoadDefaultThroughput,
+-        .maxDrain = dsMaxDrain > 0 ? dsMaxDrain : hw.lds.dsLoadDefaultMaxDrain,
+-    };
+-}
++/// Named inputs to makeDsLoadDrainEntry. All fields are ints, so a positional
++/// parameter list here (latency, dsThroughput, dsMaxDrain, isaIssueCycles,
++/// numWaves) is one transposition away from a silent bug; call sites must
++/// name each field instead.
++struct DsLoadDrainInputs {
++    /// Instruction's own latency; 0 selects hw.lds.readDrainLatency.
++    int latency = 0;
++    /// HwInstDesc::dsThroughput; 0 selects hw.lds.dsLoadDefaultThroughput.
++    int dsThroughput = 0;
++    /// HwInstDesc::dsMaxDrain; 0 selects hw.lds.dsLoadDefaultMaxDrain.
++    int dsMaxDrain = 0;
++    /// Bare per-instruction ISA issue cost (HwInstDesc::issue /
++    /// StinkyInstruction::issueCycles), not yet wave-sharing-adjusted.
++    int isaIssueCycles = 0;
++    /// GemmTileConfig::NumWaves for the kernel this instruction belongs to.
++    int numWaves = 0;
++};
++
++/// Resolve a drain-model entry from an instruction's latency, ISA issue cost,
++/// resident wave count, and optional HwInstDesc overrides. Resolves and
++/// stores the real, wave-sharing-adjusted cost via dsIssueCyclesForWaves.
++STINKYTOFU_EXPORT DsLoadDrainEntry makeDsLoadDrainEntry(const HWModel& hw,
++                                                        const DsLoadDrainInputs& in);
+ 
+-/// Homogeneous-burst drain estimate. Throughput and max-drain are already
+-/// resolved (typically via makeDsLoadDrainEntry / HwInstDesc).
++/// Homogeneous-burst drain estimate. \p issueSpacing is the real per-load
++/// issue cost (see dsIssueCyclesForWaves) -- already wave-sharing-adjusted,
++/// typically the issueSpacing field of a DsLoadDrainEntry built by
++/// makeDsLoadDrainEntry, not a bare ISA number or raw numWaves.
+ int computeDynamicDrainLatency(const HWModel& hw, int matchingDsLoadCount, int targetDSLoadLatency,
+-                               int dsLoadThroughput, int maxDrainLatency, int numWaves);
++                               int dsLoadThroughput, int maxDrainLatency, int issueSpacing);
+ 
+ /// Mixed-type burst drain estimate.
+ ///
+@@ -178,20 +209,9 @@ int computeDynamicDrainLatency(const HWModel& hw, int matchingDsLoadCount, int t
+ /// - max-drain cap = max over every entry's maxDrain
+ /// - total load count
+ /// - issue throughput as the count-weighted average of per-load throughputs
+-int computeDynamicDrainLatencyForLoads(const HWModel& hw, std::span<const DsLoadDrainEntry> loads,
+-                                       int numWaves);
+-
+-/// Effective ds issue cost in cycles for one wave, given how many waves are
+-/// resident. \p issueCycles is the ISA cost (single-wave); \p numWaves is
+-/// GemmTileConfig::NumWaves.
+-///
+-/// Waves are assumed to pair onto a pipe as soon as there are enough of them to
+-/// fill one, so two waves on a 2-wave-per-pipe part contend rather than landing
+-/// on separate pipes. That is the conservative reading and it is UNVERIFIED for
+-/// exactly NumWaves == 2 -- the ends (1 wave, 4 waves) are known, the middle is
+-/// not. If hardware turns out to spread instead, this becomes
+-/// ceilDiv(numWaves, pipeCount) and NumWaves == 2 drops back to the ISA cost.
+-int dsIssueCyclesForWaves(const HWModel& hw, int issueCycles, int numWaves);
++/// - issue spacing from the last load's own (already wave-sharing-adjusted)
++///   issueSpacing
++int computeDynamicDrainLatencyForLoads(const HWModel& hw, std::span<const DsLoadDrainEntry> loads);
+ 
+ /// Look up the hardware model for \p arch (the {major, minor, stepping} triple
+ /// from GemmTileConfig). gfx1250 is the fallback for any unlisted arch.
+diff --git a/shared/stinkytofu/src/hardware/HWModel.cpp b/shared/stinkytofu/src/hardware/HWModel.cpp
+index 9e0fb7e59bf8..c876c88d07c8 100644
+--- a/shared/stinkytofu/src/hardware/HWModel.cpp
++++ b/shared/stinkytofu/src/hardware/HWModel.cpp
+@@ -34,13 +34,13 @@ constexpr HWModel kGfx1250Model = {
+             // cost 2. Independent of dagFeatures.dsReadPerCap, which stays a
+             // separately tuned ceiling.
+             //
+-            // TEMPORARILY DISABLED (set to 1, i.e. no sharing): measured on
+-            // real gfx1250 hardware to cost f8_tn_medium ~17.5% and
+-            // mxf4_tn_medium ~12.3% real throughput, both fully recovered by
+-            // this single-line revert -- see PR discussion. The model itself
+-            // is believed correct in principle; needs re-validation against
+-            // hardware before it goes back to 2.
+-            .wavesPerDsIssuePipe = 1,
++            // Re-enabled: previously measured ~17.5%/~12.3% real regressions on
++            // f8_tn_medium/mxf4_tn_medium. Root cause wasn't this cost model --
++            // it was a second consumer (the WMMA-hide scheduling-budget check in
++            // CDNA5ReadyQueue) that fed the same doubled cost into a threshold
++            // tuned assuming single-wave issue cost. That check now uses the raw
++            // ISA issueCycles instead of dsIssueCost(); this value stays real.
++            .wavesPerDsIssuePipe = 2,
+         },
+     .barrier =
+         {
+@@ -86,8 +86,7 @@ int capDrainLatency(int latency, int maxDrainLatency) {
+ }  // namespace
+ 
+ int computeDynamicDrainLatency(const HWModel& hw, int matchingDsLoadCount, int targetDSLoadLatency,
+-                               int dsLoadThroughput, int maxDrainLatency, int rawNumWaves) {
+-    const int numWaves = std::clamp(rawNumWaves, kMinModeledWaves, kMaxModeledWaves);
++                               int dsLoadThroughput, int maxDrainLatency, int issueSpacing) {
+     const int queueDepth = hw.lds.readQueueDepth;
+     const int throughput = std::max(1, dsLoadThroughput);
+ 
+@@ -101,13 +100,13 @@ int computeDynamicDrainLatency(const HWModel& hw, int matchingDsLoadCount, int t
+     // one load's latency plus the per-wave issue spacing of the loads ahead of
+     // it.
+     if (matchingDsLoadCount <= queueDepth)
+-        return capDrainLatency(targetDSLoadLatency + (matchingDsLoadCount - 1) * numWaves,
++        return capDrainLatency(targetDSLoadLatency + (matchingDsLoadCount - 1) * issueSpacing,
+                                maxDrainLatency);
+ 
+     // Past the depth the queue is full. Divide by throughput so half-rate DS
+     // loads (smaller throughput) pay a larger overflow term.
+-    return capDrainLatency(targetDSLoadLatency + (queueDepth - 1) * numWaves +
+-                               (matchingDsLoadCount - queueDepth) * numWaves / throughput,
++    return capDrainLatency(targetDSLoadLatency + (queueDepth - 1) * issueSpacing +
++                               (matchingDsLoadCount - queueDepth) * issueSpacing / throughput,
+                            maxDrainLatency);
+ }
+ 
+@@ -123,14 +122,25 @@ int dsIssueCyclesForWaves(const HWModel& hw, int issueCycles, int numWaves) {
+     return issueCycles * std::min(numWaves, share);
+ }
+ 
+-int computeDynamicDrainLatencyForLoads(const HWModel& hw, std::span<const DsLoadDrainEntry> loads,
+-                                       int rawNumWaves) {
++DsLoadDrainEntry makeDsLoadDrainEntry(const HWModel& hw, const DsLoadDrainInputs& in) {
++    const int numWaves = std::clamp(in.numWaves, kMinModeledWaves, kMaxModeledWaves);
++    return {
++        .latency = in.latency > 0 ? in.latency : hw.lds.readDrainLatency,
++        .throughput = in.dsThroughput > 0 ? in.dsThroughput : hw.lds.dsLoadDefaultThroughput,
++        .maxDrain = in.dsMaxDrain > 0 ? in.dsMaxDrain : hw.lds.dsLoadDefaultMaxDrain,
++        .issueSpacing = dsIssueCyclesForWaves(hw, in.isaIssueCycles, numWaves),
++    };
++}
++
++int computeDynamicDrainLatencyForLoads(const HWModel& hw, std::span<const DsLoadDrainEntry> loads) {
+     if (loads.empty()) return 0;
+ 
+-    const int numWaves = std::clamp(rawNumWaves, kMinModeledWaves, kMaxModeledWaves);
+     const int queueDepth = hw.lds.readQueueDepth;
+     const int count = static_cast<int>(loads.size());
+     const int targetLatency = loads.back().latency;
++    // Last load's own (already wave-sharing-adjusted) issue cost, matching
++    // targetLatency above -- see makeDsLoadDrainEntry.
++    const int issueSpacing = loads.back().issueSpacing;
+ 
+     // Cap with the largest maxDrain among the whole burst, not just the last
+     // load.
+@@ -144,12 +154,12 @@ int computeDynamicDrainLatencyForLoads(const HWModel& hw, std::span<const DsLoad
+     if (queueDepth <= 0 || count <= 1) return capDrainLatency(targetLatency, maxDrainLatency);
+ 
+     if (count <= queueDepth)
+-        return capDrainLatency(targetLatency + (count - 1) * numWaves, maxDrainLatency);
++        return capDrainLatency(targetLatency + (count - 1) * issueSpacing, maxDrainLatency);
+ 
+     const int dsLoadThroughput =
+         static_cast<int>(std::max<long long>(1, throughputSum / std::max(1, count)));
+-    return capDrainLatency(targetLatency + (queueDepth - 1) * numWaves +
+-                               (count - queueDepth) * numWaves / dsLoadThroughput,
++    return capDrainLatency(targetLatency + (queueDepth - 1) * issueSpacing +
++                               (count - queueDepth) * issueSpacing / dsLoadThroughput,
+                            maxDrainLatency);
+ }
+ 
+diff --git a/shared/stinkytofu/src/transforms/asm/RemoveDscntPass.cpp b/shared/stinkytofu/src/transforms/asm/RemoveDscntPass.cpp
+index 339b6926f9a1..34e89e5bc3fc 100644
+--- a/shared/stinkytofu/src/transforms/asm/RemoveDscntPass.cpp
++++ b/shared/stinkytofu/src/transforms/asm/RemoveDscntPass.cpp
+@@ -75,9 +75,9 @@ constexpr int kDsProximityThreshold = 512;
+ /// write.
+ struct DsLoadEntry {
+     int cycle = 0;
+-    int latency = 0;
+-    int throughput = 0;
+-    int maxDrain = 0;
++    /// The hardware drain-model facts, embedded rather than flattened so
++    /// toDrainEntry() can't silently drop a field on the way back out.
++    DsLoadDrainEntry drain;
+     std::vector<StinkyRegister> dests;
+ };
+ 
+@@ -198,8 +198,18 @@ int computeDsIssueTimeTimes3(size_t numDsLoads) {
+ 
+ /// computeDsIssueTimeTimes3() in whole cycles, for callers that do not need the
+ /// extra precision and would otherwise repeat the scaling.
+-int computeDsIssueTime(size_t numDsLoads) {
+-    return computeDsIssueTimeTimes3(numDsLoads) / 3;
++///
++/// The empirical curve above was tuned assuming one cycle of front-end issue
++/// per ds op. It is compared directly against computeDynamicDrainLatencyForLoads(),
++/// which now scales its own per-load issue spacing by dsIssueCyclesForWaves()
++/// when waves share an issue pipe. Leaving this curve un-scaled would compare
++/// a real (doubled) drain estimate against a front-end throughput estimate
++/// that still assumes the old, single-wave rate -- systematically making
++/// bursts look like they take longer to issue than to land, so this applies
++/// the same per-load multiplier here.
++int computeDsIssueTime(const HWModel& hw, size_t numDsLoads, int numWaves) {
++    const int multiplier = dsIssueCyclesForWaves(hw, /*issueCycles=*/1, numWaves);
++    return computeDsIssueTimeTimes3(numDsLoads) * multiplier / 3;
+ }
+ 
+ /// If `inst` is an LDS-load wait (s_wait_dscnt / s_wait_loadcnt_dscnt), return
+@@ -292,7 +302,7 @@ AsmDirective* createTextCommentDirective(const std::string& comment) {
+     return directive;
+ }
+ 
+-int recomputePrefetchInFlightDsLoads(const BasicBlock& bb, const HWModel& hw,
++int recomputePrefetchInFlightDsLoads(const BasicBlock& bb, const HWModel& hw, int numWaves,
+                                      std::vector<DsLoadDrainEntry>& inFlight) {
+     inFlight.clear();
+     for (const IRBase& node : bb) {
+@@ -303,9 +313,12 @@ int recomputePrefetchInFlightDsLoads(const BasicBlock& bb, const HWModel& hw,
+ 
+         if (isDSRead(*inst) || isDSWrite(*inst)) {
+             const HwInstDesc* desc = inst->getHwInstDesc();
+-            inFlight.push_back(makeDsLoadDrainEntry(hw, static_cast<int>(inst->latencyCycles),
+-                                                    desc ? desc->dsThroughput : 0,
+-                                                    desc ? desc->dsMaxDrain : 0));
++            inFlight.push_back(
++                makeDsLoadDrainEntry(hw, {.latency = static_cast<int>(inst->latencyCycles),
++                                          .dsThroughput = desc ? desc->dsThroughput : 0,
++                                          .dsMaxDrain = desc ? desc->dsMaxDrain : 0,
++                                          .isaIssueCycles = static_cast<int>(inst->issueCycles),
++                                          .numWaves = numWaves}));
+         } else if (std::optional<int> keep = getDsWaitCount(*inst)) {
+             const size_t remaining = static_cast<size_t>(std::max(0, *keep));
+             // dscnt keep=K retires the oldest loads first; keep the newest K.
+@@ -343,8 +356,8 @@ class RemoveDscntPass : public StinkyInstPass {
+         // carried across block boundaries so cycle counting and the in-flight
+         // ds_load FIFO persist across BBs.
+         hw_ = &passCtx.getHWModel();
+-        // Passed through as-is: computeDynamicDrainLatencyForLoads() clamps it
+-        // to the range the drain model is defined over.
++        // Passed to makeDsLoadDrainEntry, which clamps it to the range the
++        // drain model is defined over.
+         numWaves_ = static_cast<int>(passCtx.getGemmTileConfig().NumWaves);
+         PASS_DEBUG(std::cerr << "[RemoveDscnt] numWaves=" << numWaves_ << "\n");
+ 
+@@ -359,7 +372,7 @@ class RemoveDscntPass : public StinkyInstPass {
+                 return PreservedAnalyses::none();
+             }
+             std::vector<DsLoadDrainEntry> recomputedPrefetch;
+-            if (recomputePrefetchInFlightDsLoads(bb, *hw_, recomputedPrefetch) > 0) {
++            if (recomputePrefetchInFlightDsLoads(bb, *hw_, numWaves_, recomputedPrefetch) > 0) {
+                 state.dsLoadsBeforeActivation = std::move(recomputedPrefetch);
+             }
+         }
+@@ -379,9 +392,9 @@ class RemoveDscntPass : public StinkyInstPass {
+     /// Map an in-flight FIFO entry to a drain-model entry. Writes with no return
+     /// latency fall back to the arch static figure.
+     DsLoadDrainEntry toDrainEntry(const DsLoadEntry& entry) const {
+-        const int latency =
+-            entry.latency > 0 ? entry.latency : (hw_ ? hw_->lds.readDrainLatency : 0);
+-        return {.latency = latency, .throughput = entry.throughput, .maxDrain = entry.maxDrain};
++        DsLoadDrainEntry drain = entry.drain;
++        if (drain.latency <= 0) drain.latency = hw_ ? hw_->lds.readDrainLatency : 0;
++        return drain;
+     }
+ 
+     /// How many of the pre-activation LDS reads have returned by the time the
+@@ -392,13 +405,13 @@ class RemoveDscntPass : public StinkyInstPass {
+     int computeNumDsFinished(std::span<const DsLoadDrainEntry> loads, int numWaves) const {
+         if (!hw_ || loads.empty()) return 0;
+ 
+-        const int totalIssueTime = computeDsIssueTime(loads.size());
++        const int totalIssueTime = computeDsIssueTime(*hw_, loads.size(), numWaves);
+ 
+         int drained = 0;
+         for (size_t count = 1; count <= loads.size(); ++count) {
+-            const int issueTime = computeDsIssueTime(count);
+-            const int landsAt = issueTime + computeDynamicDrainLatencyForLoads(
+-                                                *hw_, loads.subspan(0, count), numWaves);
++            const int issueTime = computeDsIssueTime(*hw_, count, numWaves);
++            const int landsAt =
++                issueTime + computeDynamicDrainLatencyForLoads(*hw_, loads.subspan(0, count));
+             if (landsAt + dsProximityThreshold_ > totalIssueTime) break;
+             drained = static_cast<int>(count);
+         }
+@@ -434,9 +447,8 @@ class RemoveDscntPass : public StinkyInstPass {
+         for (size_t count = 1; count <= loads.size(); ++count) {
+             const int elapsedForCount = cycles - inFlight[count - 1].cycle;
+             const int landedCyclesAgo =
+-                elapsedForCount -
+-                computeDynamicDrainLatencyForLoads(
+-                    *hw_, std::span<const DsLoadDrainEntry>(loads.data(), count), numWaves_);
++                elapsedForCount - computeDynamicDrainLatencyForLoads(
++                                      *hw_, std::span<const DsLoadDrainEntry>(loads.data(), count));
+             if (landedCyclesAgo < dsProximityThreshold_) break;
+             drained = static_cast<int>(count);
+         }
+@@ -491,8 +503,11 @@ class RemoveDscntPass : public StinkyInstPass {
+             if (isDSRead(*inst) || isDSWrite(*inst)) {
+                 const HwInstDesc* desc = inst->getHwInstDesc();
+                 dsLoadsBeforeActivation.push_back(makeDsLoadDrainEntry(
+-                    *hw_, static_cast<int>(inst->latencyCycles), desc ? desc->dsThroughput : 0,
+-                    desc ? desc->dsMaxDrain : 0));
++                    *hw_, {.latency = static_cast<int>(inst->latencyCycles),
++                           .dsThroughput = desc ? desc->dsThroughput : 0,
++                           .dsMaxDrain = desc ? desc->dsMaxDrain : 0,
++                           .isaIssueCycles = static_cast<int>(inst->issueCycles),
++                           .numWaves = numWaves_}));
+             } else if (std::optional<int> keep = getDsWaitCount(*inst)) {
+                 const int newVal = static_cast<int>(dsLoadsBeforeActivation.size()) - numDsFinished;
+                 PASS_DEBUG(std::cerr << "[RemoveDscnt]   reduce dscnt: tighten wait " << *keep
+@@ -585,6 +600,14 @@ class RemoveDscntPass : public StinkyInstPass {
+                                          << "\" cycle=" << cycles
+                                          << " wait check activated by WMMA src/ds overlap\n");
+                 }
++            } else if (isDSRead(*inst) || isDSWrite(*inst)) {
++                // Real front-end issue cost for a ds op: consistent with the
++                // wave-sharing-adjusted issueSpacing the drain model below
++                // compares this same clock against. Advancing by the raw ISA
++                // number here would make ds ops appear to issue back-to-back
++                // faster than the drain estimate assumes they land, making
++                // this pass overcount how many are still outstanding.
++                cycles += dsIssueCyclesForWaves(*hw_, inst->issueCycles, numWaves_);
+             } else {
+                 cycles += inst->issueCycles;
+             }
+@@ -593,22 +616,19 @@ class RemoveDscntPass : public StinkyInstPass {
+             if (isDSRead(*inst) || isDSWrite(*inst)) {
+                 const HwInstDesc* desc = inst->getHwInstDesc();
+                 const DsLoadDrainEntry drain = makeDsLoadDrainEntry(
+-                    *hw_, static_cast<int>(inst->latencyCycles), desc ? desc->dsThroughput : 0,
+-                    desc ? desc->dsMaxDrain : 0);
++                    *hw_, {.latency = static_cast<int>(inst->latencyCycles),
++                           .dsThroughput = desc ? desc->dsThroughput : 0,
++                           .dsMaxDrain = desc ? desc->dsMaxDrain : 0,
++                           .isaIssueCycles = static_cast<int>(inst->issueCycles),
++                           .numWaves = numWaves_});
+                 if (isDSRead(*inst)) {
+-                    inFlightDsLoads.push_back(DsLoadEntry{.cycle = cycles,
+-                                                          .latency = drain.latency,
+-                                                          .throughput = drain.throughput,
+-                                                          .maxDrain = drain.maxDrain,
+-                                                          .dests = inst->getDestRegs()});
++                    inFlightDsLoads.push_back(
++                        DsLoadEntry{.cycle = cycles, .drain = drain, .dests = inst->getDestRegs()});
+                 } else {
+                     // DS writes contribute to dscnt accounting but have no produced VGPR
+                     // dest.
+-                    inFlightDsLoads.push_back(DsLoadEntry{.cycle = cycles,
+-                                                          .latency = drain.latency,
+-                                                          .throughput = drain.throughput,
+-                                                          .maxDrain = drain.maxDrain,
+-                                                          .dests = {}});
++                    inFlightDsLoads.push_back(
++                        DsLoadEntry{.cycle = cycles, .drain = drain, .dests = {}});
+                 }
+                 ++dsLoadsSinceLastKeptDscnt;
+             } else if (std::optional<int> keep =
+diff --git a/shared/stinkytofu/src/transforms/asm/dag/CDNA5.hpp b/shared/stinkytofu/src/transforms/asm/dag/CDNA5.hpp
+index 31708565c6f0..f2d53b5d8815 100644
+--- a/shared/stinkytofu/src/transforms/asm/dag/CDNA5.hpp
++++ b/shared/stinkytofu/src/transforms/asm/dag/CDNA5.hpp
+@@ -854,15 +854,24 @@ int CDNA5ReadyQueue::computeValuAdvanceCycles(int issueCycles) const {
+ 
+ // After a picked instruction: advance the co-issue timeline. Barriers use
+ // result latency (latencyCycles); VALU/transcendentals use co-issue-aware issue
+-// progress; others use issueCycles.
++// progress; others (including ds_read) use issueCycles.
++//
++// ds_read deliberately does NOT use dsIssueCost() here. dsIssueCost()'s
++// wave-sharing multiplier models cross-wave contention for the shared ds
++// issue pipe -- how long THIS wave must wait before its NEXT ds_load can
++// issue -- which is already tracked separately via dsReadThrottleWait() /
++// dsIssueCap_ / dsReadInflight_. This timeline instead gates whether a VALU
++// can co-issue into the active WMMA window at the current position; a wave
++// still issues one instruction per cycle from its own stream regardless of
++// contention on the (shared, cross-wave) ds pipe, so charging the doubled
++// cost here would incorrectly consume a co-issue slot that a same-wave VALU
++// could otherwise still fill one cycle later.
+ void CDNA5ReadyQueue::updateWMMAStatus(DAGNode* node) {
+     int elapsedCycles = node->inst->issueCycles;
+     if (isBarrier(*node->inst))
+         elapsedCycles = node->inst->latencyCycles;
+     else if (isVectorALU(*node->inst) || isTranscendental(*node->inst))
+         elapsedCycles = computeValuAdvanceCycles(node->inst->issueCycles);
+-    else if (isDSRead(*node->inst))
+-        elapsedCycles = dsIssueCost(*node->inst);
+     advanceTime(elapsedCycles);
+ }
+ 
+@@ -1266,10 +1275,17 @@ bool CDNA5ReadyQueue::findSmallestPickableNonWmma(DAGNode* pickedDS, DAGNode** o
+         // comparison below is false for every wait and would drop the ds_load
+         // -- the veto this change removed, reached by another route.
+         const bool outOfWmmaWindow = activeWmmaLatency_ <= 0 && dsReadThrottleWait() == 0;
++        // schedulingSpace/activeWmmaLatency_ is this wave's own remaining
++        // window, consumed at the raw issueCycles rate once a ds_load is
++        // actually picked (see updateWMMAStatus). dsIssueCost()'s wave-sharing
++        // doubling belongs to dsThrottleWait (cross-wave ds pipe contention,
++        // already added above), not to this admission test -- charging it
++        // here too would reject a ds_load the window can actually fit,
++        // splitting matched ds_load pairs apart for no real reason.
+         const bool fitsSchedulingBudget =
+             dsThrottleWait == 0 || outOfWmmaWindow ||
+             (schedulingPos < activeWmmaLatency_ &&
+-             dsThrottleWait + dsIssueCost(*pickedDS->inst) <= schedulingSpace);
++             dsThrottleWait + pickedDS->inst->issueCycles <= schedulingSpace);
+         if (fitsSchedulingBudget) consider(pickedDS, kLocalRead, dsThrottleWait);
+     }
+     const bool dsWindowOk = dsBaseOk && dsThrottleWait == 0;
+@@ -1463,9 +1479,11 @@ int CDNA5ReadyQueue::computeWmmaWindowsNeeded(int dsLoadCount) const {
+ //            latencyWmmaBudget = (latency / wmmaIssueConfig.latency) + 1.
+ //            wmmaWindowsNeeded is derived from matching ds_read count and DS
+ //            per-WMMA cap. latency = dsReadDrainLatency when it is configured
+-//            (> 0), else computeDynamicDrainLatencyForLoads(hw, matchingLoads,
+-//            numWaves) over every matching ds_read (last-load latency,
+-//            count-weighted average throughput, max maxDrain over the burst).
++//            (> 0), else the last matching ds_read's own (already
++//            wave-sharing-adjusted) drain latency -- every matching ds_read
++//            is already issued earlier in program order by this point, so
++//            only that one load's own remaining transit time matters, not a
++//            burst issue-spacing term for issuing them in the first place.
+ std::unordered_map<StinkyInstruction*, CDNA5ReadyQueue::BarrierAfterOutput>
+ CDNA5ReadyQueue::computeBarrierAfterThresholds(IRList::iterator regionStart,
+                                                IRList::iterator regionEnd) {
+@@ -1485,6 +1503,7 @@ CDNA5ReadyQueue::computeBarrierAfterThresholds(IRList::iterator regionStart,
+     //          signal/wait pairs so both halves share one threshold.
+     auto barrierGroups =
+         groupBarrierTokens(collectBarrierTokens(regionStart, regionEnd, /*useSrc=*/true));
++    const int numWaves = static_cast<int>(getPassContext().getGemmTileConfig().NumWaves);
+ 
+     std::vector<BarrierAfterSummary> overlapChecks;
+     for (const BarrierTokenGroup& group : barrierGroups) {
+@@ -1507,8 +1526,11 @@ CDNA5ReadyQueue::computeBarrierAfterThresholds(IRList::iterator regionStart,
+                 if (isPseudoReg(src) && group.tokens.count(src.reg.idx)) {
+                     const HwInstDesc* desc = inst.getHwInstDesc();
+                     matchingDsLoads.push_back(makeDsLoadDrainEntry(
+-                        hw_, static_cast<int>(inst.latencyCycles), desc ? desc->dsThroughput : 0,
+-                        desc ? desc->dsMaxDrain : 0));
++                        hw_, {.latency = static_cast<int>(inst.latencyCycles),
++                              .dsThroughput = desc ? desc->dsThroughput : 0,
++                              .dsMaxDrain = desc ? desc->dsMaxDrain : 0,
++                              .isaIssueCycles = static_cast<int>(inst.issueCycles),
++                              .numWaves = numWaves}));
+                     targetDSLoad = &inst;
+                     targetDSLoadIt = it;  // keep updating → ends up as latest
+                     break;
+@@ -1532,18 +1554,21 @@ CDNA5ReadyQueue::computeBarrierAfterThresholds(IRList::iterator regionStart,
+         }
+ 
+         // Step 4: threshold N = lastOverlap + (latency / wmmaIssueConfig.latency)
+-        // + 1. A positive dsReadDrainLatency pins the latency. A non-positive value
+-        // (default 0) means "use dynamic drain latency," derived from all matching
+-        // ds_loads via computeDynamicDrainLatencyForLoads (last-load latency,
+-        // count-weighted average throughput, max maxDrain over the burst), keyed
+-        // by this pass context's NumWaves.
++        // + 1. A positive dsReadDrainLatency pins the latency. A non-positive
++        // value (default 0) means "use the last matching ds_load's own drain
++        // latency": by this point every matching ds_load has already been
++        // issued (they are earlier in program order; their issue spacing is
++        // already reflected in real instruction positions), so all that is
++        // left to wait out is that one load's own transit time through the
++        // return queue -- not computeDynamicDrainLatencyForLoads()'s
++        // (count-1)*issueSpacing burst-growth term, which models spreading
++        // NEW issues out, not draining ones already in flight. Using that
++        // term here would double-count the same issue spacing that is
++        // already paid for by the real cycle positions of the earlier loads.
+         const int configuredDrainLatency = dsReadDrainLatency();
+-        const int numWaves = static_cast<int>(getPassContext().getGemmTileConfig().NumWaves);
+         const int matchingDsLoadCount = static_cast<int>(matchingDsLoads.size());
+         const int latencyForAfterThreshold =
+-            configuredDrainLatency > 0
+-                ? configuredDrainLatency
+-                : computeDynamicDrainLatencyForLoads(hw_, matchingDsLoads, numWaves);
++            configuredDrainLatency > 0 ? configuredDrainLatency : matchingDsLoads.back().latency;
+         const int latencyWmmaBudget = (latencyForAfterThreshold / wmmaIssueConfig.latency) + 1;
+         const int wmmaWindowsNeeded = computeWmmaWindowsNeeded(matchingDsLoadCount);
+         const int overlapOrWindowBase = std::max(lastOverlap, wmmaWindowsNeeded);
+diff --git a/shared/stinkytofu/tests/unit/asm/CDNA5ReadyQueueTest.cpp b/shared/stinkytofu/tests/unit/asm/CDNA5ReadyQueueTest.cpp
+index 279eb2677528..19435b4f3ded 100644
+--- a/shared/stinkytofu/tests/unit/asm/CDNA5ReadyQueueTest.cpp
++++ b/shared/stinkytofu/tests/unit/asm/CDNA5ReadyQueueTest.cpp
+@@ -121,10 +121,13 @@ class CDNA5ReadyQueueTest : public ::testing::Test {
+     }
+ };
+ 
+-DsLoadDrainEntry entryFromOpcode(const HWModel& hw, GFX opcode, int latency) {
++DsLoadDrainEntry entryFromOpcode(const HWModel& hw, GFX opcode, int latency, int numWaves) {
+     const HwInstDesc* desc = getMCIDByUOp(opcode, GfxArchID::Gfx1250);
+-    return makeDsLoadDrainEntry(hw, latency, desc ? desc->dsThroughput : 0,
+-                                desc ? desc->dsMaxDrain : 0);
++    return makeDsLoadDrainEntry(hw, {.latency = latency,
++                                     .dsThroughput = desc ? desc->dsThroughput : 0,
++                                     .dsMaxDrain = desc ? desc->dsMaxDrain : 0,
++                                     .isaIssueCycles = desc ? desc->issue : 0,
++                                     .numWaves = numWaves});
+ }
+ 
+ }  // namespace
+@@ -179,15 +182,18 @@ TEST_F(CDNA5ReadyQueueTest, DynamicDrainUsesTypeSpecificThroughput) {
+     constexpr int kFirstOverflowLoad = 17;
+     constexpr int kLoadLatency = 56;
+     constexpr int kNumWaves = 4;
++    // Real per-load issue spacing at 4 waves: dsIssueCyclesForWaves saturates
++    // at the arch's wavesPerDsIssuePipe, so this is 2, not raw kNumWaves.
++    const int kIssueSpacing = dsIssueCyclesForWaves(hw, /*issueCycles=*/1, kNumWaves);
+ 
+-    // Base = 56 + 15*4 = 116. Overflow term = 1*4 / throughput.
+-    // B128 / Tr16B128 throughput 2 => +2 = 118; default throughput 4 => +1 = 117.
++    // Base = 56 + 15*2 = 86. Overflow term = 1*2 / throughput.
++    // B128 / Tr16B128 throughput 2 => +1 = 87; default throughput 4 => +0 = 86.
+     EXPECT_EQ(computeDynamicDrainLatency(hw, kFirstOverflowLoad, kLoadLatency, /*thr=*/2,
+-                                         /*maxDrain=*/255, kNumWaves),
+-              118);
++                                         /*maxDrain=*/255, kIssueSpacing),
++              87);
+     EXPECT_EQ(computeDynamicDrainLatency(hw, kFirstOverflowLoad, kLoadLatency, /*thr=*/4,
+-                                         /*maxDrain=*/131, kNumWaves),
+-              117);
++                                         /*maxDrain=*/131, kIssueSpacing),
++              86);
+ }
+ 
+ TEST_F(CDNA5ReadyQueueTest, DynamicDrainUsesExperimentalTypeSpecificMaximum) {
+@@ -195,24 +201,28 @@ TEST_F(CDNA5ReadyQueueTest, DynamicDrainUsesExperimentalTypeSpecificMaximum) {
+     constexpr int kLoadsBeyondMaximum = 100;
+     constexpr int kLoadLatency = 56;
+     constexpr int kNumWaves = 4;
++    const int kIssueSpacing = dsIssueCyclesForWaves(hw, /*issueCycles=*/1, kNumWaves);
+ 
+     const auto drain = [&](int thr, int maxDrain) {
+         return computeDynamicDrainLatency(hw, kLoadsBeyondMaximum, kLoadLatency, thr, maxDrain,
+-                                          kNumWaves);
++                                          kIssueSpacing);
+     };
+ 
+     EXPECT_EQ(drain(4, 120), 120);
+-    EXPECT_EQ(drain(4, 131), 131);
+-    EXPECT_EQ(drain(2, 255), 255);
+-    EXPECT_EQ(drain(4, 135), 135);
+-    EXPECT_EQ(drain(2, 255), 255);
++    EXPECT_EQ(drain(4, 131), 128);
++    EXPECT_EQ(drain(2, 255), 170);
++    EXPECT_EQ(drain(4, 135), 128);
++    EXPECT_EQ(drain(2, 255), 170);
+     // Fallback defaults via makeDsLoadDrainEntry.
+-    const DsLoadDrainEntry fallback = makeDsLoadDrainEntry(hw, kLoadLatency, 0, 0);
++    const DsLoadDrainEntry fallback = makeDsLoadDrainEntry(
++        hw, {.latency = kLoadLatency, .isaIssueCycles = 1, .numWaves = kNumWaves});
+     EXPECT_EQ(fallback.throughput, 4);
+     EXPECT_EQ(fallback.maxDrain, 120);
+-    EXPECT_EQ(computeDynamicDrainLatency(hw, kLoadsBeyondMaximum, fallback.latency,
+-                                         fallback.throughput, fallback.maxDrain, kNumWaves),
+-              120);
++    EXPECT_EQ(fallback.issueSpacing, kIssueSpacing);
++    EXPECT_EQ(
++        computeDynamicDrainLatency(hw, kLoadsBeyondMaximum, fallback.latency, fallback.throughput,
++                                   fallback.maxDrain, fallback.issueSpacing),
++        120);
+ }
+ 
+ TEST_F(CDNA5ReadyQueueTest, MixedDrainHomogeneousMatchesSingleTypeFormula) {
+@@ -220,16 +230,17 @@ TEST_F(CDNA5ReadyQueueTest, MixedDrainHomogeneousMatchesSingleTypeFormula) {
+     constexpr int kLoadLatency = 56;
+     constexpr int kNumWaves = 4;
+     constexpr int kCount = 17;
++    const int kIssueSpacing = dsIssueCyclesForWaves(hw, /*issueCycles=*/1, kNumWaves);
+ 
+-    std::vector<DsLoadDrainEntry> b64Loads(kCount,
+-                                           entryFromOpcode(hw, GFX::ds_load_b64, kLoadLatency));
+-    std::vector<DsLoadDrainEntry> b128Loads(kCount,
+-                                            entryFromOpcode(hw, GFX::ds_load_b128, kLoadLatency));
++    std::vector<DsLoadDrainEntry> b64Loads(
++        kCount, entryFromOpcode(hw, GFX::ds_load_b64, kLoadLatency, kNumWaves));
++    std::vector<DsLoadDrainEntry> b128Loads(
++        kCount, entryFromOpcode(hw, GFX::ds_load_b128, kLoadLatency, kNumWaves));
+ 
+-    EXPECT_EQ(computeDynamicDrainLatencyForLoads(hw, b64Loads, kNumWaves),
+-              computeDynamicDrainLatency(hw, kCount, kLoadLatency, 4, 131, kNumWaves));
+-    EXPECT_EQ(computeDynamicDrainLatencyForLoads(hw, b128Loads, kNumWaves),
+-              computeDynamicDrainLatency(hw, kCount, kLoadLatency, 2, 255, kNumWaves));
++    EXPECT_EQ(computeDynamicDrainLatencyForLoads(hw, b64Loads),
++              computeDynamicDrainLatency(hw, kCount, kLoadLatency, 4, 131, kIssueSpacing));
++    EXPECT_EQ(computeDynamicDrainLatencyForLoads(hw, b128Loads),
++              computeDynamicDrainLatency(hw, kCount, kLoadLatency, 2, 255, kIssueSpacing));
+ }
+ 
+ TEST_F(CDNA5ReadyQueueTest, MixedDrainUsesLastLatencyAndCountWeightedRate) {
+@@ -238,30 +249,35 @@ TEST_F(CDNA5ReadyQueueTest, MixedDrainUsesLastLatencyAndCountWeightedRate) {
+     constexpr int kB64Latency = 40;
+     constexpr int kNumWaves = 4;
+ 
++    // Issue spacing at 4 waves is 2 (dsIssueCyclesForWaves), not raw numWaves.
++    // Throughput rate math is unaffected -- it comes from per-type dsThroughput,
++    // not wave count.
++    //
+     // 17 B128 + 1 B64. Rate = (1*4 + 17*2) / 18 = 2.
+-    // L=40 (last B64); cap = max(255,131) = 255 => 40 + 15*4 + (18-16)*4/2 = 104.
+-    std::vector<DsLoadDrainEntry> endsWithB64(17,
+-                                              entryFromOpcode(hw, GFX::ds_load_b128, kB128Latency));
+-    endsWithB64.push_back(entryFromOpcode(hw, GFX::ds_load_b64, kB64Latency));
+-    EXPECT_EQ(computeDynamicDrainLatencyForLoads(hw, endsWithB64, kNumWaves), 104);
+-
+-    // 9 B128 + 9 B64, last B64. Rate = (9*4 + 9*2) / 18 = 3 => 40+60+(2*4)/3 = 102.
+-    std::vector<DsLoadDrainEntry> grouped(9, entryFromOpcode(hw, GFX::ds_load_b128, kB128Latency));
+-    grouped.insert(grouped.end(), 9, entryFromOpcode(hw, GFX::ds_load_b64, kB64Latency));
++    // L=40 (last B64); cap = max(255,131) = 255 => 40 + 15*2 + (18-16)*2/2 = 72.
++    std::vector<DsLoadDrainEntry> endsWithB64(
++        17, entryFromOpcode(hw, GFX::ds_load_b128, kB128Latency, kNumWaves));
++    endsWithB64.push_back(entryFromOpcode(hw, GFX::ds_load_b64, kB64Latency, kNumWaves));
++    EXPECT_EQ(computeDynamicDrainLatencyForLoads(hw, endsWithB64), 72);
++
++    // 9 B128 + 9 B64, last B64. Rate = (9*4 + 9*2) / 18 = 3 => 40+30+(2*2)/3 = 71.
++    std::vector<DsLoadDrainEntry> grouped(
++        9, entryFromOpcode(hw, GFX::ds_load_b128, kB128Latency, kNumWaves));
++    grouped.insert(grouped.end(), 9, entryFromOpcode(hw, GFX::ds_load_b64, kB64Latency, kNumWaves));
+     std::vector<DsLoadDrainEntry> interleaved;
+     for (int i = 0; i < 9; ++i) {
+-        interleaved.push_back(entryFromOpcode(hw, GFX::ds_load_b128, kB128Latency));
+-        interleaved.push_back(entryFromOpcode(hw, GFX::ds_load_b64, kB64Latency));
++        interleaved.push_back(entryFromOpcode(hw, GFX::ds_load_b128, kB128Latency, kNumWaves));
++        interleaved.push_back(entryFromOpcode(hw, GFX::ds_load_b64, kB64Latency, kNumWaves));
+     }
+-    EXPECT_EQ(computeDynamicDrainLatencyForLoads(hw, grouped, kNumWaves), 102);
+-    EXPECT_EQ(computeDynamicDrainLatencyForLoads(hw, interleaved, kNumWaves), 102);
++    EXPECT_EQ(computeDynamicDrainLatencyForLoads(hw, grouped), 71);
++    EXPECT_EQ(computeDynamicDrainLatencyForLoads(hw, interleaved), 71);
+ 
+-    // Same mix but last is B128: L=56 => 56+60+4 = 120.
+-    std::vector<DsLoadDrainEntry> endsWithB128(1,
+-                                               entryFromOpcode(hw, GFX::ds_load_b64, kB64Latency));
++    // Same mix but last is B128: L=56 => 56 + 15*2 + (2*2)/2 = 88.
++    std::vector<DsLoadDrainEntry> endsWithB128(
++        1, entryFromOpcode(hw, GFX::ds_load_b64, kB64Latency, kNumWaves));
+     endsWithB128.insert(endsWithB128.end(), 17,
+-                        entryFromOpcode(hw, GFX::ds_load_b128, kB128Latency));
+-    EXPECT_EQ(computeDynamicDrainLatencyForLoads(hw, endsWithB128, kNumWaves), 120);
++                        entryFromOpcode(hw, GFX::ds_load_b128, kB128Latency, kNumWaves));
++    EXPECT_EQ(computeDynamicDrainLatencyForLoads(hw, endsWithB128), 88);
+ }
+ 
+ TEST_F(CDNA5ReadyQueueTest, MixedDrainCapUsesMaxDrainInBurst) {
+@@ -270,9 +286,13 @@ TEST_F(CDNA5ReadyQueueTest, MixedDrainCapUsesMaxDrainInBurst) {
+     constexpr int kB64Latency = 40;
+     constexpr int kNumWaves = 4;
+ 
+-    // 100 B128 + 1 B64. Rate = (1*4 + 100*2) / 101 = 2.
+-    // Raw = 40 + 15*4 + (101-16)*4/2 = 270. Cap = max(255,131) = 255.
+-    std::vector<DsLoadDrainEntry> loads(100, entryFromOpcode(hw, GFX::ds_load_b128, kB128Latency));
+-    loads.push_back(entryFromOpcode(hw, GFX::ds_load_b64, kB64Latency));
+-    EXPECT_EQ(computeDynamicDrainLatencyForLoads(hw, loads, kNumWaves), 255);
++    // Issue spacing at 4 waves is 2, not raw numWaves -- a bigger burst than
++    // before is needed to still push the raw estimate past the cap.
++    //
++    // 300 B128 + 1 B64. Rate = (1*4 + 300*2) / 301 = 2.
++    // Raw = 40 + 15*2 + (301-16)*2/2 = 355. Cap = max(255,131) = 255.
++    std::vector<DsLoadDrainEntry> loads(
++        300, entryFromOpcode(hw, GFX::ds_load_b128, kB128Latency, kNumWaves));
++    loads.push_back(entryFromOpcode(hw, GFX::ds_load_b64, kB64Latency, kNumWaves));
++    EXPECT_EQ(computeDynamicDrainLatencyForLoads(hw, loads), 255);
+ }
+diff --git a/shared/stinkytofu/tests/unit/asm/DAGSchedulerPassTest.cpp b/shared/stinkytofu/tests/unit/asm/DAGSchedulerPassTest.cpp
+index 7788560117cc..f5e7db97e357 100644
+--- a/shared/stinkytofu/tests/unit/asm/DAGSchedulerPassTest.cpp
++++ b/shared/stinkytofu/tests/unit/asm/DAGSchedulerPassTest.cpp
+@@ -821,16 +821,22 @@ TEST_F(DAGSchedulerPassTest, WmmaHideBudgetCountsSplitBarrierGroupOnce) {
+ 
+ // ---------------------------------------------------------------------------
+ // HWModel::Lds::wavesPerDsIssuePipe (the ds issue pipe shared between waves)
+-// is TEMPORARILY DISABLED -- see HWModel.cpp -- after real hardware measured
+-// it costing f8_tn_medium/mxf4_tn_medium real throughput. With it disabled,
+-// NumWaves has no effect on ds issue cost end-to-end; the sharing math itself
+-// stays covered at the unit level, re-enabled on a local HWModel copy
+-// (HWModelDsIssue.FourWavesRunAsPairsSoTheCostDoubles and neighbors).
++// is enabled -- see HWModel.cpp. dsIssueCost()'s wave-sharing multiplier
++// models cross-wave contention for that shared pipe: how long THIS wave must
++// wait before its NEXT ds_load can issue. That is a ds-to-ds admission
++// throttle, already tracked separately via dsReadThrottleWait()/dsIssueCap_,
++// so updateWMMAStatus's co-issue clock advances ds_read by the raw
++// issueCycles, not dsIssueCost() -- a wave still issues one instruction per
++// cycle from its own stream regardless of contention on the (shared,
++// cross-wave) ds pipe, so charging the doubled cost to the same-wave co-issue
++// timeline would consume a slot a VALU could otherwise still fill.
+ //
+-// The rule (4) cap is held inert here (perCap well above the ds_load count) so
+-// what is measured is the window filling up, not the cap.
++// With this scenario's generous throttle/cap settings (perCap well above the
++// ds_load count, queueDepth/throttleLatency wide open), ds-to-ds admission
++// never gates either, so how many ds_loads fit in the first WMMA's window is
++// unaffected by wave count.
+ // ---------------------------------------------------------------------------
+-TEST_F(DAGSchedulerPassTest, DsIssueCostIsUnaffectedByWaveCountWhilePipeSharingIsDisabled) {
++TEST_F(DAGSchedulerPassTest, DsIssueCostSharesThePipeBetweenWaves) {
+     auto dsInFirstWmmaWindow = [this](uint32_t numWaves) {
+         SetUp();  // fresh block per run
+         createWmmaF32_16x16x16_bf16(/*destStart=*/100, /*src0Start=*/200);
+@@ -859,9 +865,11 @@ TEST_F(DAGSchedulerPassTest, DsIssueCostIsUnaffectedByWaveCountWhilePipeSharingI
+     const int fourWaves = dsInFirstWmmaWindow(4);
+ 
+     EXPECT_EQ(oneWave, fourWaves)
+-        << "pipe sharing is disabled, so NumWaves must not change how many "
+-           "ds_loads fit in a WMMA's co-issue window (see HWModel.cpp)";
+-    EXPECT_EQ(twoWaves, fourWaves);
++        << "dsIssueCost()'s wave-sharing multiplier only throttles ds-to-ds "
++           "admission, not this same-wave co-issue timeline, so with "
++           "admission wide open here wave count should not change how many "
++           "ds_loads fit in the window";
++    EXPECT_EQ(twoWaves, fourWaves) << "same reasoning applies regardless of wave count";
+ }
+ 
+ // A non-positive dsReadPerCap is not a cap anyone can mean. It used to fall
+diff --git a/shared/stinkytofu/tests/unit/asm/HWModelTest.cpp b/shared/stinkytofu/tests/unit/asm/HWModelTest.cpp
+index 04b2fb4f4790..9c5a866bf9c4 100644
+--- a/shared/stinkytofu/tests/unit/asm/HWModelTest.cpp
++++ b/shared/stinkytofu/tests/unit/asm/HWModelTest.cpp
+@@ -113,15 +113,15 @@ TEST(HWModel, ConfiguredPassContextCachesMatchingModel) {
+ // wave's issues are spaced out by however many share its pipe.
+ // ---------------------------------------------------------------------------
+ 
+-// gfx1250's pipe-sharing is temporarily disabled (wavesPerDsIssuePipe = 1, see
+-// HWModel.cpp) after real-hardware measurement found it cost f8_tn_medium
+-// ~17.5% and mxf4_tn_medium ~12.3% throughput. The tests below that exercise
+-// the sharing math re-enable it on a local copy of the model, so the model
+-// logic stays covered independent of whether the arch currently applies it.
+-TEST(HWModelDsIssue, PipeSharingIsTemporarilyDisabled) {
++// gfx1250 models ds issue pipe sharing (wavesPerDsIssuePipe = 2, see
++// HWModel.cpp). Real-hardware measurement initially found it cost
++// f8_tn_medium ~17.5% and mxf4_tn_medium ~12.3% throughput; root cause turned
++// out to be a second consumer (CDNA5ReadyQueue's WMMA-hide scheduling-budget
++// check) feeding the same doubled cost into a threshold tuned for single-wave
++// issue cost, not this model. That check now uses the raw ISA issueCycles.
++TEST(HWModelDsIssue, PipeSharingIsEnabled) {
+     const HWModel& hw = hwModelForArch({12, 5, 0});
+-    EXPECT_EQ(hw.lds.wavesPerDsIssuePipe, 1)
+-        << "re-enable only after hardware re-validation (see HWModel.cpp)";
++    EXPECT_EQ(hw.lds.wavesPerDsIssuePipe, 2);
+ }
+ 
+ TEST(HWModelDsIssue, SingleWaveKeepsTheIsaCost) {
+@@ -130,8 +130,7 @@ TEST(HWModelDsIssue, SingleWaveKeepsTheIsaCost) {
+ }
+ 
+ TEST(HWModelDsIssue, FourWavesRunAsPairsSoTheCostDoubles) {
+-    HWModel hw = hwModelForArch({12, 5, 0});
+-    hw.lds.wavesPerDsIssuePipe = 2;  // re-enable for this test; see HWModel.cpp
++    const HWModel& hw = hwModelForArch({12, 5, 0});
+     // 4 waves over a 2-wave pipe is 2-2: a wave contends with one partner, not
+     // with all three others, so the cost saturates at the share rather than
+     // scaling with the wave count.
+@@ -140,8 +139,7 @@ TEST(HWModelDsIssue, FourWavesRunAsPairsSoTheCostDoubles) {
+ }
+ 
+ TEST(HWModelDsIssue, TwoWavesAreAssumedPaired) {
+-    HWModel hw = hwModelForArch({12, 5, 0});
+-    hw.lds.wavesPerDsIssuePipe = 2;  // re-enable for this test; see HWModel.cpp
++    const HWModel& hw = hwModelForArch({12, 5, 0});
+     // UNVERIFIED on hardware: the conservative reading is that two waves share
+     // one pipe. If they turn out to land on separate pipes this becomes 1, and
+     // this test is the one to flip.
+@@ -165,8 +163,7 @@ TEST(HWModelDsIssue, DefaultConfigIsSingleWave) {
+ }
+ 
+ TEST(HWModelDsIssue, ScalesAMultiCycleIssueCost) {
+-    HWModel hw = hwModelForArch({12, 5, 0});
+-    hw.lds.wavesPerDsIssuePipe = 2;  // re-enable for this test; see HWModel.cpp
++    const HWModel& hw = hwModelForArch({12, 5, 0});
+     EXPECT_EQ(dsIssueCyclesForWaves(hw, /*issueCycles=*/4, /*numWaves=*/4), 8);
+ }
+ 

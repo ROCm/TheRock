@@ -1,0 +1,1246 @@
+From: therockbot <therockbot@amd.com>
+Date: Sun, 27 Sep 2026 12:00:00 +0000
+Subject: [PATCH] Integrate ROCm/ROCgdb#358
+
+---
+diff --git a/.github/configs.json b/.github/configs.json
+index 36df523e575..10026f24f96 100644
+--- a/.github/configs.json
++++ b/.github/configs.json
+@@ -1,6 +1,6 @@
+ {
+-  "therock_commit_ref": "1d8c858b7575e317b8589ed8859c2fec5a69a3a6",
+-  "therock_commit_created": "2026-09-15T22:23:36Z",
++  "therock_commit_ref": "f7c5b97585b7b23f911f7644efc02d82973a0c4d",
++  "therock_commit_created": "2026-09-21T02:32:16Z",
+   "build_image": "ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb",
+   "build_image_created": "2026-08-17T22:45:41.087330949Z"
+ }
+diff --git a/.github/scripts/EMULATED-TESTS.md b/.github/scripts/EMULATED-TESTS.md
+new file mode 100644
+index 00000000000..8a8b03c34fb
+--- /dev/null
++++ b/.github/scripts/EMULATED-TESTS.md
+@@ -0,0 +1,54 @@
++# Running the ROCgdb tests without hardware
++
++`--emulate GPU` runs the tests on the rocjitsu userspace emulator instead of
++real hardware, so the GPU tests can run on a machine with no AMD GPU. Which
++tests run is still up to `--tests`, `--gpu-tests` and the rest, exactly as on
++hardware.
++
++GPU is a mirage profile (`mi300x`, `mi350x`, `mi450x`) or the gfx target it
++emulates (`gfx942`, `gfx950`, `gfx1250`), and the ROCm tree under test has to
++have been built for it.
++
++| Profile | gfx target |
++| --- | --- |
++| `mi300x` | `gfx942` |
++| `mi350x` | `gfx950` |
++| `mi450x` | `gfx1250` |
++
++## Usage
++
++Point the run at the ROCm tree under test and name the GPU to emulate:
++
++```bash
++OUTPUT_ARTIFACTS_DIR=~/therock/build/dist/rocm \
++    python test_rocgdb.py --emulate mi350x --gpu-tests
++
++OUTPUT_ARTIFACTS_DIR=~/therock/build/dist/rocm \
++    python test_rocgdb.py --emulate mi350x --gpu-tests --parallel
++```
++
++## Requirements
++
++- Linux. No AMD GPU, no `/dev/kfd`, no root.
++- A ROCm tree carrying the emulation tools, which a normal TheRock build and
++  the nightly tarballs both have. A minimal tree built to work on the debug
++  tools alone needs `-D THEROCK_ENABLE_EMULATION=ON`.
++- `dejagnu` and a C compiler, as on hardware.
++
++## Notes
++
++- `--default-timeout` is raised automatically, since emulated tests are slower.
++- `--parallel` is worth using: each job gets its own emulated GPU instead of
++  queueing for one. Since memory grows with the job count, `--jobs` is capped at
++  what the machine can hold, and a `--jobs` that will not fit is flagged.
++- `--one-by-one` gives each test a session, and so a clean GPU, of its own.
++- `--sanity-check` is ignored (not meaningful for an emulated device).
++
++## Troubleshooting
++
++- **`no mirage found`**: `--emulate` could not find mirage on the run's PATH.
++  Either the run is pointed at a tree that is not a ROCm build carrying the
++  emulation tools, or at one built without them (`-D THEROCK_ENABLE_EMULATION=ON`).
++- **Tests fail or time out**: try raising `--default-timeout` first, since
++  emulated tests are slower. If they still fail, it may be a genuine test,
++  emulation, or emulated-GPU issue rather than the harness.
+diff --git a/.github/scripts/rocjitsu_emulator.py b/.github/scripts/rocjitsu_emulator.py
+new file mode 100644
+index 00000000000..c7f1f079f8f
+--- /dev/null
++++ b/.github/scripts/rocjitsu_emulator.py
+@@ -0,0 +1,370 @@
++"""rocjitsu emulator support: run the GPU test suites without an AMD GPU.
++
++rocjitsu emulates an AMDGPU in userspace by interposing the KFD (/dev/kfd)
++ioctls, and `mirage run` is the CLI that owns an emulated GPU session for the
++lifetime of the command it launches. So "running on an emulated GPU" means
++nothing more than launching the GPU-touching command inside such a session,
++which is what Emulator.wrap() produces.
++
++This module is the support code for that. Its caller is test_rocgdb.py
++--emulate PROFILE, which wraps the `make check` invocations so the tests run on
++the emulated GPU while the harness itself (configure, result parsing, ignore
++lists, reports) stays outside the session.
++
++Both halves come from the ROCm tree under test, and the run's own environment
++finds them: mirage from bin on PATH, and the emulator library it loads from lib
++on LD_LIBRARY_PATH. Nothing here asks the user to configure anything.
++
++Errors are raised as EmulatorError; nothing here exits the process, so callers
++report failures in their own style.
++
++See EMULATED-TESTS.md for how to use the flag this module implements.
++"""
++
++from __future__ import annotations
++
++import atexit
++import json
++import logging
++import os
++import shlex
++import shutil
++import subprocess
++import tempfile
++from pathlib import Path
++from typing import List, NamedTuple, Optional, Sequence, Tuple
++
++logger = logging.getLogger(__name__)
++
++# The emulated GPU profiles mirage ships, and the GPU each one emulates. The
++# profile decides what the test programs are compiled for, so it has to match
++# what the ROCm tree under test was built for.
++PROFILE_ARCH = {"mi300x": "gfx942", "mi350x": "gfx950", "mi450x": "gfx1250"}
++ARCH_PROFILE = {arch: profile for profile, arch in PROFILE_ARCH.items()}
++
++# Emulated tests run far slower than on hardware, so dejagnu's default
++# per-testcase timeout is what makes the slow ones fail rather than any real
++# problem.
++DEFAULT_TIMEOUT = 600
++
++# What a parallel emulated run costs, as measured on a gdb.rocm run: a fixed
++# cost, plus roughly a GB for each job, since a job holds an emulated GPU
++# rather than waiting for one. Wall clock stops improving well before memory
++# does, so the ceiling costs almost nothing in time while keeping the memory
++# bill bounded.
++JOB_MEMORY_GB = 1.0
++BASE_MEMORY_GB = 8.0
++JOB_CEILING = 16
++
++
++class EmulatorError(Exception):
++    """A problem setting up or driving the emulated GPU."""
++
++
++def profile_choices() -> List[str]:
++    """The accepted --emulate values, for help text and error messages."""
++    return list(PROFILE_ARCH) + list(ARCH_PROFILE)
++
++
++def normalize_profile(spec: str) -> Tuple[str, str]:
++    """Resolve a profile spec to (mirage profile, gfx target).
++
++    Accepts the mirage profile ("mi350x"), the same without the trailing x
++    ("mi350"), or the GPU it emulates ("gfx950"), because CI thinks in AMDGPU
++    families while mirage thinks in profiles.
++    """
++    key = spec.strip().lower()
++    candidates = [key] + ([f"{key}x"] if key[-1:].isdigit() else [])
++    for candidate in candidates:
++        if candidate in PROFILE_ARCH:
++            return candidate, PROFILE_ARCH[candidate]
++    if key in ARCH_PROFILE:
++        return ARCH_PROFILE[key], key
++    raise EmulatorError(
++        f"unknown emulated GPU {spec!r}; expected one of "
++        f"{', '.join(profile_choices())}"
++    )
++
++
++def _plural(count: int, noun: str) -> str:
++    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
++
++
++def _available_memory_gb() -> Optional[float]:
++    """Memory this machine can hand out right now, or None if unknowable."""
++    try:
++        for line in Path("/proc/meminfo").read_text().splitlines():
++            if line.startswith("MemAvailable:"):
++                return int(line.split()[1]) / 1024 / 1024
++    except (OSError, IndexError, ValueError):
++        pass
++    return None
++
++
++class JobAdvice(NamedTuple):
++    """How many parallel jobs to run, and what to tell the user about it."""
++
++    jobs: int
++    message: str
++    warn: bool
++
++
++def parallel_jobs(
++    requested: Optional[int], cpu_count: int, available_gb: Optional[float] = None
++) -> JobAdvice:
++    """Decide how many jobs a parallel emulated run should use.
++
++    On hardware the job count is a CPU question, because the jobs queue for the
++    one GPU either way. Under emulation each job holds an emulated GPU of its
++    own, so the job count is a memory question too, and the harness default (as
++    many jobs as CPUs) can ask for far more memory than a machine has, which
++    surfaces as tests killed by the OOM killer, indistinguishable from real
++    failures.
++
++    So a default is capped: by what memory allows, and by the point where more
++    jobs stop buying wall clock. A number the caller asked for is honoured,
++    since they may know something we do not (a big machine, a small suite), but
++    it is flagged when memory says it will not fit.
++    """
++    if available_gb is None:
++        available_gb = _available_memory_gb()
++
++    fits = None
++    if available_gb is not None:
++        fits = max(0, int((available_gb - BASE_MEMORY_GB) / JOB_MEMORY_GB))
++
++    # Even one job needs BASE_MEMORY_GB + JOB_MEMORY_GB. Below that (fits == 0)
++    # the OOM killer is likely to take tests down whatever the job count, so the
++    # warning has to fire even when the caller pinned --jobs 1.
++    below_one_job = fits == 0
++
++    if requested is not None:
++        if below_one_job:
++            return JobAdvice(
++                requested,
++                f"Only {available_gb:.0f}GB is available, below the roughly "
++                f"{BASE_MEMORY_GB + JOB_MEMORY_GB:.0f}GB even one job needs: "
++                f"the OOM killer will take tests down, which reads as failures.",
++                True,
++            )
++        if fits is not None and requested > fits:
++            return JobAdvice(
++                requested,
++                f"--jobs {requested} means {requested} emulated GPUs, roughly "
++                f"{BASE_MEMORY_GB + requested * JOB_MEMORY_GB:.0f}GB, and only "
++                f"{available_gb:.0f}GB is available: the OOM killer will take "
++                f"tests down, which reads as failures. "
++                f"{_plural(fits, 'job')} fit here.",
++                True,
++            )
++        return JobAdvice(requested, "", False)
++
++    jobs = min(cpu_count, JOB_CEILING)
++    # Start from the CPU/ceiling cap; the memory cap just below overrides both
++    # the count and this reason whenever memory is the tighter limit.
++    reason = (
++        f"the {JOB_CEILING} job ceiling" if jobs == JOB_CEILING else "this host's CPUs"
++    )
++    if fits is not None and fits < jobs:
++        # Memory is the tighter limit. Keep at least one job running; the
++        # below_one_job flag carries the warning if even that will not fit.
++        jobs, reason = max(1, fits), f"{available_gb:.0f}GB of available memory"
++    message = (
++        f"--emulate --parallel: using {_plural(jobs, 'job')}, from {reason}. "
++        f"Each job holds an emulated GPU of its own (about "
++        f"{JOB_MEMORY_GB:.0f}GB), and more than {JOB_CEILING} stops buying "
++        f"wall clock, so pass --jobs to override."
++    )
++    if below_one_job:
++        message += (
++            f" Only {available_gb:.0f}GB is available, below the roughly "
++            f"{BASE_MEMORY_GB + JOB_MEMORY_GB:.0f}GB one job needs, so expect "
++            f"OOM-killed tests."
++        )
++    return JobAdvice(jobs, message, below_one_job)
++
++
++def find_mirage(path: Optional[str] = None) -> Path:
++    """Return the mirage binary that will own the emulated session.
++
++    Found on `path`, the run's own PATH, which starts with the bin of the ROCm
++    tree under test, so a tree built with the emulation tools provides its own
++    mirage and the caller configures nothing.
++    """
++    on_path = shutil.which("mirage", path=path)
++    if on_path:
++        return Path(on_path).resolve()
++
++    raise EmulatorError(
++        "no mirage found: --emulate needs it to own the emulated GPU session. "
++        "Either the run is pointed at a tree that is not a ROCm build with the "
++        "emulation tools, or that tree was built without them "
++        "(-D THEROCK_ENABLE_EMULATION=ON)."
++    )
++
++
++def check_profile_arch(rocm_root: Path, profile: str, arch: str) -> None:
++    """Refuse a profile the ROCm tree was not built for.
++
++    The profile decides which GPU the test programs are compiled for, so a tree
++    built for another family fails deep inside the tests instead of here.
++    TheRock records what it built for in the dist info; a tree without that
++    file (a plain ROCm install) is left alone.
++    """
++    info = rocm_root / "share" / "therock" / "dist_info.json"
++    try:
++        loaded = json.loads(info.read_text()).get("dist_amdgpu_targets", "")
++    except (OSError, ValueError, AttributeError):
++        return
++    # TheRock writes this as a comma/space/semicolon separated string; anything
++    # else is a dist file we do not understand, so leave it alone.
++    if not isinstance(loaded, str):
++        return
++    targets = loaded
++    # A local build writes the list as it was given to cmake, a comma or space
++    # separated string; the nightly tarballs write cmake's own list separator.
++    built_for = targets.replace(",", " ").replace(";", " ").split()
++    if not built_for or arch in built_for:
++        return
++    alternatives = sorted({ARCH_PROFILE[a] for a in built_for if a in ARCH_PROFILE})
++    hint = (
++        f"emulate {' or '.join(alternatives)} instead"
++        if alternatives
++        else "point the run at a matching tree"
++    )
++    raise EmulatorError(
++        f"{profile} emulates {arch}, but {rocm_root} was built for "
++        f"{' '.join(built_for)}: {hint}, or rebuild the tree for {arch}."
++    )
++
++
++class Emulator:
++    """An emulated GPU: a mirage binary and the profile it brings up."""
++
++    def __init__(self, profile: str, arch: str, mirage: Path):
++        self.profile = profile
++        self.arch = arch
++        self.mirage = mirage
++        # Written on demand by runtest_wrapper(), then reused: one script
++        # serves every job of every iteration.
++        self._runtest: Optional[Path] = None
++
++    @classmethod
++    def resolve(
++        cls, spec: str, rocm_root: Path, path: Optional[str] = None
++    ) -> Emulator:
++        """Build an Emulator for `spec`, validating everything it needs.
++
++        `path` is the run's PATH, where mirage is found; mirage then loads the
++        emulator library itself, from the tree's lib on LD_LIBRARY_PATH.
++        """
++        profile, arch = normalize_profile(spec)
++        check_profile_arch(Path(rocm_root), profile, arch)
++        return cls(profile, arch, find_mirage(path))
++
++    def wrap(self, cmd: Sequence[str]) -> List[str]:
++        """Return `cmd` rewritten to run inside an emulated GPU session.
++
++        The session lives for exactly as long as the command, and the whole
++        process subtree it spawns (make -> runtest -> amdclang++, rocgdb, the
++        inferior) shares that one emulated GPU. mirage passes its own
++        environment on to the command, so nothing extra needs setting here.
++        """
++        wrapped = [str(self.mirage), "run", "--profile", self.profile, "--"]
++        return wrapped + [str(c) for c in cmd]
++
++    def runtest_wrapper(self) -> Path:
++        """Return a `runtest` replacement that sessions each dejagnu job.
++
++        Wrapping the whole `make check` (see wrap()) puts every parallel job on
++        the one emulated GPU that session owns, and the testsuite then
++        serializes them anyway: `with_rocm_gpu_lock` exists because hardware has
++        a single GPU, and it holds the lock for the GPU-touching part of nearly
++        every gdb.rocm test.
++
++        Under emulation a GPU costs a process rather than a socket, so a job can
++        have one to itself. The testsuite's parallel machinery runs one
++        `$(RUNTEST)` per test file, so pointing RUNTEST at this script is what
++        turns "one session, jobs queueing on a lock" into "a session per job".
++        The lock itself is made per-job rather than removed, so the tests keep
++        using the same code path (lock_dir() honours GDB_LOCK_DIR) and a
++        job still cannot collide with itself.
++
++        The script and the lock directories live in a temporary directory that
++        is removed when the process exits.
++        """
++        if self._runtest is not None:
++            return self._runtest
++
++        scratch = Path(tempfile.mkdtemp(prefix="rocjitsu-runtest-"))
++        atexit.register(shutil.rmtree, scratch, ignore_errors=True)
++        script = scratch / "runtest-in-session"
++        # self.profile is embedded in the generated script. normalize_profile()
++        # validated it against PROFILE_ARCH, so no unchecked input reaches here.
++        session = shlex.join(self.wrap(["runtest"]))
++        # Everything interpolated into the script is quoted for the shell that
++        # will run it: $TMPDIR decides where the scratch directory lands, and it
++        # is not ours to assume anything about.
++        template = shlex.quote(f"{scratch}/gdb-lock.XXXXXX")
++        # Created executable, since dejagnu execs it as $(RUNTEST).
++        with os.fdopen(
++            os.open(script, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o755),
++            "w",
++            encoding="utf-8",
++        ) as out:
++            out.write(
++                "#!/bin/sh\n"
++                "# Generated by rocjitsu_emulator.py: run one dejagnu job on an\n"
++                "# emulated GPU of its own, with a GPU lock of its own.\n"
++                f"lock_dir=$(mktemp -d {template}) || exit 1\n"
++                "trap 'rm -rf \"$lock_dir\"' HUP INT TERM\n"
++                # GDB_LOCK_DIR=... is a dejagnu command-line assignment consumed
++                # by runtest, which reads the Tcl global $::GDB_LOCK_DIR in
++                # lock_dir(). It is not a positional argument, so do not rewrite
++                # it as a --env variable.
++                f'{session} "GDB_LOCK_DIR=$lock_dir" "$@"\n'
++                "status=$?\n"
++                'rm -rf "$lock_dir"\n'
++                "exit $status\n"
++            )
++        self._runtest = script
++        return script
++
++    def cleanup(self) -> None:
++        """Reclaim what a killed `mirage run` left behind (best effort).
++
++        A run tears its own session down on exit, but SIGKILL (which is how the
++        harness enforces its wall-clock timeouts) leaves no code of mirage's to
++        run at all. `mirage cleanup` is the documented remedy; it leaves live
++        sessions alone, so calling it mid-run is safe. A failure here only means
++        a stranded emulated GPU costing memory, so warn rather than fail.
++        """
++        try:
++            done = subprocess.run(
++                [str(self.mirage), "cleanup"],
++                capture_output=True,
++                text=True,
++                timeout=120,
++                check=False,
++            )
++        except (OSError, subprocess.SubprocessError) as e:
++            logger.warning("mirage cleanup failed: %s", e)
++            return
++        if done.returncode != 0:
++            detail = (done.stderr or done.stdout or "").strip().splitlines()
++            logger.warning(
++                f"could not reclaim the emulated GPU: {self.mirage} cleanup "
++                f"exited {done.returncode}"
++                + (f" ({detail[0]})" if detail else "")
++                + ". A killed test may have left an emulated GPU running."
++            )
++
++    def summary(self) -> List[Tuple[str, str]]:
++        """Label/value pairs describing this emulated GPU, for config output."""
++        return [
++            ("Emulated GPU", f"{self.profile} ({self.arch})"),
++            ("mirage", str(self.mirage)),
++        ]
++
++    def __str__(self) -> str:
++        return f"{self.profile}/{self.arch} via {self.mirage}"
+diff --git a/.github/scripts/test_rocgdb.py b/.github/scripts/test_rocgdb.py
+index 360ac127a3a..fcefc87a142 100644
+--- a/.github/scripts/test_rocgdb.py
++++ b/.github/scripts/test_rocgdb.py
+@@ -3,6 +3,7 @@
+ # SPDX-License-Identifier: MIT
+ 
+ import argparse
++import atexit
+ import glob
+ import json
+ import logging
+@@ -17,6 +18,7 @@
+ import sys
+ import sysconfig
+ import time
++import types
+ from collections import defaultdict
+ from pathlib import Path
+ from typing import Dict, List, NoReturn, Optional, Set, Tuple, Union
+@@ -372,6 +374,26 @@ def _positive_nonzero_int(value: str) -> int:
+     return ivalue
+ 
+ 
++def _load_emulator_support() -> types.ModuleType:
++    """
++    Import the rocjitsu emulator support module, needed only for --emulate.
++
++    Imported lazily so this file keeps working as a single script: hardware
++    runs never reach this, and an emulated run reports exactly what is missing
++    instead of failing at import time. Returns the module, and exits 1 if it is
++    not beside this script.
++    """
++    try:
++        import rocjitsu_emulator
++    except ImportError as e:
++        _log_error_and_exit(
++            "--emulate needs rocjitsu_emulator.py next to this script in "
++            f"{Path(__file__).resolve().parent}, but it could not be "
++            f"imported: {e}"
++        )
++    return rocjitsu_emulator
++
++
+ def parse_arguments() -> argparse.Namespace:
+     """
+     Parse and validate command-line arguments for the ROCgdb test suite.
+@@ -409,7 +431,10 @@ def parse_arguments() -> argparse.Namespace:
+   python %(prog)s --one-by-one --tests gdb.rocm/foo.exp
+   python %(prog)s --one-by-one --sanity-check --gpu-tests
+   python %(prog)s --timing --gpu-tests
++  python %(prog)s --gpu-corefile-tests
+   python %(prog)s --toolchain llvm
++  python %(prog)s --emulate mi350x --gpu-tests
++  python %(prog)s --emulate gfx942 --one-by-one --tests gdb.rocm/simple.exp
+ 
+         """,
+     )
+@@ -512,21 +537,28 @@ def parse_arguments() -> argparse.Namespace:
+         default=None,
+         help="List of tests to run (individual .exp files or directories). "
+         "For directories, the /*.exp suffix is automatically added. "
+-        "Mutually exclusive with --gpu-tests and --cpu-tests. "
++        "Mutually exclusive with --gpu-tests, --cpu-tests, and --gpu-corefile-tests. "
+         "Default (if no test option specified) is gdb.rocm/*.exp and gdb.dwarf2/*.exp",
+     )
+     test_group.add_argument(
+         "--gpu-tests",
+         action="store_true",
+         help="Run GPU-specific tests (gdb.rocm directory only). "
+-        "Mutually exclusive with --tests and --cpu-tests.",
++        "Mutually exclusive with --tests, --cpu-tests, and --gpu-corefile-tests.",
+     )
+     test_group.add_argument(
+         "--cpu-tests",
+         action="store_true",
+         help="Run all CPU tests (all testsuite directories except gdb.rocm). "
+         "Automatically discovers all gdb.* directories with .exp files. "
+-        "Mutually exclusive with --tests and --gpu-tests.",
++        "Mutually exclusive with --tests, --gpu-tests, and --gpu-corefile-tests.",
++    )
++    test_group.add_argument(
++        "--gpu-corefile-tests",
++        action="store_true",
++        help="Run GPU system-generated corefile tests (gdb.rocm/runtime-core*.exp). "
++        "New tests are picked up automatically when they match that pattern. "
++        "Mutually exclusive with --tests, --gpu-tests, and --cpu-tests.",
+     )
+ 
+     parser.add_argument(
+@@ -550,6 +582,17 @@ def parse_arguments() -> argparse.Namespace:
+         help="Timeout in seconds for timeout-based retry runs only. "
+         "Only applies when retrying tests that timed out. Default is 100.",
+     )
++    parser.add_argument(
++        "--emulate",
++        type=str,
++        default=None,
++        metavar="GPU",
++        help="Run the tests on an emulated GPU (rocjitsu) instead of real "
++        "hardware; no AMD GPU needed. GPU is a mirage profile (mi300x, "
++        "mi350x, mi450x) or the gfx target it emulates (gfx942, gfx950, "
++        "gfx1250), which the ROCm tree must have been built for. Raises "
++        "--default-timeout, since emulated tests are slower.",
++    )
+     parser.add_argument(
+         "--try-rocm-path",
+         action="store_true",
+@@ -677,6 +720,26 @@ def parse_arguments() -> argparse.Namespace:
+             "--one-by-one-log-dir / --one-by-one-test-timeout require --one-by-one."
+         )
+ 
++    # An emulated GPU can't wedge the way this probe catches: it is built fresh
++    # per test, and dmesg says nothing about a userspace device. Ignore rather
++    # than reject, so one command line serves hardware and the emulator.
++    if args.emulate is not None and args.sanity_check:
++        logger.warning(
++            f"{STATUS_WARN} --emulate: ignoring --sanity-check (and "
++            "--sanity-check-timeout). The probe detects a wedged GPU; an "
++            "emulated one is built fresh for every test."
++        )
++        args.sanity_check = False
++        # Clearing the timeout too, or the "--sanity-check-timeout requires
++        # --sanity-check" check below would reject a command line we just said
++        # we were ignoring.
++        if args.sanity_check_timeout is not None:
++            logger.debug(
++                "--emulate: also clearing --sanity-check-timeout "
++                f"({args.sanity_check_timeout}s), since --sanity-check is ignored."
++            )
++        args.sanity_check_timeout = None
++
+     # Validate --sanity-check constraints. The probe is only meaningful in
+     # one-by-one mode, where it runs between per-test `make check` invocations.
+     # Check the --parallel conflict first so the message points at the real
+@@ -703,6 +766,42 @@ def parse_arguments() -> argparse.Namespace:
+     if args.rocgdb_bin is not None:
+         args.rocgdb_bin = validate_path(args.rocgdb_bin, is_file=True)
+ 
++    # Reject an unknown emulated GPU here rather than after the environment is
++    # set up, and raise the timeout: emulated tests run far slower than on
++    # hardware, where dejagnu's default per-testcase timeout is enough. Left at
++    # that default the slow tests fail for want of time rather than for a real
++    # reason.
++    if args.emulate is not None:
++        emulator_support = _load_emulator_support()
++        try:
++            emulator_support.normalize_profile(args.emulate)
++        except emulator_support.EmulatorError as e:
++            _log_error_and_exit(str(e))
++        if args.default_timeout is None:
++            args.default_timeout = emulator_support.DEFAULT_TIMEOUT
++            logger.info(
++                "--emulate: using a default timeout of "
++                f"{args.default_timeout}s (override with --default-timeout)"
++            )
++        # Under emulation the job count is a memory question, not just a CPU
++        # one, so the emulator decides what an unspecified --jobs should be
++        # rather than leaving it at "as many as there are CPUs". --fraction is
++        # resolved to a concrete count here and fed through as a request, so the
++        # same memory check (and OOM warning) covers it too, so downstream
++        # code then only has to deal with args.jobs.
++        if args.parallel:
++            cpu_count = os.cpu_count() or 1
++            requested = args.jobs
++            if args.fraction is not None:
++                requested = max(1, int(cpu_count * args.fraction))
++            advice = emulator_support.parallel_jobs(requested, cpu_count)
++            args.jobs = advice.jobs
++            args.fraction = None
++            if advice.warn:
++                logger.warning(f"{STATUS_WARN} {advice.message}")
++            elif advice.message:
++                logger.info(advice.message)
++
+     # Adjust retry-timeout if default-timeout is larger.
+     if args.default_timeout is not None and args.default_timeout > args.retry_timeout:
+         logger.warning(
+@@ -1880,6 +1979,7 @@ def run_tests(
+     args: argparse.Namespace,
+     xfailed_tests: Optional[Dict[str, List[str]]] = None,
+     sanity_check_exe: Optional[Path] = None,
++    emulator=None,
+ ) -> None:
+     """
+     Run ROCgdb test suite with retry logic for failed tests.
+@@ -1900,6 +2000,8 @@ def run_tests(
+         sanity_check_exe: When supplied (--sanity-check mode), the pre-built
+             known-good HIP executable run before each test in one-by-one mode.
+             None disables the probe.
++        emulator: When supplied (--emulate mode), the emulated GPU each
++            `make check` is run inside. None runs on real hardware.
+ 
+     Returns:
+         None
+@@ -1961,6 +2063,7 @@ def run_tests(
+                 test_results if args.timing else None,
+                 sanity_check_exe,
+                 args.sanity_check_timeout,
++                emulator,
+             )
+         else:
+             cmd = [
+@@ -1976,6 +2079,17 @@ def run_tests(
+                     jobs = args.jobs or os.cpu_count()
+                 cmd += ["FORCE_PARALLEL=1", f"-j{jobs}"]
+ 
++            if emulator is not None:
++                if args.parallel:
++                    # A session per job rather than one for all of them, so the
++                    # jobs do not queue on a single emulated GPU. Quoted because
++                    # make expands $(RUNTEST) into a shell recipe.
++                    wrapper = shlex.quote(str(emulator.runtest_wrapper()))
++                    cmd.append(f"RUNTEST={wrapper}")
++                else:
++                    # One session for the whole `make check`, as on hardware.
++                    cmd = emulator.wrap(cmd)
++
+             logger.info(
+                 f"Executing tests with {compiler_label} - Iteration {iteration}: {shlex.join(cmd)}"
+             )
+@@ -2199,6 +2313,19 @@ def main() -> None:
+     if args.gpu_tests:
+         args.tests = ["gdb.rocm"]
+         logger.info("Using --gpu-tests: running gdb.rocm tests only")
++    elif args.gpu_corefile_tests:
++        corefile_tests = sorted(
++            glob.glob("gdb.rocm/runtime-core*.exp", root_dir=str(rocgdb_testsuite_dir))
++        )
++        if not corefile_tests:
++            _log_error_and_exit(
++                "No GPU corefile tests found matching gdb.rocm/runtime-core*.exp"
++            )
++        args.tests = corefile_tests
++        logger.info(
++            f"Using --gpu-corefile-tests: found {len(corefile_tests)} test(s): "
++            f"{' '.join(corefile_tests)}"
++        )
+     elif args.cpu_tests:
+         args.tests = discover_test_directories(
+             rocgdb_testsuite_dir, exclude=["gdb.rocm"]
+@@ -2283,8 +2410,30 @@ def main() -> None:
+     required_executables = ["make", *toolchain_executables, "runtest"]
+     if has_rocm_tests:
+         required_executables.insert(1, "amdclang++")
++    # mirage is deliberately not listed here: Emulator.resolve() below looks it
++    # up via find_mirage() and raises a more specific error if it is absent, so
++    # checking it here too would just search the same PATH twice.
+     check_executables(required_executables, env_vars)
+ 
++    # Resolve the emulated GPU, if one was asked for.
++    emulator = None
++    if args.emulate is not None:
++        emulator_support = _load_emulator_support()
++        try:
++            emulator = emulator_support.Emulator.resolve(
++                args.emulate, rocm_dir, path=env_vars.get("PATH")
++            )
++        except emulator_support.EmulatorError as e:
++            _log_error_and_exit(str(e))
++        # A `make check` killed part-way (Ctrl-C, or a job's session SIGKILLed)
++        # gives mirage no chance to tear its session down, stranding an emulated
++        # GPU. The one-by-one path reclaims between tests; this sweeps whatever
++        # is left at exit, so a --parallel or single-session run cannot leak one.
++        # mirage cleanup leaves live sessions alone, so the final sweep is safe.
++        atexit.register(emulator.cleanup)
++        print_section("Emulated GPU (no hardware in use)")
++        _log_aligned_fields(emulator.summary())
++
+     # The sanity check probes the GPU with a HIP program, so it is only
+     # meaningful when gdb.rocm tests will actually run. Reject the combination
+     # early rather than compiling a HIP program for a CPU-only run.
+@@ -2323,6 +2472,7 @@ def main() -> None:
+             args,
+             xfailed_tests,
+             sanity_check_exe,
++            emulator,
+         )
+ 
+     # Final summaries.
+@@ -2632,6 +2782,7 @@ def _execute_one_by_one(
+     test_results: Optional["TestResults"],
+     sanity_check_exe: Optional[Path],
+     sanity_check_timeout: int,
++    emulator=None,
+ ) -> None:
+     """
+     Run each test in its own `make check` invocation, capturing per-test
+@@ -2685,6 +2836,10 @@ def _execute_one_by_one(
+             f"RUNTESTFLAGS={runtestflags_str}",
+             f"TESTS={test}",
+         ]
++        # A session per test, so no test can be affected by GPU state an
++        # earlier one left behind.
++        if emulator is not None:
++            cmd = emulator.wrap(cmd)
+         logger.info(f"[one-by-one] {compiler_label} - {test}: {shlex.join(cmd)}")
+ 
+         # Purge stale gdb.sum / gdb.log so a killed or failing `make` cannot
+@@ -2716,6 +2871,10 @@ def _execute_one_by_one(
+             logger.warning(
+                 f"{STATUS_WARN} {test}: wall-clock timeout after {wall_clock_timeout}s"
+             )
++            # SIGKILL left mirage no chance to release its session, so reclaim
++            # it before the next test starts its own.
++            if emulator is not None:
++                emulator.cleanup()
+         duration = time.perf_counter() - start
+ 
+         # Read per-test gdb.sum for both bucketing and aggregation.
+diff --git a/.github/scripts/test_rocjitsu_emulator.py b/.github/scripts/test_rocjitsu_emulator.py
+new file mode 100644
+index 00000000000..5c7aade9811
+--- /dev/null
++++ b/.github/scripts/test_rocjitsu_emulator.py
+@@ -0,0 +1,171 @@
++#!/usr/bin/env python3
++# Copyright Advanced Micro Devices, Inc.
++# SPDX-License-Identifier: MIT
++
++"""Unit tests for the pure logic in rocjitsu_emulator.py.
++
++These cover profile-alias resolution, the parallel-job/memory arithmetic, and
++the build-target check. None of them need a GPU or the mirage binary, so they
++run anywhere `python3` does:
++
++    python3 -m unittest test_rocjitsu_emulator
++"""
++
++import json
++import os
++import sys
++import tempfile
++import unittest
++from pathlib import Path
++from unittest import mock
++
++sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
++import rocjitsu_emulator as rj  # noqa: E402
++
++
++class NormalizeProfileTests(unittest.TestCase):
++    def test_known_profiles_map_to_arch(self):
++        self.assertEqual(rj.normalize_profile("mi300x"), ("mi300x", "gfx942"))
++        self.assertEqual(rj.normalize_profile("mi350x"), ("mi350x", "gfx950"))
++        self.assertEqual(rj.normalize_profile("mi450x"), ("mi450x", "gfx1250"))
++
++    def test_trailing_x_is_optional(self):
++        # CI often names families without the trailing x.
++        self.assertEqual(rj.normalize_profile("mi350"), ("mi350x", "gfx950"))
++        self.assertEqual(rj.normalize_profile("mi300"), ("mi300x", "gfx942"))
++
++    def test_gfx_target_resolves_to_profile(self):
++        self.assertEqual(rj.normalize_profile("gfx942"), ("mi300x", "gfx942"))
++        self.assertEqual(rj.normalize_profile("gfx1250"), ("mi450x", "gfx1250"))
++
++    def test_case_and_whitespace_insensitive(self):
++        self.assertEqual(rj.normalize_profile("  MI300X "), ("mi300x", "gfx942"))
++        self.assertEqual(rj.normalize_profile("GFX950"), ("mi350x", "gfx950"))
++
++    def test_unknown_spec_raises(self):
++        for bad in ("", "foobar", "gfx999", "mi350z"):
++            with self.assertRaises(rj.EmulatorError):
++                rj.normalize_profile(bad)
++
++
++class ParallelJobsTests(unittest.TestCase):
++    def test_requested_fits_is_honoured_quietly(self):
++        advice = rj.parallel_jobs(2, 8, available_gb=64)
++        self.assertEqual(advice.jobs, 2)
++        self.assertFalse(advice.warn)
++        self.assertEqual(advice.message, "")
++
++    def test_requested_over_capacity_warns_but_is_honoured(self):
++        advice = rj.parallel_jobs(16, 32, available_gb=12)
++        self.assertEqual(advice.jobs, 16)
++        self.assertTrue(advice.warn)
++        self.assertIn("fit here", advice.message)
++
++    def test_requested_below_one_job_warns(self):
++        # 7.5GB is under BASE(8) + JOB(1); even --jobs 1 should warn.
++        advice = rj.parallel_jobs(1, 8, available_gb=7.5)
++        self.assertEqual(advice.jobs, 1)
++        self.assertTrue(advice.warn)
++
++    def test_auto_uses_cpus_when_memory_is_ample(self):
++        advice = rj.parallel_jobs(None, 8, available_gb=64)
++        self.assertEqual(advice.jobs, 8)
++        self.assertFalse(advice.warn)
++
++    def test_auto_is_capped_by_ceiling(self):
++        advice = rj.parallel_jobs(None, 64, available_gb=1000)
++        self.assertEqual(advice.jobs, rj.JOB_CEILING)
++        self.assertFalse(advice.warn)
++        self.assertIn("ceiling", advice.message)
++
++    def test_auto_is_capped_by_memory(self):
++        # (12 - 8) / 1 == 4 jobs fit.
++        advice = rj.parallel_jobs(None, 32, available_gb=12)
++        self.assertEqual(advice.jobs, 4)
++        self.assertFalse(advice.warn)
++        self.assertIn("available memory", advice.message)
++
++    def test_auto_below_one_job_still_runs_one_and_warns(self):
++        advice = rj.parallel_jobs(None, 8, available_gb=7.5)
++        self.assertEqual(advice.jobs, 1)
++        self.assertTrue(advice.warn)
++
++    def test_unknown_memory_falls_back_to_cpus_without_warning(self):
++        with mock.patch.object(rj, "_available_memory_gb", return_value=None):
++            advice = rj.parallel_jobs(None, 8)
++        self.assertEqual(advice.jobs, 8)
++        self.assertFalse(advice.warn)
++
++
++class CheckProfileArchTests(unittest.TestCase):
++    def _make_tree(self, targets):
++        """Return a rocm_root Path whose dist_info.json holds `targets`.
++
++        `targets` may be any JSON value, or the sentinel `...` to skip writing
++        the whole top-level dict, or `None` to skip the file entirely.
++        """
++        root = Path(self._tmp.name)
++        if targets is _SKIP_FILE:
++            return root
++        info = root / "share" / "therock" / "dist_info.json"
++        info.parent.mkdir(parents=True, exist_ok=True)
++        if targets is _RAW_BAD_JSON:
++            info.write_text("{ not valid json")
++        elif targets is _TOP_LEVEL_LIST:
++            info.write_text(json.dumps(["gfx942"]))
++        else:
++            info.write_text(json.dumps({"dist_amdgpu_targets": targets}))
++        return root
++
++    def setUp(self):
++        self._tmp = tempfile.TemporaryDirectory()
++        self.addCleanup(self._tmp.cleanup)
++
++    def test_missing_file_is_left_alone(self):
++        root = self._make_tree(_SKIP_FILE)
++        self.assertIsNone(rj.check_profile_arch(root, "mi300x", "gfx942"))
++
++    def test_matching_target_passes(self):
++        root = self._make_tree("gfx942 gfx950")
++        self.assertIsNone(rj.check_profile_arch(root, "mi300x", "gfx942"))
++
++    def test_comma_separated_targets(self):
++        root = self._make_tree("gfx942,gfx950")
++        self.assertIsNone(rj.check_profile_arch(root, "mi300x", "gfx942"))
++
++    def test_semicolon_separated_targets(self):
++        # The nightly tarballs write cmake's own ';' list separator.
++        root = self._make_tree("gfx942;gfx950")
++        self.assertIsNone(rj.check_profile_arch(root, "mi350x", "gfx950"))
++
++    def test_mismatch_raises_with_hint(self):
++        root = self._make_tree("gfx950")
++        with self.assertRaises(rj.EmulatorError) as ctx:
++            rj.check_profile_arch(root, "mi300x", "gfx942")
++        self.assertIn("gfx942", str(ctx.exception))
++
++    def test_empty_targets_is_left_alone(self):
++        root = self._make_tree("")
++        self.assertIsNone(rj.check_profile_arch(root, "mi300x", "gfx942"))
++
++    def test_non_string_targets_is_left_alone(self):
++        root = self._make_tree(["gfx942"])
++        self.assertIsNone(rj.check_profile_arch(root, "mi300x", "gfx942"))
++
++    def test_top_level_not_a_dict_is_left_alone(self):
++        root = self._make_tree(_TOP_LEVEL_LIST)
++        self.assertIsNone(rj.check_profile_arch(root, "mi300x", "gfx942"))
++
++    def test_malformed_json_is_left_alone(self):
++        root = self._make_tree(_RAW_BAD_JSON)
++        self.assertIsNone(rj.check_profile_arch(root, "mi300x", "gfx942"))
++
++
++# Sentinels for _make_tree, distinct from any real JSON value it might write.
++_SKIP_FILE = object()
++_RAW_BAD_JSON = object()
++_TOP_LEVEL_LIST = object()
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/CHANGELOG_AMD.md b/CHANGELOG_AMD.md
+index aaf822737c0..4f4db4984ba 100644
+--- a/CHANGELOG_AMD.md
++++ b/CHANGELOG_AMD.md
+@@ -7,6 +7,12 @@ Full documentation for ROCgdb is available at
+ 
+ ### Added
+ 
++- Add support for the gfx1250-strict architecture variant.
++
++## ROCgdb-16.3 for ROCm-10.1
++
++### Added
++
+ - For AMD64 and AMDGPU targets, print backtrace information for
+   Clang's __builtin_verbose_trap.  The debug information emited
+   by the compiler describes the category and message arguments
+diff --git a/gdb/doc/gdb.texinfo b/gdb/doc/gdb.texinfo
+index 147aa49b2a4..d47160e9545 100644
+--- a/gdb/doc/gdb.texinfo
++++ b/gdb/doc/gdb.texinfo
+@@ -29228,11 +29228,15 @@ caused the memory violation or address watch event.  This is the
+ default.
+ 
+ @item on
+-Requests that the program location will be immediately after the
+-instruction that caused a memory violation or address watch event.
+-Enabling this mode may make the @acronym{AMD GPU} device execution
+-significantly slower as it has to wait for each memory operation to
+-complete before executing the next instruction.
++Requests that the program location be reported precisely for a memory
++violation or address watch event.  Depending on the device's
++@acronym{XNACK} (memory retry) mode, the program location is left either
++at the faulting instruction or immediately after it.  When
++@acronym{XNACK} is enabled, the faulting instruction can be replayed, so
++the wave stops on that instruction.  When it is disabled, the location is
++immediately after it.  Enabling this mode may make the @acronym{AMD GPU}
++device execution significantly slower as it has to wait for each memory
++operation to complete before executing the next instruction.
+ 
+ @end table
+ 
+diff --git a/gdb/testsuite/gdb.rocm/gcore-after-attach.exp b/gdb/testsuite/gdb.rocm/gcore-after-attach.exp
+index ef65aba6dbd..0dc69aeca14 100644
+--- a/gdb/testsuite/gdb.rocm/gcore-after-attach.exp
++++ b/gdb/testsuite/gdb.rocm/gcore-after-attach.exp
+@@ -77,7 +77,7 @@ proc do_test {debug_enabled} {
+   }
+ 
+   set corefile_path $::binfile.core
+-  if {![rocm_generate_core_file $corefile_path]} {
++  if {![rocm_generate_gcore_file $corefile_path]} {
+     return
+   }
+ 
+diff --git a/gdb/testsuite/gdb.rocm/core-no-read-special-files.cpp b/gdb/testsuite/gdb.rocm/gcore-no-read-special-files.cpp
+similarity index 100%
+rename from gdb/testsuite/gdb.rocm/core-no-read-special-files.cpp
+rename to gdb/testsuite/gdb.rocm/gcore-no-read-special-files.cpp
+diff --git a/gdb/testsuite/gdb.rocm/core-no-read-special-files.exp b/gdb/testsuite/gdb.rocm/gcore-no-read-special-files.exp
+similarity index 97%
+rename from gdb/testsuite/gdb.rocm/core-no-read-special-files.exp
+rename to gdb/testsuite/gdb.rocm/gcore-no-read-special-files.exp
+index 26fc22a8f31..82fe50727f8 100644
+--- a/gdb/testsuite/gdb.rocm/core-no-read-special-files.exp
++++ b/gdb/testsuite/gdb.rocm/gcore-no-read-special-files.exp
+@@ -42,7 +42,7 @@ proc do_test {} {
+   }
+ 
+   set corefile_path [standard_output_file "generated-core"]
+-  if {![rocm_generate_core_file $corefile_path]} {
++  if {![rocm_generate_gcore_file $corefile_path]} {
+     return
+   }
+ 
+diff --git a/gdb/testsuite/gdb.rocm/corefile.cpp b/gdb/testsuite/gdb.rocm/gcore.cpp
+similarity index 100%
+rename from gdb/testsuite/gdb.rocm/corefile.cpp
+rename to gdb/testsuite/gdb.rocm/gcore.cpp
+diff --git a/gdb/testsuite/gdb.rocm/corefile.exp b/gdb/testsuite/gdb.rocm/gcore.exp
+similarity index 98%
+rename from gdb/testsuite/gdb.rocm/corefile.exp
+rename to gdb/testsuite/gdb.rocm/gcore.exp
+index 29d46340d0f..0c009787e88 100644
+--- a/gdb/testsuite/gdb.rocm/corefile.exp
++++ b/gdb/testsuite/gdb.rocm/gcore.exp
+@@ -80,7 +80,7 @@ proc do_test {option} {
+     }
+ 
+     set corefile_path [standard_output_file "generated-core.${option}"]
+-    if {![rocm_generate_core_file $corefile_path]} {
++    if {![rocm_generate_gcore_file $corefile_path]} {
+ 	return
+     }
+ 
+diff --git a/gdb/testsuite/gdb.rocm/hcc-amdgpu-targets.exp b/gdb/testsuite/gdb.rocm/hcc-amdgpu-targets.exp
+index 9ff7f9f0620..47edab7f208 100644
+--- a/gdb/testsuite/gdb.rocm/hcc-amdgpu-targets.exp
++++ b/gdb/testsuite/gdb.rocm/hcc-amdgpu-targets.exp
+@@ -83,3 +83,31 @@ save_vars { env(HCC_AMDGPU_TARGET) ::rocm_use_generic_targets } {
+     verbose -log "hcc_amdgpu_targets: got $result"
+     gdb_assert {$result eq {gfx906 gfx90a}} "env var: order preserved when deduplicating"
+ }
++
++# Tests with the rocm-generic board active (::rocm_use_generic_targets 1).
++# Arches with no generic mapping (e.g. gfx90a) must fall back to the
++# concrete arch instead of being dropped.
++
++save_vars { env(HCC_AMDGPU_TARGET) ::rocm_use_generic_targets } {
++    set ::rocm_use_generic_targets 1
++    unset -nocomplain ::env(HCC_AMDGPU_TARGET)
++
++    with_stub_devices {gfx906} {
++	set result [hcc_amdgpu_targets]
++	verbose -log "hcc_amdgpu_targets: got $result"
++	gdb_assert {$result eq {gfx9-generic}} "generic board: mapped arch is translated"
++    }
++
++    with_stub_devices {gfx90a} {
++	set result [hcc_amdgpu_targets]
++	verbose -log "hcc_amdgpu_targets: got $result"
++	gdb_assert {$result eq {gfx90a}} "generic board: unmapped arch falls back to concrete arch"
++    }
++
++    with_stub_devices {gfx906 gfx90a gfx1100} {
++	set result [hcc_amdgpu_targets]
++	verbose -log "hcc_amdgpu_targets: got $result"
++	gdb_assert {$result eq {gfx9-generic gfx90a gfx11-generic}} \
++	    "generic board: mix of mapped and unmapped arches"
++    }
++}
+diff --git a/gdb/testsuite/gdb.rocm/load-core-remote-system.cpp b/gdb/testsuite/gdb.rocm/load-gcore-remote-system.cpp
+similarity index 100%
+rename from gdb/testsuite/gdb.rocm/load-core-remote-system.cpp
+rename to gdb/testsuite/gdb.rocm/load-gcore-remote-system.cpp
+diff --git a/gdb/testsuite/gdb.rocm/load-core-remote-system.exp b/gdb/testsuite/gdb.rocm/load-gcore-remote-system.exp
+similarity index 98%
+rename from gdb/testsuite/gdb.rocm/load-core-remote-system.exp
+rename to gdb/testsuite/gdb.rocm/load-gcore-remote-system.exp
+index 856b2ed38da..90fbe2188b7 100644
+--- a/gdb/testsuite/gdb.rocm/load-core-remote-system.exp
++++ b/gdb/testsuite/gdb.rocm/load-gcore-remote-system.exp
+@@ -62,7 +62,7 @@ proc do_test {} {
+ 		return
+ 	    }
+ 
+-	    if {![rocm_generate_core_file $corefile_path]} {
++	    if {![rocm_generate_gcore_file $corefile_path]} {
+ 		return
+ 	    }
+ 	}
+diff --git a/gdb/testsuite/gdb.rocm/precise-memory.cpp b/gdb/testsuite/gdb.rocm/precise-memory.cpp
+index 4757c32ea95..848c6f8a4e8 100644
+--- a/gdb/testsuite/gdb.rocm/precise-memory.cpp
++++ b/gdb/testsuite/gdb.rocm/precise-memory.cpp
+@@ -26,9 +26,10 @@ kernel ()
+ {
+ 
+   /* Simple kernel which loads from address 0 to trigger a pagefault.
+-     When precise memory is not enabled, it is expected that the memory fault
+-     is reported after the s_nop instruction.  With precise-memory, the
+-     exception should be reported on the s_nop.  */
++     With precise-memory disabled the fault is reported after the s_nop.
++     With precise-memory enabled the reported location depends on the
++     XNACK mode.  It is the s_load_dword itself when XNACK is enabled, or
++     the following s_nop when XNACK is disabled.  */
+   asm volatile ("s_mov_b64 [s10, s11], 0\n"
+ 		"s_load_dword s12, [s10, s11]\n"
+ 		"s_nop 0"
+diff --git a/gdb/testsuite/gdb.rocm/precise-memory.exp b/gdb/testsuite/gdb.rocm/precise-memory.exp
+index c286956e119..ad73d383c5d 100644
+--- a/gdb/testsuite/gdb.rocm/precise-memory.exp
++++ b/gdb/testsuite/gdb.rocm/precise-memory.exp
+@@ -28,10 +28,14 @@ if {[build_executable "failed to prepare" $testfile $srcfile {debug hip}]} {
+     return
+ }
+ 
+-proc do_test { } {
++proc do_test { xnack_request expected_insn } {
+     clean_restart $::binfile
+ 
+     with_rocm_gpu_lock {
++	# Force the XNACK (memory retry) mode for the inferior so that we
++	# exercise the requested path regardless of the device's default.
++	gdb_test_no_output "set environment HSA_XNACK=$xnack_request"
++
+ 	if ![runto_main] {
+ 	    return
+ 	}
+@@ -82,13 +86,30 @@ proc do_test { } {
+ 	    gdb_test_no_output "set amdgpu precise-memory on"
+ 	}
+ 
+-	# If precise-memory is available, run until a SIGSEGV is reported.  At
+-	# that point, the PC should point to the s_nop instruction (the one
+-	# following the one which caused the memory violation).
++	# If precise-memory is available, run until a SIGSEGV is reported.
++	# The PC then points at or just after the faulting instruction,
++	# depending on the XNACK mode (see below).
+ 	gdb_test "continue" "Thread ${::decimal}\[^\r\n\]* received signal SIGSEGV, Segmentation fault.*"
+ 
+-	gdb_test "x/i \$pc" "=> ${::hex} <_Z6kernelv\\+${::decimal}>:\[ \t\]+s_nop\[ \t\]+0"
++	# The violation is reported at a different point depending on the
++	# XNACK mode.  With XNACK enabled the wave stops on the faulting
++	# scalar load itself.  Without it, the wave stops on the following
++	# s_nop.  The caller passes the instruction expected for the mode
++	# forced above, rather than accepting both everywhere, which would
++	# hide a regression.
++	gdb_test "x/i \$pc" \
++	    "=> ${::hex} <_Z6kernelv\\+${::decimal}>:\[ \t\]+$expected_insn"
+     }
+ }
+ 
+-do_test
++# Every device can run with XNACK off, so always exercise that path.
++# Only add the XNACK on path when the device supports it.  Forcing the
++# mode with HSA_XNACK lets us check each one regardless of the default.
++with_test_prefix "xnack off" {
++    do_test 0 {s_nop[ \t]+0}
++}
++if { [hip_device_xnack_supported] } {
++    with_test_prefix "xnack on" {
++	do_test 1 {s_load_dword[ \t][^\r\n]*}
++    }
++}
+diff --git a/gdb/testsuite/lib/rocm.exp b/gdb/testsuite/lib/rocm.exp
+index 9bd481a1f08..d8a72a38e79 100644
+--- a/gdb/testsuite/lib/rocm.exp
++++ b/gdb/testsuite/lib/rocm.exp
+@@ -132,6 +132,42 @@ proc generic_target_for { arch } {
+     return ""
+ }
+ 
++# Return true if the current GPU can enable XNACK (memory retry).
++#
++# Every device can run with XNACK off, so only the on mode needs
++# probing.  hipDeviceProp_t::gcnArchName carries the effective runtime
++# mode as a feature suffix, e.g. "gfx942:sramecc+:xnack+".  Running the
++# probe with HSA_XNACK forced to 1 shows whether the runtime can turn
++# XNACK on for this device, which tracks the device configuration rather
++# than the static architecture alone.
++
++gdb_caching_proc hip_device_xnack_supported {} {
++    if {![gdb_simple_compile xnack_probe {
++	    #include <hip/hip_runtime.h>
++	    #include <stdio.h>
++
++	    int
++	    main ()
++	    {
++	      /* Query device 0.  The tests assume a homogeneous set of
++		 GPUs, as does find_amdgpu_devices above.  */
++	      hipDeviceProp_t props;
++	      if (hipGetDeviceProperties (&props, 0) == hipSuccess)
++		printf ("%s\n", props.gcnArchName);
++	    }
++	} executable {hip hip_no_offload_arch}]} {
++	return 0
++    }
++
++    save_vars { ::env(HSA_XNACK) } {
++	set ::env(HSA_XNACK) 1
++	set result [log_host_exec "$obj"]
++    }
++
++    return [expr {[lindex $result 0] == 0
++		  && [string first "xnack+" [lindex $result 1]] != -1}]
++}
++
+ # Get the list of unique GPU targets to compile for.
+ #
+ # If HCC_AMDGPU_TARGET is set in the environment, use it.
+@@ -161,13 +197,21 @@ proc hcc_amdgpu_targets {} {
+     }
+ 
+     # When the rocm-generic board is active, map each concrete arch to
+-    # its generic equivalent and drop any that have no mapping.
++    # its generic target.  If a concrete arch has no compatible generic
++    # target, fall back to using the concrete arch itself, so we still
++    # pass a valid offload target, and warn loudly so it's clear the
++    # generic board isn't actually exercising the generic target for
++    # that arch.
+     if { [info exists ::rocm_use_generic_targets] \
+ 	     && $::rocm_use_generic_targets } {
+ 	set mapped {}
+ 	foreach t $unique {
+ 	    set g [generic_target_for $t]
+-	    if { $g ne "" && $g ni $mapped } {
++	    if { $g eq "" } {
++		warning "no compatible generic target for $t, falling back to $t"
++		set g $t
++	    }
++	    if { $g ni $mapped } {
+ 		lappend mapped $g
+ 	    }
+ 	}
+@@ -713,7 +757,7 @@ proc rocm_core_find {binfile {deletefiles {}} {arg ""} \
+ # AMDGPU core dump, issue an UNSUPPORTED, and return 0.  If any other error is
+ # detected, issue a FAIL and return 0.
+ 
+-proc rocm_generate_core_file { corefile_path } {
++proc rocm_generate_gcore_file { corefile_path } {
+     # On some configurations, creating the core dump can take a significant
+     # amount of time.  Make sure to use an appropriate timeout value.
+     with_timeout_factor 5 {

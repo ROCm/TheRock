@@ -1,0 +1,696 @@
+From d525ab1d4f78915302ddeb5d3192b9dfbbe27e4e Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Sun, 27 Sep 2026 12:00:00 +0000
+Subject: [PATCH] Integrate ROCm/rocm-systems#12313
+
+Source: https://github.com/ROCm/rocm-systems/pull/12313
+Head: d525ab1d4f78915302ddeb5d3192b9dfbbe27e4e
+
+---
+diff --git a/projects/rccl/cmake/DeviceLinker.cmake b/projects/rccl/cmake/DeviceLinker.cmake
+index 8670af49d78e..eb2bee1959f3 100644
+--- a/projects/rccl/cmake/DeviceLinker.cmake
++++ b/projects/rccl/cmake/DeviceLinker.cmake
+@@ -86,16 +86,14 @@ endif()
+ message(STATUS "Device Linker: inherited compile options: ${DL_INHERITED_FLAGS}")
+ 
+ # ---------------------------------------------------------------------------
+-# Parse GPU_TARGETS: strip target features, build offload-arch flag list
++# Parse GPU_TARGETS into a bare processor name plus the full target ID.
+ # ---------------------------------------------------------------------------
+-set(DL_GPU_TARGETS "")
+-set(DL_OFFLOAD_ARCH_FLAGS "")
+-foreach(_gpu_raw ${GPU_TARGETS})
+-  string(REGEX REPLACE ":.*" "" _gpu "${_gpu_raw}")
+-  list(APPEND DL_GPU_TARGETS "${_gpu}")
+-  list(APPEND DL_OFFLOAD_ARCH_FLAGS "--offload-arch=${_gpu}")
+-endforeach()
+-message(STATUS "Device Linker: GPU targets = ${DL_GPU_TARGETS}")
++include(${CMAKE_CURRENT_LIST_DIR}/DeviceLinkerTargets.cmake)
++dl_parse_gpu_targets(TARGETS ${GPU_TARGETS}
++  BARE_VAR DL_GPU_TARGETS
++  FLAGS_VAR DL_OFFLOAD_ARCH_FLAGS
++  ID_PREFIX DL_TARGET_ID_)
++message(STATUS "Device Linker: GPU targets = ${GPU_TARGETS}")
+ 
+ # ---------------------------------------------------------------------------
+ # Optimization flags (passed to both compile and link modes of the driver)
+@@ -217,6 +215,8 @@ set(DL_BUNDLER_INPUTS "--input=/dev/null")
+ set(ALL_IR_FILES "")
+ 
+ foreach(DL_GPU_TARGET ${DL_GPU_TARGETS})
++  set(DL_TARGET_ID "${DL_TARGET_ID_${DL_GPU_TARGET}}")
++
+   # Sort CDNA targets first for better build scheduling (see original rationale)
+   if(DL_GPU_TARGET MATCHES "^gfx9")
+     set(DL_ARCH_DIR "${DEVICE_BUILD_DIR}/-${DL_GPU_TARGET}")
+@@ -265,6 +265,7 @@ foreach(DL_GPU_TARGET ${DL_GPU_TARGETS})
+ 
+   target_compile_options(${_dev_target} PRIVATE
+     --arch=${DL_GPU_TARGET}
++    --target-id=${DL_TARGET_ID}
+     --clang=${DL_CLANG}
+     ${DL_OPT_FLAGS}
+     -std=c++17
+@@ -362,6 +363,7 @@ foreach(DL_GPU_TARGET ${DL_GPU_TARGETS})
+     COMMAND ${CMAKE_RCCLDEV_COMPILER}
+       --link
+       --arch=${DL_GPU_TARGET}
++      --target-id=${DL_TARGET_ID}
+       --clang=${DL_CLANG}
+       ${DL_HIP_COMPILER_FLAGS}
+       --dispatcher=${HIPIFY_DIR}/src/device/common.cu.cpp
+@@ -379,7 +381,9 @@ foreach(DL_GPU_TARGET ${DL_GPU_TARGETS})
+   )
+ 
+   list(APPEND ALL_DEVICE_ELFS "${ARCH_DEVICE_ELF}")
+-  list(APPEND DL_BUNDLER_TARGETS "hip-amdgcn-amd-amdhsa--${DL_GPU_TARGET}")
++  # The runtime matches this entry against the agent at load time, so it needs
++  # the target ID, not the bare name.
++  list(APPEND DL_BUNDLER_TARGETS "hip-amdgcn-amd-amdhsa--${DL_TARGET_ID}")
+   list(APPEND DL_BUNDLER_INPUTS "--input=${ARCH_DEVICE_ELF}")
+ 
+   # =========================================================================
+@@ -410,7 +414,7 @@ foreach(DL_GPU_TARGET ${DL_GPU_TARGETS})
+         -DRCCL_DEVICE_LINKER
+         ${_link_def_flags}
+         ${_link_inc_flags}
+-        -x hip --offload-device-only --offload-arch=${DL_GPU_TARGET}
++        -x hip --offload-device-only --offload-arch=${DL_TARGET_ID}
+         ${DL_HIP_COMPILER_FLAGS}
+         -gline-tables-only
+         -std=c++17 ${DL_OPT_FLAGS}
+@@ -447,7 +451,7 @@ add_custom_command(
+     --output=${DEVICE_HIPFB}
+     ${DL_BUNDLER_COMPRESS}
+   DEPENDS ${ALL_DEVICE_ELFS}
+-  COMMENT "DL bundle: device.elf(s) -> device.hipfb [${DL_GPU_TARGETS}]"
++  COMMENT "DL bundle: device.elf(s) -> device.hipfb [${GPU_TARGETS}]"
+   VERBATIM
+ )
+ 
+diff --git a/projects/rccl/cmake/DeviceLinkerTargets.cmake b/projects/rccl/cmake/DeviceLinkerTargets.cmake
+new file mode 100644
+index 000000000000..75793d4da89f
+--- /dev/null
++++ b/projects/rccl/cmake/DeviceLinkerTargets.cmake
+@@ -0,0 +1,50 @@
++# cmake/DeviceLinkerTargets.cmake
++#
++# Splits GPU_TARGETS into the two forms the device-linker pipeline needs. The
++# bare processor name keys CMake target names, directory names and resource
++# aggregation; the full target ID must reach codegen, since a requested feature
++# applies only if the suffix survives to the compiler.
++#
++# Kept separate from DeviceLinker.cmake, which cannot be included in `cmake -P`
++# script mode (enable_language, add_library), so the split is unit-testable:
++# tools/scripts/test_runner/tests/test_device_linker_targets_cmake.py.
++
++# dl_parse_gpu_targets(TARGETS <list>
++#                      BARE_VAR <var> FLAGS_VAR <var> ID_PREFIX <prefix>)
++#
++# Sets, in the caller's scope:
++#   <BARE_VAR>          bare processor names, in input order
++#   <FLAGS_VAR>         one --offload-arch=<target id> per entry
++#   <ID_PREFIX><bare>   the full target ID for that processor
++function(dl_parse_gpu_targets)
++  cmake_parse_arguments(P "" "BARE_VAR;FLAGS_VAR;ID_PREFIX" "TARGETS" ${ARGN})
++
++  set(_bare "")
++  set(_flags "")
++  foreach(_gpu_raw ${P_TARGETS})
++    string(REGEX REPLACE ":.*" "" _gpu "${_gpu_raw}")
++    list(APPEND _bare "${_gpu}")
++    list(APPEND _flags "--offload-arch=${_gpu_raw}")
++    set(${P_ID_PREFIX}${_gpu} "${_gpu_raw}" PARENT_SCOPE)
++  endforeach()
++
++  # The bare name keys the CMake target, the output directory and the mapping
++  # above, so two target IDs for one processor cannot both be built. That is a
++  # standing limit of the device linker rather than anything new here -- both
++  # develop and this file die at the add_library in DeviceLinker.cmake -- but
++  # "target ... already exists" does not say what the user got wrong.
++  set(_unique "${_bare}")
++  list(REMOVE_DUPLICATES _unique)
++  list(LENGTH _bare _n_all)
++  list(LENGTH _unique _n_unique)
++  if(NOT _n_all EQUAL _n_unique)
++    message(FATAL_ERROR
++      "GPU_TARGETS names more than one target ID for the same processor: "
++      "${P_TARGETS}. The device linker keys its CMake targets and output "
++      "directories on the bare processor name, so it can build only one "
++      "variant of each. Choose one per processor.")
++  endif()
++
++  set(${P_BARE_VAR} "${_bare}" PARENT_SCOPE)
++  set(${P_FLAGS_VAR} "${_flags}" PARENT_SCOPE)
++endfunction()
+diff --git a/projects/rccl/src/CMakeLists.txt b/projects/rccl/src/CMakeLists.txt
+index f14139425974..c36578d60dfd 100644
+--- a/projects/rccl/src/CMakeLists.txt
++++ b/projects/rccl/src/CMakeLists.txt
+@@ -1496,10 +1496,12 @@ if(ENABLE_ROCSHMEM)
+   target_link_libraries(rccl PRIVATE ${ROCSHMEM_LIBRARY})
+   target_link_libraries(rccl PRIVATE ${HSAKMT_LIBRARY})
+   target_link_libraries(rccl PRIVATE ${IBVERBS})
++  # Full target IDs, not bare names: cmake/ROCSHMEM.cmake hands the external
++  # project the suffixed GPU_TARGETS, so librocshmem.a's RDC bundles are named
++  # for the target ID and this step has to ask for the same thing.
+   set(_rocshmem_offload_arch_flags "")
+   foreach(_gpu_raw ${GPU_TARGETS})
+-    string(REGEX REPLACE ":.*" "" _gpu "${_gpu_raw}")
+-    list(APPEND _rocshmem_offload_arch_flags "--offload-arch=${_gpu}")
++    list(APPEND _rocshmem_offload_arch_flags "--offload-arch=${_gpu_raw}")
+   endforeach()
+   list(REMOVE_DUPLICATES _rocshmem_offload_arch_flags)
+   target_link_options(rccl PRIVATE -fgpu-rdc --hip-link ${_rocshmem_offload_arch_flags})
+diff --git a/projects/rccl/test/host/run_host_tests.sh b/projects/rccl/test/host/run_host_tests.sh
+index 1edbeec3dc55..1eafd45b48cc 100755
+--- a/projects/rccl/test/host/run_host_tests.sh
++++ b/projects/rccl/test/host/run_host_tests.sh
+@@ -22,7 +22,9 @@
+ #                   prerequisite the host tests compile against
+ #   configure       configure test/host
+ #   build           build all host binaries (default target)
+-#   guards          device-table unittest and kernel-count pytest plus
++#   guards          device-table unittest, kernel-count pytest, the
++#                   tools/scripts/test_runner unittests (which include the
++#                   rccl-device-compile driver cases), plus
+ #                   src/include/test_poison_hip_atomics.py
+ #   run             run the suite (timestamped log + JUnit XML). Always emits
+ #                   llvm source-based coverage profiles (*.profraw) into
+@@ -247,15 +249,28 @@ do_kernel_count_guards() {
+   "$venv/bin/python" -m pytest "$gd/tests" -v
+ }
+ 
++# Test-runner unit tests: `unittest discover` collects every module under
++# tools/scripts/test_runner/tests, not just the rccl-device-compile driver
++# cases, so this also runs test_device_coverage_cmake.py, which shells out to
++# cmake and self-skips when cmake is absent. Nothing here needs a GPU or a
++# build directory. Run via unittest discover, as its README specifies.
++do_device_compile_guards() {
++  echo "==> Test-runner guards (unittest: tools/scripts/test_runner/tests)"
++  ( cd "$RCCL_ROOT/tools/scripts/test_runner" \
++    && python3 -m unittest discover -s tests -t . -v )
++}
++
+ # All CPU-only guards: the device-table unittest, the kernel-count pytest suite,
+-# then the __hip_atomic_* poison compile probe. Collected with `|| rc=1` rather
+-# than run back to back so that under `set -e` (line 53) an early failure still
+-# leaves the later guards running and reported, instead of aborting the phase at
+-# the first one. Same idiom as do_host_tests above.
++# the tools/scripts/test_runner unittests, then the __hip_atomic_* poison
++# compile probe. Collected with `|| rc=1` rather than run back to back so that
++# under the `set -euo pipefail` at the top an early failure still leaves the later guards
++# running and reported, instead of aborting the phase at the first one. Same
++# idiom as do_host_tests above.
+ do_guards() {
+   local rc=0
+   do_device_table_guards || rc=1
+   do_kernel_count_guards || rc=1
++  do_device_compile_guards || rc=1
+   do_poison_hip_atomics || rc=1
+   return "$rc"
+ }
+diff --git a/projects/rccl/tools/rccl-device-compile b/projects/rccl/tools/rccl-device-compile
+index baa6fcaeb985..e0e826f0e0b5 100755
+--- a/projects/rccl/tools/rccl-device-compile
++++ b/projects/rccl/tools/rccl-device-compile
+@@ -20,6 +20,15 @@ Link mode (--link):
+     5. Optionally compiles --rocshmem-bitcode=<path>.bc to a device object
+     6. Links all objects + dispatcher (+ optional rocSHMEM object) into device.elf via ld.lld
+ 
++Target selection (--arch / --target-id):
++    --arch is the bare processor name (gfx942); --target-id is the full target
++    ID (gfx942:xnack+) and defaults to --arch. Both are needed: --target-id
++    drives codegen, where a requested feature applies only if the suffix
++    survives, while --arch drives what keys on an exact processor name --
++    resource aggregation, temp-file names, and ld.lld's LTO plugin, which
++    rejects a target ID. A suffix on --arch is stripped once --target-id has
++    defaulted from it, so --arch=gfx942:xnack+ alone serves both roles.
++
+ Tool discovery:
+     amdclang++, ld.lld are found relative to --clang=<path> or by searching
+     PATH and the directory containing the system C++ compiler.
+@@ -461,6 +470,21 @@ def discover_tools(clang_path):
+ # Run subprocess with error handling
+ # ---------------------------------------------------------------------------
+ 
++def device_assemble_cmd(clang, target_id, obj_out, asm_in):
++    """Assemble device assembly text to an amdgcn object.
++
++    Takes the target ID: the assembler encodes its features into e_flags and
++    amdhsa.target metadata, which the loader matches against the agent.
++    """
++    return [
++        clang,
++        '-x', 'assembler',
++        '-target', 'amdgcn-amd-amdhsa',
++        f'-mcpu={target_id}',
++        '-c', '-o', obj_out, asm_in,
++    ]
++
++
+ def run(cmd, description=""):
+     """Run a command, raising on failure with the full command for diagnosis."""
+     try:
+@@ -483,7 +507,7 @@ def run(cmd, description=""):
+ 
+ def do_compile(args, forwarded_flags):
+     clang, _ = discover_tools(args.clang)
+-    arch = args.arch
++    target_id = args.target_id
+     source = args.source
+     output = args.output
+     keep_temps = args.keep_temps
+@@ -514,7 +538,7 @@ def do_compile(args, forwarded_flags):
+             clang,
+             '-x', 'hip',
+             '--offload-device-only',
+-            f'--offload-arch={arch}',
++            f'--offload-arch={target_id}',
+             '-gline-tables-only',
+             '-w',
+         ] + forwarded_flags + [
+@@ -541,13 +565,7 @@ def do_compile(args, forwarded_flags):
+             json.dump(resources, f, indent=2)
+ 
+         # Step 3: Assemble to object
+-        assemble_cmd = [
+-            clang,
+-            '-x', 'assembler',
+-            '-target', 'amdgcn-amd-amdhsa',
+-            f'-mcpu={arch}',
+-            '-c', '-o', output, ext_file,
+-        ]
++        assemble_cmd = device_assemble_cmd(clang, target_id, output, ext_file)
+         run(assemble_cmd, f"assemble {os.path.basename(source)}")
+ 
+     finally:
+@@ -566,9 +584,12 @@ def do_compile(args, forwarded_flags):
+ # Link mode: objects -> device.elf
+ # ---------------------------------------------------------------------------
+ 
+-def dispatcher_compile_cmd(clang, arch, forwarded_flags, disp_asm, dispatcher):
++def dispatcher_compile_cmd(clang, target_id, forwarded_flags, disp_asm, dispatcher):
+     """Device-only dispatcher compile to assembly.
+ 
++    Takes the full target ID, not the bare processor name: this is a codegen
++    invocation, so a requested feature suffix has to survive to it.
++
+     -gline-tables-only is placed before forwarded_flags so it matches the
+     per-kernel compile. Clang takes the last debug-info option, so coverage's
+     -g0 in DL_OPT_FLAGS still wins (see the ENABLE_FULL_COVERAGE branch of
+@@ -579,7 +600,7 @@ def dispatcher_compile_cmd(clang, arch, forwarded_flags, disp_asm, dispatcher):
+         clang,
+         '-x', 'hip',
+         '--offload-device-only',
+-        f'--offload-arch={arch}',
++        f'--offload-arch={target_id}',
+         '-gline-tables-only',
+         '-w',
+     ] + list(forwarded_flags) + [
+@@ -595,6 +616,13 @@ def build_link_cmd(lld, output, rsp_path, arch, profile_rt):
+     the bitcode archive targets amdgcn-amd-amdhsa for this arch instead of the
+     host triple (otherwise lld errors out with "incompatible mach").
+ 
++    This is the one codegen-adjacent site that takes the BARE processor name
++    rather than the full target ID. lld's LTO plugin does not parse target
++    IDs: given mcpu=gfx942:xnack+ it prints "'gfx942:xnack+' is not a
++    recognized processor for this target (ignoring processor)" and links on
++    with no subtarget at all, which is worse than the bare name. Passing
++    --arch here is deliberate; see the module docstring.
++
+     CMake EXISTS-checks the archive before passing --profile-rt
+     (cmake/DeviceLinker.cmake), so a missing archive here means the driver was
+     hand-invoked; fail loudly instead of falling through to a link that leaves
+@@ -614,6 +642,7 @@ def build_link_cmd(lld, output, rsp_path, arch, profile_rt):
+ def do_link(args, forwarded_flags):
+     clang, lld = discover_tools(args.clang)
+     arch = args.arch
++    target_id = args.target_id
+     objects = args.objects
+     output = args.output
+     dispatcher = args.dispatcher
+@@ -662,7 +691,7 @@ def do_link(args, forwarded_flags):
+     try:
+         # Step 2: Compile dispatcher to assembly.
+         disp_compile_cmd = dispatcher_compile_cmd(
+-            clang, arch, forwarded_flags, disp_asm, dispatcher)
++            clang, target_id, forwarded_flags, disp_asm, dispatcher)
+         run(disp_compile_cmd, f"compile dispatcher for {arch}")
+ 
+         # Step 3: Patch dispatcher with aggregated resources
+@@ -673,13 +702,8 @@ def do_link(args, forwarded_flags):
+             f.writelines(patched_lines)
+ 
+         # Step 4: Assemble patched dispatcher
+-        disp_assemble_cmd = [
+-            clang,
+-            '-x', 'assembler',
+-            '-target', 'amdgcn-amd-amdhsa',
+-            f'-mcpu={arch}',
+-            '-c', '-o', disp_obj, disp_patched,
+-        ]
++        disp_assemble_cmd = device_assemble_cmd(
++            clang, target_id, disp_obj, disp_patched)
+         run(disp_assemble_cmd, f"assemble dispatcher for {arch}")
+ 
+         # Step 5: Compile rocSHMEM device bitcode to an amdgcn object (if provided).
+@@ -696,7 +720,7 @@ def do_link(args, forwarded_flags):
+                 bc_compile_cmd = [
+                     clang,
+                     '-target', 'amdgcn-amd-amdhsa',
+-                    f'-mcpu={arch}',
++                    f'-mcpu={target_id}',
+                     '-c', '-x', 'ir',
+                     '-o', rocshmem_obj, rocshmem_bitcode,
+                 ]
+@@ -758,6 +782,11 @@ def parse_compiler_flags(argv):
+         elif arg == '--arch' and i + 1 < len(argv):
+             our_args.extend([arg, argv[i + 1]])
+             i += 1
++        elif arg.startswith('--target-id='):
++            our_args.append(arg)
++        elif arg == '--target-id' and i + 1 < len(argv):
++            our_args.extend([arg, argv[i + 1]])
++            i += 1
+         elif arg.startswith('--clang='):
+             our_args.append(arg)
+         elif arg == '--clang' and i + 1 < len(argv):
+@@ -831,6 +860,7 @@ def main():
+     parser.add_argument('--compile', action='store_true')
+     parser.add_argument('--link', action='store_true')
+     parser.add_argument('--arch', required=False)
++    parser.add_argument('--target-id', required=False)
+     parser.add_argument('--clang', default=None)
+     parser.add_argument('--dispatcher', default=None)
+     parser.add_argument('--rocshmem-bitcode', default=None, dest='rocshmem_bitcode')
+@@ -845,6 +875,14 @@ def main():
+         print("rccl-device-compile 1.0")
+         sys.exit(0)
+ 
++    # Take the default before stripping, so the feature lands on target_id.
++    # arch's consumers (ld.lld's LTO plugin, _has_unified_vgpr_agpr) misread a
++    # target ID without failing.
++    if not args.target_id:
++        args.target_id = args.arch
++    if args.arch:
++        args.arch = args.arch.split(':', 1)[0]
++
+     if args.compile:
+         if not positional:
+             raise SystemExit("ERROR: --compile requires a source file")
+diff --git a/projects/rccl/tools/scripts/test_runner/README.md b/projects/rccl/tools/scripts/test_runner/README.md
+index 5dfcd0cb81a7..403d84ad2bb5 100644
+--- a/projects/rccl/tools/scripts/test_runner/README.md
++++ b/projects/rccl/tools/scripts/test_runner/README.md
+@@ -1528,3 +1528,5 @@ python3 -m unittest discover -s tests -t . -v
+ ```
+ 
+ `pytest` also discovers them via `pytest.ini` (`pytest tests/`) if you prefer, but the `unittest discover` command above is the one contributors and CI should use so the two entry points never diverge.
++
++CI runs exactly that command: `do_device_compile_guards` in `test/host/run_host_tests.sh` invokes it as part of the `guards` phase, so a failure here fails the host-test pipeline. Add new driver cases to this suite rather than starting a second one elsewhere — `add_test()` registrations in `test/CMakeLists.txt` do not gate, because nothing in RCCL CI runs `ctest`.
+diff --git a/projects/rccl/tools/scripts/test_runner/tests/test_device_compile.py b/projects/rccl/tools/scripts/test_runner/tests/test_device_compile.py
+index 375b4f722c68..0e89ec2cea10 100644
+--- a/projects/rccl/tools/scripts/test_runner/tests/test_device_compile.py
++++ b/projects/rccl/tools/scripts/test_runner/tests/test_device_compile.py
+@@ -1,3 +1,4 @@
++import argparse
+ import tempfile
+ import unittest
+ from importlib.machinery import SourceFileLoader
+@@ -83,6 +84,177 @@ def test_missing_profile_rt_raises(self):
+                                   "gfx942", "/nonexistent/lib.a")
+ 
+ 
++class TargetIdTest(unittest.TestCase):
++    """Each case pins one side of the --arch / --target-id split, so
++    collapsing them into one option fails here and not in a clean-looking
++    build. The driver's module docstring explains the split.
++    """
++
++    def _main_with(self, argv, mode="compile"):
++        """Run main() with do_<mode> stubbed, and return the parsed args."""
++        captured = {}
++
++        def fake(args, forwarded_flags):
++            captured["args"] = args
++
++        real = getattr(driver, f"do_{mode}")
++        real_argv = driver.sys.argv
++        setattr(driver, f"do_{mode}", fake)
++        driver.sys.argv = ["rccl-device-compile"] + argv
++        try:
++            driver.main()
++        finally:
++            setattr(driver, f"do_{mode}", real)
++            driver.sys.argv = real_argv
++        return captured["args"]
++
++    def test_joined_form_is_our_arg(self):
++        our, forwarded, sources = driver.parse_compiler_flags(
++            ["--compile", "--arch=gfx942", "--target-id=gfx942:xnack+",
++             "-DFOO", "-o", "out.o", "in.cpp"]
++        )
++
++        self.assertIn("--target-id=gfx942:xnack+", our)
++        self.assertEqual(forwarded, ["-DFOO"])
++        self.assertEqual(sources, ["in.cpp"])
++
++    def test_separate_form_consumes_value(self):
++        our, forwarded, sources = driver.parse_compiler_flags(
++            ["--compile", "--target-id", "gfx950:xnack+", "-O3", "in.cpp"]
++        )
++
++        self.assertEqual(our, ["--compile", "--target-id", "gfx950:xnack+"])
++        self.assertEqual(forwarded, ["-O3"])
++        self.assertEqual(sources, ["in.cpp"])
++
++    def test_defaults_to_arch_when_absent(self):
++        args = self._main_with(["--compile", "--arch=gfx942",
++                                "-o", "out.o", "in.cpp"])
++
++        self.assertEqual(args.target_id, "gfx942")
++
++    def test_does_not_overwrite_an_explicit_value(self):
++        args = self._main_with(["--compile", "--arch=gfx942",
++                                "--target-id=gfx942:xnack+",
++                                "-o", "out.o", "in.cpp"])
++
++        self.assertEqual(args.arch, "gfx942")
++        self.assertEqual(args.target_id, "gfx942:xnack+")
++
++    def test_codegen_command_builders_emit_the_id_they_are_given(self):
++        compile_cmd = driver.dispatcher_compile_cmd(
++            "clang", "gfx942:xnack+", [], "disp.s", "common.cu.cpp")
++        assemble_cmd = driver.device_assemble_cmd(
++            "clang", "gfx942:xnack+", "disp.o", "disp.s")
++
++        self.assertIn("--offload-arch=gfx942:xnack+", compile_cmd)
++        self.assertIn("-mcpu=gfx942:xnack+", assemble_cmd)
++
++    def test_link_hands_the_target_id_to_every_codegen_step(self):
++        """The builders above only prove they interpolate their argument;
++        this pins do_link to reaching all three of them with --target-id,
++        while ld.lld still gets the bare name. Runs the whole of do_link
++        with only run() stubbed, so each command is the genuine one."""
++        calls = []
++
++        def fake_run(cmd, description=""):
++            calls.append(cmd)
++            if "-S" in cmd:
++                Path(cmd[cmd.index("-o") + 1]).write_text("")
++
++        with tempfile.TemporaryDirectory() as temp_dir:
++            obj = Path(temp_dir) / "kernel.o"
++            obj.touch()
++            (Path(temp_dir) / "kernel.resources.json").write_text(
++                '{"vgpr_count": 8, "agpr_count": 0, "sgpr_count": 16}')
++            bitcode = Path(temp_dir) / "librocshmem_device_gfx942.bc"
++            bitcode.touch()
++            # build_link_cmd only emits --plugin-opt=mcpu when it is given an
++            # archive, so without one the link step carries no arch at all and
++            # there is nothing here to pin.
++            profile_rt = Path(temp_dir) / "libclang_rt.profile.a"
++            profile_rt.touch()
++
++            args = argparse.Namespace(
++                clang="clang", arch="gfx942", target_id="gfx942:xnack+",
++                objects=[str(obj)], output=str(Path(temp_dir) / "device.elf"),
++                dispatcher="common.cu.cpp", keep_temps=False,
++                rocshmem_bitcode=str(bitcode), profile_rt=str(profile_rt))
++
++            saved = (driver.discover_tools, driver.run)
++            driver.discover_tools = lambda _: ("clang", "ld.lld")
++            driver.run = fake_run
++            try:
++                driver.do_link(args, [])
++            finally:
++                driver.discover_tools, driver.run = saved
++
++        disp_compile, disp_assemble, rocshmem_compile, link = calls
++        self.assertIn("--offload-arch=gfx942:xnack+", disp_compile)
++        self.assertIn("-mcpu=gfx942:xnack+", disp_assemble)
++        self.assertIn("-mcpu=gfx942:xnack+", rocshmem_compile)
++        # lld's LTO plugin does not parse target IDs, so this one site takes
++        # the bare processor name.
++        self.assertIn("--plugin-opt=mcpu=gfx942", link)
++        self.assertNotIn("--plugin-opt=mcpu=gfx942:xnack+", link)
++
++    def test_compile_hands_the_target_id_to_both_codegen_steps(self):
++        """The codegen path a whole build goes through. Only run() and the
++        extractor are stubbed, so both commands do_compile issues are the
++        real ones."""
++        calls = []
++
++        def fake_run(cmd, description=""):
++            calls.append(cmd)
++            if '-S' in cmd:
++                Path(cmd[cmd.index('-S') + 2]).write_text("")
++
++        with tempfile.TemporaryDirectory() as temp_dir:
++            args = argparse.Namespace(
++                clang="clang", arch="gfx942", target_id="gfx942:xnack+",
++                source="kernel.cpp", keep_temps=False,
++                output=str(Path(temp_dir) / "kernel.o"))
++
++            saved = (driver.discover_tools, driver.run,
++                     driver.extract_device_function)
++            driver.discover_tools = lambda _: ("clang", "ld.lld")
++            driver.run = fake_run
++            driver.extract_device_function = lambda lines: ([], {})
++            try:
++                driver.do_compile(args, [])
++            finally:
++                (driver.discover_tools, driver.run,
++                 driver.extract_device_function) = saved
++
++        compile_cmd, assemble_cmd = calls
++        self.assertIn("--offload-arch=gfx942:xnack+", compile_cmd)
++        self.assertIn("-mcpu=gfx942:xnack+", assemble_cmd)
++
++    def test_lld_lto_plugin_takes_the_bare_arch(self):
++        """Given a target ID, ld.lld warns "not a recognized processor" and
++        links with no subtarget at all -- worse than the bare name."""
++        with tempfile.TemporaryDirectory() as temp_dir:
++            archive = Path(temp_dir) / "libclang_rt.profile.a"
++            archive.touch()
++
++            cmd = driver.build_link_cmd("ld.lld", "device.elf", "objs.rsp",
++                                        "gfx942", str(archive))
++
++        self.assertIn("--plugin-opt=mcpu=gfx942", cmd)
++
++    def test_a_suffixed_arch_is_stripped(self):
++        """A target ID on args.arch reaches lld and the register model, both
++        of which misread it silently."""
++        args = self._main_with(["--link", "--arch=gfx942:xnack+",
++                                "--dispatcher=common.cu.cpp",
++                                "-o", "device.elf", "kernel.o"],
++                               mode="link")
++
++        self.assertEqual(args.arch, "gfx942")
++        self.assertEqual(args.target_id, "gfx942:xnack+")
++        self.assertTrue(driver._has_unified_vgpr_agpr(args.arch))
++
++
+ class DispatcherCompileCmdTest(unittest.TestCase):
+     def test_gline_tables_only_precedes_forwarded_g0(self):
+         cmd = driver.dispatcher_compile_cmd(
+diff --git a/projects/rccl/tools/scripts/test_runner/tests/test_device_linker_targets_cmake.py b/projects/rccl/tools/scripts/test_runner/tests/test_device_linker_targets_cmake.py
+new file mode 100644
+index 000000000000..1e8d7aad7c88
+--- /dev/null
++++ b/projects/rccl/tools/scripts/test_runner/tests/test_device_linker_targets_cmake.py
+@@ -0,0 +1,90 @@
++import shutil
++import subprocess
++import tempfile
++import unittest
++from pathlib import Path
++
++
++RCCL_ROOT = Path(__file__).resolve().parents[4]
++MODULE = RCCL_ROOT / "cmake" / "DeviceLinkerTargets.cmake"
++
++
++@unittest.skipUnless(shutil.which("cmake"), "cmake not available on PATH")
++class DeviceLinkerTargetsCMakeTest(unittest.TestCase):
++    """dl_parse_gpu_targets feeds --offload-arch to every device and fat-object
++    compile in DeviceLinker.cmake, and the bundler entry the loader matches
++    against the agent. A dropped suffix here is a silently featureless build.
++    """
++
++    def _parse(self, targets, check=True):
++        """Call dl_parse_gpu_targets in script mode; return (bare, flags, ids).
++
++        With check=False the CompletedProcess is returned instead, for the
++        cases that expect the function to reject its input.
++        """
++        with tempfile.TemporaryDirectory() as temp_dir:
++            out = Path(temp_dir) / "out.txt"
++            script = Path(temp_dir) / "probe.cmake"
++            script.write_text(
++                f'include("{MODULE}")\n'
++                f'dl_parse_gpu_targets(TARGETS {targets}\n'
++                '  BARE_VAR BARE FLAGS_VAR FLAGS ID_PREFIX ID_)\n'
++                'set(_ids "")\n'
++                'foreach(_b ${BARE})\n'
++                '  list(APPEND _ids "${_b}=${ID_${_b}}")\n'
++                'endforeach()\n'
++                'file(WRITE "${OUT}" "${BARE}\\n${FLAGS}\\n${_ids}\\n")\n'
++            )
++            done = subprocess.run(["cmake", f"-DOUT={out}", "-P", str(script)],
++                                  check=check, capture_output=True, text=True)
++            if not check:
++                return done
++            bare, flags, ids = out.read_text().splitlines()
++        return bare.split(";"), flags.split(";"), ids.split(";")
++
++    def test_suffix_reaches_offload_arch_but_not_the_bare_name(self):
++        bare, flags, ids = self._parse("gfx942:xnack+")
++
++        self.assertEqual(bare, ["gfx942"])
++        self.assertEqual(flags, ["--offload-arch=gfx942:xnack+"])
++        self.assertEqual(ids, ["gfx942=gfx942:xnack+"])
++
++    def test_a_bare_target_stays_bare(self):
++        bare, flags, ids = self._parse("gfx950")
++
++        self.assertEqual(bare, ["gfx950"])
++        self.assertEqual(flags, ["--offload-arch=gfx950"])
++        self.assertEqual(ids, ["gfx950=gfx950"])
++
++    def test_multiple_features_all_survive(self):
++        _, flags, ids = self._parse("gfx950:sramecc+:xnack-")
++
++        self.assertEqual(flags, ["--offload-arch=gfx950:sramecc+:xnack-"])
++        self.assertEqual(ids, ["gfx950=gfx950:sramecc+:xnack-"])
++
++    def test_a_mixed_multi_arch_list_keeps_each_target_its_own_id(self):
++        """The ASAN case: input order is preserved and each processor keeps its
++        own suffix, so the per-target loop cannot pick up a neighbour's."""
++        bare, flags, ids = self._parse("gfx942:xnack+ gfx950:xnack+ gfx1201")
++
++        self.assertEqual(bare, ["gfx942", "gfx950", "gfx1201"])
++        self.assertEqual(flags, ["--offload-arch=gfx942:xnack+",
++                                 "--offload-arch=gfx950:xnack+",
++                                 "--offload-arch=gfx1201"])
++        self.assertEqual(ids, ["gfx942=gfx942:xnack+",
++                               "gfx950=gfx950:xnack+",
++                               "gfx1201=gfx1201"])
++
++    def test_two_variants_of_one_processor_are_rejected_by_name(self):
++        """The bare name keys the CMake target and output directory, so only
++        one variant per processor can be built. Both develop and this file
++        stop, but only here does the message say why."""
++        done = self._parse("gfx90a:xnack+ gfx90a:xnack-", check=False)
++
++        self.assertNotEqual(done.returncode, 0)
++        self.assertIn("more than one target ID for the same processor",
++                      done.stderr)
++
++
++if __name__ == "__main__":
++    unittest.main()

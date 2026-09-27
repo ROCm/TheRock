@@ -1,0 +1,22 @@
+From 50bc8e2eafec213fc655c61a53da113466d46411 Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Sun, 27 Sep 2026 12:00:00 +0000
+Subject: [PATCH] Integrate ROCm/rocm-libraries#12576
+
+Source: https://github.com/ROCm/rocm-libraries/pull/12576
+Head: 50bc8e2eafec213fc655c61a53da113466d46411
+
+---
+diff --git a/projects/rpp/CMakeLists.txt b/projects/rpp/CMakeLists.txt
+index ab7bbfeb68b6..a5b148ccb69d 100644
+--- a/projects/rpp/CMakeLists.txt
++++ b/projects/rpp/CMakeLists.txt
+@@ -262,7 +262,7 @@ if("${BACKEND}" STREQUAL "HIP")
+         endif()
+         include(ROCMCheckTargetIds OPTIONAL RESULT_VARIABLE HAS_ROCM_CHECK_TARGET_IDS)
+ 
+-        set(OPTIONAL_GPU_TARGETS "gfx1250")
++        set(OPTIONAL_GPU_TARGETS "gfx1250;gfx1250-strict")
+         if(HAS_ROCM_CHECK_TARGET_IDS)
+             rocm_check_target_ids(OPTIONAL_GPU_TARGETS_AVAILABLE TARGETS ${OPTIONAL_GPU_TARGETS})
+         else() # if we don't have rocm_check_target_ids, just assume the targets are available

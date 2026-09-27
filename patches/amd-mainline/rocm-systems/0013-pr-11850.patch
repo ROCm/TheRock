@@ -1,0 +1,2044 @@
+From 97c6cc538b394114cd4b64ba69989160cfc39a80 Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Sun, 27 Sep 2026 12:00:00 +0000
+Subject: [PATCH] Integrate ROCm/rocm-systems#11850
+
+Source: https://github.com/ROCm/rocm-systems/pull/11850
+Head: 97c6cc538b394114cd4b64ba69989160cfc39a80
+
+---
+diff --git a/projects/rccl/CHANGELOG.md b/projects/rccl/CHANGELOG.md
+index b2cae525e740..a78faa69c8b3 100644
+--- a/projects/rccl/CHANGELOG.md
++++ b/projects/rccl/CHANGELOG.md
+@@ -21,6 +21,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
+ * Multiple GIN proxy progress threads via `NCCL_GIN_PROXY_NTHREADS`.
+ * Enabled hierarchical Copy Engine `ncclAllGather` and `ncclAlltoAll` on multi-node communicators: the intra-node phase runs over SDMA/CE across the LSA team and the inter-node phase over one-sided RMA through the CPU (GIN) proxy. The path is off by default and takes two opt-ins: `NCCL_CTA_POLICY=2` (equivalently `config.CTAPolicy = NCCL_CTA_POLICY_ZERO`), and symmetric registration of both the send and the receive buffer through `ncclCommWindowRegister`. On architectures other than gfx1250 (MI450) a third is needed, `NCCL_CUMEM_ENABLE=1`, because symmetric memory depends on cuMem and cuMem auto-detection enables itself only on gfx1250. `NCCL_GIN_ENABLE`, `NCCL_NUM_RMA_CTX`, `NCCL_WIN_ENABLE` and `NCCL_DMABUF_ENABLE` need no change, since their defaults already qualify; the inter-node rail draws from the internal RMA context pool (`NCCL_NUM_RMA_INT_CTX`, default 4) rather than the user-addressable contexts, so `numRmaCtx` only has to stay above zero. Selection also requires an available GIN backend and the same number of ranks on every node; communicators that do not qualify keep using the kernel path. Validated for correctness and path selection from 1 to 32 nodes.
+ * Added `ncclGinFenceLevel` barrier semantics on the Anvil SDMA GIN backend (`NCCL_GIN_TYPE=7`). `gin.get`, `flushAsync` and `wait` are implemented instead of trapping, and a barrier's signal is now ordered behind the payload on the peer's SDMA queue, so `Put`, `Get` and the default `Put | Get` fences drain what they promise. `Put` covers a rank's puts to itself, and `ncclGinAllContexts` fences every GIN context. Single-node validated on gfx950.
++* Added gfx1250 (MI450) Tensor Data Mover staging to the symmetric AllGather, AllReduce and ReduceScatter kernels, where NCCL uses NVIDIA's TMA. Their deep loops move each tile through the warp's shared-memory scratch with the DMA engine instead of per-lane vector loads; on ROCm that path previously compiled out entirely, so the `Tma` kernels were never generated. Launch tuning was also corrected so these kernels can use up to a quarter of a GPU's WGPs, where only 14 were reached before, which is where most of the large-message gain comes from. Opt-in via `NCCL_SYM_TMA_ENABLE=1`, and reached only when the application opts into symmetric memory. `NCCL_SYM_TMA_ENABLE=2` additionally forces these kernels wherever the collective has one, skipping both the tuner's cost comparison and the deep-loop size bar, which is intended for A/B measurement rather than production. The new kernels are generated only when gfx1250 is in `GPU_TARGETS`, and every other architecture keeps the vector path unchanged.
+ * Removed GIN rocSHMEM GDA dependency on rocSHMEM GDA bitcode: GIN rocSHMEM GDA is now header-only. The CMake `roc::rccl` target provides the required include directories in its `INSTALL_INTERFACE` property.
+ 
+ ### Changed
+@@ -52,7 +53,7 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
+ * Fixed hierarchical Copy Engine collectives dereferencing a NULL RMA proxy context when `NCCL_RMA_DISABLE=1` was combined with the hierarchical opt-ins. `NCCL_RMA_DISABLE` suppresses the window registration that creates those contexts, but the hierarchical availability check did not consult it, so a multi-node communicator with `NCCL_CTA_POLICY=2` and symmetric send and receive windows admitted the path and then crashed at launch. The internal RMA context predicate now defers to `ncclRmaProxyEnabled`, so such a communicator declines the hierarchical path and uses the kernel path instead.
+ 
+ ### Known issues
+-* The following NCCL 2.31 features are NVIDIA-specific and are not available in RCCL: Compute Fabric Transport, the GDAKI and EFA GDA GIN backends, PAT combined with NVLS, NVLink-multicast AllGather, TMA-based symmetric kernels, and the CuTeDSL and `nccl4rust` bindings.
++* The following NCCL 2.31 features are NVIDIA-specific and are not available in RCCL: Compute Fabric Transport, the GDAKI and EFA GDA GIN backends, PAT combined with NVLS, NVLink-multicast AllGather, and the CuTeDSL and `nccl4rust` bindings.
+ 
+ ## RCCL 2.30.7 for ROCm 10.1.0 (Unreleased)
+ 
+diff --git a/projects/rccl/src/CMakeLists.txt b/projects/rccl/src/CMakeLists.txt
+index 6e9b7687890a..03636b842eb4 100644
+--- a/projects/rccl/src/CMakeLists.txt
++++ b/projects/rccl/src/CMakeLists.txt
+@@ -855,9 +855,11 @@ if (gen_py_result)
+ endif()
+ 
+ if (GENERATE_SYM_KERNELS)
+-  # Execute the python script to generate required symmetric memory kernels
++  # Execute the python script to generate required symmetric memory kernels.
++  # GPU_TARGETS selects the arch-specific algos (the Tma* kernels need gfx1250's
++  # Tensor Data Mover).
+   execute_process(
+-    COMMAND ${Python3_EXECUTABLE} ${RCCL_SOURCE_DIR}/src/device/symmetric/generate.py ${GEN_SYM_DIR}
++    COMMAND ${Python3_EXECUTABLE} ${RCCL_SOURCE_DIR}/src/device/symmetric/generate.py ${GEN_SYM_DIR} "${GPU_TARGETS}"
+     WORKING_DIRECTORY ${RCCL_SOURCE_DIR}
+     RESULT_VARIABLE gen_sym_py_result
+     ERROR_VARIABLE gen_sym_py_error
+diff --git a/projects/rccl/src/device/symmetric/all_gather.cuh b/projects/rccl/src/device/symmetric/all_gather.cuh
+index b60525a3a1ff..4ace1320c4a3 100644
+--- a/projects/rccl/src/device/symmetric/all_gather.cuh
++++ b/projects/rccl/src/device/symmetric/all_gather.cuh
+@@ -14,7 +14,9 @@
+ #include "primitives.cuh"
+ #endif
+ 
+-template <int BytePerPack, int UnrollPacks, int UnrollPeers, bool EnableTma>
++// TileAligned: the caller's tier guarantees every tile address is ncclSymkTileLine-aligned, which
++// lets the staging wrappers drop TDM's head peel.
++template <int BytePerPack, int UnrollPacks, int UnrollPeers, bool EnableTma, bool TileAligned = false>
+ static __device__ void bcastDeep(ncclSymkArgsHandler const& handler, int tn, int t, bool waitNeeded,
+                                  ncclLsaBarrierSession<ncclCoopCta>& bar, ncclSymPtr<char> input,
+                                  ncclSymPtr<char> output, bool inPlace, int nIters) {
+@@ -27,52 +29,44 @@ static __device__ void bcastDeep(ncclSymkArgsHandler const& handler, int tn, int
+ 
+   Pack* inpPacks = (Pack*)input.localPtr() + intptr_t(w) * UnrollPacks * WARP_SIZE +
+                    (
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+                      EnableTma ? 0 :
+ #endif
+                                  lane);
+ 
+   ncclSymPtr<Pack> outPacks = (ncclSymPtr<Pack>)output + intptr_t(w) * UnrollPacks * WARP_SIZE +
+                               (
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+                                 EnableTma ? 0 :
+ #endif
+                                             lane);
+ 
+   Pack tmp[UnrollPacks];
+ 
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+   int lw = threadIdx.x / WARP_SIZE;
+-  extern __shared__ char smemScratch[];
+   using tmaSmemStruct_t = tmaSmemStruct<Pack, UnrollPacks>;
+-  constexpr int smemSizePerWarp = ncclTmaShmemScratchWarpSize();
+-  tmaSmemStruct_t* tmaSmem = reinterpret_cast<tmaSmemStruct_t*>(smemScratch + lw * smemSizePerWarp);
++  tmaSmemStruct_t* tmaSmem = ncclSymkTileSmem<tmaSmemStruct_t>(lw);
+   constexpr size_t tileSize = UnrollPacks * WARP_SIZE * BytePerPack;
+ #endif
+   bool skip = false; // all lanes issue loads/stores
+ 
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
++  size_t pending = 0;
+   if NCCL_IF_CONSTEXPR (EnableTma) {
+-    if (lane == 0) {
+-      // lane0 issues async.cp.bulk commands
+-      init(&tmaSmem->bar, 1);
+-    } else {
+-      // other lanes can skip the loop
+-      skip = true;
+-    }
++    ncclSymkTileBarInit(&tmaSmem->bar, /*arrivers=*/1, lane);
++    // TMA issues from lane 0, so the rest of the warp has nothing left to do.
++    // TDM needs the whole warp to build the descriptor, so every lane stays in.
++    skip = NCCL_SYMK_TILE_TMA && lane != 0;
+   }
+ #endif
+ 
+   nIters -= w;
+   if (0 < nIters) {
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+     if NCCL_IF_CONSTEXPR (EnableTma) {
+-      if (lane == 0) {
+-        cuda::device::memcpy_async_tx(tmaSmem->buff[0], inpPacks, cuda::aligned_size_t<16>(tileSize), tmaSmem->bar);
+-        cuda::barrier<cuda::thread_scope_block>::arrival_token token =
+-          cuda::device::barrier_arrive_tx(tmaSmem->bar, 1, tileSize);
+-        tmaSmem->bar.wait(std::move(token));
+-      }
++      ncclSymkTileLoad<TileAligned>(tmaSmem->buff[0], inpPacks, tileSize, tmaSmem->bar, pending, lane);
++      ncclSymkTileLoadWait</*Arrivers=*/1>(tmaSmem->bar, pending, lane);
+     } else
+ #endif
+     {
+@@ -97,9 +91,9 @@ static __device__ void bcastDeep(ncclSymkArgsHandler const& handler, int tn, int
+           NVCC_PRAGMA_UNROLL_AUTO
+           for (int ur = 0; ur < UnrollPeers - partial; ur++) {
+             if (partial && dr == nRanks) break;
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+             if NCCL_IF_CONSTEXPR (EnableTma) {
+-              ptx::cp_async_bulk(ptx::space_global, ptx::space_shared, outPacks.lsaPtr(r), tmaSmem->buff[0], tileSize);
++              ncclSymkTileStore<TileAligned>(outPacks.lsaPtr(r), tmaSmem->buff[0], tileSize, lane);
+             } else
+ #endif
+             {
+@@ -110,12 +104,9 @@ static __device__ void bcastDeep(ncclSymkArgsHandler const& handler, int tn, int
+             }
+             if (++r == nRanks) r = 0;
+           }
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+           if NCCL_IF_CONSTEXPR (EnableTma) {
+-            if (lane == 0) {
+-              ptx::cp_async_bulk_commit_group();
+-              ptx::cp_async_bulk_wait_group_read(ptx::n32_t<0>());
+-            }
++            ncclSymkTileStoreWait(lane);
+           }
+ #endif
+         }
+@@ -124,14 +115,10 @@ static __device__ void bcastDeep(ncclSymkArgsHandler const& handler, int tn, int
+       outPacks += intptr_t(wn) * UnrollPacks * WARP_SIZE;
+       nIters -= wn;
+       if (nIters <= 0) break;
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+       if NCCL_IF_CONSTEXPR (EnableTma) {
+-        if (lane == 0) {
+-          cuda::device::memcpy_async_tx(tmaSmem->buff[0], inpPacks, cuda::aligned_size_t<16>(tileSize), tmaSmem->bar);
+-          cuda::barrier<cuda::thread_scope_block>::arrival_token token =
+-            cuda::device::barrier_arrive_tx(tmaSmem->bar, 1, tileSize);
+-          tmaSmem->bar.wait(std::move(token));
+-        }
++        ncclSymkTileLoad<TileAligned>(tmaSmem->buff[0], inpPacks, tileSize, tmaSmem->bar, pending, lane);
++        ncclSymkTileLoadWait</*Arrivers=*/1>(tmaSmem->bar, pending, lane);
+       } else
+ #endif
+       {
+@@ -185,7 +172,7 @@ static __device__ void bcast(ncclSymkArgsHandler const& handler, int tn, int t,
+ 
+   uint32_t alignment = uint32_t(input.offset - output.offset);
+   uint32_t nPreBytes =
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+     (EnableTma && alignment % 256 == 0) ? (256 - input.offset) % 256 :
+ #endif
+                                           (16 - input.offset) % 16;
+@@ -193,7 +180,7 @@ static __device__ void bcast(ncclSymkArgsHandler const& handler, int tn, int t,
+   nPreBytes = min((size_t)nPreBytes, nBytes);
+   uintptr_t cursor = nPreBytes;
+ 
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+   if NCCL_IF_CONSTEXPR (EnableTma) {
+     if (alignment % 256 == 0) {
+       constexpr int BytePerPack = ncclSymkBytePerPack, UnrollPacks = ncclSymkAlign256BDeepUnrollPacks, UnrollPeers = 2;
+@@ -202,10 +189,12 @@ static __device__ void bcast(ncclSymkArgsHandler const& handler, int tn, int t,
+       chunks -= imodFast32(chunks, nBlocks, nBlocks_rcp32);
+       if (chunks != 0) {
+         uintptr_t cursorAfter = cursor + uintptr_t(chunks) * BytePerChunk;
+-        bcastDeep<BytePerPack, UnrollPacks, UnrollPeers, EnableTma>(handler, tn, t, waitNeeded, bar,
+-                                                                    (ncclSymPtr<char>)input + cursor,
+-                                                                    (ncclSymPtr<char>)output + cursor, inPlace,
+-                                                                    chunks * ncclSymkMinWarpsPerBlock);
++        // Both sides start on a 256 B boundary here (nPreBytes peels input to one, alignment % 256
++        // carries output with it, window bases are page-aligned) and every tile advances by a
++        // multiple of 256, so the tiles are ncclSymkTileLine-aligned and the peel can go.
++        bcastDeep<BytePerPack, UnrollPacks, UnrollPeers, EnableTma, /*TileAligned=*/true>(
++          handler, tn, t, waitNeeded, bar, (ncclSymPtr<char>)input + cursor,
++          (ncclSymPtr<char>)output + cursor, inPlace, chunks * ncclSymkMinWarpsPerBlock);
+         cursor = cursorAfter;
+         waitNeeded = false;
+       }
+diff --git a/projects/rccl/src/device/symmetric/all_reduce.cuh b/projects/rccl/src/device/symmetric/all_reduce.cuh
+index 933eee1d03bd..3a23b11ae204 100644
+--- a/projects/rccl/src/device/symmetric/all_reduce.cuh
++++ b/projects/rccl/src/device/symmetric/all_reduce.cuh
+@@ -33,46 +33,38 @@ static __device__ __forceinline__ void allreduceDeep(ncclSymkArgsHandler const&
+ 
+   ncclSymPtr<Pack> inpPacks = (ncclSymPtr<Pack>)input + intptr_t(w) * UnrollPacks * WARP_SIZE +
+                               (
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+                                 EnableTma ? 0 :
+ #endif
+                                             lane);
+ 
+   ncclSymPtr<Pack> outPacks = (ncclSymPtr<Pack>)output + intptr_t(w) * UnrollPacks * WARP_SIZE +
+                               (
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+                                 EnableTma ? 0 :
+ #endif
+                                             lane);
+ 
+   Pack acc0[UnrollPacks];
+ 
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+   int lw = threadIdx.x / WARP_SIZE;
+-  extern __shared__ char smemScratch[];
+   using tmaSmemStruct_t = tmaSmemStruct<Pack, UnrollPacks, UnrollPeers>;
+-  constexpr int smemSizePerWarp = ncclTmaShmemScratchWarpSize();
+-  tmaSmemStruct_t* tmaSmem = reinterpret_cast<tmaSmemStruct_t*>(smemScratch + lw * smemSizePerWarp);
++  tmaSmemStruct_t* tmaSmem = ncclSymkTileSmem<tmaSmemStruct_t>(lw);
+   constexpr size_t tilePack = UnrollPacks * WARP_SIZE;
+   constexpr size_t tileSize = tilePack * BytePerPack;
+   size_t tmaSize = 0;
+ 
+   if NCCL_IF_CONSTEXPR (EnableTma) {
+-    if (lane == 0) {
+-      init(&tmaSmem->bar, WARP_SIZE);
+-    }
++    ncclSymkTileBarInit(&tmaSmem->bar, /*arrivers=*/WARP_SIZE, lane);
+   }
+ #endif
+ 
+   nIters -= w;
+   if (0 < nIters) {
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+     if NCCL_IF_CONSTEXPR (EnableTma) {
+-      if (lane == 0) {
+-        cuda::device::memcpy_async_tx(tmaSmem->buff[0], inpPacks.peerPtr(world, rank),
+-                                      cuda::aligned_size_t<16>(tileSize), tmaSmem->bar);
+-        tmaSize += tileSize;
+-      }
++      ncclSymkTileLoad(tmaSmem->buff[0], inpPacks.peerPtr(world, rank), tileSize, tmaSmem->bar, tmaSize, lane);
+     } else
+ #endif
+     {
+@@ -92,17 +84,10 @@ static __device__ __forceinline__ void allreduceDeep(ncclSymkArgsHandler const&
+       if (++r == nRanks) r = 0;
+       {
+         Pack tmp1[UnrollPacks];
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+         if NCCL_IF_CONSTEXPR (EnableTma) {
+-          if (lane == 0) {
+-            cuda::device::memcpy_async_tx(tmaSmem->buff[1], inpPacks.peerPtr(world, r),
+-                                          cuda::aligned_size_t<16>(tileSize), tmaSmem->bar);
+-            tmaSize += tileSize;
+-          }
+-          cuda::barrier<cuda::thread_scope_block>::arrival_token token =
+-            cuda::device::barrier_arrive_tx(tmaSmem->bar, 1, tmaSize);
+-          tmaSmem->bar.wait(std::move(token));
+-          tmaSize = 0;
++          ncclSymkTileLoad(tmaSmem->buff[1], inpPacks.peerPtr(world, r), tileSize, tmaSmem->bar, tmaSize, lane);
++          ncclSymkTileLoadWait</*Arrivers=*/WARP_SIZE>(tmaSmem->bar, tmaSize, lane);
+         } else
+ #endif
+         {
+@@ -113,7 +98,7 @@ static __device__ __forceinline__ void allreduceDeep(ncclSymkArgsHandler const&
+         }
+         NVCC_PRAGMA_UNROLL_AUTO
+         for (int u = 0; u < UnrollPacks; u++) {
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+           if NCCL_IF_CONSTEXPR (EnableTma) {
+             acc0[u] = tmaSmem->buff[0][lane + WARP_SIZE * u];
+             tmp1[u] = tmaSmem->buff[1][lane + WARP_SIZE * u];
+@@ -133,9 +118,10 @@ static __device__ __forceinline__ void allreduceDeep(ncclSymkArgsHandler const&
+           if (partial && dr == nRanks) break;
+ 
+           Pack tmp1[UnrollPeers][UnrollPacks];
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+           if NCCL_IF_CONSTEXPR (EnableTma) {
+-            // lane 0 waits for all threads to reduce tmp1 before next batch of TMA loads
++            // The next batch reloads these same tiles, so hold until every lane has
++            // finished reducing out of them.
+             __syncwarp();
+           }
+ #endif
+@@ -143,13 +129,9 @@ static __device__ __forceinline__ void allreduceDeep(ncclSymkArgsHandler const&
+           NVCC_PRAGMA_UNROLL_AUTO
+           for (int ur = 0; ur < UnrollPeers - partial; ur++) {
+             if (partial && ur != 0 && dr + ur == nRanks) break;
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+             if NCCL_IF_CONSTEXPR (EnableTma) {
+-              if (lane == 0) {
+-                cuda::device::memcpy_async_tx(tmaSmem->buff[ur], inpPacks.peerPtr(world, r),
+-                                              cuda::aligned_size_t<16>(tileSize), tmaSmem->bar);
+-                tmaSize += tileSize;
+-              }
++              ncclSymkTileLoad(tmaSmem->buff[ur], inpPacks.peerPtr(world, r), tileSize, tmaSmem->bar, tmaSize, lane);
+             } else
+ #endif
+             {
+@@ -160,12 +142,9 @@ static __device__ __forceinline__ void allreduceDeep(ncclSymkArgsHandler const&
+             }
+             if (++r == nRanks) r = 0;
+           }
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+           if NCCL_IF_CONSTEXPR (EnableTma) {
+-            cuda::barrier<cuda::thread_scope_block>::arrival_token token =
+-              cuda::device::barrier_arrive_tx(tmaSmem->bar, 1, tmaSize);
+-            tmaSmem->bar.wait(std::move(token));
+-            tmaSize = 0;
++            ncclSymkTileLoadWait</*Arrivers=*/WARP_SIZE>(tmaSmem->bar, tmaSize, lane);
+           }
+ #endif
+           NVCC_PRAGMA_UNROLL_AUTO
+@@ -173,7 +152,7 @@ static __device__ __forceinline__ void allreduceDeep(ncclSymkArgsHandler const&
+             if (partial && ur != 0 && dr + ur == nRanks) break;
+             NVCC_PRAGMA_UNROLL(UnrollPacks)
+             for (int u = 0; u < UnrollPacks; u++) {
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+               if NCCL_IF_CONSTEXPR (EnableTma) {
+                 tmp1[ur][u] = tmaSmem->buff[ur][lane + WARP_SIZE * u];
+               }
+@@ -186,7 +165,7 @@ static __device__ __forceinline__ void allreduceDeep(ncclSymkArgsHandler const&
+ 
+       NVCC_PRAGMA_UNROLL_AUTO
+       for (int u = 0; u < UnrollPacks; u++) {
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+         if NCCL_IF_CONSTEXPR (EnableTma) {
+           tmaSmem->buff[0][lane + WARP_SIZE * u] = applyCast<Acc, T>(acc1[u]);
+         } else
+@@ -196,11 +175,10 @@ static __device__ __forceinline__ void allreduceDeep(ncclSymkArgsHandler const&
+         }
+       }
+ 
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+       if NCCL_IF_CONSTEXPR (EnableTma) {
+-        // threads flush data to point of consistency for async proxy
+-        ptx::fence_proxy_async(ptx::space_shared);
+-        __syncwarp();
++        // Publish the lanes' reduced tile to the engine that is about to read it.
++        ncclSymkTileFenceSmem();
+       }
+ #endif
+ 
+@@ -213,12 +191,9 @@ static __device__ __forceinline__ void allreduceDeep(ncclSymkArgsHandler const&
+           NVCC_PRAGMA_UNROLL_AUTO
+           for (int ur = 0; ur < UnrollPeers - partial; ur++) {
+             if (partial && dr == nRanks) break;
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+             if NCCL_IF_CONSTEXPR (EnableTma) {
+-              if (lane == 0) {
+-                ptx::cp_async_bulk(ptx::space_global, ptx::space_shared, outPacks.peerPtr(world, r), tmaSmem->buff[0],
+-                                   tileSize);
+-              }
++              ncclSymkTileStore(outPacks.peerPtr(world, r), tmaSmem->buff[0], tileSize, lane);
+             } else
+ #endif
+             {
+@@ -231,12 +206,10 @@ static __device__ __forceinline__ void allreduceDeep(ncclSymkArgsHandler const&
+           }
+         }
+       }
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+       if NCCL_IF_CONSTEXPR (EnableTma) {
+-        if (lane == 0) {
+-          ptx::cp_async_bulk_commit_group();
+-          ptx::cp_async_bulk_wait_group_read(ptx::n32_t<0>());
+-        }
++        // Drain every peer's store before the next iteration refills the tile.
++        ncclSymkTileStoreWait(lane);
+         __syncwarp();
+       }
+ #endif
+@@ -246,14 +219,10 @@ static __device__ __forceinline__ void allreduceDeep(ncclSymkArgsHandler const&
+       nIters -= wn;
+       if (nIters <= 0) break;
+ 
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+       // Load data for next iteration.
+       if NCCL_IF_CONSTEXPR (EnableTma) {
+-        if (lane == 0) {
+-          cuda::device::memcpy_async_tx(tmaSmem->buff[0], inpPacks.peerPtr(world, rank),
+-                                        cuda::aligned_size_t<16>(tileSize), tmaSmem->bar);
+-          tmaSize += tileSize;
+-        }
++        ncclSymkTileLoad(tmaSmem->buff[0], inpPacks.peerPtr(world, rank), tileSize, tmaSmem->bar, tmaSize, lane);
+       } else
+ #endif
+       {
+@@ -344,20 +313,21 @@ static __device__ void allreduce(ncclSymkArgsHandler const& handler, int tn, int
+   uint32_t nBlocks_rcp32 = nccl::utility::idivRcp32_upto64(nBlocks);
+   uint32_t nRanks_nBlocks_rcp32 = nccl::utility::imulRcp32(nRanks, nRanks_rcp32, nBlocks, nBlocks_rcp32);
+ 
++  // True only where the deep loop really stages through a TDM engine.
++  constexpr bool AsyncTile = ncclSymkAsyncTile && EnableTma;
++
+   uint32_t nPreBytes = (16u - input.offset) % 16u;
+   nPreBytes = min((size_t)nPreBytes, nBytes);
+   uintptr_t cursor = nPreBytes;
+ 
+   if ((input.offset - output.offset) % 16 == 0) {
+     constexpr int BytePerPack = ncclSymkBytePerPack,
+-                  UnrollPacks =
+-#if __CUDA_ARCH__ >= 1000
+-                    EnableTma ? ncclSymkDeepUnrollPacks :
+-#endif
+-                                ncclSymkUnrollPacks,
++                  UnrollPacks = AsyncTile ? ncclSymkDeepUnrollPacks(sizeof(T)) : ncclSymkUnrollPacks,
+                   UnrollPeers = 2;
+ 
+-    constexpr int BytePerChunk = EnableTma ? ncclSymkDeepBytePerChunk : ncclSymkBytePerChunk;
++    // Derived from UnrollPacks so the two cannot disagree: a chunk wider than what allreduceDeep()
++    // reduces would leave the difference unreduced.
++    constexpr int BytePerChunk = ncclSymkGetBytesPerChunk(ncclSymkMinWarpsPerBlock, UnrollPacks);
+     uint32_t chunks = (nBytes - cursor) / BytePerChunk;
+     chunks -= imodFast32(chunks, nRanks * nBlocks, nRanks_nBlocks_rcp32);
+     if (chunks != 0) {
+diff --git a/projects/rccl/src/device/symmetric/generate.py b/projects/rccl/src/device/symmetric/generate.py
+index 39dd575a3d81..792923fbbc6d 100755
+--- a/projects/rccl/src/device/symmetric/generate.py
++++ b/projects/rccl/src/device/symmetric/generate.py
+@@ -12,6 +12,11 @@
+ 
+ gensrc = sys.argv[1]
+ 
++# The second argument, when present, is CMake's GPU_TARGETS list. It selects the
++# arch-specific algos below; absent (e.g. a bare run of this script) nothing
++# arch-specific is emitted.
++gpu_targets = sys.argv[2] if len(sys.argv) > 2 else ""
++
+ if os.path.exists(gensrc):
+   for name in os.listdir(gensrc):
+     path = os.path.join(gensrc, name)
+@@ -90,17 +95,29 @@ def __hash__(me):
+   "f8e5m2": "rccl_bfloat8"
+ }
+ 
++# The Tma* algos stage their tiles through a DMA engine rather than per-lane vector
++# loads (see NCCL_SYMK_ASYNC_TILE in src/device/symmetric/primitives.cuh). On ROCm
++# that engine is the gfx1250 Tensor Data Mover, so on any other target these kernels
++# would compile down to a duplicate of their vector counterpart -- emit them only
++# when a capable arch is in GPU_TARGETS.
++have_tdm = "gfx1250" in gpu_targets
++
+ def enumerate_kernels():
+-  for algo in ["LL","ST"]:
++  ag_algos = ["LL","ST"] + (["TmaST"] if have_tdm else [])
++  # AllGather_TmaSTMC and the other *MC algos need multimem, which ROCm has no
++  # equivalent for, so they stay out regardless of the target.
++  ar_algos = ["AGxLL_R","RSxLD_AGxST"] + (["RSxTmaLD_AGxTmaST"] if have_tdm else [])
++  rs_algos = ["LL","LD"] + (["TmaLD"] if have_tdm else [])
++  for algo in ag_algos:
+     yield Rec(coll="AllGather", algo=algo)
+   for red in all_reds:
+     for ty in all_tys:
+-      for algo in ["AGxLL_R","RSxLD_AGxST"]:
++      for algo in ar_algos:
+         # AllReduce implements sum only; skip avg (matches upstream).
+         if red == "avg":
+           continue
+         yield Rec(coll="AllReduce", algo=algo, red=red, ty=ty)
+-      for algo in ["LL","LD"]:
++      for algo in rs_algos:
+         # ReduceScatter emits sum and avg for every float type.
+         yield Rec(coll="ReduceScatter", algo=algo, red=red, ty=ty)
+       # Multi-node GIN ReduceScatter; non-multicast only (no NVLS/multimem on ROCm).
+diff --git a/projects/rccl/src/device/symmetric/primitives.cuh b/projects/rccl/src/device/symmetric/primitives.cuh
+index 90cf750e68e7..c7470863fa63 100644
+--- a/projects/rccl/src/device/symmetric/primitives.cuh
++++ b/projects/rccl/src/device/symmetric/primitives.cuh
+@@ -17,18 +17,164 @@
+ #include <cuda/std/ranges>
+ #endif
+ 
+-#if __CUDA_ARCH__ >= 1000
++////////////////////////////////////////////////////////////////////////////////
++// Async tile staging: NVIDIA TMA and AMD gfx1250 TDM
++//
++// The deep loops in all_gather/all_reduce/reduce_scatter can move a tile through
++// the warp's shared-memory scratch with a DMA engine instead of per-lane vector
++// loads. NVIDIA drives that with TMA, gfx1250 with the Tensor Data Mover. The two
++// engines disagree on who issues a transfer and on how completion is observed:
++//
++//                 NVIDIA (sm_100+)               AMD gfx1250
++//   issue         one thread; the descriptor     the whole warp; the descriptor
++//                 is built per-thread            lives in SGPRs, so the
++//                                                arguments must be wave-uniform
++//   completion    a shared-memory mbarrier       the per-wave TENSORcnt, so only
++//                 carrying a byte count, which   the warp that issued a transfer
++//                 any thread may wait on         can drain it, and no shared
++//                                                object is involved
++//
++// The ncclSymkTile* wrappers below absorb that difference. Every one of them is
++// called by the WHOLE warp with wave-uniform arguments and narrows to a single
++// thread internally where the hardware wants that, so the loops keep one shape.
++// The `tma` names below (tmaSmemStruct, EnableTma, ...) now denote the async-tile
++// path on either vendor; they match the ncclSymkKernelId_*Tma* kernel names.
++////////////////////////////////////////////////////////////////////////////////
++#if defined(__HIP_PLATFORM_AMD__)
++#include "tdm/tdmCopy.h"
++// TDM_SUPPORTED is a device-pass constant: gfx1250, a compiler carrying the
++// builtin, and an SDK shipping the descriptor header. Every other arch, and the
++// host pass, keep the vector path.
++#define NCCL_SYMK_TILE_TMA 0
++#define NCCL_SYMK_TILE_TDM TDM_SUPPORTED
++#else
++#define NCCL_SYMK_TILE_TMA (__CUDA_ARCH__ >= 1000)
++#define NCCL_SYMK_TILE_TDM 0
++#endif
++#define NCCL_SYMK_ASYNC_TILE (NCCL_SYMK_TILE_TMA || NCCL_SYMK_TILE_TDM)
++// The macro's answer as a constant expression, for the tiling arithmetic around the #if blocks:
++// EnableTma names a kernel that CAN stage tiles, this says whether the pass has an engine.
++#if NCCL_SYMK_ASYNC_TILE
++constexpr bool ncclSymkAsyncTile = true;
++#else
++constexpr bool ncclSymkAsyncTile = false;
++#endif
++
++#if NCCL_SYMK_ASYNC_TILE
++#if NCCL_SYMK_TILE_TMA
+ #include <cuda/barrier>
+ #include <cuda/ptx>
+ 
+ namespace ptx = cuda::ptx;
+ 
++using ncclSymkTileBar = cuda::barrier<cuda::thread_scope_block>;
++#else
++// TDM completion is a per-wave counter, so gfx1250 needs no shared-memory
++// barrier. The empty type keeps tmaSmemStruct's layout common to both paths.
++struct ncclSymkTileBar {};
++
++// Tiles are streamed once and read back by a peer, not by this GPU, so keep them
++// out of the local caches. Matches kRcclTdmPolicy on the SIMPLE TDM path.
++static constexpr CachePolicy kNcclSymkTilePolicy = createCachePolicy(TemporalHint::NT, MemScope::SYS);
++#endif
++
++// The line TDM's head peel targets. Staging windows are held here so a tile whose global side is
++// already 128 B-aligned can skip the peel outright (TileAligned below).
++constexpr int ncclSymkTileLine = 128;
++
+ template <typename Pack, int UnrollPacks, int UnrollPeers = 1>
+ struct tmaSmemStruct {
+   alignas(16) Pack buff[UnrollPeers][UnrollPacks * WARP_SIZE];
+-  cuda::barrier<cuda::thread_scope_block> bar;
++  ncclSymkTileBar bar;
+ };
++
++// Arm the staging barrier. `arrivers` is how many lanes will arrive on it, which
++// differs by loop: the all-gather deep loop stages from lane 0 alone, the reduce
++// loops stage across the whole warp. TDM has no barrier to arm.
++static __device__ __forceinline__ void ncclSymkTileBarInit(ncclSymkTileBar* bar, int arrivers, int lane) {
++#if NCCL_SYMK_TILE_TMA
++  if (lane == 0) init(bar, arrivers);
++#else
++  (void)bar, (void)arrivers, (void)lane;
++#endif
++}
++
++// Start a global -> shared transfer of `bytes` into the warp's tile, leaving it in
++// flight. `pending` accumulates the bytes the next barrier arrival has to account
++// for; TDM counts its own transfers, so it is left alone there.
++//
++// TileAligned says the caller knows `global` is ncclSymkTileLine-aligned, which lets TDM drop its
++// head peel; measured worth ~7% on the staged copy. Pass it only where the tier guarantees it.
++template <bool TileAligned = false>
++static __device__ __forceinline__ void ncclSymkTileLoad(void* smem, void const* global, size_t bytes,
++                                                        ncclSymkTileBar& bar, size_t& pending, int lane) {
++#if NCCL_SYMK_TILE_TMA
++  if (lane == 0) {
++    cuda::device::memcpy_async_tx((char*)smem, (char const*)global, cuda::aligned_size_t<16>(bytes), bar);
++    pending += bytes;
++  }
++#else
++  (void)bar, (void)pending, (void)lane;
++  tdm::asyncLoadToLDS<SyncPolicy::Async, kNcclSymkTilePolicy, TileAligned>((uint8_t const*)global, (uint8_t*)smem,
++                                                                          bytes);
+ #endif
++}
++
++// Wait for the loads this warp started to land in shared memory. `Arrivers` must
++// match what ncclSymkTileBarInit() armed the barrier with.
++template <int Arrivers>
++static __device__ __forceinline__ void ncclSymkTileLoadWait(ncclSymkTileBar& bar, size_t& pending, int lane) {
++#if NCCL_SYMK_TILE_TMA
++  if (Arrivers != 1 || lane == 0) {
++    ncclSymkTileBar::arrival_token token = cuda::device::barrier_arrive_tx(bar, 1, pending);
++    bar.wait(std::move(token));
++  }
++  pending = 0;
++#else
++  (void)bar, (void)pending, (void)lane;
++  tdm::tdmWait();
++#endif
++}
++
++// Start a shared -> global transfer of `bytes` out of the warp's tile, leaving it
++// in flight. Several of these may be issued back to back (one per peer) before a
++// single ncclSymkTileStoreWait(); they all read the tile, so they cannot conflict.
++// TileAligned carries the same meaning as on ncclSymkTileLoad(), for `global`.
++template <bool TileAligned = false>
++static __device__ __forceinline__ void ncclSymkTileStore(void* global, void const* smem, size_t bytes, int lane) {
++#if NCCL_SYMK_TILE_TMA
++  if (lane == 0) ptx::cp_async_bulk(ptx::space_global, ptx::space_shared, global, smem, bytes);
++#else
++  (void)lane;
++  tdm::asyncStoreFromLDS<SyncPolicy::Async, kNcclSymkTilePolicy, TileAligned>((uint8_t const*)smem, (uint8_t*)global,
++                                                                             bytes);
++#endif
++}
++
++// Drain the stores this warp started, so its tile can be refilled.
++static __device__ __forceinline__ void ncclSymkTileStoreWait(int lane) {
++#if NCCL_SYMK_TILE_TMA
++  if (lane == 0) {
++    ptx::cp_async_bulk_commit_group();
++    ptx::cp_async_bulk_wait_group_read(ptx::n32_t<0>());
++  }
++#else
++  (void)lane;
++  tdm::tdmWait();
++#endif
++}
++
++// Publish the lanes' ordinary shared-memory writes to the DMA engine that is about
++// to read them out of the tile.
++static __device__ __forceinline__ void ncclSymkTileFenceSmem() {
++#if NCCL_SYMK_TILE_TMA
++  ptx::fence_proxy_async(ptx::space_shared);
++#else
++  __threadfence_block();
++#endif
++  __syncwarp();
++}
++#endif // NCCL_SYMK_ASYNC_TILE
+ 
+ // HIP has no __isShared() (used only as a __builtin_assume hint); map it to the AMDGCN builtin.
+ #if defined(__HIP_PLATFORM_AMD__) && !defined(NCCL_SYMK_HAVE_ISSHARED)
+@@ -380,15 +526,29 @@ struct ncclSymkGinAccumType<FuncSumPostDiv, rccl_bfloat8> {
+ };
+ #endif
+ 
+-#if __CUDA_ARCH__ >= 1000
+-static __device__ __forceinline__ void tmaLoadStoreMc(char* dest, char* smem, char* source, size_t size,
+-                                                      cuda::barrier<cuda::thread_scope_block>& bar) {
+-  cuda::device::memcpy_async_tx((char*)smem, (const char*)source, cuda::aligned_size_t<16>(size), bar);
+-  cuda::barrier<cuda::thread_scope_block>::arrival_token token = cuda::device::barrier_arrive_tx(bar, 1, size);
+-  bar.wait(std::move(token));
+-  ptx::cp_async_bulk(ptx::space_global, ptx::space_shared, dest, smem, size);
+-  ptx::cp_async_bulk_commit_group();
+-  ptx::cp_async_bulk_wait_group_read(ptx::n32_t<0>());
++#if NCCL_SYMK_ASYNC_TILE
++// This warp's tile staging window in the block's dynamic LDS. That the grant covers one per warp is
++// checked by ncclSymmetricTaskScheduler(), since the warp count is a launch parameter.
++template <typename SmemStruct>
++static __device__ __forceinline__ SmemStruct* ncclSymkTileSmem(int lw) {
++  constexpr int smemSizePerWarp = ncclTmaShmemScratchWarpSize();
++  static_assert(sizeof(SmemStruct) <= smemSizePerWarp, "staged tile does not fit its per-warp LDS window");
++  // Declaring the scratch on the line puts every window there: buff sits at offset 0 of the struct
++  // and the per-warp stride is a multiple of the line, so no per-window rounding is needed.
++  static_assert(smemSizePerWarp % ncclSymkTileLine == 0, "Required");
++  extern __shared__ __align__(ncclSymkTileLine) char smemScratch[];
++  return reinterpret_cast<SmemStruct*>(smemScratch + lw * smemSizePerWarp);
++}
++
++// Round-trip one tile global -> shared -> global. Called by the whole warp with
++// wave-uniform arguments.
++static __device__ __forceinline__ void tmaLoadStoreMc(char* dest, char* smem, char const* source, size_t size,
++                                                      ncclSymkTileBar& bar, int lane) {
++  size_t pending = 0;
++  ncclSymkTileLoad(smem, source, size, bar, pending, lane);
++  ncclSymkTileLoadWait</*Arrivers=*/1>(bar, pending, lane);
++  ncclSymkTileStore(dest, smem, size, lane);
++  ncclSymkTileStoreWait(lane);
+ }
+ #endif
+ 
+@@ -401,7 +561,7 @@ static __device__ void bcastMultimem(ncclSymkArgsHandler& handler, int tn, int t
+   uintptr_t outputUptr = reinterpret_cast<uintptr_t>(output.multimemPtr(handler.comm.lsaMultimem));
+   uint32_t alignment = uint32_t(inputUptr - outputUptr);
+   uint32_t nPreBytes =
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+     (EnableTma && alignment % 256 == 0) ? (256 - input.offset) % 256 :
+ #endif
+                                           (16 - input.offset) % 16;
+@@ -409,27 +569,25 @@ static __device__ void bcastMultimem(ncclSymkArgsHandler& handler, int tn, int t
+   nPreBytes = min((size_t)nPreBytes, nBytes);
+   uintptr_t nSufBytes;
+ 
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+   int lane = t % WARP_SIZE;
+   int lw = threadIdx.x / WARP_SIZE;
+-  extern __shared__ char smemScratch[];
+ #endif
+ 
+   if (alignment % 16 == 0) {
+-    constexpr int BytePerPack = ncclSymkBytePerPack, UnrollPacks = ncclSymkDeepUnrollPacks;
++    constexpr int BytePerPack = ncclSymkBytePerPack, UnrollPacks = ncclSymkDeepMaxUnrollPacks;
+     constexpr int BytePerChunk = ncclSymkMultimemDeepBytePerChunk;
+     uintptr_t cursor = nPreBytes;
+     uint32_t nChunks = (nBytes - cursor) / BytePerChunk;
+     uintptr_t cursorAfter = cursor + uintptr_t(nChunks) * BytePerChunk;
+ 
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+     // Initialize share memory pointer and barrier
+     constexpr size_t tileSize = UnrollPacks * WARP_SIZE * BytePerPack;
+     using tmaSmemStruct_t = tmaSmemStruct<BytePack<BytePerPack>, UnrollPacks>;
+-    constexpr int smemSizePerWarp = ncclTmaShmemScratchWarpSize();
+-    tmaSmemStruct_t* tmaSmem = reinterpret_cast<tmaSmemStruct_t*>(smemScratch + lw * smemSizePerWarp);
++    tmaSmemStruct_t* tmaSmem = ncclSymkTileSmem<tmaSmemStruct_t>(lw);
+     if NCCL_IF_CONSTEXPR (EnableTma) {
+-      if (lane == 0) init(&tmaSmem->bar, 1);
++      ncclSymkTileBarInit(&tmaSmem->bar, /*arrivers=*/1, lane);
+     }
+ #endif
+ 
+@@ -439,11 +597,13 @@ static __device__ void bcastMultimem(ncclSymkArgsHandler& handler, int tn, int t
+     int nIters = nChunks - t / WARP_SIZE;
+     NVCC_PRAGMA_UNROLL_DISABLED
+     while (0 < nIters) {
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+       if NCCL_IF_CONSTEXPR (EnableTma) {
+-        if (lane == 0)
+-          tmaLoadStoreMc((char*)(outputUptr + cursor), (char*)tmaSmem->buff[0], (char*)(inputUptr + cursor), tileSize,
+-                         tmaSmem->bar);
++        // The vector path gives every lane its own slot in the tile; a DMA
++        // descriptor is wave-uniform, so back that slot out to the tile base.
++        uintptr_t tileCursor = cursor - uintptr_t(lane) * BytePerPack;
++        tmaLoadStoreMc((char*)(outputUptr + tileCursor), (char*)tmaSmem->buff[0], (char const*)(inputUptr + tileCursor),
++                       tileSize, tmaSmem->bar, lane);
+       } else
+ #endif
+       {
+diff --git a/projects/rccl/src/device/symmetric/reduce_scatter.cuh b/projects/rccl/src/device/symmetric/reduce_scatter.cuh
+index 7351cd689c59..acce55097388 100644
+--- a/projects/rccl/src/device/symmetric/reduce_scatter.cuh
++++ b/projects/rccl/src/device/symmetric/reduce_scatter.cuh
+@@ -30,46 +30,38 @@ static __device__ void reduceDeep(ncclSymkArgsHandler const& handler, int tn, in
+   int const& nRanks = handler.comm.nRanks;
+   ncclSymPtr<Pack> inpPacks = (ncclSymPtr<Pack>)input + intptr_t(w) * UnrollPacks * WARP_SIZE +
+                               (
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+                                 EnableTma ? 0 :
+ #endif
+                                             lane);
+ 
+   ncclSymPtr<Pack> outPacks = (ncclSymPtr<Pack>)output + intptr_t(w) * UnrollPacks * WARP_SIZE +
+                               (
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+                                 EnableTma ? 0 :
+ #endif
+                                             lane);
+ 
+   Pack acc0[UnrollPacks];
+ 
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+   int lw = threadIdx.x / WARP_SIZE;
+-  extern __shared__ char smemScratch[];
+   using tmaSmemStruct_t = tmaSmemStruct<Pack, UnrollPacks, UnrollPeers>;
+-  constexpr int smemSizePerWarp = ncclTmaShmemScratchWarpSize();
+-  tmaSmemStruct_t* tmaSmem = reinterpret_cast<tmaSmemStruct_t*>(smemScratch + lw * smemSizePerWarp);
++  tmaSmemStruct_t* tmaSmem = ncclSymkTileSmem<tmaSmemStruct_t>(lw);
+   constexpr size_t tilePack = UnrollPacks * WARP_SIZE;
+   constexpr size_t tileSize = tilePack * BytePerPack;
+   size_t tmaSize = 0;
+ 
+   if NCCL_IF_CONSTEXPR (EnableTma) {
+-    if (lane == 0) {
+-      init(&tmaSmem->bar, WARP_SIZE);
+-    }
++    ncclSymkTileBarInit(&tmaSmem->bar, /*arrivers=*/WARP_SIZE, lane);
+   }
+ #endif
+ 
+   nIters -= w;
+   if (0 < nIters) {
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+     if NCCL_IF_CONSTEXPR (EnableTma) {
+-      if (lane == 0) {
+-        cuda::device::memcpy_async_tx(tmaSmem->buff[0], inpPacks.peerPtr(world, rank),
+-                                      cuda::aligned_size_t<16>(tileSize), tmaSmem->bar);
+-        tmaSize += tileSize;
+-      }
++      ncclSymkTileLoad(tmaSmem->buff[0], inpPacks.peerPtr(world, rank), tileSize, tmaSmem->bar, tmaSize, lane);
+     } else
+ #endif
+     {
+@@ -89,17 +81,10 @@ static __device__ void reduceDeep(ncclSymkArgsHandler const& handler, int tn, in
+       if (r == nRanks) r = 0;
+       {
+         Pack tmp1[UnrollPacks];
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+         if NCCL_IF_CONSTEXPR (EnableTma) {
+-          if (lane == 0) {
+-            cuda::device::memcpy_async_tx(tmaSmem->buff[1], inpPacks.peerPtr(world, r),
+-                                          cuda::aligned_size_t<16>(tileSize), tmaSmem->bar);
+-            tmaSize += tileSize;
+-          }
+-          cuda::barrier<cuda::thread_scope_block>::arrival_token token =
+-            cuda::device::barrier_arrive_tx(tmaSmem->bar, 1, tmaSize);
+-          tmaSmem->bar.wait(std::move(token));
+-          tmaSize = 0;
++          ncclSymkTileLoad(tmaSmem->buff[1], inpPacks.peerPtr(world, r), tileSize, tmaSmem->bar, tmaSize, lane);
++          ncclSymkTileLoadWait</*Arrivers=*/WARP_SIZE>(tmaSmem->bar, tmaSize, lane);
+         } else
+ #endif
+         {
+@@ -110,7 +95,7 @@ static __device__ void reduceDeep(ncclSymkArgsHandler const& handler, int tn, in
+         }
+         NVCC_PRAGMA_UNROLL_AUTO
+         for (int u = 0; u < UnrollPacks; u++) {
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+           if NCCL_IF_CONSTEXPR (EnableTma) {
+             acc0[u] = tmaSmem->buff[0][lane + WARP_SIZE * u];
+             tmp1[u] = tmaSmem->buff[1][lane + WARP_SIZE * u];
+@@ -131,9 +116,10 @@ static __device__ void reduceDeep(ncclSymkArgsHandler const& handler, int tn, in
+           if (partial && dr == nRanks) break;
+ 
+           Pack tmp1[UnrollPeers][UnrollPacks];
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+           if NCCL_IF_CONSTEXPR (EnableTma) {
+-            // lane0 waits for all threads to reduce tmp1 before next batch of TMA loads
++            // The next batch reloads these same tiles, so hold until every lane has
++            // finished reducing out of them.
+             __syncwarp();
+           }
+ #endif
+@@ -141,13 +127,9 @@ static __device__ void reduceDeep(ncclSymkArgsHandler const& handler, int tn, in
+           NVCC_PRAGMA_UNROLL_AUTO
+           for (int ur = 0; ur < UnrollPeers - partial; ur++) {
+             if (partial && ur != 0 && dr + ur == nRanks) break;
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+             if NCCL_IF_CONSTEXPR (EnableTma) {
+-              if (lane == 0) {
+-                cuda::device::memcpy_async_tx(tmaSmem->buff[ur], inpPacks.peerPtr(world, r),
+-                                              cuda::aligned_size_t<16>(tileSize), tmaSmem->bar);
+-                tmaSize += tileSize;
+-              }
++              ncclSymkTileLoad(tmaSmem->buff[ur], inpPacks.peerPtr(world, r), tileSize, tmaSmem->bar, tmaSize, lane);
+             } else
+ #endif
+             {
+@@ -159,12 +141,9 @@ static __device__ void reduceDeep(ncclSymkArgsHandler const& handler, int tn, in
+             r += 1;
+             if (r == nRanks) r = 0;
+           }
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+           if NCCL_IF_CONSTEXPR (EnableTma) {
+-            cuda::barrier<cuda::thread_scope_block>::arrival_token token =
+-              cuda::device::barrier_arrive_tx(tmaSmem->bar, 1, tmaSize);
+-            tmaSmem->bar.wait(std::move(token));
+-            tmaSize = 0;
++            ncclSymkTileLoadWait</*Arrivers=*/WARP_SIZE>(tmaSmem->bar, tmaSize, lane);
+           }
+ #endif
+           NVCC_PRAGMA_UNROLL_AUTO
+@@ -172,7 +151,7 @@ static __device__ void reduceDeep(ncclSymkArgsHandler const& handler, int tn, in
+             if (partial && ur != 0 && dr + ur == nRanks) break;
+             NVCC_PRAGMA_UNROLL(UnrollPacks)
+             for (int u = 0; u < UnrollPacks; u++) {
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+               if NCCL_IF_CONSTEXPR (EnableTma) {
+                 tmp1[ur][u] = tmaSmem->buff[ur][lane + WARP_SIZE * u];
+               }
+@@ -190,7 +169,7 @@ static __device__ void reduceDeep(ncclSymkArgsHandler const& handler, int tn, in
+ 
+       NVCC_PRAGMA_UNROLL_AUTO
+       for (int u = 0; u < UnrollPacks; u++) {
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+         if NCCL_IF_CONSTEXPR (EnableTma) {
+           tmaSmem->buff[0][lane + WARP_SIZE * u] = applyCast<Acc, T>(acc1[u]);
+         } else
+@@ -199,19 +178,13 @@ static __device__ void reduceDeep(ncclSymkArgsHandler const& handler, int tn, in
+           acc0[u] = applyCast<Acc, T>(acc1[u]);
+         }
+       }
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+       if NCCL_IF_CONSTEXPR (EnableTma) {
+-        // threads flush data to point of consistency for async proxy
+-        ptx::fence_proxy_async(ptx::space_shared);
+-        __syncwarp();
+-
+-        if (lane == 0) {
+-          ptx::cp_async_bulk(ptx::space_global, ptx::space_shared, outPacks.localPtr(), tmaSmem->buff[0], tileSize);
+-          ptx::cp_async_bulk_commit_group();
+-          ptx::cp_async_bulk_wait_group_read(ptx::n32_t<0>());
+-        }
+-
+-        // threads wait for shared memory to be consumed by async proxy before reusing it
++        // Publish the lanes' reduced tile to the engine that is about to read it.
++        ncclSymkTileFenceSmem();
++        ncclSymkTileStore(outPacks.localPtr(), tmaSmem->buff[0], tileSize, lane);
++        // Drain before the next iteration refills the tile.
++        ncclSymkTileStoreWait(lane);
+         __syncwarp();
+       } else
+ #endif
+@@ -225,13 +198,9 @@ static __device__ void reduceDeep(ncclSymkArgsHandler const& handler, int tn, in
+       nIters -= wn;
+       if (nIters <= 0) break;
+ 
+-#if __CUDA_ARCH__ >= 1000
++#if NCCL_SYMK_ASYNC_TILE
+       if NCCL_IF_CONSTEXPR (EnableTma) {
+-        if (lane == 0) {
+-          cuda::device::memcpy_async_tx(tmaSmem->buff[0], inpPacks.peerPtr(world, rank),
+-                                        cuda::aligned_size_t<16>(tileSize), tmaSmem->bar);
+-          tmaSize += tileSize;
+-        }
++        ncclSymkTileLoad(tmaSmem->buff[0], inpPacks.peerPtr(world, rank), tileSize, tmaSmem->bar, tmaSize, lane);
+       } else
+ #endif
+       {
+@@ -307,6 +276,9 @@ static __device__ void reduce(ncclSymkArgsHandler const& handler, int tn, int t,
+   uint32_t nBlocks_rcp32 = nccl::utility::idivRcp32_upto64(nBlocks);
+   uint32_t nRanks_nBlocks_rcp32 = nccl::utility::imulRcp32(nRanks, nRanks_rcp32, nBlocks, nBlocks_rcp32);
+ 
++  // True only where the deep loop really stages through a TDM engine.
++  constexpr bool AsyncTile = ncclSymkAsyncTile && EnableTma;
++
+   uint32_t alignment = uint32_t(input.offset - output.offset);
+   size_t nBytes = nElts * sizeof(T);
+ 
+@@ -316,14 +288,12 @@ static __device__ void reduce(ncclSymkArgsHandler const& handler, int tn, int t,
+ 
+   if (alignment % 16 == 0) {
+     constexpr int BytePerPack = ncclSymkBytePerPack,
+-                  UnrollPacks =
+-#if __CUDA_ARCH__ >= 1000
+-                    EnableTma ? ncclSymkDeepUnrollPacks :
+-#endif
+-                                ncclSymkUnrollPacks,
++                  UnrollPacks = AsyncTile ? ncclSymkDeepUnrollPacks(sizeof(T)) : ncclSymkUnrollPacks,
+                   UnrollPeers = 2;
+ 
+-    constexpr int BytePerChunk = EnableTma ? ncclSymkDeepBytePerChunk : ncclSymkBytePerChunk;
++    // Derived from UnrollPacks so the two cannot disagree: a chunk wider than what reduceDeep()
++    // reduces would leave the difference unreduced.
++    constexpr int BytePerChunk = ncclSymkGetBytesPerChunk(ncclSymkMinWarpsPerBlock, UnrollPacks);
+     uint32_t chunks = (nBytes - cursor) / BytePerChunk;
+     chunks -= imodFast32(chunks, nRanks * nBlocks, nRanks_nBlocks_rcp32);
+     if (chunks != 0) {
+diff --git a/projects/rccl/src/device/tdm/tdmCopy.h b/projects/rccl/src/device/tdm/tdmCopy.h
+index 8221272d2c3b..560dd43801e0 100644
+--- a/projects/rccl/src/device/tdm/tdmCopy.h
++++ b/projects/rccl/src/device/tdm/tdmCopy.h
+@@ -289,16 +289,20 @@ __device__ TDM_API void tdmWait() TDM_DELETED;
+ /// \tparam Aligned Pass true only when \p globalSrc and \p ldsDst are both known
+ ///                 to be 128-byte aligned; this compiles out the head peel.
+ ///
+-/// \warning \p globalSrc and \p ldsDst must share the same sub-128B alignment
+-///          (the head is peeled against the global pointer and the same offset
+-///          is applied to the LDS side). RCCL's LDS staging buffers are
+-///          128-byte aligned, which satisfies this for an aligned source.
++/// \note Alignment is a THROUGHPUT concern here, not a correctness one. Any
++///       alignment works on either side: the head is peeled against the global
++///       pointer at byte granularity, and the bulk rows carry an unconstrained
++///       LDS byte address. Verified over 448 mismatched global/LDS sub-128B
++///       combinations, and down to a 1-byte LDS offset under the 4-byte bulk
++///       descriptor -- all byte-correct. What matching sub-128B offsets buy is
++///       bulk rows that land on 128B natural alignment, and what \p Aligned buys is one
++///       descriptor instead of head/bulk/tail.
+ template <SyncPolicy sp = DEFAULT_SYNC_POLICY, CachePolicy cp = DEFAULT_CACHE_POLICY, bool Aligned = false>
+ __device__ TDM_API void asyncLoadToLDS(const uint8_t* globalSrc, uint8_t* ldsDst, size_t sizeInBytes) TDM_DELETED;
+ 
+ /// \brief Warp-level transfer of \p sizeInBytes from LDS out to global memory.
+ /// \see asyncLoadToLDS for the calling convention, template parameters and the
+-///      matching-alignment requirement (peeled against \p globalDst here).
++///      alignment note (peeled against \p globalDst here).
+ template <SyncPolicy sp = DEFAULT_SYNC_POLICY, CachePolicy cp = DEFAULT_CACHE_POLICY, bool Aligned = false>
+ __device__ TDM_API void asyncStoreFromLDS(const uint8_t* ldsSrc, uint8_t* globalDst, size_t sizeInBytes) TDM_DELETED;
+ 
+@@ -469,6 +473,9 @@ enum struct LdsDir {
+ 
+ constexpr uint32_t TILE_DIM_MAX = 0xFFFFu;   // tile_dim0/tile_dim1 are 16-bit fields
+ constexpr uint32_t LINE = 128;       // alignment the head peel targets
++// Whole 256B rows one 1-D bulk tile can carry: tile_dim0 now holds the entire length
++// in elements, not one row's worth, so the 16-bit field is the limit (1023 x 256B).
++constexpr uint32_t MAX_ROWS = TILE_DIM_MAX / TD0;
+ 
+ template <LdsDir DIR, CachePolicy cp>
+ __device__ inline void ldsIssue(const gfx1250_TDM_GROUP0& g0, const gfx1250_TDM_GROUP1& g1) {
+@@ -483,25 +490,22 @@ __device__ inline void ldsTileBytes(uint64_t global, uint32_t lds, uint32_t nbyt
+   gfx1250_TDM_GROUP1 g1;
+   g1.dataSize(DS1);
+   g1.tileDim0(nbytes);
+-  g1.tileDim1(1);
+   g1.tensorDim0(nbytes);
+-  g1.tensorDim1(1);
+-  g1.tensorDim0Stride(nbytes);
+   gfx1250_TDM_GROUP0 g0(lds, global);
+   ldsIssue<DIR, cp>(g0, g1);
+ }
+ 
+-// One 2-D tile of `rows` back-to-back 256B rows -- the bulk shape, chosen for
+-// bandwidth exactly as in issueRows(). `rows` must be <= TILE_DIM_MAX.
++// One 1-D tile covering `rows` back-to-back 256B rows -- the bulk shape. The rows are
++// contiguous (the 2-D form this replaced used stride == TD0), so a flat run of
++// rows*TD0 elements describes exactly the same bytes and the second dimension bought
++// nothing. `rows` must be <= MAX_ROWS.
+ template <LdsDir DIR, CachePolicy cp>
+ __device__ inline void ldsTileRows(uint64_t global, uint32_t lds, uint32_t rows) {
++  const uint32_t elems = rows * TD0;
+   gfx1250_TDM_GROUP1 g1;
+   g1.dataSize(DS4);
+-  g1.tileDim0(TD0);
+-  g1.tileDim1(rows);
+-  g1.tensorDim0(TD0);
+-  g1.tensorDim1(rows);
+-  g1.tensorDim0Stride(TD0);                // rows back-to-back (contiguous)
++  g1.tileDim0(elems);
++  g1.tensorDim0(elems);
+   gfx1250_TDM_GROUP0 g0(lds, global);
+   ldsIssue<DIR, cp>(g0, g1);
+ }
+@@ -513,10 +517,12 @@ __device__ inline void ldsTileRows(uint64_t global, uint32_t lds, uint32_t rows)
+ // all, under SyncPolicy::Async).
+ //
+ // `head` brings the GLOBAL pointer up to a 128B boundary and the same offset is
+-// applied to the LDS side, so the bulk's 4-byte elements stay naturally aligned
+-// only when the two pointers start with the same sub-128B offset -- the contract
+-// documented on the public entry points. `Aligned` asserts that offset is zero
+-// for both and compiles the peel out entirely.
++// applied to the LDS side. When the two pointers start with the same sub-128B
++// offset the bulk rows land on a 128B natural alignment on both ends; when they 
++// do not, the rows are still valid -- the LDS address field is an unconstrained 
++// byte address -- they just straddle lines. `Aligned` asserts both offsets are 
++// zero and compiles the peel out entirely, which is the real win: one descriptor
++// rather than head/bulk/tail.
+ template <LdsDir DIR, CachePolicy cp, bool Aligned>
+ __device__ inline void warpLdsCopy(uint64_t global, uint32_t lds, size_t sizeInBytes) {
+   if (sizeInBytes == 0) return;            // a zero-extent tile is not a valid descriptor
+@@ -531,10 +537,10 @@ __device__ inline void warpLdsCopy(uint64_t global, uint32_t lds, size_t sizeInB
+     }
+   }
+ 
+-    // Bulk: whole 256B rows, split across as many tiles as the 16-bit row count needs.
++    // Bulk: whole 256B rows, split across as many tiles as the 16-bit length field needs.
+   size_t rows = (sizeInBytes - off) / WIDTH;
+   while (rows) {
+-    const uint32_t chunk = rows < TILE_DIM_MAX ? static_cast<uint32_t>(rows) : TILE_DIM_MAX;
++    const uint32_t chunk = rows < MAX_ROWS ? static_cast<uint32_t>(rows) : MAX_ROWS;
+     ldsTileRows<DIR, cp>(global + off, lds + static_cast<uint32_t>(off), chunk);
+     off += static_cast<size_t>(chunk) * WIDTH;
+     rows -= chunk;
+diff --git a/projects/rccl/src/include/device.h b/projects/rccl/src/include/device.h
+index ceb03be91568..0127f32ad0e3 100644
+--- a/projects/rccl/src/include/device.h
++++ b/projects/rccl/src/include/device.h
+@@ -833,8 +833,12 @@ __device__ constexpr int ncclShmemScratchWarpSize(int cudaArch = NCCL_CUDA_ARCH)
+          -16; // pad to 16 bytes
+ }
+ 
++// Per-warp async-tile staging window. The widest tile any deep loop stages is 16 KiB
++// (ncclSymkDeepUnrollPacks(4) x 2 peers, and AllGather's 256 B tier), so this leaves a
++// little slack above that. At the symmetric kernels' 16 warps that is 288 KiB of the
++// 320 KiB these kernels already reserve via cudaFuncAttributeMaxDynamicSharedMemorySize.
+ __host__ __device__ constexpr int ncclTmaShmemScratchWarpSize(void) {
+-  return 10 << 10;
++  return 18 << 10;
+ }
+ 
+ // RCCL has its own varient of ncclShmemDynamicSize and ncclShmemScratchWarpSize
+diff --git a/projects/rccl/src/include/sym_kernels.h b/projects/rccl/src/include/sym_kernels.h
+index 7e833d7dcc06..0a5330269d0d 100644
+--- a/projects/rccl/src/include/sym_kernels.h
++++ b/projects/rccl/src/include/sym_kernels.h
+@@ -29,6 +29,11 @@ constexpr int ncclSymkMaxBlocks = 64;
+ constexpr int ncclSymkMaxThreads = 256;
+ constexpr int ncclSymkLLMaxEltSize = 8;
+ 
++// [RCCL] Launch width for the non-LL symmetric kernels. LL sizes itself from ncclSymkMaxThreads.
++// This was tuned for TDM, so if you need to change it, please add a constexpr function that 
++// selects an appropriate value for the architecture and method of transfer (TDM or non-TDM).
++constexpr int ncclSymkWarpsPerBlock = 16;
++
+ constexpr __host__ __device__ int ncclSymkLLMaxSlots(int eltSize = ncclSymkLLMaxEltSize) {
+   return ncclSymkMaxThreads * ncclSymkLLMaxEltSize / eltSize;
+ }
+@@ -170,6 +175,8 @@ uint32_t ncclSymkMask(struct ncclComm* comm, ncclFunc_t coll, int /*ncclDevRedOp
+ 
+ ncclResult_t ncclSymkMakeDevWork(struct ncclComm* comm, struct ncclTaskColl* task, struct ncclSymkDevWork* outDevWork);
+ bool ncclSymkTmaAvailable(struct ncclComm* comm);
++// NCCL_SYM_TMA_ENABLE=2: take the DMA-staged kernel regardless of predicted time or message size.
++bool ncclSymkTmaForced(struct ncclComm* comm);
+ bool ncclSymkTmaDeepEligible(struct ncclComm* comm, ncclSymkKernelId k, size_t nBytes, int nBlocks);
+ 
+ // Generated by src/device/symmetric/generate.py
+@@ -207,16 +214,44 @@ constexpr __host__ __device__ int ncclSymkGetBytesPerChunk(int nWarps, int unrol
+ constexpr int ncclSymkUnrollPacks = 4;
+ constexpr int ncclSymkBytePerChunk = ncclSymkGetBytesPerChunk(ncclSymkMinWarpsPerBlock, ncclSymkUnrollPacks);
+ 
+-// TMA kernel unroll packs
+-constexpr int ncclSymkDeepUnrollPacks = 8;
+-constexpr int ncclSymkDeepBytePerChunk = ncclSymkGetBytesPerChunk(ncclSymkMinWarpsPerBlock, ncclSymkDeepUnrollPacks);
++// TMA kernel unroll packs, by element size.
++//
++// [RCCL] The reduce deep loops carry acc0[UnrollPacks] of T plus acc1[UnrollPacks] of the
++// accumulator, and AccPack is BytePack<ncclSymkBytePerPack * sizeof(Acc) / sizeof(T)> with
++// Acc always float -- so a narrower T makes each accumulator pack WIDER: 32 B/pack at f32,
++// 48 B at 2-byte types, 80 B at 1-byte. A single pack count therefore cannot suit all of
++// them; at 16 packs everything below f32 spills the register file. Scaling the count the
++// other way holds the per-lane accumulator footprint roughly flat (~512 B), so each type
++// gets the widest tile it can actually hold.
++constexpr __host__ __device__ int ncclSymkDeepUnrollPacks(int eltSize) {
++  return eltSize >= 4 ? 16 : eltSize == 2 ? 8 : 4;
++}
++constexpr __host__ __device__ int ncclSymkDeepBytePerChunk(int eltSize) {
++  return ncclSymkGetBytesPerChunk(ncclSymkMinWarpsPerBlock, ncclSymkDeepUnrollPacks(eltSize));
++}
++// [RCCL] ncclSymkTmaDeepEligible() has no datatype, so it bars on the widest chunk any
++// element size produces. That is the safe direction: a narrower type's chunk is smaller,
++// so it needs fewer bytes to fill one, and the picker only ever asks for more than
++// necessary. The deep loops below still size themselves from their own sizeof(T).
++constexpr int ncclSymkDeepMaxUnrollPacks = ncclSymkDeepUnrollPacks(4);
++constexpr int ncclSymkDeepMaxBytePerChunk = ncclSymkDeepBytePerChunk(4);
+ 
+-// Multimem bcast deep loop (single warp; shares unroll with ncclSymkDeepUnrollPacks)
+-constexpr int ncclSymkMultimemDeepBytePerChunk = ncclSymkGetBytesPerChunk(1, ncclSymkDeepUnrollPacks);
++// Multimem bcast deep loop (single warp). A pure relay with no accumulators, so it takes
++// the widest tile regardless of type.
++constexpr int ncclSymkMultimemDeepBytePerChunk = ncclSymkGetBytesPerChunk(1, ncclSymkDeepMaxUnrollPacks);
+ 
+-// Deep loop when input/output are 256 B-aligned
+-constexpr int ncclSymkAlign256BDeepUnrollPacks = 16;
++// Deep loop when input/output are 256 B-aligned. AllGather stages a tile it never reduces,
++// so it carries no accumulator and can take double the packs without register pressure.
++constexpr int ncclSymkAlign256BDeepUnrollPacks = 32;
+ constexpr int ncclSymkAlign256BDeepBytePerChunk =
+   ncclSymkGetBytesPerChunk(ncclSymkMinWarpsPerBlock, ncclSymkAlign256BDeepUnrollPacks);
+ 
++// [RCCL] Core asserts for TDM-powered kernels.  Do not remove the static asserts.
++#if defined(__gfx1250__)
++constexpr int ncclSymkTileSmemBudget = 320 << 10; // gfx1250 has 320KiB of LDS
++static_assert(ncclSymkWarpsPerBlock * ncclTmaShmemScratchWarpSize() <= ncclSymkTileSmemBudget,
++              "async-tile staging windows do not fit gfx1250's per-block LDS budget");
++static_assert(ncclSymkWarpsPerBlock == 16, "TDM symmetric kernels expect a 16-warp launch");
++#endif
++
+ #endif
+diff --git a/projects/rccl/src/scheduler/symmetric_sched.cc b/projects/rccl/src/scheduler/symmetric_sched.cc
+index 8788127c251e..bf7317ba567d 100644
+--- a/projects/rccl/src/scheduler/symmetric_sched.cc
++++ b/projects/rccl/src/scheduler/symmetric_sched.cc
+@@ -297,6 +297,28 @@ ncclResult_t ncclMakeSymmetricTaskList(struct ncclComm* comm, struct ncclTaskCol
+   return ret;
+ }
+ 
++// Tma kernels cut a ncclTmaShmemScratchWarpSize() staging window per warp out of the block's grant
++// (ncclSymkTileSmem()). sym_kernels.h static_asserts the constants; the width this launch actually
++// carries and the grant it actually received are only visible here. No-op for every other kernel.
++static ncclResult_t symCheckTmaLaunch(ncclSymkKernelId kernelId, const char* kernelName, int nWarps,
++                                      int maxDynamicSmem) {
++  if (!(1 & (ncclSymkTmaKernelMask() >> (int)kernelId))) return ncclSuccess;
++  // An overrun would DMA a neighbour's window to every peer.
++  if (nWarps * ncclTmaShmemScratchWarpSize() > maxDynamicSmem) {
++    WARN("Symmetric kernel %s needs %d warps x %d B of tile staging LDS (%d B) but the launch reserves %d B",
++         kernelName, nWarps, ncclTmaShmemScratchWarpSize(), nWarps * ncclTmaShmemScratchWarpSize(), maxDynamicSmem);
++    return ncclInternalError;
++  }
++  // ncclTuningSymkModelSim() is the only producer of this width, so a mismatch means something
++  // downstream overwrote it or the kernel took the LL arm by mistake.
++  if (nWarps != ncclSymkWarpsPerBlock) {
++    WARN("Symmetric kernel %s launching with %d warps, expected the tuned %d", kernelName, nWarps,
++         ncclSymkWarpsPerBlock);
++    return ncclInternalError;
++  }
++  return ncclSuccess;
++}
++
+ ncclResult_t ncclSymmetricTaskScheduler(struct ncclComm* comm,
+                                         struct ncclIntruQueue<struct ncclTaskColl, &ncclTaskColl::next>* symTaskQueue,
+                                         struct ncclKernelPlan* plan) {
+@@ -341,6 +363,7 @@ ncclResult_t ncclSymmetricTaskScheduler(struct ncclComm* comm,
+                      ncclSymkKernelList[kernelIndex];
+   int maxDynamicSmem = ncclSymkKernelMaxDynamicSmem[kernelIndex];
+   plan->kernelDynSmem = (1 & (ncclSymkDynamicSmemKernelMask() >> (int)kernelId)) ? maxDynamicSmem : 0;
++  NCCLCHECKGOTO(symCheckTmaLaunch(kernelId, kernelName, headTask->nWarps, maxDynamicSmem), ret, fail);
+   task = headTask;
+   while (task != nullptr && task->devFuncId == devFuncId) {
+     workCount++;
+diff --git a/projects/rccl/src/sym_kernels.cc b/projects/rccl/src/sym_kernels.cc
+index 99f28ed5f68d..e4dafb7e3c4b 100644
+--- a/projects/rccl/src/sym_kernels.cc
++++ b/projects/rccl/src/sym_kernels.cc
+@@ -6,11 +6,15 @@
+  ************************************************************************/
+ 
+ #include "sym_kernels.h"
++#include "archinfo.h"
+ #include "comm.h"
+ #include "device.h"
+ #include "nccl_device/core_tmp.h"
+ #include "transport.h"
+ #include "tuning.h"
++#if defined(__HIP_PLATFORM_AMD__)
++#include "tdm/tdmCopy.h" // TDM_TOOLCHAIN_AVAILABLE, for ncclSymkTmaAvailable()
++#endif
+ #include <cmath>
+ #include <cfloat>
+ 
+@@ -95,7 +99,7 @@ bool ncclSymkTmaDeepEligible(struct ncclComm* comm, ncclSymkKernelId k, size_t n
+   switch (k) {
+   case ncclSymkKernelId_AllReduce_RSxTmaLD_AGxTmaST:
+   case ncclSymkKernelId_ReduceScatter_TmaLD:
+-    bytePerChunk = ncclSymkDeepBytePerChunk;
++    bytePerChunk = ncclSymkDeepMaxBytePerChunk;
+     chunkMod = comm->nRanks * nBlocks;
+     break;
+   case ncclSymkKernelId_AllGather_TmaST:
+@@ -130,11 +134,24 @@ static uint32_t kernelMask_coll(ncclFunc_t coll) {
+ 
+ NCCL_PARAM(SymGinKernelsEnable, "SYM_GIN_KERNELS_ENABLE", 1)
+ NCCL_PARAM(SymRsGinChunkSize, "SYM_RS_GIN_CHUNK_SIZE", -1)
+-// [RCCL] TMA is an NVIDIA-only hardware feature; keep the symmetric TMA kernels off by default.
++// [RCCL] These kernels stage tiles through a DMA engine: TMA on NVIDIA, the Tensor
++// Data Mover on gfx1250. Still opt-in while the gfx1250 path is being brought up.
++// 0 off, 1 offer to the tuner, 2 force (skips the cost model and the deep-loop size bar; for A/B
++// measurement). NCCL_SYM_KERNEL forces one named kernel, 2 forces whichever the collective has.
+ NCCL_PARAM(SymTmaEnable, "SYM_TMA_ENABLE", 0)
+ 
+ bool ncclSymkTmaAvailable(struct ncclComm* comm) {
+-  return comm->minCompCap >= 100 && ncclParamSymTmaEnable();
++  if (!ncclParamSymTmaEnable()) return false;
++#if defined(__HIP_PLATFORM_AMD__)
++  return TDM_TOOLCHAIN_AVAILABLE && comm->archName && IsArchMatch(comm->archName, "gfx1250");
++#else
++  return comm->minCompCap >= 100;
++#endif
++}
++
++bool ncclSymkTmaForced(struct ncclComm* comm) {
++  // Availability still gates it: an arch that emitted no Tma kernels has none to force to.
++  return ncclParamSymTmaEnable() >= 2 && ncclSymkTmaAvailable(comm);
+ }
+ 
+ static constexpr size_t ncclSymkRsGinDefaultChunkBytes = 128 << 10;
+@@ -344,6 +361,9 @@ uint32_t ncclSymkMask(struct ncclComm* comm, ncclFunc_t coll, int /*ncclDevRedOp
+ 
+   if (!ncclSymkTmaAvailable(comm)) kmask &= ~kernelMask_Tma;
+   if (!symAligned16B) kmask &= ~kernelMask_Tma;
++  // Force leaves the tuner nothing else to pick. Conditional so that a collective with no surviving
++  // Tma kernel degrades to normal selection instead of ending up with an empty mask.
++  if (ncclSymkTmaForced(comm) && (kmask & kernelMask_Tma) != 0) kmask &= kernelMask_Tma;
+ 
+   bool hasGin = ncclParamSymGinKernelsEnable() != 0;
+   if (!hasGin) kmask &= ~kernelMask_Gin;
+diff --git a/projects/rccl/src/tuning/sym_model.cc b/projects/rccl/src/tuning/sym_model.cc
+index 001b49936c29..fde48078c254 100644
+--- a/projects/rccl/src/tuning/sym_model.cc
++++ b/projects/rccl/src/tuning/sym_model.cc
+@@ -111,6 +111,11 @@ static void queryModel_gin(struct ncclTuningInput_t* input, ncclSymkKernelId k,
+ static void queryModel_lsa(struct ncclTuningInput_t* input, ncclSymkKernelId k, size_t nBytes, float* timeUs,
+                            int* nBlocks);
+ 
++// [RCCL] Occupancy cost, charged by the model rather than by the caller: TDM widens its
++// launch after pricing (see queryModel_lsa()), so by the time *nBlocks reaches the caller
++// it is no longer the count the price was based on.
++static constexpr float smPenalty = .025f; // 2.5% percent increase in time per SM
++
+ static void queryModel(struct ncclTuningInput_t* input, ncclSymkKernelId k, size_t nBytes, float* timeUs,
+                        int* nBlocks) {
+   if (ncclSymkGinKernelMask() >> k & 1) {
+@@ -186,6 +191,20 @@ static void queryModel_gin(struct ncclTuningInput_t* input, ncclSymkKernelId k,
+   default:
+     break;
+   }
++  *timeUs *= 1.0f + smPenalty * *nBlocks;
++}
++
++// [RCCL] True only when this kernel will actually stage tiles through the gfx1250
++// Tensor Data Mover. NVIDIA's TMA shares these kernel ids and the same
++// ncclSymkTmaAvailable() gate, but the widening below was measured against TDM, so
++// TMA keeps the shared model.
++static bool usesTdm(struct ncclComm* comm, ncclSymkKernelId k) {
++#if defined(__HIP_PLATFORM_AMD__)
++  return (ncclSymkTmaKernelMask() >> k & 1) && ncclSymkTmaAvailable(comm);
++#else
++  (void)comm, (void)k;
++  return false;
++#endif
+ }
+ 
+ static void queryModel_lsa(struct ncclTuningInput_t* input, ncclSymkKernelId k, size_t nBytes, float* timeUs,
+@@ -306,6 +325,11 @@ static void queryModel_lsa(struct ncclTuningInput_t* input, ncclSymkKernelId k,
+         INFO(NCCL_TUNING,
+              "NCCL_SYM_KERNEL set to %s. At largest grouped work size %zu Bytes, kernel will not exercise TMA paths.",
+              symKernelIdEnv, maxWorkBytes);
++      } else if (ncclSymkTmaForced(comm)) {
++        INFO(NCCL_TUNING,
++             "NCCL_SYM_TMA_ENABLE=2 forces %s. At largest grouped work size %zu Bytes, kernel will not exercise TMA "
++             "paths.",
++             ncclSymkKernelIdToString(k), maxWorkBytes);
+       } else {
+         *nBlocks = -1;
+         return;
+@@ -328,6 +352,15 @@ static void queryModel_lsa(struct ncclTuningInput_t* input, ncclSymkKernelId k,
+       break;
+     }
+   }
++  *timeUs *= 1.0f + smPenalty * *nBlocks;
++
++  // [RCCL] TDM runs wider than it is priced. smPenalty charges a block as pure occupancy,
++  // which holds once its marginal throughput has saturated -- where the search above stops
++  // -- but a TDM warp moves its tile as a serialized load/drain/store/drain chain through
++  // one LDS window, so its throughput tracks resident blocks all the way up. nMaxBlocks
++  // already honours minCTAs/maxCTAs, NCCL_SYM_CTAS and deep eligibility, so widening to it
++  // cannot exceed a user's bound or push the kernel off its own fast path.
++  if (usesTdm(comm, k)) *nBlocks = nMaxBlocks;
+ }
+ 
+ ncclResult_t ncclTuningSymkModelSim(struct ncclTuningInput_t* const inputs, struct ncclTuningResult_t* const tuning) {
+@@ -371,7 +404,6 @@ ncclResult_t ncclTuningSymkModelSim(struct ncclTuningInput_t* const inputs, stru
+ 
+   float kTime = 0.0f;
+   int kBlocks = 0;
+-  constexpr float smPenalty = .025f; // 2.5% percent increase in time per SM
+   queryModel(inputs, (ncclSymkKernelId)tuning->symKernelId, inputs->nBytes, &kTime, &kBlocks);
+   if (kBlocks <= 0) {
+     tuning->valid = 0;
+@@ -379,7 +411,7 @@ ncclResult_t ncclTuningSymkModelSim(struct ncclTuningInput_t* const inputs, stru
+     return ncclSuccess;
+   }
+ 
+-  tuning->timeUs = kTime * (1.0f + smPenalty * kBlocks);
++  tuning->timeUs = kTime; // queryModel() has already charged smPenalty
+   tuning->nChannels = kBlocks;
+   // LL kernels size their slots and iterations for ncclSymkMaxThreads. Convert
+   // that thread count using the runtime wave size; other symmetric kernels keep
+@@ -387,7 +419,7 @@ ncclResult_t ncclTuningSymkModelSim(struct ncclTuningInput_t* const inputs, stru
+   if (rcclSymkKernelIdIsLL(tuning->symKernelId)) {
+     tuning->nWarps = ncclSymkMaxThreads / inputs->comm->WarpSize;
+   } else {
+-    tuning->nWarps = 16;
++    tuning->nWarps = ncclSymkWarpsPerBlock;
+   }
+   return ret;
+ }
+diff --git a/projects/rccl/test/host/CMakeLists.txt b/projects/rccl/test/host/CMakeLists.txt
+index b5ea5c22628d..f689fd83ff4b 100644
+--- a/projects/rccl/test/host/CMakeLists.txt
++++ b/projects/rccl/test/host/CMakeLists.txt
+@@ -691,7 +691,8 @@ if(BUILD_TESTS)
+     add_executable(rccl-UnitTestsMicroSymKernels ${TEST_MICRO_SYM_KERNELS_SOURCE_FILES})
+     target_include_directories(rccl-UnitTestsMicroSymKernels PRIVATE
+       ${CMAKE_CURRENT_SOURCE_DIR}
+-      ${RCCL_COMMON_INCLUDE_DIRS})
++      ${RCCL_COMMON_INCLUDE_DIRS}
++      ${PROJECT_BINARY_DIR}/hipify/src/device)  # sym_kernels.cc includes "tdm/tdmCopy.h"
+     target_compile_definitions(rccl-UnitTestsMicroSymKernels PRIVATE ${RCCL_COMMON_COMPILE_DEFS}
+       GENERATE_SYM_KERNELS
+       SYM_KERNELS_HOST_CC_PATH="${PROJECT_BINARY_DIR}/hipify/gensrc/symmetric/sym_kernels_host.cc"
+@@ -1528,6 +1529,7 @@ if(EXISTS "${RCCL_HIPIFY_DIR}/gensrc/symmetric/sym_kernels_host.cc")
+   target_include_directories(rccl-UnitTestsMicroSymKernels PRIVATE
+     ${CMAKE_CURRENT_SOURCE_DIR}
+     ${RCCL_INCLUDE_DIRS}
++    ${RCCL_HIPIFY_DIR}/src/device  # sym_kernels.cc includes "tdm/tdmCopy.h"
+   )
+ 
+   target_compile_definitions(rccl-UnitTestsMicroSymKernels PRIVATE
+diff --git a/projects/rccl/test/host/fakes/sym_kernels_index_fakes.cc b/projects/rccl/test/host/fakes/sym_kernels_index_fakes.cc
+index 185c37381a9c..9f66673b9ebd 100644
+--- a/projects/rccl/test/host/fakes/sym_kernels_index_fakes.cc
++++ b/projects/rccl/test/host/fakes/sym_kernels_index_fakes.cc
+@@ -13,6 +13,7 @@
+ 
+ ASSERT_HOOK_MATCHES_PROD(g_symkLLKernelMask, ncclSymkLLKernelMask);
+ ASSERT_HOOK_MATCHES_PROD(g_symkDynamicSmemKernelMask, ncclSymkDynamicSmemKernelMask);
++ASSERT_HOOK_MATCHES_PROD(g_symkTmaKernelMask, ncclSymkTmaKernelMask);
+ ASSERT_HOOK_MATCHES_PROD(g_symkGetKernelIndex, ncclSymkGetKernelIndex);
+ ASSERT_HOOK_MATCHES_PROD(g_symkKernelIdToString, ncclSymkKernelIdToString);
+ ASSERT_HOOK_MATCHES_PROD(g_symkMakeDevWork, ncclSymkMakeDevWork);
+@@ -26,6 +27,10 @@ static int DefaultSymkDynamicSmemKernelMask() { return 0; }
+ std::function<int()> g_symkDynamicSmemKernelMask = DefaultSymkDynamicSmemKernelMask;
+ int ncclSymkDynamicSmemKernelMask() { return g_symkDynamicSmemKernelMask(); }
+ 
++static int DefaultSymkTmaKernelMask() { return 0; }
++std::function<int()> g_symkTmaKernelMask = DefaultSymkTmaKernelMask;
++int ncclSymkTmaKernelMask() { return g_symkTmaKernelMask(); }
++
+ // Index 0 always: the kernel-table arrays below are sized ncclSymkKernelId_Count but only index 0 is populated.
+ static int DefaultSymkGetKernelIndex(ncclSymkKernelId, int, ncclDataType_t) { return 0; }
+ std::function<int(ncclSymkKernelId, int, ncclDataType_t)> g_symkGetKernelIndex = DefaultSymkGetKernelIndex;
+@@ -55,6 +60,7 @@ int ncclSymkKernelMaxDynamicSmem[ncclSymkKernelId_Count] = {0};
+ void ResetSymKernelsIndexFakes() {
+   g_symkLLKernelMask = DefaultSymkLLKernelMask;
+   g_symkDynamicSmemKernelMask = DefaultSymkDynamicSmemKernelMask;
++  g_symkTmaKernelMask = DefaultSymkTmaKernelMask;
+   g_symkGetKernelIndex = DefaultSymkGetKernelIndex;
+   g_symkKernelIdToString = DefaultSymkKernelIdToString;
+   g_symkMakeDevWork = DefaultSymkMakeDevWork;
+diff --git a/projects/rccl/test/host/fakes/sym_kernels_index_fakes.h b/projects/rccl/test/host/fakes/sym_kernels_index_fakes.h
+index 55349c699324..9d3019cabd4d 100644
+--- a/projects/rccl/test/host/fakes/sym_kernels_index_fakes.h
++++ b/projects/rccl/test/host/fakes/sym_kernels_index_fakes.h
+@@ -25,6 +25,10 @@ extern std::function<int()> g_symkLLKernelMask;
+ // sym_kernels.cc's ncclSymkDynamicSmemKernelMask: default has no bits set (kernelDynSmem stays 0).
+ extern std::function<int()> g_symkDynamicSmemKernelMask;
+ 
++// sym_kernels.cc's ncclSymkTmaKernelMask: default has no bits set, so the scheduler's tile-staging
++// LDS check never fires.
++extern std::function<int()> g_symkTmaKernelMask;
++
+ // sym_kernels.cc's ncclSymkGetKernelIndex: default always selects index 0.
+ extern std::function<int(ncclSymkKernelId, int, ncclDataType_t)> g_symkGetKernelIndex;
+ 
+diff --git a/projects/rccl/test/host/fakes/sym_kernels_test_stubs.h b/projects/rccl/test/host/fakes/sym_kernels_test_stubs.h
+index e704ff96741f..408be6c78c40 100644
+--- a/projects/rccl/test/host/fakes/sym_kernels_test_stubs.h
++++ b/projects/rccl/test/host/fakes/sym_kernels_test_stubs.h
+@@ -56,7 +56,28 @@
+   X(ncclSymkDevKernel_ReduceScatter_RailA2A_LsaLD_avg_f8e4m3) \
+   X(ncclSymkDevKernel_ReduceScatter_LL_avg_f8e5m2) \
+   X(ncclSymkDevKernel_ReduceScatter_LD_avg_f8e5m2) \
+-  X(ncclSymkDevKernel_ReduceScatter_RailA2A_LsaLD_avg_f8e5m2)
++  X(ncclSymkDevKernel_ReduceScatter_RailA2A_LsaLD_avg_f8e5m2) \
++  RCCL_SYMK_TEST_TMA_KERNEL_IDS(X)
++
++// The DMA-staged kernels, emitted only when gfx1250 is in GPU_TARGETS. Listed unconditionally:
++// elsewhere they are simply unreferenced and --gc-sections drops them.
++#define RCCL_SYMK_TEST_TMA_KERNEL_IDS(X) \
++  X(ncclSymkDevKernel_AllGather_TmaST) \
++  X(ncclSymkDevKernel_AllReduce_RSxTmaLD_AGxTmaST_sum_f32) \
++  X(ncclSymkDevKernel_AllReduce_RSxTmaLD_AGxTmaST_sum_f16) \
++  X(ncclSymkDevKernel_AllReduce_RSxTmaLD_AGxTmaST_sum_bf16) \
++  X(ncclSymkDevKernel_AllReduce_RSxTmaLD_AGxTmaST_sum_f8e4m3) \
++  X(ncclSymkDevKernel_AllReduce_RSxTmaLD_AGxTmaST_sum_f8e5m2) \
++  X(ncclSymkDevKernel_ReduceScatter_TmaLD_sum_f32) \
++  X(ncclSymkDevKernel_ReduceScatter_TmaLD_sum_f16) \
++  X(ncclSymkDevKernel_ReduceScatter_TmaLD_sum_bf16) \
++  X(ncclSymkDevKernel_ReduceScatter_TmaLD_sum_f8e4m3) \
++  X(ncclSymkDevKernel_ReduceScatter_TmaLD_sum_f8e5m2) \
++  X(ncclSymkDevKernel_ReduceScatter_TmaLD_avg_f32) \
++  X(ncclSymkDevKernel_ReduceScatter_TmaLD_avg_f16) \
++  X(ncclSymkDevKernel_ReduceScatter_TmaLD_avg_bf16) \
++  X(ncclSymkDevKernel_ReduceScatter_TmaLD_avg_f8e4m3) \
++  X(ncclSymkDevKernel_ReduceScatter_TmaLD_avg_f8e5m2)
+ 
+ // One stub per kernel plus its _profile sibling: both arrays sym_kernels_host.cc defines need a real address.
+ #define RCCL_SYMK_TEST_STUB(name) \
+@@ -65,5 +86,6 @@
+ RCCL_SYMK_TEST_KERNEL_IDS(RCCL_SYMK_TEST_STUB)
+ #undef RCCL_SYMK_TEST_STUB
+ #undef RCCL_SYMK_TEST_KERNEL_IDS
++#undef RCCL_SYMK_TEST_TMA_KERNEL_IDS
+ 
+ #endif  // RCCL_TEST_HOST_FAKES_SYM_KERNELS_TEST_STUBS_H_
+diff --git a/projects/rccl/test/host/scheduler-test.cc b/projects/rccl/test/host/scheduler-test.cc
+index a83ea997774d..c306f9b98bfe 100644
+--- a/projects/rccl/test/host/scheduler-test.cc
++++ b/projects/rccl/test/host/scheduler-test.cc
+@@ -2346,6 +2346,108 @@ TEST_F(SchedulerMicrotest, SymmetricTaskScheduler_KernelDynSmem_FalseWhenBitNotS
+   EXPECT_EQ(scene.plan->kernelDynSmem, 0);
+ }
+ 
++// ---- Tma kernels: launch geometry and the tile-staging LDS bound ----
++//
++// These read ncclSymkWarpsPerBlock rather than restating 16, but they do not prove the tuner picks
++// it: nWarps arrives already decided and no test target compiles sym_model.cc. They cover what is
++// downstream of that choice. That the width fits the budget is a static_assert in sym_kernels.h.
++constexpr int kSymTmaWaveSize = 32;
++constexpr ncclSymkKernelId kSymTmaKernelId = ncclSymkKernelId_AllGather_TmaST;
++// Fixture value: ncclSymkTileSmemBudget is gfx1250-device-pass only and this is a host binary.
++constexpr int kSymTmaGrantBytes = 320 << 10;
++
++int SymTmaOnlyKernelMask() { return 1 << (int)kSymTmaKernelId; }
++
++TEST_F(SchedulerMicrotest, SymmetricTaskScheduler_TmaKernel_ShippingGeometry_ThreadsAndSmemParams) {
++  SymmetricTaskScheduler_Scene scene;
++  scene.comm->WarpSize = kSymTmaWaveSize;
++  ncclSymkKernelMaxDynamicSmem[0] = kSymTmaGrantBytes;
++  ncclTaskColl task = SymmetricTaskScheduler_MakeTask();
++  task.devFuncId = kSymTmaKernelId;
++  task.nWarps = ncclSymkWarpsPerBlock;
++  ncclIntruQueueEnqueue(&scene.symTaskQueue, &task);
++  ScopedHook tmaMaskHook(g_symkTmaKernelMask, SymTmaOnlyKernelMask);
++  ScopedHook smemMaskHook(g_symkDynamicSmemKernelMask, SymTmaOnlyKernelMask);
++
++  EXPECT_EQ(ncclSymmetricTaskScheduler(scene.comm.get(), &scene.symTaskQueue, scene.plan.get()), ncclSuccess);
++  EXPECT_EQ(scene.plan->threadPerBlock, ncclSymkWarpsPerBlock * kSymTmaWaveSize);  // 512
++  EXPECT_EQ(scene.plan->kernelDynSmem, kSymTmaGrantBytes);  // in the dyn-smem mask: reserves it all
++  auto* argsBuf = static_cast<struct ncclSymkDevWorkArgs*>(scene.plan->kernelSymArgs);
++  ASSERT_NE(argsBuf, nullptr);
++  EXPECT_EQ(argsBuf->maxDynamicSmem, kSymTmaGrantBytes);
++}
++
++// The tuned width's windows, one byte short: the plan has to fail rather than launch an overrun
++// that gets DMA'd to peers.
++TEST_F(SchedulerMicrotest, SymmetricTaskScheduler_TmaKernel_GrantBelowWarpWindows_RejectsWithWarn) {
++  SymmetricTaskScheduler_Scene scene;
++  scene.comm->WarpSize = kSymTmaWaveSize;
++  ncclSymkKernelMaxDynamicSmem[0] = ncclSymkWarpsPerBlock * ncclTmaShmemScratchWarpSize() - 1;
++  ncclTaskColl task = SymmetricTaskScheduler_MakeTask();
++  task.devFuncId = kSymTmaKernelId;
++  task.nWarps = ncclSymkWarpsPerBlock;
++  ncclIntruQueueEnqueue(&scene.symTaskQueue, &task);
++  ScopedHook tmaMaskHook(g_symkTmaKernelMask, SymTmaOnlyKernelMask);
++
++  RcclUnitTesting::ScopedDebugLogging debugLogging(NCCL_LOG_WARN, NCCL_ALL);
++  ncclResult_t result = ncclSuccess;
++  const std::string log = RcclUnitTesting::CaptureLog(
++      [&]() { result = ncclSymmetricTaskScheduler(scene.comm.get(), &scene.symTaskQueue, scene.plan.get()); });
++  EXPECT_EQ(result, ncclInternalError);
++  EXPECT_TRUE(RcclUnitTesting::LogHas(log, "tile staging LDS"));
++}
++
++// Exactly enough is enough: pins the comparison as >, not >=.
++TEST_F(SchedulerMicrotest, SymmetricTaskScheduler_TmaKernel_GrantExactlyMeetsWarpWindows_Accepted) {
++  SymmetricTaskScheduler_Scene scene;
++  scene.comm->WarpSize = kSymTmaWaveSize;
++  ncclSymkKernelMaxDynamicSmem[0] = ncclSymkWarpsPerBlock * ncclTmaShmemScratchWarpSize();
++  ncclTaskColl task = SymmetricTaskScheduler_MakeTask();
++  task.devFuncId = kSymTmaKernelId;
++  task.nWarps = ncclSymkWarpsPerBlock;
++  ncclIntruQueueEnqueue(&scene.symTaskQueue, &task);
++  ScopedHook tmaMaskHook(g_symkTmaKernelMask, SymTmaOnlyKernelMask);
++
++  EXPECT_EQ(ncclSymmetricTaskScheduler(scene.comm.get(), &scene.symTaskQueue, scene.plan.get()), ncclSuccess);
++  EXPECT_EQ(scene.plan->threadPerBlock, ncclSymkWarpsPerBlock * kSymTmaWaveSize);
++}
++
++// The width the launch actually got, not just the constant: sym_kernels.h's static_assert cannot see
++// a tuner that hands out something else, or a kernel that took the LL arm by mistake.
++TEST_F(SchedulerMicrotest, SymmetricTaskScheduler_TmaKernel_WarpCountNotTheTunedWidth_RejectsWithWarn) {
++  SymmetricTaskScheduler_Scene scene;
++  scene.comm->WarpSize = kSymTmaWaveSize;
++  ncclSymkKernelMaxDynamicSmem[0] = kSymTmaGrantBytes;  // ample: only the width can fail here
++  ncclTaskColl task = SymmetricTaskScheduler_MakeTask();
++  task.devFuncId = kSymTmaKernelId;
++  task.nWarps = ncclSymkWarpsPerBlock / 2;
++  ncclIntruQueueEnqueue(&scene.symTaskQueue, &task);
++  ScopedHook tmaMaskHook(g_symkTmaKernelMask, SymTmaOnlyKernelMask);
++
++  RcclUnitTesting::ScopedDebugLogging debugLogging(NCCL_LOG_WARN, NCCL_ALL);
++  ncclResult_t result = ncclSuccess;
++  const std::string log = RcclUnitTesting::CaptureLog(
++      [&]() { result = ncclSymmetricTaskScheduler(scene.comm.get(), &scene.symTaskQueue, scene.plan.get()); });
++  EXPECT_EQ(result, ncclInternalError);
++  EXPECT_TRUE(RcclUnitTesting::LogHas(log, "expected the tuned"));
++}
++
++// Both Tma checks are scoped to the mask: a kernel that stages no tiles keeps its own width and is
++// unaffected by an undersized grant.
++TEST_F(SchedulerMicrotest, SymmetricTaskScheduler_NonTmaKernel_UndersizedGrantAndOtherWidth_NotRejected) {
++  SymmetricTaskScheduler_Scene scene;
++  scene.comm->WarpSize = kSymTmaWaveSize;
++  constexpr int kWarps = 4;  // deliberately not ncclSymkWarpsPerBlock
++  ncclSymkKernelMaxDynamicSmem[0] = kWarps * ncclTmaShmemScratchWarpSize() - 1;
++  ncclTaskColl task = SymmetricTaskScheduler_MakeTask();  // AllGather_LL: not in the mask below
++  task.nWarps = kWarps;
++  ncclIntruQueueEnqueue(&scene.symTaskQueue, &task);
++  ScopedHook tmaMaskHook(g_symkTmaKernelMask, SymTmaOnlyKernelMask);
++
++  EXPECT_EQ(ncclSymmetricTaskScheduler(scene.comm.get(), &scene.symTaskQueue, scene.plan.get()), ncclSuccess);
++  EXPECT_EQ(scene.plan->threadPerBlock, kWarps * kSymTmaWaveSize);
++}
++
+ // Head task's nMaxChannels(60) differs from the rest of the batch(kSymSchedBigBatchChannels=100): proves the
+ // value comes from headTask specifically, not a std::max shared across the batch (both clear the 4096 floor).
+ TEST_F(SchedulerMicrotest, SymmetricTaskScheduler_NMaxChannels_DerivedFromHeadTask_FeedsArgsSize) {
+diff --git a/projects/rccl/test/host/sym-kernels-index-test.cc b/projects/rccl/test/host/sym-kernels-index-test.cc
+index 9915ca19b024..5edf036445db 100644
+--- a/projects/rccl/test/host/sym-kernels-index-test.cc
++++ b/projects/rccl/test/host/sym-kernels-index-test.cc
+@@ -49,6 +49,70 @@ TEST_P(SymKernelIndexValidTest, MapsToExactExpectedKernel) {
+   EXPECT_EQ(ncclSymkKernelListProfile[index], c.expectedProfileKernel);
+ }
+ 
++// generate.py emits these only when gfx1250 is in GPU_TARGETS, so read the answer off the generated
++// switch rather than repeating its target test. CoversEveryGeneratedKernel pins the row count
++// independently, so a wrong answer here cannot pass silently.
++bool TmaKernelsEmitted() {
++  return ncclSymkGetKernelIndex(ncclSymkKernelId_AllGather_TmaST, ncclDevSum, ncclFloat32) >= 0;
++}
++
++// Appended to ValidCases() on a build that emitted them. AllGather_TmaSTMC needs multimem, so ROCm
++// never emits it and it stays invalid unconditionally.
++const std::vector<ExpectedKernelCase>& TmaValidCases() {
++  static const std::vector<ExpectedKernelCase> kCases = {
++      {"AllGather_TmaST", ncclSymkKernelId_AllGather_TmaST, ncclDevSum, ncclFloat32,
++       (void*)ncclSymkDevKernel_AllGather_TmaST, (void*)ncclSymkDevKernel_AllGather_TmaST_profile},
++
++      {"AllReduce_RSxTmaLD_AGxTmaST_sum_f32", ncclSymkKernelId_AllReduce_RSxTmaLD_AGxTmaST, ncclDevSum, ncclFloat32,
++       (void*)ncclSymkDevKernel_AllReduce_RSxTmaLD_AGxTmaST_sum_f32,
++       (void*)ncclSymkDevKernel_AllReduce_RSxTmaLD_AGxTmaST_sum_f32_profile},
++      {"AllReduce_RSxTmaLD_AGxTmaST_sum_f16", ncclSymkKernelId_AllReduce_RSxTmaLD_AGxTmaST, ncclDevSum, ncclFloat16,
++       (void*)ncclSymkDevKernel_AllReduce_RSxTmaLD_AGxTmaST_sum_f16,
++       (void*)ncclSymkDevKernel_AllReduce_RSxTmaLD_AGxTmaST_sum_f16_profile},
++      {"AllReduce_RSxTmaLD_AGxTmaST_sum_bf16", ncclSymkKernelId_AllReduce_RSxTmaLD_AGxTmaST, ncclDevSum, ncclBfloat16,
++       (void*)ncclSymkDevKernel_AllReduce_RSxTmaLD_AGxTmaST_sum_bf16,
++       (void*)ncclSymkDevKernel_AllReduce_RSxTmaLD_AGxTmaST_sum_bf16_profile},
++      {"AllReduce_RSxTmaLD_AGxTmaST_sum_f8e4m3", ncclSymkKernelId_AllReduce_RSxTmaLD_AGxTmaST, ncclDevSum,
++       ncclFloat8e4m3, (void*)ncclSymkDevKernel_AllReduce_RSxTmaLD_AGxTmaST_sum_f8e4m3,
++       (void*)ncclSymkDevKernel_AllReduce_RSxTmaLD_AGxTmaST_sum_f8e4m3_profile},
++      {"AllReduce_RSxTmaLD_AGxTmaST_sum_f8e5m2", ncclSymkKernelId_AllReduce_RSxTmaLD_AGxTmaST, ncclDevSum,
++       ncclFloat8e5m2, (void*)ncclSymkDevKernel_AllReduce_RSxTmaLD_AGxTmaST_sum_f8e5m2,
++       (void*)ncclSymkDevKernel_AllReduce_RSxTmaLD_AGxTmaST_sum_f8e5m2_profile},
++
++      {"ReduceScatter_TmaLD_sum_f32", ncclSymkKernelId_ReduceScatter_TmaLD, ncclDevSum, ncclFloat32,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_sum_f32,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_sum_f32_profile},
++      {"ReduceScatter_TmaLD_sum_f16", ncclSymkKernelId_ReduceScatter_TmaLD, ncclDevSum, ncclFloat16,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_sum_f16,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_sum_f16_profile},
++      {"ReduceScatter_TmaLD_sum_bf16", ncclSymkKernelId_ReduceScatter_TmaLD, ncclDevSum, ncclBfloat16,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_sum_bf16,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_sum_bf16_profile},
++      {"ReduceScatter_TmaLD_sum_f8e4m3", ncclSymkKernelId_ReduceScatter_TmaLD, ncclDevSum, ncclFloat8e4m3,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_sum_f8e4m3,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_sum_f8e4m3_profile},
++      {"ReduceScatter_TmaLD_sum_f8e5m2", ncclSymkKernelId_ReduceScatter_TmaLD, ncclDevSum, ncclFloat8e5m2,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_sum_f8e5m2,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_sum_f8e5m2_profile},
++      {"ReduceScatter_TmaLD_avg_f32", ncclSymkKernelId_ReduceScatter_TmaLD, ncclDevSumPostDiv, ncclFloat32,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_avg_f32,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_avg_f32_profile},
++      {"ReduceScatter_TmaLD_avg_f16", ncclSymkKernelId_ReduceScatter_TmaLD, ncclDevSumPostDiv, ncclFloat16,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_avg_f16,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_avg_f16_profile},
++      {"ReduceScatter_TmaLD_avg_bf16", ncclSymkKernelId_ReduceScatter_TmaLD, ncclDevSumPostDiv, ncclBfloat16,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_avg_bf16,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_avg_bf16_profile},
++      {"ReduceScatter_TmaLD_avg_f8e4m3", ncclSymkKernelId_ReduceScatter_TmaLD, ncclDevSumPostDiv, ncclFloat8e4m3,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_avg_f8e4m3,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_avg_f8e4m3_profile},
++      {"ReduceScatter_TmaLD_avg_f8e5m2", ncclSymkKernelId_ReduceScatter_TmaLD, ncclDevSumPostDiv, ncclFloat8e5m2,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_avg_f8e5m2,
++       (void*)ncclSymkDevKernel_ReduceScatter_TmaLD_avg_f8e5m2_profile},
++  };
++  return kCases;
++}
++
+ // Both cases lists are read off generate.py's own kernel_list, the same list that produces the switch
+ // below: this suite proves the switch routes that list correctly, not that enumerate_kernels() chose it.
+ const std::vector<ExpectedKernelCase>& ValidCases() {
+@@ -169,7 +233,12 @@ const std::vector<ExpectedKernelCase>& ValidCases() {
+        ncclFloat8e5m2, (void*)ncclSymkDevKernel_ReduceScatter_RailA2A_LsaLD_avg_f8e5m2,
+        (void*)ncclSymkDevKernel_ReduceScatter_RailA2A_LsaLD_avg_f8e5m2_profile},
+   };
+-  return kCases;
++  static const std::vector<ExpectedKernelCase> kAll = [] {
++    std::vector<ExpectedKernelCase> all = kCases;
++    if (TmaKernelsEmitted()) all.insert(all.end(), TmaValidCases().begin(), TmaValidCases().end());
++    return all;
++  }();
++  return kAll;
+ }
+ 
+ INSTANTIATE_TEST_SUITE_P(SymAllEmittedCombinations, SymKernelIndexValidTest, ::testing::ValuesIn(ValidCases()),
+@@ -222,17 +291,13 @@ const std::vector<InvalidKernelCase>& InvalidCases() {
+   static const std::vector<InvalidKernelCase> kCases = {
+       // Outer switch(id) default: every real enumerator generate.py never emits a case for.
+       {"UnimplementedId_AllReduce_AGxLLMC_R", ncclSymkKernelId_AllReduce_AGxLLMC_R, ncclDevSum, ncclFloat32},
+-      {"UnimplementedId_AllReduce_RSxTmaLD_AGxTmaST", ncclSymkKernelId_AllReduce_RSxTmaLD_AGxTmaST, ncclDevSum,
+-       ncclFloat32},
+       {"UnimplementedId_AllReduce_RSxLDMC_AGxSTMC", ncclSymkKernelId_AllReduce_RSxLDMC_AGxSTMC, ncclDevSum,
+        ncclFloat32},
+       {"UnimplementedId_AllGather_LLMC", ncclSymkKernelId_AllGather_LLMC, ncclDevSum, ncclFloat32},
+-      {"UnimplementedId_AllGather_TmaST", ncclSymkKernelId_AllGather_TmaST, ncclDevSum, ncclFloat32},
+       {"UnimplementedId_AllGather_TmaSTMC", ncclSymkKernelId_AllGather_TmaSTMC, ncclDevSum, ncclFloat32},
+       {"UnimplementedId_AllGather_STMC", ncclSymkKernelId_AllGather_STMC, ncclDevSum, ncclFloat32},
+       {"UnimplementedId_AllGather_RailRing_LsaSTMC", ncclSymkKernelId_AllGather_RailRing_LsaSTMC, ncclDevSum,
+        ncclFloat32},
+-      {"UnimplementedId_ReduceScatter_TmaLD", ncclSymkKernelId_ReduceScatter_TmaLD, ncclDevSum, ncclFloat32},
+       {"UnimplementedId_ReduceScatter_LDMC", ncclSymkKernelId_ReduceScatter_LDMC, ncclDevSum, ncclFloat32},
+       {"UnimplementedId_ReduceScatter_RailA2A_LsaLDMC", ncclSymkKernelId_ReduceScatter_RailA2A_LsaLDMC, ncclDevSum,
+        ncclFloat32},
+@@ -254,7 +319,28 @@ const std::vector<InvalidKernelCase>& InvalidCases() {
+       {"ReduceScatter_RailA2A_LsaLD_UnknownType_Float64", ncclSymkKernelId_ReduceScatter_RailA2A_LsaLD,
+        ncclDevSumPostDiv, ncclFloat64},
+   };
+-  return kCases;
++  // The three DMA-staged ids swap sides with the build: unimplemented where generate.py emitted no
++  // case, and otherwise carrying their own switch arms whose defaults are worth pinning.
++  static const std::vector<InvalidKernelCase> kAll = [] {
++    std::vector<InvalidKernelCase> all = kCases;
++    if (TmaKernelsEmitted()) {
++      // switch(red): AllReduce is sum-only on the Tma arm too. switch(ty): float types only.
++      all.push_back({"AllReduce_RSxTmaLD_AGxTmaST_UnsupportedRed_Avg", ncclSymkKernelId_AllReduce_RSxTmaLD_AGxTmaST,
++                     ncclDevSumPostDiv, ncclFloat32});
++      all.push_back({"AllReduce_RSxTmaLD_AGxTmaST_UnknownType_Int32", ncclSymkKernelId_AllReduce_RSxTmaLD_AGxTmaST,
++                     ncclDevSum, ncclInt32});
++      all.push_back({"ReduceScatter_TmaLD_UnknownType_Int64", ncclSymkKernelId_ReduceScatter_TmaLD, ncclDevSum,
++                     ncclInt64});
++    } else {
++      all.push_back({"UnimplementedId_AllGather_TmaST", ncclSymkKernelId_AllGather_TmaST, ncclDevSum, ncclFloat32});
++      all.push_back({"UnimplementedId_AllReduce_RSxTmaLD_AGxTmaST", ncclSymkKernelId_AllReduce_RSxTmaLD_AGxTmaST,
++                     ncclDevSum, ncclFloat32});
++      all.push_back({"UnimplementedId_ReduceScatter_TmaLD", ncclSymkKernelId_ReduceScatter_TmaLD, ncclDevSum,
++                     ncclFloat32});
++    }
++    return all;
++  }();
++  return kAll;
+ }
+ 
+ INSTANTIATE_TEST_SUITE_P(SymUnhandledCombinations, SymKernelIndexInvalidTest, ::testing::ValuesIn(InvalidCases()),
+diff --git a/projects/rccl/test/host/sym-kernels-test.cc b/projects/rccl/test/host/sym-kernels-test.cc
+index 0745184ce81a..e86c3b96cfc3 100644
+--- a/projects/rccl/test/host/sym-kernels-test.cc
++++ b/projects/rccl/test/host/sym-kernels-test.cc
+@@ -129,6 +129,26 @@ class SymKernelMaskTest : public SymKernelMicrotest {
+ 
+   // AllReduce's nBusBytes multiplier is 1, so nElts*4 (f32) controls the byte count exactly, cell-aligned.
+   static size_t NEltsForBytes(size_t bytes) { return bytes / ncclTypeSize(kTy); }
++
++  // ncclSymkTmaAvailable() keys on archName under __HIP_PLATFORM_AMD__ and minCompCap otherwise;
++  // set both so a case reads the same either way.
++  void MakeTmaCapableComm() {
++    comm_->minCompCap = 100;
++    comm_->archName = const_cast<char*>("gfx1250");
++  }
++  void MakeTmaIncapableComm() {
++    comm_->minCompCap = 99;
++    comm_->archName = const_cast<char*>("gfx950");
++  }
++
++  // ROCm also needs the SDK's TDM header, so only cases asserting a kernel SURVIVES need this.
++  static bool TmaReachableOnThisBuild() {
++#if defined(__HIP_PLATFORM_AMD__)
++    return TDM_TOOLCHAIN_AVAILABLE;
++#else
++    return true;
++#endif
++  }
+ };
+ 
+ TEST_F(SymKernelMaskTest, JustBelow2GB_LLKernelSurvives) {
+@@ -151,7 +171,8 @@ TEST_F(SymKernelMaskTest, JustBelow2GBUnaligned_AlignUpRoundsUpToLLKernelCleared
+ }
+ 
+ TEST_F(SymKernelMaskTest, JustBelow64GB_NonLLKernelSurvives) {
+-  comm_->minCompCap = 100;
++  if (!TmaReachableOnThisBuild()) GTEST_SKIP() << "SDK ships no TDM descriptor header";
++  MakeTmaCapableComm();
+   ScopedHook loadParam(g_loadParam, SymTmaEnable(1));
+   size_t nElts = NEltsForBytes(32 * (size_t(2) << 30) - NCCL_SYM_KERNEL_CELL_SIZE);
+   uint32_t kmask = ncclSymkMask(comm_.get(), ncclFuncAllReduce, ncclDevSum, kTy, nElts, /*symAligned16B=*/true);
+@@ -159,23 +180,24 @@ TEST_F(SymKernelMaskTest, JustBelow64GB_NonLLKernelSurvives) {
+ }
+ 
+ TEST_F(SymKernelMaskTest, At64GB_EntireMaskZeroed) {
+-  comm_->minCompCap = 100;
++  MakeTmaCapableComm();
+   ScopedHook loadParam(g_loadParam, SymTmaEnable(1));
+   size_t nElts = NEltsForBytes(32 * (size_t(2) << 30));
+   uint32_t kmask = ncclSymkMask(comm_.get(), ncclFuncAllReduce, ncclDevSum, kTy, nElts, /*symAligned16B=*/true);
+   EXPECT_EQ(kmask, 0u);
+ }
+ 
+-TEST_F(SymKernelMaskTest, TmaAvailable_CompCapAtBoundaryAndAligned_TmaKernelSurvives) {
+-  comm_->minCompCap = 100;
++TEST_F(SymKernelMaskTest, TmaAvailable_ArchCapableAndAligned_TmaKernelSurvives) {
++  if (!TmaReachableOnThisBuild()) GTEST_SKIP() << "SDK ships no TDM descriptor header";
++  MakeTmaCapableComm();
+   ScopedHook loadParam(g_loadParam, SymTmaEnable(1));
+   uint32_t kmask =
+       ncclSymkMask(comm_.get(), ncclFuncAllReduce, ncclDevSum, kTy, /*nElts=*/1024, /*symAligned16B=*/true);
+   EXPECT_TRUE(KernelBitSet(kmask, ncclSymkKernelId_AllReduce_RSxTmaLD_AGxTmaST));
+ }
+ 
+-TEST_F(SymKernelMaskTest, CompCapJustBelowBoundary_TmaKernelCleared) {
+-  comm_->minCompCap = 99;
++TEST_F(SymKernelMaskTest, ArchNotTmaCapable_TmaKernelCleared) {
++  MakeTmaIncapableComm();
+   ScopedHook loadParam(g_loadParam, SymTmaEnable(1));
+   uint32_t kmask =
+       ncclSymkMask(comm_.get(), ncclFuncAllReduce, ncclDevSum, kTy, /*nElts=*/1024, /*symAligned16B=*/true);
+@@ -183,7 +205,7 @@ TEST_F(SymKernelMaskTest, CompCapJustBelowBoundary_TmaKernelCleared) {
+ }
+ 
+ TEST_F(SymKernelMaskTest, TmaParamDisabled_TmaKernelCleared) {
+-  comm_->minCompCap = 100;
++  MakeTmaCapableComm();
+   ScopedHook loadParam(g_loadParam, SymTmaEnable(0));
+   uint32_t kmask =
+       ncclSymkMask(comm_.get(), ncclFuncAllReduce, ncclDevSum, kTy, /*nElts=*/1024, /*symAligned16B=*/true);
+@@ -191,13 +213,92 @@ TEST_F(SymKernelMaskTest, TmaParamDisabled_TmaKernelCleared) {
+ }
+ 
+ TEST_F(SymKernelMaskTest, NotSymAligned16B_TmaKernelCleared) {
+-  comm_->minCompCap = 100;
++  MakeTmaCapableComm();
+   ScopedHook loadParam(g_loadParam, SymTmaEnable(1));
+   uint32_t kmask =
+       ncclSymkMask(comm_.get(), ncclFuncAllReduce, ncclDevSum, kTy, /*nElts=*/1024, /*symAligned16B=*/false);
+   EXPECT_FALSE(KernelBitSet(kmask, ncclSymkKernelId_AllReduce_RSxTmaLD_AGxTmaST));
+ }
+ 
++// ---- NCCL_SYM_TMA_ENABLE=2: force by leaving nothing else in the mask ----
++
++// What force has to remove: the non-Tma AllReduce kernels that survive this fixture
++// (hasLsaMultimem=false already clears the MC pair).
++constexpr ncclSymkKernelId kNonTmaAllReduceKernels[] = {
++    ncclSymkKernelId_AllReduce_AGxLL_R,
++    ncclSymkKernelId_AllReduce_RSxLD_AGxST,
++};
++
++TEST_F(SymKernelMaskTest, TmaForced_NonTmaKernelsCleared) {
++  if (!TmaReachableOnThisBuild()) GTEST_SKIP() << "SDK ships no TDM descriptor header";
++  MakeTmaCapableComm();
++  ScopedHook loadParam(g_loadParam, SymTmaEnable(2));
++  uint32_t kmask =
++      ncclSymkMask(comm_.get(), ncclFuncAllReduce, ncclDevSum, kTy, /*nElts=*/1024, /*symAligned16B=*/true);
++  EXPECT_TRUE(KernelBitSet(kmask, ncclSymkKernelId_AllReduce_RSxTmaLD_AGxTmaST));
++  for (ncclSymkKernelId id : kNonTmaAllReduceKernels) {
++    EXPECT_FALSE(KernelBitSet(kmask, id)) << "force left a non-Tma candidate for the tuner to pick: " << (int)id;
++  }
++}
++
++// Kills a mutant that made 1 behave like 2, or dropped the >= 2 test.
++TEST_F(SymKernelMaskTest, TmaEnabledNotForced_NonTmaKernelsStillOffered) {
++  if (!TmaReachableOnThisBuild()) GTEST_SKIP() << "SDK ships no TDM descriptor header";
++  MakeTmaCapableComm();
++  ScopedHook loadParam(g_loadParam, SymTmaEnable(1));
++  uint32_t kmask =
++      ncclSymkMask(comm_.get(), ncclFuncAllReduce, ncclDevSum, kTy, /*nElts=*/1024, /*symAligned16B=*/true);
++  EXPECT_TRUE(KernelBitSet(kmask, ncclSymkKernelId_AllReduce_RSxTmaLD_AGxTmaST));
++  for (ncclSymkKernelId id : kNonTmaAllReduceKernels) {
++    EXPECT_TRUE(KernelBitSet(kmask, id)) << "enable=1 must leave the tuner a choice: " << (int)id;
++  }
++}
++
++// Force must not empty the mask when the arch already cleared the Tma bit.
++TEST_F(SymKernelMaskTest, TmaForced_ArchNotCapable_NonTmaKernelsSurvive) {
++  MakeTmaIncapableComm();
++  ScopedHook loadParam(g_loadParam, SymTmaEnable(2));
++  uint32_t kmask =
++      ncclSymkMask(comm_.get(), ncclFuncAllReduce, ncclDevSum, kTy, /*nElts=*/1024, /*symAligned16B=*/true);
++  EXPECT_FALSE(KernelBitSet(kmask, ncclSymkKernelId_AllReduce_RSxTmaLD_AGxTmaST));
++  for (ncclSymkKernelId id : kNonTmaAllReduceKernels) {
++    EXPECT_TRUE(KernelBitSet(kmask, id)) << "force with no Tma kernel available must not clear: " << (int)id;
++  }
++}
++
++// Same guard via the alignment gate: kmask non-empty but no Tma bit, which a bare
++// `kmask &= kernelMask_Tma` would zero.
++TEST_F(SymKernelMaskTest, TmaForced_NotSymAligned16B_NonTmaKernelsSurvive) {
++  MakeTmaCapableComm();
++  ScopedHook loadParam(g_loadParam, SymTmaEnable(2));
++  uint32_t kmask =
++      ncclSymkMask(comm_.get(), ncclFuncAllReduce, ncclDevSum, kTy, /*nElts=*/1024, /*symAligned16B=*/false);
++  EXPECT_NE(kmask, 0u);
++  EXPECT_FALSE(KernelBitSet(kmask, ncclSymkKernelId_AllReduce_RSxTmaLD_AGxTmaST));
++  for (ncclSymkKernelId id : kNonTmaAllReduceKernels) {
++    EXPECT_TRUE(KernelBitSet(kmask, id)) << "force on a misaligned pair must not clear: " << (int)id;
++  }
++}
++
++// Force is per-collective: each keeps its own Tma kernel and loses the rest.
++TEST_F(SymKernelMaskTest, TmaForced_AppliesToEachCollectivesOwnTmaKernel) {
++  if (!TmaReachableOnThisBuild()) GTEST_SKIP() << "SDK ships no TDM descriptor header";
++  MakeTmaCapableComm();
++  ScopedHook loadParam(g_loadParam, SymTmaEnable(2));
++
++  uint32_t agMask =
++      ncclSymkMask(comm_.get(), ncclFuncAllGather, ncclDevSum, kTy, /*nElts=*/1024, /*symAligned16B=*/true);
++  EXPECT_TRUE(KernelBitSet(agMask, ncclSymkKernelId_AllGather_TmaST));
++  EXPECT_FALSE(KernelBitSet(agMask, ncclSymkKernelId_AllGather_ST));
++  EXPECT_FALSE(KernelBitSet(agMask, ncclSymkKernelId_AllGather_LL));
++
++  uint32_t rsMask =
++      ncclSymkMask(comm_.get(), ncclFuncReduceScatter, ncclDevSum, kTy, /*nElts=*/1024, /*symAligned16B=*/true);
++  EXPECT_TRUE(KernelBitSet(rsMask, ncclSymkKernelId_ReduceScatter_TmaLD));
++  EXPECT_FALSE(KernelBitSet(rsMask, ncclSymkKernelId_ReduceScatter_LD));
++  EXPECT_FALSE(KernelBitSet(rsMask, ncclSymkKernelId_ReduceScatter_LL));
++}
++
+ TEST_F(SymKernelMaskTest, NeedGinFalse_HasGinTrue_GinKernelClearedNonGinKernelSurvives) {
+   ScopedHook teamLsa(g_ncclTeamLsa, [](ncclComm_t c) {
+     ncclTeam_t t{};
+diff --git a/projects/rccl/test/kernel-count/tests/test_symmetric_kernels.py b/projects/rccl/test/kernel-count/tests/test_symmetric_kernels.py
+index 025205b34751..1764e93d75de 100644
+--- a/projects/rccl/test/kernel-count/tests/test_symmetric_kernels.py
++++ b/projects/rccl/test/kernel-count/tests/test_symmetric_kernels.py
+@@ -49,6 +49,27 @@
+     "ty": {"f32", "f16", "bf16", "f8e4m3", "f8e5m2"},
+ }
+ 
++# The generator takes GPU_TARGETS as its second argument and emits the Tma* algos
++# only when a target carries a DMA tile mover (gfx1250's Tensor Data Mover). Those
++# kernels are therefore invisible to the baselines above, so guard them separately:
++# +1 AllGather (TmaST), +5 AllReduce (RSxTmaLD_AGxTmaST, sum only), +10 ReduceScatter
++# (TmaLD, sum and avg).
++#
++# These two are GPU_TARGETS lists, not lists of movers: gfx942 has no TDM and is in
++# both on purpose. A build always passes GPU_TARGETS whole (src/CMakeLists.txt), so a
++# mixed list is the only shape the generator ever really sees, and testing a bare
++# "gfx1250" against a no-argument run would not distinguish a gate that looks for the
++# arch from one that only asks whether any target was given.
++GPU_TARGETS_WITHOUT_TDM = "gfx942;gfx950"
++GPU_TARGETS_WITH_TDM = "gfx942;gfx1250"
++EXPECTED_TDM_TOTAL = 58
++EXPECTED_TDM_PER_COLL = {
++    "AllGather": 3,
++    "AllReduce": 15,
++    "ReduceScatter": 40,
++}
++EXPECTED_TDM_ALGOS = {"TmaST", "RSxTmaLD_AGxTmaST", "TmaLD"}
++
+ # Anchors for parsing kernel names. Reductions carry a trailing _<red>_<ty>;
+ # non-reductions (AllGather) carry only _<algo>. Algorithm tokens themselves
+ # contain underscores (RSxLD_AGxST, RailA2A_LsaLD), so names are parsed by
+@@ -154,13 +175,12 @@ def _dims(records):
+     return {dim: {r[dim] for r in records if r[dim] is not None} for dim in DIMENSIONS}
+ 
+ 
+-@pytest.fixture(scope="session")
+-def sym_host(tmp_path_factory):
++def _generate(tmp_path_factory, name, *args):
+     if not GENERATE_PY.exists():
+         pytest.fail("symmetric generate.py not found: %s" % GENERATE_PY)
+-    d = tmp_path_factory.mktemp("sym")
++    d = tmp_path_factory.mktemp(name)
+     subprocess.run(
+-        [sys.executable, str(GENERATE_PY), str(d)],
++        [sys.executable, str(GENERATE_PY), str(d), *args],
+         check=True,
+         capture_output=True,
+         text=True,
+@@ -169,6 +189,21 @@ def sym_host(tmp_path_factory):
+         return f.read()
+ 
+ 
++@pytest.fixture(scope="session")
++def sym_host(tmp_path_factory):
++    return _generate(tmp_path_factory, "sym")
++
++
++@pytest.fixture(scope="session")
++def sym_host_no_tdm(tmp_path_factory):
++    return _generate(tmp_path_factory, "sym_no_tdm", GPU_TARGETS_WITHOUT_TDM)
++
++
++@pytest.fixture(scope="session")
++def sym_host_tdm(tmp_path_factory):
++    return _generate(tmp_path_factory, "sym_tdm", GPU_TARGETS_WITH_TDM)
++
++
+ def _count_literal(host):
+     m = _COUNT_RE.search(host)
+     assert m is not None, (
+@@ -287,6 +322,53 @@ def test_requirements_values_match_required_cuda(sym_host, sym_module):
+     assert not mismatches, "ncclSymkKernelRequirements[] disagrees with required_cuda():\n" + "\n".join(mismatches)
+ 
+ 
++@pytest.mark.symmetric_generator
++def test_non_tdm_target_list_stays_at_the_baseline(sym_host_no_tdm):
++    """A populated GPU_TARGETS without gfx1250 emits no Tma algos at all."""
++    records = [parse_kernel_name(c) for c in _list_cnames(sym_host_no_tdm)]
++    report = diff_report(
++        EXPECTED_TOTAL, len(records),
++        EXPECTED_PER_COLL, _per_coll(records),
++        EXPECTED_DIMS, _dims(records),
++    )
++    assert report is None, report
++
++    assert _count_literal(sym_host_no_tdm) == EXPECTED_TOTAL, (
++        "ncclSymkKernelCount %d != expected %d for %s"
++        % (_count_literal(sym_host_no_tdm), EXPECTED_TOTAL, GPU_TARGETS_WITHOUT_TDM)
++    )
++    emitted = {r["algo"] for r in records}
++    assert not (emitted & EXPECTED_TDM_ALGOS), (
++        "%s emitted mover algos %s; the gate must key on the arch, not on GPU_TARGETS "
++        "being non-empty" % (GPU_TARGETS_WITHOUT_TDM, sorted(emitted & EXPECTED_TDM_ALGOS))
++    )
++
++
++@pytest.mark.symmetric_generator
++def test_tdm_target_adds_only_the_tma_algos(sym_host_no_tdm, sym_host_tdm):
++    """Adding gfx1250 to GPU_TARGETS gains exactly the Tma* algos, nothing else moves."""
++    base = [parse_kernel_name(c) for c in _list_cnames(sym_host_no_tdm)]
++    tdm = [parse_kernel_name(c) for c in _list_cnames(sym_host_tdm)]
++
++    expected_dims = dict(EXPECTED_DIMS)
++    expected_dims["algo"] = EXPECTED_DIMS["algo"] | EXPECTED_TDM_ALGOS
++    report = diff_report(
++        EXPECTED_TDM_TOTAL, len(tdm),
++        EXPECTED_TDM_PER_COLL, _per_coll(tdm),
++        expected_dims, _dims(tdm),
++    )
++    assert report is None, report
++
++    assert _count_literal(sym_host_tdm) == EXPECTED_TDM_TOTAL, (
++        "ncclSymkKernelCount %d != expected %d for %s"
++        % (_count_literal(sym_host_tdm), EXPECTED_TDM_TOTAL, GPU_TARGETS_WITH_TDM)
++    )
++    # Every baseline kernel must survive: the arch algos are additive, never a swap.
++    assert {tuple(sorted(r.items())) for r in base} <= {tuple(sorted(r.items())) for r in tdm}, (
++        "GPU_TARGETS=%s dropped kernels that %s emits" % (GPU_TARGETS_WITH_TDM, GPU_TARGETS_WITHOUT_TDM)
++    )
++
++
+ # --- anchored name parser: valid cases --------------------------------------
+ @pytest.mark.symmetric_generator
+ @pytest.mark.parametrize("cname,expected", [
