@@ -41,6 +41,7 @@ See https://github.com/ROCm/TheRock/issues/5455 for more details.
 """
 
 import argparse
+import os
 from pathlib import Path
 import platform
 import shlex
@@ -243,6 +244,34 @@ def install_packages_into_venv(
     if index_name:
         # Look up known index name.
         index_url = ROCM_INDEX_URLS_MAP[index_name]
+
+    # Opt-in: route the ROCm pip index through a node-local caching proxy (e.g. a
+    # Dragonfly s3-shim) when THEROCK_PIP_INDEX_URL is set. Only when a real index
+    # is in use (not --no-index) AND that index is the nightly channel the shim
+    # actually mirrors — a dev/rc/stable --index-url must NOT be forced onto the
+    # nightly-only shim (would install wrong-channel wheels). Verified reachable
+    # first because pip has no index fallback — an unreachable proxy would
+    # hard-fail the install, so we fall back to the requested index_url. Unset (the
+    # default): behavior is unchanged.
+    shim_index = os.getenv("THEROCK_PIP_INDEX_URL")
+    if (
+        shim_index
+        and index_url
+        and "nightly.repo.amd.com" in index_url
+        and shim_index != index_url
+    ):
+        import urllib.request
+
+        try:
+            with urllib.request.urlopen(shim_index, timeout=5):
+                pass
+            log(f"Routing pip index via THEROCK_PIP_INDEX_URL={shim_index} (was {index_url})")
+            index_url = shim_index
+        except Exception as e:  # noqa: BLE001
+            log(
+                f"THEROCK_PIP_INDEX_URL={shim_index} unreachable ({type(e).__name__}); "
+                f"keeping {index_url}"
+            )
 
     if index_url == "" and extra_index_url:
         # There is no index left to supplement, so the extra index becomes the
