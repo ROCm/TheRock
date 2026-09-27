@@ -1,0 +1,66 @@
+From be51d4346f06550f37abec0a7b664e9416f8757f Mon Sep 17 00:00:00 2001
+From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
+Date: Sun, 27 Sep 2026 15:19:18 -0500
+Subject: [PATCH] fix(hipblaslt): replace complete strict assembly processor
+ names
+
+---
+ .../Tests/unit/test_custom_kernel_host.py     | 21 +++++++++++++++++++
+ .../Tensile/Toolchain/Component.py            |  6 ++++--
+ 2 files changed, 25 insertions(+), 2 deletions(-)
+
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_custom_kernel_host.py b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_custom_kernel_host.py
+index 00df2aebf5..8e2ef8bbd9 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_custom_kernel_host.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_custom_kernel_host.py
+@@ -271,3 +271,24 @@ def test_derive_wave_params_square_wave_count():
+     # num_threads=256, wavefront=64 -> num_waves=4 (perfect square) -> wgM=2.
+     wave_group, _ = deriveWaveParams([16, 16, 16, 1], 256, [256, 256], 64)
+     assert wave_group == [2, 2]
++
++
++@pytest.mark.parametrize("source,target", [
++    ("gfx1250", "gfx1250-strict"),
++    ("gfx1250-strict", "gfx1250-strict"),
++    ("gfx1250-strict", "gfx1250"),
++])
++@pytest.mark.parametrize("features", ["", ":sramecc+:xnack-"])
++def test_retarget_strict_processor_is_complete_and_idempotent(tmp_path, source, target, features):
++    src = tmp_path / "strict.s"
++    template = ('\t.amdgcn_target "amdgcn-amd-amdhsa--{gfx}{features}"\n'
++                '  amdhsa.target: amdgcn-amd-amdhsa--{gfx}{features}\n'
++                's_endpgm\n')
++    src.write_text(template.format(gfx=source, features=features))
++    Assembler._retargetAssemblySource(target, str(src))
++    expected = template.format(gfx=target, features=features)
++    assert src.read_text() == expected
++    mtime = src.stat().st_mtime_ns
++    Assembler._retargetAssemblySource(target, str(src))
++    assert src.read_text() == expected
++    assert src.stat().st_mtime_ns == mtime
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
+index f55e420d4f..93a0637a41 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
+@@ -171,14 +171,16 @@ class Assembler(Component):
+             # genuinely bad, rather than a confusing traceback from this helper.
+             return
+ 
++        # Consume the complete processor name, including -strict, while
++        # preserving colon-delimited target features from the source.
+         target = f"amdgcn-amd-amdhsa--{targetGfx}"
+         updated = sub(
+-            r'(\.amdgcn_target\s+")amdgcn-amd-amdhsa--gfx[0-9a-fA-F]+([^"]*")',
++            r'(\.amdgcn_target\s+")amdgcn-amd-amdhsa--gfx[0-9a-fA-F]+(?:-[A-Za-z0-9_]+)*([^"]*")',
+             rf'\1{target}\2',
+             src,
+         )
+         updated = sub(
+-            r'(amdhsa\.target:\s*)amdgcn-amd-amdhsa--gfx[0-9a-fA-F]+([^\s]*)',
++            r'(amdhsa\.target:\s*)amdgcn-amd-amdhsa--gfx[0-9a-fA-F]+(?:-[A-Za-z0-9_]+)*([^\s]*)',
+             rf'\1{target}\2',
+             updated,
+         )
+-- 
+2.43.0
+
