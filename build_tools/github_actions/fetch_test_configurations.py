@@ -66,12 +66,18 @@ TEST_LABEL_GROUPS: dict[str, list[str]] = {
 # --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
 # --ulimit nofile=1048576:1048576 - Increase open file limit for RCCL
 # --security-opt seccomp=unconfined - enables memory mapping, and is recommended for containers running in HPC environments
+# -e THEROCK_ARTIFACT_HTTP_BASE - bare passthrough of the runner's Dragonfly s3-shim
+#   base URL into the job container. fetch_artifacts/artifact_manager run INSIDE the
+#   container (not on the runner pod), which does not inherit the pod env, so the var
+#   must be forwarded explicitly. Bare `-e` forwards it ONLY when the host sets it;
+#   unset elsewhere -> ShimS3Backend not selected -> unchanged boto3 path.
 _BASE_CONTAINER_OPTIONS = [
     "--ipc host",
     "--user 0:0",
     "--ulimit memlock=-1:-1",
     "--ulimit nofile=1048576:1048576",
     "--security-opt seccomp=unconfined",
+    "-e THEROCK_ARTIFACT_HTTP_BASE",
 ]
 
 # GPU-specific container options (only applied when linux_cpu_runner != True)
