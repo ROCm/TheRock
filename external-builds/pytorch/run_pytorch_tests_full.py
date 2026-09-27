@@ -52,8 +52,10 @@ Environment variables (all overridable via CLI flags or workflow YAML):
 """
 
 import argparse
+import importlib.util
 import os
 import platform
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -520,6 +522,26 @@ def _run_inductor(
     return worst_rc
 
 
+def overlay_hangdiag_test_harness(pytorch_dir: Path) -> None:
+    """Tests import torch.testing._internal from the installed wheel, not from
+    pytorch_dir, so a harness instrumented on the source ref never runs. When
+    the source common_distributed.py carries the hang diagnostics, copy it over
+    the wheel's copy and fail fast if the wheel doesn't pick it up."""
+    rel = Path("torch/testing/_internal/common_distributed.py")
+    src = pytorch_dir / rel
+    if not src.exists() or "_HANGDIAG" not in src.read_text():
+        return
+    torch_dir = Path(importlib.util.find_spec("torch").origin).parent
+    dst = torch_dir.parent / rel
+    shutil.copyfile(src, dst)
+    check = (
+        "import torch.testing._internal.common_distributed as m; "
+        "assert m.DynamoDistributedMultiProcTestCase._run_hang_experiments; "
+        "print('[hangdiag] harness active:', m.__file__)"
+    )
+    subprocess.run([sys.executable, "-c", check], check=True)
+
+
 def main(argv: list[str]) -> int:
     args, passthrough_args = cmd_arguments(argv)
     check_pytorch_source_version(
@@ -554,6 +576,7 @@ def main(argv: list[str]) -> int:
         )
 
     print_env()
+    overlay_hangdiag_test_harness(args.pytorch_dir)
 
     if args.test_config == "inductor":
         return_code = _run_inductor(args, tests_to_skip, passthrough_args)
