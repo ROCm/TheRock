@@ -459,7 +459,7 @@ test_matrix = {
     "rocgdb-corefile": {
         **_rocgdb_common,
         "job_name": "rocgdb-corefile",
-        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm/runtime-core.exp",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --gpu-corefile-tests",
         "test_runner": "linux-gfx942-gpu-rocm-mathlib",
         "include_family": {
             "linux": ["gfx942"],
