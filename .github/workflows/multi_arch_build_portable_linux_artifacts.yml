@@ -293,8 +293,10 @@ jobs:
         env:
           OTLP_ENDPOINT: alloy-customer-dev.observability.svc.cluster.local:4317
         run: |
-          CCACHE_HITS=$(ccache -s 2>/dev/null | grep -E "^\s+Hits:" | head -1 | awk '{print $2}' || echo "0")
-          CCACHE_MISSES=$(ccache -s 2>/dev/null | grep -E "^\s+Misses:" | head -1 | awk '{print $2}' || echo "0")
+          CCACHE_HITS=$(ccache -s 2>/dev/null | grep -E "^\s+Hits:" | head -1 | awk '{print $2}')
+          CCACHE_MISSES=$(ccache -s 2>/dev/null | grep -E "^\s+Misses:" | head -1 | awk '{print $2}')
+          CCACHE_HITS="${CCACHE_HITS:-0}"
+          CCACHE_MISSES="${CCACHE_MISSES:-0}"
           python3 -m venv /tmp/otel-venv
           /tmp/otel-venv/bin/pip install -q opentelemetry-sdk opentelemetry-exporter-otlp-proto-grpc
           /tmp/otel-venv/bin/python3 build_tools/github_actions/emit-stage-trace.py \
