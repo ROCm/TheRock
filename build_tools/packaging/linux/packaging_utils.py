@@ -1206,30 +1206,37 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
             artifact_subdir = subdir["Name"]
             component_list = subdir["Components"]
             for component in component_list:
-                source_dir = (
-                    Path(artifacts_dir)
-                    / f"{artifact_prefix}_{component}_{artifact_suffix}"
-                )
-                if not source_dir.exists():
-                    continue
+                # Check the plain artifact directory and any xnack variants
+                # (e.g. ":xnack+"), matching filter_components_fromartifactory().
+                # Some components (e.g. rand, solver, hiptensor, rocalution) are
+                # only ever built with an xnack suffix for gfx942/gfx950, so
+                # checking only the plain path here falsely reports them as
+                # missing and drops the arch from the meta package's Depends:.
+                base_pattern = f"{artifact_prefix}_{component}_{artifact_suffix}"
+                candidate_dirs = [Path(artifacts_dir) / base_pattern]
+                candidate_dirs.extend(Path(artifacts_dir).glob(f"{base_pattern}:*"))
 
-                # Check if the required subdirectory exists in the manifest
-                manifest_file = source_dir / "artifact_manifest.txt"
-                if not manifest_file.exists():
-                    continue
+                for source_dir in candidate_dirs:
+                    if not source_dir.exists():
+                        continue
 
-                try:
-                    with manifest_file.open("r", encoding="utf-8") as file:
-                        for line in file:
-                            match_found = (
-                                isinstance(artifact_subdir, str)
-                                and (artifact_subdir.lower() + "/") in line.lower()
-                            )
-                            if match_found and line.strip():
-                                # Found at least one required subdirectory in the manifest
-                                return True
-                except OSError:
-                    continue
+                    # Check if the required subdirectory exists in the manifest
+                    manifest_file = source_dir / "artifact_manifest.txt"
+                    if not manifest_file.exists():
+                        continue
+
+                    try:
+                        with manifest_file.open("r", encoding="utf-8") as file:
+                            for line in file:
+                                match_found = (
+                                    isinstance(artifact_subdir, str)
+                                    and (artifact_subdir.lower() + "/") in line.lower()
+                                )
+                                if match_found and line.strip():
+                                    # Found at least one required subdirectory in the manifest
+                                    return True
+                    except OSError:
+                        continue
 
     return False
 
