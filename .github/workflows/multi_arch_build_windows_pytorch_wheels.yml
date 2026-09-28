@@ -353,15 +353,14 @@ jobs:
             --gitrepo-origin "${pytorch_origin}" \
             --repo-hashtag "${PYTORCH_GIT_REF}" \
             --no-commit-hipify
+          # Missing related_commits falls back to nightly audio and vision.
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_audio \
             --torch-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
-            --require-related-commit \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_vision \
             --torch-dir ${{ env.CHECKOUT_ROOT }}/pytorch  \
-            --require-related-commit \
             --no-commit-hipify
 
       # determine_version.py sets optional_build_prod_arguments in
