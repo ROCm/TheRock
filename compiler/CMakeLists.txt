@@ -207,7 +207,9 @@ if(THEROCK_ENABLE_COMPILER)
   # amd-comgr
   # A client of libLLVM which provides an in-process compiler API to the HIP
   # runtime. LLVM/Clang/LLD are statically linked and hidden behind comgr's
-  # version script, avoiding symbol interposition issues.
+  # version script, avoiding symbol interposition issues. CI asserts DT_NEEDED
+  # does not include LLVM/Clang compiler dylibs (libLLVM, libclang-cpp,
+  # libclang.so, libLTO, libRemarks).
   ##############################################################################
 
   # Optionally override the comgr DLL/shared-library output name (Windows). Kept
@@ -272,6 +274,8 @@ if(THEROCK_ENABLE_COMPILER)
     PATH amd-comgr/dist/lib
     LIB_NAMES
       libamd_comgr.so
+    FORBID_NEEDED "libLLVM|libclang-cpp|libclang[.]so|libLTO|libRemarks"
+    FORBID_DYNSYM "^LLVM[A-Z]|4llvm"
   )
 
   ##############################################################################
