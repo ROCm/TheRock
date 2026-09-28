@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from botocore import UNSIGNED
+from botocore.exceptions import ClientError
 from pathlib import Path
 from unittest import mock
 
@@ -638,6 +639,115 @@ class TestS3BackendCredentials(unittest.TestCase):
                 )
         finally:
             os.unlink(creds_path)
+
+
+class TestS3BackendUnsignedRetry(unittest.TestCase):
+    """Tests for retrying reads unsigned when resolved credentials are unusable.
+
+    Workflows fetch artifacts before assuming an IAM role, so boto3 signs with
+    whatever credentials the runner carries. When those have been rotated away,
+    a read of a public bucket fails with InvalidAccessKeyId even though an
+    anonymous read would succeed.
+    """
+
+    def setUp(self):
+        self.backend = S3Backend(output_root=_make_s3_root())
+        self.signed = mock.MagicMock()
+        self.unsigned = mock.MagicMock()
+        # Prime both cached clients so no real boto3 session is created.
+        self.backend._s3_client = self.signed
+        self.backend._s3_client_is_unsigned = False
+        self.backend._unsigned_s3_client = self.unsigned
+
+    @staticmethod
+    def _client_error(code, operation="ListObjectsV2"):
+        return ClientError({"Error": {"Code": code, "Message": code}}, operation)
+
+    @staticmethod
+    def _set_paginator(client, keys):
+        paginator = mock.MagicMock()
+        client.get_paginator.return_value = paginator
+        paginator.paginate.return_value = [{"Contents": [{"Key": k} for k in keys]}]
+
+    def test_list_artifacts_retries_unsigned_on_rotated_key(self):
+        """A rotated key must fall back to an anonymous read."""
+        self.signed.get_paginator.side_effect = self._client_error("InvalidAccessKeyId")
+        self._set_paginator(
+            self.unsigned, ["external/test-run-456-linux/blas_lib_gfx94X.tar.zst"]
+        )
+
+        artifacts = self.backend.list_artifacts()
+
+        self.assertEqual(artifacts, ["blas_lib_gfx94X.tar.zst"])
+
+    def test_list_artifacts_does_not_retry_on_access_denied(self):
+        """AccessDenied means the credentials work but lack permission."""
+        self.signed.get_paginator.side_effect = self._client_error("AccessDenied")
+
+        with self.assertRaises(ClientError):
+            self.backend.list_artifacts()
+        self.unsigned.get_paginator.assert_not_called()
+
+    def test_no_retry_when_client_is_already_unsigned(self):
+        """An unsigned client that fails has no further fallback to try."""
+        self.backend._s3_client = self.unsigned
+        self.backend._s3_client_is_unsigned = True
+        self.unsigned.get_paginator.side_effect = self._client_error(
+            "InvalidAccessKeyId"
+        )
+
+        with self.assertRaises(ClientError):
+            self.backend.list_artifacts()
+
+    def test_download_retries_unsigned_on_rotated_key(self):
+        """Downloads take the same fallback as listing."""
+        self.signed.download_file.side_effect = self._client_error(
+            "InvalidAccessKeyId", "GetObject"
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self.backend.download_artifact(
+                "test.tar.zst", Path(temp_dir) / "out.tar.zst"
+            )
+
+        self.unsigned.download_file.assert_called_once()
+
+    def test_artifact_exists_retries_unsigned_on_bare_forbidden(self):
+        """HeadObject has no body, so a rotated key only surfaces as "403"."""
+        self.signed.head_object.side_effect = self._client_error("403", "HeadObject")
+        self.unsigned.head_object.return_value = {}
+
+        self.assertTrue(self.backend.artifact_exists("test.tar.zst"))
+        self.unsigned.head_object.assert_called_once()
+
+    def test_artifact_exists_false_when_unsigned_retry_also_fails(self):
+        """A genuinely missing object stays missing after the retry."""
+        self.signed.head_object.side_effect = self._client_error("403", "HeadObject")
+        self.unsigned.head_object.side_effect = self._client_error("404", "HeadObject")
+
+        self.assertFalse(self.backend.artifact_exists("nonexistent.tar.zst"))
+
+    def test_list_artifacts_does_not_retry_on_bare_forbidden(self):
+        """Only HEAD callers opt into retrying an uncoded 403."""
+        self.signed.get_paginator.side_effect = self._client_error("403")
+
+        with self.assertRaises(ClientError):
+            self.backend.list_artifacts()
+        self.unsigned.get_paginator.assert_not_called()
+
+    def test_upload_never_retries_unsigned(self):
+        """Writes must surface the credential error rather than mask it."""
+        self.signed.upload_file.side_effect = self._client_error(
+            "InvalidAccessKeyId", "PutObject"
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_path = Path(temp_dir) / "test.tar.zst"
+            source_path.touch()
+            with self.assertRaises(ClientError):
+                self.backend.upload_artifact(source_path, "test.tar.zst")
+
+        self.unsigned.upload_file.assert_not_called()
 
 
 class TestCreateBackendFromEnv(unittest.TestCase):

@@ -18,9 +18,10 @@ Environment-based switching:
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import Any, Callable, List, Optional, Set
 import os
 import shutil
+import sys
 
 from .workflow_outputs import WorkflowOutputRoot
 
@@ -35,6 +36,28 @@ class ArtifactLocation:
 
 # Supported artifact archive extensions (in order of preference)
 ARTIFACT_EXTENSIONS = (".tar.zst", ".tar.xz")
+
+# S3 error codes meaning the resolved credentials are themselves unusable, as
+# opposed to being valid but lacking permission. CI runners can carry baseline
+# credentials that have since been rotated; boto3 still signs with them, so a
+# read of an otherwise public bucket fails. Reads retry unsigned on these.
+UNUSABLE_CREDENTIAL_ERROR_CODES = frozenset(
+    {
+        "AuthFailure",
+        "ExpiredToken",
+        "InvalidAccessKeyId",
+        "InvalidClientTokenId",
+        "InvalidToken",
+        "SignatureDoesNotMatch",
+        "UnrecognizedClientException",
+    }
+)
+
+# A HEAD reply carries no body, so botocore cannot read the <Code> element and
+# reports a bare status instead. HeadObject therefore surfaces a rotated key as
+# "403" where GetObject would say "InvalidAccessKeyId". Callers issuing HEAD
+# requests opt in to treating that as a possible credential fault.
+FORBIDDEN_ERROR_CODES = frozenset({"403", "Forbidden"})
 
 
 def _is_artifact_archive(filename: str) -> bool:
@@ -206,6 +229,8 @@ class S3Backend(ArtifactBackend):
     def __init__(self, output_root: WorkflowOutputRoot):
         self.output_root = output_root
         self._s3_client = None
+        self._s3_client_is_unsigned = False
+        self._unsigned_s3_client = None
 
     @property
     def bucket(self) -> str:
@@ -229,15 +254,17 @@ class S3Backend(ArtifactBackend):
         3. Shared credentials file (``AWS_SHARED_CREDENTIALS_FILE``)
 
         When no credentials are found at all, the client falls back to
-        unsigned requests for public bucket reads.
+        unsigned requests for public bucket reads. Credentials that are found
+        but turn out to be unusable are handled by ``_read`` instead, since
+        that is only detectable from a failed API call.
         """
         if self._s3_client is None:
             import boto3
-            from botocore import UNSIGNED
             from botocore.config import Config
 
             session = boto3.Session()
             credentials = session.get_credentials()
+            self._s3_client_is_unsigned = credentials is None
 
             if credentials is not None:
                 self._s3_client = session.client(
@@ -246,12 +273,65 @@ class S3Backend(ArtifactBackend):
                     config=Config(max_pool_connections=100),
                 )
             else:
-                self._s3_client = session.client(
-                    "s3",
-                    verify=True,
-                    config=Config(max_pool_connections=100, signature_version=UNSIGNED),
-                )
+                self._s3_client = self.unsigned_s3_client
         return self._s3_client
+
+    @property
+    def unsigned_s3_client(self):
+        """Lazy-initialized boto3 S3 client that never signs requests.
+
+        Only usable for reads of public buckets.
+        """
+        if self._unsigned_s3_client is None:
+            import boto3
+            from botocore import UNSIGNED
+            from botocore.config import Config
+
+            self._unsigned_s3_client = boto3.Session().client(
+                "s3",
+                verify=True,
+                config=Config(max_pool_connections=100, signature_version=UNSIGNED),
+            )
+        return self._unsigned_s3_client
+
+    def _read(
+        self, operation: Callable[[Any], Any], *, retry_on_forbidden: bool = False
+    ) -> Any:
+        """Run a read operation, retrying unsigned if the credentials are unusable.
+
+        Workflows commonly fetch artifacts before assuming an IAM role, so the
+        credentials boto3 resolves are whatever the runner happens to carry. If
+        those have been rotated away, the signed request fails even though the
+        bucket allows anonymous reads. Retrying unsigned recovers the read
+        rather than failing the job.
+
+        Set ``retry_on_forbidden`` for HEAD requests, which cannot report a
+        specific error code. A plain AccessDenied then also retries, which is
+        harmless: the anonymous attempt either succeeds or fails the same way.
+
+        Writes deliberately do not use this: an unsigned write cannot succeed,
+        and silently retrying would obscure the credential problem.
+        """
+        from botocore.exceptions import ClientError
+
+        try:
+            return operation(self.s3_client)
+        except ClientError as e:
+            if self._s3_client_is_unsigned:
+                raise
+            error_code = e.response.get("Error", {}).get("Code")
+            retryable = error_code in UNUSABLE_CREDENTIAL_ERROR_CODES or (
+                retry_on_forbidden and error_code in FORBIDDEN_ERROR_CODES
+            )
+            if not retryable:
+                raise
+            print(
+                f"WARNING: S3 read failed with {error_code}; the resolved AWS "
+                f"credentials are not usable. Retrying {self.base_uri} "
+                f"anonymously.",
+                file=sys.stderr,
+            )
+            return operation(self.unsigned_s3_client)
 
     @property
     def base_uri(self) -> str:
@@ -259,7 +339,10 @@ class S3Backend(ArtifactBackend):
 
     def list_artifacts(self, name_filter: Optional[str] = None) -> List[str]:
         """List S3 artifacts."""
-        paginator = self.s3_client.get_paginator("list_objects_v2")
+        return self._read(lambda client: self._list_artifacts(client, name_filter))
+
+    def _list_artifacts(self, client, name_filter: Optional[str]) -> List[str]:
+        paginator = client.get_paginator("list_objects_v2")
         page_iterator = paginator.paginate(Bucket=self.bucket, Prefix=self.s3_prefix)
 
         artifacts = []
@@ -288,7 +371,11 @@ class S3Backend(ArtifactBackend):
         """Download from S3."""
         loc = self.output_root.artifact(artifact_key)
         dest_path.parent.mkdir(parents=True, exist_ok=True)
-        self.s3_client.download_file(self.bucket, loc.relative_path, str(dest_path))
+        self._read(
+            lambda client: client.download_file(
+                self.bucket, loc.relative_path, str(dest_path)
+            )
+        )
 
     def upload_artifact(self, source_path: Path, artifact_key: str) -> None:
         """Upload to S3."""
@@ -324,7 +411,12 @@ class S3Backend(ArtifactBackend):
         """Check if artifact exists in S3."""
         try:
             loc = self.output_root.artifact(artifact_key)
-            self.s3_client.head_object(Bucket=self.bucket, Key=loc.relative_path)
+            self._read(
+                lambda client: client.head_object(
+                    Bucket=self.bucket, Key=loc.relative_path
+                ),
+                retry_on_forbidden=True,
+            )
             return True
         except Exception:
             return False
