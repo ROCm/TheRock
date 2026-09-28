@@ -215,9 +215,7 @@ def test_publish_dry_run_writes_nothing(tmp_path, monkeypatch):
 def test_publish_dry_run_does_not_claim_to_have_published(
     tmp_path, monkeypatch, capsys
 ):
-    # The publishing job runs under continue-on-error, so its log is the only
-    # signal. A dry run that prints "Published:" reports an upload that never
-    # happened.
+    # A dry run that prints "Published:" reports an upload that never happened.
     _stub_bucket(monkeypatch)
     args = prp.parse_args(
         _argv(tmp_path, output_dir=tmp_path / "staging", dry_run=True)
@@ -272,7 +270,8 @@ def test_publish_without_output_dir_selects_s3_backend(tmp_path, monkeypatch):
 def test_publish_rejects_the_release_line(tmp_path, monkeypatch):
     # There is no artifacts bucket for the release line: every
     # therock-release-* bucket has iam_role=None because release upload is
-    # external. The publishing job is gated off it; this is the backstop.
+    # external. The publishing job does not run for that line; this is the
+    # backstop.
     monkeypatch.setenv("RELEASE_TYPE", "release")
     monkeypatch.setenv("GITHUB_REPOSITORY", "ROCm/TheRock")
     args = prp.parse_args(_argv(tmp_path, output_dir=tmp_path / "staging"))

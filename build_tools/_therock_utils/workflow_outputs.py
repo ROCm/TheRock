@@ -258,21 +258,13 @@ class WorkflowOutputRoot:
     ) -> StorageLocation:
         """Location for the ``amdrocm-repo`` bootstrap package.
 
-        Returns ``StorageLocation`` at
         ``{run_id}-linux/packages/{pkg_type}/repo/{os_profile}/amdrocm-repo.{pkg_type}``
         (e.g. ``12345678901-linux/packages/deb/repo/ubuntu2404/amdrocm-repo.deb``).
 
-        This is a standalone file fetched by URL to configure the repository,
-        so it sits *beside* the repository index rather than inside it: it is
-        never reached by ``dists/`` (deb) or ``x86_64/repodata`` (rpm) and so
-        is not part of any package index. Keeping it out matters because one
-        ``amdrocm-repo`` is built per OS profile and they all carry the same
-        package name, which would collide if they were indexed together. The
-        built filenames differ, since the dist tag expands per profile, so the
-        collision is on the package name rather than on the file.
-
-        The object name is fixed so the download URL is stable regardless of
-        the built package's versioned filename.
+        The package is fetched by URL, so it sits beside the repository index
+        rather than in it: every profile's package has the same package name, so
+        indexing them together would collide. The object name is fixed so the
+        download URL does not change with the package version.
 
         Args:
             pkg_type: Package type ('deb' or 'rpm').

@@ -141,6 +141,7 @@ import time
 import traceback
 from argparse import ArgumentParser, Namespace
 from pathlib import Path, PurePosixPath
+from typing import NamedTuple
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
@@ -177,28 +178,33 @@ APT_SOURCES_LIST = _env(
 # ("wget .../rocm.gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/rocm.gpg")
 # and point signed-by= at it. This harness writes its keyring the same way, so
 # sharing the path would overwrite the key a host is already using. Distinct
-# from the amdrocm-repo package's own keyring (AMDROCM_DEB_KEYRING), which is
-# package-owned and lives in a different directory.
+# from the amdrocm-repo package's own keyring (build_repo_package.DEB_KEYRING_PATH),
+# which is package-owned and lives in a different directory.
 APT_KEYRING_FILE = _env("ROCM_APT_KEYRING_FILE", f"/etc/apt/keyrings/{REPO_NAME}.gpg")
 ZYPP_REPOS_DIR = _env("ROCM_ZYPP_REPOS_DIR", "/etc/zypp/repos.d")
 YUM_REPOS_DIR = _env("ROCM_YUM_REPOS_DIR", "/etc/yum.repos.d")
 # Relative path from install prefix to rdhc binary (script); overridable via ROCM_RDHC_REL_PATH
 RDHC_REL_PATH = _env("ROCM_RDHC_REL_PATH", "libexec/rocm-core/rdhc.py")
 
-# amdrocm-repo package: the on-disk paths it installs (the package's public
-# contract). Used by the install-via-package mode to confirm the repo config
-# landed. These are independent of REPO_NAME (which names the manually-written
-# repo file used by the default setup path).
-AMDROCM_REPO_ID = "amdrocm"
-AMDROCM_DEB_SOURCES = "/etc/apt/sources.list.d/amdrocm.sources"
-# Named amdrocm.gpg, not rocm.gpg, so it cannot collide with the keyring the
-# amdgpu driver setup from repo.radeon.com installs. Must match
-# build_repo_package.DEB_KEYRING_PATH.
-AMDROCM_DEB_KEYRING = "/usr/share/keyrings/amdrocm.gpg"
-AMDROCM_RPM_REPO_BASENAME = "amdrocm.repo"
-# Named -amdrocm, not -rocm, for the same collision reason as the deb
-# keyring. Must match build_repo_package.RPM_GPG_KEY_PATH.
-AMDROCM_RPM_KEY = "/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm"
+# Where the amdrocm-repo package's deb repo file lands (rpm: ZYPP_REPOS_DIR /
+# YUM_REPOS_DIR above). File names, key paths and the repo id come from
+# build_repo_package; see RepoPackageContract.
+AMDROCM_DEB_SOURCES_DIR = "/etc/apt/sources.list.d"
+
+
+class RepoPackageContract(NamedTuple):
+    """What an installed amdrocm-repo package leaves on disk for one stream.
+
+    Paths are POSIX strings: they name locations on the target system, not on
+    the host running the harness.
+    """
+
+    stream: str
+    repo_id: str
+    repo_file: str
+    key_file: str
+    signed: bool
+
 
 # Timeouts (seconds) and verification threshold
 GPG_MKDIR_TIMEOUT_SEC = 10
@@ -210,7 +216,7 @@ DNF_CLEAN_TIMEOUT_SEC = 60
 DNF_MAKECACHE_TIMEOUT_SEC = 120
 REPO_PACKAGE_INSTALL_TIMEOUT_SEC = 120
 # Retry the post-install metadata refresh so a transient repo/CDN blip does not
-# fail the (network-dependent) config-only gate.
+# fail the (network-dependent) config-only run.
 REPO_REFRESH_ATTEMPTS = 3
 REPO_REFRESH_BACKOFF_SEC = 3
 INSTALL_TIMEOUT_SEC = 1800  # 30 minutes
@@ -317,6 +323,47 @@ class NativeLinuxPackageInstallTest:
     def _is_sles(self) -> bool:
         """Return True when the OS profile is SLES (delegates to shared helper)."""
         return is_sles(self.os_profile)
+
+    def _repo_package_contract(self) -> RepoPackageContract:
+        """Return the repo file, key and repo id the amdrocm-repo package installs.
+
+        Read from build_repo_package, which renders the package, so the harness
+        looks for the names the package actually ships. The release line maps to
+        a stream through get_url_repo_params, the same mapping the build uses.
+
+        Raises:
+            ValueError: If the release line has no public stream.
+        """
+        # Deferred: only the package mode needs build_repo_package (and the
+        # jinja2 it imports), so the harness's other modes do not depend on it.
+        from build_repo_package import (
+            DEB_KEYRING_PATH,
+            RPM_GPG_KEY_PATH,
+            is_signed,
+            repo_id,
+        )
+        from get_url_repo_params import get_public_repo_stream
+
+        stream = get_public_repo_stream(self.release_type)
+        if not stream:
+            raise ValueError(
+                f"release type {self.release_type!r} has no public amdrocm-repo stream"
+            )
+        rid = repo_id(stream)
+        if self.package_type == "deb":
+            repo_file = PurePosixPath(AMDROCM_DEB_SOURCES_DIR) / f"{rid}.sources"
+            key_file = DEB_KEYRING_PATH
+        else:
+            repo_dir = ZYPP_REPOS_DIR if self._is_sles() else YUM_REPOS_DIR
+            repo_file = PurePosixPath(repo_dir) / f"{rid}.repo"
+            key_file = RPM_GPG_KEY_PATH
+        return RepoPackageContract(
+            stream=stream,
+            repo_id=rid,
+            repo_file=str(repo_file),
+            key_file=key_file,
+            signed=is_signed(stream),
+        )
 
     def __init__(
         self,
@@ -860,10 +907,16 @@ gpgcheck=0
         print("CONFIGURING REPOSITORY VIA amdrocm-repo PACKAGE")
         print("=" * 80)
 
+        try:
+            contract = self._repo_package_contract()
+        except ValueError as e:
+            print(f"[FAIL] {e}")
+            return False
         pkg = self._find_repo_package()
         if pkg is None:
             return False
         print(f"\nRepo package: {pkg}")
+        print(f"Stream: {contract.stream} (repo id {contract.repo_id})")
 
         if self.package_type == "deb":
             install_cmd = ["sudo", "apt", "install", "-y", str(pkg)]
@@ -893,10 +946,9 @@ gpgcheck=0
             return False
         print("[PASS] amdrocm-repo package installed")
 
-        # Refresh metadata for the repo the package just configured. The dnf and
-        # zypper refreshes are scoped to the amdrocm repo; apt has no clean
-        # per-source refresh, so the deb path runs a repo-wide `apt update`
-        # (a failing unrelated base-image source would also fail this step).
+        # Refresh metadata for the repo the package just configured. dnf and
+        # zypper are scoped to it; apt update is repo-wide, so a failing
+        # unrelated source in the base image also fails this step.
         if self.package_type == "deb":
             refresh_cmd = ["sudo", "apt", "update"]
             refresh_timeout = APT_UPDATE_TIMEOUT_SEC
@@ -906,7 +958,7 @@ gpgcheck=0
                 "--non-interactive",
                 "--gpg-auto-import-keys",
                 "refresh",
-                AMDROCM_REPO_ID,
+                contract.repo_id,
             ]
             refresh_timeout = ZYPP_REFRESH_TIMEOUT_SEC
         else:
@@ -914,7 +966,7 @@ gpgcheck=0
                 "dnf",
                 "makecache",
                 "--disablerepo=*",
-                f"--enablerepo={AMDROCM_REPO_ID}",
+                f"--enablerepo={contract.repo_id}",
             ]
             refresh_timeout = DNF_MAKECACHE_TIMEOUT_SEC
 
@@ -943,8 +995,9 @@ gpgcheck=0
     def assert_repo_configured(self) -> bool:
         """Verify the amdrocm-repo package dropped the expected repo config.
 
-        Checks the repo file exists (and looks like a ROCm repo) and, for signed
-        release lines, that the signing key was installed too.
+        Checks the repo file exists and has a ``URIs:``/``baseurl=`` line and,
+        for signed streams, that the signing key was installed too. Where to
+        look comes from _repo_package_contract().
 
         Returns:
         True if the on-disk repo configuration is present and well-formed.
@@ -953,19 +1006,21 @@ gpgcheck=0
         print("VERIFYING REPOSITORY CONFIGURATION")
         print("=" * 80)
 
-        signed = self.release_type in ("prerelease", "release")
+        try:
+            contract = self._repo_package_contract()
+        except ValueError as e:
+            print(f"[FAIL] {e}")
+            return False
+        signed = contract.signed
+        repo_file = Path(contract.repo_file)
+        key_file = Path(contract.key_file)
         ok = True
 
         if self.package_type == "deb":
-            repo_file = Path(AMDROCM_DEB_SOURCES)
-            key_file = Path(AMDROCM_DEB_KEYRING)
             # deb822 marker (independent of the repo host, which need not contain
             # "rocm" for a mirror).
             marker = "URIs:"
         else:
-            repo_dir = ZYPP_REPOS_DIR if self._is_sles() else YUM_REPOS_DIR
-            repo_file = Path(repo_dir) / AMDROCM_RPM_REPO_BASENAME
-            key_file = Path(AMDROCM_RPM_KEY)
             marker = "baseurl="
 
         if repo_file.is_file():
@@ -987,10 +1042,10 @@ gpgcheck=0
             if key_file.is_file():
                 print(f"[PASS] Signing key present: {key_file}")
             else:
-                print(f"[FAIL] Signing key not found (signed line): {key_file}")
+                print(f"[FAIL] Signing key not found (signed stream): {key_file}")
                 ok = False
         else:
-            print("[INFO] Unsigned line: no signing key expected")
+            print("[INFO] Unsigned stream: no signing key expected")
 
         if ok:
             print("\n[PASS] Repository configuration verified")
@@ -1757,7 +1812,8 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         metavar="DIR",
         help="Directory containing the built amdrocm-repo .deb/.rpm. When set, the repository is "
         "configured by installing that package (instead of writing repo files); --repo-url and "
-        "--gpg-key-url become optional. Not valid with --test-type simulate.",
+        "--gpg-key-url become optional. Requires a --release-type with a public stream. "
+        "Not valid with --test-type simulate.",
     )
     parser.add_argument(
         "--repo-config-only",
@@ -1792,6 +1848,20 @@ def _validate_cli_args(parser: ArgumentParser, args: Namespace) -> None:
         return
     if args.repo_config_only and not args.repo_package_dir:
         parser.error("--repo-config-only requires --repo-package-dir")
+    if args.repo_package_dir:
+        # Deferred for the same reason as in _repo_package_contract: only the
+        # package mode needs the stream mapping.
+        from get_url_repo_params import (
+            get_public_repo_release_types,
+            get_public_repo_stream,
+        )
+
+        if not get_public_repo_stream(args.release_type or ""):
+            parser.error(
+                "--repo-package-dir requires --release-type naming a line with a "
+                "public amdrocm-repo stream: "
+                + ", ".join(get_public_repo_release_types())
+            )
     if not args.os_profile:
         parser.error(
             "--os-profile is required when --test-type is 'install', 'sanity', or 'full'"

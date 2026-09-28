@@ -194,11 +194,8 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
                 )
 
     def test_repo_package_sits_outside_the_package_index(self):
-        # The bootstrap file is fetched by URL, so it must not land inside the
-        # repository index: deb indexes dists/ + pool/, rpm indexes x86_64/.
-        # One amdrocm-repo is built per OS profile and they all carry the same
-        # package name, so indexing them together would collide. The filenames
-        # differ, since the dist tag expands per profile.
+        # deb indexes dists/ + pool/ and rpm indexes x86_64/. Every profile's
+        # package has the same package name, so none may land in an index.
         for pkg_type, index_dirs in [
             ("deb", ("dists", "pool")),
             ("rpm", ("x86_64",)),
@@ -274,11 +271,10 @@ class TestWorkflowOutputRootLocationsExternalRepo(unittest.TestCase):
         )
 
     def test_native_linux_repo_package_with_external_repo(self):
-        # external_repo is only ever non-empty for the 'ci' release type from a
-        # fork or a non-ROCm/TheRock repository, which is the only case that
-        # resolves to therock-ci-artifacts-external. The signed lines
-        # (prerelease, release) and nightly resolve to their own buckets, so
-        # their external_repo is "" and the key below has no leading segment.
+        # external_repo is non-empty only for 'ci' from a fork or a repository
+        # other than ROCm/TheRock (therock-ci-artifacts-external). prerelease and
+        # nightly have their own buckets with an empty external_repo; release
+        # has no artifacts bucket at all.
         root = WorkflowOutputRoot(
             bucket="therock-ci-artifacts-external",
             external_repo="Fork-TheRock/",

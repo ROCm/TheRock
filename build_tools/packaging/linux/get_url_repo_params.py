@@ -24,8 +24,7 @@ and test_native_linux_packages_install.yml use any gpg_key_url / GPG_KEY_URL inp
 regardless of release_type (if omitted, install runs without GPG verification).
 
 Subcommands: get-base-url, get-gpg-url, get-repo-sub-folder, get-repo-url, extract-gfx-arch,
-get-container-image, get-public-repo-base-url, get-nightly-sub-folder,
-get-container-image-map. Run with -h for examples.
+get-container-image, get-repo-params. Run with -h for examples.
 
 Maintenance (when packaging or install URLs change):
 
@@ -486,41 +485,33 @@ def cmd_repo_url(args: argparse.Namespace) -> int:
 
 # Which repo.amd.com stream a build line's amdrocm-repo package configures.
 #
-# This is deliberately NOT s3_buckets.get_release_stream(). That function answers
-# a different question -- which product bucket a build publishes into -- and its
-# answers do not transfer:
+# Not s3_buckets.get_release_stream(), which picks the bucket a build publishes
+# into and raises on "release", the line that configures stable. A line absent
+# here has no public stream, and callers skip the package for it.
 #
-#   * it maps prerelease -> rc, and rc.repo.amd.com currently serves nothing on
-#     any distro, so a package pointing there could not refresh;
-#   * it raises on "release", because stable is promoted manually and has no
-#     artifacts bucket, yet stable is the stream users actually install from.
-#
-# So the mapping is kept separate and explicit. A line absent here yields an
-# empty base URL, which callers already treat as "no amdrocm-repo package for
-# this line" -- that is how prerelease is skipped until rc has content.
-#
-# The key is NOT under the packages base: packages live at
-# <root>/core/packages/<distro>/ and the key at <root>/gpg/packages.gpg, so the
-# two are carried separately rather than one being derived from the other. The
-# key URL is emitted whole so that where the key lives stays a fact about the
-# repository, recorded here, rather than a path assembled inside the builder.
-#
-# ``signed`` records whether the stream publishes a key at all. It is not an
-# independent choice: the streams serving a flat per-distro tree publish
-# InRelease/Release.gpg and repomd.xml.asc, and the ones serving per-build trees
-# publish none of them. nightly's gpg/packages.gpg is a 404.
+# Only the stream name and where it is served are recorded here; its shape,
+# signing and repo id belong to build_repo_package. The key is at
+# <root>/gpg/packages.gpg, outside the packages base, so its URL is built here
+# and passed to the builder whole.
 _STREAM_ROOTS = {
     "release": {
         "stream": "stable",
         "root": "https://stable.repo.amd.com/rocm",
-        "signed": True,
+    },
+    "prerelease": {
+        "stream": "rc",
+        "root": "https://rc.repo.amd.com/rocm",
     },
     "nightly": {
         "stream": "nightly",
         "root": "https://nightly.repo.amd.com/rocm",
-        "signed": False,
     },
 }
+
+
+def get_public_repo_release_types() -> tuple[str, ...]:
+    """Return the build lines that configure a public stream, in table order."""
+    return tuple(_STREAM_ROOTS)
 
 
 def get_public_repo_stream(release_type: str) -> str:
@@ -528,7 +519,8 @@ def get_public_repo_stream(release_type: str) -> str:
 
     Note that the build line and the stream are not the same vocabulary and do
     not always share a name: the ``release`` line configures the ``stable``
-    stream. Passed to the builder as ``--stream``.
+    stream and ``prerelease`` configures ``rc``. Passed to the builder as
+    ``--stream``.
     """
     entry = _STREAM_ROOTS.get(release_type.strip().lower())
     return entry["stream"] if entry else ""
@@ -546,28 +538,18 @@ def get_public_repo_base_url(release_type: str) -> str:
     return f"{root}/core/packages" if root else ""
 
 
-def get_public_repo_gpg_key_url(release_type: str) -> str:
+def get_public_repo_gpg_key_url(release_type: str, *, signed: bool) -> str:
     """Return the full signing-key URL for a release line (empty if none).
 
     Passed to the builder as ``--gpg-key-url`` and fetched verbatim. Only a
-    signed stream publishes a key, so an unsigned one yields an empty value here
-    even though it has a base URL.
+    signed stream publishes a key, so an unsigned one yields an empty value
+    even though it has a base URL. ``signed`` comes from
+    ``build_repo_package.is_signed(stream)``, which owns that rule.
     """
-    entry = _STREAM_ROOTS.get(release_type.strip().lower())
-    if not entry or not entry["signed"]:
+    root = get_public_repo_stream_root(release_type)
+    if not root or not signed:
         return ""
-    return f"{entry['root']}/gpg/packages.gpg"
-
-
-def cmd_public_repo_base_url(args: argparse.Namespace) -> int:
-    gha_set_output(
-        {
-            "stream": get_public_repo_stream(args.release_type),
-            "repo_base_url": get_public_repo_base_url(args.release_type),
-            "gpg_key_url": get_public_repo_gpg_key_url(args.release_type),
-        }
-    )
-    return 0
+    return f"{root}/gpg/packages.gpg"
 
 
 # --- nightly sub-folder ---
@@ -596,21 +578,6 @@ def nightly_sub_folder(run_id: str, *, today: date | None = None) -> str:
     return f"{day:%Y%m%d}-{run_id}"
 
 
-def cmd_nightly_sub_folder(args: argparse.Namespace) -> int:
-    # Only the nightly line publishes into a dated sub-folder; every other line
-    # publishes at the repository root, so the value is empty there.
-    if args.release_type and args.release_type.strip().lower() != "nightly":
-        gha_set_output({"repo_sub_folder": ""})
-        return 0
-    try:
-        sub_folder = nightly_sub_folder(args.run_id)
-    except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
-    gha_set_output({"repo_sub_folder": sub_folder})
-    return 0
-
-
 # --- container image map ---
 
 
@@ -619,16 +586,60 @@ def get_container_image_map(os_profiles: list[str]) -> dict[str, str]:
     return {profile: get_container_image(profile) for profile in os_profiles}
 
 
-def cmd_container_image_map(args: argparse.Namespace) -> int:
-    try:
-        profiles = json.loads(args.os_profiles)
-    except json.JSONDecodeError as e:
-        print(f"Error: --os-profiles is not valid JSON: {e}", file=sys.stderr)
-        return 1
-    if not isinstance(profiles, list) or not all(isinstance(p, str) for p in profiles):
-        print("Error: --os-profiles must be a JSON array of strings", file=sys.stderr)
-        return 1
-    gha_set_output({"images": json.dumps(get_container_image_map(profiles))})
+# --- amdrocm-repo parameters ---
+
+# These mirror build_repo_package's private _FLAT / _BUILD_ID. They are compared
+# against its public stream_shape(), and a test asserts the two agree.
+_SHAPE_FLAT = "flat"
+_SHAPE_BUILD_ID = "build_id"
+
+
+def cmd_repo_params(args: argparse.Namespace) -> int:
+    """Emit every parameter the amdrocm-repo build matrix needs, in one output.
+
+    Outputs: ``os_profiles`` and ``images`` (JSON, the matrix), then the stream
+    the build line configures and what follows from it -- ``stream``,
+    ``repo_base_url``, ``gpg_key_url``, ``repo_sub_folder``. A line with no
+    public stream gets all four empty, which callers read as "no package for
+    this line"; the matrix is still emitted.
+    """
+    # Deferred: build_repo_package imports jinja2 at module level, and this
+    # script's other subcommands run in a workflow job that installs no Python
+    # packages. Only this subcommand needs the builder.
+    from build_repo_package import is_signed, list_profiles, stream_shape
+
+    profiles = list_profiles(args.pkg_type)
+    outputs = {
+        "os_profiles": json.dumps(profiles),
+        "images": json.dumps(get_container_image_map(profiles)),
+        "stream": "",
+        "repo_base_url": "",
+        "gpg_key_url": "",
+        "repo_sub_folder": "",
+    }
+    stream = get_public_repo_stream(args.release_type)
+    if stream:
+        shape = stream_shape(stream)
+        if shape not in (_SHAPE_FLAT, _SHAPE_BUILD_ID):
+            print(
+                f"Error: stream {stream!r} has unknown shape {shape!r}", file=sys.stderr
+            )
+            return 1
+        outputs["stream"] = stream
+        outputs["repo_base_url"] = get_public_repo_base_url(args.release_type)
+        outputs["gpg_key_url"] = get_public_repo_gpg_key_url(
+            args.release_type, signed=is_signed(stream)
+        )
+        # A build_id stream serves each build from its own dated folder; a flat
+        # one serves one tree at the root, and the builder rejects a sub-folder
+        # there. The run id is only validated where it is used.
+        if shape == _SHAPE_BUILD_ID:
+            try:
+                outputs["repo_sub_folder"] = nightly_sub_folder(args.run_id)
+            except ValueError as e:
+                print(f"Error: {e}", file=sys.stderr)
+                return 1
+    gha_set_output(outputs)
     return 0
 
 
@@ -908,54 +919,38 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_img.set_defaults(func=cmd_container_image)
 
-    # get-public-repo-base-url: public CDN base for a release line
-    p_pub = subparsers.add_parser(
-        "get-public-repo-base-url",
-        help="Print repo_base_url= for a release line (empty for lines without a public repo, e.g. ci/dev).",
+    # get-repo-params: every amdrocm-repo build parameter in one output
+    p_rp = subparsers.add_parser(
+        "get-repo-params",
+        help=(
+            "Print os_profiles=, images=, stream=, repo_base_url=, gpg_key_url= and "
+            "repo_sub_folder= for an amdrocm-repo build. The last four are empty for "
+            "a line with no public repository (e.g. ci/dev)."
+        ),
     )
-    p_pub.add_argument(
+    p_rp.add_argument(
+        "--pkg-type",
+        type=str,
+        required=True,
+        choices=["deb", "rpm"],
+        help="Package type whose OS profiles form the build matrix",
+    )
+    p_rp.add_argument(
         "--release-type",
         type=str,
         required=True,
         help="Release line (e.g. prerelease, release, nightly)",
     )
-    p_pub.set_defaults(func=cmd_public_repo_base_url)
-
-    # get-nightly-sub-folder: dated sub-folder for the nightly line
-    p_sub = subparsers.add_parser(
-        "get-nightly-sub-folder",
-        help="Print repo_sub_folder=YYYYMMDD-<run_id> for the nightly line.",
-    )
-    p_sub.add_argument(
+    p_rp.add_argument(
         "--run-id",
         type=str,
         required=True,
-        help="Workflow run id to embed in the dated sub-folder",
-    )
-    p_sub.add_argument(
-        "--release-type",
-        type=str,
-        default=None,
         help=(
-            "If set, print an empty repo_sub_folder for any line other than "
-            "'nightly'. If omitted, always print the dated sub-folder."
+            "Workflow run id, embedded in the dated build folder of a per-build "
+            "stream. Ignored (and not validated) for other streams."
         ),
     )
-    p_sub.set_defaults(func=cmd_nightly_sub_folder)
-
-    # get-container-image-map: os_profile -> image map for a build matrix
-    p_map = subparsers.add_parser(
-        "get-container-image-map",
-        help="Print images=<json> mapping each OS profile (JSON array input) to its container image.",
-    )
-    p_map.add_argument(
-        "--os-profiles",
-        type=str,
-        required=True,
-        metavar="JSON",
-        help='JSON array of OS profiles (e.g. ["rhel8","rhel10","sles16"])',
-    )
-    p_map.set_defaults(func=cmd_container_image_map)
+    p_rp.set_defaults(func=cmd_repo_params)
 
     args = parser.parse_args(argv)
     return args.func(args)

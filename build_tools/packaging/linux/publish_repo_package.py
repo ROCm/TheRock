@@ -2,27 +2,20 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Publish a built amdrocm-repo package as a standalone per-distro file.
+r"""Publish a built amdrocm-repo package to the per-run outputs.
 
-The package is uploaded next to the native content packages, as a
-``repo/<os-profile>/`` sibling of the per-run ``packages/<format>/`` prefix,
-rather than into the repository index. A client can then fetch it directly by
-URL to configure the repository. The file becomes publicly reachable once the
-release promotion step copies the per-run tree to the public CDN.
+The destination is ``WorkflowOutputRoot.native_linux_repo_package()``, beside
+the package index (see that method for the layout). Release promotion
+(``publish_rocm_to_release_buckets.py``) copies it with the rest of the per-run
+``packages/<format>/`` tree.
 
-The object name is fixed (``amdrocm-repo.<ext>``) so the download URL is stable
-regardless of the built package's versioned filename.
-
-The destination is resolved through ``WorkflowOutputRoot``, the single source of
-truth for CI path layout, so the bucket and per-run prefix come from the
-workflow context rather than being passed in. That needs the CI environment:
-``GITHUB_REPOSITORY``, ``RELEASE_TYPE``, and the event payload used for fork
-detection. There is no artifacts bucket for the ``release`` line, so that
-release type raises; the publishing job is expected to be gated off it.
+The bucket and prefix come from the CI environment: ``GITHUB_REPOSITORY``,
+``RELEASE_TYPE`` and the event payload used for fork detection. The ``release``
+line has no artifacts bucket and raises; the publishing job does not run for it.
 
 Usage:
   python build_tools/packaging/linux/publish_repo_package.py \
-      --file repo-package-out/amdrocm-repo-7.14.0-1.el10.noarch.rpm \
+      --file repo-package-out/amdrocm-repo-10.0.0-1.stable.el10.noarch.rpm \
       --run-id 12345678901 \
       --os-profile rhel10 \
       --pkg-type rpm
@@ -44,11 +37,8 @@ if str(_BUILD_TOOLS_DIR) not in sys.path:
 from _therock_utils.storage_backend import create_storage_backend
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
-# An os-profile becomes a path segment in the object key, so restrict it to a
-# safe set of characters (no slashes, whitespace, or control characters) and
-# require a leading alphanumeric. The leading character matters: without it,
-# "." and ".." satisfy the character class, and ".." resolves one directory
-# above the intended location when the key is joined onto a local staging
+# An os-profile becomes a path segment of the object key. The leading
+# alphanumeric rejects "." and "..", which would escape a local staging
 # directory. \Z (not $) so a trailing newline is not accepted.
 _OS_PROFILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 
@@ -104,10 +94,8 @@ def publish(args: argparse.Namespace) -> str:
     root = WorkflowOutputRoot.from_workflow_run(run_id=args.run_id, platform="linux")
     dest = root.native_linux_repo_package(args.pkg_type, args.os_profile)
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
-    # Name the destination the run actually writes to. --output-dir stages to a
-    # local tree, so reporting an s3:// URI there would describe an upload that
-    # did not happen. The publishing job runs under continue-on-error, which
-    # makes this log the only signal that it did anything.
+    # Log where the file actually goes: with --output-dir that is a local path,
+    # and an s3:// URI would describe an upload that did not happen.
     target = (
         dest.local_path(args.output_dir) if args.output_dir is not None else dest.s3_uri
     )
