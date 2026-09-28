@@ -124,7 +124,11 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         requires = process_versioned_dependencies(pkg_info, "RPMRequires", config)
 
         dir_list = filter_components_fromartifactory(
-            pkg_name, config.artifacts_dir, config.gfx_arch, config.enable_kpack
+            pkg_name,
+            config.artifacts_dir,
+            config.gfx_arch,
+            config.enable_kpack,
+            target_members=package_target_members(config),
         )
         sourcedir_list.extend(dir_list)
 

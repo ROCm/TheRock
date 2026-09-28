@@ -425,6 +425,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_systems,
             args.rocprofiler_systems_examples,
             args.rocrtst,
+            args.hip_tests,
             args.rocalution,
             args.kfdtest,
             args.rocwmma,
@@ -539,13 +540,6 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("aqlprofile")
             # Contains rocprofiler-sdk-rocpd
             argv.append("rocprofiler-sdk_run")
-            if args.tests:
-                # Installed-test CMake configure needs rocprofiler-sdkConfig.cmake.
-                argv.append("rocprofiler-sdk_dev")
-                # HIP/rocprofiler-sdk tests resolve AMDDeviceLibs via amd-llvm_dev and
-                # libdw headers via sysdeps_dev (sysdeps_lib ships only runtime libs).
-                argv.append("amd-llvm_dev")
-                argv.append("sysdeps_dev")
         if args.rocprofiler_compute:
             extra_artifacts.append("rocprofiler-compute")
             # Contains the rocprof-compute CLI executable.
@@ -557,9 +551,16 @@ def retrieve_artifacts_by_run_id(args):
             if args.tests:
                 # Tests need version.h for rocprofiler-sdk version detection.
                 argv.append("rocprofiler-sdk_dev")
+            # librocprof-sys.so dlopens libhipfile.so.0 on the first hipFile
+            # telemetry sample.
+            extra_artifacts.append("hipfile")
+            extra_artifacts.append("sysdeps-util-linux")
         if args.rocprofiler_systems_examples:
             # Only a _test artifact is produced
             argv.append("rocprofiler-systems-examples_test")
+            # The hipFile examples link libhipfile.so.0 directly.
+            extra_artifacts.append("hipfile")
+            extra_artifacts.append("sysdeps-util-linux")
         if args.rocrtst:
             extra_artifacts.append("rocrtst")
             # rocrtst depends on sysdeps-hwloc (which depends on sysdeps-libpciaccess)
@@ -568,6 +569,9 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocalution:
             extra_artifacts.append("rocalution")
             argv.append("rocalution_dev")
+        if args.hip_tests:
+            # Only a _test artifact is produced; it carries share/hip/catch_tests.
+            argv.append("core-hiptests_test")
         if args.kfdtest:
             extra_artifacts.append("kfdtest")
             # kfdtest depends on llvm-dev
@@ -1024,6 +1028,13 @@ def main(argv):
         "--kfdtest",
         default=False,
         help="Include 'kfdtest' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hip-tests",
+        default=False,
+        help="Include artifacts needed to build and run 'hip-tests'",
         action=argparse.BooleanOptionalAction,
     )
 

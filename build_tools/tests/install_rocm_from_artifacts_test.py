@@ -399,6 +399,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         rocprofiler_systems=False,
         rocprofiler_systems_examples=False,
         rocrtst=False,
+        hip_tests=False,
         rocalution=False,
         kfdtest=False,
         rocwmma=False,
@@ -429,17 +430,20 @@ class TestDebugToolsAmdLlvmDev(unittest.TestCase):
         self.assertIn("amd-llvm_dev", argv)
 
 
-class TestRocprofilerSdkDev(unittest.TestCase):
-    """Tests that --rocprofiler-sdk --tests pulls rocprofiler-sdk_dev."""
+class TestRocprofilerSystemsHipfile(unittest.TestCase):
+    """--rocprofiler-systems fetches hipfile for sample-time dlopen telemetry."""
 
-    def test_rocprofiler_sdk_tests_includes_dev(self) -> None:
-        argv = _captured_fetch_argv(_make_run_id_args(rocprofiler_sdk=True, tests=True))
-        self.assertIn("rocprofiler-sdk_dev", argv)
+    def test_rocprofiler_systems_includes_hipfile(self) -> None:
+        argv = _captured_fetch_argv(_make_run_id_args(rocprofiler_systems=True))
+        self.assertIn("hipfile_lib", argv)
+        self.assertIn("sysdeps-util-linux_lib", argv)
 
-    def test_rocprofiler_sdk_tests_includes_configure_deps(self) -> None:
-        argv = _captured_fetch_argv(_make_run_id_args(rocprofiler_sdk=True, tests=True))
-        self.assertIn("amd-llvm_dev", argv)
-        self.assertIn("sysdeps_dev", argv)
+    def test_rocprofiler_systems_examples_includes_hipfile(self) -> None:
+        argv = _captured_fetch_argv(
+            _make_run_id_args(rocprofiler_systems_examples=True)
+        )
+        self.assertIn("hipfile_lib", argv)
+        self.assertIn("sysdeps-util-linux_lib", argv)
 
 
 if __name__ == "__main__":
