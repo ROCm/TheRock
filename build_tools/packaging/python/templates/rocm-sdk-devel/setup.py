@@ -32,6 +32,8 @@ dist_info = import_dist_info()
 my_package = dist_info.ALL_PACKAGES["devel"]
 print(f"Loaded dist_info package: {my_package}")
 packages = find_packages(where="./src")
+platform_package_name = my_package.get_py_package_name()
+packages.append(platform_package_name)
 print("Found packages:", packages)
 
 setup(
@@ -40,6 +42,11 @@ setup(
     packages=packages,
     package_dir={
         "": "src",
+        # rocm_sdk_devel contains the Python metadata and link manifest, while
+        # the sibling platform package contains ordinary SDK files. They are two
+        # packages in one distribution so wheel installers can own and share the
+        # ordinary payload before `rocm-sdk init` materializes link topology.
+        platform_package_name: f"platform/{platform_package_name}",
     },
     zip_safe=False,
     include_package_data=True,

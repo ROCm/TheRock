@@ -6,6 +6,7 @@
 """Installation package tests for the core package."""
 
 import importlib
+import importlib.metadata as md
 import os
 from pathlib import Path
 import platform
@@ -40,6 +41,64 @@ class ROCmDevelTest(unittest.TestCase):
             sdk_path.parent.parent,
             devel_path.parent.parent,
             msg="Paths are not siblings",
+        )
+
+    def testDevelFilesAndGeneratedLinksHaveDistinctOwnership(self):
+        """The wheel owns ordinary files and initialization owns aliases."""
+        cmd = [sys.executable, "-m", "rocm_sdk", "path", "--root"]
+        output = utils.run_command(cmd, capture=True).decode().strip()
+        devel_root = Path(output)
+
+        import rocm_sdk_devel
+
+        pure_package_path = Path(rocm_sdk_devel.__file__).parent
+        self.assertFalse(
+            (pure_package_path / "_devel.tar").exists(),
+            msg="Expected initialization to consume the devel link manifest",
+        )
+        self.assertFalse(
+            (pure_package_path / "_devel.tar.xz").exists(),
+            msg="Expected initialization to consume the compressed devel link manifest",
+        )
+
+        direct_file = devel_root / "lib" / "cmake" / "hip" / "hip-config.cmake"
+        self.assertTrue(
+            direct_file.is_file(),
+            msg=f"Expected wheel-owned devel file to remain present: {direct_file}",
+        )
+
+        distribution = md.distribution("rocm-sdk-devel")
+        dist_files = distribution.files
+        self.assertIsNotNone(dist_files)
+        direct_relpath = direct_file.relative_to(pure_package_path.parent).as_posix()
+        direct_record = next(
+            (
+                entry
+                for entry in dist_files
+                if str(entry).replace("\\", "/") == direct_relpath
+            ),
+            None,
+        )
+        self.assertIsNotNone(
+            direct_record,
+            msg=f"Expected {direct_relpath} to have a normal wheel RECORD entry",
+        )
+        self.assertIsNotNone(
+            direct_record.hash,
+            msg=f"Expected {direct_relpath} RECORD entry to include a content hash",
+        )
+
+        executable_name = (
+            "amdclang++.exe" if platform.system() == "Windows" else "amdclang++"
+        )
+        devel_alias = devel_root / "lib" / "llvm" / "bin" / executable_name
+        core_package_name = di.ALL_PACKAGES["core"].get_py_package_name()
+        core_module = importlib.import_module(core_package_name)
+        core_root = Path(core_module.__file__).parent
+        core_target = core_root / "lib" / "llvm" / "bin" / executable_name
+        self.assertTrue(
+            os.path.samefile(devel_alias, core_target),
+            msg=f"Expected generated alias {devel_alias} to share {core_target}",
         )
 
     def testCLIPathBin(self):
