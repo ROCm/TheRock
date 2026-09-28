@@ -26,6 +26,10 @@ on:
         description: "CPU test runner label (for components that don't need GPU)"
         type: string
         default: ""
+      tests_enabled:
+        description: "Whether tests should run (true when any runner is available)"
+        type: boolean
+        default: true
       sanity_check_only_for_family:
         type: boolean
         default: false
@@ -85,6 +89,10 @@ on:
         description: "CPU test runner label (for components that don't need GPU)"
         type: string
         default: ""
+      tests_enabled:
+        description: "Whether tests should run (true when any runner is available)"
+        type: boolean
+        default: true
       sanity_check_only_for_family:
         type: boolean
         default: false
@@ -124,9 +132,7 @@ run-name: Test Artifacts (${{ inputs.amdgpu_families }}, ${{ inputs.release_type
 jobs:
   configure_test_matrix:
     name: "Configure test matrix (${{ inputs.amdgpu_families }})"
-    # Always run configuration - CPU tests can run even when GPU testing is gated.
-    # The test matrix will be empty if no tests should run at all.
-    if: ${{ inputs.test_runs_on != '' || inputs.test_runs_on_cpu != '' }}
+    if: ${{ inputs.tests_enabled }}
     runs-on: ubuntu-24.04
     outputs:
       sanity_component: ${{ steps.configure.outputs.sanity_component }}
