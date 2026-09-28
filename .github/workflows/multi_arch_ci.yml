@@ -1,6 +1,12 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# Notes on security:
+#   * As this runs on lower trust `pull_request` events it forwards
+#     no github secrets to child workflows.
+#   * Some child workflows are shared by releases where `secrets: inherit` is
+#     used to forward credentials for Quartz notifications.
+
 name: Multi-Arch CI
 
 on:
@@ -110,7 +116,6 @@ concurrency:
 jobs:
   setup:
     uses: ./.github/workflows/setup_multi_arch.yml
-    # Note: not using 'secrets: inherit' here; no secrets are forwarded to setup.
     with:
       build_variant: "release"
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
@@ -137,10 +142,6 @@ jobs:
         needs.setup.outputs.enable_build_jobs == 'true'
       }}
     uses: ./.github/workflows/multi_arch_ci_linux.yml
-    secrets:
-      # Forward only benchmark database credentials; omit Quartz secrets for CI.
-      BENCHMARK_DB_URL: ${{ secrets.BENCHMARK_DB_URL }}
-      BENCHMARK_DB_FALLBACK_URL: ${{ secrets.BENCHMARK_DB_FALLBACK_URL }}
     with:
       build_config: ${{ needs.setup.outputs.linux_build_config }}
       test_labels: ${{ needs.setup.outputs.linux_test_labels }}
@@ -162,10 +163,6 @@ jobs:
         needs.setup.outputs.enable_build_jobs == 'true'
       }}
     uses: ./.github/workflows/multi_arch_ci_windows.yml
-    secrets:
-      # Forward only benchmark database credentials; omit Quartz secrets for CI.
-      BENCHMARK_DB_URL: ${{ secrets.BENCHMARK_DB_URL }}
-      BENCHMARK_DB_FALLBACK_URL: ${{ secrets.BENCHMARK_DB_FALLBACK_URL }}
     with:
       build_config: ${{ needs.setup.outputs.windows_build_config }}
       test_labels: ${{ needs.setup.outputs.windows_test_labels }}

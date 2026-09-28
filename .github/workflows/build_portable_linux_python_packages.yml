@@ -55,6 +55,10 @@ on:
           set it manually.
         type: string
         default: ""
+      build_runs_on:
+        description: "Runner label for the build job"
+        type: string
+        default: "aws-linux-scale-rocm-prod"
   workflow_call:
     inputs:
       artifact_github_repo:
