@@ -7,12 +7,12 @@
 name: Prolense Telemetry Test
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/prolense_telemetry_test.yml
   workflow_dispatch:
-    inputs:
-      job_count:
-        description: "Number of parallel test jobs to run"
-        type: number
-        default: 3
 
 permissions:
   contents: read
