@@ -128,6 +128,9 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
+      - name: Record job start time
+        run: echo "JOB_START=$(date +%s)" >> $GITHUB_ENV
+
       - name: Checkout external repository
         if: ${{ inputs.external_repo_config != '' }}
         timeout-minutes: 10
@@ -281,6 +284,26 @@ jobs:
         id: summary
         if: always()
         run: python build_tools/github_actions/capture_job_summary.py
+
+      - name: Emit trace span
+        if: always()
+        continue-on-error: true
+        env:
+          OTLP_ENDPOINT: alloy-customer-dev.observability.svc.cluster.local:4317
+        run: |
+          CCACHE_HITS=$(ccache -s 2>/dev/null | grep -E "^\s+Hits:" | head -1 | awk '{print $2}' || echo "0")
+          CCACHE_MISSES=$(ccache -s 2>/dev/null | grep -E "^\s+Misses:" | head -1 | awk '{print $2}' || echo "0")
+          python3 -m venv /tmp/otel-venv
+          /tmp/otel-venv/bin/pip install -q opentelemetry-sdk opentelemetry-exporter-otlp-proto-grpc
+          /tmp/otel-venv/bin/python3 build_tools/github_actions/emit-span.py \
+            --stage        "${STAGE_NAME}" \
+            --arch         "${AMDGPU_FAMILIES:-${DIST_AMDGPU_FAMILIES}}" \
+            --run-id       "${{ github.run_id }}" \
+            --repository   "${{ github.repository }}" \
+            --start-time   "${JOB_START}" \
+            --status       "${{ job.status }}" \
+            --ccache-hits  "${CCACHE_HITS}" \
+            --ccache-misses "${CCACHE_MISSES}"
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
