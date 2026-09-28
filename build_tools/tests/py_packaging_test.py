@@ -14,8 +14,10 @@ import json
 import os
 import stat
 import subprocess
+import tarfile
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -24,7 +26,12 @@ import sys
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.artifacts import ArtifactCatalog
-from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, PopulatedFiles
+from _therock_utils.py_packaging import (
+    Parameters,
+    PopulatedDistPackage,
+    PopulatedFiles,
+    build_packages,
+)
 from build_python_packages import (
     _run_kpack_split,
     validate_kpack_split_target_completeness,
@@ -403,6 +410,195 @@ class MultiArchPackagingTest(TmpDirTestCase):
             core,
             "core (generic) file must be reachable from arch-specific devel",
         )
+
+
+# ---------------------------------------------------------------------------
+# Integration tests: split devel wheel payload and link manifest
+# ---------------------------------------------------------------------------
+
+
+class DevelPackagingTest(TmpDirTestCase):
+    """Tests the prototype split between wheel files and generated links."""
+
+    def _add_artifact(
+        self,
+        artifact_dir: Path,
+        name: str,
+        component: str,
+        target_family: str,
+        *,
+        files: dict[str, tuple[str, int]] | None = None,
+        symlinks: dict[str, str] | None = None,
+        directories: tuple[str, ...] = (),
+    ):
+        subdir = artifact_dir / f"{name}_{component}_{target_family}"
+        stage = subdir / "stage"
+        stage.mkdir(parents=True, exist_ok=True)
+        for relpath in directories:
+            (stage / relpath).mkdir(parents=True, exist_ok=True)
+        for relpath, (content, mode) in (files or {}).items():
+            path = stage / relpath
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
+            path.chmod(mode)
+        for relpath, target in (symlinks or {}).items():
+            path = stage / relpath
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.symlink_to(target)
+        (subdir / "artifact_manifest.txt").write_text("stage\n")
+
+    def _make_params(
+        self, artifact_dir: Path, *, kpack_split: bool = False
+    ) -> Parameters:
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        return Parameters(
+            dest_dir=dest_dir,
+            version="0.0.1.dev0",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+            kpack_split=kpack_split,
+        )
+
+    def _populate_devel(
+        self,
+        *,
+        target_family: str | None,
+        kpack_split: bool = False,
+    ) -> PopulatedDistPackage:
+        artifact_dir = self.temp_dir / "artifacts"
+        artifact_target = target_family or "generic"
+        self._add_artifact(
+            artifact_dir,
+            "sdk",
+            "lib",
+            artifact_target,
+            files={"lib/libshared.txt": ("runtime payload", 0o644)},
+        )
+        self._add_artifact(
+            artifact_dir,
+            "sdk",
+            "dev",
+            artifact_target,
+            files={"include/direct.h": ("direct payload", 0o751)},
+            symlinks={"include/direct-link.h": "direct.h"},
+            directories=("share/empty",),
+        )
+
+        params = self._make_params(artifact_dir, kpack_split=kpack_split)
+        runtime = PopulatedDistPackage(
+            params,
+            logical_name="libraries",
+            target_family=target_family,
+        )
+        runtime.populate_runtime_files(
+            params.filter_artifacts(lambda an: an.component == "lib")
+        )
+
+        devel = PopulatedDistPackage(
+            params,
+            logical_name="devel",
+            target_family=target_family,
+        )
+        devel.populate_devel_files(tarball_compression=False)
+        return devel
+
+    def test_devel_tar_contains_only_directories_and_symlinks(self):
+        devel = self._populate_devel(
+            target_family=None,
+            kpack_split=True,
+        )
+        platform_dir = devel._platform_dir
+
+        direct_file = platform_dir / "include" / "direct.h"
+        source_direct_file = (
+            self.temp_dir
+            / "artifacts"
+            / "sdk_dev_generic"
+            / "stage"
+            / "include"
+            / "direct.h"
+        )
+        self.assertEqual(direct_file.read_text(), "direct payload")
+        self.assertEqual(
+            stat.S_IMODE(direct_file.stat().st_mode),
+            stat.S_IMODE(source_direct_file.stat().st_mode),
+        )
+        self.assertTrue((platform_dir / "__init__.py").is_file())
+        self.assertFalse(os.path.lexists(platform_dir / "lib" / "libshared.txt"))
+        self.assertFalse(os.path.lexists(platform_dir / "include" / "direct-link.h"))
+
+        tar_path = devel.pure_dir / "_devel.tar"
+        with tarfile.open(tar_path, mode="r") as tf:
+            members = {member.name: member for member in tf.getmembers()}
+
+        platform_package_name = platform_dir.name
+        self.assertIn(platform_package_name, members)
+        self.assertTrue(members[platform_package_name].isdir())
+        self.assertIn(f"{platform_package_name}/share/empty", members)
+        self.assertTrue(members[f"{platform_package_name}/share/empty"].isdir())
+
+        runtime_link = members[f"{platform_package_name}/lib/libshared.txt"]
+        self.assertTrue(runtime_link.issym())
+        self.assertEqual(
+            Path(runtime_link.linkname).parts,
+            Path("../../_rocm_sdk_libraries/lib/libshared.txt").parts,
+        )
+        self.assertTrue(
+            members[f"{platform_package_name}/include/direct-link.h"].issym()
+        )
+        self.assertTrue(
+            all(member.isdir() or member.issym() for member in members.values())
+        )
+
+    def test_target_specific_devel_link_uses_matching_platform_package(self):
+        devel = self._populate_devel(target_family="gfx94X-dcgpu")
+        tar_path = devel.pure_dir / "_devel.tar"
+        with tarfile.open(tar_path, mode="r") as tf:
+            member = tf.getmember(f"{devel._platform_dir.name}/lib/libshared.txt")
+
+        self.assertEqual(
+            Path(member.linkname).parts,
+            Path("../../_rocm_sdk_libraries_gfx94X_dcgpu/lib/libshared.txt").parts,
+        )
+
+    def test_devel_wheel_contains_direct_files_and_link_manifest(self):
+        devel = self._populate_devel(
+            target_family=None,
+            kpack_split=True,
+        )
+        build_packages(
+            devel.params.dest_dir,
+            package_dirs=[devel.path],
+            wheel_compression=False,
+        )
+
+        wheel_path = next((devel.params.dest_dir / "dist").glob("*.whl"))
+        platform_package_name = devel._platform_dir.name
+        direct_member = f"{platform_package_name}/include/direct.h"
+        manifest_member = "rocm_sdk_devel/_devel.tar"
+        with zipfile.ZipFile(wheel_path) as wheel:
+            names = wheel.namelist()
+            self.assertIn(direct_member, names)
+            self.assertIn(manifest_member, names)
+
+            record_name = next(
+                name for name in names if name.endswith(".dist-info/RECORD")
+            )
+            record_lines = wheel.read(record_name).decode().splitlines()
+            direct_record = next(
+                line for line in record_lines if line.startswith(f"{direct_member},")
+            )
+            self.assertNotEqual(direct_record, f"{direct_member},,")
+
+            with wheel.open(manifest_member) as manifest_file:
+                with tarfile.open(fileobj=manifest_file, mode="r") as tf:
+                    self.assertTrue(
+                        all(
+                            member.isdir() or member.issym()
+                            for member in tf.getmembers()
+                        )
+                    )
 
 
 # ---------------------------------------------------------------------------
