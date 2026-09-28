@@ -295,8 +295,10 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
     lines.append("")
 
     # Per-family test runner table
-    lines.append("| Platform | Family | Runner Label | Multi-GPU Runner | Scope |")
-    lines.append("|----------|--------|--------------|------------------|-------|")
+    lines.append(
+        "| Platform | Family | Runner Label | Multi-GPU Runner | Components | Scope |"
+    )
+    lines.append("|----------|--------|--------------|------------------|------------|-------|")
     for platform, config in [
         ("Linux", outputs.builds.linux),
         ("Windows", outputs.builds.windows),
@@ -312,11 +314,65 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
                 if entry.get("test-runs-on-multi-gpu")
                 else "—"
             )
+            # Show component count
+            selected_components = entry.get("selected_components", [])
+            component_count = len(selected_components)
+            components_str = f"{component_count} tests" if component_count > 0 else "—"
             if entry.get("sanity_check_only_for_family"):
                 scope = "sanity check only"
             else:
                 scope = test_rocm.test_type
             lines.append(
-                f"| {platform} | {family} | {runner} | {multi_gpu_runner} | {scope} |"
+                f"| {platform} | {family} | {runner} | {multi_gpu_runner} | {components_str} | {scope} |"
             )
     lines.append("")
+
+    # Component breakdown per family (collapsible details)
+    _append_component_breakdown(lines, outputs)
+
+
+def _append_component_breakdown(lines: list[str], outputs: CIOutputs) -> None:
+    """Append detailed component breakdown per family."""
+    for platform, config in [
+        ("Linux", outputs.builds.linux),
+        ("Windows", outputs.builds.windows),
+    ]:
+        if config is None:
+            continue
+        per_family = config.per_family_info
+        for entry in per_family:
+            family = entry["amdgpu_family"]
+            selected_components = entry.get("selected_components", [])
+            multi_gpu_components = entry.get("multi_gpu_components", [])
+            cpu_only_components = entry.get("cpu_only_components", [])
+
+            if not selected_components:
+                continue
+
+            # Categorize components
+            gpu_components = [
+                c
+                for c in selected_components
+                if c not in multi_gpu_components and c not in cpu_only_components
+            ]
+
+            lines.append(f"<details><summary><b>{platform} {family}</b> ({len(selected_components)} components)</summary>")
+            lines.append("")
+
+            if gpu_components:
+                gpu_list = ", ".join(f"`{c}`" for c in sorted(gpu_components))
+                lines.append(f"- **GPU**: {gpu_list}")
+
+            if multi_gpu_components:
+                multi_gpu_list = ", ".join(
+                    f"`{c}`" for c in sorted(multi_gpu_components)
+                )
+                lines.append(f"- **Multi-GPU**: {multi_gpu_list}")
+
+            if cpu_only_components:
+                cpu_list = ", ".join(f"`{c}`" for c in sorted(cpu_only_components))
+                lines.append(f"- **CPU**: {cpu_list}")
+
+            lines.append("")
+            lines.append("</details>")
+            lines.append("")

@@ -83,6 +83,11 @@ from stage_reuse_decision import (
     compute_auto_stage_reuse,
     render_step_summary,
 )
+from test_matrix import (
+    TEST_LABEL_GROUPS,
+    _family_matches,
+    test_matrix,
+)
 
 _NULL_GIT_SHA = "0" * 40
 
@@ -1258,6 +1263,105 @@ def decide_jobs(
 # ---------------------------------------------------------------------------
 
 
+def select_test_components_for_family(
+    platform: str,
+    amdgpu_family: str,
+    test_type: str,
+    test_labels: list[str],
+    enable_multi_gpu: bool,
+    family_gfx_targets: list[str],
+) -> dict:
+    """Pre-compute which test components will run for a family.
+
+    This function applies the same filters as fetch_test_configurations.py:
+    - Platform filter (linux/windows)
+    - include_family / exclude_family
+    - test_types tier gate
+    - test label selection
+    - multi-GPU availability check
+
+    Returns a dict with:
+      - components: list of component names that will run
+      - multi_gpu_components: components needing multi-GPU runners
+      - cpu_only_components: components running on CPU
+    """
+    components: list[str] = []
+    multi_gpu_components: list[str] = []
+    cpu_only_components: list[str] = []
+
+    # Check for ci:run-multi-gpu label to force multi-GPU tests
+    enable_multi_gpu_by_label = "ci:run-multi-gpu" in test_labels
+
+    # Filter out ci: control labels - they're not test component selectors
+    component_test_labels = [c for c in test_labels if not c.startswith("ci:")]
+    parsed_test_labels = [c.split("test:")[-1] for c in component_test_labels]
+    expanded_test_labels = [
+        member
+        for label in parsed_test_labels
+        for member in TEST_LABEL_GROUPS.get(label, [label])
+    ]
+
+    for key, config in test_matrix.items():
+        job_name = config["job_name"]
+
+        # Platform filter
+        if platform not in config.get("platform", []):
+            continue
+
+        # include_family (opt-in) and exclude_family (opt-out) together decide
+        # whether a job runs
+        include_list = config.get("include_family", {}).get(platform, [])
+        if include_list and not _family_matches(
+            include_list, amdgpu_family, family_gfx_targets
+        ):
+            continue
+
+        exclude_list = config.get("exclude_family", {}).get(platform, [])
+        if exclude_list and _family_matches(
+            exclude_list, amdgpu_family, family_gfx_targets
+        ):
+            continue
+
+        # Test label filter - skip if test labels are populated and this job isn't selected
+        if key != "sanity" and expanded_test_labels and key not in expanded_test_labels:
+            continue
+
+        # Tier gate: skip if test_type isn't in allowed test_types
+        allowed_test_types = config.get("test_types")
+        if allowed_test_types and test_type not in allowed_test_types:
+            continue
+
+        # Handle multi-GPU components
+        if "multi_gpu" in config:
+            # Skip multi-GPU tests for quick runs unless enable_multi_gpu_by_label is set
+            if test_type == "quick" and not enable_multi_gpu_by_label:
+                continue
+
+            # Check if this family has multi-GPU runner support
+            family_has_multi_gpu = (
+                platform in config["multi_gpu"]
+                and amdgpu_family in config["multi_gpu"][platform]
+            )
+
+            if family_has_multi_gpu or (enable_multi_gpu and enable_multi_gpu_by_label):
+                multi_gpu_components.append(job_name)
+                components.append(job_name)
+            # If no multi-GPU support, skip this component entirely
+            continue
+
+        # Track CPU-only components
+        if config.get("linux_cpu_runner", False):
+            cpu_only_components.append(job_name)
+
+        components.append(job_name)
+
+    return {
+        "components": components,
+        "multi_gpu_components": multi_gpu_components,
+        "cpu_only_components": cpu_only_components,
+    }
+
+
 def _expand_build_config_for_platform(
     families: list[str],
     platform: str,
@@ -1458,6 +1562,29 @@ def _expand_build_config_for_platform(
             family_info["test_labels_for_family"] = platform_info[
                 "test_labels_for_family"
             ]
+
+        # Pre-compute which test components will run for this family.
+        # Use the platform-specific test labels and the effective test type.
+        effective_test_type = family_test_type or jobs.test_rocm.test_type
+        platform_test_labels = (
+            ci_inputs.linux_test_labels
+            if platform == "linux"
+            else ci_inputs.windows_test_labels
+        )
+        # Check if multi-GPU runner is available for this family
+        enable_multi_gpu = bool(platform_info.get("test-runs-on-multi-gpu"))
+        component_selection = select_test_components_for_family(
+            platform=platform,
+            amdgpu_family=platform_info["family"],
+            test_type=effective_test_type,
+            test_labels=platform_test_labels,
+            enable_multi_gpu=enable_multi_gpu,
+            family_gfx_targets=platform_info.get("fetch-gfx-targets", []),
+        )
+        family_info["selected_components"] = component_selection["components"]
+        family_info["multi_gpu_components"] = component_selection["multi_gpu_components"]
+        family_info["cpu_only_components"] = component_selection["cpu_only_components"]
+
         per_family_info.append(family_info)
 
     if not per_family_info:

@@ -1378,6 +1378,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "test-runs-on-multi-gpu",
             "test-runs-on-multi-gpu-labels",
             "test_type",
+            "selected_components",
+            "multi_gpu_components",
+            "cpu_only_components",
         }
         for config in [result.linux, result.windows]:
             self.assertIsNotNone(config)
@@ -2457,6 +2460,229 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
                 gfx103x_info = builds.linux.per_family_info[0]
                 # Should always use the primary label
                 self.assertEqual(gfx103x_info["test-runs-on"], "linux-gfx1030-gpu-rocm")
+
+
+# ---------------------------------------------------------------------------
+# Test Component Selection
+# ---------------------------------------------------------------------------
+
+
+class TestSelectTestComponentsForFamily(unittest.TestCase):
+    """Test select_test_components_for_family() function."""
+
+    def test_basic_selection_linux(self):
+        """Basic test selection for Linux returns expected components."""
+        result = cm.select_test_components_for_family(
+            platform="linux",
+            amdgpu_family="gfx94X-dcgpu",
+            test_type="quick",
+            test_labels=[],
+            enable_multi_gpu=False,
+            family_gfx_targets=["gfx942"],
+        )
+        # Sanity should always be included
+        self.assertIn("sanity", result["components"])
+        # hip-tests is a common Linux test
+        self.assertIn("hip-tests", result["components"])
+        # hipfile is CPU-only
+        self.assertIn("hipfile", result["cpu_only_components"])
+
+    def test_exclude_family_filters_components(self):
+        """Components with exclude_family filter are excluded."""
+        # hipsparselt excludes gfx90a
+        result = cm.select_test_components_for_family(
+            platform="linux",
+            amdgpu_family="gfx90a",
+            test_type="standard",
+            test_labels=[],
+            enable_multi_gpu=False,
+            family_gfx_targets=["gfx90a"],
+        )
+        # hipsparselt should be excluded for gfx90a
+        self.assertNotIn("hipsparselt", result["components"])
+
+    def test_include_family_filters_components(self):
+        """Components with include_family filter are only included for matching families."""
+        # rocgdb-corefile only runs on gfx942
+        result = cm.select_test_components_for_family(
+            platform="linux",
+            amdgpu_family="gfx94X-dcgpu",
+            test_type="standard",
+            test_labels=[],
+            enable_multi_gpu=False,
+            family_gfx_targets=["gfx942"],
+        )
+        self.assertIn("rocgdb-corefile", result["components"])
+
+        # rocgdb-corefile should NOT be included for gfx90a
+        result = cm.select_test_components_for_family(
+            platform="linux",
+            amdgpu_family="gfx90a",
+            test_type="standard",
+            test_labels=[],
+            enable_multi_gpu=False,
+            family_gfx_targets=["gfx90a"],
+        )
+        self.assertNotIn("rocgdb-corefile", result["components"])
+
+    def test_test_types_tier_gate(self):
+        """Components with test_types restriction are excluded for non-matching tiers."""
+        # miopen-dbsync only runs on standard/comprehensive/full, not quick
+        result = cm.select_test_components_for_family(
+            platform="linux",
+            amdgpu_family="gfx94X-dcgpu",
+            test_type="quick",
+            test_labels=[],
+            enable_multi_gpu=False,
+            family_gfx_targets=["gfx942"],
+        )
+        self.assertNotIn("miopen-dbsync", result["components"])
+
+        result = cm.select_test_components_for_family(
+            platform="linux",
+            amdgpu_family="gfx94X-dcgpu",
+            test_type="standard",
+            test_labels=[],
+            enable_multi_gpu=False,
+            family_gfx_targets=["gfx942"],
+        )
+        self.assertIn("miopen-dbsync", result["components"])
+
+    def test_test_labels_filter_components(self):
+        """Test labels filter to only selected components."""
+        result = cm.select_test_components_for_family(
+            platform="linux",
+            amdgpu_family="gfx94X-dcgpu",
+            test_type="standard",
+            test_labels=["test:rocblas", "test:miopen"],
+            enable_multi_gpu=False,
+            family_gfx_targets=["gfx942"],
+        )
+        # sanity is always included regardless of labels
+        self.assertIn("sanity", result["components"])
+        # rocblas and miopen should be included
+        self.assertIn("rocblas", result["components"])
+        self.assertIn("miopen", result["components"])
+        # hip-tests should NOT be included (not in labels)
+        self.assertNotIn("hip-tests", result["components"])
+
+    def test_test_label_groups_expand(self):
+        """Test label groups (like test:rocgdb) expand to individual components."""
+        result = cm.select_test_components_for_family(
+            platform="linux",
+            amdgpu_family="gfx94X-dcgpu",
+            test_type="standard",
+            test_labels=["test:rocgdb"],
+            enable_multi_gpu=False,
+            family_gfx_targets=["gfx942"],
+        )
+        # rocgdb label should expand to rocgdb-cpu, rocgdb-gpu, rocgdb-corefile
+        self.assertIn("rocgdb-cpu", result["components"])
+        self.assertIn("rocgdb-gpu", result["components"])
+        self.assertIn("rocgdb-corefile", result["components"])
+
+    def test_multi_gpu_components_quick_skipped_by_default(self):
+        """Multi-GPU components are skipped on quick runs by default."""
+        result = cm.select_test_components_for_family(
+            platform="linux",
+            amdgpu_family="gfx94X-dcgpu",
+            test_type="quick",
+            test_labels=[],
+            enable_multi_gpu=True,
+            family_gfx_targets=["gfx942"],
+        )
+        # rccl is a multi-GPU component
+        self.assertNotIn("rccl", result["components"])
+        self.assertNotIn("rccl", result["multi_gpu_components"])
+
+    def test_multi_gpu_components_standard_included(self):
+        """Multi-GPU components are included on standard runs when family supports it."""
+        result = cm.select_test_components_for_family(
+            platform="linux",
+            amdgpu_family="gfx94X-dcgpu",
+            test_type="standard",
+            test_labels=[],
+            enable_multi_gpu=True,
+            family_gfx_targets=["gfx942"],
+        )
+        # rccl should be included in multi_gpu_components
+        self.assertIn("rccl", result["multi_gpu_components"])
+        self.assertIn("rccl", result["components"])
+
+    def test_ci_run_multi_gpu_label_enables_quick_multi_gpu(self):
+        """ci:run-multi-gpu label enables multi-GPU tests even on quick."""
+        result = cm.select_test_components_for_family(
+            platform="linux",
+            amdgpu_family="gfx94X-dcgpu",
+            test_type="quick",
+            test_labels=["ci:run-multi-gpu"],
+            enable_multi_gpu=True,
+            family_gfx_targets=["gfx942"],
+        )
+        # rccl should be included because of ci:run-multi-gpu label
+        self.assertIn("rccl", result["multi_gpu_components"])
+        self.assertIn("rccl", result["components"])
+
+    def test_cpu_only_components_identified(self):
+        """CPU-only components are correctly identified."""
+        result = cm.select_test_components_for_family(
+            platform="linux",
+            amdgpu_family="gfx94X-dcgpu",
+            test_type="standard",
+            test_labels=[],
+            enable_multi_gpu=False,
+            family_gfx_targets=["gfx942"],
+        )
+        # hipfile and rocgdb-cpu are CPU-only
+        self.assertIn("hipfile", result["cpu_only_components"])
+        self.assertIn("rocgdb-cpu", result["cpu_only_components"])
+
+    def test_windows_platform_filters(self):
+        """Windows platform correctly filters components."""
+        result = cm.select_test_components_for_family(
+            platform="windows",
+            amdgpu_family="gfx110X-all",
+            test_type="standard",
+            test_labels=[],
+            enable_multi_gpu=False,
+            family_gfx_targets=["gfx1100"],
+        )
+        # sanity and hip-tests run on Windows
+        self.assertIn("sanity", result["components"])
+        self.assertIn("hip-tests", result["components"])
+        # hipfile is Linux-only
+        self.assertNotIn("hipfile", result["components"])
+        # rocsolver is Linux-only
+        self.assertNotIn("rocsolver", result["components"])
+
+    def test_family_info_includes_selected_components(self):
+        """BuildConfig per_family_info includes selected_components field."""
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        jobs = cm.decide_jobs(ci_inputs, cm.GitContext(), targets)
+        builds = cm.expand_build_configs(
+            ci_inputs=ci_inputs,
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=jobs,
+        )
+
+        # Check that per_family_info has selected_components
+        self.assertIsNotNone(builds.linux)
+        self.assertTrue(len(builds.linux.per_family_info) > 0)
+        family_info = builds.linux.per_family_info[0]
+        self.assertIn("selected_components", family_info)
+        self.assertIn("multi_gpu_components", family_info)
+        self.assertIn("cpu_only_components", family_info)
+        # Components should be a non-empty list
+        self.assertIsInstance(family_info["selected_components"], list)
+        self.assertIn("sanity", family_info["selected_components"])
 
 
 if __name__ == "__main__":
