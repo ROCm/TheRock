@@ -17,11 +17,14 @@ on:
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       package_index_url:
-        description: Full Python package index URL for use with --index-url. Defaults to https://nightly.repo.amd.com/rocm/whl-next/ when neither package URL is set.
+        description: Full Python package index URL for use with --index-url.
         type: string
-        default: ""
+        default: "https://nightly.repo.amd.com/rocm/whl-next/"
       package_find_links_url:
-        description: Full Python package index URL for use with --find-links.
+        description: >-
+          Flat package page for use with --find-links. For CI artifacts, set this
+          to the run's python/index.html and package_index_url to
+          https://dev.repo.amd.com/rocm/whl-next/ for dependencies.
         type: string
         default: ""
       python_version:
@@ -72,11 +75,14 @@ on:
         required: true
         type: string
       package_index_url:
-        description: Full Python package index URL for use with --index-url. Defaults to https://nightly.repo.amd.com/rocm/whl-next/ when neither package URL is set.
+        description: Full Python package index URL for use with --index-url.
         type: string
         default: ""
       package_find_links_url:
-        description: Full Python package index URL for use with --find-links.
+        description: >-
+          Flat package page for use with --find-links. For CI artifacts, set this
+          to the run's python/index.html and package_index_url to
+          https://dev.repo.amd.com/rocm/whl-next/ for dependencies.
         type: string
         default: ""
       python_version:
@@ -145,7 +151,7 @@ jobs:
       GPU_POLICY: ${{ inputs.gpu_policy }}
       TORCH_VERSION: ${{ inputs.torch_version }}
       PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
-      PACKAGE_INDEX_URL: ${{ inputs.package_index_url || (inputs.package_find_links_url == '' && 'https://nightly.repo.amd.com/rocm/whl-next/' || '') }}
+      PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
       PACKAGE_FIND_LINKS_URL: ${{ inputs.package_find_links_url }}
       QUARTZ_REPORTING_WORKFLOW: test_pytorch_wheels.yml
       QUARTZ_WORKFLOW_POSTFIX: "- test PyTorch wheels"
