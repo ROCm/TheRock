@@ -43,7 +43,7 @@ Choose one of these options to specify where to install from:
 | `--prim`        | Flag | Include primitives artifacts                       |
 | `--rand`        | Flag | Include random number generator artifacts          |
 | `--rccl`        | Flag | Include RCCL artifacts                             |
-| `--rocdecode`   | Flag | Include rocDecode artifacts (Linux only)           |
+| `--rocdecode`   | Flag | Include rocDecode artifacts                        |
 | `--rocjpeg`     | Flag | Include rocJPEG artifacts (Linux only)             |
 | `--rocjitsu`    | Flag | Include rocjitsu artifacts (Linux only)            |
 | `--mirage`      | Flag | Include mirage artifacts (Linux only)              |
@@ -53,8 +53,9 @@ Choose one of these options to specify where to install from:
 | `--tests`       | Flag | Include test artifacts for enabled components      |
 
 > [!NOTE]
-> `--rocdecode` and `--rocjpeg` require `sysdeps-amd-mesa` and are only
-> available on Linux.
+> `--rocdecode` and `--rocjpeg` require `sysdeps-amd-mesa`. `--rocjpeg` is
+> available on Linux only; `--rocdecode` is available on Linux and Windows
+> (Windows uses the vaon12 VA-API-on-D3D12 backend).
 
 ### Utility Options
 
