@@ -178,6 +178,39 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Branch pushed: [\`${BRANCH_NAME}\`](https://github.com/${{ github.repository }}/tree/${BRANCH_NAME})" >> "$GITHUB_STEP_SUMMARY"
 
+      # Create dated branches in compiler submodule repos via GitHub API
+      - name: Create branches in compiler submodule repos
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH_NAME: ${{ steps.branch-name.outputs.branch_name }}
+        run: |
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Submodule Branches" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # Get SHAs from submodules
+          LLVM_SHA=$(git -C compiler/amd-llvm rev-parse HEAD)
+          HIPIFY_SHA=$(git -C compiler/hipify rev-parse HEAD)
+          SPIRV_SHA=$(git -C compiler/spirv-llvm-translator rev-parse HEAD)
+
+          # Create branch in llvm-project
+          gh api repos/ROCm/llvm-project/git/refs \
+            -f ref="refs/heads/${BRANCH_NAME}" \
+            -f sha="${LLVM_SHA}"
+          echo "- Branch created in llvm-project: [\`${BRANCH_NAME}\`](https://github.com/ROCm/llvm-project/tree/${BRANCH_NAME}) at \`${LLVM_SHA:0:12}\`" >> "$GITHUB_STEP_SUMMARY"
+
+          # Create branch in HIPIFY
+          gh api repos/ROCm/HIPIFY/git/refs \
+            -f ref="refs/heads/${BRANCH_NAME}" \
+            -f sha="${HIPIFY_SHA}"
+          echo "- Branch created in HIPIFY: [\`${BRANCH_NAME}\`](https://github.com/ROCm/HIPIFY/tree/${BRANCH_NAME}) at \`${HIPIFY_SHA:0:12}\`" >> "$GITHUB_STEP_SUMMARY"
+
+          # Create branch in SPIRV-LLVM-Translator
+          gh api repos/ROCm/SPIRV-LLVM-Translator/git/refs \
+            -f ref="refs/heads/${BRANCH_NAME}" \
+            -f sha="${SPIRV_SHA}"
+          echo "- Branch created in SPIRV-LLVM-Translator: [\`${BRANCH_NAME}\`](https://github.com/ROCm/SPIRV-LLVM-Translator/tree/${BRANCH_NAME}) at \`${SPIRV_SHA:0:12}\`" >> "$GITHUB_STEP_SUMMARY"
+
   # ==========================================================================
   # Phase 2 - Linux: Build and packaging
   # ==========================================================================
