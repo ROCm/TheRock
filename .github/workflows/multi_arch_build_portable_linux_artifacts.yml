@@ -194,6 +194,12 @@ jobs:
         run: | # zizmor: ignore[template-injection]
           pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
+      - name: Install mold linker
+        run: |
+          MOLD_VERSION="2.35.1"
+          curl -sSL "https://github.com/rui314/mold/releases/download/v${MOLD_VERSION}/mold-${MOLD_VERSION}-x86_64-linux.tar.gz" | tar -xzf - -C /usr/local --strip-components=1
+          mold --version
+
       - name: Configure
         # configure_stage.py emits argument fragments from repository build configuration.
         # Trust that configuration and the caller-provided preset/external repo options
@@ -208,6 +214,9 @@ jobs:
             -DTHEROCK_ROCJITSU_TEST_JOBS="${SUBPROJECT_TEST_JOBS}" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=mold" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=mold" \
+            -DCMAKE_MODULE_LINKER_FLAGS="-fuse-ld=mold" \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
