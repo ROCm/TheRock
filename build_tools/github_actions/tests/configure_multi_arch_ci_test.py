@@ -181,14 +181,14 @@ class TestCIInputsFromEnviron(unittest.TestCase):
             event_payload={
                 "pull_request": {
                     "labels": [
-                        {"name": "gfx950", "id": 1},
+                        {"name": "ci:gfx950", "id": 1},
                         {"name": "test:rocprim", "id": 2},
                     ]
                 }
             },
             commit_ref="feature-branch",
         )
-        self.assertEqual(inputs.pr_labels, ["gfx950", "test:rocprim"])
+        self.assertEqual(inputs.pr_labels, ["ci:gfx950", "test:rocprim"])
         self.assertEqual(inputs.base_ref, "HEAD^")
 
     def test_pull_request_test_labels_extracted_to_test_labels(self):
@@ -200,7 +200,7 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                     "labels": [
                         {"name": "test:rccl", "id": 1},
                         {"name": "test:rocprim", "id": 2},
-                        {"name": "gfx950", "id": 3},
+                        {"name": "ci:gfx950", "id": 3},
                     ]
                 }
             },
@@ -987,7 +987,7 @@ class TestSelectTargets(unittest.TestCase):
             base_ref="HEAD^",
             build_variant="release",
             # gfx906 is nightly-only, not in presubmit+postsubmit defaults
-            pr_labels=["gfx906"],
+            pr_labels=["ci:gfx906"],
         )
         result_without = cm.select_targets(inputs_without)
         result_with = cm.select_targets(inputs_with)
@@ -1009,14 +1009,14 @@ class TestSelectTargets(unittest.TestCase):
         self.assertIn("gfx906", result.linux_families)
 
     def test_pull_request_unknown_gfx_label_raises(self):
-        """PR with an unknown gfx label fails fast."""
+        """PR with an unknown ci:gfx label fails fast."""
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^",
             build_variant="release",
-            pr_labels=["gfx9999"],
+            pr_labels=["ci:gfx9999"],
         )
         with self.assertRaises(ValueError, msg="Unknown GPU families"):
             cm.select_targets(inputs)
@@ -2111,7 +2111,7 @@ class TestFamilyTestFilters(unittest.TestCase):
 
     # Mock family matrix for testing trigger_test_label_only behavior.
     # Family keys use "mock-" prefix to avoid conflict with label parsing
-    # (labels starting with "gfx" get special handling in select_targets).
+    # (labels starting with "ci:gfx" get special handling in select_targets).
     MOCK_FAMILIES_TRIGGER_TEST_LABEL = {
         # Presubmit family - always runs on PRs
         "mock-presubmit": {

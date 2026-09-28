@@ -27,6 +27,10 @@ TEST_COMPONENT: Job name of the component to test (e.g. "tensilelite").
 TEST_TYPE: Test category to run; must be a category defined in
     test_categories.yaml (e.g. quick, standard, comprehensive, full). Defaults to
     "quick" when unset.
+TEST_CATEGORY: Optional. When set, overrides TEST_TYPE, for jobs that always
+    run one specific category regardless of the CI tier (e.g. hw-common). If
+    the installed component does not define that category yet, the run is
+    skipped with a warning instead of failing.
 AMDGPU_FAMILIES: GPU architecture for skip-marker filtering (e.g. "gfx942").
 THEROCK_BIN_DIR: Path to the installed bin/ directory; its parent is the ROCm
     install prefix used to locate share/, lib/ and llvm tooling.
@@ -50,6 +54,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 # packages + pytest modules, not native test executables.
 INSTALLED_COMPONENTS = {
     "tensilelite": "share/hipblaslt/tensilelite",
+    "tensilelite-common": "share/hipblaslt/tensilelite",
 }
 
 
@@ -80,6 +85,36 @@ def get_env_int_override(name):
         logging.warning(f"Ignoring negative {name}={raw!r}")
         return 0
     return value
+
+
+def resolve_test_category():
+    """Return the category to run: TEST_CATEGORY if set, else TEST_TYPE."""
+    return os.getenv("TEST_CATEGORY") or os.getenv("TEST_TYPE", "quick")
+
+
+def lookup_category(all_categories, category):
+    """Return the config for `category`, or exit if the component lacks it.
+
+    A category pinned via TEST_CATEGORY that the installed component does not
+    define yet exits 0 with a warning, so a CI job can land before the
+    component change that adds its category. A missing tier is still an error.
+    """
+    category_config = all_categories.get(category)
+    if category_config:
+        return category_config
+    available = sorted(all_categories)
+    if os.getenv("TEST_CATEGORY"):
+        message = (
+            f"Test category '{category}' is not defined by this component yet "
+            f"(available: {available}); skipping."
+        )
+        print(f"::warning title=pytest_runner::{message}")
+        logging.warning(message)
+        sys.exit(0)
+    _fail(
+        f"No configuration found for test category '{category}'. "
+        f"Available categories: {available}"
+    )
 
 
 def resolve_component_path(component_name, rocm_path):
@@ -253,7 +288,7 @@ def build_environment(rocm_path, component_name):
 
 if __name__ == "__main__":
     TEST_COMPONENT_NAME = os.getenv("TEST_COMPONENT")
-    TEST_TYPE = os.getenv("TEST_TYPE", "quick")
+    TEST_TYPE = resolve_test_category()
     AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
     AMDGPU_TARGETS = os.getenv("AMDGPU_TARGETS")
     THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
@@ -273,12 +308,7 @@ if __name__ == "__main__":
 
     config = load_test_categories_yaml(component_path / "test_categories.yaml")
     all_categories = config.get("test_categories", {})
-    category_config = all_categories.get(TEST_TYPE)
-    if not category_config:
-        _fail(
-            f"No configuration found for test category '{TEST_TYPE}'. "
-            f"Available categories: {sorted(all_categories)}"
-        )
+    category_config = lookup_category(all_categories, TEST_TYPE)
 
     test_paths = category_config.get("test_paths", [])
     if not test_paths:
