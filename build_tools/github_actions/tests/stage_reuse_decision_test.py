@@ -29,6 +29,19 @@ class _FakeStage:
         self.artifact_groups = groups
 
 
+class _FakeArtifact:
+    def __init__(
+        self,
+        artifact_type,
+        *,
+        platform=None,
+        disable_platforms=(),
+    ):
+        self.type = artifact_type
+        self.platform = platform
+        self.disable_platforms = list(disable_platforms)
+
+
 class FakeTopology:
     """Minimal BuildTopology stand-in for stage_impact + artifact derivation.
 
@@ -43,6 +56,10 @@ class FakeTopology:
         self.artifact_groups = {
             "base-group": type("G", (), {"source_sets": ["core"]})(),
             "blas-group": type("G", (), {"source_sets": ["libs"]})(),
+        }
+        self.artifacts = {
+            "base": _FakeArtifact("target-neutral"),
+            "blas": _FakeArtifact("target-specific"),
         }
 
     def get_source_set_to_artifact_groups(self):
@@ -208,9 +225,7 @@ class AvailabilityGateTest(unittest.TestCase):
         # When no baseline is found, we now report it as "no commit-compatible baseline"
         self.assertIn("no commit-compatible baseline", joined)
 
-    def test_partial_family_availability_rebuilds(self):
-        # Needs base for a real family + generic; baseline only has the generic
-        # archive, so the real family's artifact is missing -> rebuild.
+    def test_target_neutral_artifact_only_requires_generic(self):
         result = compute_auto_stage_reuse(
             changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
             mode=StageReuseMode.DRY_RUN,
@@ -218,8 +233,9 @@ class AvailabilityGateTest(unittest.TestCase):
             topology=FakeTopology(),
             baseline_selector=_selector(_baseline("123", ["base_lib_generic.tar.zst"])),
         )
-        self.assertIn("compiler-runtime", result.unavailable_stages)
-        self.assertEqual(result.available_stages, ())
+
+        self.assertIn("compiler-runtime", result.available_stages)
+        self.assertNotIn("compiler-runtime", result.unavailable_stages)
 
     def test_reuse_stage_applies_only_available_stages(self):
         result = compute_auto_stage_reuse(
@@ -412,6 +428,106 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
         self.assertIsNone(captured["ordered_commit_shas"])
 
 
+class ArtifactRequirementTest(unittest.TestCase):
+    def test_expands_ci_family_names_to_concrete_targets(self):
+        expanded = srd._expand_target_families(
+            [
+                "gfx94x",
+                "gfx110x",
+                "gfx1151",
+                "gfx120x",
+                "generic",
+            ]
+        )
+
+        self.assertEqual(
+            expanded,
+            (
+                "gfx942",
+                "gfx1100",
+                "gfx1101",
+                "gfx1102",
+                "gfx1103",
+                "gfx1151",
+                "gfx1200",
+                "gfx1201",
+            ),
+        )
+
+    def test_unknown_target_family_is_rejected(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "Cannot expand AMDGPU target family: unknown-family",
+        ):
+            srd._expand_target_families(["unknown-family"])
+
+    def test_target_neutral_artifact_requires_only_generic(self):
+        requirements = srd._required_artifacts_for_stages(
+            FakeTopology(),
+            ["compiler-runtime"],
+            ["gfx110x", "generic"],
+            platform="linux",
+        )
+
+        self.assertEqual(
+            {
+                (requirement.name, requirement.target_family)
+                for requirement in requirements
+            },
+            {
+                ("base", "generic"),
+            },
+        )
+
+    def test_target_specific_artifact_uses_concrete_targets(self):
+        requirements = srd._required_artifacts_for_stages(
+            FakeTopology(),
+            ["math-libs"],
+            ["gfx110x", "generic"],
+            platform="linux",
+        )
+
+        self.assertEqual(
+            {
+                (requirement.name, requirement.target_family)
+                for requirement in requirements
+            },
+            {
+                ("blas", "generic"),
+                ("blas", "gfx1100"),
+                ("blas", "gfx1101"),
+                ("blas", "gfx1102"),
+                ("blas", "gfx1103"),
+            },
+        )
+
+    def test_artifact_disabled_on_platform_is_not_required(self):
+        topology = FakeTopology()
+        topology.artifacts["blas"].disable_platforms = ["windows"]
+
+        requirements = srd._required_artifacts_for_stages(
+            topology,
+            ["math-libs"],
+            ["gfx110x", "generic"],
+            platform="windows",
+        )
+
+        self.assertEqual(requirements, [])
+
+    def test_platform_specific_artifact_is_not_required_elsewhere(self):
+        topology = FakeTopology()
+        topology.artifacts["base"].platform = "windows"
+
+        requirements = srd._required_artifacts_for_stages(
+            topology,
+            ["compiler-runtime"],
+            ["generic"],
+            platform="linux",
+        )
+
+        self.assertEqual(requirements, [])
+
+
 class PlatformAwareAvailabilityTest(unittest.TestCase):
     """A stage is only reusable when its artifacts exist for EVERY platform.
 
@@ -472,20 +588,8 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
         captured_required = {}
 
         per_platform = {
-            "linux": _baseline(
-                "B1",
-                [
-                    "base_lib_gfx94x.tar.zst",
-                    "base_lib_generic.tar.zst",
-                ],
-            ),
-            "windows": _baseline(
-                "B1",
-                [
-                    "base_lib_gfx110x.tar.zst",
-                    "base_lib_generic.tar.zst",
-                ],
-            ),
+            "linux": _baseline("B1", ["base_lib_generic.tar.zst"]),
+            "windows": _baseline("B1", ["base_lib_generic.tar.zst"]),
         }
 
         def selector_factory(platform):
@@ -509,7 +613,6 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
         self.assertEqual(
             captured_required["linux"],
             {
-                ("base", "gfx94x"),
                 ("base", "generic"),
             },
         )
@@ -517,7 +620,6 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
         self.assertEqual(
             captured_required["windows"],
             {
-                ("base", "gfx110x"),
                 ("base", "generic"),
             },
         )

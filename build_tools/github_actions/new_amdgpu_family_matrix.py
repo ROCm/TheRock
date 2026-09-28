@@ -21,7 +21,6 @@ amdgpu_family_info_matrix_all {
               "runs_on": {                      #         dict: Host names of compute nodes
                   "test":                       #             string: test runner (optional)
                   "test-multi-gpu":             #             string: multi-gpu test runner (optional)
-                  "benchmark":                  #             string: benchmark runner (optional)
               }
             }
             "release": {                        #     release options
@@ -38,7 +37,6 @@ amdgpu_family_info_matrix_all {
               "runs_on": {                      #         dict: Host names of compute nodes
                   "test":                       #             string: test runner (optional)
                   "test-multi-gpu":             #             string: multi-gpu test runner (optional)
-                  "benchmark":                  #             string: benchmark runner (optional)
               }
             }
             "release": {                        #     release options
@@ -118,8 +116,6 @@ amdgpu_family_info_matrix_all = {
                     "runs_on": {
                         "test": "linux-mi325-1gpu-ossci-rocm-frac",
                         "test-multi-gpu": "linux-mi325-8gpu-ossci-rocm",
-                        # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
-                        "benchmark": "linux-mi325-8gpu-ossci-rocm",
                     },
                     "fetch-gfx-targets": ["gfx942"],
                 },
@@ -246,8 +242,6 @@ amdgpu_family_info_matrix_all = {
                     "run_tests": True,
                     "runs_on": {
                         "test": "windows-gfx1151-gpu-rocm",
-                        # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
-                        "benchmark": "windows-gfx1151-gpu-rocm",
                     },
                     "fetch-gfx-targets": ["gfx1151"],
                 },

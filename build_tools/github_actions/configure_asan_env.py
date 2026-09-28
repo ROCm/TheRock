@@ -29,6 +29,7 @@ Used by `test_component.yml`.
 
 import argparse
 import os
+import platform
 import subprocess
 import sys
 from pathlib import Path
@@ -58,7 +59,14 @@ STATIC_ASAN_ENV = {
     "HSA_XNACK": "1",
 }
 
-ASAN_RUNTIME_LIB = "libclang_rt.asan.so"
+# Which of these exists depends on LLVM_ENABLE_PER_TARGET_RUNTIME_DIR: ON
+# installs <resource-dir>/lib/<triple>/libclang_rt.asan.so, OFF installs
+# <resource-dir>/lib/linux/libclang_rt.asan-<arch>.so. TheRock has flipped
+# between the two (#8077), so try both rather than pinning one.
+ASAN_RUNTIME_LIBS = (
+    "libclang_rt.asan.so",
+    f"libclang_rt.asan-{platform.machine()}.so",
+)
 
 
 def _resolve_asan_runtime(
@@ -72,20 +80,23 @@ def _resolve_asan_runtime(
     if not os.access(clang, os.X_OK):
         return None, f"clang not found at {clang}, ASAN runtime path not resolved"
 
-    try:
-        result = subprocess.run(
-            [str(clang), f"-print-file-name={ASAN_RUNTIME_LIB}"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except (subprocess.CalledProcessError, OSError) as e:
-        return None, f"could not query {clang} for the ASAN runtime: {e}"
+    for lib in ASAN_RUNTIME_LIBS:
+        try:
+            result = subprocess.run(
+                [str(clang), f"-print-file-name={lib}"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except (subprocess.CalledProcessError, OSError) as e:
+            return None, f"could not query {clang} for the ASAN runtime: {e}"
 
-    runtime = Path(result.stdout.strip())
-    if not runtime.is_file():
-        return None, f"ASAN runtime not found at {runtime}"
-    return runtime.resolve(), None
+        # clang echoes the name back unchanged when it cannot locate the file.
+        runtime = Path(result.stdout.strip())
+        if runtime.is_file():
+            return runtime.resolve(), None
+
+    return None, f"ASAN runtime not found, tried {', '.join(ASAN_RUNTIME_LIBS)}"
 
 
 def _resolve_symbolizer(artifacts_dir: Path) -> tuple[Optional[Path], Optional[str]]:
@@ -101,6 +112,15 @@ def _resolve_symbolizer(artifacts_dir: Path) -> tuple[Optional[Path], Optional[s
             "ASAN reports will be unsymbolized",
         )
     return symbolizer.resolve(), None
+
+
+def _resolve_library_path(artifacts_dir: Path) -> str:
+    lib_dir = (artifacts_dir / "lib").resolve()
+    parts = [str(lib_dir), str(lib_dir / "rocm_sysdeps" / "lib")]
+    existing = os.environ.get("LD_LIBRARY_PATH")
+    if existing:
+        parts.append(existing)
+    return ":".join(parts)
 
 
 def resolve_asan_env(artifacts_dir: Path) -> tuple[dict[str, str], list[str]]:
@@ -119,6 +139,8 @@ def resolve_asan_env(artifacts_dir: Path) -> tuple[dict[str, str], list[str]]:
         env["ASAN_SYMBOLIZER_PATH"] = str(symbolizer)
     if warning:
         warnings.append(warning)
+
+    env["LD_LIBRARY_PATH"] = _resolve_library_path(artifacts_dir)
 
     return env, warnings
 
@@ -141,6 +163,7 @@ def main(argv=None) -> int:
         print(f"Resolved ASAN runtime: {env['ASAN_RUNTIME_PATH']}")
     if "ASAN_SYMBOLIZER_PATH" in env:
         print(f"Resolved ASAN symbolizer: {env['ASAN_SYMBOLIZER_PATH']}")
+    print(f"Resolved LD_LIBRARY_PATH: {env['LD_LIBRARY_PATH']}")
 
     gha_set_env(env)
     return 0
