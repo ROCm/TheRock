@@ -84,8 +84,12 @@ _EXTERNAL_SUBTREE_ALIASES = {
     # emulation stack; kpack is the ROCm packaging tool (rocm-kpack).
     "shared/kpack": ["rocm-kpack"],
     "shared/machine-readable-isa": ["rocjitsu"],
-    # primbench is a benchmarking header library used by rocprim/rocrand benchmarks.
-    "shared/primbench": ["rocprim", "rocrand"],
+    # primbench is a benchmarking header library used by rocprim/rocrand
+    # benchmarks. rocPRIM is built inside the unified hipCCL superbuild, so the
+    # walk starts from the "hipccl" graph node (which reaches rocsparse/rocsolver/
+    # rocalution etc.); the hipccl -> rocprim/hipcub/rocthrust selector alias
+    # below still fires the three prim test jobs.
+    "shared/primbench": ["hipccl", "rocrand"],
     "shared/mxdatagenerator": [
         "hipblas",
         "hipblaslt",
@@ -135,6 +139,15 @@ _CI_TEST_SELECTOR_ALIASES = {
     # tensilelite key lands in the result, not only when tensilelite itself
     # is the changed project.
     "tensilelite": ["tensilelite", "tensilelite-common"],
+    # rocPRIM, hipCUB and rocThrust are built as ONE subproject (hipccl) with a
+    # single unified `prim` artifact, but they still run as three separate CI
+    # test jobs (rocprim/hipcub/rocthrust) against that shared artifact -- each
+    # runs ctest in its own bin/<component> dir. The generated consumer graph now
+    # has `hipccl` (build) and `hipccl_tests` nodes instead of the three; map
+    # both to the three test jobs so the same tests fire whenever prim is
+    # affected (as a changed project or as a consumer reached by the walk).
+    "hipccl": ["rocprim", "hipcub", "rocthrust"],
+    "hipccl_tests": ["rocprim", "hipcub", "rocthrust"],
 }
 
 

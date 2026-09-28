@@ -1,38 +1,33 @@
-# rocPRIM
-[components.dbg."math-libs/rocPRIM/stage"]
-[components.dev."math-libs/rocPRIM/stage"]
-[components.doc."math-libs/rocPRIM/stage"]
-[components.test."math-libs/rocPRIM_tests/stage"]
-include = [
-  "bin/test_*",
-  "bin/rocprim/CTestTestfile.cmake",
-  "bin/rocprim/generate_resource_spec*",
-  "lib/libtest_linking_*.*",
-]
+# hipCCL unified superbuild (rocPRIM + hipCUB + rocThrust).
+#
+# rocPRIM, hipCUB and rocThrust are now built together by the single hipCCL
+# subproject (see math-libs/CMakeLists.txt), which installs all three under one
+# staged prefix. The artifact is still keyed `prim` (and still ships the
+# per-component rocprim/hipcub/rocthrust config packages) so every downstream
+# artifact_dep = ["prim"] and every `--prim` CI fetch keeps working unchanged.
+[components.dbg."math-libs/hipCCL/stage"]
+[components.dev."math-libs/hipCCL/stage"]
+[components.doc."math-libs/hipCCL/stage"]
 
-# hipCUB
-[components.dbg."math-libs/hipCUB/stage"]
-[components.dev."math-libs/hipCUB/stage"]
-[components.doc."math-libs/hipCUB/stage"]
-[components.test."math-libs/hipCUB/stage"]
+# Unit tests + benchmarks build in the separate hipCCL_tests background
+# subproject (BUILD_TEST=ON), mirroring the previous rocPRIM_tests split but
+# now covering all three components. The include globs are the union of the
+# old per-component rocPRIM/hipCUB/rocThrust test descriptors.
+[components.test."math-libs/hipCCL_tests/stage"]
 include = [
   "bin/test_*",
   "bin/benchmark_*",
+  "bin/*.hip",
+  "bin/*.hip.exe", # Windows
+  # rocPRIM
+  "bin/rocprim/CTestTestfile.cmake",
+  "bin/rocprim/generate_resource_spec*",
+  "lib/libtest_linking_*.*",
+  # hipCUB
   "bin/hipcub/control.txt",
   "bin/hipcub/CTestTestfile.cmake",
   "bin/hipcub/generate_resource_spec*",
-]
-
-# rocThrust
-[components.dbg."math-libs/rocThrust/stage"]
-[components.dev."math-libs/rocThrust/stage"]
-[components.doc."math-libs/rocThrust/stage"]
-[components.test."math-libs/rocThrust/stage"]
-include = [
-  "bin/test_*",
-  "bin/benchmark_thrust_*",
-  "bin/*.hip",
-  "bin/*.hip.exe", # Windows
+  # rocThrust
   "bin/rocthrust/CTestTestfile.cmake",
   "bin/rocthrust/generate_resource_spec*",
 ]

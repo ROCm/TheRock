@@ -100,10 +100,8 @@
     "therock-nlohmann-json"
   ],
   "prim": [
-    "hipCUB",
-    "rocPRIM",
-    "rocPRIM_tests",
-    "rocThrust"
+    "hipCCL",
+    "hipCCL_tests"
   ],
   "rand": [
     "hipRAND",

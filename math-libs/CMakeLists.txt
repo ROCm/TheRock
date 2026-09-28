@@ -102,47 +102,93 @@ endif(THEROCK_ENABLE_RAND)
 
 if(THEROCK_ENABLE_PRIM)
   ##############################################################################
-  # rocPRIM
+  # hipCCL (unified rocPRIM + hipCUB + rocThrust superbuild)
+  #
+  # rocPRIM, hipCUB and rocThrust were previously three independent TheRock
+  # subprojects sourced from projects/{rocprim,hipcub,rocthrust}. They are now
+  # built together through the unified hipCCL superbuild that lives at
+  # projects/hipccl/hipccl3 in rocm-libraries, mirroring the role NVIDIA/cccl
+  # plays for cub/thrust/libcudacxx.
+  #
+  # The superbuild:
+  #   * installs headers under <prefix>/include/hipccl/<component>,
+  #   * produces a single `hipccl` CPack package (HEADER_ONLY) instead of three
+  #     separate rocprim/hipcub/rocthrust packages, and
+  #   * adds a find_package(hipccl) umbrella config while STILL installing the
+  #     per-component rocprim/hipcub/rocthrust config packages, so downstream
+  #     find_package(rocprim|hipcub|rocthrust) calls keep working unchanged.
+  #
+  # We therefore expose the same rocprim/hipcub/rocthrust package names from
+  # the single hipCCL subproject (plus a new hipccl umbrella), which lets the
+  # rest of the tree keep depending on them with no source changes beyond
+  # repointing the TheRock dependency edges from rocPRIM -> hipCCL.
+  #
+  # libhipcxx is part of the upstream hipccl3 superbuild too (as an optional
+  # git submodule), but is intentionally left OFF here: TheRock builds
+  # libhipcxx as its own subproject below (THEROCK_ENABLE_LIBHIPCXX), which
+  # already installs into include/hipccl.
   ##############################################################################
 
-  therock_cmake_subproject_declare(rocPRIM
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM"
+  therock_cmake_subproject_declare(hipCCL
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipccl/hipccl3"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipCCL"
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
+      # Build every hipCCL component (rocprim + hipcub + rocthrust).
+      -DHIPCCL_BUILD_ALL=ON
+      # libhipcxx is built by TheRock's own libhipcxx subproject, not here.
+      -DHIPCCL_BUILD_LIBHIPCXX=OFF
+      # Keep tests/benchmarks off the critical path; they build in hipCCL_tests.
       -DBUILD_TEST=OFF
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
       rocm-cmake
+      # rocThrust references rocRAND during configure (preserved from the
+      # previous standalone rocThrust subproject's dependency set).
+      rocRAND
     RUNTIME_DEPS
       hip-clr
+      ${THEROCK_BUNDLED_SQLITE3}
   )
-  therock_cmake_subproject_glob_c_sources(rocPRIM
+  therock_cmake_subproject_glob_c_sources(hipCCL
     SUBDIRS
       .
   )
-  therock_cmake_subproject_provide_package(rocPRIM rocprim lib/cmake/rocprim)
-  therock_cmake_subproject_activate(rocPRIM)
+  # The unified superbuild installs each component's own package config
+  # (lib/cmake/rocprim, lib/cmake/hipcub, lib/cmake/rocthrust) in addition to
+  # the umbrella lib/cmake/hipccl, so downstream subprojects that depend on
+  # rocPRIM/hipCUB/rocThrust keep resolving find_package() against this one
+  # subproject.
+  therock_cmake_subproject_provide_package(hipCCL rocprim lib/cmake/rocprim)
+  therock_cmake_subproject_provide_package(hipCCL hipcub lib/cmake/hipcub)
+  therock_cmake_subproject_provide_package(hipCCL rocthrust lib/cmake/rocthrust)
+  therock_cmake_subproject_provide_package(hipCCL hipccl lib/cmake/hipccl)
+  therock_cmake_subproject_activate(hipCCL)
 
   if(THEROCK_BUILD_TESTING)
     ##############################################################################
-    # rocPRIM tests
+    # hipCCL tests (rocPRIM + hipCUB + rocThrust unit tests and benchmarks)
+    #
+    # Declared as a separate BACKGROUND_BUILD target (mirroring the previous
+    # rocPRIM_tests split, now extended to all three components) so compiling
+    # the heavy prim test/benchmark binaries does not clog the critical build
+    # path for libraries that only need the prim headers. USE_SYSTEM_LIB=ON
+    # makes the tests consume the headers already installed by the hipCCL
+    # subproject rather than rebuilding them.
     ##############################################################################
-
-    # rocPRIM_tests declared as a separate target to stop the tests from clogging up the critical build path for libs
-    # that depend on rocPRIM.
-    # Passing BACKGROUND_BUILD ensures that the tests aren't built (too) concurrently with other projects that are demanding.
-    therock_cmake_subproject_declare(rocPRIM_tests
-      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
-      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM_tests"
+    therock_cmake_subproject_declare(hipCCL_tests
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipccl/hipccl3"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipCCL_tests"
       BACKGROUND_BUILD
       CMAKE_ARGS
         -DHIP_PLATFORM=amd
         -DROCM_PATH=
         -DROCM_DIR=
+        -DHIPCCL_BUILD_ALL=ON
+        -DHIPCCL_BUILD_LIBHIPCXX=OFF
         -DBUILD_TEST=ON
         -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
         -DUSE_SYSTEM_LIB=ON
@@ -153,87 +199,26 @@ if(THEROCK_ENABLE_PRIM)
       BUILD_DEPS
         rocm-cmake
         therock-googletest
-        rocPRIM
+        rocRAND
+        hipCCL
         ${_primlibs_benchmark_deps}
       RUNTIME_DEPS
         hip-clr
+        ${THEROCK_BUNDLED_SQLITE3}
     )
-    therock_cmake_subproject_glob_c_sources(rocPRIM_tests
+    therock_cmake_subproject_glob_c_sources(hipCCL_tests
       SUBDIRS
         .
     )
-    therock_cmake_subproject_activate(rocPRIM_tests)
-
+    therock_cmake_subproject_activate(hipCCL_tests)
   endif()
 
-  therock_cmake_subproject_declare(hipCUB
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipcub"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipCUB"
-    BACKGROUND_BUILD
-    CMAKE_ARGS
-      -DHIP_PLATFORM=amd
-      -DROCM_PATH=
-      -DROCM_DIR=
-      -DBUILD_TEST=${THEROCK_BUILD_TESTING}
-      -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
-    CMAKE_INCLUDES
-      ${_primlibs_benchmark_includes}
-    COMPILER_TOOLCHAIN
-      amd-hip
-    BUILD_DEPS
-      rocm-cmake
-      rocPRIM
-      therock-googletest
-      ${_primlibs_benchmark_deps}
-    RUNTIME_DEPS
-      hip-clr
-  )
-  therock_cmake_subproject_glob_c_sources(hipCUB
-    SUBDIRS
-      .
-  )
-  therock_cmake_subproject_provide_package(hipCUB hipcub lib/cmake/hipcub)
-  therock_cmake_subproject_activate(hipCUB)
-
-  therock_cmake_subproject_declare(rocThrust
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocthrust"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocThrust"
-    BACKGROUND_BUILD
-    CMAKE_ARGS
-      -DHIP_PLATFORM=amd
-      -DROCM_PATH=
-      -DROCM_DIR=
-      -DBUILD_TEST=${THEROCK_BUILD_TESTING}
-      -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
-    CMAKE_INCLUDES
-      ${_primlibs_benchmark_includes}
-    COMPILER_TOOLCHAIN
-      amd-hip
-    BUILD_DEPS
-      rocm-cmake
-      rocPRIM
-      rocRAND
-      therock-googletest
-      ${_primlibs_benchmark_deps}
-    RUNTIME_DEPS
-      hip-clr
-      ${THEROCK_BUNDLED_SQLITE3}
-  )
-  therock_cmake_subproject_glob_c_sources(rocThrust
-    SUBDIRS
-      .
-  )
-  therock_cmake_subproject_provide_package(rocThrust rocthrust lib/cmake/rocthrust)
-  therock_cmake_subproject_activate(rocThrust)
-
   set(_prim_subproject_deps
-    rocPRIM
-    hipCUB
-    rocThrust
+    hipCCL
   )
 
   if(THEROCK_BUILD_TESTING)
-    list(APPEND _prim_subproject_deps rocPRIM_tests)
+    list(APPEND _prim_subproject_deps hipCCL_tests)
   endif()
 
   therock_provide_artifact(prim
@@ -455,7 +440,7 @@ if(THEROCK_ENABLE_ROCALUTION)
       amd-hip
     BUILD_DEPS
       rocm-cmake
-      rocPRIM
+      hipCCL  # was rocPRIM; rocprim now built by the unified hipCCL subproject
       therock-googletest
     RUNTIME_DEPS
       hip-clr

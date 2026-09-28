@@ -1412,19 +1412,7 @@
         "Artifact": "prim",
         "Artifact_Subdir": [
           {
-            "Name": "rocPRIM_tests",
-            "Components": [
-              "test"
-            ]
-          },
-          {
-            "Name": "hipCUB",
-            "Components": [
-              "test"
-            ]
-          },
-          {
-            "Name": "rocThrust",
+            "Name": "hipCCL_tests",
             "Components": [
               "test"
             ]
@@ -1485,22 +1473,10 @@
         "Artifact": "prim",
         "Artifact_Subdir": [
           {
-            "Name": "rocPRIM",
+            "Name": "hipCCL",
             "Components": [
               "dev",
               "doc"
-            ]
-          },
-          {
-            "Name": "hipCUB",
-            "Components": [
-              "dev"
-            ]
-          },
-          {
-            "Name": "rocThrust",
-            "Components": [
-              "dev"
             ]
           }
         ]

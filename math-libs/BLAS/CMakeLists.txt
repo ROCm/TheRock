@@ -302,7 +302,7 @@ if(THEROCK_ENABLE_SPARSE)
     BUILD_DEPS
       rocm-cmake
       rocBLAS
-      rocPRIM
+      hipCCL  # was rocPRIM; rocprim now built by the unified hipCCL subproject
       therock-googletest
     RUNTIME_DEPS
       hip-clr
@@ -440,7 +440,7 @@ if(THEROCK_ENABLE_SOLVER)
         amd-hip
       BUILD_DEPS
         rocm-cmake
-        rocPRIM
+        hipCCL  # was rocPRIM; rocprim now built by the unified hipCCL subproject
         therock-fmt
         therock-googletest
       RUNTIME_DEPS
