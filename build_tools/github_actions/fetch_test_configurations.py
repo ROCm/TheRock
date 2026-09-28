@@ -733,6 +733,9 @@ test_matrix = {
         "job_name": "hipkernelprovider",
         "fetch_artifact_args": "--hipdnn --hipkernelprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 30,
+        "additional_requirements_files": [
+            "bin/hip_kernel_provider/rocke-requirements-test.txt",
+        ],
         "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
