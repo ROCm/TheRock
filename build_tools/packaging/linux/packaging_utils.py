@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 
+import functools
 import json
 import os
 import platform
@@ -1161,6 +1162,24 @@ def resolve_versioned_dependency_list(dep_list, config: PackageConfig, is_meta):
     return deps
 
 
+@functools.lru_cache(maxsize=None)
+def _artifact_dir_name_index(artifacts_dir: str) -> dict:
+    """One-time directory listing of artifacts_dir, indexed by each entry's
+    name with any ":xnack..." suffix stripped.
+
+    has_artifact_for_arch() calls this once per (package, arch, component)
+    combination across a full packaging run; caching the listing avoids
+    re-scanning a potentially large artifacts_dir on every call.
+    """
+    index: dict = {}
+    try:
+        for entry in Path(artifacts_dir).iterdir():
+            index.setdefault(entry.name.split(":", 1)[0], []).append(entry.name)
+    except FileNotFoundError:
+        pass
+    return index
+
+
 def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
     """Check if a package has artifacts available for a specific architecture.
 
@@ -1212,13 +1231,18 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
                 # only ever built with an xnack suffix for gfx942/gfx950, so
                 # checking only the plain path here falsely reports them as
                 # missing and drops the arch from the meta package's Depends:.
+                #
+                # Looked up via a cached directory-name index (see
+                # _artifact_dir_name_index) rather than a fresh glob() per
+                # component, since this runs once per (package, arch,
+                # component) across a full packaging run.
                 base_pattern = f"{artifact_prefix}_{component}_{artifact_suffix}"
-                candidate_dirs = [Path(artifacts_dir) / base_pattern]
-                candidate_dirs.extend(Path(artifacts_dir).glob(f"{base_pattern}:*"))
+                matching_names = _artifact_dir_name_index(str(artifacts_dir)).get(
+                    base_pattern, []
+                )
 
-                for source_dir in candidate_dirs:
-                    if not source_dir.exists():
-                        continue
+                for name in matching_names:
+                    source_dir = Path(artifacts_dir) / name
 
                     # Check if the required subdirectory exists in the manifest
                     manifest_file = source_dir / "artifact_manifest.txt"
