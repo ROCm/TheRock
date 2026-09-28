@@ -290,7 +290,7 @@ LibraryEntry(
 )
 LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
 LibraryEntry("rocm_kpack", "core", "librocm_kpack.so*", "rocm_kpack*.dll")
-LibraryEntry("rocdecode", "core", "librocdecode.so*", "")
+LibraryEntry("rocdecode", "core", "librocdecode.so*", "rocdecode*.dll")
 LibraryEntry("rocjpeg", "core", "librocjpeg.so*", "")
 LibraryEntry("amd_smi", "core", "libamd_smi.so*", "")
 LibraryEntry("rocdxg", "core", "librocdxg*.so*", "", optional=True)
