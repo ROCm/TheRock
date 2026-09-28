@@ -34,6 +34,7 @@ HARNESS_INCLUDES = (
     "therock_flag_utils",
     "therock_default_targets",
     "therock_subproject",
+    "therock_artifacts",
 )
 
 
@@ -58,6 +59,7 @@ def write_harness(source_dir: Path) -> None:
 
         set(THEROCK_SOURCE_DIR "{THEROCK_ROOT.as_posix()}")
         set(THEROCK_BINARY_DIR "${{CMAKE_BINARY_DIR}}")
+        set(THEROCK_AMDGPU_DIST_BUNDLE_NAME "test")
         list(APPEND CMAKE_MODULE_PATH "${{THEROCK_SOURCE_DIR}}/cmake")
         find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
@@ -80,6 +82,18 @@ def write_harness(source_dir: Path) -> None:
           RUNTIME_DEPS dep_project
         )
         therock_cmake_subproject_activate(main_project)
+
+        therock_provide_artifact(test-artifact
+          DESCRIPTOR "${{CMAKE_CURRENT_SOURCE_DIR}}/artifact.toml"
+          COMPONENTS run
+          SUBPROJECT_DEPS main_project
+        )
+        """,
+    )
+    write_file(
+        source_dir / "artifact.toml",
+        """
+        [components.run."main/stage"]
         """,
     )
     write_file(
@@ -139,7 +153,29 @@ class PrebuiltRuntimeDepsTest(unittest.TestCase):
                 mark_prebuilt(build_dir)
 
             run("cmake", "-S", str(source_dir), "-B", str(build_dir), "-GNinja")
-            run("cmake", "--build", str(build_dir), "--target", "main_project+stage")
+            run(
+                "cmake", "--build", str(build_dir), "--target", "artifact-test-artifact"
+            )
+
+            stage_copy_log = (
+                build_dir / "logs" / "main_project_stage_copy.log"
+            ).read_text()
+            stage_stamp_log = (
+                build_dir / "logs" / "main_project_stage_stamp.log"
+            ).read_text()
+            self.assertIn("FILESET_DIAGNOSTIC", stage_copy_log)
+            self.assertIn("TEATIME_RESULT decimal=0 hex=0x00000000", stage_copy_log)
+            self.assertIn("TEATIME_PATH phase=start", stage_copy_log)
+            self.assertIn("TEATIME_RESULT decimal=0 hex=0x00000000", stage_stamp_log)
+            self.assertIn("TEATIME_PATH phase=end", stage_stamp_log)
+            artifact_log = (
+                build_dir / "logs" / "test-artifact_artifact.log"
+            ).read_text()
+            flatten_log = (build_dir / "logs" / "test-artifact_flatten.log").read_text()
+            self.assertIn("FILESET_DIAGNOSTIC", artifact_log)
+            self.assertIn("TEATIME_RESULT decimal=0 hex=0x00000000", artifact_log)
+            self.assertIn("FILESET_DIAGNOSTIC", flatten_log)
+            self.assertIn("TEATIME_RESULT decimal=0 hex=0x00000000", flatten_log)
 
             dist_dir = build_dir / "main" / "dist"
             return sorted(

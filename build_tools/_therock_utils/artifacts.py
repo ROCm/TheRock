@@ -32,7 +32,7 @@ import re
 from pathlib import Path, PurePosixPath
 
 from .archive_util import open_archive_for_read
-from .pattern_match import PatternMatcher, MatchPredicate
+from .pattern_match import DiagnosticReporter, MatchPredicate, PatternMatcher
 
 
 class ArtifactName:
@@ -186,11 +186,17 @@ class ArtifactPopulator:
     """
 
     def __init__(
-        self, *, output_path: Path, verbose: bool = False, flatten: bool = False
+        self,
+        *,
+        output_path: Path,
+        verbose: bool = False,
+        flatten: bool = False,
+        diagnostics: DiagnosticReporter | None = None,
     ):
         self.output_path = output_path
         self.verbose = verbose
         self.flatten = flatten
+        self.diagnostics = diagnostics
         self.relpaths: set[str] = set()
 
     def on_relpath(self, relpath: str):
@@ -214,6 +220,14 @@ class ArtifactPopulator:
     def __call__(self, *artifact_paths: Sequence[Path]):
         all_root_relpaths: set[str] = set()
         for artifact_path in artifact_paths:
+            if self.diagnostics is not None:
+                self.diagnostics.set_current_operation(
+                    f"populate artifact={artifact_path} output={self.output_path}"
+                )
+                self.diagnostics.log(
+                    f"populate_begin artifact={artifact_path} "
+                    f"output={self.output_path} flatten={self.flatten}"
+                )
             if artifact_path.is_dir():
                 # Process an exploded artifact dir.
                 self.on_artifact_dir(artifact_path)
@@ -222,7 +236,7 @@ class ArtifactPopulator:
                 for relpath in relpaths:
                     if not relpath:
                         continue
-                    pm = PatternMatcher()
+                    pm = PatternMatcher(diagnostics=self.diagnostics)
                     self.on_relpath(relpath)
                     source_dir = artifact_path / relpath
                     if not source_dir.exists():
@@ -252,6 +266,10 @@ class ArtifactPopulator:
                     # Iterate over all remaining members.
                     while member := tf.next():
                         member_name = member.name
+                        if self.diagnostics is not None:
+                            self.diagnostics.set_current_operation(
+                                f"extract archive={artifact_path} member={member_name}"
+                            )
                         # Figure out which relpath prefix it is a part of.
                         for prefix_relpath in relpaths:
                             output_path = self.output_path
@@ -316,6 +334,10 @@ class ArtifactPopulator:
                             raise IOError(
                                 f"Extracting tar artifact archive, encountered file not in manifest: {member}"
                             )
+            if self.diagnostics is not None:
+                self.diagnostics.log(
+                    f"populate_end artifact={artifact_path} output={self.output_path}"
+                )
         return all_root_relpaths
 
 

@@ -18,8 +18,15 @@ with the following changes:
 
 from typing import Callable
 import argparse
+import faulthandler
+import os
 from pathlib import Path
+import platform
+import shlex
 import sys
+import threading
+import time
+import traceback
 
 from _therock_utils.archive_util import open_archive_for_write
 from _therock_utils.artifacts import ArtifactPopulator
@@ -29,7 +36,64 @@ from _therock_utils.os_util import rmtree_with_retry
 from _therock_utils.pattern_match import PatternMatcher
 
 
+_DIAGNOSTIC_HEARTBEAT_SECONDS = 1.0
+
+
+class FileSetDiagnostics:
+    def __init__(self) -> None:
+        self.start_time = time.monotonic()
+        self.current_operation = "initializing"
+        self.lock = threading.Lock()
+        self.stop_event = threading.Event()
+
+    def log(self, message: str) -> None:
+        elapsed = time.monotonic() - self.start_time
+        print(
+            f"FILESET_DIAGNOSTIC elapsed={elapsed:.3f}s {message}",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    def set_current_operation(self, message: str) -> None:
+        with self.lock:
+            self.current_operation = message
+
+    def _heartbeat(self) -> None:
+        while not self.stop_event.wait(_DIAGNOSTIC_HEARTBEAT_SECONDS):
+            with self.lock:
+                current_operation = self.current_operation
+            self.log(f"heartbeat current_operation={current_operation}")
+
+    def start(self, cl_args: list[str]) -> None:
+        self.log(
+            f"start pid={os.getpid()} parent_pid={os.getppid()} "
+            f"platform={platform.platform()} python={sys.version.split()[0]} "
+            f"cwd={Path.cwd()} command={shlex.join(cl_args)}"
+        )
+        try:
+            faulthandler.enable(all_threads=True)
+            faulthandler.dump_traceback_later(60, repeat=True)
+            self.thread = threading.Thread(target=self._heartbeat, daemon=True)
+            self.thread.start()
+        except (OSError, RuntimeError) as e:
+            self.log(f"diagnostic_start_error={e!r}")
+
+    def stop(self, *, succeeded: bool) -> None:
+        self.stop_event.set()
+        if hasattr(self, "thread"):
+            self.thread.join(timeout=2)
+        try:
+            faulthandler.cancel_dump_traceback_later()
+        except RuntimeError as e:
+            self.log(f"diagnostic_stop_error={e!r}")
+        with self.lock:
+            current_operation = self.current_operation
+        self.log(f"finish succeeded={succeeded} current_operation={current_operation}")
+
+
 def do_list(args: argparse.Namespace, pm: PatternMatcher):
+    if args.diagnostics_reporter is not None:
+        args.diagnostics_reporter.set_current_operation("list matches")
     for relpath, direntry in pm.matches():
         print(relpath)
 
@@ -52,7 +116,13 @@ def do_artifact(args):
     descriptor = artifact_builder.ArtifactDescriptor.load_toml_file(
         args.descriptor, artifact_name=args.artifact_name
     )
-    scanner = artifact_builder.ComponentScanner(args.root_dir, descriptor)
+    if args.diagnostics_reporter is not None:
+        args.diagnostics_reporter.set_current_operation(
+            f"scan artifact root={args.root_dir} descriptor={args.descriptor}"
+        )
+    scanner = artifact_builder.ComponentScanner(
+        args.root_dir, descriptor, diagnostics=args.diagnostics_reporter
+    )
     # Disable strict verification temporarily until debug builds are tested/fixed.
     # scanner.verify()
     component_dirs = args.component_dirs
@@ -65,10 +135,14 @@ def do_artifact(args):
     for i in range(len(component_dirs) // 2):
         component_name = component_dirs[i * 2]
         output_dir = Path(component_dirs[i * 2 + 1])
+        if args.diagnostics_reporter is not None:
+            args.diagnostics_reporter.set_current_operation(
+                f"write artifact component={component_name} output={output_dir}"
+            )
 
         # Setup output dir.
         if output_dir.exists():
-            rmtree_with_retry(output_dir)
+            rmtree_with_retry(output_dir, verbose=args.diagnostics_reporter is not None)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         try:
@@ -88,6 +162,10 @@ def do_artifact_archive(args):
         output_path, args.compression_type, args.compression_level
     ) as arc:
         for artifact_path in args.artifact:
+            if args.diagnostics_reporter is not None:
+                args.diagnostics_reporter.set_current_operation(
+                    f"archive artifact={artifact_path} output={output_path}"
+                )
             manifest_path: Path = artifact_path / "artifact_manifest.txt"
             relpaths = manifest_path.read_text().splitlines()
             # Important: The manifest must be stored first.
@@ -98,10 +176,14 @@ def do_artifact_archive(args):
                 source_dir = artifact_path / relpath
                 if not source_dir.exists():
                     continue
-                pm = PatternMatcher()
+                pm = PatternMatcher(diagnostics=args.diagnostics_reporter)
                 pm.add_basedir(source_dir)
                 for subpath, dir_entry in pm.all.items():
                     fullpath = f"{relpath}/{subpath}"
+                    if args.diagnostics_reporter is not None:
+                        args.diagnostics_reporter.set_current_operation(
+                            f"archive source={dir_entry.path} member={fullpath}"
+                        )
                     arc.add(dir_entry.path, arcname=fullpath, recursive=False)
 
     if args.hash_file:
@@ -111,7 +193,10 @@ def do_artifact_archive(args):
 
 def _do_artifact_flatten(args):
     flattener = ArtifactPopulator(
-        output_path=args.o, verbose=args.verbose, flatten=True
+        output_path=args.o,
+        verbose=args.verbose,
+        flatten=True,
+        diagnostics=args.diagnostics_reporter,
     )
     flattener(*args.artifact)
     relpaths = list(flattener.relpaths)
@@ -147,7 +232,10 @@ def _do_artifact_flatten_split(args):
         for d in discovered_dirs:
             print(f"  {d.name}")
     flattener = ArtifactPopulator(
-        output_path=args.o, verbose=args.verbose, flatten=True
+        output_path=args.o,
+        verbose=args.verbose,
+        flatten=True,
+        diagnostics=args.diagnostics_reporter,
     )
     flattener(*discovered_dirs)
     relpaths = list(flattener.relpaths)
@@ -157,7 +245,7 @@ def _do_artifact_flatten_split(args):
             print(relpath)
 
 
-def main(cl_args: list[str]):
+def main(cl_args: list[str]) -> int:
     def add_pattern_matcher_args(p: argparse.ArgumentParser):
         p.add_argument("basedir", type=Path, nargs="*", help="Base directories to scan")
         p.add_argument("--include", nargs="+", help="Recursive glob pattern to include")
@@ -171,7 +259,11 @@ def main(cl_args: list[str]):
             if not args.basedir:
                 # base dir is CWD
                 args.basedir = [Path.cwd()]
-            pm = PatternMatcher(args.include or [], args.exclude or [])
+            pm = PatternMatcher(
+                args.include or [],
+                args.exclude or [],
+                diagnostics=args.diagnostics_reporter,
+            )
             for basedir in args.basedir:
                 pm.add_basedir(basedir)
             action(args, pm)
@@ -180,6 +272,11 @@ def main(cl_args: list[str]):
 
     p = argparse.ArgumentParser(
         "fileset_tool.py", usage="fileset_tool.py {command} ..."
+    )
+    p.add_argument(
+        "--diagnostics",
+        action="store_true",
+        help="Emit flushed progress, current-operation, and failure diagnostics",
     )
     sub_p = p.add_subparsers(required=True)
     # 'copy' command
@@ -305,8 +402,27 @@ def main(cl_args: list[str]):
     artifact_flatten_split_p.set_defaults(func=_do_artifact_flatten_split)
 
     args = p.parse_args(cl_args)
-    args.func(args)
+    diagnostics = FileSetDiagnostics() if args.diagnostics else None
+    args.diagnostics_reporter = diagnostics
+    if diagnostics is not None:
+        diagnostics.start(cl_args)
+
+    succeeded = False
+    try:
+        args.func(args)
+        succeeded = True
+        return 0
+    except Exception as e:
+        if diagnostics is not None:
+            diagnostics.log(f"failure exception={e!r}")
+            traceback.print_exc(file=sys.stderr)
+            sys.stderr.flush()
+            return 1
+        raise
+    finally:
+        if diagnostics is not None:
+            diagnostics.stop(succeeded=succeeded)
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    sys.exit(main(sys.argv[1:]))

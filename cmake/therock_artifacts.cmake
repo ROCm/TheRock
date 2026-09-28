@@ -184,8 +184,16 @@ function(therock_provide_artifact slice_name)
 
   # Populate commands.
   set(_fileset_tool "${THEROCK_SOURCE_DIR}/build_tools/fileset_tool.py")
+  therock_subproject_log_command(_artifact_log_prefix
+    LOG_FILE "${slice_name}_artifact.log"
+    LABEL "${slice_name} artifact"
+    OUTPUT_ON_FAILURE TRUE
+    DIAGNOSTICS
+    DIAGNOSTIC_PATHS "${THEROCK_BINARY_DIR}/artifacts" "${THEROCK_BINARY_DIR}/artifacts-unsplit"
+  )
   set(_artifact_command
-    COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" artifact
+    COMMAND ${_artifact_log_prefix} "${Python3_EXECUTABLE}" "${_fileset_tool}"
+          --diagnostics artifact
           --root-dir "${THEROCK_BINARY_DIR}" --descriptor "${ARG_DESCRIPTOR}"
           --artifact-name "${slice_name}"
   )
@@ -218,8 +226,16 @@ function(therock_provide_artifact slice_name)
   # that reads from split outputs (new inodes) instead of from the
   # multiply-aliased unsplit hardlinks.
   if(ARG_DISTRIBUTION AND NOT _should_split)
+    therock_subproject_log_command(_flatten_log_prefix
+      LOG_FILE "${slice_name}_flatten.log"
+      LABEL "${slice_name} flatten"
+      OUTPUT_ON_FAILURE TRUE
+      DIAGNOSTICS
+      DIAGNOSTIC_PATHS "${_dist_dir}" ${_component_dirs}
+    )
     list(APPEND _flatten_command_list
-      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" artifact-flatten
+      COMMAND ${_flatten_log_prefix} "${Python3_EXECUTABLE}" "${_fileset_tool}"
+        --diagnostics artifact-flatten
         -o "${_dist_dir}" ${_component_dirs}
     )
   endif()
@@ -267,11 +283,19 @@ function(therock_provide_artifact slice_name)
       if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" STREQUAL "THEROCK_AMDGPU_TARGETS-NOTFOUND")
         list(APPEND _split_command_args --gpu-targets ${THEROCK_AMDGPU_TARGETS})
       endif()
+      therock_subproject_log_command(_split_log_prefix
+        LOG_FILE "${slice_name}_${_component}_split.log"
+        LABEL "${slice_name} ${_component} split"
+        OUTPUT_ON_FAILURE TRUE
+        DIAGNOSTICS
+        DIAGNOSTIC_PATHS "${_unsplit_component_dir}" "${_split_generic_dir}"
+      )
 
       add_custom_command(
         OUTPUT "${_split_manifest}"
         COMMENT "Splitting ${_artifact_prefix} into generic and arch-specific artifacts"
-        COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python"
+        COMMAND ${_split_log_prefix}
+          "${CMAKE_COMMAND}" -E env "PYTHONPATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python"
           "${Python3_EXECUTABLE}" "${_split_tool}" ${_split_command_args}
         DEPENDS
           "${_unsplit_manifest}"
@@ -295,14 +319,29 @@ function(therock_provide_artifact slice_name)
       endforeach()
 
       set(_flatten_stamp "${THEROCK_BINARY_DIR}/artifacts/.flatten-${slice_name}.stamp")
+      therock_subproject_log_command(_flatten_split_log_prefix
+        LOG_FILE "${slice_name}_flatten_split.log"
+        LABEL "${slice_name} flatten split"
+        OUTPUT_ON_FAILURE TRUE
+        DIAGNOSTICS
+        DIAGNOSTIC_PATHS "${THEROCK_BINARY_DIR}/artifacts" "${_dist_dir}" "${_flatten_stamp}"
+      )
+      therock_subproject_log_command(_flatten_stamp_log_prefix
+        LOG_FILE "${slice_name}_flatten_stamp.log"
+        LABEL "${slice_name} flatten stamp"
+        OUTPUT_ON_FAILURE TRUE
+        DIAGNOSTICS
+        DIAGNOSTIC_PATHS "${THEROCK_BINARY_DIR}/artifacts" "${_flatten_stamp}"
+      )
       add_custom_command(
         OUTPUT "${_flatten_stamp}"
         COMMENT "Flatten split artifacts for ${slice_name} to dist/${ARG_DISTRIBUTION}"
-        COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" artifact-flatten-split
+        COMMAND ${_flatten_split_log_prefix} "${Python3_EXECUTABLE}" "${_fileset_tool}"
+          --diagnostics artifact-flatten-split
           -o "${_dist_dir}"
           --artifacts-dir "${THEROCK_BINARY_DIR}/artifacts"
           ${_artifact_prefixes}
-        COMMAND "${CMAKE_COMMAND}" -E touch "${_flatten_stamp}"
+        COMMAND ${_flatten_stamp_log_prefix} "${CMAKE_COMMAND}" -E touch "${_flatten_stamp}"
         DEPENDS
           ${_split_manifest_files}
           "${_fileset_tool}"

@@ -11,7 +11,11 @@ import os
 from pathlib import Path
 import platform
 
-from _therock_utils.pattern_match import PatternMatcher, MatchPredicate
+from _therock_utils.pattern_match import (
+    DiagnosticReporter,
+    MatchPredicate,
+    PatternMatcher,
+)
 
 
 class ComponentDefaults:
@@ -318,9 +322,15 @@ class ComponentContents:
 class ComponentScanner:
     """Takes an ArtifactDescriptor and sorts all files into a component."""
 
-    def __init__(self, root_dir: Path, ad: ArtifactDescriptor):
+    def __init__(
+        self,
+        root_dir: Path,
+        ad: ArtifactDescriptor,
+        diagnostics: DiagnosticReporter | None = None,
+    ):
         self.artifact = ad
         self.root_dir = root_dir
+        self.diagnostics = diagnostics
 
         # Each distinct basedir gets one PatternMatcher, so that we only scan
         # each directory once.
@@ -423,7 +433,7 @@ class ComponentScanner:
         # Process each basedir.
         for bd in cd.basedirs.values():
             pm = self._get_basedir(bd.basedir_relpath)
-            dest_pm = PatternMatcher()
+            dest_pm = PatternMatcher(diagnostics=self.diagnostics)
             contents.basedir_contents[bd.basedir_relpath] = dest_pm
             for relpath, direntry in pm.matches():
                 if relpath in contents.transitive_relpaths:
@@ -452,7 +462,7 @@ class ComponentScanner:
     def _get_basedir(self, basedir: str) -> PatternMatcher:
         pm = self.basedir_cache.get(basedir)
         if pm is None:
-            pm = PatternMatcher()
+            pm = PatternMatcher(diagnostics=self.diagnostics)
             full_path = self.root_dir / basedir
             if full_path.exists():
                 pm.add_basedir(self.root_dir / basedir)

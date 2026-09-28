@@ -104,6 +104,9 @@ set(THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS "/guard:cf")
 # OUTPUT_ON_FAILURE: Boolean value to indicate whether output should go to the
 #   console only on failure.
 # LABEL: Label to prefix console output with.
+# DIAGNOSTICS: Record child process, resource, and raw return-code diagnostics.
+# DIAGNOSTIC_PATHS: Paths whose metadata should be logged before and after the
+#   child command.
 #
 # This uses the build_tools/teatime.py script for output management. See that
 # script for further details. One thing to note: if TEATIME_LABEL_GH_GROUP=1
@@ -113,9 +116,9 @@ set(THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS "/guard:cf")
 function(therock_subproject_log_command out_var)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
-    ""
+    "DIAGNOSTICS"
     "LOG_FILE;LABEL;OUTPUT_ON_FAILURE"
-    ""
+    "DIAGNOSTIC_PATHS"
   )
 
   set(command
@@ -131,6 +134,12 @@ function(therock_subproject_log_command out_var)
   else()
     list(APPEND command "--interactive")
   endif()
+  if(ARG_DIAGNOSTICS)
+    list(APPEND command "--diagnostics")
+  endif()
+  foreach(_diagnostic_path IN LISTS ARG_DIAGNOSTIC_PATHS)
+    list(APPEND command "--diagnostic-path" "${_diagnostic_path}")
+  endforeach()
   if(ARG_LOG_FILE)
     cmake_path(ABSOLUTE_PATH ARG_LOG_FILE BASE_DIRECTORY "${THEROCK_BINARY_DIR}/logs")
     list(APPEND command "${ARG_LOG_FILE}")
@@ -947,6 +956,20 @@ function(therock_cmake_subproject_activate target_name)
   if(THEROCK_VERBOSE)
     set(_fileset_verbose_arg --verbose)
   endif()
+  therock_subproject_log_command(_stage_copy_log_prefix
+    LOG_FILE "${target_name}_stage_copy.log"
+    LABEL "${target_name} stage copy"
+    OUTPUT_ON_FAILURE TRUE
+    DIAGNOSTICS
+    DIAGNOSTIC_PATHS "${_stage_dir}" "${_dist_dir}" "${_stage_stamp_file}"
+  )
+  therock_subproject_log_command(_stage_stamp_log_prefix
+    LOG_FILE "${target_name}_stage_stamp.log"
+    LABEL "${target_name} stage stamp"
+    OUTPUT_ON_FAILURE TRUE
+    DIAGNOSTICS
+    DIAGNOSTIC_PATHS "${_stamp_dir}" "${_stage_stamp_file}"
+  )
 
   if(EXISTS "${_prebuilt_file}")
     # If pre-built, just touch the stamp files, conditioned on the prebuilt
@@ -970,8 +993,9 @@ function(therock_cmake_subproject_activate target_name)
     add_custom_command(
       OUTPUT "${_stage_stamp_file}"
       # Populate local dist directory with this+all transitive stage installs.
-      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
-      COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
+      COMMAND ${_stage_copy_log_prefix} "${Python3_EXECUTABLE}" "${_fileset_tool}"
+        --diagnostics copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
+      COMMAND ${_stage_stamp_log_prefix} "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
       DEPENDS
         "${_prebuilt_file}"
         "${_fileset_tool}"
@@ -1155,8 +1179,9 @@ function(therock_cmake_subproject_activate target_name)
       # Expand optional components _install command(s).
       ${_optional_component_install_commands}
       # Populate local dist directory with this+all transitive stage installs.
-      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
-      COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
+      COMMAND ${_stage_copy_log_prefix} "${Python3_EXECUTABLE}" "${_fileset_tool}"
+        --diagnostics copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
+      COMMAND ${_stage_stamp_log_prefix} "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
       WORKING_DIRECTORY "${_binary_dir}"
       COMMENT "Stage installing sub-project ${target_name}"
       ${_terminal_option}

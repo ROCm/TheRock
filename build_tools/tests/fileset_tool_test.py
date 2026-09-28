@@ -76,6 +76,58 @@ class FilesetToolTest(unittest.TestCase):
         if self.temp_context:
             self.temp_context.cleanup()
 
+    def testCopyDiagnostics(self):
+        source_dir = self.temp_dir / "source"
+        dest_dir = self.temp_dir / "dest"
+        write_text(source_dir / "lib" / "file.txt", "contents")
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                FILESET_TOOL,
+                "--diagnostics",
+                "copy",
+                dest_dir,
+                source_dir,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((dest_dir / "lib" / "file.txt").read_text(), "contents")
+        self.assertIn("FILESET_DIAGNOSTIC", result.stderr)
+        self.assertIn("scan_begin", result.stderr)
+        self.assertIn("scan_end", result.stderr)
+        self.assertIn("copy_begin", result.stderr)
+        self.assertIn("copy_end", result.stderr)
+        self.assertIn("finish succeeded=True", result.stderr)
+
+    def testCopyDiagnosticsReportFailureContext(self):
+        missing_source = self.temp_dir / "missing"
+        dest_dir = self.temp_dir / "dest"
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                FILESET_TOOL,
+                "--diagnostics",
+                "copy",
+                dest_dir,
+                missing_source,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(f"scan_error basedir={missing_source}", result.stderr)
+        self.assertIn("failure exception=FileNotFoundError", result.stderr)
+        self.assertIn("Traceback (most recent call last)", result.stderr)
+        self.assertIn("finish succeeded=False", result.stderr)
+
     # Validates that the happy path flow of creating an artifact, archiving it,
     # expanding and flattening works. This does not exhaustively verify
     # all descriptor options.

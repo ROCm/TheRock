@@ -35,7 +35,7 @@ def rmtree_with_retry(
         try:
             shutil.rmtree(path)
             if verbose:
-                print(f"rmtree {path}", file=sys.stderr)
+                print(f"rmtree {path}", file=sys.stderr, flush=True)
             return
         except PermissionError:
             wait_time = retry_delay_seconds * (attempt + 2)
@@ -44,6 +44,7 @@ def rmtree_with_retry(
                     f"PermissionError calling shutil.rmtree('{path}') "
                     f"retrying after {wait_time}s",
                     file=sys.stderr,
+                    flush=True,
                 )
             time.sleep(wait_time)
             if attempt == max_attempts - 1:
@@ -51,5 +52,6 @@ def rmtree_with_retry(
                     print(
                         f"rmtree failed after {max_attempts} attempts, failing",
                         file=sys.stderr,
+                        flush=True,
                     )
                 raise
