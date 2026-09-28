@@ -4,6 +4,8 @@
 
 """Unit tests for artifact_backend.py."""
 
+import contextlib
+import io
 import os
 import socket
 import sys
@@ -658,6 +660,12 @@ class TestS3BackendUnsignedRetry(unittest.TestCase):
         self.backend._s3_client = self.signed
         self.backend._s3_client_is_unsigned = False
         self.backend._unsigned_s3_client = self.unsigned
+        # Tests run on CI too; keep them from emitting real run annotations.
+        self._github_actions = os.environ.pop("GITHUB_ACTIONS", None)
+
+    def tearDown(self):
+        if self._github_actions is not None:
+            os.environ["GITHUB_ACTIONS"] = self._github_actions
 
     @staticmethod
     def _client_error(code, operation="ListObjectsV2"):
@@ -734,6 +742,19 @@ class TestS3BackendUnsignedRetry(unittest.TestCase):
         with self.assertRaises(ClientError):
             self.backend.list_artifacts()
         self.unsigned.get_paginator.assert_not_called()
+
+    def test_fallback_emits_run_annotation_on_ci(self):
+        """The retry makes the job green, so the fallback must be visible."""
+        self.signed.get_paginator.side_effect = self._client_error("InvalidAccessKeyId")
+        self._set_paginator(self.unsigned, [])
+
+        stdout = io.StringIO()
+        with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}):
+            with contextlib.redirect_stdout(stdout):
+                self.backend.list_artifacts()
+
+        self.assertIn("::warning title=Unusable AWS credentials::", stdout.getvalue())
+        self.assertIn("InvalidAccessKeyId", stdout.getvalue())
 
     def test_upload_never_retries_unsigned(self):
         """Writes must surface the credential error rather than mask it."""

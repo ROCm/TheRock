@@ -325,13 +325,26 @@ class S3Backend(ArtifactBackend):
             )
             if not retryable:
                 raise
-            print(
-                f"WARNING: S3 read failed with {error_code}; the resolved AWS "
-                f"credentials are not usable. Retrying {self.base_uri} "
-                f"anonymously.",
-                file=sys.stderr,
-            )
+            self._warn_unsigned_retry(error_code)
             return operation(self.unsigned_s3_client)
+
+    def _warn_unsigned_retry(self, error_code: str) -> None:
+        """Report a fallback so that unusable credentials are not silently tolerated.
+
+        The retry makes the job succeed, which means nothing else will flag the
+        credentials. On CI this is emitted as a run annotation so it surfaces on
+        the run page; a log line inside a green job would not be noticed.
+        """
+        message = (
+            f"S3 read failed with {error_code}, so the AWS credentials this "
+            f"runner resolved are not usable. Retried {self.base_uri} "
+            f"anonymously and the read succeeded, but the credentials still "
+            f"need attention."
+        )
+        if os.getenv("GITHUB_ACTIONS"):
+            print(f"::warning title=Unusable AWS credentials::{message}")
+        else:
+            print(f"WARNING: {message}", file=sys.stderr)
 
     @property
     def base_uri(self) -> str:
