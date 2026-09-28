@@ -17,11 +17,11 @@ on:
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       package_index_url:
-        description: Python package index URL. Defaults to nightly whl-next when neither package URL is supplied.
+        description: Full Python package index URL for use with --index-url. Defaults to https://nightly.repo.amd.com/rocm/whl-next/ when neither package URL is set.
         type: string
         default: ""
       package_find_links_url:
-        description: Flat pip --find-links page containing CI wheels (e.g. a run-scoped python/index.html).
+        description: Full Python package index URL for use with --find-links.
         type: string
         default: ""
       python_version:
@@ -72,11 +72,11 @@ on:
         required: true
         type: string
       package_index_url:
-        description: Python package index URL. Defaults to nightly whl-next when neither package URL is supplied.
+        description: Full Python package index URL for use with --index-url. Defaults to https://nightly.repo.amd.com/rocm/whl-next/ when neither package URL is set.
         type: string
         default: ""
       package_find_links_url:
-        description: Flat pip --find-links page containing CI wheels.
+        description: Full Python package index URL for use with --find-links.
         type: string
         default: ""
       python_version:
