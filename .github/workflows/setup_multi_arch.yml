@@ -72,12 +72,12 @@ on:
         description: >-
          Automatic stage reuse: reject baseline runs older than this many hours. default: "72"
         type: string
-        default: "72"
+        default: "500"
       stage_reuse_commit_history:
         description: >-
           Automatic stage reuse: number of recent branch commits to fetch for ancestry. default: "50"
         type: string
-        default: "50"
+        default: "160"
       build_python_packages:
         description: "Build ROCm Python packages (rocm-sdk, rocm-profiler, etc.)."
         type: boolean
