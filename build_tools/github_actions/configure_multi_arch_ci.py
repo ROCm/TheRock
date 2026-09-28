@@ -86,7 +86,6 @@ from github_actions_api import (
     gha_load_github_event,
     gha_set_output,
 )
-from stage_impact import analyze_artifact_impact_from_projects
 from stage_reuse_decision import (
     AutoStageReuse,
     StageReuseMode,
@@ -1337,19 +1336,16 @@ def decide_jobs(
         for stage in skipped_stages:
             stage_decisions[stage] = JobAction.SKIP
 
-    # For external repos, use changed_projects to determine artifact-level reuse.
-    # This handles the case where SKIP_PATH_FILTERS=true disables the normal
-    # changed-file analysis.
+    # Artifact-level reuse from auto_stage_reuse (when available).
+    # Note: changed_projects is NOT used for rebuild_artifacts. External repos
+    # should build the full stage and use changed_projects only for test filtering
+    # (see test_artifacts.yml -> determine_rocm_test_dependencies.py).
     rebuild_artifacts: list[str] = (
         list(auto_stage_reuse.rebuild_artifacts) if auto_stage_reuse else []
     )
     reusable_artifacts: list[str] = (
         list(auto_stage_reuse.reusable_artifacts) if auto_stage_reuse else []
     )
-    if ci_inputs.changed_projects and not rebuild_artifacts:
-        rebuild_artifacts, reusable_artifacts = analyze_artifact_impact_from_projects(
-            ci_inputs.changed_projects
-        )
 
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
