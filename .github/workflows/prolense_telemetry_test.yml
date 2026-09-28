@@ -1,0 +1,70 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Test workflow for Prolense runner telemetry validation.
+# Runs jobs in host mode (no container spec) on aws-linux customer-dev runners.
+
+name: Prolense Telemetry Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_count:
+        description: "Number of parallel test jobs to run"
+        type: number
+        default: 3
+
+permissions:
+  contents: read
+
+jobs:
+  short-job:
+    name: Short Job (${{ matrix.index }})
+    runs-on: aws-linux-scale-rocm-customer-dev
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        index: [1, 2, 3]
+    steps:
+      - name: System info
+        run: |
+          uname -a
+          nproc
+          free -h
+          df -h
+
+      - name: Simulate short workload
+        run: |
+          echo "Running short CPU workload..."
+          python3 -c "
+          import time, math
+          start = time.time()
+          result = sum(math.sqrt(i) for i in range(1_000_000))
+          elapsed = time.time() - start
+          print(f'Computed {result:.2f} in {elapsed:.2f}s')
+          "
+
+  medium-job:
+    name: Medium Job
+    runs-on: aws-linux-scale-rocm-customer-dev
+    timeout-minutes: 15
+    steps:
+      - name: System info
+        run: |
+          uname -a
+          nproc
+          free -h
+
+      - name: Simulate medium workload
+        run: |
+          echo "Running medium CPU workload..."
+          python3 -c "
+          import time, math
+          start = time.time()
+          result = sum(math.sqrt(i) for i in range(10_000_000))
+          elapsed = time.time() - start
+          print(f'Computed {result:.2f} in {elapsed:.2f}s')
+          "
+
+      - name: Sleep to extend duration
+        run: sleep 60
