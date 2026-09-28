@@ -265,10 +265,12 @@ class CIInputs:
                 ("Linux", self.linux_test_labels),
                 ("Windows", self.windows_test_labels),
             ]:
+                # ci: labels are control labels, not test component labels; skip validation
                 invalid = [
                     lbl
                     for lbl in labels
-                    if lbl.replace("test:", "") not in allowed_labels
+                    if not lbl.startswith("ci:")
+                    and lbl.replace("test:", "") not in allowed_labels
                 ]
                 if invalid:
                     raise ValueError(
@@ -344,13 +346,18 @@ class CIInputs:
         # Test labels come from two sources:
         # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
         # 2. PR test:* labels (apply to both platforms)
+        # Additionally, ci:* labels are passed through for downstream processing
         pr_test_labels = [label for label in pr_labels if label.startswith("test:")]
+        pr_ci_labels = [label for label in pr_labels if label.startswith("ci:")]
         linux_test_labels = (
-            _parse_comma_list(os.environ.get("LINUX_TEST_LABELS", "")) + pr_test_labels
+            _parse_comma_list(os.environ.get("LINUX_TEST_LABELS", ""))
+            + pr_test_labels
+            + pr_ci_labels
         )
         windows_test_labels = (
             _parse_comma_list(os.environ.get("WINDOWS_TEST_LABELS", ""))
             + pr_test_labels
+            + pr_ci_labels
         )
 
         # When build_stages limits the build, validate or auto-select test labels.
@@ -359,11 +366,13 @@ class CIInputs:
         build_stages = _parse_comma_list(os.environ.get("BUILD_STAGES", ""))
         allowed_labels = _get_allowed_test_labels_for_stages(build_stages)
         if allowed_labels is not None:
+            # ci: labels are control labels, not test component labels; skip validation
             if linux_test_labels:
                 invalid = [
                     lbl
                     for lbl in linux_test_labels
-                    if lbl.replace("test:", "") not in allowed_labels
+                    if not lbl.startswith("ci:")
+                    and lbl.replace("test:", "") not in allowed_labels
                 ]
                 if invalid:
                     raise ValueError(
@@ -377,7 +386,8 @@ class CIInputs:
                 invalid = [
                     lbl
                     for lbl in windows_test_labels
-                    if lbl.replace("test:", "") not in allowed_labels
+                    if not lbl.startswith("ci:")
+                    and lbl.replace("test:", "") not in allowed_labels
                 ]
                 if invalid:
                     raise ValueError(
@@ -1434,6 +1444,15 @@ def _expand_build_config_for_platform(
             family_info["test_type"] = family_test_type
         if test_runs_on and "test-runs-on-labels" in platform_info:
             family_info["test-runs-on-labels"] = platform_info["test-runs-on-labels"]
+        # Include multi-GPU runner info if available
+        if "test-runs-on-multi-gpu" in platform_info:
+            family_info["test-runs-on-multi-gpu"] = platform_info[
+                "test-runs-on-multi-gpu"
+            ]
+        if "test-runs-on-multi-gpu-labels" in platform_info:
+            family_info["test-runs-on-multi-gpu-labels"] = platform_info[
+                "test-runs-on-multi-gpu-labels"
+            ]
         # Per-family test labels allow limiting which tests run for specific architectures
         if "test_labels_for_family" in platform_info:
             family_info["test_labels_for_family"] = platform_info[
