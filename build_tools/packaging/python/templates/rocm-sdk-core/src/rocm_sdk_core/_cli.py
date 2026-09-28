@@ -32,7 +32,23 @@ def _has_devel_module():
 
 
 def _is_devel_module_expanded():
-    return importlib.util.find_spec(DEVEL_PY_PACKAGE_NAME) is not None
+    # The split-layout devel wheel installs its platform package immediately,
+    # before `rocm-sdk init` creates the link topology. Therefore package
+    # existence alone no longer means initialization is complete. The pure
+    # package's link manifest is the prototype completion sentinel.
+    pure_spec = importlib.util.find_spec(DEVEL_PURE_PY_PACKAGE_NAME)
+    assert (
+        pure_spec is not None
+    ), f"Package {DEVEL_PURE_PY_PACKAGE_NAME!r} disappeared after it was detected"
+    if pure_spec.origin is None:
+        raise ImportError(
+            f"Required package {DEVEL_PURE_PY_PACKAGE_NAME!r} is not file-backed"
+        )
+    pure_package_path = Path(pure_spec.origin).parent
+    return not (
+        (pure_package_path / "_devel.tar").exists()
+        or (pure_package_path / "_devel.tar.xz").exists()
+    )
 
 
 def _expand_devel_module():
