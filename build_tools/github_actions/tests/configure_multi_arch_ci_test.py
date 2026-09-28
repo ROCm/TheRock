@@ -1373,7 +1373,12 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "test-runs-on",
             "sanity_check_only_for_family",
         }
-        optional_keys = {"test-runs-on-labels", "test_type"}
+        optional_keys = {
+            "test-runs-on-labels",
+            "test-runs-on-multi-gpu",
+            "test-runs-on-multi-gpu-labels",
+            "test_type",
+        }
         for config in [result.linux, result.windows]:
             self.assertIsNotNone(config)
             per_family = config.per_family_info

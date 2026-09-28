@@ -1444,6 +1444,15 @@ def _expand_build_config_for_platform(
             family_info["test_type"] = family_test_type
         if test_runs_on and "test-runs-on-labels" in platform_info:
             family_info["test-runs-on-labels"] = platform_info["test-runs-on-labels"]
+        # Include multi-GPU runner info if available
+        if "test-runs-on-multi-gpu" in platform_info:
+            family_info["test-runs-on-multi-gpu"] = platform_info[
+                "test-runs-on-multi-gpu"
+            ]
+        if "test-runs-on-multi-gpu-labels" in platform_info:
+            family_info["test-runs-on-multi-gpu-labels"] = platform_info[
+                "test-runs-on-multi-gpu-labels"
+            ]
         # Per-family test labels allow limiting which tests run for specific architectures
         if "test_labels_for_family" in platform_info:
             family_info["test_labels_for_family"] = platform_info[
