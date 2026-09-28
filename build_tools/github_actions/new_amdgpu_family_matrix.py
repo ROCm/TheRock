@@ -14,7 +14,6 @@ amdgpu_family_info_matrix_all {
      <target>: {                                # string: cmake target for single gpu architecture
         "linux": {
             "build": {
-              "expect_failure":                 #         boolean:
               "build_variants": []              #         list: build variant names (e.g., ["release", "asan"])
             },                                  # platform <optional>
            "test": {                            #     test options
@@ -22,7 +21,6 @@ amdgpu_family_info_matrix_all {
               "runs_on": {                      #         dict: Host names of compute nodes
                   "test":                       #             string: test runner (optional)
                   "test-multi-gpu":             #             string: multi-gpu test runner (optional)
-                  "benchmark":                  #             string: benchmark runner (optional)
               }
             }
             "release": {                        #     release options
@@ -32,7 +30,6 @@ amdgpu_family_info_matrix_all {
         }
         "windows": {
             "build": {
-              "expect_failure":                 #         boolean:
               "build_variants": []              #         list: build variant names
             },                                  # platform <optional>
             "test": {                           #     test options
@@ -40,7 +37,6 @@ amdgpu_family_info_matrix_all {
               "runs_on": {                      #         dict: Host names of compute nodes
                   "test":                       #             string: test runner (optional)
                   "test-multi-gpu":             #             string: multi-gpu test runner (optional)
-                  "benchmark":                  #             string: benchmark runner (optional)
               }
             }
             "release": {                        #     release options
@@ -61,12 +57,19 @@ Cmake targets are defined in: cmake/therock_amdgpu_targets.cmake
 
 amdgpu_family_predefined_groups = {
     # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
-    "amdgpu_presubmit": ["gfx94X-dcgpu", "gfx110X-all", "gfx1151", "gfx120X-all"],
+    "amdgpu_presubmit": [
+        "gfx94X-dcgpu",
+        "gfx110X-all",
+        "gfx1151",
+        "gfx120X-all",
+        "gfx125X-dcgpu",
+    ],
     # The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
     "amdgpu_postsubmit": ["gfx950-dcgpu"],
     # The 'nightly' matrix runs on 'schedule' triggers.
     "amdgpu_nightly": [
         "gfx90X-dcgpu",
+        "gfx90c",
         "gfx101X-dgpu",
         "gfx103X-all",
         "gfx1150",
@@ -89,7 +92,6 @@ all_build_variants = {
             "build_variant_label": "asan",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
-            "expect_failure": True,
         },
     },
     "windows": {
@@ -114,8 +116,6 @@ amdgpu_family_info_matrix_all = {
                     "runs_on": {
                         "test": "linux-mi325-1gpu-ossci-rocm-frac",
                         "test-multi-gpu": "linux-mi325-8gpu-ossci-rocm",
-                        # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
-                        "benchmark": "linux-mi325-8gpu-ossci-rocm",
                     },
                     "fetch-gfx-targets": ["gfx942"],
                 },
@@ -242,8 +242,6 @@ amdgpu_family_info_matrix_all = {
                     "run_tests": True,
                     "runs_on": {
                         "test": "windows-gfx1151-gpu-rocm",
-                        # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
-                        "benchmark": "windows-gfx1151-gpu-rocm",
                     },
                     "fetch-gfx-targets": ["gfx1151"],
                 },
@@ -256,7 +254,6 @@ amdgpu_family_info_matrix_all = {
         "gfx1152": {
             "linux": {
                 "build": {
-                    "expect_failure": True,
                     "build_variants": ["release"],
                 },
                 "test": {
@@ -271,7 +268,6 @@ amdgpu_family_info_matrix_all = {
             },
             "windows": {
                 "build": {
-                    "expect_failure": True,
                     "build_variants": ["release"],
                 },
                 "test": {
@@ -288,7 +284,6 @@ amdgpu_family_info_matrix_all = {
         "gfx1153": {
             "linux": {
                 "build": {
-                    "expect_failure": True,
                     "build_variants": ["release"],
                 },
                 "test": {
@@ -307,7 +302,6 @@ amdgpu_family_info_matrix_all = {
             },
             "windows": {
                 "build": {
-                    "expect_failure": True,
                     "build_variants": ["release"],
                 },
                 "test": {
@@ -392,6 +386,25 @@ amdgpu_family_info_matrix_all = {
             },
         }
     },
+    "gfx125X": {
+        "dcgpu": {
+            "linux": {
+                "build": {
+                    "build_variants": ["release"],
+                },
+                "test": {
+                    # No gfx1250 hardware available for testing yet.
+                    "run_tests": False,
+                    "runs_on": {},
+                    "fetch-gfx-targets": ["gfx1250"],
+                },
+                "release": {
+                    "push_on_success": False,
+                    "bypass_tests_for_releases": True,
+                },
+            },
+        }
+    },
     "gfx90X": {
         "dcgpu": {
             "linux": {
@@ -426,6 +439,37 @@ amdgpu_family_info_matrix_all = {
                 },
             },
         }
+    },
+    "gfx90c": {
+        "linux": {
+            "build": {
+                "build_variants": ["release"],
+            },
+            "test": {
+                "run_tests": False,
+                "runs_on": {},
+                "fetch-gfx-targets": [],
+                "sanity_check_only_for_family": True,
+            },
+            "release": {
+                "push_on_success": False,
+                "bypass_tests_for_releases": False,
+            },
+        },
+        "windows": {
+            "build": {
+                "build_variants": ["release"],
+            },
+            "test": {
+                "run_tests": False,
+                "runs_on": {},
+                "fetch-gfx-targets": [],
+            },
+            "release": {
+                "push_on_success": False,
+                "bypass_tests_for_releases": False,
+            },
+        },
     },
     "gfx101X": {
         "dgpu": {

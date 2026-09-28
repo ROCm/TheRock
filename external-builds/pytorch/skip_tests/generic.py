@@ -9,15 +9,6 @@ skip_tests = {
         }
     },
     "common": {
-        "cuda": [
-            # RuntimeError: Error building extension 'dummy_allocator'
-            # Skipped across all PyTorch versions; the hipblas.h include error
-            # persists in the ROCm SDK environment.
-            "test_mempool_empty_cache_inactive",
-            # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI
-            "test_memory_snapshot",
-            "test_memory_plots",
-        ],
         "autograd": [
             # Stream comparison mismatch on ROCm (non-default stream vs default stream)
             #   AssertionError: <torch.cuda.Stream ...> != <torch.cuda.Stream cuda_stream=0x0>
@@ -25,6 +16,17 @@ skip_tests = {
             "test_side_stream_backward_overlap",
         ],
         "cuda": [
+            # RuntimeError: Error building extension 'dummy_allocator'
+            # Skipped across all PyTorch versions; the hipblas.h include error
+            # persists in the ROCm SDK environment.
+            "test_mempool_empty_cache_inactive",
+            # JIT-compiles dummy_allocator, but the wheel test environment is
+            # runtime-only and does not configure a native compiler or install
+            # the ROCm development headers. See #8217.
+            "test_mempool_limited_memory_with_allocator",
+            # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI
+            "test_memory_snapshot",
+            "test_memory_plots",
             # HIP_VISIBLE_DEVICES and CUDA_VISIBLE_DEVICES not working
             # to restrict visibility of devices
             # AssertionError: String comparison failed: '8, 1' != '8, 8'
@@ -223,7 +225,7 @@ skip_tests = {
             # We should fix the test to fail/skip more gracefully.
             #   subprocess.CalledProcessError: Command '['where', 'cl']' returned non-zero exit status 1.
             "test_multi_grad_all_hooks",
-            # This is/was also failing on gfx942 linux, see the 2.9 and 2.10 skip test files.
+            # This is/was also failing on gfx942 linux, see the per-release skip test files.
             #   AssertionError: "Simulate error" does not match "grad can be implicitly created only for scalar outputs"
             "test_reentrant_parent_error_on_cpu_cuda",
         ],
@@ -255,6 +257,23 @@ skip_tests = {
             #   AssertionError: Scalars are not equal!
             #   Expected 0 but got 2173342911312.
             "test_streams",
+            # Device-side assert() does not propagate to the host on Windows ROCm:
+            # the KMD has no trap handler, so the faulted queue never reports an
+            # error and torch.cuda.synchronize() hangs until the CI job timeout.
+            # These tests deliberately trigger a device-side assert and await it
+            # with no subprocess timeout, so they hang rather than fail.
+            # Re-enable once the Windows ROCm driver propagates device-side
+            # faults to the runtime.
+            # See https://github.com/ROCm/TheRock/issues/5565
+            "test_fixed_cuda_assert_async",
+            "test_index_out_of_bounds_exception_cuda",
+            # Same device-side-assert-propagation issue as the two tests above:
+            # spawns a subprocess that feeds invalid probabilities (negative,
+            # inf, nan) to torch.multinomial, calls torch.cuda.synchronize(), and
+            # asserts the device-side assert surfaces in stderr. On Windows ROCm
+            # the fault never propagates, so it hangs/fails instead.
+            # See https://github.com/ROCm/TheRock/issues/5565
+            "test_multinomial_invalid_probs_cuda",
         ],
         "nn": [
             # Hangs on some Windows ROCm runners until the job hits the 6h limit.
@@ -284,7 +303,7 @@ skip_tests = {
             # The callstack for this one points to _fill_mem_eff_dropout_mask, so it may be related to aotriton?
             "test_cublas_config_nondeterministic_alert_cuda",
             # Large test that isn't very CI-friendly (takes ~2 seconds, possibly hanging)
-            "test_memory_format_operators_cuda"
+            "test_memory_format_operators_cuda",
             # Flaky tests hanging on some gfx1151 machines...
             # Maybe memory pressure? Tests use some large tensors:
             #   v = torch.FloatTensor([64000., 32., 64000.])

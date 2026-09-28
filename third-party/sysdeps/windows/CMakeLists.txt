@@ -19,3 +19,17 @@ therock_provide_artifact(sysdeps
     therock-zlib
     therock-zstd
 )
+
+# Optional sysdep: amd-mesa
+if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
+  add_subdirectory(amd-mesa)
+  therock_provide_artifact(sysdeps-amd-mesa
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-amd-mesa.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-amd-mesa
+  )
+endif()

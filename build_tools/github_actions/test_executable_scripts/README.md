@@ -57,7 +57,7 @@ ______________________________________________________________________
 
 - `ctest -L <category>` (and optionally `-L ex_gpu_<arch>` or `-LE ex_gpu`).
 - Common options: `--output-on-failure`, `--parallel <N>`, `--test-dir`, `-V`, `--tests-information <SHARD_INDEX>,<TOTAL_SHARDS>`.
-- Parallelism: default 8; can be adjusted according to `AMDGPU_FAMILIES`
+- Parallelism: default 1 (serial); can be adjusted according to `AMDGPU_FAMILIES`
 
 7. **Run ctest**
    Execute the command in `THEROCK_DIR` with the environment that includes `ROCM_PATH`, `GTEST_SHARD_INDEX`, and `GTEST_TOTAL_SHARDS`.

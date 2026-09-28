@@ -27,6 +27,8 @@
 #
 # Supported base images (examples)
 # - ubuntu:24.04
+# - debian:12 (Bookworm)
+# - debian:13 (Trixie)
 # - almalinux:8
 # - mcr.microsoft.com/azurelinux/base/core:3.0
 # - registry.access.redhat.com/ubi8/ubi:8.10 (RHEL 8.10)
@@ -83,6 +85,28 @@
 #     --build-arg RELEASE_TYPE=stable \
 #     -f dockerfiles/rocm_runtime.Dockerfile \
 #     -t rocm:ubuntu22.04-gfx94X-7.10.0 \
+#     dockerfiles/
+#
+#   # Debian 12 + gfx110x via packages (stable)
+#   docker build \
+#     --build-arg BASE_IMAGE=debian:12 \
+#     --build-arg VERSION=7.13.0 \
+#     --build-arg AMDGPU_FAMILY=gfx110x \
+#     --build-arg RELEASE_TYPE=stable \
+#     --build-arg INSTALL_METHOD=packages \
+#     -f dockerfiles/rocm_runtime.Dockerfile \
+#     -t rocm:debian12-gfx110x-7.13.0 \
+#     dockerfiles/
+#
+#   # Debian 13 + multi-arch via packages (stable)
+#   docker build \
+#     --build-arg BASE_IMAGE=debian:13 \
+#     --build-arg VERSION=7.13.0 \
+#     --build-arg AMDGPU_FAMILY=multi-arch \
+#     --build-arg RELEASE_TYPE=stable \
+#     --build-arg INSTALL_METHOD=packages \
+#     -f dockerfiles/rocm_runtime.Dockerfile \
+#     -t rocm:debian13-multi-arch-7.13.0 \
 #     dockerfiles/
 #
 #   # RHEL 8.10 UBI + gfx94X (nightly)

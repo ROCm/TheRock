@@ -13,12 +13,14 @@ import os
 from pathlib import Path
 import platform
 import shlex
+import stat
 import subprocess
 import shutil
 import sys
 import tarfile
 
 from .artifacts import ArtifactCatalog, ArtifactName
+from .sdk_targets import package_owner, render_dist_info
 from .exe_stub_gen import generate_exe_link_stub
 
 is_windows = platform.system() == "Windows"
@@ -125,13 +127,17 @@ class Parameters:
         self.populated_packages: list["PopulatedDistPackage"] = []
         self.runtime_artifact_names: set[str] = set()
 
-        # Load and interpolate the _dist_info.py template.
+        # Load and interpolate the _dist_info.py template. version, version_suffix,
+        # and target_family are wrapped in repr() so unexpected characters can't
+        # break out of the generated source when it's later imported by setup.py
+        # at install time — the main practical risk being target_family, parsed
+        # from artifact directory names via ArtifactName's permissive regex.
         # Base: version and nonce only — no family lines. Used as the starting
         # point for restrict_families packages so they can write clean family
         # content without a .clear() dance.
-        dist_info_base = DIST_INFO_PATH.read_text()
-        dist_info_base += f"__version__ = '{version}'\n"
-        dist_info_base += f"PY_PACKAGE_SUFFIX_NONCE = '{version_suffix}'\n"
+        dist_info_base = render_dist_info(DIST_INFO_PATH)
+        dist_info_base += f"__version__ = {repr(version)}\n"
+        dist_info_base += f"PY_PACKAGE_SUFFIX_NONCE = {repr(version_suffix)}\n"
         self.dist_info_base_contents = dist_info_base
 
         # Full: base extended with all families. Used by most packages and by
@@ -150,23 +156,43 @@ class Parameters:
 
         if self.default_target_family is not None:
             dist_info_contents += (
-                f"DEFAULT_TARGET_FAMILY = '{self.default_target_family}'\n"
+                f"DEFAULT_TARGET_FAMILY = {repr(self.default_target_family)}\n"
             )
         for target_family in self.available_target_families:
             dist_info_contents += (
-                f"AVAILABLE_TARGET_FAMILIES.append('{target_family}')\n"
+                f"AVAILABLE_TARGET_FAMILIES.append({repr(target_family)})\n"
             )
         for target_family in self.linux_target_families:
-            dist_info_contents += f"LINUX_TARGET_FAMILIES.append('{target_family}')\n"
+            dist_info_contents += (
+                f"LINUX_TARGET_FAMILIES.append({repr(target_family)})\n"
+            )
         for target_family in self.windows_target_families:
-            dist_info_contents += f"WINDOWS_TARGET_FAMILIES.append('{target_family}')\n"
+            dist_info_contents += (
+                f"WINDOWS_TARGET_FAMILIES.append({repr(target_family)})\n"
+            )
         self.dist_info_contents = dist_info_contents
 
-        # And dynamically load it so that we have access to the same config during
-        # populate as will be loaded at setup and run time.
+        # Dynamically load the dist_info module for use during populate.
+        # exec() runs only the static template file; version, version_suffix,
+        # and target_family are assigned directly as attributes below, never
+        # synthesized into source text, eliminating code injection risk
+        # regardless of where those values originated.
         spec = importlib.util.spec_from_loader("rocm_sdk_dist_info", loader=None)
         self.dist_info = importlib.util.module_from_spec(spec)
-        exec(self.dist_info_contents, self.dist_info.__dict__)
+        exec(
+            render_dist_info(DIST_INFO_PATH), self.dist_info.__dict__
+        )  # static template only, no user input
+        self.dist_info.__version__ = version
+        self.dist_info.PY_PACKAGE_SUFFIX_NONCE = version_suffix
+        if kpack_split:
+            self.dist_info.ALL_PACKAGES["libraries"].dist_package_template = (
+                "rocm-sdk-libraries"
+            )
+        if self.default_target_family is not None:
+            self.dist_info.DEFAULT_TARGET_FAMILY = self.default_target_family
+        self.dist_info.AVAILABLE_TARGET_FAMILIES.extend(self.available_target_families)
+        self.dist_info.LINUX_TARGET_FAMILIES.extend(self.linux_target_families)
+        self.dist_info.WINDOWS_TARGET_FAMILIES.extend(self.windows_target_families)
 
     def filter_artifacts(
         self,
@@ -224,9 +250,9 @@ class PopulatedDistPackage:
         # so that determine_target_family() at install time only resolves to this
         # family's packages. No .clear() needed — the base has an empty list.
         if restrict_families and target_family is not None:
-            dist_info_contents += f"DEFAULT_TARGET_FAMILY = '{target_family}'\n"
+            dist_info_contents += f"DEFAULT_TARGET_FAMILY = {repr(target_family)}\n"
             dist_info_contents += (
-                f"AVAILABLE_TARGET_FAMILIES.append('{target_family}')\n"
+                f"AVAILABLE_TARGET_FAMILIES.append({repr(target_family)})\n"
             )
 
         # Device packages need to know the libraries package's Python package
@@ -393,7 +419,7 @@ class PopulatedDistPackage:
         package_dest_dir = self.platform_dir
         libraries_py_package_name = package_dest_dir.name
         devel_links: list[dict[str, str]] = []
-        for relpath, dir_entry in artifacts.pm.matches():
+        for relpath, dir_entry in artifacts.validated_matches().items():
             if self.files.has(relpath):
                 continue
             dest_path = package_dest_dir / relpath
@@ -424,7 +450,7 @@ class PopulatedDistPackage:
         """
         manifest_dir = self.platform_dir / ".devel_links"
         manifest_dir.mkdir(parents=True, exist_ok=True)
-        manifest_path = manifest_dir / f"{self.target_family}.json"
+        manifest_path = manifest_dir / f"{package_owner(self.target_family)}.json"
         manifest_path.write_text(
             json.dumps(
                 {"version": self.params.version, "links": devel_links},
@@ -490,6 +516,10 @@ class PopulatedDistPackage:
         # We have to patch many files, so we do not hard-link: always copy.
         log(f"  MATERIALIZE: {relpath} (from {src_path})", vlog=2)
         shutil.copy2(src_path, dest_path)
+        # copy2 preserves source mode bits. Some upstream files (e.g. LLVM's
+        # OMPD gdb module) are installed read-only, and patchelf below opens the
+        # file for writing, so guarantee the owner-write bit first.
+        os.chmod(dest_path, os.stat(dest_path).st_mode | stat.S_IWUSR)
         if self.files.has(relpath):
             log(f"WARNING: Path already materialized: {relpath}")
         else:

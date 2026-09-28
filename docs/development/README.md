@@ -17,12 +17,11 @@
 
 ### Testing
 
+- (root) [TESTING.md](/TESTING.md) - **Start here** for an overview of testing in this project
 - [Adding tests](adding_tests.md)
 - [Test Debugging](test_debugging.md)
 - [Test Filtering](test_filtering.md)
 - [Test Environment Reproduction](test_environment_reproduction.md)
-- [Test Runner Info](test_runner_info.md)
-- [TheRock Test Harness](therock_test_harness.md)
 
 ### Infrastructure
 
@@ -31,6 +30,7 @@
 - [S3 Buckets](s3_buckets.md)
 - [GitHub Actions Debugging](github_actions_debugging.md)
 - [CI Behavior Manipulation](ci_behavior_manipulation.md)
+- [Stage Reuse](stage_reuse.md)
 - [CCache Troubleshooting](ccache_troubleshooting.md)
 - [WSL ROCDXG CI Stage](wsl_rocdxg.md)
 

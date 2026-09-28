@@ -26,7 +26,7 @@ def main(argv: list[str] | None = None):
         "--release-type",
         type=str,
         default="ci",
-        help='Release type: "ci", "dev", "nightly", or "prerelease".',
+        help="Release type used to select the artifacts bucket.",
     )
     args = parser.parse_args(argv)
 

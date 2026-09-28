@@ -8,10 +8,12 @@
 #
 # - ubuntu* / debian* -> apt: python3, python3-venv, python3-pip -> PYTHON_CMD=python3
 # - sles* -> zypper: python313, python313-pip (SLE/BCI; unversioned python3 / python3-pip are not valid package names) -> PYTHON_CMD=python3.13
+# - rhel8 -> dnf: python3.12, python3.12-pip -> PYTHON_CMD=python3.12
 # - else (e.g. UBI 10 / RHEL-like) -> dnf: python3, python3-pip -> PYTHON_CMD=python3
 #
 # Optional --python-version X.Y (e.g. 3.12): install that stream where supported
 # (apt + dnf). Use on UBI 9 / RHEL 9 when default python3 is older than you need.
+# rhel8 defaults to 3.12 when --python-version is omitted.
 # On SLES, --python-version is ignored (zypper names vary); distro python3 is used.
 #
 # Use --install-runtime in CI so Python install lives in this script (not the workflow
@@ -84,6 +86,11 @@ OS_PLC="${OS_PROFILE,,}"
 if [[ -n "$PY_MM" ]] && ! [[ "$PY_MM" =~ ^[0-9]+\.[0-9]+$ ]]; then
     echo "Error: --python-version must be MAJOR.MINOR (e.g. 3.12)" >&2
     exit 1
+fi
+
+# UBI 8 / RHEL 8: default python3 may be older than CI needs; pin 3.12 unless overridden.
+if [[ -z "$PY_MM" ]] && [[ "$OS_PLC" == "rhel8" ]]; then
+    PY_MM="3.12"
 fi
 
 if [[ -n "$PY_MM" ]]; then

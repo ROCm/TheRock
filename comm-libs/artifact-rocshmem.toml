@@ -6,7 +6,6 @@ include = [
 [components.run."comm-libs/rocshmem/stage"]
 include = [
   "bin/rocshmem_info",
-  "bin/rocshmem_functional_tests",
   "share/rocshmem/rocshmem_functional_driver.sh",
 ]
 [components.dbg."comm-libs/rocshmem/stage"]
@@ -21,4 +20,21 @@ include = [
 ]
 # Tests
 [components.test."comm-libs/rocshmem/stage"]
+include = [
+  # Install-tree CTest files: test_runner.py runs `ctest --test-dir bin/rocshmem`,
+  # whose root CTestTestfile.cmake subdirs into tests/functional and tests/unit.
+  "bin/rocshmem/**",
+  # Test binaries. Both the functional and unit test executables install to
+  # bin/ (CMAKE_INSTALL_BINDIR) so their RPATH ($ORIGIN/../lib) resolves the
+  # ROCm runtime libs (e.g. libhiprtc.so.7).
+  "bin/rocshmem_functional_tests",
+  "bin/rocshmem_unit_tests",
+  # CTest wrapper scripts referenced (by relative path) from the install-tree
+  # CTestTestfile.cmake, plus the retry helper.
+  "share/rocshmem/test_wrapper.sh",
+  "share/rocshmem/unit_test_wrapper.sh",
+  "share/rocshmem/ctest_with_retry.sh",
+  # HSACOs used by the device_bitcode functional tests (quick tier).
+  "share/rocshmem/*.hsaco",
+]
 optional = true

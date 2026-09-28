@@ -77,21 +77,26 @@ permissions:
 jobs:
   generate-report:
     name: Generate Manifest Diff Report
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
     # Non-blocking under CI; strict on manual dispatch so regressions surface red.
     continue-on-error: ${{ github.event_name != 'workflow_dispatch' }}
     permissions:
       id-token: write
       contents: read
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
-      options: -v /runner/config:/home/awsconfig/
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
     env:
-      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
+      END_REF: ${{ inputs.end_ref || (github.event_name == 'pull_request' && github.event.pull_request.head.sha) || github.sha }}
+      START_REF: ${{ inputs.start_ref || (github.event_name == 'push' && github.event.before) || '' }}
+      FIND_LAST_RUN: ${{ inputs.find_last_run }}
+      PR_BASE_REF: ${{ inputs.pr_base_ref || (github.event_name == 'pull_request' && github.event.pull_request.base.ref) || '' }}
+      BRANCH: ${{ inputs.branch }}
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
           fetch-depth: 0
@@ -106,11 +111,11 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python3 build_tools/generate_manifest_diff_report.py \
-            --end "${{ inputs.end_ref || (github.event_name == 'pull_request' && github.event.pull_request.head.sha) || github.sha }}" \
-            --start "${{ inputs.start_ref || (github.event_name == 'push' && github.event.before) || '' }}" \
-            --find-last-run "${{ inputs.find_last_run }}" \
-            --pr-base-ref "${{ inputs.pr_base_ref || (github.event_name == 'pull_request' && github.event.pull_request.base.ref) || '' }}" \
-            --branch "${{ inputs.branch }}" \
+            --end "${END_REF}" \
+            --start "${START_REF}" \
+            --find-last-run "${FIND_LAST_RUN}" \
+            --pr-base-ref "${PR_BASE_REF}" \
+            --branch "${BRANCH}" \
             ${{ inputs.workflow_mode && '--workflow-mode' || '' }} \
             --output-dir reports
 

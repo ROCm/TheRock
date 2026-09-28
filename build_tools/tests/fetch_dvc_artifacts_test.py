@@ -15,6 +15,7 @@ import io
 import os
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -222,28 +223,30 @@ class TestS3Key(unittest.TestCase):
     """Tests for the S3 key builder (dvc 3.x layout: prefix/files/md5/...)."""
 
     def test_with_prefix(self):
-        r = fda._Remote(bucket="b", prefix="rocm-libraries", anonymous=True)
+        r = fda._Remote(
+            name="storage", bucket="b", prefix="rocm-libraries", anonymous=True
+        )
         self.assertEqual(
             fda._s3_key(r, "35b9082b72e661dc5e37f14de1d9d4ed"),
             "rocm-libraries/files/md5/35/b9082b72e661dc5e37f14de1d9d4ed",
         )
 
     def test_without_prefix(self):
-        r = fda._Remote(bucket="b", prefix="", anonymous=True)
+        r = fda._Remote(name="storage", bucket="b", prefix="", anonymous=True)
         self.assertEqual(
             fda._s3_key(r, "35b9082b72e661dc5e37f14de1d9d4ed"),
             "files/md5/35/b9082b72e661dc5e37f14de1d9d4ed",
         )
 
     def test_dir_suffix_preserved(self):
-        r = fda._Remote(bucket="b", prefix="p", anonymous=True)
+        r = fda._Remote(name="storage", bucket="b", prefix="p", anonymous=True)
         self.assertEqual(
             fda._s3_key(r, "a" * 32 + ".dir"),
             "p/files/md5/aa/" + "a" * 30 + ".dir",
         )
 
     def test_invalid_length_rejected(self):
-        r = fda._Remote(bucket="b", prefix="p", anonymous=True)
+        r = fda._Remote(name="storage", bucket="b", prefix="p", anonymous=True)
         with self.assertRaises(fda.FetchError):
             fda._s3_key(r, "deadbeef")
 
@@ -357,7 +360,7 @@ class TestDownloadBlob(unittest.TestCase):
     """Tests for _download_blob's atomic-write + verify invariants."""
 
     def _remote(self) -> fda._Remote:
-        return fda._Remote(bucket="bkt", prefix="p", anonymous=True)
+        return fda._Remote(name="storage", bucket="bkt", prefix="p", anonymous=True)
 
     def test_happy_path(self):
         with tempfile.TemporaryDirectory() as t:
@@ -403,11 +406,86 @@ class TestDownloadBlob(unittest.TestCase):
             self.assertFalse(dest.exists())
 
 
+class TestStoreInCacheConcurrency(unittest.TestCase):
+    """Regression test for #5943.
+
+    Multiple .dvc pointer files can reference files with the same content hash
+    (e.g. identical small tensors in different subdirectories). When fetched
+    concurrently, all workers call _store_in_cache with the same cache_file
+    path. Each uses a unique temp name, but the final os.replace races on
+    Windows and raises PermissionError. The fix catches PermissionError and
+    verifies the winner wrote the correct content before treating it as success.
+    """
+
+    def test_concurrent_calls_with_same_cache_file_do_not_raise(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            data = b"shared content"
+            md5 = _md5_hex(data)
+            cache_file = fda._cache_path(tmp / "cache", md5)
+
+            # Simulate the Windows race: both workers arrive at os.replace
+            # concurrently. Caller 1 writes cache_file; caller 2 then gets
+            # PermissionError because Windows won't replace a file another
+            # handle still has open. We model this with a two-phase barrier:
+            # both workers reach the gate, then caller 1 does the real replace
+            # and only after that does caller 2 raise PermissionError, so
+            # cache_file already exists when the exception handler checks it.
+            original_replace = os.replace
+            call_count = [0]
+            lock = threading.Lock()
+            gate = threading.Barrier(2)
+            done = threading.Event()
+
+            def patched_replace(src, dst):
+                with lock:
+                    call_count[0] += 1
+                    n = call_count[0]
+                gate.wait(timeout=5)
+                if n == 1:
+                    original_replace(src, dst)
+                    done.set()
+                else:
+                    done.wait(timeout=5)
+                    raise PermissionError("[WinError 5] Access is denied")
+
+            src1 = tmp / "src1.bin"
+            src2 = tmp / "src2.bin"
+            src1.write_bytes(data)
+            src2.write_bytes(data)
+
+            errors = []
+
+            def worker(src):
+                try:
+                    fda._store_in_cache(src, cache_file)
+                except Exception as e:
+                    errors.append(e)
+
+            # Patch fda's reference to os.replace (not the os module itself)
+            # so both threads see the same controlled replacement.
+            with mock.patch.object(fda.os, "replace", side_effect=patched_replace):
+                threads = [
+                    threading.Thread(target=worker, args=(src1,)),
+                    threading.Thread(target=worker, args=(src2,)),
+                ]
+                for th in threads:
+                    th.start()
+                for th in threads:
+                    th.join()
+
+            self.assertEqual(errors, [], f"unexpected errors: {errors}")
+            self.assertTrue(cache_file.exists())
+            self.assertEqual(cache_file.read_bytes(), data)
+            leftover = list(cache_file.parent.glob("*.tmp"))
+            self.assertEqual(leftover, [], f"leftover temp files: {leftover}")
+
+
 class TestMaterializeFile(unittest.TestCase):
     """Tests for the cache fast paths and download fallback."""
 
     def _remote(self) -> fda._Remote:
-        return fda._Remote(bucket="bkt", prefix="p", anonymous=True)
+        return fda._Remote(name="storage", bucket="bkt", prefix="p", anonymous=True)
 
     def test_skips_when_destination_already_correct(self):
         with tempfile.TemporaryDirectory() as t:
@@ -579,6 +657,179 @@ class TestPullEndToEnd(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             with self.assertRaisesRegex(fda.FetchError, "no .dvc/config"):
                 fda.pull(Path(t), log=lambda _: None)
+
+
+class TestParsePerOutputRemote(unittest.TestCase):
+    """Pointer entries may carry a per-output `remote:` key (dvc routing)."""
+
+    def _write(self, tmp: Path, content: str) -> Path:
+        p = tmp / "x.dvc"
+        p.write_text(content)
+        return p
+
+    def test_remote_key_parsed(self):
+        with tempfile.TemporaryDirectory() as t:
+            p = self._write(
+                Path(t),
+                "outs:\n- md5: " + "a" * 32 + "\n  size: 1\n"
+                "  hash: md5\n  remote: golden-data\n  path: f.bin\n",
+            )
+            outs = fda._parse_dvc_pointer(p)
+            self.assertEqual(outs[0].remote, "golden-data")
+
+    def test_remote_key_absent_is_none(self):
+        with tempfile.TemporaryDirectory() as t:
+            p = self._write(
+                Path(t),
+                "outs:\n- md5: " + "a" * 32 + "\n  size: 1\n  hash: md5\n  path: f\n",
+            )
+            outs = fda._parse_dvc_pointer(p)
+            self.assertIsNone(outs[0].remote)
+
+
+class TestParseDvcRemotes(unittest.TestCase):
+    """Tests for multi-remote parsing and per-output resolution."""
+
+    _CONFIG = (
+        "[core]\n    remote = storage\n"
+        "['remote \"storage\"']\n    url = s3://therock-dvc/rocm-libraries\n"
+        "    allow_anonymous_login = true\n"
+        "['remote \"golden-data\"']\n"
+        "    url = s3://therock-dvc/rocm-libraries/hipdnn/golden-data\n"
+        "    allow_anonymous_login = false\n"
+    )
+
+    def _write(self, tmp: Path, content: str) -> Path:
+        p = tmp / "config"
+        p.write_text(content)
+        return p
+
+    def test_parses_all_remotes(self):
+        with tempfile.TemporaryDirectory() as t:
+            cfg = fda._parse_dvc_remotes(self._write(Path(t), self._CONFIG))
+            self.assertEqual(cfg.default, "storage")
+            self.assertEqual(set(cfg.remotes), {"storage", "golden-data"})
+            self.assertEqual(
+                cfg.remotes["golden-data"].prefix, "rocm-libraries/hipdnn/golden-data"
+            )
+            # Per-remote anonymous flags are independent.
+            self.assertTrue(cfg.remotes["storage"].anonymous)
+            self.assertFalse(cfg.remotes["golden-data"].anonymous)
+
+    def test_resolve_default_when_none(self):
+        with tempfile.TemporaryDirectory() as t:
+            cfg = fda._parse_dvc_remotes(self._write(Path(t), self._CONFIG))
+            self.assertEqual(cfg.resolve(None, Path("x.dvc")).name, "storage")
+
+    def test_resolve_named_remote(self):
+        with tempfile.TemporaryDirectory() as t:
+            cfg = fda._parse_dvc_remotes(self._write(Path(t), self._CONFIG))
+            self.assertEqual(
+                cfg.resolve("golden-data", Path("x.dvc")).name, "golden-data"
+            )
+
+    def test_resolve_unknown_remote_raises(self):
+        with tempfile.TemporaryDirectory() as t:
+            cfg = fda._parse_dvc_remotes(self._write(Path(t), self._CONFIG))
+            with self.assertRaisesRegex(fda.FetchError, "not defined"):
+                cfg.resolve("ghost", Path("x.dvc"))
+
+    def test_default_remote_backward_compat(self):
+        # _parse_dvc_config still returns the [core] default remote unchanged.
+        with tempfile.TemporaryDirectory() as t:
+            r = fda._parse_dvc_config(self._write(Path(t), self._CONFIG))
+            self.assertEqual(r.name, "storage")
+            self.assertEqual(r.prefix, "rocm-libraries")
+
+
+class TestPullPerOutputRemoteRouting(unittest.TestCase):
+    """End-to-end: a pull routes each blob to the remote named in its pointer."""
+
+    def test_blobs_fetched_from_their_named_remotes(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            project = tmp / "proj"
+            (project / ".dvc").mkdir(parents=True)
+            (project / ".dvc" / "config").write_text(
+                "[core]\n    remote = storage\n"
+                "['remote \"storage\"']\n    url = s3://bkt/rocm-libraries\n"
+                "    allow_anonymous_login = true\n"
+                "['remote \"golden-data\"']\n"
+                "    url = s3://bkt/rocm-libraries/hipdnn/golden-data\n"
+                "    allow_anonymous_login = true\n"
+            )
+            data_def = b"default-remote blob"
+            data_gld = b"golden-data blob"
+            md5_def = _md5_hex(data_def)
+            md5_gld = _md5_hex(data_gld)
+            # Pointer 1: no remote key -> default (storage).
+            (project / "a.bin.dvc").write_text(
+                f"outs:\n- md5: {md5_def}\n  size: {len(data_def)}\n"
+                f"  hash: md5\n  path: a.bin\n"
+            )
+            # Pointer 2: remote: golden-data.
+            (project / "b.bin.dvc").write_text(
+                f"outs:\n- md5: {md5_gld}\n  size: {len(data_gld)}\n"
+                f"  hash: md5\n  remote: golden-data\n  path: b.bin\n"
+            )
+
+            # A single fake S3 keyed by (bucket, key). Because the two remotes
+            # share a bucket but differ in prefix, the keys differ - so a blob
+            # served only under the golden-data prefix proves it was routed
+            # there and NOT looked up under the storage prefix (the #9183 bug).
+            payloads = {
+                (
+                    "bkt",
+                    f"rocm-libraries/files/md5/{md5_def[:2]}/{md5_def[2:]}",
+                ): data_def,
+                (
+                    "bkt",
+                    "rocm-libraries/hipdnn/golden-data/files/md5/"
+                    f"{md5_gld[:2]}/{md5_gld[2:]}",
+                ): data_gld,
+            }
+            fake = _FakeS3(payloads)
+
+            with mock.patch.object(fda, "_make_s3_client", return_value=fake):
+                result = fda.pull(project, cache_dir=tmp / "cache", log=lambda _: None)
+
+            self.assertEqual(result.fetched, 2)
+            self.assertEqual((project / "a.bin").read_bytes(), data_def)
+            self.assertEqual((project / "b.bin").read_bytes(), data_gld)
+            fetched_keys = {key for _, key in fake.calls}
+            self.assertIn(
+                "rocm-libraries/hipdnn/golden-data/files/md5/"
+                f"{md5_gld[:2]}/{md5_gld[2:]}",
+                fetched_keys,
+            )
+
+    def test_unknown_remote_in_pointer_is_reported(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            project = tmp / "proj"
+            (project / ".dvc").mkdir(parents=True)
+            (project / ".dvc" / "config").write_text(
+                "[core]\n    remote = storage\n"
+                "['remote \"storage\"']\n    url = s3://b/pfx\n"
+                "    allow_anonymous_login = true\n"
+            )
+            md5 = _md5_hex(b"z")
+            (project / "z.bin.dvc").write_text(
+                f"outs:\n- md5: {md5}\n  size: 1\n  hash: md5\n"
+                f"  remote: nonexistent\n  path: z.bin\n"
+            )
+            fake = _FakeS3({})
+            logs: list[str] = []
+            with mock.patch.object(fda, "_make_s3_client", return_value=fake):
+                # An unknown per-output remote surfaces via the normal aggregated
+                # per-pointer failure path; the specific cause is logged.
+                with self.assertRaisesRegex(fda.FetchError, "1 file"):
+                    fda.pull(project, cache_dir=None, log=logs.append)
+            self.assertTrue(
+                any("not defined" in line for line in logs),
+                f"cause not logged; logs={logs}",
+            )
+            self.assertFalse((project / "z.bin").exists())
 
 
 if __name__ == "__main__":

@@ -2,11 +2,13 @@
 [components.lib."emulation/rocjitsu/stage"]
 default_patterns = false
 include = [
-  "lib/librocjitsu_kmd.so",
+  "lib/librocjitsu.so",
 ]
 [components.dbg."emulation/rocjitsu/stage"]
 [components.dev."emulation/rocjitsu/stage"]
 [components.run."emulation/rocjitsu/stage"]
 include = [
+  "bin/rj_pretranslate",
+  "bin/rocjitsu-pretranslate.py",
   "share/rocjitsu/**",
 ]

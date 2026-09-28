@@ -8,8 +8,9 @@ exclude = [
 [components.test."ml-libs/miopenprovider/stage"]
 include = [
   "bin/miopen_plugin*_test*",
-  "bin/miopen_plugin/CTestTestfile.cmake",
-  # Test config TOMLs (e.g. MIOPEN_ENGINE.toml) consumed by the cross-provider
+  # Install-tree CTest harness for test_runner.py (replaces the legacy
+  # test_miopenprovider.py). Pulls in CTestTestfile.cmake plus any sibling
+  # config TOMLs like MIOPEN_ENGINE.toml consumed by the cross-provider
   # integration suite (hipdnn_integration_tests --test-config).
-  "bin/miopen_plugin/*.toml",
+  "bin/miopen_plugin/**",
 ]

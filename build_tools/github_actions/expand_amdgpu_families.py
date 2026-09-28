@@ -43,6 +43,7 @@ from _therock_utils.cmake_amdgpu_targets import (
     expand_families,
 )
 
+from _therock_utils.sdk_targets import group_package_targets
 from github_actions.github_actions_api import gha_set_output
 
 
@@ -77,7 +78,7 @@ def main(argv: list[str]) -> int:
     targets = expand_families(families, amdgpu_family_map())
 
     if args.output_mode == "device-extras":
-        result = ",".join(f"device-{t}" for t in targets)
+        result = ",".join(f"device-{owner}" for owner in group_package_targets(targets))
         print(result)
         gha_set_output({"device_extras": result})
     else:

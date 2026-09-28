@@ -99,8 +99,6 @@ cmd = [
     "--test-dir",
     f"{THEROCK_BIN_DIR}/hipcub",
     "--output-on-failure",
-    "--parallel",
-    "8",
     "--resource-spec-file",
     resource_spec_file,
 ]

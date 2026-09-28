@@ -1,0 +1,7 @@
+# mirage
+[components.dbg."emulation/mirage/stage"]
+[components.dev."emulation/mirage/stage"]
+[components.run."emulation/mirage/stage"]
+include = [
+  "bin/mirage",
+]

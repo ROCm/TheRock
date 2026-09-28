@@ -54,7 +54,10 @@ def parse_components(components: list[str]) -> list[list]:
     if "default" in components:
         return [], []
 
-    if any(comp in components for comp in ["base", "comm-libs", "core", "profiler"]):
+    if any(
+        comp in components
+        for comp in ["base", "comm-libs", "core", "profiler", "storage-libs"]
+    ):
         arguments.append("--include-system-projects")
     else:
         arguments.append("--no-include-system-projects")

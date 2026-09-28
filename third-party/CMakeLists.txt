@@ -9,24 +9,22 @@
 
 add_custom_target(therock-third-party)
 
+# googletest is declared before compiler/ (see the root CMakeLists.txt); attach
+# it to the aggregate here, where therock-third-party exists.
+add_dependencies(therock-third-party therock-googletest)
+
 # No-dep third party libraries (alphabetical)
-add_subdirectory(boost)
 add_subdirectory(Catch2)
 add_subdirectory(eigen)
 add_subdirectory(fftw3)
 add_subdirectory(flatbuffers)
 add_subdirectory(fmt)
 add_subdirectory(FunctionalPlus)
-add_subdirectory(googletest)
 add_subdirectory(libdivide)
 add_subdirectory(msgpack-cxx)
 add_subdirectory(nlohmann-json)
-add_subdirectory(robin-map)
 add_subdirectory(simde)
 add_subdirectory(yaml-cpp)
-
-# nanobind depends on robin-map
-add_subdirectory(nanobind)
 
 # frugally-deep depends on eigen, FunctionalPlus and nlohmann-json
 add_subdirectory(frugally-deep)

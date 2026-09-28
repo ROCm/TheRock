@@ -1,288 +1,76 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+"""Thin wrapper that runs MIOpen tests through the standardized test runner.
+
+MIOpen's test selection is owned by the test filter standardization in
+rocm-libraries (``projects/miopen/test/gtest/test_categories.yaml``), which is
+compiled into an installed ``bin/MIOpen/CTestTestfile.cmake`` and consumed by
+the generic ``test_runner.py`` via ctest category labels (quick / standard /
+comprehensive / full) plus GPU-specific ``ex_gpu_<arch>`` exclusions.
+
+This convenience script simply delegates to ``test_runner.py`` so the YAML is
+the single source of truth.
+
+The test category can be selected with ``--test-type`` (alias ``--category``)
+or the ``TEST_TYPE`` environment variable. Precedence is: CLI option, then
+``TEST_TYPE``, then the default of "standard". All other configuration
+(THEROCK_BIN_DIR, AMDGPU_FAMILIES, SHARD_INDEX, TOTAL_SHARDS, ...) is read by
+test_runner.py from the environment.
+"""
+
+import argparse
 import logging
 import os
 import shlex
 import subprocess
+import sys
 from pathlib import Path
-import platform
 
-THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
-THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+TEST_RUNNER = SCRIPT_DIR / "test_runner.py"
 
-AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
-os_type = platform.system().lower()
+# Categories defined by the MIOpen test filter standardization.
+TEST_CATEGORIES = ["quick", "standard", "comprehensive", "full"]
 
-# GTest sharding
-SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
-TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
-environ_vars = os.environ.copy()
-# For display purposes in the GitHub Action UI, the shard array is 1th indexed. However for shard indexes, we convert it to 0th index.
-environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
-environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
-
-# Some of our runtime kernel compilations have been relying on either ROCM_PATH being set, or ROCm being installed at
-# /opt/rocm. Neither of these is true in TheRock so we need to supply ROCM_PATH to our tests.
-ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
-environ_vars["ROCM_PATH"] = str(ROCM_PATH)
+# Default category when neither --test-type nor TEST_TYPE is provided.
+# (GitHub Actions passes an empty string when a workflow input is left blank.)
+DEFAULT_TEST_TYPE = "standard"
 
 logging.basicConfig(level=logging.INFO)
 
-###########################################
 
-positive_filter = []
-negative_filter = []
-
-# Fusion #
-positive_filter.append("*Fusion*")
-
-# Batch Normalization #
-positive_filter.append("*/GPU_BNBWD*_*")
-positive_filter.append("*/GPU_BNOCLBWD*_*")
-positive_filter.append("*/GPU_BNFWD*_*")
-positive_filter.append("*/GPU_BNOCLFWD*_*")
-positive_filter.append("*/GPU_BNInfer*_*")
-positive_filter.append("*/GPU_BNActivInfer_*")
-positive_filter.append("*/GPU_BNOCLInfer*_*")
-positive_filter.append("*/GPU_bn_infer*_*")
-
-# CPU tests
-positive_filter.append("CPU_*")  # tests without a suite
-positive_filter.append("*/CPU_*")  # tests with a suite
-
-# Different
-positive_filter.append("*/GPU_Cat_*")
-positive_filter.append("*/GPU_ConvBiasActiv*")
-
-# Convolutions
-positive_filter.append("*/GPU_Conv*")
-positive_filter.append("*/GPU_conv*")
-
-# Solvers
-positive_filter.append("*/GPU_UnitTestConv*")
-
-# Misc
-
-positive_filter.append("*/GPU_GetitemBwd*")
-positive_filter.append("*/GPU_GLU_*")
-
-positive_filter.append("*/GPU_GroupConv*")
-positive_filter.append("*/GPU_GroupNorm_*")
-positive_filter.append("*/GPU_GRUExtra_*")
-positive_filter.append("*/GPU_TestActivation*")
-positive_filter.append("*/GPU_HipBLASLtGEMMTest*")
-positive_filter.append("*/GPU_KernelTuningNetTestConv*")
-positive_filter.append("*/GPU_Kthvalue_*")
-positive_filter.append("*/GPU_LayerNormTest*")
-positive_filter.append("*/GPU_LayoutTransposeTest_*")
-positive_filter.append("*/GPU_Lrn*")
-positive_filter.append("*/GPU_lstm_extra*")
-
-positive_filter.append("*/GPU_MultiMarginLoss_*")
-positive_filter.append("*/GPU_ConvNonpack*")
-positive_filter.append("*/GPU_PerfConfig_HipImplicitGemm*")
-positive_filter.append("*/GPU_AsymPooling2d_*")
-positive_filter.append("*/GPU_WidePooling2d_*")
-positive_filter.append("*/GPU_PReLU_*")
-positive_filter.append("*/GPU_Reduce*")
-positive_filter.append("*/GPU_reduce_custom_*")
-positive_filter.append("*/GPU_regression_issue_*")
-positive_filter.append("*/GPU_RNNExtra_*")
-positive_filter.append("*/GPU_RoPE*")
-positive_filter.append("*/GPU_SoftMarginLoss*")
-positive_filter.append("*/GPU_T5LayerNormTest_*")
-positive_filter.append("*/GPU_Op4dTensorGenericTest_*")
-positive_filter.append("*/GPU_TernaryTensorOps_*")
-positive_filter.append("*/GPU_unaryTensorOps_*")
-positive_filter.append("*/GPU_Transformers*")
-positive_filter.append("*/GPU_TunaNetTest_*")
-positive_filter.append("*/GPU_UnitTestActivationDescriptor_*")
-positive_filter.append("*/GPU_FinInterfaceTest*")
-positive_filter.append("*/GPU_VecAddTest_*")
-
-positive_filter.append("*/GPU_KernelTuningNetTest*")
-
-positive_filter.append("*/GPU_Bwd_Mha_*")
-positive_filter.append("*/GPU_Fwd_Mha_*")
-positive_filter.append("*/GPU_Softmax*")
-positive_filter.append("*/GPU_Dropout*")
-positive_filter.append("*/GPU_MhaBackward_*")
-positive_filter.append("*/GPU_MhaForward_*")
-positive_filter.append("*GPU_TestMhaFind20*")
-positive_filter.append("*/GPU_MIOpenDriver*")
-
-#############################################
-
-negative_filter.append("*DeepBench*")
-negative_filter.append("*MIOpenTestConv*")
-
-# For sake of time saving on pre-commit step
-####################################################
-negative_filter.append("Full/GPU_MIOpenDriverConv2dTransTest*")  # 4 min 45 sec
-negative_filter.append("Full/GPU_Reduce_FP64*")  # 4 min 19 sec
-negative_filter.append("Full/GPU_BNOCLFWDTrainSerialRun3D_BFP16*")  # 3 min 37 sec
-negative_filter.append("Full/GPU_Lrn_FP32*")  # 2 min 50 sec
-negative_filter.append("Full/GPU_Lrn_FP16*")  # 2 min 20 sec
-negative_filter.append("Full/GPU_BNOCLInferSerialRun3D_BFP16*")  # 2 min 19 sec
-negative_filter.append("Smoke/GPU_BNOCLFWDTrainLarge2D_BFP16*")  # 1 min 55 sec
-negative_filter.append("Smoke/GPU_BNOCLInferLarge2D_BFP16*")  # 1 min 48 sec
-negative_filter.append("Full/GPU_BNOCLBWDSerialRun3D_BFP16*")  # 1 min 28 sec
-negative_filter.append("Smoke/GPU_BNOCLBWDLarge2D_BFP16*")  # 1 min 19 sec
-
-negative_filter.append("Full/GPU_UnitTestActivationDescriptor_FP32*")  # 1 min 23 sec
-negative_filter.append("Full/GPU_UnitTestActivationDescriptor_FP16*")  # 1 min 0 sec
-
-negative_filter.append(
-    "Full/GPU_MIOpenDriverRegressionBigTensorTest_FP32*"
-)  # 0 min 59 sec
-
-negative_filter.append(
-    "Smoke/GPU_BNOCLBWDLargeFusedActivation2D_BFP16*"
-)  # 0 min 52 sec
-negative_filter.append("Smoke/GPU_BNOCLBWDLargeFusedActivation2D_FP16*")  # 0 min 49 sec
-
-negative_filter.append("Full/GPU_ConvGrpBiasActivInfer_BFP16*")  # 0 min 40 sec
-negative_filter.append("Full/GPU_ConvGrpBiasActivInfer_FP32*")  # 0 min 38 sec
-negative_filter.append("Full/GPU_ConvGrpBiasActivInfer_FP16*")  # 0 min 25 sec
-
-negative_filter.append("Full/GPU_ConvGrpActivInfer_BFP16*")  # 0 min 42 sec
-negative_filter.append("Full/GPU_ConvGrpActivInfer_FP32*")  # 0 min 35 sec
-negative_filter.append("Full/GPU_ConvGrpActivInfer_FP16*")  # 0 min 25 sec
-
-negative_filter.append("Full/GPU_ConvGrpBiasActivInfer3D_BFP16*")  # 0 min 27 sec
-negative_filter.append("Full/GPU_ConvGrpBiasActivInfer3D_FP32*")  # 0 min 25 sec
-negative_filter.append("Full/GPU_ConvGrpBiasActivInfer3D_FP16*")  # 0 min 19 sec
-
-negative_filter.append("Full/GPU_ConvGrpActivInfer3D_BFP16*")  # 0 min 27 sec
-negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP32*")  # 0 min 22 sec
-negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP16*")  # 0 min 16 sec
-
-# TODO(#3202): Re-enable tests once issues are resolved
-TEST_TO_IGNORE = {
-    "gfx110X-all": {
-        "windows": [
-            # Failed on gfx1103
-            "Smoke/CPU_Handle_NONE.TestHIP/with_stream_false_test_id_0",
-            "Full/GPU_reduce_custom_fp32_fp16_FP32.FloatTest_reduce_custom_fp32_fp16/1",
-            "Full/GPU_reduce_custom_fp32_fp16_FP32.FloatTest_reduce_custom_fp32_fp16/5",
-            "Full/GPU_reduce_custom_fp32_fp16_FP32.FloatTest_reduce_custom_fp32_fp16/9",
-            "Full/GPU_reduce_custom_fp32_fp16_FP32.FloatTest_reduce_custom_fp32_fp16/13",
-            "Full/GPU_reduce_custom_fp32_fp16_FP32.FloatTest_reduce_custom_fp32_fp16/17",
-            "Full/GPU_reduce_custom_fp32_fp16_FP16.HalfTest_reduce_custom_fp32_fp16/1",
-            "Full/GPU_reduce_custom_fp32_fp16_FP16.HalfTest_reduce_custom_fp32_fp16/5",
-            "Full/GPU_reduce_custom_fp32_fp16_FP16.HalfTest_reduce_custom_fp32_fp16/9",
-            "Full/GPU_reduce_custom_fp32_fp16_FP16.HalfTest_reduce_custom_fp32_fp16/13",
-            "Full/GPU_reduce_custom_fp32_fp16_FP16.HalfTest_reduce_custom_fp32_fp16/17",
-        ]
-    },
-    "gfx1151": {
-        "windows": ["Full/GPU_UnitTestConvSolverGemmBwdRestBwd_FP16.GemmBwdRest/0"]
-    },
-    "gfx950-dcgpu": {"linux": ["*DBSync*"]},
-}
-
-if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
-    ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
-    negative_filter.extend(ignored_tests)
-
-# Failing on on win gfx110x
-if any(prefix in AMDGPU_FAMILIES for prefix in ["gfx110"]):
-    negative_filter.append("*/GPU_MIOpenDriver*")
-    negative_filter.append("Smoke/CPU_Handle_NONE*")
-    negative_filter.append("Full/GPU_reduce_custom_fp32*")
-
-# Tests to be filtered for navi
-# 1- Ignore gfx942 tests
-# TODO: There is no FP32 wmma on Navi, remove all FP32 conv tests. These should already be skipped via applicability for
-# CK solvers
-
-if any(prefix in AMDGPU_FAMILIES for prefix in ["gfx110", "gfx115", "gfx120"]):
-    # These are ignored in miopen
-    negative_filter.append(
-        "Smoke/GPU_BNFWDTrainLargeFusedActivation2D_FP32.BnV2LargeFWD_TrainCKfp32Activation/NCHW_BNSpatial_testBNAPIV1_Dim_2_test_id_32"
-    )  # Temporarily disabled until gfx1151 CI nodes have fw 31 or higher installed
-    negative_filter.append(
-        "Smoke/GPU_BNFWDTrainLarge2D_FP32.BnV2LargeFWD_TrainCKfp32/NCHW_BNSpatial_testBNAPIV2_Dim_2_test_id_64"
-    )  # Temporarily disabled until gfx1151 CI nodes have fw 31 or higher installed
-    # this could address 2
-    negative_filter.append(
-        "*SerialRun3D*"
-    )  # These FP32 SerialRun3D tests use so much memory that they have a risk of timing out the machine during tests
-    # this could address 1
-    negative_filter.append("*gfx942*")
-    # List of currently failing tests
-    negative_filter.append("*GPU_UnitTestConvSolverFFTFwd_FP32*")
-    negative_filter.append("*GPU_UnitTestConvSolverFFTBwd_FP32*")
-    negative_filter.append("*GPU_TernaryTensorOps_FP64*")
-    negative_filter.append("*GPU_TernaryTensorOps_FP16*")
-    negative_filter.append("*GPU_TernaryTensorOps_FP32*")
-    negative_filter.append("*GPU_Op4dTensorGenericTest_FP32*")
-    negative_filter.append("*GPU_UnitTestActivationDescriptor_FP16*")
-    negative_filter.append("*GPU_UnitTestActivationDescriptor_FP32*")
-    negative_filter.append("*CPU_TuningPolicy_NONE*")
-    negative_filter.append("*GPU_Dropout_FP32*")
-    negative_filter.append("*GPU_Dropout_FP16*")
-
-    # TODO: We need to work to re-enable these
-    negative_filter.append(
-        "*GPU_GroupConv3D_BackwardData_FP16.GroupConv3D_BackwardData_half_Test*"
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Run MIOpen tests via the standardized ctest test runner."
     )
-    negative_filter.append(
-        "*GPU_GroupConv3D_BackwardData_BFP16.GroupConv3D_BackwardData_bfloat16_Test*"
+    parser.add_argument(
+        "--test-type",
+        "--category",
+        dest="test_type",
+        choices=TEST_CATEGORIES,
+        default=None,
+        help=(
+            "Test category to run. Overrides the TEST_TYPE environment "
+            f"variable. Defaults to TEST_TYPE or '{DEFAULT_TEST_TYPE}'."
+        ),
     )
-    negative_filter.append(
-        "*GPU_UnitTestConvSolverImplicitGemmGroupWrwXdlops_BFP16.ConvHipImplicitGemmGroupWrwXdlops*"
-    )
+    args = parser.parse_args()
 
-    negative_filter.append("Smoke/GPU_MultiMarginLoss*")
+    # Precedence: CLI option > TEST_TYPE env var > default.
+    category = args.test_type or os.getenv("TEST_TYPE") or DEFAULT_TEST_TYPE
 
-    negative_filter.append(
-        "*CPU_UnitTestConvSolverImplicitGemmGroupWrwXdlopsDevApplicability_FP16.ConvHipImplicitGemmGroupWrwXdlops*"
-    )
+    env = os.environ.copy()
+    # This script always tests MIOpen; test_runner.py maps "miopen" -> "MIOpen".
+    env["TEST_COMPONENT"] = "miopen"
+    env["TEST_TYPE"] = category
 
-    # Disable long running tests
-    negative_filter.append("Full/GPU_Softmax_FP32*")  # 24 min
-    negative_filter.append("Full/GPU_Softmax_BFP16*")  # 13 min
-    negative_filter.append("Full/GPU_Softmax_FP16*")  # 11.5 min
-    negative_filter.append("Smoke/GPU_Reduce_FP32*")  # 6.5 min
-    negative_filter.append("Smoke/GPU_Reduce_FP16*")  # 4.5 min
+    logging.info(f"MIOpen test category (TEST_TYPE): {category}")
 
-####################################################
+    cmd = [sys.executable, str(TEST_RUNNER)]
+    logging.info(f"++ Exec $ {shlex.join(cmd)}")
+    return subprocess.run(cmd, env=env, check=False).returncode
 
-# Creating a quick test filter
-quick_filter = [
-    # Batch norm FWD smoke tests
-    "Smoke/GPU_BNCKFWDTrainLarge2D_FP16*",
-    "Smoke/GPU_BNOCLFWDTrainLarge2D_FP16*",
-    "Smoke/GPU_BNOCLFWDTrainLarge3D_FP16*",
-    "Smoke/GPU_BNCKFWDTrainLarge2D_BFP16*",
-    "Smoke/GPU_BNOCLFWDTrainLarge2D_BFP16*",
-    "Smoke/GPU_BNOCLFWDTrainLarge3D_BFP16*",
-    # CK Grouped FWD Conv smoke tests
-    "Smoke/GPU_UnitTestConvSolverImplicitGemmFwdXdlops_FP16*",
-    "Smoke/GPU_UnitTestConvSolverImplicitGemmFwdXdlops_BFP16*",
-]
 
-# TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
-if AMDGPU_FAMILIES != "gfx950-dcgpu":
-    quick_filter.append("*DBSync*")
-    positive_filter.append("*DBSync*")
-
-####################################################
-
-# If quick tests are enabled, we run quick tests only.
-# Otherwise, we run the standard test suite.
-test_type = os.getenv("TEST_TYPE", "standard")
-if test_type == "quick":
-    test_filter = "--gtest_filter=" + ":".join(quick_filter)
-else:
-    test_filter = (
-        "--gtest_filter=" + ":".join(positive_filter) + "-" + ":".join(negative_filter)
-    )
-#############################################
-
-cmd = [f"{THEROCK_BIN_DIR}/miopen_gtest", test_filter]
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
+if __name__ == "__main__":
+    sys.exit(main())

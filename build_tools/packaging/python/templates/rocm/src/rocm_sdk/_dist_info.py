@@ -20,6 +20,19 @@ _VERBOSE = os.getenv("ROCM_SDK_VERBOSE", "0") == "1"
 
 CACHED_TARGET_FAMILY: str | None = None
 
+# BEGIN SHARED TARGET METADATA
+# Build-time import only. render_dist_info() replaces this marked block with
+# the shared metadata source before packaging; installed SDK packages do not
+# depend on _therock_utils or rocm_bootstrap.
+from _therock_utils.sdk_targets import (
+    canonical_target,
+    package_owner,
+    group_package_targets,
+    architectural_family,
+)
+
+# END SHARED TARGET METADATA
+
 
 class LibraryEntry:
     """Defines a public library that can be located by name within the overall
@@ -32,6 +45,7 @@ class LibraryEntry:
         so_pattern: str,
         dll_pattern: str,
         posix_relpath="lib",
+        optional: bool = False,
     ):
         self.shortname = shortname
         self.package = ALL_PACKAGES[package_name]
@@ -39,6 +53,11 @@ class LibraryEntry:
         self.windows_relpath = "bin"
         self.so_pattern = so_pattern
         self.dll_pattern = dll_pattern
+        # Optional libraries may be absent from a built distribution (e.g.
+        # rocdxg only builds on a WSL host and is skipped on fork PRs and
+        # local single-command Linux builds). find_libraries skips these
+        # rather than raising when no file matches.
+        self.optional = optional
         assert shortname not in ALL_LIBRARIES
         ALL_LIBRARIES[shortname] = self
 
@@ -90,7 +109,9 @@ class PackageEntry:
             )
         kwargs = {}
         if target_family is not None:
-            kwargs["target_family"] = target_family
+            # Shared-owner payload merging requires kpack-split packaging.
+            # Legacy per-target packages do not merge targets sharing a package name.
+            kwargs["target_family"] = package_owner(target_family)
         return self.dist_package_template.format(**kwargs)
 
     def get_dist_package_require(self, target_family: str | None = None) -> str:
@@ -138,12 +159,17 @@ def discover_current_target_family() -> str | None:
             for arch in arch_set:
                 # There may be multiple architecture supported on the system.
                 # This will select the first matching family.
-                arch_family = arch[:-1] + "X"
+                canonical_arch = canonical_target(arch)
+                arch_family = architectural_family(canonical_arch)
+                if arch_family is None:
+                    arch_family = canonical_arch[:-1] + "X"
                 for suffix in suffixes:
                     target_family = arch_family + suffix
                     if target_family in AVAILABLE_TARGET_FAMILIES:
                         return target_family
-                if arch in AVAILABLE_TARGET_FAMILIES:
+                if package_owner(arch) in group_package_targets(
+                    AVAILABLE_TARGET_FAMILIES
+                ):
                     return arch
     except subprocess.CalledProcessError as e:
         if _VERBOSE:
@@ -176,7 +202,9 @@ def determine_target_family() -> str:
         if target_family is None:
             target_family = DEFAULT_TARGET_FAMILY
     assert target_family is not None
-    if target_family not in AVAILABLE_TARGET_FAMILIES:
+    if package_owner(target_family) not in group_package_targets(
+        AVAILABLE_TARGET_FAMILIES
+    ):
         raise ValueError(
             f"Requested ROCM_SDK_TARGET_FAMILY={target_family} is "
             f"not available in the distribution (available: "
@@ -240,6 +268,7 @@ PackageEntry(
 LibraryEntry("amdhip64", "core", "libamdhip64.so*", "amdhip64*.dll")
 # The DLL glob here uses '0' from the version to avoid matching 'hiprtc-builtins'.
 # If DLLs with no version suffix are later added we will need a different pattern.
+LibraryEntry("hipfile", "core", "libhipfile.so*", "")
 LibraryEntry("hiprtc", "core", "libhiprtc.so*", "hiprtc0*.dll")
 LibraryEntry("roctx64", "core", "libroctx64.so*", "")
 LibraryEntry("rocprofiler-sdk", "core", "librocprofiler-sdk.so*", "")
@@ -260,9 +289,12 @@ LibraryEntry(
     "lib/host-math/lib",
 )
 LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
-LibraryEntry("rocm_smi64", "core", "librocm_smi64.so*", "")
+LibraryEntry("rocm_kpack", "core", "librocm_kpack.so*", "rocm_kpack*.dll")
 LibraryEntry("rocdecode", "core", "librocdecode.so*", "")
 LibraryEntry("rocjpeg", "core", "librocjpeg.so*", "")
+LibraryEntry("amd_smi", "core", "libamd_smi.so*", "")
+LibraryEntry("rocdxg", "core", "librocdxg*.so*", "", optional=True)
+LibraryEntry("rpp", "libraries", "librpp.so*", "")
 LibraryEntry("hipblas", "libraries", "libhipblas.so*", "*hipblas*.dll")
 LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so*", "*hipblaslt*.dll")
 LibraryEntry("hipfft", "libraries", "libhipfft.so*", "hipfft*.dll")
@@ -272,6 +304,7 @@ LibraryEntry("hipsparselt", "libraries", "libhipsparselt.so*", "")
 LibraryEntry("hipsolver", "libraries", "libhipsolver.so*", "hipsolver*.dll")
 LibraryEntry("rccl", "libraries", "librccl.so*", "")
 LibraryEntry("miopen", "libraries", "libMIOpen.so*", "MIOpen*.dll")
+LibraryEntry("origami", "libraries", "liborigami.so*", "origami*.dll")
 LibraryEntry("hipdnn", "libraries", "libhipdnn_backend.so*", "hipdnn_backend*.dll")
 
 # Others we may want:
@@ -318,8 +351,13 @@ def get_target_family_platform_marker(target_family: str) -> str:
     """
     if not LINUX_TARGET_FAMILIES or not WINDOWS_TARGET_FAMILIES:
         return ""
-    in_linux = target_family in LINUX_TARGET_FAMILIES
-    in_windows = target_family in WINDOWS_TARGET_FAMILIES
+    # Availability belongs to package owners; selected target identities remain
+    # in the platform lists and do not imply which payloads the wheel contains.
+    base_target = package_owner(target_family)
+    linux_base_targets = set(group_package_targets(LINUX_TARGET_FAMILIES))
+    windows_base_targets = set(group_package_targets(WINDOWS_TARGET_FAMILIES))
+    in_linux = base_target in linux_base_targets
+    in_windows = base_target in windows_base_targets
     if in_linux and not in_windows:
         return 'sys_platform == "linux"'
     if in_windows and not in_linux:
@@ -340,13 +378,14 @@ def build_per_target_extras() -> "dict[str, list[str]]":
     the generic extras already in setup.py's EXTRAS_REQUIRE suffice).
     """
     result: dict[str, list[str]] = {}
-    if len(AVAILABLE_TARGET_FAMILIES) <= 1:
+    base_targets = sorted(group_package_targets(AVAILABLE_TARGET_FAMILIES))
+    if len(base_targets) <= 1:
         return result
     for pkg in ALL_PACKAGES.values():
         if not pkg.is_target_specific or pkg.required:
             continue
         all_requires: list[str] = []
-        for tf in sorted(AVAILABLE_TARGET_FAMILIES):
+        for tf in base_targets:
             extra_name = f"{pkg.logical_name}-{tf}"
             req = pkg.get_dist_package_require(target_family=tf)
             marker = get_target_family_platform_marker(tf)
@@ -356,3 +395,14 @@ def build_per_target_extras() -> "dict[str, list[str]]":
             all_requires.append(req)
         result[f"{pkg.logical_name}-all"] = all_requires
     return result
+
+
+def build_install_requires(target_family: str) -> list[str]:
+    """Builds install_requires for the rocm meta package."""
+    return [
+        pkg.get_dist_package_require(target_family=target_family)
+        for pkg in ALL_PACKAGES.values()
+        # Excludes the meta package itself so the rocm sdist never
+        # declares a Requires-Dist on its own distribution name.
+        if pkg.required and pkg.logical_name != "meta"
+    ]

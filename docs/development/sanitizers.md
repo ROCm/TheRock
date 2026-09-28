@@ -43,7 +43,7 @@ When a project is configured for sanitizers, it will have certain variables inje
 
 You are recommended to code defensively with patterns like:
 
-```
+```cmake
 if(NOT DEFINED THEROCK_SANITIZER)
   set(THEROCK_SANITIZER)
 endif()
@@ -56,7 +56,7 @@ Note that you may need to add additional environment variable special casing to 
 
 Example:
 
-```
+```cmake
 if(NOT DEFINED THEROCK_SANITIZER_LAUNCHER)
   set(THEROCK_SANITIZER_LAUNCHER)
 endif()
@@ -75,7 +75,7 @@ We may add more built-in helpers if we see a lot of common usages like this. How
 
 If needing to activate specific codepaths in ROCm libraries specifically for ASAN, CMake plumbing can be done to set ad-hoc defines, but it is highly recommended to instead use built-in compile definitions for this. For example:
 
-```
+```c
 #if defined(__has_feature)
 # if __has_feature(address_sanitizer)
     // Code that builds only when AddressSanitizer is enabled
@@ -102,6 +102,82 @@ Handling sanitizer builds can be very complicated because of the need to fit all
     - `THEROCK_PRIVATE_INSTALL_RPATH_DIRS`
     - `THEROCK_PRIVATE_INSTALL_RPATH_DIRS`
   - Setup `THEROCK_SANITIZER_LAUNCHER`
+
+## Using ASan-Instrumented Libraries
+
+Once you have ASan-instrumented ROCm libraries installed (via
+[native packages or tarball](../../RELEASES.md#installing-asan-instrumented-libraries)),
+set `ROCM_ASAN_PATH` to the root of your ASan install tree, then configure the
+remaining environment variables in the shell from which you launch your
+application. Your production ROCm installation is left untouched; unset the
+variables to return to normal operation.
+
+```bash
+# DEB / RPM install:
+export ROCM_ASAN_PATH=/opt/rocm/core
+# Tarball install:
+export ROCM_ASAN_PATH=<EXTRACT_PATH>
+```
+
+### Step 1: Enable XNACK
+
+Required for device-side GPU instrumentation:
+
+```bash
+export HSA_XNACK=1
+```
+
+Without this, only host-side (CPU) errors will be detected.
+
+### Step 2: Locate the ASan runtime directory
+
+The host ASan runtime is used here only to resolve the directory where all ASan
+runtime libraries are installed:
+
+```bash
+ASAN_LIB_PATH=$(amdclang --print-file-name=libclang_rt.asan-x86_64.so)
+# ${ASAN_LIB_PATH%/*} strips the filename, giving the containing directory
+```
+
+### Step 3: Set library paths
+
+Choose **one** of the following options:
+
+**Option 1 — `LD_LIBRARY_PATH` (recommended)**
+
+Prepend the instrumented library directories so the loader finds them ahead of
+the default ROCm libraries:
+
+```bash
+export LD_LIBRARY_PATH="${ASAN_LIB_PATH%/*}:${ROCM_ASAN_PATH}/lib:${ROCM_ASAN_PATH}/lib/llvm/lib:${ROCM_ASAN_PATH}/lib/rocm_sysdeps/lib/:$LD_LIBRARY_PATH"
+```
+
+- `${ASAN_LIB_PATH%/*}` — ASan runtime directory, so the runtime is resolved
+  without a separate `LD_PRELOAD`
+- `${ROCM_ASAN_PATH}/lib` — instrumented ROCm libraries (e.g. `libamdhip64.so`,
+  `libhsa-runtime64.so`)
+- `${ROCM_ASAN_PATH}/lib/llvm/lib` — LLVM support libraries
+- `${ROCM_ASAN_PATH}/lib/rocm_sysdeps/lib/` — ROCm system dependency libraries
+
+**Option 2 — `LD_PRELOAD` + `LD_LIBRARY_PATH`**
+
+Use this when the application resolves ROCm libraries through a hardcoded
+`RPATH`/`RUNPATH` that `LD_LIBRARY_PATH` cannot override. `LD_PRELOAD` forces
+the ASan runtime and the specified instrumented libraries to be loaded before
+anything else, bypassing RPATH lookups:
+
+```bash
+ASAN_LIB_NAME=$(amdclang --print-file-name=libclang_rt.asan-gfx90a.so)
+export LD_PRELOAD="${ASAN_LIB_PATH%/*}/$ASAN_LIB_NAME:${ROCM_ASAN_PATH}/lib/libamdhip64.so:${ROCM_ASAN_PATH}/lib/libhsa-runtime64.so"
+```
+
+> [!NOTE]
+> `ASAN_LIB_NAME` holds only the filename of the GPU-specific ASan runtime
+> (e.g. `libclang_rt.asan-gfx90a.so`). Replace `gfx90a` with your target GPU
+> architecture. The GPU-specific `--print-file-name` returns only a filename,
+> not a full path — that is why `ASAN_LIB_PATH` (derived from the host variant
+> in Step 2) is used to supply the directory. Add or remove libraries from
+> `LD_PRELOAD` depending on which ROCm components you need to instrument.
 
 ## Troubleshooting
 

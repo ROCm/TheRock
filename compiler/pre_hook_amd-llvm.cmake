@@ -29,9 +29,7 @@ else()
     set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
     set(LIBOMPTARGET_ENABLE_DEBUG ON)
     set(LIBOMPTARGET_NO_SANITIZER_AMDGPU ON)
-    set(LIBOMP_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../lib:\$ORIGIN/../../../lib")
-    set(LIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime")
-    set(OFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR ON)
+    set(LIBOMP_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../lib:\$ORIGIN/../../../lib:\$ORIGIN/../../../../lib")
     # There is an issue with finding the zstd config built by TheRock when zstd
     # is searched for in the llvm config. LLVM has a FindZSTD.cmake that is
     # found in module mode, which ultimately fails to locate the library.
@@ -39,16 +37,29 @@ else()
     # CONFIG mode.
     set(RUNTIMES_CMAKE_ARGS "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON")
 
+    # Use DWARF4 for sanitizer builds. dwz (the DWARF optimization tool used in
+    # Debian/Ubuntu packaging) doesn't fully support DWARF5 - it fails with
+    # "Unknown debugging section .debug_str_offsets" even in version 0.16
+    # (Ubuntu 26.04). This is an upstream dwz limitation, not something we
+    # can fix by updating distro packages. Revisit if dwz gains DWARF5 support.
+    if(THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN" OR THEROCK_SANITIZER STREQUAL "TSAN")
+        string(APPEND RUNTIMES_CMAKE_ARGS ";-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} -gdwarf-4;-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} -gdwarf-4")
+    endif()
+
     # TODO: Guard for amd-staging only. Remove condition when compiler branch is updated.
     if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/openmp/device/CMakeLists.txt")
       list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
       set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
-      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR ON)
       set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;flang-rt;openmp")
       set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
       set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
-      set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/GPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
-      set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
+      set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
+      # ppc64le has native 128-bit long double, so libquadmath is not needed.
+      if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
+        set(FLANG_RUNTIME_F128_MATH_LIB "")
+      else()
+        set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
+      endif()
       set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
       #TODO: Enable when HWLOC dependency is figured out
       #set(LIBOMP_USE_HWLOC ON)
@@ -76,7 +87,7 @@ endif()
 # we have never enabled benchmarks,
 # disabling more explicitly after a bug fix enabled.
 set(LLVM_INCLUDE_BENCHMARKS OFF)
-set(LLVM_TARGETS_TO_BUILD "AMDGPU;Native" CACHE STRING "Enable LLVM Targets" FORCE)
+set(LLVM_TARGETS_TO_BUILD "AMDGPU;Native;SPIRV" CACHE STRING "Enable LLVM Targets" FORCE)
 
 # Packaging.
 set(PACKAGE_VENDOR "AMD" CACHE STRING "Vendor" FORCE)
@@ -86,7 +97,14 @@ set(PACKAGE_VENDOR "AMD" CACHE STRING "Vendor" FORCE)
 # of the compiler).
 set(LLVM_EXTERNAL_ROCM_DEVICE_LIBS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/amd/device-libs")
 set(LLVM_EXTERNAL_SPIRV_LLVM_TRANSLATOR_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/spirv-llvm-translator")
-set(LLVM_EXTERNAL_PROJECTS "rocm-device-libs;spirv-llvm-translator" CACHE STRING "Enable extra projects" FORCE)
+set(LLVM_EXTERNAL_SQTT_MARKER_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/amd/sqtt-marker")
+
+set(EXTERNAL_PROJECTS "rocm-device-libs;spirv-llvm-translator")
+if(NOT WIN32)
+    # LLVM plugins do not work on Windows unless LLVM_EXPORT_SYMBOLS_FOR_PLUGINS is set.
+    list(APPEND EXTERNAL_PROJECTS "sqtt-marker")
+endif()
+set(LLVM_EXTERNAL_PROJECTS "${EXTERNAL_PROJECTS}" CACHE STRING "Enable extra projects" FORCE)
 
 # TODO2: This mechanism has races in certain situations, failing to create a
 # symlink. Revisit once devicemanager code is made more robust.
