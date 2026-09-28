@@ -97,6 +97,10 @@ def preload_libraries(*shortnames: str, rtld_global: bool = True):
     preloading into the linker namespace, it ensures that subsequent resolution of them
     by name should succeed.
 
+    On Linux, the default rtld_global=True is for HIP/runtime SONAME resolution
+    (ROCM-27833). GLOBAL preload must not publish the LLVM C API into
+    RTLD_DEFAULT; libamd_comgr.so must not DT_NEEDED LLVM/Clang compiler dylibs.
+
     Library paths are resolved via `find_libraries`.
     """
     import ctypes

@@ -421,6 +421,13 @@ equiv will find them. However, the `rocm_sdk.find_libraries(*shortnames)`
 entrypoint is also provided and can be used to query an OS independent
 absolute path to a given named library that is known to the distribution.
 
+On Linux, `initialize_process` / `preload_libraries` default to `RTLD_GLOBAL`
+so HIP symbols resolve via `dlsym(RTLD_DEFAULT)` (ROCM-27833). `libamd_comgr.so`
+must not `DT_NEEDED` LLVM/Clang compiler dylibs (`libLLVM`, `libclang-cpp`,
+`libclang.so`, `libLTO`, `libRemarks`); otherwise the LLVM C API also enters
+`RTLD_DEFAULT` and interposes statically linked LLVM in later `dlopen`s
+(for example Triton's `libtriton.so`). `libLLVM.so` may still ship for `hipcc`.
+
 ### Testing
 
 The `rocm` distribution, if installed, bundles self tests which verify

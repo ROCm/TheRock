@@ -7,9 +7,62 @@ import importlib.util
 import logging
 import platform
 import re
+import subprocess
+import sys
 
 import pytest
 import torch
+
+_FORBIDDEN_RTLD_DEFAULT_SYMBOL = "LLVMInitializeAMDGPUTarget"
+_TORCH_THEN_TRITON = "import torch; import triton"
+_TORCH_THEN_DYNAMO = "import torch; import torch._dynamo"
+_TRITON_THEN_TORCH = "import triton; import torch; import torch._dynamo"
+
+_requires_triton = pytest.mark.skipif(
+    importlib.util.find_spec("triton") is None, reason="triton not installed"
+)
+
+# `import torch` then `import triton` on a cold filesystem is slow; keep this
+# generous but far below the CI job timeout so a hang still reports as a hang.
+_CHILD_TIMEOUT_SECONDS = 600
+
+
+def _run_child(script: str, timeout: int = _CHILD_TIMEOUT_SECONDS) -> None:
+    """Run `script` in a fresh interpreter, failing loudly on crash or hang.
+
+    The failure under test is a SIGSEGV in .init_array (returncode -11), but a
+    loader bug can hang instead; without a timeout that stalls CI until the job
+    limit and the regression signal is lost.
+    """
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        timeout=timeout,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        signal_note = (
+            f" (killed by signal {-completed.returncode})"
+            if completed.returncode < 0
+            else ""
+        )
+        raise AssertionError(
+            f"child exited {completed.returncode}{signal_note}\n"
+            f"--- child stdout ---\n{completed.stdout}\n"
+            f"--- child stderr ---\n{completed.stderr}"
+        )
+
+
+class TestChildProcessRunner:
+    def test_times_out_instead_of_hanging(self):
+        with pytest.raises(subprocess.TimeoutExpired):
+            _run_child("import time; time.sleep(30)", timeout=1)
+
+    def test_reports_child_stderr(self):
+        with pytest.raises(AssertionError, match="distinctive-child-marker"):
+            _run_child(
+                "import sys; sys.stderr.write('distinctive-child-marker'); sys.exit(3)"
+            )
 
 
 class TestROCmAvailability:
@@ -232,3 +285,26 @@ class TestRocmSdkLibraries:
             f"dlsym(RTLD_DEFAULT, '{symbol}') returned NULL — "
             f"'{lib}' was not preloaded with RTLD_GLOBAL by _rocm_init.py"
         )
+
+    def test_llvm_not_resolvable_via_rtld_default(self):
+        symbol = _FORBIDDEN_RTLD_DEFAULT_SYMBOL
+        rtld_default = ctypes.CDLL(None)
+        fn = getattr(rtld_default, symbol, None)
+        addr = ctypes.cast(fn, ctypes.c_void_p).value if fn is not None else None
+        assert not addr, (
+            f"dlsym(RTLD_DEFAULT, '{symbol}') succeeded — ROCm LLVM was pulled "
+            f"into the global namespace, most likely via libamd_comgr.so's "
+            f"DT_NEEDED libLLVM. HIP may be GLOBAL; LLVM must not."
+        )
+
+    @_requires_triton
+    def test_import_triton_after_torch(self):
+        _run_child(_TORCH_THEN_TRITON)
+
+    @_requires_triton
+    def test_import_dynamo_after_torch(self):
+        _run_child(_TORCH_THEN_DYNAMO)
+
+    @_requires_triton
+    def test_import_torch_after_triton(self):
+        _run_child(_TRITON_THEN_TORCH)
