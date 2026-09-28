@@ -1,0 +1,209 @@
+From 46f32630ad545ce416c1274e32330edea5cd9bcc Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Fri, 25 Sep 2026 18:29:24 +0000
+Subject: [PATCH] [non-x86] Build RPP with simde library on non-x86 archs
+
+---
+ projects/rpp/CMakeLists.txt                   | 35 ++++++++++-------
+ projects/rpp/api/rppdefs.h                    | 14 ++++++-
+ .../common/cpu/rpp_cpu_simd_load_store.hpp    | 21 +++++++++-
+ projects/rpp/src/modules/CMakeLists.txt       | 38 ++++++++++---------
+ .../tensor/cpu/kernel/median_filter.cpp       |  3 --
+ 5 files changed, 74 insertions(+), 37 deletions(-)
+
+diff --git a/projects/rpp/CMakeLists.txt b/projects/rpp/CMakeLists.txt
+index ab7bbfeb68b..5f72dbbccf9 100644
+--- a/projects/rpp/CMakeLists.txt
++++ b/projects/rpp/CMakeLists.txt
+@@ -217,23 +217,30 @@ endif()
+ 
+ # set global compiler flags for the project
+ # -fPIC -- Generate position-independent code if possible.
+-# -mavx2 -- Support MMX, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AVX and AVX2 built-in functions and code generation.
+-# -mfma -- Support MMX, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AVX and FMA built-in functions and code generation.
+-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -mavx2 -mf16c -mfma")
++set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+ 
+-# Check AVX/SSE support
+-include(CheckCXXCompilerFlag)
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64")
++    # x86 SIMD flags
++    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2 -mf16c -mfma")
+ 
+-# Check AVX flag
+-check_cxx_compiler_flag("-mavx" COMPILER_SUPPORTS_AVX)
+-if(COMPILER_SUPPORTS_AVX)
+-    add_definitions(-D__AVX2__)
+-else()
+-    # Check SSE flag
+-    check_cxx_compiler_flag("-msse4" COMPILER_SUPPORTS_SSE)
+-    if(COMPILER_SUPPORTS_SSE)
+-        add_definitions(-D__SSE4_1__)
++    # Check AVX/SSE support
++    include(CheckCXXCompilerFlag)
++    check_cxx_compiler_flag("-mavx" COMPILER_SUPPORTS_AVX)
++    if(COMPILER_SUPPORTS_AVX)
++        add_definitions(-D__AVX2__)
++    else()
++        check_cxx_compiler_flag("-msse4" COMPILER_SUPPORTS_SSE)
++        if(COMPILER_SUPPORTS_SSE)
++            add_definitions(-D__SSE4_1__)
++        endif()
+     endif()
++else()
++    # Non-x86: use SIMDE for portable SIMD intrinsics
++    find_package(PkgConfig REQUIRED)
++    pkg_check_modules(SIMDE REQUIRED simde)
++    include_directories(SYSTEM ${SIMDE_INCLUDE_DIRS})
++    add_definitions(-D__AVX2__)
++    message("-- ${Green}SIMDE found: ${SIMDE_INCLUDE_DIRS} (AVX2 emulation enabled)${ColourReset}")
+ endif()
+ 
+ #Generate version info
+diff --git a/projects/rpp/api/rppdefs.h b/projects/rpp/api/rppdefs.h
+index 15911912cc3..fea41b9d76f 100644
+--- a/projects/rpp/api/rppdefs.h
++++ b/projects/rpp/api/rppdefs.h
+@@ -47,10 +47,22 @@ typedef halfhpp Rpp16f;
+ 
+ #if _WIN32
+ #include <intrin.h>
+-#else
++#elif defined(__x86_64__) || defined(__i386__)
+ #include <immintrin.h>
+ #include <smmintrin.h>
+ #include <x86intrin.h>
++#else
++#if defined(__HIP_DEVICE_COMPILE__)
++#define SIMDE_NO_NATIVE
++#endif
++#define SIMDE_ENABLE_NATIVE_ALIASES
++#include <simde/x86/avx2.h>
++#include <simde/x86/fma.h>
++#include <simde/x86/f16c.h>
++// SIMDE bug: native alias block omits _MM_FROUND_NO_EXC
++#ifndef _MM_FROUND_NO_EXC
++#define _MM_FROUND_NO_EXC 0x08
++#endif
+ #endif
+ #include <vector>
+ 
+diff --git a/projects/rpp/src/include/common/cpu/rpp_cpu_simd_load_store.hpp b/projects/rpp/src/include/common/cpu/rpp_cpu_simd_load_store.hpp
+index a3db12bb497..b4dbdd329fa 100644
+--- a/projects/rpp/src/include/common/cpu/rpp_cpu_simd_load_store.hpp
++++ b/projects/rpp/src/include/common/cpu/rpp_cpu_simd_load_store.hpp
+@@ -30,10 +30,19 @@ SOFTWARE.
+ 
+ #if _WIN32
+ #include <intrin.h>
+-#else
++#elif defined(__x86_64__) || defined(__i386__)
+ #include <immintrin.h>
+ #include <smmintrin.h>
+ #include <x86intrin.h>
++#else
++#define SIMDE_ENABLE_NATIVE_ALIASES
++#include <simde/x86/avx2.h>
++#include <simde/x86/fma.h>
++#include <simde/x86/f16c.h>
++// SIMDE bug: native alias block omits _MM_FROUND_NO_EXC
++#ifndef _MM_FROUND_NO_EXC
++#define _MM_FROUND_NO_EXC 0x08
++#endif
+ #endif
+ 
+ #define M256I(m256i_register) (*((_m256i_union*)&m256i_register))
+@@ -220,17 +229,27 @@ union RppSIMD256 {
+ };
+ 
+ inline void rpp_storeu_si32(void* __p, __m128i __b) {
++#if defined(__x86_64__) || defined(__i386__)
+     struct __storeu_si32 {
+         int __v;
+     } __attribute__((__packed__, __may_alias__));
+     ((struct __storeu_si32*)__p)->__v = ((__v4si)__b)[0];
++#else
++    int __v = _mm_cvtsi128_si32(__b);
++    memcpy(__p, &__v, sizeof(__v));
++#endif
+ }
+ 
+ inline void rpp_storeu_si64(void* __p, __m128i __b) {
++#if defined(__x86_64__) || defined(__i386__)
+     struct __storeu_si64 {
+         long long __v;
+     } __attribute__((__packed__, __may_alias__));
+     ((struct __storeu_si64*)__p)->__v = ((__v2di)__b)[0];
++#else
++    long long __v = _mm_cvtsi128_si64(__b);
++    memcpy(__p, &__v, sizeof(__v));
++#endif
+ }
+ 
+ inline void rpp_pixel_check_0to1(__m256* p, Rpp32s numVectors) {
+diff --git a/projects/rpp/src/modules/CMakeLists.txt b/projects/rpp/src/modules/CMakeLists.txt
+index 53803faf74d..700b7168dd1 100644
+--- a/projects/rpp/src/modules/CMakeLists.txt
++++ b/projects/rpp/src/modules/CMakeLists.txt
+@@ -52,24 +52,26 @@ endfunction()
+ 
+ ## Disable FMA for tensor sources that require precise math behavior.
+ function(add_fma_property)
+-    set_source_files_properties(tensor/rppt_tensor_audio_augmentations.cpp
+-                                tensor/rppt_tensor_statistical_operations.cpp
+-                                tensor/cpu/kernel/non_silent_region_detection.cpp
+-                                tensor/cpu/kernel/to_decibels.cpp
+-                                tensor/cpu/kernel/pre_emphasis_filter.cpp
+-                                tensor/cpu/kernel/down_mixing.cpp
+-                                tensor/cpu/kernel/spectrogram.cpp
+-                                tensor/cpu/kernel/slice.cpp
+-                                tensor/cpu/kernel/resample.cpp
+-                                tensor/cpu/kernel/mel_filter_bank.cpp
+-                                tensor/cpu/kernel/tensor_sum.cpp
+-                                tensor/cpu/kernel/tensor_min.cpp
+-                                tensor/cpu/kernel/tensor_max.cpp
+-                                tensor/cpu/kernel/tensor_mean.cpp
+-                                tensor/cpu/kernel/tensor_stddev.cpp
+-                                tensor/cpu/kernel/normalize.cpp
+-                                tensor/cpu/kernel/threshold.cpp
+-                                PROPERTIES COMPILE_FLAGS -mno-fma)
++    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64")
++        set_source_files_properties(tensor/rppt_tensor_audio_augmentations.cpp
++                                    tensor/rppt_tensor_statistical_operations.cpp
++                                    tensor/cpu/kernel/non_silent_region_detection.cpp
++                                    tensor/cpu/kernel/to_decibels.cpp
++                                    tensor/cpu/kernel/pre_emphasis_filter.cpp
++                                    tensor/cpu/kernel/down_mixing.cpp
++                                    tensor/cpu/kernel/spectrogram.cpp
++                                    tensor/cpu/kernel/slice.cpp
++                                    tensor/cpu/kernel/resample.cpp
++                                    tensor/cpu/kernel/mel_filter_bank.cpp
++                                    tensor/cpu/kernel/tensor_sum.cpp
++                                    tensor/cpu/kernel/tensor_min.cpp
++                                    tensor/cpu/kernel/tensor_max.cpp
++                                    tensor/cpu/kernel/tensor_mean.cpp
++                                    tensor/cpu/kernel/tensor_stddev.cpp
++                                    tensor/cpu/kernel/normalize.cpp
++                                    tensor/cpu/kernel/threshold.cpp
++                                    PROPERTIES COMPILE_FLAGS -mno-fma)
++    endif()
+ endfunction()
+ 
+ set(CPPFILES "handle_api.cpp" "handle_host.cpp")
+diff --git a/projects/rpp/src/modules/tensor/cpu/kernel/median_filter.cpp b/projects/rpp/src/modules/tensor/cpu/kernel/median_filter.cpp
+index 079960c8e5a..dc03447a583 100644
+--- a/projects/rpp/src/modules/tensor/cpu/kernel/median_filter.cpp
++++ b/projects/rpp/src/modules/tensor/cpu/kernel/median_filter.cpp
+@@ -25,9 +25,6 @@ SOFTWARE.
+ #include <type_traits>
+ 
+ #include "host_tensor_executors.hpp"
+-#if __AVX2__
+-#include <immintrin.h>
+-#endif
+ 
+ /* median filter algorithm explanation
+ 
+-- 
+2.52.0
+
