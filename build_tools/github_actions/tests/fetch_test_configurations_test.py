@@ -22,8 +22,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         # Save sys.argv so tests don't leak state
         self._orig_argv = sys.argv.copy()
         # Save module-level attributes that tests may change
-        self._orig_functional_matrix = fetch_test_configurations.functional_matrix
-        self._orig_benchmark_matrix = fetch_test_configurations.benchmark_matrix
         self._orig_get_all_families = (
             fetch_test_configurations.get_all_families_for_trigger_types
         )
@@ -52,8 +50,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ.update(self._orig_env)
         sys.argv = self._orig_argv
         # Restore module-level attributes
-        fetch_test_configurations.functional_matrix = self._orig_functional_matrix
-        fetch_test_configurations.benchmark_matrix = self._orig_benchmark_matrix
         fetch_test_configurations.get_all_families_for_trigger_types = (
             self._orig_get_all_families
         )
@@ -397,78 +393,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertNotIn("miopen-dbsync", self._selected_names())
 
     # -----------------------
-    # Functional test merging via run_extended_tests
-    # -----------------------
-
-    def _setup_functional_test(self):
-        """Common setup for functional tests: fake matrix + isolate from other components."""
-        os.environ["PROJECTS_TO_TEST"] = "func1"
-        fetch_test_configurations.functional_matrix = {
-            "func1": {
-                "job_name": "func1",
-                "platform": ["linux"],
-                "total_shards": 1,
-            }
-        }
-
-    def test_functional_merged_when_enabled(self):
-        os.environ["RUN_EXTENDED_TESTS"] = "true"
-        self._setup_functional_test()
-
-        fetch_test_configurations.run()
-        components = self._get_components()
-
-        self.assertEqual(len(components), 1)
-        self.assertEqual(components[0]["job_name"], "func1")
-
-    def test_functional_not_merged_when_disabled(self):
-        os.environ["RUN_EXTENDED_TESTS"] = "false"
-        self._setup_functional_test()
-
-        fetch_test_configurations.run()
-        components = self._get_components()
-
-        names = {job["job_name"] for job in components}
-        self.assertNotIn("func1", names)
-
-    # -----------------------
-    # Benchmark merging via run_extended_tests
-    # -----------------------
-
-    def _setup_benchmark_test(self):
-        """Common setup for benchmark tests: fake matrix + isolate from other components."""
-        os.environ["PROJECTS_TO_TEST"] = "bench1"
-        fetch_test_configurations.benchmark_matrix = {
-            "bench1": {
-                "job_name": "bench1",
-                "platform": ["linux"],
-                "total_shards_dict": {"linux": 1},
-            }
-        }
-
-    def test_benchmarks_merged_when_extended_tests_enabled(self):
-        os.environ["RUN_EXTENDED_TESTS"] = "true"
-        self._setup_benchmark_test()
-
-        fetch_test_configurations.run()
-        components = self._get_components()
-
-        self.assertEqual(len(components), 1)
-        self.assertEqual(components[0]["job_name"], "bench1")
-        self.assertTrue(components[0]["is_benchmark"])
-        self.assertEqual(components[0]["test_type"], "full")
-
-    def test_benchmarks_not_merged_when_extended_tests_disabled(self):
-        os.environ["RUN_EXTENDED_TESTS"] = "false"
-        self._setup_benchmark_test()
-
-        fetch_test_configurations.run()
-        components = self._get_components()
-
-        names = {job["job_name"] for job in components}
-        self.assertNotIn("bench1", names)
-
-    # -----------------------
     # Multi-GPU logic (RCCL)
     # -----------------------
 
@@ -595,6 +519,95 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         # Both multi-GPU jobs should be included for standard tier
         self.assertIn("rccl", names)
         self.assertIn("rocshmem", names)
+
+    # -----------------------
+    # ci:run-multi-gpu label forcing
+    # -----------------------
+
+    def test_enable_multi_gpu_by_label_label_overrides_quick_exclusion(self):
+        """ci:run-multi-gpu label should include multi-GPU tests even on quick runs."""
+        os.environ["TEST_TYPE"] = "quick"
+        os.environ["TEST_LABELS"] = json.dumps(["ci:run-multi-gpu"])
+
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        # Multi-GPU jobs should be included despite quick test type
+        self.assertIn("rccl", names)
+        self.assertIn("rocshmem", names)
+
+    def test_enable_multi_gpu_by_label_label_enables_unsupported_family(self):
+        """ci:run-multi-gpu should force multi-GPU tests even for families without config."""
+        os.environ["AMDGPU_FAMILIES"] = "gfx1150"  # Family not in rccl's multi_gpu list
+        os.environ["TEST_LABELS"] = json.dumps(["ci:run-multi-gpu"])
+
+        def fake_get_all_families(_):
+            # Only gfx1150 has runner config, but rccl only lists gfx94X/gfx950 in multi_gpu
+            return {
+                "gfx1150": {"linux": {"test-runs-on-multi-gpu": "linux-gfx1150-mgpu"}}
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        # Multi-GPU jobs should be included via force flag
+        self.assertIn("rccl", names)
+        self.assertIn("rocshmem", names)
+
+    def test_enable_multi_gpu_by_label_label_excluded_when_no_runner(self):
+        """ci:run-multi-gpu should not include multi-GPU tests if no runner is configured."""
+        os.environ["AMDGPU_FAMILIES"] = "gfx90a"
+        os.environ["TEST_LABELS"] = json.dumps(["ci:run-multi-gpu"])
+
+        def fake_get_all_families(_):
+            # No multi-GPU runner configured for this family
+            return {"gfx90a": {"linux": {"test-runs-on": "linux-gfx90a-runner"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        # Multi-GPU jobs should still be excluded - no runner available
+        self.assertNotIn("rccl", names)
+        self.assertNotIn("rocshmem", names)
+
+    def test_enable_multi_gpu_by_label_combined_with_test_labels(self):
+        """ci:run-multi-gpu should work alongside test:* labels."""
+        os.environ["TEST_TYPE"] = "quick"
+        os.environ["TEST_LABELS"] = json.dumps(["ci:run-multi-gpu", "test:rccl"])
+
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        # rccl should be included (test:rccl selects it, ci:run-multi-gpu enables it)
+        self.assertIn("rccl", names)
+        # rocshmem not selected by test:rccl label
+        self.assertNotIn("rocshmem", names)
 
     # -----------------------
     # Output contract
