@@ -107,6 +107,7 @@ jobs:
       EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
       BUILD_DIR: build
       CACHE_DIR: ${{ github.workspace }}/.container-cache
+      CCACHE_DISABLE: 1
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
