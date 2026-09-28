@@ -437,7 +437,9 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "amdrocm-fft-devel",
-      "amdrocm-rand"
+      "amdrocm-rand",
+      "libfftw3-double3",
+      "libfftw3-single3"
     ],
     "RPMRequires": [
       "amdrocm-fft-devel",
