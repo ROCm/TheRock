@@ -1455,10 +1455,17 @@ def _expand_build_config_for_platform(
                     f"(global={jobs.test_rocm.test_type})"
                 )
 
+        # CPU test runner is always available for Linux (used by components with
+        # linux_cpu_runner: True). This allows CPU-only tests to run even when
+        # GPU testing is gated (e.g., trigger_test_label_only families).
+        # Windows does not currently have a separate CPU test runner.
+        test_runs_on_cpu = "aws-linux-scale-rocm-prod" if platform == "linux" else ""
+
         family_info = {
             "amdgpu_family": platform_info["family"],
             "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
             "test-runs-on": test_runs_on,
+            "test-runs-on-cpu": test_runs_on_cpu,
             "sanity_check_only_for_family": platform_info.get(
                 "sanity_check_only_for_family", False
             ),

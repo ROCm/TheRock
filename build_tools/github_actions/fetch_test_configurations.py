@@ -1441,8 +1441,13 @@ def run():
         elif "test_runner" not in component:
             # Regular components use standard runner labels.
             # Skip if test_runner is already pre-pinned (e.g. rocgdb-corefile).
-            # For ASAN builds, use the sandbox runner if available
-            if is_asan_build and test_runs_on_sandbox:
+            is_cpu_only = component.get("linux_cpu_runner", False)
+            if is_cpu_only:
+                # CPU-only components don't need a GPU runner - the workflow uses
+                # a hardcoded CPU runner label. Don't assign test_runner here.
+                logging.info(f"  {job_name}: CPU-only component, no GPU runner needed")
+            elif is_asan_build and test_runs_on_sandbox:
+                # For ASAN builds, use the sandbox runner if available
                 component["test_runner"] = test_runs_on_sandbox
                 logging.info(
                     f"  {job_name}: using ASAN sandbox runner: {test_runs_on_sandbox}"
@@ -1453,6 +1458,12 @@ def run():
                 )
             elif test_runs_on_default:
                 component["test_runner"] = test_runs_on_default
+            else:
+                # No GPU runner available and component requires GPU - skip it
+                logging.info(
+                    f"Excluding job {job_name}: GPU runner required but none configured"
+                )
+                continue
         components_with_runners.append(component)
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)

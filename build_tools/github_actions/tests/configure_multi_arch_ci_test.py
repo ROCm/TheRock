@@ -1348,6 +1348,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "amdgpu_family",
             "amdgpu_targets",
             "test-runs-on",
+            "test-runs-on-cpu",
             "sanity_check_only_for_family",
         }
         optional_keys = {
