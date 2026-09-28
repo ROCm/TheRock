@@ -339,7 +339,7 @@ jobs:
               "release_type": "dev",
               "run_full_pytorch_tests": "false",
               "ref": "${{ needs.create-branch.outputs.branch_name }}",
-              "python_version": "3.12",
+              "python_version": "3.12,3.13,3.14",
               "build_runs_on": "${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_large }}"
             }
 
@@ -362,7 +362,7 @@ jobs:
               "rocm_package_find_links_url": "${{ needs.build-linux-python-packages.outputs.package_find_links_url }}",
               "repository": "${{ github.repository }}",
               "ref": "${{ needs.create-branch.outputs.branch_name }}",
-              "python_version": "3.12"
+              "python_version": "3.12,3.13,3.14"
             }
 
   # ==========================================================================
@@ -493,7 +493,7 @@ jobs:
               "rocm_package_find_links_url": "${{ needs.build-windows-python-packages.outputs.package_find_links_url }}",
               "release_type": "dev",
               "ref": "${{ needs.create-branch.outputs.branch_name }}",
-              "python_version": "3.12",
+              "python_version": "3.12,3.13,3.14",
               "build_runs_on": "${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on_large }}"
             }
 

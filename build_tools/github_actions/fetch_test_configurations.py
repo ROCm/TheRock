@@ -864,10 +864,8 @@ test_matrix = {
         "job_name": "libhipcxx_amdclang",
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 30,
-        # TODO: Use "build/libhipcxx/requirements-test.txt" after the submodule includes
-        # https://github.com/ROCm/libhipcxx/pull/29.
         "additional_requirements_files": [
-            "build_tools/github_actions/test_executable_scripts/requirements-test-libhipcxx.txt",
+            _get_artifact_path("libhipcxx/requirements-test.txt"),
         ],
         "test_script": f"python {_get_script_path('test_libhipcxx_amdclang.py')}",
         "platform": ["linux", "windows"],
@@ -881,10 +879,8 @@ test_matrix = {
         "job_name": "libhipcxx_hiprtc",
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 20,
-        # TODO: Use "build/libhipcxx/requirements-test.txt" after the submodule includes
-        # https://github.com/ROCm/libhipcxx/pull/29.
         "additional_requirements_files": [
-            "build_tools/github_actions/test_executable_scripts/requirements-test-libhipcxx.txt",
+            _get_artifact_path("libhipcxx/requirements-test.txt"),
         ],
         "test_script": f"python {_get_script_path('test_libhipcxx_hiprtc.py')}",
         "platform": ["linux"],
