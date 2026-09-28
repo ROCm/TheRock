@@ -5,17 +5,16 @@
 
 The devel package is special in some key ways:
 
-* Since it contains distribution (wheel) unsafe files like symlinks, it is
-  distributed under the `rocm_sdk_devel` package as a `_devel.tar` or
-  `_devel.tar.xz` file that is intended to be expanded on use.
-* This tarball is intended to be expanded into the site-lib directory that
-  contains the ROCM distribution packages and will result in a top-level
-  python package named like `_rocm_sdk_devel_linux_x86_64` that is a sibling
-  to other packages like `_rocm_sdk_core_linux_x86_64`.
-* For any files already contained in one of the runtime packages, a relative
-  symlink to the correct sibling will be stored.
-* Any files not in one of the runtime packages will be included verbatim in the
-  tarball.
+* Ordinary files are distributed directly under the `_rocm_sdk_devel` platform
+  package so the package installer owns them.
+* Since symlinks are not wheel safe, symlinks and directory entries are stored
+  under the `rocm_sdk_devel` package as a `_devel.tar` or `_devel.tar.xz` file
+  that is intended to be initialized on use.
+* This tarball completes a top-level Python package named like
+  `_rocm_sdk_devel_linux_x86_64` that is a sibling to other packages like
+  `_rocm_sdk_core_linux_x86_64`.
+* For links to files already contained in a runtime package, initialization
+  creates hardlinks. Directory links remain symlinks.
 * RPATH setup relies on this sibling behavior and is already encoded properly
   in the runtime packages.
 
@@ -37,7 +36,6 @@ import os
 from pathlib import Path
 import platform
 import re
-import shutil
 import sys
 import tarfile
 
@@ -65,20 +63,12 @@ def get_devel_root() -> Path:
     devel_py_pkg_name = di.ALL_PACKAGES["devel"].get_py_package_name()
     devel_py_pkg_path = site_lib_path / devel_py_pkg_name
 
-    # Skip expanding if the devel package has already been expanded fully.
-    # _expand_devel_contents deletes the tarball with tarfile_path.unlink()
-    # as the last step of expansion, so presence of the tarball means
-    # we haven't expanded yet or expansion failed and we need to retry
+    # _expand_devel_contents deletes the tarball as the last step of expansion.
+    # The platform package now exists before expansion, so tarball presence—not
+    # __init__.py—indicates that initialization is still required.
     tarfile_path, _ = _find_tarfile(rocm_sdk_devel_path)
-    if (devel_py_pkg_path / "__init__.py").exists() and not tarfile_path:
-        # The generic devel content is expanded one-shot, but per-ISA device
-        # files are owned by independently-installed rocm-sdk-device-* wheels.
-        # Reconcile their links on every call so a device wheel installed after
-        # the first expansion is picked up on the next `rocm-sdk init`.
-        _reconcile_device_links(site_lib_path, devel_py_pkg_path, di.__version__)
-        return devel_py_pkg_path
-
-    _expand_devel_contents(rocm_sdk_devel_path, site_lib_path)
+    if tarfile_path:
+        _expand_devel_contents(rocm_sdk_devel_path, site_lib_path)
     if not (devel_py_pkg_path / "__init__.py").exists():
         raise ImportError(
             f"Expanding {devel_py_pkg_name} did not produce a valid Python package"
@@ -96,6 +86,19 @@ def _get_package_path(m) -> Path | None:
     if p.name == "__init__.py":
         return p.parent  # Directory containing __init__.py
     return None
+
+
+def _find_tarfile(rocm_sdk_devel_path: Path):
+    tarfile_path = rocm_sdk_devel_path / "_devel.tar.xz"
+    if tarfile_path.exists():
+        tarfile_mode = "r:xz"
+    else:
+        tarfile_path = rocm_sdk_devel_path / "_devel.tar"
+        if tarfile_path.exists():
+            tarfile_mode = "r"
+        else:
+            return "", ""
+    return tarfile_path, tarfile_mode
 
 
 def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
@@ -157,34 +160,13 @@ def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
     # Resolve to a physical file.
     record_path = record_pkg_file.locate()
 
-    # Find the tarfile.
-    tarfile_path, tarfile_mode = _find_tarfile(rocm_sdk_devel_path)
-    if not tarfile_path:
-        raise ImportError(
-            f"Expected to find _devel.tar or _devel.tar.xz in {rocm_sdk_devel_path}"
-        )
-
     dist_file_path_names = [str(df) for df in dist_files]
     _lock_and_expand(
         site_lib_path,
-        tarfile_path,
-        tarfile_mode,
+        rocm_sdk_devel_path,
         record_path,
         dist_file_path_names,
     )
-
-
-def _find_tarfile(rocm_sdk_devel_path: Path):
-    tarfile_path = rocm_sdk_devel_path / "_devel.tar.xz"
-    if tarfile_path.exists():
-        tarfile_mode = "r:xz"
-    else:
-        tarfile_path = rocm_sdk_devel_path / "_devel.tar"
-        if tarfile_path.exists():
-            tarfile_mode = "r"
-        else:
-            return "", ""
-    return tarfile_path, tarfile_mode
 
 
 def _resolve_link_target(parent: Path, target: str) -> Path:
@@ -415,33 +397,44 @@ def _reconcile_device_links(
 
 def _lock_and_expand(
     site_lib_path: Path,
-    tarfile_path: Path,
-    tarfile_mode: str,
+    rocm_sdk_devel_path: Path,
     record_path: Path,
     dist_file_path_names: set[str],
 ):
-    # When extracting, we note the directory paths of each entry and on the first
-    # access, clean it up if it is already present. This works around package manager
-    # races where in certain uninstall situations, some amount of the directory tree
-    # may not be fully removed (this presently happens with dangling symlinks).
-    # Cleaning it ensures consistent re-install behavior.
-    clean_dir_paths: set[Path] = set()
-
-    def _clean_dir(dir: Path):
-        clean_dir_paths.add(dir)
-        if dir.exists():
-            shutil.rmtree(dir, ignore_errors=False)
-
     with open(record_path, "at") as record_file:
         file_lock = FileLock(record_file)
         try:
+            # Multiple processes may all observe the manifest before any one of
+            # them acquires the RECORD lock. Recheck under the lock: absence means
+            # another initializer completed successfully and this process can
+            # converge without trying to reopen the consumed manifest.
+            tarfile_path, tarfile_mode = _find_tarfile(rocm_sdk_devel_path)
+            if not tarfile_path:
+                return
+
             with tarfile.open(tarfile_path, tarfile_mode) as tf:
                 while ti := tf.next():
                     dest_path = site_lib_path / ti.name
                     if ti.isfile() or ti.issym():
+                        if ti.isfile():
+                            raise ValueError(
+                                f"Unsupported devel manifest member: {ti.name}"
+                            )
+                        # Direct platform files are wheel-owned and may be siblings
+                        # of this generated path. Recursively deleting the parent,
+                        # as the old full-archive initializer did, would destroy
+                        # those installed files. Only replace the exact leaf owned
+                        # by this manifest. A directory at that leaf is treated as
+                        # an unsupported stale-layout conflict instead of being
+                        # recursively removed.
+                        if dest_path.is_symlink() or dest_path.is_file():
+                            dest_path.unlink()
+                        elif dest_path.exists():
+                            raise IsADirectoryError(
+                                f"Cannot replace manifest path with a directory: {dest_path}"
+                            )
                         parent_path = dest_path.parent
-                        if parent_path not in clean_dir_paths:
-                            _clean_dir(parent_path)
+                        parent_path.mkdir(parents=True, exist_ok=True)
                         if ti.name not in dist_file_path_names:
                             # CSV record:
                             #   path
@@ -458,7 +451,6 @@ def _lock_and_expand(
                             #   _rocm_sdk_devel). Hardlinks avoid this issue.
                             # As needed, we could also generate tarfiles with
                             # copies instead of symlinks, at the cost of disk space.
-                            parent_path.mkdir(parents=True, exist_ok=True)
                             symlink_target = ti.linkname
                             hardlink_target = _resolve_link_target(
                                 parent_path, symlink_target
@@ -486,16 +478,20 @@ def _lock_and_expand(
                             elif hardlink_target.is_file():
                                 dest_path.hardlink_to(hardlink_target)
                             else:
-                                # For directory symlinks, extract as normal
-                                tf.extract(ti, path=site_lib_path)
-                        else:
-                            tf.extract(ti, path=site_lib_path)
+                                # Directory links stay symlinks. This prototype
+                                # retains runtime target inspection, so link type
+                                # depends on extraction order and the current
+                                # filesystem.
+                                os.symlink(symlink_target, dest_path)
                     elif ti.isdir():
-                        # We don't generally have directory entries, but handle
-                        # them if we do.
-                        if dest_path not in clean_dir_paths:
-                            _clean_dir(dest_path)
-                        tf.extract(ti, path=site_lib_path)
+                        # New manifests intentionally contain every directory.
+                        # Create missing parents without disturbing wheel-owned
+                        # files already installed below them.
+                        dest_path.mkdir(parents=True, exist_ok=True)
+                    else:
+                        raise ValueError(
+                            f"Unsupported devel manifest member: {ti.name}"
+                        )
             tarfile_path.unlink()
         finally:
             file_lock.unlock()
