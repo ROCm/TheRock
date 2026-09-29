@@ -5,13 +5,6 @@ name: Multi-Arch CI - Linux
 
 on:
   workflow_call:
-    secrets:
-      # CI entry points forward only these benchmark database credentials.
-      # Nested calls inherit the caller-provided set.
-      BENCHMARK_DB_URL:
-        required: false
-      BENCHMARK_DB_FALLBACK_URL:
-        required: false
     inputs:
       quartz_tracking_id:
         description: Quartz tracking ID
@@ -115,7 +108,6 @@ jobs:
     needs: copy_prebuilt_stages
     if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       matrix_per_family_json: ${{ toJSON(fromJSON(inputs.build_config).per_family_info) }}
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -143,7 +135,6 @@ jobs:
     name: Validate Artifact Structure
     if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') }}
     uses: ./.github/workflows/test_artifacts_structure.yml
-    # Note: not using 'secrets: inherit' here; no secrets are needed.
     with:
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       platform: linux
@@ -161,7 +152,6 @@ jobs:
       matrix:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
     uses: ./.github/workflows/test_artifacts.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
@@ -183,7 +173,6 @@ jobs:
     name: Build DEB Packages
     if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       rocm_version: ${{ inputs.rocm_deb_package_version }}
@@ -201,7 +190,6 @@ jobs:
     name: Build RPM Packages
     if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       rocm_version: ${{ inputs.rocm_rpm_package_version }}
@@ -219,7 +207,6 @@ jobs:
     name: Test DEB Install - ubuntu2404
     if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       package_install_url: ${{ needs.build_native_deb_packages.outputs.package_repository_url }}
       release_type: ci
@@ -238,7 +225,6 @@ jobs:
     name: Test RPM Install - rhel8
     if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
       release_type: ci
@@ -257,7 +243,6 @@ jobs:
     name: Test RPM Install - rhel10
     if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
       release_type: ci
@@ -276,7 +261,6 @@ jobs:
     name: Test RPM Install - sles16
     if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
       release_type: ci
@@ -295,7 +279,6 @@ jobs:
     name: Build Python Packages
     if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && fromJSON(inputs.build_config).build_python_packages == true }}
     uses: ./.github/workflows/build_portable_linux_python_packages.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
