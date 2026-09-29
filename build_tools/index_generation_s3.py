@@ -14,13 +14,13 @@ Requirements:
 
 Usage:
 Running locally without specifying a bucket will use the default bucket "therock-dev-tarball":
- ./index_generation_s3_tar.py
+ ./index_generation_s3.py
 
 Generate index.html for all tarballs in a bucket to test locally:
- ./index_generation_s3_tar.py --bucket therock-dev-tarball
+ ./index_generation_s3.py --bucket therock-dev-tarball
 
 Generate index.html for all tarballs in a bucket and upload:
- ./index_generation_s3_tar.py --bucket therock-dev-tarball --upload
+ ./index_generation_s3.py --bucket therock-dev-tarball --upload
 """
 
 import argparse
