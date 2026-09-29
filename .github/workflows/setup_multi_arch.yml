@@ -226,6 +226,8 @@ jobs:
         continue-on-error: true
 
       # Checkout external repo for skip-ci evaluation (git diff + TOML config).
+      # Note: Full checkout is needed because git diff requires file content to
+      # compute changed paths. Sparse checkout would break path-based filtering.
       - name: Checkout external repo
         if: ${{ inputs.external_repo != '' }}
         timeout-minutes: 15

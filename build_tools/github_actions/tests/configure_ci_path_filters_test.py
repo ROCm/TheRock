@@ -275,46 +275,55 @@ class ExternalRepoPathFiltersTest(unittest.TestCase):
         """Empty changed_files means no changes, skip CI."""
         self.assertFalse(is_ci_run_required([], skip_patterns=self.TEST_SKIP_PATTERNS))
 
-    def test_only_markdown_files_skips_ci(self):
-        """Only markdown files changed, skip CI."""
-        self.assertFalse(
-            is_ci_run_required(["README.md"], skip_patterns=self.TEST_SKIP_PATTERNS)
-        )
+    def test_documentation_files_skip_ci(self):
+        """Documentation files (.md, .rst) in any directory skip CI."""
+        test_cases = [
+            # Single markdown file
+            (["README.md"], "single markdown file"),
+            # Multiple markdown files
+            (["README.md", "docs/guide.md", "CHANGELOG.md"], "multiple markdown files"),
+            # RST file
+            (["docs/index.rst"], "single rst file"),
+            # Mixed docs directory
+            (["docs/guide.md", "docs/api/index.rst"], "mixed docs directory"),
+        ]
+        for changed_files, description in test_cases:
+            with self.subTest(description=description):
+                self.assertFalse(
+                    is_ci_run_required(
+                        changed_files, skip_patterns=self.TEST_SKIP_PATTERNS
+                    )
+                )
+
+    def test_code_files_in_docs_directory_skip_ci(self):
+        """Code files in docs/ directories skip CI (directory matters, not extension)."""
         self.assertFalse(
             is_ci_run_required(
-                ["README.md", "docs/guide.md", "CHANGELOG.md"],
+                ["docs/guide.md", "docs/api/index.rst", "docs/examples/main.c"],
                 skip_patterns=self.TEST_SKIP_PATTERNS,
             )
         )
 
-    def test_only_rst_files_skips_ci(self):
-        """Only RST files changed, skip CI."""
-        self.assertFalse(
-            is_ci_run_required(
-                ["docs/index.rst"], skip_patterns=self.TEST_SKIP_PATTERNS
-            )
-        )
-
-    def test_only_docs_directory_skips_ci(self):
-        """Only docs directory changes, skip CI."""
-        self.assertFalse(
-            is_ci_run_required(
-                ["docs/guide.md", "docs/api/index.rst"],
-                skip_patterns=self.TEST_SKIP_PATTERNS,
-            )
-        )
-
-    def test_only_gitignore_skips_ci(self):
-        """Only .gitignore files changed, skip CI."""
-        self.assertFalse(
-            is_ci_run_required([".gitignore"], skip_patterns=self.TEST_SKIP_PATTERNS)
-        )
-        self.assertFalse(
-            is_ci_run_required(
-                ["projects/rocblas/.gitignore"],
-                skip_patterns=self.TEST_SKIP_PATTERNS,
-            )
-        )
+    def test_metadata_files_skip_ci(self):
+        """Metadata files (.gitignore, LICENSE, CODEOWNERS) skip CI."""
+        test_cases = [
+            # .gitignore files
+            ([".gitignore"], "root .gitignore"),
+            (["projects/rocblas/.gitignore"], "nested .gitignore"),
+            # LICENSE files
+            (["LICENSE"], "root LICENSE"),
+            (["LICENSE.md"], "LICENSE.md"),
+            # CODEOWNERS files
+            (["CODEOWNERS"], "root CODEOWNERS"),
+            ([".github/CODEOWNERS"], ".github/CODEOWNERS"),
+        ]
+        for changed_files, description in test_cases:
+            with self.subTest(description=description):
+                self.assertFalse(
+                    is_ci_run_required(
+                        changed_files, skip_patterns=self.TEST_SKIP_PATTERNS
+                    )
+                )
 
     def test_only_project_docs_skips_ci(self):
         """Only project-specific docs changed, skip CI."""
@@ -343,30 +352,20 @@ class ExternalRepoPathFiltersTest(unittest.TestCase):
             )
         )
 
-    def test_source_file_requires_ci(self):
-        """Source file change requires CI."""
-        self.assertTrue(
-            is_ci_run_required(
-                ["projects/rocblas/src/lib.cpp"],
-                skip_patterns=self.TEST_SKIP_PATTERNS,
-            )
-        )
-
-    def test_cmake_file_requires_ci(self):
-        """CMake file change requires CI."""
-        self.assertTrue(
-            is_ci_run_required(
-                ["CMakeLists.txt"], skip_patterns=self.TEST_SKIP_PATTERNS
-            )
-        )
-
-    def test_python_script_requires_ci(self):
-        """Python script change requires CI."""
-        self.assertTrue(
-            is_ci_run_required(
-                ["scripts/build.py"], skip_patterns=self.TEST_SKIP_PATTERNS
-            )
-        )
+    def test_code_files_require_ci(self):
+        """Code files (source, cmake, python) require CI."""
+        test_cases = [
+            (["projects/rocblas/src/lib.cpp"], "C++ source file"),
+            (["CMakeLists.txt"], "CMake file"),
+            (["scripts/build.py"], "Python script"),
+        ]
+        for changed_files, description in test_cases:
+            with self.subTest(description=description):
+                self.assertTrue(
+                    is_ci_run_required(
+                        changed_files, skip_patterns=self.TEST_SKIP_PATTERNS
+                    )
+                )
 
     def test_mixed_skippable_and_non_skippable_requires_ci(self):
         """Mix of skippable and non-skippable requires CI."""
@@ -383,26 +382,6 @@ class ExternalRepoPathFiltersTest(unittest.TestCase):
             is_ci_run_required(
                 [".github/workflows/ci.yml"], skip_patterns=self.TEST_SKIP_PATTERNS
             )
-        )
-
-    def test_codeowners_skips_ci(self):
-        """CODEOWNERS file is skippable."""
-        self.assertFalse(
-            is_ci_run_required(["CODEOWNERS"], skip_patterns=self.TEST_SKIP_PATTERNS)
-        )
-        self.assertFalse(
-            is_ci_run_required(
-                [".github/CODEOWNERS"], skip_patterns=self.TEST_SKIP_PATTERNS
-            )
-        )
-
-    def test_license_skips_ci(self):
-        """LICENSE file is skippable."""
-        self.assertFalse(
-            is_ci_run_required(["LICENSE"], skip_patterns=self.TEST_SKIP_PATTERNS)
-        )
-        self.assertFalse(
-            is_ci_run_required(["LICENSE.md"], skip_patterns=self.TEST_SKIP_PATTERNS)
         )
 
     def test_repo_name_included_in_logging(self):
