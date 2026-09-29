@@ -324,12 +324,21 @@ endif()
 # List to accumulate all unique build targets.
 set(ALL_ROCGDB_TARGETS)
 
+# Whether any variant is built with python.  The python runtime files under the
+# data directory come from those variants, so where there are none they are not
+# installed and must not be expected.
+set(ROCGDB_ANY_PYTHON_VARIANT FALSE)
+
 # Adds a rocgdb build target for a python variant with explicit additional configure flags.
 # The special minor_version "none" indicates that the build is without python support.
 #
 # For variants with minor_version other than "none", libpython_dir must contain
 # the path to the shared libpython rocgdb should link against.
 macro(add_python_variant minor_version configure_flags libpython_dir)
+  if(NOT "${minor_version}" STREQUAL "none")
+    set(ROCGDB_ANY_PYTHON_VARIANT TRUE)
+  endif()
+
   # Set the name transformation for the rocgdb executable and rocgcore script.
   set(ROCGDB_PROGRAM_TRANSFORM_STR "s/^rocgdb$/rocgdb-py${minor_version}/")
 
@@ -594,7 +603,7 @@ endif()
 
 # We always build a rocgdb without python support as fallback.
 message(STATUS "Building rocgdb without python support")
-add_python_variant("none" "--disable-python" "")
+add_python_variant("none" "--with-python=no" "")
 
 # Add a single custom target in the main project that depends
 # on building ALL rocgdb variants.
@@ -746,6 +755,13 @@ if(BUILD_TESTING)
     "share/man/man1/rocgcore.1"
     "share/man/man1/rocgdb.1"
   )
+
+  # gdb installs the python runtime files under its data directory only when
+  # python support is enabled, so expect them only if some variant actually has
+  # it.
+  if(NOT ROCGDB_ANY_PYTHON_VARIANT)
+    list(FILTER ROCGDB_EXPECTED_FILES EXCLUDE REGEX "^share/rocgdb/python/")
+  endif()
 
   # AMD-specific files not yet in upstream master.
   if(NOT ROCGDB_UPSTREAM_BUILD)
