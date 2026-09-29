@@ -314,9 +314,8 @@ jobs:
   test_python_packages:
     needs: [build_python_packages]
     name: Test Python Packages
-    if: ${{ !failure() && !cancelled() && toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) != '[]' }}
+    if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) != '[]' }}
     uses: ./.github/workflows/test_rocm_wheels_matrix.yml
-    secrets: inherit
     with:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       matrix: >-
