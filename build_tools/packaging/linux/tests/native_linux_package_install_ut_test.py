@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: MIT
 
 # Unit test coverage for native_linux_package_install_test.py:
-#   All testable behaviour is covered with unit tests (pure logic or mocked I/O/subprocess).
-#   Integration-only (real apt/rpm/zypper, network, root): main() execution path after validation.
+#   All testable behaviour is covered with unit tests (pure logic or mocked I/O/subprocess),
+#   Integration-only (real apt/rpm/zypper, network, root): main() and pytest CI entry paths.
 
 import contextlib
 import importlib.util
@@ -17,10 +17,6 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-
-# Used only by the real-ELF fixture tests (VerifyNoRunpathRealElfTest) below.
-import shutil
-import subprocess
 
 # Load the module: look in same dir as this file, then parent (covers linux/ or linux/tests/ layout).
 _this_file = Path(__file__).resolve()
