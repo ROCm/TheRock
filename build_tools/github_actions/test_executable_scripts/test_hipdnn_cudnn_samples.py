@@ -12,9 +12,11 @@ compatibility shim.
 
 This is not hipDNN's own sample suite; that one is test_hipdnn_samples.py.
 
-The harness owns every policy decision: whether the shim is present at all,
-which translation units are expected to compile, and which are expected to
-fail. This driver only configures, builds, tests, and reports.
+The driver skips (exit 0) when the installed hipdnn_frontend package lacks the
+cudnn_compatibility component, before touching the harness. Otherwise the
+harness owns every policy decision: which translation units are expected to
+compile, and which are expected to fail. This driver only configures, builds,
+tests, and reports.
 """
 
 import argparse
@@ -23,6 +25,7 @@ import logging
 import os
 import platform
 import shlex
+import re
 import subprocess
 import sys
 import tempfile
@@ -37,6 +40,15 @@ TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", "1")
 
 # Location of the harness project inside the installed artifact tree.
 PAYLOAD_RELPATH = Path("share") / "hipdnn" / "cudnn_samples"
+
+# Installed with hipDNN's dev component. Records whether hipDNN was built with
+# the cudnn_compatibility component, which is what find_package reports.
+FRONTEND_CONFIG_RELPATH = (
+    Path("lib") / "cmake" / "hipdnn_frontend" / "hipdnn_frontendConfig.cmake"
+)
+
+# CMake's false constants, for reading a boolean out of the package config.
+CMAKE_FALSE_VALUES = {"", "0", "OFF", "NO", "FALSE", "N", "IGNORE", "NOTFOUND"}
 
 # These two are coupled and must stay together. The keep-going flag is Ninja's,
 # not cmake's, so it travels after "--" and is only valid while the generator
@@ -56,6 +68,7 @@ REPORT_DIR_NAME = "cudnn_samples_report"
 # artifact did not ship it -- a wiring bug, distinct from the shim being off.
 EXIT_PAYLOAD_MISSING = 11
 EXIT_FLAG_REQUIRED_BUT_OFF = 10
+EXIT_FRONTEND_CONFIG_MISSING = 12
 
 # Outcome tokens the harness writes into the sidecars. Any other value is
 # surfaced as an anomaly instead of being folded into a count.
@@ -159,9 +172,9 @@ def configure(
 ):
     """Configure the harness as an external consumer of the installed hipDNN.
 
-    The harness decides skip-vs-run here, from its find_package query for the
-    cudnn_compatibility component, and acquires the sample corpus itself.
-    Neither is this driver's business.
+    Only reached when the cudnn_compatibility component is installed. The
+    harness acquires the sample corpus itself; that is not this driver's
+    business.
     """
     is_windows = platform.system() == "Windows"
     compiler_ext = ".exe" if is_windows else ""
@@ -256,13 +269,30 @@ def is_skip_run(test_names: list) -> bool:
     return test_names == [SKIP_TEST_NAME]
 
 
+def is_cudnn_compatibility_installed(frontend_config: Path) -> bool:
+    """Whether find_package would report the cudnn_compatibility component.
+
+    Read straight from the installed config so no toolchain is needed. A config
+    that predates the component never sets the variable, which find_package also
+    reports as not found.
+    """
+    match = re.search(
+        r"^\s*set\(\s*hipdnn_frontend_cudnn_compatibility_FOUND\s*([^\s)]*)\s*\)",
+        frontend_config.read_text(encoding="utf-8"),
+        re.MULTILINE,
+    )
+    if not match:
+        return False
+    value = match.group(1).strip('"').upper()
+    return value not in CMAKE_FALSE_VALUES and not value.endswith("-NOTFOUND")
+
+
 def report_skip() -> int:
     """Announce that nothing was tested, and decide whether that is fatal."""
     print(
         "::notice title=cuDNN samples skipped::"
         "hipDNN was built with HIPDNN_ENABLE_CUDNN_COMPATIBILITY off, so the "
-        "cuDNN compatibility shim is not installed. No sample was compiled or "
-        "run: this job tested the wiring and nothing else."
+        "cuDNN compatibility shim is not installed. No sample was compiled or run."
     )
     if os.getenv("HIPDNN_CUDNN_SAMPLES_REQUIRE_FLAG") == "1":
         print(
@@ -463,6 +493,18 @@ def main() -> int:
     logging.info(f"Shard {SHARD_INDEX} of {TOTAL_SHARDS}")
 
     artifacts_path = Path(OUTPUT_ARTIFACTS_DIR).resolve()
+
+    frontend_config = artifacts_path / FRONTEND_CONFIG_RELPATH
+    if not frontend_config.is_file():
+        logging.error(
+            f"hipdnn_frontend package config not found at {frontend_config}, so "
+            "the cudnn_compatibility component cannot be checked. The hipDNN dev "
+            "component was not fetched."
+        )
+        return EXIT_FRONTEND_CONFIG_MISSING
+    if not is_cudnn_compatibility_installed(frontend_config):
+        return report_skip()
+
     source_dir = artifacts_path / PAYLOAD_RELPATH
     if not source_dir.is_dir():
         logging.error(
