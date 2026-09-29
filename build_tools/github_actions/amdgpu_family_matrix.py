@@ -268,6 +268,7 @@ def build_variant_runs_tests(build_variant: str, event_name: str) -> bool:
         f"{rule!r}; expected 'enabled' or 'disabled'"
     )
 
+
 """
 amdgpu_family_info_matrix dictionary fields:
 - test-runs-on: (required) GitHub runner label for this architecture
