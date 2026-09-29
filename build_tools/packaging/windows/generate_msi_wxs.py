@@ -12,8 +12,7 @@ List available packages:
     python generate_msi_wxs.py --list
 
 Generate from CI artifacts (recommended):
-    python generate_msi_wxs.py --package runtime \\
-        --artifacts-url https://therock-nightly-artifacts.s3.amazonaws.com/<run-id>-windows
+    python generate_msi_wxs.py --package runtime --run-id <run-id>
 
 Generate from a local build:
     python generate_msi_wxs.py --package runtime --build build/
@@ -37,22 +36,20 @@ import argparse
 import hashlib
 import json
 import os
+import subprocess
 import sys
-import tarfile
 import urllib.request
 import uuid
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import pyzstd
-
 # Add build_tools/ to sys.path so _therock_utils can be imported.
 BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent.parent
 if str(BUILD_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(BUILD_TOOLS_DIR))
 
-from _therock_utils.artifacts import ArtifactCatalog, ArtifactName, ArtifactPopulator
+from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
 
 
 # ---------------------------------------------------------------------------
@@ -187,87 +184,52 @@ STANDARD_DIR_TOKENS: set[str] = {
 
 
 def fetch_artifacts(
-    artifacts_url: str,
-    artifact_names: list[str],
-    components: set[str],
+    run_id: str,
     dest_dir: Path,
+    run_github_repo: str | None = None,
 ) -> Path:
-    """Download and extract artifact tarballs from a remote URL into dest_dir.
+    """Fetch generic (host) artifacts for a CI run into dest_dir/artifacts.
 
-    For each (artifact, component) pair, downloads:
-        {artifacts_url}/{artifact}_{component}_generic.tar.zst
-    and extracts it into dest_dir/_extracted/{artifact}_{component}_generic/,
-    preserving the internal layout (basedir paths from artifact_manifest.txt).
-    The artifact_manifest.txt is also written to disk so ArtifactCatalog can
-    read it.
+    Delegates to build_tools/artifact_manager.py (the shared artifact-fetch
+    tool, as build_tarballs.py does) rather than reimplementing download and
+    extraction. It resolves the S3 bucket from the run id, downloads the generic
+    (host) lib-component artifacts, and extracts each archive to
+        dest_dir/artifacts/{name}_{component}_{family}/
+    with an artifact_manifest.txt that ArtifactCatalog reads. The package's
+    ArtifactCatalog filter selects only the artifacts it needs from that set.
 
-    Returns the _extracted/ directory.
+    Downloads and extractions are cached under dest_dir so repeat runs reuse
+    them. Returns the dest_dir/artifacts directory.
     """
-
-    def _open_zst(path: Path):
-        return tarfile.TarFile(fileobj=pyzstd.ZstdFile(path, "rb"), mode="r")
-
-    artifacts_url = artifacts_url.rstrip("/")
-    download_dir = dest_dir / "_downloads"
-    extract_dir = dest_dir / "_extracted"
-    download_dir.mkdir(parents=True, exist_ok=True)
-    extract_dir.mkdir(parents=True, exist_ok=True)
-
-    for artifact_name in artifact_names:
-        for component in sorted(components):
-            filename = f"{artifact_name}_{component}_generic.tar.zst"
-            url = f"{artifacts_url}/{filename}"
-            local_path = download_dir / filename
-
-            if local_path.exists():
-                print(f"  Cached:    {filename}")
-            else:
-                print(f"  Fetching:  {filename}")
-                tmp_path = local_path.with_suffix(".tmp")
-                try:
-                    urllib.request.urlretrieve(url, tmp_path)
-                except urllib.error.HTTPError as e:
-                    tmp_path.unlink(missing_ok=True)
-                    # 404 is expected: not every artifact publishes every
-                    # component (e.g. Windows-only components have no Linux
-                    # tarball). Any other HTTP error is a real failure.
-                    if e.code == 404:
-                        print(f"  Skipped:   {filename} (not found)")
-                        continue
-                    sys.exit(f"Error fetching {url}: HTTP {e.code} {e.reason}")
-                except Exception:
-                    tmp_path.unlink(missing_ok=True)
-                    raise
-                tmp_path.rename(local_path)
-
-            artifact_out = extract_dir / f"{artifact_name}_{component}_generic"
-            manifest_path = artifact_out / "artifact_manifest.txt"
-            already_extracted = artifact_out.exists()
-            if already_extracted and manifest_path.exists():
-                print(f"  Extracted: {filename} (cached)")
-                continue
-            artifact_out.mkdir(parents=True, exist_ok=True)
-            # Read manifest from first tar member and write it to disk so
-            # ArtifactCatalog can find it, then extract the rest of the files.
-            with _open_zst(local_path) as tf:
-                manifest_member = tf.next()
-                if (
-                    manifest_member is None
-                    or manifest_member.name != "artifact_manifest.txt"
-                ):
-                    sys.exit(
-                        f"Archive {filename} missing artifact_manifest.txt as first member"
-                    )
-                manifest_text = tf.extractfile(manifest_member).read().decode()
-                manifest_path.write_text(manifest_text)
-            if already_extracted:
-                print(f"  Manifest:  {filename} (files already present)")
-            else:
-                print(f"  Extracting {filename}...")
-                populator = ArtifactPopulator(output_path=artifact_out, flatten=False)
-                populator(local_path)
-
-    return extract_dir
+    # Cache the downloaded .tar.zst archives (the expensive part) across runs.
+    # extract mode re-extracts each run; artifact_manager only supports its
+    # extraction cache in --flatten mode, which is not the per-artifact layout
+    # ArtifactCatalog reads.
+    download_cache = dest_dir / "_downloads"
+    # Only the lib component is packaged today (PACKAGE_COMPONENTS); exclude the
+    # rest so the fetch stays small. Additional components can be pulled in once
+    # more MSI packages are scoped.
+    exclude_components = sorted(
+        {"run", "dev", "dbg", "doc", "test"} - PACKAGE_COMPONENTS
+    )
+    cmd = [
+        sys.executable,
+        str(BUILD_TOOLS_DIR / "artifact_manager.py"),
+        "fetch",
+        f"--run-id={run_id}",
+        # MSI packaging is Windows-only; never fetch other platforms' artifacts.
+        "--platform=windows",
+        "--stage=all",
+        "--generic-only",
+        f"--exclude-components={','.join(exclude_components)}",
+        f"--output-dir={dest_dir}",
+        f"--download-cache-dir={download_cache}",
+    ]
+    if run_github_repo:
+        cmd.append(f"--run-github-repo={run_github_repo}")
+    print(f"Fetching artifacts for run {run_id} (windows) ...")
+    subprocess.run(cmd, check=True)
+    return dest_dir / "artifacts"
 
 
 def collect_files_from_catalog(
@@ -286,7 +248,7 @@ def collect_files_from_catalog(
     if not artifact_dir.is_dir():
         print(
             f"Warning: artifact directory not found: {artifact_dir}\n"
-            "Run a Windows build or provide --artifacts-url.",
+            "Run a Windows build or provide --run-id.",
             file=sys.stderr,
         )
         return []
@@ -448,15 +410,23 @@ def parse_args() -> argparse.Namespace:
         help="List available package names and exit.",
     )
     parser.add_argument(
-        "--artifacts-url",
+        "--run-id",
         default=None,
-        metavar="URL",
+        metavar="RUN_ID",
         help=(
-            "Base URL of a TheRock artifact storage directory containing "
-            "{name}_{component}_generic.tar.zst files. When set, artifacts "
-            "are downloaded and extracted into --artifacts-cache-dir and used "
-            "as stage trees instead of --build-root. "
-            "Example: https://therock-nightly-artifacts.s3.amazonaws.com/27315369389-windows"
+            "GitHub Actions run id to fetch artifacts from. When set, artifacts "
+            "are fetched via build_tools/artifact_manager.py into "
+            "--artifacts-cache-dir and used instead of --build-root. The S3 "
+            "bucket is resolved from the run id; public artifacts need no "
+            "credentials. Example: 27315369389"
+        ),
+    )
+    parser.add_argument(
+        "--run-github-repo",
+        default=None,
+        metavar="OWNER/REPO",
+        help=(
+            "Repository that owns --run-id (for fork runs). " "Default: ROCm/TheRock."
         ),
     )
     parser.add_argument(
@@ -466,7 +436,7 @@ def parse_args() -> argparse.Namespace:
         metavar="PATH",
         help=(
             "Directory for downloaded and extracted artifacts when using "
-            "--artifacts-url. Defaults to <script-dir>/artifact-cache. "
+            "--run-id. Defaults to <script-dir>/artifact-cache. "
             "Reuse this dir across runs to avoid re-downloading."
         ),
     )
@@ -477,7 +447,7 @@ def parse_args() -> argparse.Namespace:
         metavar="PATH",
         help=(
             "CMake build directory. Artifacts are read from <build-root>/artifacts/. "
-            f"Default: {default_build}. Ignored when --artifacts-url is set."
+            f"Default: {default_build}. Ignored when --run-id is set."
         ),
     )
     parser.add_argument(
@@ -639,21 +609,19 @@ class WixDocument:
 def resolve_package_inputs(args: argparse.Namespace) -> PackageInputs:
     """Gather artifacts and payload/legacy file lists for the selected package.
 
-    Downloads artifacts when --artifacts-url is set, then enumerates the concrete
-    files to install. Legacy System32 DLLs are read from wherever they already
-    exist (the extracted artifacts, or the rocm-systems source checkout for the
+    Fetches artifacts when --run-id is set, then enumerates the concrete files
+    to install. Legacy System32 DLLs are read from wherever they already exist
+    (the extracted artifacts, or the rocm-systems source checkout for the
     driver-supplied ones) — this script never fetches them; see
     resolve_legacy_dlls().
     """
     package = PACKAGES[args.package]
 
-    if args.artifacts_url:
-        print(f"Fetching artifacts from {args.artifacts_url} ...")
+    if args.run_id:
         artifact_dir = fetch_artifacts(
-            artifacts_url=args.artifacts_url,
-            artifact_names=package.artifacts,
-            components=PACKAGE_COMPONENTS,
+            run_id=args.run_id,
             dest_dir=args.artifacts_cache_dir,
+            run_github_repo=args.run_github_repo,
         )
     else:
         # Local build: artifacts live at build/artifacts/{name}_{component}_generic/

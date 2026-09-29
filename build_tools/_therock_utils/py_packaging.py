@@ -20,7 +20,7 @@ import sys
 import tarfile
 
 from .artifacts import ArtifactCatalog, ArtifactName
-from .sdk_targets import package_owner
+from .sdk_targets import package_owner, render_dist_info
 from .exe_stub_gen import generate_exe_link_stub
 
 is_windows = platform.system() == "Windows"
@@ -135,7 +135,7 @@ class Parameters:
         # Base: version and nonce only — no family lines. Used as the starting
         # point for restrict_families packages so they can write clean family
         # content without a .clear() dance.
-        dist_info_base = DIST_INFO_PATH.read_text()
+        dist_info_base = render_dist_info(DIST_INFO_PATH)
         dist_info_base += f"__version__ = {repr(version)}\n"
         dist_info_base += f"PY_PACKAGE_SUFFIX_NONCE = {repr(version_suffix)}\n"
         self.dist_info_base_contents = dist_info_base
@@ -180,7 +180,7 @@ class Parameters:
         spec = importlib.util.spec_from_loader("rocm_sdk_dist_info", loader=None)
         self.dist_info = importlib.util.module_from_spec(spec)
         exec(
-            DIST_INFO_PATH.read_text(), self.dist_info.__dict__
+            render_dist_info(DIST_INFO_PATH), self.dist_info.__dict__
         )  # static template only, no user input
         self.dist_info.__version__ = version
         self.dist_info.PY_PACKAGE_SUFFIX_NONCE = version_suffix

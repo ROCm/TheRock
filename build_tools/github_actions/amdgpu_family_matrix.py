@@ -130,7 +130,7 @@ BUILD_RUNNER_LABELS = {
     },
     "windows": {
         "default": [
-            {"label": "azure-windows-scale-rocm", "weight": 1.0},
+            {"label": "aws-windows-scale-rocm-prod-mix", "weight": 1.0},
         ],
     },
 }
@@ -226,7 +226,6 @@ amdgpu_family_info_matrix dictionary fields:
 - test-runs-on-multi-gpu: (optional) GitHub runner label for multi-GPU tests for this architecture
 - test-runs-on-multi-gpu-labels: (optional) List of runner label configs for multi-GPU load balancing.
     Same format as test-runs-on-labels.
-- benchmark-runs-on: (optional) GitHub runner label for benchmarks for this architecture
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
 - family: (required) AMD GPU family name, used for test selection and artifact fetching
 - fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])
@@ -266,8 +265,6 @@ amdgpu_family_info_matrix = {
             "test-runs-on-multi-gpu-labels": [
                 {"label": "linux-gfx942-8gpu-ossci-rocm", "count": 10},
             ],
-            # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
-            "benchmark-runs-on": "linux-gfx942-8gpu-ossci-rocm",
             "family": "gfx94X-dcgpu",
             # Individual GPU target(s) on the test runner, for fetching split artifacts.
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
@@ -351,8 +348,6 @@ amdgpu_family_info_matrix = {
         },
         "windows": {
             "test-runs-on": "windows-gfx1151-gpu-rocm",
-            # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
-            "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
             "fetch-gfx-targets": ["gfx1151"],
             "build_variants": ["release"],
@@ -432,13 +427,15 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "linux-gfx90a-1gpu-ossci-rocm",
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
-            "build_variants": ["release"],
+            "build_variants": ["release", "asan-debug"],
             "builds_on_trigger": [
                 "postsubmit",
                 "submodule_bump",
                 "nightly",
             ],
             "tests_on_trigger": ["postsubmit", "nightly"],
+            # Only run tests when gfx90a label is present on PR
+            "trigger_test_label_only": True,
         },
         "windows": {
             "test-runs-on": "",
@@ -710,7 +707,10 @@ def _get_local_families_for_trigger_types(trigger_types: list[str]) -> dict:
 
     # Handle explicit_only families - only included when explicitly requested
     if "explicit_only" in trigger_set:
-        for family_name, family_config in amdgpu_family_info_matrix_explicit_only.items():
+        for (
+            family_name,
+            family_config,
+        ) in amdgpu_family_info_matrix_explicit_only.items():
             result[family_name] = family_config
 
     return result
@@ -731,7 +731,6 @@ def _extract_runner_labels_from_v1(external_config: dict) -> dict:
         "test-runs-on-multi-gpu",
         "test-runs-on-multi-gpu-labels",
         "test-runs-on-kernel",
-        "benchmark-runs-on",
     }
 
     for _trigger, families in gpu_families.items():

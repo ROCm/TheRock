@@ -181,18 +181,18 @@ class TestCIInputsFromEnviron(unittest.TestCase):
             event_payload={
                 "pull_request": {
                     "labels": [
-                        {"name": "gfx950", "id": 1},
+                        {"name": "ci:gfx950", "id": 1},
                         {"name": "test:rocprim", "id": 2},
                     ]
                 }
             },
             commit_ref="feature-branch",
         )
-        self.assertEqual(inputs.pr_labels, ["gfx950", "test:rocprim"])
+        self.assertEqual(inputs.pr_labels, ["ci:gfx950", "test:rocprim"])
         self.assertEqual(inputs.base_ref, "HEAD^")
 
     def test_pull_request_test_labels_extracted_to_test_labels(self):
-        """PR test:* labels are merged into linux/windows_test_labels."""
+        """PR test:* and ci:* labels are merged into linux/windows_test_labels."""
         inputs = _run_from_environ(
             event_name="pull_request",
             event_payload={
@@ -200,13 +200,50 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                     "labels": [
                         {"name": "test:rccl", "id": 1},
                         {"name": "test:rocprim", "id": 2},
-                        {"name": "gfx950", "id": 3},
+                        {"name": "ci:gfx950", "id": 3},
                     ]
                 }
             },
         )
-        self.assertEqual(inputs.linux_test_labels, ["test:rccl", "test:rocprim"])
-        self.assertEqual(inputs.windows_test_labels, ["test:rccl", "test:rocprim"])
+        self.assertEqual(
+            inputs.linux_test_labels, ["test:rccl", "test:rocprim", "ci:gfx950"]
+        )
+        self.assertEqual(
+            inputs.windows_test_labels, ["test:rccl", "test:rocprim", "ci:gfx950"]
+        )
+
+    def test_ci_run_multi_gpu_label_passed_to_test_labels(self):
+        """ci:run-multi-gpu label is included in linux/windows_test_labels."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {
+                    "labels": [
+                        {"name": "ci:run-multi-gpu", "id": 1},
+                        {"name": "test:rccl", "id": 2},
+                    ]
+                }
+            },
+        )
+        self.assertIn("ci:run-multi-gpu", inputs.linux_test_labels)
+        self.assertIn("ci:run-multi-gpu", inputs.windows_test_labels)
+        self.assertIn("test:rccl", inputs.linux_test_labels)
+        self.assertIn("test:rccl", inputs.windows_test_labels)
+
+    def test_ci_run_multi_gpu_label_alone(self):
+        """ci:run-multi-gpu label without other test labels."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {
+                    "labels": [
+                        {"name": "ci:run-multi-gpu", "id": 1},
+                    ]
+                }
+            },
+        )
+        self.assertEqual(inputs.linux_test_labels, ["ci:run-multi-gpu"])
+        self.assertEqual(inputs.windows_test_labels, ["ci:run-multi-gpu"])
 
     def test_push_reads_before_sha(self):
         """Push events use event.before as the diff base."""
@@ -713,6 +750,24 @@ class TestDecideJobs(unittest.TestCase):
         # Both labels are compatible with the stages
         self.assertEqual(outputs.linux_test_labels, ["test:hip-tests", "test:kfdtest"])
 
+    def test_build_stages_allows_ci_control_labels(self):
+        """ci: control labels like ci:run-multi-gpu are not rejected by build_stages validation."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            build_stages=["compiler-runtime", "runtime-tests"],
+            linux_test_labels=["test:hip-tests", "ci:run-multi-gpu"],
+        )
+        # Validation should pass without raising - ci:run-multi-gpu is a control label
+        inputs.validate()
+        outputs = cm.configure(inputs, cm.GitContext.empty())
+        # Both labels are preserved in output
+        self.assertIn("test:hip-tests", outputs.linux_test_labels)
+        self.assertIn("ci:run-multi-gpu", outputs.linux_test_labels)
+
     def test_debug_tools_stage_allows_all_debugger_tests(self):
         self.assertEqual(
             cm._get_allowed_test_labels_for_stages(["debug-tools"]),
@@ -987,7 +1042,7 @@ class TestSelectTargets(unittest.TestCase):
             base_ref="HEAD^",
             build_variant="release",
             # gfx906 is nightly-only, not in presubmit+postsubmit defaults
-            pr_labels=["gfx906"],
+            pr_labels=["ci:gfx906"],
         )
         result_without = cm.select_targets(inputs_without)
         result_with = cm.select_targets(inputs_with)
@@ -1009,14 +1064,14 @@ class TestSelectTargets(unittest.TestCase):
         self.assertIn("gfx906", result.linux_families)
 
     def test_pull_request_unknown_gfx_label_raises(self):
-        """PR with an unknown gfx label fails fast."""
+        """PR with an unknown ci:gfx label fails fast."""
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^",
             build_variant="release",
-            pr_labels=["gfx9999"],
+            pr_labels=["ci:gfx9999"],
         )
         with self.assertRaises(ValueError, msg="Unknown GPU families"):
             cm.select_targets(inputs)
@@ -1318,7 +1373,12 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "test-runs-on",
             "sanity_check_only_for_family",
         }
-        optional_keys = {"test-runs-on-labels", "test_type"}
+        optional_keys = {
+            "test-runs-on-labels",
+            "test-runs-on-multi-gpu",
+            "test-runs-on-multi-gpu-labels",
+            "test_type",
+        }
         for config in [result.linux, result.windows]:
             self.assertIsNotNone(config)
             per_family = config.per_family_info

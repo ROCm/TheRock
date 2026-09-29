@@ -336,7 +336,8 @@ class TestBuildWxs(unittest.TestCase):
             product_dir="AMD",
             version_dir="ROCm",
             package_version="1.2.3",
-            artifacts_url=None,
+            run_id=None,
+            run_github_repo=None,
             artifacts_cache_dir=root / "artifact-cache",
         )
         defaults.update(extra_args or {})
@@ -440,7 +441,8 @@ class TestBuildWxs(unittest.TestCase):
                 product_dir="AMD",
                 version_dir="ROCm",
                 package_version="1.2.3",
-                artifacts_url=None,
+                run_id=None,
+                run_github_repo=None,
                 artifacts_cache_dir=root_path / "artifact-cache",
             )
             with redirect_stderr(buf):

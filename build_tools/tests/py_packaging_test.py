@@ -1367,6 +1367,29 @@ class RestrictFamiliesTest(TmpDirTestCase):
         self.assertNotIn("Requires-Dist: rocm==7.0.0\n", pkg_info)
         self.assertIn("Requires-Dist: rocm-sdk-core==7.0.0\n", pkg_info)
 
+    def test_generated_metadata_runs_without_build_dependencies(self):
+        params = self._make_two_family_params()
+        meta = PopulatedDistPackage(params, logical_name="meta")
+        metadata_path = meta.path / "src" / "rocm_sdk" / "_dist_info.py"
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                "-S",
+                "-c",
+                "import runpy, sys\n"
+                "metadata = runpy.run_path(sys.argv[1])\n"
+                "assert metadata['package_owner']('gfx1250-strict') == 'gfx1250'\n"
+                "assert metadata['canonical_target']('gfx1250-strict:xnack+') == 'gfx1250-strict'\n"
+                "assert 'rocm_bootstrap' not in sys.modules\n"
+                "assert '_therock_utils' not in sys.modules\n",
+                str(metadata_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
 
 # ---------------------------------------------------------------------------
 # Tests for cross-platform family awareness in the rocm sdist
