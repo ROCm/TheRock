@@ -10,9 +10,11 @@ tests mock both collaborators and assert the wiring and the failure modes
 (missing directory, no MSIs).
 """
 
+import importlib.util
 import os
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -21,12 +23,28 @@ THIS_DIR = Path(__file__).resolve().parent
 WINDOWS_DIR = THIS_DIR.parent
 BUILD_TOOLS_DIR = WINDOWS_DIR.parent.parent
 
-for path in (BUILD_TOOLS_DIR, WINDOWS_DIR):
-    path_str = os.fspath(path)
-    if path_str not in sys.path:
-        sys.path.insert(0, path_str)
+if os.fspath(BUILD_TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, os.fspath(BUILD_TOOLS_DIR))
 
-import upload_package_repo as upload_repo
+
+def _load_module(name: str, path: Path) -> types.ModuleType:
+    """Load the module under test by path under a unique registered name.
+
+    The Linux packaging dir has a sibling ``upload_package_repo.py``; loading by
+    an explicit unique name avoids the sys.modules clash that a bare
+    ``import upload_package_repo`` would cause when both test files run together.
+    """
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load module {name!r} from {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+upload_repo = _load_module(
+    "windows_upload_package_repo", WINDOWS_DIR / "upload_package_repo.py"
+)
 
 
 class UploadPackageRepoTest(unittest.TestCase):
