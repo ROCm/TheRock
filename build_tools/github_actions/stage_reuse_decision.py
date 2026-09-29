@@ -226,6 +226,32 @@ def _artifact_is_enabled_on_platform(artifact, platform: str) -> bool:
     return True
 
 
+def _required_families_for_artifact(
+    artifact_name: str,
+    artifact,
+    concrete_targets: Sequence[str],
+    *,
+    platform: str,
+) -> tuple[str, ...]:
+    """Return this artifact's required families on one platform."""
+
+    if not _artifact_is_enabled_on_platform(artifact, platform):
+        return ()
+
+    if artifact.type == "target-neutral":
+        return (GENERIC_FAMILY,)
+
+    if artifact.type == "target-specific":
+        return (
+            GENERIC_FAMILY,
+            *concrete_targets,
+        )
+
+    raise ValueError(
+        f"Unsupported artifact type for '{artifact_name}': {artifact.type}"
+    )
+
+
 def _required_artifacts_for_stages(
     topology: BuildTopology,
     stage_names: Sequence[str],
@@ -249,22 +275,12 @@ def _required_artifacts_for_stages(
         for group_name in stage.artifact_groups:
             for artifact_name in artifacts_by_group.get(group_name, []):
                 artifact = topology.artifacts[artifact_name]
-
-                if not _artifact_is_enabled_on_platform(artifact, platform):
-                    continue
-
-                if artifact.type == "target-neutral":
-                    required_families = (GENERIC_FAMILY,)
-                elif artifact.type == "target-specific":
-                    required_families = (
-                        GENERIC_FAMILY,
-                        *concrete_targets,
-                    )
-                else:
-                    raise ValueError(
-                        f"Unsupported artifact type for '{artifact_name}': "
-                        f"{artifact.type}"
-                    )
+                required_families = _required_families_for_artifact(
+                    artifact_name,
+                    artifact,
+                    concrete_targets,
+                    platform=platform,
+                )
 
                 for family in required_families:
                     requirement = RequiredArtifact(
@@ -332,22 +348,64 @@ def _artifact_available(
     return True
 
 
-def _filter_available_artifacts(
-    artifact_names: Sequence[str],
+def _artifact_available_on_platform(
+    topology: BuildTopology,
+    artifact_name: str,
     target_families: Sequence[str],
     available_filenames: set[str],
-) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """Filter artifacts by availability in baseline.
+    *,
+    platform: str,
+) -> bool:
+    """Check an artifact against one applicable platform's baseline."""
 
-    Returns (available, unavailable) tuple of artifact names.
-    """
+    artifact = topology.artifacts[artifact_name]
+    required_families = _required_families_for_artifact(
+        artifact_name,
+        artifact,
+        _expand_target_families(target_families),
+        platform=platform,
+    )
+
+    # An artifact not produced on this platform does not block reuse.
+    if not required_families:
+        return True
+
+    return _artifact_available(
+        artifact_name,
+        required_families,
+        available_filenames,
+    )
+
+
+def _filter_available_artifacts(
+    topology: BuildTopology,
+    artifact_names: Sequence[str],
+    *,
+    target_families_by_platform: Mapping[str, Sequence[str]],
+    available_filenames_by_platform: Mapping[str, set[str]],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Require each artifact on every platform where it is enabled."""
+
     available: list[str] = []
     unavailable: list[str] = []
+
     for artifact_name in artifact_names:
-        if _artifact_available(artifact_name, target_families, available_filenames):
+        is_available = all(
+            _artifact_available_on_platform(
+                topology,
+                artifact_name,
+                target_families,
+                available_filenames_by_platform.get(platform, set()),
+                platform=platform,
+            )
+            for platform, target_families in target_families_by_platform.items()
+        )
+
+        if is_available:
             available.append(artifact_name)
         else:
             unavailable.append(artifact_name)
+
     return tuple(available), tuple(unavailable)
 
 
@@ -687,22 +745,26 @@ def compute_auto_stage_reuse(
         and plan.reusable_artifacts
         and reported_baseline_run_id
     ):
-        # Reuse the baseline results already selected for each platform.
-        all_available_filenames: set[str] = set()
-        for platform in platforms:
-            all_available_filenames.update(
-                _matched_filenames(platform_baselines.get(platform))
+        # Preserve platform identity. An artifact is reusable only when it is
+        # available on every platform where topology enables it.
+        target_families_by_platform = {
+            platform: _platform_target_families(
+                platform,
+                linux_amdgpu_families,
+                windows_amdgpu_families,
             )
-
-        all_target_families = _target_families(
-            linux_amdgpu_families,
-            windows_amdgpu_families,
-        )
+            for platform in platforms
+        }
+        available_filenames_by_platform = {
+            platform: _matched_filenames(platform_baselines.get(platform))
+            for platform in platforms
+        }
 
         available_artifacts, unavailable_artifacts = _filter_available_artifacts(
+            topology,
             plan.reusable_artifacts,
-            all_target_families,
-            all_available_filenames,
+            target_families_by_platform=target_families_by_platform,
+            available_filenames_by_platform=available_filenames_by_platform,
         )
         # Artifacts that were planned as reusable but not available must be rebuilt
         verified_reusable = available_artifacts

@@ -722,6 +722,69 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
         self.assertNotIn("all candidate runs are newer", joined)
         self.assertIn("missing on: windows", joined)
 
+    def test_artifact_reuse_requires_every_applicable_platform(self):
+        plan = srd.StageReusePlan(
+            candidate_stages=("compiler-runtime",),
+            rebuild_stages=("math-libs",),
+            full_rebuild_required=False,
+            reasons=(),
+            impacted_artifacts=("blas",),
+            reusable_artifacts=("base",),
+            artifact_level_analysis=True,
+        )
+
+        # The artifact exists in the Linux baseline but not Windows.
+        per_platform = {
+            "linux": _baseline("L1", ["base_lib_generic.tar.zst"]),
+            "windows": _baseline("L1", ["blas_lib_generic.tar.zst"]),
+        }
+
+        with patch.object(srd, "plan_stage_reuse", return_value=plan):
+            result = compute_auto_stage_reuse(
+                changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+                mode=StageReuseMode.DRY_RUN,
+                linux_amdgpu_families=["generic"],
+                windows_amdgpu_families=["generic"],
+                topology=FakeTopology(),
+                baseline_selector_factory=self._selector_factory(per_platform),
+            )
+
+        self.assertEqual(result.baseline_run_id, "L1")
+        self.assertEqual(result.reusable_artifacts, ())
+        self.assertEqual(result.rebuild_artifacts, ("base", "blas"))
+
+    def test_disabled_platform_does_not_block_artifact_reuse(self):
+        topology = FakeTopology()
+        topology.artifacts["base"].disable_platforms = ["windows"]
+
+        plan = srd.StageReusePlan(
+            candidate_stages=("compiler-runtime",),
+            rebuild_stages=("math-libs",),
+            full_rebuild_required=False,
+            reasons=(),
+            impacted_artifacts=("blas",),
+            reusable_artifacts=("base",),
+            artifact_level_analysis=True,
+        )
+
+        per_platform = {
+            "linux": _baseline("L1", ["base_lib_generic.tar.zst"]),
+        }
+
+        with patch.object(srd, "plan_stage_reuse", return_value=plan):
+            result = compute_auto_stage_reuse(
+                changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+                mode=StageReuseMode.DRY_RUN,
+                linux_amdgpu_families=["generic"],
+                windows_amdgpu_families=["generic"],
+                topology=topology,
+                baseline_selector_factory=self._selector_factory(per_platform),
+            )
+
+        self.assertEqual(result.baseline_run_id, "L1")
+        self.assertEqual(result.reusable_artifacts, ("base",))
+        self.assertEqual(result.rebuild_artifacts, ("blas",))
+
     def test_stage_reused_when_present_on_both_platforms(self):
         per_platform = {
             "linux": _baseline("L1", ["base_lib_generic.tar.zst"]),
