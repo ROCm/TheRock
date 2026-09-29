@@ -131,6 +131,8 @@ set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASA
 
 # Options to control the concurrency for building LLVM.
 set(FLANG_PARALLEL_COMPILE_JOBS "" CACHE STRING "Limit parallel compile jobs for Flang (reduces memory usage on systems with many cores)")
+set(LLVM_PARALLEL_COMPILE_JOBS "" CACHE STRING "Limit parallel compile jobs for LLVM (reduces memory usage on systems with many cores)")
+set(LLVM_RAM_PER_COMPILE_JOB "" CACHE STRING "Auto-compute LLVM compile job count based on available RAM (e.g. 4096 for 4GB per job, overrides LLVM_PARALLEL_COMPILE_JOBS)")
 set(LLVM_PARALLEL_LINK_JOBS "" CACHE STRING "Limit parallel link jobs for LLVM (reduces memory usage on systems with many cores)")
 
 # List of python executables to use for multi-version python builds
