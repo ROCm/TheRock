@@ -59,6 +59,7 @@ if TEST_TYPE not in VALID_TEST_CATEGORIES:
     )
     TEST_TYPE = "quick"
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+OS_TYPE = platform.system().lower()  # 'linux' | 'windows' | 'darwin'
 
 # Map job names to actual test directory names
 # The job names come from TEST_COMPONENT env var (set by GitHub Actions workflow)
@@ -100,9 +101,16 @@ if not test_component_job_name:
     )
     sys.exit(1)
 
-TEST_COMPONENT = COMPONENT_DIR_MAPPING.get(
-    test_component_job_name, test_component_job_name
+# A job_name like "hip-tests (PAL)" is a CI matrix variant of the underlying
+# "hip-tests" component (see fetch_test_configurations.py). Strip the trailing
+# parenthesised variant suffix before COMPONENT_DIR_MAPPING / COMPONENT_OVERRIDES
+# lookups so a single override entry covers the base job and all its variants.
+component_lookup_key = (
+    re.sub(r"\s*\([^)]*\)\s*$", "", test_component_job_name).strip()
+    or test_component_job_name
 )
+
+TEST_COMPONENT = COMPONENT_DIR_MAPPING.get(component_lookup_key, component_lookup_key)
 
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
@@ -225,6 +233,24 @@ COMPONENT_OVERRIDES = {
         # --output-on-failure still surfaces output for any failing test.
         "ctest_verbose": False,
     },
+    # hip-tests installs Catch2 binaries + CTestTestfile.cmake under
+    # ROCM_PATH/share/hip/catch_tests (not ROCM_PATH/bin/<component>/).
+    # Category (quick/standard/comprehensive/full) tags are baked into the test
+    # binaries via catch_discover_tests(ADD_TAGS_AS_LABELS), wired by
+    # rocm-systems#12266, so `ctest -L <category>` selects the tier's tests.
+    # Per-arch/OS/platform exclusions are resolved at build time from each
+    # test's YAML `disabled:` list (matching cases are registered DISABLED TRUE
+    # in ctest), so no runner-side arch-exclude labels are needed.
+    # NOTE: `ctest -L <category>` selects the right tests but leaves workload
+    # parameters at the binary's default level_2; setting HIP_TEST_LEVEL would
+    # additionally parameterise the run (intentionally not done here).
+    # The tests dlopen HIP from ROCM_PATH/lib.
+    "hip-tests": {
+        "test_dir": ["share", "hip", "catch_tests"],
+        "additional_env_paths": {
+            "LD_LIBRARY_PATH": [["lib"]],
+        },
+    },
     # rocwmma installs three independent CTestTestfile.cmake fragments:
     #   bin/rocwmma/             - per-target plain runs + regression_tests
     #   bin/rocwmma/smoke/       - per-target "<target> smoke" emulation
@@ -344,7 +370,7 @@ def apply_component_overrides(
 
 TEST_DIR = str(Path(THEROCK_BIN_DIR) / TEST_COMPONENT)
 TEST_DIR, ctest_parallel_count = apply_component_overrides(
-    test_component_job_name,
+    component_lookup_key,
     TEST_TYPE,
     ROCM_PATH,
     THEROCK_DIR,
