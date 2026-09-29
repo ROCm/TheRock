@@ -31,6 +31,7 @@ include(therock_sanitizers)
 include(therock_subproject)
 include(therock_job_pools)
 include(therock_msys2)
+include(therock_autotools)
 include(therock_testing)
 
 ################################################################################
