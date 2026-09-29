@@ -1388,15 +1388,15 @@
     "Gfxarch": "True"
   },
   {
-    "Package": "amdrocm-ccl-test",
+    "Package": "amdrocm-hipccl-test",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amdrocm-ccl-devel"
+      "amdrocm-hipccl-devel"
     ],
     "RPMRequires": [
-      "amdrocm-ccl-devel"
+      "amdrocm-hipccl-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm GPU compute primitives test suite and validation tools",
@@ -1446,7 +1446,7 @@
     "Gfxarch": "True"
   },
   {
-    "Package": "amdrocm-ccl-devel",
+    "Package": "amdrocm-hipccl-devel",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
@@ -3641,7 +3641,7 @@
       "amdrocm-sparse-devel",
       "amdrocm-solver-devel",
       "amdrocm-rand-devel",
-      "amdrocm-ccl-devel",
+      "amdrocm-hipccl-devel",
       "amdrocm-opencl-devel",
       "amdrocm-hipblas-common-devel",
       "amdrocm-rccl-devel",
@@ -3662,7 +3662,7 @@
       "amdrocm-sparse-devel",
       "amdrocm-solver-devel",
       "amdrocm-rand-devel",
-      "amdrocm-ccl-devel",
+      "amdrocm-hipccl-devel",
       "amdrocm-opencl-devel",
       "amdrocm-hipblas-common-devel",
       "amdrocm-rccl-devel",
