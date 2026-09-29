@@ -288,6 +288,9 @@ jobs:
   trigger_test_wheels_per_family:
     needs: [build_python_packages]
     name: Test Wheels (${{ matrix.family_info.amdgpu_family }})
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
     if: >-
       ${{
         !failure() &&
@@ -300,23 +303,22 @@ jobs:
       matrix:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
 
-    uses: ./.github/workflows/test_rocm_wheels_matrix.yml
-    secrets: inherit
-    with:
-      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
-      amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
-      matrix: >-
-        ${{
-          toJSON(
-            fromJSON(inputs.build_config).test_python_packages_matrix
-          )
-        }}
-      package_find_links_url: >-
-        ${{ needs.build_python_packages.outputs.package_find_links_url }}
-      kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
-      rocm_version: ${{ inputs.rocm_package_version }}
-      repository: ${{ inputs.repository || github.repository }}
-      ref: ${{ inputs.ref }}
+    steps:
+      - name: Dispatch test_rocm_wheels_matrix
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: test_rocm_wheels_matrix.yml
+          inputs: |
+            {
+              "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}",
+              "amdgpu_family": "${{ matrix.family_info.amdgpu_family }}",
+              "matrix": ${{ toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) }},
+              "package_find_links_url": "${{ needs.build_python_packages.outputs.package_find_links_url }}",
+              "kpack_split": "${{ needs.build_python_packages.outputs.kpack_split }}",
+              "rocm_version": "${{ inputs.rocm_package_version }}",
+              "repository": "${{ inputs.repository || github.repository }}",
+              "ref": "${{ inputs.ref || '' }}"
+            }
 
 
   # The PyTorch release workflow publishes its wheels to the release index, then

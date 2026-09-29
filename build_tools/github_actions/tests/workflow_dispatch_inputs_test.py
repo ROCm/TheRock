@@ -18,6 +18,7 @@ benc-uk/workflow-dispatch. It is run like a standard unit test.
 
 from dataclasses import dataclass
 import json
+import re
 from pathlib import Path
 import unittest
 
@@ -30,6 +31,32 @@ from workflow_utils import (
 )
 
 WORKFLOW_DISPATCH_ACTION_NAME = "benc-uk/workflow-dispatch"
+
+
+def _replace_github_expressions_with_placeholders(
+    inputs_raw: str,
+) -> str:
+    """Replace unevaluated GitHub expressions with JSON-safe placeholders."""
+
+    expression_pattern = re.compile(r"\$\{\{.*?\}\}", re.DOTALL)
+
+    def replace_expression(match: re.Match[str]) -> str:
+        start = match.start()
+        end = match.end()
+        expression = "${{ STATIC_EXPRESSION }}"
+
+        # Preserve whether the original expression was already inside a JSON
+        # string. Unquoted expressions need JSON quotes added.
+        is_quoted = (
+            start > 0
+            and end < len(inputs_raw)
+            and inputs_raw[start - 1] == '"'
+            and inputs_raw[end] == '"'
+        )
+
+        return expression if is_quoted else json.dumps(expression)
+
+    return expression_pattern.sub(replace_expression, inputs_raw)
 
 
 def parse_dispatch_inputs_json(inputs_raw: str) -> dict:
@@ -47,7 +74,9 @@ def parse_dispatch_inputs_json(inputs_raw: str) -> dict:
     if not inputs_raw:
         return {}
 
-    parsed = json.loads(inputs_raw)
+    parsed_inputs = _replace_github_expressions_with_placeholders(inputs_raw)
+    parsed = json.loads(parsed_inputs)
+
     if isinstance(parsed, dict):
         return parsed
 

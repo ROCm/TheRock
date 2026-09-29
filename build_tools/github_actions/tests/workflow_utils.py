@@ -216,11 +216,40 @@ class WorkflowEdge:
     passed_inputs: set
 
 
+def _replace_github_expressions_with_placeholders(
+    inputs_raw: str,
+) -> str:
+    """Replace unevaluated GitHub expressions with JSON-safe placeholders."""
+
+    expression_pattern = re.compile(r"\$\{\{.*?\}\}", re.DOTALL)
+
+    def replace_expression(match: re.Match[str]) -> str:
+        start = match.start()
+        end = match.end()
+        expression = "${{ STATIC_EXPRESSION }}"
+
+        # Preserve whether the original expression was already inside a JSON
+        # string. Unquoted expressions need JSON quotes added.
+        is_quoted = (
+            start > 0
+            and end < len(inputs_raw)
+            and inputs_raw[start - 1] == '"'
+            and inputs_raw[end] == '"'
+        )
+
+        return expression if is_quoted else json.dumps(expression)
+
+    return expression_pattern.sub(replace_expression, inputs_raw)
+
+
 def _parse_dispatch_inputs_keys(inputs_raw: str) -> set:
     """Returns the input names in a benc-uk/workflow-dispatch inputs JSON string."""
     if not inputs_raw:
         return set()
-    parsed = json.loads(inputs_raw)
+
+    parsed_inputs = _replace_github_expressions_with_placeholders(inputs_raw)
+    parsed = json.loads(parsed_inputs)
+
     if isinstance(parsed, dict):
         return set(parsed.keys())
     return set()

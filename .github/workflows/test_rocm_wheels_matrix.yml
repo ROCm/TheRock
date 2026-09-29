@@ -4,6 +4,37 @@
 name: Test ROCm Wheels Matrix
 
 on:
+  workflow_dispatch:
+    inputs:
+      quartz_tracking_id:
+        required: false
+        type: string
+        default: ""
+      matrix:
+        required: true
+        type: string
+      amdgpu_family:
+        required: false
+        type: string
+        default: ""
+      package_find_links_url:
+        required: true
+        type: string
+      kpack_split:
+        required: true
+        type: string
+      rocm_version:
+        required: true
+        type: string
+      repository:
+        required: false
+        type: string
+        default: ""
+      ref:
+        required: false
+        type: string
+        default: ""
+
   workflow_call:
     inputs:
       quartz_tracking_id:
@@ -107,7 +138,6 @@ jobs:
         include: ${{ fromJSON(needs.configure_matrix.outputs.matrix) }}
 
     uses: ./.github/workflows/test_rocm_wheels.yml
-    secrets: inherit
     with:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       amdgpu_family: ${{ matrix.amdgpu_family }}
@@ -115,14 +145,10 @@ jobs:
       package_find_links_url: >-
         ${{
           inputs.kpack_split == 'true'
-          &&
-          inputs.package_find_links_url
-          ||
-          format(
-            '{0}/{1}/index.html',
-            inputs.package_find_links_url,
-            matrix.amdgpu_family
-          )
+          && inputs.package_find_links_url
+          || format('{0}/{1}/index.html',
+              inputs.package_find_links_url,
+              matrix.amdgpu_family)
         }}
       python_version: ${{ matrix.python_version }}
       rocm_version: ${{ inputs.rocm_version }}
