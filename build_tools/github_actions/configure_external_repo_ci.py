@@ -58,6 +58,7 @@ F = TypeVar("F", bound=Callable[..., object])
 SKIPPABLE_PATH_PATTERNS = [
     "*.md",
     "*.rst",
+    "*CODEOWNERS",
     "docs/*",
     "projects/*/docs/*",
     "shared/*/docs/*",
@@ -94,6 +95,7 @@ CI_RELEVANT_NON_SUBTREE_PREFIXES = {
     "shared/amdgpu-windows-interop",
     "shared/kpack",
     "shared/machine-readable-isa",
+    "shared/primbench",
     "emulation/mirage",
     "emulation/rocjitsu",
 }

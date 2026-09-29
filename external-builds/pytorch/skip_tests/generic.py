@@ -20,6 +20,10 @@ skip_tests = {
             # Skipped across all PyTorch versions; the hipblas.h include error
             # persists in the ROCm SDK environment.
             "test_mempool_empty_cache_inactive",
+            # JIT-compiles dummy_allocator, but the wheel test environment is
+            # runtime-only and does not configure a native compiler or install
+            # the ROCm development headers. See #8217.
+            "test_mempool_limited_memory_with_allocator",
             # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI
             "test_memory_snapshot",
             "test_memory_plots",

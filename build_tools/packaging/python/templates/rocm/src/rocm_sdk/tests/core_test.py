@@ -95,6 +95,10 @@ class ROCmCoreTest(unittest.TestCase):
                 # recent addition from upstream, issue tracked in
                 # https://github.com/ROCm/TheRock/issues/2537
                 continue
+            if "libsqtt-marker" in str(so_path):
+                # LLVM pass plugin loaded via -fpass-plugin; it has unresolved
+                # LLVM symbols and is not intended to be dlopened standalone.
+                continue
             if "lib/roctracer" in str(so_path) or "share/roctracer" in str(so_path):
                 # Internal roctracer libraries are meant to be pre-loaded
                 # explicitly and cannot necessarily be loaded standalone.

@@ -425,6 +425,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_systems,
             args.rocprofiler_systems_examples,
             args.rocrtst,
+            args.hip_tests,
             args.rocalution,
             args.kfdtest,
             args.rocwmma,
@@ -550,9 +551,16 @@ def retrieve_artifacts_by_run_id(args):
             if args.tests:
                 # Tests need version.h for rocprofiler-sdk version detection.
                 argv.append("rocprofiler-sdk_dev")
+            # librocprof-sys.so dlopens libhipfile.so.0 on the first hipFile
+            # telemetry sample.
+            extra_artifacts.append("hipfile")
+            extra_artifacts.append("sysdeps-util-linux")
         if args.rocprofiler_systems_examples:
             # Only a _test artifact is produced
             argv.append("rocprofiler-systems-examples_test")
+            # The hipFile examples link libhipfile.so.0 directly.
+            extra_artifacts.append("hipfile")
+            extra_artifacts.append("sysdeps-util-linux")
         if args.rocrtst:
             extra_artifacts.append("rocrtst")
             # rocrtst depends on sysdeps-hwloc (which depends on sysdeps-libpciaccess)
@@ -561,6 +569,9 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocalution:
             extra_artifacts.append("rocalution")
             argv.append("rocalution_dev")
+        if args.hip_tests:
+            # Only a _test artifact is produced; it carries share/hip/catch_tests.
+            argv.append("core-hiptests_test")
         if args.kfdtest:
             extra_artifacts.append("kfdtest")
             # kfdtest depends on llvm-dev
@@ -1017,6 +1028,13 @@ def main(argv):
         "--kfdtest",
         default=False,
         help="Include 'kfdtest' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hip-tests",
+        default=False,
+        help="Include artifacts needed to build and run 'hip-tests'",
         action=argparse.BooleanOptionalAction,
     )
 

@@ -1,0 +1,13 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# CodeQL configuration for TheRock, picked up by the rocm-security-gh
+# reusable scanner (.github/workflows/security_scan_pr.yml and
+# security_scan_weekly.yml) in place of its own org-wide default.
+# Reference: https://docs.github.com/en/code-security/reference/code-scanning/workflow-configuration-options
+#s
+# `paths-ignore` applies to every language in the discovered matrix, and
+# takes effect only because the scanner analyses with `build-mode: none`.
+
+paths-ignore:
+  - build_tools/third_party
