@@ -313,7 +313,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
       "--with-auto-load-dir=${ROCGDB_AUTO_LOAD_DIR}"
       "--with-auto-load-safe-path=${ROCGDB_AUTO_LOAD_DIR}")
 endif()
-set(ROCGDB_TARGETS "x86_64-linux-gnu,amdgcn-amd-amdhsa")
 
 # If the version is not set, set it to a generic value.
 if (NOT ROCM_VERSION)
@@ -410,7 +409,7 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
         "--program-transform-name=${ROCGDB_PROGRAM_TRANSFORM_STR}"
 
         --enable-64-bit-bfd
-        "--enable-targets=${ROCGDB_TARGETS}"
+        --enable-targets=amdgcn-amd-amdhsa
         --enable-tui
 
         "--htmldir=${ROCGDB_HTML_DIR}"
