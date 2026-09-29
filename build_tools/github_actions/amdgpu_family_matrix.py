@@ -404,8 +404,6 @@ amdgpu_family_info_matrix = {
             # so GPU_TARGETS stays plain "gfx1250" for these variants.
             "build_variants": [
                 "release",
-                "asan",
-                "asan-debug",
                 "host-asan",
                 "host-asan-debug",
             ],
