@@ -18,6 +18,7 @@ include = [
   "lib/llvm/amdgcn/**",
   "lib/llvm/lib/*.bc",
   "lib/llvm/lib/amdgcn-amd-amdhsa/*.bc",
+  "lib/llvm/lib/amdgpu-amd-amdhsa/*.bc",
   "lib/llvm/lib/*.ll",
   "lib/llvm/lib/*.modules.json",
   "lib/llvm/include/c++/**",
