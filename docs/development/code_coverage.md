@@ -107,7 +107,7 @@ build.
 ```mermaid
 graph TD
     dispatch[Dispatch with projects_to_test] --> matrix[setup_coverage_matrix]
-    matrix --> compilerRuntime[Build instrumented compiler-runtime]
+    matrix --> compilerRuntime[Build compiler-runtime]
     compilerRuntime --> mathLibs[Build instrumented math-libs]
     mathLibs --> report[Per project: configure, test, report]
     report --> codecov[Codecov]
@@ -135,13 +135,15 @@ nightly dispatch is a follow-up; `baseline_run_id` is already the right input.
 `coverage_cmake_options`, and `needs_math_libs`. Selections naming a project
 whose stage has no build job fail immediately.
 
-`build_instrumented_compiler_runtime` always runs first — every other stage
-pulls its inbound artifacts from it. `build_instrumented_math_libs` fans out
-over GPU families and is skipped when `needs_math_libs` is false; 17 of the 19
-measurable projects live there.
+`build_compiler_runtime` always runs first — every other stage pulls its
+inbound artifacts from it. It is a regular, non-instrumented build: no
+compiler-runtime project has a supported coverage option.
+`build_instrumented_math_libs` fans out over GPU families and is skipped when
+`needs_math_libs` is false; 17 of the 19 measurable projects live there.
 
-`coverage_cmake_options` is appended to each stage's configure line. A
-full-group selection collapses to `-DTHEROCK_COVERAGE_ALL=ON`; a narrow one
+`coverage_cmake_options` is appended to the math-libs configure line only. A
+selection covering a whole group collapses to that group's option (the default
+selection becomes `-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON`); a narrow one
 names each project. `CMakeLists.txt` expands group options to
 `<PROJECT>_ENABLE_COVERAGE` flags; `therock_subproject.cmake` translates each
 to the project's upstream name. Everything not selected builds normally.

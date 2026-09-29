@@ -158,8 +158,8 @@ jobs:
 
   # Built first so later stages have a compiler-runtime to link against and
   # fetch as an inbound artifact.
-  build_instrumented_compiler_runtime:
-    name: Build Instrumented Compiler Runtime
+  build_compiler_runtime:
+    name: Build Compiler Runtime
     needs: setup_coverage_matrix
     if: ${{ needs.setup_coverage_matrix.outputs.coverage_matrix != '[]' }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
@@ -185,7 +185,7 @@ jobs:
   # group, else individual project flags; unselected projects build normally.
   build_instrumented_math_libs:
     name: Build Instrumented Math Libs
-    needs: [setup_coverage_matrix, build_instrumented_compiler_runtime]
+    needs: [setup_coverage_matrix, build_compiler_runtime]
     if: >-
       ${{
         !failure() && !cancelled() &&
@@ -224,7 +224,7 @@ jobs:
     needs:
       [
         setup_coverage_matrix,
-        build_instrumented_compiler_runtime,
+        build_compiler_runtime,
         build_instrumented_math_libs,
       ]
     # Also guard the empty matrix: fromJSON('') would hard-error.
@@ -264,7 +264,7 @@ jobs:
     if: always()
     needs:
       - setup_coverage_matrix
-      - build_instrumented_compiler_runtime
+      - build_compiler_runtime
       - build_instrumented_math_libs
       - coverage_report
     runs-on: ubuntu-24.04
