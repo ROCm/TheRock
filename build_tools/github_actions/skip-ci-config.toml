@@ -16,6 +16,10 @@ common = [
     "*.mdc",
     "*.pre-commit-config.*",
 
+    # Skip-CI config files themselves (editing skip lists doesn't need full CI)
+    "build_tools/github_actions/skip-ci-base.toml",
+    "build_tools/github_actions/skip-ci-config.toml",
+
     # Scanner configs consumed by security scan workflows, no impact on CI
     "build_tools/scan_tools/*",
 

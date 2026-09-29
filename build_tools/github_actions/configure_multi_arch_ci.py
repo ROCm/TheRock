@@ -58,10 +58,8 @@ from typing import Optional
 try:
     import tomllib
 except ImportError:
-    try:
-        import tomli as tomllib
-    except ImportError:
-        tomllib = None  # type: ignore
+    # Python <= 3.10 compatibility (requires install of 'tomli' package)
+    import tomli as tomllib
 
 # Add parent directory to path for _therock_utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -77,6 +75,7 @@ from configure_ci_path_filters import (
     get_git_modified_paths,
     get_git_submodule_paths,
     is_ci_run_required,
+    load_skip_ci_config,
 )
 from configure_jax_release_matrix import generate_jax_matrix_for_release_type
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
@@ -106,8 +105,6 @@ def _load_skip_ci_patterns_from_toml(config_path: str) -> Optional[list[str]]:
     1. Base config (skip-ci-base.toml in TheRock) - universal patterns for all repos
     2. External repo's extension config - repo-specific patterns
     """
-    from configure_ci_path_filters import load_skip_ci_config
-
     # The external repo config is checked out to external-repo-config/
     full_path = Path(_EXTERNAL_REPO_CONFIG_DIR) / config_path
     if not full_path.exists():
@@ -149,9 +146,12 @@ def _compute_changed_projects_from_files(
     try:
         with open(full_path, "r") as f:
             config = json.load(f)
-    except Exception as e:
-        print(f"  Warning: Failed to parse projects config: {e}")
-        return []
+    except json.JSONDecodeError as e:
+        # Parse errors indicate invalid config - fail immediately to surface the issue
+        raise ValueError(f"Invalid JSON in projects config {full_path}: {e}") from e
+    except OSError as e:
+        # File read errors (permissions, etc.) - fail immediately
+        raise ValueError(f"Failed to read projects config {full_path}: {e}") from e
 
     # Build set of valid project prefixes from repos-config.json.
     # Each entry has "category" (e.g., "projects") and "name" (e.g., "rocprim").
