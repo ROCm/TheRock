@@ -265,10 +265,12 @@ class CIInputs:
                 ("Linux", self.linux_test_labels),
                 ("Windows", self.windows_test_labels),
             ]:
+                # ci: labels are control labels, not test component labels; skip validation
                 invalid = [
                     lbl
                     for lbl in labels
-                    if lbl.replace("test:", "") not in allowed_labels
+                    if not lbl.startswith("ci:")
+                    and lbl.replace("test:", "") not in allowed_labels
                 ]
                 if invalid:
                     raise ValueError(
@@ -344,13 +346,18 @@ class CIInputs:
         # Test labels come from two sources:
         # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
         # 2. PR test:* labels (apply to both platforms)
+        # Additionally, ci:* labels are passed through for downstream processing
         pr_test_labels = [label for label in pr_labels if label.startswith("test:")]
+        pr_ci_labels = [label for label in pr_labels if label.startswith("ci:")]
         linux_test_labels = (
-            _parse_comma_list(os.environ.get("LINUX_TEST_LABELS", "")) + pr_test_labels
+            _parse_comma_list(os.environ.get("LINUX_TEST_LABELS", ""))
+            + pr_test_labels
+            + pr_ci_labels
         )
         windows_test_labels = (
             _parse_comma_list(os.environ.get("WINDOWS_TEST_LABELS", ""))
             + pr_test_labels
+            + pr_ci_labels
         )
 
         # When build_stages limits the build, validate or auto-select test labels.
@@ -359,11 +366,13 @@ class CIInputs:
         build_stages = _parse_comma_list(os.environ.get("BUILD_STAGES", ""))
         allowed_labels = _get_allowed_test_labels_for_stages(build_stages)
         if allowed_labels is not None:
+            # ci: labels are control labels, not test component labels; skip validation
             if linux_test_labels:
                 invalid = [
                     lbl
                     for lbl in linux_test_labels
-                    if lbl.replace("test:", "") not in allowed_labels
+                    if not lbl.startswith("ci:")
+                    and lbl.replace("test:", "") not in allowed_labels
                 ]
                 if invalid:
                     raise ValueError(
@@ -377,7 +386,8 @@ class CIInputs:
                 invalid = [
                     lbl
                     for lbl in windows_test_labels
-                    if lbl.replace("test:", "") not in allowed_labels
+                    if not lbl.startswith("ci:")
+                    and lbl.replace("test:", "") not in allowed_labels
                 ]
                 if invalid:
                     raise ValueError(
@@ -1005,24 +1015,6 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 _VALID_TEST_FILTER_TYPES = {"quick", "standard", "comprehensive", "full"}
 
 
-def _has_test_labels(ci_inputs: CIInputs) -> bool:
-    """Check whether any test labels were specified (workflow_dispatch or PR).
-
-    Note: test_filter: labels are not test labels - they control test_type,
-    not which tests to run.
-    """
-    # Filter out test_filter: labels - those control test_type, not test selection
-    linux_tests = [
-        l for l in ci_inputs.linux_test_labels if not l.startswith("test_filter:")
-    ]
-    windows_tests = [
-        l for l in ci_inputs.windows_test_labels if not l.startswith("test_filter:")
-    ]
-    if linux_tests or windows_tests:
-        return True
-    return any(label.startswith("test:") for label in ci_inputs.pr_labels)
-
-
 def _determine_test_type(
     ci_inputs: CIInputs,
     git_context: GitContext,
@@ -1061,13 +1053,7 @@ def _determine_test_type(
             )
         return filter_type, f"test_filter label: {label}"
 
-    # Priority 2: test:* labels request specific component tests (e.g.
-    # test:rocprim). When someone explicitly asks for tests, run the full
-    # suite — they're investigating something specific.
-    if _has_test_labels(ci_inputs):
-        return "full", "test labels specified"
-
-    # Priority 3: release builds run deeper test suites than regular CI.
+    # Priority 2: release builds run deeper test suites than regular CI.
     # * 'nightly' and 'nightly-bkc' get comprehensive (deeper than standard,
     #   on a daily cadence)
     # * 'prerelease' gets full (exhaustive pre-release validation)
@@ -1077,13 +1063,13 @@ def _determine_test_type(
     if ci_inputs.release_type == "prerelease":
         return "full", "release build (prerelease)"
 
-    # Priority 4: schedule runs the full nightly suite — comprehensive
+    # Priority 3: schedule runs the full nightly suite — comprehensive
     # coverage on a cadence, catching regressions that quick tests miss.
     if ci_inputs.is_schedule:
         return "comprehensive", "scheduled run"
 
-    # Priority 5: a submodule change means actual library code changed
-    # (e.g. rocBLAS, MIOpen). These need full testing since the change
+    # Priority 4: a submodule change means actual library code changed
+    # (e.g. rocBLAS, MIOpen). These need standard testing since the change
     # could affect any downstream consumer.
     if git_context.has_submodule_changes is True:
         matching = set(git_context.submodule_paths) & set(git_context.changed_files)
@@ -1434,6 +1420,15 @@ def _expand_build_config_for_platform(
             family_info["test_type"] = family_test_type
         if test_runs_on and "test-runs-on-labels" in platform_info:
             family_info["test-runs-on-labels"] = platform_info["test-runs-on-labels"]
+        # Include multi-GPU runner info if available
+        if "test-runs-on-multi-gpu" in platform_info:
+            family_info["test-runs-on-multi-gpu"] = platform_info[
+                "test-runs-on-multi-gpu"
+            ]
+        if "test-runs-on-multi-gpu-labels" in platform_info:
+            family_info["test-runs-on-multi-gpu-labels"] = platform_info[
+                "test-runs-on-multi-gpu-labels"
+            ]
         # Per-family test labels allow limiting which tests run for specific architectures
         if "test_labels_for_family" in platform_info:
             family_info["test_labels_for_family"] = platform_info[
