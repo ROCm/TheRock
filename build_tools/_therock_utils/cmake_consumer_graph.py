@@ -1,9 +1,54 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Conservative static analysis of TheRock subproject declarations."""
+"""Generate TheRock's consumer graph by statically parsing the super-project CMake.
 
-from __future__ import annotations
+Parses the Git-tracked ``CMakeLists.txt`` / ``*.cmake`` files without running
+CMake or checking out submodules, and extracts the reverse-dependency
+("consumer") graph from ``therock_cmake_subproject_declare()`` calls. The result
+is a conservative *may-depend* graph: both sides of every conditional are
+analyzed and unioned, so it may contain edges no single configure activates but
+never omits an edge a real configure produces.
+
+The committed graph lives at ``test_tools/therock_consumer_graph.json`` (the
+reverse-edge ``dependency -> {consumers}`` schema).
+
+**How it works**
+
+- Lists Git-tracked ``CMakeLists.txt`` / ``*.cmake`` (a submodule is a single
+  gitlink path, so the file set is stable whether or not submodules are checked
+  out) and traverses from the root listfile.
+- Extracts each ``therock_cmake_subproject_declare()``'s name, ``BUILD_DEPS``,
+  ``RUNTIME_DEPS``, and ``COMPILER_TOOLCHAIN``.
+- Models the dependency-relevant CMake subset: ``set``/``unset``,
+  ``list(APPEND/PREPEND/REMOVE_ITEM)``, ``${var}`` and ``;``-list expansion,
+  ``if()`` branch union, ``foreach()`` (incl. ``IN LISTS``/``IN ITEMS``/
+  ``RANGE``), and ``add_subdirectory()`` child scope vs. ``include()`` caller
+  scope.
+- An unresolved variable in a dependency argument raises rather than being
+  dropped.
+
+**Known limitations**
+
+- Correlations between separate conditions are ignored, so combinations that can
+  never co-occur may still contribute edges.
+- Only the dependency-relevant CMake subset is modeled; unsupported dependency
+  expressions should raise and gain a test.
+- Only literal ``therock_cmake_subproject_declare()`` / ``add_subdirectory()``
+  calls are seen — those reached through a wrapping function or macro are
+  invisible.
+- A *defined-but-empty* dependency variable (incl. a ``foreach(... IN LISTS x)``
+  where ``x`` is defined but empty) expands to nothing without being flagged,
+  silently dropping its edge. An *undefined* ``IN LISTS`` source is treated
+  differently: it is reported unresolved (fail-loud), diverging from CMake, where
+  an undefined ``IN LISTS`` variable is simply an empty list.
+- ``set(... PARENT_SCOPE)`` is modeled add-only: the assignment is unioned into the
+  enclosing scope rather than replacing it.
+- Sources wired through ``therock_enable_external_source()`` do not resolve
+  statically.
+- Subtree mapping assumes the default ``rocm-libraries`` / ``rocm-systems``
+  layout and ignores a ``THEROCK_ROCM_*_SOURCE_DIR`` cache override.
+"""
 
 import copy
 import json
@@ -11,6 +56,7 @@ import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Self
 
 from cmake_parser import CMakeParseError
 from cmake_parser import ast as cmake_ast
@@ -74,7 +120,7 @@ _TOOLCHAIN_SUBPROJECTS = {
 
 
 class AnalysisError(RuntimeError):
-    """Raised when the prototype cannot conservatively analyze relevant code."""
+    """Raised when the analyzer cannot conservatively analyze relevant code."""
 
 
 @dataclass(frozen=True)
@@ -85,7 +131,7 @@ class SourceLocation:
     line: int
 
     def format(self) -> str:
-        """Format the location for diagnostics."""
+        """Format the location as ``path:line`` for diagnostics."""
         return f"{self.path.as_posix()}:{self.line}"
 
 
@@ -102,7 +148,7 @@ class Subproject:
 
     @property
     def all_deps(self) -> set[str]:
-        """Return all explicit and implicit direct dependencies."""
+        """Return the explicit (build/runtime) and implicit (toolchain) dependencies."""
         result = self.build_deps | self.runtime_deps
         for toolchain in self.compiler_toolchains:
             toolchain_subproject = _TOOLCHAIN_SUBPROJECTS.get(toolchain)
@@ -150,7 +196,7 @@ class AnalysisResult:
         return self.tracked_declaration_files - self.declaration_files
 
     def build_consumer_graph(self) -> dict[str, dict[str, list[str]]]:
-        """Build the existing reverse-dependency JSON schema."""
+        """Build the reverse-dependency graph (``dependency -> {consumers}``)."""
         consumers: dict[str, set[str]] = {
             name.lower(): set() for name in self.subprojects
         }
@@ -168,9 +214,9 @@ class AnalysisResult:
         """Map each external-repo source subtree to the graph key(s) built from it.
 
         EXTERNAL_SOURCE_DIR is made relative to the rocm-libraries / rocm-systems
-        roots to yield a `category/name` subtree (e.g. `projects/clr`); one subtree
-        may back several keys. Sources outside those roots, or that did not resolve
-        (see _resolve_source_dir_section), get no entry.
+        roots to yield a ``category/name`` subtree (e.g. ``projects/clr``); one
+        subtree may back several keys. Sources outside those roots, or that did not
+        resolve (see ``_resolve_source_dir_section``), get no entry.
         """
         # Default source roots (THEROCK_ROCM_{LIBRARIES,SYSTEMS}_SOURCE_DIR); the
         # parser assumes the default layout and does not honor a cache override.
@@ -223,24 +269,18 @@ class GraphComparison:
     generated_only_edges: list[str]
     reference_only_edges: list[str]
 
-    def to_json_data(self) -> dict[str, object]:
-        """Return stable JSON-compatible comparison data."""
-        return {
-            "summary": {
-                "common_nodes": len(self.common_nodes),
-                "generated_only_nodes": len(self.generated_only_nodes),
-                "reference_only_nodes": len(self.reference_only_nodes),
-                "common_edges": len(self.common_edges),
-                "generated_only_edges": len(self.generated_only_edges),
-                "reference_only_edges": len(self.reference_only_edges),
-            },
-            "common_nodes": self.common_nodes,
-            "generated_only_nodes": self.generated_only_nodes,
-            "reference_only_nodes": self.reference_only_nodes,
-            "common_edges": self.common_edges,
-            "generated_only_edges": self.generated_only_edges,
-            "reference_only_edges": self.reference_only_edges,
-        }
+
+@dataclass
+class Expansion:
+    """Result of expanding CMake token(s): resolved values and any unresolved names.
+
+    ``values`` holds the concrete strings a token expanded to. ``unresolved`` holds
+    the names of ``${var}`` references that are not defined in the environment; when
+    it is non-empty the expansion could not be completed and ``values`` is empty.
+    """
+
+    values: set[str]
+    unresolved: set[str]
 
 
 class Environment:
@@ -260,34 +300,40 @@ class Environment:
         return name in self._variables
 
     def get(self, name: str, default: set[str] | None = None) -> set[str] | None:
+        """Return the value set for ``name``, or ``default`` if it is unset."""
         return self._variables.get(name, default)
 
     def assign(self, name: str, values: set[str]) -> None:
+        """Set ``name`` to a copy of ``values`` (replacing any existing set)."""
         self._variables[name] = set(values)
 
     def append(self, name: str, values: set[str]) -> None:
+        """Union ``values`` into ``name`` (list(APPEND)/list(PREPEND))."""
         self._variables[name] = self._variables.get(name, set()) | set(values)
 
     def remove(self, name: str, values: set[str]) -> None:
+        """Remove ``values`` from ``name`` (list(REMOVE_ITEM))."""
         self._variables[name] = self._variables.get(name, set()) - set(values)
 
     def discard(self, name: str) -> None:
+        """Unset ``name`` if present."""
         self._variables.pop(name, None)
 
-    def copy(self) -> Environment:
+    def copy(self) -> Self:
+        """Return a copy-on-write child scope sharing this scope's value sets."""
         return Environment(dict(self._variables))
 
-    def merge_from(self, other: Environment) -> None:
-        # Union another scope's values in, never dropping — the over-approximate
-        # direction used to fold a foreach() body back into its enclosing scope.
+    def merge_from(self, other: Self) -> None:
+        """Union another scope's values in, never dropping (folds a loop body back)."""
         for name, values in other._variables.items():
             self._variables[name] = self._variables.get(name, set()) | values
 
-    def replace_with(self, other: Environment) -> None:
+    def replace_with(self, other: Self) -> None:
+        """Adopt another scope's variables in place (used for the if()/else() merge)."""
         self._variables = other._variables
 
     @classmethod
-    def branch_union(cls, first: Environment, second: Environment) -> Environment:
+    def branch_union(cls, first: Self, second: Self) -> Self:
         """Union two scopes key-by-key (the conservative if()/else() merge)."""
         result = cls()
         for name in first._variables.keys() | second._variables.keys():
@@ -333,7 +379,7 @@ def compare_graphs(
     generated: dict[str, dict[str, list[str]]],
     reference: dict[str, dict[str, list[str]]],
 ) -> GraphComparison:
-    """Compare two graphs in the existing consumer graph schema."""
+    """Compare two graphs in the consumer graph schema by node and edge sets."""
     generated_nodes = set(generated)
     reference_nodes = set(reference)
     generated_edges = _graph_edges(generated)
@@ -349,7 +395,7 @@ def compare_graphs(
 
 
 def load_consumer_graph(path: Path) -> dict[str, dict[str, list[str]]]:
-    """Load and minimally validate an existing consumer graph."""
+    """Load and minimally validate a consumer graph JSON file."""
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise AnalysisError(f"Expected a JSON object in {path}")
@@ -363,6 +409,7 @@ def load_consumer_graph(path: Path) -> dict[str, dict[str, list[str]]]:
 
 
 def _graph_edges(graph: dict[str, dict[str, list[str]]]) -> set[str]:
+    """Return the set of ``dependency -> consumer`` edge strings in a graph."""
     return {
         f"{dependency} -> {consumer}"
         for dependency, entry in graph.items()
@@ -417,12 +464,14 @@ class RepositoryAnalyzer:
         )
 
     def _parse_tracked_inventory(self) -> None:
+        """Parse every tracked file and record which ones declare a subproject."""
         for relative_path in sorted(self.tracked_cmake_files):
             nodes = self._parse_file(relative_path)
             if _contains_declaration(nodes):
                 self._tracked_declaration_files.add(relative_path)
 
     def _parse_file(self, relative_path: Path) -> list[cmake_ast.AstNode]:
+        """Parse one tracked CMake file to an AST, caching the result."""
         cached = self._ast_cache.get(relative_path)
         if cached is not None:
             return cached
@@ -449,10 +498,17 @@ class RepositoryAnalyzer:
         inherited_environment: Environment,
         *,
         inherit_scope: bool = False,
+        parent_environment: Environment | None = None,
     ) -> None:
-        # inherit_scope models CMake variable scoping: add_subdirectory() (and the
-        # root) open a fresh child scope, while include() runs in the caller's scope
-        # so variables set() in the included file persist to the includer.
+        """Execute a listfile's nodes, modelling CMake variable scoping.
+
+        add_subdirectory() (and the root) open a fresh child scope; include() runs
+        in the caller's scope so variables set() in the included file persist to the
+        includer. Recursive re-entry is recorded as a skipped path.
+
+        ``parent_environment`` is the enclosing directory scope that a
+        ``set(... PARENT_SCOPE)`` writes through to (``None`` at the root).
+        """
         if relative_path in self._active_files:
             location = SourceLocation(path=relative_path, line=1)
             self._skipped_paths.append(
@@ -468,9 +524,6 @@ class RepositoryAnalyzer:
         source_directory = (self.repository_root / relative_path).parent.resolve()
         try:
             if inherit_scope:
-                # include(): share the caller's environment; only
-                # CMAKE_CURRENT_LIST_DIR changes for the duration and is restored
-                # after (CMAKE_CURRENT_SOURCE_DIR stays the caller's).
                 environment = inherited_environment
                 saved_list_dir = environment.get("CMAKE_CURRENT_LIST_DIR")
                 environment.assign("CMAKE_CURRENT_LIST_DIR", {str(source_directory)})
@@ -479,6 +532,7 @@ class RepositoryAnalyzer:
                         nodes=self._parse_file(relative_path),
                         environment=environment,
                         relative_path=relative_path,
+                        parent_environment=parent_environment,
                     )
                 finally:
                     if saved_list_dir is None:
@@ -493,6 +547,7 @@ class RepositoryAnalyzer:
                     nodes=self._parse_file(relative_path),
                     environment=environment,
                     relative_path=relative_path,
+                    parent_environment=parent_environment,
                 )
         finally:
             self._active_files.remove(relative_path)
@@ -502,36 +557,70 @@ class RepositoryAnalyzer:
         nodes: list[cmake_ast.AstNode],
         environment: Environment,
         relative_path: Path,
+        parent_environment: Environment | None = None,
     ) -> None:
+        """Execute a list of AST nodes against the given environment."""
         for node in nodes:
             if isinstance(node, cmake_ast.Set):
-                self._execute_set(node, environment)
+                self._execute_set(node, environment, relative_path, parent_environment)
             elif isinstance(node, cmake_ast.Unset):
                 self._execute_unset(node, environment)
             elif isinstance(node, cmake_ast.If):
-                self._execute_if(node, environment, relative_path)
+                self._execute_if(node, environment, relative_path, parent_environment)
             elif isinstance(node, cmake_ast.Block):
-                self._execute_nodes(node.body, environment, relative_path)
+                self._execute_nodes(
+                    node.body, environment, relative_path, parent_environment
+                )
             elif isinstance(node, cmake_ast.ForEach):
-                self._execute_foreach(node, environment, relative_path)
+                self._execute_foreach(
+                    node, environment, relative_path, parent_environment
+                )
             elif isinstance(node, cmake_ast.Command):
                 self._execute_command(node, environment, relative_path)
             elif isinstance(node, cmake_ast.Include):
-                self._execute_include(node, environment, relative_path)
+                self._execute_include(
+                    node, environment, relative_path, parent_environment
+                )
 
-    def _execute_set(self, node: cmake_ast.Set, environment: Environment) -> None:
+    def _execute_set(
+        self,
+        node: cmake_ast.Set,
+        environment: Environment,
+        relative_path: Path,
+        parent_environment: Environment | None,
+    ) -> None:
+        """Model ``set(VAR ...)``, honoring PARENT_SCOPE and stopping at CACHE."""
         if not node.args:
             return
         variable_name = node.args[0].value
+        parent_scope = False
         value_tokens = []
         for token in node.args[1:]:
-            if token.value in {"CACHE", "PARENT_SCOPE"}:
+            if token.value == "CACHE":
+                break
+            if token.value == "PARENT_SCOPE":
+                parent_scope = True
                 break
             value_tokens.append(token)
-        values, _ = _expand_tokens(value_tokens, environment)
-        environment.assign(variable_name, values)
+        values = _expand_tokens(value_tokens, environment).values
+        if not parent_scope:
+            environment.assign(variable_name, values)
+            return
+        # set(... PARENT_SCOPE) writes the enclosing directory scope, not this
+        # one; the root has no parent to write.
+        if parent_environment is None:
+            self._skipped_paths.append(
+                SkippedPath(
+                    location=SourceLocation(path=relative_path, line=node.args[0].line),
+                    expression=f"set({variable_name} ... PARENT_SCOPE)",
+                    reason="PARENT_SCOPE at root has no enclosing scope",
+                )
+            )
+            return
+        parent_environment.append(variable_name, values)
 
     def _execute_unset(self, node: cmake_ast.Unset, environment: Environment) -> None:
+        """Model ``unset(VAR)``."""
         if node.args:
             environment.assign(node.args[0].value, set())
 
@@ -540,12 +629,18 @@ class RepositoryAnalyzer:
         node: cmake_ast.If,
         environment: Environment,
         relative_path: Path,
+        parent_environment: Environment | None,
     ) -> None:
+        """Execute both branches and union their environments (conservative)."""
         true_environment = environment.copy()
         false_environment = environment.copy()
-        self._execute_nodes(node.if_true, true_environment, relative_path)
+        self._execute_nodes(
+            node.if_true, true_environment, relative_path, parent_environment
+        )
         if node.if_false is not None:
-            self._execute_nodes(node.if_false, false_environment, relative_path)
+            self._execute_nodes(
+                node.if_false, false_environment, relative_path, parent_environment
+            )
         environment.replace_with(
             Environment.branch_union(true_environment, false_environment)
         )
@@ -555,47 +650,69 @@ class RepositoryAnalyzer:
         node: cmake_ast.ForEach,
         environment: Environment,
         relative_path: Path,
+        parent_environment: Environment | None,
     ) -> None:
+        """Execute a foreach() body once with the loop variable over-approximated."""
         loop_environment = environment.copy()
         if node.args:
             loop_variable = node.args[0].value
-            loop_values = self._foreach_loop_values(node.args[1:], environment)
-            loop_environment.assign(loop_variable, loop_values)
-        self._execute_nodes(node.body, loop_environment, relative_path)
-        # Deliberately over-approximate: merge the loop environment back (loop
-        # variable included). Only ever adds values, never drops — the safe direction.
+            loop_expansion = self._foreach_loop_values(node.args[1:], environment)
+            if loop_expansion.unresolved:
+                # Leave the loop variable unset rather than empty, so a dependency
+                # built from it raises via the unresolved guard instead of being
+                # dropped.
+                loop_environment.discard(loop_variable)
+            else:
+                loop_environment.assign(loop_variable, loop_expansion.values)
+        self._execute_nodes(
+            node.body, loop_environment, relative_path, parent_environment
+        )
+        # Fold the loop body back into the enclosing scope (add-only).
         environment.merge_from(loop_environment)
 
     def _foreach_loop_values(
         self, tokens: list[Token], environment: Environment
-    ) -> set[str]:
+    ) -> Expansion:
         """Values the foreach() loop variable may take, across all iterations.
 
         Handles the keyword forms: ``IN LISTS <var>...`` dereferences each named
         list variable, ``IN ITEMS <val>...`` takes the values directly, and
         ``RANGE ...`` yields integers (never names) so it contributes nothing.
         A bare ``foreach(var a b c)`` expands the operands as literal items.
+
+        An ``IN LISTS`` operand naming an *undefined* variable is reported in
+        ``unresolved`` so the caller can leave the loop variable unset; ``RANGE``
+        and empty ``IN ITEMS`` stay legitimately empty (resolved, no values).
         """
         if not tokens:
-            return set()
+            return Expansion(values=set(), unresolved=set())
         if tokens[0].value == "RANGE":
-            return set()
+            return Expansion(values=set(), unresolved=set())
         if tokens[0].value != "IN":
-            values, _ = _expand_tokens(tokens, environment)
-            return values
+            return _expand_tokens(tokens, environment)
         values: set[str] = set()
+        unresolved: set[str] = set()
         mode: str | None = None
         for token in tokens[1:]:
             if token.value in {"LISTS", "ITEMS"}:
                 mode = token.value
                 continue
-            operand_values, _ = _expand_token(token, environment)
+            operand = _expand_token(token, environment)
+            unresolved.update(operand.unresolved)
             if mode == "LISTS":
-                for list_name in operand_values:
-                    values.update(environment.get(list_name, set()))
+                for list_name in operand.values:
+                    list_values = environment.get(list_name)
+                    if list_values is None:
+                        # Diverges from CMake, where an undefined IN LISTS variable
+                        # is an empty list (zero iterations); reporting it unresolved
+                        # makes a dependency built from the loop variable raise
+                        # rather than resolve to nothing.
+                        unresolved.add(list_name)
+                    else:
+                        values.update(list_values)
             elif mode == "ITEMS":
-                values.update(operand_values)
-        return values
+                values.update(operand.values)
+        return Expansion(values=values, unresolved=unresolved)
 
     def _execute_command(
         self,
@@ -603,6 +720,7 @@ class RepositoryAnalyzer:
         environment: Environment,
         relative_path: Path,
     ) -> None:
+        """Dispatch the CMake commands the analyzer models."""
         identifier = node.identifier.lower()
         if identifier == "list":
             self._execute_list(node, environment)
@@ -612,11 +730,12 @@ class RepositoryAnalyzer:
             self._record_declaration(node, environment, relative_path)
 
     def _execute_list(self, node: cmake_ast.Command, environment: Environment) -> None:
+        """Model ``list(APPEND|PREPEND|REMOVE_ITEM VAR ...)``."""
         if len(node.args) < 2:
             return
         operation = node.args[0].value.upper()
         variable_name = node.args[1].value
-        values, _ = _expand_tokens(node.args[2:], environment)
+        values = _expand_tokens(node.args[2:], environment).values
         if operation in {"APPEND", "PREPEND"}:
             environment.append(variable_name, values)
         elif operation == "REMOVE_ITEM":
@@ -628,6 +747,7 @@ class RepositoryAnalyzer:
         environment: Environment,
         relative_path: Path,
     ) -> None:
+        """Traverse into a tracked ``add_subdirectory()`` target (fresh scope)."""
         if not node.args:
             return
         child_paths = self._resolve_listfile_paths(
@@ -637,14 +757,18 @@ class RepositoryAnalyzer:
             is_subdirectory=True,
         )
         for child_path in child_paths:
-            self._process_file(child_path, environment)
+            # The child directory opens a fresh scope; this directory's scope is
+            # its parent for set(... PARENT_SCOPE) write-through.
+            self._process_file(child_path, environment, parent_environment=environment)
 
     def _execute_include(
         self,
         node: cmake_ast.Include,
         environment: Environment,
         relative_path: Path,
+        parent_environment: Environment | None,
     ) -> None:
+        """Traverse into a tracked ``include()`` target (caller's scope)."""
         if not node.args:
             return
         include_paths = self._resolve_listfile_paths(
@@ -654,7 +778,14 @@ class RepositoryAnalyzer:
             is_subdirectory=False,
         )
         for include_path in include_paths:
-            self._process_file(include_path, environment, inherit_scope=True)
+            # include() runs in the caller's scope, so PARENT_SCOPE writes through
+            # to the caller's own parent.
+            self._process_file(
+                include_path,
+                environment,
+                inherit_scope=True,
+                parent_environment=parent_environment,
+            )
 
     def _resolve_listfile_paths(
         self,
@@ -663,19 +794,24 @@ class RepositoryAnalyzer:
         relative_path: Path,
         is_subdirectory: bool,
     ) -> set[Path]:
-        values, unresolved = _expand_token(token, environment)
+        """Resolve an add_subdirectory/include argument to tracked listfile paths.
+
+        Unresolved variables and non-tracked (external/generated/built-in) targets
+        are recorded as skipped diagnostics and contribute no paths.
+        """
+        expansion = _expand_token(token, environment)
         location = SourceLocation(path=relative_path, line=token.line)
-        if unresolved:
+        if expansion.unresolved:
             self._skipped_paths.append(
                 SkippedPath(
                     location=location,
                     expression=token.value,
-                    reason=f"unresolved variables: {', '.join(sorted(unresolved))}",
+                    reason=f"unresolved variables: {', '.join(sorted(expansion.unresolved))}",
                 )
             )
             return set()
         result: set[Path] = set()
-        for value in values:
+        for value in expansion.values:
             candidates = self._path_candidates(
                 value=value,
                 relative_path=relative_path,
@@ -701,6 +837,7 @@ class RepositoryAnalyzer:
     def _path_candidates(
         self, value: str, relative_path: Path, is_subdirectory: bool
     ) -> set[Path]:
+        """Return repo-relative candidate listfiles for a resolved path value."""
         value_path = Path(value)
         current_directory = (self.repository_root / relative_path).parent
         absolute_path = (
@@ -730,17 +867,18 @@ class RepositoryAnalyzer:
         environment: Environment,
         relative_path: Path,
     ) -> None:
+        """Extract one ``therock_cmake_subproject_declare()`` into a Subproject."""
         if not node.args:
             raise AnalysisError(
                 f"{relative_path.as_posix()}:{node.line}: declaration has no name"
             )
-        names, unresolved_names = _expand_token(node.args[0], environment)
-        if unresolved_names or len(names) != 1:
+        name_expansion = _expand_token(node.args[0], environment)
+        if name_expansion.unresolved or len(name_expansion.values) != 1:
             raise AnalysisError(
                 f"{relative_path.as_posix()}:{node.line}: cannot resolve exactly one "
                 f"subproject name from {node.args[0].value!r}"
             )
-        name = next(iter(names))
+        name = next(iter(name_expansion.values))
         sections = _declaration_sections(node.args[1:])
         build_deps = self._resolve_dependency_section(
             sections.get("BUILD_DEPS", []), environment, relative_path, node.line
@@ -773,27 +911,31 @@ class RepositoryAnalyzer:
         relative_path: Path,
         declaration_line: int,
     ) -> set[str]:
-        values, unresolved = _expand_tokens(tokens, environment)
-        if unresolved:
+        """Resolve a dependency argument list; an unresolved variable is fatal."""
+        expansion = _expand_tokens(tokens, environment)
+        if expansion.unresolved:
             raise AnalysisError(
                 f"{relative_path.as_posix()}:{declaration_line}: unresolved "
-                f"dependency variables: {', '.join(sorted(unresolved))}"
+                f"dependency variables: {', '.join(sorted(expansion.unresolved))}"
             )
-        return {value for value in values if value}
+        return {value for value in expansion.values if value}
 
     def _resolve_source_dir_section(
         self, tokens: list[Token], environment: Environment
     ) -> set[str]:
-        """Resolve an EXTERNAL_SOURCE_DIR value; unresolved -> {} (skipped silently)."""
-        # Sources wired through therock_enable_external_source() do not resolve
-        # statically and get no subtree_map entry (handled as reader-side overrides).
-        values, unresolved = _expand_tokens(tokens, environment)
-        if unresolved:
+        """Resolve an EXTERNAL_SOURCE_DIR value; unresolved -> {} (skipped silently).
+
+        Sources wired through therock_enable_external_source() do not resolve
+        statically and get no subtree_map entry (handled as reader-side overrides).
+        """
+        expansion = _expand_tokens(tokens, environment)
+        if expansion.unresolved:
             return set()
-        return {value for value in values if value}
+        return {value for value in expansion.values if value}
 
 
 def _declaration_sections(tokens: list[Token]) -> dict[str, list[Token]]:
+    """Group a declaration's argument tokens by their keyword (BUILD_DEPS, ...)."""
     sections: dict[str, list[Token]] = {}
     current_keyword: str | None = None
     for token in tokens:
@@ -807,33 +949,37 @@ def _declaration_sections(tokens: list[Token]) -> dict[str, list[Token]]:
     return sections
 
 
-def _expand_tokens(
-    tokens: list[Token], environment: Environment
-) -> tuple[set[str], set[str]]:
+def _expand_tokens(tokens: list[Token], environment: Environment) -> Expansion:
+    """Expand several tokens, unioning their resolved values and unresolved names."""
     values: set[str] = set()
     unresolved: set[str] = set()
     for token in tokens:
         if token.kind == "COMMENT":
             continue
-        token_values, token_unresolved = _expand_token(token, environment)
-        values.update(token_values)
-        unresolved.update(token_unresolved)
-    return values, unresolved
+        expansion = _expand_token(token, environment)
+        values.update(expansion.values)
+        unresolved.update(expansion.unresolved)
+    return Expansion(values=values, unresolved=unresolved)
 
 
-def _expand_token(token: Token, environment: Environment) -> tuple[set[str], set[str]]:
+def _expand_token(token: Token, environment: Environment) -> Expansion:
+    """Expand one token's ``${var}`` references against the environment.
+
+    Returns the concrete values (semicolon-separated CMake lists split into
+    elements) with an empty ``unresolved`` set. If any reference names an *undefined*
+    variable, returns empty values and those names in ``unresolved`` so the caller
+    can raise. A reference to a *defined but empty* variable resolves to nothing
+    (empty values, empty unresolved) — its edge is dropped rather than flagged.
+    """
     references = _VARIABLE_REFERENCE_PATTERN.findall(token.value)
     unresolved = {name for name in references if name not in environment}
     if unresolved:
-        return set(), unresolved
+        return Expansion(values=set(), unresolved=unresolved)
     expanded_values = {token.value}
     for variable_name in references:
         replacements = environment.get(variable_name, set())
         if not replacements:
-            # A variable that is *defined* but empty is not flagged unresolved, so in
-            # a dependency arg its edge drops silently (an under-selection). The
-            # differential-configure superset check is the guard; a unit test pins it.
-            return set(), set()
+            return Expansion(values=set(), unresolved=set())
         next_values = set()
         reference = "${" + variable_name + "}"
         for value in expanded_values:
@@ -843,10 +989,11 @@ def _expand_token(token: Token, environment: Environment) -> tuple[set[str], set
     split_values = {
         item for value in expanded_values for item in value.split(";") if item
     }
-    return split_values, set()
+    return Expansion(values=split_values, unresolved=set())
 
 
 def _contains_declaration(nodes: list[cmake_ast.AstNode]) -> bool:
+    """Return whether any node (recursively) is a subproject declaration call."""
     for node in nodes:
         if (
             isinstance(node, cmake_ast.Command)
