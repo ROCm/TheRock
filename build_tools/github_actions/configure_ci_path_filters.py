@@ -418,3 +418,77 @@ def get_ci_workflow_filenames() -> set[str]:
     """
     _, ci_filenames = _get_therock_config()
     return ci_filenames
+
+
+def get_modified_paths_via_api(
+    github_repo: str,
+    base_sha: str,
+    head_sha: str,
+    max_retries: int = 3,
+    retry_delay: float = 2.0,
+) -> Optional[list[str]]:
+    """Get paths of files changed using GitHub API (compare endpoint).
+
+    Uses the GitHub compare API to get changed files without requiring a
+    full repository checkout. This is faster than git diff for large repos.
+
+    Args:
+        github_repo: Repository in "owner/repo" format (e.g., "ROCm/rocm-libraries")
+        base_sha: Base commit SHA to compare from
+        head_sha: Head commit SHA to compare to
+        max_retries: Maximum number of retry attempts for transient failures
+        retry_delay: Initial delay between retries (doubles with each retry)
+
+    Returns:
+        List of changed file paths, or None if:
+        - The result is truncated (>300 files) - caller should fall back to run-all
+        - API call fails after retries
+    """
+    import json
+    import time
+
+    for attempt in range(max_retries):
+        try:
+            result = subprocess.run(
+                [
+                    "gh",
+                    "api",
+                    f"repos/{github_repo}/compare/{base_sha}...{head_sha}",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=60,
+            )
+            data = json.loads(result.stdout)
+            files = data.get("files", [])
+
+            # GitHub compare API returns max 300 files; if truncated, signal caller
+            if len(files) >= 300:
+                print(
+                    f"  GitHub compare API returned 300+ files, result may be truncated"
+                )
+                return None
+
+            return [f["filename"] for f in files]
+
+        except subprocess.TimeoutExpired:
+            print(
+                f"  GitHub API request timed out (attempt {attempt + 1}/{max_retries})"
+            )
+        except subprocess.CalledProcessError as e:
+            print(
+                f"  GitHub API request failed (attempt {attempt + 1}/{max_retries}): "
+                f"{e.stderr or e}"
+            )
+        except json.JSONDecodeError as e:
+            print(f"  Failed to parse GitHub API response: {e}")
+            return None
+
+        if attempt < max_retries - 1:
+            delay = retry_delay * (2**attempt)
+            print(f"  Retrying in {delay}s...")
+            time.sleep(delay)
+
+    print("  GitHub API request failed after all retries")
+    return None

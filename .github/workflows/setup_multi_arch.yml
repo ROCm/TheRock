@@ -107,7 +107,14 @@ on:
         type: string
         default: ""
       external_repo:
-        description: "JSON object with 'repository' (e.g., 'ROCm/rocm-libraries') and 'ref' fields for external repo builds."
+        description: >-
+          JSON object for external repo builds. Fields:
+          - repository: "owner/repo" format (e.g., 'ROCm/rocm-libraries')
+          - ref: Branch, tag, or SHA to build
+          - base_sha: Base commit SHA for changed file detection (optional, enables fast API-based diff)
+          - head_sha: Head commit SHA for changed file detection (optional, enables fast API-based diff)
+          - skip_ci_config: Path to skip-CI TOML config (optional)
+          - event_name: GitHub event name (optional, for schedule/workflow_dispatch handling)
         type: string
         default: ""
       changed_projects:
@@ -225,18 +232,23 @@ jobs:
           path: ci-config
         continue-on-error: true
 
-      # Checkout external repo for skip-ci evaluation (git diff + TOML config).
-      # Note: Full checkout is needed because git diff requires file content to
-      # compute changed paths. Sparse checkout would break path-based filtering.
-      - name: Checkout external repo
+      # Checkout external repo config files for skip-CI evaluation.
+      # When base_sha/head_sha are provided in external_repo JSON, the Python
+      # script uses the GitHub compare API to get changed files (fast, no full
+      # checkout needed). This sparse checkout only fetches .github/ for the
+      # skip-CI TOML config. Falls back to git diff if SHAs aren't provided.
+      - name: Checkout external repo config
         if: ${{ inputs.external_repo != '' }}
-        timeout-minutes: 15
+        timeout-minutes: 5
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ fromJSON(inputs.external_repo).repository }}
           ref: ${{ fromJSON(inputs.external_repo).ref }}
           fetch-depth: 2
           path: external-repo-config
+          sparse-checkout: |
+            .github
+          sparse-checkout-cone-mode: false
         continue-on-error: true
 
       # Note: the script reads PR labels, the base ref, etc. from the event

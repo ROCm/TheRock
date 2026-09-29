@@ -75,6 +75,7 @@ from configure_ci_path_filters import (
     get_git_commit_hash,
     get_git_modified_paths,
     get_git_submodule_paths,
+    get_modified_paths_via_api,
     is_ci_run_required,
     load_skip_ci_config,
 )
@@ -934,32 +935,58 @@ def should_skip_ci(
                 f"external_repo must be a JSON object, got: {type(external_repo).__name__}"
             )
 
-        repo_name = external_repo.get("repository", "").split("/")[-1]
+        repo_full_name = external_repo.get("repository", "")
+        repo_name = repo_full_name.split("/")[-1]
 
-        # Get changed_files via git diff in external repo checkout.
+        # Get changed_files via GitHub API (faster, no full checkout needed).
         changed_files: list[str] | None = None
-        external_repo_path = Path(_EXTERNAL_REPO_CONFIG_DIR)
-        base_ref = external_repo.get("base_ref")
         event_name = external_repo.get("event_name", "")
+        base_sha = external_repo.get("base_sha")
+        head_sha = external_repo.get("head_sha")
 
         if event_name in ("schedule", "workflow_dispatch"):
             print(f"  External repo {repo_name}: {event_name} event, no diff available")
             changed_files = None
-        elif external_repo_path.exists() and external_repo_path.is_dir():
-            if not base_ref:
-                base_ref = "HEAD^"
-            print(f"  External repo {repo_name}: computing changed files...")
-            changed_files = list(
-                get_git_modified_paths(base_ref, cwd=str(external_repo_path)) or []
+        elif base_sha and head_sha and repo_full_name:
+            # Use GitHub API to get changed files (no checkout needed)
+            print(
+                f"  External repo {repo_name}: fetching changed files via GitHub API..."
+            )
+            print(f"    Comparing {base_sha[:12]}...{head_sha[:12]}")
+            changed_files = get_modified_paths_via_api(
+                repo_full_name, base_sha, head_sha
             )
             if changed_files is not None:
                 print(
                     f"  External repo {repo_name}: {len(changed_files)} file(s) changed"
                 )
+            else:
+                # API returned None (truncated or failed) - will run CI conservatively
+                print(
+                    f"  External repo {repo_name}: API returned truncated/failed result, "
+                    "running CI conservatively"
+                )
         else:
-            print(
-                f"  External repo {repo_name}: checkout not found at {external_repo_path}"
-            )
+            # Fallback to git diff if SHAs not provided (legacy path)
+            external_repo_path = Path(_EXTERNAL_REPO_CONFIG_DIR)
+            base_ref = external_repo.get("base_ref")
+            if external_repo_path.exists() and external_repo_path.is_dir():
+                if not base_ref:
+                    base_ref = "HEAD^"
+                print(
+                    f"  External repo {repo_name}: computing changed files via git diff..."
+                )
+                changed_files = list(
+                    get_git_modified_paths(base_ref, cwd=str(external_repo_path)) or []
+                )
+                if changed_files is not None:
+                    print(
+                        f"  External repo {repo_name}: {len(changed_files)} file(s) changed"
+                    )
+            else:
+                print(
+                    f"  External repo {repo_name}: no SHAs provided and checkout not found"
+                )
 
         # Get skip patterns from TOML config file
         skip_ci_config = external_repo.get("skip_ci_config")
@@ -2172,33 +2199,47 @@ def main():
         # This enables granular artifact-level reuse for external repos.
         projects_config = external_repo.get("projects_config")
         if not ci_inputs.changed_projects and projects_config:
-            external_repo_path = Path(_EXTERNAL_REPO_CONFIG_DIR)
-            base_ref = external_repo.get("base_ref")
             event_name = external_repo.get("event_name", "")
+            base_sha = external_repo.get("base_sha")
+            head_sha = external_repo.get("head_sha")
 
             # Only compute for PR/push events, not schedule/workflow_dispatch
             if event_name not in ("schedule", "workflow_dispatch"):
-                if external_repo_path.exists() and external_repo_path.is_dir():
-                    if not base_ref:
-                        base_ref = "HEAD^"
-                    print(
-                        f"\n=== Computing changed projects from {external_repo_name} ==="
+                print(f"\n=== Computing changed projects from {external_repo_name} ===")
+                changed_files: list[str] | None = None
+
+                # Prefer GitHub API (faster, no checkout needed)
+                if base_sha and head_sha and repo_full_name:
+                    print(f"  Fetching changed files via GitHub API...")
+                    changed_files = get_modified_paths_via_api(
+                        repo_full_name, base_sha, head_sha
                     )
-                    changed_files = list(
-                        get_git_modified_paths(base_ref, cwd=str(external_repo_path))
-                        or []
-                    )
-                    if changed_files:
-                        computed_projects = _compute_changed_projects_from_files(
-                            changed_files, projects_config
-                        )
-                        if computed_projects:
-                            # Use dataclass replace to update ci_inputs immutably
-                            ci_inputs = replace(
-                                ci_inputs, changed_projects=computed_projects
+                else:
+                    # Fallback to git diff if SHAs not provided
+                    external_repo_path = Path(_EXTERNAL_REPO_CONFIG_DIR)
+                    base_ref = external_repo.get("base_ref")
+                    if external_repo_path.exists() and external_repo_path.is_dir():
+                        if not base_ref:
+                            base_ref = "HEAD^"
+                        print(f"  Computing via git diff...")
+                        changed_files = list(
+                            get_git_modified_paths(
+                                base_ref, cwd=str(external_repo_path)
                             )
-                            print(f"  Changed projects: {', '.join(computed_projects)}")
-                        print()
+                            or []
+                        )
+
+                if changed_files:
+                    computed_projects = _compute_changed_projects_from_files(
+                        changed_files, projects_config
+                    )
+                    if computed_projects:
+                        # Use dataclass replace to update ci_inputs immutably
+                        ci_inputs = replace(
+                            ci_inputs, changed_projects=computed_projects
+                        )
+                        print(f"  Changed projects: {', '.join(computed_projects)}")
+                print()
     elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.
