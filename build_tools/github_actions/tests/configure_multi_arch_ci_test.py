@@ -497,28 +497,6 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.test_rocm.test_type, "quick")
 
-    def test_pr_test_label_is_full(self):
-        """PR with test:* label → full tests."""
-        git = cm.GitContext(changed_files=["CMakeLists.txt"])
-        result = cm.decide_jobs(
-            self._inputs(pr_labels=["test:rocprim"]),
-            git_context=git,
-            targets=cm.TargetSelection(),
-        )
-        self.assertEqual(result.test_rocm.test_type, "full")
-
-    def test_workflow_dispatch_test_labels_is_full(self):
-        """workflow_dispatch with test labels → full tests."""
-        result = cm.decide_jobs(
-            self._inputs(
-                event_name="workflow_dispatch",
-                linux_test_labels=["test:rocprim"],
-            ),
-            git_context=cm.GitContext(),
-            targets=cm.TargetSelection(),
-        )
-        self.assertEqual(result.test_rocm.test_type, "full")
-
     def test_nightly_release_is_comprehensive(self):
         """Nightly release → comprehensive tests."""
         result = cm.decide_jobs(
@@ -574,8 +552,7 @@ class TestDecideJobs(unittest.TestCase):
 
     def test_workflow_dispatch_test_filter_label_overrides(self):
         """test_filter in workflow_dispatch test_labels overrides test_type."""
-        # workflow_dispatch with test_filter:comprehensive should use comprehensive,
-        # not fall through to "full" because of _has_test_labels
+        # workflow_dispatch with test_filter:comprehensive should use comprehensive
         result = cm.decide_jobs(
             self._inputs(
                 event_name="workflow_dispatch",
