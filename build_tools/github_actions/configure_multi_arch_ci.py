@@ -1319,9 +1319,9 @@ def _expand_build_config_for_platform(
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant.startswith("host-asan"):
-            # Which triggers run host-asan tests is declared in
-            # build_variant_test_triggers, beside the per-family trigger keys.
-            if not build_variant_runs_tests(build_variant, ci_inputs.event_name):
+            # Which triggers run this variant's tests is declared by its
+            # "test_triggers" in amdgpu_family_matrix.py's all_build_variants.
+            if not build_variant_runs_tests(variant_config, ci_inputs.event_name):
                 test_runs_on = ""
                 print(
                     f"  {family_name}: {build_variant} does not run tests on "
