@@ -86,7 +86,7 @@ distinct, run the tests, then call `merge_coverage_report.py`:
 
 ```bash
 export LLVM_PROFILE_FILE="$PWD/coverage-report/profraw/%p-%m.profraw"
-ctest --test-dir build/math-libs/hiprand
+ctest --test-dir build/math-libs/hipRAND/build
 
 python build_tools/github_actions/merge_coverage_report.py \
   --profraw-dir coverage-report/profraw \
@@ -162,10 +162,11 @@ Per shard, `test_code_coverage_component.yml` does three things:
 1. **Run tests and upload profraw** under `always()` — a failing shard still
    exercised code.
 
-`coverage_enabled` raises the test timeout to a 60-minute floor. Instrumented
-libraries are `-O0 -g`; rocRAND tests that finish in milliseconds normally took
-25–60 seconds each. A floor rather than a multiplier avoids over-extending
-budgets that are already generous (rocBLAS: 288 min).
+Coverage runs use each component's normal `timeout_minutes` from
+`fetch_test_configurations.py`; nothing extends it for instrumented builds.
+Instrumented tests run slower, and some upstream coverage options also lower the
+optimization level (hipRAND's `BUILD_CODE_COVERAGE` adds `-O0 -g`), so a
+component close to its limit may time out.
 
 #### Why there are two run ids
 
@@ -175,11 +176,16 @@ its own profiles alongside hipRAND's, shifting hipRAND's numbers on unrelated
 changes. The baseline-install-then-overlay isolates exactly one project.
 
 The baseline is read from `baseline_release_type` (normally `nightly`), not the
-coverage run's `ci` channel — artifacts are bucketed per channel. The overlay
-targets `math-libs/hipRAND/stage` rather than the whole `rand` artifact (which
-also contains rocRAND). The two runs write to separate S3 paths; no files
-collide. An empty overlay fails the job rather than reporting coverage for
-uninstrumented binaries.
+coverage run's `ci` channel — artifacts are bucketed per channel. The swap
+downloads the project's whole artifact (`rand`, which also contains rocRAND)
+but extracts only the paths matching the project's library folder in
+`COMPONENT_MAP` (`hipRAND`). The two runs write to separate S3 paths; no files
+collide.
+
+A missing instrumented artifact fails the install step. A swap that matches no
+files does not: the installer logs `Replaced 0` and the tests run against the
+baseline's uninstrumented binaries. The failure then surfaces in the report
+job, which finds no profraw files.
 
 #### What scopes a report to one project
 
