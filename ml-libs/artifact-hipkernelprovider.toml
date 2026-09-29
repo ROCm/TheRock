@@ -18,6 +18,10 @@ exclude = [
 include = [
   "bin/hip_kernel_provider*_test*",
   "bin/hip_kernel_provider/CTestTestfile.cmake",
+  # Test descriptor sets (unit, integration) installed under the plugin engine
+  # directory. The unit/integration test binaries resolve these relative to
+  # their own location.
+  "**/engines/test_arch_content/**",
   # Vendored kpack test fixture (test_zstd.kpack) used by unit tests that
   # need a real container for parse-level validation.
   "bin/fixtures/**",
