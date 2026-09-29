@@ -238,7 +238,14 @@ def _dedupe_required_artifacts(
 def _normalize_required_artifact_groups(
     required_artifact_groups: Mapping[str, Iterable[RequiredArtifact]],
 ) -> dict[str, tuple[RequiredArtifact, ...]]:
-    """Normalize independently reusable artifact requirement groups."""
+    """Normalize and validate independently reusable artifact requirement groups.
+
+    Each mapping entry represents one independently reusable requirement group.
+    Normalization strips whitespace from group names, artifact names, and target
+    families; deduplicates artifact requirements; and converts each group's
+    requirements to a tuple. Empty mappings, empty group names, duplicate group
+    names after stripping, and empty requirement groups are rejected.
+    """
 
     result: dict[str, tuple[RequiredArtifact, ...]] = {}
 
