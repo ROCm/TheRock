@@ -15,7 +15,8 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 env = os.environ.copy()
 # Enable verbose ROCm logging, see
 # https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/debugging.html
-# Note: ROCM_KPACK_DEBUG is set for all components by test_component.yml.
+# Note: test_component.yml defaults ROCM_KPACK_DEBUG to "1" (components may
+# override it via their test_matrix "rocm_kpack_debug" entry); sanity inherits "1".
 env["AMD_LOG_LEVEL"] = "4"
 
 # The sanity checks run tools like 'offload-arch' which may search for DLLs on
