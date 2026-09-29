@@ -753,6 +753,43 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
         self.assertEqual(result.reusable_artifacts, ())
         self.assertEqual(result.rebuild_artifacts, ("base", "blas"))
 
+    def test_artifact_reuse_uses_requirement_expansion_for_family_aliases(self):
+        topology = FakeTopology()
+        plan = srd.StageReusePlan(
+            candidate_stages=("compiler-runtime",),
+            rebuild_stages=("math-libs",),
+            full_rebuild_required=False,
+            reasons=(),
+            impacted_artifacts=("blas",),
+            reusable_artifacts=("blas",),
+            artifact_level_analysis=True,
+        )
+
+        per_platform = {
+            "linux": _baseline(
+                "L1",
+                [
+                    "blas_lib_generic.tar.zst",
+                    "blas_lib_gfx1100.tar.zst",
+                    "blas_lib_gfx1101.tar.zst",
+                    "blas_lib_gfx1102.tar.zst",
+                    "blas_lib_gfx1103.tar.zst",
+                ],
+            ),
+        }
+
+        with patch.object(srd, "plan_stage_reuse", return_value=plan):
+            result = compute_auto_stage_reuse(
+                changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+                mode=StageReuseMode.DRY_RUN,
+                linux_amdgpu_families=["gfx110x"],
+                topology=topology,
+                baseline_selector_factory=self._selector_factory(per_platform),
+            )
+
+        self.assertEqual(result.reusable_artifacts, ("blas",))
+        self.assertEqual(result.rebuild_artifacts, ("blas",))
+
     def test_disabled_platform_does_not_block_artifact_reuse(self):
         topology = FakeTopology()
         topology.artifacts["base"].disable_platforms = ["windows"]

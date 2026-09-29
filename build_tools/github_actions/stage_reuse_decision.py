@@ -348,6 +348,43 @@ def _artifact_available(
     return True
 
 
+def _required_artifacts_for_artifact_on_platform(
+    topology: BuildTopology,
+    artifact_name: str,
+    target_families: Sequence[str],
+    *,
+    platform: str,
+) -> tuple[RequiredArtifact, ...]:
+    """Return the concrete per-family requirements for one artifact/platform."""
+
+    artifact = topology.artifacts[artifact_name]
+    required_families = _required_families_for_artifact(
+        artifact_name,
+        artifact,
+        _expand_target_families(target_families),
+        platform=platform,
+    )
+    return tuple(
+        RequiredArtifact(name=artifact_name, target_family=family)
+        for family in required_families
+    )
+
+
+def _artifact_requirement_available(
+    requirement: RequiredArtifact,
+    available_filenames: set[str],
+) -> bool:
+    """True when one artifact/family requirement is present in the baseline."""
+    for component in ARTIFACT_COMPONENTS:
+        for extension in ARTIFACT_EXTENSIONS:
+            filename = (
+                f"{requirement.name}_{component}_{requirement.target_family}{extension}"
+            )
+            if filename in available_filenames:
+                return True
+    return False
+
+
 def _artifact_available_on_platform(
     topology: BuildTopology,
     artifact_name: str,
@@ -358,22 +395,20 @@ def _artifact_available_on_platform(
 ) -> bool:
     """Check an artifact against one applicable platform's baseline."""
 
-    artifact = topology.artifacts[artifact_name]
-    required_families = _required_families_for_artifact(
+    requirements = _required_artifacts_for_artifact_on_platform(
+        topology,
         artifact_name,
-        artifact,
-        _expand_target_families(target_families),
+        target_families,
         platform=platform,
     )
 
     # An artifact not produced on this platform does not block reuse.
-    if not required_families:
+    if not requirements:
         return True
 
-    return _artifact_available(
-        artifact_name,
-        required_families,
-        available_filenames,
+    return all(
+        _artifact_requirement_available(requirement, available_filenames)
+        for requirement in requirements
     )
 
 
@@ -390,15 +425,27 @@ def _filter_available_artifacts(
     unavailable: list[str] = []
 
     for artifact_name in artifact_names:
-        is_available = all(
-            _artifact_available_on_platform(
-                topology,
-                artifact_name,
-                target_families,
-                available_filenames_by_platform.get(platform, set()),
-                platform=platform,
+        requirements_by_platform: dict[str, tuple[RequiredArtifact, ...]] = {}
+        for platform, target_families in target_families_by_platform.items():
+            requirements_by_platform[platform] = (
+                _required_artifacts_for_artifact_on_platform(
+                    topology,
+                    artifact_name,
+                    target_families,
+                    platform=platform,
+                )
             )
-            for platform, target_families in target_families_by_platform.items()
+
+        is_available = all(
+            all(
+                _artifact_requirement_available(
+                    requirement,
+                    available_filenames_by_platform.get(platform, set()),
+                )
+                for requirement in requirements
+            )
+            for platform, requirements in requirements_by_platform.items()
+            if requirements
         )
 
         if is_available:
