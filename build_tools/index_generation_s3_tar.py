@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 """
-Generate an index.html listing .tar.gz files in an S3 bucket.
+Generate an index.html listing files in an S3 bucket.
 
 Usable as both a CLI tool (for local inspection) and an importable library
 (used by the tarball-index AWS Lambda handler in TheRock-Infra). The
@@ -52,20 +52,40 @@ def extract_gpu_details(files):
 
 
 def generate_index_s3(
-    s3_client, bucket_name, prefix: str, upload: bool = False, allow_empty: bool = False
+    s3_client,
+    bucket_name,
+    prefix: str,
+    upload: bool = False,
+    allow_empty: bool = False,
+    artifact_suffix: str = ".tar.gz",
+    page_title: str = "Tarball index",
+    show_filter: bool = True,
+    empty_message: str = "No tarballs available.",
 ) -> str:
-    """Generate index.html for direct-child .tar.gz files at s3://bucket_name/prefix.
+    """Generate index.html for direct-child artifacts at s3://bucket_name/prefix.
 
     With upload=True the index is PUT to s3://bucket_name/<prefix>/index.html
     and the HTTPS URL is returned. Otherwise the index is written to
     ./index.html and the local path is returned.
 
-    With allow_empty=True, an empty index is generated when the prefix
-    contains no .tar.gz files. Otherwise, FileNotFoundError is raised.
+    artifact_suffix controls which direct-child files are included.
+
+    page_title controls the generated page title.
+
+    show_filter controls whether the GPU-family filter is included in the
+    generated HTML. It should remain True for tarballs and can be set to False
+    for other artifact types such as Windows installers.
+
+    empty_message controls the message shown when the generated file list is
+    empty.
+
+    Raises FileNotFoundError when the prefix has no matching files unless
+    allow_empty=True. Empty indexes are useful for event-driven regeneration
+    after the final artifact under a product-local prefix is deleted.
     """
     # Strip any leading or trailing slash from the prefix to standardize the directory path used to filter object.
     prefix = prefix.lstrip("/").rstrip("/")
-    # List all objects and select .tar.gz keys
+    # List all objects and select matching direct-child files.
     try:
         paginator = s3_client.get_paginator("list_objects_v2")
         page_iterator = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
@@ -89,30 +109,48 @@ def generate_index_s3(
     for page in page_iterator:
         for obj in page.get("Contents", []):
             key = obj["Key"]
-            if key.endswith(".tar.gz") and os.path.dirname(key) == prefix:
+            if key.endswith(artifact_suffix) and os.path.dirname(key) == prefix:
                 # Only append the filename without the full path.
                 files.append(
                     (key.removeprefix(f"{prefix}/"), obj["LastModified"].timestamp())
                 )
 
     if not files and not allow_empty:
-        raise FileNotFoundError(f"No .tar.gz files found in bucket {bucket_name}.")
+        raise FileNotFoundError(
+            f"No {artifact_suffix} files found in bucket {bucket_name} "
+            f"under prefix '{prefix}'."
+        )
 
-    # Page title
-    page_title = "Tarball index"
-
-    # Prepare filter options and files array for JS
-    gpu_families = extract_gpu_details(files)
-    log.info(
-        "Detected GPU families (%d): %s",
-        len(gpu_families),
-        ", ".join(gpu_families) if gpu_families else "none",
-    )
+    # Prepare filter options and files array for JS.
+    gpu_families = extract_gpu_details(files) if show_filter else []
+    if show_filter:
+        log.info(
+            "Detected GPU families (%d): %s",
+            len(gpu_families),
+            ", ".join(gpu_families) if gpu_families else "none",
+        )
     gpu_families_options = "".join(
         [f'<option value="{family}">{family}</option>' for family in gpu_families]
     )
     files_js_array = json.dumps([{"name": f[0], "mtime": f[1]} for f in files])
-    log.info("Found %d .tar.gz files in bucket '%s'.", len(files), bucket_name)
+    log.info(
+        "Found %d %s files in bucket '%s'.",
+        len(files),
+        artifact_suffix,
+        bucket_name,
+    )
+
+    if show_filter:
+        filter_html = f"""
+        <label for="filter">Filter by:</label>
+        <select id="filter">
+            <option value="all">All</option>
+            <option value="multiarch">Multiarch</option>
+            {gpu_families_options}
+        </select>
+        """
+    else:
+        filter_html = ""
 
     # HTML content for displaying files
     html_content = f"""
@@ -145,7 +183,7 @@ def generate_index_s3(
 
                 if (fileList.length === 0) {{
                     const li = document.createElement('li');
-                    li.textContent = 'No tarballs available.';
+                    li.textContent = '{empty_message}';
                     ul.appendChild(li);
                     return;
                 }}
@@ -159,7 +197,8 @@ def generate_index_s3(
             }}
             function updateDisplay() {{
                 const order = document.getElementById('sortOrder').value;
-                const filter = document.getElementById('filter').value;
+                const filterElement = document.getElementById('filter');
+                const filter = filterElement ? filterElement.value : 'all';
                 let sortedFiles = [...files].sort((a, b) => {{
                     return (order === 'desc') ? b.mtime - a.mtime : a.mtime - b.mtime;
                 }});
@@ -169,7 +208,10 @@ def generate_index_s3(
             document.addEventListener('DOMContentLoaded', function() {{
                 updateDisplay();
                 document.getElementById('sortOrder').addEventListener('change', updateDisplay);
-                document.getElementById('filter').addEventListener('change', updateDisplay);
+                const filterElement = document.getElementById('filter');
+                if (filterElement) {{
+                    filterElement.addEventListener('change', updateDisplay);
+                }}
             }});
         </script>
     </head>
@@ -181,12 +223,7 @@ def generate_index_s3(
                 <option value="desc">Last Updated (Recent to Old)</option>
                 <option value="asc">First Updated (Old to Recent)</option>
             </select>
-            <label for="filter">Filter by:</label>
-            <select id="filter">
-                <option value="all">All</option>
-                <option value="multiarch">Multiarch</option>
-                {gpu_families_options}
-            </select>
+            {filter_html}
         </div>
         <ul id="fileList"></ul>
     </body>
@@ -237,6 +274,126 @@ def generate_index_s3(
         bucket_name,
         local_path,
     )
+    return local_path
+
+
+def generate_directory_index_s3(
+    s3_client,
+    bucket_name,
+    prefix: str,
+    upload: bool = False,
+    page_title: str = "Directory index",
+    empty_message: str = "No directories available.",
+) -> str:
+    """Generate index.html listing direct child directories."""
+
+    prefix = prefix.lstrip("/").rstrip("/")
+
+    try:
+        paginator = s3_client.get_paginator("list_objects_v2")
+        page_iterator = paginator.paginate(
+            Bucket=bucket_name,
+            Prefix=f"{prefix}/",
+            Delimiter="/",
+        )
+    except NoCredentialsError:
+        log.exception(
+            "AWS credentials not found when accessing bucket '%s'", bucket_name
+        )
+        raise
+    except ClientError as e:
+        code = e.response.get("Error", {}).get("Code")
+        if code in {"AccessDenied", "UnauthorizedOperation"}:
+            raise PermissionError(f"Access denied to bucket '{bucket_name}'") from e
+        if code in {"NoSuchBucket", "404"}:
+            raise FileNotFoundError(f"Bucket '{bucket_name}' not found") from e
+        log.exception("ClientError while accessing bucket '%s'", bucket_name)
+        raise
+
+    directories = []
+
+    for page in page_iterator:
+        for common_prefix in page.get("CommonPrefixes", []):
+            directory = common_prefix["Prefix"].removeprefix(f"{prefix}/")
+            directories.append(directory.rstrip("/") + "/")
+
+    directories.sort()
+
+    log.info(
+        "Found %d child directories in bucket '%s' under prefix '%s'.",
+        len(directories),
+        bucket_name,
+        prefix,
+    )
+
+    directories_html = "".join(
+        f'<li><a href="{directory}">{directory}</a></li>\n' for directory in directories
+    )
+
+    if not directories_html:
+        directories_html = f"<li>{empty_message}</li>"
+
+    html_content = f"""
+    <html>
+    <head>
+        <title>{page_title}</title>
+        <meta charset="utf-8"/>
+        <meta http-equiv="x-ua-compatible" content="ie=edge"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; color: #333; }}
+            h1 {{ color: #0056b3; }}
+            ul {{ list-style-type: none; padding: 0; }}
+            li {{ margin-bottom: 5px; padding: 10px; background-color: white; border-radius: 5px; box-shadow: 0 0 5px rgba(0,0,0,0.1); }}
+            a {{ text-decoration: none; color: #0056b3; word-break: break-all; }}
+            a:hover {{ color: #003d82; }}
+        </style>
+    </head>
+    <body>
+        <h1>{page_title}</h1>
+        <ul>
+            {directories_html}
+        </ul>
+    </body>
+    </html>
+    """
+
+    upload_prefix = f"{prefix}/" if prefix else ""
+    upload_key = f"{upload_prefix}index.html"
+
+    if upload:
+        try:
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=upload_key,
+                Body=html_content.encode("utf-8"),
+                ContentType="text/html",
+            )
+        except ClientError as e:
+            code = e.response.get("Error", {}).get("Code")
+            if code in {"AccessDenied", "UnauthorizedOperation"}:
+                raise PermissionError(
+                    f"Access denied uploading to bucket '{bucket_name}'"
+                ) from e
+            if code in {"NoSuchBucket", "404"}:
+                raise FileNotFoundError(
+                    f"Bucket '{bucket_name}' not found during upload"
+                ) from e
+            log.error("Failed to upload index.html to bucket '%s': %s", bucket_name, e)
+            raise
+
+        region = s3_client.meta.region_name or "us-east-2"
+        if region == "us-east-2":
+            bucket_url = f"https://{bucket_name}.s3.amazonaws.com/{upload_key}"
+        else:
+            bucket_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{upload_key}"
+        log.info("index.html successfully uploaded. URL: %s", bucket_url)
+        return bucket_url
+
+    local_path = "index.html"
+    with open(local_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
+
     return local_path
 
 
