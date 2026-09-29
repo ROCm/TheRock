@@ -776,7 +776,12 @@ def select_baseline_run(
     """
     # Validate these early so a missing requirement is a caller error instead of
     # being discovered only after GitHub/API work.
-    if (required_artifacts is None) == (required_artifact_groups is None):
+    both_missing = required_artifacts is None and required_artifact_groups is None
+    both_provided = (
+        required_artifacts is not None and required_artifact_groups is not None
+    )
+
+    if both_missing or both_provided:
         raise ValueError(
             "exactly one of required_artifacts or "
             "required_artifact_groups must be provided"
