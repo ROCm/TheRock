@@ -55,6 +55,10 @@ on:
           set it manually.
         type: string
         default: ""
+      build_runs_on:
+        description: "Runner label for the build job"
+        type: string
+        default: "aws-windows-scale-rocm-prod-mix"
   workflow_call:
     inputs:
       artifact_github_repo:
@@ -92,6 +96,10 @@ on:
       quartz_tracking_id:
         type: string
         default: ""
+      build_runs_on:
+        description: "Runner label for the build job"
+        type: string
+        default: "aws-windows-scale-rocm-prod-mix"
     outputs:
       package_find_links_url:
         description: URL for pip --find-links to install built packages
@@ -108,7 +116,7 @@ run-name: Build Windows Python Packages (${{ inputs.artifact_group }}, ${{ input
 jobs:
   build_rocm_wheels:
     name: Build Python | ${{ inputs.artifact_group }}
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'windows-2022' }}
     permissions:
       id-token: write
     outputs:
