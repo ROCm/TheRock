@@ -8,10 +8,6 @@ The uploader is a thin wrapper: it resolves the destination via
 ``WorkflowOutputRoot`` and uploads ``*.msi`` through a storage backend. These
 tests mock both collaborators and assert the wiring and the failure modes
 (missing directory, no MSIs).
-
-Run::
-
-    python3.12 -m pytest build_tools/packaging/windows/tests/upload_package_repo_test.py
 """
 
 import os

@@ -306,6 +306,12 @@ def publish_native_windows_packages(
 
     source = artifacts_root.native_windows_packages("msi")
 
+    # TODO(#1987): the destination path scheme per release channel is not yet
+    # settled for Windows MSIs. This mirrors the native Linux packages (a
+    # {date}-{run_id} subdirectory for dev/nightly, a stable path for
+    # prerelease), but MSIs may not need the dated subdirectory the way the
+    # Linux package repositories do; revisit whether to follow python
+    # packages/tarballs and use one path across all release channels instead.
     base_path = "v5/rocm/core/packages"
     if release_type == "prerelease":
         dest_prefix = f"{base_path}/msi"
