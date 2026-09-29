@@ -55,6 +55,7 @@ on:
           - asan-debug
           - host-asan
           - host-asan-debug
+          - tsan
         default: release
       quartz_tracking_id:
         description: >-

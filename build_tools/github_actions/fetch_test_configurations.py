@@ -308,7 +308,10 @@ test_matrix = {
         # suite (tensilelite/tests) is appended below for TEST_TYPE != quick;
         # see the "tensilelite" special-case in the component loop
         # (AIHPBLAS-4410).
-        "test_script": f"python {_get_script_path('pytest_runner.py')}",
+        "test_script": (
+            f"python {_get_script_path('test_rocisa_artifact.py')}"
+            f" && python {_get_script_path('pytest_runner.py')}"
+        ),
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
