@@ -425,27 +425,15 @@ def _filter_available_artifacts(
     unavailable: list[str] = []
 
     for artifact_name in artifact_names:
-        requirements_by_platform: dict[str, tuple[RequiredArtifact, ...]] = {}
-        for platform, target_families in target_families_by_platform.items():
-            requirements_by_platform[platform] = (
-                _required_artifacts_for_artifact_on_platform(
-                    topology,
-                    artifact_name,
-                    target_families,
-                    platform=platform,
-                )
-            )
-
         is_available = all(
-            all(
-                _artifact_requirement_available(
-                    requirement,
-                    available_filenames_by_platform.get(platform, set()),
-                )
-                for requirement in requirements
+            _artifact_available_on_platform(
+                topology,
+                artifact_name,
+                target_families,
+                available_filenames_by_platform.get(platform, set()),
+                platform=platform,
             )
-            for platform, requirements in requirements_by_platform.items()
-            if requirements
+            for platform, target_families in target_families_by_platform.items()
         )
 
         if is_available:

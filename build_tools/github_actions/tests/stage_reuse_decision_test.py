@@ -756,11 +756,11 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
     def test_artifact_reuse_uses_requirement_expansion_for_family_aliases(self):
         topology = FakeTopology()
         plan = srd.StageReusePlan(
-            candidate_stages=("compiler-runtime",),
-            rebuild_stages=("math-libs",),
+            candidate_stages=("math-libs",),
+            rebuild_stages=("compiler-runtime",),
             full_rebuild_required=False,
             reasons=(),
-            impacted_artifacts=("blas",),
+            impacted_artifacts=("base",),
             reusable_artifacts=("blas",),
             artifact_level_analysis=True,
         )
@@ -787,7 +787,36 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
                 baseline_selector_factory=self._selector_factory(per_platform),
             )
 
+        self.assertEqual(result.baseline_run_id, "L1")
         self.assertEqual(result.reusable_artifacts, ("blas",))
+        self.assertEqual(result.rebuild_artifacts, ("base",))
+
+    def test_artifact_reuse_target_neutral_only_requires_generic(self):
+        plan = srd.StageReusePlan(
+            candidate_stages=("compiler-runtime",),
+            rebuild_stages=("math-libs",),
+            full_rebuild_required=False,
+            reasons=(),
+            impacted_artifacts=("blas",),
+            reusable_artifacts=("base",),
+            artifact_level_analysis=True,
+        )
+
+        per_platform = {
+            "linux": _baseline("L1", ["base_lib_generic.tar.zst"]),
+        }
+
+        with patch.object(srd, "plan_stage_reuse", return_value=plan):
+            result = compute_auto_stage_reuse(
+                changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+                mode=StageReuseMode.DRY_RUN,
+                linux_amdgpu_families=["gfx110x"],
+                topology=FakeTopology(),
+                baseline_selector_factory=self._selector_factory(per_platform),
+            )
+
+        self.assertEqual(result.baseline_run_id, "L1")
+        self.assertEqual(result.reusable_artifacts, ("base",))
         self.assertEqual(result.rebuild_artifacts, ("blas",))
 
     def test_disabled_platform_does_not_block_artifact_reuse(self):
