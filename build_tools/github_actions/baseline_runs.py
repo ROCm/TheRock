@@ -791,7 +791,10 @@ def select_baseline_run(
 
     if required_artifact_groups is not None:
         artifact_groups = _normalize_required_artifact_groups(required_artifact_groups)
-        requirements = _dedupe_required_artifacts(
+
+        # Each group is already normalized independently. The availability
+        # validator deduplicates the flattened requirements across groups.
+        requirements = tuple(
             artifact
             for group_requirements in artifact_groups.values()
             for artifact in group_requirements
