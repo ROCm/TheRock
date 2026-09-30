@@ -67,6 +67,7 @@ from packaging_utils import (
     update_package_name,
 )
 from _therock_utils.log_utils import TheRockLogger, configure_logging
+from _therock_utils.sdk_targets import group_package_targets
 
 logger = TheRockLogger(__name__)
 
@@ -285,9 +286,11 @@ def iter_package_variant_specs(
     """Enumerate expected variants using the same routing as ``build_package_variants``.
 
     Read-only helper for verification: mirrors how ``build_package.py`` splits a
-    ``package.json`` entry into variant names without building anything. Logic is
-    duplicated here (not imported) so verify stays side-effect free and runnable
-    after build completes.
+    ``package.json`` entry into variant names without building anything. The
+    host/device/meta/non-versioned enumeration is duplicated here (not imported
+    from ``build_gfxarch_package_variants``) so verify stays side-effect free
+    and runnable after build completes. Device arches share
+    ``group_package_targets`` (package owners) with that builder.
 
     Parameters:
         pkg_name: ``package.json`` base name.
@@ -309,7 +312,8 @@ def iter_package_variant_specs(
                         gfx_arch=GFX_HOST,
                     )
                 )
-            for device_arch in config.gfxarch_list:
+            # Device packages (one per owner, retaining all selected member targets)
+            for device_arch in group_package_targets(config.gfxarch_list):
                 specs.append(
                     PackageVariantSpec(
                         label=f"device-{device_arch}",

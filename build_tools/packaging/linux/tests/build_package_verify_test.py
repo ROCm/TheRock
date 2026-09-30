@@ -235,6 +235,24 @@ class IterPackageVariantSpecsRoutingTest(BuildPackageVerifyTestCase):
         ]
         self.assertEqual(meta_variants, [(True, GFX_META)])
 
+    def test_device_variants_use_package_owners_not_raw_targets(self):
+        """Matches build_package.py: group_package_targets collapses owned targets.
+
+        ``gfx1250-strict`` packages under owner ``gfx1250``, so verify must expect
+        ``device-gfx1250`` rather than ``device-gfx1250-strict``.
+        """
+        cfg = _kpack_config(
+            self.temp_dir,
+            target=["gfx1250-strict", "gfx1100"],
+        )
+        device_archs = [
+            spec.gfx_arch
+            for spec in verify.iter_package_variant_specs(PKG_CORE_SDK, cfg)
+            if spec.label.startswith("device-")
+        ]
+        self.assertEqual(device_archs, ["gfx1250", "gfx1100"])
+        self.assertNotIn("gfx1250-strict", device_archs)
+
 
 class FindPackageFilesTest(unittest.TestCase):
     """Ensures package index keys match control metadata names, not filename stems."""
