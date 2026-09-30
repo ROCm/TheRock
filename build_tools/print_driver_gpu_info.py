@@ -8,6 +8,7 @@ Sanity check script for CI runners.
 On Linux:
   - run "amd-smi static"
   - run "rocminfo"
+  - print the amdgpu kernel driver (KMD) version
   - report the KFD IOCTL version and warn if outside the range required by rocdbgapi (>= 1.13 and < 2.0)
 
 On Windows:
@@ -122,6 +123,52 @@ def run_command_with_search(
     log(f"{command}: command not found")
 
 
+def print_file(label: str, path: Path) -> None:
+    """Print the contents of a sysfs/procfs file, if it exists."""
+    log(f"\n=== {label} ===")
+    log(f"++ Read {path}")
+    try:
+        if path.exists():
+            log(path.read_text().rstrip())
+        else:
+            log(f"{path}: not found")
+    except OSError as e:
+        log(f"{path}: {e}")
+
+
+def print_amdgpu_driver_version() -> None:
+    """Print the amdgpu kernel driver (KMD) version on Linux.
+
+    The packaged / DKMS amdgpu build stamps a version string (e.g. "6.16.13")
+    that CI needs when correlating failures to a driver regression. The in-box
+    / upstream module often leaves this empty, in which case "amd-smi static"
+    reports DRIVER/VERSION as "N/A". Probe several sources so at least one
+    populates:
+      - /sys/module/amdgpu/version : KMD version string (when present)
+      - modinfo amdgpu             : module version metadata
+      - dmesg                      : amdgpu initialization banner
+
+    All probes are best-effort. Unlike the driver commands above, a missing
+    module / restricted dmesg must never fail the sanity step, so the
+    subprocess probes run under "sh -c ... || true" to swallow non-zero exits
+    (run_command uses check=True).
+    """
+    print_file(
+        "amdgpu driver version (/sys/module/amdgpu/version)",
+        Path("/sys/module/amdgpu/version"),
+    )
+    log("\n=== amdgpu driver version (modinfo) ===")
+    run_command(["sh", "-c", "modinfo -F version amdgpu 2>/dev/null || true"])
+    log("\n=== amdgpu driver version (dmesg) ===")
+    run_command(
+        [
+            "sh",
+            "-c",
+            "dmesg 2>/dev/null | grep -iE 'amdgpu.*version' | head -n 20 || true",
+        ]
+    )
+
+
 def run_sanity(os_name: str) -> int:
     THIS_SCRIPT_DIR = Path(__file__).resolve().parent
     THEROCK_DIR = THIS_SCRIPT_DIR.parent
@@ -169,6 +216,7 @@ def run_sanity(os_name: str) -> int:
             args=["-r"],
             extra_command_search_paths=[bin_dir],
         )
+        print_amdgpu_driver_version()
 
         log("\n=== KFD IOCTL version ===")
         if not os.path.exists(_KFD_DEVICE):
