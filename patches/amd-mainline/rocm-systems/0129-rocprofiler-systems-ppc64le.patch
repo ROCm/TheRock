@@ -1,57 +1,29 @@
-From 49546f512dd956b5849f5a164772f5ab3fb91c63 Mon Sep 17 00:00:00 2001
-From: benrichard-amd <ben.richard@amd.com>
-Date: Tue, 28 Jul 2026 14:10:56 +0000
-Subject: [PATCH] rocprofiler-systems: add ppc64le support
+From ff2e4c389b932f04980a7e6e1692ca79593fe0ca Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Wed, 30 Sep 2026 15:52:17 +0000
+Subject: [PATCH] rocprofiler-systems: add ppc64le support (resolved conflict
+ with clang-tidy formatting)
 
-RT library (rocprof-sys-rt):
-- Add RTthread-powerpc.c, RTthread-powerpc-asm.S, and
-  RTstatic_ctors_dtors-ppc64.c copied from the Dyninst submodule
-  (external/dyninst, commit 5dff47b) for ppc64le thread locking
-  and static constructor/destructor support.
-- Make CMakeLists.txt arch-conditional: select x86 or ppc64 sources
-  based on CMAKE_SYSTEM_PROCESSOR.
-
-DL library (rocprof-sys-dl) __libc_start_main interposition:
-- On ppc64le ELFv2, _start passes a startup_info struct pointer in r8
-  and the stack pointer in r9, rather than individual arguments in
-  r3-r7 as on x86_64. The startup_info struct resides in read-only
-  memory.
-- Add an assembly trampoline (main_ppc64le.S) that saves/restores all
-  registers around a C patching function, and tail-calls the real
-  __libc_start_main.
-- The C patching function copies the read-only startup_info to a
-  writable static, swaps the main pointer to rocprofsys_main, and
-  returns the copy. Uses dlvsym with glibc version tags to resolve
-  the real __libc_start_main without recursion.
-
-Runtime feature guards (config.cpp):
-- Disable USE_SAMPLING, USE_PROCESS_SAMPLING, and TRACE (perfetto) on
-  ppc64le with warning messages. Signal-based call-stack sampling
-  crashes due to a known libunwind ppc64 mixed-frame unwinding
-  limitation, and perfetto tracing hits a null dereference on ppc64le.
-  Wall-clock profiling (-P) remains fully functional.
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 ---
- .../source/lib/core/config.cpp                | 21 ++++
- .../source/lib/rocprof-sys-dl/CMakeLists.txt  |  8 ++
- .../source/lib/rocprof-sys-dl/main.c          | 98 +++++++++++++++----
- .../source/lib/rocprof-sys-dl/main_ppc64le.S  | 85 ++++++++++++++++
- .../source/lib/rocprof-sys-rt/CMakeLists.txt  |  9 +-
- .../src/RTstatic_ctors_dtors-ppc64.c          | 69 +++++++++++++
- .../rocprof-sys-rt/src/RTthread-powerpc-asm.S | 51 ++++++++++
- .../lib/rocprof-sys-rt/src/RTthread-powerpc.c | 61 ++++++++++++
- 8 files changed, 383 insertions(+), 19 deletions(-)
+ .../source/lib/core/config.cpp                |  21 ++++
+ .../source/lib/rocprof-sys-dl/CMakeLists.txt  |   8 ++
+ .../source/lib/rocprof-sys-dl/main.c          | 107 ++++++++++++++----
+ .../source/lib/rocprof-sys-dl/main_ppc64le.S  |  85 ++++++++++++++
+ .../source/lib/rocprof-sys-rt/CMakeLists.txt  |   9 +-
+ .../src/RTstatic_ctors_dtors-ppc64.c          |  69 +++++++++++
+ .../rocprof-sys-rt/src/RTthread-powerpc-asm.S |  51 +++++++++
+ .../lib/rocprof-sys-rt/src/RTthread-powerpc.c |  61 ++++++++++
+ 8 files changed, 389 insertions(+), 22 deletions(-)
  create mode 100644 projects/rocprofiler-systems/source/lib/rocprof-sys-dl/main_ppc64le.S
  create mode 100644 projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTstatic_ctors_dtors-ppc64.c
  create mode 100644 projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTthread-powerpc-asm.S
  create mode 100644 projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTthread-powerpc.c
 
 diff --git a/projects/rocprofiler-systems/source/lib/core/config.cpp b/projects/rocprofiler-systems/source/lib/core/config.cpp
-index 80c04dd027..d141cbd623 100644
+index c92a85679e7..9fe26aa60d0 100644
 --- a/projects/rocprofiler-systems/source/lib/core/config.cpp
 +++ b/projects/rocprofiler-systems/source/lib/core/config.cpp
-@@ -1582,6 +1582,27 @@ configure_mode_settings(const std::shared_ptr<settings>& _config)
+@@ -1888,6 +1888,27 @@ configure_mode_settings(const std::shared_ptr<settings>& _config)
          _set(env_vars::USE_AMD_SMI, false);
      }
  
@@ -80,7 +52,7 @@ index 80c04dd027..d141cbd623 100644
      {
          auto _current_kokkosp_lib = rocprofsys::get_env<std::string>("KOKKOS_TOOLS_LIBS");
 diff --git a/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/CMakeLists.txt b/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/CMakeLists.txt
-index ff09930ed9..2188298420 100644
+index e37a68dfd87..9a41168ce95 100644
 --- a/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/CMakeLists.txt
 +++ b/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/CMakeLists.txt
 @@ -27,6 +27,14 @@ target_sources(
@@ -99,7 +71,7 @@ index ff09930ed9..2188298420 100644
      rocprofiler-systems-dl-library
      PUBLIC
 diff --git a/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/main.c b/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/main.c
-index 31b58bdf6b..3c42418839 100644
+index 3eec3549e28..270b5df488a 100644
 --- a/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/main.c
 +++ b/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/main.c
 @@ -38,19 +38,6 @@
@@ -122,7 +94,7 @@ index 31b58bdf6b..3c42418839 100644
  
  //
  // external function declarations
-@@ -90,6 +77,85 @@ rocprofsys_main_init(void) ROCPROFSYS_INTERNAL_API;
+@@ -87,6 +74,85 @@ rocprofsys_main_init(void) ROCPROFSYS_INTERNAL_API;
  extern int
  rocprofsys_main(int argc, char** argv, char** envp) ROCPROFSYS_INTERNAL_API;
  
@@ -208,18 +180,28 @@ index 31b58bdf6b..3c42418839 100644
  int
  rocprofsys_libc_start_main(int (*_main)(int, char**, char**), int _argc, char** _argv,
                             void (*_init)(void), void (*_fini)(void),
-@@ -124,10 +190,6 @@ rocprofsys_libc_start_main(int (*_main)(int, char**, char**), int _argc, char**
+@@ -122,14 +188,13 @@ rocprofsys_libc_start_main(int (*_main)(int, char**, char**), int _argc, char**
+             // call original main
+             return user_main(_main, _argc, _argv, _init, _fini, _rtld_fini, _stack_end);
          }
-         else
-         {
--            // return user_main(rocprofsys_main, _argc, _argv,
--            //                  rocprofsys_main_init, _fini,
--            //                  _rtld_fini, _stack_end);
++        else
++        {
++            // call rocprof-sys main function wrapper
++            return user_main(rocprofsys_main, _argc, _argv, _init, _fini, _rtld_fini,
++                             _stack_end);
++        }
+ 
+-        // return user_main(rocprofsys_main, _argc, _argv,
+-        //                  rocprofsys_main_init, _fini,
+-        //                  _rtld_fini, _stack_end);
 -
-             // call rocprof-sys main function wrapper
-             return user_main(rocprofsys_main, _argc, _argv, _init, _fini, _rtld_fini,
-                              _stack_end);
-@@ -149,3 +211,5 @@ __libc_start_main(int (*_main)(int, char**, char**), int _argc, char** _argv,
+-        // call rocprof-sys main function wrapper
+-        return user_main(rocprofsys_main, _argc, _argv, _init, _fini, _rtld_fini,
+-                         _stack_end);
+     }
+     else
+     {
+@@ -147,3 +212,5 @@ __libc_start_main(int (*_main)(int, char**, char**), int _argc, char** _argv,
      return rocprofsys_libc_start_main(_main, _argc, _argv, _init, _fini, _rtld_fini,
                                        _stack_end);
  }
@@ -227,7 +209,7 @@ index 31b58bdf6b..3c42418839 100644
 +#endif /* __powerpc64__ */
 diff --git a/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/main_ppc64le.S b/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/main_ppc64le.S
 new file mode 100644
-index 0000000000..397a62b0b8
+index 00000000000..397a62b0b87
 --- /dev/null
 +++ b/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/main_ppc64le.S
 @@ -0,0 +1,85 @@
@@ -317,7 +299,7 @@ index 0000000000..397a62b0b8
 +
 +.section .note.GNU-stack,"",@progbits
 diff --git a/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/CMakeLists.txt b/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/CMakeLists.txt
-index a65d182ef7..de9618efa4 100644
+index a65d182ef77..de9618efa40 100644
 --- a/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/CMakeLists.txt
 +++ b/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/CMakeLists.txt
 @@ -35,8 +35,13 @@ if(PLATFORM MATCHES linux)
@@ -338,7 +320,7 @@ index a65d182ef7..de9618efa4 100644
  # that gcc can handle .S.
 diff --git a/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTstatic_ctors_dtors-ppc64.c b/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTstatic_ctors_dtors-ppc64.c
 new file mode 100644
-index 0000000000..942f58586a
+index 00000000000..942f58586ad
 --- /dev/null
 +++ b/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTstatic_ctors_dtors-ppc64.c
 @@ -0,0 +1,69 @@
@@ -413,7 +395,7 @@ index 0000000000..942f58586a
 +#endif
 diff --git a/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTthread-powerpc-asm.S b/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTthread-powerpc-asm.S
 new file mode 100644
-index 0000000000..818c61a3d0
+index 00000000000..818c61a3d0d
 --- /dev/null
 +++ b/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTthread-powerpc-asm.S
 @@ -0,0 +1,51 @@
@@ -470,7 +452,7 @@ index 0000000000..818c61a3d0
 +.section .note.GNU-stack,"",@progbits        
 diff --git a/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTthread-powerpc.c b/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTthread-powerpc.c
 new file mode 100644
-index 0000000000..071f996203
+index 00000000000..071f9962033
 --- /dev/null
 +++ b/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTthread-powerpc.c
 @@ -0,0 +1,61 @@
