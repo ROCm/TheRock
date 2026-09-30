@@ -55,6 +55,12 @@ on:
         type: string
         required: false
         default: "aws-linux-scale-rocm-prod"
+      enable_pre_upload_build_verify:
+        description: >-
+          After build_package.py, verify filenames listed in built_packages.txt
+          exist under the packages directory (manifest-based presence check).
+        type: boolean
+        default: true
     outputs:
       package_repository_url:
         description: "Public repository URL for package installation"
@@ -154,6 +160,16 @@ jobs:
             --pkg-type "${NATIVE_PACKAGE_TYPE}" \
             --version-suffix "${ARTIFACT_RUN_ID}" \
             --build-variant "${BUILD_VARIANT}"
+
+      # Manifest-based presence check: uses built_packages.txt from build_package.py.
+      # Blocking — failure skips simulate-install / upload.
+      - name: Pre-upload build package verification
+        if: ${{ inputs.enable_pre_upload_build_verify }}
+        id: pre-upload-build-verify
+        run: |
+          python ./build_tools/packaging/linux/build_package_verify.py \
+            --packages-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --pkg-type "${NATIVE_PACKAGE_TYPE}"
 
       - name: Simulated install Test
         id: test-packages
