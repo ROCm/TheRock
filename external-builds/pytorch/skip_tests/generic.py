@@ -7,7 +7,7 @@
 exclude_modules = {
     "common": [
         # Hangs past the pytest-timeout threshold on MIOpen convolution
-        # autotuning; the timeout thread cannot interrupt the native call.
+        # autotuning; restore this module via #8645.
         "nn/test_convolution",
         # Inductor autotuning compiles in subprocesses that can outlive or
         # crash the worker, taking the shard's report with them.
@@ -225,8 +225,7 @@ skip_tests = {
     #     That is likely related to processes not terminating on their own:
     #     https://github.com/ROCm/TheRock/issues/999. Note that even if
     #     _test cases_ themselves terminate, the parent process still
-    #     hangs though. In run_pytorch_tests.py we exit with `os.kill()` to
-    #     force termination.
+    #     hangs, so these remain excluded from the test.sh path.
     #   * Linux has substantial testing on datacenter GPUs while Windows support
     #     is newer and skews towards consumer GPUs with lower specs. We disable
     #     some tests that are resource intensive or otherwise degrade CI

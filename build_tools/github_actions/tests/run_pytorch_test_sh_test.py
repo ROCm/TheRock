@@ -106,5 +106,39 @@ class ExcludedModulesTest(unittest.TestCase):
             self.assertNotIn(module, skips)
 
 
+class MainTest(unittest.TestCase):
+    def test_invokes_relative_test_sh_from_pytorch_checkout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pytorch_dir = Path(tmp)
+            test_sh = pytorch_dir / ".ci" / "pytorch" / "test.sh"
+            test_sh.parent.mkdir(parents=True)
+            test_sh.touch()
+            result = mock.Mock(returncode=0)
+            with (
+                mock.patch.object(runner, "check_pytorch_source_version"),
+                mock.patch.object(runner, "reconcile_agent_visibility_env"),
+                mock.patch.object(
+                    runner, "configure_gpu_visibility", return_value=["gfx942"]
+                ),
+                mock.patch.object(
+                    runner, "detect_pytorch_version", return_value="2.15"
+                ),
+                mock.patch.object(runner, "get_tests", return_value=""),
+                mock.patch.object(runner, "get_excluded_modules", return_value=[]),
+                mock.patch.object(
+                    runner, "configure_environment", return_value={"CI": "1"}
+                ),
+                mock.patch.object(runner.subprocess, "run", return_value=result) as run,
+            ):
+                returncode = runner.main(["--pytorch-dir", tmp])
+
+        self.assertEqual(returncode, 0)
+        run.assert_called_once_with(
+            ["bash", ".ci/pytorch/test.sh"],
+            cwd=pytorch_dir,
+            env={"CI": "1"},
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

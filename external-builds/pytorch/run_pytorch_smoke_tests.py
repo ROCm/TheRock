@@ -15,7 +15,7 @@ Specify GPU family:
 
 Pass additional pytest arguments after "--":
     $ python run_pytorch_smoke_tests.py -- -m "slow"
-    $ python run_pytorch_tests.py -- --tb=short -x
+    $ python run_pytorch_smoke_tests.py -- --tb=short -x
 """
 
 import argparse

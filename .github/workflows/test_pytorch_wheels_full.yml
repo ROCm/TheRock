@@ -369,8 +369,7 @@ jobs:
             --log-cli-level=INFO \
             -v
 
-      - name: (Linux) Run PyTorch full test suite
-        if: ${{ runner.os == 'Linux' }}
+      - name: Run PyTorch full test suite
         run: |
           python ./external-builds/pytorch/run_pytorch_test_sh.py \
             --test-config "${MATRIX_TEST_CONFIG}" \
@@ -387,30 +386,6 @@ jobs:
           path: external-builds/pytorch/pytorch/test/test-reports/
           if-no-files-found: ignore
           retention-days: 30
-
-      # HACK: The test process does not terminate on its own gracefully,
-      # so we write to run_pytorch_tests_exit_code.txt and then kill the process.
-      # After killing the process we read the return code to signal it normally.
-      # See https://github.com/ROCm/TheRock/issues/999.
-      - name: (Windows) Run PyTorch tests
-        if: ${{ runner.os == 'Windows'}}
-        continue-on-error: true
-        run: |
-          python ./external-builds/pytorch/run_pytorch_tests.py -- \
-            --continue-on-collection-errors \
-            -v
-
-      - name: (Windows) Read and propagate exit code
-        if: ${{ runner.os == 'Windows'}}
-        run: |
-          if [ -f run_pytorch_tests_exit_code.txt ]; then
-            EXIT_CODE=$(cat run_pytorch_tests_exit_code.txt)
-            echo "Exit code from file: ${EXIT_CODE}"
-            exit ${EXIT_CODE}
-          else
-            echo "No run_pytorch_tests_exit_code.txt found"
-            exit 1
-          fi
 
       - name: Capture job summary
         id: summary
