@@ -295,8 +295,8 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
     lines.append("")
 
     # Per-family test runner table
-    lines.append("| Platform | Family | Runner Label | Scope |")
-    lines.append("|----------|--------|--------------|-------|")
+    lines.append("| Platform | Family | Runner Label | Multi-GPU Runner | Scope |")
+    lines.append("|----------|--------|--------------|------------------|-------|")
     for platform, config in [
         ("Linux", outputs.builds.linux),
         ("Windows", outputs.builds.windows),
@@ -307,9 +307,16 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
         for entry in per_family:
             family = f"`{entry['amdgpu_family']}`"
             runner = f"`{entry['test-runs-on']}`" if entry["test-runs-on"] else "—"
+            multi_gpu_runner = (
+                f"`{entry['test-runs-on-multi-gpu']}`"
+                if entry.get("test-runs-on-multi-gpu")
+                else "—"
+            )
             if entry.get("sanity_check_only_for_family"):
                 scope = "sanity check only"
             else:
                 scope = test_rocm.test_type
-            lines.append(f"| {platform} | {family} | {runner} | {scope} |")
+            lines.append(
+                f"| {platform} | {family} | {runner} | {multi_gpu_runner} | {scope} |"
+            )
     lines.append("")

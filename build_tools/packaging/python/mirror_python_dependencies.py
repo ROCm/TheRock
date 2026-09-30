@@ -71,6 +71,8 @@ DEPENDENCIES: dict[str, DependencyPolicy] = {
     "fsspec": DependencyPolicy(project="torch", versions=("latest",)),
     "typing-extensions": DependencyPolicy(project="torch", versions=("latest",)),
     "rocm-bootstrap": DependencyPolicy(project="rocm", versions=("latest",)),
+    # Required by the rocprof_trace_decoder Python API in rocm-profiler.
+    "pyelftools": DependencyPolicy(project="rocm", versions=("latest",)),
     "setuptools": DependencyPolicy(project="rocm", versions=("81.0.0",)),
 }
 

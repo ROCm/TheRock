@@ -2,12 +2,32 @@
 # With the introduction of LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON these libraries are
 # installed one level down and could break backwards compatability with older ROCm
 # versions. For now we will install symlinks in the old lib/llvm/lib directory.
+#
+# Add symlink for x86_64-pc-linux-gnu -> x86_64-unknown-linux-gnu to ensure
+# projects that hardcode -target will still work.
 
-#TODO: Remove for next major ROCm version after 10.0
+#TODO: Remove entire post_hook for next major ROCm version after 10.0
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/GetHostTriple.cmake")
 get_host_triple(THEROCK_LLVM_HOST_TRIPLE)
 
 if(LLVM_ENABLE_PER_TARGET_RUNTIME_DIR)
+  include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/Modules/LLVMVersion.cmake")
+  if(NOT LLVM_VERSION_MAJOR)
+    message(FATAL_ERROR "LLVM_VERSION_MAJOR is empty; cannot create clang resource-dir triple symlink")
+  endif()
+  if(THEROCK_LLVM_HOST_TRIPLE MATCHES "-unknown-")
+    string(REPLACE "-unknown-" "-pc-" _pc_triple "${THEROCK_LLVM_HOST_TRIPLE}")
+    install(CODE "
+      set(_clang_lib \"\${CMAKE_INSTALL_PREFIX}/lib/clang/${LLVM_VERSION_MAJOR}/lib\")
+      set(_src \"\${_clang_lib}/${THEROCK_LLVM_HOST_TRIPLE}\")
+      set(_dest \"\${_clang_lib}/${_pc_triple}\")
+      if(EXISTS \"\${_src}\" AND NOT EXISTS \"\${_dest}\")
+        file(CREATE_LINK \"${THEROCK_LLVM_HOST_TRIPLE}\" \"\${_dest}\" SYMBOLIC)
+        message(STATUS \"Created triple compat symlink: \${_dest} -> ${THEROCK_LLVM_HOST_TRIPLE}\")
+      endif()
+    ")
+  endif()
+
   if(THEROCK_LLVM_HOST_TRIPLE)
     set(_compat_libs
       libarcher.so
