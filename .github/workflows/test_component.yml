@@ -129,6 +129,12 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
+      - name: Record source checkout
+        id: source_checkout
+        run: |
+          source_sha="$(git rev-parse HEAD)"
+          echo "sha=${source_sha}" >> "$GITHUB_OUTPUT"
+
       - name: Run setup test environment workflow
         timeout-minutes: ${{ inputs.build_variant == 'asan' && 60 || 15 }}
         env:
@@ -234,6 +240,19 @@ jobs:
       - name: Print test reproduction command
         if: ${{ failure() && steps.test.outcome == 'failure' }}
         env:
+          ARTIFACT_REPOSITORY: ${{ github.repository }}
+          SOURCE_REPOSITORY: ${{ inputs.repository || github.repository }}
+          SOURCE_SHA: ${{ steps.source_checkout.outputs.sha }}
+          SOURCE_REF: >-
+            ${{ inputs.ref ||
+                ((inputs.repository == '' || inputs.repository == github.repository) && github.ref)
+                || ''
+            }}
+          REPRO_CONTAINER_IMAGE: >-
+            ${{ inputs.platform == 'linux' &&
+                (fromJSON(inputs.component).container_image || inputs.default_container_image)
+                || ''
+            }}
           MATRIX_SHARD: ${{ matrix.shard }}
           COMPONENT_TEST_SCRIPT: ${{ fromJSON(inputs.component).test_script }}
           COMPONENT_TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
@@ -243,7 +262,11 @@ jobs:
         run: |
           python ./build_tools/github_actions/reproduce_test_failure.py \
             --run-id "${ARTIFACT_RUN_ID}" \
-            --repository "${{ github.repository }}" \
+            --repository "${ARTIFACT_REPOSITORY}" \
+            --source-repository "${SOURCE_REPOSITORY}" \
+            --source-sha "${SOURCE_SHA}" \
+            --source-ref "${SOURCE_REF}" \
+            --container-image "${REPRO_CONTAINER_IMAGE}" \
             --amdgpu-family "${AMDGPU_FAMILIES}" \
             --amdgpu-targets "${AMDGPU_TARGETS}" \
             --test-script "${COMPONENT_TEST_SCRIPT}" \
