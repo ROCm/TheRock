@@ -13,7 +13,7 @@
 # 7. storage-libs (generic) - hipfile (parallel to math-libs)
 # 8. debug-tools (generic) - amd-dbgapi, rocr-debug-agent, rocgdb (parallel to math-libs)
 # 9. dctools-core (generic) - RDC (parallel to math-libs)
-# 10. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
+# 10. profiler-apps (generic) - rocprofiler-systems (after storage-libs)
 # 11. cv-libs (generic) - rpp
 # 12. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
 
@@ -398,10 +398,10 @@ jobs:
       id-token: write
 
   # ==========================================================================
-  # STAGE: profiler-apps (generic, parallel to math-libs)
+  # STAGE: profiler-apps (generic, after storage-libs)
   # ==========================================================================
   profiler-apps:
-    needs: compiler-runtime
+    needs: storage-libs
     if: >-
       ${{
         !cancelled() && !failure() &&
