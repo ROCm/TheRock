@@ -366,7 +366,7 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--skip-native-packages",
         action="store_true",
-        help="Skip publishing native Linux packages (deb/rpm)",
+        help="Skip publishing native packages (Linux deb/rpm, Windows msi)",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Print plan without copying"

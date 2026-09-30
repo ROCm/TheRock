@@ -165,7 +165,8 @@ jobs:
             --platform=windows \
             --release-type="${BUILD_RELEASE_TYPE}" \
             --kpack-split="${KPACK_SPLIT}" \
-            --structured
+            --structured \
+            --skip-native-packages
 
   trigger_test_artifacts_per_family:
     needs: [build_artifacts]
