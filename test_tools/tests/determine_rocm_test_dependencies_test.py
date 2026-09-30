@@ -38,6 +38,9 @@ SCRIPT = Path(__file__).parent.parent / "determine_rocm_test_dependencies.py"
 sys.path.insert(0, str(THEROCK_DIR / "test_tools"))
 
 from determine_rocm_test_dependencies import (  # noqa: E402
+    _SUBTREE_ALIAS_OVERRIDES,
+    _load_subtree_alias_map,
+    _normalize_changed_project,
     explain_component,
     get_subprojects_to_test,
     list_subprojects,
@@ -416,9 +419,9 @@ class TestCliInputParsing(_FixtureTestCase):
         root = _make_fixture(graph=graph, policies="")
         try:
             cases = {
-                "dnn-providers/hipblaslt-provider": "hipblasltprovider",
-                "dnn-providers/hip-kernel-provider": "hipkernelprovider",
-                "dnn-providers/miopen-provider": "miopenprovider",
+                "dnn-providers/hipblaslt-provider": ["hipblasltprovider"],
+                "dnn-providers/hip-kernel-provider": ["hipkernelprovider"],
+                "dnn-providers/miopen-provider": ["miopenprovider"],
             }
             for changed_project, expected in cases.items():
                 with self.subTest(changed_project=changed_project):
@@ -437,7 +440,9 @@ class TestCliInputParsing(_FixtureTestCase):
                         text=True,
                     )
                     self.assertEqual(proc.returncode, 0, proc.stderr)
-                    self.assertEqual(json.loads(proc.stdout.strip()), [expected])
+                    self.assertEqual(
+                        sorted(json.loads(proc.stdout.strip())), sorted(expected)
+                    )
 
             proc = subprocess.run(
                 [
@@ -542,18 +547,20 @@ class TestCliInputParsing(_FixtureTestCase):
         root = _make_fixture(graph=graph, policies="")
         try:
             cases = {
-                "emulation/mirage": "mirage",
-                "emulation/rocjitsu": "rocjitsu",
-                "projects/clr": "hip-clr",
-                "projects/cuid": "rdc",
-                "projects/hip": "hip-clr",
-                "projects/hipother": "hip-clr",
-                "projects/rocdbgapi": "amd-dbgapi",
-                "projects/rocm-smi-lib": "rocm_smi_lib",
-                "projects/rocprofiler": "rocprofiler-sdk",
-                "shared/amdgpu-windows-interop": "hip-clr",
-                "shared/kpack": "rocm-kpack",
-                "shared/machine-readable-isa": "rocjitsu",
+                "emulation/mirage": ["mirage"],
+                "emulation/rocjitsu": ["rocjitsu"],
+                # clr builds both hip-clr and ocl-clr; the generated subtree_map
+                # returns both (the retired hand dict under-listed it as hip-clr only).
+                "projects/clr": ["hip-clr", "ocl-clr"],
+                "projects/cuid": ["rdc"],
+                "projects/hip": ["hip-clr"],
+                "projects/hipother": ["hip-clr"],
+                "projects/rocdbgapi": ["amd-dbgapi"],
+                "projects/rocm-smi-lib": ["rocm_smi_lib"],
+                "projects/rocprofiler": ["rocprofiler-sdk"],
+                "shared/amdgpu-windows-interop": ["hip-clr"],
+                "shared/kpack": ["rocm-kpack"],
+                "shared/machine-readable-isa": ["rocjitsu"],
             }
             for changed_project, expected in cases.items():
                 with self.subTest(changed_project=changed_project):
@@ -572,7 +579,9 @@ class TestCliInputParsing(_FixtureTestCase):
                         text=True,
                     )
                     self.assertEqual(proc.returncode, 0, proc.stderr)
-                    self.assertEqual(json.loads(proc.stdout.strip()), [expected])
+                    self.assertEqual(
+                        sorted(json.loads(proc.stdout.strip())), sorted(expected)
+                    )
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
@@ -627,7 +636,7 @@ class TestCliInputParsing(_FixtureTestCase):
     def test_unmapped_external_namespace_fails(self) -> None:
         proc = self._run("--changed-projects", "shared/not-aliased", "--level", "4")
         self.assertNotEqual(proc.returncode, 0)
-        self.assertIn("no entry in _EXTERNAL_SUBTREE_ALIASES", proc.stderr)
+        self.assertIn("_SUBTREE_ALIAS_OVERRIDES", proc.stderr)
 
     def test_empty_changed_projects_outputs_wildcard(self) -> None:
         proc = self._run()
@@ -1182,6 +1191,93 @@ class TestListSubprojectsNoBuildDir(_FixtureTestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         names = json.loads(proc.stdout)
         self.assertEqual(set(names), set(_GRAPH.keys()))
+
+
+# The hand dict retired in commit 6 (frozen here as the parity oracle). The new
+# resolution (generated subtree_map + _SUBTREE_ALIAS_OVERRIDES) must never drop a
+# graph key any of these produced — over-selection is safe, under-selection is the bug.
+_OLD_HAND_ALIASES = {
+    "emulation/mirage": ["mirage"],
+    "emulation/rocjitsu": ["rocjitsu"],
+    "shared/rocroller": ["rocroller"],
+    "shared/amdgpu-windows-interop": ["hip-clr"],
+    "shared/kpack": ["rocm-kpack"],
+    "shared/machine-readable-isa": ["rocjitsu"],
+    "shared/primbench": ["rocprim", "rocrand"],
+    "shared/mxdatagenerator": [
+        "hipblas",
+        "hipblaslt",
+        "rocblas",
+        "rocroller",
+        "tensilelite",
+    ],
+    "shared/origami": ["origami", "tensilelite"],
+    "shared/stinkytofu": ["tensilelite"],
+    "shared/tensile": ["hipblas", "rocblas"],
+    "dnn-providers/cmake": ["hipdnn_integration_tests"],
+    "dnn-providers/hipblaslt-provider": ["hipblasltprovider"],
+    "dnn-providers/hip-kernel-provider": ["hipkernelprovider"],
+    "dnn-providers/integration-tests": ["hipdnn_integration_tests"],
+    "dnn-providers/miopen-provider": ["miopenprovider"],
+    "projects/clr": ["hip-clr"],
+    "projects/composablekernel": ["composable_kernel"],
+    "projects/cuid": ["rdc"],
+    "projects/hip": ["hip-clr"],
+    "projects/hipblaslt/tensilelite": ["tensilelite"],
+    "projects/hipother": ["hip-clr"],
+    "projects/rocdbgapi": ["amd-dbgapi"],
+    "projects/rocm-smi-lib": ["rocm_smi_lib"],
+    "projects/rocprofiler": ["rocprofiler-sdk"],
+}
+
+
+class TestGeneratedSubtreeMapResolution(unittest.TestCase):
+    """Commit 6: subtree resolution reads the generated therock_subtree_map.json
+    layered with _SUBTREE_ALIAS_OVERRIDES, replacing the retired hand dict."""
+
+    def test_no_under_selection_vs_old_hand_dict(self) -> None:
+        for key, old in _OLD_HAND_ALIASES.items():
+            new = set(_normalize_changed_project(key))
+            self.assertTrue(
+                set(old) <= new,
+                f"{key}: new resolution {sorted(new)} drops "
+                f"{sorted(set(old) - new)} from old {old} (under-selection)",
+            )
+
+    def test_regression_fixture(self) -> None:
+        # Historically under-selected / name-skew inputs must resolve correctly.
+        cases = {
+            "projects/hipblaslt/tensilelite": {"tensilelite"},  # nested path override
+            "projects/clr": {"hip-clr", "ocl-clr"},  # generated fan-out (+ocl-clr)
+            "projects/rocdbgapi": {"amd-dbgapi"},  # variable-sourced override
+            "projects/rocprofiler": {"rocprofiler-sdk"},  # name-skew override
+            "shared/rocroller": {"rocroller"},  # generated
+            "dnn-providers/miopen-provider": {"miopenprovider"},  # generated
+            "emulation/mirage": {"mirage"},  # generated
+        }
+        for key, expected in cases.items():
+            self.assertEqual(set(_normalize_changed_project(key)), expected, key)
+
+    def test_overrides_are_exactly_non_derivable(self) -> None:
+        # Each override must be genuinely non-derivable: the generated map either
+        # lacks the key or maps it to a value that does not cover the override.
+        # Guards against the residue silently shadowing generated data.
+        generated = json.loads(
+            (THEROCK_DIR / "test_tools" / "therock_subtree_map.json").read_text()
+        )
+        generated_lower = {k.lower(): set(v) for k, v in generated.items()}
+        for key, values in _SUBTREE_ALIAS_OVERRIDES.items():
+            gen = generated_lower.get(key.lower())
+            self.assertFalse(
+                gen is not None and set(values) <= gen,
+                f"{key} is derivable from the generated subtree_map ({gen}); "
+                "retire it instead of keeping an override",
+            )
+
+    def test_merged_map_prefers_overrides(self) -> None:
+        merged = _load_subtree_alias_map()
+        for key, values in _SUBTREE_ALIAS_OVERRIDES.items():
+            self.assertEqual(merged[key.lower()], list(values), key)
 
 
 if __name__ == "__main__":

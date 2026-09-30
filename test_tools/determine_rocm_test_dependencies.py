@@ -74,18 +74,44 @@ _TEST_POLICIES_NAME = "test_policies.toml"
 # them script-relative lets selection work from a clean checkout with no build/.
 _TEST_TOOLS_DIR = Path(__file__).resolve().parent
 
-_EXTERNAL_SUBTREE_ALIASES = {
-    "emulation/mirage": ["mirage"],
-    "emulation/rocjitsu": ["rocjitsu"],
-    "shared/rocroller": ["rocroller"],
+_SUBTREE_MAP_NAME = "therock_subtree_map.json"
+
+# Hand overrides layered on top of the generated subtree map
+# (test_tools/therock_subtree_map.json, built from each subproject's
+# EXTERNAL_SOURCE_DIR). Every entry here is a subtree the static parser cannot
+# derive on its own; the derivable majority was retired in favor of the
+# generated map. An override REPLACES the generated value for its key (see
+# _load_subtree_alias_map), so these also correct the few subtrees the parser
+# maps to a narrower key than selection needs.
+_SUBTREE_ALIAS_OVERRIDES = {
+    # Not their own declared subproject — no EXTERNAL_SOURCE_DIR subtree for the
+    # parser to relativize, so they never appear in the generated map.
     "shared/amdgpu-windows-interop": ["hip-clr"],
-    # rocm-systems shared/* components that are not subtree-synced repos.
-    # machine-readable-isa ships the ISA data consumed by the rocjitsu
-    # emulation stack; kpack is the ROCm packaging tool (rocm-kpack).
-    "shared/kpack": ["rocm-kpack"],
+    # machine-readable-isa ships the ISA data consumed by the rocjitsu stack.
     "shared/machine-readable-isa": ["rocjitsu"],
     # primbench is a benchmarking header library used by rocprim/rocrand benchmarks.
     "shared/primbench": ["rocprim", "rocrand"],
+    "shared/stinkytofu": ["tensilelite"],
+    "shared/tensile": ["hipblas", "rocblas"],
+    "dnn-providers/cmake": ["hipdnn_integration_tests"],
+    "projects/hip": ["hip-clr"],
+    "projects/hipother": ["hip-clr"],
+    # TensileLite is vendored inside hipBLASLt rather than being its own subtree,
+    # so rocm-libraries change detection reports the nested path
+    # "projects/hipblaslt/tensilelite" (see rocm-libraries#11785). Without this
+    # it falls through the `projects/` strip to the non-existent key
+    # "hipblaslt/tensilelite" and selects nothing. "tensilelite" is a synthetic
+    # level-3 node, so this also pulls in hipblaslt/rocblas/hipblas transitively.
+    "projects/hipblaslt/tensilelite": ["tensilelite"],
+    # Directory name != graph key (the parser keys by subtree path).
+    "projects/cuid": ["rdc"],
+    "projects/rocprofiler": ["rocprofiler-sdk"],
+    # Variable EXTERNAL_SOURCE_DIR (THEROCK_AMD_DBGAPI_SOURCE_DIR) the static
+    # parser cannot resolve, so it is skipped from the generated map by design.
+    "projects/rocdbgapi": ["amd-dbgapi"],
+    # In the generated map, but only as its own node ("mxdatagenerator"); the
+    # coupled GEMM keys below are a hand-tuned selection the mechanical
+    # subtree->key map cannot express, so the override replaces it.
     "shared/mxdatagenerator": [
         "hipblas",
         "hipblaslt",
@@ -93,37 +119,32 @@ _EXTERNAL_SUBTREE_ALIASES = {
         "rocroller",
         "tensilelite",
     ],
-    # hipblaslt/rocblas/hipblas are reachable transitively from "tensilelite"
-    # itself: TensileLite is a synthetic consumer-graph node (see
-    # _load_synthetic_subprojects below) with level 3 (unbounded) in
-    # test_policies.toml, so they don't need to be hand-listed here too.
+    # Generated map has ["origami"]; the tensilelite coupling is hand-added.
     "shared/origami": ["origami", "tensilelite"],
-    "shared/stinkytofu": ["tensilelite"],
-    "shared/tensile": ["hipblas", "rocblas"],
-    "dnn-providers/cmake": ["hipdnn_integration_tests"],
-    "dnn-providers/hipblaslt-provider": ["hipblasltprovider"],
-    "dnn-providers/hip-kernel-provider": ["hipkernelprovider"],
-    "dnn-providers/integration-tests": ["hipdnn_integration_tests"],
-    "dnn-providers/miopen-provider": ["miopenprovider"],
-    "projects/clr": ["hip-clr"],
-    "projects/composablekernel": ["composable_kernel"],
-    "projects/cuid": ["rdc"],
-    "projects/hip": ["hip-clr"],
-    # TensileLite is vendored inside hipBLASLt rather than being its own
-    # subtree, so rocm-libraries change detection reports the nested path
-    # "projects/hipblaslt/tensilelite" (see rocm-libraries#11785). Without an
-    # alias that string falls through to the `projects/` strip, yields the
-    # non-existent graph key "hipblaslt/tensilelite", and selects no tests at
-    # all. "tensilelite" is a synthetic level-3 node, so this also pulls in
-    # hipblaslt/rocblas/hipblas transitively.
-    "projects/hipblaslt/tensilelite": ["tensilelite"],
-    "projects/hipother": ["hip-clr"],
-    "projects/rocdbgapi": ["amd-dbgapi"],
-    "projects/rocm-smi-lib": ["rocm_smi_lib"],
-    "projects/rocprofiler": ["rocprofiler-sdk"],
 }
 
 _EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
+
+
+def _load_subtree_alias_map() -> dict[str, list[str]]:
+    """Subtree -> graph-key(s), from the generated map plus hand overrides.
+
+    The generated map (test_tools/therock_subtree_map.json) covers every subtree
+    the parser derives from EXTERNAL_SOURCE_DIR; _SUBTREE_ALIAS_OVERRIDES supplies
+    the residue it cannot and wins on any shared key. Keys are lowercased to match
+    the lookup in _normalize_changed_project. Read script-relative so selection
+    works from a clean checkout.
+    """
+    raw = json.loads(
+        (_TEST_TOOLS_DIR / _SUBTREE_MAP_NAME).read_text(encoding="utf-8")
+    )
+    merged = {key.lower(): list(values) for key, values in raw.items()}
+    for key, values in _SUBTREE_ALIAS_OVERRIDES.items():
+        merged[key.lower()] = list(values)
+    return merged
+
+
+_SUBTREE_ALIAS_MAP = _load_subtree_alias_map()
 
 _CI_TEST_SELECTOR_ALIASES = {
     "hipdnn_integration_tests": ["hipdnn-integration-tests"],
@@ -543,12 +564,13 @@ def list_subprojects(therock_dir: Path | None = None, show_deps: bool = False):
 def _normalize_changed_project(project: str) -> list[str]:
     """Normalize CI subtree identifiers to consumer-graph keys for the CLI."""
     project_lower = project.lower()
-    if project_lower in _EXTERNAL_SUBTREE_ALIASES:
-        return _EXTERNAL_SUBTREE_ALIASES[project_lower]
+    if project_lower in _SUBTREE_ALIAS_MAP:
+        return list(_SUBTREE_ALIAS_MAP[project_lower])
     if project_lower.startswith(_EXTERNAL_ONLY_NAMESPACES):
         raise ValueError(
-            f"'{project}' has no entry in _EXTERNAL_SUBTREE_ALIASES. Add one "
-            "before merging; this namespace has no valid self-select fallback."
+            f"'{project}' has no entry in the generated subtree map or "
+            "_SUBTREE_ALIAS_OVERRIDES. Add an override before merging; this "
+            "namespace has no valid self-select fallback."
         )
     return [project_lower.removeprefix("projects/")]
 
