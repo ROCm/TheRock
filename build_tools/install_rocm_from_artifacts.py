@@ -379,6 +379,8 @@ def retrieve_artifacts_by_run_id(args):
         "core-runtime_lib",
         "rocjitsu-hotswap_lib",
         "sysdeps_lib",
+        "sysdeps-hwloc_lib",
+        "sysdeps-libpciaccess_lib",
         "base_run",
         "base_lib",
         "amd-llvm_run",
