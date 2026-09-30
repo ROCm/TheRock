@@ -9,12 +9,12 @@ from dataclasses import dataclass
 from amdgpu_family_matrix import select_weighted_label
 
 UBUNTU_24_04_CONTAINER = (
-    "ghcr.io/rocm/no_rocm_image_ubuntu24_04@"
-    "sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26"
+    "ghcr.io/rocm/no_rocm_image_ubuntu24_04:"
+    "users-cgoea-trivy"
 )
 UBI_10_CONTAINER = (
-    "ghcr.io/rocm/no_rocm_image_ubi10@"
-    "sha256:a10f34d6006a20d02cf688982de9dea147710927ed405a3b0d5c73b58a6030c0"
+    "ghcr.io/rocm/no_rocm_image_ubi10:"
+    "users-cgoea-trivy"
 )
 
 

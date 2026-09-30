@@ -160,7 +160,7 @@ _rocgdb_common = {
     "timeout_minutes": 30,
     "platform": ["linux"],
     "total_shards": 1,
-    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:aa3f8966fcdefca04d4c04fb10ae7f8b654d1bb1cc6a894ea7089e5a01953197",  # 2026-07-22T15:21:18.527038581Z
+    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb:users-cgoea-trivy",  # 2026-07-22T15:21:18.527038581Z
     "container_options": ["--cap-add=SYS_PTRACE"],
 }
 
@@ -678,7 +678,7 @@ test_matrix = {
         # rocprofv3 mpi-ranks tests gate on find_package(MPI) and launch under
         # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
         # the specialized openmpi image.
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi:users-cgoea-trivy",
     },
     # rocprofiler-sdk SPM tests: same artifact as rocprofiler-sdk above, but only
     # CTest tests labeled "spm" run here on a pinned gfx94x runner (driver preflight
@@ -699,7 +699,7 @@ test_matrix = {
         # rocprofv3 mpi-ranks tests gate on find_package(MPI) and launch under
         # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
         # the specialized openmpi image.
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi:users-cgoea-trivy",
         "test_runner": "linux-gfx942-gpu-rocm-profiler",
         "include_family": {
             "linux": ["gfx94X-dcgpu"],
@@ -937,7 +937,7 @@ test_matrix = {
         # rocdecode requires FFmpeg dev libraries (libavcodec-dev, libavformat-dev,
         # libavutil-dev) for test builds. These are not bundled in TheRock
         # artifacts and are provided via the specialized media image.
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:d715ae2db664b055c90343e00588ce9ac3eec387513fe359396e5e08e75521ca",
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media:users-cgoea-trivy",
     },
     "rocjpeg": {
         "job_name": "rocjpeg",
