@@ -1473,8 +1473,11 @@ def _expand_build_config_for_platform(
 
     # ASAN builds native Linux packages (deb/rpm) but not Python packages.
     # The build_python_packages input allows callers to disable Python packages.
+    # TEMPORARY (validation of #8341): honour the caller's request even for
+    # ASAN. This `not is_asan` term is why test_rocm_wheels.yml's ASAN path is
+    # unreachable in CI -- no ASAN build ever produces the wheels it tests.
     is_asan = suffix in ("asan", "host-asan")
-    build_python_packages = ci_inputs.build_python_packages and not is_asan
+    build_python_packages = ci_inputs.build_python_packages
     test_python_packages_matrix = (
         build_rocm_python_test_matrix(
             per_family_info=per_family_info,
