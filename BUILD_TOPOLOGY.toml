@@ -667,11 +667,13 @@ source_paths = ["rocsolver", "hipsolver"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas", "prim", "rand", "sparse"]
+source_paths = ["rocalution"]
 
 [artifacts.rocwmma]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas"]
+source_paths = ["rocwmma"]
 
 [artifacts.composable-kernel]
 artifact_group = "math-libs"
@@ -683,11 +685,13 @@ source_paths = ["composablekernel"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "composable-kernel"]
+source_paths = ["hiptensor"]
 
 [artifacts.libhipcxx]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
+source_paths = ["libhipcxx"]
 
 [artifacts.hipthreads]
 # target-neutral: libhipthreads.a is a static archive of device bitcode that is
@@ -695,12 +699,13 @@ artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
 artifact_group = "math-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "amd-llvm", "libhipcxx"]
+source_paths = ["hipthreads"]
 
 [artifacts.support]
 artifact_group = "math-libs"
 type = "target-neutral"
 artifact_deps = []
-source_paths = ["mxdatagenerator"]
+source_paths = ["mxdatagenerator", "ctest"]
 
 # --- ML Libraries (per-arch) ---
 
@@ -709,11 +714,13 @@ artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas", "composable-kernel", "rand", "rocprofiler-sdk"]
 split_databases = ["miopen"]
+source_paths = ["miopen"]
 
 [artifacts.hipdnn]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "spdlog"]
+source_paths = ["hipdnn"]
 
 [artifacts.hipdnn-integration-tests]
 artifact_group = "ml-libs"
@@ -756,6 +763,7 @@ type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "base", "sysdeps"]
 feature_group = "CV_LIBS"
 disable_platforms = ["windows"]
+source_paths = ["rpp"]
 
 # --- Media Integration ---
 
