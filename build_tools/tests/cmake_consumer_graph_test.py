@@ -3,6 +3,7 @@
 
 """Tests for conservative CMake repository analysis."""
 
+import json
 import re
 from pathlib import Path
 
@@ -363,6 +364,27 @@ def test_static_graph_matches_committed() -> None:
     assert comparison.generated_only_edges == [], regen_hint
     assert result.unreachable_declaration_files == set()
     assert result.dangling_dependencies() == {}
+
+
+def test_subtree_map_matches_committed() -> None:
+    # Run against the real tree: the parser is the authoritative generator of the
+    # committed subtree map, so build_subtree_map() must equal the committed file
+    # exactly. Skips outside a git checkout.
+    repo_root = Path(__file__).resolve().parents[2]
+    committed = repo_root / "test_tools" / "therock_subtree_map.json"
+    if not (
+        (repo_root / ".git").exists()
+        and committed.exists()
+        and (repo_root / "CMakeLists.txt").exists()
+    ):
+        pytest.skip("not a TheRock git checkout with a committed subtree map")
+
+    result = RepositoryAnalyzer(repo_root).analyze()
+    committed_map = json.loads(committed.read_text(encoding="utf-8"))
+    assert result.build_subtree_map() == committed_map, (
+        "committed subtree map is out of sync with the parser; regenerate it with "
+        "build_tools/generate_consumer_graph.py and commit the result"
+    )
 
 
 def test_subtree_map_on_real_tree() -> None:
