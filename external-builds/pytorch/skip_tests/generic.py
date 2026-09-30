@@ -6,9 +6,6 @@
 # built from skip_tests below cannot intervene. Prefer skip_tests otherwise.
 exclude_modules = {
     "common": [
-        # Hangs past the pytest-timeout threshold on MIOpen convolution
-        # autotuning; restore this module via #8645.
-        "nn/test_convolution",
         # Inductor autotuning compiles in subprocesses that can outlive or
         # crash the worker, taking the shard's report with them.
         "inductor/test_max_autotune",

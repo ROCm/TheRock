@@ -93,7 +93,7 @@ class ExcludedModulesTest(unittest.TestCase):
         modules = runner.get_excluded_modules(
             amdgpu_family=["gfx942"], pytorch_version="2.15", platform="Linux"
         )
-        self.assertIn("nn/test_convolution", modules)
+        self.assertNotIn("nn/test_convolution", modules)
         self.assertIn("inductor/test_max_autotune", modules)
 
     def test_exclusions_are_module_paths_not_test_cases(self):
