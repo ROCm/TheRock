@@ -334,9 +334,11 @@ therock_cmake_subproject_declare(variable-sourced
     assert "variable-sourced" in result.subprojects
 
 
-def test_static_graph_superset_of_committed() -> None:
-    # Run against the real tree: the generated graph must not miss any node or edge
-    # in the committed graph (the superset invariant). Skips outside a git checkout.
+def test_static_graph_matches_committed() -> None:
+    # Run against the real tree: the parser is the authoritative generator of the
+    # committed graph, so the two must match exactly — no reference-only (committed
+    # holds something the parser does not) and no generated-only (committed is stale)
+    # nodes or edges. Skips outside a git checkout.
     repo_root = Path(__file__).resolve().parents[2]
     committed = repo_root / "test_tools" / "therock_consumer_graph.json"
     if not (
@@ -351,17 +353,14 @@ def test_static_graph_superset_of_committed() -> None:
         result.build_consumer_graph(), load_consumer_graph(committed)
     )
 
-    # A reference-only node/edge means the committed graph holds something the
-    # parser does not (a stale committed edge, or a parser gap). While the committed
-    # graph is still emitted by CMake, regenerate it via the cmake emit path
-    # (therock_emit_consumer_graph) — NOT generate_consumer_graph.py, which writes
-    # the conservative superset and would itself introduce drift.
     regen_hint = (
-        "committed graph has nodes/edges the parser does not; regenerate it via the "
-        "cmake emit path (not generate_consumer_graph.py, which writes the superset)"
+        "committed graph is out of sync with the parser; regenerate it with "
+        "build_tools/generate_consumer_graph.py and commit the result"
     )
     assert comparison.reference_only_nodes == [], regen_hint
     assert comparison.reference_only_edges == [], regen_hint
+    assert comparison.generated_only_nodes == [], regen_hint
+    assert comparison.generated_only_edges == [], regen_hint
     assert result.unreachable_declaration_files == set()
     assert result.dangling_dependencies() == {}
 

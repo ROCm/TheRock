@@ -10,11 +10,11 @@
 # Schema (reverse-dependency edges only):
 #   { "<subproject>": { "consumers": ["<consumer>", ...] }, ... }
 #
-# The emit writes build/therock_consumer_graph.json, which refreshes the committed
-# copy at test_tools/therock_consumer_graph.json. The committed copy is read
-# directly by CI (no configure on the hot path) and kept honest by the drift check
-# in .github/workflows/test_consumer_graph_drift.yml. It is generated-only; never
-# hand-edit it.
+# The emit writes build/therock_consumer_graph.json. NOTE: the committed copy at
+# test_tools/therock_consumer_graph.json is now generated and kept honest by the
+# static parser (build_tools/generate_consumer_graph.py) and its Test build_tools
+# pytest gate, not by this emit. This emit path is vestigial and slated for removal.
+# The committed copy is generated-only; never hand-edit it.
 function(therock_emit_consumer_graph output_file)
   get_property(_all GLOBAL PROPERTY THEROCK_ALL_SUBPROJECTS)
 

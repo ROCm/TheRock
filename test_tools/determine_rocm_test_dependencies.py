@@ -159,7 +159,8 @@ def _load_consumer_graph(therock_dir: Path | None = None) -> dict:
     """Load the committed consumer graph JSON, plus synthetic subprojects.
 
     Read directly from test_tools/ — no configure, no source fetch. Freshness is
-    enforced by the test_consumer_graph_drift.yml CI job.
+    enforced by the consumer-graph parser test in the Test build_tools CI job
+    (build_tools/generate_consumer_graph.py is the authoritative generator).
 
     Synthetic subprojects declared in test_policies.toml's `[synthetic.<name>]`
     tables (see `_load_synthetic_subprojects`) are merged in here as ordinary
