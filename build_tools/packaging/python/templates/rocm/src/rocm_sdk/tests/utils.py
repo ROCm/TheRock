@@ -50,13 +50,18 @@ def get_module_shared_libraries(mod) -> list[Path]:
 
 
 def find_console_script(script_name: str) -> Path | None:
-    scripts_paths = [sysconfig.get_path("scripts")]
+    scripts_paths = [
+        Path(sys.executable).parent,
+        sysconfig.get_path("scripts"),
+    ]
     if is_windows:
         scripts_paths.append(sysconfig.get_path("scripts", "nt_user"))
     else:
         scripts_paths.append(sysconfig.get_path("scripts", "posix_user"))
     for scripts_path in scripts_paths:
+        if scripts_path is None:
+            continue
         script_path = (Path(scripts_path) / script_name).with_suffix(exe_suffix)
-        if script_path.exists():
+        if script_path.is_file():
             return script_path
     return None
