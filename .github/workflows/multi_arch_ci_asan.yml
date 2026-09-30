@@ -63,7 +63,9 @@ jobs:
       linux_test_labels: ${{ inputs.linux_test_labels || '' }}
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
-      build_python_packages: false
+      # Validation only, not for merge: the wheel ASAN fixes in #8341 live in
+      # test_rocm_wheels.yml, which only runs when Python packages are built.
+      build_python_packages: true
       build_pytorch: false
       build_jax: false
 
