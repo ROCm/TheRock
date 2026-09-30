@@ -1431,6 +1431,11 @@ def _expand_build_config_for_platform(
                 f"disabling tests for quick test run"
             )
 
+        # Track whether tests are gated by trigger conditions (as opposed to
+        # simply having no GPU runner available). When gated, both GPU and CPU
+        # tests should be disabled.
+        tests_gated_by_trigger = False
+
         # Use trigger-based test gating (replaces nightly_check_only_for_family,
         # submodule_bump_tests_only, and trigger_test_label_only flags).
         # Each family specifies tests_on_trigger list; tests run if any current
@@ -1441,6 +1446,7 @@ def _expand_build_config_for_platform(
             )
             if not should_run:
                 test_runs_on = ""
+                tests_gated_by_trigger = True
                 print(f"  {family_name}: tests disabled ({reason})")
 
         # If test_type_for_family is set, force the test type for this family.
@@ -1457,9 +1463,10 @@ def _expand_build_config_for_platform(
                 )
 
         # CPU test runner for components that don't need GPU access (e.g.,
-        # components with linux_cpu_runner: True). This allows CPU-only tests
-        # to run even when GPU testing is gated (e.g., trigger_test_label_only).
-        test_runs_on_cpu = get_cpu_test_runner(platform)
+        # components with linux_cpu_runner: True). Only set when tests are not
+        # gated by trigger conditions. When tests are gated (e.g., via
+        # tests_on_trigger), both GPU and CPU tests should be disabled.
+        test_runs_on_cpu = "" if tests_gated_by_trigger else get_cpu_test_runner(platform)
 
         # tests_enabled is true when any test runner (GPU or CPU) is available.
         # This provides a single flag for workflows to gate test jobs.
