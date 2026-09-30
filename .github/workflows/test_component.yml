@@ -160,8 +160,12 @@ jobs:
       - name: Enable sanitizer-specific test flags
         if: ${{ contains(inputs.artifact_group, 'asan') }}
         run: |
-          python ./build_tools/github_actions/configure_asan_env.py \
-            --artifacts-dir "${{ env.OUTPUT_ARTIFACTS_DIR }}"
+          # configure_asan_env.py asks a compiler on PATH where its ASAN
+          # runtime lives, the same way docs/development/sanitizers.md does.
+          echo "${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin" >> "${GITHUB_PATH}"
+          PATH="${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin:${PATH}" \
+            python ./build_tools/github_actions/configure_asan_env.py \
+              --artifacts-dir "${{ env.OUTPUT_ARTIFACTS_DIR }}"
 
       - name: Driver / GPU sanity check
         if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}

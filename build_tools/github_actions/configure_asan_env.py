@@ -5,8 +5,8 @@
 """Exports the environment that ASAN-instrumented test jobs need to GITHUB_ENV.
 
 Test jobs for `asan` and `host-asan` artifact groups run binaries that link
-against instrumented ROCm libraries. Two paths have to be discovered from the
-downloaded artifacts rather than hardcoded:
+against instrumented ROCm libraries. Two paths have to be discovered rather than
+hardcoded:
 
 * The ASAN runtime, so that executables built without `-fsanitize=address`
   (Python, hip_check) can preload it. Without the preload they abort with
@@ -16,20 +16,24 @@ downloaded artifacts rather than hardcoded:
   directory is not the workspace root (hip_check runs from build/bin), where a
   relative path resolves to nothing.
 
+Both paths are discovered by asking a compiler on PATH, following
+docs/development/sanitizers.md. Callers are responsible for putting one there:
+a Python install gets `amdclang++` from `rocm-sdk-core`, and artifact-tree
+callers add the extracted `llvm/bin` to PATH. `--artifacts-dir` only supplies
+LD_LIBRARY_PATH, which cannot be derived from PATH.
+
 Which steps consume these values is left to the workflow; this script only
-exports them. Leak suppression in particular is deliberately not set here: a
-job-wide `detect_leaks=0` would disable leak detection for the component tests
-as well, so the workflow scopes that to the sanity step's own `env`.
+exports them. Leak detection stays on: LSAN_OPTIONS points at a suppressions
+file that silences the uninstrumented interpreter without hiding leaks in ROCm
+libraries.
 
-Missing binaries warn rather than fail, preserving the behavior of the inline
-shell this replaced.
-
-Used by `test_component.yml`.
+Used by `test_component.yml` and `test_rocm_wheels.yml`.
 """
 
 import argparse
 import os
 import platform
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -68,50 +72,77 @@ ASAN_RUNTIME_LIBS = (
     f"libclang_rt.asan-{platform.machine()}.so",
 )
 
+# Searched on PATH in order. The first two are the console scripts
+# rocm-sdk-core installs; the last two are what an extracted artifact tree
+# carries in llvm/bin.
+COMPILERS = ("amdclang++", "amdclang", "clang++", "clang")
 
-def _resolve_asan_runtime(
-    artifacts_dir: Path,
-) -> tuple[Optional[Path], Optional[str]]:
-    """Asks the artifact tree's clang where its ASAN runtime lives.
+LSAN_SUPPRESSIONS = (
+    Path(__file__).resolve().parents[2] / "test_tools" / "lsan_suppressions.txt"
+)
 
+
+class AsanEnvironmentError(Exception):
+    """Raised when a required ASAN path cannot be resolved."""
+
+
+def _resolve_compiler() -> Path:
+    """Locates the clang that owns the ASAN runtime under test."""
+    for name in COMPILERS:
+        found = shutil.which(name)
+        if found:
+            return Path(found)
+    raise AsanEnvironmentError(
+        f"none of {', '.join(COMPILERS)} are on PATH; the caller is responsible "
+        "for putting the ROCm toolchain there"
+    )
+
+
+def _ask_compiler(clang: Path, flag: str, name: str) -> Optional[Path]:
+    """Runs a clang -print-*-name query, returning the path only if it exists.
+
+    clang echoes the name back when it cannot find the file, so the result is
+    only meaningful once it resolves to something on disk.
+    """
+    try:
+        result = subprocess.run(
+            [str(clang), f"-{flag}={name}"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, OSError) as e:
+        raise AsanEnvironmentError(f"could not query {clang} for {name}: {e}") from e
+
+    candidate = Path(result.stdout.strip())
+    return candidate.resolve() if candidate.is_file() else None
+
+
+def _resolve_asan_runtime(clang: Path) -> Path:
+    """Asks clang where its ASAN runtime lives. Raises if it ships none."""
+    for name in ASAN_RUNTIME_LIBS:
+        runtime = _ask_compiler(clang, "print-file-name", name)
+        if runtime:
+            return runtime
+    raise AsanEnvironmentError(
+        f"ASAN runtime not found, tried {', '.join(ASAN_RUNTIME_LIBS)} via "
+        f"{clang}; the build under test is probably not ASAN-instrumented"
+    )
+
+
+def _resolve_symbolizer(clang: Path) -> tuple[Optional[Path], Optional[str]]:
+    """Locates llvm-symbolizer beside the compiler.
+
+    Unsymbolized reports are still usable, so this warns instead of raising.
     Returns (path, warning); exactly one is set.
     """
-    clang = artifacts_dir / "llvm" / "bin" / "clang"
-    if not os.access(clang, os.X_OK):
-        return None, f"clang not found at {clang}, ASAN runtime path not resolved"
-
-    for lib in ASAN_RUNTIME_LIBS:
-        try:
-            result = subprocess.run(
-                [str(clang), f"-print-file-name={lib}"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-        except (subprocess.CalledProcessError, OSError) as e:
-            return None, f"could not query {clang} for the ASAN runtime: {e}"
-
-        # clang echoes the name back unchanged when it cannot locate the file.
-        runtime = Path(result.stdout.strip())
-        if runtime.is_file():
-            return runtime.resolve(), None
-
-    return None, f"ASAN runtime not found, tried {', '.join(ASAN_RUNTIME_LIBS)}"
-
-
-def _resolve_symbolizer(artifacts_dir: Path) -> tuple[Optional[Path], Optional[str]]:
-    """Locates llvm-symbolizer in the artifact tree.
-
-    Returns (path, warning); exactly one is set.
-    """
-    symbolizer = artifacts_dir / "llvm" / "bin" / "llvm-symbolizer"
-    if not os.access(symbolizer, os.X_OK):
+    symbolizer = _ask_compiler(clang, "print-prog-name", "llvm-symbolizer")
+    if not symbolizer:
         return (
             None,
-            f"llvm-symbolizer not found at {symbolizer}, "
-            "ASAN reports will be unsymbolized",
+            f"{clang} reports no llvm-symbolizer, ASAN reports will be unsymbolized",
         )
-    return symbolizer.resolve(), None
+    return symbolizer, None
 
 
 def _resolve_library_path(artifacts_dir: Path) -> str:
@@ -123,24 +154,31 @@ def _resolve_library_path(artifacts_dir: Path) -> str:
     return ":".join(parts)
 
 
-def resolve_asan_env(artifacts_dir: Path) -> tuple[dict[str, str], list[str]]:
-    """Returns (environment variables to export, warnings to surface)."""
+def resolve_asan_env(
+    artifacts_dir: Optional[Path] = None,
+) -> tuple[dict[str, str], list[str]]:
+    """Returns (environment variables to export, warnings to surface).
+
+    Raises AsanEnvironmentError if the runtime cannot be resolved.
+    """
     env = dict(STATIC_ASAN_ENV)
     warnings: list[str] = []
 
-    runtime, warning = _resolve_asan_runtime(artifacts_dir)
-    if runtime:
-        env["ASAN_RUNTIME_PATH"] = str(runtime)
-    if warning:
-        warnings.append(warning)
+    clang = _resolve_compiler()
+    env["ASAN_RUNTIME_PATH"] = str(_resolve_asan_runtime(clang))
 
-    symbolizer, warning = _resolve_symbolizer(artifacts_dir)
+    symbolizer, warning = _resolve_symbolizer(clang)
     if symbolizer:
         env["ASAN_SYMBOLIZER_PATH"] = str(symbolizer)
     if warning:
         warnings.append(warning)
 
-    env["LD_LIBRARY_PATH"] = _resolve_library_path(artifacts_dir)
+    # Python packages carry their own RPATH; only the artifact tree needs help
+    # finding its libraries.
+    if artifacts_dir is not None:
+        env["LD_LIBRARY_PATH"] = _resolve_library_path(artifacts_dir)
+
+    env["LSAN_OPTIONS"] = f"suppressions={LSAN_SUPPRESSIONS}"
 
     return env, warnings
 
@@ -150,8 +188,11 @@ def main(argv=None) -> int:
     parser.add_argument(
         "--artifacts-dir",
         type=Path,
-        required=True,
-        help="Directory ROCm artifacts were extracted into (OUTPUT_ARTIFACTS_DIR).",
+        help=(
+            "Directory ROCm artifacts were extracted into "
+            "(OUTPUT_ARTIFACTS_DIR), used to build LD_LIBRARY_PATH. Omit when "
+            "ROCm is installed as Python packages, which carry their own RPATH."
+        ),
     )
     args = parser.parse_args(argv)
 
@@ -159,11 +200,11 @@ def main(argv=None) -> int:
 
     for warning in warnings:
         print(f"::warning::{warning}")
-    if "ASAN_RUNTIME_PATH" in env:
-        print(f"Resolved ASAN runtime: {env['ASAN_RUNTIME_PATH']}")
+    print(f"Resolved ASAN runtime: {env['ASAN_RUNTIME_PATH']}")
     if "ASAN_SYMBOLIZER_PATH" in env:
         print(f"Resolved ASAN symbolizer: {env['ASAN_SYMBOLIZER_PATH']}")
-    print(f"Resolved LD_LIBRARY_PATH: {env['LD_LIBRARY_PATH']}")
+    if "LD_LIBRARY_PATH" in env:
+        print(f"Resolved LD_LIBRARY_PATH: {env['LD_LIBRARY_PATH']}")
 
     gha_set_env(env)
     return 0
