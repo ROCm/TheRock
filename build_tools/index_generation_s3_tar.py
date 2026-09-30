@@ -184,6 +184,7 @@ def generate_index_s3(
             <label for="filter">Filter by:</label>
             <select id="filter">
                 <option value="all">All</option>
+                <option value="multiarch">Multiarch</option>
                 {gpu_families_options}
             </select>
         </div>

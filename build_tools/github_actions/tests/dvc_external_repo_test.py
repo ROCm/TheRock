@@ -71,10 +71,20 @@ class TestDVCProjectsConfiguration(unittest.TestCase):
         )
 
         # Verify it contains external-rocm-libraries
-        self.assertEqual(
+        self.assertIn(
+            "external-rocm-libraries",
             config["dvc_projects"],
-            ["external-rocm-libraries"],
             "dvc_projects should contain external-rocm-libraries path",
+        )
+
+    def test_rocm_libraries_also_pulls_rocm_systems_dvc(self):
+        """Test that rocm-libraries dvc_projects also includes rocm-systems (wkmi)."""
+        config = get_repo_config("rocm-libraries")
+
+        self.assertIn(
+            "rocm-systems",
+            config["dvc_projects"],
+            "dvc_projects should contain rocm-systems for wkmi",
         )
 
 
@@ -168,9 +178,9 @@ class TestFetchSourcesArgsGeneration(unittest.TestCase):
         # rocm-libraries should have both skip-submodules and dvc-projects
         self.assertIn("--skip-submodules rocm-libraries", output)
         self.assertIn(
-            "--dvc-projects external-rocm-libraries",
+            "--dvc-projects external-rocm-libraries rocm-systems",
             output,
-            "Should include --dvc-projects external-rocm-libraries",
+            "Should include --dvc-projects external-rocm-libraries rocm-systems",
         )
 
 

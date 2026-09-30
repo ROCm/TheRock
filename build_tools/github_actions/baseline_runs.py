@@ -876,9 +876,22 @@ def select_baseline_run(
         )
 
         if not availability.is_valid:
+            missing_pairs = sorted(
+                f"{artifact.name}/{artifact.target_family}"
+                for artifact in availability.missing_artifacts
+            )
             missing_families = sorted(
                 {artifact.target_family for artifact in availability.missing_artifacts}
             )
+
+            logger.info(
+                "[BASELINE] missing required artifact pairs: "
+                "platform=%s run_id=%s pairs=%s",
+                platform,
+                run_id,
+                missing_pairs,
+            )
+
             logger.info(
                 "[BASELINE] rejecting candidate: platform=%s run_id=%s "
                 "missing_artifact_pairs=%d/%d missing_families=%s total=%.2fs",
