@@ -72,7 +72,6 @@ class FileSetDiagnostics:
         )
         try:
             faulthandler.enable(all_threads=True)
-            faulthandler.dump_traceback_later(60, repeat=True)
             self.thread = threading.Thread(target=self._heartbeat, daemon=True)
             self.thread.start()
         except (OSError, RuntimeError) as e:
@@ -82,10 +81,6 @@ class FileSetDiagnostics:
         self.stop_event.set()
         if hasattr(self, "thread"):
             self.thread.join(timeout=2)
-        try:
-            faulthandler.cancel_dump_traceback_later()
-        except RuntimeError as e:
-            self.log(f"diagnostic_stop_error={e!r}")
         with self.lock:
             current_operation = self.current_operation
         self.log(f"finish succeeded={succeeded} current_operation={current_operation}")

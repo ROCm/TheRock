@@ -65,6 +65,10 @@ class TeatimeDiagnosticsTest(unittest.TestCase):
             format_returncode(-1073741819),
             "decimal=-1073741819 hex=0xC0000005 status=STATUS_ACCESS_VIOLATION",
         )
+        self.assertEqual(
+            format_returncode(3221356611),
+            "decimal=3221356611 hex=0xC0020043 status=RPC_NT_INTERNAL_ERROR",
+        )
 
     def test_diagnostic_path_records_before_and_after_state(self):
         with tempfile.TemporaryDirectory() as temp_dir:

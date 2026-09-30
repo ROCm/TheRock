@@ -143,6 +143,14 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
         loc = self.root.log_stage_dir("math-libs", "gfx1151")
         self._assert_relative_path(loc, "99999-linux/logs/math-libs/gfx1151")
 
+    def test_log_stage_dir_per_arch_run_attempt(self):
+        loc = self.root.log_stage_dir("math-libs", "gfx1151", run_attempt=6)
+        self._assert_relative_path(loc, "99999-linux/logs/math-libs/gfx1151/attempt-6")
+
+    def test_log_stage_dir_rejects_invalid_run_attempt(self):
+        with self.assertRaises(ValueError):
+            self.root.log_stage_dir("math-libs", "gfx1151", run_attempt=0)
+
     def test_log_stage_dir_generic(self):
         loc = self.root.log_stage_dir("foundation")
         self._assert_relative_path(loc, "99999-linux/logs/foundation")

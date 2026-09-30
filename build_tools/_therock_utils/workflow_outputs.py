@@ -129,7 +129,10 @@ class WorkflowOutputRoot:
         return StorageLocation(self.bucket, f"{self.prefix}/logs/{artifact_group}")
 
     def log_stage_dir(
-        self, stage_name: str, amdgpu_family: str = ""
+        self,
+        stage_name: str,
+        amdgpu_family: str = "",
+        run_attempt: int | str | None = None,
     ) -> StorageLocation:
         """Location for a multi-arch stage log directory.
 
@@ -140,12 +143,18 @@ class WorkflowOutputRoot:
         Args:
             stage_name: Build stage (e.g., 'compiler-runtime', 'math-libs')
             amdgpu_family: GPU family (e.g., 'gfx1151'). Empty for generic stages.
+            run_attempt: Optional GitHub Actions run attempt. When present, logs
+                are isolated under an ``attempt-N`` subdirectory.
         """
+        relative_path = f"{self.prefix}/logs/{stage_name}"
         if amdgpu_family:
-            return StorageLocation(
-                self.bucket, f"{self.prefix}/logs/{stage_name}/{amdgpu_family}"
-            )
-        return StorageLocation(self.bucket, f"{self.prefix}/logs/{stage_name}")
+            relative_path += f"/{amdgpu_family}"
+        if run_attempt is not None and str(run_attempt):
+            attempt = int(run_attempt)
+            if attempt < 1:
+                raise ValueError(f"run_attempt must be positive, got {run_attempt!r}")
+            relative_path += f"/attempt-{attempt}"
+        return StorageLocation(self.bucket, relative_path)
 
     def log_file(self, artifact_group: str, filename: str) -> StorageLocation:
         """Location for a specific file within the log_dir() subtree.

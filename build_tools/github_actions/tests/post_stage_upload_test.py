@@ -215,6 +215,29 @@ class TestUploadStageLogs(unittest.TestCase):
             self.assertTrue((base / "rocBLAS_configure.log").is_file())
             self.assertTrue((base / "ninja_logs.tar.gz").is_file())
 
+    def test_per_arch_stage_upload_path_isolated_by_attempt(self):
+        output_root = _make_output_root()
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
+            build_dir = Path(tmp)
+            staging_dir = Path(staging)
+            log_dir = build_dir / "logs"
+            log_dir.mkdir()
+            (log_dir / "hipDNN_stage_copy.log").write_text("partial log")
+
+            backend = LocalStorageBackend(staging_dir)
+            post_stage_upload.upload_stage_logs(
+                build_dir=build_dir,
+                output_root=output_root,
+                backend=backend,
+                stage_name="math-libs",
+                amdgpu_family="gfx1151",
+                run_attempt=6,
+            )
+
+            base = staging_dir / "12345-linux" / "logs" / "math-libs" / "gfx1151"
+            self.assertTrue((base / "attempt-6" / "hipDNN_stage_copy.log").is_file())
+            self.assertFalse((base / "hipDNN_stage_copy.log").exists())
+
     def test_no_log_dir_skips(self):
         """Verify no error when logs/ doesn't exist."""
         output_root = _make_output_root()

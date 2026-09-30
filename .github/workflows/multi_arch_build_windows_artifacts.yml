@@ -105,6 +105,8 @@ jobs:
       EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
       BUILD_DIR: B:\build
       CACHE_DIR: ${{ github.workspace }}/.cache
+      PYTHONFAULTHANDLER: 1
+      WINDOWS_DIAGNOSTICS_DIR: B:\build\logs\windows-diagnostics
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -239,6 +241,13 @@ jobs:
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
+      # Limit full process dumps to the build phase, where no repository or
+      # artifact credentials are present in child-process environments.
+      - name: Configure Windows crash diagnostics
+        shell: powershell
+        run: |
+          & build_tools\github_actions\windows_crash_diagnostics.ps1 -Mode Setup -OutputDir "${env:WINDOWS_DIAGNOSTICS_DIR}"
+
       - name: Build stage
         run: |
           cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
@@ -261,6 +270,13 @@ jobs:
       - name: Test Packaging
         run: |
           ctest --test-dir ${BUILD_DIR} --output-on-failure
+
+      - name: Collect Windows crash diagnostics
+        if: ${{ always() }}
+        continue-on-error: true
+        shell: powershell
+        run: |
+          & build_tools\github_actions\windows_crash_diagnostics.ps1 -Mode Collect -OutputDir "${env:WINDOWS_DIAGNOSTICS_DIR}"
 
       - name: Configure AWS credentials for artifact uploads
         if: ${{ always() }}
@@ -285,6 +301,7 @@ jobs:
         run: |
           python build_tools/github_actions/post_stage_upload.py \
             --run-id=${{ github.run_id }} \
+            --run-attempt=${{ github.run_attempt }} \
             --stage="${STAGE_NAME}" \
             --build-dir="${BUILD_DIR}" \
             --amdgpu-family="${AMDGPU_FAMILIES}"

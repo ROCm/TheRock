@@ -8,8 +8,8 @@ Each multi-arch CI stage job builds a subset of TheRock (e.g., math-libs for
 gfx1151). This script archives ninja logs and uploads the stage's log directory
 to S3, organized by stage name and (optionally) GPU family:
 
-    {run_id}-{platform}/logs/{stage_name}/                  # generic stages
-    {run_id}-{platform}/logs/{stage_name}/{amdgpu_family}/  # per-arch stages
+    {run_id}-{platform}/logs/{stage_name}/attempt-{run_attempt}/
+    {run_id}-{platform}/logs/{stage_name}/{amdgpu_family}/attempt-{run_attempt}/
 
 This is the multi-arch counterpart to post_build_upload.py, which handles
 single-stage (monolithic) CI builds. Key differences:
@@ -22,6 +22,7 @@ single-stage (monolithic) CI builds. Key differences:
 Usage:
     python post_stage_upload.py \\
         --run-id ${{ github.run_id }} \\
+        --run-attempt ${{ github.run_attempt }} \\
         --stage math-libs \\
         --build-dir build \\
         --amdgpu-family gfx1151
@@ -121,6 +122,7 @@ def upload_stage_logs(
     backend: StorageBackend,
     stage_name: str,
     amdgpu_family: str,
+    run_attempt: int | str | None = None,
 ):
     """Upload the stage's log directory.
 
@@ -130,13 +132,14 @@ def upload_stage_logs(
         backend: Storage backend (S3 or local) to upload through.
         stage_name: Build stage (e.g., 'compiler-runtime', 'math-libs').
         amdgpu_family: GPU family (e.g., 'gfx1151'). Empty for generic stages.
+        run_attempt: Optional GitHub Actions run attempt used to isolate reruns.
     """
     log_dir = build_dir / "logs"
     if not log_dir.is_dir():
         log(f"[INFO] Log directory {log_dir} not found. Skipping upload.")
         return
 
-    dest = output_root.log_stage_dir(stage_name, amdgpu_family)
+    dest = output_root.log_stage_dir(stage_name, amdgpu_family, run_attempt)
     # Exclude raw ccache logs — they're uploaded compressed as ccache_logs.tar.zst.
     backend.upload_directory(log_dir, dest, exclude=["ccache/**/*"])
 
@@ -177,6 +180,7 @@ def run(args: argparse.Namespace):
         backend=backend,
         stage_name=args.stage,
         amdgpu_family=args.amdgpu_family,
+        run_attempt=args.run_attempt,
     )
     if args.stage == "compiler-runtime":
         upload_manifest(
@@ -199,6 +203,12 @@ def main(argv: list[str] | None = None):
         type=str,
         default=platform.system().lower(),
         help=f"Platform for workflow output paths (default: {platform.system().lower()})",
+    )
+    parser.add_argument(
+        "--run-attempt",
+        type=int,
+        default=int(os.environ.get("GITHUB_RUN_ATTEMPT", "0")) or None,
+        help="GitHub Actions run attempt (default: $GITHUB_RUN_ATTEMPT)",
     )
     parser.add_argument(
         "--stage",

@@ -66,6 +66,7 @@ _WINDOWS_STATUS_NAMES = {
     0xC0000142: "STATUS_DLL_INIT_FAILED",
     0xC0000374: "STATUS_HEAP_CORRUPTION",
     0xC0000409: "STATUS_STACK_BUFFER_OVERRUN",
+    0xC0020043: "RPC_NT_INTERNAL_ERROR",
 }
 
 
@@ -89,9 +90,19 @@ def format_returncode(returncode: int) -> str:
     return " ".join(fields)
 
 
-def _get_windows_commit_bytes() -> tuple[int | None, int | None, int | None]:
+@dataclass(frozen=True)
+class WindowsPerformanceSnapshot:
+    commit_total: int | None = None
+    commit_limit: int | None = None
+    commit_peak: int | None = None
+    handle_count: int | None = None
+    process_count: int | None = None
+    thread_count: int | None = None
+
+
+def _get_windows_performance() -> WindowsPerformanceSnapshot:
     if platform.system() != "Windows":
-        return None, None, None
+        return WindowsPerformanceSnapshot()
 
     try:
         import ctypes
@@ -117,14 +128,17 @@ def _get_windows_commit_bytes() -> tuple[int | None, int | None, int | None]:
         info = PerformanceInformation()
         info.cb = ctypes.sizeof(info)
         if not ctypes.windll.psapi.GetPerformanceInfo(ctypes.byref(info), info.cb):
-            return None, None, None
-        return (
-            info.CommitTotal * info.PageSize,
-            info.CommitLimit * info.PageSize,
-            info.CommitPeak * info.PageSize,
+            return WindowsPerformanceSnapshot()
+        return WindowsPerformanceSnapshot(
+            commit_total=info.CommitTotal * info.PageSize,
+            commit_limit=info.CommitLimit * info.PageSize,
+            commit_peak=info.CommitPeak * info.PageSize,
+            handle_count=info.HandleCount,
+            process_count=info.ProcessCount,
+            thread_count=info.ThreadCount,
         )
     except Exception:
-        return None, None, None
+        return WindowsPerformanceSnapshot()
 
 
 @dataclass(frozen=True)
@@ -136,6 +150,9 @@ class ResourceSnapshot:
     commit_total: int | None = None
     commit_limit: int | None = None
     commit_peak: int | None = None
+    system_handles: int | None = None
+    system_processes: int | None = None
+    system_threads: int | None = None
     process_rss: int | None = None
     process_vms: int | None = None
     process_threads: int | None = None
@@ -159,6 +176,9 @@ class ResourceSnapshot:
                 f"swap={_format_bytes(self.swap_used)}/{_format_bytes(self.swap_total)}",
                 f"commit={_format_bytes(self.commit_total)}/{_format_bytes(self.commit_limit)}",
                 f"commit_peak={_format_bytes(self.commit_peak)}",
+                f"system_handles={self.system_handles if self.system_handles is not None else 'unknown'}",
+                f"system_processes={self.system_processes if self.system_processes is not None else 'unknown'}",
+                f"system_threads={self.system_threads if self.system_threads is not None else 'unknown'}",
                 f"process_rss={_format_bytes(self.process_rss)}",
                 f"process_vms={_format_bytes(self.process_vms)}",
                 f"process_threads={self.process_threads if self.process_threads is not None else 'unknown'}",
@@ -178,7 +198,7 @@ def _collect_resource_snapshot(pid: int) -> ResourceSnapshot:
 
     virtual_memory = psutil.virtual_memory()
     swap_memory = psutil.swap_memory()
-    commit_total, commit_limit, commit_peak = _get_windows_commit_bytes()
+    windows_performance = _get_windows_performance()
 
     process_rss = None
     process_vms = None
@@ -219,9 +239,12 @@ def _collect_resource_snapshot(pid: int) -> ResourceSnapshot:
         system_memory_available=virtual_memory.available,
         swap_used=swap_memory.used,
         swap_total=swap_memory.total,
-        commit_total=commit_total,
-        commit_limit=commit_limit,
-        commit_peak=commit_peak,
+        commit_total=windows_performance.commit_total,
+        commit_limit=windows_performance.commit_limit,
+        commit_peak=windows_performance.commit_peak,
+        system_handles=windows_performance.handle_count,
+        system_processes=windows_performance.process_count,
+        system_threads=windows_performance.thread_count,
         process_rss=process_rss,
         process_vms=process_vms,
         process_threads=process_threads,
