@@ -160,15 +160,12 @@ jobs:
         env:
           KPACK_SPLIT: ${{ needs.build_python_packages.outputs.kpack_split }}
         run: |
-          # Temporary: --skip-native-packages until the MSI build workflow is
-          # wired into this release pipeline (see #1987).
           python build_tools/github_actions/publish_rocm_to_release_buckets.py \
             --run-id="${{ github.run_id }}" \
             --platform=windows \
             --release-type="${BUILD_RELEASE_TYPE}" \
             --kpack-split="${KPACK_SPLIT}" \
-            --structured \
-            --skip-native-packages
+            --structured
 
   trigger_test_artifacts_per_family:
     needs: [build_artifacts]
