@@ -100,6 +100,10 @@ class ExcludedModulesTest(unittest.TestCase):
         skips = runner.get_tests(
             amdgpu_family=["gfx942"], pytorch_version="2.15", platform="Linux"
         )
+        self.assertIn(
+            "test_Conv2d_depthwise_kernel_flag_cuda_float16",
+            skips,
+        )
         for module in runner.get_excluded_modules(
             amdgpu_family=["gfx942"], pytorch_version="2.15", platform="Linux"
         ):

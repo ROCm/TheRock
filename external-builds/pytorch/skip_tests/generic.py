@@ -109,6 +109,9 @@ skip_tests = {
             "test_is_pinned_no_context",
         ],
         "nn": [
+            # ROCm selects MiopenDepthwise while this CUDA-specific assertion
+            # requires CudaDepthwise2d.
+            "test_Conv2d_depthwise_kernel_flag_cuda_float16",
             # external-builds/pytorch/pytorch/test/test_nn.py::TestNN::test_RNN_dropout_state MIOpen(HIP): Error [Compile] 'hiprtcCompileProgram(prog.get(), c_options.size(), c_options.data())' MIOpenDropoutHIP.cpp: HIPRTC_ERROR_COMPILATION (6)
             # MIOpen(HIP): Error [BuildHip] HIPRTC status = HIPRTC_ERROR_COMPILATION (6), source file: MIOpenDropoutHIP.cpp
             # MIOpen(HIP): Warning [BuildHip] In file included from /tmp/comgr-01c423/input/MIOpenDropoutHIP.cpp:32:
