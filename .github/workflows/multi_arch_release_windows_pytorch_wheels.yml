@@ -8,6 +8,10 @@
 # * https://github.com/ROCm/TheRock/issues/3332
 # * https://github.com/ROCm/TheRock/issues/3291
 
+# Notes on security:
+#   * Higher-trust entry points: manual runs and automation from https://github.com/ROCm/rockrel.
+#   * Inherit Quartz credentials through nested workflows without repeating mappings.
+
 name: Multi-Arch Release Windows PyTorch Wheels
 
 on:
@@ -122,16 +126,25 @@ on:
         type: string
         default: ""
 
-run-name: Release Windows PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
+run-name: >-
+  Release Windows PyTorch Wheels
+  (${{ inputs.release_type }}, ${{ inputs.rocm_version }},
+  ${{ inputs.amdgpu_families }}, py ${{ inputs.python_version || 'all' }})
 
 permissions:
   contents: read
 
 jobs:
   setup_matrix:
+    name: Configure PyTorch Release Matrix
     runs-on: ubuntu-24.04
     outputs:
       pytorch_matrix: ${{ steps.matrix.outputs.pytorch_matrix }}
+    env:
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
+      PYTHON_VERSION: ${{ inputs.python_version }}
+
     steps:
       - name: "Quartz - started - release PyTorch wheels"
         continue-on-error: true
@@ -147,6 +160,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
@@ -154,10 +168,10 @@ jobs:
         id: matrix
         run: |
           python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
-            --python-versions="${{ inputs.python_version }}" \
+            --python-versions="${PYTHON_VERSION}" \
             --platform=windows \
-            --release-type="${{ inputs.release_type }}" \
-            --amdgpu-families="${{ inputs.amdgpu_families }}"
+            --release-type="${BUILD_RELEASE_TYPE}" \
+            --amdgpu-families="${AMDGPU_FAMILIES}"
 
   build_pytorch_wheels:
     needs: setup_matrix
@@ -171,10 +185,11 @@ jobs:
       id-token: write
       contents: read
     uses: ./.github/workflows/multi_arch_build_windows_pytorch_wheels.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
       test_amdgpu_families: ${{ matrix.test_amdgpu_families }}
+      test_level: ${{ matrix.test_level }}
       python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       rocm_version: ${{ inputs.rocm_version }}

@@ -45,8 +45,8 @@ test_include = ["amd-dbgapi", "ocl-icd", "rocgdb"]
 # Backs the "amd-hip" toolchain most of the tree builds with.
 level = 3
 # Only the couplings the walk does not already reach: hipinfo is a hip-clr tool
-# target (not a graph key); rocrtst has no graph path from hip-clr.
-test_include = ["hipinfo", "rocrtst"]
+# target (not a graph key); rocrtst and rocgdb have no graph path from hip-clr.
+test_include = ["hipinfo", "rocrtst", "rocgdb"]
 
 [component.amd-llvm]
 # The compiler builds ~everything; its consumers come from the graph via

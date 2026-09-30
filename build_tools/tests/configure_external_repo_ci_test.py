@@ -37,6 +37,10 @@ class IsSkippableTest(unittest.TestCase):
     def test_rst_files_are_skippable(self):
         self.assertTrue(is_skippable("index.rst"))
 
+    def test_codeowners_files_are_skippable(self):
+        self.assertTrue(is_skippable(".github/CODEOWNERS"))
+        self.assertTrue(is_skippable("projects/rocblas/.github/CODEOWNERS"))
+
     def test_docs_directory_is_skippable(self):
         self.assertTrue(is_skippable("docs/api.txt"))
         self.assertTrue(is_skippable("projects/rocblas/docs/readme.md"))
@@ -217,6 +221,20 @@ class ConfigureTest(unittest.TestCase):
         )
         self.assertEqual(result.skip_tests, True)
         self.assertEqual(result.run_all_tests, False)
+
+    @patch("configure_external_repo_ci.get_modified_paths_api")
+    def test_only_codeowners_changed_skips_tests(self, mock_api):
+        mock_api.return_value = {".github/CODEOWNERS"}
+        result = configure(
+            event_name="pull_request",
+            github_repo="ROCm/rocm-libraries",
+            base_sha="abc123",
+            head_sha="def456",
+            config_path="",
+        )
+        self.assertEqual(result.skip_tests, True)
+        self.assertEqual(result.run_all_tests, False)
+        self.assertEqual(result.changed_projects, "")
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
     def test_ci_workflow_changed_runs_all_tests(self, mock_api):
