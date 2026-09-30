@@ -1547,9 +1547,9 @@ def _expand_build_config_for_platform(
 
     # PR labels can override packaging build decisions.
     pr_labels = ci_inputs.pr_labels
-    if "ci:build-tarball" in pr_labels:
+    if "ci:build-native-linux" in pr_labels:
         build_native_linux = True
-    elif "ci:skip-tarball" in pr_labels:
+    elif "ci:skip-native-linux" in pr_labels:
         build_native_linux = False
 
     if "ci:build-python-packages" in pr_labels:

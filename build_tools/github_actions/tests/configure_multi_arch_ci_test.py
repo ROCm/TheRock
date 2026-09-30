@@ -1856,14 +1856,14 @@ class TestExpandBuildConfigs(unittest.TestCase):
         cases = [
             # (label, input_field, config_field, default, expected)
             (
-                "ci:build-tarball",
+                "ci:build-native-linux",
                 "build_native_linux",
                 "build_native_linux",
                 False,
                 True,
             ),
             (
-                "ci:skip-tarball",
+                "ci:skip-native-linux",
                 "build_native_linux",
                 "build_native_linux",
                 True,
