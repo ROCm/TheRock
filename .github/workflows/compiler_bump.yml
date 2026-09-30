@@ -580,6 +580,41 @@ jobs:
           echo "## Linux Tests Triggered" >> "$GITHUB_STEP_SUMMARY"
           echo "**Test Run:** ${TEST_RUN_URL}" >> "$GITHUB_STEP_SUMMARY"
 
+  trigger-rccl-tests:
+    name: Trigger RCCL Tests (gfx950-dcgpu)
+    needs: [create-branch, setup-linux, build-linux]
+    if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' }}
+    runs-on: ubuntu-24.04
+    outputs:
+      test_run_url: ${{ steps.trigger-tests.outputs.runUrlHtml }}
+    steps:
+      - name: Trigger test_artifacts for gfx950-dcgpu (RCCL only, comprehensive)
+        id: trigger-tests
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: test_artifacts.yml
+          inputs: |
+            {
+              "artifact_group": "gfx950-dcgpu",
+              "artifact_run_id": "${{ github.run_id }}",
+              "amdgpu_families": "gfx950-dcgpu",
+              "test_runs_on": "linux-gfx950-8gpu-ccs-ossci-rocm",
+              "test_type": "comprehensive",
+              "test_labels": "[\"test:rccl\"]",
+              "release_type": "dev",
+              "repository": "${{ github.repository }}",
+              "ref": "${{ needs.create-branch.outputs.branch_name }}",
+              "build_variant": "release"
+            }
+
+      - name: Output test run URL
+        if: ${{ steps.trigger-tests.outputs.runUrlHtml != '' }}
+        env:
+          TEST_RUN_URL: ${{ steps.trigger-tests.outputs.runUrlHtml }}
+        run: |
+          echo "## RCCL Tests Triggered (gfx950-dcgpu)" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Test Run:** ${TEST_RUN_URL}" >> "$GITHUB_STEP_SUMMARY"
+
   trigger-windows-tests:
     name: Trigger Windows Tests (gfx110X-all)
     needs: [create-branch, setup-windows, build-windows]
@@ -649,6 +684,7 @@ jobs:
       - trigger-windows-pytorch-wheels
       - dispatch-asan-build
       - trigger-linux-tests
+      - trigger-rccl-tests
       - trigger-windows-tests
     if: always()
     runs-on: ubuntu-24.04
@@ -698,6 +734,7 @@ jobs:
           ASAN_URL: ${{ needs.dispatch-asan-build.outputs.run_url }}
           BRANCH_NAME: ${{ needs.create-branch.outputs.branch_name }}
           LINUX_TEST_RUN_URL: ${{ needs.trigger-linux-tests.outputs.test_run_url }}
+          RCCL_TEST_RUN_URL: ${{ needs.trigger-rccl-tests.outputs.test_run_url }}
           WINDOWS_TEST_RUN_URL: ${{ needs.trigger-windows-tests.outputs.test_run_url }}
           LINUX_ARTIFACT_URL: ${{ steps.artifact-urls.outputs.linux_artifact_url }}
           LINUX_LOG_URL: ${{ steps.artifact-urls.outputs.linux_log_url }}
@@ -765,6 +802,18 @@ jobs:
             fi
           elif [ "${{ needs.trigger-linux-tests.result }}" == "failure" ]; then
             echo "- :x: Test trigger failed" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # RCCL tests (gfx950-dcgpu, comprehensive)
+          if [ "${{ needs.trigger-rccl-tests.result }}" == "success" ]; then
+            RCCL_TEST_URL="${RCCL_TEST_RUN_URL}"
+            if [ -n "$RCCL_TEST_URL" ]; then
+              echo "- :white_check_mark: RCCL tests triggered (gfx950-dcgpu, comprehensive): [View Run]($RCCL_TEST_URL)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- :white_check_mark: RCCL tests triggered (gfx950-dcgpu, comprehensive)" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          elif [ "${{ needs.trigger-rccl-tests.result }}" == "failure" ]; then
+            echo "- :x: RCCL test trigger failed" >> "$GITHUB_STEP_SUMMARY"
           fi
 
           echo "" >> "$GITHUB_STEP_SUMMARY"
