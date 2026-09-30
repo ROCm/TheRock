@@ -451,6 +451,12 @@ class SharedOwnerPackagingTest(BuildPackageTestCase):
                 self.assertIn("amdrocm-rand7.1-gfx1250", deps)
                 self.assertNotIn("gfx1250-strict", deps)
 
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "xnack-suffixed artifact dirs use ':', which NTFS reserves and cannot "
+        "represent as a real path; this naming only ever occurs on the Linux "
+        "packaging path, so Windows coverage is a no-op by construction.",
+    )
     def test_has_artifact_for_arch_matches_xnack_suffixed_directory(self):
         """rand/solver/hiptensor/rocalution ship gfx942/gfx950 only as ':xnack+'
         directories - has_artifact_for_arch() must recognize those, not just an
@@ -483,6 +489,12 @@ class SharedOwnerPackagingTest(BuildPackageTestCase):
             )
         )
 
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "xnack-suffixed artifact dirs use ':', which NTFS reserves and cannot "
+        "represent as a real path; this naming only ever occurs on the Linux "
+        "packaging path, so Windows coverage is a no-op by construction.",
+    )
     def test_meta_dependency_includes_xnack_only_device_arch(self):
         """Reproduces the original bug end-to-end: a meta package must still
         depend on a device arch whose only artifact directory is xnack-suffixed."""
