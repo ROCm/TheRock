@@ -321,9 +321,20 @@ def publish_native_windows_packages(
     dest = StorageLocation(dest_bucket.name, dest_prefix)
     logger.info("Native msi packages: %s -> %s", source.s3_uri, dest.s3_uri)
     count = backend.copy_directory(source, dest)
-    logger.info("Copied %d files for msi packages", count)
+    # Unlike deb/rpm, whose build runs earlier in the release pipeline (so an
+    # empty source is a real error), nothing builds MSIs during a release yet —
+    # multi_arch_build_native_windows_packages.yml is not wired in (#1987). An
+    # empty prefix is therefore the expected state for now, so warn and skip
+    # rather than failing the whole publish job. This self-heals: once the build
+    # workflow populates the prefix, the MSIs are published automatically.
     if count == 0:
-        raise FileNotFoundError(f"No msi packages found at {source.s3_uri}")
+        logger.warning(
+            "No msi packages found at %s; skipping msi publish (the Windows MSI "
+            "build workflow is not yet wired into the release pipeline, #1987).",
+            source.s3_uri,
+        )
+        return
+    logger.info("Copied %d files for msi packages", count)
 
 
 def main(argv: list[str]) -> None:

@@ -158,6 +158,29 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    def test_windows_empty_msi_prefix_is_not_fatal(self, mock_copy):
+        # Regression guard for #8617: nothing builds MSIs during a release yet,
+        # so the msi prefix is empty. The publish must attempt the msi copy and
+        # then warn-and-skip on 0 files, not raise. Earlier copies (tarballs,
+        # python x2) succeed; only the final msi copy returns 0.
+        mock_copy.side_effect = [1, 1, 1, 0]
+        main(
+            [
+                "--run-id",
+                "99",
+                "--platform",
+                "windows",
+                "--release-type",
+                "nightly",
+                "--dry-run",
+            ]
+        )
+        # The msi copy was still attempted (4th call), just not fatal on zero.
+        self.assertEqual(mock_copy.call_count, 4)
+        msi_source, _ = mock_copy.call_args_list[3].args
+        self.assertEqual(msi_source.relative_path, "99-windows/packages/msi")
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_raises_when_no_tarballs_found(self, mock_copy):
         mock_copy.return_value = 0
         with self.assertRaises(FileNotFoundError):
