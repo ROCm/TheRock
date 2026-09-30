@@ -183,12 +183,20 @@ all_build_variants = {
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
         },
-        # host ASAN builds are run on nightly, with intent to run on presubmit and postsubmit
         # host ASAN detects memory errors on host code (excluding kernel binaries), while ASAN sanitizes everything
+        #
+        # "test_triggers" lists the events on which this variant runs its tests;
+        # omit the key to test on every event, as release does. Presubmit is
+        # listed because reaching the test gate already means the caller asked
+        # for a host-asan build, so skipping the tests would pay for the build
+        # and discard the signal (ROCm/TheRock#7202). Postsubmit is left off
+        # because nightly already covers it. Adding it is a data edit here, not
+        # a new workflow input.
         "host-asan": {
             "build_variant_label": "host-asan",
             "build_variant_suffix": "host-asan",
             "build_variant_cmake_preset": "linux-release-host-asan",
+            "test_triggers": ["pull_request", "schedule", "workflow_dispatch"],
         },
         # Debug variants: same as asan/host-asan but with RelWithDebInfo + -g1 -gdwarf-4.
         # Used for nightly and release ASAN builds where stack traces need source line info.
@@ -201,6 +209,7 @@ all_build_variants = {
             "build_variant_label": "host-asan-debug",
             "build_variant_suffix": "host-asan",
             "build_variant_cmake_preset": "linux-release-host-asan-debug",
+            "test_triggers": ["pull_request", "schedule", "workflow_dispatch"],
         },
         "tsan": {
             "build_variant_label": "tsan",
@@ -216,6 +225,40 @@ all_build_variants = {
         },
     },
 }
+
+# Events that can trigger CI, used to validate the "test_triggers" keys above.
+CI_TRIGGER_EVENTS = frozenset({"pull_request", "push", "schedule", "workflow_dispatch"})
+
+
+def _validate_test_triggers() -> None:
+    """Rejects an unknown event in a "test_triggers" list at import time.
+
+    Without this a typo silently reads as "does not test on that trigger",
+    which is the one failure mode the table must not have.
+    """
+    for platform, variants in all_build_variants.items():
+        for variant, config in variants.items():
+            unknown = sorted(set(config.get("test_triggers", ())) - CI_TRIGGER_EVENTS)
+            if unknown:
+                raise ValueError(
+                    f'all_build_variants["{platform}"]["{variant}"]'
+                    f'["test_triggers"] has unknown event(s) {unknown}; '
+                    f"expected any of {sorted(CI_TRIGGER_EVENTS)}"
+                )
+
+
+_validate_test_triggers()
+
+
+def build_variant_runs_tests(variant_config: dict, event_name: str) -> bool:
+    """Returns whether a build variant runs its tests on event_name.
+
+    A variant with no "test_triggers" tests on every trigger, which is what
+    release does.
+    """
+    triggers = variant_config.get("test_triggers")
+    return True if triggers is None else event_name in triggers
+
 
 """
 amdgpu_family_info_matrix dictionary fields:
