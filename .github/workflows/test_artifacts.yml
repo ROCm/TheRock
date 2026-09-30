@@ -196,9 +196,13 @@ jobs:
           PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
           CI_CONFIG_PATH: ci-config
           BUILD_VARIANT: ${{ inputs.build_variant }}
+          # Pass the policy-gated GPU runner label. When empty, GPU tests are gated
+          # but CPU-only tests (linux_cpu_runner: True) can still run.
+          TEST_RUNS_ON: ${{ inputs.test_runs_on }}
+          TEST_RUNS_ON_CPU: ${{ inputs.test_runs_on_cpu }}
         run: |
           python ./build_tools/github_actions/fetch_test_configurations.py \
-            --platform=${{ contains(inputs.test_runs_on, 'windows') && 'windows' || 'linux' }}
+            --platform=${{ contains(inputs.test_runs_on, 'windows') && 'windows' || contains(inputs.test_runs_on_cpu, 'windows') && 'windows' || 'linux' }}
 
   test_sanity_check:
     name: 'Test Sanity Check'

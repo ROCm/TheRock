@@ -1209,6 +1209,15 @@ def run():
     test_runs_on_multi_gpu_default = None
     # For ASAN builds, use the sandbox runner if available
     test_runs_on_sandbox = None
+
+    # Check if GPU runner was passed from configure_multi_arch_ci.py via workflow.
+    # This carries the policy decision (e.g., trigger gating). When set to empty,
+    # GPU tests are gated but CPU-only tests (linux_cpu_runner: True) can still run.
+    test_runs_on_from_workflow = os.getenv("TEST_RUNS_ON")
+    gpu_tests_gated = test_runs_on_from_workflow == ""
+    if gpu_tests_gated:
+        logging.info("GPU tests gated (TEST_RUNS_ON is empty), only CPU-only components will run")
+
     if amdgpu_families:
         shortened_family = amdgpu_families.split("-")[0].lower()
         all_families = get_all_families_for_trigger_types(
@@ -1216,8 +1225,19 @@ def run():
         )
         if shortened_family in all_families:
             platform_info = all_families[shortened_family].get(platform, {})
-            test_runs_on_labels = platform_info.get("test-runs-on-labels")
-            test_runs_on_default = platform_info.get("test-runs-on", "")
+            # Use policy-gated value from workflow if available, otherwise use static matrix
+            if gpu_tests_gated:
+                # GPU tests are gated - don't use runner labels or defaults for GPU
+                test_runs_on_labels = None
+                test_runs_on_default = ""
+            elif test_runs_on_from_workflow is not None:
+                # Workflow provided a non-empty runner - use it but allow label distribution
+                test_runs_on_labels = platform_info.get("test-runs-on-labels")
+                test_runs_on_default = test_runs_on_from_workflow
+            else:
+                # Fallback to static matrix (backward compatibility)
+                test_runs_on_labels = platform_info.get("test-runs-on-labels")
+                test_runs_on_default = platform_info.get("test-runs-on", "")
             test_runs_on_multi_gpu_labels = platform_info.get(
                 "test-runs-on-multi-gpu-labels"
             )
