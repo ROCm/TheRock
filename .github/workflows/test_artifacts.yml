@@ -24,6 +24,10 @@ on:
       sanity_check_only_for_family:
         type: boolean
         default: false
+      continue_on_sanity_failure:
+        description: "Run the full test_components matrix even if test_sanity_check fails."
+        type: boolean
+        default: false
       test_type:
         type: string
       test_labels:
@@ -83,6 +87,10 @@ on:
         type: string
         default: ""
       sanity_check_only_for_family:
+        type: boolean
+        default: false
+      continue_on_sanity_failure:
+        description: "Run the full test_components matrix even if test_sanity_check fails."
         type: boolean
         default: false
       test_type:
@@ -216,13 +224,15 @@ jobs:
     name: 'Test ${{ matrix.components.job_name }}'
     needs: [test_sanity_check, configure_test_matrix]
     # Run when:
-    #   - sanity check passed
+    #   - configure_test_matrix succeeded (its own failure always blocks testing)
+    #   - sanity check passed, was skipped, or continue_on_sanity_failure opts past it
     #   - there are components to test
     #   - sanity_check_only_for_family is not set
     if: >-
       ${{
-        !failure() &&
         !cancelled() &&
+        needs.configure_test_matrix.result == 'success' &&
+        (needs.test_sanity_check.result != 'failure' || inputs.continue_on_sanity_failure) &&
         needs.configure_test_matrix.outputs.components != '' &&
         needs.configure_test_matrix.outputs.components != '[]' &&
         !inputs.sanity_check_only_for_family
