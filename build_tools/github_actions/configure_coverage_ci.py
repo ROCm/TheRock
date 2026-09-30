@@ -26,6 +26,7 @@ Outputs (GITHUB_OUTPUT):
 """
 
 import argparse
+import functools
 import json
 import os
 import sys
@@ -37,6 +38,7 @@ sys.path.insert(0, os.fspath(Path(__file__).resolve().parent))
 sys.path.insert(0, os.fspath(Path(__file__).resolve().parents[1]))
 
 from github_actions_api import gha_set_output
+from _therock_utils.build_topology import get_topology
 
 DEFAULT_AMDGPU_FAMILIES = "gfx94X-dcgpu"
 DEFAULT_COVERAGE_CONFIG_SOURCE = "ROCm/rocm-libraries@main"
@@ -67,6 +69,28 @@ KNOWN_STAGES = frozenset(
 # (comm-libs) are blocked upstream, so selecting them is rejected here rather
 # than failing hours later on a missing inbound artifact.
 BUILDABLE_STAGES = frozenset({STAGE_COMPILER_RUNTIME, STAGE_MATH_LIBS})
+
+
+@functools.lru_cache(maxsize=1)
+def _topology():
+    """BUILD_TOPOLOGY.toml, parsed once per process.
+
+    CMake runs this script on every configure to emit the coverage CMake
+    include, so the parse is cached rather than repeated per project.
+    """
+    return get_topology()
+
+
+@functools.lru_cache(maxsize=None)
+def _stage_for_artifact(artifact_name: str) -> str:
+    """Resolves the build stage that produces an artifact."""
+    stage = _topology().get_stage_for_artifact(artifact_name)
+    if stage is None:
+        raise ValueError(
+            f"no build stage in BUILD_TOPOLOGY.toml produces artifact "
+            f"'{artifact_name}'"
+        )
+    return stage
 
 
 @dataclass(frozen=True)
@@ -101,17 +125,10 @@ class CoverageProject:
             that belong to this project alone. The nightly hybrid fetch copies
             only these over the baseline install tree, so a run measuring
             hipRAND does not also pick up an instrumented rocRAND.
-        stage: Build stage that produces the project. The nightly needs a build
-            job for this stage, so onboarding a project from a new stage means
-            adding one.
-        test_component: Key in fetch_test_configurations.py's test matrix.
-        coverage_config: Per-project coverage metadata file, relative to the
-            root of the repository named by COVERAGE_CONFIG_SOURCE.
         object_globs: Globs, relative to the extracted artifact directory,
             matching the instrumented binaries handed to `llvm-cov`.
         fetch_artifact_args: Arguments to install_rocm_from_artifacts.py that
             pull the instrumented libraries into the report generation job.
-        codecov_flag: Flag the report is filed under in Codecov.
         source_repo: The repo this project ships from (ROCM_LIBRARIES or
             ROCM_SYSTEMS); drives the group aliases.
         extra_cmake_targets: Additional subprojects to instrument alongside
@@ -119,12 +136,18 @@ class CoverageProject:
             binaries, and some of those are built by a sibling subproject
             (rocPRIM's live in rocPRIM_tests), which therefore has to be
             instrumented too or the binaries carry no coverage mapping.
+        codecov_flag_override: Set only when the Codecov flag differs from
+            cmake_target, which it does for rocshmem (reported as rocSHMEM).
+        stage_override: Set only when the build stage cannot be derived from
+            artifact_names, which no project needs today.
+
+    The `key`, `stage`, `test_component`, `coverage_config` and `codecov_flag`
+    properties below are derived rather than stored: repeating them per entry
+    gave three dozen chances to disagree with the build topology and with the
+    registry key itself.
     """
 
     cmake_target: str
-    stage: str
-    test_component: str
-    coverage_config: str
     coverage_option: str = ""
     unsupported_reason: str = ""
     blocked_reason: str = ""
@@ -132,9 +155,54 @@ class CoverageProject:
     artifact_relpaths: list[str] = field(default_factory=list)
     object_globs: list[str] = field(default_factory=list)
     fetch_artifact_args: str = ""
-    codecov_flag: str = ""
     source_repo: str = ROCM_LIBRARIES
     extra_cmake_targets: list[str] = field(default_factory=list)
+    codecov_flag_override: str = ""
+    stage_override: str = ""
+
+    @property
+    def key(self) -> str:
+        """The project's key in COVERAGE_PROJECTS."""
+        return self.cmake_target.lower()
+
+    @property
+    def stage(self) -> str:
+        """Build stage that produces the project.
+
+        Read out of the build topology via the project's first artifact, so a
+        project moving between stages upstream cannot leave a stale stage here.
+        The nightly needs a build job for this stage, so onboarding a project
+        from a new stage still means adding one.
+        """
+        if self.stage_override:
+            return self.stage_override
+        if not self.artifact_names:
+            raise ValueError(
+                f"{self.key}: stage is derived from artifact_names, so set "
+                "either that or stage_override"
+            )
+        # Every artifact of a project has to come from one stage for this to be
+        # well defined; configure_coverage_ci_test.py checks that for all of
+        # them, not just the first.
+        return _stage_for_artifact(self.artifact_names[0])
+
+    @property
+    def test_component(self) -> str:
+        """Key in fetch_test_configurations.py's test matrix."""
+        return self.key
+
+    @property
+    def coverage_config(self) -> str:
+        """Per-project coverage metadata file.
+
+        Relative to the root of the repository named by COVERAGE_CONFIG_SOURCE.
+        """
+        return f"projects/{self.key}/test_categories_coverage.yaml"
+
+    @property
+    def codecov_flag(self) -> str:
+        """Flag the report is filed under in Codecov."""
+        return self.codecov_flag_override or self.cmake_target
 
 
 # Projects that participate in coverage CI.
@@ -162,72 +230,48 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         artifact_names=["rand"],
         artifact_relpaths=["math-libs/rocRAND/stage"],
         coverage_option="CODE_COVERAGE",
-        stage=STAGE_MATH_LIBS,
-        test_component="rocrand",
-        coverage_config="projects/rocrand/test_categories_coverage.yaml",
         object_globs=["lib/librocrand.so*"],
         fetch_artifact_args="--rand",
-        codecov_flag="rocRAND",
     ),
     "hiprand": CoverageProject(
         cmake_target="hipRAND",
         artifact_names=["rand"],
         artifact_relpaths=["math-libs/hipRAND/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
-        stage=STAGE_MATH_LIBS,
-        test_component="hiprand",
-        coverage_config="projects/hiprand/test_categories_coverage.yaml",
         object_globs=["lib/libhiprand.so*"],
         fetch_artifact_args="--rand",
-        codecov_flag="hipRAND",
     ),
     "rocfft": CoverageProject(
         cmake_target="rocFFT",
         artifact_names=["fft"],
         artifact_relpaths=["math-libs/rocFFT/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
-        stage=STAGE_MATH_LIBS,
-        test_component="rocfft",
-        coverage_config="projects/rocfft/test_categories_coverage.yaml",
         object_globs=["lib/librocfft.so*"],
         fetch_artifact_args="--fft",
-        codecov_flag="rocFFT",
     ),
     "hipfft": CoverageProject(
         cmake_target="hipFFT",
         artifact_names=["fft"],
         artifact_relpaths=["math-libs/hipFFT/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
-        stage=STAGE_MATH_LIBS,
-        test_component="hipfft",
-        coverage_config="projects/hipfft/test_categories_coverage.yaml",
         object_globs=["lib/libhipfft.so*"],
         fetch_artifact_args="--fft",
-        codecov_flag="hipFFT",
     ),
     "rocblas": CoverageProject(
         cmake_target="rocBLAS",
         artifact_names=["blas"],
         artifact_relpaths=["math-libs/BLAS/rocBLAS/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
-        stage=STAGE_MATH_LIBS,
-        test_component="rocblas",
-        coverage_config="projects/rocblas/test_categories_coverage.yaml",
         object_globs=["lib/librocblas.so*"],
         fetch_artifact_args="--blas",
-        codecov_flag="rocBLAS",
     ),
     "hipblas": CoverageProject(
         cmake_target="hipBLAS",
         artifact_names=["blas"],
         artifact_relpaths=["math-libs/BLAS/hipBLAS/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
-        stage=STAGE_MATH_LIBS,
-        test_component="hipblas",
-        coverage_config="projects/hipblas/test_categories_coverage.yaml",
         object_globs=["lib/libhipblas.so*"],
         fetch_artifact_args="--blas",
-        codecov_flag="hipBLAS",
     ),
     "hipblaslt": CoverageProject(
         cmake_target="hipBLASLt",
@@ -245,24 +289,16 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
             "hipblaslt-test fails to link with 'unable to find library "
             "-lrocroller'; its coverage build needs roc::rocroller upstream"
         ),
-        stage=STAGE_MATH_LIBS,
-        test_component="hipblaslt",
-        coverage_config="projects/hipblaslt/test_categories_coverage.yaml",
         object_globs=["lib/libhipblaslt.so*"],
         fetch_artifact_args="--blas",
-        codecov_flag="hipBLASLt",
     ),
     "rocsparse": CoverageProject(
         cmake_target="rocSPARSE",
         artifact_names=["sparse"],
         artifact_relpaths=["math-libs/BLAS/rocSPARSE/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
-        stage=STAGE_MATH_LIBS,
-        test_component="rocsparse",
-        coverage_config="projects/rocsparse/test_categories_coverage.yaml",
         object_globs=["lib/librocsparse.so*"],
         fetch_artifact_args="--sparse",
-        codecov_flag="rocSPARSE",
     ),
     "hipsparse": CoverageProject(
         cmake_target="hipSPARSE",
@@ -271,48 +307,32 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         unsupported_reason=(
             "HIPSPARSE_ENABLE_COVERAGE selects gcov instrumentation, which writes .gcda files rather than the .profraw this pipeline merges"
         ),
-        stage=STAGE_MATH_LIBS,
-        test_component="hipsparse",
-        coverage_config="projects/hipsparse/test_categories_coverage.yaml",
         object_globs=["lib/libhipsparse.so*"],
         fetch_artifact_args="--sparse",
-        codecov_flag="hipSPARSE",
     ),
     "hipsparselt": CoverageProject(
         cmake_target="hipSPARSELt",
         artifact_names=["sparse"],
         artifact_relpaths=["math-libs/BLAS/hipSPARSELt/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
-        stage=STAGE_MATH_LIBS,
-        test_component="hipsparselt",
-        coverage_config="projects/hipsparselt/test_categories_coverage.yaml",
         object_globs=["lib/libhipsparselt.so*"],
         fetch_artifact_args="--sparse",
-        codecov_flag="hipSPARSELt",
     ),
     "rocsolver": CoverageProject(
         cmake_target="rocSOLVER",
         artifact_names=["solver"],
         artifact_relpaths=["math-libs/BLAS/rocSOLVER/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
-        stage=STAGE_MATH_LIBS,
-        test_component="rocsolver",
-        coverage_config="projects/rocsolver/test_categories_coverage.yaml",
         object_globs=["lib/librocsolver.so*"],
         fetch_artifact_args="--solver",
-        codecov_flag="rocSOLVER",
     ),
     "hipsolver": CoverageProject(
         cmake_target="hipSOLVER",
         artifact_names=["solver"],
         artifact_relpaths=["math-libs/BLAS/hipSOLVER/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
-        stage=STAGE_MATH_LIBS,
-        test_component="hipsolver",
-        coverage_config="projects/hipsolver/test_categories_coverage.yaml",
         object_globs=["lib/libhipsolver.so*"],
         fetch_artifact_args="--solver",
-        codecov_flag="hipSOLVER",
     ),
     "rocalution": CoverageProject(
         cmake_target="rocALUTION",
@@ -321,12 +341,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         unsupported_reason=(
             "BUILD_CODE_COVERAGE selects gcov instrumentation, which writes .gcda files rather than the .profraw this pipeline merges"
         ),
-        stage=STAGE_MATH_LIBS,
-        test_component="rocalution",
-        coverage_config="projects/rocalution/test_categories_coverage.yaml",
         object_globs=["lib/librocalution.so*"],
         fetch_artifact_args="--rocalution",
-        codecov_flag="rocALUTION",
     ),
     "hiptensor": CoverageProject(
         cmake_target="hipTensor",
@@ -350,38 +366,26 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
             "libhiptensor.so exceeds the small code model when instrumented; "
             "the link fails on out-of-range R_X86_64_PC32 relocations"
         ),
-        stage=STAGE_MATH_LIBS,
-        test_component="hiptensor",
-        coverage_config="projects/hiptensor/test_categories_coverage.yaml",
         object_globs=["lib/libhiptensor.so*"],
         fetch_artifact_args="--hiptensor",
-        codecov_flag="hipTensor",
     ),
     "miopen": CoverageProject(
         cmake_target="MIOpen",
         artifact_names=["miopen"],
         artifact_relpaths=["ml-libs/MIOpen/stage"],
         unsupported_reason="no coverage option in its CMake",
-        stage=STAGE_MATH_LIBS,
-        test_component="miopen",
-        coverage_config="projects/miopen/test_categories_coverage.yaml",
         object_globs=["lib/libMIOpen.so*"],
         fetch_artifact_args="--miopen",
-        codecov_flag="MIOpen",
     ),
     "hipdnn": CoverageProject(
         cmake_target="hipDNN",
         artifact_names=["hipdnn"],
         artifact_relpaths=["ml-libs/hipDNN/stage"],
         coverage_option="HIPDNN_ENABLE_COVERAGE",
-        stage=STAGE_MATH_LIBS,
-        test_component="hipdnn",
-        coverage_config="projects/hipdnn/test_categories_coverage.yaml",
         # Not libhipdnn.so: hipDNN's shared library is the backend, which is
         # also the name TheRock's own packaging metadata records for it.
         object_globs=["lib/libhipdnn_backend.so*"],
         fetch_artifact_args="--hipdnn",
-        codecov_flag="hipDNN",
     ),
     #
     # rocm-libraries -- math-libs stage, header-only
@@ -391,12 +395,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         artifact_names=["prim"],
         artifact_relpaths=["math-libs/rocPRIM/stage", "math-libs/rocPRIM_tests/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
-        stage=STAGE_MATH_LIBS,
-        test_component="rocprim",
-        coverage_config="projects/rocprim/test_categories_coverage.yaml",
         object_globs=["bin/test_*"],
         fetch_artifact_args="--prim --tests",
-        codecov_flag="rocPRIM",
         # rocPRIM's tests are a sibling subproject, so both stage dirs are
         # overlaid and both are instrumented.
         extra_cmake_targets=["rocPRIM_tests"],
@@ -406,36 +406,24 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         artifact_names=["prim"],
         artifact_relpaths=["math-libs/hipCUB/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
-        stage=STAGE_MATH_LIBS,
-        test_component="hipcub",
-        coverage_config="projects/hipcub/test_categories_coverage.yaml",
         object_globs=["bin/test_*"],
         fetch_artifact_args="--prim --tests",
-        codecov_flag="hipCUB",
     ),
     "rocthrust": CoverageProject(
         cmake_target="rocThrust",
         artifact_names=["prim"],
         artifact_relpaths=["math-libs/rocThrust/stage"],
         coverage_option="CODE_COVERAGE",
-        stage=STAGE_MATH_LIBS,
-        test_component="rocthrust",
-        coverage_config="projects/rocthrust/test_categories_coverage.yaml",
         object_globs=["bin/test_*"],
         fetch_artifact_args="--prim --tests",
-        codecov_flag="rocThrust",
     ),
     "rocwmma": CoverageProject(
         cmake_target="rocWMMA",
         artifact_names=["rocwmma"],
         artifact_relpaths=["math-libs/rocWMMA/stage"],
         coverage_option="CODE_COVERAGE",
-        stage=STAGE_MATH_LIBS,
-        test_component="rocwmma",
-        coverage_config="projects/rocwmma/test_categories_coverage.yaml",
         object_globs=["bin/*_test*"],
         fetch_artifact_args="--rocwmma --tests",
-        codecov_flag="rocWMMA",
     ),
     #
     # rocm-systems -- comm-libs stage
@@ -445,12 +433,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         artifact_names=["rccl"],
         artifact_relpaths=["comm-libs/rccl/stage"],
         coverage_option="ENABLE_CODE_COVERAGE",
-        stage=STAGE_COMM_LIBS,
-        test_component="rccl",
-        coverage_config="projects/rccl/test_categories_coverage.yaml",
         object_globs=["lib/librccl.so*"],
         fetch_artifact_args="--rccl",
-        codecov_flag="rccl",
         source_repo=ROCM_SYSTEMS,
     ),
     "rocshmem": CoverageProject(
@@ -458,13 +442,11 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         artifact_names=["rocshmem"],
         artifact_relpaths=["comm-libs/rocshmem/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
-        stage=STAGE_COMM_LIBS,
-        test_component="rocshmem",
-        coverage_config="projects/rocshmem/test_categories_coverage.yaml",
         object_globs=["lib/librocshmem.so*"],
         fetch_artifact_args="--rocshmem",
-        codecov_flag="rocSHMEM",
         source_repo=ROCM_SYSTEMS,
+        # The only project whose Codecov flag is not its cmake_target.
+        codecov_flag_override="rocSHMEM",
     ),
     #
     # rocm-systems -- compiler-runtime stage
@@ -476,12 +458,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         unsupported_reason=(
             "ROCPROFILER_BUILD_CODECOV selects gcov instrumentation, which writes .gcda files rather than the .profraw this pipeline merges"
         ),
-        stage=STAGE_COMPILER_RUNTIME,
-        test_component="rocprofiler-sdk",
-        coverage_config="projects/rocprofiler-sdk/test_categories_coverage.yaml",
         object_globs=["lib/librocprofiler-sdk.so*"],
         fetch_artifact_args="--rocprofiler-sdk",
-        codecov_flag="rocprofiler-sdk",
         source_repo=ROCM_SYSTEMS,
     ),
     "aqlprofile": CoverageProject(
@@ -489,12 +467,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         artifact_names=["aqlprofile"],
         artifact_relpaths=["profiler/aqlprofile/stage"],
         unsupported_reason="no coverage option in its CMake",
-        stage=STAGE_COMPILER_RUNTIME,
-        test_component="aqlprofile",
-        coverage_config="projects/aqlprofile/test_categories_coverage.yaml",
         object_globs=["lib/libhsa-amd-aqlprofile*.so*"],
         fetch_artifact_args="--aqlprofile",
-        codecov_flag="aqlprofile",
         source_repo=ROCM_SYSTEMS,
     ),
     "amdsmi": CoverageProject(
@@ -502,12 +476,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         artifact_names=["core-amdsmi"],
         artifact_relpaths=["core/amdsmi/stage"],
         unsupported_reason="no coverage option in its CMake",
-        stage=STAGE_COMPILER_RUNTIME,
-        test_component="amdsmi",
-        coverage_config="projects/amdsmi/test_categories_coverage.yaml",
         object_globs=["lib/libamd_smi.so*"],
         fetch_artifact_args="--base-only",
-        codecov_flag="amdsmi",
         source_repo=ROCM_SYSTEMS,
     ),
     "rocprofiler-compute": CoverageProject(
@@ -515,12 +485,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         artifact_names=["rocprofiler-compute"],
         artifact_relpaths=["profiler/rocprofiler-compute/stage"],
         unsupported_reason="a Python tool with no native instrumentation option",
-        stage=STAGE_COMPILER_RUNTIME,
-        test_component="rocprofiler-compute",
-        coverage_config="projects/rocprofiler-compute/test_categories_coverage.yaml",
         object_globs=["lib/librocprofiler-compute*.so*"],
         fetch_artifact_args="--rocprofiler-compute",
-        codecov_flag="rocprofiler-compute",
         source_repo=ROCM_SYSTEMS,
     ),
     #
@@ -533,36 +499,83 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         unsupported_reason=(
             "no build-time coverage option; its coverage feature instruments other programs at runtime"
         ),
-        stage=STAGE_PROFILER_APPS,
-        test_component="rocprofiler-systems",
-        coverage_config="projects/rocprofiler-systems/test_categories_coverage.yaml",
         object_globs=["lib/librocprofiler-systems*.so*"],
         fetch_artifact_args="--rocprofiler-systems",
-        codecov_flag="rocprofiler-systems",
         source_repo=ROCM_SYSTEMS,
     ),
 }
 
 _VALID_SOURCE_REPOS = frozenset({ROCM_LIBRARIES, ROCM_SYSTEMS})
-for _key, _proj in COVERAGE_PROJECTS.items():
-    assert (
-        _proj.source_repo in _VALID_SOURCE_REPOS
-    ), f"{_key}: source_repo must be one of {sorted(_VALID_SOURCE_REPOS)}"
-    # A project in a stage the workflow cannot build would be selectable and
-    # then silently tested against uninstrumented binaries.
-    assert (
-        _proj.stage in KNOWN_STAGES
-    ), f"{_key}: stage must be one of {sorted(KNOWN_STAGES)}"
-    # An entry with neither would be selectable and instrument nothing; one
-    # with both leaves it ambiguous whether the project can be measured.
-    assert bool(_proj.coverage_option) != bool(
-        _proj.unsupported_reason
-    ), f"{_key}: set exactly one of coverage_option and unsupported_reason"
-    # Without these the nightly test job cannot tell which files belong to the
-    # project, and would measure an entirely non-instrumented install.
-    if _proj.coverage_option:
-        assert _proj.artifact_names, f"{_key}: needs artifacts to overlay"
-        assert _proj.artifact_relpaths, f"{_key}: needs relpaths to overlay"
+
+
+class CoverageRegistryError(ValueError):
+    """Raised when COVERAGE_PROJECTS is internally inconsistent."""
+
+
+def validate_registry(projects: dict[str, CoverageProject]) -> None:
+    """Checks the hand-written parts of the registry.
+
+    Raises rather than asserts: `assert` is compiled out under `python -O` or
+    PYTHONOPTIMIZE, and CMake runs this script on every configure with
+    whatever environment the build inherits. A registry mistake has to fail
+    the configure, not emit a quietly wrong therock_coverage_projects.cmake.
+
+    Every problem is collected before raising, so adding a project reports all
+    of its mistakes at once rather than one per run.
+    """
+    problems: list[str] = []
+    for key, proj in projects.items():
+        if proj.source_repo not in _VALID_SOURCE_REPOS:
+            problems.append(
+                f"{key}: source_repo must be one of {sorted(_VALID_SOURCE_REPOS)}, "
+                f"not '{proj.source_repo}'"
+            )
+        # test_component and coverage_config are derived from cmake_target, so
+        # a key that disagrees with it would point the test matrix and the
+        # metadata lookup at a project other than the one being selected.
+        if proj.key != key:
+            problems.append(
+                f"{key}: key must be cmake_target lower cased, not '{proj.key}'"
+            )
+        # An entry with neither would be selectable and instrument nothing; one
+        # with both leaves it ambiguous whether the project can be measured.
+        if proj.coverage_option and proj.unsupported_reason:
+            problems.append(
+                f"{key}: set only one of coverage_option and unsupported_reason"
+            )
+        elif not proj.coverage_option and not proj.unsupported_reason:
+            problems.append(
+                f"{key}: set either coverage_option (if it can be measured) or "
+                "unsupported_reason (if it cannot)"
+            )
+        # Without these the nightly test job cannot tell which files belong to
+        # the project, and would measure an entirely non-instrumented install.
+        if proj.coverage_option and not proj.artifact_names:
+            problems.append(f"{key}: needs artifact_names to overlay")
+        if proj.coverage_option and not proj.artifact_relpaths:
+            problems.append(f"{key}: needs artifact_relpaths to overlay")
+        # The stage comes from the build topology, so this catches an artifact
+        # that was renamed or moved to a stage the coverage pipeline does not
+        # know about. Such a project would be selectable and then silently
+        # tested against uninstrumented binaries.
+        try:
+            stage = proj.stage
+        except ValueError as e:
+            problems.append(f"{key}: {e}")
+        else:
+            if stage not in KNOWN_STAGES:
+                problems.append(
+                    f"{key}: stage must be one of {sorted(KNOWN_STAGES)}, "
+                    f"not '{stage}'"
+                )
+    if problems:
+        raise CoverageRegistryError(
+            "COVERAGE_PROJECTS in "
+            f"{Path(__file__).name} is inconsistent:\n  " + "\n  ".join(problems)
+        )
+
+
+validate_registry(COVERAGE_PROJECTS)
 
 SUPPORTED_PROJECTS: frozenset[str] = frozenset(
     k for k, v in COVERAGE_PROJECTS.items() if v.coverage_option
@@ -718,7 +731,7 @@ def build_coverage_matrix(
                     # The report job fetches this stage's sources so the HTML
                     # rendering has something to annotate.
                     "build_stage": project.stage,
-                    "codecov_flag": project.codecov_flag or project_key,
+                    "codecov_flag": project.codecov_flag,
                     "amdgpu_families": family,
                     "artifact_names": ",".join(project.artifact_names),
                     "artifact_relpaths": ",".join(project.artifact_relpaths),

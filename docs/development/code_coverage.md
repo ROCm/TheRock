@@ -19,6 +19,10 @@ RCCL: `ENABLE_CODE_COVERAGE`), so `therock_subproject.cmake` translates it to
 whichever name `COVERAGE_PROJECTS` registers for that project. Passing the flag
 for an unregistered project is a configure error, not a silent no-op.
 
+Instrumentation is Linux only: the profile runtime's link flags and the
+device-compilation negation below are both clang/lld specific. On an MSVC build
+the flag is ignored with a warning rather than partially applied.
+
 ### Enabling a whole group
 
 | Option                                | Instruments                                  |

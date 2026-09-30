@@ -339,14 +339,15 @@ class ResolveBuildStagesTest(unittest.TestCase):
 
 
 class RegistryMatchesBuildTopologyTest(unittest.TestCase):
-    """The registry duplicates facts the build topology already knows.
+    """CoverageProject.stage reads the build topology instead of repeating it.
 
-    Nothing keeps the two in step at runtime, so a project moving between
-    stages upstream would otherwise show up as a stage that is never built and
-    an overlay that finds nothing, hours into a run.
+    The derivation looks at the first artifact only, so it is well defined
+    only while every artifact of a project comes from one stage. A project
+    whose artifacts straddled two stages would otherwise get a stage picked by
+    list order, and the overlay would find nothing hours into a run.
     """
 
-    def test_every_project_names_the_stage_that_builds_its_artifacts(self):
+    def test_all_artifacts_of_a_project_come_from_one_stage(self):
         topology = get_topology()
         for key, project in sorted(configure_coverage_ci.COVERAGE_PROJECTS.items()):
             for artifact in project.artifact_names:
@@ -355,6 +356,167 @@ class RegistryMatchesBuildTopologyTest(unittest.TestCase):
                         topology.get_stage_for_artifact(artifact),
                         project.stage,
                     )
+
+    def test_every_project_resolves_to_a_known_stage(self):
+        for key, project in sorted(configure_coverage_ci.COVERAGE_PROJECTS.items()):
+            with self.subTest(project=key):
+                self.assertIn(project.stage, configure_coverage_ci.KNOWN_STAGES)
+
+    def test_unknown_artifact_is_rejected_rather_than_guessed(self):
+        project = configure_coverage_ci.CoverageProject(
+            cmake_target="notAProject",
+            artifact_names=["no-such-artifact"],
+        )
+        with self.assertRaises(ValueError) as caught:
+            project.stage
+        self.assertIn("no-such-artifact", str(caught.exception))
+
+    def test_stage_override_wins_over_the_topology(self):
+        # The escape hatch for a project the topology cannot answer for. No
+        # entry needs it today, so this is the only thing exercising it.
+        project = configure_coverage_ci.CoverageProject(
+            cmake_target="hipRAND",
+            artifact_names=["no-such-artifact"],
+            stage_override=configure_coverage_ci.STAGE_COMM_LIBS,
+        )
+        self.assertEqual(project.stage, configure_coverage_ci.STAGE_COMM_LIBS)
+
+    def test_stage_needs_an_artifact_or_an_override(self):
+        project = configure_coverage_ci.CoverageProject(cmake_target="hipRAND")
+        with self.assertRaises(ValueError) as caught:
+            project.stage
+        self.assertIn("artifact_names", str(caught.exception))
+
+
+class ValidateRegistryTest(unittest.TestCase):
+    """The registry's hand-written parts are checked, not assumed.
+
+    These ran as bare asserts once, which PYTHONOPTIMIZE strips; CMake runs
+    this script on every configure, so a stripped check meant a quietly wrong
+    therock_coverage_projects.cmake rather than a failed configure.
+    """
+
+    def _project(self, **kwargs):
+        defaults = dict(
+            cmake_target="hipRAND",
+            coverage_option="BUILD_CODE_COVERAGE",
+            artifact_names=["rand"],
+            artifact_relpaths=["math-libs/hipRAND/stage"],
+        )
+        return configure_coverage_ci.CoverageProject(**{**defaults, **kwargs})
+
+    def test_the_shipped_registry_is_valid(self):
+        configure_coverage_ci.validate_registry(configure_coverage_ci.COVERAGE_PROJECTS)
+
+    def test_raises_rather_than_asserts(self):
+        # A ValueError subclass, so callers can keep catching ValueError.
+        self.assertTrue(
+            issubclass(configure_coverage_ci.CoverageRegistryError, ValueError)
+        )
+
+    def test_unknown_source_repo_is_rejected(self):
+        with self.assertRaises(configure_coverage_ci.CoverageRegistryError) as caught:
+            configure_coverage_ci.validate_registry(
+                {"hiprand": self._project(source_repo="rocm-something")}
+            )
+        self.assertIn("source_repo", str(caught.exception))
+
+    def test_key_disagreeing_with_cmake_target_is_rejected(self):
+        with self.assertRaises(configure_coverage_ci.CoverageRegistryError) as caught:
+            configure_coverage_ci.validate_registry({"hip_rand": self._project()})
+        self.assertIn("cmake_target lower cased", str(caught.exception))
+
+    def test_entry_with_neither_option_nor_reason_is_rejected(self):
+        with self.assertRaises(configure_coverage_ci.CoverageRegistryError) as caught:
+            configure_coverage_ci.validate_registry(
+                {"hiprand": self._project(coverage_option="")}
+            )
+        self.assertIn("set either coverage_option", str(caught.exception))
+
+    def test_entry_with_both_option_and_reason_is_rejected(self):
+        with self.assertRaises(configure_coverage_ci.CoverageRegistryError) as caught:
+            configure_coverage_ci.validate_registry(
+                {"hiprand": self._project(unsupported_reason="no")}
+            )
+        self.assertIn("set only one of", str(caught.exception))
+
+    def test_measurable_project_without_overlay_inputs_is_rejected(self):
+        with self.assertRaises(configure_coverage_ci.CoverageRegistryError) as caught:
+            configure_coverage_ci.validate_registry(
+                {"hiprand": self._project(artifact_relpaths=[])}
+            )
+        self.assertIn("artifact_relpaths", str(caught.exception))
+
+    def test_artifact_the_topology_does_not_know_is_rejected(self):
+        with self.assertRaises(configure_coverage_ci.CoverageRegistryError) as caught:
+            configure_coverage_ci.validate_registry(
+                {"hiprand": self._project(artifact_names=["no-such-artifact"])}
+            )
+        self.assertIn("no-such-artifact", str(caught.exception))
+
+    def test_stage_outside_the_known_set_is_rejected(self):
+        with self.assertRaises(configure_coverage_ci.CoverageRegistryError) as caught:
+            configure_coverage_ci.validate_registry(
+                {"hiprand": self._project(stage_override="not-a-stage")}
+            )
+        self.assertIn("not-a-stage", str(caught.exception))
+
+    def test_every_problem_is_reported_not_just_the_first(self):
+        # Adding a project should surface all of its mistakes in one run.
+        with self.assertRaises(configure_coverage_ci.CoverageRegistryError) as caught:
+            configure_coverage_ci.validate_registry(
+                {
+                    "hip_rand": self._project(
+                        source_repo="nope",
+                        artifact_relpaths=[],
+                    )
+                }
+            )
+        message = str(caught.exception)
+        self.assertIn("source_repo", message)
+        self.assertIn("cmake_target lower cased", message)
+        self.assertIn("artifact_relpaths", message)
+
+
+class DerivedAttributesTest(unittest.TestCase):
+    """The fields that used to be written out per entry.
+
+    Each was identical to something already known -- the registry key, the
+    cmake_target, or the build topology -- for every project, so they are
+    derived now and these tests pin the shape the coverage workflows read.
+    """
+
+    def test_key_and_test_component_follow_the_cmake_target(self):
+        for key, project in sorted(configure_coverage_ci.COVERAGE_PROJECTS.items()):
+            with self.subTest(project=key):
+                self.assertEqual(project.key, key)
+                self.assertEqual(project.test_component, key)
+
+    def test_coverage_config_path_follows_the_key(self):
+        project = configure_coverage_ci.COVERAGE_PROJECTS["hiprand"]
+        self.assertEqual(
+            project.coverage_config,
+            "projects/hiprand/test_categories_coverage.yaml",
+        )
+
+    def test_codecov_flag_defaults_to_the_cmake_target(self):
+        # The cased spelling, not the key: Codecov reports "hipRAND".
+        self.assertEqual(
+            configure_coverage_ci.COVERAGE_PROJECTS["hiprand"].codecov_flag, "hipRAND"
+        )
+
+    def test_codecov_flag_override_is_honoured(self):
+        # rocshmem is the only project whose flag is not its cmake_target.
+        self.assertEqual(
+            configure_coverage_ci.COVERAGE_PROJECTS["rocshmem"].codecov_flag, "rocSHMEM"
+        )
+
+    def test_every_project_declares_the_inputs_the_derivations_need(self):
+        for key, project in sorted(configure_coverage_ci.COVERAGE_PROJECTS.items()):
+            with self.subTest(project=key):
+                self.assertTrue(project.artifact_names, "stage is derived from these")
+                self.assertTrue(project.codecov_flag)
+                self.assertTrue(project.coverage_config)
 
 
 class MainTest(unittest.TestCase):
