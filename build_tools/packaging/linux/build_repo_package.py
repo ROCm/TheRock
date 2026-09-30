@@ -42,10 +42,12 @@ Worked examples, all at ``--rocm-version 10.0.0`` with the default
     rhel10        stable    -                  amdrocm-repo-10.0.0-1.stable.el10.noarch.rpm
     sles16        stable    -                  amdrocm-repo-10.0.0-1.stable.sles16.noarch.rpm
 
-``rc`` configures the release-candidate repository for the next GA. Its marker
-sorts below the plain version, so the stable package upgrades over it. Note that
-``rc`` does not spell itself the same way everywhere -- its repo file is
-``amdrocm-stablerc`` and its deb marker is ``~pre`` -- see STREAM_IDS.
+``rc`` configures the release-candidate repository for the next GA. Its deb
+version carries a ``~pre`` marker and its rpm Release carries the stream, both
+of which sort below stable at the same ROCm version. Across versions the higher
+ROCm version wins, so moving from an rc for the next GA back to stable is a
+downgrade. ``rc`` does not spell itself the same way everywhere -- its repo file
+is ``amdrocm-stablerc`` and its deb marker is ``~pre`` -- see STREAM_IDS.
 
 ``--rocm-version`` may carry a prerelease marker, which stays in the upstream
 part of the version and sorts below the matching GA release:
@@ -113,7 +115,6 @@ REPO_NAME = "AMD ROCm"
 # file; a per-stream suite such as ``dists/stablerc/`` returns 404. Pointing apt
 # at a stream-named suite would therefore produce a package that installs
 # cleanly and then fails on the user's first update, so this follows the server.
-# Flagged to devops rather than encoded as a bug.
 DEB_SUITE = "stable"
 
 MAINTAINER = "ROCm Dev Support <rocm-dev.support@amd.com>"
@@ -126,7 +127,7 @@ MAINTAINER = "ROCm Dev Support <rocm-dev.support@amd.com>"
 # that no other package or hand-written setup step can claim the same path.
 # dpkg and rpm both refuse to unpack two packages owning one path, so a generic
 # name risks making this package uninstallable alongside something unrelated.
-# This is precautionary: amdgpu-install 31.40 keeps its key elsewhere
+# This is precautionary: amdgpu-install 31.50 keeps its key elsewhere
 # (/etc/apt/keyrings/rocm.gpg, /etc/amdgpu-install/rocm.gpg.key), so it is not
 # a collision we have observed. The overlap that does exist with that package
 # is the repository definition, and Conflicts handles it -- see
@@ -149,7 +150,8 @@ RPM_GPG_KEY_PATH = "/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm"
 # repositories configured. It also grants itself precedence (an apt pin at
 # priority 600 against a 500 default, and priority=50 against dnf's 99 default),
 # so it wins package resolution rather than reporting a conflict.
-# Required by RFC0012, "Repository Package".
+# RFC0012's "Repository Package" section names this rule and defers its
+# definition to a separate repository-package RFC.
 #
 # What the declaration actually achieves differs by package manager, so do not
 # describe it as closing the overlap outright:
@@ -253,8 +255,7 @@ STREAMS = tuple(STREAM_SHAPES)
 #   "file_id"     the installed repo file. RFC0012 names rc's tier package
 #                 amdrocm-repo-stablerc, so the file is amdrocm-stablerc while
 #                 the subdomain stays rc. Matching it now keeps the eventual
-#                 per-tier split from having to rename a package and a file
-#                 together -- the one case dpkg and rpm do not handle.
+#                 per-tier split from also having to rename an installed file.
 #   "deb_marker"  the prerelease marker. docs/packaging/versioning.md gives deb
 #                 "~preN" against rpm's "~rcN", and the published packages
 #                 agree, so this package follows suit alongside them. No
@@ -335,7 +336,7 @@ OS_PROFILES = {
 # used here: the published install instructions configure the per-distro tree,
 # and a stream that ever drops the per-format alias would break silently in the
 # field rather than in CI. A dual-served layout cannot tell a right mapping from
-# a wrong one, which is how an earlier GA-line break got through.
+# a wrong one.
 #
 # The signing key is not under <base> at all -- it sits beside core/, two
 # levels up -- so its URL is passed in whole rather than derived here. That
@@ -576,9 +577,9 @@ def deb_version(
 
     The value is ``<upstream>-<debian revision>``. The upstream part names what
     the repository points at: the ROCm version for a flat stream, or the build
-    folder for a build_id one. That folder's ``-`` becomes a ``.`` because only
-    the *last* ``-`` in a deb version separates the revision, so leaving it
-    would split the version in the wrong place. A flat stream other than
+    folder for a build_id one. That folder's ``-`` becomes a ``.`` so that the
+    only ``-`` in the version is the one that introduces the revision. A flat
+    stream other than
     ``stable`` also carries a ``~<marker>``, which sorts below the plain
     version so that stable upgrades over it.
 
@@ -622,8 +623,8 @@ def deb_version(
 def _fetch_signing_key(url: str) -> bytes:
     """Fetch the armored signing key over https, size-bounded, with retries.
 
-    Only transient network errors are retried; a scheme downgrade or an
-    over-size body fails immediately.
+    Network and HTTP errors are retried; a scheme downgrade or an over-size
+    body fails immediately.
     """
     # The fetched key is embedded and trusted, so it must travel over https.
     _require_https(url, "signing key URL")
@@ -670,30 +671,62 @@ def _run_gpg(argv: list[str], **kwargs) -> subprocess.CompletedProcess:
         ) from e
 
 
-def _key_fingerprint(armored: bytes) -> str:
-    """Return the primary-key fingerprint of an armored public key."""
+def _primary_fingerprints(listing: str) -> list[str]:
+    """Return the primary-key fingerprints in ``gpg --with-colons`` output.
+
+    Each ``fpr`` record belongs to the ``pub`` or ``sub`` record before it; only
+    those following a ``pub`` identify a primary key.
+    """
+    primaries = []
+    owner = None
+    for line in listing.splitlines():
+        record = line.split(":")
+        if record[0] in ("pub", "sub"):
+            owner = record[0]
+        elif record[0] == "fpr" and owner == "pub":
+            primaries.append(record[9])
+    return primaries
+
+
+def _extract_pinned_key(armored: bytes) -> bytes:
+    """Return the pinned AMD ROCm key, armored, from a fetched key file.
+
+    The file must hold exactly one primary key, the pinned one. Checking only
+    the first key would let a file with other keys appended pass, and every
+    key in the embedded file is trusted on the user's machine. The key is
+    returned as gpg re-exports it, which keeps the primary key and its valid
+    subkeys (the packages are signed by a subkey) and drops anything else.
+    ``import-export`` writes no keyring, so no gpg daemon is started.
+    """
     with tempfile.TemporaryDirectory() as home:
         key_path = Path(home) / "key.asc"
         key_path.write_bytes(armored)
-        result = _run_gpg(
+        listing = _run_gpg(
             ["gpg", "--homedir", home, "--with-colons", "--show-keys", str(key_path)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-        )
-    for line in result.stdout.decode(errors="replace").splitlines():
-        if line.startswith("fpr:"):
-            return line.split(":")[9]
-    raise ValueError("no fingerprint found in the fetched signing key")
-
-
-def _verify_key_fingerprint(armored: bytes) -> None:
-    """Reject a fetched key whose fingerprint is not the pinned AMD ROCm key."""
-    fingerprint = _key_fingerprint(armored)
-    if fingerprint != EXPECTED_KEY_FINGERPRINT:
-        raise ValueError(
-            f"fetched signing key fingerprint {fingerprint} does not match the "
-            f"expected {EXPECTED_KEY_FINGERPRINT}"
-        )
+        ).stdout.decode(errors="replace")
+        primaries = _primary_fingerprints(listing)
+        if primaries != [EXPECTED_KEY_FINGERPRINT]:
+            raise ValueError(
+                f"fetched signing key must be exactly the pinned key "
+                f"{EXPECTED_KEY_FINGERPRINT}; found {primaries or 'no key'}"
+            )
+        return _run_gpg(
+            [
+                "gpg",
+                "--homedir",
+                home,
+                "--batch",
+                "--armor",
+                "--import-options",
+                "import-export",
+                "--import",
+                str(key_path),
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        ).stdout
 
 
 def load_signing_key(args: argparse.Namespace) -> bytes:
@@ -704,9 +737,9 @@ def load_signing_key(args: argparse.Namespace) -> bytes:
     source tree.
 
     Two guards apply to the fetch only: the https requirement
-    (``_require_https``, including after redirects) and the pinned fingerprint.
-    They exist to detect a tampered or misconfigured repository, which is a
-    remote input. A key passed with ``--gpg-key-file`` is a local file the
+    (``_require_https``, including after redirects) and the pinned key (the
+    file must hold only that key, and only it is embedded). They exist to
+    detect a tampered or misconfigured repository, which is a remote input. A key passed with ``--gpg-key-file`` is a local file the
     caller has already chosen, so it is embedded as provided and neither guard
     runs; callers supplying their own key are responsible for it being the
     right one.
@@ -718,9 +751,7 @@ def load_signing_key(args: argparse.Namespace) -> bytes:
     """
     if args.gpg_key_file:
         return args.gpg_key_file.read_bytes()
-    key = _fetch_signing_key(args.gpg_key_url)
-    _verify_key_fingerprint(key)
-    return key
+    return _extract_pinned_key(_fetch_signing_key(args.gpg_key_url))
 
 
 def dearmor_key(armored: bytes) -> bytes:
@@ -934,10 +965,10 @@ def build_deb_package(
     # reference.
     #
     # A native package conventionally carries no debian revision, and this one
-    # does (see deb_version). That convention is enforced by dpkg-source, which
-    # a binary-only build never runs: "dpkg-buildpackage -b" below produces the
-    # .deb straight from debian/. Checked against both dpkg-buildpackage and
-    # lintian, neither of which reports a version or source-format tag for it.
+    # does (see deb_version). That convention is enforced when dpkg-source
+    # builds a source package, which a binary-only build never does:
+    # "dpkg-buildpackage -b" below runs only dpkg-source's --before-build and
+    # --after-build hooks and produces the .deb straight from debian/.
     (deb_dir / "source").mkdir(exist_ok=True)
     (deb_dir / "source" / "format").write_text("3.0 (native)\n", encoding="utf-8")
 
@@ -996,7 +1027,10 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument(
         "--repo-base-url",
         required=True,
-        help="Public repository base URL (the packages-multi-arch base)",
+        help=(
+            "Stream repository base URL, e.g. "
+            "https://stable.repo.amd.com/rocm/core/packages"
+        ),
     )
     p.add_argument(
         "--repo-sub-folder",
@@ -1049,7 +1083,7 @@ def parse_args(argv=None) -> argparse.Namespace:
             "than derived: the key is not under --repo-base-url (packages sit "
             "at <root>/core/packages/ and the key beside core/), and where it "
             "sits is the publisher's choice, not this tool's. The fetch is "
-            "https-only and the key must match the pinned fingerprint. "
+            "https-only and the file must hold only the pinned key. "
             "Required for a signed stream unless --gpg-key-file is given"
         ),
     )

@@ -63,11 +63,11 @@ def _render(template: str, context: dict) -> str:
 #   flat      <base>/<distro>/[x86_64/]
 #   build_id  <base>/<distro>/<YYYYMMDD-id>/[x86_64/]
 #
-# These are pinned rather than derived, and the values match the shapes the
-# published install instructions use (scriptgen's unit-test/test_stream_urls.py,
-# checked against the live repos). A URL that does not serve a repository only
-# fails at the user's first metadata refresh, so a derived expectation would
-# reproduce a builder bug instead of catching it.
+# These are pinned rather than derived, and the values match the published
+# install instructions for stable and the live repositories for every stream.
+# A URL that does not serve a repository only fails at the user's first
+# metadata refresh, so a derived expectation would reproduce a builder bug
+# instead of catching it.
 
 STABLE_EXPECTED = {
     "ubuntu2404": f"{STABLE_BASE}/ubuntu2404/",
@@ -118,9 +118,9 @@ def _sub_for(stream: str) -> str:
 
 
 # Derived from STREAMS rather than listed, so enabling a stream cannot quietly
-# leave these per-stream assertions covering only the old set. _STREAM_BASES is
-# the one place that then has to grow, and a missing entry is a KeyError rather
-# than a silent skip.
+# leave these per-stream assertions covering only the old set. A new stream also
+# needs a _STREAM_BASES entry (tests using _base_for raise KeyError without one)
+# and an EXPECTED_REPO_FILE_STEMS entry.
 ALL_STREAMS = [(s, _sub_for(s)) for s in brp.STREAMS]
 
 
@@ -156,7 +156,7 @@ def test_key_url_is_used_verbatim(monkeypatch):
     # builder that still derived the tail would fetch a different URL here.
     seen = []
     monkeypatch.setattr(brp, "_fetch_signing_key", lambda url: seen.append(url) or b"k")
-    monkeypatch.setattr(brp, "_verify_key_fingerprint", lambda key: None)
+    monkeypatch.setattr(brp, "_extract_pinned_key", lambda key: key)
     args = _args()
     args.gpg_key_url = "https://example.invalid/somewhere/else/custom-key.gpg"
     brp.load_signing_key(args)
@@ -274,9 +274,8 @@ def test_verify_repo_url_does_not_retry_a_missing_repo(monkeypatch):
 
 def test_verify_repo_url_does_not_retry_a_non_200_response(monkeypatch):
     # urlopen raises for the error codes, so a status that arrives here is a URL
-    # that answers but serves no repository index. Retrying cannot change that.
-    # Before this was fixed the status was recorded and the loop slept through
-    # every remaining attempt before failing anyway.
+    # that answers but serves no repository index. Retrying cannot change that,
+    # so it must fail on the first attempt without sleeping.
     calls = {"n": 0}
 
     def created(*a, **k):
@@ -530,15 +529,19 @@ def test_load_signing_key_rejects_oversize_key(monkeypatch):
         brp.load_signing_key(_args())
 
 
-def test_load_signing_key_returns_fetched_key(monkeypatch):
+def test_load_signing_key_embeds_only_the_extracted_key(monkeypatch):
     monkeypatch.setattr(
         brp.urllib.request,
         "urlopen",
         lambda *a, **k: _FakeResponse(b"ARMORED KEY", f"{STABLE_BASE}/gpg/rocm.gpg"),
     )
-    # Fingerprint verification runs gpg on real key bytes; stub it here.
-    monkeypatch.setattr(brp, "_verify_key_fingerprint", lambda key: None)
-    assert brp.load_signing_key(_args()) == b"ARMORED KEY"
+    # The pinned-key extraction runs gpg; the real-gpg tests below cover it.
+    seen = []
+    monkeypatch.setattr(
+        brp, "_extract_pinned_key", lambda key: seen.append(key) or b"PINNED KEY"
+    )
+    assert brp.load_signing_key(_args()) == b"PINNED KEY"
+    assert seen == [b"ARMORED KEY"]
 
 
 def test_load_signing_key_prefers_key_file(monkeypatch, tmp_path):
@@ -554,22 +557,96 @@ def test_load_signing_key_prefers_key_file(monkeypatch, tmp_path):
     assert brp.load_signing_key(args) == b"FILE KEY"
 
 
-def test_load_signing_key_rejects_wrong_fingerprint(monkeypatch):
-    monkeypatch.setattr(
-        brp.urllib.request,
-        "urlopen",
-        lambda *a, **k: _FakeResponse(b"KEY", f"{STABLE_BASE}/gpg/rocm.gpg"),
+def test_primary_fingerprints_ignores_subkeys():
+    listing = "\n".join(
+        [
+            "pub:-:4096:1:AAAA:1:::-:::scESC::::::23::0:",
+            "fpr:::::::::" + "A" * 40 + ":",
+            "uid:-::::1::X::Pinned:::::::::0:",
+            "sub:-:4096:1:BBBB:1::::::s::::::23:",
+            "fpr:::::::::" + "B" * 40 + ":",
+            "pub:-:2048:1:CCCC:1:::-:::scESC::::::23::0:",
+            "fpr:::::::::" + "C" * 40 + ":",
+        ]
     )
-    monkeypatch.setattr(brp, "_key_fingerprint", lambda armored: "0" * 40)
+    assert brp._primary_fingerprints(listing) == ["A" * 40, "C" * 40]
+
+
+# The pinned-key check runs real gpg on real keys: mocking gpg is what let a
+# key file with a second key appended pass the check unnoticed. The builder
+# only runs on Linux, so these are skipped on Windows and where gpg is absent.
+_GPG = shutil.which("gpg")
+_needs_gpg = pytest.mark.skipif(
+    _GPG is None or sys.platform == "win32",
+    reason="needs gpg on a Linux host",
+)
+
+
+def _gpg(home: Path, *argv: str) -> bytes:
+    return subprocess.run(
+        [_GPG, "--homedir", str(home), "--batch", *argv],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    ).stdout
+
+
+@pytest.fixture(scope="module")
+def signing_keys(tmp_path_factory):
+    """Two throwaway armored public keys, "pinned" and "extra", by fingerprint."""
+    keys = {}
+    for name in ("pinned", "extra"):
+        home = tmp_path_factory.mktemp(f"gpg-{name}")
+        home.chmod(0o700)
+        _gpg(
+            home,
+            "--pinentry-mode",
+            "loopback",
+            "--passphrase",
+            "",
+            "--quick-generate-key",
+            f"{name} <{name}@example.invalid>",
+            "ed25519",
+            "sign",
+            "0",
+        )
+        listing = _gpg(home, "--with-colons", "--list-keys").decode()
+        fingerprint = brp._primary_fingerprints(listing)[0]
+        keys[name] = (fingerprint, _gpg(home, "--armor", "--export"))
+        # Key generation starts a gpg-agent for this homedir; stop it.
+        if shutil.which("gpgconf"):
+            subprocess.run(
+                ["gpgconf", "--homedir", str(home), "--kill", "all"], check=False
+            )
+    return keys
+
+
+@_needs_gpg
+def test_extract_pinned_key_accepts_the_pinned_key_alone(monkeypatch, signing_keys):
+    fingerprint, armored = signing_keys["pinned"]
+    monkeypatch.setattr(brp, "EXPECTED_KEY_FINGERPRINT", fingerprint)
+    out = brp._extract_pinned_key(armored)
+    listing = subprocess.run(
+        [_GPG, "--with-colons", "--show-keys"],
+        input=out,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    ).stdout.decode()
+    assert brp._primary_fingerprints(listing) == [fingerprint]
+
+
+@_needs_gpg
+@pytest.mark.parametrize(
+    "order",
+    [("pinned", "extra"), ("extra", "pinned"), ("extra",)],
+    ids=["pinned+extra", "extra+pinned", "extra"],
+)
+def test_extract_pinned_key_rejects_any_other_key(monkeypatch, signing_keys, order):
+    monkeypatch.setattr(brp, "EXPECTED_KEY_FINGERPRINT", signing_keys["pinned"][0])
+    armored = b"".join(signing_keys[name][1] for name in order)
     with pytest.raises(ValueError):
-        brp.load_signing_key(_args())
-
-
-def test_verify_key_fingerprint_accepts_pinned(monkeypatch):
-    monkeypatch.setattr(
-        brp, "_key_fingerprint", lambda armored: brp.EXPECTED_KEY_FINGERPRINT
-    )
-    brp._verify_key_fingerprint(b"whatever")  # must not raise
+        brp._extract_pinned_key(armored)
 
 
 def test_fetch_signing_key_retries_then_succeeds(monkeypatch):
@@ -676,8 +753,8 @@ def test_rpm_profiles_never_share_a_package_version():
 
 def test_stable_carries_the_plain_version_and_the_stream_in_the_rpm_release():
     # stable is the GA stream, so the upstream part of its deb version is the
-    # bare ROCm version; any other flat stream would carry a "~<stream>" marker
-    # there, which sorts before it.
+    # bare ROCm version; any other flat stream carries a "~<marker>" there
+    # (rc: "~pre"), which sorts before it.
     assert _deb("stable") == "10.0.0-1~ubuntu2404"
     assert _rpm("stable")[1] == "1.stable.el8"
 
@@ -752,9 +829,8 @@ def test_rc_markers_carry_no_candidate_number():
 
 
 def test_rc_version_uses_the_stream_not_the_file_id():
-    # The file stem is amdrocm-stablerc (see STREAM_IDS); neither version carries it.
-    # Three distinct identifiers for one stream, asserted separately so a
-    # future edit cannot quietly collapse them.
+    # The repo file stem is amdrocm-stablerc (see STREAM_IDS); neither version
+    # may carry it.
     assert "stablerc" not in _deb("rc")
     assert "stablerc" not in _rpm("rc")[1]
     assert brp.repo_id("rc") == "amdrocm-stablerc"
@@ -798,13 +874,13 @@ _DPKG = shutil.which("dpkg")
             "prerelease sorts below its GA",
         ),
         (
-            "10.0.0~rc-1~ubuntu2404",
+            "10.0.0~pre-1~ubuntu2404",
             "10.0.0-1~ubuntu2404",
             "rc sorts below the GA it is a candidate for",
         ),
         (
-            "10.0.0~rc-1~ubuntu2404",
-            "10.0.0~rc-2~ubuntu2404",
+            "10.0.0~pre-1~ubuntu2404",
+            "10.0.0~pre-2~ubuntu2404",
             "rc respin bump",
         ),
     ],
@@ -1096,15 +1172,15 @@ def test_deb_sources_signed_fields():
     assert "X-Repo-Id: amdrocm-stable" in out
     assert "Types: deb" in out
     assert f"URIs: {STABLE_EXPECTED['ubuntu2404']}" in out
-    # The suite is rendered from the constant the reachability check also uses,
-    # so the repo file and the verified index path cannot drift apart.
+    # Suites is literal in the template; it must equal DEB_SUITE, the suite
+    # verify_repo_url fetches, or the checked index is not the one apt reads.
     assert f"Suites: {brp.DEB_SUITE}" in out
     assert "Suites: stable" in out
     assert "Components: main" in out
     assert "Architectures: amd64" in out
     assert f"Signed-By: {brp.DEB_KEYRING_PATH}" in out
-    # Pinned literally as well: the keyring must not be named rocm.gpg, which
-    # the amdgpu driver setup from repo.radeon.com already owns.
+    # Pinned literally as well, so the package-specific keyring name cannot
+    # drift back to a generic one.
     assert "Signed-By: /usr/share/keyrings/amdrocm.gpg" in out
     assert "Trusted:" not in out
 
@@ -1204,9 +1280,9 @@ def test_spec_install_scriptlet_only_prints(stream, sub):
     # before its first refresh, and --non-interactive answers "reject", so the
     # repository is skipped and nothing installs. It does not work: rpm holds
     # the database lock for the whole transaction, so "rpm --import" fails with
-    # "can't create transaction lock" from %post and from %posttrans alike.
-    # Both were tried in ubi10 and bci-base:16.0 containers, and the failure is
-    # only a scriptlet warning, so the package still installs looking healthy.
+    # "can't create transaction lock" from %post and from %posttrans alike,
+    # and the failure is only a scriptlet warning, so the package still
+    # installs looking healthy.
     #
     # The supported answer is the package manager's own flag -- "dnf -y" or
     # "zypper --gpg-auto-import-keys" -- which is what the published ROCm
@@ -1242,8 +1318,6 @@ def test_spec_install_scriptlet_only_prints(stream, sub):
 def test_spec_files_sets_root_ownership_before_listing_anything():
     # %defattr only governs the entries that follow it, so position is the point
     # and a bare "is it present" assertion would not catch a misplaced one.
-    # Without it, files packaged by a non-root rpmbuild keep the builder's
-    # uid/gid.
     out = _spec("stable", STABLE_BASE)
     body = out.split("%files", 1)[1].split("%changelog", 1)[0]
     entries = [ln.strip() for ln in body.splitlines() if ln.strip()]
@@ -1267,8 +1341,8 @@ def test_control_has_no_key_runtime_deps():
 def test_control_conflicts_with_the_legacy_installer_on_every_stream(stream):
     # Conflicts only, not Conflicts + Breaks. Conflicts is the stronger field --
     # it blocks unpacking, where Breaks only blocks configuration -- and adding
-    # Breaks alongside it was measured to change nothing: dpkg and apt behave
-    # identically with either field alone or both. Breaks would also imply some
+    # Breaks alongside it changes nothing: dpkg and apt behave identically with
+    # either field alone or both. Breaks would also imply some
     # version of amdgpu-install exists that is not affected, which is not the
     # case. Declared for every stream, since that package configures a
     # ROCm repository regardless of which stream this one points at.
@@ -1321,11 +1395,9 @@ def test_postinst_cannot_fail_the_install():
 
 
 def test_rules_forces_root_ownership_in_the_archive():
-    # Building as a non-root uid already yields root/root today, because
-    # dh_builddeb passes --root-owner-group itself when a package sets no
-    # Rules-Requires-Root. The override states it anyway, so the archive does
-    # not start carrying the build account's uid/gid if that field is ever
-    # added, and to match template/debian_rules.j2.
+    # The archive is root:root either way (fakeroot without Rules-Requires-Root;
+    # dh_builddeb adds the flag itself with "Rules-Requires-Root: no"). The
+    # override states it explicitly to match template/debian_rules.j2.
     out = _render(
         "template/repo/deb/rules.j2",
         brp.build_context(_args(), brp.OS_PROFILES["ubuntu2404"]),
@@ -1361,8 +1433,7 @@ def test_install_maps_keyring_only_when_signed():
         "template/repo/deb/install.j2",
         brp.build_context(args_n, brp.OS_PROFILES["ubuntu2404"]),
     )
-    # Assert the whole mapping line is absent. Substring-matching "rocm.gpg"
-    # alone would be satisfied by "amdrocm.gpg" and prove nothing.
+    # No keyring file or directory is mapped for an unsigned stream.
     assert "amdrocm.gpg" not in out_nightly
     assert "/usr/share/keyrings/" not in out_nightly
 
@@ -1449,10 +1520,8 @@ EXPECTED_REPO_FILE_STEMS = {
 
 @pytest.mark.parametrize("stream", sorted(brp.STREAMS))
 def test_installed_filename_matches_the_expected_stem(stream):
-    # Renaming a file inside one package is free; renaming the package and the
-    # file together is the one case dpkg/rpm do not handle automatically. The
-    # eventual split into per-tier packages is only cheap if the stems are
-    # already right, so these are asserted literally, not derived.
+    # The eventual split into per-tier packages is only cheap if the installed
+    # file stems are already right, so these are asserted literally, not derived.
     assert stream in EXPECTED_REPO_FILE_STEMS, f"no stem recorded for {stream!r}"
     assert brp.repo_id(stream) == EXPECTED_REPO_FILE_STEMS[stream]
 
@@ -1484,19 +1553,18 @@ def test_deb_install_maps_the_stream_scoped_sources_file():
 
 # --- parity with the published install instructions ---------------------------
 #
-# These stanzas are copied verbatim from the ROCm 10.0.0 install scripts that
-# rocm-install-utils generates and ships (commit 2c40b326f, 2026-08-25), which
-# are what users are told to run. They are the closest thing to an external
-# oracle available here: a golden file we wrote ourselves only proves the
-# renderer is self-consistent, whereas these prove it agrees with the
+# These stanzas are copied verbatim from the ROCm 10.0.0 installation
+# instructions (ROCm/rocm-docs, docs/install/include/200-install.rst at
+# 44d9ab17), which are what users are told to run. They are the closest thing
+# to an external oracle available here: a golden file we wrote ourselves only
+# proves the renderer is self-consistent, whereas these prove it agrees with the
 # configuration AMD actually publishes for the same repositories.
 #
-# Vendored rather than read from the sibling repository: rocm-install-utils is
-# not a dependency of TheRock and must not become one. Refresh them by hand when
-# that project changes shape, which is rare -- and a mismatch here is the signal
-# that it did.
+# Vendored rather than read from that repository, which is not a dependency of
+# TheRock. Refresh them by hand when the documented configuration changes -- a
+# mismatch here is the signal that it did.
 
-SCRIPTGEN_DEB_UBUNTU2404 = """\
+DOCUMENTED_DEB_UBUNTU2404 = """\
 X-Repo-Id: amdrocm-stable
 Types: deb
 URIs: https://stable.repo.amd.com/rocm/core/packages/ubuntu2404/
@@ -1507,10 +1575,9 @@ Signed-By: /etc/apt/keyrings/amdrocm.gpg
 Enabled: yes
 """
 
-# The rpm stanzas differ only by the distro slug, so one template covers all
-# three rpm profiles we build. scriptgen ships RHEL 8.x/10.x and SLES 16.0,
-# which map onto rhel8/rhel10/sles16 exactly.
-SCRIPTGEN_RPM = """\
+# The documented rpm stanzas differ only by the distro slug, so one template
+# covers all three rpm profiles we build.
+DOCUMENTED_RPM = """\
 [amdrocm-stable]
 name=ROCm 10.0.0
 baseurl=https://stable.repo.amd.com/rocm/core/packages/{slug}/x86_64
@@ -1523,17 +1590,16 @@ gpgkey=https://stable.repo.amd.com/rocm/gpg/packages.gpg
 # reason. Anything NOT listed here has to match, and a new entry is a decision
 # that belongs in the PR description rather than a quiet edit to this table.
 #
-#   Signed-By   scriptgen downloads the key itself to /etc/apt/keyrings; the
-#               package owns its keyring, and the amdrocm name (not rocm) is
-#               what keeps dpkg from refusing to unpack it alongside the amdgpu
-#               driver setup, which already owns .../keyrings/rocm.gpg.
+#   Signed-By   the documented steps download the key to /etc/apt/keyrings,
+#               the location for locally managed keys; the package owns its
+#               keyring, so it ships it under /usr/share/keyrings.
 #   gpgkey      the package ships the key, so it references it locally with
 #               file:// rather than refetching it over the network at install.
 #   baseurl     trailing slash; both forms resolve, cosmetic only.
-#   name        scriptgen bakes the version ("ROCm 10.0.0") because it generates
-#               a script per release. This package configures a rolling repo
-#               that serves every retained version, so a version in the display
-#               name would be wrong the moment the next one ships.
+#   name        the documented stanza bakes in the version ("ROCm 10.0.0")
+#               because it is written per release. This package configures a
+#               rolling repo that serves every retained version, so a version
+#               in the display name would be wrong once the next one ships.
 DEVIATIONS = {"Signed-By", "gpgkey", "baseurl", "name"}
 
 
@@ -1548,7 +1614,7 @@ def _fields(text: str, sep: str) -> dict:
 
 def test_deb_sources_match_the_published_install_instructions():
     ours = _fields(_deb_sources("stable", STABLE_BASE), ":")
-    theirs = _fields(SCRIPTGEN_DEB_UBUNTU2404, ":")
+    theirs = _fields(DOCUMENTED_DEB_UBUNTU2404, ":")
     assert set(ours) == set(theirs), "field set diverged from the published config"
     for key in theirs:
         if key in DEVIATIONS:
@@ -1566,7 +1632,7 @@ def test_deb_deviations_are_the_expected_ones():
 def test_rpm_name_is_not_version_pinned():
     # The repo serves every retained version, so its display name must not name
     # one. Guards the "name" deviation above against being quietly reverted to
-    # match scriptgen.
+    # match the documented stanza.
     ours = _fields(_rpm_repo("stable", STABLE_BASE), "=")
     assert ours["name"] == brp.REPO_NAME
     assert "10.0.0" not in ours["name"]
@@ -1575,7 +1641,7 @@ def test_rpm_name_is_not_version_pinned():
 @pytest.mark.parametrize("profile", ["rhel8", "rhel10", "sles16"])
 def test_rpm_repo_matches_the_published_install_instructions(profile):
     ours = _fields(_rpm_repo("stable", STABLE_BASE, profile=profile), "=")
-    theirs = _fields(SCRIPTGEN_RPM.format(slug=profile), "=")
+    theirs = _fields(DOCUMENTED_RPM.format(slug=profile), "=")
     assert set(ours) == set(theirs), "field set diverged from the published config"
     for key in theirs:
         if key in DEVIATIONS:
@@ -1596,6 +1662,6 @@ def test_rpm_repo_matches_the_published_install_instructions(profile):
     ],
 )
 def test_rpm_repo_dir_matches_the_published_install_instructions(profile, expected_dir):
-    # scriptgen writes SLES to /etc/zypp/repos.d and the RHEL family to
-    # /etc/yum.repos.d. Easy to get wrong and invisible until install time.
+    # The documented steps write SLES to /etc/zypp/repos.d and the RHEL family
+    # to /etc/yum.repos.d. Easy to get wrong and invisible until install time.
     assert brp.OS_PROFILES[profile]["rpm_repo_dir"] == expected_dir

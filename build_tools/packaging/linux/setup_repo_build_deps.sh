@@ -10,7 +10,7 @@
 # - sles*             -> zypper: rpm-build
 # - else (RHEL-like)  -> dnf: rpm-build
 #
-# gpg is installed for every profile: signed release lines need it to dearmor
+# gpg is installed for every profile: signed streams need it to dearmor
 # the deb keyring and to check the signing key fingerprint.
 #
 # Python is installed separately by setup_python_cmd.sh.

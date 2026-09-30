@@ -19,18 +19,19 @@ single repo definition and, for signed streams, the repository signing key:
 | `rhel8`, `rhel10` | `dnf` / `yum`   | `/etc/yum.repos.d/amdrocm-<stream>.repo`           | `/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm` |
 | `sles16`          | `zypper`        | `/etc/zypp/repos.d/amdrocm-<stream>.repo`          | `/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm` |
 
-The filename and the rpm section id both identify the stream, so packages for
-two different streams can be installed in turn without one silently replacing
-the other's configuration. The stem is `amdrocm-<stream>` for every stream
-except `rc`, whose file is `amdrocm-stablerc` — see [Streams](#streams).
+The filename and the rpm section id both identify the stream. The stem is
+`amdrocm-<stream>` for every stream except `rc`, whose file is
+`amdrocm-stablerc` — see [Streams](#streams). To change streams, see
+[Switching streams](#switching-streams).
 
 The deb repo definition uses the deb822 `.sources` format (`X-Repo-Id`,
 `Suites: stable`, `Components: main`, `Architectures: amd64`, `Enabled: yes`)
 and references the shipped keyring via `Signed-By`. The rpm repo definition
-references the shipped key via `gpgkey=file://`. These match the configuration
-the [published ROCm install
-instructions](https://github.com/ROCm/rocm-install-utils) write by hand, so a
-system set up either way ends up with equivalent repository configuration.
+references the shipped key via `gpgkey=file://`. For `stable`, these configure
+the same repository and signing key as the [ROCm installation
+instructions](https://rocm.docs.amd.com/en/latest/install/rocm.html); the files
+differ in where the key is stored, the repository's display name, and
+formatting.
 
 ## Streams
 
@@ -43,15 +44,15 @@ repository serves x86_64 (`amd64`) packages only.
 | `rc`      | `https://rc.repo.amd.com/rocm/core/packages`      | yes    | `amdrocm-stablerc.{sources,repo}` |
 | `nightly` | `https://nightly.repo.amd.com/rocm/core/packages` | no     | `amdrocm-nightly.{sources,repo}`  |
 
-`rc` is the release-candidate stream for the next GA release. Its package
-version carries a prerelease marker, which sorts below the plain version, so the
-stable package upgrades cleanly over a candidate.
-
-The marker follows the same per-ecosystem spelling the ROCm content packages
-use: **`~pre` on deb and `.rc.` on rpm**. The rc repository publishes those
-packages as `10.1.0~pre1` and `10.1.0~rc1` respectively, so `amdrocm-repo` reads
-consistently alongside them. It carries no candidate number, because it names
-the stream rather than one candidate — the repository serves several at once.
+`rc` is the release-candidate stream for the next GA release. On deb its package
+version carries a `~pre` marker (`10.1.0~pre-1~ubuntu2404`), matching the `~preN`
+the rc repository's own deb packages use. On rpm the version is unchanged and the
+stream is in the release field (`10.1.0-1.rc.el8`). Either way the rc package
+sorts below the stable package at the same ROCm version, but it targets the
+*next* release, so moving from `rc` back to `stable` is a downgrade — see
+[Switching streams](#switching-streams). The version carries no candidate
+number, because it names the stream rather than one candidate — the repository
+serves several at once.
 
 Note that `rc`'s installed file is `amdrocm-stablerc`, not `amdrocm-rc`. The
 stream names the subdomain, while `stablerc` is the spelling RFC0012 uses for
@@ -80,14 +81,9 @@ building the package.
 >
 > More importantly, a nightly repo file names **one specific build**. Nightly
 > retention prunes old builds, so a nightly `amdrocm-repo` stops resolving once
-> the build it points at is removed, and the package must be rebuilt to follow
-> the stream.
->
-> The retained window is roughly **30 days**: as of 2026-09-22 each distro keeps
-> 30 build folders at one build per night. So a nightly `amdrocm-repo` has an
-> expected shelf life of about a month, after which `apt update` or
-> `dnf makecache` fails against it. Use `stable` for anything beyond short-lived
-> testing.
+> the build it points at is removed — `apt update` or `dnf makecache` then fails
+> against it — and the package must be rebuilt to follow the stream. Use
+> `stable` for anything beyond short-lived testing.
 
 Two further streams exist on `repo.amd.com` but no `amdrocm-repo` is built for
 them: `weekly` is not yet serving content, and `dev` is intended for developer
@@ -110,6 +106,10 @@ sudo apt purge amdgpu-install       # Ubuntu: purge, not remove (see the note be
 sudo dnf remove amdgpu-install      # RHEL / Rocky / Oracle Linux
 sudo zypper remove amdgpu-install   # SLES
 ```
+
+`amdgpu-install` also configures the AMDGPU driver repository (`amdgpu.list` or
+`amdgpu.repo`). Purging it (Debian/Ubuntu) or removing it (RHEL/SLES) removes
+that repository configuration too.
 
 > **On Debian and Ubuntu, use `purge` rather than `remove`.** `amdgpu-install`
 > ships its repository file, its signing key and its priority pin
@@ -143,16 +143,15 @@ sudo zypper remove amdgpu-install   # SLES
 ## Building the package locally
 
 `build_repo_package.py` builds `amdrocm-repo` for a single OS profile and
-stream. It requires Python 3.12 or newer, matching the rest of this
-repository, the `jinja2` Python package, and the native packaging tools for the
-target format:
+stream. Use Python 3.10 or newer with the `jinja2` Python package, plus the
+native packaging tools for the target format:
 
 - deb (`ubuntu2404`): `debhelper`, `dpkg-dev`, `build-essential`
 - rpm (`rhel8`, `rhel10`, `sles16`): `rpm-build`
 
 Some rpm base images ship no system `python3` at all — UBI 8, for example — so
-Python may need installing first. `setup_python_cmd.sh` does that per profile
-and reports the interpreter to use.
+Python may need installing first. `setup_python_cmd.sh --install-runtime` does
+that per profile and reports the interpreter to use.
 
 For a signed stream the builder also invokes `gpg` to prepare the key, and
 fetches it over the network (see below), so `gpg` and `ca-certificates` must be
@@ -184,12 +183,13 @@ option because the key is not under `--repo-base-url` — packages live under
 `<root>/core/packages/` and the key beside `core/` — so one cannot be derived
 from the other. Taking it whole rather than assembling it from a root also keeps
 where the key lives a property of the repository rather than an assumption in
-this tool. The fetch is https-only, and the key must match the fingerprint
-pinned in `build_repo_package.py`, so a wrong or tampered key fails the build
-regardless of the URL it came from.
+this tool. The fetch is https-only, and the fetched file must hold only the key
+pinned in `build_repo_package.py`, so a wrong, tampered or added key fails the
+build regardless of the URL it came from.
 
 For a signed stream the key is fetched over the network at build time. To build
-offline, or to pin a specific key, pass it explicitly instead:
+offline, pass a key file you already trust instead. It is embedded as provided;
+the pinned-key check applies only to a fetched key:
 
 ```bash
 python3 build_tools/packaging/linux/build_repo_package.py \
@@ -325,28 +325,43 @@ because `Signed-By:` names the keyring directly.
 
 ### Switching streams
 
-Installing a different stream's package over the current one switches the
-configured repository. The install commands above are the same ones to use.
-
-On Debian and Ubuntu, expect `apt` to describe a switch from `nightly` to
-`stable` as a **downgrade**. The package version carries the stream so that two
-streams never produce an identically named package, and a nightly version is
-derived from its build date, which sorts above a ROCm version number. `apt`
-prompts and proceeds normally when you confirm. Only non-interactive use is
-affected:
+On Debian and Ubuntu, switching in place is not supported yet: purge the
+installed package first, then install the other stream's package.
 
 ```bash
-# fails: "Packages were downgraded and -y was used without --allow-downgrades"
-sudo apt install -y ./repo-package-out/amdrocm-repo_*_all.deb
-
-# succeeds
-sudo apt install -y --allow-downgrades ./repo-package-out/amdrocm-repo_*_all.deb
+sudo apt purge amdrocm-repo
+sudo apt install ./repo-package-out/amdrocm-repo_*_all.deb
 ```
 
-`dnf` and `zypper` are unaffected and install the new stream's package directly.
+Installing over the current package keeps the old stream's `.sources` file,
+because `dpkg` does not delete a configuration file that the version being
+installed no longer ships. The old repository stays active: after moving from `rc` to
+`stable`, `apt` keeps resolving `amdrocm` to the higher rc version, and after
+moving from a signed stream to `nightly`, `apt-get update` can no longer
+refresh the old repository, whose signing key was removed.
+
+On RHEL, `dnf install` switches directly, reporting a move to a lower-versioned
+stream as a downgrade. On SLES, pass `--oldpackage`: without it, `zypper` skips a
+lower-versioned package with "Nothing to do" and still exits 0.
+
+```bash
+sudo dnf install ./repo-package-out/amdrocm-repo-*.noarch.rpm
+sudo zypper install --oldpackage --allow-unsigned-rpm ./repo-package-out/amdrocm-repo-*.noarch.rpm
+```
 
 Refresh the package manager metadata afterwards, exactly as after a first
-install.
+install. Switching changes where packages are installed from; ROCm packages that
+are already installed keep their version. Moving to a lower-versioned stream, such
+as from `rc` back to `stable`, therefore means removing or downgrading those
+packages as well.
+
+### Removing the package
+
+On Debian and Ubuntu, use `sudo apt purge amdrocm-repo`. `apt remove` keeps the
+`.sources` file, so the repository stays configured. On a signed stream it also
+deletes the key, so every later `apt-get update` warns `NO_PUBKEY`. On RHEL and
+SLES, `dnf remove amdrocm-repo` or `zypper remove amdrocm-repo` deletes both the
+repository file and the key.
 
 ### Verifying the repository
 
@@ -363,7 +378,7 @@ current. No candidate means the repository is not configured, or its metadata
 has not been refreshed.
 
 To browse everything the repository publishes, list by prefix instead — expect
-on the order of a thousand entries, since each component ships separately:
+several hundred entries, since each component ships separately:
 
 ```bash
 apt list 'amdrocm*'      # Ubuntu
@@ -386,9 +401,9 @@ zypper search amdrocm    # SLES
   `dpkg` will not resolve the conflict for you; purge `amdgpu-install` first.
 - **`zypper` reports `Signature verification failed [6-File is unsigned]`.**
   The package file is unsigned; pass `--allow-unsigned-rpm`.
-- **`apt` reports `Packages were downgraded and -y was used without --allow-downgrades`.** You are switching streams non-interactively. See
-  [Switching streams](#switching-streams); add `--allow-downgrades`,
-  or drop `-y` and confirm the prompt.
+- **`apt` reports `Packages were downgraded and -y was used without --allow-downgrades`.** You are installing another stream's package over the
+  current one. Purge `amdrocm-repo` first; see
+  [Switching streams](#switching-streams).
 - **`amdrocm*` packages are not listed.** Refresh the package manager metadata
   (`sudo apt-get update`, `sudo dnf makecache`, or `sudo zypper refresh`) after
   installing `amdrocm-repo`.
