@@ -4,6 +4,7 @@
 """Tests for stage_reuse_decision: impact + baseline-availability gates."""
 
 import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -321,19 +322,18 @@ class GuardrailTest(unittest.TestCase):
 
 
 class DefaultBaselineSelectorTest(unittest.TestCase):
-    """_default_baseline_selector must fetch real branch history and never pass
-    an empty ordered_commit_shas window while current_commit_sha is set."""
+    """The default selector must use first-parent history from the commit built."""
 
     def _run_with_env(self, env, fake_history, fake_select):
         test_env = {
             "GITHUB_REPOSITORY": "ROCm/TheRock",
             "THEROCK_REPOSITORY": "ROCm/TheRock",
         }
-        for k, v in env.items():
-            if v is None:
-                test_env.pop(k, None)
+        for key, value in env.items():
+            if value is None:
+                test_env.pop(key, None)
             else:
-                test_env[k] = v
+                test_env[key] = value
 
         captured = {}
 
@@ -349,8 +349,8 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
                 new=_capturing_select,
             ),
             patch.object(
-                srd.github_actions_api,
-                "gha_query_recent_branch_commits",
+                srd,
+                "get_git_first_parent_history",
                 new=fake_history,
             ),
         ):
@@ -359,11 +359,14 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
 
         return captured, result
 
-    def test_history_is_fetched_and_threaded(self):
-        def fake_history(**kwargs):
+    def test_first_parent_history_is_threaded_to_selector(self):
+        calls = []
+
+        def fake_history(ref, *, max_count, repo_root=None):
+            calls.append((ref, max_count, repo_root))
             return ["sha-current", "sha-old", "sha-older"]
 
-        captured, _ = self._run_with_env(
+        captured, result = self._run_with_env(
             {
                 "GITHUB_REPOSITORY": "ROCm/TheRock",
                 "STAGE_REUSE_CURRENT_SHA": "sha-current",
@@ -371,17 +374,20 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
             fake_history,
             fake_select="baseline",
         )
-        # Real history passed through (NOT an empty list).
+
+        self.assertEqual(calls, [("sha-current", 50, None)])
         self.assertEqual(
-            captured["ordered_commit_shas"], ["sha-current", "sha-old", "sha-older"]
+            captured["ordered_commit_shas"],
+            ["sha-current", "sha-old", "sha-older"],
         )
         self.assertEqual(captured["current_commit_sha"], "sha-current")
+        self.assertEqual(result, "baseline")
 
-    def test_empty_history_disables_commit_rule(self):
-        def fake_history(**kwargs):
+    def test_empty_history_fails_closed(self):
+        def fake_history(ref, *, max_count, repo_root=None):
             return []
 
-        captured, _ = self._run_with_env(
+        captured, result = self._run_with_env(
             {
                 "GITHUB_REPOSITORY": "ROCm/TheRock",
                 "STAGE_REUSE_CURRENT_SHA": "sha-current",
@@ -389,15 +395,18 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
             fake_history,
             fake_select="baseline",
         )
-        # Disabled rather than enabled-with-empty-window: both None.
-        self.assertIsNone(captured["current_commit_sha"])
-        self.assertIsNone(captured["ordered_commit_shas"])
 
-    def test_history_fetch_error_disables_commit_rule(self):
-        def fake_history(**kwargs):
-            raise GitHubAPIError("api down")
+        self.assertEqual(captured, {})
+        self.assertIsNone(result)
 
-        captured, _ = self._run_with_env(
+    def test_history_failure_fails_closed(self):
+        def fake_history(ref, *, max_count, repo_root=None):
+            raise subprocess.CalledProcessError(
+                returncode=128,
+                cmd=["git", "rev-list"],
+            )
+
+        captured, result = self._run_with_env(
             {
                 "GITHUB_REPOSITORY": "ROCm/TheRock",
                 "STAGE_REUSE_CURRENT_SHA": "sha-current",
@@ -405,17 +414,18 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
             fake_history,
             fake_select="baseline",
         )
-        self.assertIsNone(captured["current_commit_sha"])
-        self.assertIsNone(captured["ordered_commit_shas"])
 
-    def test_no_sha_means_no_history_fetch(self):
-        calls = {"n": 0}
+        self.assertEqual(captured, {})
+        self.assertIsNone(result)
 
-        def fake_history(**kwargs):
-            calls["n"] = 1
-            return ["x"]
+    def test_no_sha_means_no_history_lookup(self):
+        calls = []
 
-        captured, _ = self._run_with_env(
+        def fake_history(ref, *, max_count, repo_root=None):
+            calls.append((ref, max_count, repo_root))
+            return ["unexpected"]
+
+        captured, result = self._run_with_env(
             {
                 "GITHUB_REPOSITORY": "ROCm/TheRock",
                 "STAGE_REUSE_CURRENT_SHA": None,
@@ -423,9 +433,11 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
             fake_history,
             fake_select="baseline",
         )
-        self.assertEqual(calls["n"], 0)
+
+        self.assertEqual(calls, [])
         self.assertIsNone(captured["current_commit_sha"])
         self.assertIsNone(captured["ordered_commit_shas"])
+        self.assertEqual(result, "baseline")
 
 
 class ArtifactRequirementTest(unittest.TestCase):
