@@ -22,6 +22,7 @@ from generate_msi_wxs import (
     collect_files_from_catalog,
     make_id,
     build_wxs,
+    build_all,
     parse_args,
     create_wix_document,
     resolve_install_layout,
@@ -558,6 +559,155 @@ class TestBuildWxs(unittest.TestCase):
             )
             targetdirs = [d.get("Id") for d in root.iter(_ns("Directory"))]
             self.assertIn("TARGETDIR", targetdirs)
+
+
+class TestBuildAll(unittest.TestCase):
+    """build_all writes one .wxs per requested package, named by output_stem."""
+
+    BASEDIR = "some/stage"
+
+    def _setup_tree(self, tmp: str, packages: list) -> Path:
+        """Create artifact dirs + legacy DLLs covering every requested package."""
+        root = Path(tmp)
+        artifacts = root / "artifacts"
+        artifacts.mkdir()
+        (root / "version.json").write_text('{"rocm-version": "1.2.3"}')
+
+        artifact_names = set()
+        for pkg in packages:
+            artifact_names.update(PACKAGES[pkg].artifacts)
+        for name in artifact_names:
+            _make_artifact_dir(artifacts, name, "lib", self.BASEDIR, [])
+
+        legacy_dir = (
+            root / "rocm-systems" / "shared" / "amdgpu-windows-interop" / "legacy"
+        )
+        legacy_dir.mkdir(parents=True, exist_ok=True)
+        legacy_dlls = set()
+        for pkg in packages:
+            legacy_dlls.update(PACKAGES[pkg].legacy_system32_dlls)
+        for dll in legacy_dlls:
+            (legacy_dir / dll).write_bytes(b"dll")
+        return root
+
+    def _args(self, root: Path, package_list: list, **overrides) -> argparse.Namespace:
+        defaults = dict(
+            package=None,
+            packages=None,
+            package_list=package_list,
+            build_root=root,
+            repo_root=root,
+            output=None,
+            output_dir=None,
+            default_output_dir=root,
+            install_root="ProgramFiles64Folder",
+            product_dir="AMD",
+            version_dir="ROCm",
+            package_version="1.2.3",
+            run_id=None,
+            run_github_repo=None,
+            artifacts_cache_dir=root / "artifact-cache",
+        )
+        defaults.update(overrides)
+        return argparse.Namespace(**defaults)
+
+    def test_multi_package_writes_named_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._setup_tree(tmp, ["runtime", "core"])
+            out = root / "out"
+            build_all(self._args(root, ["runtime", "core"], output_dir=out))
+            rt = out / "amdrocm-runtime.wxs"
+            core = out / "amdrocm-core.wxs"
+            self.assertTrue(rt.exists())
+            self.assertTrue(core.exists())
+            # Each file is the correct package (distinct UpgradeCode).
+            self.assertEqual(ET.parse(rt).getroot().tag, _ns("Wix"))
+            self.assertNotEqual(
+                ET.parse(rt).getroot().find(_ns("Package")).get("UpgradeCode"),
+                ET.parse(core).getroot().find(_ns("Package")).get("UpgradeCode"),
+            )
+
+    def test_multi_package_writes_exactly_n_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._setup_tree(tmp, ["runtime", "core"])
+            out = root / "out"
+            build_all(self._args(root, ["runtime", "core"], output_dir=out))
+            names = {p.name for p in out.glob("*.wxs")}
+            self.assertEqual(names, {"amdrocm-runtime.wxs", "amdrocm-core.wxs"})
+
+    def test_single_package_output_dir_uses_stem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._setup_tree(tmp, ["runtime"])
+            out = root / "out"
+            build_all(self._args(root, ["runtime"], output_dir=out))
+            self.assertTrue((out / "amdrocm-runtime.wxs").exists())
+            self.assertFalse((out / "out.wxs").exists())
+
+    def test_single_package_explicit_output_honored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._setup_tree(tmp, ["runtime"])
+            custom = root / "custom.wxs"
+            build_all(self._args(root, ["runtime"], output=custom))
+            self.assertTrue(custom.exists())
+
+    def test_single_package_no_flags_defaults_to_script_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._setup_tree(tmp, ["runtime"])
+            build_all(self._args(root, ["runtime"], default_output_dir=root))
+            self.assertTrue((root / "amdrocm-runtime.wxs").exists())
+
+
+class TestParseArgsPackages(unittest.TestCase):
+    """parse_args normalization + validation for --package/--packages/--output*."""
+
+    def _parse(self, *cli):
+        argv = ["generate_msi_wxs.py", *cli]
+        with unittest.mock.patch.object(sys, "argv", argv):
+            return parse_args()
+
+    def test_single_package_scalar_supported(self):
+        args = self._parse("--package", "runtime")
+        self.assertEqual(args.package_list, ["runtime"])
+        self.assertEqual(args.package, "runtime")
+
+    def test_packages_parses_comma_list(self):
+        args = self._parse("--packages", "runtime,core")
+        self.assertEqual(args.package_list, ["runtime", "core"])
+
+    def test_packages_dedupes_preserving_order(self):
+        args = self._parse("--packages", "runtime,core,runtime")
+        self.assertEqual(args.package_list, ["runtime", "core"])
+
+    def test_packages_strips_whitespace(self):
+        args = self._parse("--packages", " runtime , core ")
+        self.assertEqual(args.package_list, ["runtime", "core"])
+
+    def test_package_and_packages_mutually_exclusive(self):
+        with self.assertRaises(SystemExit):
+            self._parse("--package", "runtime", "--packages", "core")
+
+    def test_output_and_output_dir_mutually_exclusive(self):
+        with self.assertRaises(SystemExit):
+            self._parse(
+                "--package", "runtime", "--output", "x.wxs", "--output-dir", "d"
+            )
+
+    def test_output_rejected_with_multiple_packages(self):
+        with self.assertRaises(SystemExit):
+            self._parse("--packages", "runtime,core", "--output", "x.wxs")
+
+    def test_invalid_package_in_packages_errors(self):
+        with self.assertRaises(SystemExit):
+            self._parse("--packages", "runtime,bogus")
+
+    def test_no_package_errors(self):
+        with self.assertRaises(SystemExit):
+            self._parse("--output-dir", "d")
+
+    def test_list_exits_zero(self):
+        with self.assertRaises(SystemExit) as cm:
+            self._parse("--list")
+        self.assertEqual(cm.exception.code, 0)
 
 
 class TestResolveLegacyDlls(unittest.TestCase):

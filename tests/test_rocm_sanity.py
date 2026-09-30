@@ -9,8 +9,10 @@ import platform
 import pytest
 import re
 import shlex
+import shutil
 import subprocess
 import sys
+import tempfile
 
 THIS_DIR = Path(__file__).resolve().parent
 
@@ -29,10 +31,10 @@ def is_windows():
     return "windows" == platform.system().lower()
 
 
-def run_command(command: list[str], cwd=None):
+def run_command(command: list[str], cwd=None, env: dict[str, str] | None = None):
     logger.info(f"++ Run [{cwd}]$ {shlex.join(command)}")
     process = subprocess.run(
-        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True
+        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True, env=env
     )
     if process.returncode != 0:
         logger.error(f"Command failed!")
@@ -55,7 +57,65 @@ def rocm_info_output():
         return None
 
 
+@pytest.fixture(scope="session")
+def clinfo_output() -> str:
+    env = os.environ.copy()
+    if is_windows():
+        vendor = THEROCK_BIN_DIR / "amdocl64.dll"
+        if not vendor.is_file():
+            raise FileNotFoundError(f"OpenCL vendor runtime not found: {vendor}")
+        env["PATH"] = str(THEROCK_BIN_DIR) + os.pathsep + env.get("PATH", "")
+        # The system ICD loader can fall back to a registered driver. Load the
+        # built vendor directly via clinfo's application-local OpenCL.dll.
+        # amdocl64 exports the OpenCL entry points used by clinfo.
+        with tempfile.TemporaryDirectory(prefix="therock-clinfo-") as directory:
+            clinfo = Path(directory) / "clinfo.exe"
+            shutil.copy2(THEROCK_BIN_DIR / "clinfo.exe", clinfo)
+            shutil.copy2(vendor, Path(directory) / "OpenCL.dll")
+            return run_command([str(clinfo)], cwd=directory, env=env).stdout
+
+    lib_dir = THEROCK_BIN_DIR.parent / "lib"
+    vendor = lib_dir / "opencl" / "libamdocl64.so"
+    if not vendor.is_file():
+        raise FileNotFoundError(f"OpenCL vendor runtime not found: {vendor}")
+
+    # Support both the distro ocl-icd loader and the Khronos loader without
+    # depending on system-wide ICD registration.
+    env["OCL_ICD_VENDORS"] = str(vendor)
+    env["OCL_ICD_FILENAMES"] = str(vendor)
+    library_dirs = (lib_dir, lib_dir / "llvm" / "lib", lib_dir / "rocm_sysdeps" / "lib")
+    library_path = [str(path) for path in library_dirs if path.is_dir()]
+    if env.get("LD_LIBRARY_PATH"):
+        library_path.append(env["LD_LIBRARY_PATH"])
+    env["LD_LIBRARY_PATH"] = os.pathsep.join(library_path)
+
+    return run_command([str(THEROCK_BIN_DIR / "clinfo")], env=env).stdout
+
+
 class TestROCmSanity:
+    @pytest.mark.skipif(
+        is_asan(),
+        reason="runtime GPU enumeration is flaky under ASAN, see TheRock#3312",
+    )
+    @pytest.mark.parametrize(
+        "to_search",
+        [
+            r"Platform\s*Name:\s*AMD Accelerated Parallel Processing",
+            r"Device\s*Type:\s*CL_DEVICE_TYPE_GPU",
+            r"Name:\s*gfx",
+        ],
+        ids=[
+            "clinfo - AMD Platform Search",
+            "clinfo - GPU Device Type Search",
+            "clinfo - GFX Name Search",
+        ],
+    )
+    def test_clinfo_output(self, clinfo_output: str, to_search: str):
+        check.is_not_none(
+            re.search(to_search, clinfo_output),
+            f"Failed to search for {to_search} in clinfo output:\n{clinfo_output}",
+        )
+
     @pytest.mark.skipif(is_windows(), reason="rocminfo is not supported on Windows")
     # TODO(#3312): Re-enable once rocminfo test is fixed for ASAN builds
     @pytest.mark.skipif(
