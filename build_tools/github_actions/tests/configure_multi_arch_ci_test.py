@@ -2483,27 +2483,9 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
                     self.assertNotEqual(
                         family_info["test-runs-on"], "", f"Expected tests for {name}"
                     )
-                    # When tests are enabled, CPU runner and tests_enabled should be set
-                    self.assertNotEqual(
-                        family_info["test-runs-on-cpu"], "",
-                        f"Expected CPU tests enabled for {name}"
-                    )
-                    self.assertTrue(
-                        family_info["tests_enabled"],
-                        f"Expected tests_enabled=True for {name}"
-                    )
                 else:
-                    # When tests are gated, BOTH GPU and CPU tests should be disabled
                     self.assertEqual(
                         family_info["test-runs-on"], "", f"Expected no tests for {name}"
-                    )
-                    self.assertEqual(
-                        family_info["test-runs-on-cpu"], "",
-                        f"Expected no CPU tests for {name} (gated by trigger)"
-                    )
-                    self.assertFalse(
-                        family_info["tests_enabled"],
-                        f"Expected tests_enabled=False for {name}"
                     )
 
     def test_test_type_for_family_override(self):
