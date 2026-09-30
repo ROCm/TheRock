@@ -457,3 +457,28 @@ jobs:
     uses: ./.github/workflows/test.yml
     secrets: inherit
 ```
+
+#### Security - Limit GitHub App token permissions
+
+When creating a GitHub App token, explicitly request only the permissions its
+consumers need. Without `permission-*` inputs, `actions/create-github-app-token`
+inherits all installation permissions. See
+[zizmor's github-app audit](https://docs.zizmor.sh/audits/#github-app) and the
+[action's permission inputs](https://github.com/actions/create-github-app-token#permission-permission-name).
+
+For example, a token used only to create tags needs contents write access:
+
+```yaml
+- name: Create tagging token
+  id: tagging-token
+  uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+  with:
+    app-id: ${{ secrets.APP_ID }}
+    private-key: ${{ secrets.APP_PRIVATE_KEY }}
+    permission-contents: write # Create tags.
+```
+
+Omitting both `owner` and `repositories` scopes the token to the current
+repository. For cross-repository operations, set `owner` and `repositories` to
+limit access to the required repositories. The App installation must already
+allow every requested permission.
