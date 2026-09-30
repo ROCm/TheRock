@@ -126,6 +126,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 run-name: Test Artifacts (${{ inputs.amdgpu_families }}, ${{ inputs.release_type }}, ${{ inputs.test_type }}, ${{ inputs.build_variant }}, ${{ inputs.test_runs_on }})
 

@@ -45,6 +45,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   test_component:
