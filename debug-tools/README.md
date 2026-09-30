@@ -427,7 +427,10 @@ upstream repositories and installed into the ROCm tree as part of the build:
 
 - ROCgdb: source of truth is
   [ROCm/ROCgdb `.github/scripts/test_rocgdb.py`](https://github.com/ROCm/ROCgdb/blob/amd-staging/.github/scripts/test_rocgdb.py),
-  installed to `tests/rocgdb/test_rocgdb.py`
+  installed to `tests/rocgdb/test_rocgdb.py`. Its emulation support module
+  [`rocjitsu_emulator.py`](https://github.com/ROCm/ROCgdb/blob/amd-staging/.github/scripts/rocjitsu_emulator.py)
+  is installed next to it as `tests/rocgdb/rocjitsu_emulator.py`, since
+  `test_rocgdb.py --emulate` imports it from its own directory.
 - ROCr Debug Agent: source of truth is
   [ROCm/rocm-systems `projects/rocr-debug-agent/.github/scripts/test_rocr-debug-agent.py`](https://github.com/ROCm/rocm-systems/blob/develop/projects/rocr-debug-agent/.github/scripts/test_rocr-debug-agent.py),
   installed to `tests/rocm-debug-agent/test_rocr-debug-agent.py`
@@ -530,13 +533,14 @@ Usage: `-DTHEROCK_ROCGDB_UPSTREAM_BUILD=ON`
 
 ### THEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT
 
-- **Default**: `OFF` - Require `.github/scripts/test_rocgdb.py` to exist in the rocgdb source tree; configure fails if it is missing.
-- **Non-default**: `ON` - If `test_rocgdb.py` is missing from the source tree, download it from `ROCm/ROCgdb` `amd-staging` at configure time (with retries) and install it into `tests/rocgdb`.
+- **Default**: `OFF` - Require `.github/scripts/test_rocgdb.py` and `.github/scripts/rocjitsu_emulator.py` to exist in the rocgdb source tree; configure fails if either is missing.
+- **Non-default**: `ON` - If `test_rocgdb.py` or `rocjitsu_emulator.py` is missing from the source tree, download it from `ROCm/ROCgdb` `amd-staging` at configure time (with retries) and install it into `tests/rocgdb`.
 
 Use this when building a rocgdb source tree (e.g. upstream master) that is not part of the branches exercised by TheRock CI.
 
 Usage: `-DTHEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT=ON`
 
 **Note:** `curl` must be available on the system when this option is enabled, as
-it is used to download `test_rocgdb.py` at configure time. Most environments
+it is used to download `test_rocgdb.py` and `rocjitsu_emulator.py` at configure
+time. Most environments
 provide `curl` by default, but it may need to be installed otherwise.
