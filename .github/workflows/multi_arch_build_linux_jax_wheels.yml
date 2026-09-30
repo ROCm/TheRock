@@ -155,10 +155,12 @@ run-name: Build Multi-Arch Linux JAX Wheels (${{ inputs.release_type }}, ${{ inp
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   build_jax_wheels:
+    permissions:
+      contents: read
+      id-token: write # Authenticate to AWS to upload wheels.
     name: Build | py ${{ inputs.python_version }} | jax ${{ inputs.jax_ref }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     outputs:
@@ -368,7 +370,6 @@ jobs:
       matrix: ${{ fromJSON(needs.configure_jax_tests.outputs.matrix) }}
     permissions:
       contents: read
-      id-token: write
     uses: ./.github/workflows/test_multi_arch_linux_jax_wheels.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:

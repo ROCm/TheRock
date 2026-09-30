@@ -144,7 +144,6 @@ on:
         default: false
 
 permissions:
-  id-token: write
   contents: read
 
 run-name: Test - Native Linux packages Install (${{ inputs.os_profile }})
