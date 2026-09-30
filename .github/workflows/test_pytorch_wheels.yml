@@ -163,6 +163,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
@@ -197,33 +198,6 @@ jobs:
           git config --global --add safe.directory $PWD
           git config --global core.longpaths true
 
-      # Here we checkout the same version of PyTorch that wheels were built from
-      # so we have the right set of test source files. We _probably_ don't need
-      # to run HIPIFY, apply patches, or fetch submodules, so we skip those
-      # steps to save time.
-      # TODO(#5110): Accept manifest_url and use checkout_from_manifest.py
-      # --no-hipify --no-submodules so tests use the exact source commit and
-      # related repository pins that produced the package under test.
-      - name: Checkout PyTorch Source Repos from nightly branch
-        if: ${{ (inputs.pytorch_git_ref == 'nightly') }}
-        timeout-minutes: 30
-        run: |
-          python external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --gitrepo-origin https://github.com/pytorch/pytorch.git \
-            --repo-hashtag nightly \
-            --no-hipify \
-            --no-submodules
-
-      - name: Checkout PyTorch Source Repos from stable branch
-        if: ${{ (inputs.pytorch_git_ref != 'nightly') }}
-        timeout-minutes: 30
-        run: |
-          python external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --gitrepo-origin https://github.com/ROCm/pytorch.git \
-            --repo-hashtag "${PYTORCH_GIT_REF}" \
-            --no-hipify \
-            --no-submodules
-
       - name: Set up virtual environment
         timeout-minutes: 15
         env:
@@ -236,6 +210,26 @@ jobs:
             --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION}" \
             --index-url="${PACKAGE_INDEX_URL}" \
             --activate-in-future-github-actions-steps
+
+      # Here we checkout the same version of PyTorch that wheels were built from
+      # so we have the right set of test source files. We _probably_ don't need
+      # to run HIPIFY, apply patches, or fetch submodules, so we skip those
+      # steps to save time.
+      - name: Checkout PyTorch Source Repos
+        timeout-minutes: 30
+        run: |
+          if [ "${PYTORCH_GIT_REF}" = "nightly" ]; then
+            ORIGIN="https://github.com/pytorch/pytorch.git"
+          else
+            ORIGIN="https://github.com/ROCm/pytorch.git"
+          fi
+          TORCH_SHA=$(python -c "import torch; print(torch.version.git_version)")
+          echo "Pinning pytorch test source to wheel commit: ${TORCH_SHA}"
+          python external-builds/pytorch/pytorch_torch_repo.py checkout \
+            --gitrepo-origin "${ORIGIN}" \
+            --repo-hashtag "${TORCH_SHA}" \
+            --no-hipify \
+            --no-submodules
 
       - name: Install test requirements
         run: |

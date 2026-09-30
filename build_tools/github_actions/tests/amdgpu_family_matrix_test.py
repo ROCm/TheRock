@@ -9,6 +9,7 @@ import sys
 import unittest
 from pathlib import Path
 from unittest import mock
+from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
@@ -19,9 +20,11 @@ if "CI_CONFIG_PATH" in os.environ:
 
 import amdgpu_family_matrix
 from amdgpu_family_matrix import (
+    VALID_TRIGGERS,
     get_all_families_for_trigger_types,
     get_build_runner_labels,
     load_external_runner_config,
+    select_build_runner,
 )
 
 
@@ -68,7 +71,14 @@ class TestFamilyMatrixInvariants(unittest.TestCase):
 
     def test_required_fields_present(self):
         """Every platform entry must have the required fields."""
-        required = {"family", "fetch-gfx-targets", "test-runs-on", "build_variants"}
+        required = {
+            "family",
+            "fetch-gfx-targets",
+            "test-runs-on",
+            "build_variants",
+            "builds_on_trigger",
+            "tests_on_trigger",
+        }
         for target_name, entry in ALL_FAMILIES.items():
             for platform in ("linux", "windows"):
                 if platform not in entry:
@@ -89,6 +99,115 @@ class TestFamilyMatrixInvariants(unittest.TestCase):
                 variants = entry[platform].get("build_variants", [])
                 if not variants:
                     self.fail(f"{target_name}/{platform} has empty build_variants")
+
+    def test_builds_on_trigger_non_empty(self):
+        """Every platform entry must list at least one build trigger."""
+        for target_name, entry in ALL_FAMILIES.items():
+            for platform in ("linux", "windows"):
+                if platform not in entry:
+                    continue
+                triggers = entry[platform].get("builds_on_trigger", [])
+                if not triggers:
+                    self.fail(f"{target_name}/{platform} has empty builds_on_trigger")
+
+    def test_trigger_values_are_valid(self):
+        """builds_on_trigger and tests_on_trigger must contain only valid trigger names."""
+        for target_name, entry in ALL_FAMILIES.items():
+            for platform in ("linux", "windows"):
+                if platform not in entry:
+                    continue
+                platform_info = entry[platform]
+
+                build_triggers = set(platform_info.get("builds_on_trigger", []))
+                invalid_build = build_triggers - VALID_TRIGGERS
+                if invalid_build:
+                    self.fail(
+                        f"{target_name}/{platform} has invalid builds_on_trigger: "
+                        f"{invalid_build}. Valid: {VALID_TRIGGERS}"
+                    )
+
+                test_triggers = set(platform_info.get("tests_on_trigger", []))
+                invalid_test = test_triggers - VALID_TRIGGERS
+                if invalid_test:
+                    self.fail(
+                        f"{target_name}/{platform} has invalid tests_on_trigger: "
+                        f"{invalid_test}. Valid: {VALID_TRIGGERS}"
+                    )
+
+    def test_tests_on_trigger_subset_of_builds(self):
+        """tests_on_trigger should be a subset of builds_on_trigger.
+
+        It doesn't make sense to run tests on triggers where we don't build.
+        """
+        for target_name, entry in ALL_FAMILIES.items():
+            for platform in ("linux", "windows"):
+                if platform not in entry:
+                    continue
+                platform_info = entry[platform]
+                build_triggers = set(platform_info.get("builds_on_trigger", []))
+                test_triggers = set(platform_info.get("tests_on_trigger", []))
+
+                # tests_on_trigger should be subset of builds_on_trigger
+                extra_test_triggers = test_triggers - build_triggers
+                if extra_test_triggers:
+                    self.fail(
+                        f"{target_name}/{platform} has tests_on_trigger values not in "
+                        f"builds_on_trigger: {extra_test_triggers}"
+                    )
+
+
+class TestTriggerFiltering(unittest.TestCase):
+    """Tests for trigger-based family filtering."""
+
+    def test_presubmit_returns_presubmit_families(self):
+        """get_all_families_for_trigger_types(['presubmit']) returns presubmit families."""
+        result = get_all_families_for_trigger_types(["presubmit"])
+        # gfx94x has presubmit in builds_on_trigger
+        self.assertIn("gfx94x", result)
+        # gfx900 only has nightly/on_demand in builds_on_trigger
+        self.assertNotIn("gfx900", result)
+
+    def test_nightly_returns_all_families(self):
+        """get_all_families_for_trigger_types(['nightly']) includes nightly-only families."""
+        result = get_all_families_for_trigger_types(["nightly"])
+        # gfx900 has nightly in builds_on_trigger
+        self.assertIn("gfx900", result)
+        # gfx94x also builds on nightly
+        self.assertIn("gfx94x", result)
+
+    def test_postsubmit_returns_postsubmit_families(self):
+        """get_all_families_for_trigger_types(['postsubmit']) returns postsubmit families."""
+        result = get_all_families_for_trigger_types(["postsubmit"])
+        # gfx950 builds on postsubmit
+        self.assertIn("gfx950", result)
+        # gfx900 only builds on nightly
+        self.assertNotIn("gfx900", result)
+
+    def test_multiple_triggers_union(self):
+        """Multiple trigger types return union of matching families."""
+        presubmit_only = get_all_families_for_trigger_types(["presubmit"])
+        nightly_only = get_all_families_for_trigger_types(["nightly"])
+        combined = get_all_families_for_trigger_types(["presubmit", "nightly"])
+
+        # Combined should include families from both
+        self.assertEqual(
+            set(combined.keys()),
+            set(presubmit_only.keys()) | set(nightly_only.keys()),
+        )
+
+    def test_empty_trigger_list_returns_all_families(self):
+        """Empty trigger list returns ALL families (workflow_dispatch case)."""
+        all_families = get_all_families_for_trigger_types([])
+        presubmit = get_all_families_for_trigger_types(["presubmit"])
+        nightly = get_all_families_for_trigger_types(["nightly"])
+
+        # Empty list should return all families
+        self.assertGreaterEqual(len(all_families), len(presubmit))
+        self.assertGreaterEqual(len(all_families), len(nightly))
+
+        # Should include both presubmit-only and nightly-only families
+        self.assertIn("gfx94x", all_families)  # presubmit family
+        self.assertIn("gfx900", all_families)  # nightly-only family
 
 
 class TestExternalConfig(unittest.TestCase):
@@ -275,6 +394,94 @@ class TestExternalConfig(unittest.TestCase):
         # Non-runner keys should come from local definitions
         self.assertEqual(result["gfx94x"]["linux"]["family"], "gfx94X-dcgpu")
         self.assertIn("asan", result["gfx94x"]["linux"]["build_variants"])
+
+    def test_load_external_runner_config_v2_api_success(self):
+        """load_external_runner_config successfully calls load_config(version=2)."""
+        # Create a mock config object that mimics the v2 API
+        mock_config = mock.MagicMock()
+        mock_config.get_gpu_runner_labels.return_value = {
+            "gfx94x": {
+                "linux": {"test-runs-on": "v2-runner-label"},
+            }
+        }
+        mock_config.build_runners = {
+            "linux": {"default": [{"label": "v2-build-runner", "weight": 1.0}]}
+        }
+
+        # Create mock ci_config_api module
+        mock_ci_config_api = mock.MagicMock()
+        mock_ci_config_api.load_config.return_value = mock_config
+
+        os.environ["CI_CONFIG_PATH"] = "/fake/config/path"
+
+        with mock.patch.dict(sys.modules, {"ci_config_api": mock_ci_config_api}):
+            # Need to reimport to pick up the mocked module
+            import importlib
+
+            importlib.reload(amdgpu_family_matrix)
+            result = amdgpu_family_matrix.load_external_runner_config()
+
+        # Verify load_config was called with version=2
+        mock_ci_config_api.load_config.assert_called_once()
+        call_kwargs = mock_ci_config_api.load_config.call_args
+        self.assertEqual(call_kwargs.kwargs.get("version"), 2)
+
+        # Verify the result structure
+        self.assertIsNotNone(result)
+        self.assertIn("runner_labels", result)
+        self.assertIn("build_runners", result)
+        self.assertEqual(
+            result["runner_labels"]["gfx94x"]["linux"]["test-runs-on"],
+            "v2-runner-label",
+        )
+        self.assertEqual(
+            result["build_runners"]["linux"]["default"][0]["label"],
+            "v2-build-runner",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Build runner selection
+# ---------------------------------------------------------------------------
+
+
+class TestBuildRunnerSelection(unittest.TestCase):
+    """Tests for select_build_runner() in amdgpu_family_matrix.py.
+
+    CI_CONFIG_PATH is cleared to ensure tests use local definitions only.
+    """
+
+    def setUp(self):
+        self._orig_env = os.environ.copy()
+        if "CI_CONFIG_PATH" in os.environ:
+            del os.environ["CI_CONFIG_PATH"]
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self._orig_env)
+
+    def test_select_build_runner(self):
+        """select_build_runner() returns the correct label for each platform/variant/size."""
+        cases = [
+            # (platform, variant, size, expected_runner_label)
+            ("linux", "release", "large", "aws-linux-scale-rocm-prod"),
+            ("windows", "release", "large", "aws-windows-scale-rocm-prod-mix"),
+            # Sanitizer builds always use the large runner regardless of requested size
+            ("linux", "asan", "small", "aws-linux-scale-rocm-large"),
+            ("linux", "tsan", "medium", "aws-linux-scale-rocm-large"),
+            ("linux", "release", "small", "aws-linux-scale-rocm-small"),
+            # Windows has no small/medium pool — falls back to the Windows default
+            ("windows", "release", "small", "aws-windows-scale-rocm-prod-mix"),
+            ("linux", "release", "medium", "aws-linux-scale-rocm-medium"),
+            ("windows", "release", "medium", "aws-windows-scale-rocm-prod-mix"),
+        ]
+        with patch("random.random", return_value=0.5):
+            for platform, variant, size, expected in cases:
+                with self.subTest(platform=platform, variant=variant, size=size):
+                    self.assertEqual(
+                        select_build_runner(platform, variant, size=size),
+                        expected,
+                    )
 
 
 if __name__ == "__main__":

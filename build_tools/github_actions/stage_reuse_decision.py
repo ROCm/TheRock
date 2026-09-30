@@ -71,6 +71,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from _therock_utils.artifact_backend import ARTIFACT_EXTENSIONS
 from _therock_utils.build_topology import BuildTopology, get_topology
+from _therock_utils.cmake_amdgpu_targets import (
+    amdgpu_family_map,
+    expand_families,
+)
 from artifact_manager import ARTIFACT_COMPONENTS
 from baseline_runs import BaselineRun, RequiredArtifact
 from github_actions_api import GitHubAPIError
@@ -171,27 +175,99 @@ def _platform_target_families(
     raise ValueError(f"unsupported build platform: {platform}")
 
 
+def _expand_target_families(
+    target_families: Sequence[str],
+) -> tuple[str, ...]:
+    """Expand CI family names to concrete artifact target names."""
+
+    family_map = amdgpu_family_map()
+    expanded_targets: list[str] = []
+
+    for requested_family in target_families:
+        if requested_family == GENERIC_FAMILY:
+            continue
+
+        requested_lower = requested_family.lower()
+        matching_families = [
+            family_name
+            for family_name in family_map
+            if family_name.lower() == requested_lower
+            or family_name.lower().startswith(f"{requested_lower}-")
+        ]
+
+        if not matching_families:
+            raise ValueError(f"Cannot expand AMDGPU target family: {requested_family}")
+
+        for target in expand_families(
+            matching_families,
+            family_map,
+            strict=True,
+        ):
+            if target not in expanded_targets:
+                expanded_targets.append(target)
+
+    return tuple(expanded_targets)
+
+
+def _artifact_is_enabled_on_platform(artifact, platform: str) -> bool:
+    """Return whether an artifact is produced on the requested platform."""
+
+    if artifact.platform and artifact.platform != platform:
+        return False
+    if platform in artifact.disable_platforms:
+        return False
+    return True
+
+
 def _required_artifacts_for_stages(
     topology: BuildTopology,
     stage_names: Sequence[str],
     target_families: Sequence[str],
+    *,
+    platform: str,
 ) -> list[RequiredArtifact]:
-    """Artifact/family pairs the given stages produce."""
+    """Return valid artifact/target requirements for the requested stages."""
 
     artifacts_by_group = topology.get_artifact_group_to_artifacts()
+    concrete_targets = _expand_target_families(target_families)
+
     required: list[RequiredArtifact] = []
     seen: set[RequiredArtifact] = set()
+
     for stage_name in stage_names:
         stage = topology.build_stages.get(stage_name)
         if stage is None:
             continue
+
         for group_name in stage.artifact_groups:
             for artifact_name in artifacts_by_group.get(group_name, []):
-                for family in target_families:
-                    req = RequiredArtifact(name=artifact_name, target_family=family)
-                    if req not in seen:
-                        seen.add(req)
-                        required.append(req)
+                artifact = topology.artifacts[artifact_name]
+
+                if not _artifact_is_enabled_on_platform(artifact, platform):
+                    continue
+
+                if artifact.type == "target-neutral":
+                    required_families = (GENERIC_FAMILY,)
+                elif artifact.type == "target-specific":
+                    required_families = (
+                        GENERIC_FAMILY,
+                        *concrete_targets,
+                    )
+                else:
+                    raise ValueError(
+                        f"Unsupported artifact type for '{artifact_name}': "
+                        f"{artifact.type}"
+                    )
+
+                for family in required_families:
+                    requirement = RequiredArtifact(
+                        name=artifact_name,
+                        target_family=family,
+                    )
+                    if requirement not in seen:
+                        seen.add(requirement)
+                        required.append(requirement)
+
     return required
 
 
@@ -206,20 +282,26 @@ def _stage_artifacts_available(
     stage_name: str,
     target_families: Sequence[str],
     available_filenames: set[str],
+    *,
+    platform: str,
 ) -> bool:
-    """True when every artifact this stage produces has an archive present."""
+    """True when every valid requirement for this stage is available."""
 
-    artifacts_by_group = topology.get_artifact_group_to_artifacts()
-    stage = topology.build_stages.get(stage_name)
-    if stage is None:
-        return False
-    for group_name in stage.artifact_groups:
-        for artifact_name in artifacts_by_group.get(group_name, []):
-            if not _artifact_available(
-                artifact_name, target_families, available_filenames
-            ):
-                return False
-    return True
+    requirements = _required_artifacts_for_stages(
+        topology,
+        [stage_name],
+        target_families,
+        platform=platform,
+    )
+
+    return all(
+        _artifact_available(
+            requirement.name,
+            [requirement.target_family],
+            available_filenames,
+        )
+        for requirement in requirements
+    )
 
 
 def _artifact_available(
@@ -446,6 +528,7 @@ def compute_auto_stage_reuse(
             topology,
             candidates,
             platform_families,
+            platform=platform,
         )
 
         logger.info(
@@ -504,6 +587,7 @@ def compute_auto_stage_reuse(
                     stage_name,
                     platform_families,
                     available_filenames,
+                    platform=platform,
                 ):
                     available_here.append(stage_name)
 

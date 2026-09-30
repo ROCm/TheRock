@@ -53,6 +53,9 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
 
       # TODO: migrate to boto3 Python package instead of this native tool?
       - name: Install the AWS tool

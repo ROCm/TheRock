@@ -191,6 +191,56 @@ class InstallPackagesTest(unittest.TestCase):
         self.assertIn("--index-url=https://deps/simple/", cmd)
         self.assertIn("--find-links=https://bucket/run-123/index.html", cmd)
 
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
+    @patch("setup_venv.run_command")
+    def test_extra_index_url_supplements_index_url(self, mock_run, mock_find_python):
+        """extra_index_url adds a second index without replacing index_url."""
+        install_packages_into_venv(
+            venv_dir=self.venv_dir,
+            packages=["rocm-profiler[compute-analyze]"],
+            index_url="https://rocm/index/",
+            extra_index_url="https://pypi.org/simple",
+        )
+
+        cmd = mock_run.call_args[0][0]
+        self.assertIn("--index-url=https://rocm/index/", cmd)
+        self.assertIn("--extra-index-url=https://pypi.org/simple", cmd)
+
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
+    @patch("setup_venv.run_command")
+    def test_extra_index_url_becomes_the_index_when_none_is_set(
+        self, mock_run, mock_find_python
+    ):
+        """An empty index_url disables the index, so the extra takes its place."""
+        install_packages_into_venv(
+            venv_dir=self.venv_dir,
+            packages=["rocm-profiler[compute-analyze]"],
+            index_url="",
+            extra_index_url="https://pypi.org/simple",
+            find_links="https://bucket/run-123/index.html",
+        )
+
+        cmd = mock_run.call_args[0][0]
+        self.assertIn("--index-url=https://pypi.org/simple", cmd)
+        self.assertIn("--find-links=https://bucket/run-123/index.html", cmd)
+        self.assertNotIn("--no-index", cmd)
+        self.assertFalse(any("--extra-index-url" in str(a) for a in cmd))
+
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
+    @patch("setup_venv.run_command")
+    def test_extra_index_url_without_an_index_url(self, mock_run, mock_find_python):
+        """An unset index_url leaves pip on its default index plus the extra."""
+        install_packages_into_venv(
+            venv_dir=self.venv_dir,
+            packages=["rocm"],
+            extra_index_url="https://pypi.org/simple",
+        )
+
+        cmd = mock_run.call_args[0][0]
+        self.assertIn("--extra-index-url=https://pypi.org/simple", cmd)
+        self.assertNotIn("--no-index", cmd)
+        self.assertFalse(any("--index-url" in str(a) for a in cmd))
+
     @patch("setup_venv.time.sleep")
     @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
