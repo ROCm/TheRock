@@ -354,10 +354,12 @@ class ConfigureNonSubtreeTest(unittest.TestCase):
             ["emulation/mirage", "emulation/rocjitsu"],
         )
 
-    def test_ctest_harness_triggers_full_run(self):
+    def test_ctest_harness_narrows_to_support_artifact(self):
+        # shared/ctest changes only affect test categorization, not actual code,
+        # so we map it to a specific artifact rather than triggering full CI.
         r = self._configure(["shared/ctest/TestCategories.cmake"])
-        self.assertTrue(r.run_all_tests)
-        self.assertEqual(r.changed_projects, "")
+        self.assertFalse(r.run_all_tests)
+        self.assertEqual(r.changed_projects, "shared/ctest")
 
     def test_mixed_recognized_and_unclassified_runs_all(self):
         r = self._configure(

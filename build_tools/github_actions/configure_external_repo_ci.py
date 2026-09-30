@@ -76,10 +76,6 @@ FULL_TEST_TRIGGER_PATTERNS = [
     ".github/scripts/repo_config_model.py",
     ".github/scripts/pr_detect_changed_subtrees.py",
     ".github/repos-config.json",
-    # shared/ctest holds the CTest categorization logic consumed by every
-    # project's tests; a change there can alter selection everywhere, so treat
-    # it as a full-test trigger rather than a single surfaced component.
-    "shared/ctest/*",
 ]
 
 # CI-relevant monorepo directories that are NOT subtree-synced repos and so are
@@ -96,6 +92,10 @@ CI_RELEVANT_NON_SUBTREE_PREFIXES = {
     "shared/kpack",
     "shared/machine-readable-isa",
     "shared/primbench",
+    # shared/ctest holds CTest categorization logic used by math-libs projects.
+    # Changes affect test filtering but not actual test/library code, so map it
+    # to a specific artifact (support) rather than triggering full CI.
+    "shared/ctest",
     "emulation/mirage",
     "emulation/rocjitsu",
 }
