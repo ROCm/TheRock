@@ -58,6 +58,7 @@ F = TypeVar("F", bound=Callable[..., object])
 SKIPPABLE_PATH_PATTERNS = [
     "*.md",
     "*.rst",
+    "*CODEOWNERS",
     "docs/*",
     "projects/*/docs/*",
     "shared/*/docs/*",

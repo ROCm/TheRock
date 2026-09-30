@@ -47,9 +47,15 @@ jobs:
     permissions:
       id-token: write
 
+    env:
+      ROCM_VERSION: ${{ inputs.rocm_version }}
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
 
       # TODO: migrate to boto3 Python package instead of this native tool?
       - name: Install the AWS tool
@@ -72,7 +78,7 @@ jobs:
             s3://therock-nightly-python/v4/whl/ \
             s3://therock-dev-python/v4/whl/ \
             --recursive --exclude "*" \
-            --include "rocm*${{ inputs.rocm_version }}*"
+            --include "rocm*${ROCM_VERSION}*"
 
       - name: Copy torch wheels between S3 buckets
         if: ${{ inputs.include_torch }}
@@ -81,9 +87,9 @@ jobs:
             s3://therock-nightly-python/v4/whl/ \
             s3://therock-dev-python/v4/whl/ \
             --recursive --exclude "*" \
-            --include "*torch*${{ inputs.rocm_version }}*${{ env.cp_version }}*" \
-            --include "apex*${{ inputs.rocm_version }}*${{ env.cp_version }}*" \
-            --include "triton*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
+            --include "*torch*${ROCM_VERSION}*${cp_version}*" \
+            --include "apex*${ROCM_VERSION}*${cp_version}*" \
+            --include "triton*${ROCM_VERSION}*${cp_version}*"
 
       - name: Copy JAX wheels between S3 buckets
         if: ${{ inputs.include_jax }}
@@ -92,4 +98,4 @@ jobs:
             s3://therock-nightly-python/v4/whl/ \
             s3://therock-dev-python/v4/whl/ \
             --recursive --exclude "*" \
-            --include "jax*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
+            --include "jax*${ROCM_VERSION}*${cp_version}*"
