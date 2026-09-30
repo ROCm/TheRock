@@ -8,26 +8,31 @@ This is a build-time check, not an install test. It builds the package for each
 OS profile of the given package type and asserts that the archive contains the
 files it is supposed to install, at the right paths, owned by root. The build
 container has dpkg and rpm but no dnf or zypper, so the packages can be built
-and inspected there but not installed; per-distro install coverage lives in
-``test_native_linux_packages_install.yml``.
+and inspected there but not installed.
 
-Each profile is built twice, because the two shapes install different files:
+Every profile is built for every stream the builder knows, because the installed
+filename carries the stream and the two layout shapes install different files:
 
-  unsigned (nightly)      the repository file only
-  signed   (prerelease)   the repository file and the signing key
+  flat     (stable, rc)   the repository file and the signing key
+  build_id (nightly)      the repository file only
 
-The signed build is what covers the key paths. Those were renamed so that
-``amdrocm-repo`` does not claim a file already owned by the amdgpu driver
-packages, and this is the only place CI checks that the renamed paths are the
-ones that ship and that the previous paths are gone.
+The flat builds cover the key paths. Those were renamed away from generic
+``rocm`` names as a precaution; this checks that the built archive ships the
+renamed paths and not the previous ones. The builds also check the
+stream-to-filename mapping in the archive: ``rc`` installs
+``amdrocm-stablerc``, not ``amdrocm-rc``.
 
-Neither build reaches the network:
+Streams come from the builder's own table, so one added there is inspected here
+without another edit. A stream whose shape this module does not handle raises
+rather than being built with the wrong arguments.
 
-  * The unsigned stream loads no key, and the
-    repository URL check is skipped for it.
-  * The signed stream reads its key from ``--gpg-key-file``, which returns before
-    the build-time key fetch. The key is generated here, offline, and thrown
-    away; it never signs anything and never leaves the build.
+No build reaches the network:
+
+  * A build_id stream loads no key, and the repository URL check is skipped for
+    it.
+  * A flat stream reads its key from ``--gpg-key-file``, which returns before the
+    build-time key fetch. The key is generated here, offline, and thrown away; it
+    never signs anything and never leaves the build.
   * The repository URL check is opt-in and is not requested.
 
 The repository URL is therefore a placeholder and the built packages are for
@@ -57,26 +62,33 @@ from build_repo_package import (
     DEB_KEYRING_PATH,
     OS_PROFILES,
     RPM_GPG_KEY_PATH,
+    STREAMS,
     list_profiles,
     repo_id,
+    stream_shape,
 )
 
 _BUILDER = _THIS_DIR / "build_repo_package.py"
 
-# The two streams that produce the unsigned and signed payload shapes. The
-# per-build stream requires a build sub-folder and the flat one rejects it, so
-# they are passed different arguments. Within this module signedness and stream
-# select each other, which is why the helpers below take only ``signed``.
-_UNSIGNED_STREAM = "nightly"
-_SIGNED_STREAM = "stable"
+# The layout shapes this inspector knows how to build. A flat stream is signed
+# and rejects a build sub-folder; a per-build stream is unsigned and requires
+# one. Every stream in STREAMS is inspected, so a stream added to the builder is
+# covered here without another edit -- but one whose shape is not handled here
+# would otherwise be built with the wrong arguments, so an unknown shape raises.
+#
+# These mirror build_repo_package's private _FLAT / _BUILD_ID. They are compared
+# against the public stream_shape() return value, and a test asserts the two
+# spellings still agree.
+_SHAPE_FLAT = "flat"
+_SHAPE_BUILD_ID = "build_id"
 
 # Everything the package installs is owned by root, whatever user builds it.
 _EXPECTED_OWNER = "root/root"
 
-# Key paths used before the rename. The amdgpu driver setup installs its key at
-# the deb path below, and neither dpkg nor rpm will unpack two packages that
-# claim the same file, so shipping these names again would make amdrocm-repo and
-# the driver mutually uninstallable. Asserted absent from every build.
+# Key paths used before the rename. A generic rocm name is one another package
+# could also claim, and neither dpkg nor rpm will unpack two packages that own
+# the same file; see build_repo_package's DEB_KEYRING_PATH for why the rename is
+# precautionary. Asserted absent from every build.
 _SUPERSEDED_KEY_PATHS = (
     PurePosixPath("/usr/share/keyrings/rocm.gpg"),
     PurePosixPath("/etc/pki/rpm-gpg/RPM-GPG-KEY-rocm"),
@@ -103,23 +115,34 @@ def key_path(os_profile: str) -> PurePosixPath:
     return PurePosixPath(RPM_GPG_KEY_PATH)
 
 
-def stream_for(signed: bool) -> str:
-    """Return the stream this inspection builds for a given signedness."""
-    return _SIGNED_STREAM if signed else _UNSIGNED_STREAM
+def shape_of(stream: str) -> str:
+    """Return a stream's layout shape, rejecting one this inspector cannot build."""
+    shape = stream_shape(stream)
+    if shape not in (_SHAPE_FLAT, _SHAPE_BUILD_ID):
+        raise RuntimeError(
+            f"stream {stream!r} has shape {shape!r}, which this inspector does "
+            f"not know how to build"
+        )
+    return shape
 
 
-def expected_paths(os_profile: str, signed: bool) -> set[PurePosixPath]:
-    """Return the paths a build of this profile must install."""
-    paths = {repo_file_path(os_profile, stream_for(signed))}
-    if signed:
+def is_signed_stream(stream: str) -> bool:
+    """Whether a stream's package ships a signing key. Follows the shape."""
+    return shape_of(stream) == _SHAPE_FLAT
+
+
+def expected_paths(os_profile: str, stream: str) -> set[PurePosixPath]:
+    """Return the paths a build of this profile and stream must install."""
+    paths = {repo_file_path(os_profile, stream)}
+    if is_signed_stream(stream):
         paths.add(key_path(os_profile))
     return paths
 
 
-def forbidden_paths(os_profile: str, signed: bool) -> set[PurePosixPath]:
-    """Return the paths a build of this profile must not install."""
+def forbidden_paths(os_profile: str, stream: str) -> set[PurePosixPath]:
+    """Return the paths a build of this profile and stream must not install."""
     paths = set(_SUPERSEDED_KEY_PATHS)
-    if not signed:
+    if not is_signed_stream(stream):
         # An unsigned stream ships no key at all: the repository it configures is
         # unsigned, so a key here would be inert at best and misleading at worst.
         paths.add(key_path(os_profile))
@@ -144,7 +167,7 @@ def parse_deb_contents(text: str) -> list[tuple[PurePosixPath, str]]:
         if len(fields) < 6:
             continue
         owner, name = fields[1], fields[5]
-        # Symlinks are reported as "target -> source"; keep the target.
+        # Symlinks are reported as "link -> target"; keep the link's own path.
         name = name.split(" -> ", 1)[0]
         entries.append((PurePosixPath("/") / name.removeprefix("./"), owner))
     return entries
@@ -238,9 +261,25 @@ def generate_throwaway_key(dest: Path) -> Path:
     return key_file
 
 
+def locate_built_package(dest_dir: Path, pkg_type: str) -> Path:
+    """Return the single built package in ``dest_dir``.
+
+    One build produces one package, so anything other than exactly one match is
+    an error worth failing on rather than guessing about. A shell glob captured
+    into a string in its place would join several matches into one filename,
+    and pass the unexpanded pattern on none.
+    """
+    built = sorted(dest_dir.glob(f"*.{pkg_type}"))
+    if len(built) != 1:
+        raise RuntimeError(
+            f"expected exactly one .{pkg_type} in {dest_dir}, found {len(built)}"
+        )
+    return built[0]
+
+
 def build_package(
     os_profile: str,
-    signed: bool,
+    stream: str,
     dest_dir: Path,
     rocm_version: str,
     repo_base_url: str,
@@ -260,22 +299,13 @@ def build_package(
         "--dest-dir",
         str(dest_dir),
     ]
-    if signed:
-        argv += [
-            "--stream",
-            _SIGNED_STREAM,
-            "--gpg-key-file",
-            str(gpg_key_file),
-        ]
+    argv += ["--stream", stream]
+    if shape_of(stream) == _SHAPE_FLAT:
+        argv += ["--gpg-key-file", str(gpg_key_file)]
     else:
         # The build sub-folder is required on a per-build stream and rejected on
         # a flat one, so it is passed here and nowhere else.
-        argv += [
-            "--stream",
-            _UNSIGNED_STREAM,
-            "--repo-sub-folder",
-            repo_sub_folder,
-        ]
+        argv += ["--repo-sub-folder", repo_sub_folder]
 
     try:
         _run(argv)
@@ -285,13 +315,7 @@ def build_package(
         sys.stderr.write(e.stderr or "")
         raise
 
-    pkg_type = OS_PROFILES[os_profile]["pkg_type"]
-    built = sorted(dest_dir.glob(f"*.{pkg_type}"))
-    if len(built) != 1:
-        raise RuntimeError(
-            f"expected exactly one .{pkg_type} in {dest_dir}, found {len(built)}"
-        )
-    return built[0]
+    return locate_built_package(dest_dir, OS_PROFILES[os_profile]["pkg_type"])
 
 
 def read_payload(package: Path, pkg_type: str) -> list[tuple[PurePosixPath, str]]:
@@ -312,17 +336,17 @@ def read_payload(package: Path, pkg_type: str) -> list[tuple[PurePosixPath, str]
 
 def inspect_profile(
     os_profile: str,
-    signed: bool,
+    stream: str,
     work_dir: Path,
     args: argparse.Namespace,
     gpg_key_file: Path,
 ) -> list[str]:
-    """Build one profile in one shape and return any problems with its payload."""
-    dest_dir = work_dir / f"{os_profile}-{'signed' if signed else 'unsigned'}"
+    """Build one profile for one stream and return any payload problems."""
+    dest_dir = work_dir / f"{os_profile}-{stream}"
     dest_dir.mkdir()
     package = build_package(
         os_profile,
-        signed,
+        stream,
         dest_dir,
         args.rocm_version,
         args.repo_base_url,
@@ -332,9 +356,25 @@ def inspect_profile(
     entries = read_payload(package, OS_PROFILES[os_profile]["pkg_type"])
     return check_payload(
         entries,
-        expected_paths(os_profile, signed),
-        forbidden_paths(os_profile, signed),
+        expected_paths(os_profile, stream),
+        forbidden_paths(os_profile, stream),
     )
+
+
+def run_locate(argv: list[str]) -> None:
+    """Print the path of the single built package in a directory.
+
+    This exists so a workflow step can hand the built package to another script
+    without a shell glob. See ``locate_built_package`` for why that matters.
+    """
+    p = argparse.ArgumentParser(
+        prog="inspect_repo_package.py locate",
+        description="Print the path of the single built package in a directory.",
+    )
+    p.add_argument("--dest-dir", required=True, type=Path)
+    p.add_argument("--pkg-type", required=True, choices=["deb", "rpm"])
+    ns = p.parse_args(argv)
+    print(locate_built_package(ns.dest_dir, ns.pkg_type))
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -366,6 +406,11 @@ def parse_args(argv=None) -> argparse.Namespace:
 
 
 def main(argv=None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    if argv and argv[0] == "locate":
+        run_locate(argv[1:])
+        return 0
     args = parse_args(argv)
     profiles = list_profiles(args.pkg_type)
     if not profiles:
@@ -376,24 +421,22 @@ def main(argv=None) -> int:
         work_dir = Path(tmp)
         gpg_key_file = generate_throwaway_key(work_dir)
         for os_profile in profiles:
-            for signed in (False, True):
-                shape = "signed" if signed else "unsigned"
+            for stream in STREAMS:
                 problems = inspect_profile(
-                    os_profile, signed, work_dir, args, gpg_key_file
+                    os_profile, stream, work_dir, args, gpg_key_file
                 )
                 if problems:
-                    failures.append((os_profile, shape, problems))
+                    failures.append((os_profile, stream, problems))
                     for problem in problems:
-                        print(f"FAIL {os_profile} ({shape}): {problem}")
+                        print(f"FAIL {os_profile} ({stream}): {problem}")
                 else:
-                    print(f"ok   {os_profile} ({shape})")
+                    print(f"ok   {os_profile} ({stream})")
 
+    built = len(profiles) * len(STREAMS)
     if failures:
-        print(f"\n{len(failures)} package(s) have an unexpected payload")
+        print(f"\n{len(failures)} of {built} package(s) have an unexpected payload")
         return 1
-    print(
-        f"\nall {len(profiles) * 2} {args.pkg_type} packages have the expected payload"
-    )
+    print(f"\nall {built} {args.pkg_type} packages have the expected payload")
     return 0
 
 
