@@ -943,12 +943,34 @@ def should_skip_ci(
         event_name = external_repo.get("event_name", "")
         base_sha = external_repo.get("base_sha")
         head_sha = external_repo.get("head_sha")
+        # PR number enables using the PR files endpoint which correctly handles
+        # merge-base computation even when the target branch has been updated.
+        pr_number = external_repo.get("pr_number")
 
         if event_name in ("schedule", "workflow_dispatch"):
             print(f"  External repo {repo_name}: {event_name} event, no diff available")
             changed_files = None
+        elif pr_number and repo_full_name:
+            # Use PR files API endpoint (best for PRs - handles merge-base correctly)
+            print(
+                f"  External repo {repo_name}: fetching changed files via GitHub API..."
+            )
+            print(f"    Using PR #{pr_number} files endpoint")
+            changed_files = get_modified_paths_via_api(
+                repo_full_name, base_sha or "", head_sha or "", pr_number=pr_number
+            )
+            if changed_files is not None:
+                print(
+                    f"  External repo {repo_name}: {len(changed_files)} file(s) changed"
+                )
+            else:
+                # API returned None (truncated or failed) - will run CI conservatively
+                print(
+                    f"  External repo {repo_name}: API returned truncated/failed result, "
+                    "running CI conservatively"
+                )
         elif base_sha and head_sha and repo_full_name:
-            # Use GitHub API to get changed files (no checkout needed)
+            # Fall back to compare API for non-PR events (push, etc.)
             print(
                 f"  External repo {repo_name}: fetching changed files via GitHub API..."
             )
@@ -2202,14 +2224,21 @@ def main():
             event_name = external_repo.get("event_name", "")
             base_sha = external_repo.get("base_sha")
             head_sha = external_repo.get("head_sha")
+            pr_number = external_repo.get("pr_number")
 
             # Only compute for PR/push events, not schedule/workflow_dispatch
             if event_name not in ("schedule", "workflow_dispatch"):
                 print(f"\n=== Computing changed projects from {external_repo_name} ===")
                 changed_files: list[str] | None = None
 
-                # Prefer GitHub API (faster, no checkout needed)
-                if base_sha and head_sha and repo_full_name:
+                # Prefer PR files API for PRs (handles merge-base correctly)
+                if pr_number and repo_full_name:
+                    print(f"  Fetching changed files via GitHub API (PR #{pr_number})...")
+                    changed_files = get_modified_paths_via_api(
+                        repo_full_name, base_sha or "", head_sha or "", pr_number=pr_number
+                    )
+                elif base_sha and head_sha and repo_full_name:
+                    # Fall back to compare API for non-PR events
                     print(f"  Fetching changed files via GitHub API...")
                     changed_files = get_modified_paths_via_api(
                         repo_full_name, base_sha, head_sha

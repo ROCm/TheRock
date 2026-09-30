@@ -424,29 +424,41 @@ def get_modified_paths_via_api(
     github_repo: str,
     base_sha: str,
     head_sha: str,
+    pr_number: Optional[int] = None,
     max_retries: int = 3,
     retry_delay: float = 2.0,
 ) -> Optional[list[str]]:
-    """Get paths of files changed using GitHub API (compare endpoint).
+    """Get paths of files changed using GitHub API.
 
-    Uses the GitHub compare API to get changed files without requiring a
-    full repository checkout. This is faster than git diff for large repos.
+    For pull requests (when pr_number is provided), uses the PR files endpoint
+    which correctly computes the diff against the merge-base. This avoids issues
+    with stale base SHAs when the target branch has been updated.
+
+    For non-PR events, falls back to the compare endpoint using base_sha/head_sha.
 
     Args:
         github_repo: Repository in "owner/repo" format (e.g., "ROCm/rocm-libraries")
-        base_sha: Base commit SHA to compare from
-        head_sha: Head commit SHA to compare to
+        base_sha: Base commit SHA to compare from (used for non-PR events)
+        head_sha: Head commit SHA to compare to (used for non-PR events)
+        pr_number: Pull request number (if this is a PR event)
         max_retries: Maximum number of retry attempts for transient failures
         retry_delay: Initial delay between retries (doubles with each retry)
 
     Returns:
         List of changed file paths, or None if:
-        - The result is truncated (>300 files) - caller should fall back to run-all
+        - The result is truncated (>300 files for compare, >3000 for PR files)
         - API call fails after retries
     """
     import json
     import time
 
+    # Use PR files endpoint for pull requests - it correctly handles merge-base
+    if pr_number:
+        return _get_pr_files_via_api(
+            github_repo, pr_number, max_retries, retry_delay
+        )
+
+    # Fall back to compare endpoint for non-PR events (push, etc.)
     for attempt in range(max_retries):
         try:
             result = subprocess.run(
@@ -489,6 +501,98 @@ def get_modified_paths_via_api(
             delay = retry_delay * (2**attempt)
             print(f"  Retrying in {delay}s...")
             time.sleep(delay)
+
+    print("  GitHub API request failed after all retries")
+    return None
+
+
+def _get_pr_files_via_api(
+    github_repo: str,
+    pr_number: int,
+    max_retries: int = 3,
+    retry_delay: float = 2.0,
+) -> Optional[list[str]]:
+    """Get changed files for a PR using the PR files endpoint.
+
+    The PR files endpoint (/pulls/{number}/files) correctly computes the diff
+    against the merge-base, unlike the compare endpoint which can include
+    unrelated commits when the base branch has been updated.
+
+    Args:
+        github_repo: Repository in "owner/repo" format
+        pr_number: Pull request number
+        max_retries: Maximum retry attempts
+        retry_delay: Initial delay between retries
+
+    Returns:
+        List of changed file paths, or None if truncated/failed.
+    """
+    import json
+    import time
+
+    all_files: list[str] = []
+    page = 1
+    per_page = 100  # Maximum allowed by GitHub API
+
+    for attempt in range(max_retries):
+        try:
+            # Paginate through all files (PR files endpoint supports pagination)
+            while True:
+                result = subprocess.run(
+                    [
+                        "gh",
+                        "api",
+                        f"repos/{github_repo}/pulls/{pr_number}/files",
+                        "-f", f"per_page={per_page}",
+                        "-f", f"page={page}",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=60,
+                )
+                files = json.loads(result.stdout)
+
+                if not files:
+                    break
+
+                all_files.extend(f["filename"] for f in files)
+
+                # PR files endpoint returns max 3000 files total
+                if len(all_files) >= 3000:
+                    print(
+                        f"  GitHub PR files API returned 3000+ files, result may be truncated"
+                    )
+                    return None
+
+                # If we got fewer than per_page, we've reached the end
+                if len(files) < per_page:
+                    break
+
+                page += 1
+
+            return all_files
+
+        except subprocess.TimeoutExpired:
+            print(
+                f"  GitHub API request timed out (attempt {attempt + 1}/{max_retries})"
+            )
+        except subprocess.CalledProcessError as e:
+            print(
+                f"  GitHub API request failed (attempt {attempt + 1}/{max_retries}): "
+                f"{e.stderr or e}"
+            )
+        except json.JSONDecodeError as e:
+            print(f"  Failed to parse GitHub API response: {e}")
+            return None
+
+        if attempt < max_retries - 1:
+            delay = retry_delay * (2**attempt)
+            print(f"  Retrying in {delay}s...")
+            time.sleep(delay)
+            # Reset pagination for retry
+            all_files = []
+            page = 1
 
     print("  GitHub API request failed after all retries")
     return None
