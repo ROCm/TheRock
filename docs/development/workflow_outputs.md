@@ -127,6 +127,8 @@ families in parallel, producing identically-named log files (e.g.,
             main/binary-amd64/
                 Packages
                 Packages.gz
+        repo/{os_profile}/
+            amdrocm-repo.deb                    (bootstrap package, not indexed)
 
     packages/rpm/                               (DNF/Zypper repository)
         x86_64/
@@ -135,6 +137,11 @@ families in parallel, producing identically-named log files (e.g.,
                 repomd.xml
                 primary.xml.gz
                 ...
+        repo/{os_profile}/
+            amdrocm-repo.rpm                    (bootstrap package, not indexed)
+
+    packages/msi/                               (Windows MSI installers)
+        *.msi                                   (one per package, e.g. amdrocm-runtime.msi)
 
     python/
         *.whl                                   (generic wheels, e.g., rocm_sdk_core)
@@ -254,6 +261,9 @@ root.native_linux_packages(
 root.native_linux_packages(
     pkg_type="rpm"
 )  # {run_id}-linux/packages/rpm — DNF/Zypper repo root
+root.native_windows_packages(
+    pkg_type="msi"
+)  # {run_id}-windows/packages/msi — loose .msi installers
 root.python_packages(artifact_group="gfx110X-all")
 root.tarballs()
 ```
@@ -299,6 +309,8 @@ To add a new output type:
 | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
 | [`post_build_upload.py`](/build_tools/github_actions/post_build_upload.py)                 | `WorkflowOutputRoot` + `StorageBackend` for artifacts, logs, manifests        |
 | [`upload_package_repo.py`](/build_tools/packaging/linux/upload_package_repo.py)            | `WorkflowOutputRoot.native_linux_packages()` for deb/rpm package repositories |
+| [`publish_repo_package.py`](/build_tools/packaging/linux/publish_repo_package.py)          | `WorkflowOutputRoot.native_linux_repo_package()` for the amdrocm-repo package |
+| [`upload_package_repo.py`](/build_tools/packaging/windows/upload_package_repo.py)          | `WorkflowOutputRoot.native_windows_packages()` for msi installers             |
 | [`post_stage_upload.py`](/build_tools/github_actions/post_stage_upload.py)                 | `WorkflowOutputRoot` + `StorageBackend` for multi-arch stage logs             |
 | [`upload_tarballs.py`](/build_tools/github_actions/upload_tarballs.py)                     | `WorkflowOutputRoot` + `StorageBackend` for tarballs                          |
 | [`upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)       | `WorkflowOutputRoot` + `StorageBackend` for Python wheels and index           |

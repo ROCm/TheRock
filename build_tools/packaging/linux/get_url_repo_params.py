@@ -24,7 +24,7 @@ and test_native_linux_packages_install.yml use any gpg_key_url / GPG_KEY_URL inp
 regardless of release_type (if omitted, install runs without GPG verification).
 
 Subcommands: get-base-url, get-gpg-url, get-repo-sub-folder, get-repo-url, extract-gfx-arch,
-get-container-image. Run with -h for examples.
+get-container-image, get-repo-params. Run with -h for examples.
 
 Maintenance (when packaging or install URLs change):
 
@@ -36,9 +36,11 @@ Maintenance (when packaging or install URLs change):
 """
 
 import argparse
+import json
 import os
 import re
 import sys
+from datetime import date, datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -498,6 +500,168 @@ def cmd_repo_url(args: argparse.Namespace) -> int:
     return 0
 
 
+# --- public repository stream (RFC0012) ---
+
+# Which repo.amd.com stream a build line's amdrocm-repo package configures.
+#
+# Not s3_buckets.get_release_stream(), which picks the bucket a build publishes
+# into and raises on "release", the line that configures stable. A line absent
+# here has no public stream, and callers skip the package for it.
+#
+# Only the stream name and where it is served are recorded here; its shape,
+# signing and repo id belong to build_repo_package. The key is at
+# <root>/gpg/packages.gpg, outside the packages base, so its URL is built here
+# and passed to the builder whole.
+_STREAM_ROOTS = {
+    "release": {
+        "stream": "stable",
+        "root": "https://stable.repo.amd.com/rocm",
+    },
+    "prerelease": {
+        "stream": "rc",
+        "root": "https://rc.repo.amd.com/rocm",
+    },
+    "nightly": {
+        "stream": "nightly",
+        "root": "https://nightly.repo.amd.com/rocm",
+    },
+}
+
+
+def get_public_repo_release_types() -> tuple[str, ...]:
+    """Return the build lines that configure a public stream, in table order."""
+    return tuple(_STREAM_ROOTS)
+
+
+def get_public_repo_stream(release_type: str) -> str:
+    """Return the stream a build line's package configures (empty if none).
+
+    Note that the build line and the stream are not the same vocabulary and do
+    not always share a name: the ``release`` line configures the ``stable``
+    stream and ``prerelease`` configures ``rc``. Passed to the builder as
+    ``--stream``.
+    """
+    entry = _STREAM_ROOTS.get(release_type.strip().lower())
+    return entry["stream"] if entry else ""
+
+
+def get_public_repo_stream_root(release_type: str) -> str:
+    """Return the stream root for a build line (empty if it has no stream)."""
+    entry = _STREAM_ROOTS.get(release_type.strip().lower())
+    return entry["root"] if entry else ""
+
+
+def get_public_repo_base_url(release_type: str) -> str:
+    """Return the packages base URL for a release line (empty if none)."""
+    root = get_public_repo_stream_root(release_type)
+    return f"{root}/core/packages" if root else ""
+
+
+def get_public_repo_gpg_key_url(release_type: str, *, signed: bool) -> str:
+    """Return the full signing-key URL for a release line (empty if none).
+
+    Passed to the builder as ``--gpg-key-url`` and fetched verbatim. Only a
+    signed stream publishes a key, so an unsigned one yields an empty value
+    even though it has a base URL. ``signed`` comes from
+    ``build_repo_package.is_signed(stream)``, which owns that rule.
+    """
+    root = get_public_repo_stream_root(release_type)
+    if not root or not signed:
+        return ""
+    return f"{root}/gpg/packages.gpg"
+
+
+# --- nightly sub-folder ---
+
+
+# A workflow run id is always numeric. It is interpolated into a value written
+# to $GITHUB_OUTPUT, and gha_set_output writes multi-line values with a heredoc
+# whose delimiter it does not verify, so an unconstrained value could terminate
+# the heredoc early and inject further step outputs. \Z (not $) so a trailing
+# newline is not accepted.
+_RUN_ID_RE = re.compile(r"^[0-9]+\Z")
+
+
+def nightly_sub_folder(run_id: str, *, today: date | None = None) -> str:
+    """Return the dated nightly sub-folder ``YYYYMMDD-<run_id>``.
+
+    ``today`` is injectable for deterministic tests; it defaults to the current
+    UTC date.
+
+    Raises:
+        ValueError: If ``run_id`` is not a run of digits.
+    """
+    if not _RUN_ID_RE.match(run_id):
+        raise ValueError(f"run_id must be numeric, got {run_id!r}")
+    day = today or datetime.now(timezone.utc).date()
+    return f"{day:%Y%m%d}-{run_id}"
+
+
+# --- container image map ---
+
+
+def get_container_image_map(os_profiles: list[str]) -> dict[str, str]:
+    """Map each OS profile to its container image (for a build matrix)."""
+    return {profile: get_container_image(profile) for profile in os_profiles}
+
+
+# --- amdrocm-repo parameters ---
+
+# These mirror build_repo_package's private _FLAT / _BUILD_ID. They are compared
+# against its public stream_shape(), and a test asserts the two agree.
+_SHAPE_FLAT = "flat"
+_SHAPE_BUILD_ID = "build_id"
+
+
+def cmd_repo_params(args: argparse.Namespace) -> int:
+    """Emit every parameter the amdrocm-repo build matrix needs, in one output.
+
+    Outputs: ``os_profiles`` and ``images`` (JSON, the matrix), then the stream
+    the build line configures and what follows from it -- ``stream``,
+    ``repo_base_url``, ``gpg_key_url``, ``repo_sub_folder``. A line with no
+    public stream gets all four empty, which callers read as "no package for
+    this line"; the matrix is still emitted.
+    """
+    # Deferred: build_repo_package imports jinja2 at module level, and this
+    # script's other subcommands run in a workflow job that installs no Python
+    # packages. Only this subcommand needs the builder.
+    from build_repo_package import is_signed, list_profiles, stream_shape
+
+    profiles = list_profiles(args.pkg_type)
+    outputs = {
+        "os_profiles": json.dumps(profiles),
+        "images": json.dumps(get_container_image_map(profiles)),
+        "stream": "",
+        "repo_base_url": "",
+        "gpg_key_url": "",
+        "repo_sub_folder": "",
+    }
+    stream = get_public_repo_stream(args.release_type)
+    if stream:
+        shape = stream_shape(stream)
+        if shape not in (_SHAPE_FLAT, _SHAPE_BUILD_ID):
+            print(
+                f"Error: stream {stream!r} has unknown shape {shape!r}", file=sys.stderr
+            )
+            return 1
+        outputs["stream"] = stream
+        outputs["repo_base_url"] = get_public_repo_base_url(args.release_type)
+        outputs["gpg_key_url"] = get_public_repo_gpg_key_url(
+            args.release_type, signed=is_signed(stream)
+        )
+        # A build_id stream serves each build from its own dated folder; a flat
+        # one serves one tree at the root, and the builder rejects a sub-folder
+        # there. The run id is only validated where it is used.
+        if shape == _SHAPE_BUILD_ID:
+            try:
+                outputs["repo_sub_folder"] = nightly_sub_folder(args.run_id)
+            except ValueError as e:
+                print(f"Error: {e}", file=sys.stderr)
+                return 1
+    gha_set_output(outputs)
+    return 0
+
+
 # --- extract-gfx-arch ---
 
 
@@ -773,6 +937,39 @@ def main(argv: list[str] | None = None) -> int:
         help="OS profile (e.g. ubuntu2404, sles16, rhel10)",
     )
     p_img.set_defaults(func=cmd_container_image)
+
+    # get-repo-params: every amdrocm-repo build parameter in one output
+    p_rp = subparsers.add_parser(
+        "get-repo-params",
+        help=(
+            "Print os_profiles=, images=, stream=, repo_base_url=, gpg_key_url= and "
+            "repo_sub_folder= for an amdrocm-repo build. The last four are empty for "
+            "a line with no public repository (e.g. ci/dev)."
+        ),
+    )
+    p_rp.add_argument(
+        "--pkg-type",
+        type=str,
+        required=True,
+        choices=["deb", "rpm"],
+        help="Package type whose OS profiles form the build matrix",
+    )
+    p_rp.add_argument(
+        "--release-type",
+        type=str,
+        required=True,
+        help="Release line (e.g. prerelease, release, nightly)",
+    )
+    p_rp.add_argument(
+        "--run-id",
+        type=str,
+        required=True,
+        help=(
+            "Workflow run id, embedded in the dated build folder of a per-build "
+            "stream. Ignored (and not validated) for other streams."
+        ),
+    )
+    p_rp.set_defaults(func=cmd_repo_params)
 
     args = parser.parse_args(argv)
     return args.func(args)

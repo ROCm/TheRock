@@ -25,7 +25,9 @@ Prerequisites:
 
   - Python 3.10 or newer
   - Run from TheROCK repository root
-  - Stdlib only; ``$GITHUB_OUTPUT`` is mocked to a temp file
+  - Stdlib only, except the ``get-repo-params`` and stream-consistency tests,
+    which import ``build_repo_package`` (jinja2, from requirements-test.txt);
+    ``$GITHUB_OUTPUT`` is mocked to a temp file
 
 Run::
 
@@ -35,10 +37,13 @@ Run::
   python3.12 build_tools/packaging/linux/tests/get_url_repo_params_test.py -v
 """
 
+import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
@@ -50,6 +55,7 @@ for _path in (_BUILD_TOOLS_DIR, _LINUX_DIR):
     if _path_str not in sys.path:
         sys.path.insert(0, _path_str)
 
+import build_repo_package  # noqa: E402
 import get_url_repo_params  # noqa: E402
 
 _EXAMPLE = get_url_repo_params.EXAMPLE_CDN_BASE
@@ -422,6 +428,314 @@ class MainSubcommandsTest(unittest.TestCase):
         self.assertIn(
             "container_image=ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest", output
         )
+
+
+class GetPublicRepoBaseUrlTest(unittest.TestCase):
+    """Tests for the RFC0012 stream mapping."""
+
+    def test_release_maps_to_the_stable_stream(self):
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_base_url("release"),
+            "https://stable.repo.amd.com/rocm/core/packages",
+        )
+
+    def test_prerelease_maps_to_the_rc_stream(self):
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_base_url("prerelease"),
+            "https://rc.repo.amd.com/rocm/core/packages",
+        )
+
+    def test_nightly_maps_to_the_nightly_stream(self):
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_base_url("nightly"),
+            "https://nightly.repo.amd.com/rocm/core/packages",
+        )
+
+    def test_ci_and_dev_are_empty(self):
+        self.assertEqual(get_url_repo_params.get_public_repo_base_url("ci"), "")
+        self.assertEqual(get_url_repo_params.get_public_repo_base_url("dev"), "")
+
+    def test_unknown_line_is_empty(self):
+        self.assertEqual(get_url_repo_params.get_public_repo_base_url("bogus"), "")
+
+    def test_case_insensitive(self):
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_base_url("Release"),
+            "https://stable.repo.amd.com/rocm/core/packages",
+        )
+
+    def test_key_url_is_outside_the_packages_base(self):
+        # packages live at <root>/core/packages/, the key at <root>/gpg/, so
+        # neither URL can be reached from the other by appending or trimming one
+        # segment. The builder takes the key URL whole for that reason.
+        for release_type, key_url in (
+            ("release", "https://stable.repo.amd.com/rocm/gpg/packages.gpg"),
+            ("prerelease", "https://rc.repo.amd.com/rocm/gpg/packages.gpg"),
+        ):
+            with self.subTest(release_type=release_type):
+                base = get_url_repo_params.get_public_repo_base_url(release_type)
+                key = get_url_repo_params.get_public_repo_gpg_key_url(
+                    release_type, signed=True
+                )
+                self.assertEqual(key, key_url)
+                self.assertFalse(key.startswith(base))
+                self.assertFalse(base.startswith(key))
+
+    def test_unsigned_stream_has_no_key_url(self):
+        # nightly serves no InRelease, no Release.gpg and no repomd.xml.asc, and
+        # its gpg/packages.gpg is a 404, so it must not advertise a key.
+        self.assertNotEqual(get_url_repo_params.get_public_repo_base_url("nightly"), "")
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_gpg_key_url("nightly", signed=False),
+            "",
+        )
+
+    def test_line_without_a_stream_has_no_key_url_even_if_signed(self):
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_gpg_key_url("ci", signed=True), ""
+        )
+
+    def test_build_lines_map_to_differently_named_streams(self):
+        # The vocabularies differ: "release" configures "stable" and
+        # "prerelease" configures "rc". Pin them so the two are not conflated.
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_stream("release"), "stable"
+        )
+        self.assertEqual(get_url_repo_params.get_public_repo_stream("prerelease"), "rc")
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_stream("nightly"), "nightly"
+        )
+        self.assertEqual(get_url_repo_params.get_public_repo_stream("ci"), "")
+
+    def test_release_types_in_table_order(self):
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_release_types(),
+            ("release", "prerelease", "nightly"),
+        )
+
+
+class StreamRootsConsistencyTest(unittest.TestCase):
+    """The line -> stream table agrees with the builder's streams.
+
+    The table records only the line -> stream name and where the stream is
+    served; everything else about a stream belongs to build_repo_package. These
+    tests keep the two sides from drifting when a stream is added to one only.
+    """
+
+    def test_every_stream_in_the_table_is_one_the_builder_knows(self):
+        for release_type in get_url_repo_params.get_public_repo_release_types():
+            with self.subTest(release_type=release_type):
+                self.assertIn(
+                    get_url_repo_params.get_public_repo_stream(release_type),
+                    build_repo_package.STREAMS,
+                )
+
+    def test_every_builder_stream_is_reachable_from_exactly_one_line(self):
+        streams = [
+            get_url_repo_params.get_public_repo_stream(release_type)
+            for release_type in get_url_repo_params.get_public_repo_release_types()
+        ]
+        for stream in build_repo_package.STREAMS:
+            with self.subTest(stream=stream):
+                self.assertEqual(streams.count(stream), 1)
+
+    def test_shape_constants_match_the_builder(self):
+        shapes = set(build_repo_package.STREAM_SHAPES.values())
+        self.assertEqual(
+            shapes,
+            {get_url_repo_params._SHAPE_FLAT, get_url_repo_params._SHAPE_BUILD_ID},
+        )
+        self.assertEqual(
+            build_repo_package.stream_shape("nightly"),
+            get_url_repo_params._SHAPE_BUILD_ID,
+        )
+
+
+class NightlySubFolderTest(unittest.TestCase):
+    """Tests for nightly_sub_folder()."""
+
+    def test_formats_with_injected_date(self):
+        self.assertEqual(
+            get_url_repo_params.nightly_sub_folder("12345", today=date(2026, 7, 16)),
+            "20260716-12345",
+        )
+
+    def test_zero_padded_month_and_day(self):
+        self.assertEqual(
+            get_url_repo_params.nightly_sub_folder("7", today=date(2026, 1, 3)),
+            "20260103-7",
+        )
+
+    def test_rejects_non_numeric_run_id(self):
+        # The value is written to $GITHUB_OUTPUT, and gha_set_output uses a
+        # heredoc whose delimiter it does not verify, so an embedded newline
+        # could terminate it early and inject further step outputs.
+        for bad in ["1\nEOF_mag1c\ninjected=yes", "a/b", "12345\n", "", "abc"]:
+            with self.subTest(run_id=bad):
+                with self.assertRaises(ValueError):
+                    get_url_repo_params.nightly_sub_folder(bad)
+
+
+class GetContainerImageMapTest(unittest.TestCase):
+    """Tests for get_container_image_map()."""
+
+    def test_maps_rpm_profiles(self):
+        self.assertEqual(
+            get_url_repo_params.get_container_image_map(["rhel8", "sles16"]),
+            {
+                "rhel8": "registry.access.redhat.com/ubi8/ubi:8.10",
+                "sles16": "registry.suse.com/bci/bci-base:16.0",
+            },
+        )
+
+
+def _outputs(text: str) -> dict[str, str]:
+    """Parse single-line ``key=value`` GITHUB_OUTPUT entries into a dict."""
+    return dict(line.split("=", 1) for line in text.splitlines() if "=" in line)
+
+
+_REPO_PARAMS_KEYS = {
+    "os_profiles",
+    "images",
+    "stream",
+    "repo_base_url",
+    "gpg_key_url",
+    "repo_sub_folder",
+}
+
+
+class GetRepoParamsTest(unittest.TestCase):
+    """Tests for the get-repo-params subcommand."""
+
+    def _run(self, pkg_type, release_type, run_id="12345"):
+        return _run_main_with_output(
+            [
+                "get-repo-params",
+                "--pkg-type",
+                pkg_type,
+                "--release-type",
+                release_type,
+                "--run-id",
+                run_id,
+            ]
+        )
+
+    def test_nightly_is_unsigned_with_a_dated_build_folder(self):
+        code, output = self._run("rpm", "nightly")
+        self.assertEqual(code, 0)
+        out = _outputs(output)
+        self.assertEqual(set(out), _REPO_PARAMS_KEYS)
+        self.assertEqual(json.loads(out["os_profiles"]), ["rhel8", "rhel10", "sles16"])
+        self.assertEqual(
+            json.loads(out["images"]),
+            get_url_repo_params.get_container_image_map(["rhel8", "rhel10", "sles16"]),
+        )
+        self.assertEqual(out["stream"], "nightly")
+        self.assertEqual(
+            out["repo_base_url"], "https://nightly.repo.amd.com/rocm/core/packages"
+        )
+        self.assertEqual(out["gpg_key_url"], "")
+        # The date is the current UTC date; assert the structure, not the value.
+        self.assertRegex(out["repo_sub_folder"], r"^\d{8}-12345$")
+
+    def test_flat_streams_are_signed_with_no_build_folder(self):
+        cases = {
+            "release": ("stable", "https://stable.repo.amd.com/rocm"),
+            "prerelease": ("rc", "https://rc.repo.amd.com/rocm"),
+        }
+        for release_type, (stream, root) in cases.items():
+            with self.subTest(release_type=release_type):
+                code, output = self._run("deb", release_type)
+                self.assertEqual(code, 0)
+                out = _outputs(output)
+                self.assertEqual(set(out), _REPO_PARAMS_KEYS)
+                self.assertEqual(json.loads(out["os_profiles"]), ["ubuntu2404"])
+                self.assertEqual(out["stream"], stream)
+                self.assertEqual(out["repo_base_url"], f"{root}/core/packages")
+                self.assertEqual(out["gpg_key_url"], f"{root}/gpg/packages.gpg")
+                self.assertEqual(out["repo_sub_folder"], "")
+
+    def test_line_without_a_stream_still_emits_the_matrix(self):
+        code, output = self._run("deb", "ci")
+        self.assertEqual(code, 0)
+        out = _outputs(output)
+        self.assertEqual(set(out), _REPO_PARAMS_KEYS)
+        self.assertEqual(json.loads(out["os_profiles"]), ["ubuntu2404"])
+        for key in ("stream", "repo_base_url", "gpg_key_url", "repo_sub_folder"):
+            self.assertEqual(out[key], "", key)
+
+    def test_hostile_run_id_on_a_build_id_stream_writes_nothing(self):
+        code, output = self._run("deb", "nightly", run_id="1\nEOF_mag1c\ninjected=yes")
+        self.assertNotEqual(code, 0)
+        self.assertNotIn("injected=yes", output)
+        self.assertEqual(output, "")
+
+    def test_run_id_is_not_validated_on_a_flat_stream(self):
+        # A flat stream has no build folder, so the run id is never used there.
+        code, output = self._run("deb", "release", run_id="not-a-number")
+        self.assertEqual(code, 0)
+        self.assertEqual(_outputs(output)["repo_sub_folder"], "")
+
+    def test_outputs_follow_the_stream_shape_not_its_name(self):
+        # Register a build_id stream that is not called "nightly". Its outputs
+        # must come from its shape: a dated folder and no key.
+        with patch.dict(build_repo_package.STREAM_SHAPES, {"weekly": "build_id"}):
+            with patch.dict(
+                get_url_repo_params._STREAM_ROOTS,
+                {"dev": {"stream": "weekly", "root": "https://weekly.example/rocm"}},
+            ):
+                code, output = self._run("deb", "dev")
+        self.assertEqual(code, 0)
+        out = _outputs(output)
+        self.assertEqual(out["stream"], "weekly")
+        self.assertRegex(out["repo_sub_folder"], r"^\d{8}-12345$")
+        self.assertEqual(out["gpg_key_url"], "")
+
+    def test_rejects_an_unknown_package_type(self):
+        with self.assertRaises(SystemExit):
+            with patch("sys.stderr"):
+                self._run("apk", "nightly")
+
+
+# Run in a fresh interpreter: in the test session build_repo_package is already
+# in sys.modules (this file imports it), so an in-process check would pass even
+# if get_url_repo_params imported it at load time.
+_NO_JINJA2_PROBE = """
+import os, sys, tempfile
+sys.modules["jinja2"] = None  # any "import jinja2" now raises ImportError
+sys.path.insert(0, sys.argv[1])
+import get_url_repo_params as g
+assert "build_repo_package" not in sys.modules, "loaded build_repo_package"
+with tempfile.TemporaryDirectory() as d:
+    os.environ["GITHUB_OUTPUT"] = os.path.join(d, "github_output")
+    assert g.main(["extract-gfx-arch", "--artifact-group", "gfx94X-dcgpu"]) == 0
+    assert g.main(["get-container-image", "--os-profile", "ubuntu2404"]) == 0
+    try:
+        g.main(["get-repo-params", "--pkg-type", "deb", "--release-type", "nightly",
+                "--run-id", "1"])
+    except ImportError:
+        print("ok")
+"""
+
+
+class WithoutJinja2Test(unittest.TestCase):
+    """The script's other subcommands run without jinja2.
+
+    test_native_linux_packages_install.yml runs extract-gfx-arch and
+    get-container-image in a job that installs no Python packages. Only
+    get-repo-params needs
+    build_repo_package, and it must fail when called, not when imported.
+    """
+
+    def test_other_subcommands_run_and_get_repo_params_fails_at_call_time(self):
+        result = subprocess.run(
+            [sys.executable, "-c", _NO_JINJA2_PROBE, str(_LINUX_DIR)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip().splitlines()[-1], "ok")
 
 
 if __name__ == "__main__":
