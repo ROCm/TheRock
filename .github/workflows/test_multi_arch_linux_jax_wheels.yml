@@ -202,7 +202,6 @@ on:
         default: ""
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   test_jax_wheels:

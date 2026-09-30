@@ -118,6 +118,7 @@ jobs:
     name: Build Python | ${{ inputs.artifact_group }}
     runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'windows-2022' }}
     permissions:
+      contents: read
       id-token: write
     outputs:
       package_find_links_url: ${{ steps.upload.outputs.package_find_links_url }}

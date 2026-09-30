@@ -61,13 +61,15 @@ on:
         value: ${{ jobs.build_native_packages.outputs.package_repository_url }}
 
 permissions:
-  id-token: write
   contents: read
 
 run-name: Build ${{ inputs.native_package_type }} packages (${{ inputs.rocm_version }}, ${{ inputs.dist_amdgpu_families }}${{ inputs.release_type && format(', {0}', inputs.release_type) || '' }})
 
 jobs:
   build_native_packages:
+    permissions:
+      contents: read
+      id-token: write # Authenticate to AWS to upload package repositories.
     name: Build ${{ inputs.native_package_type }} packages
     runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-24.04' }}
     container:
