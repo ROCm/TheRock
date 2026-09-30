@@ -454,9 +454,7 @@ def get_modified_paths_via_api(
 
     # Use PR files endpoint for pull requests - it correctly handles merge-base
     if pr_number:
-        return _get_pr_files_via_api(
-            github_repo, pr_number, max_retries, retry_delay
-        )
+        return _get_pr_files_via_api(github_repo, pr_number, max_retries, retry_delay)
 
     # Fall back to compare endpoint for non-PR events (push, etc.)
     for attempt in range(max_retries):
@@ -538,13 +536,12 @@ def _get_pr_files_via_api(
         try:
             # Paginate through all files (PR files endpoint supports pagination)
             while True:
+                # Use query parameters in URL for GET request (not -f which is for POST)
                 result = subprocess.run(
                     [
                         "gh",
                         "api",
-                        f"repos/{github_repo}/pulls/{pr_number}/files",
-                        "-f", f"per_page={per_page}",
-                        "-f", f"page={page}",
+                        f"repos/{github_repo}/pulls/{pr_number}/files?per_page={per_page}&page={page}",
                     ],
                     capture_output=True,
                     text=True,

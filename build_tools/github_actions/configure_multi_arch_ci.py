@@ -2006,9 +2006,14 @@ def main():
 
                 # Prefer PR files API for PRs (handles merge-base correctly)
                 if pr_number and repo_full_name:
-                    print(f"  Fetching changed files via GitHub API (PR #{pr_number})...")
+                    print(
+                        f"  Fetching changed files via GitHub API (PR #{pr_number})..."
+                    )
                     changed_files = get_modified_paths_via_api(
-                        repo_full_name, base_sha or "", head_sha or "", pr_number=pr_number
+                        repo_full_name,
+                        base_sha or "",
+                        head_sha or "",
+                        pr_number=pr_number,
                     )
                 elif base_sha and head_sha and repo_full_name:
                     # Fall back to compare API for non-PR events
