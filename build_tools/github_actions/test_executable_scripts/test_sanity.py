@@ -16,7 +16,8 @@ env = os.environ.copy()
 # Enable verbose ROCm logging, see
 # https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/debugging.html
 # Note: test_component.yml defaults ROCM_KPACK_DEBUG to "1" (components may
-# override it via their test_matrix "rocm_kpack_debug" entry); sanity inherits "1".
+# override it via their test_matrix "rocm_kpack_debug" entry, and the general
+# THEROCK_CI_DEBUG mode forces it back on); sanity inherits "1".
 env["AMD_LOG_LEVEL"] = "4"
 
 # The sanity checks run tools like 'offload-arch' which may search for DLLs on
