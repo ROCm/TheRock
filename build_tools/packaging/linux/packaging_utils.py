@@ -1163,7 +1163,7 @@ def resolve_versioned_dependency_list(dep_list, config: PackageConfig, is_meta):
 
 
 @functools.lru_cache(maxsize=None)
-def _artifact_dir_name_index(artifacts_dir: str) -> dict:
+def _artifact_dir_name_index(artifacts_dir: str) -> dict[str, list[str]]:
     """One-time directory listing of artifacts_dir, indexed by each entry's
     name with any ":xnack..." suffix stripped.
 
@@ -1171,7 +1171,7 @@ def _artifact_dir_name_index(artifacts_dir: str) -> dict:
     combination across a full packaging run; caching the listing avoids
     re-scanning a potentially large artifacts_dir on every call.
     """
-    index: dict = {}
+    index: dict[str, list[str]] = {}
     try:
         for entry in Path(artifacts_dir).iterdir():
             index.setdefault(entry.name.split(":", 1)[0], []).append(entry.name)

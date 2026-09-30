@@ -98,6 +98,7 @@ from packaging_utils import (  # noqa: E402
     PackageConfig,
     filter_components_fromartifactory,
     get_package_info,
+    has_artifact_for_arch,
     is_gfxarch_package,
     is_key_defined,
     update_package_name,
@@ -236,8 +237,15 @@ def _stage_package_artifacts(
     *,
     enable_kpack: bool = True,
     payload_name: str = STAGING_PAYLOAD_NAME,
+    dir_suffix_override: str | None = None,
 ) -> list[Path]:
-    """Stage artifacts from ``package.json`` and return their manifest stage roots."""
+    """Stage artifacts from ``package.json`` and return their manifest stage roots.
+
+    ``dir_suffix_override``, when given, replaces the computed directory suffix
+    (e.g. stage under ``..._gfx942:xnack+`` while still resolving dependencies
+    for plain ``gfx_arch="gfx942"``) - used to reproduce components that are
+    only ever built with an xnack-suffixed artifact directory.
+    """
     pkg_info = get_package_info(pkg_name)
     if enable_kpack and gfx_arch == GFX_META:
         return []
@@ -259,6 +267,8 @@ def _stage_package_artifacts(
         )
         if suffix is None:
             continue
+        if dir_suffix_override is not None:
+            suffix = dir_suffix_override
 
         prefix = artifact["Artifact"]
         subdirs = artifact.get("Artifact_Subdir", [])
@@ -440,6 +450,59 @@ class SharedOwnerPackagingTest(BuildPackageTestCase):
                 deps = process_main_dependencies_kpack(info, field, cfg)
                 self.assertIn("amdrocm-rand7.1-gfx1250", deps)
                 self.assertNotIn("gfx1250-strict", deps)
+
+    def test_has_artifact_for_arch_matches_xnack_suffixed_directory(self):
+        """rand/solver/hiptensor/rocalution ship gfx942/gfx950 only as ':xnack+'
+        directories - has_artifact_for_arch() must recognize those, not just an
+        exact (non-suffixed) directory match."""
+        cfg = _kpack_config(self.temp_dir, target=[TEST_GFX_TARGET_ALT])
+        _stage_package_artifacts(
+            "amdrocm-rand",
+            cfg.artifacts_dir,
+            TEST_GFX_TARGET_ALT,
+            dir_suffix_override=f"{TEST_GFX_TARGET_ALT}:xnack+",
+        )
+        self.assertTrue(
+            has_artifact_for_arch(
+                "amdrocm-rand", cfg.artifacts_dir, TEST_GFX_TARGET_ALT
+            )
+        )
+
+    def test_has_artifact_for_arch_missing_when_not_staged_for_that_arch(self):
+        """Artifacts staged for one arch but not another - has_artifact_for_arch()
+        must report False for the arch that was never staged, rather than
+        (incorrectly) skipping the check because *some* gfx-arch artifacts
+        exist elsewhere for this package."""
+        cfg = _kpack_config(
+            self.temp_dir, target=[TEST_GFX_TARGET, TEST_GFX_TARGET_ALT]
+        )
+        _stage_package_artifacts("amdrocm-rand", cfg.artifacts_dir, TEST_GFX_TARGET)
+        self.assertFalse(
+            has_artifact_for_arch(
+                "amdrocm-rand", cfg.artifacts_dir, TEST_GFX_TARGET_ALT
+            )
+        )
+
+    def test_meta_dependency_includes_xnack_only_device_arch(self):
+        """Reproduces the original bug end-to-end: a meta package must still
+        depend on a device arch whose only artifact directory is xnack-suffixed."""
+        cfg = _kpack_config(self.temp_dir, target=[TEST_GFX_TARGET_ALT])
+        _stage_package_artifacts(
+            "amdrocm-rand",
+            cfg.artifacts_dir,
+            GFX_HOST,
+        )
+        _stage_package_artifacts(
+            "amdrocm-rand",
+            cfg.artifacts_dir,
+            TEST_GFX_TARGET_ALT,
+            dir_suffix_override=f"{TEST_GFX_TARGET_ALT}:xnack+",
+        )
+        deps = expand_kpack_meta_dependencies("amdrocm-rand", cfg.gfxarch_list, cfg)
+        self.assertEqual(
+            deps,
+            ["amdrocm-rand-host7.1", f"amdrocm-rand7.1-{TEST_GFX_TARGET_ALT}"],
+        )
 
     def _stage_conflicting_targets(self, pkg_type: str) -> PackageConfig:
         cfg = self._stage_targets(("gfx1250", "gfx1250-strict"), pkg_type)
