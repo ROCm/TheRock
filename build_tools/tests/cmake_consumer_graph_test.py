@@ -467,19 +467,33 @@ therock_provide_artifact(meta
     }
 
 
-def test_source_dir_map_unresolved_subproject_deps_raises(tmp_path: Path) -> None:
-    # SUBPROJECT_DEPS built from an unresolved variable must fail loud, never
-    # silently drop the dependency (mirrors the BUILD_DEPS guard).
+def test_source_dir_map_unresolved_subproject_deps_is_omitted(tmp_path: Path) -> None:
+    # SUBPROJECT_DEPS feeds only the report-only source_dir_map, so an unresolved
+    # variable must degrade gracefully: the offending artifact is omitted (with a
+    # skipped diagnostic) and the authoritative graph/subtree_map still build. It
+    # must NOT abort the whole analysis + the blocking drift gate.
     _write(
         tmp_path / "CMakeLists.txt",
         """
+set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/rocm-systems")
+therock_cmake_subproject_declare(hip-clr
+  EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr)
+therock_provide_artifact(good
+  SUBPROJECT_DEPS hip-clr)
 therock_provide_artifact(thing
   SUBPROJECT_DEPS ${UNDEFINED_DEPS})
 """,
     )
     tracked = {Path("CMakeLists.txt")}
-    with pytest.raises(AnalysisError):
-        RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
+    result = RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
+
+    # The unresolvable artifact is omitted; the resolvable one is kept.
+    assert result.build_source_dir_map() == {"good": ["projects/clr"]}
+    # The failure is visible as a diagnostic, not silently swallowed.
+    assert any("UNDEFINED_DEPS" in skipped.reason for skipped in result.skipped_paths)
+    # The authoritative outputs are unaffected and still build.
+    assert result.build_subtree_map() == {"projects/clr": ["hip-clr"]}
+    assert isinstance(result.build_consumer_graph(), dict)
 
 
 def test_source_dir_map_matches_committed() -> None:
