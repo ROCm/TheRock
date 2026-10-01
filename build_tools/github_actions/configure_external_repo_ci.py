@@ -64,6 +64,7 @@ SKIPPABLE_PATH_PATTERNS = [
     "shared/*/docs/*",
     ".github/workflows/therock*",
     ".github/scripts/therock*",
+    ".github/actions/ci-env/*",
 ]
 
 # Patterns that trigger a full test run when changed (CI infrastructure)
