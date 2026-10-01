@@ -83,6 +83,14 @@ class BaselineRunsTest(unittest.TestCase):
         self.assertTrue(
             baseline_runs.is_successful_workflow_job(_workflow_job("Build"))
         )
+        self.assertTrue(
+            baseline_runs.is_successful_workflow_job(
+                _workflow_job(
+                    "Build Multi-Arch Stages / Quartz - started - build ROCm",
+                    conclusion="skipped",
+                )
+            )
+        )
         self.assertFalse(
             baseline_runs.is_successful_workflow_job(
                 _workflow_job("Build", conclusion="failure")
@@ -351,6 +359,14 @@ class BaselineRunsTest(unittest.TestCase):
             workflow_jobs=[
                 _workflow_job("Build Multi-Arch Stages / linux"),
                 _workflow_job("Build Multi-Arch Stages / windows"),
+                _workflow_job(
+                    "Build Multi-Arch Stages / Quartz - started - build ROCm",
+                    conclusion="skipped",
+                ),
+                _workflow_job(
+                    "Build Multi-Arch Stages / Quartz - completed - build ROCm",
+                    conclusion="skipped",
+                ),
                 _workflow_job("Test hip-tests", conclusion="failure"),
             ],
             required_name_substrings=["Build Multi-Arch Stages"],
@@ -362,6 +378,8 @@ class BaselineRunsTest(unittest.TestCase):
             (
                 "Build Multi-Arch Stages / linux",
                 "Build Multi-Arch Stages / windows",
+                "Build Multi-Arch Stages / Quartz - started - build ROCm",
+                "Build Multi-Arch Stages / Quartz - completed - build ROCm",
             ),
         )
         self.assertEqual(job_health.failed_job_names, ())
@@ -374,7 +392,11 @@ class BaselineRunsTest(unittest.TestCase):
                     "Build Multi-Arch Stages / linux",
                     conclusion="failure",
                 ),
-                _workflow_job("Test hip-tests"),
+                _workflow_job(
+                    "Build Multi-Arch Stages / Quartz - completed - build ROCm",
+                    conclusion="skipped",
+                ),
+                _workflow_job("Test hip-tests", conclusion="failure"),
             ],
             required_name_substrings=[
                 "Build Multi-Arch Stages",
@@ -451,10 +473,97 @@ class BaselineRunsTest(unittest.TestCase):
         self.assertEqual(baseline.job_health.failed_job_names, ())
         self.assertEqual(baseline.artifact_availability.missing_artifacts, ())
 
+    def test_select_baseline_run_accepts_one_complete_artifact_group(self):
+        run = _workflow_run("partial")
+
+        def backend_factory(workflow_run, github_repository, platform):
+            return FakeBackend(
+                [
+                    "base_lib_generic.tar.zst",
+                    "rocprofiler-sdk_lib_generic.tar.zst",
+                ]
+            )
+
+        def workflow_jobs_fetcher(workflow_run, github_repository):
+            return [_workflow_job("Build Multi-Arch Stages")]
+
+        baseline = baseline_runs.select_baseline_run(
+            required_artifact_groups={
+                "compiler-runtime": [
+                    RequiredArtifact("base", "generic"),
+                ],
+                "profiler-apps": [
+                    RequiredArtifact("rocprofiler-sdk", "generic"),
+                    RequiredArtifact("rocprofiler-systems", "generic"),
+                ],
+            },
+            platform="linux",
+            workflow_runs=[run],
+            backend_factory=backend_factory,
+            workflow_jobs_fetcher=workflow_jobs_fetcher,
+        )
+
+        self.assertIsNotNone(baseline)
+        assert baseline is not None
+        self.assertEqual(baseline.run_id, "partial")
+        self.assertEqual(
+            baseline.artifact_availability.missing_artifacts,
+            (RequiredArtifact("rocprofiler-systems", "generic"),),
+        )
+
+    def test_select_baseline_run_rejects_when_no_group_is_complete(self):
+        run = _workflow_run("incomplete")
+
+        def backend_factory(workflow_run, github_repository, platform):
+            return FakeBackend(["rocprofiler-sdk_lib_generic.tar.zst"])
+
+        def workflow_jobs_fetcher(workflow_run, github_repository):
+            return [_workflow_job("Build Multi-Arch Stages")]
+
+        baseline = baseline_runs.select_baseline_run(
+            required_artifact_groups={
+                "compiler-runtime": [
+                    RequiredArtifact("base", "generic"),
+                ],
+                "profiler-apps": [
+                    RequiredArtifact("rocprofiler-sdk", "generic"),
+                    RequiredArtifact("rocprofiler-systems", "generic"),
+                ],
+            },
+            platform="linux",
+            workflow_runs=[run],
+            backend_factory=backend_factory,
+            workflow_jobs_fetcher=workflow_jobs_fetcher,
+        )
+
+        self.assertIsNone(baseline)
+
+    def test_select_baseline_run_strict_mode_still_requires_every_pair(self):
+        run = _workflow_run("partial")
+
+        def backend_factory(workflow_run, github_repository, platform):
+            return FakeBackend(["base_lib_generic.tar.zst"])
+
+        def workflow_jobs_fetcher(workflow_run, github_repository):
+            return [_workflow_job("Build Multi-Arch Stages")]
+
+        baseline = baseline_runs.select_baseline_run(
+            required_artifacts=[
+                RequiredArtifact("base", "generic"),
+                RequiredArtifact("rocprofiler-systems", "generic"),
+            ],
+            platform="linux",
+            workflow_runs=[run],
+            backend_factory=backend_factory,
+            workflow_jobs_fetcher=workflow_jobs_fetcher,
+        )
+
+        self.assertIsNone(baseline)
+
     def test_select_baseline_run_skips_run_when_required_build_job_failed(self):
         runs = [
             _workflow_run("failed-build", conclusion="failure"),
-            _workflow_run("usable"),
+            _workflow_run("usable", conclusion="success"),
         ]
         artifacts_by_run_id = {
             "failed-build": [
@@ -468,9 +577,20 @@ class BaselineRunsTest(unittest.TestCase):
         }
         jobs_by_run_id = {
             "failed-build": [
-                _workflow_job("Build Multi-Arch Stages", conclusion="failure")
+                _workflow_job("Build Multi-Arch Stages", conclusion="failure"),
+                _workflow_job(
+                    "Build Multi-Arch Stages / Quartz - completed - build ROCm",
+                    conclusion="skipped",
+                ),
             ],
-            "usable": [_workflow_job("Build Multi-Arch Stages")],
+            "usable": [
+                _workflow_job("Build Multi-Arch Stages"),
+                _workflow_job(
+                    "Build Multi-Arch Stages / Quartz - started - build ROCm",
+                    conclusion="skipped",
+                ),
+                _workflow_job("Test hip-tests", conclusion="failure"),
+            ],
         }
 
         def backend_factory(workflow_run, github_repository, platform):

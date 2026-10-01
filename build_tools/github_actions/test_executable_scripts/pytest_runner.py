@@ -15,13 +15,22 @@ optional pytest marker expression (``pytest_markers`` / ``exclude_markers``).
 GPU-architecture exclusions are applied via ``skip-gfxXXXX`` markers. A category
 may also supply ``pytest_args``: a list of extra pytest CLI options appended
 verbatim to the invocation (e.g. ``-k``, or component-specific conftest options).
-``{ROCM_PATH}`` tokens in those values are substituted with the install prefix.
+``{ROCM_PATH}`` tokens in those values are substituted with the install prefix,
+and ``{AMDGPU_TARGETS}`` tokens with the concrete GPU target (first entry of the
+``AMDGPU_TARGETS`` env var, e.g. ``gfx1250``; when unset, the gfx token is
+extracted from ``AMDGPU_FAMILIES`` via ``extract_gpu_arch()``).  This applies to
+``pytest_args``, ``pytest_markers``, ``exclude_markers``, and
+``execution_settings.environment``.
 
 Environment variables used:
 TEST_COMPONENT: Job name of the component to test (e.g. "tensilelite").
 TEST_TYPE: Test category to run; must be a category defined in
     test_categories.yaml (e.g. quick, standard, comprehensive, full). Defaults to
     "quick" when unset.
+TEST_CATEGORY: Optional. When set, overrides TEST_TYPE, for jobs that always
+    run one specific category regardless of the CI tier (e.g. hw-common). If
+    the installed component does not define that category yet, the run is
+    skipped with a warning instead of failing.
 AMDGPU_FAMILIES: GPU architecture for skip-marker filtering (e.g. "gfx942").
 THEROCK_BIN_DIR: Path to the installed bin/ directory; its parent is the ROCm
     install prefix used to locate share/, lib/ and llvm tooling.
@@ -45,6 +54,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 # packages + pytest modules, not native test executables.
 INSTALLED_COMPONENTS = {
     "tensilelite": "share/hipblaslt/tensilelite",
+    "tensilelite-common": "share/hipblaslt/tensilelite",
 }
 
 
@@ -75,6 +85,36 @@ def get_env_int_override(name):
         logging.warning(f"Ignoring negative {name}={raw!r}")
         return 0
     return value
+
+
+def resolve_test_category():
+    """Return the category to run: TEST_CATEGORY if set, else TEST_TYPE."""
+    return os.getenv("TEST_CATEGORY") or os.getenv("TEST_TYPE", "quick")
+
+
+def lookup_category(all_categories, category):
+    """Return the config for `category`, or exit if the component lacks it.
+
+    A category pinned via TEST_CATEGORY that the installed component does not
+    define yet exits 0 with a warning, so a CI job can land before the
+    component change that adds its category. A missing tier is still an error.
+    """
+    category_config = all_categories.get(category)
+    if category_config:
+        return category_config
+    available = sorted(all_categories)
+    if os.getenv("TEST_CATEGORY"):
+        message = (
+            f"Test category '{category}' is not defined by this component yet "
+            f"(available: {available}); skipping."
+        )
+        print(f"::warning title=pytest_runner::{message}")
+        logging.warning(message)
+        sys.exit(0)
+    _fail(
+        f"No configuration found for test category '{category}'. "
+        f"Available categories: {available}"
+    )
 
 
 def resolve_component_path(component_name, rocm_path):
@@ -113,13 +153,29 @@ def extract_gpu_arch(amdgpu_families):
     return None
 
 
-def build_marker_expression(category_config, gpu_arch):
+def build_marker_expression(category_config, gpu_arch, amdgpu_target=""):
     """
     Build a pytest -m expression from a category's marker config plus the
     GPU-arch skip markers registered in pytest.ini (skip-gfxXXXX).
+
+    ``{AMDGPU_TARGETS}`` tokens in marker strings are substituted with the
+    *amdgpu_target* value (a concrete gfx target like ``gfx1250``) so
+    categories can be arch-agnostic.  When *amdgpu_target* is empty,
+    any marker containing ``{AMDGPU_TARGETS}`` is dropped entirely
+    (preventing malformed expressions like ``( and emu_fast)``).
     """
-    include = category_config.get("pytest_markers", []) or []
-    exclude = category_config.get("exclude_markers", []) or []
+    gfx_target = amdgpu_target or ""
+    include_markers = category_config.get("pytest_markers", []) or []
+    exclude_markers = category_config.get("exclude_markers", []) or []
+    if not gfx_target:
+        include_markers = [
+            m for m in include_markers if "{AMDGPU_TARGETS}" not in str(m)
+        ]
+        exclude_markers = [
+            m for m in exclude_markers if "{AMDGPU_TARGETS}" not in str(m)
+        ]
+    include = [str(m).replace("{AMDGPU_TARGETS}", gfx_target) for m in include_markers]
+    exclude = [str(m).replace("{AMDGPU_TARGETS}", gfx_target) for m in exclude_markers]
 
     terms = []
     if include:
@@ -195,13 +251,26 @@ def build_environment(rocm_path, component_name):
     env["ROCM_PATH"] = str(rocm_path)
 
     # _rocisa links libamdhip64.so (in lib/), tensilelite-client links libomp.so
-    # (in lib/llvm/lib/) — both are needed or the client segfaults at load.
+    # (in lib/llvm/lib/<triple>/ due to GNUInstallDirs) and librocm_sysdeps_z.so
+    # (in lib/rocm_sysdeps/lib/).
     lib_path = rocm_path / "lib"
     llvm_lib_path = rocm_path / "lib" / "llvm" / "lib"
-    existing_ld = env.get("LD_LIBRARY_PATH", "")
-    env["LD_LIBRARY_PATH"] = os.pathsep.join(
-        filter(None, [str(lib_path), str(llvm_lib_path), existing_ld])
+    sysdeps_lib_path = rocm_path / "lib" / "rocm_sysdeps" / "lib"
+    ld_paths = [str(lib_path), str(llvm_lib_path)]
+    # GNUInstallDirs puts libomp.so under one or more platform-specific triple
+    # subdirs (e.g. x86_64-unknown-linux-gnu/) instead of lib/llvm/lib/ directly.
+    # Add every triple dir (sorted) so the result is deterministic and does not
+    # depend on glob order or break when a new triple is added to the location.
+    llvm_platform_dirs = sorted(
+        p for p in llvm_lib_path.glob("*-linux-*") if p.is_dir()
     )
+    ld_paths.extend(str(p) for p in llvm_platform_dirs)
+    if sysdeps_lib_path.is_dir():
+        ld_paths.append(str(sysdeps_lib_path))
+    existing_ld = env.get("LD_LIBRARY_PATH", "")
+    if existing_ld:
+        ld_paths.append(existing_ld)
+    env["LD_LIBRARY_PATH"] = os.pathsep.join(ld_paths)
 
     existing_path = env.get("PATH", "")
     env["PATH"] = os.pathsep.join(
@@ -219,8 +288,9 @@ def build_environment(rocm_path, component_name):
 
 if __name__ == "__main__":
     TEST_COMPONENT_NAME = os.getenv("TEST_COMPONENT")
-    TEST_TYPE = os.getenv("TEST_TYPE", "quick")
+    TEST_TYPE = resolve_test_category()
     AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+    AMDGPU_TARGETS = os.getenv("AMDGPU_TARGETS")
     THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 
     if not TEST_COMPONENT_NAME:
@@ -238,23 +308,30 @@ if __name__ == "__main__":
 
     config = load_test_categories_yaml(component_path / "test_categories.yaml")
     all_categories = config.get("test_categories", {})
-    category_config = all_categories.get(TEST_TYPE)
-    if not category_config:
-        _fail(
-            f"No configuration found for test category '{TEST_TYPE}'. "
-            f"Available categories: {sorted(all_categories)}"
-        )
+    category_config = lookup_category(all_categories, TEST_TYPE)
 
     test_paths = category_config.get("test_paths", [])
     if not test_paths:
         _fail(f"Category '{TEST_TYPE}' defines no test_paths")
 
     gpu_arch = extract_gpu_arch(AMDGPU_FAMILIES)
-    marker_expr = build_marker_expression(category_config, gpu_arch)
+    # Resolve a concrete gfx target for {AMDGPU_TARGETS} substitution.
+    # AMDGPU_TARGETS (set by test_component.yml from fetch-gfx-targets)
+    # carries real targets like "gfx1250". Fallback: extract_gpu_arch()
+    # parses a gfx token from AMDGPU_FAMILIES — only correct when that
+    # var holds a bare target (e.g. NPI sets "gfx1250"), not when it
+    # holds a family name (e.g. "gfx125X-dcgpu" → "gfx125X", wrong).
+    amdgpu_target = (
+        AMDGPU_TARGETS.split(",")[0].strip() if AMDGPU_TARGETS else ""
+    ) or (gpu_arch or "")
+    marker_expr = build_marker_expression(category_config, gpu_arch, amdgpu_target)
 
-    # Extra pytest CLI options for this category, with {ROCM_PATH} substitution.
+    # Extra pytest CLI options for this category.  {ROCM_PATH} and
+    # {AMDGPU_TARGETS} tokens are substituted with runtime values.
     pytest_args = [
-        str(arg).replace("{ROCM_PATH}", str(rocm_path))
+        str(arg)
+        .replace("{ROCM_PATH}", str(rocm_path))
+        .replace("{AMDGPU_TARGETS}", amdgpu_target)
         for arg in (category_config.get("pytest_args", []) or [])
     ]
 
@@ -280,7 +357,11 @@ if __name__ == "__main__":
 
     env = build_environment(rocm_path, TEST_COMPONENT_NAME)
     for key, value in (exec_settings.get("environment", {}) or {}).items():
-        value = str(value).replace("{ROCM_PATH}", str(rocm_path))
+        value = (
+            str(value)
+            .replace("{ROCM_PATH}", str(rocm_path))
+            .replace("{AMDGPU_TARGETS}", amdgpu_target)
+        )
         env[key] = value
         logging.info(f"Set environment variable: {key}={value}")
 

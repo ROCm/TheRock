@@ -23,11 +23,24 @@ else()
   )
 endif()
 
-# hipTensor is only built when composable_kernel is also built (CK is a hard
+# Pin an architecture instead of letting CMake detect one: detection needs
+# either a GPU on the builder or a -target-cpu flag that clang no longer emits
+# (llvm/llvm-project#206483). One target is enough for a configure/build check.
+# Generic stages have no per-arch targets, so fall back to the dist targets.
+set(_example_hip_targets "${THEROCK_AMDGPU_TARGETS}")
+if(NOT _example_hip_targets)
+  set(_example_hip_targets "${THEROCK_DIST_AMDGPU_TARGETS}")
+endif()
+if(_example_hip_targets)
+  list(GET _example_hip_targets 0 _example_hip_arch)
+  list(APPEND HIP_CMAKE_ARGS "-DCMAKE_HIP_ARCHITECTURES=${_example_hip_arch}")
+endif()
+
+# hipTensor is built conditionally to composable_kernel availability (CK is a hard
 # build dependency). _ck_enabled, set by math-libs/CMakeLists.txt, is OFF when
-# CK was filtered out for the selected gfx targets, in which case hipTensor is
-# not declared even though THEROCK_ENABLE_HIPTENSOR is ON. Reflect the actual
-# built status so the example does not find_package() a missing hiptensor.
+# CK and hipTensor were filtered out for the selected gfx targets.
+# _hiptensor_available reflect the actual built status so the example does not
+# find_package() a missing hiptensor.
 set(_hiptensor_available OFF)
 if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR)
   set(_hiptensor_available ON)

@@ -39,6 +39,40 @@ ACCEPTED_FILE_EXTENSIONS = (".whl", ".tar.gz", ".zip")
 
 # Valid aggregate index names (the second path segment).
 INDEX_NAMES = ("whl", "whl-next")
+DEFAULT_INDEX = "whl-next"
+
+# repo.amd.com release streams and the per-product bucket naming scheme:
+# therock-repo-amd-<stream>-<product>. Centralized here (rather than
+# duplicated in download_python_packages.py and upload_release_packages.py)
+# so a bucket-name typo like "pytorch" -> "python" can't be introduced in one
+# copy and missed in the other.
+REPO_STREAMS = ("dev", "nightly", "rc", "stable-staging")
+REPO_BUCKET_PRODUCT_NAMES = {
+    "core": "core",
+    "pytorch": "pytorch",
+    "jax": "jax",
+}
+
+# ROCm Core tarball prefixes under the structured layout, keyed by variant.
+CORE_TARBALL_PREFIXES = {
+    "release": "v5/rocm/core/tarball/",
+    "asan": "v5/rocm/core/tarball-asan/",
+}
+
+
+def repo_product_bucket(stream: str, product: str) -> str:
+    """Return the repo.amd.com bucket name for a product on a given stream."""
+    return f"therock-repo-amd-{stream}-{REPO_BUCKET_PRODUCT_NAMES[product]}"
+
+
+def core_tarball_prefix(tarball_variant: str) -> str:
+    """Return the structured S3 prefix for a ROCm Core tarball variant."""
+    return CORE_TARBALL_PREFIXES[tarball_variant]
+
+
+def core_tarball_dir_name(tarball_variant: str) -> str:
+    """Return the local directory name used for a ROCm Core tarball variant."""
+    return "tarball-asan" if tarball_variant == "asan" else "tarball"
 
 
 def pep503_normalize(name: str) -> str:
@@ -178,3 +212,62 @@ def plan_key_copies(
             )
         )
     return plans
+
+
+# Product classification for the flat local promotion layout: the local
+# directory (e.g. <output-dir>/wheels/, see how_to_do_release.md) where
+# downloaded core, PyTorch, and JAX artifacts sit side-by-side, unsorted by
+# product, before upload_release_packages.py --structured routes each one to
+# its own product bucket. Kept as an explicit allowlist (rather than
+# defaulting unmatched packages to "core") so an unrecognized or renamed
+# package fails loudly instead of silently landing in the wrong product
+# bucket.
+#
+# "rocm-bootstrap" is a real package intentionally not classified here:
+# promote_packages.py already special-cases and skips it before this
+# classification would ever run.
+#
+# PYTORCH_PACKAGE_NAMES is an exact-match set (apex/triton share no reliable
+# prefix with "torch"); the *_PREFIXES tuples below are str.startswith()
+# wildcard-style matches (e.g. "rocm_sdk_device_gfx1100" matches
+# "rocm-sdk-device" once pep503-normalized).
+PYTORCH_PACKAGE_NAMES = frozenset({"apex", "triton"})
+PYTORCH_PACKAGE_PREFIXES = ("torch", "amd-torch")
+JAX_PACKAGE_PREFIXES = ("jax", "jaxlib", "jax-rocm")
+CORE_PACKAGE_PREFIXES = (
+    "rocm-sdk-core",
+    "rocm-sdk-devel",
+    "rocm-sdk-device",
+    "rocm-sdk-libraries",
+    "rocm-profiler",
+    "rocm",
+)
+
+
+def infer_structured_product(filename: str) -> str:
+    """Infer the repo.amd.com product for a flat-layout distribution artifact.
+
+    Args:
+        filename: Wheel or sdist filename from the flat local promotion
+            layout (core/pytorch/jax artifacts intermixed in one directory).
+
+    Returns:
+        One of "pytorch", "jax", "core".
+
+    Raises:
+        ValueError: if filename cannot be parsed as a wheel/sdist, or its
+            package name doesn't match any known core/pytorch/jax package.
+    """
+    package_name = package_name_from_filename(filename)
+    if package_name in PYTORCH_PACKAGE_NAMES or package_name.startswith(
+        PYTORCH_PACKAGE_PREFIXES
+    ):
+        return "pytorch"
+    if package_name.startswith(JAX_PACKAGE_PREFIXES):
+        return "jax"
+    if package_name.startswith(CORE_PACKAGE_PREFIXES):
+        return "core"
+    raise ValueError(
+        f"Cannot infer structured product for package {package_name!r} "
+        f"(file: {filename!r}); expected a known core/pytorch/jax package"
+    )

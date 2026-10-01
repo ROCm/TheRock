@@ -116,6 +116,8 @@ class RmtreeWithRetryTest(unittest.TestCase):
             finally:
                 holder.terminate()
                 holder.wait()
+                if target.exists():
+                    rmtree_with_retry(target)
 
 
 if __name__ == "__main__":

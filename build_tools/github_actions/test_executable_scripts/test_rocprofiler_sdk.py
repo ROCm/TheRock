@@ -129,7 +129,7 @@ def setup_env():
     environ_vars["HIP_PLATFORM"] = "amd"
 
     ld_lib_paths = [f"{THEROCK_LIB_PATH}", f"{THEROCK_SYSDEPS_LIB_PATH}"]
-    if host_triple:
+    if host_triple and THEROCK_LLVM_LIB_HOST_TRIPLE_PATH.exists():
         ld_lib_paths += [f"{THEROCK_LLVM_LIB_HOST_TRIPLE_PATH}"]
 
     if is_asan():

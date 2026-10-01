@@ -25,7 +25,9 @@ build directory that its contents are subset from.
 
 from typing import Callable, Optional, Sequence
 
+import filecmp
 import os
+import stat
 import re
 from pathlib import Path, PurePosixPath
 
@@ -113,6 +115,32 @@ class ArtifactCatalog:
                     self.artifact_basedirs.append((name, full_path))
                     self.pm.add_basedir(full_path)
 
+    def validated_matches(self) -> dict[str, os.DirEntry[str]]:
+        """Merge roots only after validating collisions with source provenance.
+
+        Device packaging must call this instead of the last-wins pattern view.
+        Check directories too so a file/directory conflict cannot hide descendants.
+        """
+        entries: dict[str, os.DirEntry[str]] = {}
+        for _, basedir in self.artifact_basedirs:
+            root = PatternMatcher()
+            root.add_basedir(basedir)
+            for relpath, entry in root.all.items():
+                previous = entries.get(relpath)
+                if previous is not None:
+                    if not _identical_entries(previous, entry):
+                        raise ValueError(
+                            f"Conflicting device path {relpath}: "
+                            f"{previous.path} and {entry.path}"
+                        )
+                else:
+                    entries[relpath] = entry
+        return {
+            relpath: entry
+            for relpath, entry in entries.items()
+            if self.pm.predicate.matches(relpath, entry)
+        }
+
     @property
     def artifact_names(self) -> list[ArtifactName]:
         return [an for an, _ in self.artifact_basedirs]
@@ -124,6 +152,28 @@ class ArtifactCatalog:
             for an in self.artifact_names
             if an.target_family != "generic"
         )
+
+
+def _identical_entries(first: os.DirEntry[str], second: os.DirEntry[str]) -> bool:
+    first_type = stat.S_IFMT(first.stat(follow_symlinks=False).st_mode)
+    second_type = stat.S_IFMT(second.stat(follow_symlinks=False).st_mode)
+    if first_type != second_type:
+        return False
+    if stat.S_ISDIR(first_type):
+        return True
+    if stat.S_ISLNK(first_type):
+        if os.readlink(first.path) != os.readlink(second.path):
+            return False
+        # Runtime packaging resolves links, so equal link text alone is not
+        # enough: identical relative links can refer to different payloads.
+        first_path = Path(first.path).resolve(strict=True)
+        second_path = Path(second.path).resolve(strict=True)
+        if first_path.is_dir() or second_path.is_dir():
+            return first_path == second_path
+        return filecmp.cmp(first_path, second_path, shallow=False)
+    if stat.S_ISREG(first_type):
+        return filecmp.cmp(first.path, second.path, shallow=False)
+    raise ValueError(f"Unsupported device entry type: {first.path}")
 
 
 class ArtifactPopulator:
@@ -267,3 +317,35 @@ class ArtifactPopulator:
                                 f"Extracting tar artifact archive, encountered file not in manifest: {member}"
                             )
         return all_root_relpaths
+
+
+# Every subproject stage directory is named "stage": therock_subproject.cmake
+# derives it as "${BINARY_DIR}/${DIR_PREFIX}stage" and DIR_PREFIX is unset for
+# every subproject in the tree.
+STAGE_DIR_NAME = "stage"
+
+
+def prebuilt_marker_relpath(relpath: str) -> str:
+    """Maps an artifact manifest relpath to the bootstrap marker the build reads.
+
+    therock_subproject.cmake looks for the marker beside the subproject's stage
+    directory, as "${_stage_dir}.prebuilt". Almost every artifact descriptor
+    declares its basedir as the stage directory itself, so the marker is simply
+    "<relpath>.prebuilt".
+
+    A descriptor may however declare a basedir *below* its stage directory (e.g.
+    "dctools/rdc/stage/portable-rdc", which scopes the artifact to RDC's
+    INSTALL_DESTINATION). Naming the marker after that basedir yields a path the
+    build never checks, so the subproject is rebuilt from source even though its
+    artifact was fetched and extracted. Truncate at the innermost enclosing
+    "stage" component so such basedirs still mark their enclosing subproject.
+
+    Relpaths whose last component is "stage" (the overwhelming majority) and
+    relpaths with no "stage" component at all (e.g. "math-libs/hipthreads/build")
+    are returned unchanged apart from the suffix.
+    """
+    parts = PurePosixPath(relpath).parts
+    for i in range(len(parts) - 1, -1, -1):
+        if parts[i] == STAGE_DIR_NAME:
+            return str(PurePosixPath(*parts[: i + 1])) + ".prebuilt"
+    return relpath + ".prebuilt"

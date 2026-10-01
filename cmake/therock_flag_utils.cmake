@@ -10,7 +10,7 @@
 # defines within included subprojects.
 #
 # Each flag results in the following changes:
-#   THEROCK_FLAG_${NAME}: boolean cache variable controlling the flag state
+#   THEROCK_FLAG_${NAME}: typed cache variable controlling the flag state
 #   Optionally propagates CMAKE variables and CPP defines to all or specific
 #   subprojects via the project_init.cmake mechanism.
 #
@@ -19,13 +19,69 @@
 # Global property to track all declared flags.
 set_property(GLOBAL PROPERTY THEROCK_ALL_FLAGS)
 
+set(_THEROCK_BUILD_FLAGS_PROTOCOL_VERSION 1)
+
+function(_therock_normalize_bool out_var value context)
+  string(TOUPPER "${value}" _value_upper)
+  if(_value_upper STREQUAL "1" OR
+      _value_upper STREQUAL "ON" OR
+      _value_upper STREQUAL "YES" OR
+      _value_upper STREQUAL "TRUE" OR
+      _value_upper STREQUAL "Y")
+    set(${out_var} "1" PARENT_SCOPE)
+  elseif(_value_upper STREQUAL "0" OR
+      _value_upper STREQUAL "OFF" OR
+      _value_upper STREQUAL "NO" OR
+      _value_upper STREQUAL "FALSE" OR
+      _value_upper STREQUAL "N")
+    set(${out_var} "0" PARENT_SCOPE)
+  else()
+    message(FATAL_ERROR
+      "${context}: BOOL value '${value}' is invalid; use ON/OFF, TRUE/FALSE, "
+      "YES/NO, Y/N, or 1/0"
+    )
+  endif()
+endfunction()
+
+function(_therock_normalize_integer out_var value context)
+  if(NOT "${value}" MATCHES "^(0|-?[1-9][0-9]*)$")
+    message(FATAL_ERROR
+      "${context}: INTEGER value '${value}' is invalid; use canonical signed "
+      "base-10 spelling without a leading plus sign or leading zeroes"
+    )
+  endif()
+  set(${out_var} "${value}" PARENT_SCOPE)
+endfunction()
+
+function(_therock_normalize_flag_value out_var flag_name value context)
+  get_property(_type GLOBAL PROPERTY _THEROCK_FLAG_${flag_name}_TYPE)
+  if(_type STREQUAL "BOOL")
+    _therock_normalize_bool(_normalized "${value}" "${context}")
+  elseif(_type STREQUAL "INTEGER")
+    _therock_normalize_integer(_normalized "${value}" "${context}")
+    get_property(_valid_values GLOBAL PROPERTY _THEROCK_FLAG_${flag_name}_VALID_VALUES)
+    if(NOT "${_valid_values}" STREQUAL "" AND
+        NOT "${_normalized}" IN_LIST _valid_values)
+      message(FATAL_ERROR
+        "${context}: INTEGER value '${value}' is not one of the allowed values: "
+        "${_valid_values}"
+      )
+    endif()
+  else()
+    message(FATAL_ERROR "${context}: unsupported flag type '${_type}'")
+  endif()
+  set(${out_var} "${_normalized}" PARENT_SCOPE)
+endfunction()
+
 # therock_declare_flag
 # Declares a build flag with optional variable and define propagation.
 #
 # Arguments:
 #   NAME           - Unique flag identifier (creates THEROCK_FLAG_${NAME} cache var)
-#   DEFAULT_VALUE  - ON or OFF
+#   TYPE           - BOOL (default) or INTEGER
+#   DEFAULT_VALUE  - Typed default value
 #   DESCRIPTION    - Short description for the cache variable
+#   VALID_VALUES   - (Optional) Allowed values for INTEGER flags
 #   ISSUE          - (Optional) Tracking issue URL
 #   GLOBAL_PROPAGATE_FLAG
 #                  - Propagate THEROCK_FLAG_${NAME} to all sub-projects
@@ -43,8 +99,8 @@ set_property(GLOBAL PROPERTY THEROCK_ALL_FLAGS)
 function(therock_declare_flag)
   cmake_parse_arguments(PARSE_ARGV 0 ARG
     "GLOBAL_PROPAGATE_FLAG"
-    "NAME;DEFAULT_VALUE;DESCRIPTION;ISSUE"
-    "GLOBAL_CMAKE_VARS;GLOBAL_CPP_DEFINES;CMAKE_VARS;CPP_DEFINES;SUB_PROJECTS"
+    "NAME;TYPE;DEFAULT_VALUE;DESCRIPTION;ISSUE"
+    "VALID_VALUES;GLOBAL_CMAKE_VARS;GLOBAL_CPP_DEFINES;CMAKE_VARS;CPP_DEFINES;SUB_PROJECTS"
   )
 
   # Validate required arguments.
@@ -54,8 +110,36 @@ function(therock_declare_flag)
   if(NOT DEFINED ARG_DEFAULT_VALUE)
     message(FATAL_ERROR "therock_declare_flag: DEFAULT_VALUE is required for flag ${ARG_NAME}")
   endif()
-  if(NOT ARG_DESCRIPTION)
+  if(NOT DEFINED ARG_DESCRIPTION OR "${ARG_DESCRIPTION}" STREQUAL "")
     message(FATAL_ERROR "therock_declare_flag: DESCRIPTION is required for flag ${ARG_NAME}")
+  endif()
+  if(NOT "${ARG_NAME}" MATCHES "^[A-Z][A-Z0-9_]*$")
+    message(FATAL_ERROR
+      "therock_declare_flag: NAME '${ARG_NAME}' must use uppercase letters, "
+      "digits, and underscores, and must start with a letter"
+    )
+  endif()
+  if(NOT ARG_TYPE)
+    set(ARG_TYPE "BOOL")
+  endif()
+  if(NOT ARG_TYPE STREQUAL "BOOL" AND NOT ARG_TYPE STREQUAL "INTEGER")
+    message(FATAL_ERROR
+      "therock_declare_flag: TYPE for '${ARG_NAME}' must be BOOL or INTEGER"
+    )
+  endif()
+  if(ARG_TYPE STREQUAL "BOOL" AND ARG_VALID_VALUES)
+    message(FATAL_ERROR
+      "therock_declare_flag: VALID_VALUES is only supported for INTEGER flags"
+    )
+  endif()
+  if(ARG_TYPE STREQUAL "INTEGER" AND
+      (ARG_GLOBAL_CMAKE_VARS OR ARG_GLOBAL_CPP_DEFINES OR
+       ARG_CMAKE_VARS OR ARG_CPP_DEFINES))
+    message(FATAL_ERROR
+      "therock_declare_flag: enabled-only CMake variable and preprocessor "
+      "propagation is only supported for BOOL flags; consume INTEGER flags "
+      "through ROCMBuildFlags.cmake"
+    )
   endif()
 
   # Check for duplicate flags.
@@ -78,6 +162,8 @@ function(therock_declare_flag)
   set_property(GLOBAL APPEND PROPERTY THEROCK_ALL_FLAGS "${ARG_NAME}")
 
   # Store flag metadata in global properties for later retrieval.
+  set_property(GLOBAL PROPERTY _THEROCK_FLAG_${ARG_NAME}_TYPE "${ARG_TYPE}")
+  set_property(GLOBAL PROPERTY _THEROCK_FLAG_${ARG_NAME}_VALID_VALUES "${ARG_VALID_VALUES}")
   set_property(GLOBAL PROPERTY _THEROCK_FLAG_${ARG_NAME}_DEFAULT_VALUE "${ARG_DEFAULT_VALUE}")
   set_property(GLOBAL PROPERTY _THEROCK_FLAG_${ARG_NAME}_DESCRIPTION "${ARG_DESCRIPTION}")
   set_property(GLOBAL PROPERTY _THEROCK_FLAG_${ARG_NAME}_GLOBAL_PROPAGATE_FLAG "${ARG_GLOBAL_PROPAGATE_FLAG}")
@@ -89,6 +175,17 @@ function(therock_declare_flag)
   if(ARG_ISSUE)
     set_property(GLOBAL PROPERTY _THEROCK_FLAG_${ARG_NAME}_ISSUE "${ARG_ISSUE}")
   endif()
+
+  foreach(_valid_value ${ARG_VALID_VALUES})
+    _therock_normalize_integer(
+      _unused "${_valid_value}"
+      "therock_declare_flag(${ARG_NAME}) VALID_VALUES"
+    )
+  endforeach()
+  _therock_normalize_flag_value(
+    _unused "${ARG_NAME}" "${ARG_DEFAULT_VALUE}"
+    "therock_declare_flag(${ARG_NAME}) DEFAULT_VALUE"
+  )
 endfunction()
 
 # therock_override_flag_default
@@ -105,13 +202,17 @@ function(therock_override_flag_default flag_name new_default)
   endif()
 
   message(STATUS "Flag ${flag_name} default overridden to ${new_default}")
+  _therock_normalize_flag_value(
+    _unused "${flag_name}" "${new_default}"
+    "therock_override_flag_default(${flag_name})"
+  )
   set_property(GLOBAL PROPERTY _THEROCK_FLAG_${flag_name}_DEFAULT_VALUE "${new_default}")
 endfunction()
 
 # therock_finalize_flags
 # Processes all declared flags: sets global variables, appends to
 # THEROCK_DEFAULT_CMAKE_VARS, prepares per-subproject injection data, and
-# generates the flag_settings.json file.
+# generates flag_settings.json and the provider state file.
 # Must be called after all flags are declared and before subprojects are activated.
 function(therock_finalize_flags)
   get_property(_all_flags GLOBAL PROPERTY THEROCK_ALL_FLAGS)
@@ -122,21 +223,62 @@ function(therock_finalize_flags)
   foreach(_flag_name ${_all_flags})
     get_property(_default GLOBAL PROPERTY _THEROCK_FLAG_${_flag_name}_DEFAULT_VALUE)
     get_property(_description GLOBAL PROPERTY _THEROCK_FLAG_${_flag_name}_DESCRIPTION)
-    set(THEROCK_FLAG_${_flag_name} "${_default}" CACHE BOOL "${_description}")
+    get_property(_type GLOBAL PROPERTY _THEROCK_FLAG_${_flag_name}_TYPE)
+    if(_type STREQUAL "BOOL")
+      set(_cache_type BOOL)
+    else()
+      set(_cache_type STRING)
+    endif()
+    set(THEROCK_FLAG_${_flag_name} "${_default}" CACHE ${_cache_type} "${_description}")
+    _therock_normalize_flag_value(
+      _normalized "${_flag_name}" "${THEROCK_FLAG_${_flag_name}}"
+      "THEROCK_FLAG_${_flag_name}"
+    )
+    if(_type STREQUAL "BOOL")
+      if(_normalized STREQUAL "1")
+        set(_cache_value ON)
+      else()
+        set(_cache_value OFF)
+      endif()
+    else()
+      set(_cache_value "${_normalized}")
+    endif()
+    set(THEROCK_FLAG_${_flag_name} "${_cache_value}"
+      CACHE ${_cache_type} "${_description}" FORCE)
     # Propagate the (possibly user-overridden) cache value to the caller's scope.
     set(THEROCK_FLAG_${_flag_name} "${THEROCK_FLAG_${_flag_name}}" PARENT_SCOPE)
   endforeach()
 
-  # Phase 2: Process enabled flags and build JSON.
+  # Phase 2: Process enabled flags and build JSON and provider state.
   set(_json_entries)
+  set(_state_names ${_all_flags})
+  set(_state_content
+    "set(ROCM_BUILD_FLAGS_PROTOCOL_VERSION ${_THEROCK_BUILD_FLAGS_PROTOCOL_VERSION})\n")
+  string(APPEND _state_content "set(ROCM_BUILD_FLAGS_PROVIDER \"TheRock\")\n")
+  string(APPEND _state_content "set(ROCM_BUILD_FLAGS_NAMES\n")
+  foreach(_state_name ${_state_names})
+    string(APPEND _state_content "  ${_state_name}\n")
+  endforeach()
+  string(APPEND _state_content ")\n")
 
   foreach(_flag_name ${_all_flags})
-    # Record flag state for JSON output.
-    if(THEROCK_FLAG_${_flag_name})
+    get_property(_type GLOBAL PROPERTY _THEROCK_FLAG_${_flag_name}_TYPE)
+    _therock_normalize_flag_value(
+      _normalized "${_flag_name}" "${THEROCK_FLAG_${_flag_name}}"
+      "THEROCK_FLAG_${_flag_name}"
+    )
+
+    if(_type STREQUAL "BOOL" AND _normalized STREQUAL "1")
       list(APPEND _json_entries "\"${_flag_name}\": true")
-    else()
+    elseif(_type STREQUAL "BOOL")
       list(APPEND _json_entries "\"${_flag_name}\": false")
+    else()
+      list(APPEND _json_entries "\"${_flag_name}\": ${_normalized}")
     endif()
+    string(APPEND _state_content
+      "set(ROCM_BUILD_FLAG_${_flag_name}_TYPE \"${_type}\")\n"
+      "set(ROCM_BUILD_FLAG_${_flag_name}_VALUE \"${_normalized}\")\n"
+    )
 
     get_property(_global_propagate_flag GLOBAL PROPERTY _THEROCK_FLAG_${_flag_name}_GLOBAL_PROPAGATE_FLAG)
     if(_global_propagate_flag)
@@ -190,12 +332,18 @@ function(therock_finalize_flags)
     endforeach()
   endforeach()
 
-  # Generate flag_settings.json in the build directory.
+  string(APPEND _state_content "set(ROCM_BUILD_FLAGS_STATE_COMPLETE 1)\n")
+
+  # Generate typed settings and provider state in the build directory. file(CONFIGURE)
+  # only updates the output when its contents change.
   list(JOIN _json_entries ",\n  " _json_body)
   set(_json_content "{\n  ${_json_body}\n}\n")
   set(_flag_settings_file "${THEROCK_BINARY_DIR}/flag_settings.json")
-  file(WRITE "${_flag_settings_file}" "${_json_content}")
+  file(CONFIGURE OUTPUT "${_flag_settings_file}" CONTENT "${_json_content}" @ONLY)
+  set(_build_flags_state_file "${THEROCK_BINARY_DIR}/rocm_build_flags_state.cmake")
+  file(CONFIGURE OUTPUT "${_build_flags_state_file}" CONTENT "${_state_content}" @ONLY)
   set(THEROCK_FLAG_SETTINGS_FILE "${_flag_settings_file}" PARENT_SCOPE)
+  set(ROCM_BUILD_FLAGS_STATE_FILE "${_build_flags_state_file}" PARENT_SCOPE)
 endfunction()
 
 # therock_report_flags
@@ -208,11 +356,18 @@ function(therock_report_flags)
 
   message(STATUS "Build flags:")
   foreach(_flag_name ${_all_flags})
-    if(THEROCK_FLAG_${_flag_name})
-      message(STATUS "  * ${_flag_name} = ON (-DTHEROCK_FLAG_${_flag_name}=ON)")
+    get_property(_type GLOBAL PROPERTY _THEROCK_FLAG_${_flag_name}_TYPE)
+    if(_type STREQUAL "BOOL" AND THEROCK_FLAG_${_flag_name})
+      set(_display_value ON)
+    elseif(_type STREQUAL "BOOL")
+      set(_display_value OFF)
     else()
-      message(STATUS "  * ${_flag_name} = OFF (-DTHEROCK_FLAG_${_flag_name}=OFF)")
+      set(_display_value "${THEROCK_FLAG_${_flag_name}}")
     endif()
+    message(STATUS
+      "  * ${_flag_name} = ${_display_value} "
+      "(-DTHEROCK_FLAG_${_flag_name}=${_display_value})"
+    )
   endforeach()
 endfunction()
 

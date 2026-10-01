@@ -2,7 +2,9 @@
 
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit) [![Multi-arch CI](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml/badge.svg?branch=main&event=push)](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml?query=branch%3Amain) [![Multi-arch CI ASan](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci_asan.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci_asan.yml?query=branch%3Amain)
 
-TheRock (The HIP Environment and ROCm Kit) is a lightweight open source build platform for HIP and ROCm. It is designed for ROCm contributors as well as developers, researchers, and advanced users who need access to the latest ROCm capabilities without the complexity of traditional package-based installations. The project is currently in an **early preview state** but is under active development and welcomes contributors. Come try us out! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more info and the [FAQ](docs/faq.md) for frequently asked questions.
+TheRock (The HIP Environment and ROCm Kit) is the open source build and release system for HIP and ROCm, and the top-level entry point that integrates ROCm's components into a single buildable, testable, and releasable product. Since ROCm 7.14, ROCm is built and released through TheRock, which replaces the previous monolithic release process with a modular workflow that makes ROCm components easier to build, integrate, and distribute. It is designed for ROCm contributors as well as developers, researchers, and advanced users who need access to the latest ROCm capabilities without the complexity of traditional package-based installations. The project is under active development and welcomes contributors. Come try us out! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more info and the [FAQ](docs/faq.md) for frequently asked questions.
+
+For general information about the ROCm software platform, see the [ROCm documentation](https://rocm.docs.amd.com/).
 
 ## Features
 
@@ -41,6 +43,9 @@ Multi-arch releases (all GPU architectures):
 | JAX packages - Linux build/test        | [![Multi-Arch Release Linux JAX Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_jax_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_jax_wheels.yml)                   |
 
 ## Building from source
+
+> [!WARNING]
+> **Disk Space and Build Time Requirements:** Building from source requires approximately 200 GB of free disk space and can take multiple hours to compile. Builds will fail if you run out of space.
 
 We keep the following instructions for recent, commonly used operating system
 versions. Most build failures are due to minor operating system differences in
@@ -216,7 +221,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_RDC=ON`              | Enables ROCm Data Center Tool (Linux only)          |
 | `-DTHEROCK_ENABLE_LIBHIPCXX=ON`        | Enables libhipcxx                                   |
 | `-DTHEROCK_ENABLE_HIPTHREADS=ON`       | Enables hipThreads                                  |
-| `-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON` | Enables AMD Mesa for media libs (Linux only)        |
+| `-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON` | Enables AMD Mesa for media libs                     |
 | `-DTHEROCK_ENABLE_ROCDECODE=ON`        | Enables rocDecode video decoder (Linux only)        |
 | `-DTHEROCK_ENABLE_ROCJPEG=ON`          | Enables rocJPEG JPEG decoder (Linux only)           |
 | `-DTHEROCK_ENABLE_ROCJITSU=ON`         | Enables ROCm emulation tools (Linux only)           |
@@ -350,13 +355,16 @@ with ctest:
 ctest --test-dir build
 ```
 
-Testing functionality on an actual GPU is in progress and will be documented
-separately.
+See [TESTING.md](/TESTING.md#testing-changes-to-rocm-subprojects-with-therock)
+for more details about testing.
 
 ## Development manuals
 
 - [FAQ](docs/faq.md): Frequently asked questions for TheRock users.
-- [Contribution Guidelines](CONTRIBUTING.md): Documentation for the process of contributing to this project including a quick pointer to its governance.
+- [CONTRIBUTING.md](CONTRIBUTING.md): Documentation for the process of contributing to this project including a quick pointer to its governance.
+- [GOVERNANCE.md](GOVERNANCE.md): The governance model, contributor roles, common contribution guidelines, and code of conduct shared across ROCm repositories.
+- [SECURITY.md](SECURITY.md): How to report a security vulnerability.
+- [TESTING.md](TESTING.md): Testing policies for TheRock itself and ROCm subprojects.
 - [Development Guide](docs/development/development_guide.md): Documentation on how to use TheRock as a daily driver for developing any of its contained ROCm components (i.e. vs interacting with each component build individually).
 - [Build System](docs/development/build_system.md): More detailed information about TheRock's build system relevant to people looking to extend TheRock, add components, etc.
 - [Environment Setup Guide](docs/environment_setup_guide.md): Comprehensive guide for setting up a build environment, known workarounds, and other operating specific information.

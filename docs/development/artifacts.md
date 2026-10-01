@@ -13,7 +13,7 @@ Generally, each artifact is an extract of the top level build tree, containing a
 
 After each sub-project build stage, corresponding artifact sub-directories will be populated in the `build/artifacts` directory. As a visual-aid, consider the directory listing of the `base`, `sysdeps`, and `rand` artifacts:
 
-```
+```bash
 $ ls -1d artifacts/{base_*,sysdeps_*,rand_*}
 artifacts/base_dbg_generic
 artifacts/base_dev_generic
@@ -119,7 +119,7 @@ These commands always ensure that the `artifact_manifest.txt` is written to the 
 
 Artifacts are constructed by adding a `therock_provide_artifact()` command to a CMake file. Working forward on our sysdeps example, here is the directive to create its artifact:
 
-```
+```cmake
 therock_provide_artifact(sysdeps
   TARGET_NEUTRAL
   DESCRIPTOR artifact.toml
@@ -152,7 +152,7 @@ The artifact descriptor uses a pattern based language to define what files are i
 
 Abbreviated example:
 
-```
+```toml
 # bzip2
 [components.lib."third-party/sysdeps/linux/bzip2/build/stage"]
 [components.dev."third-party/sysdeps/linux/bzip2/build/stage"]

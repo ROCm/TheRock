@@ -174,6 +174,20 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
         loc = self.root.python_packages()
         self._assert_relative_path(loc, "99999-linux/python")
 
+    # -- Native Linux packages logs --
+
+    def test_native_linux_packages_log_dir_deb(self):
+        loc = self.root.native_linux_packages_log_dir("deb")
+        self._assert_relative_path(loc, "99999-linux/logs/packaging/deb")
+
+    def test_native_linux_packages_log_dir_rpm(self):
+        loc = self.root.native_linux_packages_log_dir("rpm")
+        self._assert_relative_path(loc, "99999-linux/logs/packaging/rpm")
+
+    def test_native_linux_packages_log_index(self):
+        loc = self.root.native_linux_packages_log_index("deb")
+        self._assert_relative_path(loc, "99999-linux/logs/packaging/deb/index.html")
+
 
 class TestWorkflowOutputRootLocationsExternalRepo(unittest.TestCase):
     """Verify external_repo prefix propagates through location methods."""

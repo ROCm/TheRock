@@ -73,7 +73,8 @@ Sub-project directories:
 - [`base/`](/base/) : Utility sub-projects that are dependency free or minimally
   co-dependent, providing core dependencies for the rest of the system.
 - [`compiler/`](/compiler/) : Compiler sub-projects, most notably the
-  [AMD-LLVM](https://github.com/ROCm/llvm-project) build, `hipcc`, etc.
+  [AMD-LLVM](https://github.com/ROCm/llvm-project) build, `hipcc` (legacy —
+  see [hipcc migration guide](hipcc_migration.md)), etc.
 - [`core/`](/core/) : Core runtime sub-projects, including the low-level
   [ROCR-Runtime](https://github.com/ROCm/ROCR-Runtime) and
   higher level HIP runtimes.
@@ -229,6 +230,24 @@ The topology has a three-level hierarchy:
 - `BUILD_TOPOLOGY.toml` - The topology definition (see inline documentation)
 - `build_tools/_therock_utils/build_topology.py` - Python parser and utilities
 - `build_tools/topology_to_cmake.py` - Generates CMake includes from topology
+
+### Conditional Availability
+
+Artifacts can be conditionally disabled based on the build environment using the
+following fields in `BUILD_TOPOLOGY.toml`:
+
+| Field                | Scope            | Behavior                                                                                                                                                                 | Example                            |
+| -------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
+| `disable_platforms`  | OS platform      | **Hard disable.** The feature is OFF on matching platforms and cannot be overridden. Attempting `-DTHEROCK_ENABLE_<feature>=ON` on a disabled platform is a fatal error. | `disable_platforms = ["windows"]`  |
+| `disable_processors` | CPU architecture | **Soft default.** The feature defaults to OFF on matching processors but can be overridden with `-DTHEROCK_ENABLE_<feature>=ON`.                                         | `disable_processors = ["ppc64le"]` |
+
+The distinction reflects intent: platform disables typically indicate fundamental
+incompatibility (e.g., Linux-only kernel interfaces), while processor disables
+indicate practical issues (e.g., broken dependencies) that an advanced user may
+want to work around.
+
+Canonical processor names: `x86_64`, `aarch64`, `ppc64le`. Platform-specific
+values (e.g., `AMD64`, `ARM64`) are normalized automatically in CMake.
 
 ### Naming Conventions
 

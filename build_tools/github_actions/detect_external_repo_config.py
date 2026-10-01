@@ -46,6 +46,11 @@ REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
         "cmake_source_var": "THEROCK_ROCM_LIBRARIES_SOURCE_DIR",
         "submodule_path": "rocm-libraries",
         "skip_submodules": ["rocm-libraries"],
+        # "rocm-systems" pulls TheRock's own rocm-systems submodule DVC data
+        # (e.g. the amdgpu-windows-interop/wkmi libs CLR links against).
+        # --dvc-projects replaces fetch_sources.py's default project list
+        # rather than extending it, so both entries are listed explicitly.
+        "dvc_projects": ["external-rocm-libraries", "rocm-systems"],
     },
     "rocm-systems": {
         "cmake_source_var": "THEROCK_ROCM_SYSTEMS_SOURCE_DIR",
@@ -465,6 +470,7 @@ def main(argv=None):
             "ref": source_ref,
             "checkout_path": checkout_path,
             "source_package": source_package,
+            "submodule_path": config["submodule_path"],
             "fetch_sources_args": config.get("fetch_sources_args", ""),
             "extra_cmake_options": extra_cmake_options,
             "projects": projects,

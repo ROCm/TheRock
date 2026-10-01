@@ -45,6 +45,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocprofiler-systems-examples | --no-rocprofiler-systems-examples]
     [--rocrtst | --no-rocrtst]
     [--rocalution | --no-rocalution]
+    [--kfdtest | --no-kfdtest]
     [--rocwmma | --no-rocwmma]
     [--rpp | --no-rpp]
     [--hiptensor | --no-hiptensor]
@@ -397,6 +398,7 @@ def retrieve_artifacts_by_run_id(args):
         argv.extend(base_artifact_patterns)
     elif any(
         [
+            args.sanity,
             args.aqlprofile,
             args.blas,
             args.debug_tools,
@@ -424,9 +426,13 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_systems,
             args.rocprofiler_systems_examples,
             args.rocrtst,
+            args.hip_tests,
             args.rocalution,
+            args.kfdtest,
             args.rocwmma,
             args.rpp,
+            args.solver,
+            args.sparse,
             args.libhipcxx,
             args.hipthreads,
         ]
@@ -434,6 +440,8 @@ def retrieve_artifacts_by_run_id(args):
         argv.extend(base_artifact_patterns)
 
         extra_artifacts = []
+        if args.sanity:
+            argv.append("core-ocl_run")  # clinfo for the OpenCL sanity test
         if args.aqlprofile:
             extra_artifacts.append("aqlprofile")
         if args.blas:
@@ -467,6 +475,8 @@ def retrieve_artifacts_by_run_id(args):
             # --test-engine; without _run, ctest finds the entry but errors with
             # "Unable to find executable: ../hipdnn_integration_tests".
             argv.append("hipdnn-integration-tests_run")
+            # The test binaries link librocrand.
+            argv.append("rand_lib")
         if args.hipdnn_samples:
             extra_artifacts.append("hipdnn-samples")
         if args.hipfile:
@@ -541,12 +551,21 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rocprofiler-systems")
             # Contains executables (rocprof-sys-run, rocprof-sys-instrument, etc.)
             argv.append("rocprofiler-systems_run")
+            # rocprofiler-systems links libprofiler-hub.so.0 at runtime.
+            argv.append("profiler-hub_lib")
             if args.tests:
                 # Tests need version.h for rocprofiler-sdk version detection.
                 argv.append("rocprofiler-sdk_dev")
+            # librocprof-sys.so dlopens libhipfile.so.0 on the first hipFile
+            # telemetry sample.
+            extra_artifacts.append("hipfile")
+            extra_artifacts.append("sysdeps-util-linux")
         if args.rocprofiler_systems_examples:
             # Only a _test artifact is produced
             argv.append("rocprofiler-systems-examples_test")
+            # The hipFile examples link libhipfile.so.0 directly.
+            extra_artifacts.append("hipfile")
+            extra_artifacts.append("sysdeps-util-linux")
         if args.rocrtst:
             extra_artifacts.append("rocrtst")
             # rocrtst depends on sysdeps-hwloc (which depends on sysdeps-libpciaccess)
@@ -555,9 +574,21 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocalution:
             extra_artifacts.append("rocalution")
             argv.append("rocalution_dev")
+        if args.hip_tests:
+            # Only a _test artifact is produced; it carries share/hip/catch_tests.
+            argv.append("core-hiptests_test")
+        if args.kfdtest:
+            extra_artifacts.append("kfdtest")
+            # kfdtest depends on llvm-dev
+            argv.append("amd-llvm_dev")
+            argv.append("amd-llvm_lib")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
+        if args.solver:
+            extra_artifacts.append("solver")
+        if args.sparse:
+            extra_artifacts.append("sparse")
         if args.rpp:
             extra_artifacts.append("rpp")
             # test_rpp.py compiles the test suite against the installed tree,
@@ -803,6 +834,20 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--solver",
+        default=False,
+        help="Include 'solver' artifacts (rocSOLVER, hipSOLVER)",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--sparse",
+        default=False,
+        help="Include 'sparse' artifacts (rocSPARSE, hipSPARSE, hipSPARSELt)",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--debug-tools",
         default=False,
         help="Include ROCm debugging tools (amd-dbgapi, rocgdb and rocr_debug_agent) artifacts",
@@ -985,6 +1030,20 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--kfdtest",
+        default=False,
+        help="Include 'kfdtest' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hip-tests",
+        default=False,
+        help="Include artifacts needed to build and run 'hip-tests'",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--rocwmma",
         default=False,
         help="Include 'rocwmma' artifacts",
@@ -1019,6 +1078,12 @@ def main(argv):
         action=argparse.BooleanOptionalAction,
     )
 
+    artifacts_group.add_argument(
+        "--sanity",
+        default=False,
+        help="Include base artifacts and clinfo for sanity tests",
+        action=argparse.BooleanOptionalAction,
+    )
     artifacts_group.add_argument(
         "--base-only", help="Include only base artifacts", action="store_true"
     )

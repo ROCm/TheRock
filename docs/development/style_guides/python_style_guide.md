@@ -924,6 +924,18 @@ Other optimizations:
 
 ### Testing standards
 
+Good unit test design is part science and part art. Where this style guide
+is not specific, we encourage learning from and referencing content such as
+https://testing.googleblog.com/, including:
+
+- [Blog 2024-05: Test Failures Should Be Actionable](https://testing.googleblog.com/2024/05/test-failures-should-be-actionable.html)
+- [Blog 2024-04: Prefer Narrow Assertions in Unit Tests](https://testing.googleblog.com/2024/04/prefer-narrow-assertions-in-unit-tests.html)
+- [Blog 2024-02: Increase Test Fidelity By Avoiding Mocks](https://testing.googleblog.com/2024/02/increase-test-fidelity-by-avoiding-mocks.html)
+- [Blog 2018-06: Only Verify Relevant Method Arguments](https://testing.googleblog.com/2018/06/testing-on-toilet-only-verify-relevant.html)
+- [Blog 2017-12: Only Verify State-Changing Method Calls](https://testing.googleblog.com/2017/12/testing-on-toilet-only-verify-state.html)
+- [Blog 2015-01: Change-Detector Tests Considered Harmful](https://testing.googleblog.com/2015/01/testing-on-toilet-change-detector-tests.html)
+- [Blog 2014-07: Don't Put Logic in Tests](https://testing.googleblog.com/2014/07/testing-on-toilet-dont-put-logic-in.html)
+
 **Tests should verify fail-fast behavior:**
 
 ```python

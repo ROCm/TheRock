@@ -28,7 +28,7 @@ Test modes (--test-type):
   actual install. Requires --packages-dir.
 
 Path and repo name are overridable via environment variables: ROCM_REPO_NAME (repo id used for
-APT list, Zypper/Yum repo file and section), ROCM_APT_KEYRING_DIR, ROCM_APT_SOURCES_LIST,
+APT list, Zypper/Yum repo file and section), ROCM_APT_SOURCES_LIST,
 ROCM_APT_KEYRING_FILE, ROCM_ZYPP_REPOS_DIR, ROCM_YUM_REPOS_DIR,
 ROCM_RDHC_REL_PATH (relative path from install prefix to rdhc binary).
 
@@ -61,63 +61,63 @@ Example invocations:
  # Nightly DEB (Ubuntu 24.04) - run inside ubuntu:24.04 container or VM
  python3 native_linux_package_install_test.py \\
          --os-profile ubuntu2404 \\
-         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
          --gfx-arch gfx94x \\
          --release-type nightly
 
  # Prerelease DEB with GPG verification
  python3 native_linux_package_install_test.py \\
          --os-profile ubuntu2404 \\
-         --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
+         --repo-url https://rc.repo.amd.com/rocm/core/packages/ubuntu2404 \\
          --release-type prerelease \\
-         --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+         --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
 
  # Nightly RPM (RHEL 8) - run inside a rhel8/UBI 8 container or VM
  python3 native_linux_package_install_test.py \\
          --os-profile rhel8 \\
-         --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/x86_64/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/rpm/20260204-21658678136/x86_64/ \\
          --gfx-arch gfx94x \\
          --release-type nightly
 
  # Prerelease RPM (SLES 16)
  python3 native_linux_package_install_test.py \\
          --os-profile sles16 \\
-         --repo-url https://rocm.prereleases.amd.com/packages/sles16/x86_64/ \\
+         --repo-url https://rc.repo.amd.com/rocm/core/packages/sles16/x86_64/ \\
          --release-type prerelease \\
-         --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+         --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
 
  # --test-type sanity (default): repo install + basic verification only (steps 1-2)
  python3 native_linux_package_install_test.py --test-type sanity \\
          --os-profile ubuntu2404 \\
-         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
          --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type full: same as sanity plus rdhc full verification (steps 1-3)
  python3 native_linux_package_install_test.py --test-type full \\
          --os-profile ubuntu2404 \\
-         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
          --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type install: repo install only (no verification)
  python3 native_linux_package_install_test.py --test-type install \\
          --os-profile ubuntu2404 \\
-         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
          --gfx-arch gfx94x --release-type nightly
 
  # Versioned metapackages with multiple GPU architectures (requires --rocm-version for arch in names).
  # Installs e.g. amdrocm7.13-gfx94x, amdrocm-core-sdk7.13-gfx94x, amdrocm7.13-gfx1100, ...
  python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --rocm-version 7.13.1 --gfx-arch gfx94x gfx1100 --release-type nightly \\
  --install-prefix /opt/rocm/core
 
  # Same semantics: comma- or semicolon-separated arches in one --gfx-arch argument (or repeat --gfx-arch).
  python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --rocm-version 7.13 --gfx-arch gfx94x,gfx1100 --release-type nightly \\
  --install-prefix /opt/rocm/core
  python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --rocm-version 7.13 --gfx-arch 'gfx94x;gfx1100' --release-type nightly \\
  --install-prefix /opt/rocm/core
 
@@ -146,6 +146,15 @@ if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 from packaging_utils import normalize_target_list
+from native_linux_package_test_common import (
+    ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION,
+    VERIFY_KEY_COMPONENTS,
+    build_metapackage_names,
+    derive_package_type,
+    is_sles,
+    major_minor_rocm_version_from_input,
+    run_streaming as _run_streaming,
+)
 
 
 def _env(key: str, default: str) -> str:
@@ -158,25 +167,20 @@ def _env(key: str, default: str) -> str:
 # ROCM_REPO_NAME: logical repo name used for APT list, Zypper/Yum repo file and section id
 # ROCM_APT_*, ROCM_ZYPP_*, ROCM_YUM_*, ROCM_RDHC_REL_PATH
 REPO_NAME = _env("ROCM_REPO_NAME", "rocm-test")
-APT_KEYRING_DIR = _env("ROCM_APT_KEYRING_DIR", "/etc/apt/keyrings")
 APT_SOURCES_LIST = _env(
     "ROCM_APT_SOURCES_LIST", f"/etc/apt/sources.list.d/{REPO_NAME}.list"
 )
-APT_KEYRING_FILE = _env("ROCM_APT_KEYRING_FILE", "/etc/apt/keyrings/rocm.gpg")
+# Derived from REPO_NAME like APT_SOURCES_LIST above, and deliberately not
+# /etc/apt/keyrings/rocm.gpg. No package owns that path, but the current
+# documented amdgpu package manager steps set the signing key up there
+# ("wget .../rocm.gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/rocm.gpg")
+# and point signed-by= at it. This harness writes its keyring the same way, so
+# sharing the path would overwrite the key a host is already using.
+APT_KEYRING_FILE = _env("ROCM_APT_KEYRING_FILE", f"/etc/apt/keyrings/{REPO_NAME}.gpg")
 ZYPP_REPOS_DIR = _env("ROCM_ZYPP_REPOS_DIR", "/etc/zypp/repos.d")
 YUM_REPOS_DIR = _env("ROCM_YUM_REPOS_DIR", "/etc/yum.repos.d")
-VERIFY_KEY_COMPONENTS = [
-    "bin/rocminfo",
-    "bin/hipcc",
-    "bin/clinfo",
-    "include/hip/hip_runtime.h",
-    "lib/libamdhip64.so",
-]
 # Relative path from install prefix to rdhc binary (script); overridable via ROCM_RDHC_REL_PATH
 RDHC_REL_PATH = _env("ROCM_RDHC_REL_PATH", "libexec/rocm-core/rdhc.py")
-
-# Pytest/CI only: becomes ``--rocm-version``.
-ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION = "NATIVE_LINUX_INSTALL_ROCM_VERSION"
 
 # Timeouts (seconds) and verification threshold
 GPG_MKDIR_TIMEOUT_SEC = 10
@@ -273,89 +277,22 @@ def run_simulate_install_test(pkg_type: str, packages_dir: str) -> bool:
         return False
 
 
-def _run_streaming(cmd: list[str], timeout_sec: int) -> int:
-    """Run a command with streaming stdout/stderr and return its exit code.
-
-    Lines are printed as they are produced. Raises subprocess.TimeoutExpired
-    (after killing the process) or OSError on failure.
-    """
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
-    try:
-        for line in process.stdout:
-            print(line.rstrip())
-            sys.stdout.flush()
-        return process.wait(timeout=timeout_sec)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        raise
-
-
 class NativeLinuxPackageInstallTest:
     """Runner for the native Linux package install test (repo setup, install, verification)."""
 
     @staticmethod
     def _derive_package_type(os_profile: str) -> str:
-        """Derive package type from OS profile.
-
-        Args:
-        os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16, almalinux9, centos7, azl3)
-
-        Returns:
-        Package type ('deb' or 'rpm')
-        """
-        os_profile_lower = os_profile.lower()
-        if os_profile_lower.startswith(("ubuntu", "debian")):
-            return "deb"
-        elif os_profile_lower.startswith(
-            ("rhel", "sles", "almalinux", "centos", "azl")
-        ):
-            return "rpm"
-        else:
-            raise ValueError(
-                f"Unable to derive package type from OS profile: {os_profile}. "
-                "Supported profiles: ubuntu*, debian*, rhel*, sles*, almalinux*, centos*, azl*"
-            )
+        """Derive package type from OS profile (delegates to shared helper)."""
+        return derive_package_type(os_profile)
 
     @staticmethod
     def _major_minor_rocm_version_from_input(rocm_version: str | None) -> str | None:
-        """Parse ROCm version for arch-specific package names: major.minor only.
-
-        Examples: ``7.13.1`` → ``7.13``, ``v7.13`` → ``7.13``,
-        ``7.14.0~20260520`` / ``7.14.0~rc1-123456`` → ``7.14``. Used when forming
-        names like ``amdrocm7.13-gfx1100``. Returns ``None`` if input is absent
-        or blank.
-
-        Raises:
-        ValueError: Non-empty input that does not start with a major.minor pattern.
-        """
-        if rocm_version is None:
-            return None
-        s = str(rocm_version).strip()
-        if not s:
-            return None
-        if s.lower().startswith("v"):
-            s = s[1:].lstrip()
-        m = re.match(r"^(\d+)\.(\d+)", s)
-        if not m:
-            raise ValueError(
-                "Invalid ROCm version "
-                f"{rocm_version!r}: expected major.minor (e.g. 7.13 or 7.13.1)."
-            )
-        return f"{int(m.group(1))}.{int(m.group(2))}"
+        """Parse ROCm version for metapackage names (delegates to shared helper)."""
+        return major_minor_rocm_version_from_input(rocm_version)
 
     def _is_sles(self) -> bool:
-        """Check if the OS profile is SLES (SUSE Linux Enterprise Server).
-
-        Returns:
-        True if SLES, False otherwise
-        """
-        return self.os_profile.lower().startswith("sles")
+        """Return True when the OS profile is SLES (delegates to shared helper)."""
+        return is_sles(self.os_profile)
 
     def __init__(
         self,
@@ -366,6 +303,7 @@ class NativeLinuxPackageInstallTest:
         gfx_arch: str | list[str] | None = None,
         rocm_version: str | None = None,
         gpg_key_url: str | None = None,
+        build_variant: str = "",
     ):
         """Initialize the native Linux package install test runner.
 
@@ -383,6 +321,13 @@ class NativeLinuxPackageInstallTest:
         If unset: unversioned ``amdrocm`` / ``amdrocm-core-sdk`` (``gfx_arch`` alone
         does not add arch suffixes).
         gpg_key_url: GPG key URL
+        build_variant: Build variant (e.g. 'asan', 'host-asan', 'asan-debug',
+        'host-asan-debug'). When it contains 'asan', '-asan' is inserted before
+        the version suffix in package names so that variant packages are
+        tested (e.g. ``amdrocm-asan7.15-gfx942`` instead of
+        ``amdrocm7.15-gfx942``). Debug variants collapse to the same '-asan'
+        name as their non-debug counterpart — there is no separate
+        amdrocm-asan-debug package.
         """
         self.os_profile = os_profile.lower()
         self.package_type = self._derive_package_type(os_profile)
@@ -400,29 +345,12 @@ class NativeLinuxPackageInstallTest:
             self.gfx_arch_list[0] if self.gfx_arch_list else None
         )
         self.gpg_key_url = gpg_key_url
-
-        # Metapackage install targets (four combinations of optional inputs):
-        #   gfx_arch + rocm_version -> amdrocm{major.minor}-{arch} per arch
-        #   gfx_arch only           -> amdrocm / amdrocm-core-sdk (arch not in name)
-        #   rocm_version only       -> amdrocm{major.minor} / amdrocm-core-sdk{major.minor}
-        #   neither                 -> unversioned amdrocm / amdrocm-core-sdk
-        ver = self.rocm_version_major_minor
-        if self.gfx_arch_list and ver:
-            self.package_names = []
-            for arch in self.gfx_arch_list:
-                self.package_names.extend(
-                    [
-                        f"amdrocm{ver}-{arch}",
-                        f"amdrocm-core-sdk{ver}-{arch}",
-                    ]
-                )
-        elif ver:
-            self.package_names = [
-                f"amdrocm{ver}",
-                f"amdrocm-core-sdk{ver}",
-            ]
-        else:
-            self.package_names = ["amdrocm", "amdrocm-core-sdk"]
+        self.build_variant = build_variant.strip().lower()
+        self.package_names = build_metapackage_names(
+            gfx_arch=self.gfx_arch_list,
+            rocm_version=rocm_version,
+            build_variant=self.build_variant,
+        )
 
     def setup_gpg_key(self) -> bool:
         """Setup GPG key for repositories that require GPG verification.
@@ -440,9 +368,14 @@ class NativeLinuxPackageInstallTest:
         print(f"\nGPG Key URL: {self.gpg_key_url}")
 
         if self.package_type == "deb":
-            # For DEB, import GPG key using pipeline approach
-            keyring_dir = Path(APT_KEYRING_DIR)
-            keyring_file = keyring_dir / "rocm.gpg"
+            # Write to the same path the sources entry pins with signed-by=.
+            # These were separate expressions that happened to agree, so any
+            # change to one silently broke apt's ability to find the keyring.
+            # PurePosixPath, not Path: these are paths on the target Linux
+            # filesystem handed to mkdir(1), tee(1) and chmod(1). Path follows
+            # the local flavour, so on Windows it renders "\etc\apt\keyrings".
+            keyring_file = PurePosixPath(APT_KEYRING_FILE)
+            keyring_dir = keyring_file.parent
 
             try:
                 # Create keyring directory
@@ -456,20 +389,31 @@ class NativeLinuxPackageInstallTest:
                 )
                 print(f"[PASS] Created keyring directory: {keyring_dir}")
 
-                # Download, dearmor, and write GPG key using pipeline
-                # wget URL -O - | gpg --dearmor | sudo tee keyring_file > /dev/null
+                # Download, dearmor and write the key as three list-form calls
+                # rather than one shell pipeline: the URL and the keyring path
+                # are both configurable, and interpolating them into a shell
+                # string makes them command injection vectors.
                 print(f"\nDownloading and importing GPG key from {self.gpg_key_url}...")
-                pipeline_cmd = (
-                    f"wget -q -O - {self.gpg_key_url} | "
-                    f"gpg --dearmor | "
-                    f"sudo tee {keyring_file} > /dev/null"
-                )
-
-                subprocess.run(
-                    pipeline_cmd,
-                    shell=True,
+                armored = subprocess.run(
+                    ["wget", "-q", "-O", "-", self.gpg_key_url],
                     check=True,
                     stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=GPG_KEY_TIMEOUT_SEC,
+                ).stdout
+                dearmored = subprocess.run(
+                    ["gpg", "--dearmor"],
+                    input=armored,
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=GPG_KEY_TIMEOUT_SEC,
+                ).stdout
+                subprocess.run(
+                    ["sudo", "tee", str(keyring_file)],
+                    input=dearmored,
+                    check=True,
+                    stdout=subprocess.DEVNULL,
                     stderr=subprocess.PIPE,
                     timeout=GPG_KEY_TIMEOUT_SEC,
                 )
@@ -488,6 +432,13 @@ class NativeLinuxPackageInstallTest:
                 print(f"[FAIL] Failed to setup GPG key: {e}")
                 if e.stderr:
                     print(f"Error output: {e.stderr.decode()}")
+                return False
+            except subprocess.TimeoutExpired as e:
+                # TimeoutExpired is a SubprocessError, not an OSError or a
+                # CalledProcessError, so neither handler around it catches one.
+                # Without this the whole run dies on a slow mirror instead of
+                # reporting a failed key import like every other failure here.
+                print(f"[FAIL] Timed out setting up GPG key: {e}")
                 return False
             except OSError as e:
                 print(f"[FAIL] Error setting up GPG key: {e}")
@@ -522,7 +473,9 @@ class NativeLinuxPackageInstallTest:
 
         if self.gpg_key_url:
             # Use GPG key verification (arch=amd64 matches ROCm Ubuntu install docs)
-            apt_keyring = Path(APT_KEYRING_FILE)
+            # PurePosixPath for the same reason: this lands in signed-by= inside
+            # a sources file on the target, not on the machine running the test.
+            apt_keyring = PurePosixPath(APT_KEYRING_FILE)
             repo_entry = f"deb [arch=amd64 signed-by={apt_keyring}] {self.repo_url} stable main\n"
         else:
             # No GPG check (trusted=yes; arch=amd64 matches install_rocm_packages.sh)
@@ -947,6 +900,11 @@ gpgcheck=0
         except subprocess.CalledProcessError:
             print(" [WARN] Could not query installed packages")
 
+        # Verify installed ELF files use RPATH and not RUNPATH.
+        if not self.verify_no_runpath():
+            print("\n[FAIL] Basic verification FAILED (ELF files still using RUNPATH)")
+            return False
+
         # Try to run rocminfo if available
         rocminfo_path = install_path / "bin" / "rocminfo"
         if rocminfo_path.exists():
@@ -1282,44 +1240,158 @@ gpgcheck=0
             print(f" [WARN] Could not run rdhc.py: {e}")
             return False
 
+    def verify_no_runpath(self) -> bool:
+        """Verify installed ELF files use DT_RPATH (not DT_RUNPATH).
+
+        During packaging, RUNPATH is converted to RPATH (see runpath_to_rpath.py).
+        Each installed ELF's dynamic section is read with ``readelf -d`` and
+        classified by looking for DT_RPATH first, falling back to DT_RUNPATH:
+
+        * has DT_RPATH -> converted correctly (expected)
+        * no DT_RPATH but has DT_RUNPATH -> conversion was missed (failure)
+        * neither tag -> nothing to convert; counted and reported for
+          visibility only, not treated as a failure
+
+        For files that do have DT_RPATH, the rpath value is additionally
+        inspected for entries that are not ``$ORIGIN``-relative (i.e. fixed or
+        absolute paths). A relocatable package should only use
+        ``$ORIGIN``-relative rpaths, so fixed paths are reported for visibility
+        but are not treated as a failure here.
+
+        If ``readelf`` is unavailable the check is skipped (non-fatal), matching
+        the tolerant behaviour used elsewhere in basic verification.
+
+        Returns:
+        True if no installed ELF uses DT_RUNPATH (or the check could not run),
+        False if any offending file is found.
+        """
+        print("\nVerifying installed ELF files use RPATH (not RUNPATH)...")
+        install_path = Path(self.install_prefix)
+        runpath_only: list[str] = []
+        no_path: list[str] = []
+        fixed_rpath: list[tuple[str, list[str]]] = []
+        rpath_count = 0
+        for root, _dirs, files in os.walk(install_path):
+            for name in files:
+                filepath = Path(root) / name
+                if filepath.is_symlink():
+                    continue
+                try:
+                    # Cheap ELF magic check before invoking readelf.
+                    with open(filepath, "rb") as f:
+                        if f.read(4) != b"\x7fELF":
+                            continue
+                except OSError:
+                    continue
+                try:
+                    result = subprocess.run(
+                        ["readelf", "-d", str(filepath)],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
+                except OSError as e:
+                    print(
+                        f" [WARN] 'readelf' unavailable ({e}); skipping RUNPATH check"
+                    )
+                    return True
+                if result.returncode != 0:
+                    print(
+                        f" [WARN] readelf failed for {filepath}: {result.stderr.strip()}"
+                    )
+                    continue
+                # Confirm DT_RPATH is present; only fall back to DT_RUNPATH if
+                # it is not. Note "(RPATH)" is not a substring of "(RUNPATH)".
+                if "(RPATH)" in result.stdout:
+                    rpath_count += 1
+                    fixed = self._fixed_rpath_entries(result.stdout)
+                    if fixed:
+                        fixed_rpath.append((str(filepath), fixed))
+                elif "(RUNPATH)" in result.stdout:
+                    runpath_only.append(str(filepath))
+                else:
+                    no_path.append(str(filepath))
+        print(
+            f" Scanned ELF files: {rpath_count} with DT_RPATH, "
+            f"{len(runpath_only)} with DT_RUNPATH only, "
+            f"{len(no_path)} with neither"
+        )
+        if no_path:
+            # Count only; the individual files are not interesting to list.
+            print(
+                f" [INFO] {len(no_path)} ELF file(s) have neither DT_RPATH nor DT_RUNPATH"
+            )
+        if fixed_rpath:
+            # List every offending file and its non-$ORIGIN entries in full.
+            print(
+                f" [WARN] {len(fixed_rpath)} ELF file(s) have DT_RPATH entries that are "
+                "not $ORIGIN-relative (fixed/absolute paths):"
+            )
+            for path, entries in fixed_rpath:
+                print(f"   {path}: {':'.join(entries)}")
+        if runpath_only:
+            print(f" [FAIL] {len(runpath_only)} ELF file(s) still using DT_RUNPATH:")
+            for entry in runpath_only[:10]:
+                print(f"   {entry}")
+            if len(runpath_only) > 10:
+                print(f"   ... and {len(runpath_only) - 10} more")
+            return False
+        print(" [PASS] No installed ELF files use DT_RUNPATH")
+        return True
+
+    @staticmethod
+    def _fixed_rpath_entries(readelf_output: str) -> list[str]:
+        """Return DT_RPATH entries that are not ``$ORIGIN``-relative.
+
+        Parses the ``Library rpath: [...]`` value from ``readelf -d`` output and
+        returns each colon-separated entry that does not reference ``$ORIGIN``
+        (i.e. fixed or absolute paths). Returns an empty list if there is no
+        rpath value or all entries are ``$ORIGIN``-relative.
+        """
+        match = re.search(r"\(RPATH\)\s+Library rpath: \[([^\]]*)\]", readelf_output)
+        if not match:
+            return []
+        entries = [entry for entry in match.group(1).split(":") if entry]
+        return [entry for entry in entries if "$ORIGIN" not in entry]
+
 
 _CLI_EXAMPLES_EPILOG = """
 Examples:
  # Nightly DEB (Ubuntu 24.04) - run inside matching container/VM
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # Prerelease DEB with GPG verification
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
+ --repo-url https://rc.repo.amd.com/rocm/core/packages/ubuntu2404 \\
  --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
- --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+ --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
 
  # Nightly RPM (RHEL 8)
  python native_linux_package_install_test.py --os-profile rhel8 \\
- --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/rhel8/x86_64/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/rpm/20260204-21658678136/rhel8/x86_64/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type full on RHEL 8 (rdhc needs pciutils/kmod on the host — install before running)
  python native_linux_package_install_test.py --test-type full --os-profile rhel8 \\
- --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/rhel8/x86_64/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/rpm/20260204-21658678136/rhel8/x86_64/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # Prerelease RPM (RHEL 8)
  python native_linux_package_install_test.py --os-profile rhel8 \\
- --repo-url https://rocm.prereleases.amd.com/packages/rhel8/x86_64/ \\
+ --repo-url https://rc.repo.amd.com/rocm/core/packages/rhel8/x86_64/ \\
  --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
- --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+ --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
 
  # --test-type sanity (default): repo install + basic verification only
  python native_linux_package_install_test.py --test-type sanity --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type full: install + basic verification + rdhc
  python native_linux_package_install_test.py --test-type full --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type install: install only
@@ -1329,19 +1401,19 @@ Examples:
 
  # Versioned + multiple --gfx-arch (metapackages amdrocm7.13-<arch> per arch)
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --rocm-version 7.12.1 --gfx-arch gfx94x gfx1100 --release-type nightly \\
  --install-prefix /opt/rocm/core
 
  # Comma-separated arches in one argument (equivalent normalization)
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --rocm-version 7.12 --gfx-arch gfx94x,gfx1100 --release-type nightly \\
  --install-prefix /opt/rocm/core
 
  # Semicolon-separated (quote for POSIX shells so ``;`` is not a command separator)
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --rocm-version 7.12 --gfx-arch 'gfx94x;gfx1100' --release-type nightly \\
  --install-prefix /opt/rocm/core
 
@@ -1405,7 +1477,15 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
     parser.add_argument(
         "--release-type",
         type=str,
-        choices=["dev", "nightly", "prerelease", "release", "ci"],
+        choices=[
+            "dev",
+            "dev-bkc",
+            "nightly",
+            "nightly-bkc",
+            "prerelease",
+            "release",
+            "ci",
+        ],
         help="Type of release: 'dev', 'nightly', 'prerelease', 'release', or 'ci'",
     )
     parser.add_argument(
@@ -1417,6 +1497,13 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         "--gpg-key-url",
         type=str,
         help="GPG key URL",
+    )
+    parser.add_argument(
+        "--build-variant",
+        type=str,
+        default="",
+        help="Build variant (e.g. 'asan', 'host-asan', 'asan-debug', 'host-asan-debug'). "
+        "Changes expected package names to match variant-suffixed packages.",
     )
     parser.add_argument(
         "--test-type",
@@ -1497,7 +1584,13 @@ def parse_cli_arguments(
 
 
 def run_tests(args: Namespace) -> int:
-    """Run simulate or repo-based install test from parsed CLI args. Returns exit code (0 success)."""
+    """Run simulate or repo-based install test from parsed CLI args.
+
+    Repo-based flows run Steps 1–2 (sanity) or 1–3 (full).
+
+    Returns:
+        Exit code (0 success).
+    """
     if args.test_type == "simulate":
         pkg_type = args.pkg_type or NativeLinuxPackageInstallTest._derive_package_type(
             args.os_profile
@@ -1573,6 +1666,7 @@ def run_tests(args: Namespace) -> int:
         gfx_arch=args.gfx_arch,
         rocm_version=args.rocm_version,
         gpg_key_url=args.gpg_key_url,
+        build_variant=args.build_variant,
     )
 
     print("\n" + "=" * 80)
@@ -1603,9 +1697,9 @@ def run_tests(args: Namespace) -> int:
         print("\n" + "=" * 80)
         print("[PASS] INSTALLATION TEST PASSED")
         if args.test_type == "sanity":
-            print("(sanity: basic verification completed)")
-        else:
-            print("ROCm has been successfully installed from repository and verified!")
+            print("(sanity: repo install and basic verification completed)")
+        elif args.test_type == "full":
+            print("(full: repo install, basic verification, and RDHC completed)")
         print("=" * 80 + "\n")
         return 0
     except Exception as e:
@@ -1618,8 +1712,8 @@ def _argv_from_ci_env() -> list[str] | None:
     """Build CLI argv from workflow/container env (see ``test_native_linux_packages_install.yml``).
 
     Required for sanity/full: OS_PROFILE, REPO_URL, RELEASE_TYPE, INSTALL_PREFIX.
-    Optional: GFX_ARCH, GPG_KEY_URL; ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` maps to ``--rocm-version``
-    only when versioned package names are needed (omit for unversioned installs).
+    Optional: GFX_ARCH, GPG_KEY_URL, BUILD_VARIANT; ``NATIVE_LINUX_INSTALL_ROCM_VERSION``
+    maps to ``--rocm-version`` when versioned package names are needed.
     """
     test_type = (os.environ.get("TEST_TYPE") or "sanity").strip().lower() or "sanity"
 
@@ -1676,6 +1770,9 @@ def _argv_from_ci_env() -> list[str] | None:
     gpg = (os.environ.get("GPG_KEY_URL") or "").strip()
     if gpg:
         argv.extend(["--gpg-key-url", gpg])
+    build_variant = (os.environ.get("BUILD_VARIANT") or "").strip()
+    if build_variant:
+        argv.extend(["--build-variant", build_variant])
     return argv
 
 
@@ -1689,11 +1786,14 @@ def test_native_linux_package_install() -> None:
             pytest.fail(
                 "Missing required environment variables for native install test "
                 "(expected OS_PROFILE, REPO_URL, RELEASE_TYPE, INSTALL_PREFIX; "
-                "optional GFX_ARCH, NATIVE_LINUX_INSTALL_ROCM_VERSION; or for simulate: PACKAGES_DIR)."
+                "optional GFX_ARCH, GPG_KEY_URL, BUILD_VARIANT, "
+                "NATIVE_LINUX_INSTALL_ROCM_VERSION; "
+                "or for simulate: PACKAGES_DIR)."
             )
         pytest.skip(
             "Set workflow env vars (OS_PROFILE, REPO_URL, RELEASE_TYPE, INSTALL_PREFIX); "
-            "optional GFX_ARCH and NATIVE_LINUX_INSTALL_ROCM_VERSION."
+            "optional GFX_ARCH, GPG_KEY_URL, BUILD_VARIANT, "
+            "NATIVE_LINUX_INSTALL_ROCM_VERSION."
         )
 
     args = parse_cli_arguments(argv, raise_instead_of_exit=True)

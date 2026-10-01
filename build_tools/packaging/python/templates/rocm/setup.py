@@ -49,11 +49,7 @@ print(
 
 
 TARGET_FAMILY = dist_info.determine_target_family()
-INSTALL_REQUIRES = [
-    pkg.get_dist_package_require(target_family=TARGET_FAMILY)
-    for pkg in dist_info.ALL_PACKAGES.values()
-    if pkg.required
-]
+INSTALL_REQUIRES = dist_info.build_install_requires(target_family=TARGET_FAMILY)
 print(f"install_requires={INSTALL_REQUIRES}")
 EXTRAS_REQUIRE = {
     pkg.logical_name: [pkg.get_dist_package_require(target_family=TARGET_FAMILY)]

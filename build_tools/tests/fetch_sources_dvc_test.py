@@ -304,6 +304,63 @@ class TestPullLargeFilesIntegration(unittest.TestCase):
             if Path(temp_dir).exists():
                 shutil.rmtree(temp_dir)
 
+    @patch("fetch_sources.THEROCK_DIR")
+    @patch("fetch_sources.get_submodule_path")
+    @patch("fetch_dvc_artifacts.pull")
+    def test_rocm_libraries_scenario_pulls_rocm_systems_wkmi(
+        self, mock_dvc_pull, mock_get_submodule_path, mock_therock_dir
+    ):
+        """Test that a rocm-libraries-triggered build also pulls rocm-systems DVC data (wkmi)."""
+        temp_dir = tempfile.mkdtemp()
+        try:
+            therock_dir = Path(temp_dir)
+            fetch_sources.THEROCK_DIR = therock_dir
+
+            # External checkout, with its own DVC-tracked hipdnn golden data.
+            external_repo = therock_dir / "external-rocm-libraries"
+            external_repo.mkdir()
+            ext_dvc_dir = external_repo / ".dvc"
+            ext_dvc_dir.mkdir()
+            (ext_dvc_dir / "config").write_text("[core]\n    remote = origin\n")
+
+            # TheRock's own rocm-systems submodule, hosting the DVC-tracked
+            # wkmi libs that CLR/rocdxg link against.
+            rocm_systems_submodule = therock_dir / "rocm-systems"
+            rocm_systems_submodule.mkdir()
+            sub_dvc_dir = rocm_systems_submodule / ".dvc"
+            sub_dvc_dir.mkdir()
+            (sub_dvc_dir / "config").write_text("[core]\n    remote = origin\n")
+            wkmi_dir = (
+                rocm_systems_submodule
+                / "shared"
+                / "amdgpu-windows-interop"
+                / "wkmi"
+                / "win"
+                / "lib"
+            )
+            wkmi_dir.mkdir(parents=True)
+            (wkmi_dir / "wkmi.lib.dvc").write_text(
+                "md5: 049e4861d0a50c6e33c24f2ebc25c3ba\nsize: 444338\n"
+            )
+
+            mock_get_submodule_path.return_value = "rocm-systems"
+            mock_dvc_pull.return_value = MockPullResult()
+
+            dvc_projects = ["external-rocm-libraries", "rocm-systems"]
+            projects = ["rocm-systems"]
+
+            fetch_sources.pull_large_files(dvc_projects, projects)
+
+            self.assertEqual(mock_dvc_pull.call_count, 2)
+            call_paths = [c[0][0] for c in mock_dvc_pull.call_args_list]
+            self.assertIn(external_repo, call_paths)
+            self.assertIn(rocm_systems_submodule, call_paths)
+        finally:
+            import shutil
+
+            if Path(temp_dir).exists():
+                shutil.rmtree(temp_dir)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -229,6 +229,45 @@ class WorkflowOutputRoot:
         """
         return StorageLocation(self.bucket, f"{self.prefix}/packages/{pkg_type}")
 
+    def native_windows_packages(self, pkg_type: str = "msi") -> StorageLocation:
+        """Location for the native Windows package directory.
+
+        Returns ``StorageLocation`` at ``{run_id}-windows/packages/{pkg_type}``
+        (e.g. ``12345678901-windows/packages/msi``).
+
+        Unlike the Linux deb/rpm repositories, the contents are loose installer
+        files (one ``.msi`` per package). See ``upload_package_repo.py`` for the
+        upload side.
+
+        Args:
+            pkg_type: Package type (currently only 'msi').
+        """
+        return StorageLocation(self.bucket, f"{self.prefix}/packages/{pkg_type}")
+
+    def native_linux_packages_log_dir(self, pkg_type: str) -> StorageLocation:
+        """Location for native Linux packaging logs directory.
+
+        Returns ``StorageLocation`` at ``{run_id}-linux/logs/packaging/{pkg_type}``
+        (e.g. ``12345678901-linux/logs/packaging/deb``).
+
+        This directory contains per-package build logs generated during
+        native package creation (e.g., ``deb-amdrocm-core.log``).
+
+        Args:
+            pkg_type: Package type ('deb' or 'rpm').
+        """
+        return StorageLocation(self.bucket, f"{self.prefix}/logs/packaging/{pkg_type}")
+
+    def native_linux_packages_log_index(self, pkg_type: str) -> StorageLocation:
+        """Location for native Linux packaging logs index HTML.
+
+        Args:
+            pkg_type: Package type ('deb' or 'rpm').
+        """
+        return StorageLocation(
+            self.bucket, f"{self.prefix}/logs/packaging/{pkg_type}/index.html"
+        )
+
     # -- Python packages --------------------------------------------------------
 
     def python_packages(self, artifact_group: str = "") -> StorageLocation:
