@@ -572,9 +572,12 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_FPRINT_SOURCE_HASH "${ARG_FPRINT_SOURCE_HASH}"
   )
 
-  # Record direct-consumer edges for the consumer graph emitted by
-  # therock_emit_consumer_graph(). The compiler is a dependency too, but is
-  # declared via COMPILER_TOOLCHAIN rather than BUILD_DEPS/RUNTIME_DEPS.
+  # Record subproject + direct-consumer edges on GLOBAL properties. These fed the
+  # removed therock_emit_consumer_graph() emit; the consumer graph is now generated
+  # statically by build_tools/generate_consumer_graph.py (parsing these same
+  # declarations), so this recording is unused and can be removed in a follow-up.
+  # The compiler is a dependency too, but is declared via COMPILER_TOOLCHAIN rather
+  # than BUILD_DEPS/RUNTIME_DEPS.
   set_property(GLOBAL APPEND PROPERTY THEROCK_ALL_SUBPROJECTS "${target_name}")
   set(_consumer_deps ${ARG_BUILD_DEPS} ${ARG_RUNTIME_DEPS})
   therock_compiler_toolchain_subproject(_toolchain_dep "${ARG_COMPILER_TOOLCHAIN}")
