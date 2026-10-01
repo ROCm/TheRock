@@ -1274,6 +1274,34 @@ class TestGeneratedSubtreeMapResolution(unittest.TestCase):
                 "retire it instead of keeping an override",
             )
 
+    # Overrides REPLACE (not union) the generated value on a shared key, so an
+    # override that omits a graph key the parser derives would silently drop it
+    # from selection (under-selection). These subtrees deliberately narrow the
+    # generated value and are exempt: shared/mxdatagenerator maps to its GEMM
+    # consumers, intentionally excluding the mxdatagenerator self-node.
+    _NARROWING_OVERRIDES = {"shared/mxdatagenerator"}
+
+    def test_overrides_do_not_shadow_generated_edges(self) -> None:
+        # For every subtree in BOTH the generated map and the overrides, the
+        # override must cover the generated value (no dropped edge), unless it is
+        # an acknowledged narrowing. Fails if a future parser edge on an
+        # overridden subtree would be shadowed.
+        generated = json.loads(
+            (THEROCK_DIR / "test_tools" / "therock_subtree_map.json").read_text()
+        )
+        generated_lower = {k.lower(): set(v) for k, v in generated.items()}
+        for key, values in _SUBTREE_ALIAS_OVERRIDES.items():
+            if key in self._NARROWING_OVERRIDES:
+                continue
+            gen = generated_lower.get(key.lower())
+            if gen is None:
+                continue
+            self.assertTrue(
+                gen <= set(values),
+                f"{key}: override {sorted(values)} drops generated edge(s) "
+                f"{sorted(gen - set(values))}; union it or allow-list the narrowing",
+            )
+
     def test_merged_map_prefers_overrides(self) -> None:
         merged = _load_subtree_alias_map()
         for key, values in _SUBTREE_ALIAS_OVERRIDES.items():
