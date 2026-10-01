@@ -1674,17 +1674,19 @@ class FamilyArtifactSelectionTest(unittest.TestCase):
                 "rand_lib_generic.tar.zst",
                 "rand_lib_gfx125X-all.tar.zst",
                 "rand_lib_gfx1250.tar.zst",
+                "rand_lib_gfx1250-strict.tar.zst",
             },
         )
 
     def test_explicit_target_can_supplement_broad_family(self):
         self.assertEqual(
-            self._select("gfx125X-all;gfx1250-strict"),
+            self._select("gfx125X-all;gfx942"),
             {
                 "rand_lib_generic.tar.zst",
                 "rand_lib_gfx125X-all.tar.zst",
                 "rand_lib_gfx1250.tar.zst",
                 "rand_lib_gfx1250-strict.tar.zst",
+                "rand_lib_gfx942.tar.zst",
             },
         )
 

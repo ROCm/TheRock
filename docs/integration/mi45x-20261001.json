@@ -1,0 +1,284 @@
+{
+  "base": "40ba8af6d5678831eeb014ba7cc4087a2412a94b",
+  "identity": "Jarvis, Ammar's AI Assistant",
+  "purpose": "User-authorized native MI45x integration build with PyTorch and JAX",
+  "pins": {
+    "llvm/llvm-project": "4f43f4746ede4cc49ab4129f473dbd54e0d9db4f",
+    "ROCm/rocgdb": "38a47a7a4b4eea5b09080bacf831df8d2c3d1009",
+    "ROCm/rocm-libraries": "916d478bccb056ccc8da2709fc26312d1dee3b7e",
+    "ROCm/rocm-systems": "0bf70ef688f186f99f9c2513aefe77b7a0ba8c46"
+  },
+  "pr_audit": [
+    {
+      "repo": "llvm/llvm-project",
+      "pr": 224741,
+      "head": "e8509638b1547d376c6659227c4775b28355911a",
+      "merge_commit_sha": "4bd5979264ba739f8cb266b90c40e519eb7f3008",
+      "pin": "4f43f4746ede4cc49ab4129f473dbd54e0d9db4f",
+      "decision": "include_verified_patch",
+      "present": false
+    },
+    {
+      "repo": "llvm/llvm-project",
+      "pr": 225303,
+      "head": "1a424929d3d62f9bf04c4c9165b0900062b7b4b8",
+      "merge_commit_sha": "b15daae148e77f1ad2e20990094ddbeb8cc598ac",
+      "pin": "4f43f4746ede4cc49ab4129f473dbd54e0d9db4f",
+      "decision": "include_verified_patch",
+      "present": false
+    },
+    {
+      "repo": "llvm/llvm-project",
+      "pr": 227426,
+      "head": "32fdcc5ab1080a6ff5bd9872d44b931e54e57b4e",
+      "merge_commit_sha": "86593e50bc8c586d881ea75eecb81e1312378d39",
+      "pin": "4f43f4746ede4cc49ab4129f473dbd54e0d9db4f",
+      "decision": "include_pending_patch_apply_review",
+      "present": false
+    },
+    {
+      "repo": "llvm/llvm-project",
+      "pr": 227475,
+      "head": "58e3ec49acbd10411712491ee54064d433540b3d",
+      "merge_commit_sha": "f446e0f6d896983a8e4eb343952a46fe5ba01f0f",
+      "pin": "4f43f4746ede4cc49ab4129f473dbd54e0d9db4f",
+      "decision": "include_pending_patch_apply_review",
+      "present": false
+    },
+    {
+      "repo": "llvm/llvm-project",
+      "pr": 227861,
+      "head": "c910dc9f7400a05b000af60c238d8a8157f32dfb",
+      "merge_commit_sha": "dc6c70440387c3d2d809129a7f047053b05e4b94",
+      "pin": "4f43f4746ede4cc49ab4129f473dbd54e0d9db4f",
+      "decision": "include_pending_patch_apply_review",
+      "present": false
+    },
+    {
+      "repo": "ROCm/rocgdb",
+      "pr": 358,
+      "head": "276a77cd4f5e0b500f5d2ba09dbbb2d2a3062788",
+      "merge_commit_sha": "77ccba19b679627d13766dfe7aaf3198c5120edd",
+      "pin": "38a47a7a4b4eea5b09080bacf831df8d2c3d1009",
+      "decision": "omit_already_pinned",
+      "present": true
+    },
+    {
+      "repo": "ROCm/rocm-libraries",
+      "pr": 12608,
+      "head": "8f5e1c855f6e73f21d0c4ffe74231ac02e2ea047",
+      "merge_commit_sha": "8f07fd59238d853192f687176b1c4c3b2e9eccc2",
+      "pin": "916d478bccb056ccc8da2709fc26312d1dee3b7e",
+      "decision": "omit_already_pinned",
+      "present": true
+    },
+    {
+      "repo": "ROCm/rocm-libraries",
+      "pr": 12614,
+      "head": "a3457e947649f7014c0182a2ec84147c12aab9f7",
+      "merge_commit_sha": "72b46468583fbf282b8b207e756133547aefc3ad",
+      "pin": "916d478bccb056ccc8da2709fc26312d1dee3b7e",
+      "decision": "omit_already_pinned",
+      "present": true
+    },
+    {
+      "repo": "ROCm/rocm-libraries",
+      "pr": 11777,
+      "head": "6fdee38bedbf9e56c3554155c761d9dc55385a76",
+      "merge_commit_sha": "87eaafc911f5d18639874a5f56ae3542c2f32f62",
+      "pin": "916d478bccb056ccc8da2709fc26312d1dee3b7e",
+      "decision": "include_verified_patch",
+      "present": false
+    },
+    {
+      "repo": "ROCm/rocm-libraries",
+      "pr": 12321,
+      "head": "5a89638d5d1aa48fd6c363774c27e7724b63eb7c",
+      "merge_commit_sha": "edc1529384002b5d3566250a8f3d2f0ec23fab03",
+      "pin": "916d478bccb056ccc8da2709fc26312d1dee3b7e",
+      "decision": "omit_already_pinned",
+      "present": true
+    },
+    {
+      "repo": "ROCm/rocm-libraries",
+      "pr": 12494,
+      "head": "b8cf5ad8a5ddf3e7acd1d865a110ffe1cab90b5e",
+      "merge_commit_sha": "1a05fdb187a39050b1da2633aef440464b6f932b",
+      "pin": "916d478bccb056ccc8da2709fc26312d1dee3b7e",
+      "decision": "omit_already_pinned",
+      "present": true
+    },
+    {
+      "repo": "ROCm/rocm-libraries",
+      "pr": 12576,
+      "head": "50bc8e2eafec213fc655c61a53da113466d46411",
+      "merge_commit_sha": "a863782076f0fb186ebca00d9ef3b4fbcd53a212",
+      "pin": "916d478bccb056ccc8da2709fc26312d1dee3b7e",
+      "decision": "omit_already_pinned",
+      "present": true
+    },
+    {
+      "repo": "ROCm/rocm-libraries",
+      "pr": 12000,
+      "head": "dcc9647edffd71d64bf6bce7317a1d8bb3d2104f",
+      "merge_commit_sha": "2ce4c67166da6a8568deb8074643bda227fff510",
+      "pin": "916d478bccb056ccc8da2709fc26312d1dee3b7e",
+      "decision": "omit_already_pinned",
+      "present": true
+    },
+    {
+      "repo": "ROCm/rocm-libraries",
+      "pr": 12579,
+      "head": "b449c8c1a4914e7f48c35e66a5586485c6aba820",
+      "merge_commit_sha": "41f1566edd2cd67b037b1cbcff504c61c6d4f1ef",
+      "pin": "916d478bccb056ccc8da2709fc26312d1dee3b7e",
+      "decision": "omit_already_pinned",
+      "present": true
+    },
+    {
+      "repo": "ROCm/rocm-libraries",
+      "pr": 12583,
+      "head": "c4d8eb187d9f605d807938d11f3636f977e88e0f",
+      "merge_commit_sha": "4db857aa31fcf3d7b661e4360dc29da40fe3071f",
+      "pin": "916d478bccb056ccc8da2709fc26312d1dee3b7e",
+      "decision": "include_verified_patch",
+      "present": false
+    },
+    {
+      "repo": "ROCm/rocm-libraries",
+      "pr": 12842,
+      "head": "d520bda2ee0d01986ae297961260dc90a0618ead",
+      "merge_commit_sha": "02c48ed5575adc1e6af883e024aa1db3b4c06fb0",
+      "pin": "916d478bccb056ccc8da2709fc26312d1dee3b7e",
+      "decision": "include_verified_patch",
+      "present": false
+    },
+    {
+      "repo": "ROCm/rocm-libraries",
+      "pr": 12800,
+      "head": "64b1fa0a9bc6ff5e693f41b5b9a6cb3af43d803f",
+      "merge_commit_sha": "98db95c0c2c2a40ed93c99a5cf97a7cc2eda44ea",
+      "pin": "916d478bccb056ccc8da2709fc26312d1dee3b7e",
+      "decision": "exclude_unrelated_or_superseded_or_proposed_revert",
+      "present": false
+    },
+    {
+      "repo": "ROCm/rocm-systems",
+      "pr": 11047,
+      "head": "f20b511b0598e7e03bd219dd805a208060e4f951",
+      "merge_commit_sha": "9dc9a1844ff8ccd27db863045ce3efeb22a67746",
+      "pin": "0bf70ef688f186f99f9c2513aefe77b7a0ba8c46",
+      "decision": "exclude_unrelated_or_superseded_or_proposed_revert",
+      "present": false
+    },
+    {
+      "repo": "ROCm/rocm-systems",
+      "pr": 11575,
+      "head": "c7cb5ea9e294014f58b48a86f7ce39eca7e71dcb",
+      "merge_commit_sha": "06be64d2aff5613dc4f579f094e99ebaf3f88156",
+      "pin": "0bf70ef688f186f99f9c2513aefe77b7a0ba8c46",
+      "decision": "include_verified_patch",
+      "present": false
+    },
+    {
+      "repo": "ROCm/rocm-systems",
+      "pr": 12070,
+      "head": "66be2922cd437416e34e3182b221c140bc60148c",
+      "merge_commit_sha": "a18354e31edde8efffa306c868050be42ccf3815",
+      "pin": "0bf70ef688f186f99f9c2513aefe77b7a0ba8c46",
+      "decision": "include_verified_patch",
+      "present": false
+    },
+    {
+      "repo": "ROCm/rocm-systems",
+      "pr": 11850,
+      "head": "97c6cc538b394114cd4b64ba69989160cfc39a80",
+      "merge_commit_sha": "af6d8a1904e273a1f757ad57f4b8255159ff5ad5",
+      "pin": "0bf70ef688f186f99f9c2513aefe77b7a0ba8c46",
+      "decision": "omit_already_pinned",
+      "present": true
+    },
+    {
+      "repo": "ROCm/rocm-systems",
+      "pr": 12313,
+      "head": "7dbad824011ce04cf6f7db2fe28a101c6ca21cc9",
+      "merge_commit_sha": null,
+      "pin": "0bf70ef688f186f99f9c2513aefe77b7a0ba8c46",
+      "decision": "exclude_closed_unmerged",
+      "present": false
+    },
+    {
+      "repo": "ROCm/rocm-systems",
+      "pr": 12333,
+      "head": "0b3fa58fded328c808004262e77a33fee6ae2d96",
+      "merge_commit_sha": "5f7f3581b3178ba889eec883a561c8d859b588cf",
+      "pin": "0bf70ef688f186f99f9c2513aefe77b7a0ba8c46",
+      "decision": "include_verified_patch",
+      "present": false
+    }
+  ],
+  "compiler_adaptations": {
+    "227426": "Preserve pinned _Vector spelling and scheduling while enabling PK8 as upstream.",
+    "227475": "Preserve pinned scheduling; take upstream selector legality and lowering including revised PK16 availability. Hardware opcode/OP_SEL applicability remains unverified.",
+    "227861": "Preserve pinned ISA-list context; append tests after prior PK8/PK16 test updates."
+  },
+  "therock_pr": "https://github.com/ROCm/TheRock/pull/8350",
+  "omitted": [
+    "already pinned PRs per audit",
+    "rocm-systems11047 unrelated SDMA callback",
+    "rocm-systems12313 superseded by12333",
+    "old local hipBLASLt assembly rewrite now included in11777",
+    "MIOpen12800 proposed revert not selected"
+  ],
+  "limitations": [
+    "Embedded Triton/AOTriton strict execution remains unqualified; embedded XLA Triton strict parser gap identified.",
+    "Only source applicability and static checks before CI; no full local compiler build or physical GPU qualification.",
+    "Upstream test exclusions are retained and are not omitted build artifacts."
+  ],
+  "patches": [
+    {
+      "path": "patches/amd-mainline/llvm-project/0010-pr-224741.patch",
+      "sha256": "2c40a1ffe768e873106798cfd1b2dbd6638e8459aab2fd1a5c4a1ef111bf6f86"
+    },
+    {
+      "path": "patches/amd-mainline/llvm-project/0011-pr-225303.patch",
+      "sha256": "9428bd9b78d427b5989027f142cb541a60522165ad0869b309b8523c7ffd9659"
+    },
+    {
+      "path": "patches/amd-mainline/llvm-project/0012-pr-227426.patch",
+      "sha256": "0462c62f1527a2e91360760a57953783201b5839d7adad777d9972778fedfa60"
+    },
+    {
+      "path": "patches/amd-mainline/llvm-project/0013-pr-227475.patch",
+      "sha256": "9e7bc3f1b2c4caab25155f8365086b37bc6441a60190e2bbcf145c6b11d07449"
+    },
+    {
+      "path": "patches/amd-mainline/llvm-project/0014-pr-227861.patch",
+      "sha256": "33d2153c356202b8b92b04b4c8210423a15ff10c21c81802dfeced412c3e3093"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-libraries/0010-pr-11777.patch",
+      "sha256": "bbc61d76cd63b7178293ffcb721a282176adc977ae91634d8a9bf6c2139f7134"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-libraries/0011-pr-12583.patch",
+      "sha256": "a075f42a6b22bf2ddefe29a1994d9e07332cae3bc537d8f0ad9f70e07bb5440d"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-libraries/0012-pr-12842.patch",
+      "sha256": "395244c14b20d2e93faa6285b14e93892fb6f93252827ae1a0eec864e4dede2e"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-systems/0010-pr-11575.patch",
+      "sha256": "c685309de39e2dd6beb2663bbea85fd4f0c3c137c34b5f8144c19e3b120e78fb"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-systems/0011-pr-12070.patch",
+      "sha256": "918c4adb835f5436a18a3c66dd2d84a4ececb764ab94b88cc2b35bb938979662"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-systems/0012-pr-12333.patch",
+      "sha256": "23f95a49c2e78fecf2aac2fa76bd87e3ed123afb5124b5c3c09013e32d697414"
+    }
+  ]
+}

@@ -1,0 +1,150 @@
+From 21b6655ecc2da62fc65d869cd3e04a3f66a45a52 Mon Sep 17 00:00:00 2001
+From: Jarvis <3832908+ammarwa@users.noreply.github.com>
+Date: Thu, 1 Oct 2026 11:04:36 -0500
+Subject: [PATCH] Backport LLVM227861 strict E5M3 restriction preserving pinned
+ ISA lists
+
+---
+ llvm/lib/Target/AMDGPU/AMDGPU.td           |  4 +++-
+ llvm/lib/Target/AMDGPU/VOP1Instructions.td |  8 +-------
+ llvm/lib/Target/AMDGPU/VOP3Instructions.td |  4 ++--
+ llvm/lib/Target/AMDGPU/VOPInstructions.td  | 18 +++++++++---------
+ llvm/test/MC/AMDGPU/gfx1250-strict_err.s   |  9 +++++++++
+ 5 files changed, 24 insertions(+), 19 deletions(-)
+
+diff --git a/llvm/lib/Target/AMDGPU/AMDGPU.td b/llvm/lib/Target/AMDGPU/AMDGPU.td
+index 339b033..967f435 100644
+--- a/llvm/lib/Target/AMDGPU/AMDGPU.td
++++ b/llvm/lib/Target/AMDGPU/AMDGPU.td
+@@ -2421,7 +2421,6 @@ def FeatureISAVersion12_50_Common : FeatureSet<
+    FeatureOCPFP8ConversionInsts,
+    FeatureFP8F16ConversionInsts,
+    FeatureF16FP8ConversionInsts,
+-   FeatureFP8E5M3Insts,
+    FeaturePackedTID,
+    FeatureVcmpxPermlaneHazard,
+    FeatureSALUFloatInsts,
+@@ -2531,6 +2530,7 @@ def FeatureISAVersion12_50 : FeatureSet<
+    FeatureCvtPkNormVOP2Insts,
+    FeatureCvtPkNormVOP3Insts,
+    FeatureBlock16ConversionScaleInsts,
++   FeatureFP8E5M3Insts,
+    FeatureSWMMACGfx1200Insts,
+    FeatureSWMMACGfx1250Insts,
+    FeatureTransCoexecutionHazard,
+@@ -2566,6 +2566,7 @@ def FeatureISAVersion12_51 : FeatureSet<
+    FeatureCvtPkNormVOP2Insts,
+    FeatureCvtPkNormVOP3Insts,
+    FeatureBlock16ConversionScaleInsts,
++   FeatureFP8E5M3Insts,
+    FeatureSWMMACGfx1200Insts,
+    FeatureSWMMACGfx1250Insts,
+    FeatureUseAddPC64Inst,
+@@ -2586,6 +2587,7 @@ def FeatureISAVersion12_5_Generic: FeatureSet<
+    FeatureAddressableLocalMemorySize327680,
+    FeatureLDSBankCount64,
+    FeatureBlock16ConversionScaleInsts,
++   FeatureFP8E5M3Insts,
+    FeatureSetregVGPRMSBFixup,
+    FeatureRequiresCOV6,
+    FeatureSupportsXNACK,
+diff --git a/llvm/lib/Target/AMDGPU/VOP1Instructions.td b/llvm/lib/Target/AMDGPU/VOP1Instructions.td
+index ed1f38a..090cad0 100644
+--- a/llvm/lib/Target/AMDGPU/VOP1Instructions.td
++++ b/llvm/lib/Target/AMDGPU/VOP1Instructions.td
+@@ -1204,12 +1204,6 @@ multiclass VOP1_Real_FULL_t16_and_fake16_gfx13<
+        VOP1_Real_FULL_with_name<GFX13Gen, op, opName#"_fake16", asmName>;
+ }
+ 
+-multiclass VOP1_Real_FULL_with_name_gfx11_gfx12_gfx13_not_gfx1250<bits<9> op, string opName,
+-                                                                  string asmName> :
+-  VOP1_Real_FULL_with_name<GFX11Gen, op, opName, asmName>,
+-  VOP1_Real_FULL_with_name<GFX12Not12_50Gen, op, opName, asmName>,
+-  VOP1_Real_FULL_with_name<GFX13Gen, op, opName, asmName>;
+-
+ multiclass VOP1_Real_OpSelIsDPP<GFXGen Gen, bits<9> op> : VOP1_Real_e32<Gen, op> {
+    defvar ps = !cast<VOP_Pseudo>(NAME#"_e64");
+    def _e64#Gen.Suffix :
+@@ -1273,7 +1267,7 @@ multiclass VOP1_Real_OpSelIsDPP_gfx1250_gfx13<bits<9> op> :
+   VOP1_Real_OpSelIsDPP<GFX1250Gen, op>,
+   VOP1_Real_OpSelIsDPP<GFX13Gen, op>;
+ 
+-defm V_CVT_F32_FP8           : VOP1_Real_FULL_with_name_gfx11_gfx12_gfx13_not_gfx1250<0x06c, "V_CVT_F32_FP8_op_sel", "v_cvt_f32_fp8">;
++defm V_CVT_F32_FP8           : VOP1_Real_FULL_with_name_gfx11_gfx12_gfx13<0x06c, "V_CVT_F32_FP8_op_sel", "v_cvt_f32_fp8">;
+ defm V_CVT_F32_FP8           : VOP1_Real_FULL_with_name<GFX1250Gen, 0x06c, "V_CVT_F32_FP8_gfx1250", "v_cvt_f32_fp8">;
+ 
+ defm V_CVT_F32_BF8           : VOP1_Real_FULL_with_name_gfx11_gfx12_gfx13<0x06d, "V_CVT_F32_BF8_op_sel", "v_cvt_f32_bf8">;
+diff --git a/llvm/lib/Target/AMDGPU/VOP3Instructions.td b/llvm/lib/Target/AMDGPU/VOP3Instructions.td
+index 0737dcb..61f578e 100644
+--- a/llvm/lib/Target/AMDGPU/VOP3Instructions.td
++++ b/llvm/lib/Target/AMDGPU/VOP3Instructions.td
+@@ -2390,10 +2390,10 @@ def : AMDGPUMnemonicAlias<"v_perm_pk4_b8_u8", "v_perm_b32"> {
+   let AssemblerPredicate = isGFX13Plus;
+ }
+ 
+-defm V_CVT_PK_FP8_F32         : VOP3Only_Realtriple_t16_and_fake16_gfx11_gfx12_not_gfx1250_gfx13<0x369, 0x37a, "v_cvt_pk_fp8_f32">;
++defm V_CVT_PK_FP8_F32         : VOP3Only_Realtriple_t16_and_fake16_gfx11_gfx12_not_gfx13<0x369, 0x37a, "v_cvt_pk_fp8_f32">;
+ defm V_CVT_PK_FP8_F32_gfx1250 : VOP3Only_Realtriple_t16_and_fake16_gfx1250<0x369, "v_cvt_pk_fp8_f32">;
+ defm V_CVT_PK_BF8_F32         : VOP3Only_Realtriple_t16_and_fake16_gfx11_gfx12_gfx13<0x36a, 0x37b, "v_cvt_pk_bf8_f32">;
+-defm V_CVT_SR_FP8_F32_gfx12   : VOP3_Realtriple_with_name_gfx11_gfx12_not_gfx1250_gfx13<0x36b, 0x337, "V_CVT_SR_FP8_F32_gfx12", "v_cvt_sr_fp8_f32">;
++defm V_CVT_SR_FP8_F32_gfx12   : VOP3_Realtriple_with_name_gfx11_gfx12_not_gfx13<0x36b, 0x337, "V_CVT_SR_FP8_F32_gfx12", "v_cvt_sr_fp8_f32">;
+ defm V_CVT_SR_FP8_F32_gfx1250 : VOP3Only_Realtriple_with_name_gfx1250<0x36b, "V_CVT_SR_FP8_F32_gfx1250", "v_cvt_sr_fp8_f32">;
+ defm V_CVT_SR_BF8_F32_gfx12   : VOP3_Realtriple_with_name_gfx11_gfx12_gfx13<0x36c, 0x338, "V_CVT_SR_BF8_F32_gfx12", "v_cvt_sr_bf8_f32">;
+ 
+diff --git a/llvm/lib/Target/AMDGPU/VOPInstructions.td b/llvm/lib/Target/AMDGPU/VOPInstructions.td
+index a379785..3dce225 100644
+--- a/llvm/lib/Target/AMDGPU/VOPInstructions.td
++++ b/llvm/lib/Target/AMDGPU/VOPInstructions.td
+@@ -2111,23 +2111,23 @@ multiclass VOP3Only_ScaleSel_Real_gfx1250_gfx13<bits<10> preGFX13, bits<10> op =
+     VOP3a_ScaleSel_gfx1250_gfx13<op, ps.Pfl>;
+ }
+ 
+-multiclass VOP3Only_Realtriple_t16_gfx11_gfx12_not_gfx1250_gfx13<bits<10> preGFX13Op, bits<10> op, string asmName, string opName = NAME,
+-                                                       string pseudo_mnemonic = "", bit isSingle = 0> :
++multiclass VOP3Only_Realtriple_t16_gfx11_gfx12_not_gfx13<bits<10> preGFX13Op, bits<10> op, string asmName, string opName = NAME,
++                                                         string pseudo_mnemonic = "", bit isSingle = 0> :
+   VOP3_Realtriple_with_name<GFX11Gen, preGFX13Op, opName, asmName, pseudo_mnemonic, isSingle>,
+-  VOP3_Realtriple_with_name<GFX12Not12_50Gen, preGFX13Op, opName, asmName, pseudo_mnemonic, isSingle>,
++  VOP3_Realtriple_with_name<GFX12Gen, preGFX13Op, opName, asmName, pseudo_mnemonic, isSingle>,
+   VOP3_Realtriple_with_name<GFX13Gen, op, opName, asmName, pseudo_mnemonic, isSingle>;
+ 
+-multiclass VOP3Only_Realtriple_t16_and_fake16_gfx11_gfx12_not_gfx1250_gfx13<bits<10> preGFX13Op, bits<10> op, string asmName,
+-                                                          string opName = NAME, string pseudo_mnemonic = ""> {
+-  defm _t16 : VOP3Only_Realtriple_t16_gfx11_gfx12_not_gfx1250_gfx13<preGFX13Op, op, asmName, opName#"_t16", pseudo_mnemonic, 1>;
+-  defm _fake16 : VOP3Only_Realtriple_t16_gfx11_gfx12_not_gfx1250_gfx13<preGFX13Op, op, asmName, opName#"_fake16", pseudo_mnemonic, 1>;
++multiclass VOP3Only_Realtriple_t16_and_fake16_gfx11_gfx12_not_gfx13<bits<10> preGFX13Op, bits<10> op, string asmName,
++                                                                    string opName = NAME, string pseudo_mnemonic = ""> {
++  defm _t16 : VOP3Only_Realtriple_t16_gfx11_gfx12_not_gfx13<preGFX13Op, op, asmName, opName#"_t16", pseudo_mnemonic, 1>;
++  defm _fake16 : VOP3Only_Realtriple_t16_gfx11_gfx12_not_gfx13<preGFX13Op, op, asmName, opName#"_fake16", pseudo_mnemonic, 1>;
+ }
+ 
+-multiclass VOP3_Realtriple_with_name_gfx11_gfx12_not_gfx1250_gfx13<bits<10> preGFX13Op, bits<10> op, string opName,
++multiclass VOP3_Realtriple_with_name_gfx11_gfx12_not_gfx13<bits<10> preGFX13Op, bits<10> op, string opName,
+                                                            string asmName, string pseudo_mnemonic = "",
+                                                            bit isSingle = 0> :
+   VOP3_Realtriple_with_name<GFX11Gen, preGFX13Op, opName, asmName, pseudo_mnemonic, isSingle>,
+-  VOP3_Realtriple_with_name<GFX12Not12_50Gen, preGFX13Op, opName, asmName, pseudo_mnemonic, isSingle>,
++  VOP3_Realtriple_with_name<GFX12Gen, preGFX13Op, opName, asmName, pseudo_mnemonic, isSingle>,
+   VOP3_Realtriple_with_name<GFX13Gen, op, opName, asmName, pseudo_mnemonic, isSingle>;
+ 
+ //===----------------------------------------------------------------------===//
+diff --git a/llvm/test/MC/AMDGPU/gfx1250-strict_err.s b/llvm/test/MC/AMDGPU/gfx1250-strict_err.s
+index aac9e3b..2a9e649 100644
+--- a/llvm/test/MC/AMDGPU/gfx1250-strict_err.s
++++ b/llvm/test/MC/AMDGPU/gfx1250-strict_err.s
+@@ -146,3 +146,12 @@ v_cvt_scale_pk8_bf16_fp4 v[10:13], v20, v8 scale_sel:4
+ v_cvt_scale_pk8_f32_fp4 v[10:17], v20, v8 scale_sel:4
+ // GFX1250S-ERR: :[[@LINE-1]]:43: error: scale_sel maximum supported value is 3
+ 
++
++v_cvt_pk_fp8_f32 v1.l, v2, v3 clamp
++// GFX1250-ERR: :[[@LINE-1]]:31: error: invalid operand for instruction
++
++v_cvt_sr_fp8_f32 v1, v2, v3 clamp
++// GFX1250-ERR: :[[@LINE-1]]:29: error: invalid operand for instruction
++
++v_cvt_f32_fp8 v1, v3 clamp
++// GFX1250-ERR: :[[@LINE-1]]:22: error: invalid operand for instruction
+-- 
+2.43.0
+

@@ -1,0 +1,266 @@
+From c4d8eb187d9f605d807938d11f3636f977e88e0f Mon Sep 17 00:00:00 2001
+From: Jarvis <Ammar.Elwazir@amd.com>
+Date: Thu, 1 Oct 2026 16:00:00 +0000
+Subject: [PATCH] Backport ROCm/rocm-libraries#12583
+
+Jarvis, Ammar's AI Assistant
+Upstream: https://github.com/ROCm/rocm-libraries/pull/12583
+Head: c4d8eb187d9f605d807938d11f3636f977e88e0f
+Merge: unmerged
+Net diff preserves upstream contents.
+
+---
+diff --git a/shared/stinkytofu/src/hardware/HWModel.cpp b/shared/stinkytofu/src/hardware/HWModel.cpp
+index 9e0fb7e59bf8..28fbc854ae91 100644
+--- a/shared/stinkytofu/src/hardware/HWModel.cpp
++++ b/shared/stinkytofu/src/hardware/HWModel.cpp
+@@ -29,18 +29,21 @@ constexpr HWModel kGfx1250Model = {
+             // Fallback when HwInstDesc::dsThroughput / dsMaxDrain are 0.
+             .dsLoadDefaultThroughput = 4,
+             .dsLoadDefaultMaxDrain = 120,
+-            // One ds issue pipe per 2 waves: the ISA's 1-cycle ds issue holds
+-            // at 1 wave, but 4 waves run as 2-2 pairs and each wave's issues
+-            // cost 2. Independent of dagFeatures.dsReadPerCap, which stays a
+-            // separately tuned ceiling.
++            // One ds issue pipe per 2 waves: when waves share the pipe, only
++            // one contending wave stalls in a given cycle, so a wave cannot
++            // safely count on the full single-wave admission ceiling for
++            // itself. This is used to derive a real, achievable-per-window
++            // cap in CDNA5ReadyQueue::dsReadPerCap() -- NOT a per-instruction
++            // real cycle cost (see dsReadPerCap() for why). Independent of
++            // dagFeatures.dsReadPerCap, which stays a separately tuned
++            // ceiling.
+             //
+-            // TEMPORARILY DISABLED (set to 1, i.e. no sharing): measured on
+-            // real gfx1250 hardware to cost f8_tn_medium ~17.5% and
+-            // mxf4_tn_medium ~12.3% real throughput, both fully recovered by
+-            // this single-line revert -- see PR discussion. The model itself
+-            // is believed correct in principle; needs re-validation against
+-            // hardware before it goes back to 2.
+-            .wavesPerDsIssuePipe = 1,
++            // Previously measured ~17.5%/~12.3% real regressions on
++            // f8_tn_medium/mxf4_tn_medium when this was 2 and the doubled
++            // cost was (incorrectly) also applied to per-instruction real
++            // cycle costs elsewhere. Re-enabled now that dsReadPerCap() is
++            // the only consumer.
++            .wavesPerDsIssuePipe = 2,
+         },
+     .barrier =
+         {
+diff --git a/shared/stinkytofu/src/transforms/asm/dag/CDNA5.hpp b/shared/stinkytofu/src/transforms/asm/dag/CDNA5.hpp
+index 31708565c6f0..0d9741f0b897 100644
+--- a/shared/stinkytofu/src/transforms/asm/dag/CDNA5.hpp
++++ b/shared/stinkytofu/src/transforms/asm/dag/CDNA5.hpp
+@@ -455,14 +455,17 @@ class CDNA5ReadyQueue : public ReadyQueue {
+             getPassContext().getPassFeatureConfig().dagFeatures.dsReadThrottleTransitionEntries;
+         return cfg >= 0 ? cfg : dsReadQueueDepth();
+     }
+-    // Effective ds issue cost for one wave. The ISA number is single-wave; the
+-    // ds issue pipe is shared, so resident waves round-robin it and one wave's
+-    // issues are spaced out (see HWModel::Lds::wavesPerDsIssuePipe). Distinct
+-    // from dsReadPerCap below, which is a manually tuned ceiling, not a cost.
+-    int dsIssueCost(const StinkyInstruction& inst) const {
+-        return dsIssueCyclesForWaves(
+-            hw_, inst.issueCycles, static_cast<int>(getPassContext().getGemmTileConfig().NumWaves));
+-    }
++    // Rule (4) per-window ds_load admission ceiling. The tuned value
++    // (config_.dsReadPerCap / dagFeatures.dsReadPerCap override) is a
++    // single-wave number, and stays the ceiling whenever it is still
++    // physically achievable. When waves share one ds issue pipe
++    // (HWModel::Lds::wavesPerDsIssuePipe), only one contending wave stalls in
++    // any given cycle, so this wave cannot safely count on issuing more than
++    // dsIssueCapSpan() / dsLoadIssueCycles / contendingWaves loads for itself
++    // in that same real window -- take whichever of the two is smaller. Never
++    // below 1. This is the ONLY place wavesPerDsIssuePipe affects scheduling:
++    // it is a capacity constraint on admission, not a per-instruction real
++    // cycle cost.
+     int dsReadPerCap() const {
+         const int cfg = getPassContext().getPassFeatureConfig().dagFeatures.dsReadPerCap;
+         // INT_MAX is the "unset" sentinel and resolves to the arch default. A
+@@ -479,7 +482,15 @@ class CDNA5ReadyQueue : public ReadyQueue {
+         // The arch default is static data, so a bad one is a build-time mistake
+         // in this file rather than a caller error.
+         assert(resolved > 0 && "arch config dsReadPerCap must be positive");
+-        return resolved;
++        const int numWaves = static_cast<int>(getPassContext().getGemmTileConfig().NumWaves);
++        const int contendingWaves = dsIssueCyclesForWaves(hw_, /*issueCycles=*/1, numWaves);
++        if (contendingWaves <= 1) return resolved;
++        // Every ds_load variant on gfx1250 has issueCycles == 1 (see the .def
++        // tables), so this is the representative per-load issue cost, not a
++        // per-instruction lookup.
++        constexpr int kDsLoadIssueCycles = 1;
++        const int windowCap = dsIssueCapSpan() / kDsLoadIssueCycles / contendingWaves;
++        return std::max(1, std::min(resolved, windowCap));
+     }
+     int tensorLoadWmmaSpace() const {
+         const int cfg = getPassContext().getPassFeatureConfig().dagFeatures.tensorLoadWmmaSpace;
+@@ -854,15 +865,19 @@ int CDNA5ReadyQueue::computeValuAdvanceCycles(int issueCycles) const {
+ 
+ // After a picked instruction: advance the co-issue timeline. Barriers use
+ // result latency (latencyCycles); VALU/transcendentals use co-issue-aware issue
+-// progress; others use issueCycles.
++// progress; others (including ds_read) use issueCycles.
++//
++// ds_read's real cost here is always the raw ISA issueCycles: a wave issues
++// one instruction per cycle from its own stream regardless of contention on
++// the shared (cross-wave) ds issue pipe. That contention is a capacity
++// constraint on admission (see dsReadPerCap()), not a per-instruction cycle
++// cost, so it has no business inflating this same-wave timeline.
+ void CDNA5ReadyQueue::updateWMMAStatus(DAGNode* node) {
+     int elapsedCycles = node->inst->issueCycles;
+     if (isBarrier(*node->inst))
+         elapsedCycles = node->inst->latencyCycles;
+     else if (isVectorALU(*node->inst) || isTranscendental(*node->inst))
+         elapsedCycles = computeValuAdvanceCycles(node->inst->issueCycles);
+-    else if (isDSRead(*node->inst))
+-        elapsedCycles = dsIssueCost(*node->inst);
+     advanceTime(elapsedCycles);
+ }
+ 
+@@ -1266,10 +1281,17 @@ bool CDNA5ReadyQueue::findSmallestPickableNonWmma(DAGNode* pickedDS, DAGNode** o
+         // comparison below is false for every wait and would drop the ds_load
+         // -- the veto this change removed, reached by another route.
+         const bool outOfWmmaWindow = activeWmmaLatency_ <= 0 && dsReadThrottleWait() == 0;
++        // schedulingSpace/activeWmmaLatency_ is this wave's own remaining
++        // window, consumed at the raw issueCycles rate once a ds_load is
++        // actually picked (see updateWMMAStatus). Wave-sharing contention is
++        // a capacity constraint on admission and belongs to dsReadPerCap()
++        // (which dsThrottleWait's dsCapWait already reflects, added above),
++        // not to this same-wave scheduling-space test -- inflating the cost
++        // here too would reject a ds_load the window can actually fit.
+         const bool fitsSchedulingBudget =
+             dsThrottleWait == 0 || outOfWmmaWindow ||
+             (schedulingPos < activeWmmaLatency_ &&
+-             dsThrottleWait + dsIssueCost(*pickedDS->inst) <= schedulingSpace);
++             dsThrottleWait + pickedDS->inst->issueCycles <= schedulingSpace);
+         if (fitsSchedulingBudget) consider(pickedDS, kLocalRead, dsThrottleWait);
+     }
+     const bool dsWindowOk = dsBaseOk && dsThrottleWait == 0;
+diff --git a/shared/stinkytofu/tests/unit/asm/DAGSchedulerPassTest.cpp b/shared/stinkytofu/tests/unit/asm/DAGSchedulerPassTest.cpp
+index 7788560117cc..dd075f3c4204 100644
+--- a/shared/stinkytofu/tests/unit/asm/DAGSchedulerPassTest.cpp
++++ b/shared/stinkytofu/tests/unit/asm/DAGSchedulerPassTest.cpp
+@@ -820,25 +820,28 @@ TEST_F(DAGSchedulerPassTest, WmmaHideBudgetCountsSplitBarrierGroupOnce) {
+ }
+ 
+ // ---------------------------------------------------------------------------
+-// HWModel::Lds::wavesPerDsIssuePipe (the ds issue pipe shared between waves)
+-// is TEMPORARILY DISABLED -- see HWModel.cpp -- after real hardware measured
+-// it costing f8_tn_medium/mxf4_tn_medium real throughput. With it disabled,
+-// NumWaves has no effect on ds issue cost end-to-end; the sharing math itself
+-// stays covered at the unit level, re-enabled on a local HWModel copy
+-// (HWModelDsIssue.FourWavesRunAsPairsSoTheCostDoubles and neighbors).
+-//
+-// The rule (4) cap is held inert here (perCap well above the ds_load count) so
+-// what is measured is the window filling up, not the cap.
++// dsReadPerCap() is the ONLY place wavesPerDsIssuePipe affects scheduling:
++// min(the tuned per-window ceiling, dsIssueCapSpan() / dsLoadIssueCycles /
++// contendingWaves), since only one of several waves sharing the ds issue pipe
++// actually stalls in a given cycle -- this wave cannot safely count on
++// issuing more than that window-derived number for itself. This scenario's
++// WMMA (createWmmaF32_16x16x16_bf16) has the arch-fallback 8-cycle
++// dsIssueCapSpan(), so the window-derived number at 4 waves (contendingWaves
++// == wavesPerDsIssuePipe == 2) is 8/1/2 == 4: a tuned ceiling at or below 4
++// (e.g. the real dsReadPerCap default of 3) is never the binding one and so
++// is NOT reduced -- only a larger requested ceiling (perCap=10 below) gets
++// clamped down to the window-derived number.
+ // ---------------------------------------------------------------------------
+-TEST_F(DAGSchedulerPassTest, DsIssueCostIsUnaffectedByWaveCountWhilePipeSharingIsDisabled) {
+-    auto dsInFirstWmmaWindow = [this](uint32_t numWaves) {
++TEST_F(DAGSchedulerPassTest, DsReadPerCapClampsToWindowDerivedCeilingWhenSharingThePipe) {
++    auto dsAdmittedWithCap = [this](uint32_t numWaves, int perCap) {
+         SetUp();  // fresh block per run
+         createWmmaF32_16x16x16_bf16(/*destStart=*/100, /*src0Start=*/200);
+         createWmmaF32_16x16x16_bf16(/*destStart=*/120, /*src0Start=*/220);
+         for (int i = 0; i < 12; ++i)
+             createMovableDsLoad(/*destReg=*/i * 4, /*addrReg=*/300 + i, /*ldsToken=*/i + 1);
+         config.NumWaves = numWaves;
+-        runPassWithDsReadThrottle(/*queueDepth=*/64, /*throttleLatency=*/64, /*perCap=*/100);
++        // Wide-open queue/throttle so only the rule (4) per-window cap binds.
++        runPassWithDsReadThrottle(/*queueDepth=*/64, /*throttleLatency=*/64, perCap);
+         int count = 0;
+         bool seenFirstWmma = false;
+         for (const IRBase& ir : *bb) {
+@@ -854,14 +857,22 @@ TEST_F(DAGSchedulerPassTest, DsIssueCostIsUnaffectedByWaveCountWhilePipeSharingI
+         return count;
+     };
+ 
+-    const int oneWave = dsInFirstWmmaWindow(1);
+-    const int twoWaves = dsInFirstWmmaWindow(2);
+-    const int fourWaves = dsInFirstWmmaWindow(4);
+-
+-    EXPECT_EQ(oneWave, fourWaves)
+-        << "pipe sharing is disabled, so NumWaves must not change how many "
+-           "ds_loads fit in a WMMA's co-issue window (see HWModel.cpp)";
+-    EXPECT_EQ(twoWaves, fourWaves);
++    // A tuned ceiling of 3 or 4 is already at/below the window-derived number
++    // (4 at 4 waves here), so it is NOT reduced -- this is the realistic case
++    // for the arch default (dsReadPerCap == 3): most kernels see no change.
++    EXPECT_EQ(dsAdmittedWithCap(/*numWaves=*/1, /*perCap=*/4), 4);
++    EXPECT_EQ(dsAdmittedWithCap(/*numWaves=*/4, /*perCap=*/4), 4);
++    EXPECT_EQ(dsAdmittedWithCap(/*numWaves=*/4, /*perCap=*/3), 3);
++
++    // A larger tuned ceiling (10) DOES get clamped down to the window-derived
++    // number once waves share the pipe. At numWaves=1 the cap itself is not
++    // the binding constraint (some other rule already limits this synthetic
++    // 2-WMMA/12-load scenario to 7), so this only demonstrates the 4-wave
++    // clamp, not a literal 10.
++    EXPECT_EQ(dsAdmittedWithCap(/*numWaves=*/1, /*perCap=*/10), 7);
++    EXPECT_EQ(dsAdmittedWithCap(/*numWaves=*/4, /*perCap=*/10), 4);
++    EXPECT_EQ(dsAdmittedWithCap(/*numWaves=*/2, /*perCap=*/10), 4)
++        << "share saturates at wavesPerDsIssuePipe==2, so 2 and 4 waves clamp the same amount";
+ }
+ 
+ // A non-positive dsReadPerCap is not a cap anyone can mean. It used to fall
+diff --git a/shared/stinkytofu/tests/unit/asm/HWModelTest.cpp b/shared/stinkytofu/tests/unit/asm/HWModelTest.cpp
+index 04b2fb4f4790..7d2ab67aa1c3 100644
+--- a/shared/stinkytofu/tests/unit/asm/HWModelTest.cpp
++++ b/shared/stinkytofu/tests/unit/asm/HWModelTest.cpp
+@@ -113,15 +113,9 @@ TEST(HWModel, ConfiguredPassContextCachesMatchingModel) {
+ // wave's issues are spaced out by however many share its pipe.
+ // ---------------------------------------------------------------------------
+ 
+-// gfx1250's pipe-sharing is temporarily disabled (wavesPerDsIssuePipe = 1, see
+-// HWModel.cpp) after real-hardware measurement found it cost f8_tn_medium
+-// ~17.5% and mxf4_tn_medium ~12.3% throughput. The tests below that exercise
+-// the sharing math re-enable it on a local copy of the model, so the model
+-// logic stays covered independent of whether the arch currently applies it.
+-TEST(HWModelDsIssue, PipeSharingIsTemporarilyDisabled) {
++TEST(HWModelDsIssue, PipeSharingIsEnabled) {
+     const HWModel& hw = hwModelForArch({12, 5, 0});
+-    EXPECT_EQ(hw.lds.wavesPerDsIssuePipe, 1)
+-        << "re-enable only after hardware re-validation (see HWModel.cpp)";
++    EXPECT_EQ(hw.lds.wavesPerDsIssuePipe, 2);
+ }
+ 
+ TEST(HWModelDsIssue, SingleWaveKeepsTheIsaCost) {
+@@ -130,8 +124,7 @@ TEST(HWModelDsIssue, SingleWaveKeepsTheIsaCost) {
+ }
+ 
+ TEST(HWModelDsIssue, FourWavesRunAsPairsSoTheCostDoubles) {
+-    HWModel hw = hwModelForArch({12, 5, 0});
+-    hw.lds.wavesPerDsIssuePipe = 2;  // re-enable for this test; see HWModel.cpp
++    const HWModel& hw = hwModelForArch({12, 5, 0});
+     // 4 waves over a 2-wave pipe is 2-2: a wave contends with one partner, not
+     // with all three others, so the cost saturates at the share rather than
+     // scaling with the wave count.
+@@ -140,8 +133,7 @@ TEST(HWModelDsIssue, FourWavesRunAsPairsSoTheCostDoubles) {
+ }
+ 
+ TEST(HWModelDsIssue, TwoWavesAreAssumedPaired) {
+-    HWModel hw = hwModelForArch({12, 5, 0});
+-    hw.lds.wavesPerDsIssuePipe = 2;  // re-enable for this test; see HWModel.cpp
++    const HWModel& hw = hwModelForArch({12, 5, 0});
+     // UNVERIFIED on hardware: the conservative reading is that two waves share
+     // one pipe. If they turn out to land on separate pipes this becomes 1, and
+     // this test is the one to flip.
+@@ -165,8 +157,7 @@ TEST(HWModelDsIssue, DefaultConfigIsSingleWave) {
+ }
+ 
+ TEST(HWModelDsIssue, ScalesAMultiCycleIssueCost) {
+-    HWModel hw = hwModelForArch({12, 5, 0});
+-    hw.lds.wavesPerDsIssuePipe = 2;  // re-enable for this test; see HWModel.cpp
++    const HWModel& hw = hwModelForArch({12, 5, 0});
+     EXPECT_EQ(dsIssueCyclesForWaves(hw, /*issueCycles=*/4, /*numWaves=*/4), 8);
+ }
+ 
