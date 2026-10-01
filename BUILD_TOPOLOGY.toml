@@ -296,7 +296,7 @@ source_sets = ["rocm-systems"]
 [artifact_groups.math-libs]
 description = "Math libraries (BLAS, FFT, RAND, etc.)"
 type = "per-arch"  # Built per GPU architecture
-artifact_group_deps = ["hip-runtime", "profiler-core"]
+artifact_group_deps = ["hip-runtime", "profiler-core", "core-amdsmi"]
 # rocm-systems provides shared kpack tooling used to produce kpack artifacts.
 source_sets = ["rocm-libraries", "rocm-systems", "math-libs"]
 
@@ -677,7 +677,7 @@ artifact_deps = ["core-runtime", "core-hip", "blas", "prim", "rand", "sparse"]
 [artifacts.rocwmma]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "blas"]
+artifact_deps = ["core-runtime", "core-hip", "blas", "core-amdsmi"]
 
 [artifacts.composable-kernel]
 artifact_group = "math-libs"
