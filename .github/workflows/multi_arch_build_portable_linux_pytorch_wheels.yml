@@ -101,6 +101,10 @@ on:
           Only takes effect for gfx94X-dcgpu Python 3.12 builds.
         type: boolean
         default: false
+      asan:
+        description: "Build a torch-only AddressSanitizer wheel against the installed ROCm SDK"
+        type: boolean
+        default: false
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -202,6 +206,10 @@ on:
           Only takes effect for gfx94X-dcgpu Python 3.12 builds.
         type: boolean
         default: false
+      asan:
+        description: "Build a torch-only AddressSanitizer wheel against the installed ROCm SDK"
+        type: boolean
+        default: false
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -235,6 +243,7 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       CACHE_TYPE: ${{ inputs.cache_type }}
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
+      ASAN: ${{ inputs.asan }}
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       optional_build_prod_arguments: ""
       # TODO: Move the sccache bucket and IAM role mapping into a shared script.
@@ -307,17 +316,19 @@ jobs:
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --repo-hashtag nightly \
             --no-commit-hipify
-          ./external-builds/pytorch/pytorch_audio_repo.py checkout \
-            --repo-hashtag nightly \
-            --no-commit-hipify
-          ./external-builds/pytorch/pytorch_vision_repo.py checkout \
-            --repo-hashtag nightly \
-            --no-commit-hipify
-          ./external-builds/pytorch/pytorch_triton_repo.py checkout \
-            --no-commit-hipify
-          ./external-builds/pytorch/pytorch_apex_repo.py checkout \
-            --repo-hashtag master \
-            --no-commit-hipify
+          if [[ "${ASAN}" != "true" ]]; then
+            ./external-builds/pytorch/pytorch_audio_repo.py checkout \
+              --repo-hashtag nightly \
+              --no-commit-hipify
+            ./external-builds/pytorch/pytorch_vision_repo.py checkout \
+              --repo-hashtag nightly \
+              --no-commit-hipify
+            ./external-builds/pytorch/pytorch_triton_repo.py checkout \
+              --no-commit-hipify
+            ./external-builds/pytorch/pytorch_apex_repo.py checkout \
+              --repo-hashtag master \
+              --no-commit-hipify
+          fi
 
       - name: Checkout PyTorch source repos (stable)
         if: ${{ inputs.pytorch_git_ref != 'nightly' }}
@@ -331,17 +342,19 @@ jobs:
             --gitrepo-origin "${pytorch_origin}" \
             --repo-hashtag "${PYTORCH_GIT_REF}" \
             --no-commit-hipify
-          ./external-builds/pytorch/pytorch_audio_repo.py checkout \
-            --require-related-commit \
-            --no-commit-hipify
-          ./external-builds/pytorch/pytorch_vision_repo.py checkout \
-            --require-related-commit \
-            --no-commit-hipify
-          ./external-builds/pytorch/pytorch_triton_repo.py checkout \
-            --no-commit-hipify
-          ./external-builds/pytorch/pytorch_apex_repo.py checkout \
-            --require-related-commit \
-            --no-commit-hipify
+          if [[ "${ASAN}" != "true" ]]; then
+            ./external-builds/pytorch/pytorch_audio_repo.py checkout \
+              --require-related-commit \
+              --no-commit-hipify
+            ./external-builds/pytorch/pytorch_vision_repo.py checkout \
+              --require-related-commit \
+              --no-commit-hipify
+            ./external-builds/pytorch/pytorch_triton_repo.py checkout \
+              --no-commit-hipify
+            ./external-builds/pytorch/pytorch_apex_repo.py checkout \
+              --require-related-commit \
+              --no-commit-hipify
+          fi
 
       # determine_version.py sets optional_build_prod_arguments in
       # GITHUB_ENV (--rocm-sdk-version, --version-suffix).
@@ -401,6 +414,10 @@ jobs:
           elif [ "${CACHE_TYPE}" = "ccache" ]; then
             cache_flag="--use-ccache"
           fi
+          asan_flag=""
+          if [[ "${ASAN}" == "true" ]]; then
+            asan_flag="--asan"
+          fi
 
           # build_prod_wheels.py forwards each of these to pip and ignores an
           # empty value, so pass both and supply whichever source applies:
@@ -417,6 +434,7 @@ jobs:
             ${cache_flag} \
             --release-type="${BUILD_RELEASE_TYPE}" \
             --pytorch-rocm-arch "${AMDGPU_TARGETS}" \
+            ${asan_flag} \
             ${{ env.optional_build_prod_arguments }}
 
       - name: Report cache stats
@@ -481,15 +499,17 @@ jobs:
             -j "$(nproc)"
           rm -f "${FAT_STAGE}"/torch-*.whl
 
-          mv "${PACKAGE_DIST_DIR}"/torchvision-*.whl "${FAT_STAGE}/"
-          python -m rocm_kpack.tools.split_python_wheels \
-            --input "${FAT_STAGE}"/torchvision-*.whl \
-            --output-dir "${PACKAGE_DIST_DIR}" \
-            --device-package-prefix amd-torchvision-device \
-            --overlay-root torchvision/ \
-            --device-requires-dist "rocm-sdk-device-@GFXARCH@ == ${ROCM_SDK_VERSION}" \
-            --compression zstd \
-            -j "$(nproc)"
+          if [[ "${ASAN}" != "true" ]]; then
+            mv "${PACKAGE_DIST_DIR}"/torchvision-*.whl "${FAT_STAGE}/"
+            python -m rocm_kpack.tools.split_python_wheels \
+              --input "${FAT_STAGE}"/torchvision-*.whl \
+              --output-dir "${PACKAGE_DIST_DIR}" \
+              --device-package-prefix amd-torchvision-device \
+              --overlay-root torchvision/ \
+              --device-requires-dist "rocm-sdk-device-@GFXARCH@ == ${ROCM_SDK_VERSION}" \
+              --compression zstd \
+              -j "$(nproc)"
+          fi
 
           rm -rf "${FAT_STAGE}"
           echo "Post-split contents of ${PACKAGE_DIST_DIR}:"
@@ -501,10 +521,16 @@ jobs:
       - name: Write PyTorch package version outputs
         id: pytorch-versions
         run: |
+          torch_only_flag=""
+          if [[ "${ASAN}" == "true" ]]; then
+            torch_only_flag="--torch-only"
+          fi
           python build_tools/github_actions/write_torch_versions.py \
-            --dist-dir "${PACKAGE_DIST_DIR}"
+            --dist-dir "${PACKAGE_DIST_DIR}" \
+            ${torch_only_flag}
 
       - name: Configure AWS Credentials
+        if: ${{ inputs.asan != true }}
         uses: ./.github/actions/configure_aws_product_publication_credentials
         with:
           release_type: ${{ inputs.release_type }}
@@ -512,11 +538,19 @@ jobs:
 
       - name: Upload PyTorch wheels to release bucket
         id: publish-pytorch-wheels
+        if: ${{ inputs.asan != true }}
         run: |
           python build_tools/github_actions/publish_pytorch_to_release_bucket.py \
             --source-dir="${PACKAGE_DIST_DIR}" \
             --release-type="${BUILD_RELEASE_TYPE}" \
             --structured
+
+      - name: Upload ASAN torch wheel artifact
+        if: ${{ inputs.asan }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pytorch-asan-wheel-${{ github.run_id }}-py${{ inputs.python_version }}
+          path: ${{ github.workspace }}/output/packages/dist/*.whl
 
       - name: Capture job summary
         id: summary
