@@ -205,7 +205,7 @@ jobs:
           # packages (PYTORCH_EXTRA_INSTALL_REQUIREMENTS pins rocm[libraries]),
           # so installing torch is enough to pull the ROCm runtime.
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION}" \
+            --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION} torchvision" \
             --index-url="${PACKAGE_INDEX_URL}" \
             --activate-in-future-github-actions-steps
 
@@ -228,6 +228,16 @@ jobs:
             --repo-hashtag "${TORCH_SHA}" \
             --no-hipify \
             --no-submodules
+
+          # test.sh installs from this cache instead of building torchvision,
+          # which requires devel packages excluded from this quick workflow.
+          TORCHVISION_VERSION=$(python -c \
+            "import importlib.metadata; print(importlib.metadata.version('torchvision'))")
+          python -m pip download \
+            --no-deps \
+            --dest external-builds/pytorch/pytorch/dist/vision \
+            --index-url="${PACKAGE_INDEX_URL}" \
+            "torchvision==${TORCHVISION_VERSION}"
 
       - name: Install test requirements
         run: |

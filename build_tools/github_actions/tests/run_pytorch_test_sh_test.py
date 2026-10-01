@@ -87,6 +87,22 @@ class ConfigureEnvironmentTest(unittest.TestCase):
             ],
         )
 
+    def test_windows_adds_rocminfo_shim(self):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(runner.platform, "system", return_value="Windows"),
+            mock.patch.dict(os.environ, {"PATH": "existing-path"}),
+        ):
+            env = runner.configure_environment(self.args(Path(tmp)), [], "", [])
+
+        shim_dir = Path(env["PATH"].split(os.pathsep, 1)[0])
+        self.assertEqual(
+            (shim_dir / "rocminfo").read_text(),
+            "#!/usr/bin/env bash\n"
+            "echo 'rocminfo is unavailable in the Windows wheel environment'\n",
+        )
+        self.assertTrue((shim_dir / "rocminfo").stat().st_mode & 0o100)
+
 
 class ExcludedModulesTest(unittest.TestCase):
     def test_reads_exclusions_from_skip_tests(self):

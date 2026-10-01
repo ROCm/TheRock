@@ -126,6 +126,16 @@ def configure_environment(
     env["IN_WHEEL_TEST"] = "1"
     env["TEST_CONFIG"] = args.test_config
 
+    if platform.system() == "Windows":
+        shim_dir = Path(tempfile.mkdtemp())
+        rocminfo_shim = shim_dir / "rocminfo"
+        rocminfo_shim.write_text(
+            "#!/usr/bin/env bash\n"
+            "echo 'rocminfo is unavailable in the Windows wheel environment'\n"
+        )
+        rocminfo_shim.chmod(0o755)
+        env["PATH"] = f"{shim_dir}{os.pathsep}{env.get('PATH', '')}"
+
     if args.test_config != "distributed":
         env["PYTORCH_TEST_RUN_EVERYTHING_IN_SERIAL"] = "1"
     if args.shard:
