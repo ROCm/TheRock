@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Run PyTorch's CI test.sh with TheRock's ROCm test configuration."""
 
-from __future__ import annotations
-
 import argparse
 import importlib.util
 import os
