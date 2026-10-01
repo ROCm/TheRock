@@ -52,6 +52,8 @@ import argparse
 import shutil
 import sys
 import os
+import tarfile
+import unittest
 from pathlib import Path
 import tempfile
 from packaging.version import Version
@@ -404,6 +406,90 @@ def getWindowsPackagesLinks() -> tuple[list[tuple[str, str]], Version, Version]:
     )
 
     return url_and_packages, version, expected_version
+
+
+SDIST_OWNERSHIP_PKG_INFO_BODY = """\
+Metadata-Version: 2.1
+Name: rocm
+Version: 7.14.0rc1
+"""
+
+
+def _make_sdist_ownership_source(path: Path) -> None:
+    """Write a synthetic rocm-7.14.0rc1.tar.gz with non-default owner/mode.
+
+    Used by PromoteSdistOwnershipTest below to simulate the tar-member
+    ownership leak reported against promote_targz_sdist() without needing to
+    download a real RC package.
+    """
+    with tempfile.TemporaryDirectory() as staging:
+        root = Path(staging) / "rocm-7.14.0rc1"
+        root.mkdir()
+        (root / "PKG-INFO").write_text(SDIST_OWNERSHIP_PKG_INFO_BODY)
+        (root / "MANIFEST.in").write_text("")
+
+        # promote_targz_sdist() unconditionally rewrites these files in place
+        # to bump the embedded version string, so the fixture must contain them.
+        egg_info = root / "src" / "rocm.egg-info"
+        egg_info.mkdir(parents=True)
+        (egg_info / "requires.txt").write_text("")
+        (egg_info / "PKG-INFO").write_text(SDIST_OWNERSHIP_PKG_INFO_BODY)
+
+        rocm_sdk = root / "src" / "rocm_sdk"
+        rocm_sdk.mkdir(parents=True)
+        (rocm_sdk / "_dist_info.py").write_text("")
+
+        def foreign_owner(tarinfo: tarfile.TarInfo) -> tarfile.TarInfo:
+            # Simulate the observed leak: a real (non-root) account, and
+            # permissive modes (as if extracted under an unrestrictive umask).
+            tarinfo.uid = 1000
+            tarinfo.gid = 1000
+            tarinfo.uname = "arravikum"
+            tarinfo.gname = "arravikum"
+            tarinfo.mode = 0o777 if tarinfo.isdir() else 0o666
+            return tarinfo
+
+        with tarfile.open(path, "w:gz") as tar:
+            tar.add(root, arcname="rocm-7.14.0rc1", filter=foreign_owner)
+
+
+class PromoteSdistOwnershipTest(unittest.TestCase):
+    """Runs without network access and completes in well under a second.
+
+    Unlike the rest of this file (a standalone script invoked directly, see
+    `if __name__ == "__main__"` below), this is a plain unittest.TestCase so
+    it can be picked up by `python -m unittest promote_packages_test`
+    alongside the other lightweight tests in this directory.
+    """
+
+    def test_promoted_sdist_has_no_local_identity_or_permissive_modes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base_dir = Path(tmp)
+            source = base_dir / "rocm-7.14.0rc1.tar.gz"
+            _make_sdist_ownership_source(source)
+
+            self.assertTrue(
+                promote_packages.promote_targz_sdist(source, src_version_type="rc")
+            )
+
+            promoted = base_dir / "rocm-7.14.0.tar.gz"
+            self.assertTrue(promoted.exists())
+
+            with tarfile.open(promoted) as tar:
+                members = tar.getmembers()
+
+            self.assertGreater(len(members), 0)
+            for member in members:
+                self.assertEqual(member.uid, 0)
+                self.assertEqual(member.gid, 0)
+                self.assertEqual(member.uname, "")
+                self.assertEqual(member.gname, "")
+                self.assertNotEqual(member.uid, os.getuid())
+                if member.isdir():
+                    self.assertEqual(member.mode, 0o755)
+                elif member.isreg():
+                    self.assertIn(member.mode, (0o644, 0o755))
+                    self.assertFalse(member.mode & 0o022)
 
 
 if __name__ == "__main__":
