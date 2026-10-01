@@ -83,6 +83,12 @@ from stage_reuse_decision import (
     compute_auto_stage_reuse,
     render_step_summary,
 )
+from emergency_levers import (
+    EmergencyLevers,
+    get_emergency_levers,
+    should_disable_tests,
+    get_test_filter_override,
+)
 
 _NULL_GIT_SHA = "0" * 40
 
@@ -1274,6 +1280,8 @@ def _should_run_tests_for_family(
     platform_info: dict,
     ci_inputs: CIInputs,
     git_context: GitContext,
+    family_name: str = "",
+    platform: str = "",
 ) -> tuple[bool, str]:
     """Determine if tests should run based on tests_on_trigger field.
 
@@ -1287,6 +1295,13 @@ def _should_run_tests_for_family(
     Returns:
         Tuple of (should_run, reason_string) for logging.
     """
+    # Emergency lever check: tests_enabled=false completely disables tests
+    # This takes highest priority and cannot be overridden by workflow_dispatch
+    levers = get_emergency_levers(family_name, platform, platform_info)
+    disable_tests, reason = should_disable_tests(levers)
+    if disable_tests:
+        return False, f"emergency lever: {reason}"
+
     # workflow_dispatch implicitly allows all families
     if ci_inputs.is_workflow_dispatch:
         return True, "workflow_dispatch (on_demand)"
@@ -1436,24 +1451,35 @@ def _expand_build_config_for_platform(
         # trigger matches.
         if test_runs_on:
             should_run, reason = _should_run_tests_for_family(
-                platform_info, ci_inputs, git_context
+                platform_info, ci_inputs, git_context, family_name, platform
             )
             if not should_run:
                 test_runs_on = ""
                 print(f"  {family_name}: tests disabled ({reason})")
 
-        # If test_type_for_family is set, force the test type for this family.
-        # This overrides the global test_type, allowing families with limited
-        # hardware to always run quick tests regardless of trigger type.
-        test_type_for_family = platform_info.get("test_type_for_family", "")
+        # Determine per-family test type override. Priority order:
+        # 1. Emergency lever test_filter_override (highest - for queue remediation)
+        # 2. Static test_type_for_family (for hardware-limited families)
+        # 3. Global test_type from jobs.test_rocm (default)
         family_test_type = None
-        if test_type_for_family and test_runs_on:
-            family_test_type = test_type_for_family
-            if family_test_type != jobs.test_rocm.test_type:
+        if test_runs_on:
+            # Check emergency lever first (highest priority)
+            levers = get_emergency_levers(family_name, platform, platform_info)
+            lever_override = get_test_filter_override(levers)
+            if lever_override:
+                family_test_type = lever_override
                 print(
-                    f"  {family_name}: forcing test_type={family_test_type} "
+                    f"  {family_name}: emergency lever forcing test_type={family_test_type} "
                     f"(global={jobs.test_rocm.test_type})"
                 )
+            # Fall back to static test_type_for_family
+            elif platform_info.get("test_type_for_family"):
+                family_test_type = platform_info["test_type_for_family"]
+                if family_test_type != jobs.test_rocm.test_type:
+                    print(
+                        f"  {family_name}: forcing test_type={family_test_type} "
+                        f"(global={jobs.test_rocm.test_type})"
+                    )
 
         family_info = {
             "amdgpu_family": platform_info["family"],
@@ -1480,6 +1506,11 @@ def _expand_build_config_for_platform(
         if "test_labels_for_family" in platform_info:
             family_info["test_labels_for_family"] = platform_info[
                 "test_labels_for_family"
+            ]
+        # Pass through emergency lever disabled_test_components for fetch_test_configurations
+        if platform_info.get("disabled_test_components"):
+            family_info["disabled_test_components"] = platform_info[
+                "disabled_test_components"
             ]
         per_family_info.append(family_info)
 

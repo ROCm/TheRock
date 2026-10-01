@@ -30,6 +30,11 @@ from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
     select_weighted_label,
 )
+from emergency_levers import (
+    get_emergency_levers,
+    should_skip_component,
+    filter_components_by_levers,
+)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -1235,6 +1240,12 @@ def run():
             )
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
 
+    # Get emergency levers for this family/platform
+    emergency_levers = None
+    if amdgpu_families and shortened_family and shortened_family in all_families:
+        platform_info = all_families[shortened_family].get(platform, {})
+        emergency_levers = get_emergency_levers(shortened_family, platform, platform_info)
+
     logging.info(f"Selecting projects: {projects_to_test}")
 
     logging.info(f"Using test_matrix ({len(test_matrix)} test(s))")
@@ -1468,6 +1479,10 @@ def run():
     all_components = [
         _build_container_options(c, platform) for c in components_with_runners
     ]
+
+    # Apply emergency lever filtering (disabled_test_components)
+    if emergency_levers:
+        all_components = filter_components_by_levers(emergency_levers, all_components)
 
     # Separate sanity (always a prerequisite) from the regular component matrix.
     sanity_component = next(
