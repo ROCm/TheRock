@@ -146,6 +146,9 @@ def _load_subtree_alias_map() -> dict[str, list[str]]:
 
 _SUBTREE_ALIAS_MAP = _load_subtree_alias_map()
 
+# NOTE: the rocgdb/tensilelite entries mirror build_tools' fetch_test_configurations
+# .TEST_LABEL_GROUPS; test_label_consistency_test guards that they stay identical
+# until they share one source.
 _CI_TEST_SELECTOR_ALIASES = {
     "hipdnn_integration_tests": ["hipdnn-integration-tests"],
     "hipdnn_samples": ["hipdnn-samples"],
