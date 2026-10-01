@@ -23,7 +23,12 @@ markers = [
 
 [tool.coverage.run]
 data_file = "build/.coverage"
-source = ["build_tools"]
+source = [
+    "build_tools",
+    "external-builds/pytorch",
+    "test_tools",
+    "skills/therock_pr_bot",
+]
 omit = [
     "build_tools/tests/*",
     "build_tools/github_actions/tests/*",
@@ -34,7 +39,16 @@ omit = [
     "build_tools/packaging/windows/tests/*",
     "build_tools/third_party/s3_management/tests/*",
     "external-builds/pytorch/tests/*",
+    "external-builds/pytorch/smoke-tests/*",
+    # Downloaded source checkouts and local environments are not TheRock tooling.
+    "external-builds/pytorch/src/*",
+    "external-builds/pytorch/.venv/*",
+    "external-builds/pytorch/pytorch/*",
+    "external-builds/pytorch/pytorch_vision/*",
+    "external-builds/pytorch/pytorch_audio/*",
+    "external-builds/pytorch/triton/*",
     "test_tools/tests/*",
+    "skills/therock_pr_bot/policy_check_test.py",
     "*/__pycache__/*",
 ]
 

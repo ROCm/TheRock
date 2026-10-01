@@ -358,6 +358,7 @@ class ROCmBuildFlagsTest(unittest.TestCase):
                   @ONLY
                 )
                 add_library(unknown_flag OBJECT unknown_flag.c)
+                # _Static_assert requires C11; don't fail due to an older C dialect.
                 target_compile_features(unknown_flag PRIVATE c_std_11)
                 target_include_directories(unknown_flag PRIVATE "${{CMAKE_BINARY_DIR}}")
                 """,
