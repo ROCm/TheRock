@@ -134,7 +134,7 @@ class ConfigureRocmPythonTestMatrixTest(unittest.TestCase):
         for workflow_filename, platform in test_cases:
             with self.subTest(workflow_filename=workflow_filename):
                 workflow = load_workflow(WORKFLOWS_DIR / workflow_filename)
-                job = get_workflow_job(workflow, "test_python_packages_per_family")
+                job = get_workflow_job(workflow, "test_python_packages")
                 matrix_references = get_matrix_references(job["with"])
 
                 matrix = m.build_rocm_python_test_matrix(
