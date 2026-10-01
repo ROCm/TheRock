@@ -833,22 +833,15 @@ def get_build_runner_labels():
 
 
 def get_cpu_test_runner(platform: str) -> str:
-    """Returns the CPU test runner label for the given platform.
+    """Returns the CPU test runner label for components with linux_cpu_runner: True.
 
-    CPU test runners are used for test components that don't require GPU access
-    (e.g., components with linux_cpu_runner: True in fetch_test_configurations.py).
-
-    Uses the default build runner for the platform, which is the same pool used
-    for builds and doesn't require GPU hardware.
-
-    Attempts to load external config from CI_CONFIG_PATH. Falls back to local
-    definitions if external config is unavailable.
+    Falls back to the default build runner if no explicit cpu_test_runners config exists.
 
     Args:
         platform: "linux" or "windows"
 
     Returns:
-        Runner label string, or empty string if no CPU runner is configured.
+        Runner label string, or empty string if not configured.
     """
     # First check for explicit cpu_test_runners in external config
     external_config = load_external_runner_config()

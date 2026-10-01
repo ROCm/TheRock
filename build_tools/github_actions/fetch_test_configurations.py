@@ -28,6 +28,7 @@ from pathlib import Path
 from github_actions_api import *
 from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
+    get_cpu_test_runner,
     select_weighted_label,
 )
 
@@ -1214,9 +1215,13 @@ def run():
     # This carries the policy decision (e.g., trigger gating). When set to empty,
     # GPU tests are gated but CPU-only tests (linux_cpu_runner: True) can still run.
     test_runs_on_from_workflow = os.getenv("TEST_RUNS_ON")
+    # CPU runner: prefer workflow input, fall back to get_cpu_test_runner()
+    test_runs_on_cpu = os.getenv("TEST_RUNS_ON_CPU") or get_cpu_test_runner(platform)
     gpu_tests_gated = test_runs_on_from_workflow == ""
     if gpu_tests_gated:
-        logging.info("GPU tests gated (TEST_RUNS_ON is empty), only CPU-only components will run")
+        logging.info(
+            "GPU tests gated (TEST_RUNS_ON is empty), only CPU-only components will run"
+        )
 
     if amdgpu_families:
         shortened_family = amdgpu_families.split("-")[0].lower()
@@ -1463,9 +1468,16 @@ def run():
             # Skip if test_runner is already pre-pinned (e.g. rocgdb-corefile).
             is_cpu_only = component.get("linux_cpu_runner", False)
             if is_cpu_only:
-                # CPU-only components don't need a GPU runner - the workflow uses
-                # a hardcoded CPU runner label. Don't assign test_runner here.
-                logging.info(f"  {job_name}: CPU-only component, no GPU runner needed")
+                if test_runs_on_cpu:
+                    component["test_runner"] = test_runs_on_cpu
+                    logging.info(
+                        f"  {job_name}: CPU-only, using runner: {test_runs_on_cpu}"
+                    )
+                else:
+                    logging.info(
+                        f"Excluding job {job_name}: CPU runner required but none configured"
+                    )
+                    continue
             elif is_asan_build and test_runs_on_sandbox:
                 # For ASAN builds, use the sandbox runner if available
                 component["test_runner"] = test_runs_on_sandbox

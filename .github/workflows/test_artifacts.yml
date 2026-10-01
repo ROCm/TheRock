@@ -257,8 +257,7 @@ jobs:
       #      Only applies to workflow_dispatch events (not PR/workflow_call chains).
       #      Bot-triggered runs (e.g., nightly from rockrel) skip this and use rules below.
       #   2. Multi-GPU components use the multi-GPU runner (required for correct execution)
-      #   3. CPU-only components use standard GitHub runners (aws-linux-scale-rocm-prod)
-      #   4. Per-component runner (set by fetch_test_configurations.py)
+      #   3. Per-component runner (set by fetch_test_configurations.py, includes CPU-only)
       test_runs_on: >-
         ${{
           (github.event_name == 'workflow_dispatch' &&
@@ -267,8 +266,6 @@ jobs:
             inputs.test_runs_on) ||
           (matrix.components.multi_gpu_runner != '' &&
             matrix.components.multi_gpu_runner) ||
-          (matrix.components.linux_cpu_runner == true &&
-            'aws-linux-scale-rocm-prod') ||
           matrix.components.test_runner
         }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
