@@ -266,10 +266,12 @@ class CIInputs:
                 ("Linux", self.linux_test_labels),
                 ("Windows", self.windows_test_labels),
             ]:
+                # ci: labels are control labels, not test component labels; skip validation
                 invalid = [
                     lbl
                     for lbl in labels
-                    if lbl.replace("test:", "") not in allowed_labels
+                    if not lbl.startswith("ci:")
+                    and lbl.replace("test:", "") not in allowed_labels
                 ]
                 if invalid:
                     raise ValueError(
@@ -345,13 +347,18 @@ class CIInputs:
         # Test labels come from two sources:
         # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
         # 2. PR test:* labels (apply to both platforms)
+        # Additionally, ci:* labels are passed through for downstream processing
         pr_test_labels = [label for label in pr_labels if label.startswith("test:")]
+        pr_ci_labels = [label for label in pr_labels if label.startswith("ci:")]
         linux_test_labels = (
-            _parse_comma_list(os.environ.get("LINUX_TEST_LABELS", "")) + pr_test_labels
+            _parse_comma_list(os.environ.get("LINUX_TEST_LABELS", ""))
+            + pr_test_labels
+            + pr_ci_labels
         )
         windows_test_labels = (
             _parse_comma_list(os.environ.get("WINDOWS_TEST_LABELS", ""))
             + pr_test_labels
+            + pr_ci_labels
         )
 
         # When build_stages limits the build, validate or auto-select test labels.
@@ -360,11 +367,13 @@ class CIInputs:
         build_stages = _parse_comma_list(os.environ.get("BUILD_STAGES", ""))
         allowed_labels = _get_allowed_test_labels_for_stages(build_stages)
         if allowed_labels is not None:
+            # ci: labels are control labels, not test component labels; skip validation
             if linux_test_labels:
                 invalid = [
                     lbl
                     for lbl in linux_test_labels
-                    if lbl.replace("test:", "") not in allowed_labels
+                    if not lbl.startswith("ci:")
+                    and lbl.replace("test:", "") not in allowed_labels
                 ]
                 if invalid:
                     raise ValueError(
@@ -378,7 +387,8 @@ class CIInputs:
                 invalid = [
                     lbl
                     for lbl in windows_test_labels
-                    if lbl.replace("test:", "") not in allowed_labels
+                    if not lbl.startswith("ci:")
+                    and lbl.replace("test:", "") not in allowed_labels
                 ]
                 if invalid:
                     raise ValueError(
@@ -860,7 +870,7 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 
     - pull_request: Smallest default set (presubmit families). Designed for
       fast feedback on proposed changes. PR labels can opt in to additional
-      families (gfx* labels) or the full set (ci:run-all-archs).
+      families (ci:gfx* labels) or the full set (ci:run-all-archs).
     - push: Broader coverage (presubmit + postsubmit families). Runs on
       code that has landed, so we want more thorough validation than PRs
       without paying the full nightly cost.
@@ -877,17 +887,20 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     Returns per-platform family lists, filtered to only include families
     that have a platform entry in amdgpu_family_matrix.py.
     """
-    all_families = get_all_families_for_trigger_types(
-        ["presubmit", "postsubmit", "nightly"]
-    )
+    # All families for validation and "all" keyword expansion.
+    # Empty trigger list returns all families (workflow_dispatch/schedule case).
+    all_families = get_all_families_for_trigger_types([])
+    # Default families excludes explicit_only targets (used for "all" keyword)
     default_family_names = list(all_families)
+    # For workflow_dispatch, also include explicit_only families for lookup
     if ci_inputs.is_workflow_dispatch:
         all_families.update(get_all_families_for_trigger_types(["explicit_only"]))
 
     # Select family names per platform based on trigger type.
     # Ordered from most-specific (workflow_dispatch) to broadest (schedule).
     if ci_inputs.is_workflow_dispatch:
-        # Manual trigger: caller specifies exact families per platform.
+        # Manual trigger: all families are implicitly allowed.
+        # Caller specifies exact families per platform.
         # "all" = all known families. "none" or empty = skip platform.
         linux_names = list(ci_inputs.linux_amdgpu_families)
         windows_names = list(ci_inputs.windows_amdgpu_families)
@@ -923,7 +936,7 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
         print("  Using caller-supplied GPU families")
     elif ci_inputs.is_pull_request:
         # Smallest default set for fast PR feedback. PR labels can extend
-        # the set below (gfx* for individual families, ci:run-all-archs
+        # the set below (ci:gfx* for individual families, ci:run-all-archs
         # for everything).
         defaults = list(get_all_families_for_trigger_types(["presubmit"]).keys())
         linux_names = list(defaults)
@@ -938,7 +951,8 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
         linux_names = list(defaults)
         windows_names = list(defaults)
     elif ci_inputs.is_schedule:
-        # Schedule trigger: use explicit inputs if provided, else all families.
+        # Schedule trigger: all families implicitly allowed (like workflow_dispatch).
+        # Use explicit inputs if provided, else all families.
         # "all" or empty = all known families. "none" = skip platform.
         linux_names = list(ci_inputs.linux_amdgpu_families)
         windows_names = list(ci_inputs.windows_amdgpu_families)
@@ -969,12 +983,13 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 windows_names = list(all_families.keys())
                 print("  Label 'ci:run-all-archs' -> all families")
                 break
-            if label.lower().startswith("gfx"):
+            if label.lower().startswith("ci:gfx"):
                 # Trim suffixes from labels since amdgpu_family_matrix.py
                 # specifies families with no suffix (e.g. `gfx94x`) but
-                # we have some labels like `gfx94X-dcgpu` or `gfx103X-linux`.
+                # we have some labels like `ci:gfx94X-dcgpu` or `ci:gfx103X-linux`.
                 # Family keys are lowercase, so normalize the target.
-                target = label.split("-")[0].lower()
+                # Strip ci: prefix, then split on dash to get the base family.
+                target = label.lower().removeprefix("ci:").split("-")[0]
                 linux_names.append(target)
                 windows_names.append(target)
                 print(f"  Label '{label}' -> adding target {target}")
@@ -1003,24 +1018,6 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 
 
 _VALID_TEST_FILTER_TYPES = {"quick", "standard", "comprehensive", "full"}
-
-
-def _has_test_labels(ci_inputs: CIInputs) -> bool:
-    """Check whether any test labels were specified (workflow_dispatch or PR).
-
-    Note: test_filter: labels are not test labels - they control test_type,
-    not which tests to run.
-    """
-    # Filter out test_filter: labels - those control test_type, not test selection
-    linux_tests = [
-        l for l in ci_inputs.linux_test_labels if not l.startswith("test_filter:")
-    ]
-    windows_tests = [
-        l for l in ci_inputs.windows_test_labels if not l.startswith("test_filter:")
-    ]
-    if linux_tests or windows_tests:
-        return True
-    return any(label.startswith("test:") for label in ci_inputs.pr_labels)
 
 
 def _determine_test_type(
@@ -1061,13 +1058,7 @@ def _determine_test_type(
             )
         return filter_type, f"test_filter label: {label}"
 
-    # Priority 2: test:* labels request specific component tests (e.g.
-    # test:rocprim). When someone explicitly asks for tests, run the full
-    # suite — they're investigating something specific.
-    if _has_test_labels(ci_inputs):
-        return "full", "test labels specified"
-
-    # Priority 3: release builds run deeper test suites than regular CI.
+    # Priority 2: release builds run deeper test suites than regular CI.
     # * 'nightly' and 'nightly-bkc' get comprehensive (deeper than standard,
     #   on a daily cadence)
     # * 'prerelease' gets full (exhaustive pre-release validation)
@@ -1077,13 +1068,13 @@ def _determine_test_type(
     if ci_inputs.release_type == "prerelease":
         return "full", "release build (prerelease)"
 
-    # Priority 4: schedule runs the full nightly suite — comprehensive
+    # Priority 3: schedule runs the full nightly suite — comprehensive
     # coverage on a cadence, catching regressions that quick tests miss.
     if ci_inputs.is_schedule:
         return "comprehensive", "scheduled run"
 
-    # Priority 5: a submodule change means actual library code changed
-    # (e.g. rocBLAS, MIOpen). These need full testing since the change
+    # Priority 4: a submodule change means actual library code changed
+    # (e.g. rocBLAS, MIOpen). These need standard testing since the change
     # could affect any downstream consumer.
     if git_context.has_submodule_changes is True:
         matching = set(git_context.submodule_paths) & set(git_context.changed_files)
@@ -1248,6 +1239,79 @@ def decide_jobs(
 # ---------------------------------------------------------------------------
 
 
+def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[str]:
+    """Determine which triggers are active for current CI context.
+
+    Triggers are cumulative - multiple can be active at once. For example,
+    a push to main with submodule changes activates both "postsubmit" and
+    "submodule_bump" triggers.
+
+    Note: workflow_dispatch (on_demand) is handled separately - it implicitly
+    allows all families, so it's not returned as a trigger here.
+
+    Returns:
+        Set of active trigger names from: presubmit, postsubmit, submodule_bump,
+        nightly.
+    """
+    triggers: set[str] = set()
+
+    # Event-based triggers (mutually exclusive)
+    # Note: workflow_dispatch handled separately in _should_run_tests_for_family
+    if ci_inputs.is_schedule:
+        triggers.add("nightly")
+    if ci_inputs.is_push:
+        triggers.add("postsubmit")
+    if ci_inputs.is_pull_request:
+        triggers.add("presubmit")
+
+    # Context-based triggers (can stack on top of event triggers)
+    if git_context.has_submodule_changes is True:
+        triggers.add("submodule_bump")
+
+    return triggers
+
+
+def _should_run_tests_for_family(
+    platform_info: dict,
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+) -> tuple[bool, str]:
+    """Determine if tests should run based on tests_on_trigger field.
+
+    This function replaces the old flag-based logic (nightly_check_only_for_family,
+    submodule_bump_tests_only, trigger_test_label_only) with a unified trigger-based
+    approach.
+
+    workflow_dispatch (on_demand) implicitly allows all families to run tests,
+    since it's a manual trigger where users explicitly choose what to run.
+
+    Returns:
+        Tuple of (should_run, reason_string) for logging.
+    """
+    # workflow_dispatch implicitly allows all families
+    if ci_inputs.is_workflow_dispatch:
+        return True, "workflow_dispatch (on_demand)"
+
+    tests_on_trigger = set(platform_info.get("tests_on_trigger", []))
+
+    # If no test triggers configured, tests should not run
+    if not tests_on_trigger:
+        return False, "no tests_on_trigger configured"
+
+    current_triggers = _get_current_triggers(ci_inputs, git_context)
+
+    # Check if any current trigger matches the allowed test triggers
+    matching = tests_on_trigger & current_triggers
+
+    if matching:
+        return True, f"trigger match: {matching}"
+
+    return (
+        False,
+        f"no trigger match (current={current_triggers}, allowed={tests_on_trigger})",
+    )
+
+
 def _expand_build_config_for_platform(
     families: list[str],
     platform: str,
@@ -1367,47 +1431,17 @@ def _expand_build_config_for_platform(
                 f"disabling tests for quick test run"
             )
 
-        # If nightly_check_only_for_family is set, only run tests for schedule
-        # or workflow_dispatch triggers (to allow manual testing of nightly-only archs)
-        if platform_info.get("nightly_check_only_for_family", False) and not (
-            ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch
-        ):
-            test_runs_on = ""
-            print(
-                f"  {family_name}: nightly_check_only_for_family flag set, "
-                f"disabling test runner for non-scheduled/non-dispatch runs"
+        # Use trigger-based test gating (replaces nightly_check_only_for_family,
+        # submodule_bump_tests_only, and trigger_test_label_only flags).
+        # Each family specifies tests_on_trigger list; tests run if any current
+        # trigger matches.
+        if test_runs_on:
+            should_run, reason = _should_run_tests_for_family(
+                platform_info, ci_inputs, git_context
             )
-
-        # If submodule_bump_tests_only is set, only run tests when submodule changes
-        # are detected or on workflow_dispatch (manual triggers).
-        if (
-            platform_info.get("submodule_bump_tests_only", False)
-            and not ci_inputs.is_workflow_dispatch
-            and git_context.has_submodule_changes is not True
-        ):
-            test_runs_on = ""
-            print(
-                f"  {family_name}: submodule_bump_tests_only flag set, "
-                f"disabling tests (no submodule changes detected)"
-            )
-
-        # If trigger_test_label_only is set, only run tests when the family's
-        # label (e.g., gfx950-dcgpu, gfx125X-dcgpu) is present on the PR.
-        # This allows families with limited hardware to have tests opt-in via
-        # PR labels rather than always running. Builds always run regardless.
-        # workflow_dispatch bypasses this check (manual triggers always run tests).
-        # Both pull_request and push triggers respect this flag.
-        if (
-            platform_info.get("trigger_test_label_only", False)
-            and not ci_inputs.is_workflow_dispatch
-        ):
-            family_label = platform_info["family"]
-            if family_label not in ci_inputs.pr_labels:
+            if not should_run:
                 test_runs_on = ""
-                print(
-                    f"  {family_name}: trigger_test_label_only set, "
-                    f"'{family_label}' label not present, disabling tests"
-                )
+                print(f"  {family_name}: tests disabled ({reason})")
 
         # If test_type_for_family is set, force the test type for this family.
         # This overrides the global test_type, allowing families with limited
@@ -1434,6 +1468,15 @@ def _expand_build_config_for_platform(
             family_info["test_type"] = family_test_type
         if test_runs_on and "test-runs-on-labels" in platform_info:
             family_info["test-runs-on-labels"] = platform_info["test-runs-on-labels"]
+        # Include multi-GPU runner info if available
+        if "test-runs-on-multi-gpu" in platform_info:
+            family_info["test-runs-on-multi-gpu"] = platform_info[
+                "test-runs-on-multi-gpu"
+            ]
+        if "test-runs-on-multi-gpu-labels" in platform_info:
+            family_info["test-runs-on-multi-gpu-labels"] = platform_info[
+                "test-runs-on-multi-gpu-labels"
+            ]
         # Per-family test labels allow limiting which tests run for specific architectures
         if "test_labels_for_family" in platform_info:
             family_info["test_labels_for_family"] = platform_info[
