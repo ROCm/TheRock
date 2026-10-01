@@ -168,8 +168,8 @@ That produces a second matrix entry alongside the hardware one, named
 `rocrtst (emulated mi350x)`, which:
 
 - runs on the Linux CPU builder with no GPU devices mapped into the container,
-- fetches the component under test from the current artifact run,
-- overlays `mirage` and `rocjitsu` from the pinned emulator artifact set,
+- fetches the component under test plus `mirage` and `rocjitsu` from the current
+  artifact run,
 - gets 10x the component's `timeout_minutes`, capped at one hour.
 - runs unsharded
 - wraps the unchanged `test_script` in `mirage run`, passing `TEST_EMULATOR` and `TEST_EMULATOR_PROFILE` as literals for repro commands.
@@ -206,29 +206,25 @@ component whose family has no multi-GPU pool still gets its emulated variant.
 >
 > `rocrtst` — the one emulated component today — lives in `rocm-systems`.
 
-### Pinned emulator artifact baseline
+### Pinned emulator source baseline
 
-Emulated component jobs deliberately do **not** consume `mirage` and
-`rocjitsu` from the same artifact run as the component under test. The test
-component should move with the PR being tested, while the emulator should be a
-known baseline. Without that separation, a failure can be caused either by the
-component/library change or by a fresh emulator change from the same source
-tree, and CI cannot tell those cases apart.
+Emulated component jobs fetch `mirage` and `rocjitsu` artifacts from the current
+workflow run with `--mirage --rocjitsu`. The emulator baseline is pinned at the
+source stage instead: the Linux emulation artifact build checks out
+`ROCm/rocm-systems` at `PINNED_EMULATOR_ROCM_SYSTEMS_COMMIT` in
+[`multi_arch_build_portable_linux_artifacts.yml`](../../.github/workflows/multi_arch_build_portable_linux_artifacts.yml)
+and passes that checkout to CMake as `THEROCK_ROCM_SYSTEMS_SOURCE_DIR`.
 
-The pinned baseline is declared in
-[`emulation.py`](../../build_tools/github_actions/emulation.py):
+This keeps the emulator stable while component and library artifacts move with
+the PR under test. Without the source pin, a failing emulated job could be caused
+by the component change, by a runtime/library bug, or by a fresh `mirage` /
+`rocjitsu` change from the same rocm-systems checkout. A fixed emulator source
+commit gives CI a known baseline without depending on retention-bound workflow
+artifacts.
 
-- `EMULATOR_ARTIFACT_REPOSITORY` — the repository that owns the pinned TheRock artifact run,
-- `EMULATOR_ARTIFACT_RUN_ID` — the TheRock run whose Linux artifacts provide the emulator tools,
-- `EMULATOR_ROCM_SYSTEMS_COMMIT` — the rocm-systems source commit used by that artifact run.
-
-`test_component.yml` first installs the component artifacts from the current
-run, then overlays only the emulator artifacts from the pinned run:
-`mirage_run`, `rocjitsu_run`, and `rocjitsu-hotswap_lib`. Bumping the
-emulator means updating those constants together after choosing a new artifact
-run built from the intended rocm-systems commit. That bump should be deliberate
-and called out in the PR description so reviewers know the emulator baseline
-changed.
+To update the emulator baseline, choose the rocm-systems commit that should
+provide `mirage` and `rocjitsu`, update `PINNED_EMULATOR_ROCM_SYSTEMS_COMMIT`,
+and call out the bump in the PR description.
 
 ### Which families are emulated
 

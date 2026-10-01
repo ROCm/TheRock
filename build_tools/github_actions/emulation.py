@@ -37,12 +37,8 @@ EMULATED_PROFILES = frozenset({"mi350x", "mi450x"})
 TIMEOUT_MULTIPLIER = 10
 MAX_TIMEOUT_MINUTES = 60
 
-# Pinned emulator baseline used by emulated test jobs. Bump these together when
-# deliberately updating mirage / rocjitsu. The artifact run is the TheRock
-# rocm-systems bump to the commit below, which includes ROCm/rocm-systems#11312.
-EMULATOR_ARTIFACT_REPOSITORY = "ROCm/TheRock"
-EMULATOR_ARTIFACT_RUN_ID = "36888908989"
-EMULATOR_ROCM_SYSTEMS_COMMIT = "5be26db802ab09955546ab404f83affb0571cb0b"
+# Artifacts an emulated job needs on top of its component's own.
+FETCH_ARTIFACT_ARGS = ("--mirage", "--rocjitsu")
 
 # Matrix keys that configure emulation. Consumed here, never emitted: leaking
 # them would make `component.emulate` truthy on hardware jobs too.
@@ -71,10 +67,6 @@ FORWARDED_ENV = (
     "OPENBLAS_NUM_THREADS",
     # Read by the ROCm runtime; set for every other job in the matrix.
     "ROCM_KPACK_DEBUG",
-    # Log and repro metadata for the pinned mirage / rocjitsu baseline.
-    "TEST_EMULATOR_ARTIFACT_REPOSITORY",
-    "TEST_EMULATOR_ARTIFACT_RUN_ID",
-    "TEST_EMULATOR_ROCM_SYSTEMS_COMMIT",
     # setup-python's interpreter links against a libpython under this path, so
     # without it `python` inside the session dies with exit 127 before running
     # anything. Safe for rocjitsu, which injects LD_PRELOAD and never sets this;
@@ -167,18 +159,21 @@ def build_emulated_job(job_config: dict, emulator: str, profile: str) -> dict:
     emulated["test_component"] = job_config.get("test_component", base_job_name)
     emulated["emulator"] = emulator
     emulated["emulator_profile"] = profile
-    emulated["emulator_artifact_repository"] = EMULATOR_ARTIFACT_REPOSITORY
-    emulated["emulator_artifact_run_id"] = EMULATOR_ARTIFACT_RUN_ID
-    emulated["emulator_rocm_systems_commit"] = EMULATOR_ROCM_SYSTEMS_COMMIT
     # rocjitsu emulates the GPU in software, so this must not hold a GPU runner.
     emulated["linux_cpu_runner"] = True
     emulated["timeout_minutes"] = min(
         job_config["timeout_minutes"] * TIMEOUT_MULTIPLIER,
         MAX_TIMEOUT_MINUTES,
     )
-    # The component under test is fetched from the current run; mirage /
-    # rocjitsu are overlaid later from the pinned emulator artifact run.
-    emulated["fetch_artifact_args"] = job_config.get("fetch_artifact_args", "")
+    # install_rocm_from_artifacts.py treats --base-only as exclusive, so
+    # "--base-only --mirage" would fetch neither. Dropping it loses nothing:
+    # the extra-artifact branch pulls the base patterns too.
+    base_args = [
+        arg
+        for arg in job_config.get("fetch_artifact_args", "").split()
+        if arg != "--base-only"
+    ]
+    emulated["fetch_artifact_args"] = " ".join(base_args + list(FETCH_ARTIFACT_ARGS))
     # An emulated job already runs a reduced subset; sharding it costs more in
     # artifact fetches than it saves.
     emulated["total_shards"] = 1
@@ -231,18 +226,6 @@ def log_emulator_banner(env: Env = os.environ) -> None:
     """Print what is being emulated, for readability in CI logs."""
     print(f"# TEST_EMULATOR: {emulator_name(env) or '<none>'}")
     print(f"# TEST_EMULATOR_PROFILE: {emulator_profile(env) or '<none>'}")
-    print(
-        "# TEST_EMULATOR_ARTIFACT_REPOSITORY: "
-        f"{env.get('TEST_EMULATOR_ARTIFACT_REPOSITORY', '<unset>')}"
-    )
-    print(
-        "# TEST_EMULATOR_ARTIFACT_RUN_ID: "
-        f"{env.get('TEST_EMULATOR_ARTIFACT_RUN_ID', '<unset>')}"
-    )
-    print(
-        "# TEST_EMULATOR_ROCM_SYSTEMS_COMMIT: "
-        f"{env.get('TEST_EMULATOR_ROCM_SYSTEMS_COMMIT', '<unset>')}"
-    )
     print(f"# AMDGPU_FAMILIES: {env.get('AMDGPU_FAMILIES', '<unset>')}")
     print(f"# AMDGPU_TARGETS: {env.get('AMDGPU_TARGETS', '<unset>')}")
     sys.stdout.flush()

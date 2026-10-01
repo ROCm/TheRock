@@ -107,6 +107,12 @@ jobs:
       EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
       BUILD_DIR: build
       CACHE_DIR: ${{ github.workspace }}/.container-cache
+      # mirage and rocjitsu provide the software GPU baseline for emulated
+      # tests. Keep their source fixed until deliberately bumping this pin.
+      PINNED_EMULATOR_ROCM_SYSTEMS_COMMIT: "5be26db802ab09955546ab404f83affb0571cb0b"
+      PINNED_EMULATOR_ROCM_SYSTEMS_CHECKOUT_PATH: pinned-emulator-rocm-systems
+      EXTERNAL_SOURCE_CMAKE_ARG: ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }}
+      PINNED_EMULATOR_SOURCE_CMAKE_ARG: ${{ inputs.stage_name == 'emulation' && '-DTHEROCK_ROCM_SYSTEMS_SOURCE_DIR=pinned-emulator-rocm-systems' || '' }}
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -137,6 +143,16 @@ jobs:
           repository: ${{ fromJSON(inputs.external_repo_config).repository }}
           ref: ${{ fromJSON(inputs.external_repo_config).ref }}
           path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}
+
+      - name: Checkout pinned rocm-systems for emulator baseline
+        if: ${{ inputs.stage_name == 'emulation' }}
+        timeout-minutes: 10
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: ROCm/rocm-systems
+          ref: ${{ env.PINNED_EMULATOR_ROCM_SYSTEMS_COMMIT }}
+          path: ${{ env.PINNED_EMULATOR_ROCM_SYSTEMS_CHECKOUT_PATH }}
 
       - name: Install python deps
         run: pip install -r requirements.txt
@@ -203,14 +219,18 @@ jobs:
           if ((SUBPROJECT_TEST_JOBS > 16)); then
             SUBPROJECT_TEST_JOBS=16
           fi
+          if [[ -n "${PINNED_EMULATOR_SOURCE_CMAKE_ARG}" ]]; then
+            echo "Using pinned rocm-systems source for mirage / rocjitsu: ${PINNED_EMULATOR_ROCM_SYSTEMS_COMMIT}"
+          fi
           cmake -B "${BUILD_DIR}" -S . -GNinja \
             -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
             -DTHEROCK_ROCJITSU_TEST_JOBS="${SUBPROJECT_TEST_JOBS}" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
-            ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
+            ${EXTERNAL_SOURCE_CMAKE_ARG} \
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
+            ${PINNED_EMULATOR_SOURCE_CMAKE_ARG} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage

@@ -90,9 +90,6 @@ jobs:
       AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
       ARTIFACT_GROUP: ${{ inputs.artifact_group }}
       BUILD_VARIANT: ${{ inputs.build_variant }}
-      TEST_EMULATOR_ARTIFACT_REPOSITORY: ${{ fromJSON(inputs.component).emulator_artifact_repository || '' }}
-      TEST_EMULATOR_ARTIFACT_RUN_ID: ${{ fromJSON(inputs.component).emulator_artifact_run_id || '' }}
-      TEST_EMULATOR_ROCM_SYSTEMS_COMMIT: ${{ fromJSON(inputs.component).emulator_rocm_systems_commit || '' }}
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
@@ -147,9 +144,6 @@ jobs:
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
           RELEASE_TYPE: ${{ inputs.release_type }}
-          PINNED_EMULATOR_ARTIFACT_REPOSITORY: ${{ env.TEST_EMULATOR_ARTIFACT_REPOSITORY }}
-          PINNED_EMULATOR_ARTIFACT_RUN_ID: ${{ env.TEST_EMULATOR_ARTIFACT_RUN_ID }}
-          PINNED_EMULATOR_ROCM_SYSTEMS_COMMIT: ${{ env.TEST_EMULATOR_ROCM_SYSTEMS_COMMIT }}
 
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
@@ -249,9 +243,6 @@ jobs:
           COMPONENT_TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
           REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
           COMPONENT_FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
-          COMPONENT_EMULATOR_ARTIFACT_REPOSITORY: ${{ fromJSON(inputs.component).emulator_artifact_repository || '' }}
-          COMPONENT_EMULATOR_ARTIFACT_RUN_ID: ${{ fromJSON(inputs.component).emulator_artifact_run_id || '' }}
-          COMPONENT_EMULATOR_ROCM_SYSTEMS_COMMIT: ${{ fromJSON(inputs.component).emulator_rocm_systems_commit || '' }}
         run: |
           python ./build_tools/github_actions/reproduce_test_failure.py \
             --run-id "${ARTIFACT_RUN_ID}" \
@@ -264,9 +255,6 @@ jobs:
             --test-type "${COMPONENT_TEST_TYPE}" \
             --print-cmd \
             --fetch-artifact-args="${COMPONENT_FETCH_ARTIFACT_ARGS}" \
-            --emulator-artifact-repository="${COMPONENT_EMULATOR_ARTIFACT_REPOSITORY}" \
-            --emulator-artifact-run-id="${COMPONENT_EMULATOR_ARTIFACT_RUN_ID}" \
-            --emulator-rocm-systems-commit="${COMPONENT_EMULATOR_ROCM_SYSTEMS_COMMIT}" \
             --additional-requirements-files="${REQUIREMENTS_FILES}"
 
       - name: Post-job cleanup GPU processes on Linux

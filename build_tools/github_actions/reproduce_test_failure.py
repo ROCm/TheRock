@@ -90,34 +90,12 @@ def build_reproduction_command(args: argparse.Namespace) -> str:
         cmd += f" --test-type {args.test_type}"
     if args.fetch_artifact_args:
         cmd += f' --fetch-artifact-args="{args.fetch_artifact_args}"'
-    if args.emulator_artifact_run_id:
-        cmd += f" --emulator-artifact-run-id {args.emulator_artifact_run_id}"
-        cmd += f" --emulator-artifact-repository {args.emulator_artifact_repository}"
-    if args.emulator_rocm_systems_commit:
-        cmd += f" --emulator-rocm-systems-commit {args.emulator_rocm_systems_commit}"
     if args.additional_requirements_files:
         cmd += (
             " --additional-requirements-files="
             f'"{args.additional_requirements_files}"'
         )
     return cmd
-
-
-def build_emulator_fetch_command(args: argparse.Namespace) -> str:
-    """Build the command that overlays pinned mirage / rocjitsu artifacts."""
-    fetch_cmd = (
-        f"python build_tools/fetch_artifacts.py "
-        f"--run-id {args.emulator_artifact_run_id} "
-        f"--run-github-repo {args.emulator_artifact_repository} "
-        f"--artifact-group {args.amdgpu_family} "
-        f'--output-dir "{args.output_dir}" '
-        f"--platform linux "
-        f"--flatten"
-    )
-    if args.amdgpu_targets:
-        fetch_cmd += f" --amdgpu-targets {args.amdgpu_targets}"
-    fetch_cmd += " '^mirage_run_' '^rocjitsu_run_' '^rocjitsu-hotswap_lib_'"
-    return fetch_cmd
 
 
 def append_additional_requirements_step(
@@ -164,31 +142,19 @@ def run_linux(args: argparse.Namespace) -> int:
         ("Creating virtual environment", "uv venv .venv && source .venv/bin/activate"),
         ("Installing dependencies", "uv pip install -r requirements-test.txt"),
         ("Downloading artifacts", fetch_cmd),
+        (
+            "Setting environment variables",
+            " && ".join(
+                [
+                    f'export THEROCK_BIN_DIR="{args.output_dir}/bin"',
+                    f'export OUTPUT_ARTIFACTS_DIR="{args.output_dir}"',
+                    f"export SHARD_INDEX={args.shard_index}",
+                    f"export TOTAL_SHARDS={args.total_shards}",
+                    f"export TEST_TYPE={args.test_type}",
+                ]
+            ),
+        ),
     ]
-    if args.emulator_artifact_run_id:
-        steps.append(
-            (
-                "Downloading pinned emulator artifacts",
-                build_emulator_fetch_command(args),
-            )
-        )
-
-    env_exports = [
-        f'export THEROCK_BIN_DIR="{args.output_dir}/bin"',
-        f'export OUTPUT_ARTIFACTS_DIR="{args.output_dir}"',
-        f"export SHARD_INDEX={args.shard_index}",
-        f"export TOTAL_SHARDS={args.total_shards}",
-        f"export TEST_TYPE={args.test_type}",
-    ]
-    if args.emulator_artifact_run_id:
-        env_exports.extend(
-            [
-                f"export TEST_EMULATOR_ARTIFACT_REPOSITORY={args.emulator_artifact_repository}",
-                f"export TEST_EMULATOR_ARTIFACT_RUN_ID={args.emulator_artifact_run_id}",
-                f"export TEST_EMULATOR_ROCM_SYSTEMS_COMMIT={args.emulator_rocm_systems_commit}",
-            ]
-        )
-    steps.append(("Setting environment variables", " && ".join(env_exports)))
 
     append_additional_requirements_step(steps, args.additional_requirements_files)
 
@@ -421,21 +387,6 @@ def main() -> int:
         help="Docker image (Linux only)",
     )
     parser.add_argument("--fetch-artifact-args", default="", help="Extra artifact args")
-    parser.add_argument(
-        "--emulator-artifact-run-id",
-        default="",
-        help="Pinned TheRock run ID for mirage / rocjitsu artifacts",
-    )
-    parser.add_argument(
-        "--emulator-artifact-repository",
-        default="ROCm/TheRock",
-        help="GitHub repository for --emulator-artifact-run-id",
-    )
-    parser.add_argument(
-        "--emulator-rocm-systems-commit",
-        default="",
-        help="rocm-systems commit used by the pinned mirage / rocjitsu artifacts",
-    )
     parser.add_argument(
         "--output-dir",
         default=os.environ.get("OUTPUT_ARTIFACTS_DIR", "build"),
