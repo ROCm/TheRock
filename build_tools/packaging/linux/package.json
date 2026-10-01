@@ -1418,7 +1418,71 @@
             ]
           }
         ]
-      },
+      }
+    ],
+    "Disable_DWZ": "True",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-rocwmma-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6",
+      "amdrocm-runtime-devel"
+    ],
+    "RPMRequires": [
+      "python3",
+      "amdrocm-runtime-devel"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "rocWMMA development headers and libraries",
+    "Description_Long": "Development package for the rocWMMA C++ library for accelerating mixed-precision matrix multiply-accumulate (MMA) operations on AMD GPU matrix cores. Contains headers, CMake config and libraries. Previously bundled into the hipccl (ccl) package; split out as its own package.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "rocwmma",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocWMMA",
+            "Components": [
+              "dev",
+              "lib"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-rocwmma-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-rocwmma-devel"
+    ],
+    "RPMRequires": [
+      "amdrocm-rocwmma-devel"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "rocWMMA test suite and validation binaries",
+    "Description_Long": "Test suite for the rocWMMA matrix multiply-accumulate library. Includes unit tests and validation binaries for mixed-precision MMA on AMD GPU matrix cores.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
       {
         "Artifact": "rocwmma",
         "Artifact_Subdir": [
@@ -1429,7 +1493,70 @@
             ]
           }
         ]
-      },
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-libhipcxx-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6",
+      "amdrocm-runtime-devel"
+    ],
+    "RPMRequires": [
+      "python3",
+      "amdrocm-runtime-devel"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "libhipcxx (HIP C++ standard library) development headers",
+    "Description_Long": "Development package for libhipcxx, the HIP port of the CUDA C++ standard library (libcu++), providing heterogeneous C++ standard library facilities for AMD GPUs. Header-only; installs under include/hipccl. Previously bundled into the hipccl (ccl) package; split out as its own package.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "Apache-2.0 WITH LLVM-exception",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/libhipcxx",
+    "Artifactory": [
+      {
+        "Artifact": "libhipcxx",
+        "Artifact_Subdir": [
+          {
+            "Name": "libhipcxx",
+            "Components": [
+              "lib",
+              "dev"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-libhipcxx-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-libhipcxx-devel"
+    ],
+    "RPMRequires": [
+      "amdrocm-libhipcxx-devel"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "libhipcxx test suite",
+    "Description_Long": "Test suite for libhipcxx, the HIP port of the CUDA C++ standard library. Includes lit-based conformance tests on AMD GPUs.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "Apache-2.0 WITH LLVM-exception",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/libhipcxx",
+    "Artifactory": [
       {
         "Artifact": "libhipcxx",
         "Artifact_Subdir": [
@@ -1442,7 +1569,6 @@
         ]
       }
     ],
-    "Disable_DWZ": "True",
     "Gfxarch": "True"
   },
   {
@@ -1477,30 +1603,6 @@
             "Components": [
               "dev",
               "doc"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "libhipcxx",
-        "Artifact_Subdir": [
-          {
-            "Name": "libhipcxx",
-            "Components": [
-              "lib",
-              "dev"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "rocwmma",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocWMMA",
-            "Components": [
-              "dev",
-              "lib"
             ]
           }
         ]
@@ -3642,6 +3744,8 @@
       "amdrocm-solver-devel",
       "amdrocm-rand-devel",
       "amdrocm-hipccl-devel",
+      "amdrocm-rocwmma-devel",
+      "amdrocm-libhipcxx-devel",
       "amdrocm-opencl-devel",
       "amdrocm-hipblas-common-devel",
       "amdrocm-rccl-devel",
@@ -3663,6 +3767,8 @@
       "amdrocm-solver-devel",
       "amdrocm-rand-devel",
       "amdrocm-hipccl-devel",
+      "amdrocm-rocwmma-devel",
+      "amdrocm-libhipcxx-devel",
       "amdrocm-opencl-devel",
       "amdrocm-hipblas-common-devel",
       "amdrocm-rccl-devel",
