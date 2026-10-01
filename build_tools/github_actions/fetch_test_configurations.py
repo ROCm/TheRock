@@ -1470,11 +1470,9 @@ def run():
             if is_cpu_only:
                 if test_runs_on_cpu:
                     component["test_runner"] = test_runs_on_cpu
-                    logging.info(
-                        f"  {job_name}: CPU-only, using runner: {test_runs_on_cpu}"
-                    )
+                    print(f"  {job_name}: CPU-only, using runner: {test_runs_on_cpu}")
                 else:
-                    logging.info(
+                    print(
                         f"Excluding job {job_name}: CPU runner required but none configured"
                     )
                     continue
