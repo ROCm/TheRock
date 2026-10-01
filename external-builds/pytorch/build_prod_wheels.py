@@ -662,6 +662,7 @@ def _setup_common_build_env(
     pytorch_rocm_arch: str,
     triton_dir: Path | None,
     is_windows: bool,
+    asan: bool = False,
 ) -> dict[str, str]:
     """Construct the common environment dict shared by all wheel builds."""
     env: dict[str, str] = {
@@ -706,10 +707,12 @@ def _setup_common_build_env(
                 "CXX": str((llvm_dir / "clang-cl.exe").resolve()),
             }
         )
-    else:
+    elif not asan:
         env.update(
             {
-                # Workaround GCC12 compiler flags.
+                # Workaround GCC12 compiler flags. Clang rejects
+                # -Wno-error=maybe-uninitialized and -Wno-error=restrict, so the
+                # ASAN build, which uses ROCm Clang, must not inherit them.
                 "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
                 "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
             }
@@ -934,7 +937,13 @@ def do_build(args: argparse.Namespace):
     pytorch_rocm_arch = pytorch_rocm_arch.replace(",", ";")
 
     env = _setup_common_build_env(
-        cmake_prefix, bin_dir, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
+        cmake_prefix,
+        bin_dir,
+        rocm_dir,
+        pytorch_rocm_arch,
+        triton_dir,
+        is_windows,
+        asan=args.asan,
     )
     print(f"  PATH = {env['PATH']}")
 
