@@ -467,7 +467,16 @@ def check_available_labels():
 
         return gpu_archs, exclude_labels
     except subprocess.CalledProcessError as e:
-        print(f"Error running ctest --print-labels: {e}", file=sys.stderr)
+        # Surface ctest's own output so failures during test discovery are
+        # diagnosable from CI logs. For components using deferred (PRE_TEST)
+        # Catch2 discovery, `ctest -N` executes each test binary to enumerate
+        # cases; when that enumeration fails, the real reason is in ctest's
+        # captured stdout/stderr (otherwise swallowed).
+        print(f"Error running ctest discovery: {e}", file=sys.stderr)
+        if e.stdout:
+            print(f"--- ctest stdout ---\n{e.stdout}", file=sys.stderr)
+        if e.stderr:
+            print(f"--- ctest stderr ---\n{e.stderr}", file=sys.stderr)
         sys.exit(1)
     except FileNotFoundError:
         print(
