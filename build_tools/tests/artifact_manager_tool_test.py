@@ -1621,6 +1621,74 @@ class ParseTargetFamiliesTest(unittest.TestCase):
         self.assertIn("gfx1101", result)
 
 
+class FamilyArtifactSelectionTest(unittest.TestCase):
+    """Exercise the family-expansion path used by packaging workflows."""
+
+    def setUp(self):
+        self.available = {
+            "rand_lib_generic.tar.zst",
+            "rand_lib_gfx1250.tar.zst",
+            "rand_lib_gfx1250-strict.tar.zst",
+            "rand_lib_gfx125X-all.tar.zst",
+            "rand_lib_gfx942.tar.zst",
+        }
+
+    def _select(self, families: str) -> set[str]:
+        args = argparse.Namespace(
+            amdgpu_families=families,
+            amdgpu_targets="",
+            generic_only=False,
+            expand_family_to_targets=True,
+        )
+        targets = artifact_manager.parse_target_families(args)
+        return set(
+            artifact_manager.find_available_artifacts({"rand"}, targets, self.available)
+        )
+
+    def test_gfx1250_does_not_select_gfx1250_strict(self):
+        self.assertEqual(
+            self._select("gfx1250"),
+            {"rand_lib_generic.tar.zst", "rand_lib_gfx1250.tar.zst"},
+        )
+
+    def test_gfx1250_strict_does_not_select_gfx1250(self):
+        self.assertEqual(
+            self._select("gfx1250-strict"),
+            {"rand_lib_generic.tar.zst", "rand_lib_gfx1250-strict.tar.zst"},
+        )
+
+    def test_combined_selection_preserves_both_targets(self):
+        self.assertEqual(
+            self._select("gfx1250;gfx1250-strict"),
+            {
+                "rand_lib_generic.tar.zst",
+                "rand_lib_gfx1250.tar.zst",
+                "rand_lib_gfx1250-strict.tar.zst",
+            },
+        )
+
+    def test_broad_family_selects_family_and_enabled_target_artifacts(self):
+        self.assertEqual(
+            self._select("gfx125X-all"),
+            {
+                "rand_lib_generic.tar.zst",
+                "rand_lib_gfx125X-all.tar.zst",
+                "rand_lib_gfx1250.tar.zst",
+            },
+        )
+
+    def test_explicit_target_can_supplement_broad_family(self):
+        self.assertEqual(
+            self._select("gfx125X-all;gfx1250-strict"),
+            {
+                "rand_lib_generic.tar.zst",
+                "rand_lib_gfx125X-all.tar.zst",
+                "rand_lib_gfx1250.tar.zst",
+                "rand_lib_gfx1250-strict.tar.zst",
+            },
+        )
+
+
 class BootstrapMarkerTest(unittest.TestCase):
     """End-to-end tests for where bootstrapping writes ".prebuilt" markers.
 

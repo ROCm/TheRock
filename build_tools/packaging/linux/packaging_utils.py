@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 
+import functools
 import json
 import os
 import platform
@@ -21,6 +22,8 @@ if str(BUILD_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(BUILD_TOOLS_DIR))
 
 from _therock_utils.log_utils import TheRockLogger
+from _therock_utils.sdk_targets import group_package_targets, package_owner
+from _therock_utils.artifacts import _identical_entries, PatternMatcher
 
 logger = TheRockLogger(__name__)
 
@@ -458,7 +461,11 @@ def update_package_name(pkg_name, config: PackageConfig):
                 pass
             else:
                 # Device package: add gfx arch suffix (e.g., amdrocm-fft8.2-gfx1100)
-                gfx_arch = config.gfx_arch.lower().split("-", 1)[0]
+                gfx_arch = re.sub(
+                    r"-(?:all|dcgpu|dgpu|igpu)$",
+                    "",
+                    package_owner(config.gfx_arch).lower(),
+                )
                 updated_pkgname += "-" + gfx_arch
         else:
             # Single-arch mode: add gfx arch suffix
@@ -488,7 +495,7 @@ def expand_metapackage_to_all_archs(pkg_name, gfxarch_list, config: PackageConfi
         pkg_name, gfxarch_list, config.artifacts_dir
     )
 
-    for gfx_arch in filtered_archs:
+    for gfx_arch in group_package_targets(filtered_archs):
         # Create new config for each arch with versioned_pkg=True
         local_config = replace(config, versioned_pkg=True, gfx_arch=gfx_arch)
         # update_package_name will append version and gfx_arch
@@ -524,7 +531,7 @@ def expand_kpack_meta_dependencies(pkg_name, gfxarch_list, config: PackageConfig
     )
 
     # Add arch-specific (device) packages only for available architectures
-    for gfx_arch in filtered_archs:
+    for gfx_arch in group_package_targets(filtered_archs):
         arch_config = replace(config, versioned_pkg=True, gfx_arch=gfx_arch)
         arch_pkg = update_package_name(pkg_name, arch_config)
         packages.append(arch_pkg)
@@ -670,7 +677,10 @@ def process_main_dependencies_kpack(
             dep_list = pkg_info.get(field_key, [])
             # Filter deps without artifacts
             dep_list = filter_dependencies_by_artifacts(
-                dep_list, config.artifacts_dir, config.gfx_arch
+                dep_list,
+                config.artifacts_dir,
+                config.gfx_arch,
+                target_members=package_target_members(config),
             )
     elif config.gfx_arch == GFX_META:
         # GFX_META for non-meta gfxarch packages: depend on host + all device packages
@@ -714,7 +724,10 @@ def process_main_dependencies_kpack(
         ]
         # Filter deps without artifacts
         gfxarch_deps = filter_dependencies_by_artifacts(
-            gfxarch_deps, config.artifacts_dir, config.gfx_arch
+            gfxarch_deps,
+            config.artifacts_dir,
+            config.gfx_arch,
+            target_members=package_target_members(config),
         )
         dep_list = [pkg_name] + gfxarch_deps
 
@@ -910,8 +923,52 @@ def move_packages_to_destination(updated_pkg_name, config: PackageConfig):
     return output_packages
 
 
+def package_target_members(config: PackageConfig) -> tuple[str, ...]:
+    """Return selected targets contributing to the current device package."""
+    if not config.enable_kpack or config.gfx_arch in ("", GFX_HOST, GFX_META):
+        return ()
+    return tuple(
+        group_package_targets(config.gfxarch_list).get(
+            package_owner(config.gfx_arch), [config.gfx_arch]
+        )
+    )
+
+
+class PackageCollisionError(ValueError):
+    """Selected payloads cannot share one destination package."""
+
+
+def validate_package_roots(roots: list[Path]) -> None:
+    """Reject conflicting destination paths before either backend copies files."""
+    entries: dict[str, os.DirEntry[str]] = {}
+    for root in roots:
+        if not root.is_dir():
+            raise FileNotFoundError(f"Missing package source directory: {root}")
+        matcher = PatternMatcher()
+        matcher.add_basedir(root)
+        for relative, entry in matcher.all.items():
+            previous = entries.get(relative)
+            if previous is None:
+                entries[relative] = entry
+                continue
+            # Native packages preserve links instead of resolving their targets.
+            if previous.is_symlink() and entry.is_symlink():
+                identical = os.readlink(previous.path) == os.readlink(entry.path)
+            else:
+                identical = _identical_entries(previous, entry)
+            if not identical:
+                raise PackageCollisionError(
+                    f"Conflicting package path {relative}: {previous.path} and {entry.path}"
+                )
+
+
 def filter_components_fromartifactory(
-    pkg_name, artifacts_dir, gfx_arch, enable_kpack=False
+    pkg_name,
+    artifacts_dir,
+    gfx_arch,
+    enable_kpack=False,
+    *,
+    target_members: tuple[str, ...] = (),
 ):
     """Get the list of Artifactory directories required for creating the package.
 
@@ -925,6 +982,20 @@ def filter_components_fromartifactory(
 
     Returns: List of directories
     """
+    if enable_kpack and target_members:
+        roots = list(
+            dict.fromkeys(
+                root
+                for member in target_members
+                for root in filter_components_fromartifactory(
+                    pkg_name, artifacts_dir, member, enable_kpack
+                )
+            )
+        )
+        if len(target_members) > 1:
+            validate_package_roots(roots)
+        return roots
+
     logger.debug("filter_components_fromartifactory")
 
     pkg_info = get_package_info(pkg_name)
@@ -1091,6 +1162,24 @@ def resolve_versioned_dependency_list(dep_list, config: PackageConfig, is_meta):
     return deps
 
 
+@functools.lru_cache(maxsize=None)
+def _artifact_dir_name_index(artifacts_dir: str) -> dict[str, list[str]]:
+    """One-time directory listing of artifacts_dir, indexed by each entry's
+    name with any ":xnack..." suffix stripped.
+
+    has_artifact_for_arch() calls this once per (package, arch, component)
+    combination across a full packaging run; caching the listing avoids
+    re-scanning a potentially large artifacts_dir on every call.
+    """
+    index: dict[str, list[str]] = {}
+    try:
+        for entry in Path(artifacts_dir).iterdir():
+            index.setdefault(entry.name.split(":", 1)[0], []).append(entry.name)
+    except FileNotFoundError:
+        pass
+    return index
+
+
 def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
     """Check if a package has artifacts available for a specific architecture.
 
@@ -1136,30 +1225,42 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
             artifact_subdir = subdir["Name"]
             component_list = subdir["Components"]
             for component in component_list:
-                source_dir = (
-                    Path(artifacts_dir)
-                    / f"{artifact_prefix}_{component}_{artifact_suffix}"
+                # Check the plain artifact directory and any xnack variants
+                # (e.g. ":xnack+"), matching filter_components_fromartifactory().
+                # Some components (e.g. rand, solver, hiptensor, rocalution) are
+                # only ever built with an xnack suffix for gfx942/gfx950, so
+                # checking only the plain path here falsely reports them as
+                # missing and drops the arch from the meta package's Depends:.
+                #
+                # Looked up via a cached directory-name index (see
+                # _artifact_dir_name_index) rather than a fresh glob() per
+                # component, since this runs once per (package, arch,
+                # component) across a full packaging run.
+                base_pattern = f"{artifact_prefix}_{component}_{artifact_suffix}"
+                matching_names = _artifact_dir_name_index(str(artifacts_dir)).get(
+                    base_pattern, []
                 )
-                if not source_dir.exists():
-                    continue
 
-                # Check if the required subdirectory exists in the manifest
-                manifest_file = source_dir / "artifact_manifest.txt"
-                if not manifest_file.exists():
-                    continue
+                for name in matching_names:
+                    source_dir = Path(artifacts_dir) / name
 
-                try:
-                    with manifest_file.open("r", encoding="utf-8") as file:
-                        for line in file:
-                            match_found = (
-                                isinstance(artifact_subdir, str)
-                                and (artifact_subdir.lower() + "/") in line.lower()
-                            )
-                            if match_found and line.strip():
-                                # Found at least one required subdirectory in the manifest
-                                return True
-                except OSError:
-                    continue
+                    # Check if the required subdirectory exists in the manifest
+                    manifest_file = source_dir / "artifact_manifest.txt"
+                    if not manifest_file.exists():
+                        continue
+
+                    try:
+                        with manifest_file.open("r", encoding="utf-8") as file:
+                            for line in file:
+                                match_found = (
+                                    isinstance(artifact_subdir, str)
+                                    and (artifact_subdir.lower() + "/") in line.lower()
+                                )
+                                if match_found and line.strip():
+                                    # Found at least one required subdirectory in the manifest
+                                    return True
+                    except OSError:
+                        continue
 
     return False
 
@@ -1212,7 +1313,11 @@ def filter_archs_with_artifacts(
 
 
 def filter_dependencies_by_artifacts(
-    dep_list: list, artifacts_dir: Path, gfx_arch: str
+    dep_list: list,
+    artifacts_dir: Path,
+    gfx_arch: str,
+    *,
+    target_members: tuple[str, ...] = (),
 ) -> list:
     """Filter dependency list to exclude packages without artifacts.
 
@@ -1242,7 +1347,10 @@ def filter_dependencies_by_artifacts(
             continue
 
         # Check if gfxarch package has artifacts
-        if has_artifact_for_arch(dep, artifacts_dir, gfx_arch):
+        if any(
+            has_artifact_for_arch(dep, artifacts_dir, member)
+            for member in (target_members or (gfx_arch,))
+        ):
             filtered.append(dep)
         else:
             logger.warning(f"WORKAROUND: Excluding {dep} (no artifacts for {gfx_arch})")
