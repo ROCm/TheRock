@@ -68,7 +68,7 @@ on:
       build_pytorch:
         description: "Build PyTorch wheels"
         type: boolean
-        default: false
+        default: true
       python_version:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
@@ -91,7 +91,7 @@ jobs:
       prerelease_version: ${{ inputs.prerelease_version }}
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || 'all' }}
       windows_amdgpu_families: "none"
-      build_pytorch: false
+      build_pytorch: ${{ inputs.build_pytorch }}
       build_jax: false
       python_version: ${{ inputs.python_version }}
       repository: ${{ inputs.repository || github.repository }}
