@@ -417,7 +417,7 @@ Safety Features:
         help=(
             "Product-local aggregate index to publish into with --structured: "
             "whl is the flat pip-installable index, whl-next is the device-extra "
-            "index used for gfx-specific builds, whl-asan is for ASAN-instrumented "
+            "index used for gfx-specific builds, whl-next-asan is for ASAN-instrumented "
             f"wheels (default: {STRUCTURED_DEFAULT_INDEX})"
         ),
     )
