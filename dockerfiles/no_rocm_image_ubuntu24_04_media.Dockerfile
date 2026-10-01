@@ -6,8 +6,12 @@ FROM ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
 # libraries are not bundled in TheRock artifacts and must be present at test
 # build time. The corresponding published image is:
 #   ghcr.io/rocm/no_rocm_image_ubuntu24_04_media:latest
-RUN sudo apt-get install -y --no-install-recommends \
-    libavcodec-dev \
-    libavformat-dev \
-    libavutil-dev \
-    pkg-config
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libavcodec-dev \
+        libavformat-dev \
+        libavutil-dev \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+USER tester

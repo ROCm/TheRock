@@ -25,8 +25,9 @@ The following labels may be added to a pull request to modify CI behavior:
 | `ci:run-all-archs` | Build and test all possible architectures                                                                                                                                                         |
 | `ci:asan`          | Enable ASAN CI builds and tests. ASAN CI is skipped by default on PRs unless this label is present.                                                                                               |
 | `ci:host-asan`     | Alias for `ci:asan`. Enable ASAN CI builds and tests.                                                                                                                                             |
-| `gfx...`           | Opt-in to building and testing the specified gfx family (e.g. `gfx120X`, `gfx950`)                                                                                                                |
-| `test:...`         | Run tests only for the specified projects (e.g. `test:rocthrust`, `test:hipblaslt`). Sets test level to `full` unless overridden by `test_filter:`. Multiple `test:` labels can be combined.      |
+| `ci:run-multi-gpu` | Opt-in to running multi-GPU tests.                                                                                                                                                                |
+| `ci:gfx...`        | Opt-in to building and testing the specified gfx family (e.g. `ci:gfx120X-all`, `ci:gfx950-dcgpu`)                                                                                                |
+| `test:...`         | Run tests only for the specified projects (e.g. `test:rocthrust`, `test:hipblaslt`). Multiple `test:` labels can be combined.                                                                     |
 | `test_runner:...`  | Run tests on only custom test machines (e.g. `test_runner:oem`). Single-arch CI only.                                                                                                             |
 | `test_filter:...`  | Override the test level (e.g. `test_filter:comprehensive`, `test_filter:quick`). Takes priority over all other test level logic. See [test_filtering.md](./test_filtering.md) for allowed values. |
 

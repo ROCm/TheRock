@@ -63,7 +63,7 @@ import baseline_runs
 import github_actions_api
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Callable, Optional, Sequence
+from typing import Callable, Mapping, Optional, Sequence
 
 # Add build_tools to the path so sibling CI modules and _therock_utils import
 # cleanly regardless of the current working directory.
@@ -71,6 +71,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from _therock_utils.artifact_backend import ARTIFACT_EXTENSIONS
 from _therock_utils.build_topology import BuildTopology, get_topology
+from _therock_utils.cmake_amdgpu_targets import (
+    amdgpu_family_map,
+    expand_families,
+)
 from artifact_manager import ARTIFACT_COMPONENTS
 from baseline_runs import BaselineRun, RequiredArtifact
 from github_actions_api import GitHubAPIError
@@ -98,7 +102,14 @@ class StageReuseMode(enum.Enum):
         return default
 
 
-BaselineSelector = Callable[[Sequence[RequiredArtifact]], BaselineRun | None]
+StageArtifactRequirements = Mapping[
+    str,
+    Sequence[RequiredArtifact],
+]
+BaselineSelector = Callable[
+    [StageArtifactRequirements],
+    BaselineRun | None,
+]
 
 
 @dataclass(frozen=True)
@@ -135,7 +146,7 @@ class AutoStageReuse:
     reasons: tuple[str, ...]
     report_lines: tuple[str, ...] = field(default_factory=tuple)
     platform_available: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    # Tracks which platforms had no commit-compatible baseline (vs missing artifacts)
+    # Tracks platforms for which baseline selection returned no usable run.
     platforms_no_compatible_baseline: tuple[str, ...] = field(default_factory=tuple)
     # Granular artifact-level reuse fields
     reusable_artifacts: tuple[str, ...] = field(default_factory=tuple)
@@ -171,27 +182,115 @@ def _platform_target_families(
     raise ValueError(f"unsupported build platform: {platform}")
 
 
+def _expand_target_families(
+    target_families: Sequence[str],
+) -> tuple[str, ...]:
+    """Expand CI family names to concrete artifact target names."""
+
+    family_map = amdgpu_family_map()
+    expanded_targets: list[str] = []
+
+    for requested_family in target_families:
+        if requested_family == GENERIC_FAMILY:
+            continue
+
+        requested_lower = requested_family.lower()
+        matching_families = [
+            family_name
+            for family_name in family_map
+            if family_name.lower() == requested_lower
+            or family_name.lower().startswith(f"{requested_lower}-")
+        ]
+
+        if not matching_families:
+            raise ValueError(f"Cannot expand AMDGPU target family: {requested_family}")
+
+        for target in expand_families(
+            matching_families,
+            family_map,
+            strict=True,
+        ):
+            if target not in expanded_targets:
+                expanded_targets.append(target)
+
+    return tuple(expanded_targets)
+
+
+def _artifact_is_enabled_on_platform(artifact, platform: str) -> bool:
+    """Return whether an artifact is produced on the requested platform."""
+
+    if artifact.platform and artifact.platform != platform:
+        return False
+    if platform in artifact.disable_platforms:
+        return False
+    return True
+
+
+def _required_families_for_artifact(
+    artifact_name: str,
+    artifact,
+    concrete_targets: Sequence[str],
+    *,
+    platform: str,
+) -> tuple[str, ...]:
+    """Return this artifact's required families on one platform."""
+
+    if not _artifact_is_enabled_on_platform(artifact, platform):
+        return ()
+
+    if artifact.type == "target-neutral":
+        return (GENERIC_FAMILY,)
+
+    if artifact.type == "target-specific":
+        return (
+            GENERIC_FAMILY,
+            *concrete_targets,
+        )
+
+    raise ValueError(
+        f"Unsupported artifact type for '{artifact_name}': {artifact.type}"
+    )
+
+
 def _required_artifacts_for_stages(
     topology: BuildTopology,
     stage_names: Sequence[str],
     target_families: Sequence[str],
+    *,
+    platform: str,
 ) -> list[RequiredArtifact]:
-    """Artifact/family pairs the given stages produce."""
+    """Return valid artifact/target requirements for the requested stages."""
 
     artifacts_by_group = topology.get_artifact_group_to_artifacts()
+    concrete_targets = _expand_target_families(target_families)
+
     required: list[RequiredArtifact] = []
     seen: set[RequiredArtifact] = set()
+
     for stage_name in stage_names:
         stage = topology.build_stages.get(stage_name)
         if stage is None:
             continue
+
         for group_name in stage.artifact_groups:
             for artifact_name in artifacts_by_group.get(group_name, []):
-                for family in target_families:
-                    req = RequiredArtifact(name=artifact_name, target_family=family)
-                    if req not in seen:
-                        seen.add(req)
-                        required.append(req)
+                artifact = topology.artifacts[artifact_name]
+                required_families = _required_families_for_artifact(
+                    artifact_name,
+                    artifact,
+                    concrete_targets,
+                    platform=platform,
+                )
+
+                for family in required_families:
+                    requirement = RequiredArtifact(
+                        name=artifact_name,
+                        target_family=family,
+                    )
+                    if requirement not in seen:
+                        seen.add(requirement)
+                        required.append(requirement)
+
     return required
 
 
@@ -206,20 +305,26 @@ def _stage_artifacts_available(
     stage_name: str,
     target_families: Sequence[str],
     available_filenames: set[str],
+    *,
+    platform: str,
 ) -> bool:
-    """True when every artifact this stage produces has an archive present."""
+    """True when every valid requirement for this stage is available."""
 
-    artifacts_by_group = topology.get_artifact_group_to_artifacts()
-    stage = topology.build_stages.get(stage_name)
-    if stage is None:
-        return False
-    for group_name in stage.artifact_groups:
-        for artifact_name in artifacts_by_group.get(group_name, []):
-            if not _artifact_available(
-                artifact_name, target_families, available_filenames
-            ):
-                return False
-    return True
+    requirements = _required_artifacts_for_stages(
+        topology,
+        [stage_name],
+        target_families,
+        platform=platform,
+    )
+
+    return all(
+        _artifact_available(
+            requirement.name,
+            [requirement.target_family],
+            available_filenames,
+        )
+        for requirement in requirements
+    )
 
 
 def _artifact_available(
@@ -243,22 +348,99 @@ def _artifact_available(
     return True
 
 
-def _filter_available_artifacts(
-    artifact_names: Sequence[str],
+def _required_artifacts_for_artifact_on_platform(
+    topology: BuildTopology,
+    artifact_name: str,
+    target_families: Sequence[str],
+    *,
+    platform: str,
+) -> tuple[RequiredArtifact, ...]:
+    """Return the concrete per-family requirements for one artifact/platform."""
+
+    artifact = topology.artifacts[artifact_name]
+    required_families = _required_families_for_artifact(
+        artifact_name,
+        artifact,
+        _expand_target_families(target_families),
+        platform=platform,
+    )
+    return tuple(
+        RequiredArtifact(name=artifact_name, target_family=family)
+        for family in required_families
+    )
+
+
+def _artifact_requirement_available(
+    requirement: RequiredArtifact,
+    available_filenames: set[str],
+) -> bool:
+    """True when one artifact/family requirement is present in the baseline."""
+    for component in ARTIFACT_COMPONENTS:
+        for extension in ARTIFACT_EXTENSIONS:
+            filename = (
+                f"{requirement.name}_{component}_{requirement.target_family}{extension}"
+            )
+            if filename in available_filenames:
+                return True
+    return False
+
+
+def _artifact_available_on_platform(
+    topology: BuildTopology,
+    artifact_name: str,
     target_families: Sequence[str],
     available_filenames: set[str],
-) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """Filter artifacts by availability in baseline.
+    *,
+    platform: str,
+) -> bool:
+    """Check an artifact against one applicable platform's baseline."""
 
-    Returns (available, unavailable) tuple of artifact names.
-    """
+    requirements = _required_artifacts_for_artifact_on_platform(
+        topology,
+        artifact_name,
+        target_families,
+        platform=platform,
+    )
+
+    # An artifact not produced on this platform does not block reuse.
+    if not requirements:
+        return True
+
+    return all(
+        _artifact_requirement_available(requirement, available_filenames)
+        for requirement in requirements
+    )
+
+
+def _filter_available_artifacts(
+    topology: BuildTopology,
+    artifact_names: Sequence[str],
+    *,
+    target_families_by_platform: Mapping[str, Sequence[str]],
+    available_filenames_by_platform: Mapping[str, set[str]],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Require each artifact on every platform where it is enabled."""
+
     available: list[str] = []
     unavailable: list[str] = []
+
     for artifact_name in artifact_names:
-        if _artifact_available(artifact_name, target_families, available_filenames):
+        is_available = all(
+            _artifact_available_on_platform(
+                topology,
+                artifact_name,
+                target_families,
+                available_filenames_by_platform.get(platform, set()),
+                platform=platform,
+            )
+            for platform, target_families in target_families_by_platform.items()
+        )
+
+        if is_available:
             available.append(artifact_name)
         else:
             unavailable.append(artifact_name)
+
     return tuple(available), tuple(unavailable)
 
 
@@ -429,10 +611,11 @@ def compute_auto_stage_reuse(
     # baseline that actually produced that platform's artifacts.
     platform_baseline_run_ids: dict[str, str | None] = {}
     platform_baseline_urls: dict[str, str | None] = {}
+    platform_baselines: dict[str, BaselineRun | None] = {}
     per_platform_available: dict[str, tuple[str, ...]] = {}
     baseline_error: str | None = None
-    # Track platforms where no commit-compatible baseline was found (distinct
-    # from platforms where a baseline exists but artifacts are missing).
+    # Track platforms for which baseline selection returned no usable run.
+    # Detailed rejection reasons are logged by baseline_runs.
     platforms_no_compatible_baseline: list[str] = []
 
     for platform in platforms:
@@ -442,11 +625,31 @@ def compute_auto_stage_reuse(
             windows_amdgpu_families,
         )
 
-        required = _required_artifacts_for_stages(
-            topology,
-            candidates,
-            platform_families,
-        )
+        requirements_by_stage = {
+            stage_name: tuple(
+                _required_artifacts_for_stages(
+                    topology,
+                    [stage_name],
+                    platform_families,
+                    platform=platform,
+                )
+            )
+            for stage_name in candidates
+        }
+
+        # A stage with no artifacts enabled on this platform does not
+        # participate in baseline selection for this platform.
+        selectable_requirements_by_stage = {
+            stage_name: requirements
+            for stage_name, requirements in requirements_by_stage.items()
+            if requirements
+        }
+
+        required_artifact_pairs = {
+            requirement
+            for requirements in selectable_requirements_by_stage.values()
+            for requirement in requirements
+        }
 
         logger.info(
             "%s baseline lookup start: platform=%s required_families=%s "
@@ -455,25 +658,26 @@ def compute_auto_stage_reuse(
             platform,
             list(platform_families),
             list(candidates),
-            len(required),
+            len(required_artifact_pairs),
         )
 
-        if baseline_selector is not None:
-            selector = baseline_selector
-        elif baseline_selector_factory is not None:
-            selector = baseline_selector_factory(platform)
-        else:
-            selector = _default_baseline_selector(platform=platform)
+        baseline = None
 
-        # Only transient GitHub API / network failures are tolerated here: a
-        # failed baseline lookup falls back to a full rebuild, which is safe.
-        # Configuration errors (e.g. a bad required-artifacts request) indicate
-        # a bug and must surface, so they are left to propagate.
-        try:
-            baseline = selector(required)
-        except GitHubAPIError as exc:
-            baseline_error = str(exc)
-            baseline = None
+        if selectable_requirements_by_stage:
+            if baseline_selector is not None:
+                selector = baseline_selector
+            elif baseline_selector_factory is not None:
+                selector = baseline_selector_factory(platform)
+            else:
+                selector = _default_baseline_selector(platform=platform)
+
+            # Only transient GitHub API / network failures are tolerated here:
+            # a failed lookup falls back to rebuilding, which is safe.
+            try:
+                baseline = selector(selectable_requirements_by_stage)
+            except GitHubAPIError as exc:
+                baseline_error = str(exc)
+                baseline = None
 
         logger.info(
             "%s baseline lookup result: platform=%s run_id=%s",
@@ -489,23 +693,37 @@ def compute_auto_stage_reuse(
             baseline.html_url if baseline is not None else None
         )
 
-        # Track when no baseline was found (likely due to commit incompatibility
-        # when building from an older/external repo commit).
-        if baseline is None and baseline_error is None:
+        platform_baselines[platform] = baseline
+
+        # Track when no usable baseline was selected. This may be caused by
+        # compatibility, recency, job-health, or artifact-availability gates.
+        if (
+            selectable_requirements_by_stage
+            and baseline is None
+            and baseline_error is None
+        ):
             platforms_no_compatible_baseline.append(platform)
 
         available_filenames = _matched_filenames(baseline)
         available_here: list[str] = []
 
-        if baseline is not None:
-            for stage_name in candidates:
-                if _stage_artifacts_available(
-                    topology,
-                    stage_name,
-                    platform_families,
-                    available_filenames,
-                ):
-                    available_here.append(stage_name)
+        for stage_name in candidates:
+            stage_requirements = requirements_by_stage[stage_name]
+
+            # Nothing from this stage is produced on this platform, so this
+            # platform does not prevent the stage from being reused.
+            if not stage_requirements:
+                available_here.append(stage_name)
+                continue
+
+            if baseline is not None and _stage_artifacts_available(
+                topology,
+                stage_name,
+                platform_families,
+                available_filenames,
+                platform=platform,
+            ):
+                available_here.append(stage_name)
 
         per_platform_available[platform] = tuple(available_here)
 
@@ -562,23 +780,26 @@ def compute_auto_stage_reuse(
         and plan.reusable_artifacts
         and reported_baseline_run_id
     ):
-        # Get all available filenames across platforms
-        all_available_filenames: set[str] = set()
-        for platform in platforms:
-            if baseline_selector is not None:
-                selector = baseline_selector
-            elif baseline_selector_factory is not None:
-                selector = baseline_selector_factory(platform)
-            else:
-                selector = _default_baseline_selector(platform=platform)
-            try:
-                baseline = selector(required)
-            except GitHubAPIError:
-                baseline = None
-            all_available_filenames.update(_matched_filenames(baseline))
+        # Preserve platform identity. An artifact is reusable only when it is
+        # available on every platform where topology enables it.
+        target_families_by_platform = {
+            platform: _platform_target_families(
+                platform,
+                linux_amdgpu_families,
+                windows_amdgpu_families,
+            )
+            for platform in platforms
+        }
+        available_filenames_by_platform = {
+            platform: _matched_filenames(platform_baselines.get(platform))
+            for platform in platforms
+        }
 
         available_artifacts, unavailable_artifacts = _filter_available_artifacts(
-            plan.reusable_artifacts, families, all_available_filenames
+            topology,
+            plan.reusable_artifacts,
+            target_families_by_platform=target_families_by_platform,
+            available_filenames_by_platform=available_filenames_by_platform,
         )
         # Artifacts that were planned as reusable but not available must be rebuilt
         verified_reusable = available_artifacts
@@ -652,9 +873,10 @@ def _build_platforms(
 
 def _default_baseline_selector(*, platform: str) -> BaselineSelector:
     """Build a selector bound to baseline_runs.select_baseline_run.
-    ``select_baseline_run`` already requires each candidate run to have healthy
-    build jobs (``required_successful_job_name_substrings=("Build",)``) AND to
-    contain all requested artifacts. A run with no artifacts (e.g. a docs-only
+    ``select_baseline_run`` requires each candidate run to have healthy build
+    jobs and to contain every artifact required by at least one candidate
+    stage. Individual stages are reused only when their complete requirement
+    group is present. A run with no artifacts (e.g. a docs-only
     change) therefore fails the availability gate and is never selected, so no
     extra "passing build" check is needed here.
     """
@@ -740,14 +962,18 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
 
 
 def _invoke_select_baseline_run(
-    required: Sequence[RequiredArtifact], **kwargs
+    required_by_stage: StageArtifactRequirements,
+    **kwargs,
 ) -> BaselineRun | None:
-    """Adapter so a partial can present the BaselineSelector(required) shape.
+    """Adapt stage requirements to baseline-run artifact groups.
 
-    Calls through the ``baseline_runs`` module attribute (rather than a bound
-    reference) so tests can monkeypatch ``select_baseline_run``.
+    Calls through the ``baseline_runs`` module attribute so tests can
+    monkeypatch ``select_baseline_run``.
     """
-    return baseline_runs.select_baseline_run(required_artifacts=required, **kwargs)
+    return baseline_runs.select_baseline_run(
+        required_artifact_groups=required_by_stage,
+        **kwargs,
+    )
 
 
 def _empty_result(
@@ -815,12 +1041,9 @@ def _format_report(
     elif baseline_run_id:
         lines.append(f"{LOG_PREFIX} baseline run for artifact check: {baseline_run_id}")
     elif platforms_no_compatible_baseline:
-        # Clarify that the issue is commit incompatibility, not missing artifacts.
-        # This typically happens when building from an external repo pinned to an
-        # older TheRock commit - all main branch runs are newer (descendants).
         lines.append(
-            f"{LOG_PREFIX} no commit-compatible baseline run found; "
-            f"all candidate runs are newer than current commit "
+            f"{LOG_PREFIX} no usable baseline run found; "
+            f"see [BASELINE] candidate logs for rejection reasons "
             f"(platforms: {', '.join(platforms_no_compatible_baseline)})"
         )
     else:
@@ -852,13 +1075,14 @@ def _format_report(
         else:
             where = ""
 
-        # Determine why artifacts aren't available
+        # The selector returns only BaselineRun or None, so the detailed
+        # rejection reason is available in the [BASELINE] candidate logs.
         if platforms_no_compatible_baseline and all(
-            p in platforms_no_compatible_baseline for p in platforms
+            platform in platforms_no_compatible_baseline for platform in platforms
         ):
-            reason = "no commit-compatible baseline"
+            reason = "no usable baseline"
         else:
-            reason = "artifacts not in baseline"
+            reason = "artifacts not in selected baseline"
         lines.append(
             f"{LOG_PREFIX} stage '{stage}' unaffected but {reason} -> rebuild{where}"
         )
