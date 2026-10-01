@@ -7,6 +7,7 @@ from pathlib import Path
 
 from build_prod_wheels import (
     _append_env_text,
+    _setup_common_build_env,
     add_env_compiler_flags,
     validate_build_args,
     with_asan_local_version,
@@ -55,6 +56,37 @@ class AsanFlagSpacingTest(unittest.TestCase):
         self.assertIn("-shared-libasan -L/opt/rocm/lib", env["LDFLAGS"])
         self.assertNotIn("-fno-omit-frame-pointer-I", env["CXXFLAGS"])
         self.assertNotIn("-shared-libasan-L", env["LDFLAGS"])
+
+
+class AsanCompilerFlagsTest(unittest.TestCase):
+    def test_asan_does_not_inherit_gcc_warning_workarounds(self):
+        env = _setup_common_build_env(
+            Path("/tmp/cmake"),
+            Path("/tmp/bin"),
+            Path("/tmp/rocm"),
+            "gfx942",
+            None,
+            False,
+            asan=True,
+        )
+
+        for name in ("CXXFLAGS", "CPPFLAGS"):
+            self.assertNotIn("maybe-uninitialized", env.get(name, ""))
+            self.assertNotIn("restrict", env.get(name, ""))
+
+    def test_normal_linux_build_keeps_gcc_warning_workarounds(self):
+        env = _setup_common_build_env(
+            Path("/tmp/cmake"),
+            Path("/tmp/bin"),
+            Path("/tmp/rocm"),
+            "gfx942",
+            None,
+            False,
+            asan=False,
+        )
+
+        self.assertIn("-Wno-error=maybe-uninitialized", env["CXXFLAGS"])
+        self.assertIn("-Wno-error=restrict", env["CPPFLAGS"])
 
 
 class AsanBuildSelectionTest(unittest.TestCase):
