@@ -550,7 +550,7 @@ class TestCliInputParsing(_FixtureTestCase):
                 "emulation/mirage": ["mirage"],
                 "emulation/rocjitsu": ["rocjitsu"],
                 # clr builds both hip-clr and ocl-clr; the generated subtree_map
-                # returns both (the retired hand dict under-listed it as hip-clr only).
+                # returns both.
                 "projects/clr": ["hip-clr", "ocl-clr"],
                 "projects/cuid": ["rdc"],
                 "projects/hip": ["hip-clr"],
@@ -1193,10 +1193,10 @@ class TestListSubprojectsNoBuildDir(_FixtureTestCase):
         self.assertEqual(set(names), set(_GRAPH.keys()))
 
 
-# The hand dict retired in commit 6 (frozen here as the parity oracle). The new
-# resolution (generated subtree_map + _SUBTREE_ALIAS_OVERRIDES) must never drop a
-# graph key any of these produced — over-selection is safe, under-selection is the bug.
-_OLD_HAND_ALIASES = {
+# Parity oracle: the previous static alias dict. The new resolution (generated
+# subtree_map + _SUBTREE_ALIAS_OVERRIDES) must never drop a graph key any of these
+# produced — over-selection is safe, under-selection is the bug.
+_ALIAS_PARITY_ORACLE = {
     "emulation/mirage": ["mirage"],
     "emulation/rocjitsu": ["rocjitsu"],
     "shared/rocroller": ["rocroller"],
@@ -1232,11 +1232,11 @@ _OLD_HAND_ALIASES = {
 
 
 class TestGeneratedSubtreeMapResolution(unittest.TestCase):
-    """Commit 6: subtree resolution reads the generated therock_subtree_map.json
-    layered with _SUBTREE_ALIAS_OVERRIDES, replacing the retired hand dict."""
+    """Subtree resolution reads the generated therock_subtree_map.json layered
+    with _SUBTREE_ALIAS_OVERRIDES."""
 
     def test_no_under_selection_vs_old_hand_dict(self) -> None:
-        for key, old in _OLD_HAND_ALIASES.items():
+        for key, old in _ALIAS_PARITY_ORACLE.items():
             new = set(_normalize_changed_project(key))
             self.assertTrue(
                 set(old) <= new,

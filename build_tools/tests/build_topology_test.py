@@ -1368,7 +1368,7 @@ class RealTopologyTest(unittest.TestCase):
 
 class SourceDirMapOracleTest(unittest.TestCase):
     """Cross-check the generated therock_source_dir_map.json against the hand
-    BUILD_TOPOLOGY.toml source_paths (issue #7782 'Generate more metadata').
+    BUILD_TOPOLOGY.toml source_paths.
 
     The generated map is report-only; it does NOT drive get_alias_to_artifact_map.
     This guards that its relationship to the hand source_paths does not silently

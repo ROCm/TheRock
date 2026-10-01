@@ -259,8 +259,8 @@ class AnalysisResult:
         For every ``therock_provide_artifact()`` slice, join each ``SUBPROJECT_DEPS``
         subproject to its ``EXTERNAL_SOURCE_DIR`` subtree (relativized against the
         rocm-libraries / rocm-systems roots, as in ``build_subtree_map``). This is
-        report-only metadata for issue #7782's "Generate more metadata"; it is NOT a
-        drop-in for ``BUILD_TOPOLOGY.toml`` ``source_paths``, which are hand-curated CI
+        report-only metadata; it is NOT a drop-in for ``BUILD_TOPOLOGY.toml``
+        ``source_paths``, which are hand-curated CI
         reuse hints that only partly coincide with this derivation. Artifacts whose
         deps resolve to no statically-captured source dir are omitted.
         """
