@@ -8,11 +8,10 @@ discussion: https://github.com/ROCm/TheRock/issues/6048
 
 # Custom Python Bindings Layering
 
-> **The RFC number is a placeholder.** `RFC0013` is claimed by both this PR and
-> [PR #6904](https://github.com/ROCm/TheRock/pull/6904), and several RFCs are in
-> flight against a contended numbering space, so the number is assigned at merge.
-> Same convention as [PR #6034](https://github.com/ROCm/TheRock/pull/6034) and
-> [PR #6118](https://github.com/ROCm/TheRock/pull/6118).
+> **Numbering.** `RFC0015` and `RFC0016` are claimed by open PRs
+> ([#5743](https://github.com/ROCm/TheRock/pull/5743),
+> [#5609](https://github.com/ROCm/TheRock/pull/5609)), so this RFC takes
+> `RFC0017`. The number may be revised at merge if the numbering space shifts.
 
 This RFC proposes the ownership and packaging model for ROCm library Python bindings that are not generated C API wrappers. hipDNN is the motivating example, but the model is intended to apply to any ROCm library that needs a custom Python binding layer over component-specific C, C++, or higher-level APIs.
 
@@ -667,3 +666,4 @@ Either way, the developer document should link back to this RFC and avoid restat
 
 - 2026-06-23: Initial draft (Brian Harrison)
 - 2026-08-06: Address review feedback (Brian Harrison). Add the background section on the ROCm Python surfaces, the release channel section, and sections on cross-repo compatibility, mixing generated and custom bindings, and the relationship to `hip-python`. Adopt the `<component>/python/[backend,frontend]` layout. Reconcile the Python ABI strategy with #5701. Refresh the hipDNN current-state section for the restructured source tree and the merged TheRock revert (#6425). Move to a placeholder RFC number.
+- 2026-10-01: Merge `main`; renumber from placeholder to RFC0017 (Brian Harrison).
