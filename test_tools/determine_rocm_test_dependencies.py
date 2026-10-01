@@ -40,6 +40,7 @@ $ python test_tools/determine_rocm_test_dependencies.py --changed-projects rocSP
 """
 
 import argparse
+import functools
 import json
 import sys
 import tomllib
@@ -126,6 +127,7 @@ _SUBTREE_ALIAS_OVERRIDES = {
 _EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
 
 
+@functools.lru_cache(maxsize=1)
 def _load_subtree_alias_map() -> dict[str, list[str]]:
     """Subtree -> graph-key(s), from the generated map plus hand overrides.
 
@@ -134,17 +136,27 @@ def _load_subtree_alias_map() -> dict[str, list[str]]:
     the residue it cannot and wins on any shared key. Keys are lowercased to match
     the lookup in _normalize_changed_project. Read script-relative so selection
     works from a clean checkout.
+
+    Loaded lazily (and cached) rather than at import so `--help` and the other
+    subcommands still work if the committed map is temporarily missing.
     """
-    raw = json.loads(
-        (_TEST_TOOLS_DIR / _SUBTREE_MAP_NAME).read_text(encoding="utf-8")
-    )
+    map_path = _TEST_TOOLS_DIR / _SUBTREE_MAP_NAME
+    if not map_path.exists():
+        raise FileNotFoundError(
+            f"Subtree map not found at {map_path}.\n"
+            "It is a committed, generated artifact. If it is missing, regenerate "
+            "it with build_tools/generate_consumer_graph.py."
+        )
+    raw = json.loads(map_path.read_text(encoding="utf-8"))
     merged = {key.lower(): list(values) for key, values in raw.items()}
+    # Overrides REPLACE the generated value on a shared key (not union) so that,
+    # e.g., shared/mxdatagenerator can intentionally drop its self-node. The risk:
+    # a future parser-derived edge on an overridden subtree would be shadowed and
+    # silently dropped from selection (under-selection). test_overrides_do_not_
+    # shadow_generated_edges guards this, with a documented narrowing allow-list.
     for key, values in _SUBTREE_ALIAS_OVERRIDES.items():
         merged[key.lower()] = list(values)
     return merged
-
-
-_SUBTREE_ALIAS_MAP = _load_subtree_alias_map()
 
 # NOTE: the rocgdb/tensilelite entries mirror build_tools' fetch_test_configurations
 # .TEST_LABEL_GROUPS; test_label_consistency_test guards that they stay identical
@@ -564,9 +576,10 @@ def list_subprojects(therock_dir: Path | None = None, show_deps: bool = False):
 
 def _normalize_changed_project(project: str) -> list[str]:
     """Normalize CI subtree identifiers to consumer-graph keys for the CLI."""
+    subtree_alias_map = _load_subtree_alias_map()
     project_lower = project.lower()
-    if project_lower in _SUBTREE_ALIAS_MAP:
-        return list(_SUBTREE_ALIAS_MAP[project_lower])
+    if project_lower in subtree_alias_map:
+        return list(subtree_alias_map[project_lower])
     if project_lower.startswith(_EXTERNAL_ONLY_NAMESPACES):
         raise ValueError(
             f"'{project}' has no entry in the generated subtree map or "
