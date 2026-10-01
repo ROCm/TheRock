@@ -52,7 +52,7 @@ ASAN build variant:
       -> s3://therock-repo-amd-dev-core/v5/rocm/core/tarball-asan/
 
     s3://therock-dev-artifacts/12345-linux/python/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
-      -> s3://therock-repo-amd-dev-core/v5/rocm/core/whl-asan/rocm-sdk-core/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
+      -> s3://therock-repo-amd-dev-core/v5/rocm/core/whl-next-asan/rocm-sdk-core/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
 
     s3://therock-dev-artifacts/12345-linux/packages/deb/
       -> s3://therock-repo-amd-dev-core/v5/rocm/core/packages-asan/deb/20250101-12345/
@@ -315,10 +315,10 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--python-index",
         default="whl-next",
-        choices=["whl", "whl-next", "whl-asan"],
+        choices=["whl", "whl-next", "whl-next-asan"],
         help="Product-local index name for structured Python publishing "
         "(default: whl-next). Selects the v5/rocm/core/<index>/ path segment. "
-        "whl-asan is used for ASAN builds (auto-selected when --build-variant is asan).",
+        "whl-next-asan is used for ASAN builds (auto-selected when --build-variant is asan).",
     )
     parser.add_argument(
         "--skip-native-packages",
@@ -333,7 +333,7 @@ def main(argv: list[str]) -> None:
         default="release",
         choices=["release", "asan", "asan-debug", "host-asan", "host-asan-debug"],
         help="Build variant (default: release). ASAN builds publish python packages "
-        "to whl-asan index and native packages to separate paths. The '-debug' variants "
+        "to whl-next-asan index and native packages to separate paths. The '-debug' variants "
         "(RelWithDebInfo + line-number debug info) publish to the same paths "
         "as their non-debug counterpart.",
     )
@@ -350,24 +350,25 @@ def main(argv: list[str]) -> None:
     is_asan = _is_asan_variant(args.build_variant)
 
     publish_tarballs(artifacts_root, args.release_type, backend, args.build_variant)
-    if is_asan:
-        # Publish ASAN wheels to dedicated whl-asan index
-        publish_python_packages(
-            artifacts_root,
-            args.release_type,
-            backend,
-            kpack_split,
-            structured=args.structured,
-            index="whl-asan",
+    # ASAN python packages require --structured for proper variant isolation
+    # (whl-next-asan index). In legacy mode, skip to avoid mixing with standard wheels.
+    if is_asan and not args.structured:
+        logger.info(
+            "Skipping python packages for ASAN build (use --structured for ASAN wheels)"
         )
     else:
+        # ASAN builds default to whl-next-asan, but explicit --python-index takes precedence
+        if is_asan and args.python_index == "whl-next":
+            python_index = "whl-next-asan"
+        else:
+            python_index = args.python_index
         publish_python_packages(
             artifacts_root,
             args.release_type,
             backend,
             kpack_split,
             structured=args.structured,
-            index=args.python_index,
+            index=python_index,
         )
     if artifacts_root.platform == "linux" and not args.skip_native_packages:
         publish_native_linux_packages(
