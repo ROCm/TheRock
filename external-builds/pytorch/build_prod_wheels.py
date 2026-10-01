@@ -295,6 +295,23 @@ def get_version_suffix_for_installed_rocm_package() -> str:
     return version_suffix
 
 
+def with_asan_local_version(version_suffix: str) -> str:
+    """Add an asan marker to the torch local version.
+
+    The incoming suffix is whatever the installed ROCm package already
+    produced, for example ``+rocm10.1.0rc3``. The torch wheel becomes
+    ``+rocm10.1.0rc3.asan``. The ROCm package version itself is unchanged.
+    """
+    if not version_suffix.startswith("+") or version_suffix == "+":
+        raise RuntimeError(
+            "--asan expected a PEP 440 local version suffix such as "
+            f"+rocm10.1.0rc3, got {version_suffix!r}"
+        )
+    if version_suffix.endswith(".asan"):
+        return version_suffix
+    return f"{version_suffix}.asan"
+
+
 def get_source_commit_short(source_dir: Path, length: int = 8) -> str:
     """Return the short git commit for a source dir, or "" if unresolved."""
     # Pass safe.directory via `-c` (scoped to this single git invocation)
@@ -539,6 +556,18 @@ def validate_build_args(
     parser: argparse.ArgumentParser, args: argparse.Namespace
 ) -> None:
     """Resolve automatic project selections and validate build arguments."""
+    # --asan builds the torch wheel only. Companion projects stay off unless
+    # the caller explicitly asks for them.
+    if args.asan:
+        if args.build_triton is None:
+            args.build_triton = False
+        if args.build_pytorch_audio is None:
+            args.build_pytorch_audio = False
+        if args.build_pytorch_vision is None:
+            args.build_pytorch_vision = False
+        if args.build_apex is None:
+            args.build_apex = False
+
     # If a project dir exists, enable that project --build-* option by default.
     if args.build_triton is None:
         args.build_triton = args.triton_dir is not None
@@ -582,6 +611,7 @@ def validate_build_args(
     if (
         args.enable_pytorch_flash_attention
         and args.pytorch_dir is not None
+        and not args.asan
         and not is_windows
         and not args.build_triton
     ):
@@ -791,12 +821,92 @@ def _do_build_wheels_core(
     print("--- Builds all completed")
 
 
+def _append_env_text(env: dict[str, str], name: str, addition: str) -> None:
+    current = env.get(name, "")
+    if addition in current.split():
+        return
+    env[name] = f"{current} {addition}".strip() if current else addition
+
+
+def _resolve_shared_asan_runtime(clangxx: Path, rocm_dir: Path) -> Path:
+    """Ask ROCm clang for its shared ASan runtime so the link can find it."""
+    runtime_attempts: list[str] = []
+    for runtime_name in (
+        f"libclang_rt.asan-{platform.machine().lower()}.so",
+        "libclang_rt.asan.so",
+    ):
+        runtime_text = capture(
+            [clangxx, f"-print-file-name={runtime_name}"], cwd=rocm_dir
+        )
+        runtime_attempts.append(f"{runtime_name} -> {runtime_text!r}")
+        candidate = Path(runtime_text)
+        if (
+            runtime_text
+            and runtime_text != runtime_name
+            and candidate.is_absolute()
+            and candidate.is_file()
+        ):
+            return candidate
+    raise RuntimeError(
+        "ROCm clang++ did not resolve its shared ASAN runtime: "
+        + "; ".join(runtime_attempts)
+    )
+
+
+def apply_asan_build_env(env: dict[str, str], rocm_dir: Path) -> None:
+    """Compile torch with the ROCm Clang shared ASan runtime.
+
+    PYTORCH_ROCM_ARCH is whatever the caller already put in ``env``. This does
+    not select a GPU target and does not rewrite the installed ROCm version.
+    """
+    if is_windows or platform.machine().lower() not in ("x86_64", "amd64"):
+        raise RuntimeError("--asan is supported only on Linux x86_64")
+
+    llvm_bin = rocm_dir / "lib" / "llvm" / "bin"
+    clang = llvm_bin / "clang"
+    clangxx = llvm_bin / "clang++"
+    for compiler in (clang, clangxx):
+        if not compiler.is_file() or not os.access(compiler, os.X_OK):
+            raise RuntimeError(
+                f"--asan requires the executable ROCm compiler {compiler}"
+            )
+
+    runtime_path = _resolve_shared_asan_runtime(clangxx, rocm_dir)
+    inherited_ld_library_path = env.get(
+        "LD_LIBRARY_PATH", os.environ.get("LD_LIBRARY_PATH", "")
+    )
+    ld_library_parts = [str(runtime_path.parent), str(rocm_dir / "lib")]
+    if inherited_ld_library_path:
+        ld_library_parts.append(inherited_ld_library_path)
+
+    env["USE_ASAN"] = "1"
+    env["CC"] = str(clang)
+    env["CXX"] = str(clangxx)
+    env["CMAKE_C_COMPILER"] = str(clang)
+    env["CMAKE_CXX_COMPILER"] = str(clangxx)
+    env["ASAN_OPTIONS"] = os.environ.get(
+        "ASAN_OPTIONS", "detect_leaks=0:abort_on_error=1:print_stacktrace=1"
+    )
+    env["LD_LIBRARY_PATH"] = os.path.pathsep.join(ld_library_parts)
+    env["PATH"] = str(llvm_bin) + os.path.pathsep + env.get("PATH", "")
+    _append_env_text(env, "CFLAGS", "-fno-omit-frame-pointer")
+    _append_env_text(env, "CXXFLAGS", "-fno-omit-frame-pointer")
+    _append_env_text(env, "LDFLAGS", "-shared-libasan")
+    _append_env_text(env, "CMAKE_ARGS", "-DCMAKE_CXX_SCAN_FOR_MODULES=OFF")
+    print(f"  ASAN compiler: {clangxx}")
+    print(f"  ASAN runtime: {runtime_path}")
+    print(f"  PYTORCH_ROCM_ARCH: {env.get('PYTORCH_ROCM_ARCH', '')}")
+
+
 def do_build(args: argparse.Namespace):
     if args.install_rocm:
         do_install_rocm(args)
 
     if not args.version_suffix:
         args.version_suffix = get_version_suffix_for_installed_rocm_package()
+    if args.asan:
+        args.version_suffix = with_asan_local_version(args.version_suffix)
+        print(f"  ASAN torch version suffix: {args.version_suffix}")
 
     triton_dir: Path | None = args.triton_dir
     pytorch_dir: Path | None = args.pytorch_dir
@@ -893,6 +1003,9 @@ def do_build(args: argparse.Namespace):
                 pass  # Server may already be running
 
             run_command([str(sccache_path), "--zero-stats"], cwd=tempfile.gettempdir())
+
+        if args.asan:
+            apply_asan_build_env(env, rocm_dir)
 
         _do_build_wheels_core(
             args,
@@ -1151,7 +1264,7 @@ def do_build_pytorch(
         use_flash_attention = args.enable_pytorch_flash_attention
         print(f"Flash Attention explicitly set to: {use_flash_attention}")
         # Note: this may fail if aotriton is not supported, see below.
-    elif not is_windows and not triton_requirement:
+    elif not args.asan and not is_windows and not triton_requirement:
         print(f"Disabling Flash Attention on Linux since triton is not built")
         use_flash_attention = False
     else:
@@ -1331,14 +1444,21 @@ def do_build_pytorch(
         [sys.executable, "-m", "pip", "install", built_wheel], cwd=tempfile.gettempdir()
     )
 
-    print("+++ Sanity checking installed torch (unavailable is okay on CPU machines):")
-    sanity_check_output = capture(
-        [sys.executable, "-c", "import torch; print(torch.cuda.is_available())"],
-        cwd=tempfile.gettempdir(),
-    )
-    if not sanity_check_output:
-        raise RuntimeError("torch package sanity check failed (see output above)")
+    if args.asan:
+        print(
+            "+++ Skipping torch import sanity check for --asan. "
+            "The shared runtime is applied with LD_PRELOAD when the wheel is used."
+        )
     else:
+        print(
+            "+++ Sanity checking installed torch (unavailable is okay on CPU machines):"
+        )
+        sanity_check_output = capture(
+            [sys.executable, "-c", "import torch; print(torch.cuda.is_available())"],
+            cwd=tempfile.gettempdir(),
+        )
+        if not sanity_check_output:
+            raise RuntimeError("torch package sanity check failed (see output above)")
         print(f"Sanity check output:\n{sanity_check_output}")
 
 
@@ -1584,6 +1704,16 @@ def main(argv: list[str]):
         default=None,
         type=Path,
         help="apex source directory",
+    )
+    build_p.add_argument(
+        "--asan",
+        action="store_true",
+        default=False,
+        help="Build the torch wheel with AddressSanitizer against the "
+        "installed ROCm SDK. The workflow-supplied GPU list and ROCm version "
+        "are left unchanged. The torch local version gains an .asan suffix, "
+        "and triton, torchaudio, torchvision, and apex are not built unless "
+        "explicitly requested.",
     )
     build_p.add_argument(
         "--pytorch-rocm-arch",

@@ -1,0 +1,83 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+import argparse
+import unittest
+from pathlib import Path
+
+from build_prod_wheels import validate_build_args, with_asan_local_version
+
+
+class AsanVersionSuffixTest(unittest.TestCase):
+    def test_appends_asan_to_the_incoming_rocm_suffix(self):
+        self.assertEqual(
+            with_asan_local_version("+rocm10.1.0rc3"), "+rocm10.1.0rc3.asan"
+        )
+
+    def test_keeps_a_dev_suffix_and_adds_asan(self):
+        self.assertEqual(
+            with_asan_local_version("+devrocm10.2.0.dev0-abcdef"),
+            "+devrocm10.2.0.dev0-abcdef.asan",
+        )
+
+    def test_is_idempotent(self):
+        self.assertEqual(
+            with_asan_local_version("+rocm10.1.0rc3.asan"), "+rocm10.1.0rc3.asan"
+        )
+
+    def test_rejects_a_suffix_that_is_not_a_local_version(self):
+        with self.assertRaises(RuntimeError):
+            with_asan_local_version("10.1.0rc3")
+
+
+class AsanBuildSelectionTest(unittest.TestCase):
+    def test_asan_leaves_companion_projects_off_when_sources_exist(self):
+        parser = argparse.ArgumentParser()
+        args = argparse.Namespace(
+            asan=True,
+            build_triton=None,
+            build_pytorch_audio=None,
+            build_pytorch_vision=None,
+            build_apex=None,
+            triton_dir=Path("/tmp/triton"),
+            pytorch_dir=Path("/tmp/pytorch"),
+            pytorch_audio_dir=Path("/tmp/audio"),
+            pytorch_vision_dir=Path("/tmp/vision"),
+            apex_dir=Path("/tmp/apex"),
+            enable_pytorch_flash_attention=None,
+        )
+
+        validate_build_args(parser, args)
+
+        self.assertFalse(args.build_triton)
+        self.assertFalse(args.build_pytorch_audio)
+        self.assertFalse(args.build_pytorch_vision)
+        self.assertFalse(args.build_apex)
+
+    def test_without_asan_existing_sources_still_enable_companions(self):
+        parser = argparse.ArgumentParser()
+        source = Path(__file__).resolve().parent
+        args = argparse.Namespace(
+            asan=False,
+            build_triton=None,
+            build_pytorch_audio=None,
+            build_pytorch_vision=None,
+            build_apex=None,
+            triton_dir=source,
+            pytorch_dir=source,
+            pytorch_audio_dir=source,
+            pytorch_vision_dir=source,
+            apex_dir=source,
+            enable_pytorch_flash_attention=None,
+        )
+
+        validate_build_args(parser, args)
+
+        self.assertTrue(args.build_triton)
+        self.assertTrue(args.build_pytorch_audio)
+        self.assertTrue(args.build_pytorch_vision)
+        self.assertTrue(args.build_apex)
+
+
+if __name__ == "__main__":
+    unittest.main()
