@@ -1753,9 +1753,8 @@ class TestExpandBuildConfigs(unittest.TestCase):
     def test_asan_runner_selection(self):
         """ASAN uses a sandbox runner on both nightly and PR triggers.
 
-        A PR remaps asan to host-asan, which now tests on presubmit per
-        ROCm/TheRock#7202. Reaching here already means the build was not
-        skipped, so the build is paid for either way.
+        A PR remaps asan to host-asan, which tests on presubmit per
+        https://github.com/ROCm/TheRock/issues/7202. The build runs either way.
         """
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
@@ -1806,14 +1805,21 @@ class TestExpandBuildConfigs(unittest.TestCase):
         return result.linux.per_family_info[0]
 
     def test_host_asan_presubmit_runs_without_any_label(self):
-        """ROCm/TheRock#7202 requires an unlabelled PR to get a sandbox runner."""
+        """https://github.com/ROCm/TheRock/issues/7202 requires an unlabelled
+        PR to get a sandbox runner."""
         entry = self._host_asan_entry(event_name="pull_request", pr_labels=[])
         self.assertIn("sandbox", entry["test-runs-on"])
 
     def test_host_asan_postsubmit_stays_off(self):
-        """Unchanged from before; enabling it is a data edit, not a new input."""
+        """Unchanged from before this variant declared its triggers."""
         entry = self._host_asan_entry(event_name="push")
         self.assertEqual(entry["test-runs-on"], "")
+
+    def test_host_asan_workflow_dispatch_runs(self):
+        """workflow_dispatch is not a named trigger, so it is allowed here the
+        same way _should_run_tests_for_family allows it per family."""
+        entry = self._host_asan_entry(event_name="workflow_dispatch")
+        self.assertIn("sandbox", entry["test-runs-on"])
 
     def test_explicit_strict_linux_dev_build(self):
         """Explicit selection creates a build config without GPU tests."""

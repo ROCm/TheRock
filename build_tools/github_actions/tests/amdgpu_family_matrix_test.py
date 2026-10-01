@@ -485,8 +485,7 @@ class TestBuildRunnerSelection(unittest.TestCase):
 
 
 class TestBuildVariantTestTriggers(unittest.TestCase):
-    """Trigger policy is data, so adding a variant or an event is an edit here
-    rather than a new workflow input.
+    """Per-variant test trigger policy in all_build_variants.
 
     Goes through the module rather than imported names: an earlier test in this
     file reloads amdgpu_family_matrix, which rebinds its globals.
@@ -495,58 +494,61 @@ class TestBuildVariantTestTriggers(unittest.TestCase):
     def _config(self, variant, platform="linux"):
         return amdgpu_family_matrix.all_build_variants[platform][variant]
 
-    def _runs(self, variant, event, platform="linux"):
+    def _runs(self, variant, trigger, platform="linux"):
         return amdgpu_family_matrix.build_variant_runs_tests(
-            self._config(variant, platform), event
+            self._config(variant, platform), {trigger}
         )
 
-    def test_variants_without_test_triggers_always_test(self):
-        """release declares no test_triggers and must stay unaffected."""
-        for event in ["pull_request", "push", "schedule", "workflow_dispatch"]:
-            with self.subTest(event=event):
-                self.assertTrue(self._runs("release", event))
+    def test_host_asan_tests_on_nightly(self):
+        self.assertTrue(self._runs("host-asan", "nightly"))
 
-    def test_host_asan_still_tests_on_nightly_triggers(self):
-        for event in ["schedule", "workflow_dispatch"]:
-            with self.subTest(event=event):
-                self.assertTrue(self._runs("host-asan", event))
-
-    def test_host_asan_still_skips_postsubmit(self):
-        self.assertFalse(self._runs("host-asan", "push"))
+    def test_host_asan_skips_postsubmit(self):
+        self.assertFalse(self._runs("host-asan", "postsubmit"))
 
     def test_host_asan_tests_on_presubmit_without_a_label(self):
-        """ROCm/TheRock#7202 requires this to run with no opt-in label."""
-        self.assertTrue(self._runs("host-asan", "pull_request"))
+        """https://github.com/ROCm/TheRock/issues/7202 requires no opt-in label."""
+        self.assertTrue(self._runs("host-asan", "presubmit"))
 
     def test_debug_variant_follows_the_same_policy(self):
-        """The gate matches on the host-asan prefix, so both forms need a rule."""
-        self.assertFalse(self._runs("host-asan-debug", "push"))
-        self.assertTrue(self._runs("host-asan-debug", "schedule"))
+        """The caller matches on the host-asan prefix, so both forms need a rule."""
+        self.assertFalse(self._runs("host-asan-debug", "postsubmit"))
+        self.assertTrue(self._runs("host-asan-debug", "nightly"))
 
-    def test_an_unlisted_event_does_not_test(self):
-        self.assertFalse(self._runs("host-asan", "repository_dispatch"))
+    def test_variants_without_tests_on_trigger_never_test(self):
+        """The documented caveat: no list means no tests, so only variants that
+        declare one may be passed to build_variant_runs_tests."""
+        for trigger in sorted(amdgpu_family_matrix.VALID_TRIGGERS):
+            with self.subTest(trigger=trigger):
+                self.assertFalse(self._runs("release", trigger))
 
-    def test_an_unknown_trigger_raises(self):
-        """A typo should fail the configure step, not quietly disable tests."""
-        variants = amdgpu_family_matrix.all_build_variants
-        bogus = {"linux": {**variants["linux"]}}
-        bogus["linux"]["host-asan"] = {
-            **variants["linux"]["host-asan"],
-            "test_triggers": ["pull_requst"],
-        }
-        with mock.patch.object(amdgpu_family_matrix, "all_build_variants", bogus):
-            with self.assertRaisesRegex(ValueError, "unknown event"):
-                amdgpu_family_matrix._validate_test_triggers()
+    def test_every_host_asan_variant_declares_its_triggers(self):
+        """Enforces the caveat for the variants the caller actually reaches."""
+        for platform, variants in amdgpu_family_matrix.all_build_variants.items():
+            for variant, config in variants.items():
+                if not variant.startswith("host-asan"):
+                    continue
+                with self.subTest(platform=platform, variant=variant):
+                    self.assertTrue(config.get("tests_on_trigger"))
 
-    def test_the_shipped_table_validates(self):
-        """The import-time check must pass for the real table."""
-        amdgpu_family_matrix._validate_test_triggers()
+    def test_trigger_values_are_valid(self):
+        """A typo must fail here rather than quietly disabling tests."""
+        for platform, variants in amdgpu_family_matrix.all_build_variants.items():
+            for variant, config in variants.items():
+                invalid = set(config.get("tests_on_trigger", []))
+                invalid -= amdgpu_family_matrix.VALID_TRIGGERS
+                if invalid:
+                    self.fail(
+                        f"{platform}/{variant} has invalid tests_on_trigger: "
+                        f"{invalid}. Valid: {amdgpu_family_matrix.VALID_TRIGGERS}"
+                    )
 
     def test_adding_postsubmit_needs_no_new_input(self):
         """The design requirement from the #7780 review."""
         config = {**self._config("host-asan")}
-        config["test_triggers"] = [*config["test_triggers"], "push"]
-        self.assertTrue(amdgpu_family_matrix.build_variant_runs_tests(config, "push"))
+        config["tests_on_trigger"] = [*config["tests_on_trigger"], "postsubmit"]
+        self.assertTrue(
+            amdgpu_family_matrix.build_variant_runs_tests(config, {"postsubmit"})
+        )
 
 
 if __name__ == "__main__":
