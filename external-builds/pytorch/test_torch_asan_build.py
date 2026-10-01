@@ -5,7 +5,12 @@ import argparse
 import unittest
 from pathlib import Path
 
-from build_prod_wheels import validate_build_args, with_asan_local_version
+from build_prod_wheels import (
+    _append_env_text,
+    add_env_compiler_flags,
+    validate_build_args,
+    with_asan_local_version,
+)
 
 
 class AsanVersionSuffixTest(unittest.TestCase):
@@ -28,6 +33,28 @@ class AsanVersionSuffixTest(unittest.TestCase):
     def test_rejects_a_suffix_that_is_not_a_local_version(self):
         with self.assertRaises(RuntimeError):
             with_asan_local_version("10.1.0rc3")
+
+
+class AsanFlagSpacingTest(unittest.TestCase):
+    def test_asan_flags_stay_separate_from_later_appends(self):
+        env = {
+            "CXXFLAGS": " -Wno-error=restrict ",
+            "LDFLAGS": "",
+        }
+        _append_env_text(env, "CXXFLAGS", "-fno-omit-frame-pointer")
+        _append_env_text(env, "LDFLAGS", "-shared-libasan")
+        add_env_compiler_flags(
+            env, "CXXFLAGS", "-I/opt/rocm/include", "-I/opt/rocm/include/roctracer"
+        )
+        add_env_compiler_flags(env, "LDFLAGS", "-L/opt/rocm/lib")
+
+        self.assertIn(
+            "-fno-omit-frame-pointer -I/opt/rocm/include -I/opt/rocm/include/roctracer",
+            env["CXXFLAGS"],
+        )
+        self.assertIn("-shared-libasan -L/opt/rocm/lib", env["LDFLAGS"])
+        self.assertNotIn("-fno-omit-frame-pointer-I", env["CXXFLAGS"])
+        self.assertNotIn("-shared-libasan-L", env["LDFLAGS"])
 
 
 class AsanBuildSelectionTest(unittest.TestCase):

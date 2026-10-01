@@ -797,10 +797,20 @@ def _do_build_wheels_core(
 
 
 def _append_env_text(env: dict[str, str], name: str, addition: str) -> None:
+    """Append one compiler flag and keep the trailing space later appends expect.
+
+    add_env_compiler_flags concatenates the next flag directly onto the current
+    value, so a stripped value turns ``-fno-omit-frame-pointer`` plus ``-I...``
+    into one unknown argument.
+    """
     current = env.get(name, "")
     if addition in current.split():
+        if current and not current.endswith((" ", "\t")):
+            env[name] = current + " "
         return
-    env[name] = f"{current} {addition}".strip() if current else addition
+    if current and not current.endswith((" ", "\t")):
+        current += " "
+    env[name] = f"{current}{addition} "
 
 
 def _resolve_shared_asan_runtime(clangxx: Path, rocm_dir: Path) -> Path:
