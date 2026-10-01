@@ -212,7 +212,6 @@ jobs:
       ref: ${{ inputs.ref }}
     permissions:
       contents: read
-      id-token: write
 
   test_native_packages_rhel8:
     needs: [build_native_rpm_packages]
@@ -230,7 +229,6 @@ jobs:
       ref: ${{ inputs.ref }}
     permissions:
       contents: read
-      id-token: write
 
   test_native_packages_rhel10:
     needs: [build_native_rpm_packages]
@@ -248,7 +246,6 @@ jobs:
       ref: ${{ inputs.ref }}
     permissions:
       contents: read
-      id-token: write
 
   test_native_packages_sles16:
     needs: [build_native_rpm_packages]
@@ -266,7 +263,6 @@ jobs:
       ref: ${{ inputs.ref }}
     permissions:
       contents: read
-      id-token: write
 
   build_python_packages:
     needs: [build_multi_arch_stages]

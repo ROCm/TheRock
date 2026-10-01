@@ -1333,6 +1333,7 @@ def _expand_build_config_for_platform(
     - sanity_check_only_for_family: whether to limit test scope
     """
     build_variant = variant_config["build_variant_label"]
+    current_triggers = _get_current_triggers(ci_inputs, git_context)
 
     # Extract kernel type from test_runner:<kernel> PR label (e.g. "oem").
     # Selects kernel-specific test runners for families that support them.
@@ -1384,12 +1385,16 @@ def _expand_build_config_for_platform(
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant.startswith("host-asan"):
             # Which triggers run this variant's tests is declared by its
-            # "test_triggers" in amdgpu_family_matrix.py's all_build_variants.
-            if not build_variant_runs_tests(variant_config, ci_inputs.event_name):
+            # "tests_on_trigger" in amdgpu_family_matrix.py's all_build_variants.
+            # workflow_dispatch implicitly allows tests, as it does per-family.
+            if not (
+                ci_inputs.is_workflow_dispatch
+                or build_variant_runs_tests(variant_config, current_triggers)
+            ):
                 test_runs_on = ""
                 print(
                     f"  {family_name}: {build_variant} does not run tests on "
-                    f"{ci_inputs.event_name}, disabling tests"
+                    f"{sorted(current_triggers)}, disabling tests"
                 )
             elif "test-runs-on-sandbox" in platform_info:
                 test_runs_on = platform_info["test-runs-on-sandbox"]

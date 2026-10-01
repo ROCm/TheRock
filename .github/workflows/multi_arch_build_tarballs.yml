@@ -104,6 +104,7 @@ jobs:
     container:
       image: python:3.12-slim
     permissions:
+      contents: read
       id-token: write
     outputs:
       tarball_urls: ${{ steps.upload.outputs.tarball_urls }}
