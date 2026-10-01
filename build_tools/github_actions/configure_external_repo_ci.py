@@ -82,14 +82,13 @@ FULL_TEST_TRIGGER_PATTERNS = [
 
 # CI-relevant monorepo directories that are NOT subtree-synced repos and so are
 # absent from an external repo's repos-config.json. Without these, a PR confined
-# to shared/* or emulation/* yields no matched subtree -> empty changed_projects
-# -> TheRock falls back to building and testing everything. Each entry MUST have
-# a corresponding mapping in TheRock (build-topology alias + the test selector's
-# _EXTERNAL_SUBTREE_ALIASES); the test selector hard-fails on an unmapped
-# shared/* or emulation/* path, so keep this list in lock-step with TheRock when
-# adding directories. (Currently enumerates rocm-systems' non-subtree dirs;
-# rocm-libraries paths already resolve as repos-config subtrees.)
+# to one of these paths yields no matched subtree -> empty changed_projects ->
+# TheRock falls back to building and testing everything. Each entry MUST have a
+# corresponding mapping in TheRock (build-topology alias + the test selector's
+# _EXTERNAL_SUBTREE_ALIASES), so keep this list in lock-step with TheRock when
+# adding directories.
 CI_RELEVANT_NON_SUBTREE_PREFIXES = {
+    "dnn-providers/cmake",
     "shared/amdgpu-windows-interop",
     "shared/kpack",
     "shared/machine-readable-isa",

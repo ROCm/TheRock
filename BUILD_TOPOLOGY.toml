@@ -497,6 +497,12 @@ type = "target-neutral"
 artifact_deps = []
 feature_group = "CORE"
 
+[artifacts.grpc]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = ["amd-llvm"]
+feature_group = "CORE"
+
 [artifacts.spdlog]
 artifact_group = "third-party-libs"
 type = "target-neutral"
@@ -850,7 +856,7 @@ disable_processors = ["ppc64le"]
 [artifacts.rdc]
 artifact_group = "dctools-core"
 type = "target-neutral"
-artifact_deps = ["core-hip", "rocprofiler-sdk", "sysdeps", "core-amdsmi"]
+artifact_deps = ["core-hip", "rocprofiler-sdk", "sysdeps", "core-amdsmi", "grpc"]
 feature_group = "DC_TOOLS"  # Part of DC tools, enabled by default via THEROCK_ENABLE_ALL
 disable_platforms = ["windows"]
 
