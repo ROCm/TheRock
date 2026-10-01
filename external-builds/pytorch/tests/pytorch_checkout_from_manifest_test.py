@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 THIS_DIR = Path(__file__).resolve().parent
-PYTORCH_DIR = THIS_DIR.parents[2] / "external-builds" / "pytorch"
+PYTORCH_DIR = THIS_DIR.parent
 EXAMPLE_MANIFEST = PYTORCH_DIR / "pytorch_manifest_nightly.example.json"
 sys.path.insert(0, os.fspath(PYTORCH_DIR))
 
