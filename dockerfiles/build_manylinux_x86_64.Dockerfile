@@ -4,8 +4,8 @@
 # This will print a SHA image id, which you can run with (or equiv):
 #   sudo docker run --rm -it --entrypoint /bin/bash <<IMAGE>>
 #
-# To build and push to a test branch, create a pull request on a branch named:
-#   stage/docker/*
+# To publish a test image from any other branch, run the
+# publish_build_manylinux_x86_64.yml workflow manually against that branch.
 # We build our portable linux releases on the manylinux (RHEL-based)
 # images, with custom additional packages installed. We switch to
 # new upstream versions as needed.
@@ -149,3 +149,7 @@ RUN ./install_shared_pythons.sh /tmp/python-build && rm -rf /install-shared-pyth
 # We use the wildcard option to disable the checks. This was added
 # in git 2.35.3
 RUN git config --global --add safe.directory '*'
+
+# This build image requires root for CI steps that install build dependencies.
+# trivy:ignore:DS-0002
+USER root
