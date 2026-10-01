@@ -1053,6 +1053,34 @@ class TestSelectTargets(unittest.TestCase):
         with self.assertRaises(ValueError, msg="Unknown GPU families"):
             cm.select_targets(inputs)
 
+    def test_pull_request_platform_linux_label_skips_windows(self):
+        """PR with ci:platform:linux label skips Windows builds."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:platform:linux"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertGreater(len(result.linux_families), 0)
+        self.assertEqual(result.windows_families, [])
+
+    def test_pull_request_platform_windows_label_skips_linux(self):
+        """PR with ci:platform:windows label skips Linux builds."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:platform:windows"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(result.linux_families, [])
+        self.assertGreater(len(result.windows_families), 0)
+
     def test_workflow_dispatch_per_platform(self):
         """workflow_dispatch selects families per platform."""
         inputs = cm.CIInputs(

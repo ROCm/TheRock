@@ -993,6 +993,14 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 windows_names.append(target)
                 print(f"  Label '{label}' -> adding target {target}")
 
+        # Platform-specific labels filter to a single platform (checked last)
+        if "ci:platform:linux" in ci_inputs.pr_labels:
+            windows_names = []
+            print("  Label 'ci:platform:linux' -> skipping Windows builds/tests")
+        elif "ci:platform:windows" in ci_inputs.pr_labels:
+            linux_names = []
+            print("  Label 'ci:platform:windows' -> skipping Linux builds/tests")
+
     # De-dup, validate, then filter by platform availability.
     linux_names = list(dict.fromkeys(linux_names))
     windows_names = list(dict.fromkeys(windows_names))
