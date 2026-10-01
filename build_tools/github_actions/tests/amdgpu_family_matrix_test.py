@@ -543,7 +543,7 @@ class TestBuildVariantTestTriggers(unittest.TestCase):
                     )
 
     def test_adding_postsubmit_needs_no_new_input(self):
-        """The design requirement from the #7780 review."""
+        """Requirement from https://github.com/ROCm/TheRock/pull/7780 review."""
         config = {**self._config("host-asan")}
         config["tests_on_trigger"] = [*config["tests_on_trigger"], "postsubmit"]
         self.assertTrue(
