@@ -27,6 +27,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--hipdnn-integration-tests | --no-hipdnn-integration-tests]
     [--hipdnn-samples | --no-hipdnn-samples]
     [--hipfile | --no-hipfile]
+    [--profiler-hub | --no-profiler-hub]
     [--miopen | --no-miopen]
     [--miopenprovider | --no-miopenprovider]
     [--hipblasltprovider | --no-hipblasltprovider]
@@ -407,6 +408,7 @@ def retrieve_artifacts_by_run_id(args):
             args.hipdnn_integration_tests,
             args.hipdnn_samples,
             args.hipfile,
+            args.profiler_hub,
             args.miopen,
             args.miopenprovider,
             args.hiptensor,
@@ -482,6 +484,8 @@ def retrieve_artifacts_by_run_id(args):
         if args.hipfile:
             extra_artifacts.append("hipfile")
             extra_artifacts.append("sysdeps-util-linux")
+        if args.profiler_hub:
+            extra_artifacts.append("profiler-hub")
         if args.miopen:
             extra_artifacts.append("miopen")
             # Contains bin/MIOpenDriver executable for tests.
@@ -886,6 +890,13 @@ def main(argv):
         "--hipfile",
         default=False,
         help="Include 'hipfile' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--profiler-hub",
+        default=False,
+        help="Include 'profiler-hub' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

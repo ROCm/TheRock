@@ -856,6 +856,7 @@ test_matrix = {
     # profiler-hub install/consumption tests
     "profiler-hub": {
         "job_name": "profiler-hub",
+        "fetch_artifact_args": "--profiler-hub --tests",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_profiler_hub_install.py')}",
         "platform": ["linux"],

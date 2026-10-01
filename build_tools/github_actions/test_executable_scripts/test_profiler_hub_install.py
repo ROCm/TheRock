@@ -24,17 +24,26 @@ ARTIFACTS_DIR = Path(OUTPUT_ARTIFACTS_DIR).resolve()
 EXECUTABLE = ARTIFACTS_DIR / "bin" / "test_profiler-hub"
 
 if not EXECUTABLE.is_file():
-    logging.error(
+    raise FileNotFoundError(
         f"consumer executable not found: {EXECUTABLE}. It is built during the "
         "build phase and delivered in the test component of the profiler-hub "
         "artifact; its absence means that component was not fetched or not built."
     )
-    raise SystemExit(1)
+
+logging.info(f"Resolved executable path: {EXECUTABLE}")
+
+ldd_result = subprocess.run(
+    ["ldd", str(EXECUTABLE)], capture_output=True, text=True, check=False
+)
+logging.info(f"ldd {EXECUTABLE}:\n{ldd_result.stdout}{ldd_result.stderr}")
 
 # Popped deliberately: the executable must resolve libprofiler-hub.so via its
 # own RUNPATH, and an inherited path would mask a wrong or absent one.
 env = os.environ.copy()
-env.pop("LD_LIBRARY_PATH", None)
+prior_ld_library_path = env.pop("LD_LIBRARY_PATH", None)
+logging.info(
+    f"Removing LD_LIBRARY_PATH from subprocess env (prior value: {prior_ld_library_path!r})"
+)
 
 logging.info(f"++ Exec [{ARTIFACTS_DIR}]$ {shlex.join([str(EXECUTABLE)])}")
 subprocess.run(
