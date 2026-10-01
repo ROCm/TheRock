@@ -373,9 +373,48 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         emulation_job = components[0]
         self.assertEqual(emulation_job["job_name"], "emulation (emulated mi350x)")
         self.assertTrue(emulation_job["linux_cpu_runner"])
+        self.assertEqual(emulation_job["fetch_artifact_args"], "--base-only")
+        self.assertEqual(
+            emulation_job["emulator_artifact_repository"],
+            fetch_test_configurations.emulation.EMULATOR_ARTIFACT_REPOSITORY,
+        )
+        self.assertEqual(
+            emulation_job["emulator_artifact_run_id"],
+            fetch_test_configurations.emulation.EMULATOR_ARTIFACT_RUN_ID,
+        )
+        self.assertEqual(
+            emulation_job["emulator_rocm_systems_commit"],
+            fetch_test_configurations.emulation.EMULATOR_ROCM_SYSTEMS_COMMIT,
+        )
         self.assertNotIn("emulate", emulation_job)
         self.assertNotIn("emulate_only", emulation_job)
         self.assertNotIn("--device /dev/kfd", emulation_job["container_options"])
+
+    def test_emulated_job_uses_pinned_emulator_artifacts(self):
+        os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
+        os.environ["PROJECTS_TO_TEST"] = "rocrtst"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        emulation_job = next(
+            job for job in components if job["job_name"] == "rocrtst (emulated mi350x)"
+        )
+        self.assertEqual(emulation_job["fetch_artifact_args"], "--rocrtst --tests")
+        self.assertNotIn("--mirage", emulation_job["fetch_artifact_args"])
+        self.assertNotIn("--rocjitsu", emulation_job["fetch_artifact_args"])
+        self.assertEqual(
+            emulation_job["emulator_artifact_repository"],
+            fetch_test_configurations.emulation.EMULATOR_ARTIFACT_REPOSITORY,
+        )
+        self.assertEqual(
+            emulation_job["emulator_artifact_run_id"],
+            fetch_test_configurations.emulation.EMULATOR_ARTIFACT_RUN_ID,
+        )
+        self.assertEqual(
+            emulation_job["emulator_rocm_systems_commit"],
+            fetch_test_configurations.emulation.EMULATOR_ROCM_SYSTEMS_COMMIT,
+        )
 
     # -----------------------
     # test_types tier gating

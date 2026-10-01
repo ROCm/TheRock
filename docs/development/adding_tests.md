@@ -168,7 +168,8 @@ That produces a second matrix entry alongside the hardware one, named
 `rocrtst (emulated mi350x)`, which:
 
 - runs on the Linux CPU builder with no GPU devices mapped into the container,
-- fetches the `mirage` and `rocjitsu` artifacts,
+- fetches the component under test from the current artifact run,
+- overlays `mirage` and `rocjitsu` from the pinned emulator artifact set,
 - gets 10x the component's `timeout_minutes`, capped at one hour.
 - runs unsharded
 - wraps the unchanged `test_script` in `mirage run`, passing `TEST_EMULATOR` and `TEST_EMULATOR_PROFILE` as literals for repro commands.
@@ -204,6 +205,30 @@ component whose family has no multi-GPU pool still gets its emulated variant.
 >   would route mi450x emulated jobs onto the scarce MI455 GPU runners.
 >
 > `rocrtst` — the one emulated component today — lives in `rocm-systems`.
+
+### Pinned emulator artifact baseline
+
+Emulated component jobs deliberately do **not** consume `mirage` and
+`rocjitsu` from the same artifact run as the component under test. The test
+component should move with the PR being tested, while the emulator should be a
+known baseline. Without that separation, a failure can be caused either by the
+component/library change or by a fresh emulator change from the same source
+tree, and CI cannot tell those cases apart.
+
+The pinned baseline is declared in
+[`emulation.py`](../../build_tools/github_actions/emulation.py):
+
+- `EMULATOR_ARTIFACT_REPOSITORY` — the repository that owns the pinned TheRock artifact run,
+- `EMULATOR_ARTIFACT_RUN_ID` — the TheRock run whose Linux artifacts provide the emulator tools,
+- `EMULATOR_ROCM_SYSTEMS_COMMIT` — the rocm-systems source commit used by that artifact run.
+
+`test_component.yml` first installs the component artifacts from the current
+run, then overlays only the emulator artifacts from the pinned run:
+`mirage_run`, `rocjitsu_run`, and `rocjitsu-hotswap_lib`. Bumping the
+emulator means updating those constants together after choosing a new artifact
+run built from the intended rocm-systems commit. That bump should be deliberate
+and called out in the PR description so reviewers know the emulator baseline
+changed.
 
 ### Which families are emulated
 

@@ -26,6 +26,15 @@ inputs:
   RELEASE_TYPE:
     description: "Release type for the artifacts being tested"
     default: ci
+  PINNED_EMULATOR_ARTIFACT_RUN_ID:
+    description: (string) TheRock run ID to fetch pinned mirage / rocjitsu artifacts from
+    default: ""
+  PINNED_EMULATOR_ARTIFACT_REPOSITORY:
+    description: (string) GitHub repository for PINNED_EMULATOR_ARTIFACT_RUN_ID
+    default: ROCm/TheRock
+  PINNED_EMULATOR_ROCM_SYSTEMS_COMMIT:
+    description: (string) rocm-systems commit used by the pinned mirage / rocjitsu artifacts
+    default: ""
 
 runs:
   using: "composite"
@@ -80,3 +89,31 @@ runs:
           --amdgpu-targets=${AMDGPU_TARGETS} \
           --output-dir=${OUTPUT_ARTIFACTS_DIR} \
           ${FETCH_ARTIFACT_ARGS}
+
+    - name: Download and unpack pinned emulator artifacts
+      if: ${{ inputs.PINNED_EMULATOR_ARTIFACT_RUN_ID != '' }}
+      shell: bash
+      env:
+        OUTPUT_ARTIFACTS_DIR: ${{ inputs.OUTPUT_ARTIFACTS_DIR }}
+        ARTIFACT_GROUP: ${{ inputs.ARTIFACT_GROUP }}
+        AMDGPU_TARGETS: ${{ inputs.AMDGPU_TARGETS }}
+        PINNED_EMULATOR_ARTIFACT_RUN_ID: ${{ inputs.PINNED_EMULATOR_ARTIFACT_RUN_ID }}
+        PINNED_EMULATOR_ARTIFACT_REPOSITORY: ${{ inputs.PINNED_EMULATOR_ARTIFACT_REPOSITORY }}
+        PINNED_EMULATOR_ROCM_SYSTEMS_COMMIT: ${{ inputs.PINNED_EMULATOR_ROCM_SYSTEMS_COMMIT }}
+        GITHUB_TOKEN: ${{ github.token }}
+        STEP_NAME: "Download and unpack pinned emulator artifacts"
+        STEP_TIMEOUT_TOLERANCE: "2"
+      run: |
+        echo "Fetching pinned emulator artifacts from ${PINNED_EMULATOR_ARTIFACT_REPOSITORY} run ${PINNED_EMULATOR_ARTIFACT_RUN_ID}"
+        echo "Pinned emulator rocm-systems commit: ${PINNED_EMULATOR_ROCM_SYSTEMS_COMMIT}"
+        python ./build_tools/fetch_artifacts.py \
+          --run-id="${PINNED_EMULATOR_ARTIFACT_RUN_ID}" \
+          --run-github-repo="${PINNED_EMULATOR_ARTIFACT_REPOSITORY}" \
+          --artifact-group="${ARTIFACT_GROUP}" \
+          --amdgpu-targets="${AMDGPU_TARGETS}" \
+          --platform=linux \
+          --output-dir="${OUTPUT_ARTIFACTS_DIR}" \
+          --flatten \
+          '^mirage_run_' \
+          '^rocjitsu_run_' \
+          '^rocjitsu-hotswap_lib_'
