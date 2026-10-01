@@ -970,12 +970,9 @@ class RepositoryAnalyzer:
     ) -> None:
         """Extract one ``therock_provide_artifact()`` slice's SUBPROJECT_DEPS.
 
-        Feeds only the report-only ``source_dir_map``; the authoritative consumer
-        graph and subtree_map do not depend on ``therock_provide_artifact`` at all.
-        So a resolution failure here is **non-fatal** — the artifact is omitted (with
-        a SkippedPath diagnostic) rather than aborting the whole analysis and the
-        blocking drift gate. (Contrast ``_resolve_dependency_section``, which stays
-        fatal for the authoritative BUILD_DEPS/RUNTIME_DEPS path.)
+        Feeds only the report-only ``source_dir_map``, not the authoritative graph.
+        Resolution failures are non-fatal: the artifact is omitted with a SkippedPath
+        diagnostic instead of aborting the analysis.
         """
         location = SourceLocation(path=relative_path, line=node.line)
         if not node.args:

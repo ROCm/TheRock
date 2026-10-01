@@ -469,9 +469,8 @@ therock_provide_artifact(meta
 
 def test_source_dir_map_unresolved_subproject_deps_is_omitted(tmp_path: Path) -> None:
     # SUBPROJECT_DEPS feeds only the report-only source_dir_map, so an unresolved
-    # variable must degrade gracefully: the offending artifact is omitted (with a
-    # skipped diagnostic) and the authoritative graph/subtree_map still build. It
-    # must NOT abort the whole analysis + the blocking drift gate.
+    # variable must not abort the analysis: the offending artifact is omitted (with
+    # a skipped diagnostic) and the authoritative graph/subtree_map still build.
     _write(
         tmp_path / "CMakeLists.txt",
         """
