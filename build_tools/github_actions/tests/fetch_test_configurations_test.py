@@ -359,6 +359,40 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["AMDGPU_FAMILIES"] = "gfx1150"
         self.assertNotIn("rocgdb-corefile", self._selected_names())
 
+    # Emulation logic
+    # -----------------------
+
+    def test_emulate_only_job_routes_to_cpu_runner(self):
+        os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
+        os.environ["PROJECTS_TO_TEST"] = "emulation"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        self.assertEqual(len(components), 1)
+        emulation_job = components[0]
+        self.assertEqual(emulation_job["job_name"], "emulation (emulated mi350x)")
+        self.assertTrue(emulation_job["linux_cpu_runner"])
+        self.assertEqual(emulation_job["fetch_artifact_args"], "--mirage --rocjitsu")
+        self.assertNotIn("emulate", emulation_job)
+        self.assertNotIn("emulate_only", emulation_job)
+        self.assertNotIn("--device /dev/kfd", emulation_job["container_options"])
+
+    def test_emulated_job_fetches_current_run_emulator_artifacts(self):
+        os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
+        os.environ["PROJECTS_TO_TEST"] = "rocrtst"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        emulation_job = next(
+            job for job in components if job["job_name"] == "rocrtst (emulated mi350x)"
+        )
+        self.assertEqual(
+            emulation_job["fetch_artifact_args"],
+            "--rocrtst --tests --mirage --rocjitsu",
+        )
+
     # -----------------------
     # test_types tier gating
     # -----------------------
