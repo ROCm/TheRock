@@ -111,6 +111,13 @@ _DECLARATION_KEYWORDS = (
     _DECLARATION_FLAGS | _DECLARATION_ONE_VALUE_ARGS | _DECLARATION_MULTI_VALUE_ARGS
 )
 
+# Keyword vocabulary of therock_provide_artifact(slice_name ...); mirrors the
+# cmake_parse_arguments in cmake/therock_artifacts.cmake. Used to split out the
+# SUBPROJECT_DEPS list for the source-dir map.
+_PROVIDE_ARTIFACT_KEYWORDS = frozenset(
+    {"TARGET_NEUTRAL", "DESCRIPTOR", "DISTRIBUTION", "COMPONENTS", "SUBPROJECT_DEPS"}
+)
+
 # TODO: mirrors CMake's therock_compiler_toolchain_subproject() (the CMake-side
 # source); share one definition via a data file if a third toolchain is added.
 _TOOLCHAIN_SUBPROJECTS = {
@@ -182,6 +189,9 @@ class AnalysisResult:
     subprojects: dict[str, Subproject]
     skipped_paths: list[SkippedPath]
     repository_root: Path
+    # artifact slice name -> set of SUBPROJECT_DEPS subproject names, from
+    # therock_provide_artifact(). Empty when no provide_artifact calls were reached.
+    artifacts: dict[str, set[str]] = field(default_factory=dict)
 
     @property
     def declaration_count(self) -> int:
@@ -241,6 +251,50 @@ class AnalysisResult:
                     break
         return {
             subtree: sorted(keys) for subtree, keys in sorted(subtree_to_keys.items())
+        }
+
+    def build_source_dir_map(self) -> dict[str, list[str]]:
+        """Map each artifact to the source subtree(s) its SUBPROJECT_DEPS build from.
+
+        For every ``therock_provide_artifact()`` slice, join each ``SUBPROJECT_DEPS``
+        subproject to its ``EXTERNAL_SOURCE_DIR`` subtree (relativized against the
+        rocm-libraries / rocm-systems roots, as in ``build_subtree_map``). This is
+        report-only metadata for issue #7782's "Generate more metadata"; it is NOT a
+        drop-in for ``BUILD_TOPOLOGY.toml`` ``source_paths``, which are hand-curated CI
+        reuse hints that only partly coincide with this derivation. Artifacts whose
+        deps resolve to no statically-captured source dir are omitted.
+        """
+        roots = (
+            self.repository_root / "rocm-libraries",
+            self.repository_root / "rocm-systems",
+        )
+
+        def subtrees_for(subproject_key: str) -> set[str]:
+            subproject = self.subprojects.get(subproject_key)
+            if subproject is None:
+                return set()
+            result: set[str] = set()
+            for source_dir in subproject.external_source_dirs:
+                source_path = Path(source_dir)
+                for root in roots:
+                    try:
+                        relative = source_path.relative_to(root)
+                    except ValueError:
+                        continue
+                    result.add(relative.as_posix())
+                    break
+            return result
+
+        artifact_to_subtrees: dict[str, set[str]] = {}
+        for artifact, deps in self.artifacts.items():
+            subtrees: set[str] = set()
+            for dep in deps:
+                subtrees |= subtrees_for(dep.lower())
+            if subtrees:
+                artifact_to_subtrees[artifact] = subtrees
+        return {
+            artifact: sorted(subtrees)
+            for artifact, subtrees in sorted(artifact_to_subtrees.items())
         }
 
     def dangling_dependencies(self) -> dict[str, list[str]]:
@@ -437,6 +491,7 @@ class RepositoryAnalyzer:
         self._tracked_declaration_files: set[Path] = set()
         self._declaration_files: set[Path] = set()
         self._subprojects: dict[str, Subproject] = {}
+        self._artifacts: dict[str, set[str]] = {}
         self._skipped_paths: list[SkippedPath] = []
         self._active_files: set[Path] = set()
 
@@ -461,6 +516,7 @@ class RepositoryAnalyzer:
             subprojects=copy.deepcopy(self._subprojects),
             skipped_paths=list(self._skipped_paths),
             repository_root=self.repository_root,
+            artifacts=copy.deepcopy(self._artifacts),
         )
 
     def _parse_tracked_inventory(self) -> None:
@@ -728,6 +784,8 @@ class RepositoryAnalyzer:
             self._execute_add_subdirectory(node, environment, relative_path)
         elif identifier == "therock_cmake_subproject_declare":
             self._record_declaration(node, environment, relative_path)
+        elif identifier == "therock_provide_artifact":
+            self._record_artifact(node, environment, relative_path)
 
     def _execute_list(self, node: cmake_ast.Command, environment: Environment) -> None:
         """Model ``list(APPEND|PREPEND|REMOVE_ITEM VAR ...)``."""
@@ -904,6 +962,30 @@ class RepositoryAnalyzer:
         subproject.locations.add(SourceLocation(path=relative_path, line=node.line))
         self._declaration_files.add(relative_path)
 
+    def _record_artifact(
+        self,
+        node: cmake_ast.Command,
+        environment: Environment,
+        relative_path: Path,
+    ) -> None:
+        """Extract one ``therock_provide_artifact()`` slice's SUBPROJECT_DEPS."""
+        if not node.args:
+            raise AnalysisError(
+                f"{relative_path.as_posix()}:{node.line}: provide_artifact has no name"
+            )
+        name_expansion = _expand_token(node.args[0], environment)
+        if name_expansion.unresolved or len(name_expansion.values) != 1:
+            raise AnalysisError(
+                f"{relative_path.as_posix()}:{node.line}: cannot resolve exactly one "
+                f"artifact name from {node.args[0].value!r}"
+            )
+        name = next(iter(name_expansion.values))
+        sections = _declaration_sections(node.args[1:], _PROVIDE_ARTIFACT_KEYWORDS)
+        deps = self._resolve_dependency_section(
+            sections.get("SUBPROJECT_DEPS", []), environment, relative_path, node.line
+        )
+        self._artifacts.setdefault(name, set()).update(deps)
+
     def _resolve_dependency_section(
         self,
         tokens: list[Token],
@@ -934,14 +1016,17 @@ class RepositoryAnalyzer:
         return {value for value in expansion.values if value}
 
 
-def _declaration_sections(tokens: list[Token]) -> dict[str, list[Token]]:
-    """Group a declaration's argument tokens by their keyword (BUILD_DEPS, ...)."""
+def _declaration_sections(
+    tokens: list[Token],
+    keywords: frozenset[str] | set[str] = _DECLARATION_KEYWORDS,
+) -> dict[str, list[Token]]:
+    """Group an argument list's tokens by their keyword (BUILD_DEPS, ...)."""
     sections: dict[str, list[Token]] = {}
     current_keyword: str | None = None
     for token in tokens:
         if token.kind == "COMMENT":
             continue
-        if token.value in _DECLARATION_KEYWORDS:
+        if token.value in keywords:
             current_keyword = token.value
             sections.setdefault(current_keyword, [])
         elif current_keyword is not None:

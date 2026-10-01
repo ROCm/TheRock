@@ -1,0 +1,164 @@
+{
+  "aqlprofile": [
+    "projects/aqlprofile"
+  ],
+  "base": [
+    "projects/rocm-core",
+    "projects/rocm-smi-lib",
+    "projects/rocprofiler-register"
+  ],
+  "blas": [
+    "projects/hipblas",
+    "projects/hipblas-common",
+    "projects/hipblaslt",
+    "projects/rocblas",
+    "shared/origami",
+    "shared/rocroller"
+  ],
+  "composable-kernel": [
+    "projects/composablekernel"
+  ],
+  "core-amdsmi": [
+    "projects/amdsmi"
+  ],
+  "core-hip": [
+    "projects/clr"
+  ],
+  "core-hiptests": [
+    "projects/hip-tests/catch"
+  ],
+  "core-kpack": [
+    "shared/kpack"
+  ],
+  "core-ocl": [
+    "projects/clr"
+  ],
+  "core-ocl-icd": [
+    "projects/OpenCL-Headers",
+    "projects/clr/opencl/khronos/icd"
+  ],
+  "core-runtime": [
+    "projects/rocminfo",
+    "projects/rocr-runtime"
+  ],
+  "fft": [
+    "projects/hipfft",
+    "projects/rocfft"
+  ],
+  "hipblasltprovider": [
+    "dnn-providers/hipblaslt-provider"
+  ],
+  "hipdnn": [
+    "projects/hipdnn"
+  ],
+  "hipdnn-integration-tests": [
+    "dnn-providers/integration-tests"
+  ],
+  "hipdnn-samples": [
+    "projects/hipdnn/samples"
+  ],
+  "hipfile": [
+    "projects/hipfile"
+  ],
+  "hipkernelprovider": [
+    "dnn-providers/hip-kernel-provider"
+  ],
+  "hiptensor": [
+    "projects/hiptensor"
+  ],
+  "hipthreads": [
+    "projects/hipthreads"
+  ],
+  "kfdtest": [
+    "projects/rocr-runtime/libhsakmt/tests/kfdtest"
+  ],
+  "miopen": [
+    "projects/miopen"
+  ],
+  "miopenprovider": [
+    "dnn-providers/miopen-provider"
+  ],
+  "mirage": [
+    "emulation/mirage"
+  ],
+  "prim": [
+    "projects/hipcub",
+    "projects/rocprim",
+    "projects/rocthrust"
+  ],
+  "rand": [
+    "projects/hiprand",
+    "projects/rocrand"
+  ],
+  "rccl": [
+    "projects/rccl",
+    "projects/rccl-tests"
+  ],
+  "rdc": [
+    "projects/amdsmi",
+    "projects/rdc",
+    "projects/rocprofiler-sdk"
+  ],
+  "rocalution": [
+    "projects/rocalution"
+  ],
+  "rocdecode": [
+    "projects/rocdecode"
+  ],
+  "rocjitsu": [
+    "emulation/rocjitsu"
+  ],
+  "rocjpeg": [
+    "projects/rocjpeg"
+  ],
+  "rocprofiler-compute": [
+    "projects/aqlprofile",
+    "projects/rocprofiler-compute",
+    "projects/rocprofiler-sdk"
+  ],
+  "rocprofiler-sdk": [
+    "projects/rocprof-trace-decoder",
+    "projects/rocprofiler-sdk",
+    "projects/roctracer"
+  ],
+  "rocprofiler-systems": [
+    "projects/amdsmi",
+    "projects/hipfile",
+    "projects/rocprofiler-sdk",
+    "projects/rocprofiler-systems"
+  ],
+  "rocprofiler-systems-examples": [
+    "projects/rocprofiler-systems/examples"
+  ],
+  "rocr-debug-agent": [
+    "projects/rocr-runtime"
+  ],
+  "rocr-debug-agent-tests": [
+    "projects/clr",
+    "projects/rocr-runtime"
+  ],
+  "rocrtst": [
+    "projects/rocr-runtime/rocrtst/suites/test_common"
+  ],
+  "rocshmem": [
+    "projects/rocshmem"
+  ],
+  "rocwmma": [
+    "projects/rocwmma"
+  ],
+  "rpp": [
+    "projects/rpp"
+  ],
+  "solver": [
+    "projects/hipsolver",
+    "projects/rocsolver"
+  ],
+  "sparse": [
+    "projects/hipsparse",
+    "projects/hipsparselt",
+    "projects/rocsparse"
+  ],
+  "support": [
+    "shared/mxdatagenerator"
+  ]
+}
