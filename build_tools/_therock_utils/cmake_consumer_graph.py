@@ -968,22 +968,51 @@ class RepositoryAnalyzer:
         environment: Environment,
         relative_path: Path,
     ) -> None:
-        """Extract one ``therock_provide_artifact()`` slice's SUBPROJECT_DEPS."""
+        """Extract one ``therock_provide_artifact()`` slice's SUBPROJECT_DEPS.
+
+        Feeds only the report-only ``source_dir_map``; the authoritative consumer
+        graph and subtree_map do not depend on ``therock_provide_artifact`` at all.
+        So a resolution failure here is **non-fatal** — the artifact is omitted (with
+        a SkippedPath diagnostic) rather than aborting the whole analysis and the
+        blocking drift gate. (Contrast ``_resolve_dependency_section``, which stays
+        fatal for the authoritative BUILD_DEPS/RUNTIME_DEPS path.)
+        """
+        location = SourceLocation(path=relative_path, line=node.line)
         if not node.args:
-            raise AnalysisError(
-                f"{relative_path.as_posix()}:{node.line}: provide_artifact has no name"
+            self._skipped_paths.append(
+                SkippedPath(
+                    location=location,
+                    expression="therock_provide_artifact",
+                    reason="provide_artifact has no name",
+                )
             )
+            return
         name_expansion = _expand_token(node.args[0], environment)
         if name_expansion.unresolved or len(name_expansion.values) != 1:
-            raise AnalysisError(
-                f"{relative_path.as_posix()}:{node.line}: cannot resolve exactly one "
-                f"artifact name from {node.args[0].value!r}"
+            self._skipped_paths.append(
+                SkippedPath(
+                    location=location,
+                    expression=node.args[0].value,
+                    reason="cannot resolve exactly one artifact name",
+                )
             )
+            return
         name = next(iter(name_expansion.values))
         sections = _declaration_sections(node.args[1:], _PROVIDE_ARTIFACT_KEYWORDS)
-        deps = self._resolve_dependency_section(
-            sections.get("SUBPROJECT_DEPS", []), environment, relative_path, node.line
-        )
+        expansion = _expand_tokens(sections.get("SUBPROJECT_DEPS", []), environment)
+        if expansion.unresolved:
+            self._skipped_paths.append(
+                SkippedPath(
+                    location=location,
+                    expression=name,
+                    reason=(
+                        "unresolved SUBPROJECT_DEPS variables: "
+                        f"{', '.join(sorted(expansion.unresolved))}"
+                    ),
+                )
+            )
+            return
+        deps = {value for value in expansion.values if value}
         self._artifacts.setdefault(name, set()).update(deps)
 
     def _resolve_dependency_section(
