@@ -133,7 +133,7 @@ def _load_subtree_alias_map() -> dict[str, list[str]]:
 
     The generated map (test_tools/therock_subtree_map.json) covers every subtree
     the parser derives from EXTERNAL_SOURCE_DIR; _SUBTREE_ALIAS_OVERRIDES supplies
-    the residue it cannot and wins on any shared key. Keys are lowercased to match
+    what the parser can't derive, and wins on any shared key. Keys are lowercased to match
     the lookup in _normalize_changed_project. Read script-relative so selection
     works from a clean checkout.
 

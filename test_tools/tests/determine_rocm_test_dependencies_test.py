@@ -1193,10 +1193,8 @@ class TestListSubprojectsNoBuildDir(_FixtureTestCase):
         self.assertEqual(set(names), set(_GRAPH.keys()))
 
 
-# Parity oracle: the previous static alias dict. The new resolution (generated
-# subtree_map + _SUBTREE_ALIAS_OVERRIDES) must never drop a graph key any of these
-# produced — over-selection is safe, under-selection is the bug.
-_ALIAS_PARITY_ORACLE = {
+# The previous static alias dict. New resolution must never drop a key it produced.
+_PREVIOUS_ALIASES = {
     "emulation/mirage": ["mirage"],
     "emulation/rocjitsu": ["rocjitsu"],
     "shared/rocroller": ["rocroller"],
@@ -1235,8 +1233,8 @@ class TestGeneratedSubtreeMapResolution(unittest.TestCase):
     """Subtree resolution reads the generated therock_subtree_map.json layered
     with _SUBTREE_ALIAS_OVERRIDES."""
 
-    def test_no_under_selection_vs_old_hand_dict(self) -> None:
-        for key, old in _ALIAS_PARITY_ORACLE.items():
+    def test_resolution_keeps_all_old_aliases(self) -> None:
+        for key, old in _PREVIOUS_ALIASES.items():
             new = set(_normalize_changed_project(key))
             self.assertTrue(
                 set(old) <= new,
@@ -1258,10 +1256,10 @@ class TestGeneratedSubtreeMapResolution(unittest.TestCase):
         for key, expected in cases.items():
             self.assertEqual(set(_normalize_changed_project(key)), expected, key)
 
-    def test_overrides_are_exactly_non_derivable(self) -> None:
+    def test_overrides_not_in_generated_map(self) -> None:
         # Each override must be genuinely non-derivable: the generated map either
         # lacks the key or maps it to a value that does not cover the override.
-        # Guards against the residue silently shadowing generated data.
+        # Guards against an override hiding a value the parser already derives.
         generated = json.loads(
             (THEROCK_DIR / "test_tools" / "therock_subtree_map.json").read_text()
         )
@@ -1281,7 +1279,7 @@ class TestGeneratedSubtreeMapResolution(unittest.TestCase):
     # consumers, intentionally excluding the mxdatagenerator self-node.
     _NARROWING_OVERRIDES = {"shared/mxdatagenerator"}
 
-    def test_overrides_do_not_shadow_generated_edges(self) -> None:
+    def test_overrides_cover_generated_values(self) -> None:
         # For every subtree in BOTH the generated map and the overrides, the
         # override must cover the generated value (no dropped edge), unless it is
         # an acknowledged narrowing. Fails if a future parser edge on an

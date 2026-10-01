@@ -1366,14 +1366,10 @@ class RealTopologyTest(unittest.TestCase):
         self.assertIn("hipkernelprovider", hkp.split_databases)
 
 
-class SourceDirMapOracleTest(unittest.TestCase):
-    """Cross-check the generated therock_source_dir_map.json against the hand
-    BUILD_TOPOLOGY.toml source_paths.
-
-    The generated map is report-only; it does NOT drive get_alias_to_artifact_map.
-    This guards that its relationship to the hand source_paths does not silently
-    change: the derivable majority must keep agreeing, and the known non-derivable
-    residue must not grow. Skips outside a git checkout with the committed maps.
+class SourceDirMapVsBuildTopologyTest(unittest.TestCase):
+    """Check the generated source_dir_map against the hand BUILD_TOPOLOGY.toml
+    source_paths: the derivable entries must keep agreeing and the non-derivable
+    set must not grow.
     """
 
     # Hand source_paths basenames EXACTLY equal the parser-derived subtrees.
@@ -1394,8 +1390,8 @@ class SourceDirMapOracleTest(unittest.TestCase):
     }
     # Hand source_paths add curated subtrees not in the artifact's SUBPROJECT_DEPS
     # (derived is a strict subset), except core-hiptests which is a genuine name
-    # divergence (hand "hip-tests" vs derived "catch"). Frozen so the residue that
-    # a future full-retirement must handle by hand cannot grow unnoticed.
+    # divergence (hand "hip-tests" vs derived "catch"). Frozen so the non-derivable
+    # set that a future full-retirement must handle by hand cannot grow unnoticed.
     _DIVERGE = {
         "blas",
         "core-hip",
