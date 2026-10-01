@@ -26,7 +26,21 @@ class EmulationStageTest(unittest.TestCase):
         step = next(
             step
             for step in workflow["jobs"]["build_stage"]["steps"]
-            if step.get("name") == "Build stage"
+            if step.get("name") == "Build emulation stage"
         )
         self.assertIn("--target stage-${STAGE_NAME}", step["run"])
         self.assertNotIn("therock-artifacts", step["run"])
+
+    def test_other_stages_keep_full_artifact_validation(self):
+        workflow = load_workflow(
+            WORKFLOWS_DIR / "multi_arch_build_portable_linux_artifacts.yml"
+        )
+        steps = {s["name"]: s for s in workflow["jobs"]["build_stage"]["steps"]}
+        self.assertIn("therock-artifacts", steps["Build stage"]["run"])
+        self.assertIn("!= 'emulation'", steps["Build stage"]["if"])
+        self.assertIn("!= 'emulation'", steps["Test Packaging"]["if"])
+        packaging = steps["Test emulation packaging"]
+        self.assertIn("== 'emulation'", packaging["if"])
+        self.assertIn("librocjitsu", packaging["run"])
+        self.assertIn("libhsa_hotswap_rocjitsu", packaging["run"])
+        self.assertIn("--no-tests=error", packaging["run"])
