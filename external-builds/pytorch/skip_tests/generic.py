@@ -1,6 +1,21 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# Whole test modules dropped before pytest collects them. Use this only when a
+# module hangs or crashes during import or collection, where the `-k` expression
+# built from skip_tests below cannot intervene. Prefer skip_tests otherwise.
+exclude_modules = {
+    "common": [
+        # Inductor autotuning compiles in subprocesses that can outlive or
+        # crash the worker, taking the shard's report with them.
+        "inductor/test_max_autotune",
+        "inductor/test_torchinductor_opinfo_properties",
+        "inductor/test_compiled_autograd",
+        "dynamo/test_dynamic_shapes",
+        "functorch/test_control_flow",
+    ],
+}
+
 skip_tests = {
     "gfx950": {
         "cuda": {
@@ -27,10 +42,16 @@ skip_tests = {
             # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI
             "test_memory_snapshot",
             "test_memory_plots",
+            # setup-python requires LD_LIBRARY_PATH, but this test launches a
+            # subprocess with an empty environment.
+            "test_allocator_backend",
             # HIP_VISIBLE_DEVICES and CUDA_VISIBLE_DEVICES not working
             # to restrict visibility of devices
             # AssertionError: String comparison failed: '8, 1' != '8, 8'
             "test_device_count_not_cached_pre_init",
+            # The OOM subprocess can select a GPU hidden by the runner's HSA
+            # visibility policy and exits before checking allocator logs.
+            "test_oom_retry_message_logged_at_info",
             # empty_stats() in test_cuda.py does not match stats returned
             # Returned is:
             # OrderedDict({'allocated_bytes.allocated': 0, 'allocated_bytes.current': 0, 'allocated_bytes.freed': 0,
@@ -88,6 +109,9 @@ skip_tests = {
             "test_is_pinned_no_context",
         ],
         "nn": [
+            # ROCm selects MiopenDepthwise while this CUDA-specific assertion
+            # requires CudaDepthwise2d.
+            "test_Conv2d_depthwise_kernel_flag_cuda_float16",
             # external-builds/pytorch/pytorch/test/test_nn.py::TestNN::test_RNN_dropout_state MIOpen(HIP): Error [Compile] 'hiprtcCompileProgram(prog.get(), c_options.size(), c_options.data())' MIOpenDropoutHIP.cpp: HIPRTC_ERROR_COMPILATION (6)
             # MIOpen(HIP): Error [BuildHip] HIPRTC status = HIPRTC_ERROR_COMPILATION (6), source file: MIOpenDropoutHIP.cpp
             # MIOpen(HIP): Warning [BuildHip] In file included from /tmp/comgr-01c423/input/MIOpenDropoutHIP.cpp:32:
@@ -201,8 +225,7 @@ skip_tests = {
     #     That is likely related to processes not terminating on their own:
     #     https://github.com/ROCm/TheRock/issues/999. Note that even if
     #     _test cases_ themselves terminate, the parent process still
-    #     hangs though. In run_pytorch_tests.py we exit with `os.kill()` to
-    #     force termination.
+    #     hangs, so these remain excluded from the test.sh path.
     #   * Linux has substantial testing on datacenter GPUs while Windows support
     #     is newer and skews towards consumer GPUs with lower specs. We disable
     #     some tests that are resource intensive or otherwise degrade CI

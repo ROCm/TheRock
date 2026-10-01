@@ -250,55 +250,34 @@ python run_pytorch_smoke_tests.py -- \
 
 ### Running full PyTorch tests
 
-We have a [`run_pytorch_tests.py`](run_pytorch_tests.py) script
-which runs PyTorch unit tests using pytest with additional test exclusion
-capabilities tailored for AMD ROCm GPUs. See the script for detailed
-instructions. Here are a few examples:
+[`run_pytorch_test_sh.py`](run_pytorch_test_sh.py) runs PyTorch tests through
+the upstream `pytorch/.ci/pytorch/test.sh` entry point. Both quick and full
+TheRock workflows use this adapter so sharding, test selection, and reporting
+match upstream instead of being reimplemented locally.
 
 ```bash
 # Install test dependencies
 python -m pip install -r pytorch/.ci/docker/requirements-ci.txt
 
-# Basic usage (auto-detect everything, no extra args):
-python run_pytorch_tests.py
+# Run the default config
+python run_pytorch_test_sh.py
 
-# Typical usage on CI, passing through some useful pytest args:
-python run_pytorch_tests.py -- \
-  --continue-on-collection-errors \
-  --import-mode=importlib \
-  -v
+# Shard 2 of 6 for a specific GPU family, as CI runs it
+python run_pytorch_test_sh.py \
+  --amdgpu-family=gfx94X-dcgpu --test-config=default --shard=2 --num-shards=6
 
-# Custom test selection with pytest -k:
-python run_pytorch_tests.py -k "test_nn and not test_dropout"
+# Distributed config (implies --device-query all --gpu-policy all)
+python run_pytorch_test_sh.py --test-config=distributed
 
-# Explicit pytorch repo path (for test sources) and GPU family (for filtering)
-python run_pytorch_tests.py --pytorch-dir=/tmp/pytorch --amdgpu-family=gfx950
-
-# GPU selection happens in two stages:
-#   1. --device-query  decides which GPUs enter the candidate set.
-#   2. --gpu-policy    decides how many candidates are made visible to tests.
-#
-# All GPUs visible at once (for multi-GPU tests):
-python run_pytorch_tests.py --device-query all --gpu-policy all
-
-# All GPUs discovered, but only one visible at a time:
-python run_pytorch_tests.py --device-query all --gpu-policy single
-
-# One GPU per architecture discovered, all of them visible:
-python run_pytorch_tests.py --device-query unique --gpu-policy all
-
-# Multi-GPU run on a single architecture (e.g., use both gfx1201 GPUs on a
-# machine where visible devices are {'gfx1100': [0], 'gfx1201': [1, 2]}):
-python run_pytorch_tests.py --amdgpu-family=gfx1201 --device-query all --gpu-policy all
+# Run the quick workflow's module subset and pass pytest args through
+python run_pytorch_test_sh.py --include test_nn test_torch -- -v
 ```
 
-Tests can also be run by following the ROCm documentation at
-https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation.
-For example:
-
-```bash
-PYTORCH_TEST_WITH_ROCM=1 python pytorch/test/run_test.py --include test_torch
-```
+The adapter translates GPU selection, ROCm exclusions, sharding, and pytest
+arguments into the environment variables `test.sh` expects. Test exclusions
+come from [`skip_tests/`](skip_tests/): individual cases via `skip_tests` and
+whole modules via `exclude_modules`. See
+[`skip_tests/README.md`](skip_tests/README.md).
 
 ## Nightly releases
 

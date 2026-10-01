@@ -23,9 +23,10 @@ Independent of this tooling, it is _always_ welcome to _get those changes upstre
 
 ## How to run
 
-[`../run_pytorch_tests.py`](../run_pytorch_tests.py) steers the pytest and is
-used by the CI, while [`./create_skip_tests.py`](create_skip_tests.py) creates
-the list of tests to be included or excluded.
+[`../run_pytorch_test_sh.py`](../run_pytorch_test_sh.py) invokes PyTorch's
+`test.sh` entry point and is used by CI, while
+[`./create_skip_tests.py`](create_skip_tests.py) creates the list of tests to
+include or exclude.
 
 ## Structure
 
@@ -46,6 +47,21 @@ skip_tests = {
     },
 }
 ```
+
+The same files may also define `exclude_modules`, which drops whole test
+modules before pytest collects them:
+
+```py
+exclude_modules = {
+    "common": [ <PyTorch test module paths> ],
+}
+```
+
+Reach for this only when a module hangs or crashes during import or collection,
+where the `-k` expression built from `skip_tests` cannot intervene. Entries are
+paths relative to PyTorch's `test/` directory, such as
+`inductor/test_max_autotune`, and a module missing from the checkout is ignored.
+Prefer `skip_tests` whenever the failure is limited to specific test cases.
 
 `Amdgpu family short form` is the minimum entry needed to match the right architecture. E.g.
 

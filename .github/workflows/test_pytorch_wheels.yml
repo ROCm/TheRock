@@ -114,7 +114,7 @@ jobs:
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
     container:
-      image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
+      image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }} # zizmor: ignore[unpinned-images]
       # SYS_PTRACE is required by PyTorch's test infra, which uses gdb to
       # collect stack traces on segfaults and hangs (torch/testing/_internal).
       options: --ipc host
@@ -129,9 +129,7 @@ jobs:
     defaults:
       run:
         shell: bash
-    # run_pytorch_tests_full.py already sets CI, PYTORCH_TEST_WITH_ROCM,
-    # PYTORCH_TESTING_DEVICE_ONLY_FOR and TEST_CONFIG (via --test-config)
-    # itself, so we only set the extras the runner does not manage.
+    # The test.sh adapter sets CI, ROCm mode, and TEST_CONFIG itself.
     env:
       DEVICE_QUERY: ${{ inputs.device_query }}
       GPU_POLICY: ${{ inputs.gpu_policy }}
@@ -207,7 +205,7 @@ jobs:
           # packages (PYTORCH_EXTRA_INSTALL_REQUIREMENTS pins rocm[libraries]),
           # so installing torch is enough to pull the ROCm runtime.
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION}" \
+            --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION} torchvision" \
             --index-url="${PACKAGE_INDEX_URL}" \
             --activate-in-future-github-actions-steps
 
@@ -230,6 +228,16 @@ jobs:
             --repo-hashtag "${TORCH_SHA}" \
             --no-hipify \
             --no-submodules
+
+          # test.sh installs from this cache instead of building torchvision,
+          # which requires devel packages excluded from this quick workflow.
+          TORCHVISION_VERSION=$(python -c \
+            "import importlib.metadata; print(importlib.metadata.version('torchvision'))")
+          python -m pip download \
+            --no-deps \
+            --dest external-builds/pytorch/pytorch/dist/vision \
+            --index-url="${PACKAGE_INDEX_URL}" \
+            "torchvision==${TORCHVISION_VERSION}"
 
       - name: Install test requirements
         run: |
@@ -262,15 +270,12 @@ jobs:
             --log-cli-level=INFO \
             -v
 
-      # Rather than calling pytest or PyTorch's run_test.py directly, we use a
-      # test runner script that invokes run_test.py after first handling our
-      # custom skip-list integration, serialized execution, GPU selection, and
-      # more. The list of included test suites is limited here compared to in
-      # test_pytorch_wheels_full.yml.
+      # Use the same upstream test.sh entry point as the full workflow, limited
+      # to the quick suite's selected modules.
       - name: Run PyTorch tests
         timeout-minutes: 120
         run: |
-          python ./external-builds/pytorch/run_pytorch_tests_full.py \
+          python ./external-builds/pytorch/run_pytorch_test_sh.py \
             --test-config default \
             --device-query "${DEVICE_QUERY}" \
             --gpu-policy "${GPU_POLICY}" \

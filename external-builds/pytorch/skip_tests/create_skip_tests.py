@@ -53,7 +53,11 @@ import sys
 from typing import Dict, List
 
 
-def import_skip_tests(pytorch_version: str = "") -> Dict[str, Dict]:
+def import_skip_tests(
+    pytorch_version: str = "",
+    attribute: str = "skip_tests",
+    required: bool = True,
+) -> Dict[str, Dict]:
     """Dynamically load test skip definitions from configuration files.
 
     Loads skip test definitions from:
@@ -66,6 +70,9 @@ def import_skip_tests(pytorch_version: str = "") -> Dict[str, Dict]:
             - "" (empty): Load only generic.py
             - "all": Load generic.py and all pytorch_*.py files
             - Specific version: Load generic.py and pytorch_<version>.py
+        attribute: Module-level name to read from each file.
+        required: When False, files that do not define `attribute` are skipped
+            silently rather than warned about.
 
     Returns:
         Dictionary mapping module names to their skip_tests dictionaries.
@@ -99,7 +106,12 @@ def import_skip_tests(pytorch_version: str = "") -> Dict[str, Dict]:
             sys.modules[module_name] = module
             spec.loader.exec_module(module)
 
-            dict_skip_tests[module_name] = getattr(module, "skip_tests")
+            if required:
+                dict_skip_tests[module_name] = getattr(module, attribute)
+            else:
+                value = getattr(module, attribute, None)
+                if value:
+                    dict_skip_tests[module_name] = value
         except (ImportError, FileNotFoundError, AttributeError) as ex:
             msg_pytorch = ""
             if "pytorch" in module_name:
@@ -171,6 +183,37 @@ def create_list(
 
     # Remove duplicates and return
     return list(set(selected_tests))
+
+
+def get_excluded_modules(
+    amdgpu_family: list[str] = [],
+    pytorch_version: str = "",
+    platform: str = "",
+) -> List[str]:
+    """Collect whole test modules to exclude, filtered like create_list().
+
+    A `-k` expression cannot help when a module hangs or dies during import or
+    collection, so these are dropped before pytest sees them. Definitions live
+    in the same files as `skip_tests` under an `exclude_modules` dict, keyed by
+    the same filters but holding module paths (e.g. "inductor/test_max_autotune")
+    rather than per-module test-case lists.
+
+    Returns:
+        Sorted list of unique module paths.
+    """
+    filters = ["common"]
+    filters += amdgpu_family
+    filters += [platform.lower()] if platform else []
+
+    excluded = set()
+    dicts = import_skip_tests(
+        pytorch_version, attribute="exclude_modules", required=False
+    )
+    for definitions in dicts.values():
+        for section_name, modules in definitions.items():
+            if any(section_name in filter_name for filter_name in filters):
+                excluded.update(modules)
+    return sorted(excluded)
 
 
 def parse_arguments(argv: List[str]) -> argparse.Namespace:
