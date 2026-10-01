@@ -720,6 +720,68 @@ class TestFetchStageAll(ArtifactManagerTestBase):
         self.assertIn("test-artifact_lib_generic.tar.zst", fetched_keys)
         self.assertNotIn("second-artifact_lib_generic.tar.zst", fetched_keys)
 
+    def test_fetch_artifact_names_limits_to_named_artifacts(self) -> None:
+        """Test that --artifact-names narrows the fetch to an include list."""
+        import artifact_manager
+
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("second-artifact", "lib", "generic")
+
+        extract_calls: list[artifact_manager.ExtractRequest] = []
+
+        def mock_extract(request: artifact_manager.ExtractRequest) -> Path:
+            extract_calls.append(request)
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            argv = [
+                "fetch",
+                "--stage",
+                "all",
+                "--output-dir",
+                str(self.output_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+                "--artifact-names",
+                "second-artifact",
+            ]
+
+            artifact_manager.main(argv)
+
+        fetched_keys = [c.archive_path.name for c in extract_calls]
+        self.assertEqual(fetched_keys, ["second-artifact_lib_generic.tar.zst"])
+
+    def test_fetch_artifact_names_rejects_unknown_artifact(self) -> None:
+        """Test that --artifact-names validates artifact names."""
+        import artifact_manager
+
+        argv = [
+            "fetch",
+            "--stage",
+            "all",
+            "--output-dir",
+            str(self.output_dir),
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "local",
+            "--artifact-names",
+            "unknown-artifact",
+        ]
+
+        with self.assertRaises(ValueError):
+            artifact_manager.main(argv)
+
     def test_fetch_exclude_artifacts_rejects_unknown_artifact(self) -> None:
         """Test that --exclude-artifacts validates artifact names."""
         argv = [
