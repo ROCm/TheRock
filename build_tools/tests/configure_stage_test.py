@@ -174,7 +174,10 @@ class StageArtifactFilteringTest(unittest.TestCase):
             platform_name="linux",
         )
         self.assertIn("-DTHEROCK_ENABLE_SPARSE=ON", args)
-        self.assertNotIn("-DTHEROCK_ENABLE_BLAS=ON", args)
+        # When building within a stage, transitive artifact dependencies are
+        # also enabled so CMake can resolve them. sparse depends on blas, so
+        # BLAS must be enabled.
+        self.assertIn("-DTHEROCK_ENABLE_BLAS=ON", args)
 
 
 class ManifestValidationTest(unittest.TestCase):

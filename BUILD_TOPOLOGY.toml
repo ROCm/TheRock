@@ -678,7 +678,7 @@ source_paths = ["rocwmma"]
 [artifacts.composable-kernel]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip"]
+artifact_deps = ["core-runtime", "core-hip", "rand", "rocprofiler-sdk"]
 source_paths = ["composablekernel"]
 
 [artifacts.hiptensor]
