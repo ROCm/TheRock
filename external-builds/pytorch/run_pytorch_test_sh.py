@@ -131,7 +131,7 @@ def configure_environment(
         rocminfo_shim = shim_dir / "rocminfo"
         rocminfo_shim.write_text(
             "#!/usr/bin/env bash\n"
-            "echo 'rocminfo is unavailable in the Windows wheel environment'\n"
+            "echo '  Name: gfx-unknown (rocminfo unavailable on Windows)'\n"
         )
         rocminfo_shim.chmod(0o755)
         env["PATH"] = f"{shim_dir}{os.pathsep}{env.get('PATH', '')}"
