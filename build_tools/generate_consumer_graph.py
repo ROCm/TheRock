@@ -12,8 +12,8 @@ three committed files:
   graph key(s) built from it.
 * ``test_tools/therock_source_dir_map.json`` — each artifact mapped to the source
   subtree(s) its therock_provide_artifact() SUBPROJECT_DEPS build from. Report-only
-  metadata (issue #7782 "Generate more metadata"); it is NOT authoritative for
-  BUILD_TOPOLOGY.toml source_paths, which are hand-curated and only partly coincide.
+  metadata; it is NOT authoritative for BUILD_TOPOLOGY.toml source_paths, which are
+  hand-curated and only partly coincide.
 
 This parser is the authoritative generator of all three files. See cmake_consumer_graph.py
 for the full description and limitations.

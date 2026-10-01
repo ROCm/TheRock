@@ -1,12 +1,12 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Consistency guards for the hand-maintained test-label metadata (issue #7782).
+"""Consistency guards for the hand-maintained test-label metadata.
 
-Behavior-neutral: these fail only if the duplicated/stale label data that #7782
-flags drifts — (1) a STAGE_TO_TEST_LABELS label that resolves to no real test,
-and (2) the rocgdb/tensilelite expansions duplicated between build_tools'
-TEST_LABEL_GROUPS and test_tools' _CI_TEST_SELECTOR_ALIASES.
+Behavior-neutral: these fail only if the duplicated/stale label data drifts —
+(1) a STAGE_TO_TEST_LABELS label that resolves to no real test, and (2) the
+rocgdb/tensilelite expansions duplicated between build_tools' TEST_LABEL_GROUPS
+and test_tools' _CI_TEST_SELECTOR_ALIASES.
 """
 
 import os
