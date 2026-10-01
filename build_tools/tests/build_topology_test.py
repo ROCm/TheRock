@@ -1317,43 +1317,23 @@ class RealTopologyTest(unittest.TestCase):
             {"rocjitsu", "rocjitsu-hotswap", "mirage"},
         )
         emulation_inbound = topology.get_inbound_artifacts("emulation")
-        self.assertIn("base", emulation_inbound)
-        self.assertIn("sysdeps", emulation_inbound)
+        self.assertEqual(emulation_inbound, set())
 
         comm_libs_inbound = topology.get_inbound_artifacts("comm-libs")
         self.assertIn("rocjitsu", comm_libs_inbound)
         self.assertIn("rocjitsu-hotswap", comm_libs_inbound)
 
-    def test_emulation_artifacts_declare_foundation_stage_deps(self):
+    def test_emulation_artifacts_need_no_upstream_stages(self):
+        # Keep stage selection and inbound fetching consistent: emulation-only
+        # builds must neither build compiler-runtime nor fetch its artifacts.
         # Regression for https://github.com/ROCm/rocm-systems/issues/11198.
-        # An emulation-only change (mirage / rocjitsu) narrows the build to the
-        # 'emulation' stage, but that stage fetches base + sysdeps as inbound
-        # artifacts. Those are produced by 'compiler-runtime'. If the emulation
-        # artifacts drop their artifact_deps, get_stages_for_artifacts() no
-        # longer pulls in 'compiler-runtime', base/sysdeps are neither built nor
-        # fetchable, and the inbound artifact fetch fails at CI time.
         topology = get_topology()
-
-        # base and sysdeps are the foundation artifacts the emulation stage needs.
-        emulation_inbound = topology.get_inbound_artifacts("emulation")
-        self.assertIn("base", emulation_inbound)
-        self.assertIn("sysdeps", emulation_inbound)
-
-        # compiler-runtime is the stage that produces them.
-        self.assertEqual(topology.get_stage_for_artifact("base"), "compiler-runtime")
-        self.assertEqual(topology.get_stage_for_artifact("sysdeps"), "compiler-runtime")
-
-        # Selecting an emulation artifact must therefore also schedule
-        # compiler-runtime, not just emulation.
+        self.assertEqual(topology.get_inbound_artifacts("emulation"), set())
         for artifact in ("mirage", "rocjitsu", "rocjitsu-hotswap"):
-            stages = topology.get_stages_for_artifacts([artifact])
-            self.assertIn(
-                "compiler-runtime",
-                stages,
-                f"{artifact} must pull in the compiler-runtime stage that "
-                f"produces its base/sysdeps foundation artifacts, got: {sorted(stages)}",
-            )
-            self.assertIn("emulation", stages)
+            with self.subTest(artifact=artifact):
+                self.assertEqual(
+                    topology.get_stages_for_artifacts([artifact]), {"emulation"}
+                )
 
     def test_hipkernelprovider_is_split_per_arch(self):
         # rocKE ships per-arch AOT bundles under engines/arch_content/rocke/<arch>,
