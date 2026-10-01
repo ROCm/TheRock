@@ -61,7 +61,7 @@ jobs:
     container:
       # If the component has specified an alternate image, honor that option.
       # Otherwise use the default image.
-      image: >-
+      image: >- # zizmor: ignore[unpinned-images]
         ${{ inputs.platform == 'linux' &&
             (fromJSON(inputs.component).container_image || inputs.default_container_image)
             || null
@@ -134,7 +134,7 @@ jobs:
         env:
           RETRY_THIS_STEP: "true"
           STEP_TIMEOUT_MINUTES: ${{ inputs.build_variant == 'asan' && '60' || '15' }}
-        uses: './.github/actions/setup_test_environment'
+        uses: './.github/actions/setup_test_environment' # zizmor: ignore[self-repository]
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
           # TODO(#3381): revert back to `inputs.artifact_group` once issue is resolved
