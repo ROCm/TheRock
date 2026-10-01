@@ -519,16 +519,36 @@ class GitContext:
 
 @dataclass(frozen=True)
 class TargetSelection:
-    """Which GPU families to build/test, per platform."""
+    """Which GPU families to build/test, per platform.
+
+    Supports fine-grained control over build vs test selection:
+    - linux_families/windows_families: families to build (always)
+    - build_only_families: families where tests should be skipped even if hardware
+      is available (useful for verifying compilation without running tests)
+    - test_only_families: families where tests should be force-enabled
+      (requires the family to be in the build list)
+    """
 
     linux_families: list[str] = field(default_factory=list)
     windows_families: list[str] = field(default_factory=list)
+    # Build-only families: build but skip tests (per-platform)
+    linux_build_only_families: list[str] = field(default_factory=list)
+    windows_build_only_families: list[str] = field(default_factory=list)
+    # Test-only families: force-enable tests (requires family in build list)
+    linux_test_only_families: list[str] = field(default_factory=list)
+    windows_test_only_families: list[str] = field(default_factory=list)
 
     def log(self) -> None:
         """Log selected targets for CI diagnostics."""
         print("TargetSelection:")
         print(f"  linux: {self.linux_families}")
         print(f"  windows: {self.windows_families}")
+        if self.linux_build_only_families or self.windows_build_only_families:
+            print(f"  linux_build_only: {self.linux_build_only_families}")
+            print(f"  windows_build_only: {self.windows_build_only_families}")
+        if self.linux_test_only_families or self.windows_test_only_families:
+            print(f"  linux_test_only: {self.linux_test_only_families}")
+            print(f"  windows_test_only: {self.windows_test_only_families}")
 
 
 # ---------------------------------------------------------------------------
@@ -973,7 +993,26 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     else:
         raise ValueError(f"Unsupported event type: {ci_inputs.event_name!r}")
 
-    # PR labels can extend the family set (both platforms)
+    # PR labels can extend the family set (both platforms).
+    # We support three types of arch labels:
+    #   - ci:gfx* - opt-in to both build AND test (existing behavior)
+    #   - ci:build:gfx* - opt-in to build only (no tests)
+    #   - ci:test:gfx* - opt-in to tests only (requires build label)
+    #
+    # This fine-grained control is helpful for specific use cases:
+    #   - ci:build:gfx* alone: verify compilation for an arch without running tests
+    #     (useful when you don't need/want test results, just build validation)
+    #   - ci:gfx* + ci:test:gfx*: normal build + explicitly request tests for an arch
+    #     that might not normally run tests on PRs
+    #
+    # IMPORTANT: ci:test:gfx* labels require corresponding build labels (ci:gfx* or
+    # ci:build:gfx*) because tests depend on build artifacts. CI will error if a
+    # test label is used without the matching build label.
+    linux_build_only: list[str] = []
+    windows_build_only: list[str] = []
+    linux_test_only: list[str] = []
+    windows_test_only: list[str] = []
+
     if ci_inputs.is_pull_request:
         for label in ci_inputs.pr_labels:
             if label == "ci:run-all-archs":
@@ -982,7 +1021,24 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 windows_names = list(all_families.keys())
                 print("  Label 'ci:run-all-archs' -> all families")
                 break
-            if label.lower().startswith("ci:gfx"):
+            if label.lower().startswith("ci:build:gfx"):
+                # Build-only label: ci:build:gfx94x -> gfx94x
+                target = label.lower().removeprefix("ci:build:").split("-")[0]
+                linux_names.append(target)
+                windows_names.append(target)
+                linux_build_only.append(target)
+                windows_build_only.append(target)
+                print(f"  Label '{label}' -> adding build-only target {target}")
+            elif label.lower().startswith("ci:test:gfx"):
+                # Test-only label: ci:test:gfx94x -> gfx94x
+                # Note: we don't add to linux_names/windows_names here because
+                # test requires build. Validation below will check that a
+                # corresponding build label exists.
+                target = label.lower().removeprefix("ci:test:").split("-")[0]
+                linux_test_only.append(target)
+                windows_test_only.append(target)
+                print(f"  Label '{label}' -> adding test-only target {target}")
+            elif label.lower().startswith("ci:gfx"):
                 # Trim suffixes from labels since amdgpu_family_matrix.py
                 # specifies families with no suffix (e.g. `gfx94x`) but
                 # we have some labels like `ci:gfx94X-dcgpu` or `ci:gfx103X-linux`.
@@ -996,18 +1052,55 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     # De-dup, validate, then filter by platform availability.
     linux_names = list(dict.fromkeys(linux_names))
     windows_names = list(dict.fromkeys(windows_names))
+    linux_build_only = list(dict.fromkeys(linux_build_only))
+    windows_build_only = list(dict.fromkeys(windows_build_only))
+    linux_test_only = list(dict.fromkeys(linux_test_only))
+    windows_test_only = list(dict.fromkeys(windows_test_only))
+
     _validate_family_names(linux_names, all_families)
     _validate_family_names(windows_names, all_families)
+
+    # Validate that test-only families have corresponding build labels.
+    # Tests depend on build artifacts, so ci:test:gfx* requires ci:gfx* or ci:build:gfx*.
+    for target in linux_test_only:
+        if target not in linux_names:
+            raise ValueError(
+                f"ci:test:{target} label requires a corresponding build label "
+                f"(ci:{target} or ci:build:{target}). Tests depend on build artifacts."
+            )
+    for target in windows_test_only:
+        if target not in windows_names:
+            raise ValueError(
+                f"ci:test:{target} label requires a corresponding build label "
+                f"(ci:{target} or ci:build:{target}). Tests depend on build artifacts."
+            )
+
     # TODO: For workflow_dispatch, a family requested for a specific platform
     # but not available there (e.g. gfx94x on windows) is silently dropped.
     # Consider validating per-platform and reporting the mismatch.
     # We could also filter per-platform in get_all_families_for_trigger_types.
     linux_names = _filter_families_by_platform(linux_names, "linux", all_families)
     windows_names = _filter_families_by_platform(windows_names, "windows", all_families)
+    linux_build_only = _filter_families_by_platform(
+        linux_build_only, "linux", all_families
+    )
+    windows_build_only = _filter_families_by_platform(
+        windows_build_only, "windows", all_families
+    )
+    linux_test_only = _filter_families_by_platform(
+        linux_test_only, "linux", all_families
+    )
+    windows_test_only = _filter_families_by_platform(
+        windows_test_only, "windows", all_families
+    )
 
     return TargetSelection(
         linux_families=linux_names,
         windows_families=windows_names,
+        linux_build_only_families=linux_build_only,
+        windows_build_only_families=windows_build_only,
+        linux_test_only_families=linux_test_only,
+        windows_test_only_families=windows_test_only,
     )
 
 
@@ -1319,6 +1412,8 @@ def _expand_build_config_for_platform(
     ci_inputs: CIInputs,
     jobs: JobDecisions,
     git_context: GitContext,
+    build_only_families: list[str] | None = None,
+    test_only_families: list[str] | None = None,
 ) -> BuildConfig | None:
     """Build a BuildConfig for one platform, or None if no families match.
 
@@ -1330,7 +1425,17 @@ def _expand_build_config_for_platform(
     - amdgpu_targets: comma-separated gfx targets for split artifact fetching
     - test-runs-on: runner label for testing (empty = no test runner available)
     - sanity_check_only_for_family: whether to limit test scope
+
+    Args:
+        build_only_families: Families where tests should be skipped even if
+            hardware is available (from ci:build:gfx* labels).
+        test_only_families: Families where tests should be force-enabled
+            (from ci:test:gfx* labels).
     """
+    if build_only_families is None:
+        build_only_families = []
+    if test_only_families is None:
+        test_only_families = []
     build_variant = variant_config["build_variant_label"]
 
     # Extract kernel type from test_runner:<kernel> PR label (e.g. "oem").
@@ -1430,11 +1535,20 @@ def _expand_build_config_for_platform(
                 f"disabling tests for quick test run"
             )
 
+        # Handle build-only labels (ci:build:gfx*).
+        # These allow verifying compilation without running tests.
+        # Note: if ci:test:gfx* is also present, test-only wins (user wants tests).
+        if family_name in build_only_families and family_name not in test_only_families:
+            if test_runs_on:
+                print(f"  {family_name}: tests disabled (ci:build:{family_name} label)")
+            test_runs_on = ""
         # Use trigger-based test gating (replaces nightly_check_only_for_family,
         # submodule_bump_tests_only, and trigger_test_label_only flags).
         # Each family specifies tests_on_trigger list; tests run if any current
         # trigger matches.
-        if test_runs_on:
+        # Skip trigger-based gating for test-only families (ci:test:gfx*) - they
+        # explicitly request tests regardless of trigger type.
+        elif test_runs_on and family_name not in test_only_families:
             should_run, reason = _should_run_tests_for_family(
                 platform_info, ci_inputs, git_context
             )
@@ -1656,9 +1770,19 @@ def expand_build_configs(
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
 
-    for platform, families in [
-        ("linux", targets.linux_families),
-        ("windows", targets.windows_families),
+    for platform, families, build_only, test_only in [
+        (
+            "linux",
+            targets.linux_families,
+            targets.linux_build_only_families,
+            targets.linux_test_only_families,
+        ),
+        (
+            "windows",
+            targets.windows_families,
+            targets.windows_build_only_families,
+            targets.windows_test_only_families,
+        ),
     ]:
         variant_config = all_build_variants.get(platform, {}).get(build_variant)
         if not variant_config:
@@ -1675,6 +1799,8 @@ def expand_build_configs(
             ci_inputs=ci_inputs,
             jobs=jobs,
             git_context=git_context,
+            build_only_families=build_only,
+            test_only_families=test_only,
         )
         if platform == "linux":
             linux_config = config

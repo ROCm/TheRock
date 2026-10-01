@@ -1246,6 +1246,92 @@ class TestSelectTargets(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unknown GPU families"):
             cm.select_targets(inputs)
 
+    def test_build_only_label_adds_family_to_build_only_list(self):
+        """ci:build:gfx* labels add family to both build and build_only lists."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:build:gfx950"],
+        )
+        result = cm.select_targets(inputs)
+        # Family should be in the build list
+        self.assertIn("gfx950", result.linux_families)
+        # Family should also be marked as build-only
+        self.assertIn("gfx950", result.linux_build_only_families)
+        # And not in test-only
+        self.assertNotIn("gfx950", result.linux_test_only_families)
+
+    def test_test_only_label_adds_family_to_test_only_list(self):
+        """ci:test:gfx* labels add family to test_only list when build exists."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            # Need both build and test labels
+            pr_labels=["ci:gfx950", "ci:test:gfx950"],
+        )
+        result = cm.select_targets(inputs)
+        # Family should be in the build list
+        self.assertIn("gfx950", result.linux_families)
+        # Family should be in test-only list
+        self.assertIn("gfx950", result.linux_test_only_families)
+        # And not in build-only
+        self.assertNotIn("gfx950", result.linux_build_only_families)
+
+    def test_test_only_label_without_build_raises_error(self):
+        """ci:test:gfx* labels without corresponding build label raises error."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            # Only test label, no build label
+            pr_labels=["ci:test:gfx950"],
+        )
+        with self.assertRaisesRegex(
+            ValueError, "ci:test:gfx950 label requires a corresponding build label"
+        ):
+            cm.select_targets(inputs)
+
+    def test_test_only_label_with_build_only_label_is_valid(self):
+        """ci:test:gfx* works when paired with ci:build:gfx* (not just ci:gfx*)."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            # Build-only + test-only labels together
+            pr_labels=["ci:build:gfx950", "ci:test:gfx950"],
+        )
+        result = cm.select_targets(inputs)
+        # Family should be in the build list
+        self.assertIn("gfx950", result.linux_families)
+        # With both labels, build-only is overridden by test-only
+        self.assertIn("gfx950", result.linux_build_only_families)
+        self.assertIn("gfx950", result.linux_test_only_families)
+
+    def test_build_and_test_labels_case_insensitive(self):
+        """Labels are processed case-insensitively."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:build:GFX950", "ci:test:GFX950"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertIn("gfx950", result.linux_families)
+        self.assertIn("gfx950", result.linux_build_only_families)
+        self.assertIn("gfx950", result.linux_test_only_families)
+
 
 # ---------------------------------------------------------------------------
 # Step 5: Build Configs
@@ -1819,6 +1905,65 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertEqual(family["test-runs-on"], "")
         self.assertEqual(family["amdgpu_targets"], "")
         self.assertEqual(linux.test_python_packages_matrix, [])
+
+    def test_build_only_family_disables_tests(self):
+        """Family in build_only_families list has tests disabled."""
+        # gfx94x normally has tests enabled on presubmit
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            linux_build_only_families=["gfx94x"],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(event_name="pull_request"),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        # Build happened (family is in config)
+        self.assertEqual(entry["amdgpu_family"], "gfx94X-dcgpu")
+        # But tests are disabled
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_test_only_family_force_enables_tests(self):
+        """Family in test_only_families list has tests force-enabled."""
+        # gfx950 doesn't normally run tests on presubmit (tests_on_trigger=submodule_bump)
+        targets = cm.TargetSelection(
+            linux_families=["gfx950"],
+            linux_test_only_families=["gfx950"],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(event_name="pull_request"),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        # Build happened
+        self.assertEqual(entry["amdgpu_family"], "gfx950-dcgpu")
+        # Tests are force-enabled despite presubmit trigger not in tests_on_trigger
+        self.assertNotEqual(entry["test-runs-on"], "")
+
+    def test_test_only_overrides_build_only(self):
+        """When family is in both build_only and test_only, test_only wins."""
+        # ci:build:gfx* + ci:test:gfx* = user wants tests (test-only takes precedence)
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            linux_build_only_families=["gfx94x"],
+            linux_test_only_families=["gfx94x"],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(event_name="pull_request"),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        # Tests should be enabled because test_only overrides build_only
+        self.assertNotEqual(entry["test-runs-on"], "")
 
 
 # ---------------------------------------------------------------------------
