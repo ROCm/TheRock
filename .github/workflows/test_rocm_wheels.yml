@@ -244,11 +244,11 @@ jobs:
         id: install_compute_analyze
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: |
-          python build_tools/setup_venv.py ${COMPUTE_ANALYZE_VENV_DIR} \
-            --packages "rocm-profiler[compute-analyze]==${{ inputs.rocm_version }}" \
-            --index-url=${{ inputs.package_index_url }} \
+          python build_tools/setup_venv.py "${COMPUTE_ANALYZE_VENV_DIR}" \
+            --packages "rocm-profiler[compute-analyze]==${ROCM_VERSION}" \
+            --index-url="${PACKAGE_INDEX_URL}" \
             --extra-index-url=https://pypi.org/simple \
-            --find-links=${{ inputs.package_find_links_url }} \
+            --find-links="${PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
 
       - name: Show installed packages (compute-analyze)
