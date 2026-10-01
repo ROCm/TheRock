@@ -1040,6 +1040,51 @@ class TestSelectTargets(unittest.TestCase):
         # Should include nightly-only families
         self.assertIn("gfx906", result.linux_families)
 
+    def test_pull_request_ci_exactly_label(self):
+        """PR with ci:exactly label only honors explicit ci:gfx* labels."""
+        # Without ci:exactly, presubmit defaults are included
+        inputs_without = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:gfx90a"],
+        )
+        result_without = cm.select_targets(inputs_without)
+        # Should include presubmit defaults PLUS gfx90a
+        self.assertIn("gfx90a", result_without.linux_families)
+        self.assertGreater(len(result_without.linux_families), 1)
+
+        # With ci:exactly, ONLY the specified families are selected
+        inputs_with = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:exactly", "ci:gfx90a"],
+        )
+        result_with = cm.select_targets(inputs_with)
+        # Should include ONLY gfx90a
+        self.assertIn("gfx90a", result_with.linux_families)
+        self.assertEqual(len(result_with.linux_families), 1)
+
+    def test_pull_request_ci_exactly_without_gfx_labels(self):
+        """PR with ci:exactly but no ci:gfx* labels results in empty families."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:exactly"],
+        )
+        result = cm.select_targets(inputs)
+        # Should have empty family lists
+        self.assertEqual(result.linux_families, [])
+        self.assertEqual(result.windows_families, [])
+
     def test_pull_request_unknown_gfx_label_raises(self):
         """PR with an unknown ci:gfx label fails fast."""
         inputs = cm.CIInputs(

@@ -22,6 +22,7 @@ The following labels may be added to a pull request to modify CI behavior:
 | Label or group     | Description                                                                                                                                                                                       |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ci:skip`          | Skip all builds and tests                                                                                                                                                                         |
+| `ci:exactly`       | Only honor explicit `ci:gfx*` labels, ignoring default architectures. Use with `ci:gfx*` labels to build exactly what you specify.                                                                |
 | `ci:run-all-archs` | Build and test all possible architectures                                                                                                                                                         |
 | `ci:asan`          | Enable ASAN CI builds and tests. ASAN CI is skipped by default on PRs unless this label is present.                                                                                               |
 | `ci:host-asan`     | Alias for `ci:asan`. Enable ASAN CI builds and tests.                                                                                                                                             |
@@ -30,6 +31,14 @@ The following labels may be added to a pull request to modify CI behavior:
 | `test:...`         | Run tests only for the specified projects (e.g. `test:rocthrust`, `test:hipblaslt`). Multiple `test:` labels can be combined.                                                                     |
 | `test_runner:...`  | Run tests on only custom test machines (e.g. `test_runner:oem`). Single-arch CI only.                                                                                                             |
 | `test_filter:...`  | Override the test level (e.g. `test_filter:comprehensive`, `test_filter:quick`). Takes priority over all other test level logic. See [test_filtering.md](./test_filtering.md) for allowed values. |
+
+#### Example: Building only gfx90a
+
+To build only for gfx90a and skip all default architectures, add these labels:
+- `ci:exactly`
+- `ci:gfx90a`
+
+Without `ci:exactly`, the `ci:gfx90a` label would *add* gfx90a to the default set of architectures.
 
 ### Push
 

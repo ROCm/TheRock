@@ -870,6 +870,8 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     - pull_request: Smallest default set (presubmit families). Designed for
       fast feedback on proposed changes. PR labels can opt in to additional
       families (ci:gfx* labels) or the full set (ci:run-all-archs).
+      The ci:exactly label changes this behavior: when present, ONLY the
+      explicit ci:gfx* labels are honored, ignoring all defaults.
     - push: Broader coverage (presubmit + postsubmit families). Runs on
       code that has landed, so we want more thorough validation than PRs
       without paying the full nightly cost.
@@ -973,25 +975,39 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     else:
         raise ValueError(f"Unsupported event type: {ci_inputs.event_name!r}")
 
-    # PR labels can extend the family set (both platforms)
+    # PR labels can extend or override the family set (both platforms)
     if ci_inputs.is_pull_request:
-        for label in ci_inputs.pr_labels:
-            if label == "ci:run-all-archs":
-                # Override to all families.
-                linux_names = list(all_families.keys())
-                windows_names = list(all_families.keys())
-                print("  Label 'ci:run-all-archs' -> all families")
-                break
-            if label.lower().startswith("ci:gfx"):
-                # Trim suffixes from labels since amdgpu_family_matrix.py
-                # specifies families with no suffix (e.g. `gfx94x`) but
-                # we have some labels like `ci:gfx94X-dcgpu` or `ci:gfx103X-linux`.
-                # Family keys are lowercase, so normalize the target.
-                # Strip ci: prefix, then split on dash to get the base family.
-                target = label.lower().removeprefix("ci:").split("-")[0]
-                linux_names.append(target)
-                windows_names.append(target)
-                print(f"  Label '{label}' -> adding target {target}")
+        # ci:exactly mode: ONLY honor explicit ci:gfx* labels, ignoring defaults.
+        # This allows building exactly what's specified, nothing more.
+        if "ci:exactly" in ci_inputs.pr_labels:
+            linux_names = []
+            windows_names = []
+            print("  Label 'ci:exactly' -> starting with empty family list")
+            for label in ci_inputs.pr_labels:
+                if label.lower().startswith("ci:gfx"):
+                    target = label.lower().removeprefix("ci:").split("-")[0]
+                    linux_names.append(target)
+                    windows_names.append(target)
+                    print(f"  Label '{label}' -> adding target {target}")
+        else:
+            # Normal mode: labels extend the default set
+            for label in ci_inputs.pr_labels:
+                if label == "ci:run-all-archs":
+                    # Override to all families.
+                    linux_names = list(all_families.keys())
+                    windows_names = list(all_families.keys())
+                    print("  Label 'ci:run-all-archs' -> all families")
+                    break
+                if label.lower().startswith("ci:gfx"):
+                    # Trim suffixes from labels since amdgpu_family_matrix.py
+                    # specifies families with no suffix (e.g. `gfx94x`) but
+                    # we have some labels like `ci:gfx94X-dcgpu` or `ci:gfx103X-linux`.
+                    # Family keys are lowercase, so normalize the target.
+                    # Strip ci: prefix, then split on dash to get the base family.
+                    target = label.lower().removeprefix("ci:").split("-")[0]
+                    linux_names.append(target)
+                    windows_names.append(target)
+                    print(f"  Label '{label}' -> adding target {target}")
 
     # De-dup, validate, then filter by platform availability.
     linux_names = list(dict.fromkeys(linux_names))
