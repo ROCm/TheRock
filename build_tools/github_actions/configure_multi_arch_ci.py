@@ -1557,6 +1557,13 @@ def _expand_build_config_for_platform(
     elif "ci:skip-python-packages" in pr_labels:
         build_python_packages = False
 
+    # Ensure python packages are built if pytorch or jax are enabled,
+    # since they depend on rocm python packages.
+    if build_pytorch or build_jax:
+        if not build_python_packages:
+            print("  Enabling python packages (required by pytorch/jax)")
+        build_python_packages = True
+
     # When stages are skipped (partial build), disable package builds since
     # they require a complete artifact set. Prebuilt/reused stages are OK
     # because their artifacts are copied from a baseline run.
