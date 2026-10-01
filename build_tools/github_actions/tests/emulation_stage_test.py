@@ -18,3 +18,15 @@ class EmulationStageTest(unittest.TestCase):
     def test_comm_libs_still_waits_for_emulation(self):
         workflow = load_workflow(WORKFLOWS_DIR / "multi_arch_build_portable_linux.yml")
         self.assertIn("emulation", workflow["jobs"]["comm-libs"]["needs"])
+
+    def test_stage_build_does_not_build_all_artifacts(self):
+        workflow = load_workflow(
+            WORKFLOWS_DIR / "multi_arch_build_portable_linux_artifacts.yml"
+        )
+        step = next(
+            step
+            for step in workflow["jobs"]["build_stage"]["steps"]
+            if step.get("name") == "Build stage"
+        )
+        self.assertIn("--target stage-${STAGE_NAME}", step["run"])
+        self.assertNotIn("therock-artifacts", step["run"])
