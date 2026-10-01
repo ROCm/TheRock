@@ -828,7 +828,7 @@ disable_platforms = ["windows"]
 source_paths = ["rocprofiler", "rocprofiler-sdk", "roctracer", "rocprof-trace-decoder"]
 
 [artifacts.rocprofiler-compute]
-artifact_group = "profiler-core"
+artifact_group = "profiler-apps"
 type = "target-neutral"
 artifact_deps = ["rocprofiler-sdk", "openmpi"]
 feature_group = "PROFILER"
