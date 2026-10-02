@@ -95,7 +95,7 @@ on:
         required: false
         default: ""
       jax_ref:
-        description: "JAX / rocm-jax release ref (e.g. rocm-jaxlib-v0.11.0, rocm-jaxlib-v0.11.1)."
+        description: "JAX / rocm-jax release ref (e.g. rocm-jaxlib-v0.11.1, rocm-jaxlib-v0.11.2)."
         type: string
         required: true
       rocm_version:
@@ -129,10 +129,12 @@ on:
 run-name: Build Multi-Arch Linux JAX Wheels CI (${{ inputs.artifact_group }}, ${{ inputs.rocm_version }}, py${{ inputs.python_version }}, ${{ inputs.jax_ref }})
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   build_jax_wheels:
+    permissions:
+      contents: read
+      id-token: write # Authenticate to AWS to upload wheels.
     name: Build JAX | ${{ inputs.artifact_group }} | jax ${{ inputs.jax_ref }} | py ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     outputs:
@@ -322,7 +324,6 @@ jobs:
       matrix: ${{ fromJSON(needs.configure_jax_tests.outputs.matrix) }}
     permissions:
       contents: read
-      id-token: write
     uses: ./.github/workflows/test_multi_arch_linux_jax_wheels.yml
     with:
       test_amdgpu_family: ${{ inputs.test_amdgpu_family }}

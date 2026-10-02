@@ -55,6 +55,10 @@ on:
           set it manually.
         type: string
         default: ""
+      build_runs_on:
+        description: "Runner label for the build job"
+        type: string
+        default: "aws-linux-scale-rocm-prod"
   workflow_call:
     inputs:
       artifact_github_repo:
@@ -115,6 +119,7 @@ jobs:
     # Note: GitHub-hosted runners run out of disk space for some gpu families
     runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-24.04' }}
     permissions:
+      contents: read
       id-token: write
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
