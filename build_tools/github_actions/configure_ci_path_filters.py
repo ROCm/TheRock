@@ -241,6 +241,7 @@ _SKIPPABLE_PATH_PATTERNS = [
     "build_tools/packaging/python/tests/*",
     "build_tools/packaging/windows/tests/*",
     "build_tools/third_party/s3_management/tests/*",
+    "cmake/tests/*",
     "external-builds/pytorch/tests/*",
     "test_tools/tests/*",
 ]
