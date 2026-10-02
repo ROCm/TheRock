@@ -514,3 +514,119 @@ def test_source_dir_map_matches_committed() -> None:
         "committed source-dir map is out of sync with the parser; regenerate it "
         "with build_tools/generate_consumer_graph.py and commit the result"
     )
+
+
+def test_subtree_map_uses_forward_slashes(tmp_path: Path) -> None:
+    # Keys come from Path.as_posix(), so a Windows separator can never reach the
+    # committed map even when relativizing a deeply nested source dir.
+    _write(
+        tmp_path / "CMakeLists.txt",
+        """
+set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/rocm-systems")
+therock_cmake_subproject_declare(deep
+  EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl/khronos)
+""",
+    )
+    tracked = {Path("CMakeLists.txt")}
+
+    subtree_map = (
+        RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked)
+        .analyze()
+        .build_subtree_map()
+    )
+
+    assert subtree_map == {"projects/clr/opencl/khronos": ["deep"]}
+    assert all("\\" not in key for key in subtree_map)
+
+
+def test_source_dir_map_uses_forward_slashes(tmp_path: Path) -> None:
+    # Same forward-slash guarantee for the artifact source-dir map.
+    _write(
+        tmp_path / "CMakeLists.txt",
+        """
+set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/rocm-systems")
+therock_cmake_subproject_declare(clr
+  EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl)
+therock_provide_artifact(clr-artifact
+  SUBPROJECT_DEPS clr)
+""",
+    )
+    tracked = {Path("CMakeLists.txt")}
+
+    source_dir_map = (
+        RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked)
+        .analyze()
+        .build_source_dir_map()
+    )
+
+    assert source_dir_map == {"clr-artifact": ["projects/clr/opencl"]}
+    assert all(
+        "\\" not in subtree
+        for subtrees in source_dir_map.values()
+        for subtree in subtrees
+    )
+
+
+def test_unsupported_compiler_toolchain_raises(tmp_path: Path) -> None:
+    # An unknown COMPILER_TOOLCHAIN is a hard error when edges are built, not a
+    # silent drop of a real dependency.
+    _write(
+        tmp_path / "CMakeLists.txt",
+        "therock_cmake_subproject_declare(client COMPILER_TOOLCHAIN not-a-toolchain)\n",
+    )
+    tracked = {Path("CMakeLists.txt")}
+
+    result = RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
+    with pytest.raises(AnalysisError, match="Unsupported COMPILER_TOOLCHAIN"):
+        result.build_consumer_graph()
+
+
+def test_include_cycle_terminates(tmp_path: Path) -> None:
+    # A recursive include() is recorded as a skipped path rather than looping.
+    _write(
+        tmp_path / "CMakeLists.txt",
+        "include(a)\ntherock_cmake_subproject_declare(root)\n",
+    )
+    _write(tmp_path / "a.cmake", "include(b)\n")
+    _write(tmp_path / "b.cmake", "include(a)\n")
+    tracked = {Path("CMakeLists.txt"), Path("a.cmake"), Path("b.cmake")}
+
+    result = RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
+
+    assert "root" in result.subprojects
+    assert any("cycle" in skipped.reason for skipped in result.skipped_paths)
+
+
+def test_missing_tracked_file_raises(tmp_path: Path) -> None:
+    # A tracked listfile that is not on disk fails clearly, not with a bare
+    # FileNotFoundError traceback.
+    _write(
+        tmp_path / "CMakeLists.txt",
+        "include(gone)\ntherock_cmake_subproject_declare(root)\n",
+    )
+    tracked = {Path("CMakeLists.txt"), Path("gone.cmake")}
+
+    with pytest.raises(AnalysisError, match="does not exist"):
+        RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
+
+
+def test_non_utf8_tracked_file_raises(tmp_path: Path) -> None:
+    # A tracked file with invalid UTF-8 fails clearly, not with a UnicodeDecodeError.
+    _write(
+        tmp_path / "CMakeLists.txt",
+        "include(bad)\ntherock_cmake_subproject_declare(root)\n",
+    )
+    (tmp_path / "bad.cmake").write_bytes(b"\xff\xfe set(x 1)\n")
+    tracked = {Path("CMakeLists.txt"), Path("bad.cmake")}
+
+    with pytest.raises(AnalysisError, match="not valid UTF-8"):
+        RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
+
+
+def test_git_ls_files_failure_raises(tmp_path: Path) -> None:
+    # Without an explicit tracked-file set, discovery shells out to git; a
+    # non-repository root fails with a clear error.
+    _write(tmp_path / "CMakeLists.txt", "therock_cmake_subproject_declare(root)\n")
+
+    with pytest.raises(AnalysisError, match="git ls-files failed"):
+        RepositoryAnalyzer(tmp_path).analyze()
