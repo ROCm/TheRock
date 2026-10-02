@@ -223,7 +223,9 @@ jobs:
       fail-fast: false
     runs-on: ${{ github.repository_owner == 'ROCm' && (inputs.test_runs_on || 'linux-gfx942-1gpu-ccs-csp-ossci-rocm') || 'ubuntu-24.04' }}
     container:
-      image: ${{ needs.prepare_install_context.outputs.container_image }}
+      # get_url_repo_params.py manages image references for each OS profile.
+      # zizmor cannot inspect the dynamically selected image.
+      image: ${{ needs.prepare_install_context.outputs.container_image }} # zizmor: ignore[unpinned-images]
       # GPU options from prepare_install_context — see comment there for why this
       # is dynamic across os_profile (multi-OS install matrix, SLES /etc/group).
       options: ${{ needs.prepare_install_context.outputs.container_gpu_options }}
