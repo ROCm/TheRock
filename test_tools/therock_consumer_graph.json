@@ -55,7 +55,8 @@
       "rocrand",
       "rocrtst",
       "rocshmem",
-      "rocthrust"
+      "rocthrust",
+      "rocwmma"
     ]
   },
   "aqlprofile": {
