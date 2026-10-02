@@ -115,7 +115,8 @@ def main(argv: list[str]):
         "--torch-only",
         action="store_true",
         default=False,
-        help="Require only the torch wheel.",
+        help="Require only the torch wheel. Used by ASAN builds, which do not "
+        "produce torchaudio, torchvision, triton, or apex.",
     )
 
     args = p.parse_args(argv)
