@@ -417,6 +417,24 @@ class SharedOwnerPackagingTest(BuildPackageTestCase):
                         STAGING_PAYLOAD_BYTES,
                     )
 
+    @patch.object(deb_package, "move_packages_to_destination", return_value=[])
+    @patch.object(deb_package, "package_with_dpkg_build")
+    def test_deb_retains_kpacks_with_absent_manifest_roots(self, mock_build, _move):
+        cfg = self._stage_targets(("gfx1250", "gfx1250-strict"))
+        for target in cfg.gfxarch_list:
+            manifest = cfg.artifacts_dir / f"fft_lib_{target}" / "artifact_manifest.txt"
+            # A split archive can retain a root with no remaining files.
+            with manifest.open("a") as stream:
+                stream.write("empty/rocFFT/stage\n")
+        deb_package.create_versioned_deb_package(PKG_FFT, cfg)
+        payload_dir = (
+            mock_build.call_args.args[0] / cfg.install_prefix.lstrip("/") / ".kpack"
+        )
+        self.assertEqual(
+            {path.name: path.read_bytes() for path in payload_dir.iterdir()},
+            {f"fft_{target}.kpack": STAGING_PAYLOAD_BYTES for target in cfg.gfxarch_list},
+        )
+
     @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
     @patch.object(rpm_package, "package_with_rpmbuild")
     def test_rpm_spec_includes_only_selected_roots(self, _mock_build, _mock_move):
