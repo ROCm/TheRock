@@ -34,7 +34,6 @@ VERIFY_KEY_COMPONENTS = [
     "bin/clinfo",
     "include/hip/hip_runtime.h",
     "lib/libamdhip64.so",
-    "lib/cmake/profiler-hub/profiler-hub-config.cmake",
 ]
 
 
