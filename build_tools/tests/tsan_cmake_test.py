@@ -41,9 +41,14 @@ def configure(source: Path, build: Path, *args: str) -> None:
 class TsanCMakeTest(unittest.TestCase):
     def test_sanitizer_flags_and_gpu_targets_reach_child_project(self) -> None:
         cases = (
-            ("TSAN", "thread", True, "gfx942;gfx950"),
-            ("HOST_ASAN", "address", True, "gfx942;gfx950"),
-            ("ASAN", "address", False, "gfx942:xnack+;gfx950:xnack+"),
+            ("TSAN", "thread", True, "gfx90a;gfx942;gfx950;gfx1100"),
+            ("HOST_ASAN", "address", True, "gfx90a;gfx942;gfx950;gfx1100"),
+            (
+                "ASAN",
+                "address",
+                False,
+                "gfx90a:xnack+;gfx942:xnack+;gfx950:xnack+;gfx1100",
+            ),
         )
         for sanitizer, kind, host_only, expected_targets in cases:
             with self.subTest(
@@ -66,7 +71,7 @@ class TsanCMakeTest(unittest.TestCase):
                     """
                     cmake_minimum_required(VERSION 3.25)
                     project(child NONE)
-                    set(GPU_TARGETS "gfx942;gfx950")
+                    set(GPU_TARGETS "gfx90a;gfx942;gfx950;gfx1100")
                     foreach(language C CXX HIP)
                       set(CMAKE_${language}_COMPILER_LAUNCHER "ccache;--verbose")
                     endforeach()

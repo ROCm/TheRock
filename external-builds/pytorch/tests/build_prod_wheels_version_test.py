@@ -13,9 +13,7 @@ from unittest import mock
 
 from packaging.version import Version
 
-sys.path.insert(
-    0, os.fspath(Path(__file__).parent.parent.parent / "external-builds" / "pytorch")
-)
+sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent))
 
 from build_prod_wheels import compute_build_version
 

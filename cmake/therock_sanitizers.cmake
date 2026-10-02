@@ -29,7 +29,7 @@ function(therock_sanitizer_configure
   endif()
 
   # Our own toolchains get ASAN enabled consistently.
-  # ASAN: Full host+device address sanitizer (xnack+ GPU targets for gfx942, gfx950)
+  # ASAN: Full host+device address sanitizer (xnack+ GPU targets for gfx90a, gfx942, gfx950)
   # HOST_ASAN: Host-only address sanitizer (no device-side instrumentation)
   # TSAN: Host-only thread sanitizer (no device-side instrumentation).
   set(_stanza)
@@ -108,7 +108,7 @@ endforeach()
     # Device-side instrumentation applies only to full ASAN, not to TSAN.
     # Filter GPU_TARGETS to enable xnack+ mode only for gfx targets that support it.
     if(_sanitizer STREQUAL "ASAN")
-      string(APPEND _stanza "list(TRANSFORM GPU_TARGETS REPLACE \"^(gfx942|gfx950)$\" \"\\\\1:xnack+\")\n")
+      string(APPEND _stanza "list(TRANSFORM GPU_TARGETS REPLACE \"^(gfx90a|gfx942|gfx950)$\" \"\\\\1:xnack+\")\n")
       string(APPEND _stanza "set(AMDGPU_TARGETS \"\${GPU_TARGETS}\")\n")
       string(APPEND _stanza "message(STATUS \"Override ${_sanitizer} GPU_TARGETS = \${GPU_TARGETS}\")\n")
     else()
