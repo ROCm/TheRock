@@ -1,0 +1,124 @@
+{
+  "base": "c9ac6f862132b2589eb41d18f3ba33492974f4cb",
+  "mainline_followup": "e7829b712c8caf738c4e03e839722bfefc1ae3bc",
+  "targets": [
+    "gfx1250-strict",
+    "gfx1250"
+  ],
+  "compiler_pin": "4f43f4746ede4cc49ab4129f473dbd54e0d9db4f",
+  "compiler_stack_head": "b1959d68be7af07cdc49dc00ce400010b8be46dd",
+  "compiler_resolutions": {
+    "224741": [
+      "AMDGPU.td: retain pinned ISA list context; insert identical hazard feature into strict,1250,1251,generic.",
+      "GCNVOPDUtils.cpp: place unchanged helper before checkVOPDRegConstraints without unrelated newer literal-materialization helper."
+    ],
+    "225303": [],
+    "227426": [
+      "BuiltinsAMDGPU.td: retain pinned _Vector spelling; change nine PK8 gates only.",
+      "VOP3Instructions.td: relocate PK8 outside block16 gate; retain pinned absence of GFX1250BlockingCycles attributes."
+    ],
+    "227475": [
+      "BuiltinsAMDGPU.td: retain pinned _Vector spelling; enable six PK16 gates only.",
+      "VOP3Instructions.td: remove PK16 block16 gate preserving earlyclobber and PK8 wave32 scopes; omit unrelated absent scheduling attributes."
+    ],
+    "227861": [
+      "VOPInstructions.td: apply multiclass rename while excluding unrelated upstream-context VOP3Only_ScaleSel_Real_gfx13 definition absent from pin."
+    ]
+  },
+  "compiler_checks": {
+    "replay_tree_identical": true,
+    "no_conflict_markers": true,
+    "15_pk_builtins_enabled": true,
+    "no_pk_block16_gate": true,
+    "pk_constraints_retained": true,
+    "strict_e5m3_not_enabled": true,
+    "b0_e5m3_enabled": true,
+    "upstream_cpp_227475_diff_preserved": true
+  },
+  "libraries_prs": [
+    11777,
+    12583,
+    12842
+  ],
+  "systems_prs": [
+    11575,
+    12070,
+    12333
+  ],
+  "therock_prs": [
+    8350
+  ],
+  "local_compatibility_fix": "hipBLASLt strict E5M3 software fallback; B0 fast path retained",
+  "frameworks": "PyTorch2.12/2.13 and JAX0.11.2; source preparation overlays pinned",
+  "limitations": [
+    "CI compile not yet verified",
+    "GPU tests disabled",
+    "Embedded Triton/AOTriton target qualification remains open"
+  ],
+  "patches": [
+    {
+      "path": "patches/amd-mainline/llvm-project/0010-AMDGPU-Work-around-gfx1250-VOPD3-FP64-OPY-hazard-224.patch",
+      "sha256": "4d193ff24cebf1216aa193d91cc270c7fcb6c92ec13c843563efaf93082e1d82"
+    },
+    {
+      "path": "patches/amd-mainline/llvm-project/0011-AMDGPU-Add-scalar_to_vector-pattern-for-v2bf16-22530.patch",
+      "sha256": "0410482d28775a44bc034005fb56e19edbd667b707f4ffa7968a08dbd800cafe"
+    },
+    {
+      "path": "patches/amd-mainline/llvm-project/0012-AMDGPU-v_cvt_scale_pk8_-are-block32-in-strict-mode-2.patch",
+      "sha256": "11931bc8a63500a17c4673b9cd43728dee30ab40296afdcb1ff14037d6093013"
+    },
+    {
+      "path": "patches/amd-mainline/llvm-project/0013-AMDGPU-Validate-scale_sel-in-v_cvt_scale_-227475.patch",
+      "sha256": "e7d7391ff15abbd2a0967a73803b25ded9d984c3d97dbc9e96e8d9f70eb4c6e2"
+    },
+    {
+      "path": "patches/amd-mainline/llvm-project/0014-AMDGPU-Disable-e5m3-conversions-on-gfx1250-strict.patch",
+      "sha256": "7e96d6fd55e5b7fefeb4501758b01f072ec9f401a3df30f05d9cf02364ff0668"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-libraries/0010-hipblaslt-add-support-for-gfx1250-strict-build-11777.patch",
+      "sha256": "0462b9ee2540ddad83c2e06c98c6559fd992d508721e39a9d272c0333f53966f"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-libraries/0011-fix-stinkytofu-re-enable-wavesPerDsIssuePipe-scoped-.patch",
+      "sha256": "7fc14cd82d426d1c2344f55ff8309f55fa8c5979dab5eb8394737b4fce6bf7f4"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-libraries/0012-fix-tensilelite-gate-forced-scaled-WMMA-to-gfx1250-s.patch",
+      "sha256": "da98922122915c7a466845fdbb6aac799261a2f00ffc1d648811a531ec538689"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-libraries/0013-Use-hipBLASLt-E5M3-software-conversion-on-gfx1250-st.patch",
+      "sha256": "35a46e052e3811258147d3fbcbff4625c0613af67390551a6398792a829a2f98"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-systems/0010-feat-rocr-report-gfx12-A0-strict-ISA-variant-by-defa.patch",
+      "sha256": "761420834b3775b2ba1f646877d107e9603bc09c82aea4db93d51e3e35de6cf3"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-systems/0011-fix-clr-don-t-take-the-gfx1250-OCP-builtin-path-on-g.patch",
+      "sha256": "d96ae13badebe9defbc9e5e81e0fc876acc0fe52de39665b9f276fd5006369d2"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-systems/0012-fix-clr-gate-only-the-block16-converts-not-the-whole.patch",
+      "sha256": "e4fb00cbeb6f247bb46adef7c2986c73d56d3da66adb1d1faa233ced44df1a0b"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-systems/0013-fix-clr-drop-redundant-OCP-conjunction-from-the-bloc.patch",
+      "sha256": "632f93c3db1a0974c2f34ab5ab5d5057cbe24dd9cb97163a2b590a1788a22588"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-systems/0014-fix-clr-gate-the-scaled-fp8-bf8-unpack-converts-on-b.patch",
+      "sha256": "ea9669c948098db534c722ed26c65507b052d8cfe740f19531a1aff0acdc5caf"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-systems/0015-fix-clr-separate-the-pk8-scale-gating-from-the-pk16-.patch",
+      "sha256": "ccc3e9b0159fd3880608e22d11a8a042d46a330123207fedbb67b215ac6d1723"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-systems/0016-RCCL-add-gfx1250-strict-build-and-device-support-123.patch",
+      "sha256": "81f3da7e88e76cd02f7f0a37da9defb10dcdc867aade6e756a57425bf4b35d00"
+    }
+  ]
+}

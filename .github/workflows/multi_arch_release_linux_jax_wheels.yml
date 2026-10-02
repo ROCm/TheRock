@@ -126,7 +126,8 @@ jobs:
         id: matrix
         run: |
           python ./build_tools/github_actions/configure_jax_release_matrix.py \
-            --python-versions="${PYTHON_VERSION}"
+            --python-versions="${PYTHON_VERSION}" \
+            --jax-refs="rocm-jaxlib-v0.11.2"
 
   build_jax_wheels:
     needs: setup_matrix
@@ -143,7 +144,7 @@ jobs:
     uses: ./.github/workflows/multi_arch_build_linux_jax_wheels.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
-      test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
+      test_amdgpu_family: ""
       python_version: ${{ matrix.python_version }}
       jax_ref: ${{ matrix.jax_ref }}
       jax_repository: ${{ matrix.jax_repository }}

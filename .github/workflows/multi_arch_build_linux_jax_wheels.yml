@@ -203,7 +203,7 @@ jobs:
           persist-credentials: false
           path: rocm-jax
           repository: ROCm/rocm-jax
-          ref: ${{ inputs.jax_ref }}
+          ref: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.11.2' && '431083f5809c124b5acb4298d87ae688179444f6' || inputs.jax_ref }}
 
       - name: Checkout JAX
         id: checkout_jax
@@ -213,8 +213,12 @@ jobs:
           persist-credentials: false
           path: jax-source
           repository: ${{ inputs.jax_repository }}
-          ref: ${{ inputs.jax_ref }}
+          ref: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.11.2' && '7353a2f071e7935f720358a757b7e539f47a2dd1' || inputs.jax_ref }}
 
+
+      - name: Apply pinned native MI45x JAX and XLA overlays
+        if: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.11.2' }}
+        run: python3 external-builds/jax/apply_strict_overlay.py --jax-dir jax-source
 
       - name: Configure Git Identity
         run: |

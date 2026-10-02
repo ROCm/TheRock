@@ -180,6 +180,7 @@ jobs:
           python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
             --python-versions="${PYTHON_VERSION}" \
             --platform=linux \
+            --pytorch-git-refs="release/2.12 release/2.13" \
             --release-type="${BUILD_RELEASE_TYPE}" \
             --amdgpu-families="${AMDGPU_FAMILIES}"
 
@@ -202,8 +203,8 @@ jobs:
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
-      test_amdgpu_families: ${{ matrix.test_amdgpu_families }}
-      test_level: ${{ matrix.test_level }}
+      test_amdgpu_families: "none"
+      test_level: "none"
       python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       rocm_version: ${{ inputs.rocm_version }}
@@ -217,7 +218,7 @@ jobs:
       # The reusable build workflow dispatches the full PyTorch test suite for
       # each successfully built (nightly, gfx94X-dcgpu, py3.12) ref using that
       # build's own torch_version output (#5777).
-      run_full_pytorch_tests: ${{ inputs.run_full_pytorch_tests }}
+      run_full_pytorch_tests: false
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:

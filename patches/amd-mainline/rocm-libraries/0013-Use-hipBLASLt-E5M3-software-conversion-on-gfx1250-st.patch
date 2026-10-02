@@ -1,0 +1,26 @@
+From 7a9d86709f2d6d3116d9dc699656c3d7ae03491b Mon Sep 17 00:00:00 2001
+From: Jarvis <3832908+ammarwa@users.noreply.github.com>
+Date: Thu, 1 Oct 2026 19:32:51 -0500
+Subject: [PATCH] Use hipBLASLt E5M3 software conversion on gfx1250-strict
+
+---
+ projects/hipblaslt/library/include/hipblaslt/hipblaslt_e5m3.h | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/projects/hipblaslt/library/include/hipblaslt/hipblaslt_e5m3.h b/projects/hipblaslt/library/include/hipblaslt/hipblaslt_e5m3.h
+index 2ee6faf..578e918 100644
+--- a/projects/hipblaslt/library/include/hipblaslt/hipblaslt_e5m3.h
++++ b/projects/hipblaslt/library/include/hipblaslt/hipblaslt_e5m3.h
+@@ -33,7 +33,8 @@
+ #define HIP_HOST __host__
+ #define HIP_DEVICE __device__
+ 
+-#if (defined(__gfx1250__) || defined(__gfx1250_strict__)) && __HIP_DEVICE_COMPILE__
++// gfx1250-strict lacks E5M3 conversion instructions; use the software path.
++#if defined(__gfx1250__) && !defined(__gfx1250_strict__) && __HIP_DEVICE_COMPILE__
+ #define HIP_E5M3_CVT_FAST_PATH 1
+ #else
+ #define HIP_E5M3_CVT_FAST_PATH 0
+-- 
+2.43.0
+

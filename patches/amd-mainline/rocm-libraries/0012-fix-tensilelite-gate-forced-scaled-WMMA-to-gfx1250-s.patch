@@ -1,0 +1,198 @@
+From d94ccc064624c3587f77af77c14bdedaebaa3bb2 Mon Sep 17 00:00:00 2001
+From: jichang <jimmy.chang@amd.com>
+Date: Thu, 1 Oct 2026 14:01:17 +0000
+Subject: [PATCH 12/12]  fix(tensilelite): gate forced scaled-WMMA to
+ gfx1250-strict/v0 only
+
+  Low-precision WMMA (f8f6f4 / f4) on gfx1250 was unconditionally emitted
+  in the v_wmma_scale_* form with scale=0. That form is only required for
+  the gfx1250-strict / gfx1250v0 steppings; the base gfx1250 build should
+  emit plain v_wmma_f32_*_f8f6f4.
+
+(cherry picked from commit d520bda2ee0d01986ae297961260dc90a0618ead)
+---
+ .../tensilelite/Tensile/KernelWriter.py       |  6 +++++
+ .../rocisa/rocisa/include/base.hpp            | 21 +++++++++++++++
+ .../rocisa/include/instruction/mfma.hpp       | 12 ++++++---
+ .../tensilelite/rocisa/rocisa/src/base.cpp    |  8 +++++-
+ .../rocisa_stinkytofu_adaptor/__init__.py     |  8 ++++++
+ .../rocisa_stinkytofu_adaptor/base.py         | 26 +++++++++++++++++++
+ 6 files changed, 76 insertions(+), 5 deletions(-)
+
+diff --git a/projects/hipblaslt/tensilelite/Tensile/KernelWriter.py b/projects/hipblaslt/tensilelite/Tensile/KernelWriter.py
+index 0d36488..1485302 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/KernelWriter.py
++++ b/projects/hipblaslt/tensilelite/Tensile/KernelWriter.py
+@@ -7518,6 +7518,12 @@ class KernelWriter(metaclass=abc.ABCMeta):
+     isgfx950 = kernel["ISA"][:2] == (9, 5)
+     ti = rocIsa.getInstance()
+     ti.setKernel(version, kernel["WavefrontSize"])
++    # gfx1250 low-precision WMMA scaled-form workaround applies only to the V0/strict
++    # steppings (gfx1250-strict / gfx1250v0), not the base gfx1250 build. All three
++    # share ISA (12,5,0), so gate on the concrete arch name instead. Persists across
++    # later setKernel calls (e.g. activation codegen); see rocIsa::setForceScaledWMMA.
++    _stArchName = globalParameters.get("StinkyTofuArchName") or ""
++    ti.setForceScaledWMMA(_stArchName in ("gfx1250-strict", "gfx1250v0"))
+ 
+     self.consts = ConstValues()
+     self.states = StateValues(version=version, kernel=kernel, kernelName=getKernelNameMin(kernel, self.debugConfig.splitGSU))
+diff --git a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/base.hpp b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/base.hpp
+index 3a602d3..8bfe8af 100644
+--- a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/base.hpp
++++ b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/base.hpp
+@@ -180,6 +180,18 @@ namespace rocisa
+             return m_vgprmsb[std::this_thread::get_id()];
+         }
+ 
++        // gfx1250 low-precision WMMA scaled-form workaround toggle. Set per build
++        // from the concrete arch name (true only for gfx1250-strict / gfx1250v0,
++        // whose V0 silicon needs v_wmma_scale_* with scale=0). Deliberately NOT
++        // reset by setKernel: forceScaledWMMA() is evaluated at toString() time,
++        // and intervening setKernel calls (e.g. activation codegen) must not clear
++        // it. Defaults false, so base gfx1250 emits plain v_wmma_*.
++        bool getForceScaledWMMA()
++        {
++            auto it = m_forceScaledWMMA.find(std::this_thread::get_id());
++            return it != m_forceScaledWMMA.end() ? it->second : false;
++        }
++
+         void setData(const std::map<IsaVersion, IsaInfo>& data)
+         {
+             m_isainfo = data;
+@@ -217,6 +229,14 @@ namespace rocisa
+             m_mutex.unlock();
+         }
+ 
++        void setForceScaledWMMA(const bool v)
++        {
++            std::thread::id id = std::this_thread::get_id();
++            m_mutex.lock();
++            m_forceScaledWMMA[id] = v;
++            m_mutex.unlock();
++        }
++
+     private:
+         rocIsa() = default;
+ 
+@@ -226,6 +246,7 @@ namespace rocisa
+         std::map<std::thread::id, OutputOptions> m_outputOptions;
+         std::map<std::thread::id, std::map<std::string, int>> m_vgpridx;
+         std::map<std::thread::id, int>        m_vgprmsb;
++        std::map<std::thread::id, bool>       m_forceScaledWMMA;
+     };
+ 
+     struct Item
+diff --git a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/instruction/mfma.hpp b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/instruction/mfma.hpp
+index a954078..0ea6659 100644
+--- a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/instruction/mfma.hpp
++++ b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/instruction/mfma.hpp
+@@ -155,16 +155,20 @@ namespace rocisa
+             return std::make_shared<MFMAInstruction>(*this);
+         }
+ 
+-        // Workaround for gfx1250: low-precision WMMA must use _scale instruction with scale=0
+-        // to avoid Base layer issue where VOP3PX2/VOP3PX3 instructions may not execute atomically
++        // Workaround for gfx1250 V0/strict silicon: low-precision WMMA must use the
++        // _scale instruction with scale=0 to avoid a Base layer issue where
++        // VOP3PX2/VOP3PX3 instructions may not execute atomically. This is NOT needed
++        // on the base gfx1250 build, so it is gated on a per-build toggle set only for
++        // gfx1250-strict / gfx1250v0 (see rocIsa::setForceScaledWMMA, driven from
++        // StinkyTofuArchName in KernelWriter) rather than on the shared ISA (12,5,0),
++        // which cannot tell the steppings apart.
+         bool forceScaledWMMA() const
+         {
+             bool        isWMMA      = !capOrDefault(getAsmCaps(), "HasMFMA");
+-            auto        isaVersion  = rocIsa::getInstance().getKernel().isaVersion;
+             std::string instTypeStr = typeConvert(instType);
+             // Affected instructions: v_wmma_f32_16x16x128_f8f6f4, v_wmma_f32_32x16x128_f4
+             bool isLowPrecision = (instTypeStr == "f8f6f4") || (instTypeStr == "f4");
+-            return isWMMA && (isaVersion == std::array<int, 3>{12, 5, 0}) && isLowPrecision;
++            return isWMMA && rocIsa::getInstance().getForceScaledWMMA() && isLowPrecision;
+         }
+ 
+         std::string typeConvert(InstType iType) const
+diff --git a/projects/hipblaslt/tensilelite/rocisa/rocisa/src/base.cpp b/projects/hipblaslt/tensilelite/rocisa/rocisa/src/base.cpp
+index 6e6ff6e..faddecc 100644
+--- a/projects/hipblaslt/tensilelite/rocisa/rocisa/src/base.cpp
++++ b/projects/hipblaslt/tensilelite/rocisa/rocisa/src/base.cpp
+@@ -125,7 +125,13 @@ void init_base(nb::module_ m)
+         .def("getVgprMsb", &rocisa::rocIsa::getVgprMsb, "Get vgpr msb.")
+         .def("setOutputOptions", &rocisa::rocIsa::setOutputOptions, "Set output options.")
+         .def("setVgprIdx", &rocisa::rocIsa::setVgprIdx, "Set vgpr idx.")
+-        .def("setVgprMsb", &rocisa::rocIsa::setVgprMsb, "Set vgpr msb.");
++        .def("setVgprMsb", &rocisa::rocIsa::setVgprMsb, "Set vgpr msb.")
++        .def("setForceScaledWMMA",
++             &rocisa::rocIsa::setForceScaledWMMA,
++             "Toggle the gfx1250 low-precision scaled-WMMA workaround (strict/v0 only).")
++        .def("getForceScaledWMMA",
++             &rocisa::rocIsa::getForceScaledWMMA,
++             "Get the gfx1250 low-precision scaled-WMMA workaround toggle.");
+ 
+     auto m_base = m.def_submodule("base", "rocIsa base submodule.");
+     nb::class_<IsaVersion>(m_base, "IsaVersion")
+diff --git a/projects/hipblaslt/tensilelite/rocisa_stinkytofu_adaptor/rocisa_stinkytofu_adaptor/__init__.py b/projects/hipblaslt/tensilelite/rocisa_stinkytofu_adaptor/rocisa_stinkytofu_adaptor/__init__.py
+index 9b59e9f..648fa33 100644
+--- a/projects/hipblaslt/tensilelite/rocisa_stinkytofu_adaptor/rocisa_stinkytofu_adaptor/__init__.py
++++ b/projects/hipblaslt/tensilelite/rocisa_stinkytofu_adaptor/rocisa_stinkytofu_adaptor/__init__.py
+@@ -171,6 +171,14 @@ class rocIsa:
+     def setVgprMsb(self, msb: int) -> None:
+         _base.setVgprMsb(msb)
+ 
++    # --- gfx1250 low-precision scaled-WMMA workaround toggle. --------------
++
++    def getForceScaledWMMA(self) -> bool:
++        return _base.getForceScaledWMMA()
++
++    def setForceScaledWMMA(self, v: bool) -> None:
++        _base.setForceScaledWMMA(v)
++
+     # --- Backwards-compatible private-field shims --------------------------
+     #
+     # Test harnesses (and possibly external code) historically reached
+diff --git a/projects/hipblaslt/tensilelite/rocisa_stinkytofu_adaptor/rocisa_stinkytofu_adaptor/base.py b/projects/hipblaslt/tensilelite/rocisa_stinkytofu_adaptor/rocisa_stinkytofu_adaptor/base.py
+index ec29a3e..f4e944d 100644
+--- a/projects/hipblaslt/tensilelite/rocisa_stinkytofu_adaptor/rocisa_stinkytofu_adaptor/base.py
++++ b/projects/hipblaslt/tensilelite/rocisa_stinkytofu_adaptor/rocisa_stinkytofu_adaptor/base.py
+@@ -171,6 +171,12 @@ matches the C++ ``int()`` default-construct of a missing map entry.
+ ``setVgprMsb`` is wired in for Commit Y (``Label.toString`` side
+ effect, code.hpp:122-125) — no consumer reads it today."""
+ 
++_force_scaled_wmma: bool = False
++"""gfx1250 low-precision scaled-WMMA workaround toggle. Mirror of
++``rocisa::rocIsa::m_forceScaledWMMA[id]``. Default ``False`` (base
++gfx1250 → plain ``v_wmma_*``); set ``True`` only for
++gfx1250-strict / gfx1250v0. Not reset by ``setKernel``."""
++
+ 
+ # ---------------------------------------------------------------------------
+ # OutputOptions accessors (unchanged from the prior commit).
+@@ -508,6 +514,26 @@ def setVgprMsb(msb: int) -> None:
+     _vgpr_msb = int(msb)
+ 
+ 
++def getForceScaledWMMA() -> bool:
++    """Mirror of ``rocisa::rocIsa::getForceScaledWMMA`` (base.hpp).
++
++    The gfx1250 low-precision scaled-WMMA workaround toggle; default
++    ``False`` matches the C++ absent-entry default. Deliberately not
++    reset by ``setKernel``.
++    """
++    return _force_scaled_wmma
++
++
++def setForceScaledWMMA(v: bool) -> None:
++    """Mirror of ``rocisa::rocIsa::setForceScaledWMMA`` (base.hpp).
++
++    Set true only for gfx1250-strict / gfx1250v0 so low-precision WMMA
++    emits ``v_wmma_scale_*`` with scale=0; base gfx1250 stays plain.
++    """
++    global _force_scaled_wmma
++    _force_scaled_wmma = bool(v)
++
++
+ # ---------------------------------------------------------------------------
+ # Item base class -- polymorphic root of the code composition tree.
+ # ---------------------------------------------------------------------------
+-- 
+2.43.0
+

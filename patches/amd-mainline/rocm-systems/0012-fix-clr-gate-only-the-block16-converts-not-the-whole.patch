@@ -1,0 +1,396 @@
+From ec7cf364bd410ee814a60549b41f87fa5b8e82c0 Mon Sep 17 00:00:00 2001
+From: "Mingyang Sun (Public)" <Mingyang.Sun@amd.com>
+Date: Tue, 22 Sep 2026 15:12:30 -0700
+Subject: [PATCH 12/16] fix(clr): gate only the block16 converts, not the whole
+ gfx1250 OCP path
+
+The previous commit disabled HIP_ENABLE_GFX1250_OCP_BUILTINS entirely for
+gfx1250-strict. That is too coarse: the macro also gates conversions that
+gfx1250-strict does support, so those fell back to software unnecessarily.
+Measured on gfx1250-strict:
+
+  __amd_cvt_fp8_to_float   v_cvt_f32_fp8_e32, 10 instrs -> 62 instrs (software)
+  FP8 convert loop         9.86 ms -> 74.06 ms  (7.5x slower)
+
+For reference the same loop takes 9.44 ms on the pre-split gfx1250 path, so
+the previous commit regressed against the behaviour it was meant to restore.
+The gfx1250 FP4/FP6 pack helpers in amd_hip_ocp_fp.hpp were affected the same
+way.
+
+Only the block16 unpack ops are missing on gfx1250-strict. Introduce a
+separate HIP_ENABLE_GFX1250_BLOCK16_BUILTINS predicate, restore
+HIP_ENABLE_GFX1250_OCP_BUILTINS to its previous definition, and require the
+new predicate on exactly the 30 preprocessor blocks that reference a block16
+unpack builtin (8 in amd_hip_fp4.h, 12 in amd_hip_fp6.h, 10 in
+amd_hip_ocp_fp.hpp). Everything else keeps using hardware on gfx1250-strict.
+
+Verified mechanically that no block referencing a block16 builtin is left
+ungated, and that no block gated by the new predicate uses only builtins that
+are still available.
+
+Behaviour now matches the pre-split path, which emulated only the ops the
+target lacks. Compared bit-exactly against it across 9664 conversions --
+every FP4 code, every FP6 E2M3/E3M2 code, every FP8 E4M3/E5M2 code, the
+__amd_cvt_* family, and 512-point forward sweeps from float, double and half
+through FP4/FP6/FP8 including x2 pack/unpack:
+
+  this change          3 mismatches / 9664
+  without the fix   1941 mismatches / 9664
+
+The 3 remaining mismatches are the negative-zero code converting to half
+(fp4 code 8, fp6 code 32), which returns 32768.0 instead of -0.0. That is a
+pre-existing defect in the shared fcbx software path, reproducible on the
+host with unmodified headers, and is tracked separately.
+
+Other measurements on gfx1250-strict:
+
+  fp4 roundtrip   9/10 mismatches -> 0/10
+  fp6 roundtrip   7/8  mismatches -> 0/8
+  fp8             v_cvt_f32_fp8_e32 / v_cvt_pk_fp8_f32, unchanged
+  fp4 pack        v_cvt_scalef32_pk8_fp4_f32, still hardware
+  gfx1250         unchanged
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+(cherry picked from commit 8778233019ad56e1d4d2116f9b45f78e1ff55392)
+---
+ .../include/hip/amd_detail/amd_hip_fp4.h      | 16 +++++-----
+ .../include/hip/amd_detail/amd_hip_fp6.h      | 24 +++++++-------
+ .../hip/amd_detail/amd_hip_mx_common.h        | 12 +++++--
+ .../include/hip/amd_detail/amd_hip_ocp_fp.hpp | 32 ++++++++++++-------
+ 4 files changed, 50 insertions(+), 34 deletions(-)
+
+diff --git a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp4.h b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp4.h
+index 03ff347c..5c1a56d7 100644
+--- a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp4.h
++++ b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp4.h
+@@ -196,7 +196,7 @@ __FP4_HOST_DEVICE_STATIC__ __half_raw __hip_cvt_fp4_to_halfraw(
+       __amd_fp16x2_storage_t{__builtin_amdgcn_is_invocable(__builtin_amdgcn_cvt_scalef32_pk_f16_fp4)
+                                  ? __builtin_amdgcn_cvt_scalef32_pk_f16_fp4(x, 0, 0)
+                                  : __amd_fp16x2_storage_t{}};
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+   static_assert(sizeof(__amd_fp16x2_storage_t[4]) == sizeof(__amd_fp16x8_storage_t));
+   static_assert(sizeof(__amd_fp4x2_storage_t[4]) == sizeof(unsigned int));
+   union {
+@@ -229,7 +229,7 @@ __FP4_HOST_DEVICE_STATIC__ __half2_raw __hip_cvt_fp4x2_to_halfraw2(
+       __amd_fp16x2_storage_t{__builtin_amdgcn_is_invocable(__builtin_amdgcn_cvt_scalef32_pk_f16_fp4)
+                                  ? __builtin_amdgcn_cvt_scalef32_pk_f16_fp4(x, 0, 0)
+                                  : __amd_fp16x2_storage_t{}};
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+   static_assert(sizeof(__amd_fp16x2_storage_t[4]) == sizeof(__amd_fp16x8_storage_t));
+   static_assert(sizeof(__amd_fp4x2_storage_t[4]) == sizeof(unsigned int));
+   union {
+@@ -366,7 +366,7 @@ struct __hip_fp4_e2m1 {
+ #if HIP_ENABLE_GFX950_OCP_BUILTINS
+     if (__builtin_amdgcn_is_invocable(__builtin_amdgcn_cvt_scalef32_pk_bf16_fp4))
+       u.bf16x2 = __builtin_amdgcn_cvt_scalef32_pk_bf16_fp4(__x, 1.0f /* scale */, 0);
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+     static_assert(sizeof(__amd_bf16x2_storage_t[4]) == sizeof(__amd_bf16x8_storage_t));
+     static_assert(sizeof(__amd_fp4x2_storage_t[4]) == sizeof(unsigned int));
+     union {
+@@ -396,7 +396,7 @@ struct __hip_fp4_e2m1 {
+     auto ret = __builtin_amdgcn_is_invocable(__builtin_amdgcn_cvt_scalef32_pk_f32_fp4)
+                    ? __builtin_amdgcn_cvt_scalef32_pk_f32_fp4(__x, 1.0f /* scale */, 0)
+                    : __amd_floatx2_storage_t{};
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+     union {
+       unsigned int ui32;
+       __amd_fp4x2_storage_t fp4x2[4];
+@@ -453,7 +453,7 @@ struct __hip_fp4x2_e2m1 {
+ #if HIP_ENABLE_GFX950_OCP_BUILTINS
+     if (__builtin_amdgcn_is_invocable(__builtin_amdgcn_cvt_scalef32_pk_bf16_fp4))
+       u.bf16x2 = __builtin_amdgcn_cvt_scalef32_pk_bf16_fp4(__x, 1.0f /* scale */, 0);
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+     static_assert(sizeof(__amd_bf16x2_storage_t[4]) == sizeof(__amd_bf16x8_storage_t));
+     static_assert(sizeof(__amd_fp4x2_storage_t[4]) == sizeof(unsigned int));
+     union {
+@@ -483,7 +483,7 @@ struct __hip_fp4x2_e2m1 {
+     auto fp32x2 = __builtin_amdgcn_is_invocable(__builtin_amdgcn_cvt_scalef32_pk_f32_fp4)
+                       ? __builtin_amdgcn_cvt_scalef32_pk_f32_fp4(__x, 1.0f /* scale */, 0)
+                       : __amd_floatx2_storage_t{};
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+     union {
+       unsigned int ui32;
+       __amd_fp4x2_storage_t fp4x2[4];
+@@ -507,7 +507,7 @@ struct __hip_fp4x2_e2m1 {
+     auto fp32x2 = __builtin_amdgcn_is_invocable(__builtin_amdgcn_cvt_scalef32_pk_f32_fp4)
+                       ? __builtin_amdgcn_cvt_scalef32_pk_f32_fp4(__x, 1.0f /* scale */, 0)
+                       : __amd_floatx2_storage_t{};
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+     union {
+       unsigned int ui32;
+       __amd_fp4x2_storage_t fp4x2[4];
+@@ -562,7 +562,7 @@ struct __hip_fp4x4_e2m1 {
+                         ? __builtin_amdgcn_cvt_scalef32_pk_f32_fp4(__x >> 8, 1.0f /* scale */, 0)
+                         : __amd_floatx2_storage_t{};
+     return float4{fp32x2_1[0], fp32x2_1[1], fp32x2_2[0], fp32x2_2[1]};
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+     union {
+       unsigned int ui32;
+       __hip_fp4x4_storage_t fp4x4[2];
+diff --git a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp6.h b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp6.h
+index 32edab4c..3b586481 100644
+--- a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp6.h
++++ b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp6.h
+@@ -332,7 +332,7 @@ __FP6_HOST_DEVICE_STATIC__ __half_raw __hip_cvt_fp6_to_halfraw(
+       out = __builtin_amdgcn_cvt_scalef32_pk32_f16_bf6(in, 1.0f);
+   }
+   ret.data = out[0];
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+   __amd_fp16x16_storage_t out{};
+   __amd_fp6x16_storage_t in{};
+   in[0] = (__hip_uint32_t)x;
+@@ -370,7 +370,7 @@ __FP6_HOST_DEVICE_STATIC__ __half2_raw __hip_cvt_fp6x2_to_halfraw2(
+       out = __builtin_amdgcn_cvt_scalef32_pk32_f16_bf6(in, 1.0f);
+   }
+   ret.data = {out[0], out[1]};
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+   __amd_fp16x16_storage_t out{};
+   __amd_fp6x16_storage_t in{};
+   in[0] = x & 0x3Fu;            // first 6 bits
+@@ -542,7 +542,7 @@ struct __hip_fp6_e2m3 {
+     if (__builtin_amdgcn_is_invocable(__builtin_amdgcn_cvt_scalef32_pk32_bf16_fp6))
+       out = __builtin_amdgcn_cvt_scalef32_pk32_bf16_fp6(in, 1.0f /* scale */);
+     u.bf16 = out[0];
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+     __amd_fp6x16_storage_t in{};
+     __amd_bf16x16_storage_t out{};
+     in[0] = (__hip_uint32_t)__x;
+@@ -563,7 +563,7 @@ struct __hip_fp6_e2m3 {
+     if (__builtin_amdgcn_is_invocable(__builtin_amdgcn_cvt_scalef32_pk32_f32_fp6))
+       out = __builtin_amdgcn_cvt_scalef32_pk32_f32_fp6(in, 1.0f /* scale */);
+     auto ret = out[0];
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+     __amd_fp6x16_storage_t in{};
+     __amd_floatx16_storage_t out{};
+     in[0] = (__hip_uint32_t)__x;
+@@ -627,7 +627,7 @@ struct __hip_fp6_e3m2 {
+     if (__builtin_amdgcn_is_invocable(__builtin_amdgcn_cvt_scalef32_pk32_bf16_bf6))
+       out = __builtin_amdgcn_cvt_scalef32_pk32_bf16_bf6(in, 1.0f /* scale */);
+     u.bf16 = out[0];
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+     __amd_fp6x16_storage_t in{};
+     __amd_bf16x16_storage_t out{};
+     in[0] = (__hip_uint32_t)__x;
+@@ -648,7 +648,7 @@ struct __hip_fp6_e3m2 {
+     if (__builtin_amdgcn_is_invocable(__builtin_amdgcn_cvt_scalef32_pk32_f32_bf6))
+       out = __builtin_amdgcn_cvt_scalef32_pk32_f32_bf6(in, 1.0f /* scale */);
+     auto ret = out[0];
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+     __amd_fp6x16_storage_t in{};
+     __amd_floatx16_storage_t out{};
+     in[0] = (__hip_uint32_t)__x;
+@@ -696,7 +696,7 @@ struct __hip_fp6x2_e2m3 {
+     if (__builtin_amdgcn_is_invocable(__builtin_amdgcn_cvt_scalef32_pk32_bf16_fp6))
+       out = __builtin_amdgcn_cvt_scalef32_pk32_bf16_fp6(in, 1.0f /* scale */);
+     u.bf16x2 = {out[0], out[1]};
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+     __amd_fp6x16_storage_t in{};
+     __amd_bf16x16_storage_t out{};
+     in[0] = __x & 0x3Fu;            // first 6 bits
+@@ -721,7 +721,7 @@ struct __hip_fp6x2_e2m3 {
+     if (__builtin_amdgcn_is_invocable(__builtin_amdgcn_cvt_scalef32_pk32_f32_fp6))
+       out = __builtin_amdgcn_cvt_scalef32_pk32_f32_fp6(in, 1.0f /* scale */);
+     __amd_floatx2_storage_t fp32x2 = {out[0], out[1]};
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+     __amd_fp6x16_storage_t in{};
+     __amd_floatx16_storage_t out{};
+     in[0] = __x & 0x3Fu;            // first 6 bits
+@@ -774,7 +774,7 @@ struct __hip_fp6x2_e3m2 {
+     if (__builtin_amdgcn_is_invocable(__builtin_amdgcn_cvt_scalef32_pk32_bf16_bf6))
+       out = __builtin_amdgcn_cvt_scalef32_pk32_bf16_bf6(in, 1.0f /* scale */);
+     u.bf16x2 = {out[0], out[1]};
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+     __amd_fp6x16_storage_t in{};
+     __amd_bf16x16_storage_t out{};
+     in[0] = __x & 0x3Fu;            // first 6 bits
+@@ -799,7 +799,7 @@ struct __hip_fp6x2_e3m2 {
+     if (__builtin_amdgcn_is_invocable(__builtin_amdgcn_cvt_scalef32_pk32_f32_bf6))
+       out = __builtin_amdgcn_cvt_scalef32_pk32_f32_bf6(in, 1.0f /* scale */);
+     __amd_floatx2_storage_t fp32x2 = {out[0], out[1]};
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+     __amd_fp6x16_storage_t in{};
+     __amd_floatx16_storage_t out{};
+     in[0] = __x & 0x3Fu;            // first 6 bits
+@@ -852,7 +852,7 @@ struct __hip_fp6x4_e2m3 {
+       out = __builtin_amdgcn_cvt_scalef32_pk32_f32_fp6(in, 1.0f /* scale */);
+     __amd_floatx2_storage_t fp32x2_1 = {out[0], out[1]};
+     __amd_floatx2_storage_t fp32x2_2 = {out[2], out[3]};
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+     __amd_fp6x16_storage_t in{};
+     __amd_floatx16_storage_t out{};
+     in[0] = __x & 0x3Fu;                 // first 6 bits
+@@ -912,7 +912,7 @@ struct __hip_fp6x4_e3m2 {
+       out = __builtin_amdgcn_cvt_scalef32_pk32_f32_bf6(in, 1.0f /* scale */);
+     __amd_floatx2_storage_t fp32x2_1 = {out[0], out[1]};
+     __amd_floatx2_storage_t fp32x2_2 = {out[2], out[3]};
+-#elif HIP_ENABLE_GFX1250_OCP_BUILTINS
++#elif HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+     __amd_fp6x16_storage_t in{};
+     __amd_floatx16_storage_t out{};
+     in[0] = __x & 0x3Fu;                 // first 6 bits
+diff --git a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_mx_common.h b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_mx_common.h
+index e2d74d87..74b38a71 100644
+--- a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_mx_common.h
++++ b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_mx_common.h
+@@ -10,12 +10,20 @@
+ #else
+ #define HIP_ENABLE_GFX950_OCP_BUILTINS 0
+ #endif
+-#if defined(__gfx1250__)
++#if defined(__gfx1250__) || defined(__gfx1250_strict__)
+ #define HIP_ENABLE_GFX1250_OCP_BUILTINS 1
+ #else
+ #define HIP_ENABLE_GFX1250_OCP_BUILTINS 0
+ #endif
+-#if !defined(__gfx950__) && !defined(__gfx1250__)
++#if defined(__gfx1250__)
++#define HIP_ENABLE_GFX1250_BLOCK16_BUILTINS 1
++#else
++// gfx1250-strict does not have the block16 convert ops, so the fp4/fp6 ->
++// f16/bf16/f32 unpack builtins are unavailable there even though the rest of
++// the gfx1250 OCP builtins are supported.
++#define HIP_ENABLE_GFX1250_BLOCK16_BUILTINS 0
++#endif
++#if !defined(__gfx950__) && !defined(__gfx1250__) && !defined(__gfx1250_strict__)
+ #define HIP_ENABLE_HOST_OCP_CONVERSIONS 1
+ #else
+ #define HIP_ENABLE_HOST_OCP_CONVERSIONS 0
+diff --git a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_ocp_fp.hpp b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_ocp_fp.hpp
+index 5b199c27..01e1aba7 100644
+--- a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_ocp_fp.hpp
++++ b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_ocp_fp.hpp
+@@ -30,12 +30,20 @@ static_assert(sizeof(__hip_uint64_t) * CHAR_BIT == 64);
+ #else
+ #define HIP_ENABLE_GFX950_OCP_BUILTINS 0
+ #endif
+-#if defined(__gfx1250__)
++#if defined(__gfx1250__) || defined(__gfx1250_strict__)
+ #define HIP_ENABLE_GFX1250_OCP_BUILTINS 1
+ #else
+ #define HIP_ENABLE_GFX1250_OCP_BUILTINS 0
+ #endif
+-#if !defined(__gfx950__) and !defined(__gfx1250__)
++#if defined(__gfx1250__)
++#define HIP_ENABLE_GFX1250_BLOCK16_BUILTINS 1
++#else
++// gfx1250-strict does not have the block16 convert ops, so the fp4/fp6 ->
++// f16/bf16/f32 unpack builtins are unavailable there even though the rest of
++// the gfx1250 OCP builtins are supported.
++#define HIP_ENABLE_GFX1250_BLOCK16_BUILTINS 0
++#endif
++#if !defined(__gfx950__) and !defined(__gfx1250__) and !defined(__gfx1250_strict__)
+ #define HIP_ENABLE_HOST_OCP_CONVERSIONS 1
+ #else
+ #define HIP_ENABLE_HOST_OCP_CONVERSIONS 0
+@@ -536,7 +544,7 @@ __OCP_FP_HOST_DEVICE_STATIC__ __amd_fp4x2_storage_t __amd_cvt_floatx2_to_fp4x2_s
+  */
+ __OCP_FP_HOST_DEVICE_STATIC__ __amd_floatx2_storage_t __amd_cvt_fp4x2_to_floatx2_scale(
+     const __amd_fp4x2_storage_t val, const __amd_fp4_interpretation_t, const __amd_scale_t scale) {
+-#if HIP_ENABLE_GFX1250_OCP_BUILTINS
++#if HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+   union {
+     unsigned int ui32;
+     __amd_fp4x2_storage_t fp4x2[4];
+@@ -1178,7 +1186,7 @@ __OCP_FP_HOST_DEVICE_STATIC__ __amd_bf16x8_storage_t __amd_cvt_fp8x8_to_bf16x8_s
+ __OCP_FP_HOST_DEVICE_STATIC__ __amd_fp16x32_storage_t __amd_cvt_fp6x32_to_fp16x32_scale(
+     const __amd_fp6x32_storage_t in, const __amd_fp6_interpretation_t interpret,
+     const __amd_scale_t scale) {
+-#if HIP_ENABLE_GFX1250_OCP_BUILTINS
++#if HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+   static_assert(sizeof(__amd_fp16x32_storage_t) == sizeof(__amd_fp16x16_storage_t[2]));
+   static_assert(sizeof(__amd_fp6x32_storage_t) == sizeof(unsigned int[8]));
+   static_assert(sizeof(__amd_fp6x16_storage_t) == sizeof(unsigned int[4]));
+@@ -1238,7 +1246,7 @@ __OCP_FP_HOST_DEVICE_STATIC__ __amd_fp16x32_storage_t __amd_cvt_fp6x32_to_fp16x3
+ __OCP_FP_HOST_DEVICE_STATIC__ __amd_bf16x32_storage_t __amd_cvt_fp6x32_to_bf16x32_scale(
+     const __amd_fp6x32_storage_t in, const __amd_fp6_interpretation_t interpret,
+     const __amd_scale_t scale) {
+-#if HIP_ENABLE_GFX1250_OCP_BUILTINS
++#if HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+   static_assert(sizeof(__amd_bf16x32_storage_t) == sizeof(__amd_bf16x16_storage_t[2]));
+   static_assert(sizeof(__amd_fp6x32_storage_t) == sizeof(unsigned int[8]));
+   static_assert(sizeof(__amd_fp6x16_storage_t) == sizeof(unsigned int[4]));
+@@ -1289,7 +1297,7 @@ __OCP_FP_HOST_DEVICE_STATIC__ __amd_bf16x32_storage_t __amd_cvt_fp6x32_to_bf16x3
+ __OCP_FP_HOST_DEVICE_STATIC__ __amd_floatx32_storage_t __amd_cvt_fp6x32_to_floatx32_scale(
+     const __amd_fp6x32_storage_t val, const __amd_fp6_interpretation_t interpret,
+     const __amd_scale_t scale) {
+-#if HIP_ENABLE_GFX1250_OCP_BUILTINS
++#if HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+   static_assert(sizeof(__amd_floatx32_storage_t) == sizeof(__amd_floatx16_storage_t[2]));
+   static_assert(sizeof(__amd_fp6x32_storage_t) == sizeof(unsigned int[8]));
+   static_assert(sizeof(__amd_fp6x16_storage_t) == sizeof(unsigned int[4]));
+@@ -1345,7 +1353,7 @@ __OCP_FP_HOST_DEVICE_STATIC__ __amd_floatx32_storage_t __amd_cvt_fp6x32_to_float
+  */
+ __OCP_FP_HOST_DEVICE_STATIC__ __amd_fp16x2_storage_t __amd_cvt_fp4x2_to_fp16x2_scale(
+     const __amd_fp4x2_storage_t in, const __amd_fp4_interpretation_t, const __amd_scale_t scale) {
+-#if HIP_ENABLE_GFX1250_OCP_BUILTINS
++#if HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+   static_assert(sizeof(__amd_fp16x2_storage_t[4]) == sizeof(__amd_fp16x8_storage_t));
+   static_assert(sizeof(__amd_fp4x2_storage_t[4]) == sizeof(unsigned int));
+   union {
+@@ -1379,7 +1387,7 @@ __OCP_FP_HOST_DEVICE_STATIC__ __amd_fp16x2_storage_t __amd_cvt_fp4x2_to_fp16x2_s
+  */
+ __OCP_FP_HOST_DEVICE_STATIC__ __amd_fp16x8_storage_t __amd_cvt_fp4x8_to_fp16x8_scale(
+     const __amd_fp4x8_storage_t in, const __amd_fp4_interpretation_t, const __amd_scale_t scale) {
+-#if HIP_ENABLE_GFX1250_OCP_BUILTINS
++#if HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+   return __builtin_amdgcn_cvt_scale_pk8_f16_fp4((unsigned int)in, __amd_scale_e8m0(scale), 0);
+ #elif HIP_ENABLE_GFX950_OCP_BUILTINS
+   static_assert(sizeof(__amd_fp4x2_storage_t[4]) == sizeof(unsigned int));
+@@ -1426,7 +1434,7 @@ __OCP_FP_HOST_DEVICE_STATIC__ __amd_fp16x8_storage_t __amd_cvt_fp4x8_to_fp16x8_s
+  */
+ __OCP_FP_HOST_DEVICE_STATIC__ __amd_bf16x2_storage_t __amd_cvt_fp4x2_to_bf16x2_scale(
+     const __amd_fp4x2_storage_t in, const __amd_fp4_interpretation_t, const __amd_scale_t scale) {
+-#if HIP_ENABLE_GFX1250_OCP_BUILTINS
++#if HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+   static_assert(sizeof(__amd_bf16x2_storage_t[4]) == sizeof(__amd_bf16x8_storage_t));
+   static_assert(sizeof(__amd_fp4x2_storage_t[4]) == sizeof(unsigned int));
+   union {
+@@ -1460,7 +1468,7 @@ __OCP_FP_HOST_DEVICE_STATIC__ __amd_bf16x2_storage_t __amd_cvt_fp4x2_to_bf16x2_s
+  */
+ __OCP_FP_HOST_DEVICE_STATIC__ __amd_bf16x8_storage_t __amd_cvt_fp4x8_to_bf16x8_scale(
+     const __amd_fp4x8_storage_t in, const __amd_fp4_interpretation_t, const __amd_scale_t scale) {
+-#if HIP_ENABLE_GFX1250_OCP_BUILTINS
++#if HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+   return __builtin_amdgcn_cvt_scale_pk8_bf16_fp4((unsigned int)in, __amd_scale_e8m0(scale), 0);
+ #elif HIP_ENABLE_GFX950_OCP_BUILTINS
+   static_assert(sizeof(__amd_fp4x2_storage_t[4]) == sizeof(unsigned int));
+@@ -1507,7 +1515,7 @@ __OCP_FP_HOST_DEVICE_STATIC__ __amd_bf16x8_storage_t __amd_cvt_fp4x8_to_bf16x8_s
+  */
+ __OCP_FP_HOST_DEVICE_STATIC__ __amd_floatx8_storage_t __amd_cvt_fp4x8_to_floatx8_scale(
+     const __amd_fp4x8_storage_t val, const __amd_fp4_interpretation_t, const __amd_scale_t scale) {
+-#if HIP_ENABLE_GFX1250_OCP_BUILTINS
++#if HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+   union {
+     __amd_fp4x8_storage_t fp4x8;
+     unsigned int ui32;
+@@ -2203,7 +2211,7 @@ __OCP_FP_HOST_DEVICE_STATIC__ __amd_fp6x16_storage_t __amd_cvt_floatx16_to_fp6x1
+ __OCP_FP_HOST_DEVICE_STATIC__ __amd_floatx16_storage_t __amd_cvt_fp6x16_to_floatx16_scale(
+     const __amd_fp6x16_storage_t val, const __amd_fp6_interpretation_t interpret,
+     const __amd_scale_t scale) {
+-#if HIP_ENABLE_GFX1250_OCP_BUILTINS
++#if HIP_ENABLE_GFX1250_OCP_BUILTINS && HIP_ENABLE_GFX1250_BLOCK16_BUILTINS
+   return interpret == __AMD_OCP_E2M3
+       ? __builtin_amdgcn_cvt_scale_pk16_f32_fp6(val, __amd_scale_e8m0(scale), 0)
+       : __builtin_amdgcn_cvt_scale_pk16_f32_bf6(val, __amd_scale_e8m0(scale), 0);
+-- 
+2.43.0
+

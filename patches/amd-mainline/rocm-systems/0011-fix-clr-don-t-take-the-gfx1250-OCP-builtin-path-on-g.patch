@@ -1,0 +1,99 @@
+From 423e36d548c2d87143f1671c3dc6e7093728782c Mon Sep 17 00:00:00 2001
+From: "Mingyang Sun (Public)" <Mingyang.Sun@amd.com>
+Date: Tue, 22 Sep 2026 14:36:55 -0700
+Subject: [PATCH 11/16] fix(clr): don't take the gfx1250 OCP builtin path on
+ gfx1250-strict
+
+gfx1250-strict does not have the block16 convert ops. LLVM commit
+75f35e17f755 ("[AMDGPU] Disable block16 conversions on gfx1250-strict",
+#222597) therefore gates the fp4/fp6 -> f16/bf16/f32 unpack builtins behind
+"block16-cvt-scale-insts", which FeatureISAVersion12_50_STRICT omits:
+
+  error: '__builtin_amdgcn_cvt_scale_pk8_f16_fp4' needs target feature
+         block16-cvt-scale-insts
+
+That compiler behaviour is correct and is not what this change addresses.
+
+#11551 added __gfx1250_strict__ to HIP_ENABLE_GFX1250_OCP_BUILTINS, which
+routes gfx1250-strict into the hardware-builtin branches. Those branches
+guard each call with __builtin_amdgcn_is_invocable() but have no else, so on
+gfx1250-strict the guard correctly evaluates false and the zero-initialized
+destination is returned unchanged: the conversion silently yields 0. The
+software path that already exists as the preprocessor #else is unreachable
+while the macro is 1.
+
+Restore the pre-#11551 definition of HIP_ENABLE_GFX1250_OCP_BUILTINS so
+gfx1250-strict takes the existing fcbx software path, as it did before. No
+conversion logic is added or duplicated, and this covers every site gated by
+the macro across amd_hip_fp4.h, amd_hip_fp6.h and amd_hip_ocp_fp.hpp rather
+than only the ones a per-call-site audit happens to catch.
+
+#11551's purpose is unaffected: amd_hip_fp8.h tests
+(__gfx1250__ || __gfx1250_strict__) directly rather than via this macro, so
+FP8 keeps using native conversions on gfx1250-strict.
+
+Before the gfx1250-strict target existed these conversions were covered by
+the rocjitsu hotswap translator, which was enabled by default. With hotswap
+now opt-in and off by default nothing covers them, so the emulation moves
+back into the header.
+
+Measured on gfx1250-strict:
+
+  fp4 roundtrip  9/10 mismatches -> 0/10
+  fp6 roundtrip  7/8  mismatches -> 0/8
+  fp8            v_cvt_f32_fp8_e32 / v_cvt_pk_fp8_f32, unchanged
+  gfx1250        v_cvt_scale_pk8_f32_fp4 / v_cvt_scalef32_pk8_fp4_f32,
+                 unchanged
+
+Note FP4/FP6 conversion is software-emulated on gfx1250-strict, which has no
+hardware unpack for these formats, so MX performance there is not
+representative of gfx1250.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+(cherry picked from commit 4f32467dd30bfc1c5d42d9de81e0e74d1497dc17)
+---
+ .../clr/hipamd/include/hip/amd_detail/amd_hip_mx_common.h     | 4 ++--
+ projects/clr/hipamd/include/hip/amd_detail/amd_hip_ocp_fp.hpp | 4 ++--
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_mx_common.h b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_mx_common.h
+index 82eba78f..e2d74d87 100644
+--- a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_mx_common.h
++++ b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_mx_common.h
+@@ -10,12 +10,12 @@
+ #else
+ #define HIP_ENABLE_GFX950_OCP_BUILTINS 0
+ #endif
+-#if defined(__gfx1250__) || defined(__gfx1250_strict__)
++#if defined(__gfx1250__)
+ #define HIP_ENABLE_GFX1250_OCP_BUILTINS 1
+ #else
+ #define HIP_ENABLE_GFX1250_OCP_BUILTINS 0
+ #endif
+-#if !defined(__gfx950__) && !defined(__gfx1250__) && !defined(__gfx1250_strict__)
++#if !defined(__gfx950__) && !defined(__gfx1250__)
+ #define HIP_ENABLE_HOST_OCP_CONVERSIONS 1
+ #else
+ #define HIP_ENABLE_HOST_OCP_CONVERSIONS 0
+diff --git a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_ocp_fp.hpp b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_ocp_fp.hpp
+index 54fe59bf..5b199c27 100644
+--- a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_ocp_fp.hpp
++++ b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_ocp_fp.hpp
+@@ -30,12 +30,12 @@ static_assert(sizeof(__hip_uint64_t) * CHAR_BIT == 64);
+ #else
+ #define HIP_ENABLE_GFX950_OCP_BUILTINS 0
+ #endif
+-#if defined(__gfx1250__) || defined(__gfx1250_strict__)
++#if defined(__gfx1250__)
+ #define HIP_ENABLE_GFX1250_OCP_BUILTINS 1
+ #else
+ #define HIP_ENABLE_GFX1250_OCP_BUILTINS 0
+ #endif
+-#if !defined(__gfx950__) and !defined(__gfx1250__) and !defined(__gfx1250_strict__)
++#if !defined(__gfx950__) and !defined(__gfx1250__)
+ #define HIP_ENABLE_HOST_OCP_CONVERSIONS 1
+ #else
+ #define HIP_ENABLE_HOST_OCP_CONVERSIONS 0
+-- 
+2.43.0
+

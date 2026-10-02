@@ -1,0 +1,270 @@
+diff --git a/xla/backends/gpu/codegen/triton/transforms/tests/triton_pipeline_tdm.mlir b/xla/backends/gpu/codegen/triton/transforms/tests/triton_pipeline_tdm.mlir
+index 8c26715..dead3a8 100644
+--- a/xla/backends/gpu/codegen/triton/transforms/tests/triton_pipeline_tdm.mlir
++++ b/xla/backends/gpu/codegen/triton/transforms/tests/triton_pipeline_tdm.mlir
+@@ -15,6 +15,9 @@
+ // RUN: xla-opt %s -split-input-file --triton-xla-pipeline='target=gfx1250' \
+ // RUN:   | FileCheck %s --check-prefix=CHECK-TDM
+ //
++// RUN: xla-opt %s -split-input-file --triton-xla-pipeline='target=gfx1250-strict' \
++// RUN:   | FileCheck %s --check-prefix=CHECK-TDM
++//
+ // RUN: xla-opt %s -split-input-file --triton-xla-pipeline='target=gfx950' \
+ // RUN:   | FileCheck %s --check-prefix=CHECK-NOTDM
+ 
+diff --git a/xla/backends/gpu/target_config/specs/gfx1250_strict.txtpb b/xla/backends/gpu/target_config/specs/gfx1250_strict.txtpb
+new file mode 100644
+index 0000000..76fde75
+--- /dev/null
++++ b/xla/backends/gpu/target_config/specs/gfx1250_strict.txtpb
+@@ -0,0 +1,39 @@
++# Copyright 2026 The OpenXLA Authors.
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#    http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++# Values are placeholders copied from gfx1201.
++# TODO: reconfirm and fix them once real gfx1250-strict hardware or its published
++# spec is available.
++gpu_device_info {
++  threads_per_block_limit: 1024
++  threads_per_warp: 32
++  shared_memory_per_block: 65536
++  shared_memory_per_block_optin: 65536
++  shared_memory_per_core: 65536
++  threads_per_core_limit: 1024
++  core_count: 64
++  fpus_per_core: 128
++  block_dim_limit_x: 2147483647
++  block_dim_limit_y: 2147483647
++  block_dim_limit_z: 2147483647
++  memory_bandwidth: 640000000000
++  l2_cache_size: 8388608
++  clock_rate_ghz: 2.4
++  device_memory_size: 17179869184
++  rocm_compute_capability {
++    gcn_arch_name: "gfx1250-strict"
++  }
++}
++platform_name: "ROCM"
++device_description_str: "GFX1250-STRICT"
+diff --git a/xla/backends/gpu/target_config/target_config_map.bzl b/xla/backends/gpu/target_config/target_config_map.bzl
+index d658aa8..4dc1a5b 100644
+--- a/xla/backends/gpu/target_config/target_config_map.bzl
++++ b/xla/backends/gpu/target_config/target_config_map.bzl
+@@ -39,6 +39,7 @@ target_config_map = {
+     "gb200": "//xla/backends/gpu/target_config:specs/gb200.txtpb",
+     "gb300": "//xla/backends/gpu/target_config:specs/gb300.txtpb",
+     "gfx1250": "//xla/backends/gpu/target_config:specs/gfx1250.txtpb",
++    "gfx1250_strict": "//xla/backends/gpu/target_config:specs/gfx1250_strict.txtpb",
+     "h100_pcie": "//xla/backends/gpu/target_config:specs/h100_pcie.txtpb",
+     "h100_sxm": "//xla/backends/gpu/target_config:specs/h100_sxm.txtpb",
+     "h100": "//xla/backends/gpu/target_config:specs/h100_sxm.txtpb",
+diff --git a/xla/backends/gpu/tests/BUILD b/xla/backends/gpu/tests/BUILD
+index 680c99c..67acfc8 100644
+--- a/xla/backends/gpu/tests/BUILD
++++ b/xla/backends/gpu/tests/BUILD
+@@ -782,12 +782,19 @@ lit_test_suite_for_gpus(
+             "vectorization.hlo",
+             "pdl.hlo",
+         ],
++        "gfx1250_strict": [
++            # TODO: re-enable once gfx1250 memory_bandwidth is finalized.
++            "memory_bandwidth_fusion.hlo",
++            "vectorization.hlo",
++            "pdl.hlo",
++        ],
+     },
+     gpus = [
+         "a100_pcie_80",
+         "a6000",
+         "b200",
+         "gfx1250",
++        "gfx1250_strict",
+         "h100_sxm",
+         "mi200",
+         "mi350",
+diff --git a/xla/backends/gpu/tests/triton_tdm_elemwise.hlo b/xla/backends/gpu/tests/triton_tdm_elemwise.hlo
+index 3e21447..144155a 100644
+--- a/xla/backends/gpu/tests/triton_tdm_elemwise.hlo
++++ b/xla/backends/gpu/tests/triton_tdm_elemwise.hlo
+@@ -9,6 +9,10 @@
+ // CHECK-gfx1250: @llvm.amdgcn.s.wait.tensorcnt
+ // CHECK-gfx1250: @llvm.amdgcn.tensor.store.from.lds
+ 
++// CHECK-gfx1250_strict: @llvm.amdgcn.tensor.load.to.lds
++// CHECK-gfx1250_strict: @llvm.amdgcn.s.wait.tensorcnt
++// CHECK-gfx1250_strict: @llvm.amdgcn.tensor.store.from.lds
++
+ // CHECK-mi200-NOT: @llvm.amdgcn.{{(tensor\.|s\.wait\.tensorcnt)}}
+ // CHECK-mi200: @llvm.amdgcn.raw.ptr.buffer.load
+ // CHECK-mi200-NOT: @llvm.amdgcn.{{(tensor\.|s\.wait\.tensorcnt)}}
+diff --git a/xla/lit.bzl b/xla/lit.bzl
+index 415c852..562b522 100644
+--- a/xla/lit.bzl
++++ b/xla/lit.bzl
+@@ -212,7 +212,7 @@ def lit_test_suite_for_gpus(
+         requirement to run on a GPU.
+       gpus: string list. GPU names for which a lit test suite should be
+         generated. Supported GPU names are: p100, v100, a100_pcie, a6000, h100,
+-        b200, mi200, gfx1250.
++        b200, mi200, gfx1250, gfx1250_strict.
+       disabled_on_gpus: string_dict. For a gpu name (key) contains a list of
+         test files that should be skipped.
+       **kwargs: additional keyword arguments to pass to all generated rules.
+@@ -223,7 +223,7 @@ def lit_test_suite_for_gpus(
+     # If there are kwargs that need to be passed to only some of the generated
+     # rules, they should be extracted into separate named arguments.
+ 
+-    rocm_gpus = ["mi200", "mi350", "gfx1250"]
++    rocm_gpus = ["mi200", "mi350", "gfx1250", "gfx1250_strict"]
+ 
+     for gpu in gpus:
+         is_rocm = gpu in rocm_gpus
+diff --git a/xla/service/gpu/gpu_float_support_test.cc b/xla/service/gpu/gpu_float_support_test.cc
+index 17ac0c3..f732972 100644
+--- a/xla/service/gpu/gpu_float_support_test.cc
++++ b/xla/service/gpu/gpu_float_support_test.cc
+@@ -656,7 +656,6 @@ ENTRY main {
+ TEST_F(FloatSupportTest, BF16TranscendentalsOnGfx1250AreNotNormalized) {
+   // gfx1250 has native bf16 transcendental instructions, so these bf16 ops
+   // should be kept as bf16 instead of being upcast to f32.
+-  auto cc = se::RocmComputeCapability("gfx1250");
+   constexpr absl::string_view kHloModule = R"(
+ HloModule module
+ 
+@@ -665,21 +664,25 @@ ENTRY main {
+       ROOT r = bf16[4] $0(p0)
+ })";
+ 
+-  for (absl::string_view op : {"exponential", "log", "sqrt", "rsqrt", "tanh"}) {
+-    ASSERT_OK_AND_ASSIGN(auto module, ParseAndReturnVerifiedModule(
+-                                          absl::Substitute(kHloModule, op)));
+-    EXPECT_FALSE(
+-        Normalize(module.get(), se::GpuComputeCapability{cc}, BF16, F32))
+-        << "bf16 " << op << " should not be normalized on gfx1250";
+-  }
++  for (const char* gfx : {"gfx1250", "gfx1250-strict"}) {
++    auto cc = se::RocmComputeCapability(gfx);
++    for (absl::string_view op :
++         {"exponential", "log", "sqrt", "rsqrt", "tanh"}) {
++      ASSERT_OK_AND_ASSIGN(auto module, ParseAndReturnVerifiedModule(
++                                            absl::Substitute(kHloModule, op)));
++      EXPECT_FALSE(
++          Normalize(module.get(), se::GpuComputeCapability{cc}, BF16, F32))
++          << "bf16 " << op << " should not be normalized on " << gfx;
++    }
+ 
+-  // sine has a native bf16 hardware instruction (v_sin_bf16) but is not yet
+-  // wired up in XLA (no lowering / gate), so it is still normalized to f32.
+-  ASSERT_OK_AND_ASSIGN(
+-      auto module_sin,
+-      ParseAndReturnVerifiedModule(absl::Substitute(kHloModule, "sine")));
+-  EXPECT_TRUE(
+-      Normalize(module_sin.get(), se::GpuComputeCapability{cc}, BF16, F32));
++    // sine has a native bf16 hardware instruction (v_sin_bf16) but is not yet
++    // wired up in XLA (no lowering / gate), so it is still normalized to f32.
++    ASSERT_OK_AND_ASSIGN(
++        auto module_sin,
++        ParseAndReturnVerifiedModule(absl::Substitute(kHloModule, "sine")));
++    EXPECT_TRUE(
++        Normalize(module_sin.get(), se::GpuComputeCapability{cc}, BF16, F32));
++  }
+ }
+ 
+ TEST_F(FloatSupportTest, BF16TranscendentalsWithoutNativeSupportAreNormalized) {
+diff --git a/xla/stream_executor/device_description_test.cc b/xla/stream_executor/device_description_test.cc
+index 345feee..ee7bfca 100644
+--- a/xla/stream_executor/device_description_test.cc
++++ b/xla/stream_executor/device_description_test.cc
+@@ -75,6 +75,8 @@ TEST(RocmComputeCapability, IsSupportedGfxVersion) {
+   ASSERT_TRUE(RocmComputeCapability{"gfx1201"}.is_supported_gfx_version());
+   ASSERT_TRUE(RocmComputeCapability{"gfx942"}.is_supported_gfx_version());
+   ASSERT_TRUE(RocmComputeCapability{"gfx1250"}.is_supported_gfx_version());
++  ASSERT_TRUE(
++      RocmComputeCapability{"gfx1250-strict"}.is_supported_gfx_version());
+   ASSERT_FALSE(RocmComputeCapability{"some_string"}.is_supported_gfx_version());
+ }
+ 
+@@ -124,18 +126,25 @@ TEST(RocmComputeCapability, Accessors) {
+   EXPECT_TRUE(RocmComputeCapability{"gfx1100"}.has_hipblaslt());
+   EXPECT_TRUE(RocmComputeCapability{"gfx1103"}.has_hipblaslt());
+   EXPECT_TRUE(RocmComputeCapability{"gfx1250"}.has_hipblaslt());
+-
++  EXPECT_TRUE(RocmComputeCapability{"gfx1250-strict"}.has_hipblaslt());
+   EXPECT_FALSE(RocmComputeCapability{"gfx1250"}.has_nhwc_layout_support());
++  EXPECT_FALSE(
++      RocmComputeCapability{"gfx1250-strict"}.has_nhwc_layout_support());
+   EXPECT_TRUE(RocmComputeCapability{"gfx1250"}.has_fast_fp16_support());
++  EXPECT_TRUE(RocmComputeCapability{"gfx1250-strict"}.has_fast_fp16_support());
+   EXPECT_FALSE(RocmComputeCapability{"gfx1250"}.has_mfma_instr_support());
++  EXPECT_FALSE(
++      RocmComputeCapability{"gfx1250-strict"}.has_mfma_instr_support());
+   EXPECT_TRUE(
+       RocmComputeCapability{"gfx1250"}.has_packed_fp16_atomics_support());
+-  EXPECT_TRUE(
+-      RocmComputeCapability{"gfx1250"}.has_packed_bf16_atomics_support());
++  EXPECT_TRUE(RocmComputeCapability{"gfx1250-strict"}
++                  .has_packed_bf16_atomics_support());
+   EXPECT_TRUE(RocmComputeCapability{"gfx1250"}.has_ocp_fp8_support());
++  EXPECT_TRUE(RocmComputeCapability{"gfx1250-strict"}.has_ocp_fp8_support());
+   EXPECT_TRUE(RocmComputeCapability{"gfx1250"}.has_mx_type_support());
+-
++  EXPECT_TRUE(RocmComputeCapability{"gfx1250-strict"}.has_mx_type_support());
+   EXPECT_TRUE(RocmComputeCapability{"gfx1250"}.has_tdm_support());
++  EXPECT_TRUE(RocmComputeCapability{"gfx1250-strict"}.has_tdm_support());
+   EXPECT_FALSE(RocmComputeCapability{"gfx942"}.has_tdm_support());
+   EXPECT_FALSE(RocmComputeCapability{"gfx1201"}.has_tdm_support());
+ 
+@@ -145,6 +154,8 @@ TEST(RocmComputeCapability, Accessors) {
+   EXPECT_FALSE(RocmComputeCapability{"gfx908"}.has_peer_visible_atomics());
+   EXPECT_FALSE(RocmComputeCapability{"gfx1201"}.has_peer_visible_atomics());
+   EXPECT_FALSE(RocmComputeCapability{"gfx1250"}.has_peer_visible_atomics());
++  EXPECT_FALSE(
++      RocmComputeCapability{"gfx1250-strict"}.has_peer_visible_atomics());
+ }
+ 
+ TEST(GpuComputeCapability, ProtoConversion) {
+diff --git a/xla/stream_executor/rocm/rocm_compute_capability.h b/xla/stream_executor/rocm/rocm_compute_capability.h
+index 55c85b8..9d8f167 100644
+--- a/xla/stream_executor/rocm/rocm_compute_capability.h
++++ b/xla/stream_executor/rocm/rocm_compute_capability.h
+@@ -94,7 +94,8 @@ class RocmComputeCapability {
+       "gfx1030",  // RX68xx / RX69xx
+       "gfx1100",  // RX7900
+       "gfx1101",  // RX7700 / RX7800
+-      "gfx1103", "gfx1150", "gfx1151", "gfx1200", "gfx1201", "gfx1250"};
++      "gfx1103", "gfx1150", "gfx1151", "gfx1200", "gfx1201", "gfx1250",
++      "gfx1250-strict"};
+ 
+   bool is_supported_gfx_version() const {
+     return IsThisGfxInAnyList(kSupportedGfxVersions);
+@@ -154,7 +155,8 @@ class RocmComputeCapability {
+ 
+   bool gfx12_rx8900() const { return gfx12_discrete(); }
+ 
+-  bool gfx1250() const { return gfx_version() == "gfx1250"; }
++  static constexpr absl::string_view kGfx1250[] = {"gfx1250", "gfx1250-strict"};
++  bool gfx1250() const { return IsThisGfxInAnyList(kGfx1250); }
+ 
+   bool has_nhwc_layout_support() const { return gfx9_mi100_or_later(); }
+ 
+@@ -189,8 +191,7 @@ class RocmComputeCapability {
+ 
+   bool has_hipblaslt() const {
+     return IsThisGfxInAnyList(kMI300Series, kMI200Series, kGfx12Discrete,
+-                              kGfx11Discrete, kGfx11Apu) ||
+-           gfx1250();
++                              kGfx11Discrete, kGfx11Apu, kGfx1250);
+   }
+ 
+   bool has_fp8_support() const {

@@ -1,0 +1,324 @@
+diff --git a/aten/src/ATen/CMakeLists.txt b/aten/src/ATen/CMakeLists.txt
+index fc5d69381e648..877146acdf0e1 100644
+--- a/aten/src/ATen/CMakeLists.txt
++++ b/aten/src/ATen/CMakeLists.txt
+@@ -688,14 +688,14 @@ if(USE_ROCM)
+     exclude(ATen_HIP_SRCS "${ATen_HIP_SRCS}"
+       ${native_hip_bgemm} ${native_hip_ck})
+   else()
+-    # composable_kernel has no gfx1250 support yet, so its CK GEMM kernels fail to
+-    # compile for that arch. Build CK GEMM as a separate library with gfx1250
++    # composable_kernel has no gfx1250/gfx1250-strict support yet, so its CK GEMM kernels fail to
++    # compile for those archs. Build CK GEMM as a separate library with gfx1250/gfx1250-strict
+     # filtered out of HIP_ARCHITECTURES so every other requested arch still gets
+-    # CK GEMM. Remove this filtering once the CK submodule supports gfx1250.
++    # CK GEMM. Remove this filtering once the CK submodule supports gfx1250/gfx1250-strict.
+     exclude(ATen_HIP_SRCS "${ATen_HIP_SRCS}"
+       ${native_hip_bgemm} ${native_hip_ck})
+     set(_ck_gemm_hip_arches ${PYTORCH_ROCM_ARCH})
+-    list(REMOVE_ITEM _ck_gemm_hip_arches "gfx1250")
++    list(REMOVE_ITEM _ck_gemm_hip_arches "gfx1250" "gfx1250-strict")
+     set_source_files_properties(${native_hip_bgemm} ${native_hip_ck} PROPERTIES LANGUAGE HIP)
+     add_library(ck_gemm STATIC ${native_hip_bgemm} ${native_hip_ck})
+     set_target_properties(ck_gemm PROPERTIES
+diff --git a/aten/src/ATen/cuda/CUDABlas.cpp b/aten/src/ATen/cuda/CUDABlas.cpp
+index f36c87ce108bd..2ab8da652428f 100644
+--- a/aten/src/ATen/cuda/CUDABlas.cpp
++++ b/aten/src/ATen/cuda/CUDABlas.cpp
+@@ -2015,6 +2015,7 @@ void scaled_gemm(
+             std::vector<std::string> mx_archs{"gfx950"};
+   #if ROCM_VERSION >= 71400
+             mx_archs.push_back("gfx1250");
++            mx_archs.push_back("gfx1250-strict");
+   #endif
+             if (at::detail::getCUDAHooks().isGPUArch(mx_archs)) {
+                 // TODO: add constraints based on hipblaslt internals
+diff --git a/aten/src/ATen/cuda/CublasHandlePool.cpp b/aten/src/ATen/cuda/CublasHandlePool.cpp
+index 6a6d0fe1929cf..70afce353607a 100644
+--- a/aten/src/ATen/cuda/CublasHandlePool.cpp
++++ b/aten/src/ATen/cuda/CublasHandlePool.cpp
+@@ -165,8 +165,8 @@ size_t parseChosenWorkspaceSize() {
+     // for extra convenience
+     val = c10::utils::get_env("ROCBLAS_WORKSPACE_CONFIG");
+   }
+-  /* 32MiB default, 128MiB for gfx942/gfx950/gfx1250 */
+-  const bool gfx942_950_1250 = at::detail::getCUDAHooks().isGPUArch({"gfx942", "gfx950", "gfx1250"});
++  /* 32MiB default, 128MiB for gfx942/gfx950/gfx1250/gfx1250-strict */
++  const bool gfx942_950_1250 = at::detail::getCUDAHooks().isGPUArch({"gfx942", "gfx950", "gfx1250", "gfx1250-strict"});
+   const size_t default_size = gfx942_950_1250 ? 1024 * 128 * 1024 : 1024 * 32 * 1024;
+ #else
+   /* :4096:2:16:8 default, 32MiB for Hopper and Blackwell */
+diff --git a/aten/src/ATen/cuda/detail/CUDAHooks.cpp b/aten/src/ATen/cuda/detail/CUDAHooks.cpp
+index 47e83d03e6b36..1f7de03d5bf99 100644
+--- a/aten/src/ATen/cuda/detail/CUDAHooks.cpp
++++ b/aten/src/ATen/cuda/detail/CUDAHooks.cpp
+@@ -560,7 +560,7 @@ const std::vector<std::string>& CUDAHooks::getHipblasltPreferredArchs() const {
+     "gfx1100", "gfx1101", "gfx1151",
+ #endif
+ #if ROCM_VERSION >= 71400
+-    "gfx1250",
++    "gfx1250", "gfx1250-strict",
+ #endif
+   };
+   return archs;
+@@ -576,7 +576,7 @@ const std::vector<std::string>& CUDAHooks::getHipblasltSupportedArchs() const {
+     "gfx950", "gfx1150", "gfx1151",
+ #endif
+ #if ROCM_VERSION >= 71400
+-    "gfx1250"
++    "gfx1250", "gfx1250-strict"
+ #endif
+   };
+   return archs;
+diff --git a/aten/src/ATen/native/cuda/KernelUtils.cuh b/aten/src/ATen/native/cuda/KernelUtils.cuh
+index 12feeb6d63af3..d949dcafac51b 100644
+--- a/aten/src/ATen/native/cuda/KernelUtils.cuh
++++ b/aten/src/ATen/native/cuda/KernelUtils.cuh
+@@ -257,7 +257,7 @@ __device__ inline void cmtdStore(void* address, T value) {
+       if constexpr (wait_for_commit)
+       {
+         __atomic_signal_fence(__ATOMIC_SEQ_CST);
+-#ifdef __gfx1250__
++#if defined(__gfx1250__) || defined(__gfx1250_strict__)
+         asm volatile("s_wait_loadcnt(0)" ::: "memory");
+ #else
+         asm volatile("s_waitcnt vmcnt(0)" ::: "memory");
+diff --git a/aten/src/ATen/native/cuda/MemoryAccess.cuh b/aten/src/ATen/native/cuda/MemoryAccess.cuh
+index ac248d8cc00c8..05262d3b8c7ab 100644
+--- a/aten/src/ATen/native/cuda/MemoryAccess.cuh
++++ b/aten/src/ATen/native/cuda/MemoryAccess.cuh
+@@ -189,9 +189,9 @@ __device__ aligned_vector<scalar_t, vec_size> load_vector(const scalar_t *base_p
+   auto *from = reinterpret_cast<const vec_t *>(base_ptr);
+ #if defined(USE_ROCM)
+   // NOTE: This nontemporal vectorized load is tuned for gfx942 (CDNA3, Wave64).
+-  // Do NOT extend to gfx1250 (GFX12.5, Wave32) without first validating
+-  // intrinsic codegen and re-benchmarking — the register layout and wave
+-  // width differ. gfx1250 falls through to the generic path below, which
++  // Do NOT extend to gfx1250/gfx1250-strict (GFX12.5, Wave32) without first validating
++  // intrinsic codegen and re-benchmarking -- the register layout and wave
++  // width differ. gfx1250/gfx1250-strict fall through to the generic path below, which
+   // is correctness-safe.
+   if(__builtin_amdgcn_processor_is("gfx942")) {
+     using longx2 = __attribute__((__vector_size__(4*sizeof(int)))) int;
+diff --git a/aten/src/ATen/native/cuda/ScaledBlas.cpp b/aten/src/ATen/native/cuda/ScaledBlas.cpp
+index e1a1db85d6c1c..e5c848659bd34 100644
+--- a/aten/src/ATen/native/cuda/ScaledBlas.cpp
++++ b/aten/src/ATen/native/cuda/ScaledBlas.cpp
+@@ -82,7 +82,7 @@ bool _scaled_mm_allowed_device(bool sm90_only=false, bool sm100_only=false) {
+         "gfx950",
+ #endif
+ #if ROCM_VERSION >= 71400
+-        "gfx1250",
++        "gfx1250", "gfx1250-strict",
+ #endif
+     };
+     return at::detail::getCUDAHooks().isGPUArch(archs);
+@@ -107,6 +107,7 @@ static void check_blockwise_e8m0fnu_arch_supported() {
+   std::vector<std::string> mx_archs{"gfx950"};
+ #if ROCM_VERSION >= 71400
+   mx_archs.push_back("gfx1250");
++  mx_archs.push_back("gfx1250-strict");
+ #endif
+   TORCH_CHECK_NOT_IMPLEMENTED(
+       at::detail::getCUDAHooks().isGPUArch(mx_archs),
+diff --git a/aten/src/ATen/native/cuda/int4mm.cu b/aten/src/ATen/native/cuda/int4mm.cu
+index 21893ea5622f4..e6db3b735c0de 100644
+--- a/aten/src/ATen/native/cuda/int4mm.cu
++++ b/aten/src/ATen/native/cuda/int4mm.cu
+@@ -147,7 +147,7 @@ static bool isCDNA2orLater(int index) {
+ }
+ 
+ static bool isCDNA5orLater(int index) {
+-  return at::detail::getCUDAHooks().isGPUArch({"gfx1250"}, index);
++  return at::detail::getCUDAHooks().isGPUArch({"gfx1250", "gfx1250-strict"}, index);
+ }
+ 
+ #else
+@@ -1104,8 +1104,8 @@ at::Tensor _weight_int4pack_mm_cuda(
+ #if defined(USE_ROCM)
+   if (isCDNA5orLater(A.device().index())) {
+     TORCH_CHECK(false,
+-                "_weight_int4pack_mm_cuda is not yet supported on gfx1250. "
+-                "A WMMA-based implementation is required for gfx1250.");
++                "_weight_int4pack_mm_cuda is not yet supported on gfx1250/gfx1250-strict. "
++                "A WMMA-based implementation is required for gfx1250/gfx1250-strict.");
+   }
+   if (!isCDNA2orLater(A.device().index())) {
+     TORCH_CHECK(false, "_weight_int4pack_mm_cuda is only supported on AMD gpu arch greater than or equal to CDNA2");
+@@ -1304,8 +1304,8 @@ at::Tensor _convert_weight_to_int4pack_cuda(
+ #if defined(USE_ROCM)
+   if (isCDNA5orLater(in.device().index())) {
+     TORCH_CHECK(false,
+-                "_convert_weight_to_int4pack_cuda is not yet supported on gfx1250. "
+-                "A WMMA-based implementation is required for gfx1250.");
++                "_convert_weight_to_int4pack_cuda is not yet supported on gfx1250/gfx1250-strict. "
++                "A WMMA-based implementation is required for gfx1250/gfx1250-strict.");
+   }
+   if (!isCDNA2orLater(in.device().index())) {
+     TORCH_CHECK(false, "_convert_weight_to_int4pack_cuda is only supported on AMD gpu arch greater than or equal to CDNA2");
+diff --git a/aten/src/ATen/native/sparse/cuda/cuSPARSELtOps.cpp b/aten/src/ATen/native/sparse/cuda/cuSPARSELtOps.cpp
+index f0f4172ccf6f4..69d0056d7dcef 100644
+--- a/aten/src/ATen/native/sparse/cuda/cuSPARSELtOps.cpp
++++ b/aten/src/ATen/native/sparse/cuda/cuSPARSELtOps.cpp
+@@ -27,7 +27,7 @@ static bool g_hipSparseLtSupported = false;
+ 
+ static const std::vector<std::string>& hipSparseLtSupportedArchs() {
+ #if ROCM_VERSION >= 71400
+-  static const std::vector<std::string> archs = {"gfx950", "gfx942", "gfx1250"};
++  static const std::vector<std::string> archs = {"gfx950", "gfx942", "gfx1250", "gfx1250-strict"};
+ #elif ROCM_VERSION >= 71200
+   static const std::vector<std::string> archs = {"gfx950", "gfx942"};
+ #else
+diff --git a/test/inductor/test_aot_inductor.py b/test/inductor/test_aot_inductor.py
+index fc77808446116..9155e4d45ce1d 100644
+--- a/test/inductor/test_aot_inductor.py
++++ b/test/inductor/test_aot_inductor.py
+@@ -7176,7 +7176,7 @@ def test__weight_int4pack_mm(self, m, n, q_group, num_groups):
+ 
+         if TEST_WITH_ROCM:
+             if CDNA5OrLater():
+-                self.skipTest("int4 mm not yet implemented for gfx1250 (needs WMMA)")
++                self.skipTest("int4 mm not yet implemented for gfx1250/gfx1250-strict (needs WMMA)")
+             if not CDNA2OrLater():
+                 self.skipTest("_int4_mm is supported only for CDNA2 or later")
+ 
+@@ -7215,7 +7215,7 @@ def test__weight_int4pack_mm_with_scales_and_zeros(self, m, n, q_group, num_grou
+ 
+         if TEST_WITH_ROCM:
+             if CDNA5OrLater():
+-                self.skipTest("int4 mm not yet implemented for gfx1250 (needs WMMA)")
++                self.skipTest("int4 mm not yet implemented for gfx1250/gfx1250-strict (needs WMMA)")
+             if not CDNA2OrLater():
+                 self.skipTest("_int4_mm is supported only for CDNA2 or later")
+ 
+diff --git a/test/test_cuda.py b/test/test_cuda.py
+index 04c28e93e80ad..7d51d310e36ef 100644
+--- a/test/test_cuda.py
++++ b/test/test_cuda.py
+@@ -780,7 +780,7 @@ def test_cublas_workspace_explicit_allocation(self):
+             gcn_arch = str(
+                 torch.cuda.get_device_properties(0).gcnArchName.split(":", 1)[0]
+             )
+-            if gcn_arch in ["gfx942", "gfx950", "gfx1250"]:
++            if gcn_arch in ["gfx942", "gfx950", "gfx1250", "gfx1250-strict"]:
+                 default_workspace_size = 1024 * 128 * 1024  # :1024:128
+         else:
+             default_workspace_size = (
+@@ -8566,7 +8566,7 @@ def test_compile_kernel_large_shared_memory(self):
+         # Test error handling with more than supported shared memory size
+         if torch.version.hip:
+             gcn_arch = get_device_properties().gcnArchName.split(":", 1)[0]
+-            if gcn_arch == "gfx1250":
++            if gcn_arch in ("gfx1250", "gfx1250-strict"):
+                 max_smem = 320 * 1024
+             elif gcn_arch == "gfx950":
+                 max_smem = 160 * 1024
+diff --git a/test/test_linalg.py b/test/test_linalg.py
+index c720b52fcecb3..9b9674c037296 100644
+--- a/test/test_linalg.py
++++ b/test/test_linalg.py
+@@ -66,7 +66,7 @@ def blaslt_supported_device():
+             if ROCM_VERSION >= (6, 5):
+                 archs.append('gfx95')
+             if ROCM_VERSION >= (7, 14):
+-                archs.append('gfx1250')
++                archs.extend(['gfx1250', 'gfx1250-strict'])
+             for arch in archs:
+                 if arch in torch.cuda.get_device_properties(0).gcnArchName:
+                     return True
+@@ -8080,7 +8080,7 @@ def test__int4_mm(self, device, m, k, n):
+             self.skipTest("requires SM80 or later")
+ 
+         if TEST_WITH_ROCM and self.device_type == 'cuda' and CDNA5OrLater():
+-            self.skipTest("int4 mm not yet implemented for gfx1250 (needs WMMA)")
++            self.skipTest("int4 mm not yet implemented for gfx1250/gfx1250-strict (needs WMMA)")
+ 
+         if TEST_WITH_ROCM and self.device_type == 'cuda' and not CDNA2OrLater():
+             self.skipTest("_convert_weight_to_int4pack_cuda is supported only for CDNA2 or later")
+@@ -8152,7 +8152,7 @@ def test_compile_int4_mm(self, device, m, k, n):
+             self.skipTest("requires SM80 or later")
+ 
+         if TEST_WITH_ROCM and self.device_type == 'cuda' and CDNA5OrLater():
+-            self.skipTest("int4 mm not yet implemented for gfx1250 (needs WMMA)")
++            self.skipTest("int4 mm not yet implemented for gfx1250/gfx1250-strict (needs WMMA)")
+ 
+         if TEST_WITH_ROCM and self.device_type == 'cuda' and not CDNA2OrLater():
+             self.skipTest("_convert_weight_to_int4pack_cuda supported only for CDNA2 or later")
+diff --git a/torch/cuda/_utils.py b/torch/cuda/_utils.py
+index bede63233f38e..30b47b3349719 100644
+--- a/torch/cuda/_utils.py
++++ b/torch/cuda/_utils.py
+@@ -476,11 +476,11 @@ def set_shared_memory_config(self, shared_mem_bytes: int) -> None:
+         # HIP doesn't have shared_memory_per_block_optin in device properties, so we hard-code it here
+         if torch.version.hip:
+             # navi, CDNA1-CDNA3 allows a max of 64KB shared memory,
+-            # CDNA4 (gfx950) 160KB, and CDNA5 (gfx1250) 320KB.
++            # CDNA4 (gfx950) 160KB, and CDNA5 (gfx1250/gfx1250-strict) 320KB.
+             gcn_arch = device_props.gcnArchName.split(":", 1)[0]
+             if gcn_arch == "gfx950":
+                 max_shared_mem = 160 * 1024
+-            elif gcn_arch == "gfx1250":
++            elif gcn_arch in ("gfx1250", "gfx1250-strict"):
+                 max_shared_mem = 320 * 1024
+             else:
+                 max_shared_mem = 65536
+diff --git a/torch/testing/_internal/common_cuda.py b/torch/testing/_internal/common_cuda.py
+index 2724b2b316eea..0321a5a6b5cb3 100644
+--- a/torch/testing/_internal/common_cuda.py
++++ b/torch/testing/_internal/common_cuda.py
+@@ -68,8 +68,8 @@ def evaluate_gfx_arch_within(arch_list):
+ # nested by construction: CDNA5OrLater => CDNA3OrLater => CDNA2OrLater.
+ _CDNA2_ARCHS = ["gfx90a"]
+ _CDNA3_ARCHS = ["gfx942", "gfx950"]
+-# GFX1250 (CDNA 5)
+-_CDNA5_ARCHS = ["gfx1250"]
++# GFX1250 / gfx1250-strict (CDNA 5)
++_CDNA5_ARCHS = ["gfx1250", "gfx1250-strict"]
+ 
+ def CDNA5OrLater():
+     return evaluate_gfx_arch_within(_CDNA5_ARCHS)
+@@ -82,13 +82,13 @@ def CDNA2OrLater():
+ 
+ # Archs that take the opportunistic_fastAtomicAdd path (packed 2x16 atomics + DPP
+ # lane coalescing) in ScatterGatherKernel.cu. Keep in sync with that kernel's arch
+-# gate; this is intentionally not CDNA3OrLater (gfx1250 uses plain fastAtomicAdd).
++# gate; this is intentionally not CDNA3OrLater (gfx1250/gfx1250-strict use plain fastAtomicAdd).
+ def gfx_arch_supports_opportunistic_fastatomics():
+     return evaluate_gfx_arch_within(["gfx942", "gfx950"])
+ 
+ def evaluate_platform_supports_flash_attention():
+     if TEST_WITH_ROCM:
+-        arch_list = ["gfx90a", "gfx942", "gfx1100", "gfx1201", "gfx950", "gfx1250"]
++        arch_list = ["gfx90a", "gfx942", "gfx1100", "gfx1201", "gfx950", "gfx1250", "gfx1250-strict"]
+         if os.environ.get("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "0") != "0":
+             arch_list += ["gfx1101", "gfx1102", "gfx1150", "gfx1151", "gfx1200"]
+         return evaluate_gfx_arch_within(arch_list)
+@@ -106,7 +106,7 @@ def evaluate_platform_supports_ck_sdpa():
+ 
+ def evaluate_platform_supports_efficient_attention():
+     if TEST_WITH_ROCM:
+-        arch_list = ["gfx90a", "gfx942", "gfx1100", "gfx1201", "gfx950", "gfx1250"]
++        arch_list = ["gfx90a", "gfx942", "gfx1100", "gfx1201", "gfx950", "gfx1250", "gfx1250-strict"]
+         if os.environ.get("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "0") != "0":
+             arch_list += ["gfx1101", "gfx1102", "gfx1150", "gfx1151", "gfx1200"]
+         return evaluate_gfx_arch_within(arch_list)
+@@ -193,7 +193,7 @@ def evaluate_platform_supports_fp8():
+             if ROCM_VERSION >= (6, 5):
+                 archs.append('gfx95')
+             if ROCM_VERSION >= (7, 14):
+-                archs.append('gfx1250')
++                archs.extend(['gfx1250', 'gfx1250-strict'])
+             for arch in archs:
+                 if arch in torch.cuda.get_device_properties(0).gcnArchName:
+                     return True
+@@ -210,8 +210,8 @@ def evaluate_platform_supports_fp8_grouped_gemm():
+         if torch.version.hip:
+             if "USE_MSLK" not in torch.__config__.show():
+                 return False
+-            # gfx1250 omitted: MSLK only builds gfx942/gfx950 kernels (see the arch
+-            # filter in aten/src/ATen/CMakeLists.txt). Add gfx1250 here once MSLK does.
++            # gfx1250/gfx1250-strict omitted: MSLK only builds gfx942/gfx950 kernels (see the arch
++            # filter in aten/src/ATen/CMakeLists.txt). Add gfx1250/gfx1250-strict here once MSLK does.
+             archs = ['gfx942', 'gfx950']
+             for arch in archs:
+                 if arch in torch.cuda.get_device_properties(0).gcnArchName:
