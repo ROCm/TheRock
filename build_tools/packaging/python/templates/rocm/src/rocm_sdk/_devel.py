@@ -5,21 +5,21 @@
 
 The devel package is special in some key ways:
 
-* Ordinary files are distributed directly under the `_rocm_sdk_devel` platform
+* Non-link files are distributed directly under the `_rocm_sdk_devel` platform
   package so the package installer owns them.
-* Since symlinks are not wheel safe, symlinks and directory entries are stored
-  under the `rocm_sdk_devel` package as a `_devel.tar` or `_devel.tar.xz` file
-  that is intended to be initialized on use.
-* This tarball completes a top-level Python package named like
-  `_rocm_sdk_devel_linux_x86_64` that is a sibling to other packages like
-  `_rocm_sdk_core_linux_x86_64`.
+* Wheel archives do not portably represent symlinks, so their paths and targets
+  are stored in a `.devel_links/devel.json` manifest under the
+  `rocm_sdk_devel` package.
+* The wheel installs a top-level Python package named like
+  `_rocm_sdk_devel_linux_x86_64` as a sibling to packages like
+  `_rocm_sdk_core_linux_x86_64`; initialization creates its recorded links.
 * For links to files already contained in a runtime package, initialization
   creates hardlinks. Directory links remain symlinks.
 * RPATH setup relies on this sibling behavior and is already encoded properly
   in the runtime packages.
 
 In order to make this work, we dynamically extend the distribution package on
-use, modifying the dist-info RECORD file to include all newly expanded files in
+use, modifying the dist-info RECORD file to include all generated links in
 accordance with the PyPA documentation:
   https://packaging.python.org/en/latest/specifications/recording-installed-packages/
 Note that this puts us in the category of creating a self-modifying package,
@@ -33,20 +33,23 @@ import importlib.metadata as md
 import io
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
 import platform
 import re
 import sys
-import tarfile
 
 from . import _dist_info as di
+
+_DEVEL_LINKS_MANIFEST = Path(".devel_links/devel.json")
+_DEVEL_INITIALIZATION_LOCK = Path(".devel_links/devel.lock")
 
 
 def _is_windows():
     return platform.system() == "Windows"
 
 
-def get_devel_root() -> Path:
+def get_devel_root(*, force_initialize: bool = False) -> Path:
     try:
         import rocm_sdk_devel
     except ModuleNotFoundError as e:
@@ -63,16 +66,9 @@ def get_devel_root() -> Path:
     devel_py_pkg_name = di.ALL_PACKAGES["devel"].get_py_package_name()
     devel_py_pkg_path = site_lib_path / devel_py_pkg_name
 
-    # _expand_devel_contents deletes the tarball as the last step of expansion.
-    # The platform package now exists before expansion, so tarball presence—not
-    # __init__.py—indicates that initialization is still required.
-    tarfile_path, _ = _find_tarfile(rocm_sdk_devel_path)
-    if tarfile_path:
-        _expand_devel_contents(rocm_sdk_devel_path, site_lib_path)
-    if not (devel_py_pkg_path / "__init__.py").exists():
-        raise ImportError(
-            f"Expanding {devel_py_pkg_name} did not produce a valid Python package"
-        )
+    marker_file = rocm_sdk_devel_path / di.DEVEL_INITIALIZED
+    if force_initialize or not marker_file.is_file():
+        _initialize_devel_package(rocm_sdk_devel_path, site_lib_path)
     _reconcile_device_links(site_lib_path, devel_py_pkg_path, di.__version__)
     return devel_py_pkg_path
 
@@ -88,26 +84,28 @@ def _get_package_path(m) -> Path | None:
     return None
 
 
-def _find_tarfile(rocm_sdk_devel_path: Path):
-    tarfile_path = rocm_sdk_devel_path / "_devel.tar.xz"
-    if tarfile_path.exists():
-        tarfile_mode = "r:xz"
-    else:
-        tarfile_path = rocm_sdk_devel_path / "_devel.tar"
-        if tarfile_path.exists():
-            tarfile_mode = "r"
-        else:
-            return "", ""
-    return tarfile_path, tarfile_mode
+def _load_devel_link_manifest(
+    manifest_path: Path,
+) -> tuple[str, list[dict[str, str]]]:
+    manifest = json.loads(manifest_path.read_text())
+    if "version" not in manifest:
+        raise ValueError(
+            f"Devel link manifest is missing required 'version' field: {manifest_path}"
+        )
+    if "links" not in manifest:
+        raise ValueError(
+            f"Devel link manifest is missing required 'links' field: {manifest_path}"
+        )
+    return manifest["version"], manifest["links"]
 
 
-def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
+def _initialize_devel_package(rocm_sdk_devel_path: Path, site_lib_path: Path) -> None:
     # Resolve the Python package to its distribution package name and find the
     # RECORD file.
     dist_names = md.packages_distributions()["rocm_sdk_devel"]
 
     # De-duplication, preserving order (handles purelib/platlib duplicates)
-    seen_dist_names = set()
+    seen_dist_names: set[str] = set()
     dist_names_list = [
         d for d in dist_names if not (d in seen_dist_names or seen_dist_names.add(d))
     ]
@@ -143,7 +141,7 @@ def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
 
     if dist_files is None:
         raise ImportError(
-            "Cannot expand the `rocm[devel]` package because it was not installed "
+            "Cannot initialize the `rocm[devel]` package because it was not installed "
             "by a user-mode package manager and is managed by the system. Please "
             "install `rocm[devel]` in a virtual environment."
         )
@@ -160,12 +158,18 @@ def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
     # Resolve to a physical file.
     record_path = record_pkg_file.locate()
 
-    dist_file_path_names = [str(df) for df in dist_files]
-    _lock_and_expand(
-        site_lib_path,
-        rocm_sdk_devel_path,
-        record_path,
-        dist_file_path_names,
+    # Files installed from the wheel have hashes in RECORD. Links generated by
+    # initialization are recorded with empty hash and size fields, so exclude
+    # those entries when checking whether a manifest path conflicts with a
+    # wheel-owned file.
+    wheel_owned_path_names = {
+        str(df) for df in dist_files if getattr(df, "hash", None) is not None
+    }
+    _initialize_devel_links(
+        site_lib_path=site_lib_path,
+        rocm_sdk_devel_path=rocm_sdk_devel_path,
+        record_path=record_path,
+        wheel_owned_path_names=wheel_owned_path_names,
     )
 
 
@@ -179,7 +183,7 @@ def _resolve_link_target(parent: Path, target: str) -> Path:
     under the limit.
 
     resolve() collapses '..' by walking the path rather than lexically, which
-    matters because _lock_and_expand extracts directory symlinks as-is: a
+    matters because devel link setup preserves directory symlinks: a
     lexical collapse through a symlinked ancestor names a different file than
     the OS reaches.
     """
@@ -224,7 +228,9 @@ def _without_post_release(version: str) -> str:
     return re.sub(r"\.post\d+", "", version, count=1)
 
 
-def _discover_device_link_plans(site_lib_path: Path, expected_version: str):
+def _discover_device_link_plans(
+    site_lib_path: Path, expected_version: str
+) -> list[tuple[Path, list[dict[str, str]]]]:
     """Find installed rocm-sdk-device-* wheels and their devel-link manifests.
 
     Returns a list of (record_path, links) where links is the list of
@@ -237,7 +243,7 @@ def _discover_device_link_plans(site_lib_path: Path, expected_version: str):
     # scan may otherwise be missed.
     importlib.invalidate_caches()
 
-    plans = []
+    plans: list[tuple[Path, list[dict[str, str]]]] = []
     for dist in md.distributions(path=[str(site_lib_path)]):
         name = dist.metadata["Name"]
         if not name:
@@ -273,7 +279,7 @@ def _discover_device_link_plans(site_lib_path: Path, expected_version: str):
         manifest_path = Path(manifest_file.locate())
         if not manifest_path.is_file():
             continue
-        links = json.loads(manifest_path.read_text()).get("links", [])
+        _, links = _load_devel_link_manifest(manifest_path)
         if not links:
             continue
         plans.append((Path(record_file.locate()), links))
@@ -315,10 +321,61 @@ def _record_name(site_lib_path: Path, devel_py_pkg_path: Path, relpath: str) -> 
     return (devel_py_pkg_path / relpath).relative_to(site_lib_path).as_posix()
 
 
+def _ensure_links(
+    site_lib_path: Path,
+    devel_py_pkg_path: Path,
+    plans: list[tuple[Path, list[dict[str, str]]]],
+    *,
+    should_use_symlink: Callable[[Path, str], bool] = (
+        lambda _dest_path, _target: False
+    ),
+) -> int:
+    """Create or repair links and update their owning RECORD files."""
+    # Record ownership before creating links so a later failure cannot leave a
+    # successfully created link unowned. Missing paths in RECORD are safe.
+    for record_path, links in plans:
+        recorded_names = [
+            _record_name(site_lib_path, devel_py_pkg_path, link["relpath"])
+            for link in links
+        ]
+        _ensure_record_entries(record_path, recorded_names)
+
+    created = 0
+    for _record_path, links in plans:
+        for link in links:
+            relpath = link["relpath"]
+            dest_path = devel_py_pkg_path / relpath
+            use_symlink = should_use_symlink(dest_path, link["target"])
+            # Create the parent first: neither link operation creates it.
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            # Keep an existing link when its type and target already match.
+            # Otherwise, validate its replacement target and select the link
+            # operation.
+            if use_symlink:
+                if dest_path.is_symlink() and os.readlink(dest_path) == link["target"]:
+                    continue
+                link_target = link["target"]
+                create_link = dest_path.symlink_to
+            else:
+                if _devel_link_ok(dest_path, link["target"]):
+                    continue
+                hardlink_target = _resolve_link_target(dest_path.parent, link["target"])
+                if not hardlink_target.is_file():
+                    raise FileNotFoundError(
+                        f"Hardlink target is not a file: {hardlink_target}"
+                    )
+                link_target = os.fspath(hardlink_target)
+                create_link = dest_path.hardlink_to
+            dest_path.unlink(missing_ok=True)
+            create_link(link_target)
+            created += 1
+    return created
+
+
 def _reconcile_device_links(
     site_lib_path: Path, devel_py_pkg_path: Path, expected_version: str
 ) -> int:
-    """Mirror per-ISA device files into the expanded devel tree.
+    """Mirror per-ISA device files into the initialized devel tree.
 
     Each installed `rocm-sdk-device-*` wheel ships a `.devel_links/<arch>.json`
     manifest listing (relpath, target) pairs. For each entry we hardlink the
@@ -331,7 +388,7 @@ def _reconcile_device_links(
     links created during this call.
 
     Note: the core CLI trampolines (hipcc etc., see rocm_sdk_core._cli) only
-    reach `get_devel_root()` on the FIRST devel expansion, so a device wheel
+    reach `get_devel_root()` on the FIRST devel initialization, so a device wheel
     installed after that is linked by an explicit `rocm-sdk init` / `rocm-sdk
     path`, not by subsequent compiler invocations.
     """
@@ -341,10 +398,9 @@ def _reconcile_device_links(
 
     # Fast path: skip the lock and any RECORD rewrite only when every device file
     # is already a correct hardlink AND its wheel's RECORD cleanly owns every
-    # link (present, no duplicates). The RECORD check matters because a prior run
-    # can be interrupted after creating the hardlink but before writing RECORD;
-    # that must still be repaired (otherwise `pip uninstall` would not prune the
-    # orphaned link).
+    # link (present, no duplicates). The RECORD check matters because an existing
+    # hardlink can be absent from RECORD; that must still be repaired (otherwise
+    # `pip uninstall` would not prune the orphaned link).
     if all(
         _devel_link_ok(devel_py_pkg_path / link["relpath"], link["target"])
         for _record_path, links in plans
@@ -365,134 +421,95 @@ def _reconcile_device_links(
     with open(lock_path, "a") as lock_file:
         file_lock = FileLock(lock_file)
         try:
-            created = 0
-            for record_path, links in plans:
-                recorded_names = []
-                for link in links:
-                    relpath = link["relpath"]
-                    dest_path = devel_py_pkg_path / relpath
-                    recorded_names.append(
-                        _record_name(site_lib_path, devel_py_pkg_path, relpath)
-                    )
-                    if _devel_link_ok(dest_path, link["target"]):
-                        continue
-                    # Create the parent first: hardlink_to needs it to exist.
-                    dest_path.parent.mkdir(parents=True, exist_ok=True)
-                    hardlink_target = _resolve_link_target(
-                        dest_path.parent, link["target"]
-                    )
-                    if not hardlink_target.is_file():
-                        # The target ships in the same wheel as this manifest, so
-                        # it should exist; skip defensively if it somehow does not.
-                        continue
-                    if dest_path.exists() or dest_path.is_symlink():
-                        dest_path.unlink()
-                    dest_path.hardlink_to(hardlink_target)
-                    created += 1
-                _ensure_record_entries(record_path, recorded_names)
-            return created
+            return _ensure_links(
+                site_lib_path,
+                devel_py_pkg_path,
+                plans,
+            )
         finally:
             file_lock.unlock()
 
 
-def _lock_and_expand(
+def _initialize_devel_links(
     site_lib_path: Path,
     rocm_sdk_devel_path: Path,
     record_path: Path,
-    dist_file_path_names: set[str],
-):
-    with open(record_path, "at") as record_file:
-        file_lock = FileLock(record_file)
-        try:
-            # Multiple processes may all observe the manifest before any one of
-            # them acquires the RECORD lock. Recheck under the lock: absence means
-            # another initializer completed successfully and this process can
-            # converge without trying to reopen the consumed manifest.
-            tarfile_path, tarfile_mode = _find_tarfile(rocm_sdk_devel_path)
-            if not tarfile_path:
-                return
+    wheel_owned_path_names: set[str],
+) -> int:
+    manifest_path = rocm_sdk_devel_path / _DEVEL_LINKS_MANIFEST
+    # The manifest remains installed, so a marker file records whether
+    # initialization completed successfully.
+    marker_file = rocm_sdk_devel_path / di.DEVEL_INITIALIZED
+    devel_py_pkg_path = site_lib_path / di.ALL_PACKAGES["devel"].get_py_package_name()
+    if not manifest_path.is_file():
+        raise ImportError(f"Missing devel link manifest: {manifest_path}")
+    manifest_version, links = _load_devel_link_manifest(manifest_path)
+    if manifest_version != di.__version__:
+        raise ValueError(
+            f"Devel link manifest version {manifest_version!r} does not "
+            f"match installed ROCm version {di.__version__!r}"
+        )
+    for link in links:
+        relpath = link["relpath"]
+        record_name = _record_name(site_lib_path, devel_py_pkg_path, relpath)
+        if record_name in wheel_owned_path_names:
+            raise ValueError(
+                f"Devel link manifest path is owned by the wheel: {relpath}"
+            )
+    marker_record_name = marker_file.relative_to(site_lib_path).as_posix()
+    if marker_record_name in wheel_owned_path_names:
+        raise ValueError("Devel initialization marker path is owned by the wheel")
+    lock_path = rocm_sdk_devel_path / _DEVEL_INITIALIZATION_LOCK
+    lock_record_name = lock_path.relative_to(site_lib_path).as_posix()
+    if lock_record_name in wheel_owned_path_names:
+        raise ValueError("Devel initialization lock path is owned by the wheel")
 
-            with tarfile.open(tarfile_path, tarfile_mode) as tf:
-                while ti := tf.next():
-                    dest_path = site_lib_path / ti.name
-                    if ti.isfile() or ti.issym():
-                        if ti.isfile():
-                            raise ValueError(
-                                f"Unsupported devel manifest member: {ti.name}"
-                            )
-                        # Direct platform files are wheel-owned and may be siblings
-                        # of this generated path. Recursively deleting the parent,
-                        # as the old full-archive initializer did, would destroy
-                        # those installed files. Only replace the exact leaf owned
-                        # by this manifest. A directory at that leaf is treated as
-                        # an unsupported stale-layout conflict instead of being
-                        # recursively removed.
-                        if dest_path.is_symlink() or dest_path.is_file():
-                            dest_path.unlink()
-                        elif dest_path.exists():
-                            raise IsADirectoryError(
-                                f"Cannot replace manifest path with a directory: {dest_path}"
-                            )
-                        parent_path = dest_path.parent
-                        parent_path.mkdir(parents=True, exist_ok=True)
-                        if ti.name not in dist_file_path_names:
-                            # CSV record:
-                            #   path
-                            #   hash (empty)
-                            #   size (empty)
-                            record_file.write(f"{ti.name},,\n")
-                        if ti.issym():
-                            # Convert file symlinks into hardlinks on all platforms.
-                            # This saves disk space while improving compatibility.
-                            # On Windows: symlinks require admin privileges.
-                            # On Linux: native binaries that use readlink(/proc/self/exe)
-                            #   to determine their location will resolve symlinks and
-                            #   report the wrong path (e.g., _rocm_sdk_core instead of
-                            #   _rocm_sdk_devel). Hardlinks avoid this issue.
-                            # As needed, we could also generate tarfiles with
-                            # copies instead of symlinks, at the cost of disk space.
-                            symlink_target = ti.linkname
-                            hardlink_target = _resolve_link_target(
-                                parent_path, symlink_target
-                            )
-                            # On Linux, preserve symlinks in top-level bin/ directory
-                            PRESERVE_SYMLINKS = [
-                                "amdclang",
-                                "amdclang++",
-                                "amdclang-cl",
-                                "amdclang-cpp",
-                                "amdflang",
-                                "amdlld",
-                                "amdllvm",
-                            ]
-                            if (
-                                not _is_windows()
-                                and dest_path.name in PRESERVE_SYMLINKS
-                                and dest_path.parent.name == "bin"
-                                and dest_path.parent.parent.name.startswith(
-                                    "_rocm_sdk_devel"
-                                )
-                            ):
-                                dest_path.symlink_to(symlink_target)
-                            # Only create hardlinks for files, not directories
-                            elif hardlink_target.is_file():
-                                dest_path.hardlink_to(hardlink_target)
-                            else:
-                                # Directory links stay symlinks. This prototype
-                                # retains runtime target inspection, so link type
-                                # depends on extraction order and the current
-                                # filesystem.
-                                os.symlink(symlink_target, dest_path)
-                    elif ti.isdir():
-                        # New manifests intentionally contain every directory.
-                        # Create missing parents without disturbing wheel-owned
-                        # files already installed below them.
-                        dest_path.mkdir(parents=True, exist_ok=True)
-                    else:
-                        raise ValueError(
-                            f"Unsupported devel manifest member: {ti.name}"
-                        )
-            tarfile_path.unlink()
+    # Materialize links to files as hardlinks. This saves space, avoids Windows
+    # symlink privileges, and lets binaries observe their devel path through
+    # /proc/self/exe. Preserve top-level compiler symlinks on non-Windows hosts;
+    # directory and dangling links must also remain symlinks.
+    PRESERVE_SYMLINKS = [
+        "amdclang",
+        "amdclang++",
+        "amdclang-cl",
+        "amdclang-cpp",
+        "amdflang",
+        "amdlld",
+        "amdllvm",
+    ]
+    # Multiple processes can observe a missing marker file concurrently. Link
+    # setup is idempotent and writes the marker file while holding a
+    # dedicated initialization lock.
+    with open(lock_path, "a") as lock_file:
+        file_lock = FileLock(lock_file)
+        try:
+            # Record the lock before link setup so uninstall removes it even if
+            # initialization fails.
+            _ensure_record_entries(record_path, [lock_record_name])
+
+            # A failed initialization must leave the marker absent so a later
+            # call retries the complete operation.
+            marker_file.unlink(missing_ok=True)
+
+            created = _ensure_links(
+                site_lib_path,
+                devel_py_pkg_path,
+                plans=[(record_path, links)],
+                should_use_symlink=lambda dest_path, target: (
+                    not _is_windows()
+                    and dest_path.name in PRESERVE_SYMLINKS
+                    and dest_path.parent.name == "bin"
+                    and dest_path.parent.parent.name.startswith("_rocm_sdk_devel")
+                )
+                or not _resolve_link_target(dest_path.parent, target).is_file(),
+            )
+
+            # Record the generated marker so uninstall removes it with the
+            # devel package.
+            _ensure_record_entries(record_path, [marker_record_name])
+
+            marker_file.touch()
+            return created
         finally:
             file_lock.unlock()
 

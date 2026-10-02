@@ -43,64 +43,6 @@ class ROCmDevelTest(unittest.TestCase):
             msg="Paths are not siblings",
         )
 
-    def testDevelFilesAndGeneratedLinksHaveDistinctOwnership(self):
-        """The wheel owns ordinary files and initialization owns aliases."""
-        cmd = [sys.executable, "-m", "rocm_sdk", "path", "--root"]
-        output = utils.run_command(cmd, capture=True).decode().strip()
-        devel_root = Path(output)
-
-        import rocm_sdk_devel
-
-        pure_package_path = Path(rocm_sdk_devel.__file__).parent
-        self.assertFalse(
-            (pure_package_path / "_devel.tar").exists(),
-            msg="Expected initialization to consume the devel link manifest",
-        )
-        self.assertFalse(
-            (pure_package_path / "_devel.tar.xz").exists(),
-            msg="Expected initialization to consume the compressed devel link manifest",
-        )
-
-        direct_file = devel_root / "lib" / "cmake" / "hip" / "hip-config.cmake"
-        self.assertTrue(
-            direct_file.is_file(),
-            msg=f"Expected wheel-owned devel file to remain present: {direct_file}",
-        )
-
-        distribution = md.distribution("rocm-sdk-devel")
-        dist_files = distribution.files
-        self.assertIsNotNone(dist_files)
-        direct_relpath = direct_file.relative_to(pure_package_path.parent).as_posix()
-        direct_record = next(
-            (
-                entry
-                for entry in dist_files
-                if str(entry).replace("\\", "/") == direct_relpath
-            ),
-            None,
-        )
-        self.assertIsNotNone(
-            direct_record,
-            msg=f"Expected {direct_relpath} to have a normal wheel RECORD entry",
-        )
-        self.assertIsNotNone(
-            direct_record.hash,
-            msg=f"Expected {direct_relpath} RECORD entry to include a content hash",
-        )
-
-        executable_name = (
-            "amdclang++.exe" if platform.system() == "Windows" else "amdclang++"
-        )
-        devel_alias = devel_root / "lib" / "llvm" / "bin" / executable_name
-        core_package_name = di.ALL_PACKAGES["core"].get_py_package_name()
-        core_module = importlib.import_module(core_package_name)
-        core_root = Path(core_module.__file__).parent
-        core_target = core_root / "lib" / "llvm" / "bin" / executable_name
-        self.assertTrue(
-            os.path.samefile(devel_alias, core_target),
-            msg=f"Expected generated alias {devel_alias} to share {core_target}",
-        )
-
     def testCLIPathBin(self):
         cmd = [sys.executable, "-m", "rocm_sdk", "path", "--bin"]
         output = utils.run_command(cmd, capture=True).decode().strip()
@@ -115,6 +57,30 @@ class ROCmDevelTest(unittest.TestCase):
         hip_file = path / "hip" / "hip-config.cmake"
         self.assertTrue(
             hip_file.exists(), msg=f"Expected hip config to exist {hip_file}"
+        )
+
+    def testDirectDevelFileOwnedByWheel(self):
+        """A direct devel file remains owned by the installed wheel."""
+        # Locate a representative development file through the public SDK command.
+        cmd = [sys.executable, "-m", "rocm_sdk", "path", "--cmake"]
+        output = utils.run_command(cmd, capture=True).decode().strip()
+        hip_file = Path(output) / "hip" / "hip-config.cmake"
+
+        # Verify the representative development file is installed and owned by
+        # the wheel rather than generated during initialization.
+        dist_files = md.files("rocm-sdk-devel")
+        self.assertIsNotNone(dist_files)
+        hip_record = next(
+            (
+                dist_file
+                for dist_file in dist_files
+                if Path(dist_file.locate()).resolve() == hip_file.resolve()
+            ),
+            None,
+        )
+        self.assertIsNotNone(hip_record, msg=f"No RECORD entry for {hip_file}")
+        self.assertIsNotNone(
+            hip_record.hash, msg=f"Expected a wheel-generated hash for {hip_file}"
         )
 
     def testCLIPathRoot(self):
@@ -176,7 +142,7 @@ class ROCmDevelTest(unittest.TestCase):
         self.assertTrue(path.exists(), msg=f"Expected {path} to exist")
 
     def testSharedLibrariesLoad(self):
-        # Make sure the devel package is expanded.
+        # Make sure the devel package is initialized.
         cmd = [sys.executable, "-m", "rocm_sdk", "path", "--root"]
         _ = utils.run_command(cmd, capture=True).decode().strip()
 
@@ -277,7 +243,7 @@ class ROCmDevelTest(unittest.TestCase):
         """Every file in the libraries platform tree must also appear in the
         devel tree as the same (hardlinked) file.
 
-        Host libraries are mirrored when the devel tree is expanded; per-ISA
+        Host libraries are mirrored when the devel tree is initialized; per-ISA
         device payloads (.kpack archives, Tensile/MIOpen kernels, per-arch .so)
         are mirrored by `_devel._reconcile_device_links`. Walking libraries and
         checking each entry exists in devel is sufficient because devel is a
@@ -296,7 +262,7 @@ class ROCmDevelTest(unittest.TestCase):
         except ModuleNotFoundError:
             self.skipTest("rocm-sdk-libraries is not installed")
 
-        # Expand the devel tree and reconcile device links before comparing.
+        # Initialize the devel tree and refresh device links before comparing.
         utils.run_command(
             [sys.executable, "-m", "rocm_sdk", "path", "--root"], capture=True
         )

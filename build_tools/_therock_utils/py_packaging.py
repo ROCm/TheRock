@@ -438,10 +438,10 @@ class PopulatedDistPackage:
         self.params.populated_packages.append(self)
         return self
 
-    def _emit_devel_links_manifest(self, devel_links: list[dict[str, str]]):
+    def _emit_devel_links_manifest(self, devel_links: list[dict[str, str]]) -> None:
         """Writes the `_devel_links` manifest consumed by `rocm-sdk init`.
 
-        Each device wheel ships this manifest so that, at devel expansion time,
+        Each device wheel ships this manifest so that, during devel initialization,
         its per-ISA files are hardlinked from the rocm-sdk-libraries overlay into
         the generic rocm-sdk-devel tree (and recorded in this wheel's RECORD so
         that `pip uninstall` prunes them). Named per target family so that
@@ -449,8 +449,13 @@ class PopulatedDistPackage:
         colliding.
         """
         manifest_dir = self.platform_dir / ".devel_links"
-        manifest_dir.mkdir(parents=True, exist_ok=True)
         manifest_path = manifest_dir / f"{package_owner(self.target_family)}.json"
+        self._write_devel_links_manifest(manifest_path, devel_links)
+
+    def _write_devel_links_manifest(
+        self, manifest_path: Path, devel_links: list[dict[str, str]]
+    ) -> None:
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text(
             json.dumps(
                 {"version": self.params.version, "links": devel_links},
@@ -587,9 +592,8 @@ class PopulatedDistPackage:
         *,
         addl_artifact_names: Sequence[str] = (),
         exclude_components: Sequence[str] = (),
-        tarball_compression: bool = True,
-    ):
-        """Populates all files that have not yet been materialized and symlink the rest."""
+    ) -> None:
+        """Populates non-link devel files and records the remaining links."""
         package_path = self.platform_dir
         # Set up for what artifacts to include in the devel package, including
         # any emitted runtime artifacts plus additional requested.
@@ -643,56 +647,31 @@ class PopulatedDistPackage:
                 dir_entry,
             )
 
-        # Prototype layout: ordinary files stay in platform/ so that they become
-        # normal wheel members. In particular, this lets uv clone or hardlink them
-        # from its cache instead of expanding a private copy in every environment.
-        #
-        # Symlinks cannot stay in the wheel staging tree: wheel archives do not
-        # portably represent them and setuptools may dereference them into duplicate
-        # payload. Keep those entries, plus all directory entries, in the existing
-        # secondary tar. For this prototype the tar is therefore a link manifest,
-        # not the bulk devel payload. Initialization owns only the paths represented
-        # by symlink members; the wheel installer owns every ordinary file left in
-        # platform/ and initialization must never recursively remove those files.
-        #
-        # Reusing the tar format and deleting it after initialization are deliberate
-        # prototype choices. Schema versioning and partial-tree repair are outside
-        # this prototype's scope.
-        tar_suffix = ".tar.xz" if tarball_compression else ".tar"
-        tar_mode = "w:xz" if tarball_compression else "w"
-        tar_path = self.pure_dir / f"_devel{tar_suffix}"
-        log(f"::: Building secondary devel tarball: {tar_path}")
+        # Wheel archives do not portably represent symlinks. Store them in the
+        # same JSON format used by device wheels, then remove them from the wheel
+        # staging tree so setuptools packages only non-link files.
+        devel_links: list[dict[str, str]] = []
         symlink_paths: list[Path] = []
-        with tarfile.open(tar_path, mode=tar_mode) as tf:
-            # Record even the platform package root. Most directories would be
-            # recreated implicitly by the wheel or link parents, but retaining all
-            # of them preserves required empty directories and keeps this
-            # experimental partition mechanically simple. Their metadata is not
-            # significant: installers and initialization create directories using
-            # their normal filesystem modes.
-            tf.add(package_path, arcname=package_path.name, recursive=False)
-            for root, dirnames, files in os.walk(package_path):
-                for file in dirnames:
-                    file_path = Path(root) / file
-                    arcname = os.path.relpath(file_path, package_path.parent)
-                    log(f"Adding {arcname}", vlog=2)
-                    tf.add(file_path, arcname=arcname, recursive=False)
-                    if file_path.is_symlink():
-                        symlink_paths.append(file_path)
-                for file in files:
-                    file_path = Path(root) / file
-                    if not file_path.is_symlink():
-                        continue
-                    arcname = os.path.relpath(file_path, package_path.parent)
-                    log(f"Adding {arcname}", vlog=2)
-                    tf.add(file_path, arcname=arcname, recursive=False)
-                    symlink_paths.append(file_path)
+        for root, dirnames, filenames in os.walk(package_path):
+            dirnames.sort()
+            filenames.sort()
+            for name in [*dirnames, *filenames]:
+                link_path = Path(root) / name
+                if not link_path.is_symlink():
+                    continue
+                relpath = link_path.relative_to(package_path).as_posix()
+                target = os.readlink(link_path)
+                if is_windows:
+                    target = target.replace("\\", "/")
+                devel_links.append({"relpath": relpath, "target": target})
+                symlink_paths.append(link_path)
 
-        # The generated-link paths and direct wheel paths must be disjoint. Remove
-        # links only after the manifest has closed successfully, leaving ordinary
-        # files and directories for setuptools to package directly.
         for symlink_path in symlink_paths:
             symlink_path.unlink()
+
+        manifest_path = self.pure_dir / ".devel_links" / "devel.json"
+        log(f"::: Writing devel link manifest: {manifest_path}")
+        self._write_devel_links_manifest(manifest_path, devel_links)
 
     def _find_populated(
         self, relpath: str

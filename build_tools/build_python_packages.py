@@ -440,7 +440,6 @@ def _run_kpack_split(
             "mirage",
         ],
         exclude_components=["test"],
-        tarball_compression=args.devel_tarball_compression,
     )
     if args.build_packages:
         build_packages(
@@ -513,12 +512,12 @@ def _run_legacy(
             )
 
     # One rocm-sdk-devel wheel per target family. Each wheel is NOT generic:
-    # shared libraries already materialized by the libraries runtime package
-    # are embedded in the devel tarball as symlinks into that package's
-    # arch-specific platform directory (e.g. _rocm_sdk_libraries_gfx120x_all),
-    # so the tarball is only valid when the matching family's library wheel
-    # is co-installed. In a multi-arch build each wheel goes to
-    # dist/{target_family}/; in a single-arch build directly to dist/.
+    # Shared libraries already materialized by the libraries runtime package
+    # are represented by links into that package's arch-specific platform
+    # directory (e.g. _rocm_sdk_libraries_gfx120x_all), so the devel wheel is
+    # only valid when the matching family's library wheel is co-installed. In a
+    # multi-arch build each wheel goes to dist/{target_family}/; in a
+    # single-arch build directly to dist/.
     for target_family in all_target_families:
         devel = PopulatedDistPackage(
             params, logical_name="devel", target_family=target_family
@@ -536,7 +535,6 @@ def _run_legacy(
                 "rocjitsu",
                 "mirage",
             ],
-            tarball_compression=args.devel_tarball_compression,
         )
         if args.build_packages:
             build_packages(
@@ -702,12 +700,6 @@ def main(argv: list[str]):
         "--version-suffix",
         default="",
         help="Version suffix to append to package names on disk",
-    )
-    p.add_argument(
-        "--devel-tarball-compression",
-        default=False,
-        action=argparse.BooleanOptionalAction,
-        help="Enable compression of the devel tarball (slows build time but more efficient)",
     )
     p.add_argument(
         "--wheel-compression",

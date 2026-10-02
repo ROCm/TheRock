@@ -42,10 +42,7 @@ setup(
     packages=packages,
     package_dir={
         "": "src",
-        # rocm_sdk_devel contains the Python metadata and link manifest, while
-        # the sibling platform package contains ordinary SDK files. They are two
-        # packages in one distribution so wheel installers can own and share the
-        # ordinary payload before `rocm-sdk init` materializes link topology.
+        # Install non-link SDK files directly; `rocm-sdk init` creates links.
         platform_package_name: f"platform/{platform_package_name}",
     },
     zip_safe=False,
