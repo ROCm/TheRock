@@ -67,10 +67,17 @@ class TsanCMakeTest(unittest.TestCase):
                     cmake_minimum_required(VERSION 3.25)
                     project(child NONE)
                     set(GPU_TARGETS "gfx942;gfx950")
+                    foreach(language C CXX HIP)
+                      set(CMAKE_${language}_COMPILER_LAUNCHER "ccache;--verbose")
+                    endforeach()
                     include("${TOOLCHAIN_FILE}")
                     get_directory_property(link_options LINK_OPTIONS)
                     file(WRITE "${CMAKE_BINARY_DIR}/observed.txt"
                       "${CMAKE_C_FLAGS_INIT}\n${CMAKE_CXX_FLAGS_INIT}\n"
+                      "${CMAKE_HIP_FLAGS_INIT}\n"
+                      "${CMAKE_C_COMPILER_LAUNCHER}\n"
+                      "${CMAKE_CXX_COMPILER_LAUNCHER}\n"
+                      "${CMAKE_HIP_COMPILER_LAUNCHER}\n"
                       "${GPU_TARGETS}\n${link_options}\n")
                     """,
                 )
@@ -80,15 +87,25 @@ class TsanCMakeTest(unittest.TestCase):
                     root / "child-build",
                     f"-DTOOLCHAIN_FILE={root / 'parent-build' / 'toolchain.cmake'}",
                 )
-                c_flags, cxx_flags, gpu_targets, link_options = (
+                c_flags, cxx_flags, hip_flags, *observed = (
                     (root / "child-build" / "observed.txt")
                     .read_text(encoding="utf-8")
                     .splitlines()
                 )
+                *launchers, gpu_targets, link_options = observed
                 prefix = "-Xarch_host " if host_only else ""
                 for flags in (c_flags, cxx_flags):
                     self.assertIn(f"{prefix}-fsanitize={kind}", flags)
                     self.assertIn(f"{prefix}-fno-omit-frame-pointer", flags)
+                if host_only:
+                    self.assertIn(f"-Xarch_host -fsanitize={kind}", hip_flags)
+                for launcher in launchers:
+                    parts = launcher.split(";")
+                    self.assertEqual(parts[-2:], ["ccache", "--verbose"])
+                    if host_only:
+                        self.assertEqual(parts[1:-2], ["-E", "env", "CCACHE_DISABLE=1"])
+                    else:
+                        self.assertEqual(len(parts), 2)
                 self.assertEqual(gpu_targets, expected_targets)
                 self.assertIn(f"-fsanitize={kind}", link_options)
 

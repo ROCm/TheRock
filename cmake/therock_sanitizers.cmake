@@ -49,8 +49,20 @@ function(therock_sanitizer_configure
       # Avoids: (1) -Woption-ignored on gfx942 without :xnack+ (MIOpen failure due to -Werror)
       #         (2) handleSanitizeOption dropping all device -I/-D with -fno-gpu-sanitize (Bug in Driver)
       # TODO: If this is indeed a Driver bug, then this can be replaced with -fno-gpu-sanitize when that is fixed.
-      string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -Xarch_host -fsanitize=${_sanitizer_string} -Xarch_host -fno-omit-frame-pointer\")\n")
-      string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -Xarch_host -fsanitize=${_sanitizer_string} -Xarch_host -fno-omit-frame-pointer\")\n")
+      foreach(_language C CXX HIP)
+        string(APPEND _stanza "string(APPEND CMAKE_${_language}_FLAGS_INIT \" -Xarch_host -fsanitize=${_sanitizer_string} -Xarch_host -fno-omit-frame-pointer\")\n")
+      endforeach()
+      # ccache 4.9.1 drops -Xarch_host and its argument, producing uninstrumented
+      # objects even on cache misses. Bypass ccache until these flags are supported;
+      # preserve other compiler launchers and keep device compilation unsanitized.
+      string(APPEND _stanza [=[
+foreach(_therock_language C CXX HIP)
+  if(CMAKE_${_therock_language}_COMPILER_LAUNCHER)
+    list(PREPEND CMAKE_${_therock_language}_COMPILER_LAUNCHER
+      "${CMAKE_COMMAND}" -E env CCACHE_DISABLE=1)
+  endif()
+endforeach()
+]=])
     else()
       # TODO: Support ASAN_STATIC/TSAN_STATIC to use static sanitizer linkage. Shared is almost always the right thing,
       # so make the sanitizer imply shared linkage.
