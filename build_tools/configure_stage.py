@@ -260,32 +260,25 @@ def generate_cmake_args(
         features = get_artifact_features(
             topology, artifact_names, platform_name=platform_name, build_dir=build_dir
         )
-        # When building specific artifacts within a stage, we need their
-        # transitive dependencies enabled so CMake can resolve them.
-        # This includes both:
-        # 1. Inbound deps from previous stages (marked as pre-built via bootstrap)
-        # 2. Same-stage sibling deps (e.g., composable-kernel needs rand)
-        if stage_name:
-            # Collect transitive deps for each requested artifact
-            alias_map = topology.get_alias_to_artifact_map(build_dir)
-            all_deps: set[str] = set()
-            for name in artifact_names:
-                canonical = alias_map.get(name.lower())
-                if canonical:
-                    topology._collect_transitive_artifact_deps(canonical, all_deps)
-            # Also add inbound deps for the stage
-            inbound = topology.get_inbound_artifacts(stage_name)
-            all_deps.update(inbound)
-            # Convert to features
-            for artifact_name in all_deps:
-                if artifact_name in topology.artifacts:
-                    artifact = topology.artifacts[artifact_name]
-                    if topology.is_artifact_disabled_on_platform(
-                        artifact,
-                        platform_name,
-                    ):
-                        continue
-                    features.add(topology.get_artifact_feature_name(artifact))
+        # When building specific artifacts, we need their transitive
+        # dependencies enabled so CMake can resolve them.
+        # Collect transitive deps for each requested artifact
+        alias_map = topology.get_alias_to_artifact_map(build_dir)
+        all_deps: set[str] = set()
+        for name in artifact_names:
+            canonical = alias_map.get(name.lower())
+            if canonical:
+                topology._collect_transitive_artifact_deps(canonical, all_deps)
+        # Convert to features
+        for artifact_name in all_deps:
+            if artifact_name in topology.artifacts:
+                artifact = topology.artifacts[artifact_name]
+                if topology.is_artifact_disabled_on_platform(
+                    artifact,
+                    platform_name,
+                ):
+                    continue
+                features.add(topology.get_artifact_feature_name(artifact))
     elif stage_name:
         features = get_stage_features(topology, stage_name, platform_name=platform_name)
     else:
