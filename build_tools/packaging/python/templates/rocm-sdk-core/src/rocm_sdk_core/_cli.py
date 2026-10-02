@@ -10,7 +10,7 @@ import platform
 import sys
 from pathlib import Path
 
-from ._dist_info import ALL_PACKAGES
+from ._dist_info import ALL_PACKAGES, DEVEL_INITIALIZED
 
 CORE_PACKAGE = ALL_PACKAGES["core"]
 CORE_PY_PACKAGE_NAME = CORE_PACKAGE.get_py_package_name()
@@ -31,11 +31,9 @@ def _has_devel_module():
     return importlib.util.find_spec(DEVEL_PURE_PY_PACKAGE_NAME) is not None
 
 
-def _is_devel_module_expanded():
-    # The split-layout devel wheel installs its platform package immediately,
-    # before `rocm-sdk init` creates the link topology. Therefore package
-    # existence alone no longer means initialization is complete. The pure
-    # package's link manifest is the prototype completion sentinel.
+def _is_devel_module_initialized() -> bool:
+    # The platform package exists before `rocm-sdk init` creates its links, so
+    # package existence alone does not indicate that initialization completed.
     pure_spec = importlib.util.find_spec(DEVEL_PURE_PY_PACKAGE_NAME)
     assert (
         pure_spec is not None
@@ -45,20 +43,18 @@ def _is_devel_module_expanded():
             f"Required package {DEVEL_PURE_PY_PACKAGE_NAME!r} is not file-backed"
         )
     pure_package_path = Path(pure_spec.origin).parent
-    return not (
-        (pure_package_path / "_devel.tar").exists()
-        or (pure_package_path / "_devel.tar.xz").exists()
-    )
+    state_path = pure_package_path / DEVEL_INITIALIZED
+    return state_path.is_file()
 
 
-def _expand_devel_module():
+def _initialize_devel_module() -> None:
     import subprocess
 
     try:
         subprocess.check_call([sys.executable, "-m", "rocm_sdk", "init", "--quiet"])
     except subprocess.CalledProcessError:
         print(
-            "ERROR: Failed to expand rocm[devel] package. "
+            "ERROR: Failed to initialize rocm[devel] package. "
             "Try running `rocm-sdk init` manually for details.",
             file=sys.stderr,
         )
@@ -84,35 +80,36 @@ def _get_devel_module_path():
     return Path(devel_module.__file__).parent
 
 
-def _get_module_path(expand_devel: bool) -> Path:
+def _get_module_path(init_devel: bool) -> Path:
     """Gets the module path, either from 'core' or 'devel'.
 
-    If the 'devel' package IS NOT installed then 'core' is used, ignoring the input of `expand_devel`.
-    If the 'devel' package IS installed AND already expanded then it is used.
-    If the 'devel' package IS installed AND NOT already expanded then either
+    If the 'devel' package IS NOT installed then 'core' is used, ignoring the
+    input of `init_devel`.
+    If the 'devel' package IS installed AND already initialized then it is used.
+    If the 'devel' package IS installed AND NOT already initialized then either
       A) System information tools like amd-smi can choose to run more quickly
-         with 'core' by skipping the (compute-intensive) 'devel' expansion.
-         These tools should pass `expand_devel=False`.
+         with 'core' by skipping 'devel' initialization.
+         These tools should pass `init_devel=False`.
       B) Other tools that benefit from the extra files in the 'devel' package
-         will expand expand it by passing `expand_devel=True`.
+         will initialize it by passing `init_devel=True`.
 
-    NOTE: the "already expanded" check is one-shot. Once the devel tree exists
-    it is returned directly, WITHOUT re-running the device-link reconcile in
-    `rocm_sdk._devel._reconcile_device_links` (only `_expand_devel_module()` /
+    NOTE: the "already initialized" check is one-shot. Once initialization
+    completes, the devel tree is returned directly WITHOUT refreshing device
+    links (only `_initialize_devel_module()` /
     `rocm-sdk init` does that). So a `rocm-sdk-device-*` wheel installed or
-    removed after the first expansion is NOT picked up by these trampolines
+    removed after the first initialization is NOT picked up by these trampolines
     (e.g. hipcc); refresh it with an explicit
     `rocm-sdk init` / `rocm-sdk path` / `rocm-sdk test`.
-    This is intentional: reconciling on every compiler invocation would add a
+    This is intentional: refreshing on every compiler invocation would add a
     subprocess + metadata scan to a build hot path.
     """
     if _has_devel_module():
-        if _is_devel_module_expanded():
-            # One-shot: returns the existing tree without re-reconciling device
+        if _is_devel_module_initialized():
+            # One-shot: returns the existing tree without refreshing device
             # links (see NOTE above).
             return _get_devel_module_path()
-        elif expand_devel:
-            _expand_devel_module()
+        elif init_devel:
+            _initialize_devel_module()
             return _get_devel_module_path()
         else:
             # Passthrough. Fallback to core module.
@@ -125,11 +122,11 @@ is_windows = platform.system() == "Windows"
 exe_suffix = ".exe" if is_windows else ""
 
 
-def _exec(relpath: str, expand_devel=True):
+def _exec(relpath: str, init_devel: bool = True) -> None:
     # Default is True because most CLI tools are compiler/build tools that
     # need the devel files. System info tools (amd-smi, rocminfo, etc.)
-    # override with expand_devel=False to avoid the expansion cost.
-    full_path = _get_module_path(expand_devel) / (relpath + exe_suffix)
+    # override with init_devel=False to avoid initialization.
+    full_path = _get_module_path(init_devel) / (relpath + exe_suffix)
     if is_windows:
         # Windows has no real exec() and subprocess is recommended instead.
         # os.execv runs the child in the background (https://bugs.python.org/issue19124)
@@ -165,7 +162,7 @@ def amdlld():
 
 
 def amd_smi():
-    _exec("bin/amd-smi", expand_devel=False)
+    _exec("bin/amd-smi", init_devel=False)
 
 
 def hipcc():
@@ -185,7 +182,7 @@ def hipify_perl():
 
 
 def hipInfo():
-    _exec("bin/hipInfo", expand_devel=False)
+    _exec("bin/hipInfo", init_devel=False)
 
 
 def offload_arch():
@@ -193,11 +190,11 @@ def offload_arch():
 
 
 def rocm_agent_enumerator():
-    _exec("bin/rocm_agent_enumerator", expand_devel=False)
+    _exec("bin/rocm_agent_enumerator", init_devel=False)
 
 
 def rocm_info():
-    _exec("bin/rocminfo", expand_devel=False)
+    _exec("bin/rocminfo", init_devel=False)
 
 
 def roccoremerge():
