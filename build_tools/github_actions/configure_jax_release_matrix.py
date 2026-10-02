@@ -69,8 +69,8 @@ JAX_REF_CONFIGS = {
         "rocm_jax_ref": "rocm-jax-infra",
         "gfx_arch": "device-all",
         "jax_label": "tip",
-        # main has no release on PyPI, so the plugin is versioned as the JAX
-        # nightly it is tested against (see resolve_jax_nightly_version.py).
+        # main has no release on PyPI, so jax and jaxlib are built from the same
+        # checkout and dated from its HEAD commit (see resolve_jax_version.py).
         "wheel_type": "nightly",
         # JAX dropped Python 3.11 support in 0.11.0.
         "exclude_python_versions": ["3.11"],
@@ -160,10 +160,8 @@ def generate_jax_matrix(
                     # build (e.g. device-all). This direct lookup raises
                     # KeyError if JAX_REF_CONFIGS omits the key.
                     "gfx_arch": ref_cfg["gfx_arch"],
-                    # How the plugin wheel is versioned: "release" stamps the
-                    # ref's own version, "nightly" stamps a published JAX
-                    # nightly's version so the test job can install jax/jaxlib
-                    # to match. Release tags have a release on PyPI.
+                    # "release" builds the plugin for a ref on PyPI; "nightly"
+                    # also builds jax and jaxlib, for refs with no release.
                     "wheel_type": ref_cfg.get("wheel_type", "release"),
                 }
             )

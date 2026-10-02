@@ -35,9 +35,9 @@ _BASE_VERSION_RE = re.compile(r"^\d+(?:\.\d+)*")
 def base_version(jax_version: str) -> str:
     """The release a full version belongs to: 0.11.2.dev20260914 -> 0.11.2.
 
-    A build of upstream tip is versioned as the JAX nightly it pairs with, and
-    what fails on it is what fails on the release that nightly leads to, so both
-    read the same file. A value that does not start with a release number (a
+    A build of upstream tip is versioned as a pre-release of the next JAX
+    release, and what fails on it is what fails on that release, so both read
+    the same file. A value that does not start with a release number (a
     branch name) is returned unchanged and simply names no file.
     """
     match = _BASE_VERSION_RE.match(jax_version)

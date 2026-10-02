@@ -35,23 +35,27 @@ class WriteJaxVersionsTest(unittest.TestCase):
                 },
             )
 
-    def test_nightly_plugin_wheels_report_the_dev_version(self):
-        # A tip build stamps the plugin with a published JAX nightly's version
-        # plus the ROCm local label. Only the local label is split off, so the
-        # test side installs jax/jaxlib at exactly the nightly version.
+    def test_a_tip_build_reports_its_own_jax_and_jaxlib(self):
+        # A tip build makes all four wheels from one checkout with one suffix.
+        # jax_version drops only the local label, which still pins the jax
+        # wheel built here since PEP 440 ignores it when the pin has none.
+        version = "0.12.0.dev20261002+rocm7.14.0a20261002"
         with tempfile.TemporaryDirectory() as tmp:
             dist_dir = Path(tmp)
             _touch(
                 dist_dir,
-                "jax_rocm7_plugin-0.11.2.dev20260914+rocm7.14.0a20260914-cp312-cp312-manylinux_2_28_x86_64.whl",
-                "jax_rocm7_pjrt-0.11.2.dev20260914+rocm7.14.0a20260914-py3-none-manylinux_2_28_x86_64.whl",
+                f"jax-{version}-py3-none-any.whl",
+                f"jaxlib-{version}-cp312-cp312-manylinux_2_27_x86_64.whl",
+                f"jax_rocm7_plugin-{version}-cp312-cp312-manylinux_2_28_x86_64.whl",
+                f"jax_rocm7_pjrt-{version}-py3-none-manylinux_2_28_x86_64.whl",
             )
             self.assertEqual(
                 m.get_all_jax_wheel_versions(dist_dir),
                 {
-                    "jax_plugin_version": "0.11.2.dev20260914+rocm7.14.0a20260914",
-                    "jax_pjrt_version": "0.11.2.dev20260914+rocm7.14.0a20260914",
-                    "jax_version": "0.11.2.dev20260914",
+                    "jaxlib_version": version,
+                    "jax_plugin_version": version,
+                    "jax_pjrt_version": version,
+                    "jax_version": "0.12.0.dev20261002",
                 },
             )
 

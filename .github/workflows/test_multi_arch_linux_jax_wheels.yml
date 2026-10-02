@@ -57,6 +57,10 @@ on:
         description: "Repository holding the JAX checkout the test suite runs from."
         type: string
         default: "ROCm/jax"
+      jax_commit:
+        description: "JAX commit the wheels were built from. Empty uses jax_ref, which a moving ref like main may have advanced past."
+        type: string
+        default: ""
       rocm_jax_ref:
         description: "ROCm/rocm-jax ref to check out. Empty uses jax_ref, which release tags share across both repositories."
         type: string
@@ -167,6 +171,10 @@ on:
         description: "Repository holding the JAX checkout the test suite runs from."
         type: string
         default: "ROCm/jax"
+      jax_commit:
+        description: "JAX commit the wheels were built from. Empty uses jax_ref."
+        type: string
+        default: ""
       rocm_jax_ref:
         description: "ROCm/rocm-jax ref to check out. Empty uses jax_ref, which release tags share across both repositories."
         type: string
@@ -297,7 +305,7 @@ jobs:
           persist-credentials: false
           path: jax
           repository: ${{ inputs.jax_repository }}
-          ref: ${{ inputs.jax_ref }}
+          ref: ${{ inputs.jax_commit || inputs.jax_ref }}
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -360,11 +368,6 @@ jobs:
 
       # Package names, versions and where to get them arrive as env vars above.
       - name: Install JAX wheels
-        env:
-          # A tip build is versioned as a JAX nightly, which PyPI does not
-          # carry. This registry holds nightlies only, so it has nothing to
-          # answer with for the pinned releases every other cell installs.
-          JAX_INDEX_URL: "https://us-python.pkg.dev/ml-oss-artifacts-published/jax-public-nightly-artifacts-registry/simple/"
         run: |
           python external-builds/jax/install_jax_wheels.py
 
