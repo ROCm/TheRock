@@ -2701,5 +2701,103 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
                 self.assertEqual(gfx103x_info["test-runs-on"], "linux-gfx1030-gpu-rocm")
 
 
+# ---------------------------------------------------------------------------
+# Emergency test-queue lever (ROCm/TheRock#8688)
+#
+# gfx110X Windows presubmit testing was removed from tests_on_trigger for
+# test-queue remediation; builds still run on presubmit and tests are taken
+# on-demand via the `ci:test:gfx110x` label. These tests pin that behavior.
+# Superseded by the permanent build/test label plumbing in #8692.
+# ---------------------------------------------------------------------------
+class TestGfx110xWindowsTestLever(unittest.TestCase):
+    """gfx110X Windows: no presubmit tests by default, re-enabled by label.
+
+    The lever is scoped to Windows (ROCm/TheRock#8688): the `ci:test:gfx110x`
+    label must not re-enable Linux gfx110X presubmit tests, which stay
+    nightly-only.
+    """
+
+    def _pr_inputs(self, **kwargs):
+        defaults = dict(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+        defaults.update(kwargs)
+        return cm.CIInputs(**defaults)
+
+    def _windows_gfx110x_entry(self, ci_inputs):
+        result = cm.expand_build_configs(
+            ci_inputs=ci_inputs,
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(windows_families=["gfx110x"]),
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.windows, "windows build config expected")
+        entry = result.windows.per_family_info[0]
+        self.assertEqual(entry["amdgpu_family"], "gfx110X-all")
+        return entry
+
+    def _linux_gfx110x_entry(self, ci_inputs):
+        result = cm.expand_build_configs(
+            ci_inputs=ci_inputs,
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(linux_families=["gfx110x"]),
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux, "linux build config expected")
+        entry = result.linux.per_family_info[0]
+        self.assertEqual(entry["amdgpu_family"], "gfx110X-all")
+        return entry
+
+    def test_presubmit_builds_but_skips_tests_by_default(self):
+        """On a PR with no label, gfx110X Windows builds but does not test."""
+        entry = self._windows_gfx110x_entry(self._pr_inputs())
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_ci_test_label_force_enables_presubmit_tests(self):
+        """`ci:test:gfx110x` re-enables gfx110X Windows tests on a PR."""
+        entry = self._windows_gfx110x_entry(
+            self._pr_inputs(pr_labels=["ci:test:gfx110x"])
+        )
+        self.assertNotEqual(entry["test-runs-on"], "")
+
+    def test_ci_test_label_does_not_enable_linux_presubmit(self):
+        """The lever is Windows-scoped: `ci:test:gfx110x` must not turn on
+        Linux gfx110X presubmit tests (Linux gfx110X stays nightly-only)."""
+        entry = self._linux_gfx110x_entry(
+            self._pr_inputs(pr_labels=["ci:test:gfx110x"])
+        )
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_ci_test_label_is_case_insensitive(self):
+        """The force-enable label is matched case-insensitively."""
+        entry = self._windows_gfx110x_entry(
+            self._pr_inputs(pr_labels=["ci:test:GFX110X"])
+        )
+        self.assertNotEqual(entry["test-runs-on"], "")
+
+    def test_unrelated_test_label_does_not_enable_tests(self):
+        """A `ci:test:` label for a different family does not re-enable tests."""
+        entry = self._windows_gfx110x_entry(
+            self._pr_inputs(pr_labels=["ci:test:gfx1151"])
+        )
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_nightly_still_tests_gfx110x_windows(self):
+        """Nightly testing for gfx110X Windows is unaffected by the lever."""
+        nightly = cm.CIInputs(
+            run_id="12345",
+            event_name="schedule",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+        entry = self._windows_gfx110x_entry(nightly)
+        self.assertNotEqual(entry["test-runs-on"], "")
+
+
 if __name__ == "__main__":
     unittest.main()

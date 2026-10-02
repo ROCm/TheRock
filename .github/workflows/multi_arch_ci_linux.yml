@@ -61,7 +61,8 @@ jobs:
       contents: read
       id-token: write
     container:
-      image: python:3.12-slim
+      # https://hub.docker.com/_/python/tags?name=3.12-slim
+      image: python:3.12-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f
     steps:
       - name: Checking out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
