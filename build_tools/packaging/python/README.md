@@ -69,9 +69,6 @@ Skipping strict completeness never adds ownership or routes.
 Prepare a snapshot only when using content validation; manifest-only generation
 does not require one.
 
-Downloading a snapshot requires AWS credentials with read access to the selected
-product buckets. Developers without this access can use manifest-only generation.
-
 `--content-root` is a local directory containing downloaded product index HTML,
 not a bucket name or URL. Prepare it separately; neither the validator nor the
 infra generator downloads it.
@@ -95,25 +92,22 @@ compares product content against aggregate ownership.
    Missing roots, missing owned package links, or empty owned package pages fail
    content validation. Linked wheel objects are not checked.
 
-For example, download nightly HTML from the product buckets into a fresh local
-snapshot. These commands read S3 and write local files only:
+Use the snapshot helper to download the public product index HTML over HTTPS.
+The output directory must not already exist. No AWS credentials are needed:
 
 ```bash
-# Copy core index HTML, excluding wheels and other artifacts.
-aws s3 sync s3://therock-repo-amd-nightly-core/v5/rocm/core/whl-next/ \
-  /tmp/rocm-whl-next-nightly-snapshot/rocm/core/whl-next/ \
-  --exclude '*' --include 'index.html' --include '*/index.html'
-
-# Copy the matching nightly PyTorch index HTML.
-aws s3 sync s3://therock-repo-amd-nightly-pytorch/v5/rocm/pytorch/whl-next/ \
-  /tmp/rocm-whl-next-nightly-snapshot/rocm/pytorch/whl-next/ \
-  --exclude '*' --include 'index.html' --include '*/index.html'
-
-# Copy the matching nightly JAX index HTML.
-aws s3 sync s3://therock-repo-amd-nightly-jax/v5/rocm/jax/whl-next/ \
-  /tmp/rocm-whl-next-nightly-snapshot/rocm/jax/whl-next/ \
-  --exclude '*' --include 'index.html' --include '*/index.html'
+python build_tools/packaging/python/download_rocm_python_index_snapshot.py \
+  --stream nightly \
+  --origin https://nightly.repo.amd.com \
+  --output-dir /tmp/rocm-whl-next-nightly-snapshot
 ```
+
+The helper selects product roots from the ownership manifest. A product root
+with active ownership for the selected stream is required. A root used only by
+inactive entries is included when present and skipped only when it returns 404.
+Every package page linked by a downloaded root is retained, including unowned
+packages, so strict completeness can detect ownership gaps. The helper publishes
+the output directory only after the complete snapshot has downloaded and parsed.
 
 The resulting layout is:
 
@@ -128,9 +122,11 @@ The resulting layout is:
 ```
 
 Use `--content-root /tmp/rocm-whl-next-nightly-snapshot --stream nightly`.
-For other streams, adjust both the source buckets and local directory. Product
-roots may change while downloading; if validation exposes inconsistent pages,
-prepare a fresh snapshot after publication has completed.
+For other streams, use that stream's public HTTPS origin and a new local
+directory. The HTTPS view may be cached, and product roots may change while
+downloading. If validation exposes inconsistent pages, prepare a fresh snapshot
+after publication has completed. Future deployment automation may prepare the
+same layout directly from S3 when authoritative bucket access is available.
 
 ### Deploy generated artifacts
 
