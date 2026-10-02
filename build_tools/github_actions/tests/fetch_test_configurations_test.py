@@ -584,6 +584,19 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         fetch_test_configurations.run()
         self.assertEqual(self.gha_output["platform"], "linux")
 
+    def test_tsan_component_filter_preserves_requested_test_tier(self):
+        os.environ["BUILD_VARIANT"] = "tsan"
+        os.environ["TEST_LABELS"] = '["test:rocrand"]'
+        for tier in ("quick", "standard", "comprehensive"):
+            with self.subTest(tier=tier):
+                os.environ["TEST_TYPE"] = tier
+                fetch_test_configurations.run()
+                components = self._get_components()
+                self.assertEqual({job["job_name"] for job in components}, {"rocrand"})
+                for job in components:
+                    self.assertEqual(job["test_type"], tier)
+                    self.assertIn("/dev/kfd", job["container_options"])
+
     def test_tsan_uses_the_regular_comprehensive_matrix(self):
         os.environ["TEST_TYPE"] = "comprehensive"
         os.environ["BUILD_VARIANT"] = "release"

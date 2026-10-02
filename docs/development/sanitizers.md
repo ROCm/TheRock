@@ -184,12 +184,50 @@ export LD_PRELOAD="${ASAN_LIB_PATH%/*}/$ASAN_LIB_NAME:${ROCM_ASAN_PATH}/lib/liba
 > in Step 2) is used to supply the directory. Add or remove libraries from
 > `LD_PRELOAD` depending on which ROCm components you need to instrument.
 
+## Using TSan-Instrumented Libraries
+
+TSan instruments host code to detect data races. GPU code is not instrumented,
+and GPU targets are unchanged. Use the `linux-release-tsan` CMake preset for
+local builds.
+
+### CI qualification
+
+Run the manual [Multi-Arch CI TSAN workflow](../../.github/workflows/multi_arch_ci_tsan.yml)
+with an explicit GPU family such as `gfx94X` or `gfx950`. Leaving the family
+input empty skips Linux builds, matching the other manual CI workflows.
+Tests use the regular per-family GPU
+runners, component scripts, and sharding. The setup job selects the test tier
+using the [standard filtering policy](test_filtering.md).
+
+For comprehensive qualification, set `linux_test_labels` to
+`test_filter:comprehensive`. To focus on a component, use a label such as
+`test:rocrand,test_filter:comprehensive`.
+
+Initial qualification uses `stage_reuse_mode: off` to build all stages. The
+shared stage-reuse selector does not yet verify build-variant compatibility;
+an artifact's name and GPU family alone do not establish that it was built
+with TSan. Before enabling reuse, both automatic baseline selection and
+explicit baseline copying must reject incompatible variants. Compatible
+TSan artifacts may then be reused. Release publishing is deferred until CI
+qualification succeeds.
+
+### Runtime setup
+
+The component test runner resolves the TSan runtime and symbolizer from the
+fetched artifact tree. Do not inject TSan into the Python or shell harness
+with `LD_PRELOAD`.
+
 ## Troubleshooting
 
-The multi-architecture TSAN workflows use the regular test artifact
-matrix, per-family GPU runners, component test scripts, and sharding. They run
-the comprehensive test tier. The TSAN runtime and symbolizer are resolved from
-the fetched artifact tree; TSAN is not injected into the Python/shell harness
-with `LD_PRELOAD`. Prebuilt-stage reuse and package publication are disabled
-during qualification so an uninstrumented baseline cannot be mixed into the
-result.
+### TSan compiler probes in containers
+
+Clang TSan may re-execute build-time compiler probes with ASLR disabled.
+Docker's default seccomp profile can block the required `personality` syscall.
+The TSAN build workflow sets `--security-opt seccomp=unconfined` for its build
+container to allow these probes.
+
+### GPU tests stop before running components
+
+If `amd-smi static` or the GPU sanity checks fail, check driver health and
+GPU access on the test runner. A successful build followed by a failed
+sanity check does not qualify the GPU component tests.

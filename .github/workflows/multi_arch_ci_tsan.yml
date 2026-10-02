@@ -9,38 +9,41 @@ on:
     inputs:
       linux_amdgpu_families:
         type: string
-        description: "Linux GPU families to build and test."
-        default: "all"
+        description: "Comma-separated Linux GPU families, e.g. gfx94X or gfx950. Empty skips Linux builds."
+        default: ""
+      linux_test_labels:
+        type: string
+        description: "Test labels, e.g. test:rocrand,test_filter:comprehensive. Empty uses the standard CI selection."
+        default: ""
 
 permissions:
   contents: read
   actions: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Allow independent manual runs, as in the other multi-arch CI workflows.
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
-
-run-name: >-
-  Multi-Arch TSAN | Linux artifacts: ${{ inputs.linux_amdgpu_families }}
 
 jobs:
   setup:
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "tsan"
-      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families }}
+      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
+      linux_test_labels: ${{ inputs.linux_test_labels || '' }}
       windows_amdgpu_families: "none"
-      # Qualification is intentionally from-source. Cross-variant stage reuse
-      # could mix uninstrumented artifacts into a TSAN run.
-      prebuilt_stages: ""
-      baseline_run_id: ""
+      # Initial qualification builds every stage. The shared reuse selector
+      # does not yet check build-variant compatibility (see stage_reuse_decision.py).
+      # Empty baseline inputs alone would not disable automatic reuse.
+      stage_reuse_mode: "off"
       build_python_packages: false
       build_pytorch: false
       build_jax: false
       # Native package names/install prefixes are intentionally not shared
       # with release packages during the qualification phase.
       build_native_linux: false
-    secrets: inherit
+    # No secrets are needed by this CI entry point.
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
@@ -51,14 +54,13 @@ jobs:
         needs.setup.outputs.enable_build_jobs == 'true'
       }}
     uses: ./.github/workflows/multi_arch_ci_linux.yml
-    secrets: inherit
     with:
       build_config: ${{ needs.setup.outputs.linux_build_config }}
-      test_labels: ""
+      test_labels: ${{ needs.setup.outputs.linux_test_labels }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
-      test_type: comprehensive
+      test_type: ${{ needs.setup.outputs.test_type }}
     permissions:
       contents: read
       id-token: write
@@ -70,10 +72,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 15
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
       - name: Evaluate workflow results
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
           python build_tools/github_actions/workflow_summary.py \
-            --needs-json '${{ toJSON(needs) }}'
+            --needs-json "${NEEDS_JSON}"
