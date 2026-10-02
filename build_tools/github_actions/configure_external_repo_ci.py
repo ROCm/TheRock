@@ -25,7 +25,7 @@ Usage:
 Outputs (to $GITHUB_OUTPUT):
     changed_projects: Comma-separated list of changed project paths
     run_all_tests: "true" for schedule/dispatch, shared CI changes,
-                workflow changes outside rocm-libraries, or when
+                workflow changes without a configured project scope, or when
                 changed projects cannot be determined safely
     skip_tests: "true" if only docs/skippable files changed
 """
@@ -65,7 +65,13 @@ SKIPPABLE_PATH_PATTERNS = [
     "shared/*/docs/*",
 ]
 
-# Only rocm-libraries workflow changes are scoped to its projects.
+# Repositories that scope TheRock workflow changes to configured projects.
+# Repositories absent from this map retain full-test coverage.
+WORKFLOW_TEST_SCOPE_BY_REPO = {
+    "rocm/rocm-libraries": "configured-projects",
+}
+
+# Patterns for TheRock workflow changes in the calling repository.
 CALLER_WORKFLOW_TRIGGER_PATTERNS = [
     ".github/workflows/therock*",
 ]
@@ -347,10 +353,14 @@ def configure(
             changed_projects="", run_all_tests=True, skip_tests=False
         )
 
-    # Scope rocm-libraries workflow changes to its configured projects.
+    # Apply the calling repository's workflow test policy.
     if matches_patterns(modified_paths, CALLER_WORKFLOW_TRIGGER_PATTERNS):
-        if github_repo.lower() != "rocm/rocm-libraries":
-            logger.info("Workflow changed outside rocm-libraries - running all tests")
+        workflow_test_scope = WORKFLOW_TEST_SCOPE_BY_REPO.get(github_repo.lower())
+        if workflow_test_scope != "configured-projects":
+            logger.info(
+                "Workflow changed in %s - running all tests",
+                github_repo,
+            )
             return ConfigureResult(
                 changed_projects="", run_all_tests=True, skip_tests=False
             )
@@ -380,7 +390,10 @@ def configure(
                 changed_projects="", run_all_tests=True, skip_tests=False
             )
 
-        logger.info("rocm-libraries workflow changed - testing rocm-libraries projects")
+        logger.info(
+            "Workflow changed in %s - testing configured projects",
+            github_repo,
+        )
         return ConfigureResult(
             changed_projects=",".join(sorted(own_projects)),
             run_all_tests=False,

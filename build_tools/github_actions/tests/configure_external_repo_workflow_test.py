@@ -122,6 +122,21 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
         self.assertTrue(result.run_all_tests)
         self.assertEqual(result.changed_projects, "")
 
+    def test_configured_repository_workflow_selects_its_projects(self):
+        with patch.dict(
+            ci.WORKFLOW_TEST_SCOPE_BY_REPO,
+            {"rocm/example": "configured-projects"},
+        ):
+            result = self.configure(
+                {WORKFLOW},
+                repo="ROCm/example",
+                entries=[("projects", "example")],
+            )
+
+        self.assertFalse(result.run_all_tests)
+        self.assertFalse(result.skip_tests)
+        self.assertEqual(result.changed_projects, "projects/example")
+
     def test_unknown_repository_workflow_preserves_full_test_run(self):
         result = self.configure({WORKFLOW}, repo="ROCm/unknown")
 
