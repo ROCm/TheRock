@@ -6,10 +6,13 @@ import unittest
 from pathlib import Path
 
 from build_prod_wheels import (
-    _append_env_text,
     _setup_common_build_env,
     add_env_compiler_flags,
     validate_build_args,
+)
+from setup_pytorch_asan import (
+    append_env_text,
+    remove_incompatible_warning_flags,
     with_asan_local_version,
 )
 
@@ -42,8 +45,8 @@ class AsanFlagSpacingTest(unittest.TestCase):
             "CXXFLAGS": " -Wno-error=restrict ",
             "LDFLAGS": "",
         }
-        _append_env_text(env, "CXXFLAGS", "-fno-omit-frame-pointer")
-        _append_env_text(env, "LDFLAGS", "-shared-libasan")
+        append_env_text(env, "CXXFLAGS", "-fno-omit-frame-pointer")
+        append_env_text(env, "LDFLAGS", "-shared-libasan")
         add_env_compiler_flags(
             env, "CXXFLAGS", "-I/opt/rocm/include", "-I/opt/rocm/include/roctracer"
         )
@@ -67,8 +70,8 @@ class AsanCompilerFlagsTest(unittest.TestCase):
             "gfx942",
             None,
             False,
-            asan=True,
         )
+        remove_incompatible_warning_flags(env)
 
         for name in ("CXXFLAGS", "CPPFLAGS"):
             self.assertNotIn("maybe-uninitialized", env.get(name, ""))
@@ -82,7 +85,6 @@ class AsanCompilerFlagsTest(unittest.TestCase):
             "gfx942",
             None,
             False,
-            asan=False,
         )
 
         self.assertIn("-Wno-error=maybe-uninitialized", env["CXXFLAGS"])
