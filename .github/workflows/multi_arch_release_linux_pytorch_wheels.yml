@@ -37,7 +37,7 @@ on:
         type: string
         default: ""
       asan:
-        description: "Build a torch-only AddressSanitizer wheel against the installed ROCm SDK"
+        description: "Build AddressSanitizer wheels for torch, torchaudio, torchvision, triton, and apex against the installed ROCm SDK"
         type: boolean
         default: false
       pytorch_git_refs:
@@ -101,7 +101,7 @@ on:
         type: string
         default: ""
       asan:
-        description: "Build a torch-only AddressSanitizer wheel against the installed ROCm SDK"
+        description: "Build AddressSanitizer wheels for torch, torchaudio, torchvision, triton, and apex against the installed ROCm SDK"
         type: boolean
         default: false
       pytorch_git_refs:
