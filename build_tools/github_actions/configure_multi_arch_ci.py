@@ -1431,16 +1431,21 @@ def _expand_build_config_for_platform(
             )
 
         # TEMPORARY (ROCm/TheRock#8688): emergency test-queue lever.
-        # A `ci:test:<family>` PR label force-enables tests for that family even
-        # when its tests_on_trigger no longer includes the current trigger (used
-        # to take gfx110X Windows presubmit testing on-demand without dropping
-        # presubmit builds). The family already builds on presubmit, so the test
-        # artifacts exist; this only re-enables the test jobs. Superseded by the
-        # permanent build/test label plumbing in #8692 -- remove this block and
-        # the `force_tests_via_label` branch once that lands.
+        # A `ci:test:<family>` PR label force-enables that family's tests even
+        # when its tests_on_trigger no longer includes the current trigger. This
+        # exists only to take gfx110X Windows presubmit testing on-demand (that
+        # is the only presubmit testing this change removed), so it is scoped to
+        # Windows: Linux families are untouched and keep their existing gating
+        # (e.g. Linux gfx110X stays nightly-only). The family already builds on
+        # presubmit, so the test artifacts exist; this only re-enables the test
+        # jobs. The permanent build/test label plumbing in #8692 generalizes the
+        # label to all platforms -- remove this block and the
+        # `force_tests_via_label` branch once that lands.
         force_test_label = f"ci:test:{family_name}".lower()
-        force_tests_via_label = ci_inputs.is_pull_request and any(
-            label.lower() == force_test_label for label in ci_inputs.pr_labels
+        force_tests_via_label = (
+            ci_inputs.is_pull_request
+            and platform == "windows"
+            and any(label.lower() == force_test_label for label in ci_inputs.pr_labels)
         )
 
         # Use trigger-based test gating (replaces nightly_check_only_for_family,

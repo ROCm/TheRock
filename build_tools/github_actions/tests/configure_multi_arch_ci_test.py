@@ -2701,10 +2701,6 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
                 self.assertEqual(gfx103x_info["test-runs-on"], "linux-gfx1030-gpu-rocm")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 # ---------------------------------------------------------------------------
 # Emergency test-queue lever (ROCm/TheRock#8688)
 #
@@ -2714,7 +2710,12 @@ if __name__ == "__main__":
 # Superseded by the permanent build/test label plumbing in #8692.
 # ---------------------------------------------------------------------------
 class TestGfx110xWindowsTestLever(unittest.TestCase):
-    """gfx110X Windows: no presubmit tests by default, re-enabled by label."""
+    """gfx110X Windows: no presubmit tests by default, re-enabled by label.
+
+    The lever is scoped to Windows (ROCm/TheRock#8688): the `ci:test:gfx110x`
+    label must not re-enable Linux gfx110X presubmit tests, which stay
+    nightly-only.
+    """
 
     def _pr_inputs(self, **kwargs):
         defaults = dict(
@@ -2739,6 +2740,18 @@ class TestGfx110xWindowsTestLever(unittest.TestCase):
         self.assertEqual(entry["amdgpu_family"], "gfx110X-all")
         return entry
 
+    def _linux_gfx110x_entry(self, ci_inputs):
+        result = cm.expand_build_configs(
+            ci_inputs=ci_inputs,
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(linux_families=["gfx110x"]),
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux, "linux build config expected")
+        entry = result.linux.per_family_info[0]
+        self.assertEqual(entry["amdgpu_family"], "gfx110X-all")
+        return entry
+
     def test_presubmit_builds_but_skips_tests_by_default(self):
         """On a PR with no label, gfx110X Windows builds but does not test."""
         entry = self._windows_gfx110x_entry(self._pr_inputs())
@@ -2750,6 +2763,14 @@ class TestGfx110xWindowsTestLever(unittest.TestCase):
             self._pr_inputs(pr_labels=["ci:test:gfx110x"])
         )
         self.assertNotEqual(entry["test-runs-on"], "")
+
+    def test_ci_test_label_does_not_enable_linux_presubmit(self):
+        """The lever is Windows-scoped: `ci:test:gfx110x` must not turn on
+        Linux gfx110X presubmit tests (Linux gfx110X stays nightly-only)."""
+        entry = self._linux_gfx110x_entry(
+            self._pr_inputs(pr_labels=["ci:test:gfx110x"])
+        )
+        self.assertEqual(entry["test-runs-on"], "")
 
     def test_ci_test_label_is_case_insensitive(self):
         """The force-enable label is matched case-insensitively."""
@@ -2776,3 +2797,7 @@ class TestGfx110xWindowsTestLever(unittest.TestCase):
         )
         entry = self._windows_gfx110x_entry(nightly)
         self.assertNotEqual(entry["test-runs-on"], "")
+
+
+if __name__ == "__main__":
+    unittest.main()
