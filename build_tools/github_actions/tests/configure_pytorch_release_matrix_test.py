@@ -72,6 +72,15 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             ],
         )
 
+    def test_release_defaults_exclude_python310(self):
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="nightly",
+            amdgpu_families="gfx94X-dcgpu",
+            platform="linux",
+        )
+
+        self.assertNotIn("3.10", {row["python_version"] for row in matrix})
+
     def test_explicit_versions_and_refs_narrow_matrix(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="nightly",
@@ -179,7 +188,6 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
         self.assertEqual(
             [(row["python_version"], row["test_level"]) for row in matrix],
             [
-                ("3.10", "none"),
                 ("3.11", "standard"),
                 ("3.12", "none"),
                 ("3.13", "none"),
