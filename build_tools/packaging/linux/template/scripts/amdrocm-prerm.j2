@@ -1,0 +1,65 @@
+#!/bin/bash
+
+{% import data_template as data with context %}
+
+is_debian_like() {
+    local id_like="$1"
+
+    case " $id_like " in
+        (*" debian "*|*" ubuntu "*)
+            return 0
+            ;;
+        (*)
+            return 1
+            ;;
+    esac
+}
+
+do_remove_alternatives() {
+    # Skip update if update-alternatives does not exist.
+    command -v update-alternatives >/dev/null || return 0
+
+{% if target == "deb" %}
+    PKG_INSTALL_PREFIX={{ install_prefix }}
+{% else %}
+    PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
+{% endif %}
+
+    # Remove binary alternatives first.
+{% for binary in data.binaries %}
+    update-alternatives --remove \
+        "{{ binary }}" \
+        "$PKG_INSTALL_PREFIX/bin/{{ binary }}" \
+        || true
+{% endfor %}
+
+    # Remove directory and symbolic-link alternatives.
+{% for alternative in data.alternatives %}
+    update-alternatives --remove \
+        "{{ alternative.name }}" \
+        "$PKG_INSTALL_PREFIX{{ alternative.target_suffix }}" \
+        || true
+{% endfor %}
+}
+
+if [ -e /etc/os-release ] &&
+   source /etc/os-release &&
+   is_debian_like "${ID_LIKE:-$ID}"
+then
+    case "$1" in
+        remove|upgrade)
+            do_remove_alternatives
+            ;;
+
+        purge)
+            # Nothing to do.
+            ;;
+
+        *)
+            exit 0
+            ;;
+    esac
+else
+    do_remove_alternatives
+fi
+

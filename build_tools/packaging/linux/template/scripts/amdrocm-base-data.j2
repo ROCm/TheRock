@@ -1,0 +1,52 @@
+{#
+  Alternatives owned by amdrocm-base.
+
+  Directory alternatives:
+    /opt/rocm/core
+    /opt/rocm/bin
+    /opt/rocm/lib
+    /opt/rocm/include
+    /opt/rocm/libexec
+    /opt/rocm/share
+#}
+
+{% set alternatives = [
+    {
+        "link": "/opt/rocm/core",
+        "name": "core",
+        "target_suffix": ""
+    },
+    {
+        "link": "/opt/rocm/core-" ~ version_major,
+        "name": "core-" ~ version_major,
+        "target_suffix": ""
+    },
+    {
+        "link": "/opt/rocm/bin",
+        "name": "rocm-bin",
+        "target_suffix": "/bin"
+    },
+    {
+        "link": "/opt/rocm/lib",
+        "name": "rocm-lib",
+        "target_suffix": "/lib"
+    },
+    {
+        "link": "/opt/rocm/include",
+        "name": "rocm-include",
+        "target_suffix": "/include"
+    },
+    {
+        "link": "/opt/rocm/libexec",
+        "name": "rocm-libexec",
+        "target_suffix": "/libexec"
+    },
+    {
+        "link": "/opt/rocm/share",
+        "name": "rocm-share",
+        "target_suffix": "/share"
+    }
+] %}
+
+{% set binaries = [] %}
+
