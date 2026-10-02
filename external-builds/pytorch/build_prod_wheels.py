@@ -160,6 +160,8 @@ import tempfile
 import textwrap
 import urllib.request
 
+import setup_pytorch_asan
+
 script_dir = Path(__file__).resolve().parent
 
 is_windows = platform.system() == "Windows"
@@ -514,6 +516,9 @@ def validate_build_args(
     parser: argparse.ArgumentParser, args: argparse.Namespace
 ) -> None:
     """Resolve automatic project selections and validate build arguments."""
+    if args.asan:
+        setup_pytorch_asan.disable_default_companion_builds(args)
+
     # If a project dir exists, enable that project --build-* option by default.
     if args.build_triton is None:
         args.build_triton = args.triton_dir is not None
@@ -557,6 +562,7 @@ def validate_build_args(
     if (
         args.enable_pytorch_flash_attention
         and args.pytorch_dir is not None
+        and not setup_pytorch_asan.keep_flash_attention_without_triton(args.asan)
         and not is_windows
         and not args.build_triton
     ):
@@ -772,6 +778,11 @@ def do_build(args: argparse.Namespace):
 
     if not args.version_suffix:
         args.version_suffix = get_version_suffix_for_installed_rocm_package()
+    if args.asan:
+        args.version_suffix = setup_pytorch_asan.with_asan_local_version(
+            args.version_suffix
+        )
+        print(f"  ASAN torch version suffix: {args.version_suffix}")
 
     triton_dir: Path | None = args.triton_dir
     pytorch_dir: Path | None = args.pytorch_dir
@@ -814,7 +825,12 @@ def do_build(args: argparse.Namespace):
     pytorch_rocm_arch = pytorch_rocm_arch.replace(",", ";")
 
     env = _setup_common_build_env(
-        cmake_prefix, bin_dir, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
+        cmake_prefix,
+        bin_dir,
+        rocm_dir,
+        pytorch_rocm_arch,
+        triton_dir,
+        is_windows,
     )
     print(f"  PATH = {env['PATH']}")
 
@@ -868,6 +884,9 @@ def do_build(args: argparse.Namespace):
                 pass  # Server may already be running
 
             run_command([str(sccache_path), "--zero-stats"], cwd=tempfile.gettempdir())
+
+        if args.asan:
+            setup_pytorch_asan.apply_asan_build_env(env, rocm_dir)
 
         _do_build_wheels_core(
             args,
@@ -1178,7 +1197,11 @@ def do_build_pytorch(
         use_flash_attention = args.enable_pytorch_flash_attention
         print(f"Flash Attention explicitly set to: {use_flash_attention}")
         # Note: this may fail if aotriton is not supported, see below.
-    elif not is_windows and not triton_requirement:
+    elif (
+        not setup_pytorch_asan.keep_flash_attention_without_triton(args.asan)
+        and not is_windows
+        and not triton_requirement
+    ):
         print(f"Disabling Flash Attention on Linux since triton is not built")
         use_flash_attention = False
     else:
@@ -1358,14 +1381,18 @@ def do_build_pytorch(
         [sys.executable, "-m", "pip", "install", built_wheel], cwd=tempfile.gettempdir()
     )
 
-    print("+++ Sanity checking installed torch (unavailable is okay on CPU machines):")
-    sanity_check_output = capture(
-        [sys.executable, "-c", "import torch; print(torch.cuda.is_available())"],
-        cwd=tempfile.gettempdir(),
-    )
-    if not sanity_check_output:
-        raise RuntimeError("torch package sanity check failed (see output above)")
+    if args.asan:
+        print(setup_pytorch_asan.TORCH_IMPORT_SANITY_SKIP_MESSAGE)
     else:
+        print(
+            "+++ Sanity checking installed torch (unavailable is okay on CPU machines):"
+        )
+        sanity_check_output = capture(
+            [sys.executable, "-c", "import torch; print(torch.cuda.is_available())"],
+            cwd=tempfile.gettempdir(),
+        )
+        if not sanity_check_output:
+            raise RuntimeError("torch package sanity check failed (see output above)")
         print(f"Sanity check output:\n{sanity_check_output}")
 
 
@@ -1598,6 +1625,16 @@ def main(argv: list[str]):
         default=None,
         type=Path,
         help="apex source directory",
+    )
+    build_p.add_argument(
+        "--asan",
+        action="store_true",
+        default=False,
+        help="Build the torch wheel with AddressSanitizer against the "
+        "installed ROCm SDK. The workflow-supplied GPU list and ROCm version "
+        "are left unchanged. The torch local version gains an .asan suffix, "
+        "and triton, torchaudio, torchvision, and apex are not built unless "
+        "explicitly requested.",
     )
     build_p.add_argument(
         "--pytorch-rocm-arch",
