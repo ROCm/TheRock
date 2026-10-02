@@ -388,6 +388,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         hipdnn_integration_tests=False,
         hipdnn_samples=False,
         hipfile=False,
+        profiler_hub=False,
         miopen=False,
         miopenprovider=False,
         hipkernelprovider=False,
