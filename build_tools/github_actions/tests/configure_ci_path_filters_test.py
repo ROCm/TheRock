@@ -63,10 +63,6 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         run_ci = is_ci_run_required(paths)
         self.assertFalse(run_ci)
 
-        paths = [".github/workflows/test_jax_dockerfile.yml"]
-        run_ci = is_ci_run_required(paths)
-        self.assertFalse(run_ci)
-
     def test_run_ci_if_source_file_and_unrelated_workflow_file_edited(self):
         paths = ["source_file.h", ".github/workflows/pre-commit.yml"]
         run_ci = is_ci_run_required(paths)
@@ -77,10 +73,13 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         unit_test_paths = [
             "build_tools/tests/example_test.py",
             "build_tools/github_actions/tests/example_test.py",
+            "build_tools/packaging/tests/example_test.py",
             "build_tools/packaging/archives/tests/example_test.py",
             "build_tools/packaging/linux/tests/example_test.py",
             "build_tools/packaging/python/tests/example_test.py",
+            "build_tools/packaging/windows/tests/example_test.py",
             "build_tools/third_party/s3_management/tests/example_test.py",
+            "external-builds/pytorch/tests/example_test.py",
             "test_tools/tests/example_test.py",
         ]
 

@@ -56,15 +56,15 @@ on:
           prebuilt_stages, no artifacts exist for these stages afterwards.
       build_runs_on_large:
         type: string
-        default: "azure-windows-scale-rocm"
+        default: "aws-windows-scale-rocm-prod-mix"
         description: "Build runner label for CPU-intensive stages (selected by configure script with weighted distribution)"
       build_runs_on_small:
         type: string
-        default: "azure-windows-scale-rocm"
+        default: "aws-windows-scale-rocm-prod-mix"
         description: "Build runner label for low-CPU stages (no dedicated small pool for Windows yet, defaults to standard pool)"
       build_runs_on_medium:
         type: string
-        default: "azure-windows-scale-rocm"
+        default: "aws-windows-scale-rocm-prod-mix"
         description: "Build runner label for medium-CPU stages (no dedicated medium pool for Windows yet, defaults to standard pool)"
       rocm_package_version:
         type: string

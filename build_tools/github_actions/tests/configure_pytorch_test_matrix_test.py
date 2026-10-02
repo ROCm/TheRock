@@ -43,6 +43,12 @@ def _fake_family_matrix(_trigger_types: list[str]) -> FamilyMatrix:
 
 
 class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
+    def setUp(self) -> None:
+        # CLI tests must not append mock configurations to the CI job summary.
+        self.mock_step_summary = self.enterContext(
+            mock.patch.object(m, "gha_append_step_summary")
+        )
+
     def test_empty_family_list_returns_empty_matrix(self) -> None:
         matrix = m.build_test_matrix(
             amdgpu_families=[],
@@ -122,6 +128,8 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
         self.assertEqual(outputs["enabled"], "true")
         matrix = json.loads(outputs["matrix"])
         self.assertEqual(matrix["include"][0]["amdgpu_family"], "gfxalpha-all")
+        self.mock_step_summary.assert_called_once()
+        self.assertIn("linux-alpha", self.mock_step_summary.call_args.args[0])
 
     def test_main_auto_uses_built_families(self) -> None:
         with mock.patch.object(
@@ -171,6 +179,11 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
         outputs = gha_set_output.call_args.args[0]
         self.assertEqual(outputs["enabled"], "false")
         self.assertEqual(json.loads(outputs["matrix"]), {"include": []})
+        self.mock_step_summary.assert_called_once()
+        self.assertIn(
+            "| Self-hosted GPU test jobs | 0 |",
+            self.mock_step_summary.call_args.args[0],
+        )
 
     def test_none_summary_explains_no_gpu_tests(self) -> None:
         summary = m.format_test_summary(

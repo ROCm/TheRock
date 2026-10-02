@@ -60,8 +60,8 @@ jobs:
       summary: ${{ steps.summary.outputs.summary }}
     container:
       # If the component has specified an alternate image, honor that option.
-      # Otherwise use the default image. Images are supplied by the trusted test
-      # matrix or caller; this reusable workflow cannot pin a literal image.
+      # Otherwise use the default image.
+      # Callers must supply digest-pinned images; fetch_test_configurations.py pins overrides.
       image: >- # zizmor: ignore[unpinned-images]
         ${{ inputs.platform == 'linux' &&
             (fromJSON(inputs.component).container_image || inputs.default_container_image)
@@ -156,31 +156,26 @@ jobs:
         run: |
           python ./build_tools/health_status.py
 
-        # TODO(#3755): Clean this up after final sanitizer environment variable flags are determined
-        # Must run before sanity check so ASAN_RUNTIME_PATH is available for LD_PRELOAD
-      - name: Enable sanitizer-specific test flags
-        if: ${{ contains(inputs.build_variant, 'asan') }}
+      - name: Configure sanitizer test environment
+        if: ${{ contains(inputs.build_variant, 'asan') || inputs.build_variant == 'tsan' }}
+        env:
+          BUILD_VARIANT: ${{ inputs.build_variant }}
         run: |
-          python ./build_tools/github_actions/configure_asan_env.py \
-            --artifacts-dir "${{ env.OUTPUT_ARTIFACTS_DIR }}"
-
-      - name: Enable TSAN-specific test flags
-        if: ${{ inputs.build_variant == 'tsan' }}
-        run: |
-          python ./build_tools/github_actions/configure_tsan_env.py \
-            --artifacts-dir "${{ env.OUTPUT_ARTIFACTS_DIR }}"
+          python ./build_tools/github_actions/configure_sanitizer_env.py \
+            --artifacts-dir "${OUTPUT_ARTIFACTS_DIR}" \
+            --build-variant "${BUILD_VARIANT}"
 
       - name: Driver / GPU sanity check
         if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
         timeout-minutes: 3
         env:
-          # Preload ASAN runtime so Python can load ASAN-instrumented libraries
-          LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
+          # Preload the sanitizer runtime before probes load instrumented libraries.
+          LD_PRELOAD: ${{ inputs.build_variant == 'tsan' && env.TSAN_RUNTIME_PATH || env.ASAN_RUNTIME_PATH }}
           # The probes load instrumented ROCm libraries, so LeakSanitizer reports
           # whatever those leak at exit and the probe returns non-zero. This step
           # answers "is the driver and GPU functional", not "is the runtime
           # leak-free". Extends rather than replaces, to keep the options set by
-          # configure_asan_env.py; scoped here so component tests still run with
+          # configure_sanitizer_env.py; scoped here so component tests still run with
           # leak detection enabled.
           ASAN_OPTIONS: ${{ env.ASAN_OPTIONS }}:detect_leaks=0
         run: |
@@ -211,6 +206,7 @@ jobs:
         id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
         env:
+          LD_PRELOAD: ${{ inputs.build_variant == 'tsan' && env.TSAN_RUNTIME_PATH || '' }}
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}

@@ -45,6 +45,7 @@ jobs:
     name: Copy nightly -> dev | rocm ${{ inputs.rocm_version }} | py ${{ inputs.python_version }}
     runs-on: ubuntu-24.04
     permissions:
+      contents: read
       id-token: write
 
     env:
