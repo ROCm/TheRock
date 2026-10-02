@@ -1430,11 +1430,29 @@ def _expand_build_config_for_platform(
                 f"disabling tests for quick test run"
             )
 
+        # TEMPORARY (ROCm/TheRock#8688): emergency test-queue lever.
+        # A `ci:test:<family>` PR label force-enables tests for that family even
+        # when its tests_on_trigger no longer includes the current trigger (used
+        # to take gfx110X Windows presubmit testing on-demand without dropping
+        # presubmit builds). The family already builds on presubmit, so the test
+        # artifacts exist; this only re-enables the test jobs. Superseded by the
+        # permanent build/test label plumbing in #8692 -- remove this block and
+        # the `force_tests_via_label` branch once that lands.
+        force_test_label = f"ci:test:{family_name}".lower()
+        force_tests_via_label = ci_inputs.is_pull_request and any(
+            label.lower() == force_test_label for label in ci_inputs.pr_labels
+        )
+
         # Use trigger-based test gating (replaces nightly_check_only_for_family,
         # submodule_bump_tests_only, and trigger_test_label_only flags).
         # Each family specifies tests_on_trigger list; tests run if any current
         # trigger matches.
-        if test_runs_on:
+        if test_runs_on and force_tests_via_label:
+            print(
+                f"  {family_name}: tests force-enabled by '{force_test_label}' "
+                f"label (ROCm/TheRock#8688 emergency lever)"
+            )
+        elif test_runs_on:
             should_run, reason = _should_run_tests_for_family(
                 platform_info, ci_inputs, git_context
             )
