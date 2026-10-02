@@ -1,0 +1,7 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Temporary component requirements for the installed rocKE Python tests. Use
+# the copy in the hipkernelprovider test artifact after rocKE installs it.
+numpy>=1.26.0
+ml_dtypes==0.5.4
