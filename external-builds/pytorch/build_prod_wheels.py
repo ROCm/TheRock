@@ -531,18 +531,6 @@ def validate_build_args(
     parser: argparse.ArgumentParser, args: argparse.Namespace
 ) -> None:
     """Resolve automatic project selections and validate build arguments."""
-    # --asan builds the torch wheel only. Companion projects stay off unless
-    # the caller explicitly asks for them.
-    if args.asan:
-        if args.build_triton is None:
-            args.build_triton = False
-        if args.build_pytorch_audio is None:
-            args.build_pytorch_audio = False
-        if args.build_pytorch_vision is None:
-            args.build_pytorch_vision = False
-        if args.build_apex is None:
-            args.build_apex = False
-
     # If a project dir exists, enable that project --build-* option by default.
     if args.build_triton is None:
         args.build_triton = args.triton_dir is not None
@@ -662,6 +650,7 @@ def _setup_common_build_env(
     pytorch_rocm_arch: str,
     triton_dir: Path | None,
     is_windows: bool,
+    asan: bool = False,
 ) -> dict[str, str]:
     """Construct the common environment dict shared by all wheel builds."""
     env: dict[str, str] = {
@@ -706,10 +695,12 @@ def _setup_common_build_env(
                 "CXX": str((llvm_dir / "clang-cl.exe").resolve()),
             }
         )
-    else:
+    elif not asan:
         env.update(
             {
-                # Workaround GCC12 compiler flags.
+                # Workaround GCC12 compiler flags. Clang rejects
+                # -Wno-error=maybe-uninitialized and -Wno-error=restrict, so the
+                # ASAN build, which uses ROCm Clang, must not inherit them.
                 "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
                 "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
             }
@@ -797,10 +788,20 @@ def _do_build_wheels_core(
 
 
 def _append_env_text(env: dict[str, str], name: str, addition: str) -> None:
+    """Append one compiler flag and keep the trailing space later appends expect.
+
+    add_env_compiler_flags concatenates the next flag directly onto the current
+    value, so a stripped value turns ``-fno-omit-frame-pointer`` plus ``-I...``
+    into one unknown argument.
+    """
     current = env.get(name, "")
     if addition in current.split():
+        if current and not current.endswith((" ", "\t")):
+            env[name] = current + " "
         return
-    env[name] = f"{current} {addition}".strip() if current else addition
+    if current and not current.endswith((" ", "\t")):
+        current += " "
+    env[name] = f"{current}{addition} "
 
 
 def _resolve_shared_asan_runtime(clangxx: Path, rocm_dir: Path) -> Path:
@@ -924,7 +925,13 @@ def do_build(args: argparse.Namespace):
     pytorch_rocm_arch = pytorch_rocm_arch.replace(",", ";")
 
     env = _setup_common_build_env(
-        cmake_prefix, bin_dir, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
+        cmake_prefix,
+        bin_dir,
+        rocm_dir,
+        pytorch_rocm_arch,
+        triton_dir,
+        is_windows,
+        asan=args.asan,
     )
     print(f"  PATH = {env['PATH']}")
 
@@ -1723,11 +1730,11 @@ def main(argv: list[str]):
         "--asan",
         action="store_true",
         default=False,
-        help="Build the torch wheel with AddressSanitizer against the "
-        "installed ROCm SDK. The workflow-supplied GPU list and ROCm version "
-        "are left unchanged. The torch local version gains an .asan suffix, "
-        "and triton, torchaudio, torchvision, and apex are not built unless "
-        "explicitly requested.",
+        help="Build torch with AddressSanitizer against the installed ROCm "
+        "SDK. The workflow-supplied GPU list and ROCm version are left "
+        "unchanged. The torch local version gains an .asan suffix. Triton, "
+        "torchaudio, torchvision, and apex are built when their sources are "
+        "present and share this compiler environment.",
     )
     build_p.add_argument(
         "--pytorch-rocm-arch",
