@@ -556,18 +556,6 @@ def validate_build_args(
     parser: argparse.ArgumentParser, args: argparse.Namespace
 ) -> None:
     """Resolve automatic project selections and validate build arguments."""
-    # --asan builds the torch wheel only. Companion projects stay off unless
-    # the caller explicitly asks for them.
-    if args.asan:
-        if args.build_triton is None:
-            args.build_triton = False
-        if args.build_pytorch_audio is None:
-            args.build_pytorch_audio = False
-        if args.build_pytorch_vision is None:
-            args.build_pytorch_vision = False
-        if args.build_apex is None:
-            args.build_apex = False
-
     # If a project dir exists, enable that project --build-* option by default.
     if args.build_triton is None:
         args.build_triton = args.triton_dir is not None
@@ -1728,11 +1716,11 @@ def main(argv: list[str]):
         "--asan",
         action="store_true",
         default=False,
-        help="Build the torch wheel with AddressSanitizer against the "
-        "installed ROCm SDK. The workflow-supplied GPU list and ROCm version "
-        "are left unchanged. The torch local version gains an .asan suffix, "
-        "and triton, torchaudio, torchvision, and apex are not built unless "
-        "explicitly requested.",
+        help="Build torch with AddressSanitizer against the installed ROCm "
+        "SDK. The workflow-supplied GPU list and ROCm version are left "
+        "unchanged. The torch local version gains an .asan suffix. Triton, "
+        "torchaudio, torchvision, and apex are built when their sources are "
+        "present and share this compiler environment.",
     )
     build_p.add_argument(
         "--pytorch-rocm-arch",
