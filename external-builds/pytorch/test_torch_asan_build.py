@@ -90,28 +90,29 @@ class AsanCompilerFlagsTest(unittest.TestCase):
 
 
 class AsanBuildSelectionTest(unittest.TestCase):
-    def test_asan_leaves_companion_projects_off_when_sources_exist(self):
+    def test_asan_enables_companion_projects_when_sources_exist(self):
         parser = argparse.ArgumentParser()
+        source = Path(__file__).resolve().parent
         args = argparse.Namespace(
             asan=True,
             build_triton=None,
             build_pytorch_audio=None,
             build_pytorch_vision=None,
             build_apex=None,
-            triton_dir=Path("/tmp/triton"),
-            pytorch_dir=Path("/tmp/pytorch"),
-            pytorch_audio_dir=Path("/tmp/audio"),
-            pytorch_vision_dir=Path("/tmp/vision"),
-            apex_dir=Path("/tmp/apex"),
+            triton_dir=source,
+            pytorch_dir=source,
+            pytorch_audio_dir=source,
+            pytorch_vision_dir=source,
+            apex_dir=source,
             enable_pytorch_flash_attention=None,
         )
 
         validate_build_args(parser, args)
 
-        self.assertFalse(args.build_triton)
-        self.assertFalse(args.build_pytorch_audio)
-        self.assertFalse(args.build_pytorch_vision)
-        self.assertFalse(args.build_apex)
+        self.assertTrue(args.build_triton)
+        self.assertTrue(args.build_pytorch_audio)
+        self.assertTrue(args.build_pytorch_vision)
+        self.assertTrue(args.build_apex)
 
     def test_without_asan_existing_sources_still_enable_companions(self):
         parser = argparse.ArgumentParser()
