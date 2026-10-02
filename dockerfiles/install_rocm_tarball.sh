@@ -14,9 +14,8 @@
 #   VERSION          - Full version string (e.g., 7.11.0a20251211, 7.10.0)
 #   AMDGPU_FAMILY    - AMD GPU family (e.g., gfx110X-all, gfx94X-dcgpu).
 #                      Special value: 'multi-arch' downloads AMD's bundled
-#                      tarball that contains kpack files for all GPU families
-#                      (from the tarball-multi-arch/ path, except on the nightly
-#                      host where every tarball shares one tarball/ directory).
+#                      tarball, whose .kpack/ covers every supported target
+#                      rather than a single family.
 #   RELEASE_TYPE     - Release type: nightlies (default), prereleases, devreleases, stable
 #
 # Examples:
@@ -36,10 +35,9 @@ RELEASE_TYPE="${3:-nightlies}"
 # URL-encode '+' as '%2B' in VERSION (required for devreleases)
 VERSION_ENCODED="${VERSION//+/%2B}"
 
-# AMDGPU_FAMILY=multi-arch selects AMD's bundled all-GPU tarball. The tarball
-# filename slot uses "multiarch" (no hyphen) while the directory name that
-# carries it uses "multi-arch" (with hyphen) — handle both conventions
-# explicitly here.
+# AMDGPU_FAMILY=multi-arch selects AMD's bundled all-GPU tarball, whose filename
+# spells the slot "multiarch" while the legacy directory carrying it spells it
+# "multi-arch". TARBALL_DIR is consulted only for the legacy hosts.
 if [ "$AMDGPU_FAMILY" = "multi-arch" ]; then
     TARBALL_DIR="tarball-multi-arch"
     FAMILY_SLOT="multiarch"
@@ -48,16 +46,54 @@ else
     FAMILY_SLOT="$AMDGPU_FAMILY"
 fi
 
-# Directory holding the tarballs, by release type:
-# - nightlies use: https://nightly.repo.amd.com/rocm/core/tarball/
-# - stable releases use: https://repo.amd.com/rocm/${TARBALL_DIR}/
-# - other releases use: https://rocm.{RELEASE_TYPE}.amd.com/${TARBALL_DIR}/
+# Releases from which each channel serves the ROCm Core product layout. Anything
+# older stayed behind on the original host and was never copied across.
+PRERELEASE_PRODUCT_MIN_VERSION="10.1"
+STABLE_PRODUCT_MIN_VERSION="10.0"
+
+# MAJOR.MINOR drives the host choice below. A version string without one leaves
+# this empty, which sorts below every threshold and so lands on the legacy host.
+MAJOR_MINOR=$(echo "$VERSION" | grep -oE '^[0-9]+\.[0-9]+' || true)
+
+# ---------------------------------------------------------------------------
+# Helper: report whether MAJOR.MINOR is at least the given threshold
+#
+# sort -VC exits 0 only when its input is already in version order, so this
+# reads as want <= have. Version order puts 7.14 below 10.0; a string compare
+# would get that backwards.
+# ---------------------------------------------------------------------------
+version_at_least() {
+    local have="$1"
+    local want="$2"
+    printf '%s\n%s\n' "$want" "$have" | sort -VC
+}
+
+# Tarball directory by release type. The product layout is flat — a single
+# tarball/ directory holding every family — so TARBALL_DIR applies only to the
+# legacy hosts, which give each install mode its own tree:
+# - nightlies use:   https://nightly.repo.amd.com/rocm/core/tarball/
+# - prereleases use: https://rc.repo.amd.com/rocm/core/tarball/       (>= 10.1)
+#                    https://rocm.prereleases.amd.com/${TARBALL_DIR}/ (older)
+# - stable uses:     https://stable.repo.amd.com/rocm/core/tarball/   (>= 10.0)
+#                    https://repo.amd.com/rocm/${TARBALL_DIR}/        (older)
+# - other releases:  https://rocm.{RELEASE_TYPE}.amd.com/${TARBALL_DIR}/
 case "$RELEASE_TYPE" in
     nightlies)
         LISTING_URL="https://nightly.repo.amd.com/rocm/core/tarball/"
         ;;
+    prereleases)
+        if version_at_least "$MAJOR_MINOR" "$PRERELEASE_PRODUCT_MIN_VERSION"; then
+            LISTING_URL="https://rc.repo.amd.com/rocm/core/tarball/"
+        else
+            LISTING_URL="https://rocm.prereleases.amd.com/${TARBALL_DIR}/"
+        fi
+        ;;
     stable)
-        LISTING_URL="https://repo.amd.com/rocm/${TARBALL_DIR}/"
+        if version_at_least "$MAJOR_MINOR" "$STABLE_PRODUCT_MIN_VERSION"; then
+            LISTING_URL="https://stable.repo.amd.com/rocm/core/tarball/"
+        else
+            LISTING_URL="https://repo.amd.com/rocm/${TARBALL_DIR}/"
+        fi
         ;;
     *)
         LISTING_URL="https://rocm.${RELEASE_TYPE}.amd.com/${TARBALL_DIR}/"

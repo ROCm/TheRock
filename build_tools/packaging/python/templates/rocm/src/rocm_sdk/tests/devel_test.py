@@ -78,10 +78,13 @@ class ROCmDevelTest(unittest.TestCase):
 
         # CLI scripts by default run from _rocm_sdk_core.
         # When the devel package is installed they should run from _rocm_sdk_devel.
+        hipconfig = utils.find_console_script("hipconfig")
+        self.assertIsNotNone(
+            hipconfig,
+            msg=f"Could not find `hipconfig` console script for interpreter {sys.executable}",
+        )
         rocmpath_output = (
-            utils.run_command(["hipconfig", "--rocmpath"], capture=True)
-            .decode()
-            .strip()
+            utils.run_command([hipconfig, "--rocmpath"], capture=True).decode().strip()
         )
         rocmpath = Path(rocmpath_output)
         self.assertTrue(
@@ -146,6 +149,10 @@ class ROCmDevelTest(unittest.TestCase):
                 # recent addition from upstream, issue tracked in
                 # https://github.com/ROCm/TheRock/issues/2537
                 continue
+            if "libsqtt-marker" in str(so_path):
+                # LLVM pass plugin loaded via -fpass-plugin; it has unresolved
+                # LLVM symbols and is not intended to be dlopened standalone.
+                continue
             if "lib/roctracer" in str(so_path) or "share/roctracer" in str(so_path):
                 # Internal roctracer libraries are meant to be pre-loaded
                 # explicitly and cannot necessarily be loaded standalone.
@@ -153,11 +160,13 @@ class ROCmDevelTest(unittest.TestCase):
             if (
                 "lib/rocprofiler-sdk/" in str(so_path)
                 or "libexec/rocprofiler-sdk/" in str(so_path)
+                or "share/rocprofiler-sdk/tests/duplicate-sdk/" in str(so_path)
                 or "libpyrocpd" in str(so_path)
                 or "libpyroctx" in str(so_path)
             ):
-                # Internal rocprofiler-sdk libraries are meant to be pre-loaded
-                # explicitly and cannot necessarily be loaded standalone.
+                # Internal rocprofiler-sdk libraries cannot necessarily be loaded
+                # standalone. The duplicate SDK is a test fixture that requires the
+                # primary SDK to be preloaded by its test harness.
                 continue
             if "libtest_linking_lib" in str(so_path):
                 # rocprim unit tests, not actual library files

@@ -124,8 +124,7 @@ option(THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY
 
 option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
-option(THEROCK_ENABLE_HOTSWAP "Enables the comgr hotswap transpiler/tool and loads it in the runtime via HSA_TOOLS_LIB" ON)
-option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" OFF)
+option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" ON)
 set(THEROCK_COMGR_DLL_NAME "" CACHE STRING "Override the Comgr DLL name for the comgr build and CLR load (e.g. amd_comgr_opencl.dll); empty = component default")
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
@@ -506,8 +505,9 @@ add_subdirectory(debug-tools)
 # performs optional find_package(rocdecode)/find_package(rocjpeg) for trace
 # feature detection.
 add_subdirectory(media-libs)
-# storage-libs (hipfile) must be added before profiler: rocprofiler-sdk performs
-# optional find_package(hipfile) for hipFILE trace feature detection.
+# storage-libs (hipfile) must be added before profiler: rocprofiler-sdk and
+# rocprofiler-systems both find_package(hipfile) (SDK for API tracing; systems
+# for optional GPU-direct storage I/O telemetry when the package is usable).
 add_subdirectory(storage-libs)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
