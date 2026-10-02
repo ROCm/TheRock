@@ -212,6 +212,8 @@ jobs:
         --group-add 992
         --group-add 110
         --env-file /etc/podinfo/gha-gpu-isolation-settings
+        --env POD_NAME
+        --env NODE_NAME
         --user 0:0 # Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
     defaults:
       run:
@@ -242,6 +244,11 @@ jobs:
       TESTS_TO_INCLUDE: ${{ inputs.tests_to_include }}
 
     steps:
+      - name: Print runner pod info
+        run: |
+          echo "POD_NAME=${POD_NAME:-<unset>}"
+          echo "NODE_NAME=${NODE_NAME:-<unset>}"
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
