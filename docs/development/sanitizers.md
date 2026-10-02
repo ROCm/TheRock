@@ -9,10 +9,8 @@ Sanitizers can be enabled via the `THEROCK_SANITIZER` variable. We will be exten
   - You don't have xnack-capable hardware (gfx942, gfx950)
   - You want faster builds (no xnack+ kernel variants)
   - You only need to catch host-side memory errors
-- `TSAN` : Enables host-side ThreadSanitizer (`-fsanitize=thread`) without
-  instrumenting device compilation or changing GPU targets. The multi-architecture
-  TSAN workflow uses the regular per-family GPU runners and component matrix.
 - `OFF` : Explicitly disable sanitizers.
+- `TSAN` : Enables host-side ThreadSanitizer to detect data races, without device-side instrumentation.
 
 The sanitizer selection can be controlled per project by using a variable of the form `{subproject}_SANITIZER={VALUE}`. This is most commonly used to disable santiziers for specific projects once enabled globally.
 
@@ -24,8 +22,7 @@ In order to simplify use, the following presets are available for setting up spe
 
 - `--preset linux-release-asan`: Full ASAN build with both host and device instrumentation. Enables ASAN globally and selectively disables it for the compiler and certain system libraries that are not yet ready for generic sanitizer builds. Requires xnack-capable hardware (gfx942, gfx950) at runtime.
 - `--preset linux-release-host-asan`: Host-only ASAN build without device-side instrumentation. Same as above but GPU_TARGETS are not modified to include xnack+ variants. Can run on any GPU hardware.
-- `--preset linux-release-tsan`: Host-only TSAN build with debug line
-  information for actionable race reports. GPU targets remain unchanged.
+- `--preset linux-release-tsan`: Host-only ThreadSanitizer build. GPU targets are unchanged.
 - TODO: compiler-asan preset: We will enable a build mode such that the compiler and base libraries can also be instrumented. We will use this for qualifying compiler builds but not generally for *using* the compiler.
 
 ## Sanitizer Aware Project Development
@@ -43,8 +40,8 @@ Some sub-projects have strict gfx target checks that do not allow these extends 
 
 When a project is configured for sanitizers, it will have certain variables injected into it. While it is often possible to not require projects to have any special knowledge of what sanitizer they were compiled for, some do need to know. For these cases, it can be necessary to use these special variables so injected.
 
-- `THEROCK_SANITIZER={ASAN|HOST_ASAN|TSAN}` : Set if a sanitizer is active for the project and indicates which one. `TSAN` instruments host code only.
-- `THEROCK_SANITIZER_LAUNCHER` : If invoking certain tools at build time that dynamically link to a shared library compiled with a sanitizer, you need to prefix it with this value as `${THEROCK_SANITIZER_LAUNCHER}` (not surrounded in quotes so it can expand to multiple terms). This is most commonly needed for invoking system-python and importing native extensions that were built in the project with ASAN. This is set for all supported ASAN and TSAN modes.
+- `THEROCK_SANITIZER={ASAN|HOST_ASAN}` : Set if a sanitizer is active for the project and indicates which one. `ASAN` enables both host and device ASAN; `HOST_ASAN` enables host-only ASAN.
+- `THEROCK_SANITIZER_LAUNCHER` : If invoking certain tools at build time that dynamically link to a shared library compiled with a sanitizer, you need to prefix it with this value as `${THEROCK_SANITIZER_LAUNCHER}` (not surrounded in quotes so it can expand to multiple terms). This is most commonly needed for invoking system-python and importing native extensions that were built in the project with ASAN. This is set for both `ASAN` and `HOST_ASAN` modes.
 
 You are recommended to code defensively with patterns like:
 
@@ -186,9 +183,9 @@ export LD_PRELOAD="${ASAN_LIB_PATH%/*}/$ASAN_LIB_NAME:${ROCM_ASAN_PATH}/lib/liba
 
 ## Using TSan-Instrumented Libraries
 
-TSan instruments host code to detect data races. GPU code is not instrumented,
-and GPU targets are unchanged. Use the `linux-release-tsan` CMake preset for
-local builds.
+TSAN instruments host code; it does not instrument GPU kernels or require
+`HSA_XNACK=1`. Use a TSAN build or install tree and its matching compiler/runtime.
+Do not load ASAN and TSAN runtimes into the same process.
 
 ### CI qualification
 
@@ -213,9 +210,67 @@ qualification succeeds.
 
 ### Runtime setup
 
-The component test runner resolves the TSan runtime and symbolizer from the
-fetched artifact tree. Do not inject TSan into the Python or shell harness
-with `LD_PRELOAD`.
+From a TheRock checkout, configure the same environment used by component CI:
+
+```bash
+export ROCM_TSAN_PATH=/path/to/tsan/rocm
+sanitizer_env=$(python build_tools/github_actions/configure_sanitizer_env.py \
+  --artifacts-dir "${ROCM_TSAN_PATH}" \
+  --build-variant tsan --output-format shell) && eval "${sanitizer_env}"
+```
+
+The helper discovers Clang and `llvm-symbolizer` under `llvm/bin` or
+`lib/llvm/bin`, resolves the shared runtime through Clang, and adds the runtime
+and ROCm library directories to `LD_LIBRARY_PATH`. It sets `TSAN_OPTIONS` to
+stop on the first report and return exit code **86**. A missing TSAN runtime
+is an error; a missing symbolizer emits a warning. Warnings go to stderr so they
+do not enter the shell exports. To use the helper for ASAN, select `asan` or
+`host-asan` with the corresponding installed artifacts instead.
+
+### Compile and run a local application
+
+Compile all relevant host code with TSAN and link the executable to the shared
+runtime, for example:
+
+```bash
+"${ROCM_TSAN_PATH}/lib/llvm/bin/clang++" \
+  -g -O1 -fsanitize=thread -shared-libsan -fno-omit-frame-pointer \
+  -pthread example.cpp -o example
+./example
+```
+
+For HIP compilation, use the host-only flags generated by TheRock's `TSAN`
+preset; see [Verify host instrumentation](#verify-host-instrumentation).
+Linking the runtime alone does not instrument memory accesses or synchronization
+in previously compiled code. Rebuild dependencies that need race detection.
+
+For an uninstrumented loader such as Python importing a TSAN-built extension,
+preload the discovered runtime for that command only:
+
+```bash
+LD_PRELOAD="${TSAN_RUNTIME_PATH}" python /path/to/component_tests.py
+```
+
+Use the test script and Python environment supplied by your component. This
+starts the runtime early enough for instrumented shared libraries. It does not
+instrument Python or establish that the extension was compiled correctly.
+CI uses the same scoped preload for probes and component scripts that load
+instrumented libraries; the setup helper does not set a global `LD_PRELOAD`.
+
+### Run a component test locally
+
+After building a TSAN component with tests, run its executable or CTest suite
+from the configured shell. For example, hipFile's internal unit tests can run
+without GPU device access:
+
+```bash
+ctest --test-dir /path/to/hipfile/build -L internal -LE stress --output-on-failure
+```
+
+GPU tests still require a working driver and supported hardware. Investigate a
+TSAN report rather than retrying the test until it passes; component CI disables
+retries for the TSAN variant. The host sanitizer controls below verify both a
+clean program and an intentional race, including the expected nonzero exit.
 
 ## Troubleshooting
 
@@ -231,3 +286,36 @@ container to allow these probes.
 If `amd-smi static` or the GPU sanity checks fail, check driver health and
 GPU access on the test runner. A successful build followed by a failed
 sanity check does not qualify the GPU component tests.
+
+### Verify host instrumentation
+
+`HOST_ASAN` and `TSAN` apply sanitizer flags to host code in C, C++ and native
+HIP sources. These modes bypass ccache through `CCACHE_DISABLE=1` in the
+compiler launcher: ccache 4.9.1 drops `-Xarch_host` and its argument even on
+cache misses. Clearing the cache does not fix this. Rebuild affected objects
+after changing the launcher configuration.
+
+Run the integration controls against an installed ROCm development tree on
+Linux (CMake, Ninja and ccache must be available):
+
+```bash
+python tests/test_host_sanitizer.py \
+  --rocm-path /path/to/rocm \
+  --sanitizer TSAN \
+  --build-dir /path/to/new-test-directory \
+  --gpu-arch gfx950 \
+  --artifact /path/to/rocm/lib/libhipfile.so
+```
+
+Use `--sanitizer HOST_ASAN` with a compatible ASAN or unsanitized dependency
+tree to check address instrumentation. Do not mix ASAN and TSAN runtimes in
+one process. `--artifact` is optional and may be repeated for other shared
+libraries or dynamically linked executables.
+
+The test builds C, C++ and HIP controls both directly and through ccache. It
+checks memory-access instrumentation symbols, runs clean controls, requires
+intentional races or use-after-free errors to produce sanitizer reports, and
+checks that the HIP device kernel remains unsanitized. It also checks each
+supplied artifact for memory-access instrumentation symbols. Logs, objects
+and reports remain in the new build directory. These host controls compile
+device code but do not require a GPU; they do not qualify GPU execution.
