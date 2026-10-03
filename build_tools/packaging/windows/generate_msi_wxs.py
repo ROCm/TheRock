@@ -593,6 +593,17 @@ def _stable_guid(*parts: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, "/".join(parts))).upper()
 
 
+def discovery_registry_key(major: str, minor: str) -> str:
+    """Return the shared SDK-discovery registry subkey for a ROCm major.minor.
+
+    The single source of truth for the per-version, package-agnostic key
+    ``Software\\AMD\\ROCm\\{major}.{minor}`` written by add_discovery_registry
+    (RFC0014). Consumers that need to locate ROCm (e.g. the install test) import
+    this so the written and read key cannot drift apart.
+    """
+    return f"Software\\AMD\\ROCm\\{major}.{minor}"
+
+
 @dataclass
 class PackageInputs:
     """Everything gathered from disk before any WiX XML is emitted.
@@ -926,7 +937,7 @@ def add_discovery_registry(
     (an x64 package would otherwise land it under WOW6432Node), where x64
     consumers expect it.
     """
-    discovery_key = f"Software\\AMD\\ROCm\\{layout.major}.{layout.minor}"
+    discovery_key = discovery_registry_key(layout.major, layout.minor)
     component = ET.SubElement(
         doc.install_dir,
         _tag("Component"),

@@ -29,6 +29,7 @@ from generate_msi_wxs import (
     resolve_legacy_dlls,
     add_install_directory_tree,
     add_legacy_system32_feature,
+    discovery_registry_key,
     _stable_guid,
     _read_rocm_version,
 )
@@ -919,6 +920,11 @@ class TestBuildWxsHelpers(unittest.TestCase):
             _stable_guid("System32", "amdhip64_7.dll"),
             _stable_guid("ROCm_ROCmRuntime_PATH_component"),
         )
+
+    def test_discovery_registry_key(self):
+        # The single source of truth for the shared discovery subkey. Consumers
+        # (e.g. the install test) import this, so pin its exact shape.
+        self.assertEqual(discovery_registry_key("10", "2"), "Software\\AMD\\ROCm\\10.2")
 
     def test_create_wix_document_emits_control_properties(self):
         pkg = PACKAGES["runtime"]
