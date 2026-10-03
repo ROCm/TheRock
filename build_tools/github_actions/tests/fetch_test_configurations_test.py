@@ -132,6 +132,23 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertGreater(len(components), 0)
 
     # -----------------------
+    # kpack debug opt-out
+    # -----------------------
+
+    def test_kpack_debug_opt_out_emitted(self):
+        # rocblas/hipblas/hiptensor suppress kpack debug logs by default via
+        # "rocm_kpack_debug": "0" in their test_matrix entry. The workflow reads
+        # this field (defaulting to "1" when absent, and forcing "1" when the
+        # job is re-run with GitHub's debug logging enabled).
+        os.environ["PROJECTS_TO_TEST"] = "rocblas"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        rocblas = next(j for j in components if j["job_name"] == "rocblas")
+        self.assertEqual(rocblas["rocm_kpack_debug"], "0")
+
+    # -----------------------
     # Sharding behavior
     # -----------------------
 
