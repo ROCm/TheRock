@@ -1084,6 +1084,13 @@ def filter_components_fromartifactory(
                                 if match_found and line.strip():
                                     logger.debug(f"Matching line: {line.strip()}")
                                     source_path = source_dir / line.strip()
+                                    # Split artifacts retain original manifest roots even
+                                    # when all of a root's device images were moved into
+                                    # a shared kpack under another root. Match the artifact
+                                    # flattener's handling of these absent roots, while
+                                    # retaining validation of every existing payload.
+                                    if enable_kpack and not source_path.exists():
+                                        continue
                                     sourcedir_list.append(source_path)
                     except OSError as e:
                         logger.warning(f"Could not read manifest {filename}: {e}")
