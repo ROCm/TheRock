@@ -187,6 +187,29 @@ TSAN instruments host code; it does not instrument GPU kernels or require
 `HSA_XNACK=1`. Use a TSAN build or install tree and its matching compiler/runtime.
 Do not load ASAN and TSAN runtimes into the same process.
 
+### CI qualification
+
+Run the manual [Multi-Arch CI TSAN workflow](../../.github/workflows/multi_arch_ci_tsan.yml)
+with an explicit GPU family such as `gfx94X` or `gfx950`. Leaving the family
+input empty skips Linux builds, matching the other manual CI workflows.
+Tests use the regular per-family GPU
+runners, component scripts, and sharding. The setup job selects the test tier
+using the [standard filtering policy](test_filtering.md).
+
+For comprehensive qualification, set `linux_test_labels` to
+`test_filter:comprehensive`. To focus on a component, use a label such as
+`test:rocrand,test_filter:comprehensive`.
+
+Initial qualification uses `stage_reuse_mode: off` to build all stages. The
+shared stage-reuse selector does not yet verify build-variant compatibility;
+an artifact's name and GPU family alone do not establish that it was built
+with TSan. Before enabling reuse, both automatic baseline selection and
+explicit baseline copying must reject incompatible variants. Compatible
+TSan artifacts may then be reused. Release publishing is deferred until CI
+qualification succeeds.
+
+### Runtime setup
+
 From a TheRock checkout, configure the same environment used by component CI:
 
 ```bash
@@ -251,6 +274,19 @@ retries for the TSAN variant. The host sanitizer controls below verify both a
 clean program and an intentional race, including the expected nonzero exit.
 
 ## Troubleshooting
+
+### TSan compiler probes in containers
+
+Clang TSan may re-execute build-time compiler probes with ASLR disabled.
+Docker's default seccomp profile can block the required `personality` syscall.
+The TSAN build workflow sets `--security-opt seccomp=unconfined` for its build
+container to allow these probes.
+
+### GPU tests stop before running components
+
+If `amd-smi static` or the GPU sanity checks fail, check driver health and
+GPU access on the test runner. A successful build followed by a failed
+sanity check does not qualify the GPU component tests.
 
 ### Verify host instrumentation
 

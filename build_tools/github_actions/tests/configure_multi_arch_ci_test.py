@@ -1774,6 +1774,32 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
 
+    def test_tsan_uses_two_gpu_families_and_disables_python(self):
+        targets = cm.TargetSelection(linux_families=["gfx94x", "gfx950"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="workflow_dispatch",
+                build_variant="tsan",
+                build_python_packages=True,
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+
+        self.assertIsNotNone(result.linux)
+        self.assertEqual(result.linux.build_variant_label, "tsan")
+        self.assertEqual(result.linux.build_variant_suffix, "tsan")
+        self.assertEqual(result.linux.build_variant_cmake_preset, "linux-release-tsan")
+        self.assertFalse(result.linux.build_python_packages)
+        self.assertEqual(
+            [entry["amdgpu_family"] for entry in result.linux.per_family_info],
+            ["gfx94X-dcgpu", "gfx950-dcgpu"],
+        )
+        for entry in result.linux.per_family_info:
+            self.assertTrue(entry["test-runs-on"])
+            self.assertNotEqual(entry["test-runs-on"], result.linux.build_runs_on_large)
+
     def test_asan_debug_uses_sandbox_runner(self):
         """asan-debug variant uses sandbox runner like asan."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])
@@ -1932,6 +1958,53 @@ class TestWriteOutputs(unittest.TestCase):
 
 class TestConfigurePipeline(unittest.TestCase):
     """Test the full pipeline via configure()."""
+
+    def test_tsan_qualification_rebuilds_and_honors_test_selection(self):
+        for labels, expected_tier in (
+            ([], "quick"),
+            (["test_filter:standard"], "standard"),
+            (["test:rocrand", "test_filter:comprehensive"], "comprehensive"),
+        ):
+            with self.subTest(labels=labels):
+                inputs = cm.CIInputs(
+                    run_id="12345",
+                    event_name="workflow_dispatch",
+                    commit_ref="feature",
+                    base_ref="HEAD^",
+                    build_variant="tsan",
+                    linux_amdgpu_families=["gfx94x"],
+                    windows_amdgpu_families=["none"],
+                    linux_test_labels=labels,
+                    build_python_packages=False,
+                    build_pytorch=False,
+                    build_jax=False,
+                    build_native_linux=False,
+                    # Even an explicit baseline cannot bypass qualification.
+                    prebuilt_stages="all",
+                    baseline_run_id="release-baseline",
+                )
+                with (
+                    patch.dict(os.environ, {"STAGE_REUSE_MODE": "off"}),
+                    patch("configure_multi_arch_ci.compute_auto_stage_reuse") as reuse,
+                ):
+                    outputs = cm.configure(inputs, cm.GitContext.empty())
+                reuse.assert_not_called()
+                self.assertEqual(outputs.jobs.test_rocm.test_type, expected_tier)
+                self.assertEqual(outputs.linux_test_labels, labels)
+                self.assertIsNone(outputs.builds.windows)
+                linux = outputs.builds.linux
+                self.assertIsNotNone(linux)
+                self.assertEqual(linux.build_variant_cmake_preset, "linux-release-tsan")
+                self.assertEqual(linux.prebuilt_stages, [])
+                self.assertEqual(linux.baseline_run_id, "")
+                self.assertEqual(linux.baseline_repository, "")
+                self.assertFalse(linux.build_python_packages)
+                self.assertFalse(linux.build_native_linux)
+                self.assertEqual(len(linux.per_family_info), 1)
+                self.assertEqual(
+                    linux.per_family_info[0]["amdgpu_family"], "gfx94X-dcgpu"
+                )
+                self.assertTrue(linux.per_family_info[0]["test-runs-on"])
 
     def test_skipped_outputs(self):
         """CIOutputs.skipped produces empty, disabled outputs."""
