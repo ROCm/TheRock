@@ -476,9 +476,7 @@ class TestBuildWxs(unittest.TestCase):
     def _discovery_values(self, root):
         """Return {value_name: (key, value, type)} for the RocmDiscovery component."""
         comp = next(
-            c
-            for c in root.iter(_ns("Component"))
-            if c.get("Id") == "RocmDiscovery"
+            c for c in root.iter(_ns("Component")) if c.get("Id") == "RocmDiscovery"
         )
         out = {}
         for rv in comp.findall(_ns("RegistryValue")):
@@ -542,9 +540,7 @@ class TestBuildWxs(unittest.TestCase):
 
         def _disco(root):
             return next(
-                c
-                for c in root.iter(_ns("Component"))
-                if c.get("Id") == "RocmDiscovery"
+                c for c in root.iter(_ns("Component")) if c.get("Id") == "RocmDiscovery"
             )
 
         comp_r, comp_c = _disco(root_r), _disco(root_c)
