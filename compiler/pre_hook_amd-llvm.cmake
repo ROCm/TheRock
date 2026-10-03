@@ -42,7 +42,9 @@ else()
     # "Unknown debugging section .debug_str_offsets" even in version 0.16
     # (Ubuntu 26.04). This is an upstream dwz limitation, not something we
     # can fix by updating distro packages. Revisit if dwz gains DWARF5 support.
-    if(THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN" OR THEROCK_SANITIZER STREQUAL "TSAN")
+    if(THEROCK_SANITIZER STREQUAL "ASAN" OR
+       THEROCK_SANITIZER STREQUAL "HOST_ASAN" OR
+       THEROCK_SANITIZER STREQUAL "TSAN")
         string(APPEND RUNTIMES_CMAKE_ARGS ";-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} -gdwarf-4;-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} -gdwarf-4")
     endif()
 

@@ -1739,6 +1739,8 @@ function(_therock_cmake_subproject_setup_toolchain
   endif()
   string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER_LAUNCHER \"@CMAKE_C_COMPILER_LAUNCHER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER_LAUNCHER \"@CMAKE_CXX_COMPILER_LAUNCHER@\")\n")
+  string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER_LAUNCHER \"@CMAKE_HIP_COMPILER_LAUNCHER@\")\n")
+  string(APPEND _toolchain_contents "set(CMAKE_HIP_FLAGS_INIT \"@CMAKE_HIP_FLAGS@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT \"@CMAKE_MSVC_DEBUG_INFORMATION_FORMAT@\")\n")
   if(MSVC AND compiler_toolchain)
     # The system compiler and the toolchain compiler are incompatible, so we

@@ -701,6 +701,9 @@ if(BUILD_TESTING)
     "contrib/dg-extract-results.py"
     "gdb/disable-implicit-rules.mk"
     "gdb/silent-rules.mk"
+    # gdb/testsuite/lib/gdb.exp unconditionally points TSAN at this file.
+    # Without it every instrumented ROCgdb process exits before a test runs.
+    "gdb/tsan-suppressions.txt"
     "include/dwarf2.def"
     "include/dwarf2.h"
   )
