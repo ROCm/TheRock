@@ -5,11 +5,12 @@
 """Uninstall the Windows MSI packages and verify a clean teardown.
 
 Companion to ``native_windows_package_install_test.py``. For each requested
-package it looks up the installed product's ProductCode by DisplayName (the
-package's ``product_name``) under the Windows "Uninstall" registry hive, runs
+package it resolves the installed product's ProductCode (by DisplayName),
+validates that the product under that code was installed for the requested
+``--rocm-version`` (so the wrong version is never removed), runs
 ``msiexec /x {ProductCode} /qn`` to remove it, and verifies teardown: the
-versioned install directory is gone (or empty) and the package's HKLM registry
-key no longer exists.
+versioned install directory is gone (or empty) and the shared SDK-discovery
+registry key no longer exists.
 
 Note: the driver-supplied System32 DLLs are shared, reference-counted MSI
 components and may legitimately remain after an uninstall (another ROCm install
@@ -28,62 +29,97 @@ import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from generate_msi_wxs import PACKAGES  # noqa: E402
-
-# Reuse the install test's shared helpers (same directory) so the two scripts
-# agree on paths, version parsing, and env handling.
-from native_windows_package_install_test import (  # noqa: E402
-    DEFAULT_ARTIFACT_GITHUB_REPO,
-    DEFAULT_PROGRAM_FILES,
-    MSIEXEC_TIMEOUT_SEC,
-    _env,
-    _format_package_template,
-    _print_log_tail,
-    _split_packages,
-    install_dir_for,
-    major_minor,
+from generate_msi_wxs import (  # noqa: E402
+    PACKAGES,
+    discovery_registry_key,
+    parse_major_minor,
 )
 
-UNINSTALL_KEY = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
+# Reuse the install test's shared helpers (same directory) so the two scripts
+# agree on paths, msiexec handling, and env parsing.
+from native_windows_package_install_test import (  # noqa: E402
+    DEFAULT_PROGRAM_FILES,
+    MSIEXEC_SUCCESS_CODES,
+    MSIEXEC_TIMEOUT_SEC,
+    _env,
+    _print_log_tail,
+    _split_packages,
+    find_product_code,
+    install_dir_for,
+    installed_product_files,
+)
 
 
-def find_product_code(display_name: str) -> str:
-    """Return the MSI ProductCode for an installed product by DisplayName.
+def product_install_location(product_code: str) -> Path | None:
+    """Return a product's install location from the Windows Installer API.
 
-    Searches the 64-bit Uninstall hive for a subkey whose ``DisplayName`` value
-    matches ``display_name`` and returns its ``{GUID}`` key name (the
-    ProductCode msiexec /x expects).
+    Reads ``INSTALLPROPERTY_INSTALLLOCATION`` for ``product_code``; returns None
+    when the product records no install location (older MSIs). Used to validate
+    the installed version before removal.
     """
-    import winreg  # Windows-only; imported lazily so the module loads on Linux.
+    import ctypes
+    from ctypes import wintypes
 
-    with winreg.OpenKey(
-        winreg.HKEY_LOCAL_MACHINE,
-        UNINSTALL_KEY,
-        0,
-        winreg.KEY_READ | winreg.KEY_WOW64_64KEY,
-    ) as hive:
-        index = 0
-        while True:
-            try:
-                product_code = winreg.EnumKey(hive, index)
-            except OSError:
-                break
-            index += 1
-            try:
-                with winreg.OpenKey(hive, product_code) as entry:
-                    name, _ = winreg.QueryValueEx(entry, "DisplayName")
-            except (FileNotFoundError, OSError):
-                continue
-            if name == display_name:
-                return product_code
-    raise RuntimeError(
-        f"no installed product found with DisplayName {display_name!r} under "
-        f"HKLM\\{UNINSTALL_KEY}"
-    )
+    msi = ctypes.WinDLL("msi")
+    ERROR_MORE_DATA = 234
+    msi.MsiGetProductInfoW.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.LPCWSTR,
+        wintypes.LPWSTR,
+        ctypes.POINTER(wintypes.DWORD),
+    ]
+    msi.MsiGetProductInfoW.restype = wintypes.UINT
+
+    prop = "InstallLocation"  # INSTALLPROPERTY_INSTALLLOCATION
+    pcch = wintypes.DWORD(0)
+    rc = msi.MsiGetProductInfoW(product_code, prop, None, ctypes.byref(pcch))
+    if rc not in (0, ERROR_MORE_DATA):
+        return None
+    buf = ctypes.create_unicode_buffer(pcch.value + 1)
+    pcch = wintypes.DWORD(pcch.value + 1)
+    rc = msi.MsiGetProductInfoW(product_code, prop, buf, ctypes.byref(pcch))
+    if rc != 0 or not buf.value:
+        return None
+    return Path(buf.value)
+
+
+def resolve_product_for_version(package: str, rocm_version: str) -> str:
+    """Return the ProductCode for ``package`` at ``rocm_version``, or raise.
+
+    Guards against removing the wrong version: the product is matched by
+    DisplayName and then its installed footprint is confirmed to belong to the
+    requested version's install directory before its ProductCode is returned.
+    """
+    product_code = find_product_code(PACKAGES[package].product_name)
+    expected_dir = install_dir_for(package, rocm_version).resolve()
+
+    # Prefer the product's recorded InstallLocation; fall back to its component
+    # file paths when the MSI did not set InstallLocation.
+    location = product_install_location(product_code)
+    if location is not None:
+        if location.resolve() != expected_dir:
+            raise RuntimeError(
+                f"product {package!r} ({product_code}) is installed at {location}, "
+                f"not the requested version's directory {expected_dir}; refusing "
+                "to uninstall a different version"
+            )
+        return product_code
+
+    files = installed_product_files(product_code)
+    if files and not any(expected_dir in f.resolve().parents for f in files):
+        raise RuntimeError(
+            f"product {package!r} ({product_code}) has no files under the "
+            f"requested version's directory {expected_dir}; refusing to uninstall "
+            "a different version"
+        )
+    return product_code
 
 
 def uninstall_msi(product_code: str, log_path: Path) -> None:
-    """Uninstall a product by ProductCode, raising RuntimeError on failure."""
+    """Uninstall a product by ProductCode, raising on real failure.
+
+    Exit code 3010 (reboot required) is treated as success.
+    """
     cmd = [
         "msiexec",
         "/x",
@@ -95,12 +131,14 @@ def uninstall_msi(product_code: str, log_path: Path) -> None:
     ]
     print(f"Uninstalling: {' '.join(cmd)}")
     result = subprocess.run(cmd, check=False, timeout=MSIEXEC_TIMEOUT_SEC)
-    if result.returncode != 0:
+    if result.returncode not in MSIEXEC_SUCCESS_CODES:
         _print_log_tail(log_path)
         raise RuntimeError(
             f"msiexec failed (exit {result.returncode}) uninstalling {product_code}; "
             "see the verbose log above."
         )
+    if result.returncode == 3010:
+        print("[note] msiexec returned 3010 (reboot required); treated as success")
 
 
 def verify_install_dir_removed(
@@ -115,11 +153,17 @@ def verify_install_dir_removed(
     print(f"[PASS] install directory removed: {install_dir}")
 
 
-def verify_registry_key_removed(package: str, rocm_version: str) -> None:
-    """Assert the package's HKLM registry key no longer exists."""
+def verify_discovery_key_removed(rocm_version: str) -> None:
+    """Assert the shared SDK-discovery key no longer exists.
+
+    The key is ref-counted across all ROCm packages at the version, so it is
+    removed only once the LAST package uninstalls; this is checked once after all
+    requested packages are removed.
+    """
     import winreg  # Windows-only; imported lazily so the module loads on Linux.
 
-    subkey = _format_package_template(PACKAGES[package].registry_key, rocm_version)
+    major, minor = parse_major_minor(rocm_version)
+    subkey = discovery_registry_key(major, minor)
     try:
         winreg.OpenKey(
             winreg.HKEY_LOCAL_MACHINE,
@@ -128,9 +172,11 @@ def verify_registry_key_removed(package: str, rocm_version: str) -> None:
             winreg.KEY_READ | winreg.KEY_WOW64_64KEY,
         ).Close()
     except FileNotFoundError:
-        print(f"[PASS] registry key removed: HKLM\\{subkey}")
+        print(f"[PASS] discovery registry key removed: HKLM\\{subkey}")
         return
-    raise RuntimeError(f"registry key still present after uninstall: HKLM\\{subkey}")
+    raise RuntimeError(
+        f"discovery registry key still present after uninstall: HKLM\\{subkey}"
+    )
 
 
 class WindowsPackageUninstallTest:
@@ -148,7 +194,7 @@ class WindowsPackageUninstallTest:
                 f"unknown package(s): {', '.join(unknown)} "
                 f"(choose from {', '.join(PACKAGES)})"
             )
-        major_minor(rocm_version)
+        parse_major_minor(rocm_version)
         self.packages = packages
         self.rocm_version = rocm_version
         self.program_files = program_files
@@ -166,13 +212,19 @@ class WindowsPackageUninstallTest:
             with tempfile.TemporaryDirectory() as tmp:
                 work_dir = Path(tmp)
                 for package in self.packages:
-                    product_code = find_product_code(PACKAGES[package].product_name)
+                    # Validate the installed version before removing it.
+                    product_code = resolve_product_for_version(
+                        package, self.rocm_version
+                    )
                     uninstall_msi(product_code, work_dir / f"{package}-uninstall.log")
                 for package in self.packages:
                     verify_install_dir_removed(
                         package, self.rocm_version, self.program_files
                     )
-                    verify_registry_key_removed(package, self.rocm_version)
+                # The discovery key is shared and ref-counted across packages, so
+                # it is gone only after the last package is removed above; check
+                # it once.
+                verify_discovery_key_removed(self.rocm_version)
         except Exception:  # noqa: BLE001 - top-level reporting boundary
             print("[FAIL] MSI uninstall test failed:", file=sys.stderr)
             traceback.print_exc()
@@ -185,12 +237,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Uninstall Windows MSI packages and verify clean teardown."
     )
-    # --artifact-run-id / --artifact-github-repo / --release-type are accepted for
-    # symmetry with the install test (so the same env/args drive both), even
-    # though uninstall needs only the installed product + version.
-    parser.add_argument("--artifact-run-id", default="")
-    parser.add_argument("--artifact-github-repo", default=DEFAULT_ARTIFACT_GITHUB_REPO)
-    parser.add_argument("--release-type", default="nightly")
     parser.add_argument(
         "--packages",
         default="runtime",
