@@ -13,6 +13,8 @@ Sanitizers can be enabled via the `THEROCK_SANITIZER` variable. We will be exten
 
 The sanitizer selection can be controlled per project by using a variable of the form `{subproject}_SANITIZER={VALUE}`. This is most commonly used to disable santiziers for specific projects once enabled globally.
 
+`linux-release-asan-compact` is an additional variant. It does not replace `linux-release-asan`, `linux-release-asan-debug`, `linux-release-host-asan`, or `linux-release-host-asan-debug`. Compact flags apply only when `THEROCK_ASAN_COMPACT` is ON. A subproject can keep normal ASAN and skip the compact flags with `{subproject}_ASAN_COMPACT=OFF` (for example `-Dcomposable_kernel_ASAN_COMPACT=OFF`).
+
 Because ROCm includes a compiler and uses multiple toolchains to build, there are only certain configurations of the project that support ASAN: generally, we allow ASAN to be enabled for any component that is built with the ROCm version of LLVM. This ensures that we only link to a single ASAN support library (each process can have only one) and can setup RPATH entries and other settings so that anything so compiled will function without further flags, preloads, path settings, etc. We are in the process of switching more of the project to bootstrap off of the built-in compiler, which will make more of the project capable of being instrumented out of the box with a sanitizer.
 
 ### CMake Preset
