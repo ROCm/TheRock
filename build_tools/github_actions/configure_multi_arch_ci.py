@@ -60,6 +60,7 @@ from _therock_utils.build_topology import get_topology
 from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
+    get_cpu_test_runner,
     select_build_runner,
 )
 from configure_ci_path_filters import (
@@ -1478,10 +1479,21 @@ def _expand_build_config_for_platform(
                     f"(global={jobs.test_rocm.test_type})"
                 )
 
+        # CPU test runner for components that don't need GPU access (e.g.,
+        # components with linux_cpu_runner: True). This allows CPU-only tests
+        # to run even when GPU testing is gated (e.g., trigger_test_label_only).
+        test_runs_on_cpu = get_cpu_test_runner(platform)
+
+        # tests_enabled is true when any test runner (GPU or CPU) is available.
+        # This provides a single flag for workflows to gate test jobs.
+        tests_enabled = bool(test_runs_on or test_runs_on_cpu)
+
         family_info = {
             "amdgpu_family": platform_info["family"],
             "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
             "test-runs-on": test_runs_on,
+            "test-runs-on-cpu": test_runs_on_cpu,
+            "tests_enabled": tests_enabled,
             "sanity_check_only_for_family": platform_info.get(
                 "sanity_check_only_for_family", False
             ),
