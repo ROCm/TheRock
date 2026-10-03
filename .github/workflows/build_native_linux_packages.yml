@@ -1,0 +1,111 @@
+name: Build Native Linux Packages
+
+on:
+  workflow_call:
+    inputs:
+      amdgpu_family:
+        description: gfx arch for creating the artifact fetch url
+        required: true
+        type: string
+      artifact_run_id:
+        description: workflow run id to download the artifacts from
+        type: string
+      rocm_version:
+        description: ROCm version to append to the package( Like 8.0.0 or 8.1.0).
+        required: true
+        type: string
+      package_type:
+        description: Specify whether debian or rpm packages are needed (deb or rpm).
+        required: true
+        type: string
+      package_suffix:
+        description: The suffix to be added to package name(build_no or master or rc or combiantion).
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      amdgpu_family:
+        type: choice
+        options:
+          - gfx110X-dgpu
+          - gfx1151
+          - gfx120X-all
+          - gfx94X-dcgpu
+          - gfx950-dcgpu
+        default: gfx94X-dcgpu
+      artifact_run_id:
+        description: workflow run id to download the artifacts from
+        type: string
+        default: "17840675558"
+      rocm_version:
+        description: ROCm version to append to the package( Like 8.0.0 or 8.1.0)
+        type: string
+        default: "7.9.0"
+      package_type:
+        description: Specify whether debian or rpm packages are needed (deb or rpm).
+        required: true
+        type: choice
+        options:
+          - rpm
+          - deb
+        default: "rpm"
+      package_suffix:
+        description: The suffix to be added to package name(build_no or master or rc or combiantion).
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build_rpm_packages:
+    name: Build Linux rpm Packages (xfail ${{ inputs.expect_failure }})
+    strategy:
+      fail-fast: false
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    env:
+      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:3ac188c17f88f08ce522297b616d8308361b8e9a9b31bcc3c3bbb9429b1efa6c
+      ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      OUTPUT_DIR: ${{ github.workspace }}/output
+      ARTIFACTS_DIR: ${{ github.workspace }}/output/artifacts
+      PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.12'
+      - name: Install Python requirements
+        run: |
+          pip install pyelftools boto3 jinja2
+          sudo apt install -y llvm debhelper-compat build-essential
+
+      - name: Fetch Artifacts
+        run: |
+          echo "Fetching artifacts for build ${{ inputs.artifact_run_id }}"
+          python ./build_tools/fetch_artifacts.py \
+            --run-id=${{ env.ARTIFACT_RUN_ID }} \
+            --run-github-repo="ROCm/TheRock" \
+            --target=${{ inputs.amdgpu_family }} \
+            --all \
+            --output-dir=${{ env.ARTIFACTS_DIR }}
+
+      - name: Build Packages
+        id: build-packages
+        run: |
+          echo "Building ${{ inputs.package_type }} packages for ${{ inputs.amdgpu_family }} ${{ inputs.artifact_run_id }}"
+          python ./build_tools/packaging/linux/build_package.py \
+            --dest-dir ${{ env.PACKAGE_DIST_DIR }} \
+            --rocm-version  ${{ inputs.rocm_version }} \
+            --target ${{ inputs.amdgpu_family }} \
+            --artifacts-dir ${{ env.ARTIFACTS_DIR }} \
+            --pkg-type ${{ inputs.package_type }} \
+            --version-suffix ${{ inputs.package_suffix }}
+
+      - name: Install generated packages (Python script)
+        run: |
+          python3 install_packages.py --artifacts-dir ${{ env.ARTIFACTS_DIR }}
+
+      - name: Upload Packages
+        id: upload-packages
+        run: |
+          echo "Skipping upload since s3 bucket is not ready"
