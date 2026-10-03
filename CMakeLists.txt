@@ -267,8 +267,8 @@ cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL
   "THEROCK_ENABLE_COMPOSABLE_KERNEL" OFF)
 
 cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
-  "Enables building rocWMMA benchmarks" OFF
-  "THEROCK_ENABLE_ROCWMMA;THEROCK_BUILD_TESTING" OFF)
+  "Enables building rocWMMA benchmarks" ON
+  "THEROCK_ENABLE_ROCWMMA;THEROCK_BUILD_TESTING;NOT WIN32" OFF)
 
 # Additional manual features that don't map to artifacts
 
