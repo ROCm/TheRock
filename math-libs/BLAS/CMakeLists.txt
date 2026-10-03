@@ -164,6 +164,7 @@ therock_cmake_subproject_declare(hipBLASLt
   CMAKE_ARGS
     -DHIP_PLATFORM=amd
     -DHIPBLASLT_ENABLE_BLIS=OFF  # TODO: Evaluate
+    -DHIPBLASLT_ENABLE_CLIENT=$<IF:$<BOOL:${WIN32}>,OFF,ON>
     # TensileLite's C++ gtest suite (tests/) is Linux-only for now (unvalidated
     # on Windows); mirrors the TENSILELITE_ENABLE_CLIENT guard below.
     -DTENSILELITE_BUILD_TESTING=$<IF:$<BOOL:${WIN32}>,OFF,${THEROCK_BUILD_TESTING}>
