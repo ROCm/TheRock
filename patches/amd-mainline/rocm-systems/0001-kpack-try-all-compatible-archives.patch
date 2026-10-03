@@ -1,0 +1,473 @@
+From 694068a0c1610c61e22ff33ef574849cd172f13d Mon Sep 17 00:00:00 2001
+From: Nirmal Unnikrishnan <71024015+nunnikri@users.noreply.github.com>
+Date: Thu, 1 Oct 2026 16:43:55 -0700
+Subject: [PATCH] fix(kpack): fall through to next matching kpack archive on
+ kernel-not-found (#12518)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Temporary backport of https://github.com/ROCm/rocm-systems/pull/12518.
+The pinned rocm-systems revision bc176d4b86e86cf5caf5dc44fc2beec442ad6e38
+predates this fix. Remove this patch when the pin includes upstream commit
+694068a0c1610c61e22ff33ef574849cd172f13d. Avoids a 130-commit submodule
+bump for the rocBLAS gfx942:xnack+ / bare-gfx942 archive lookup failure in
+https://github.com/ROCm/rocm-libraries/actions/runs/37138192117/job/111247271746.
+
+## Motivation
+
+JIRA ID: ROCM-31644
+
+`kpack_load_code_object()` committed to the first archive whose
+architecture tag matched the requesting agent's ISA, and returned
+`KPACK_ERROR_KERNEL_NOT_FOUND` immediately if that archive didn't hold
+the kernel — even when a less-specific but still ISA-compatible archive
+existed and actually held it. A single architecture's kernels can be
+split across multiple kpack archives (e.g. an `xnack`-tagged archive
+holding a handful of kernels for one binary, plus a bare/generic archive
+holding the rest for a different binary sharing the same kpack group),
+so the loader needs to try every compatible candidate before giving up.
+
+This revives [#9874](https://github.com/ROCm/rocm-systems/pull/9874),
+which fixed this exact defect for
+[ROCm/TheRock#7081](https://github.com/ROCm/TheRock/issues/7081) (torch
+2.12 + ROCm 7.14, `hipErrorInvalidImage` on gfx90a) but was closed
+without merging once that specific trigger was worked around in
+PyTorch's own packaging rather than by fixing the loader.
+
+The same underlying defect is independently hitting rocFFT-test on
+gfx950 ASAN builds (see Issue Tracking). Root cause there is upstream in
+rocFFT's own build: `projects/rocfft/CMakeLists.txt` unconditionally
+strips all `GPU_TARGETS` feature flags before compiling (`list(TRANSFORM
+GPU_TARGETS REPLACE ":[^;]+" "")`, comment: *"rocFFT builds generic code
+for each target"*), so rocFFT-test's kernels always land in the bare,
+untagged kpack archive — even on ASAN builds where TheRock's own
+sanitizer configuration deliberately forces `gfx950` → `gfx950:xnack+`.
+Meanwhile hipFFT-test, a separate project sharing the same `fft_test`
+kpack group, has no such stripping logic and is correctly tagged.
+
+## Technical Details
+
+- `kpack_load_code_object()`: instead of stopping at the first archive
+whose architecture tag matches, collect every `(archive,
+matched_target)` candidate across the full compatible-target power set
+for an architecture (most specific first), then try `kpack_get_kernel()`
+against each in order until one succeeds.
+- Every miss along the way is logged and recorded in `last_err`; if
+every candidate is exhausted without success, the original error
+(`KERNEL_NOT_FOUND`, or another error type) is still returned —
+preserving the existing `ARCH_NOT_FOUND` vs `KERNEL_NOT_FOUND`
+distinction for accurate diagnostics, unchanged from #9874's original
+behavior.
+- Rebased cleanly onto current `develop` (which already has #9953's
+partial fix) with zero conflicts in the affected file.
+- Added a second regression test alongside #9874's original 1-feature
+case (`gfx90a:xnack-` → falls through to bare `gfx90a`): a 2-feature
+(`sramecc+`/`xnack+`) scenario mirroring the rocFFT-test/gfx950 case
+exactly, where two of the four power-set candidates have no archive at
+all — not merely a kernel-not-found miss — to cover that the collection
+loop correctly skips candidates with no matching archive on the way to
+the one that has it.
+
+## Test Plan
+
+- Generated all four `.kpack` test fixtures via `generate_test_data.py`
+(ran cleanly, verified output).
+- Traced the fix logic by hand against the real archive layout pulled
+from a gfx950 ASAN tarball (`kpack_get_binary`/`kpack_get_architecture`
+listing) to confirm it resolves the actual ROCM-31644 failure.
+- **Not yet done**: a real compiler/CTest pass of `test_kpack_runtime`
+(including the pre-existing `LoadCodeObject_KernelNotFound` test, to
+confirm no regression there).
+
+## Test Result
+
+Pending
+---
+ shared/kpack/runtime/src/loader.cpp           |  44 ++++---
+ .../kpack/runtime/tests/generate_test_data.py | 109 +++++++++++++++++-
+ .../test_fallthrough_2feat_generic.kpack      | Bin 0 -> 328 bytes
+ .../test_fallthrough_2feat_xnack.kpack        | Bin 0 -> 341 bytes
+ .../test_fallthrough_generic.kpack            | Bin 0 -> 328 bytes
+ .../test_assets/test_fallthrough_xnack.kpack  | Bin 0 -> 341 bytes
+ .../kpack/runtime/tests/test_loader_api.cpp   |  92 +++++++++++++++
+ 7 files changed, 226 insertions(+), 19 deletions(-)
+ create mode 100644 shared/kpack/runtime/tests/test_assets/test_fallthrough_2feat_generic.kpack
+ create mode 100644 shared/kpack/runtime/tests/test_assets/test_fallthrough_2feat_xnack.kpack
+ create mode 100644 shared/kpack/runtime/tests/test_assets/test_fallthrough_generic.kpack
+ create mode 100644 shared/kpack/runtime/tests/test_assets/test_fallthrough_xnack.kpack
+
+diff --git a/shared/kpack/runtime/src/loader.cpp b/shared/kpack/runtime/src/loader.cpp
+index 62dc8f82cdaa..6097689a4ef1 100644
+--- a/shared/kpack/runtime/src/loader.cpp
++++ b/shared/kpack/runtime/src/loader.cpp
+@@ -7,6 +7,7 @@
+ #include <filesystem>
+ #include <msgpack.hpp>
+ #include <string>
++#include <utility>
+ #include <vector>
+ 
+ #include "isa_target_match.h"
+@@ -414,8 +415,11 @@ kpack_error_t kpack_load_code_object(kpack_cache_t cache,
+     // to find an archive that has a matching architecture.
+     KPACK_DEBUG(cache, "trying architecture: %s", arch);
+ 
+-    kpack_archive_t archive = nullptr;
+-    std::string matched_arch;
++    // A single architecture's kernels may be split across several archives
++    // (e.g. an xnack-variant kpack holding a handful of kernels plus the bare
++    // kpack holding the rest), so collect every matching archive rather than
++    // committing to the most specific one.
++    std::vector<std::pair<kpack_archive_t, std::string>> candidates;
+ 
+     // Find archive containing a compatible architecture
+     // Lock only for cache lookup, release before kernel fetch
+@@ -435,34 +439,38 @@ kpack_error_t kpack_load_code_object(kpack_cache_t cache,
+ 
+           auto archive_it = cache->archives.find(archive_path);
+           if (archive_it != cache->archives.end()) {
+-            archive = archive_it->second;
+-            matched_arch = target;
+-            return true;  // found — stop searching
++            candidates.emplace_back(archive_it->second, target);
+           }
+         }
+-        return false;  // try next compatible target
++        return false;  // keep collecting from every compatible target
+       });
+     }  // Release cache->archive_mutex before kernel fetch
+ 
+-    if (!archive) {
++    if (candidates.empty()) {
+       continue;
+     }
+ 
+     // Fetch kernel using the matched architecture (which may be a subset of
+     // the agent's full ISA, e.g., bare "gfx942" for a release build).
+-    err = kpack_get_kernel(archive, lookup_key.c_str(), matched_arch.c_str(),
+-                           &kernel_data, &kernel_size);
+-    if (err == KPACK_SUCCESS) {
+-      KPACK_DEBUG(cache, "  found kernel: %zu bytes", kernel_size);
++    for (const auto& [archive, matched_arch] : candidates) {
++      err = kpack_get_kernel(archive, lookup_key.c_str(), matched_arch.c_str(),
++                             &kernel_data, &kernel_size);
++      if (err == KPACK_SUCCESS) {
++        KPACK_DEBUG(cache, "  found kernel: %zu bytes", kernel_size);
++        break;
++      }
++      // Archive was found with matching architecture but the kernel was not
++      // present in it (e.g. an xnack-variant kpack that is missing a kernel
++      // present in the base/generic kpack). Continue to the next candidate
++      // rather than returning immediately — a less-specific but still ISA-
++      // compatible archive (e.g. bare gfx90a.kpack) may contain the kernel.
++      KPACK_DEBUG(cache, "  kernel not found in this archive (error %d), trying next candidate", err);
++      last_err = err;
++    }
++
++    if (kernel_data) {
+       break;
+     }
+-    // Archive was found with matching architecture but the kernel was not
+-    // present in it (e.g. an xnack-variant kpack that is missing a kernel
+-    // present in the base/generic kpack). Continue to the next candidate
+-    // rather than returning immediately — a less-specific but still ISA-
+-    // compatible archive (e.g. bare gfx90a.kpack) may contain the kernel.
+-    KPACK_DEBUG(cache, "  kernel not found in this archive (error %d), trying next candidate", err);
+-    last_err = err;
+   }
+ 
+   if (!kernel_data) {
+diff --git a/shared/kpack/runtime/tests/generate_test_data.py b/shared/kpack/runtime/tests/generate_test_data.py
+index 72b538e7a956..8770ea420034 100644
+--- a/shared/kpack/runtime/tests/generate_test_data.py
++++ b/shared/kpack/runtime/tests/generate_test_data.py
+@@ -41,7 +41,7 @@ def generate_noop_archive(output_dir: Path) -> None:
+     archive.add_kernel(prepared2)
+ 
+     # Kernel 3: bin/testapp#0 @ gfx900
+-    kernel3_data = b"KERNEL3_APP_GFX900" + b"\xFF" * 150
++    kernel3_data = b"KERNEL3_APP_GFX900" + b"\xff" * 150
+     prepared3 = archive.prepare_kernel("bin/testapp#0", "gfx900", kernel3_data)
+     archive.add_kernel(prepared3)
+ 
+@@ -94,6 +94,109 @@ def generate_zstd_archive(output_dir: Path) -> None:
+     print(f"  - bin/hiptest#0: gfx1100 ({len(kernel3_data)} bytes)")
+ 
+ 
++def generate_fallthrough_archives(output_dir: Path) -> None:
++    """Generate archives for the xnack-split archive-fallthrough regression test.
++
++    Reproduces the ROCm/TheRock#7081 archive layout: a kernel's full set of
++    kpack archives is split across a more-specific (xnack) archive holding
++    unrelated kernels and a less-specific (bare) archive holding the actual
++    kernel. The loader must fall through from the xnack archive to the bare
++    archive on a kernel-not-found miss instead of giving up immediately.
++    """
++    # xnack-specific archive: matches the agent ISA more specifically, but
++    # does not contain the kernel under test.
++    xnack_archive = PackedKernelArchive(
++        group_name="test",
++        gfx_arch_family="gfx90aX",
++        gfx_arches=["gfx90a:xnack-"],
++        compressor=NoOpCompressor(),
++    )
++    other_data = b"OTHER_KERNEL_XNACK_MINUS" + b"\x00" * 50
++    prepared = xnack_archive.prepare_kernel(
++        "lib/libother.so#0", "gfx90a:xnack-", other_data
++    )
++    xnack_archive.add_kernel(prepared)
++    xnack_archive.finalize_archive()
++    xnack_archive.write(output_dir / "test_fallthrough_xnack.kpack")
++    print(
++        f"Generated fallthrough xnack archive: {output_dir / 'test_fallthrough_xnack.kpack'}"
++    )
++    print("  - gfx90a:xnack-, 1 unrelated kernel (lib/libother.so#0)")
++
++    # Bare/generic archive: less specific, holds the kernel under test.
++    generic_archive = PackedKernelArchive(
++        group_name="test",
++        gfx_arch_family="gfx90aX",
++        gfx_arches=["gfx90a"],
++        compressor=NoOpCompressor(),
++    )
++    target_data = b"GENERIC_GFX90A_KERNEL_DATA" + b"\x00" * 50
++    prepared2 = generic_archive.prepare_kernel(
++        "lib/libtest.so#0", "gfx90a", target_data
++    )
++    generic_archive.add_kernel(prepared2)
++    generic_archive.finalize_archive()
++    generic_archive.write(output_dir / "test_fallthrough_generic.kpack")
++    print(
++        f"Generated fallthrough generic archive: {output_dir / 'test_fallthrough_generic.kpack'}"
++    )
++    print("  - gfx90a, 1 kernel (lib/libtest.so#0)")
++
++
++def generate_fallthrough_two_feature_archives(output_dir: Path) -> None:
++    """Generate archives for a two-feature (sramecc+xnack) fallthrough test.
++
++    Reproduces the ROCM-31644 archive layout on gfx950: the agent reports
++    "gfx950:sramecc+:xnack+", but no archive is tagged with "sramecc+" at
++    all (rocFFT's build strips feature flags before compiling — see
++    projects/rocfft/CMakeLists.txt). Only two archives exist for the group:
++    one tagged "gfx950:xnack+" holding an unrelated binary's kernel (e.g.
++    hipFFT-test), and one bare "gfx950" holding the target kernel (e.g.
++    rocFFT-test). The loader must walk the full compatible-target power set
++    ("gfx950:sramecc+:xnack+" -> "gfx950:sramecc+" -> "gfx950:xnack+" ->
++    "gfx950"), skipping the two candidates that have no archive at all,
++    missing the kernel in the "gfx950:xnack+" archive, and finally finding
++    it in the bare "gfx950" archive.
++    """
++    xnack_archive = PackedKernelArchive(
++        group_name="test",
++        gfx_arch_family="gfx950X",
++        gfx_arches=["gfx950:xnack+"],
++        compressor=NoOpCompressor(),
++    )
++    other_data = b"OTHER_KERNEL_HIPFFT_TEST" + b"\x00" * 50
++    prepared = xnack_archive.prepare_kernel(
++        "lib/libother.so#0", "gfx950:xnack+", other_data
++    )
++    xnack_archive.add_kernel(prepared)
++    xnack_archive.finalize_archive()
++    xnack_archive.write(output_dir / "test_fallthrough_2feat_xnack.kpack")
++    print(
++        f"Generated 2-feature fallthrough xnack archive: "
++        f"{output_dir / 'test_fallthrough_2feat_xnack.kpack'}"
++    )
++    print("  - gfx950:xnack+, 1 unrelated kernel (lib/libother.so#0)")
++
++    generic_archive = PackedKernelArchive(
++        group_name="test",
++        gfx_arch_family="gfx950X",
++        gfx_arches=["gfx950"],
++        compressor=NoOpCompressor(),
++    )
++    target_data = b"GENERIC_GFX950_ROCFFT_TEST" + b"\x00" * 50
++    prepared2 = generic_archive.prepare_kernel(
++        "lib/libtest.so#0", "gfx950", target_data
++    )
++    generic_archive.add_kernel(prepared2)
++    generic_archive.finalize_archive()
++    generic_archive.write(output_dir / "test_fallthrough_2feat_generic.kpack")
++    print(
++        f"Generated 2-feature fallthrough generic archive: "
++        f"{output_dir / 'test_fallthrough_2feat_generic.kpack'}"
++    )
++    print("  - gfx950, 1 kernel (lib/libtest.so#0)")
++
++
+ def generate_test_manifests(output_dir: Path) -> None:
+     """Generate .kpm manifest files for testing manifest resolution."""
+     # Manifest for test_noop.kpack (gfx900, gfx906)
+@@ -175,6 +278,10 @@ def main() -> None:
+     print()
+     generate_zstd_archive(output_dir)
+     print()
++    generate_fallthrough_archives(output_dir)
++    print()
++    generate_fallthrough_two_feature_archives(output_dir)
++    print()
+     generate_test_manifests(output_dir)
+     print()
+     print("Done!")
+diff --git a/shared/kpack/runtime/tests/test_assets/test_fallthrough_2feat_generic.kpack b/shared/kpack/runtime/tests/test_assets/test_fallthrough_2feat_generic.kpack
+new file mode 100644
+index 0000000000000000000000000000000000000000..e8152e8483b36232370faa46a9d35286b56baec3
+GIT binary patch
+literal 328
+zcmeYcaP($mU|{G0Vse1HtDkF-r*pi!TZE;lL41(EvzuE;e28ms2<fJ^uS?4>%1tbZ
+zFH0>d&dkqaT$NswUs@2KmzbNnq$IVtWPN&CMSNmWaz=bwVs2(m<#He&XlukOn0RXO
+z#AOh%#U=U4jT>?@lk|ZYq*t#vU)i7$D%-rIq_QA&X-08ka{luCqLj?M#2kjT`9+!O
+zAXa>FW>u=srsVwGf}+%7kW1o=lQU9*j>yZ;OI@0jlb=*Pv1wU;T3T^xiNg}GY5)VQ
+BSuFqn
+
+literal 0
+HcmV?d00001
+
+diff --git a/shared/kpack/runtime/tests/test_assets/test_fallthrough_2feat_xnack.kpack b/shared/kpack/runtime/tests/test_assets/test_fallthrough_2feat_xnack.kpack
+new file mode 100644
+index 0000000000000000000000000000000000000000..b544b7cf7fc70e59c231892b2eba0c9079e54a57
+GIT binary patch
+literal 341
+zcmeYcaP($mU|{G1Vse0gh=*%XytiwRpQ}&2hi8DBTS$C}Yj6nZX0@+N%P-1JEQv2m
+zEh^5;&tqJbUX)*25TBQro4TYVwYX$`dRj$%Vo`ENd|F~|W=`dDAm7r|AYv6vJhgb@
+zT8NlcMP6cZw)WzZ{N%=sIhjfNK%8Haky@lzoUd%qh^nf2Nl9fv>e7tj#N_<t`9&$2
+zd5Jj;Yx9dT(?P8G;>@a4uT9DMxdlb3#UO{p7bj<=0^O9CpO?BcDJMUvcw*DC{Is;<
+K)Dnj!VATMznqEu*
+
+literal 0
+HcmV?d00001
+
+diff --git a/shared/kpack/runtime/tests/test_assets/test_fallthrough_generic.kpack b/shared/kpack/runtime/tests/test_assets/test_fallthrough_generic.kpack
+new file mode 100644
+index 0000000000000000000000000000000000000000..ce039efdd6457b4af40b843f1f906c189570e8f4
+GIT binary patch
+literal 328
+zcmbVG&1%9x5RT8{U32x;piv|uA|AXAn{_r>NOr=`wx~Dt&`U2qgHb`SEk2=1TOYs<
+zd@%F<3|}+}qK4;r9~J&HgK!*9hg}%-=N&(QD4dSN5%hvt@cg&;PenEt4&KnRCeyei
+zmR<`mBFEApyRSqoL0FlB61mP+=j!hGVt#q>$otbTcW@*(-<giv73yq@sp)V2)LrRT
+z1s+otlFnoo+K9}%lGRDQ0qZr6Zj$oCBG*lTWr|e^Lk5p=MltWVCsK;hy_7%hJ0VP2
+AlmGw#
+
+literal 0
+HcmV?d00001
+
+diff --git a/shared/kpack/runtime/tests/test_assets/test_fallthrough_xnack.kpack b/shared/kpack/runtime/tests/test_assets/test_fallthrough_xnack.kpack
+new file mode 100644
+index 0000000000000000000000000000000000000000..5f51c7798b28572e8029b708b1bafe1f9f52569b
+GIT binary patch
+literal 341
+zcmbVG!D_-l6pY{E+3HnKN(oe>vDg;8JvQ67$zrlE?AsRY&Gu06<~KA}5VX`UG*)`>
+zr~?Bt!!S&6-w7(7=PgQJgW=<yKZ3v?g?=B#Vdpl0K{tGQxP0q#r^sf)!7EzUWGb83
+z(n}6TWLP+4_Y<or2rCm%BGc(?UHWE2j5q%|@^X91T2mwBr1s@V&VN%K)k~5~(B3dr
+z8}swlN8x5Ut`ZiK)?}Zx5vjK&tK*{r)^FI`OUiPKd^`p$6D&U&GPsITig@|{O-eDk
+IcJbFf0P;&-)Bpeg
+
+literal 0
+HcmV?d00001
+
+diff --git a/shared/kpack/runtime/tests/test_loader_api.cpp b/shared/kpack/runtime/tests/test_loader_api.cpp
+index 70a3d89d209a..1890acc53509 100644
+--- a/shared/kpack/runtime/tests/test_loader_api.cpp
++++ b/shared/kpack/runtime/tests/test_loader_api.cpp
+@@ -778,6 +778,98 @@ TEST(LoaderAPITest, LoadCodeObject_KernelNotFound) {
+   EXPECT_EQ(code_object, nullptr);
+ }
+ 
++// Regression test for ROCm/TheRock#7081: when a requested architecture's
++// kernels are split across multiple kpack archives (e.g. a more-specific
++// "gfx90a:xnack-" archive plus a less-specific "gfx90a" archive), a
++// kernel-not-found miss in the first matching archive must not abort the
++// search — the loader must fall through to the next compatible archive.
++//
++// test_fallthrough_xnack.kpack declares architecture "gfx90a:xnack-" and
++// contains only an unrelated kernel ("lib/libother.so#0").
++// test_fallthrough_generic.kpack declares architecture "gfx90a" and contains
++// the kernel under test ("lib/libtest.so#0").
++//
++// Both archives are listed as search paths. For agent ISA "gfx90a:xnack-",
++// for_each_compatible_target() yields "gfx90a:xnack-" before "gfx90a", so the
++// xnack archive is tried first and matches the architecture but not the
++// kernel. Before the fix, the loader returned KPACK_ERROR_KERNEL_NOT_FOUND
++// immediately at that point. With the fix, it falls through and finds the
++// kernel in the generic archive.
++TEST(LoaderAPITest, LoadCodeObject_FallsThroughToNextArchiveOnKernelNotFound) {
++  std::string assets_dir = get_test_assets_dir();
++  if (assets_dir.empty()) {
++    GTEST_SKIP() << "ROCM_KPACK_TEST_ASSETS_DIR not set";
++  }
++
++  CacheGuard cache;
++  ASSERT_EQ(kpack_cache_create(cache.ptr()), KPACK_SUCCESS);
++
++  // Search paths list the more-specific (xnack) archive first, matching the
++  // real torch device wheel layout where the xnack archive is also listed
++  // ahead of the bare-arch archive.
++  auto metadata = make_hipk_metadata(
++      "lib/libtest.so",
++      {"test_fallthrough_xnack.kpack", "test_fallthrough_generic.kpack"});
++  std::string binary_path = assets_dir + "/fake_binary.so";
++
++  const char* arch_list[] = {"gfx90a:xnack-"};
++  void* code_object = nullptr;
++  size_t size = 0;
++
++  kpack_error_t err =
++      kpack_load_code_object(cache.get(), metadata.data(), binary_path.c_str(),
++                             0, arch_list, 1, &code_object, &size);
++
++  ASSERT_EQ(err, KPACK_SUCCESS);
++  ASSERT_NE(code_object, nullptr);
++  EXPECT_EQ(std::memcmp(code_object, "GENERIC_GFX90A_KERNEL_DATA", 26), 0);
++
++  kpack_free_code_object(code_object);
++}
++
++// Regression test for ROCM-31644: a two-feature agent ISA
++// ("gfx950:sramecc+:xnack+") where no archive is tagged with "sramecc+" at
++// all — two of the four compatible-target candidates
++// ("gfx950:sramecc+:xnack+", "gfx950:sramecc+") have no archive whatsoever,
++// not merely a kernel-not-found miss. The loader must skip those cleanly,
++// miss the kernel in the "gfx950:xnack+" archive (holding an unrelated
++// binary's kernel), and fall through to the bare "gfx950" archive that
++// actually holds it. This is the exact shape rocFFT-test hits on gfx950
++// ASAN builds: rocFFT's own CMakeLists.txt strips all feature flags from
++// GPU_TARGETS before compiling ("rocFFT builds generic code for each
++// target"), so its kernels always land in the bare, untagged archive even
++// when a sibling binary in the same kpack group (e.g. hipFFT-test) is
++// correctly tagged "xnack+".
++TEST(LoaderAPITest,
++     LoadCodeObject_FallsThroughAcrossTwoFeatureCandidatesOnKernelNotFound) {
++  std::string assets_dir = get_test_assets_dir();
++  if (assets_dir.empty()) {
++    GTEST_SKIP() << "ROCM_KPACK_TEST_ASSETS_DIR not set";
++  }
++
++  CacheGuard cache;
++  ASSERT_EQ(kpack_cache_create(cache.ptr()), KPACK_SUCCESS);
++
++  auto metadata = make_hipk_metadata("lib/libtest.so",
++                                     {"test_fallthrough_2feat_xnack.kpack",
++                                      "test_fallthrough_2feat_generic.kpack"});
++  std::string binary_path = assets_dir + "/fake_binary.so";
++
++  const char* arch_list[] = {"gfx950:sramecc+:xnack+"};
++  void* code_object = nullptr;
++  size_t size = 0;
++
++  kpack_error_t err =
++      kpack_load_code_object(cache.get(), metadata.data(), binary_path.c_str(),
++                             0, arch_list, 1, &code_object, &size);
++
++  ASSERT_EQ(err, KPACK_SUCCESS);
++  ASSERT_NE(code_object, nullptr);
++  EXPECT_EQ(std::memcmp(code_object, "GENERIC_GFX950_ROCFFT_TEST", 26), 0);
++
++  kpack_free_code_object(code_object);
++}
++
+ TEST(LoaderAPITest, LoadCodeObject_ArchiveFileNotFound) {
+   std::string assets_dir = get_test_assets_dir();
+   if (assets_dir.empty()) {
