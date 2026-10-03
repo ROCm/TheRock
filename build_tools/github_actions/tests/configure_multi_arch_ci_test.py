@@ -1751,28 +1751,23 @@ class TestExpandBuildConfigs(unittest.TestCase):
 
     # TODO(#3433): Remove sandbox tests once ASAN tests are passing
     def test_asan_runner_selection(self):
-        """ASAN uses sandbox on nightly, disables tests on PR/push."""
+        """ASAN uses a sandbox runner on both nightly and PR triggers.
+
+        A PR remaps asan to host-asan, which tests on presubmit per
+        https://github.com/ROCm/TheRock/issues/7202. The build runs either way.
+        """
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
-        # Schedule: uses sandbox runner
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(event_name="schedule", build_variant="asan"),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        entry = result.linux.per_family_info[0]
-        self.assertIn("sandbox", entry["test-runs-on"])
-
-        # PR: disables tests (empty runner)
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(event_name="pull_request", build_variant="asan"),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "")
+        for event in ["schedule", "pull_request"]:
+            with self.subTest(event=event):
+                result = cm.expand_build_configs(
+                    ci_inputs=self._inputs(event_name=event, build_variant="asan"),
+                    git_context=cm.GitContext(),
+                    targets=targets,
+                    jobs=_jobs(),
+                )
+                entry = result.linux.per_family_info[0]
+                self.assertIn("sandbox", entry["test-runs-on"])
 
     def test_asan_debug_uses_sandbox_runner(self):
         """asan-debug variant uses sandbox runner like asan."""
@@ -1798,6 +1793,32 @@ class TestExpandBuildConfigs(unittest.TestCase):
             jobs=_jobs(),
         )
         entry = result.linux.per_family_info[0]
+        self.assertIn("sandbox", entry["test-runs-on"])
+
+    def _host_asan_entry(self, **kwargs):
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(build_variant="host-asan", **kwargs),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(linux_families=["gfx94x"]),
+            jobs=_jobs(),
+        )
+        return result.linux.per_family_info[0]
+
+    def test_host_asan_presubmit_runs_without_any_label(self):
+        """https://github.com/ROCm/TheRock/issues/7202 requires an unlabelled
+        PR to get a sandbox runner."""
+        entry = self._host_asan_entry(event_name="pull_request", pr_labels=[])
+        self.assertIn("sandbox", entry["test-runs-on"])
+
+    def test_host_asan_postsubmit_stays_off(self):
+        """Unchanged from before this variant declared its triggers."""
+        entry = self._host_asan_entry(event_name="push")
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_host_asan_workflow_dispatch_runs(self):
+        """workflow_dispatch is not a named trigger, so it is allowed here the
+        same way _should_run_tests_for_family allows it per family."""
+        entry = self._host_asan_entry(event_name="workflow_dispatch")
         self.assertIn("sandbox", entry["test-runs-on"])
 
     def test_explicit_strict_linux_dev_build(self):
