@@ -317,7 +317,8 @@ These artifacts are built if any project features requiring them are enabled:
 - `rand`: Random number generator libraries.
 - `rccl`: Collective communication libraries.
 - `MIOpen`: MIOpen kernel-select/fusion library.
-- `rocdecode`: Video decode library (Linux only).
+- `rocdecode`: Video decode library (Linux via VA-API; Windows via the vaon12
+  VA-API-on-D3D12 backend).
 - `rocjpeg`: JPEG decode library (Linux only).
 - `rpp`: ROCm Performance Primitives computer vision library (built by
   default on Linux; experimental and off by default on Windows).

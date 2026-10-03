@@ -1087,13 +1087,16 @@ test_matrix = {
         "fetch_artifact_args": "--rocdecode --tests",
         "timeout_minutes": 10,
         "test_script": f"python {_get_script_path('test_rocdecode.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
+            "windows": 1,
         },
         # rocdecode requires FFmpeg dev libraries (libavcodec-dev, libavformat-dev,
-        # libavutil-dev) for test builds. These are not bundled in TheRock
-        # artifacts and are provided via the specialized media image.
+        # libavutil-dev) for the extended (FFmpeg-demux) test builds, which run only
+        # on Linux via the specialized media image below. Windows runs the always-on
+        # tests (raw decode, caps, negative API) with ENABLE_EXTENDED_TESTS=OFF via
+        # the vaon12 backend, so it needs no FFmpeg and no container image.
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:d715ae2db664b055c90343e00588ce9ac3eec387513fe359396e5e08e75521ca",
     },
     "rocjpeg": {
