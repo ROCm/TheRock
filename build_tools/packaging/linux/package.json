@@ -2155,6 +2155,7 @@
       }
     ],
     "Gfxarch": "False",
+    "Postinstall": "True",
     "Disable_DWZ": "True",
     "Disable_DEB_STRIP": "True"
   },
