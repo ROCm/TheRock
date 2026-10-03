@@ -1,0 +1,25 @@
+From 059b3dc491d1d865134019c3a934117756e95cd2 Mon Sep 17 00:00:00 2001
+From: Austin Kerbow <Austin.Kerbow@amd.com>
+Date: Mon, 4 May 2026 11:58:20 -0500
+Subject: [PATCH] [AMDGPU] Enable kernel argument preloading by default
+
+---
+ llvm/lib/Target/AMDGPU/AMDGPUPreloadKernelArguments.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/llvm/lib/Target/AMDGPU/AMDGPUPreloadKernelArguments.cpp b/llvm/lib/Target/AMDGPU/AMDGPUPreloadKernelArguments.cpp
+index 7d6e3edc75e1..09c191c56fc0 100644
+--- a/llvm/lib/Target/AMDGPU/AMDGPUPreloadKernelArguments.cpp
++++ b/llvm/lib/Target/AMDGPU/AMDGPUPreloadKernelArguments.cpp
+@@ -35,7 +35,7 @@ using namespace llvm;
+ 
+ static cl::opt<unsigned> KernargPreloadCount(
+     "amdgpu-kernarg-preload-count",
+-    cl::desc("How many kernel arguments to preload onto SGPRs"), cl::init(0));
++    cl::desc("How many kernel arguments to preload onto SGPRs"), cl::init(10000));
+ 
+ static cl::opt<bool>
+     EnableKernargPreload("amdgpu-kernarg-preload",
+-- 
+2.34.1
+
