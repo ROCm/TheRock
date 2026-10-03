@@ -61,8 +61,10 @@ on:
         type: string
         required: true
       release_type:
+        # Matches the MSI build workflow's default so the test reads from the
+        # same bucket the producer wrote to.
         type: string
-        default: nightly
+        default: ci
       run_uninstall:
         type: boolean
         default: true
@@ -91,6 +93,9 @@ jobs:
       RELEASE_TYPE: ${{ inputs.release_type }}
       PACKAGES: ${{ inputs.packages }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
+      # Download target; the install/uninstall tests consume these files via
+      # MSI_DIR and never touch the network themselves.
+      MSI_DIR: ${{ github.workspace }}/msi-packages
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -108,15 +113,23 @@ jobs:
       - name: Install Python requirements
         run: pip install -r requirements.txt
 
+      # Download once; the tests below re-use these files (no network in tests).
+      - name: Download MSI packages
+        run: |
+          python build_tools/packaging/windows/download_msi_packages.py \
+            --artifact-run-id "${ARTIFACT_RUN_ID}" \
+            --artifact-github-repo "${ARTIFACT_GITHUB_REPO}" \
+            --release-type "${RELEASE_TYPE}" \
+            --packages "${PACKAGES}" \
+            --dest-dir "${MSI_DIR}"
+
       - name: Install and verify MSI packages
         run: |
-          set -euo pipefail
           python -m pytest \
             build_tools/packaging/windows/native_windows_package_install_test.py -vv -s
 
       - name: Uninstall and verify teardown
         if: ${{ inputs.run_uninstall }}
         run: |
-          set -euo pipefail
           python -m pytest \
             build_tools/packaging/windows/native_windows_package_uninstall_test.py -vv -s
