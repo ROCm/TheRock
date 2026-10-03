@@ -16,6 +16,15 @@
 {%- if exclude_libpython_requires %}
 %define __requires_exclude libpython*.*
 {%- endif %}
+# Exclude vendored TBB metadata. Used for amdrocm-profiler (ROCM-28385).
+# rocprofiler-systems bundles TBB 2021.x via Dyninst for instrumentation.
+# Suppress Provides so dyninst/system tbb do not block dnf autoremove.
+# Suppress Requires so profiler does not couple to distribution TBB versions.
+# NOTE: If vendored TBB soname versions change, verify these patterns still match.
+{%- if exclude_vendored_tbb_metadata %}
+%global __requires_exclude libtbb\.so\..*|libtbbmalloc\.so\..*|libtbbmalloc_proxy\.so\..*
+%global __provides_exclude libtbb\.so\..*|libtbbmalloc\.so\..*|libtbbmalloc_proxy\.so\..*
+{%- endif %}
 %define _binary_payload w9.zstdio
 
 Name: {{ pkg_name }}

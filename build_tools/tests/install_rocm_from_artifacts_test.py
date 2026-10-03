@@ -74,6 +74,13 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         argv = self._run_main(["--base-only"])
         self.assertIn("rocjitsu-hotswap_lib", argv)
 
+    def test_clinfo_is_only_added_for_sanity(self):
+        base_argv = self._run_main(["--base-only"])
+        sanity_argv = self._run_main(["--sanity"])
+        self.assertNotIn("core-ocl_run", base_argv)
+        self.assertEqual(sanity_argv, base_argv + ["core-ocl_run", "hipify_run"])
+        self.assertNotIn("core-ocl_run", self._run_main(["--blas", "--tests"]))
+
     def test_hipdnn_integration_tests_includes_rocrand(self):
         # The hipdnn_gpu_ref_tests binary links librocrand for GPU tensor data
         # generation, so the test runners must fetch the rand artifact even
@@ -372,6 +379,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         dry_run=False,
         run_github_repo=None,
         base_only=False,
+        sanity=False,
         aqlprofile=False,
         blas=False,
         debug_tools=False,
@@ -399,6 +407,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         rocprofiler_systems=False,
         rocprofiler_systems_examples=False,
         rocrtst=False,
+        hip_tests=False,
         rocalution=False,
         kfdtest=False,
         rocwmma=False,
@@ -427,6 +436,22 @@ class TestDebugToolsAmdLlvmDev(unittest.TestCase):
     def test_debug_tools_includes_amd_llvm_dev(self) -> None:
         argv = _captured_fetch_argv(_make_run_id_args(debug_tools=True))
         self.assertIn("amd-llvm_dev", argv)
+
+
+class TestRocprofilerSystemsHipfile(unittest.TestCase):
+    """--rocprofiler-systems fetches hipfile for sample-time dlopen telemetry."""
+
+    def test_rocprofiler_systems_includes_hipfile(self) -> None:
+        argv = _captured_fetch_argv(_make_run_id_args(rocprofiler_systems=True))
+        self.assertIn("hipfile_lib", argv)
+        self.assertIn("sysdeps-util-linux_lib", argv)
+
+    def test_rocprofiler_systems_examples_includes_hipfile(self) -> None:
+        argv = _captured_fetch_argv(
+            _make_run_id_args(rocprofiler_systems_examples=True)
+        )
+        self.assertIn("hipfile_lib", argv)
+        self.assertIn("sysdeps-util-linux_lib", argv)
 
 
 if __name__ == "__main__":
