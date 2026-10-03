@@ -201,8 +201,9 @@ The helper discovers Clang and `llvm-symbolizer` under `llvm/bin` or
 and ROCm library directories to `LD_LIBRARY_PATH`. It sets `TSAN_OPTIONS` to
 stop on the first report and return exit code **86**. A missing TSAN runtime
 is an error; a missing symbolizer emits a warning. Warnings go to stderr so they
-do not enter the shell exports. To use the helper for ASAN, select `asan` or
-`host-asan` with the corresponding installed artifacts instead.
+do not enter the shell exports. To use the helper for ASAN, select `asan`, `host-asan`, `asan-debug`, or
+`host-asan-debug` with the corresponding installed artifacts instead. The debug
+variants use the same ASAN runtime settings.
 
 ### Compile and run a local application
 

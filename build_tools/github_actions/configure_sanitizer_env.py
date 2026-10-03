@@ -25,15 +25,26 @@ from github_actions_api import gha_set_env
 # freed-memory quarantine, and allow tools that load instrumented libraries
 # without preloading. Callers should still preload the runtime when possible.
 # The workflow disables leak detection only for its driver sanity probe.
-STATIC_ASAN_ENV = {
-    "ASAN_OPTIONS": (
-        "detect_odr_violation=0:quarantine_size_mb=600:verify_asan_link_order=0"
-    ),
-    "HSA_XNACK": "1",
+STATIC_SANITIZER_ENV = {
+    "asan": {
+        "ASAN_OPTIONS": (
+            "detect_odr_violation=0:quarantine_size_mb=600:verify_asan_link_order=0"
+        ),
+        "HSA_XNACK": "1",
+    },
+    "tsan": {
+        "TSAN_OPTIONS": (
+            "halt_on_error=1:exitcode=86:history_size=7:second_deadlock_stack=1"
+        ),
+    },
 }
-STATIC_TSAN_OPTIONS = (
-    "halt_on_error=1:exitcode=86:history_size=7:second_deadlock_stack=1"
-)
+BUILD_VARIANT_SANITIZERS = {
+    "asan": "asan",
+    "host-asan": "asan",
+    "asan-debug": "asan",
+    "host-asan-debug": "asan",
+    "tsan": "tsan",
+}
 
 
 def _find_tool(artifacts_dir: Path, name: str) -> Path | None:
@@ -78,15 +89,11 @@ def _resolve_runtime(artifacts_dir: Path, sanitizer: str) -> Path | None:
 
 
 def resolve_sanitizer_env(artifacts_dir: Path, build_variant: str) -> dict[str, str]:
-    if build_variant not in ("asan", "host-asan", "tsan"):
+    sanitizer = BUILD_VARIANT_SANITIZERS.get(build_variant)
+    if sanitizer is None:
         raise ValueError(f"Unsupported sanitizer build variant: {build_variant}")
-    sanitizer = "tsan" if build_variant == "tsan" else "asan"
     prefix = sanitizer.upper()
-    env = (
-        {"TSAN_OPTIONS": STATIC_TSAN_OPTIONS}
-        if sanitizer == "tsan"
-        else dict(STATIC_ASAN_ENV)
-    )
+    env = STATIC_SANITIZER_ENV[sanitizer].copy()
     runtime = _resolve_runtime(artifacts_dir, sanitizer)
     if runtime:
         env[f"{prefix}_RUNTIME_PATH"] = str(runtime)
@@ -113,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifacts-dir", type=Path, required=True)
     parser.add_argument(
-        "--build-variant", choices=("asan", "host-asan", "tsan"), required=True
+        "--build-variant", choices=BUILD_VARIANT_SANITIZERS, required=True
     )
     parser.add_argument(
         "--output-format", choices=("github", "shell"), default="github"

@@ -54,7 +54,7 @@ def artifacts(
 )
 class SanitizerEnvironmentTest(unittest.TestCase):
     def test_discovers_both_runtime_layouts_and_preserves_library_paths(self):
-        for variant in ("asan", "host-asan", "tsan"):
+        for variant in ("asan", "host-asan", "asan-debug", "host-asan-debug", "tsan"):
             for legacy in (False, True):
                 for native in (False, True):
                     with self.subTest(variant=variant, legacy=legacy, native=native):
@@ -91,7 +91,13 @@ class SanitizerEnvironmentTest(unittest.TestCase):
                                 self.assertNotIn("TSAN_OPTIONS", env)
 
     def test_missing_runtime_policy_and_no_partial_tsan_export(self):
-        for variant, expected in (("asan", 0), ("host-asan", 0), ("tsan", 1)):
+        for variant, expected in (
+            ("asan", 0),
+            ("host-asan", 0),
+            ("asan-debug", 0),
+            ("host-asan-debug", 0),
+            ("tsan", 1),
+        ):
             with self.subTest(variant=variant), tempfile.TemporaryDirectory() as tmp:
                 output = Path(tmp) / "github_env"
                 with mock.patch.dict(
@@ -125,7 +131,7 @@ class SanitizerEnvironmentTest(unittest.TestCase):
             self.assertTrue(any("unsymbolized" in line for line in logs.output))
 
     def test_exports_to_github_env(self):
-        for variant in ("asan", "host-asan", "tsan"):
+        for variant in ("asan", "host-asan", "asan-debug", "host-asan-debug", "tsan"):
             with self.subTest(variant=variant), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
                 kind = "tsan" if variant == "tsan" else "asan"
@@ -142,36 +148,52 @@ class SanitizerEnvironmentTest(unittest.TestCase):
                 self.assertIn(f"{kind.upper()}_OPTIONS", exported)
 
     def test_shell_exports_work_from_another_directory(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "artifact tree"
-            runtime = artifacts(root, "tsan")
-            captured = io.StringIO()
-            with contextlib.redirect_stdout(captured):
-                self.assertEqual(
-                    main(
-                        [
-                            "--artifacts-dir",
-                            str(root),
-                            "--build-variant",
-                            "tsan",
-                            "--output-format",
-                            "shell",
-                        ]
-                    ),
-                    0,
+        for variant in ("asan", "host-asan", "asan-debug", "host-asan-debug", "tsan"):
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp) / "artifact tree"
+                kind = "tsan" if variant == "tsan" else "asan"
+                runtime = artifacts(root, kind)
+                captured = io.StringIO()
+                with contextlib.redirect_stdout(captured):
+                    self.assertEqual(
+                        main(
+                            [
+                                "--artifacts-dir",
+                                str(root),
+                                "--build-variant",
+                                variant,
+                                "--output-format",
+                                "shell",
+                            ]
+                        ),
+                        0,
+                    )
+                result = subprocess.run(
+                    [
+                        "bash",
+                        "-c",
+                        captured.getvalue()
+                        + f'\nprintf "%s" "${kind.upper()}_RUNTIME_PATH"',
+                    ],
+                    cwd="/",
+                    capture_output=True,
+                    text=True,
+                    check=True,
                 )
-            result = subprocess.run(
-                [
-                    "bash",
-                    "-c",
-                    captured.getvalue() + '\nprintf "%s" "$TSAN_RUNTIME_PATH"',
-                ],
-                cwd="/",
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            self.assertEqual(result.stdout, str(runtime))
+                self.assertEqual(result.stdout, str(runtime))
+
+    def test_environment_resolution_does_not_reuse_previous_artifact_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first = Path(tmp) / "first"
+            second = Path(tmp) / "second"
+            artifacts(first, "tsan")
+            runtime = artifacts(second, "tsan")
+            resolve_sanitizer_env(first, "tsan")
+            env = resolve_sanitizer_env(second, "tsan")
+            self.assertEqual(env["TSAN_RUNTIME_PATH"], str(runtime))
+            self.assertNotIn(str(first), env["TSAN_OPTIONS"])
+            self.assertEqual(env["TSAN_OPTIONS"].count("external_symbolizer_path="), 1)
+            self.assertIn(str(second / "llvm/bin/llvm-symbolizer"), env["TSAN_OPTIONS"])
 
     def test_rejects_unknown_variant(self):
         with self.assertRaises(ValueError):
