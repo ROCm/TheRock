@@ -400,6 +400,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       rocprofiler-sdk
       rocprofiler-systems
       ${_rocprofiler_systems_hipfile_dep}
+      ${_rocprofsys_profiler_hub_dep}
     )
 
 
