@@ -38,7 +38,10 @@ from packaging.utils import (
 ACCEPTED_FILE_EXTENSIONS = (".whl", ".tar.gz", ".zip")
 
 # Valid aggregate index names (the second path segment).
-INDEX_NAMES = ("whl", "whl-next")
+# whl: flat pip-installable index (backward-compatible, all device extras)
+# whl-next: device-extra index for gfx-specific builds (explicit device selection)
+# whl-next-asan: ASAN-instrumented wheels for memory error detection
+INDEX_NAMES = ("whl", "whl-next", "whl-next-asan")
 DEFAULT_INDEX = "whl-next"
 
 # repo.amd.com release streams and the per-product bucket naming scheme:
