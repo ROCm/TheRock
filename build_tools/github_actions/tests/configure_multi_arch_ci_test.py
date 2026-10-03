@@ -20,6 +20,7 @@ from unittest.mock import call, patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_multi_arch_ci as cm
+from bump_automation import SUBMODULE_CONFIG
 from amdgpu_family_matrix import get_all_families_for_trigger_types
 from configure_multi_arch_ci_summary import format_summary
 from workflow_utils import WORKFLOWS_DIR
@@ -1773,6 +1774,83 @@ class TestExpandBuildConfigs(unittest.TestCase):
         )
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
+
+    def test_host_asan_submodule_bump_runners(self):
+        targets = cm.TargetSelection(linux_families=["gfx94x", "gfx950"])
+        for path in (
+            "rocm-libraries",
+            "rocm-systems",
+            "compiler/amd-llvm",
+            "compiler/hipify",
+            "README.md",
+        ):
+            for event in ("pull_request", "push"):
+                for variant in ("asan", "host-asan-debug"):
+                    with self.subTest(path=path, event=event, variant=variant):
+                        result = cm.expand_build_configs(
+                            ci_inputs=self._inputs(
+                                event_name=event,
+                                build_variant=variant,
+                                pr_labels=SUBMODULE_CONFIG.get(path, {}).get(
+                                    "labels", ["ci:host-asan"]
+                                ),
+                            ),
+                            git_context=cm.GitContext(
+                                changed_files=[path],
+                                submodule_paths=[
+                                    "rocm-libraries",
+                                    "rocm-systems",
+                                    "compiler/amd-llvm",
+                                    "compiler/hipify",
+                                ],
+                            ),
+                            targets=targets,
+                            jobs=_jobs(),
+                        )
+                        runners = [
+                            entry["test-runs-on"]
+                            for entry in result.linux.per_family_info
+                        ]
+                        expected = (
+                            [
+                                "linux-gfx942-8gpu-asan-sandbox-rocm",
+                                "linux-gfx950-8gpu-asan-sandbox-rocm",
+                            ]
+                            if path
+                            in ("rocm-libraries", "rocm-systems", "compiler/amd-llvm")
+                            else ["", ""]
+                        )
+                        self.assertEqual(runners, expected)
+                        expected_variant = (
+                            "host-asan-debug"
+                            if path == "compiler/amd-llvm"
+                            or variant == "host-asan-debug"
+                            else "host-asan"
+                        )
+                        self.assertEqual(
+                            result.linux.build_variant_label, expected_variant
+                        )
+                        self.assertEqual(
+                            result.linux.build_variant_cmake_preset,
+                            f"linux-release-{expected_variant}",
+                        )
+
+    def test_llvm_bump_preserves_explicit_full_asan(self):
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="pull_request", build_variant="asan", pr_labels=["ci:asan"]
+            ),
+            git_context=cm.GitContext(
+                changed_files=["compiler/amd-llvm"],
+                submodule_paths=["compiler/amd-llvm"],
+            ),
+            targets=cm.TargetSelection(linux_families=["gfx94x", "gfx950"]),
+            jobs=_jobs(),
+        )
+        self.assertEqual(result.linux.build_variant_label, "asan")
+        self.assertEqual(
+            [e["test-runs-on"] for e in result.linux.per_family_info], ["", ""]
+        )
 
     def test_asan_debug_uses_sandbox_runner(self):
         """asan-debug variant uses sandbox runner like asan."""

@@ -505,6 +505,14 @@ class GitContext:
             return None
         return bool(set(self.submodule_paths) & set(self.changed_files))
 
+    @property
+    def has_llvm_submodule_changes(self) -> bool:
+        return bool(
+            {"compiler/amd-llvm"}
+            & set(self.changed_files or [])
+            & set(self.submodule_paths or [])
+        )
+
     def log(self) -> None:
         """Log git context for CI diagnostics."""
         if self.changed_files is None:
@@ -1382,16 +1390,27 @@ def _expand_build_config_for_platform(
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant.startswith("host-asan"):
-            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+            # Library, system, and LLVM bumps exercise the host-ASan sandbox
+            # in addition to scheduled and manually dispatched runs.
+            has_host_asan_bump = bool(
+                {"rocm-libraries", "rocm-systems", "compiler/amd-llvm"}
+                & set(git_context.changed_files or [])
+                & set(git_context.submodule_paths or [])
+            )
+            if not (
+                ci_inputs.is_schedule
+                or ci_inputs.is_workflow_dispatch
+                or has_host_asan_bump
+            ):
                 test_runs_on = ""
                 print(
-                    f"  {family_name}: host-asan tests only run on nightly, "
+                    f"  {family_name}: host-asan tests require nightly or a library/system/LLVM bump, "
                     f"disabling tests"
                 )
             elif "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info["test-runs-on-sandbox"]
+                test_runs_on = platform_info.get(
+                    "test-runs-on-host-asan", platform_info["test-runs-on-sandbox"]
+                )
                 print(
                     f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
                 )
@@ -1675,6 +1694,11 @@ def expand_build_configs(
         elif ci_inputs.is_push or ci_inputs.is_pull_request:
             build_variant = "host-asan"
             print("  Using host-asan variant (push/pull_request default)")
+
+    # LLVM bump diagnostics need source locations from the debug preset.
+    if build_variant == "host-asan" and git_context.has_llvm_submodule_changes:
+        build_variant = "host-asan-debug"
+        print("  Using host-asan-debug variant for LLVM submodule bump")
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
