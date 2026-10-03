@@ -371,7 +371,7 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
 
     Returns: None
     """
-    # Debian maintainer scripts that must be executable
+    # Debian maintainer scripts that may be generated directly.
     EXEC_SCRIPTS = {"preinst", "postinst", "prerm", "postrm", "config"}
     pkg_name = pkg_info.get("Package")
     parts = config.rocm_version.split(".")
@@ -398,14 +398,33 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
     }
 
     templates_root = Path(SCRIPT_DIR) / "template" / "scripts"
-    # Collect all matching files
-    for script in EXEC_SCRIPTS:
-        pattern = f"{pkg_name}-{script}.j2"
-        for file in templates_root.glob(pattern):
+
+    # New data-driven maintainer-script generation.
+    #
+    # For example:
+    #
+    #   amdrocm-core-data.j2
+    #       -> amdrocm-postinst.j2 -> debian/postinst
+    #       -> amdrocm-prerm.j2   -> debian/prerm
+    #
+    data_file = templates_root / f"{pkg_name}-data.j2"
+
+    if data_file.is_file():
+        data_template = data_file.relative_to(SCRIPT_DIR).as_posix()
+
+        for script in ("postinst", "prerm"):
+            template_name = f"template/scripts/amdrocm-{script}.j2"
             script_file = Path(deb_dir) / script
-            template = env.get_template(file.relative_to(SCRIPT_DIR).as_posix())
+
+            template = env.get_template(template_name)
+            render_context = {
+                **context,
+                "data_template": data_template,
+            }
+
             with script_file.open("w", encoding="utf-8") as f:
-                f.write(template.render(context))
+                f.write(template.render(render_context))
+
             os.chmod(script_file, 0o755)
 
 
