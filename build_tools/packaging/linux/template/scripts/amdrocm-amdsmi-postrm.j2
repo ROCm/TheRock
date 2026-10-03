@@ -1,0 +1,93 @@
+#!/bin/bash
+#
+# Remove only this install prefix's registration after its payload is gone.
+
+is_debian_like() {
+    local id_like="$1"
+    case " $id_like " in
+        (*" debian "*|*" ubuntu "*)
+            return 0
+            ;;
+        (*)
+            return 1
+            ;;
+    esac
+}
+
+registration_path() {
+    /usr/bin/python3 - "$1" <<'PY' 2>/dev/null
+import hashlib
+from pathlib import Path
+import sys
+import sysconfig
+
+for scheme in ("deb_system", "posix_prefix"):
+    if scheme in sysconfig.get_scheme_names():
+        path = sysconfig.get_path("purelib", scheme)
+        if path:
+            break
+else:
+    path = sysconfig.get_paths()["purelib"]
+
+# Install and removal must use the same literal prefix, without resolving aliases.
+identity = hashlib.sha256(sys.argv[1].encode("utf-8")).hexdigest()
+print(Path(path) / f"amdrocm-amdsmi-{identity}.pth")
+PY
+}
+
+do_unregister_python_module() {
+    {% if target == "deb" %}
+       PKG_INSTALL_PREFIX={{ install_prefix }}
+    {% else %}
+       PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
+    {% endif %}
+
+    local share_dir pth recorded own_module
+    # Guard before any path is built from it: an empty prefix would make the
+    # cleanup below operate on /share/amd_smi/amdsmi.
+    [ -n "$PKG_INSTALL_PREFIX" ] || return 0
+    # Core's alternatives root stays /opt/rocm even when RPM relocates the payload.
+    share_dir="/opt/rocm/share/amd_smi"
+
+    # Byte-compilation caches are created at run time, so the package manager
+    # does not own them and they outlive removal. The leftover directory then
+    # still satisfies an "amdsmi" import as an empty namespace package, which
+    # succeeds while providing nothing. Drop them so the directory really goes.
+    own_module="$PKG_INSTALL_PREFIX/share/amd_smi/amdsmi"
+    if [ -d "$own_module" ]; then
+        rm -rf "$own_module/__pycache__"
+        rmdir "$own_module" 2>/dev/null || true
+        rmdir "$PKG_INSTALL_PREFIX/share/amd_smi" 2>/dev/null || true
+    fi
+
+    # RPM's old postun runs after an upgrade/reinstall has installed the new payload.
+    [ -f "$own_module/__init__.py" ] && return 0
+
+    [ -x /usr/bin/python3 ] || return 0
+    pth="$(registration_path "$PKG_INSTALL_PREFIX")" || return 0
+    [ -n "$pth" ] || return 0
+    [ -f "$pth" ] || return 0
+
+    # Only touch the file if it is the one this package writes.
+    recorded="$(cat "$pth" 2>/dev/null)" || return 0
+    [ "$recorded" = "$share_dir" ] || return 0
+
+    rm -f "$pth" || true
+}
+
+if [ -e /etc/os-release ] && source /etc/os-release && is_debian_like "${ID_LIKE:-$ID}"
+then
+    case "$1" in
+       (remove|purge)
+       do_unregister_python_module
+       ;;
+       (upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+           exit 0
+       ;;
+       (*)
+          exit 0
+       ;;
+    esac
+else
+    do_unregister_python_module
+fi
