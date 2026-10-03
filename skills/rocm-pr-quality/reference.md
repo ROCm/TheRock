@@ -160,12 +160,12 @@ ______________________________________________________________________
 
 ## Finding tiers (individual findings)
 
-| Tier            | Meaning                                                                                                                                                                                                                                                                                                                                                        |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **BLOCKING**    | Must fix before merge: correctness/logic error, security issue, leak/crash in normal use, ABI/API break, breaking change without a migration path, missing required tests for new functionality, an untested broad-blast-radius change to a default/shipping path, or incomplete cleanup of code this PR modifies (dead params/constants/helpers left behind). |
-| **IMPORTANT**   | Should fix: real behavioral risk, missing validation for a likely edge case, meaningful test gap, missing required device/arch coverage, or a maintainability issue likely to cause defects soon.                                                                                                                                                              |
-| **SUGGESTION**  | Nice to have on code already being touched: clarity, naming, a small refactor, an extra test case.                                                                                                                                                                                                                                                             |
-| **FUTURE WORK** | Out of scope for this PR: improvements to code not being modified, larger refactors, follow-up features. Track separately; do not block this PR.                                                                                                                                                                                                               |
+| Tier            | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **BLOCKING**    | Must fix before merge: correctness/logic error, security issue, leak/crash in normal use, ABI/API break, breaking change without a migration path, missing required tests for new functionality, an untested broad-blast-radius change to a default/shipping path, incomplete cleanup of code this PR modifies (dead params/constants/helpers left behind), or asserting a lane as validation coverage for the change when the component's `TESTING.md` documents that lane as non-gating/informational or a known gap. |
+| **IMPORTANT**   | Should fix: real behavioral risk, missing validation for a likely edge case, meaningful test gap, missing required device/arch coverage, or a maintainability issue likely to cause defects soon.                                                                                                                                                                                                                                                                                                                       |
+| **SUGGESTION**  | Nice to have on code already being touched: clarity, naming, a small refactor, an extra test case, or resolving/worsening a documented Known Risk/Gap in `TESTING.md` without updating that entry.                                                                                                                                                                                                                                                                                                                      |
+| **FUTURE WORK** | Out of scope for this PR: improvements to code not being modified, larger refactors, follow-up features. Track separately; do not block this PR.                                                                                                                                                                                                                                                                                                                                                                        |
 
 Decision framework: correctness/security issue, or incomplete cleanup of code being modified → **BLOCKING**; will cause problems for users/developers soon → **IMPORTANT**; an improvement to code being modified → **SUGGESTION**; otherwise → **FUTURE WORK**. Do not mark unrelated improvements BLOCKING, and do not soften incomplete cleanup to SUGGESTION/FUTURE WORK.
 
@@ -179,6 +179,65 @@ Decision framework: correctness/security issue, or incomplete cleanup of code be
 
 ______________________________________________________________________
 
+## Discover the component's `TESTING.md` first
+
+ROCm components are rolling out a standard `TESTING.md` — a per-component testing-strategy
+document (piloted by hipBLASLt: `projects/hipblaslt/TESTING.md` and
+`projects/hipblaslt/tensilelite/TESTING.md` in `rocm-libraries`). Where one exists, it is the
+canonical source of truth for testing questions on that component — treat it the same way as
+`CONTRIBUTING.md`: read and apply it rather than inventing guidance.
+
+**Discovery rule:** check the repo root for a `TESTING.md` (many repos, including this one, have
+one covering repo/build-level testing), then walk up from each changed file's directory to the
+nearest component-level `TESTING.md`. A PR spanning multiple components may need to consult more
+than one.
+
+**What to extract from it:**
+
+- Which lanes actually **gate** a merge versus which are **informational** (green-but-not-required,
+  or documented as silently skipped in some environment). This distinction is the whole point of
+  the document — "is CI covering that?" should be a lookup, not a guess.
+- The component's own test tiers/suites and what each is for, so the Testing Summary/Checklist
+  can name the right one instead of a generic label.
+- The **Known Risks and Gaps** table (or equivalent). If the PR touches an area a gap row already
+  names, say so explicitly rather than silently rediscovering it — and check whether the PR should
+  update that row (close it, tighten it, or leave it, with a note either way).
+- Owners / review cadence, if the change needs a named domain reviewer beyond standard CODEOWNERS.
+
+**No `TESTING.md` for this component yet?** The rollout is in progress — absence is not a
+blocker. Fall back to CI-config discovery and the risk-dimension lens below, and add a
+`SUGGESTION`/`FUTURE WORK` note that the component would benefit from one, pointing at the
+hipBLASLt pilot as a reference example.
+
+______________________________________________________________________
+
+## Risk dimensions (the lens for picking a level)
+
+Use these seven factors to judge a risk level (1–5, below) and to sanity-check a `TESTING.md`'s
+documented validation against the change actually in front of you. This is a weighting *lens*,
+not a literal point formula — do not invent a numeric score or bake in dated defect-rate
+statistics; regression history in particular should come from *this* repo's own defect/revert
+history (Jira, `git revert` patterns, CI flake logs), discovered at run time, never a fixed
+percentage table.
+
+- **Primary (weigh heaviest):**
+  - *Component criticality* — how central the touched component is to the product (e.g. runtime/
+    driver/kernel-adjacent code outweighs a peripheral tool).
+  - *Historical regression risk* — this component's/path's own track record of regressions or
+    reverts, not an assumed rate.
+  - *Blast radius / dependency impact* — how many components, consumers, or downstream frameworks
+    (e.g. PyTorch/JAX) could be affected; an API/ABI change has a wider radius than an internal
+    helper.
+- **Secondary:**
+  - *Sensitive-path exposure* — whether the diff touches paths the repo itself treats as
+    sensitive (discover these from CODEOWNERS, a documented sensitive-paths list, or directory
+    naming convention such as `memory/`, `scheduler/`, `driver/` — do not hardcode a fixed list).
+- **Modifiers (raise or lower the primary/secondary read, rather than standing alone):**
+  - *Code churn* — lines/files changed and whether it reads as a large refactor.
+  - *Test-coverage delta* — did the PR add coverage, hold it steady, or reduce it.
+  - *Release-phase timing* — the same change carries more risk closer to a code freeze or release
+    candidate; tighten scrutiny accordingly.
+
 ## Risk levels (1–5)
 
 | Level | Meaning                                                                                                                                    |
@@ -190,6 +249,30 @@ ______________________________________________________________________
 | 5     | Cross-project/architectural, default behavior change in a critical path, ABI break, large unproven refactor, or known unresolved failures. |
 
 A required-but-not-yet-passed device/arch run raises the residual risk.
+
+## Required validation floor by risk level (fallback)
+
+**Use the discovered `TESTING.md`'s own tiers/gates first.** This table is the fallback lens —
+apply it only when no `TESTING.md` covers the touched component, or to sanity-check that a
+documented tier is not obviously mismatched to the assessed level (e.g. a change touching a
+named sensitive path landing in a component whose `TESTING.md` marks the relevant lane
+informational-only). It generalizes a proposed ROCm-wide CI-enforcement ladder onto the existing
+1–5 scale; the concrete lane names are illustrative, not prescriptive — map them onto whatever
+this repo actually runs.
+
+| Level | Cumulative validation floor                                                                    | Review gate                                            |
+| ----- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| 1     | Build + lint + unit tests.                                                                     | Ready for review immediately after CI passes.          |
+| 2     | + component tests, sanitizer smoke.                                                            | Ready after those tests pass.                          |
+| 3     | + integration tests, API/ABI compatibility check, multi-arch smoke, feature-flag verification. | Ready after enhanced validation passes.                |
+| 4     | + full component regression, cross-stack (framework) smoke, stress/perf smoke.                 | Named SME approval required before merge.              |
+| 5     | + full-stack regression, system validation, perf qualification, canary/soak.                   | SME **and** QA/release sign-off required before merge. |
+
+**Review eligibility should track real validation, not just approval or a green rollup.** Do not
+treat a Level 4–5 PR (or one whose `TESTING.md` gates say the equivalent) as ready for full review
+until the validation its floor requires has actually run — a valid-looking green summary can hide
+a skipped lane, a lane marked informational, or a documented known gap in exactly the area the PR
+touches.
 
 ______________________________________________________________________
 
