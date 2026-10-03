@@ -1781,6 +1781,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "rocm-libraries",
             "rocm-systems",
             "compiler/amd-llvm",
+            "compiler/hipify",
             "README.md",
         ):
             for event in ("pull_request", "push"):
@@ -1800,6 +1801,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                                     "rocm-libraries",
                                     "rocm-systems",
                                     "compiler/amd-llvm",
+                                    "compiler/hipify",
                                 ],
                             ),
                             targets=targets,
@@ -1814,10 +1816,41 @@ class TestExpandBuildConfigs(unittest.TestCase):
                                 "linux-gfx942-8gpu-asan-sandbox-rocm",
                                 "linux-gfx950-8gpu-asan-sandbox-rocm",
                             ]
-                            if path in ("rocm-libraries", "rocm-systems")
+                            if path
+                            in ("rocm-libraries", "rocm-systems", "compiler/amd-llvm")
                             else ["", ""]
                         )
                         self.assertEqual(runners, expected)
+                        expected_variant = (
+                            "host-asan-debug"
+                            if path == "compiler/amd-llvm"
+                            or variant == "host-asan-debug"
+                            else "host-asan"
+                        )
+                        self.assertEqual(
+                            result.linux.build_variant_label, expected_variant
+                        )
+                        self.assertEqual(
+                            result.linux.build_variant_cmake_preset,
+                            f"linux-release-{expected_variant}",
+                        )
+
+    def test_llvm_bump_preserves_explicit_full_asan(self):
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="pull_request", build_variant="asan", pr_labels=["ci:asan"]
+            ),
+            git_context=cm.GitContext(
+                changed_files=["compiler/amd-llvm"],
+                submodule_paths=["compiler/amd-llvm"],
+            ),
+            targets=cm.TargetSelection(linux_families=["gfx94x", "gfx950"]),
+            jobs=_jobs(),
+        )
+        self.assertEqual(result.linux.build_variant_label, "asan")
+        self.assertEqual(
+            [e["test-runs-on"] for e in result.linux.per_family_info], ["", ""]
+        )
 
     def test_asan_debug_uses_sandbox_runner(self):
         """asan-debug variant uses sandbox runner like asan."""

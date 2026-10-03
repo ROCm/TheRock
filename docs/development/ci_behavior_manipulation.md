@@ -7,7 +7,12 @@ when ASAN CI is enabled (the bump automation adds `ci:host-asan`). For `gfx94x`
 and `gfx950`, host-ASan sanity checks and component tests use
 `linux-gfx942-8gpu-asan-sandbox-rocm` and
 `linux-gfx950-8gpu-asan-sandbox-rocm`, respectively. Scheduled and manually
-dispatched host-ASan tests use the same pools. Other PRs retain the existing
+dispatched host-ASan tests use the same pools. LLVM submodule bump PRs
+(`compiler/amd-llvm`) can opt in with `ci:host-asan`; they select
+`host-asan-debug` (`linux-release-host-asan-debug`) and enable sandbox tests.
+Add `ci:gfx950-dcgpu` to include gfx950 alongside the default gfx94x coverage,
+or use `ci:run-all-archs`. An explicit `ci:asan` label still selects full ASan.
+The separate Compiler Daily Bump workflow is unchanged. Other PRs retain the existing
 host-ASan test restriction, and full ASan retains its nightly/manual restriction.
 
 ## Trigger behavior
