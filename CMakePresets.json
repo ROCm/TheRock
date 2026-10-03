@@ -74,6 +74,16 @@
       }
     },
     {
+      "name": "linux-release-asan-compact",
+      "displayName": "Linux release ASAN compact build",
+      "description": "Release + full ASAN with size-oriented flags: outline instrumentation, -Oz, compressed line tables, offload compress, GC sections, LTO. Inherits linux-asan-base.",
+      "inherits": "linux-asan-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "THEROCK_ASAN_COMPACT": "ON"
+      }
+    },
+    {
       "name": "linux-release-asan-debug",
       "displayName": "Linux release ASAN build with debug info",
       "description": "Nightly/release builds: RelWithDebInfo + full ASAN + -g1 -gdwarf-4 for stack traces. Inherits linux-asan-base.",
