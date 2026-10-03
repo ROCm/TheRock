@@ -11,10 +11,16 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from configure_asan_env import STATIC_ASAN_ENV, main, resolve_asan_env
+from configure_asan_env import (
+    STATIC_ASAN_ENV,
+    get_asan_runtime_path,
+    main,
+    resolve_asan_env,
+)
 
 # The runtime is located by executing the artifact tree's clang, which the tests
 # stub with a shell script. Windows has no equivalent shebang mechanism.
@@ -56,6 +62,24 @@ class TestResolveAsanEnv(unittest.TestCase):
             self.assertEqual(warnings, [])
             self.assertTrue(env["ASAN_RUNTIME_PATH"].endswith("asan.so"))
             self.assertTrue(env["ASAN_SYMBOLIZER_PATH"].endswith("llvm-symbolizer"))
+            self.assertIn(
+                str(Path(env["ASAN_RUNTIME_PATH"]).parent),
+                env["LD_LIBRARY_PATH"].split(":"),
+            )
+
+    def test_launcher_uses_configured_runtime_without_clang(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = Path(tmp) / "libclang_rt.asan.so"
+            runtime.touch()
+            with patch.dict(os.environ, {"ASAN_RUNTIME_PATH": str(runtime)}):
+                self.assertEqual(get_asan_runtime_path(Path(tmp)), runtime.resolve())
+
+    def test_launcher_rejects_missing_configured_runtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = Path(tmp) / "missing.so"
+            with patch.dict(os.environ, {"ASAN_RUNTIME_PATH": str(runtime)}):
+                with self.assertRaisesRegex(FileNotFoundError, "ASAN_RUNTIME_PATH"):
+                    get_asan_runtime_path(Path(tmp))
 
     def test_static_values_are_always_exported(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -118,6 +142,11 @@ class TestResolveAsanEnv(unittest.TestCase):
 
             self.assertEqual(warnings, [])
             self.assertEqual(env["ASAN_RUNTIME_PATH"], str(runtime_path.resolve()))
+            with patch.dict(os.environ):
+                os.environ.pop("ASAN_RUNTIME_PATH", None)
+                self.assertEqual(
+                    get_asan_runtime_path(artifacts), runtime_path.resolve()
+                )
 
     @requires_posix
     def test_missing_runtime_file_warns(self):
