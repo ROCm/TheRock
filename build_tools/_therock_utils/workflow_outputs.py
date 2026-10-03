@@ -268,6 +268,29 @@ class WorkflowOutputRoot:
             self.bucket, f"{self.prefix}/logs/packaging/{pkg_type}/index.html"
         )
 
+    def native_linux_repo_package(
+        self, pkg_type: str, os_profile: str
+    ) -> StorageLocation:
+        """Location for the ``amdrocm-repo`` bootstrap package.
+
+        ``{run_id}-linux/packages/{pkg_type}/repo/{os_profile}/amdrocm-repo.{pkg_type}``
+        (e.g. ``12345678901-linux/packages/deb/repo/ubuntu2404/amdrocm-repo.deb``).
+
+        The package is fetched by URL, so it sits beside the repository index
+        rather than in it: every profile's package has the same package name, so
+        indexing them together would collide. The object name is fixed so the
+        download URL does not change with the package version.
+
+        Args:
+            pkg_type: Package type ('deb' or 'rpm').
+            os_profile: Target distro profile (e.g. 'ubuntu2404', 'rhel10').
+        """
+        return StorageLocation(
+            self.bucket,
+            f"{self.prefix}/packages/{pkg_type}/repo/{os_profile}"
+            f"/amdrocm-repo.{pkg_type}",
+        )
+
     # -- Python packages --------------------------------------------------------
 
     def python_packages(self, artifact_group: str = "") -> StorageLocation:
