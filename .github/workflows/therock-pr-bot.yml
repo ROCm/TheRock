@@ -71,6 +71,8 @@ jobs:
         with:
           app-id: ${{ secrets.THEROCK_PR_BOT_APPID }}
           private-key: ${{ secrets.THEROCK_PRBOT_KEY }}
+          permission-checks: read         # Read required CI check results.
+          permission-pull-requests: write # Read PRs and manage comments and labels.
 
       # SECURITY: only fixed, trusted dependencies — never installed from the PR.
       - name: Install deps
