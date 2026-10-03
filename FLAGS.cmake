@@ -125,6 +125,12 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
+  NAME FFTW3_AUTOTOOLS_BUILD
+  DEFAULT_VALUE ON
+  DESCRIPTION "Build third-party fftw3 with autotools on Linux. Ignored on Windows."
+)
+
+therock_declare_flag(
   NAME HSA_WINDOWS_SHARED_RUNTIME
   DEFAULT_VALUE OFF
   DESCRIPTION "Emit ROCR-Runtime and rocminfo from core-runtime on Windows"
