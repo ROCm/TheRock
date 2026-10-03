@@ -40,11 +40,11 @@ msiexec /i amdrocm-runtime.msi /qn ENABLE_LONG_PATHS=0
 
 ## What Gets Installed
 
-| Item                         | Default location                                   |
-| ---------------------------- | -------------------------------------------------- |
-| Runtime DLLs and executables | `C:\Program Files\AMD\ROCm\runtime-<version>\bin\` |
-| Import libraries (`.lib`)    | `C:\Program Files\AMD\ROCm\runtime-<version>\lib\` |
-| System PATH entry            | `...\bin` appended to the machine-wide PATH        |
+| Item                         | Default location                                         |
+| ---------------------------- | -------------------------------------------------------- |
+| Runtime DLLs and executables | `C:\Program Files\AMD\ROCm\runtime-<version>\bin\`       |
+| Import libraries (`.lib`)    | `C:\Program Files\AMD\ROCm\runtime-<version>\lib\`       |
+| System PATH entry            | `...\bin` appended to the machine-wide PATH              |
 | SDK-discovery registry key   | `HKLM\Software\AMD\ROCm\<X.Y>` (`InstallDir`, `Version`) |
 
 The SDK-discovery key is **shared** across all ROCm packages installed at the
