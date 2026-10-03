@@ -97,8 +97,14 @@ function(therock_sanitizer_configure
 
     # Compact ASAN: shrink host+device objects. Injected here (not via
     # super-project CMAKE_CXX_FLAGS) so gcc sysdeps never see clang/HIP-only
-    # flags like --offload-compress which is HIP-only
-    if(THEROCK_ASAN_COMPACT AND (_sanitizer STREQUAL "ASAN" OR _sanitizer STREQUAL "HOST_ASAN"))
+    # flags like --offload-compress, which is HIP-only.
+    # A subproject opts out with -D{subproject}_ASAN_COMPACT=OFF without
+    # changing its THEROCK_SANITIZER setting.
+    set(_asan_compact "${THEROCK_ASAN_COMPACT}")
+    if(DEFINED "${subproject_name}_ASAN_COMPACT")
+      set(_asan_compact "${${subproject_name}_ASAN_COMPACT}")
+    endif()
+    if(_asan_compact AND (_sanitizer STREQUAL "ASAN" OR _sanitizer STREQUAL "HOST_ASAN"))
       # -Oz must replace the default Release -O3 (FLAGS_<CONFIG> is appended
       # after FLAGS_INIT). -Wl,--gc-sections is a link flag only.
       string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -fsanitize-address-outline-instrumentation -gz -gline-tables-only -fdata-sections -ffunction-sections -flto\")\n")

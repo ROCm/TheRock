@@ -26,6 +26,13 @@ on:
         type: string
         default: ""
         description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
+      build_variant:
+        type: choice
+        description: "asan keeps the existing full ASAN preset. asan-compact is the opt-in size-oriented preset and does not replace asan."
+        options:
+          - asan
+          - asan-compact
+        default: asan
   pull_request:
     types:
       - labeled
@@ -52,7 +59,7 @@ jobs:
   setup:
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
-      build_variant: "asan"
+      build_variant: ${{ inputs.build_variant || 'asan' }}
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
       linux_test_labels: ${{ inputs.linux_test_labels || '' }}
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}

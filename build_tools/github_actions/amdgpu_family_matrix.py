@@ -75,7 +75,9 @@ def load_external_runner_config() -> dict | None:
 def is_asan():
     """Determines if this is an ASAN build using BUILD_VARIANT env var."""
     BUILD_VARIANT = os.getenv("BUILD_VARIANT", "")
-    return BUILD_VARIANT == "asan"
+    # asan-compact uses the same test timeouts as full ASAN. host-asan and
+    # asan-debug keep their existing exact-match behavior.
+    return BUILD_VARIANT in ("asan", "asan-compact")
 
 
 def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
@@ -172,6 +174,13 @@ all_build_variants = {
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan-debug",
         },
+        # Opt-in size-oriented full ASAN. Does not replace asan or asan-debug.
+        # Select with build_variant=asan-compact (CI ASAN workflow dispatch).
+        "asan-compact": {
+            "build_variant_label": "asan-compact",
+            "build_variant_suffix": "asan-compact",
+            "build_variant_cmake_preset": "linux-release-asan-compact",
+        },
         "host-asan-debug": {
             "build_variant_label": "host-asan-debug",
             "build_variant_suffix": "host-asan",
@@ -242,6 +251,7 @@ amdgpu_family_info_matrix_presubmit = {
             "build_variants": [
                 "release",
                 "asan",
+                "asan-compact",
                 "asan-debug",
                 "host-asan",
                 "host-asan-debug",
@@ -320,6 +330,7 @@ amdgpu_family_info_matrix_presubmit = {
             "build_variants": [
                 "release",
                 "asan",
+                "asan-compact",
                 "asan-debug",
                 "host-asan",
                 "host-asan-debug",
@@ -356,6 +367,7 @@ amdgpu_family_info_matrix_postsubmit = {
             "build_variants": [
                 "release",
                 "asan",
+                "asan-compact",
                 "asan-debug",
                 "host-asan",
                 "host-asan-debug",

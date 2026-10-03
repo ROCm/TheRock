@@ -1621,6 +1621,33 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
 
+    def test_asan_compact_is_opt_in_and_keeps_full_asan(self):
+        """asan-compact selects linux-release-asan-compact and does not replace asan."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        compact = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="workflow_dispatch", build_variant="asan-compact"
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertEqual(
+            compact.linux.build_variant_cmake_preset, "linux-release-asan-compact"
+        )
+        self.assertEqual(compact.linux.build_variant_suffix, "asan-compact")
+        self.assertIn("sandbox", compact.linux.per_family_info[0]["test-runs-on"])
+
+        full = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="workflow_dispatch", build_variant="asan"
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertEqual(full.linux.build_variant_cmake_preset, "linux-release-asan")
+
     def test_asan_debug_uses_sandbox_runner(self):
         """asan-debug variant uses sandbox runner like asan."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])

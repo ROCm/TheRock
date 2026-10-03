@@ -1429,7 +1429,8 @@ def _expand_build_config_for_platform(
 
     # ASAN builds native Linux packages (deb/rpm) but not Python packages.
     # The build_python_packages input allows callers to disable Python packages.
-    is_asan = suffix in ("asan", "host-asan")
+    # "asan" covers asan, host-asan, and asan-compact suffixes.
+    is_asan = "asan" in suffix
     build_python_packages = ci_inputs.build_python_packages and not is_asan
     test_python_packages_matrix = (
         build_rocm_python_test_matrix(
