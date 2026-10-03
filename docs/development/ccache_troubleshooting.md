@@ -42,6 +42,17 @@ remote cache, accessed via ccache's `remote_storage` option with
 Both servers are on the Kubernetes cluster, accessible without
 authentication from any pod in the cluster.
 
+### Which builds use which cache
+
+| Build                     | Cache                             | Details                                                                 |
+| ------------------------- | --------------------------------- | ----------------------------------------------------------------------- |
+| ROCm CMake / Ninja stages | ccache → bazel-remote (this page) | Default for TheRock CI                                                  |
+| PyTorch wheels            | sccache → S3                      | [Cache buckets](s3_buckets.md#cache-buckets)                            |
+| JAX wheels                | Bazel remote cache on EngFlow     | [JAX README](../../external-builds/jax/README.md#ci-bazel-remote-cache) |
+
+This page covers ccache only. Builds that use another cache are linked above
+rather than documented here.
+
 ### Namespace version
 
 `CCACHE_NAMESPACE_VERSION` in `setup_ccache.py` controls the cache
