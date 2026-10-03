@@ -62,6 +62,7 @@ def get_devel_root() -> Path:
             "rocm_sdk_devel expected to be defined by an __init__.py file"
         )
     site_lib_path = rocm_sdk_devel_path.parent
+    _validate_devel_versions(site_lib_path, di.__version__)
     devel_py_pkg_name = di.ALL_PACKAGES["devel"].get_py_package_name()
     devel_py_pkg_path = site_lib_path / devel_py_pkg_name
 
@@ -240,6 +241,36 @@ def _record_has_entries(record_path: Path, names: list[str]) -> bool:
 def _without_post_release(version: str) -> str:
     """Remove a canonical PEP 440 post-release segment from a version."""
     return re.sub(r"\.post\d+", "", version, count=1)
+
+
+def _validate_devel_versions(site_lib_path: Path, expected_version: str):
+    """Do not combine development metadata with runtime files from another build.
+
+    Expansion turns links into hardlinks, so mixing wheels can pair an older
+    rocBLAS library/master database with newer fallback databases. Validate even
+    an already-expanded tree, since runtime wheels can be upgraded independently.
+    Post-release packaging revisions follow the device-link compatibility policy.
+    """
+    mismatches = []
+    for dist in md.distributions(path=[str(site_lib_path)]):
+        name = re.sub(r"[-_.]+", "-", dist.metadata.get("Name", "")).lower()
+        if name not in {
+            "rocm-sdk-devel",
+            "rocm-sdk-core",
+            "rocm-sdk-libraries",
+        } and not name.startswith("rocm-sdk-libraries-"):
+            continue
+        if _without_post_release(dist.version) != _without_post_release(
+            expected_version
+        ):
+            mismatches.append(f"{name}=={dist.version}")
+    if mismatches:
+        raise ImportError(
+            f"Cannot use the ROCm SDK development tree with rocm=={expected_version}: "
+            f"incompatible package versions: {', '.join(sorted(mismatches))}. "
+            "Install rocm, rocm-sdk-devel, rocm-sdk-core, and the required "
+            "rocm-sdk-libraries packages from the same SDK build, then run rocm-sdk init."
+        )
 
 
 def _discover_device_link_plans(site_lib_path: Path, expected_version: str):
