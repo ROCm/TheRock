@@ -80,3 +80,31 @@ if(APPLE)
     message(STATUS "  Deployment target: ${CMAKE_OSX_DEPLOYMENT_TARGET}")
   endif()
 endif()
+
+# ---------------------------------------------------------------------------
+# Native CPU optimization (opt-in, off by default)
+# ---------------------------------------------------------------------------
+# When enabled, passes -march=native -mtune=native to the bootstrap C/C++
+# compiler. These flags are forwarded into every subproject via the generated
+# _toolchain.cmake files (see therock_subproject.cmake).
+#
+# DO NOT enable this for distributed packages — binaries compiled with
+# -march=native are not portable to other CPU microarchitectures.
+# This is intended for local source builds where the build host and the
+# runtime host are the same machine.
+option(THEROCK_NATIVE_MARCH
+  "Optimize the build for the current host CPU (produces non-portable binaries)"
+  OFF)
+
+if(THEROCK_NATIVE_MARCH)
+  if(NOT MSVC)
+    string(APPEND CMAKE_C_FLAGS " -march=native -mtune=native")
+    string(APPEND CMAKE_CXX_FLAGS " -march=native -mtune=native")
+    message(STATUS "THEROCK_NATIVE_MARCH: enabled (-march=native -mtune=native)")
+  else()
+    message(WARNING
+      "THEROCK_NATIVE_MARCH: ignored — the MSVC bootstrap compiler does not "
+      "support -march. Subprojects that use the amd-llvm toolchain will still "
+      "pick up the flag via their generated toolchain file if you set it there.")
+  endif()
+endif()
