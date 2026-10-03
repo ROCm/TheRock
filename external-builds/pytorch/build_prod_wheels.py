@@ -1084,6 +1084,59 @@ def copy_libuv_to_torch_lib(pytorch_dir: Path):
     shutil.copy2(uv_dll, target_lib)
 
 
+_AOTRITON_ARCH_ANCHOR = '    message(STATUS "PYTORCH_ROCM_ARCH ${PYTORCH_ROCM_ARCH}")\n'
+_AOTRITON_ARCH_ARG = "      -DAOTRITON_TARGET_ARCH:STRING=${PYTORCH_ROCM_ARCH}\n"
+_AOTRITON_BASE_ARCH_ARG = "      -DAOTRITON_TARGET_ARCH:STRING=${__AOTRITON_BASE_ARCH}\n"
+_AOTRITON_BASE_ARCH_BLOCK = """\
+    # Added by TheRock: AOTriton matches whole target tokens, so a variant such
+    # as gfx942:xnack+ is filtered out even though gfx942 is supported, and
+    # configure then fails on the empty target list. Its kernel images are
+    # per-architecture and xnack-agnostic, and this code path builds the
+    # runtime only (AOTRITON_NOIMAGE_MODE=ON), so the base target is the value
+    # AOTriton actually wants. The workflow still builds PyTorch for the full
+    # target list in PYTORCH_ROCM_ARCH.
+    set(__AOTRITON_BASE_ARCH "")
+    foreach(__aotriton_target ${PYTORCH_ROCM_ARCH})
+      string(REGEX REPLACE ":.*$" "" __aotriton_base "${__aotriton_target}")
+      list(APPEND __AOTRITON_BASE_ARCH "${__aotriton_base}")
+    endforeach()
+    list(REMOVE_DUPLICATES __AOTRITON_BASE_ARCH)
+    message(STATUS "AOTRITON_TARGET_ARCH ${__AOTRITON_BASE_ARCH}")
+"""
+
+
+def patch_aotriton_target_arch(pytorch_dir: Path) -> None:
+    """Strip target suffixes before they are forwarded to AOTriton.
+
+    PYTORCH_ROCM_ARCH comes from the workflow. A bare name such as gfx942 is
+    left unchanged. A suffixed name such as gfx942:xnack+ is reduced to gfx942
+    for AOTRITON_TARGET_ARCH only.
+    """
+    cmake_path = pytorch_dir / "cmake" / "External" / "aotriton.cmake"
+    if not cmake_path.is_file():
+        print(f"+++ No AOTriton cmake at {cmake_path}; nothing to adjust")
+        return
+
+    text = cmake_path.read_text()
+    if "__AOTRITON_BASE_ARCH" in text:
+        return
+    if _AOTRITON_ARCH_ANCHOR not in text or _AOTRITON_ARCH_ARG not in text:
+        raise RuntimeError(
+            f"Cannot adjust AOTRITON_TARGET_ARCH in {cmake_path}: expected "
+            "upstream text is missing. PyTorch's AOTriton integration changed, "
+            "so re-check whether suffixed targets still need this adjustment."
+        )
+
+    text = text.replace(
+        _AOTRITON_ARCH_ANCHOR,
+        _AOTRITON_ARCH_ANCHOR + _AOTRITON_BASE_ARCH_BLOCK,
+        1,
+    )
+    text = text.replace(_AOTRITON_ARCH_ARG, _AOTRITON_BASE_ARCH_ARG, 1)
+    cmake_path.write_text(text)
+    print(f"+++ Adjusted AOTRITON_TARGET_ARCH to base gfx targets in {cmake_path}")
+
+
 def do_build_pytorch(
     args: argparse.Namespace,
     pytorch_dir: Path,
@@ -1091,6 +1144,8 @@ def do_build_pytorch(
     *,
     triton_requirement: str | None,
 ):
+    patch_aotriton_target_arch(pytorch_dir)
+
     # Compute version (dev builds are tagged with the torch source commit).
     pytorch_build_version = compute_build_version(
         pytorch_dir, args.version_suffix, args.release_type
