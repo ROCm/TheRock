@@ -20,6 +20,7 @@ from unittest.mock import call, patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_multi_arch_ci as cm
+from bump_automation import SUBMODULE_CONFIG
 from amdgpu_family_matrix import get_all_families_for_trigger_types
 from configure_multi_arch_ci_summary import format_summary
 from workflow_utils import WORKFLOWS_DIR
@@ -1773,6 +1774,50 @@ class TestExpandBuildConfigs(unittest.TestCase):
         )
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
+
+    def test_host_asan_submodule_bump_runners(self):
+        targets = cm.TargetSelection(linux_families=["gfx94x", "gfx950"])
+        for path in (
+            "rocm-libraries",
+            "rocm-systems",
+            "compiler/amd-llvm",
+            "README.md",
+        ):
+            for event in ("pull_request", "push"):
+                for variant in ("asan", "host-asan-debug"):
+                    with self.subTest(path=path, event=event, variant=variant):
+                        result = cm.expand_build_configs(
+                            ci_inputs=self._inputs(
+                                event_name=event,
+                                build_variant=variant,
+                                pr_labels=SUBMODULE_CONFIG.get(path, {}).get(
+                                    "labels", ["ci:host-asan"]
+                                ),
+                            ),
+                            git_context=cm.GitContext(
+                                changed_files=[path],
+                                submodule_paths=[
+                                    "rocm-libraries",
+                                    "rocm-systems",
+                                    "compiler/amd-llvm",
+                                ],
+                            ),
+                            targets=targets,
+                            jobs=_jobs(),
+                        )
+                        runners = [
+                            entry["test-runs-on"]
+                            for entry in result.linux.per_family_info
+                        ]
+                        expected = (
+                            [
+                                "linux-gfx942-8gpu-asan-sandbox-rocm",
+                                "linux-gfx950-8gpu-asan-sandbox-rocm",
+                            ]
+                            if path in ("rocm-libraries", "rocm-systems")
+                            else ["", ""]
+                        )
+                        self.assertEqual(runners, expected)
 
     def test_asan_debug_uses_sandbox_runner(self):
         """asan-debug variant uses sandbox runner like asan."""

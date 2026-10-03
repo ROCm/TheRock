@@ -727,6 +727,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                             "linux": {
                                 "test-runs-on": "linux-gfx942-prod",
                                 "test-runs-on-sandbox": "linux-sandbox-runner",
+                                "test-runs-on-host-asan": "linux-host-asan-runner",
                             }
                         }
                     }
@@ -739,7 +740,41 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 components = self._get_components()
 
                 hipblas = next(j for j in components if j["job_name"] == "hipblas")
-                self.assertEqual(hipblas["test_runner"], "linux-sandbox-runner")
+                self.assertEqual(
+                    hipblas["test_runner"],
+                    (
+                        "linux-host-asan-runner"
+                        if build_variant.startswith("host-asan")
+                        else "linux-sandbox-runner"
+                    ),
+                )
+
+    def test_host_asan_multi_gpu_uses_sandbox_runner(self):
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        os.environ["PROJECTS_TO_TEST"] = "rccl"
+        os.environ["TEST_LABELS"] = json.dumps(["ci:run-multi-gpu"])
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on-host-asan": "linux-gfx942-8gpu-asan-sandbox-rocm",
+                        "test-runs-on-multi-gpu": "production-default",
+                        "test-runs-on-multi-gpu-labels": [
+                            {"label": "production-weighted", "count": 1}
+                        ],
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+        fetch_test_configurations.run()
+        rccl = next(j for j in self._get_components() if j["job_name"] == "rccl")
+        self.assertEqual(
+            rccl["multi_gpu_runner"], "linux-gfx942-8gpu-asan-sandbox-rocm"
+        )
 
     def test_release_build_uses_count_runner(self):
         """Release builds should use count-based runner labels, not sandbox."""

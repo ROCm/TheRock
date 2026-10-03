@@ -2,6 +2,14 @@
 
 **Multi-Arch CI** ([`multi_arch_ci.yml`](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml)) is configured by [`configure_multi_arch_ci.py`](../../build_tools/github_actions/configure_multi_arch_ci.py) and reads GPU family definitions from [`amdgpu_family_matrix.py`](../../build_tools/github_actions/amdgpu_family_matrix.py).
 
+Host-ASan tests run for `rocm-libraries` and `rocm-systems` submodule bumps
+when ASAN CI is enabled (the bump automation adds `ci:host-asan`). For `gfx94x`
+and `gfx950`, host-ASan sanity checks and component tests use
+`linux-gfx942-8gpu-asan-sandbox-rocm` and
+`linux-gfx950-8gpu-asan-sandbox-rocm`, respectively. Scheduled and manually
+dispatched host-ASan tests use the same pools. Other PRs retain the existing
+host-ASan test restriction, and full ASan retains its nightly/manual restriction.
+
 ## Trigger behavior
 
 The CI pipelines test a growing set of GPU targets depending on trigger type/frequency:

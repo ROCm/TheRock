@@ -1225,6 +1225,15 @@ def run():
                 "test-runs-on-multi-gpu", ""
             )
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
+            if build_variant.startswith("host-asan"):
+                test_runs_on_sandbox = platform_info.get(
+                    "test-runs-on-host-asan", test_runs_on_sandbox
+                )
+                if platform_info.get("test-runs-on-host-asan"):
+                    # The host-ASan sandbox has eight GPUs and can also run
+                    # multi-GPU components without using the production pool.
+                    test_runs_on_multi_gpu_default = test_runs_on_sandbox
+                    test_runs_on_multi_gpu_labels = None
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
