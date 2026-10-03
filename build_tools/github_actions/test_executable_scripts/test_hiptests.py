@@ -154,6 +154,12 @@ def setup_env(env):
     env["THEROCK_REQUIRE_HIP_YAML_ENTRIES"] = "1"
     # required for hip-tests to avoid optimizing out multi-stream tests
     env["DEBUG_HIP_GRAPH_MIN_OVERLAP"] = str(0)
+    # On the FFM emulator, run the quick tiers with hip-tests' level_0 parameters
+    # (smaller sizes and fewer iterations).
+    if TEST_TYPE in ("ffm-quick", "ffm-standard"):
+        env.setdefault("HIP_TEST_LEVEL", "level_0")
+    if "HIP_TEST_LEVEL" in env:
+        logging.info(f"++ Setting HIP_TEST_LEVEL={env['HIP_TEST_LEVEL']}")
     if platform.system() == "Linux":
         HIP_LIB_PATH = Path(THEROCK_BIN_DIR).parent / "lib"
         logging.info(f"++ Setting LD_LIBRARY_PATH={HIP_LIB_PATH}")
