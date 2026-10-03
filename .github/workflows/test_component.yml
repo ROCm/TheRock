@@ -129,12 +129,6 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
-      - name: Record source checkout
-        id: source_checkout
-        run: |
-          source_sha="$(git rev-parse HEAD)"
-          echo "sha=${source_sha}" >> "$GITHUB_OUTPUT"
-
       - name: Run setup test environment workflow
         timeout-minutes: ${{ inputs.build_variant == 'asan' && 60 || 15 }}
         env:
@@ -242,7 +236,6 @@ jobs:
         env:
           ARTIFACT_REPOSITORY: ${{ github.repository }}
           SOURCE_REPOSITORY: ${{ inputs.repository || github.repository }}
-          SOURCE_SHA: ${{ steps.source_checkout.outputs.sha }}
           SOURCE_REF: >-
             ${{ inputs.ref ||
                 ((inputs.repository == '' || inputs.repository == github.repository) && github.ref)
@@ -260,11 +253,12 @@ jobs:
           REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
           COMPONENT_FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
         run: |
+          source_sha="$(git rev-parse HEAD)"
           python ./build_tools/github_actions/reproduce_test_failure.py \
             --run-id "${ARTIFACT_RUN_ID}" \
             --repository "${ARTIFACT_REPOSITORY}" \
             --source-repository "${SOURCE_REPOSITORY}" \
-            --source-sha "${SOURCE_SHA}" \
+            --source-sha "${source_sha}" \
             --source-ref "${SOURCE_REF}" \
             --container-image "${REPRO_CONTAINER_IMAGE}" \
             --amdgpu-family "${AMDGPU_FAMILIES}" \

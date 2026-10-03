@@ -150,7 +150,7 @@ python build_tools/github_actions/test_executable_scripts/test_rocblas.py
 | `GPU_FAMILY`        | LLVM target name (e.g., `gfx94X-dcgpu`, `gfx1151`, `gfx110X-all`)                                                                                      |
 | `GITHUB_REPO`       | Repository where the CI run was executed (e.g., `ROCm/TheRock`, `ROCm/rocm-libraries`)                                                                 |
 | `SOURCE_REPOSITORY` | Repository checked out by the test job (e.g., `ROCm/TheRock` or a fork)                                                                                |
-| `SOURCE_SHA`        | Commit checked out by the test job; the printed command records it before setup and testing run                                                        |
+| `SOURCE_SHA`        | Commit in the test job's source checkout when the reproduction command is printed                                                                      |
 | `CI_IMAGE`          | Linux container image reference selected by the test job                                                                                               |
 | `ADDITIONAL_FLAGS`  | Optional flags for `install_rocm_from_artifacts.py`. See [installing_artifacts.md](installing_artifacts.md#component-selection) for available options. |
 | `TEST_SCRIPT`       | The test command to run (e.g., `python build_tools/github_actions/test_executable_scripts/test_rocblas.py`)                                            |
