@@ -45,7 +45,16 @@ msiexec /i amdrocm-runtime.msi /qn ENABLE_LONG_PATHS=0
 | Runtime DLLs and executables | `C:\Program Files\AMD\ROCm\runtime-<version>\bin\` |
 | Import libraries (`.lib`)    | `C:\Program Files\AMD\ROCm\runtime-<version>\lib\` |
 | System PATH entry            | `...\bin` appended to the machine-wide PATH        |
-| Install-dir registry key     | `HKLM\Software\AMD\ROCm\<version>\InstallDir`      |
+| SDK-discovery registry key   | `HKLM\Software\AMD\ROCm\<X.Y>` (`InstallDir`, `Version`) |
+
+The SDK-discovery key is **shared** across all ROCm packages installed at the
+same `<X.Y>` version (per
+[RFC0014](/docs/rfcs/RFC0014-Windows-Packaging-Requirements.md)): tools locate
+ROCm via `InstallDir` / `Version` without needing to know which packages are
+present. It is written in the native 64-bit registry view and removed when the
+last package at that version is uninstalled. The package's `ProductCode` is not
+stored here — each MSI registers its own under the standard Add/Remove Programs
+(`HKLM\...\Uninstall\{ProductCode}`) hive.
 
 ### Optional: Long Path Support
 

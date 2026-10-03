@@ -193,7 +193,6 @@ class TestCollectFilesFromCatalog(unittest.TestCase):
             upgrade_code="00000000-0000-0000-0000-000000000000",
             feature_id="Test",
             feature_title="Test",
-            registry_key="Software\\Test\\{version}",
             description="test",
         )
 
@@ -473,6 +472,89 @@ class TestBuildWxs(unittest.TestCase):
             root = self._run(tmp, specs)
             comp_ids = [c.get("Id") for c in root.iter(_ns("Component"))]
             self.assertNotIn("EnvPath", comp_ids)
+
+    def _discovery_values(self, root):
+        """Return {value_name: (key, value, type)} for the RocmDiscovery component."""
+        comp = next(
+            c
+            for c in root.iter(_ns("Component"))
+            if c.get("Id") == "RocmDiscovery"
+        )
+        out = {}
+        for rv in comp.findall(_ns("RegistryValue")):
+            out[rv.get("Name")] = (rv.get("Key"), rv.get("Value"), rv.get("Type"))
+        return comp, out
+
+    def test_discovery_key_shared_version_scoped(self):
+        # The discovery key is the shared, package-agnostic Software\AMD\ROCm\{X.Y}
+        # (NOT the old per-package ...\runtime\... / ...\core\... form), holding
+        # InstallDir + Version. Guards the RFC0014 discovery contract.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._run(tmp, self._minimal_specs("runtime"))  # version 1.2.3
+            _, vals = self._discovery_values(root)
+            self.assertIn("InstallDir", vals)
+            self.assertIn("Version", vals)
+            self.assertEqual(vals["InstallDir"][0], "Software\\AMD\\ROCm\\1.2")
+            self.assertEqual(vals["InstallDir"][1], "[InstallDir]")
+            self.assertEqual(vals["Version"][0], "Software\\AMD\\ROCm\\1.2")
+            self.assertEqual(vals["Version"][1], "1.2.3")
+
+    def test_discovery_component_is_64bit_keypath(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._run(tmp, self._minimal_specs("runtime"))
+            comp, vals = self._discovery_values(root)
+            self.assertEqual(comp.get("Bitness"), "always64")
+            # InstallDir is the component keypath.
+            install_rv = next(
+                rv
+                for rv in comp.findall(_ns("RegistryValue"))
+                if rv.get("Name") == "InstallDir"
+            )
+            self.assertEqual(install_rv.get("KeyPath"), "yes")
+
+    def test_discovery_separate_from_path_component(self):
+        # Discovery registry and PATH are now distinct components; EnvPath must
+        # no longer carry a RegistryValue (it holds only the Environment entry).
+        with tempfile.TemporaryDirectory() as tmp:
+            specs = {
+                "core-hip": {"lib": ["bin/amdhip64_7.dll"]},
+                "core-kpack": {"lib": []},
+                "core-hipinfo": {"lib": []},
+            }
+            root = self._run(tmp, specs)
+            comp_ids = [c.get("Id") for c in root.iter(_ns("Component"))]
+            self.assertIn("EnvPath", comp_ids)
+            self.assertIn("RocmDiscovery", comp_ids)
+            env = next(
+                c for c in root.iter(_ns("Component")) if c.get("Id") == "EnvPath"
+            )
+            self.assertIsNone(env.find(_ns("RegistryValue")))
+            self.assertIsNotNone(env.find(_ns("Environment")))
+
+    def test_discovery_component_guid_is_package_independent(self):
+        # Both runtime and core, built at the same version, must emit a
+        # byte-identical RocmDiscovery component (Id + Guid + key/values) so that
+        # Windows Installer ref-counts the shared key across the two MSIs.
+        with tempfile.TemporaryDirectory() as tmp_r:
+            root_r = self._run(tmp_r, self._minimal_specs("runtime"), package="runtime")
+        with tempfile.TemporaryDirectory() as tmp_c:
+            root_c = self._run(tmp_c, self._minimal_specs("core"), package="core")
+
+        def _disco(root):
+            return next(
+                c
+                for c in root.iter(_ns("Component"))
+                if c.get("Id") == "RocmDiscovery"
+            )
+
+        comp_r, comp_c = _disco(root_r), _disco(root_c)
+        self.assertEqual(comp_r.get("Guid"), comp_c.get("Guid"))
+        self.assertEqual(comp_r.get("Id"), comp_c.get("Id"))
+        self.assertEqual(comp_r.get("Bitness"), comp_c.get("Bitness"))
+        # And the registry key path matches (same X.Y -> same key).
+        _, vals_r = self._discovery_values(root_r)
+        _, vals_c = self._discovery_values(root_c)
+        self.assertEqual(vals_r["InstallDir"][0], vals_c["InstallDir"][0])
 
     def test_long_paths_feature_always_present(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -781,15 +863,6 @@ class TestPackageDefs(unittest.TestCase):
             self.assertTrue(
                 has_placeholder,
                 msg=f"{name} install_subdir missing version placeholder",
-            )
-
-    def test_registry_key_contains_version_placeholder(self):
-        for name, pkg in PACKAGES.items():
-            has_placeholder = any(
-                p in pkg.registry_key for p in ("{version}", "{major}", "{minor}")
-            )
-            self.assertTrue(
-                has_placeholder, msg=f"{name} registry_key missing version placeholder"
             )
 
 
