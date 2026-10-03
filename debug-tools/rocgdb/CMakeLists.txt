@@ -94,10 +94,11 @@ option(ENABLE_TESTS "Enable installation of ROCgdb testsuite files" OFF)
 # (NOTICES.txt, roccoremerge program/manpage).
 option(ROCGDB_UPSTREAM_BUILD "Building from upstream master (skips AMD-specific files)" OFF)
 
-# When the rocgdb source tree does not carry .github/scripts/test_rocgdb.py
-# (e.g. an upstream branch), fetch it from ROCm/ROCgdb amd-staging at configure
-# time so that it can be installed into tests/rocgdb for TheRock CI to invoke.
-option(ROCGDB_DOWNLOAD_CI_SCRIPT "Download test_rocgdb.py from amd-staging if missing in source tree" OFF)
+# When the rocgdb source tree does not carry .github/scripts/test_rocgdb.py and
+# rocjitsu_emulator.py (e.g. an upstream branch), fetch them from ROCm/ROCgdb
+# amd-staging at configure time so that they can be installed into tests/rocgdb
+# for TheRock CI to invoke.
+option(ROCGDB_DOWNLOAD_CI_SCRIPT "Download test_rocgdb.py and rocjitsu_emulator.py from amd-staging if missing in source tree" OFF)
 
 # Find standard build tools.
 find_program(MAKE_EXECUTABLE NAMES make REQUIRED)
@@ -743,53 +744,68 @@ if(BUILD_TESTING)
       USE_SOURCE_PERMISSIONS)
   endforeach()
 
-  # Install the CI wrapper script that invokes the rocgdb testsuite. This is
-  # used by TheRock CI. If the script is not in the source tree and
-  # ROCGDB_DOWNLOAD_CI_SCRIPT is enabled, fetch it from amd-staging.
-  set(TEST_ROCGDB_SCRIPT "${ROCGDB_SOURCE_DIR}/.github/scripts/test_rocgdb.py")
-  if(NOT EXISTS "${TEST_ROCGDB_SCRIPT}")
-    if(ROCGDB_DOWNLOAD_CI_SCRIPT)
-      set(TEST_ROCGDB_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/test_rocgdb.py")
-      # The source of truth for the CI script is the one in amd-staging.
-      set(TEST_ROCGDB_URL "https://raw.githubusercontent.com/ROCm/ROCgdb/amd-staging/.github/scripts/test_rocgdb.py")
-
-      # Use curl rather than file(DOWNLOAD): file(DOWNLOAD)'s STATUS is the
-      # libcurl transfer code, so HTTP 404/500 responses are reported as
-      # success and the error-page body is written to disk. curl --fail
-      # returns non-zero on HTTP >= 400, and verifies TLS by default.
+  # Resolve a ROCgdb CI helper script: prefer the copy in the source tree, and
+  # if it is absent (e.g. an upstream branch) optionally download it from
+  # amd-staging when ROCGDB_DOWNLOAD_CI_SCRIPT is ON.
+  #
+  # Use curl rather than file(DOWNLOAD): file(DOWNLOAD)'s STATUS is the libcurl
+  # transfer code, so HTTP 404/500 responses are reported as success and the
+  # error-page body is written to disk. curl --fail returns non-zero on
+  # HTTP >= 400, and verifies TLS by default.
+  function(_rocgdb_resolve_ci_script script_name out_var)
+    set(_script "${ROCGDB_SOURCE_DIR}/.github/scripts/${script_name}")
+    if(NOT EXISTS "${_script}")
+      if(NOT ROCGDB_DOWNLOAD_CI_SCRIPT)
+        message(FATAL_ERROR
+          "${script_name} not found at ${_script} and THEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT "
+          "is OFF. Re-configure with -DTHEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT=ON to "
+          "fetch it from amd-staging.")
+      endif()
+      set(_script "${CMAKE_CURRENT_BINARY_DIR}/${script_name}")
+      set(_url "https://raw.githubusercontent.com/ROCm/ROCgdb/amd-staging/.github/scripts/${script_name}")
       find_program(CURL_EXECUTABLE curl REQUIRED)
-      set(download_success FALSE)
+      set(_download_success FALSE)
       foreach(attempt RANGE 1 3)
-        message(STATUS "Attempting to download test_rocgdb.py (attempt ${attempt}/3)")
+        message(STATUS "Attempting to download ${script_name} (attempt ${attempt}/3)")
         execute_process(
           COMMAND "${CURL_EXECUTABLE}"
             --fail --silent --show-error --location
             --max-time 60
-            --output "${TEST_ROCGDB_SCRIPT}"
-            "${TEST_ROCGDB_URL}"
-          RESULT_VARIABLE curl_result
-          ERROR_VARIABLE  curl_error
+            --output "${_script}"
+            "${_url}"
+          RESULT_VARIABLE _curl_result
+          ERROR_VARIABLE  _curl_error
         )
-        if(curl_result EQUAL 0)
-          set(download_success TRUE)
-          message(STATUS "Successfully downloaded test_rocgdb.py to ${TEST_ROCGDB_SCRIPT}")
+        if(_curl_result EQUAL 0)
+          set(_download_success TRUE)
+          message(STATUS "Successfully downloaded ${script_name} to ${_script}")
           break()
         else()
-          message(WARNING "Download attempt ${attempt} failed: ${curl_error}")
-          file(REMOVE "${TEST_ROCGDB_SCRIPT}")
+          message(WARNING "Download attempt ${attempt} failed: ${_curl_error}")
+          file(REMOVE "${_script}")
         endif()
       endforeach()
-
-      if(NOT download_success)
-        message(FATAL_ERROR "Failed to download test_rocgdb.py after 3 attempts")
+      if(NOT _download_success)
+        message(FATAL_ERROR "Failed to download ${script_name} after 3 attempts")
       endif()
-    else()
-      message(FATAL_ERROR "test_rocgdb.py not found at ${TEST_ROCGDB_SCRIPT} and ROCGDB_DOWNLOAD_CI_SCRIPT is OFF. Re-configure with -DTHEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT=ON to fetch it from amd-staging.")
     endif()
-  endif()
+    set(${out_var} "${_script}" PARENT_SCOPE)
+  endfunction()
+
+  # Install the CI wrapper that invokes the rocgdb testsuite, and the emulator
+  # module it imports for --emulate. test_rocgdb.py imports rocjitsu_emulator
+  # from its own directory, so both must be installed together.
+  _rocgdb_resolve_ci_script("test_rocgdb.py"       TEST_ROCGDB_SCRIPT)
+  _rocgdb_resolve_ci_script("rocjitsu_emulator.py" ROCJITSU_EMULATOR_SCRIPT)
 
   install(
     PROGRAMS ${TEST_ROCGDB_SCRIPT}
+    DESTINATION tests/rocgdb
+    COMPONENT tests
+  )
+
+  install(
+    FILES ${ROCJITSU_EMULATOR_SCRIPT}
     DESTINATION tests/rocgdb
     COMPONENT tests
   )
