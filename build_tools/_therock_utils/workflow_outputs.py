@@ -175,6 +175,23 @@ class WorkflowOutputRoot:
             f"{self.prefix}/logs/{artifact_group}/build_observability.html",
         )
 
+    def build_observability_stage(
+        self, stage_name: str, amdgpu_family: str = ""
+    ) -> StorageLocation:
+        """Location for build observability HTML within a stage log dir.
+
+        Multi-arch CI produces one report per build stage (and optionally per
+        GPU family), mirroring the per-stage layout of ``log_stage_dir()``.
+
+        Args:
+            stage_name: Build stage (e.g., 'compiler-runtime', 'math-libs')
+            amdgpu_family: GPU family (e.g., 'gfx1151'). Empty for generic stages.
+        """
+        stage_dir = self.log_stage_dir(stage_name, amdgpu_family)
+        return StorageLocation(
+            self.bucket, f"{stage_dir.relative_path}/build_observability.html"
+        )
+
     # -- Manifests --------------------------------------------------------------
 
     def manifest_dir(self, artifact_group: str) -> StorageLocation:
