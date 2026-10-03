@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Components -->
+
+  <!-- Contents of directory bin -->
+  <ComponentGroup Id="cg_amdrocm_fft_b" Directory="amdrocm_fft_b">
+    <Component Id="c_amdrocm_fft_b_h.dll" Guid="*">
+      <File Id="f_amdrocm_fft_b_h.dll" Source="$(var.BuildRoot)/math-libs/hipFFT/dist/bin/hipfft.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_fft_b_hi.dll" Guid="*">
+      <File Id="f_amdrocm_fft_b_hi.dll" Source="$(var.BuildRoot)/math-libs/hipFFT/dist/bin/hipfftw.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_fft_b_r.dll" Guid="*">
+      <File Id="f_amdrocm_fft_b_r.dll" Source="$(var.BuildRoot)/math-libs/hipFFT/dist/bin/rocfft.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_fft_b_rrh.exe" Guid="*">
+      <File Id="f_amdrocm_fft_b_rrh.exe" Source="$(var.BuildRoot)/math-libs/hipFFT/dist/bin/rocfft_rtc_helper.exe" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory share\doc\hipfft -->
+  <ComponentGroup Id="cg_amdrocm_fft_sdh" Directory="amdrocm_fft_sdh">
+    <Files Include="$(var.BuildRoot)/math-libs/hipFFT/dist/share/doc/hipfft/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory share\doc\rocfft -->
+  <ComponentGroup Id="cg_amdrocm_fft_sdr" Directory="amdrocm_fft_sdr">
+    <Files Include="$(var.BuildRoot)/math-libs/hipFFT/dist/share/doc/rocfft/*.*" />
+  </ComponentGroup>
+
+</Include>
