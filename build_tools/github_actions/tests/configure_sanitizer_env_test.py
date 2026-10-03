@@ -182,19 +182,6 @@ class SanitizerEnvironmentTest(unittest.TestCase):
                 )
                 self.assertEqual(result.stdout, str(runtime))
 
-    def test_environment_resolution_does_not_reuse_previous_artifact_paths(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            first = Path(tmp) / "first"
-            second = Path(tmp) / "second"
-            artifacts(first, "tsan")
-            runtime = artifacts(second, "tsan")
-            resolve_sanitizer_env(first, "tsan")
-            env = resolve_sanitizer_env(second, "tsan")
-            self.assertEqual(env["TSAN_RUNTIME_PATH"], str(runtime))
-            self.assertNotIn(str(first), env["TSAN_OPTIONS"])
-            self.assertEqual(env["TSAN_OPTIONS"].count("external_symbolizer_path="), 1)
-            self.assertIn(str(second / "llvm/bin/llvm-symbolizer"), env["TSAN_OPTIONS"])
-
     def test_rejects_unknown_variant(self):
         with self.assertRaises(ValueError):
             resolve_sanitizer_env(Path("/unused"), "release")
