@@ -69,6 +69,7 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
     # Pass through environment variables that control build behavior.
     # These are set by CI workflows to enable features like build profiling.
     passthrough_env_vars = [
+        "CMAKE_BUILD_PARALLEL_LEVEL",
         "EXTRA_C_COMPILER_LAUNCHER",
         "EXTRA_CXX_COMPILER_LAUNCHER",
         "THEROCK_BUILD_PROF_LOG_DIR",
