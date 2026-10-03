@@ -19,17 +19,25 @@ CI runs on pull requests if modified files pass the filters in
 
 The following labels may be added to a pull request to modify CI behavior:
 
-| Label or group     | Description                                                                                                                                                                                       |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci:skip`          | Skip all builds and tests                                                                                                                                                                         |
-| `ci:run-all-archs` | Build and test all possible architectures                                                                                                                                                         |
-| `ci:asan`          | Enable ASAN CI builds and tests. ASAN CI is skipped by default on PRs unless this label is present.                                                                                               |
-| `ci:host-asan`     | Alias for `ci:asan`. Enable ASAN CI builds and tests.                                                                                                                                             |
-| `ci:run-multi-gpu` | Opt-in to running multi-GPU tests.                                                                                                                                                                |
-| `ci:gfx...`        | Opt-in to building and testing the specified gfx family (e.g. `ci:gfx120X-all`, `ci:gfx950-dcgpu`)                                                                                                |
-| `test:...`         | Run tests only for the specified projects (e.g. `test:rocthrust`, `test:hipblaslt`). Multiple `test:` labels can be combined.                                                                     |
-| `test_runner:...`  | Run tests on only custom test machines (e.g. `test_runner:oem`). Single-arch CI only.                                                                                                             |
-| `test_filter:...`  | Override the test level (e.g. `test_filter:comprehensive`, `test_filter:quick`). Takes priority over all other test level logic. See [test_filtering.md](./test_filtering.md) for allowed values. |
+| Label or group             | Description                                                                                                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci:skip`                  | Skip all builds and tests                                                                                                                                                                         |
+| `ci:run-all-archs`         | Build and test all possible architectures                                                                                                                                                         |
+| `ci:asan`                  | Enable ASAN CI builds and tests. ASAN CI is skipped by default on PRs unless this label is present.                                                                                               |
+| `ci:host-asan`             | Alias for `ci:asan`. Enable ASAN CI builds and tests.                                                                                                                                             |
+| `ci:run-multi-gpu`         | Opt-in to running multi-GPU tests.                                                                                                                                                                |
+| `ci:gfx...`                | Opt-in to building and testing the specified gfx family (e.g. `ci:gfx120X-all`, `ci:gfx950-dcgpu`)                                                                                                |
+| `test:...`                 | Run tests only for the specified projects (e.g. `test:rocthrust`, `test:hipblaslt`). Multiple `test:` labels can be combined.                                                                     |
+| `test_runner:...`          | Run tests on only custom test machines (e.g. `test_runner:oem`). Single-arch CI only.                                                                                                             |
+| `test_filter:...`          | Override the test level (e.g. `test_filter:comprehensive`, `test_filter:quick`). Takes priority over all other test level logic. See [test_filtering.md](./test_filtering.md) for allowed values. |
+| `ci:build-native-linux`    | Opt-in to building native Linux packages (deb/rpm).                                                                                                                                               |
+| `ci:skip-native-linux`     | Skip native Linux package builds.                                                                                                                                                                 |
+| `ci:build-python-packages` | Opt-in to building Python packages.                                                                                                                                                               |
+| `ci:skip-python-packages`  | Skip Python package builds.                                                                                                                                                                       |
+| `ci:build-pytorch`         | Opt-in to building PyTorch packages.                                                                                                                                                              |
+| `ci:skip-pytorch`          | Skip PyTorch package builds.                                                                                                                                                                      |
+| `ci:build-jax`             | Opt-in to building JAX packages.                                                                                                                                                                  |
+| `ci:skip-jax`              | Skip JAX package builds.                                                                                                                                                                          |
 
 ### Push
 
