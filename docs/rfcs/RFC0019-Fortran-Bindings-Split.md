@@ -240,8 +240,8 @@ Only the generator front end carries over; the emitter, the tests, the packaging
 It would serve a disjoint audience, since no F2003 or later caller would route through an untyped shim when the modules are available, and it would add nothing to the F2003 track, which stands unchanged whether or not the shim is ever built.
 
 hipfort never shipped one, so this is not a capability the split removes: it has never existed in either generation.
-It is therefore out of scope for this RFC, whose subject is moving the existing bindings into `rocm-systems` and `rocm-libraries`, and not a statement that the need is illegitimate.
-If demand appears, it belongs in its own RFC, scoped to that application's entry points rather than the full API, and it can be taken up without reopening anything decided here.
+It is therefore out of scope for this RFC and independent of it: this RFC's subject is moving the existing bindings into `rocm-systems` and `rocm-libraries`, and declining the F77 path here is not a statement that the need is illegitimate.
+If the need arises, it will be prioritized separately, in its own RFC scoped to that application's entry points rather than the full API, and it can be taken up without reopening anything decided here.
 
 ### CUDA backend
 
