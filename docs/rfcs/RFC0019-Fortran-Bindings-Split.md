@@ -706,7 +706,7 @@ The rollout is staged, and each stage has a clear exit.
 1. **Co-locate and package (10.2).** Each in-scope library has a `fortran/` directory, the packaging job builds per-library `.mod` and `lib<lib>_fortran.a`, and the `bindings-in-sync` gate becomes *enforcing*.
 1. **Retire the compatibility track (11.0).** `ROCm/hipfort` under its current name is removed, and the packaged track is the sole deliverable.
 
-It is done when `hip`, `roctx`, and all eleven in-scope libraries carry a co-located `fortran/` (generated source, curated metadata, tests); a header PR that changes a binding fails the enforcing gate until the regenerated `.F90` is committed; `find_package(<lib>-fortran)` exposes `<ns>::<lib>_fortran` when built (and `find_package(<lib>)` too, once rocm-cmake has the optional include); and an external consumer compiles and links against the installed package for at least amdflang and gfortran.
+It is done when `hip`, `roctx`, and all eleven in-scope libraries carry a co-located `fortran/` (generated source, curated metadata, tests); a header PR that changes a binding fails the enforcing gate until the regenerated `.F90` is committed; `find_package(<lib>-fortran)` exposes `<ns>::<lib>_fortran` when built (and `find_package(<lib>)` too, once rocm-cmake has the optional include); TheRock builds and packages them (see Packaging in TheRock); and an external consumer compiles and links against the installed package for at least amdflang and gfortran.
 
 The co-location step is in review, one pull request per library:
 
@@ -726,6 +726,32 @@ The co-location step is in review, one pull request per library:
 | hipRAND         | [rocm-libraries#12506](https://github.com/ROCm/rocm-libraries/pull/12506) |
 
 The `rocm-libraries` tests `use hip`, so they depend on the HIP binding (rocm-systems#11923) being installed; until it is, they configure as skipped.
+
+### Packaging in TheRock
+
+The "packaging job" of this RFC is TheRock's build: it already builds every project above as a subproject, so it builds their `fortran/` with them, and nothing about the bindings needs a separate pipeline.
+It needs a short list of changes in TheRock itself, none of which changes the design.
+
+1. **One Fortran compiler for every subproject: the `amdflang` TheRock builds.**
+   `compiler/amd-llvm` already builds flang (`LLVM_ENABLE_PROJECTS` includes `flang`, with `flang-rt`), and `base/aux-overlay` exposes it as `bin/amdflang`.
+   But the toolchain file TheRock generates for each subproject (`cmake/therock_subproject.cmake`) sets `CMAKE_C_COMPILER`, `CMAKE_CXX_COMPILER` and, for `amd-hip`, `CMAKE_HIP_COMPILER`, and no `CMAKE_Fortran_COMPILER`.
+   Each project's probe then decides on its own: the `fortran/` probe looks for `amdflang` beside the C compiler first, but a project root that probes earlier with a plain `check_language(Fortran)` takes whatever is on `PATH`, which on a TheRock builder is `gfortran` (the environment check requires it).
+   The change is to emit `CMAKE_Fortran_COMPILER` (the toolchain's `amdflang`) in that generated file for the `amd-llvm` and `amd-hip` toolchains, so that every subproject compiles its binding with the compiler that ships, and the shipped `.mod` files match the shipped `amdflang` exactly, version included.
+   It also keeps the dependent bindings consistent: rocSOLVER's top-level `CMakeLists.txt` defaults `CMAKE_Fortran_COMPILER` to `gfortran` when none is given, so without this change TheRock would build `rocsolver.mod` with gfortran against an `amdflang` `rocblas.mod` it cannot read, and the rocSOLVER binding would be skipped. That default already yields to a compiler set by the toolchain.
+1. **Artifact descriptors.**
+   The default `dev` component already collects `**/*.a`, `**/include/**` and `**/cmake/**`, so the `.mod` files, the archives and the config packages land in `dev` with no change.
+   Two edits remain:
+   - Add `share/<lib>/fortran/**` to the `dev` component of each library (ROCTx with rocprofiler-sdk), since `share/` is not a default `dev` path and the installed `.F90` is what users of other compilers build from.
+   - Fix the existing Fortran entries in `math-libs/BLAS`: hipSOLVER's `lib/libhipsolver_fortran.so*` (in `artifact-solver.toml`) no longer exists, because the binding is a static archive, and the `-DEXPORT_FORTRAN_BINDINGS=OFF` passed to hipSOLVER retires with that option. hipBLAS's `lib/libhipblas_fortran.so` (in `artifact-blas.toml`) is the clients' test helper, and follows whatever name the clients library ends up with.
+1. **Dependency order.**
+   Already expressed: rocSOLVER depends on rocBLAS, and every library depends on `hip-clr`, so the Fortran build order follows the C one. The `rocm-libraries` binding tests `use hip`, so they need the HIP binding from `hip-clr` installed first, which is also already the case.
+1. **Tests.**
+   The bindings' tests (`fortran/test/`, under `BUILD_FORTRAN_CLIENTS`) are CTest tests labelled `gpu`, so they join each library's existing `test` component and test runner.
+1. **Fortran runtime.**
+   An `amdflang`-built test executable links flang's runtime (`flang-rt`) rather than `libgfortran`; the test artifacts depend on the `amd-llvm` runtime libraries, as the HIP ones already do. A user's application gets the runtime from the compiler that links it.
+
+Windows builds keep `BUILD_FORTRAN_BINDINGS` off (see Non-goals), and the ASAN and coverage variants build no Fortran.
+Once these land, TheRock's nightly builds are the first place a user gets the bindings precompiled, ahead of a ROCm release; until then, a user tries a binding by building its `fortran/` from the pull request against a nightly install.
 
 ## Open questions and risks
 
