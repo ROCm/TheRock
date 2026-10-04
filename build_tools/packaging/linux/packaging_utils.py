@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 
+import functools
 import json
 import os
 import platform
@@ -1161,6 +1162,24 @@ def resolve_versioned_dependency_list(dep_list, config: PackageConfig, is_meta):
     return deps
 
 
+@functools.lru_cache(maxsize=None)
+def _artifact_dir_name_index(artifacts_dir: str) -> dict[str, list[str]]:
+    """One-time directory listing of artifacts_dir, indexed by each entry's
+    name with any ":xnack..." suffix stripped.
+
+    has_artifact_for_arch() calls this once per (package, arch, component)
+    combination across a full packaging run; caching the listing avoids
+    re-scanning a potentially large artifacts_dir on every call.
+    """
+    index: dict[str, list[str]] = {}
+    try:
+        for entry in Path(artifacts_dir).iterdir():
+            index.setdefault(entry.name.split(":", 1)[0], []).append(entry.name)
+    except FileNotFoundError:
+        pass
+    return index
+
+
 def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
     """Check if a package has artifacts available for a specific architecture.
 
@@ -1206,30 +1225,42 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
             artifact_subdir = subdir["Name"]
             component_list = subdir["Components"]
             for component in component_list:
-                source_dir = (
-                    Path(artifacts_dir)
-                    / f"{artifact_prefix}_{component}_{artifact_suffix}"
+                # Check the plain artifact directory and any xnack variants
+                # (e.g. ":xnack+"), matching filter_components_fromartifactory().
+                # Some components (e.g. rand, solver, hiptensor, rocalution) are
+                # only ever built with an xnack suffix for gfx942/gfx950, so
+                # checking only the plain path here falsely reports them as
+                # missing and drops the arch from the meta package's Depends:.
+                #
+                # Looked up via a cached directory-name index (see
+                # _artifact_dir_name_index) rather than a fresh glob() per
+                # component, since this runs once per (package, arch,
+                # component) across a full packaging run.
+                base_pattern = f"{artifact_prefix}_{component}_{artifact_suffix}"
+                matching_names = _artifact_dir_name_index(str(artifacts_dir)).get(
+                    base_pattern, []
                 )
-                if not source_dir.exists():
-                    continue
 
-                # Check if the required subdirectory exists in the manifest
-                manifest_file = source_dir / "artifact_manifest.txt"
-                if not manifest_file.exists():
-                    continue
+                for name in matching_names:
+                    source_dir = Path(artifacts_dir) / name
 
-                try:
-                    with manifest_file.open("r", encoding="utf-8") as file:
-                        for line in file:
-                            match_found = (
-                                isinstance(artifact_subdir, str)
-                                and (artifact_subdir.lower() + "/") in line.lower()
-                            )
-                            if match_found and line.strip():
-                                # Found at least one required subdirectory in the manifest
-                                return True
-                except OSError:
-                    continue
+                    # Check if the required subdirectory exists in the manifest
+                    manifest_file = source_dir / "artifact_manifest.txt"
+                    if not manifest_file.exists():
+                        continue
+
+                    try:
+                        with manifest_file.open("r", encoding="utf-8") as file:
+                            for line in file:
+                                match_found = (
+                                    isinstance(artifact_subdir, str)
+                                    and (artifact_subdir.lower() + "/") in line.lower()
+                                )
+                                if match_found and line.strip():
+                                    # Found at least one required subdirectory in the manifest
+                                    return True
+                    except OSError:
+                        continue
 
     return False
 
