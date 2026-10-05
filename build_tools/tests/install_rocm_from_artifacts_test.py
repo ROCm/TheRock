@@ -11,6 +11,7 @@ from pathlib import Path
 import os
 import sys
 import tempfile
+import tarfile
 import unittest
 from unittest import mock
 
@@ -452,6 +453,26 @@ class TestRocprofilerSystemsHipfile(unittest.TestCase):
         )
         self.assertIn("hipfile_lib", argv)
         self.assertIn("sysdeps-util-linux_lib", argv)
+
+
+class TestUntarFiles(unittest.TestCase):
+    def test_rejects_artifact_that_overwrites_file_outside_destination(self):
+        # We explicitly use filter="tar" to preserve packaged metadata.
+        # It still rejects writes outside the destination, as tested here:
+        # https://docs.python.org/3/library/tarfile.html#tarfile.tar_filter
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            outside = root / "outside"
+            outside.write_bytes(b"original")
+            archive = root / "package.tar"
+            with tarfile.open(archive, "w") as tf:
+                member = tarfile.TarInfo("../outside")
+                member.size = 7
+                tf.addfile(member, io.BytesIO(b"changed"))
+            with self.assertRaises(tarfile.FilterError):
+                mod._untar_files(root / "output", archive)
+            self.assertEqual(outside.read_bytes(), b"original")
+            self.assertTrue(archive.exists())
 
 
 if __name__ == "__main__":

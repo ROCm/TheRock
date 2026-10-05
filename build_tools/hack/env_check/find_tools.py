@@ -228,7 +228,6 @@ class FindMSVC(FindProgram):
             _msg = subprocess.run(
                 [self.name],
                 text=True,
-                shell=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
             ).stdout
@@ -305,7 +304,6 @@ class FindML64(FindProgram):
             _msg = subprocess.run(
                 [self.name],
                 text=True,
-                shell=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
             ).stdout
@@ -339,7 +337,6 @@ class FindLIB(FindProgram):
             _msg = subprocess.run(
                 [self.name],
                 text=True,
-                shell=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
             ).stdout
@@ -375,7 +372,6 @@ class FindLINK(FindProgram):
             _msg = subprocess.run(
                 [self.name],
                 text=True,
-                shell=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
             ).stdout

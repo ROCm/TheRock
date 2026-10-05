@@ -205,11 +205,13 @@ def sha256_of(data: bytes) -> str:
 
 
 def md5_of(data: bytes) -> str:
-    return hashlib.md5(data).hexdigest()
+    # Debian metadata checksum; SHA256 is emitted alongside it.
+    return hashlib.md5(data, usedforsecurity=False).hexdigest()
 
 
 def sha1_of(data: bytes) -> str:
-    return hashlib.sha1(data).hexdigest()
+    # Debian metadata checksum; SHA256 is emitted alongside it.
+    return hashlib.sha1(data, usedforsecurity=False).hexdigest()
 
 
 def generate_release(
