@@ -148,6 +148,11 @@ ctest_parallel_count = 1
 ctest_timeout_seconds = 7200
 
 environ_vars = os.environ.copy()
+
+# When THEROCK_CI_DEBUG is on, force enable individual debug options
+if environ_vars.get("THEROCK_CI_DEBUG") == "1":
+    environ_vars["ROCM_KPACK_DEBUG"] = "1"
+
 # Set the GTEST env vars for Gtest based tests
 # Set ROCM_PATH for tests that rely on it
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)

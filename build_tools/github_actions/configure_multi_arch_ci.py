@@ -60,6 +60,7 @@ from _therock_utils.build_topology import get_topology
 from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
+    get_cpu_test_runner,
     select_build_runner,
 )
 from configure_ci_path_filters import (
@@ -993,6 +994,22 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 windows_names.append(target)
                 print(f"  Label '{label}' -> adding target {target}")
 
+        # Platform-specific labels use additive logic: if any ci:platform label is
+        # set, start with empty lists and add back only the requested platforms.
+        has_platform_linux = "ci:platform:linux" in ci_inputs.pr_labels
+        has_platform_windows = "ci:platform:windows" in ci_inputs.pr_labels
+        if has_platform_linux or has_platform_windows:
+            saved_linux = linux_names
+            saved_windows = windows_names
+            linux_names = []
+            windows_names = []
+            if has_platform_linux:
+                linux_names = saved_linux
+                print("  Label 'ci:platform:linux' -> including Linux builds/tests")
+            if has_platform_windows:
+                windows_names = saved_windows
+                print("  Label 'ci:platform:windows' -> including Windows builds/tests")
+
     # De-dup, validate, then filter by platform availability.
     linux_names = list(dict.fromkeys(linux_names))
     windows_names = list(dict.fromkeys(windows_names))
@@ -1430,11 +1447,34 @@ def _expand_build_config_for_platform(
                 f"disabling tests for quick test run"
             )
 
+        # TEMPORARY (ROCm/TheRock#8688): emergency test-queue lever.
+        # A `ci:test:<family>` PR label force-enables that family's tests even
+        # when its tests_on_trigger no longer includes the current trigger. This
+        # exists only to take gfx110X Windows presubmit testing on-demand (that
+        # is the only presubmit testing this change removed), so it is scoped to
+        # Windows: Linux families are untouched and keep their existing gating
+        # (e.g. Linux gfx110X stays nightly-only). The family already builds on
+        # presubmit, so the test artifacts exist; this only re-enables the test
+        # jobs. The permanent build/test label plumbing in #8692 generalizes the
+        # label to all platforms -- remove this block and the
+        # `force_tests_via_label` branch once that lands.
+        force_test_label = f"ci:test:{family_name}".lower()
+        force_tests_via_label = (
+            ci_inputs.is_pull_request
+            and platform == "windows"
+            and any(label.lower() == force_test_label for label in ci_inputs.pr_labels)
+        )
+
         # Use trigger-based test gating (replaces nightly_check_only_for_family,
         # submodule_bump_tests_only, and trigger_test_label_only flags).
         # Each family specifies tests_on_trigger list; tests run if any current
         # trigger matches.
-        if test_runs_on:
+        if test_runs_on and force_tests_via_label:
+            print(
+                f"  {family_name}: tests force-enabled by '{force_test_label}' "
+                f"label (ROCm/TheRock#8688 emergency lever)"
+            )
+        elif test_runs_on:
             should_run, reason = _should_run_tests_for_family(
                 platform_info, ci_inputs, git_context
             )
@@ -1455,10 +1495,21 @@ def _expand_build_config_for_platform(
                     f"(global={jobs.test_rocm.test_type})"
                 )
 
+        # CPU test runner for components that don't need GPU access (e.g.,
+        # components with linux_cpu_runner: True). This allows CPU-only tests
+        # to run even when GPU testing is gated (e.g., trigger_test_label_only).
+        test_runs_on_cpu = get_cpu_test_runner(platform)
+
+        # tests_enabled is true when any test runner (GPU or CPU) is available.
+        # This provides a single flag for workflows to gate test jobs.
+        tests_enabled = bool(test_runs_on or test_runs_on_cpu)
+
         family_info = {
             "amdgpu_family": platform_info["family"],
             "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
             "test-runs-on": test_runs_on,
+            "test-runs-on-cpu": test_runs_on_cpu,
+            "tests_enabled": tests_enabled,
             "sanity_check_only_for_family": platform_info.get(
                 "sanity_check_only_for_family", False
             ),
