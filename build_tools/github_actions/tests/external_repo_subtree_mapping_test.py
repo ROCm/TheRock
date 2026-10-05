@@ -78,9 +78,7 @@ class GetUnclassifiedPathsTest(unittest.TestCase):
         # A path under a CI-relevant non-subtree dir must NOT be unclassified when
         # that prefix is in the valid set (as configure() builds it).
         prefixes = {"projects/rdc"} | cerc.CI_RELEVANT_NON_SUBTREE_PREFIXES
-        unclassified = cerc.get_unclassified_paths(
-            ["shared/kpack/build.py"], prefixes
-        )
+        unclassified = cerc.get_unclassified_paths(["shared/kpack/build.py"], prefixes)
         self.assertEqual(unclassified, [])
 
     def test_unknown_non_subtree_dir_is_unclassified(self):
@@ -103,9 +101,7 @@ class ExternalRepoToSelectorChainTest(unittest.TestCase):
             ["shared/amdgpu-windows-interop/interop.cpp"], prefixes
         )
         self.assertEqual(matched, ["shared/amdgpu-windows-interop"])
-        self.assertEqual(
-            drtd._normalize_changed_project(matched[0]), ["hip-clr"]
-        )
+        self.assertEqual(drtd._normalize_changed_project(matched[0]), ["hip-clr"])
 
     def test_every_ci_relevant_prefix_resolves_in_selector(self):
         # The comment on CI_RELEVANT_NON_SUBTREE_PREFIXES promises each entry maps
