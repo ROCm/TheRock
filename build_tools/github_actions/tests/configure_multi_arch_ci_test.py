@@ -841,6 +841,36 @@ class TestDecideJobs(unittest.TestCase):
         self.assertEqual(result.auto_stage_reuse.applied_reuse_stages, ("compiler-rt",))
         self.assertEqual(result.auto_stage_reuse.baseline_run_id, "12345")
 
+    def test_packaging_label_overrides(self):
+        """PR labels can enable/disable PyTorch and JAX builds."""
+        cases = [
+            # (label, field, default, expected_action)
+            ("ci:build-pytorch", "build_pytorch", False, cm.JobAction.RUN),
+            ("ci:skip-pytorch", "build_pytorch", True, cm.JobAction.SKIP),
+            ("ci:build-jax", "build_jax", False, cm.JobAction.RUN),
+            ("ci:skip-jax", "build_jax", True, cm.JobAction.SKIP),
+        ]
+        for label, field, default, expected in cases:
+            with self.subTest(label=label):
+                result = cm.decide_jobs(
+                    self._inputs(**{field: default}, pr_labels=[label]),
+                    git_context=cm.GitContext(),
+                    targets=cm.TargetSelection(),
+                )
+                actual = getattr(result, field).action
+                self.assertEqual(actual, expected)
+
+        # Build labels take precedence over skip labels
+        result = cm.decide_jobs(
+            self._inputs(
+                build_pytorch=False,
+                pr_labels=["ci:skip-pytorch", "ci:build-pytorch"],
+            ),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.build_pytorch.action, cm.JobAction.RUN)
+
 
 # ---------------------------------------------------------------------------
 # Step 4: Select Targets
@@ -1863,6 +1893,88 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertEqual(family["test-runs-on"], "")
         self.assertEqual(family["amdgpu_targets"], "")
         self.assertEqual(linux.test_python_packages_matrix, [])
+
+    def test_packaging_label_overrides(self):
+        """PR labels can enable/disable native-linux and python package builds."""
+        targets = cm.select_targets(self._inputs(event_name="pull_request"))
+        cases = [
+            # (label, input_field, config_field, default, expected)
+            (
+                "ci:build-native-linux",
+                "build_native_linux",
+                "build_native_linux",
+                False,
+                True,
+            ),
+            (
+                "ci:skip-native-linux",
+                "build_native_linux",
+                "build_native_linux",
+                True,
+                False,
+            ),
+            (
+                "ci:build-python-packages",
+                "build_python_packages",
+                "build_python_packages",
+                False,
+                True,
+            ),
+            (
+                "ci:skip-python-packages",
+                "build_python_packages",
+                "build_python_packages",
+                True,
+                False,
+            ),
+        ]
+        for label, input_field, config_field, default, expected in cases:
+            with self.subTest(label=label):
+                result = cm.expand_build_configs(
+                    ci_inputs=self._inputs(
+                        event_name="pull_request",
+                        **{input_field: default},
+                        pr_labels=[label],
+                    ),
+                    git_context=cm.GitContext(),
+                    targets=targets,
+                    # Disable pytorch/jax so labels control python packages directly.
+                    jobs=_jobs(build_pytorch=False, build_jax=False),
+                )
+                self.assertIsNotNone(result.linux)
+                self.assertEqual(getattr(result.linux, config_field), expected)
+
+    def test_pytorch_forces_python_packages_even_with_skip_label(self):
+        """PyTorch/JAX depend on python packages, so skip label is ignored."""
+        targets = cm.select_targets(self._inputs(event_name="pull_request"))
+
+        # PyTorch enabled + skip-python-packages label -> python packages still enabled
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="pull_request",
+                pr_labels=["ci:skip-python-packages"],
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(build_pytorch=True),
+        )
+        self.assertIsNotNone(result.linux)
+        self.assertTrue(result.linux.build_python_packages)
+        self.assertTrue(result.linux.build_pytorch)
+
+        # JAX enabled + skip-python-packages label -> python packages still enabled
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="pull_request",
+                pr_labels=["ci:skip-python-packages"],
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(build_pytorch=False, build_jax=True),
+        )
+        self.assertIsNotNone(result.linux)
+        self.assertTrue(result.linux.build_python_packages)
+        self.assertTrue(result.linux.build_jax)
 
 
 # ---------------------------------------------------------------------------

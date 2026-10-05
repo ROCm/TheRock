@@ -1236,6 +1236,18 @@ def decide_jobs(
     build_pytorch_action = JobAction.RUN if ci_inputs.build_pytorch else JobAction.SKIP
     build_jax_action = JobAction.RUN if ci_inputs.build_jax else JobAction.SKIP
 
+    # PR labels can override packaging job decisions.
+    pr_labels = ci_inputs.pr_labels
+    if "ci:build-pytorch" in pr_labels:
+        build_pytorch_action = JobAction.RUN
+    elif "ci:skip-pytorch" in pr_labels:
+        build_pytorch_action = JobAction.SKIP
+
+    if "ci:build-jax" in pr_labels:
+        build_jax_action = JobAction.RUN
+    elif "ci:skip-jax" in pr_labels:
+        build_jax_action = JobAction.SKIP
+
     # Other jobs run unconditionally with no configuration.
     # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
 
@@ -1583,6 +1595,25 @@ def _expand_build_config_for_platform(
         else []
     )
     build_native_linux = ci_inputs.build_native_linux
+
+    # PR labels can override packaging build decisions.
+    pr_labels = ci_inputs.pr_labels
+    if "ci:build-native-linux" in pr_labels:
+        build_native_linux = True
+    elif "ci:skip-native-linux" in pr_labels:
+        build_native_linux = False
+
+    if "ci:build-python-packages" in pr_labels:
+        build_python_packages = True
+    elif "ci:skip-python-packages" in pr_labels:
+        build_python_packages = False
+
+    # Ensure python packages are built if pytorch or jax are enabled,
+    # since they depend on rocm python packages.
+    if build_pytorch or build_jax:
+        if not build_python_packages:
+            print("  Enabling python packages (required by pytorch/jax)")
+        build_python_packages = True
 
     # When stages are skipped (partial build), disable package builds since
     # they require a complete artifact set. Prebuilt/reused stages are OK
