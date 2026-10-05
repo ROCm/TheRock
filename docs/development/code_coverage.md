@@ -221,7 +221,10 @@ Per shard, `test_code_coverage_component.yml` does three things:
 
 1. **Install baseline + swap project.** `install_rocm_code_coverage_build.py`
    installs from `--run-id` (the nightly) and replaces only the
-   project-under-test from `--code-coverage-run-id` (`<run_id>-coverage`).
+   project-under-test from `--code-coverage-run-id` (`<run_id>-coverage`). It
+   then moves each replaced library's program header table back to where the
+   profile writer looks for it (see
+   [Program headers kpack moved](#program-headers-kpack-moved)).
 1. **Set `LLVM_PROFILE_FILE`** to a per-shard path (`%p`/`%m`) so concurrent
    processes don't overwrite each other.
 1. **Run tests and upload profraw** under `always()` — a failing shard still
@@ -250,6 +253,21 @@ but extracts only the paths matching the project's library folder in
 `COMPONENT_MAP` (`hipRAND`). The instrumented stack lives under
 `<run_id>-coverage`, so even a baseline from the same workflow run is never
 overwritten by it.
+
+#### Program headers kpack moved
+
+kpack (`KPACK_SPLIT_ARTIFACTS`, on by default) moves the program header table
+of each library it rewrites, the ones carrying device code, to the end of the
+file. A `PT_LOAD` of its own maps the table there, at an address that is only
+page-congruent with its file offset. ld.so copes. compiler-rt's profile writer
+does not: to record binary IDs it reads the table at `__ehdr_start + e_phoff`.
+For such a library that address is either unmapped, so rocBLAS and rocSPARSE
+segfault at exit before writing a counter, or inside another segment, so
+rocRAND reads unrelated bytes. kpack already pins `p_vaddr == p_offset` for
+executables (`normalize_phdr_vaddr` in `rocm_kpack/elf/phdr_manager.py`). The
+installer applies the same edit to every replaced shared library that has a
+`__llvm_prf_cnts` section (`_therock_utils/elf_phdr.py`), growing the file when
+the table has to move above the library's address range.
 
 A missing instrumented artifact fails the install step. A swap that matches no
 files does not: the installer logs `Replaced 0` and the tests run against the

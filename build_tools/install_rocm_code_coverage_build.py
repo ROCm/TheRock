@@ -34,6 +34,7 @@ from artifact_manager import (
 from _therock_utils.archive_util import open_archive_for_read
 from _therock_utils.artifacts import ArtifactName
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
+from _therock_utils.elf_phdr import pin_phdr_table
 
 # Maps each --replace-<name> flag to its TheRock artifact and library folder.
 # e.g. rocBLAS ships in the 'blas' artifact (see BUILD_TOPOLOGY.toml).
@@ -190,7 +191,10 @@ def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
 
     Reads each archive's artifact_manifest.txt for relpath prefixes, then flattens
     members into output_dir -- but only those matching the artifact's library
-    folder (e.g. rocBLAS), leaving unrelated files in place.
+    folder (e.g. rocBLAS), leaving unrelated files in place. Instrumented shared
+    libraries whose program header table kpack moved get it pinned back (see
+    _therock_utils/elf_phdr.py); otherwise their profile writer can segfault
+    at exit before writing any counters.
     """
     archives = sorted(
         p for p in dest_dir.iterdir() if p.name.endswith((".tar.zst", ".tar.xz"))
@@ -199,6 +203,7 @@ def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
         log(f"No replacement archives found in {dest_dir}")
         return
 
+    written_files = []
     for archive in archives:
         an = ArtifactName.from_filename(archive.name)
         folders = artifacts.get(an.name) if an else None
@@ -235,9 +240,15 @@ def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
                         _replace_scoped_member(
                             tf, member, dest_path, output_dir, relpaths
                         )
+                        if member.isfile():
+                            written_files.append(dest_path)
                         replaced += 1
                         break
             log(f"  Replaced {replaced} '{folder}' path(s) from {archive.name}")
+
+    for path in written_files:
+        if pin_phdr_table(path, require_section="__llvm_prf_cnts"):
+            log(f"  Pinned the program header table kpack moved in {path}")
 
 
 def main(argv):

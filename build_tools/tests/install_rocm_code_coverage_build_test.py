@@ -6,11 +6,14 @@
 
 Focuses on the generic-vs-instrumented repo split: the generic install is keyed
 on --run-github-repo while the instrumented replacement fetch must be keyed on
---code-coverage-run-github-repo (defaulting to $GITHUB_REPOSITORY).
+--code-coverage-run-github-repo (defaulting to $GITHUB_REPOSITORY). Also checks
+which of the replaced files get their program header table looked at.
 """
 
+import io
 import os
 import sys
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -95,6 +98,49 @@ class TestCodeCoverageRepoSplit(unittest.TestCase):
         # since the default is evaluated at parse time inside main().
         captured = self._run_main([], env={"GITHUB_REPOSITORY": "ROCm/TheRock"})
         self.assertEqual(captured["github_repository"], "ROCm/TheRock")
+
+
+class TestReplaceInstrumentedLibraries(unittest.TestCase):
+    def test_pins_program_headers_of_every_replaced_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            downloads = tmp / "downloads"
+            downloads.mkdir()
+            prefix = "math-libs/BLAS/rocBLAS/stage"
+            members = {
+                "artifact_manifest.txt": f"{prefix}\n".encode(),
+                f"{prefix}/lib/librocblas.so.5.8": b"instrumented library",
+                f"{prefix}/lib/rocblas/library": None,
+                f"{prefix}/lib/rocblas/library/TensileLibrary.dat": b"data",
+                f"{prefix}/lib/libhipblas.so.3.8": b"some other library",
+            }
+            with tarfile.open(downloads / "blas_lib_generic.tar.xz", "w:xz") as tf:
+                for name, content in members.items():
+                    info = tarfile.TarInfo(name)
+                    if content is None:
+                        info.type = tarfile.DIRTYPE
+                        tf.addfile(info)
+                    else:
+                        info.size = len(content)
+                        tf.addfile(info, io.BytesIO(content))
+            output_dir = tmp / "install"
+
+            with mock.patch.object(mod, "pin_phdr_table", return_value=False) as pin:
+                mod.replace_instrumented_libraries(
+                    {"blas": ["rocBLAS"]}, downloads, output_dir
+                )
+
+            library = output_dir / "lib" / "librocblas.so.5.8"
+            data = output_dir / "lib" / "rocblas" / "library" / "TensileLibrary.dat"
+            self.assertEqual(library.read_bytes(), b"instrumented library")
+            self.assertFalse((output_dir / "lib" / "libhipblas.so.3.8").exists())
+            self.assertEqual(
+                pin.call_args_list,
+                [
+                    mock.call(library, require_section="__llvm_prf_cnts"),
+                    mock.call(data, require_section="__llvm_prf_cnts"),
+                ],
+            )
 
 
 if __name__ == "__main__":
