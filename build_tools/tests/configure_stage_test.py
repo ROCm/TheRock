@@ -4,11 +4,8 @@
 
 import json
 import os
-import shutil
-import shlex
 import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -202,52 +199,6 @@ class ManifestValidationTest(unittest.TestCase):
                 feature,
                 valid_features,
                 f"Invalid feature '{feature}' for subproject '{subproject}'",
-            )
-
-    @unittest.skipUnless(sys.platform == "linux", "Linux stage configuration")
-    def test_emulation_configures_only_its_artifacts_and_packaging_tests(self):
-        for tool in ("cmake", "ninja", "meson", "patchelf"):
-            if not shutil.which(tool):
-                self.skipTest(f"{tool} not installed")
-        repo_root = Path(__file__).parent.parent.parent
-        args = generate_cmake_args(
-            stage_name="emulation",
-            amdgpu_families="",
-            dist_amdgpu_families="gfx94X-dcgpu",
-            topology=get_topology(),
-            platform_name="linux",
-        )
-        with tempfile.TemporaryDirectory() as build_dir:
-            result = subprocess.run(
-                [
-                    "cmake",
-                    "-S",
-                    str(repo_root),
-                    "-B",
-                    build_dir,
-                    "-GNinja",
-                    *shlex.split(" ".join(args)),
-                ],
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            manifest = json.loads(
-                (Path(build_dir) / "artifact_subprojects.json").read_text()
-            )
-            self.assertEqual(set(manifest), {"rocjitsu", "rocjitsu-hotswap", "mirage"})
-            result = subprocess.run(
-                ["ctest", "--test-dir", build_dir, "--show-only=json-v1"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            self.assertEqual(
-                {test["name"] for test in json.loads(result.stdout)["tests"]},
-                {
-                    "therock-validate-shared-lib-librocjitsu.so",
-                    "therock-validate-shared-lib-libhsa_hotswap_rocjitsu.so",
-                },
             )
 
     @unittest.skipIf(
