@@ -174,6 +174,19 @@ if(THEROCK_ENABLE_RCCL AND _rccl_enabled)
 endif()
 
 if(THEROCK_ENABLE_ROCSHMEM)
+  set(_rocshmem_enabled ON)
+  if(THEROCK_TEST_AMDGPU_TARGETS AND NOT "${THEROCK_TEST_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_rocshmem_targets rocshmem ${THEROCK_TEST_AMDGPU_TARGETS})
+    if(NOT _rocshmem_targets)
+      message(STATUS
+        "rocshmem: no supported gfx targets remain after filtering "
+        "(THEROCK_TEST_AMDGPU_TARGETS='${THEROCK_TEST_AMDGPU_TARGETS}'); skipping subproject.")
+      set(_rocshmem_enabled OFF)
+    endif()
+  endif()
+endif()
+
+if(THEROCK_ENABLE_ROCSHMEM AND _rocshmem_enabled)
   ##############################################################################
   # rocSHMEM
   ##############################################################################
@@ -256,4 +269,4 @@ if(THEROCK_ENABLE_ROCSHMEM)
     SUBPROJECT_DEPS
       ${_rocshmem_subproject_names}
   )
-endif(THEROCK_ENABLE_ROCSHMEM)
+endif()
