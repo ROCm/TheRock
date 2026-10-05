@@ -55,7 +55,7 @@ def _get_artifact_path(artifact_path: str) -> str:
 # keys it expands to. Use this when a single label should select multiple
 # related jobs without relying on name-prefix inference.
 # NOTE: rocgdb/tensilelite are mirrored in test_tools'
-# determine_rocm_test_dependencies._CI_TEST_SELECTOR_ALIASES; test_label_consistency_test
+# determine_rocm_test_dependencies._CI_TEST_SELECTOR_ALIASES; label_consistency_test
 # guards that the two stay identical until they share one source.
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],

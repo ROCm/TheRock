@@ -152,7 +152,7 @@ def _resolve_skipped_stages(build_stages: list[str]) -> list[str]:
 # Test labels not listed here require a full build. Most labels have a
 # fetch_test_configurations.test_matrix entry; kfdtest and composable-kernel are
 # real artifacts tested through other paths and have none (see
-# test_label_consistency_test, which guards against a genuinely unknown label).
+# label_consistency_test, which guards against a genuinely unknown label).
 STAGE_TO_TEST_LABELS: dict[str, list[str]] = {
     "compiler-runtime": ["kfdtest"],
     "runtime-tests": ["hip-tests", "rocrtst"],
