@@ -1,0 +1,57 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# TEMPORARY. Delete this file before merging.
+#
+# Runs the device coverage pipeline as a check on this PR. workflow_dispatch
+# only appears once multi_arch_ci_coverage_linux.yml is on the default branch,
+# but a caller can reach it: paths resolve against the caller's commit, so this
+# runs the branch copy.
+#
+# Self-contained, with no baseline: every component comes from this run's own
+# build, so the HIP runtime under test is the pinned one, which already has the
+# fix device coverage needs (ROCm/rocm-systems#10894).
+
+name: Device Coverage PR Check
+
+on:
+  pull_request:
+    # Narrow on purpose: each run is a multi-hour build, so only files carrying
+    # coverage logic are worth one.
+    paths:
+      - ".github/workflows/coverage_device_pr_check.yml"
+      - ".github/workflows/multi_arch_ci_coverage_linux.yml"
+      - ".github/workflows/multi_arch_ci_coverage_report.yml"
+      - ".github/workflows/test_code_coverage_component.yml"
+      - "build_tools/_therock_utils/kpack_archive.py"
+      - "build_tools/github_actions/configure_coverage_ci.py"
+      - "build_tools/github_actions/merge_coverage_report.py"
+      - "build_tools/install_rocm_code_coverage_build.py"
+      - "cmake/therock_coverage_device.cmake"
+      - "cmake/therock_subproject.cmake"
+      - "CMakeLists.txt"
+
+concurrency:
+  # A later push supersedes this run; a multi-hour build of replaced code only
+  # holds nodes the rest of CI needs.
+  group: device-coverage-pr-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    name: Device Coverage
+    uses: ./.github/workflows/multi_arch_ci_coverage_linux.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    # A called workflow can't hold more than its caller: id-token for the AWS
+    # role the artifact uploads and fetches assume, actions:read for run lookups.
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    with:
+      projects_to_test: "rocrand,rocsparse,rocsolver"
+      amdgpu_families: "gfx94X-dcgpu"
+      # With no baseline the test jobs install this run's own artifacts, which
+      # publish to the ci channel rather than the nightly default.
+      baseline_release_type: "ci"
+      test_type: "standard"
