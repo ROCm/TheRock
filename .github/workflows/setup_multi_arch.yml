@@ -283,7 +283,8 @@ jobs:
           python ./build_tools/compute_rocm_package_version.py \
             --release-type="${BUILD_RELEASE_TYPE}" \
             --prerelease-version="${PRERELEASE_VERSION}" \
-            --override-git-sha="${CHECKOUT_COMMIT}"
+            --override-git-sha="${CHECKOUT_COMMIT}" \
+            --build-variant="${BUILD_VARIANT}"
 
       - name: Detect external repo config
         id: external_repo_config
