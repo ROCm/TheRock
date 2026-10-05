@@ -132,6 +132,34 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertGreater(len(components), 0)
 
     # -----------------------
+    # kpack debug opt-out
+    # -----------------------
+
+    def test_kpack_debug_opt_out_passed_through(self):
+        # A component opts out of kpack debug logs by setting
+        # "rocm_kpack_debug": "0" on its test_matrix entry. fetch_test_configurations
+        # passes the field through verbatim; the "1" default and the debug-re-run
+        # override both live in the workflow YAML, not here.
+        self._inject_job("kpack-opt-out", rocm_kpack_debug="0")
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        job = next(j for j in components if j["job_name"] == "kpack-opt-out")
+        self.assertEqual(job["rocm_kpack_debug"], "0")
+
+    def test_kpack_debug_absent_when_not_set(self):
+        # When a component omits "rocm_kpack_debug", the field is not emitted and
+        # the workflow applies its "1" default via fromJSON(...).rocm_kpack_debug.
+        self._inject_job("kpack-default")
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        job = next(j for j in components if j["job_name"] == "kpack-default")
+        self.assertNotIn("rocm_kpack_debug", job)
+
+    # -----------------------
     # Sharding behavior
     # -----------------------
 
@@ -672,6 +700,19 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_platform_is_emitted(self):
         fetch_test_configurations.run()
         self.assertEqual(self.gha_output["platform"], "linux")
+
+    def test_container_images_are_sha256_pinned(self):
+        # Check the full matrix, including jobs filtered out for a given run.
+        # Entries without an override use the workflow's default image.
+        for job_name, config in fetch_test_configurations.test_matrix.items():
+            if "container_image" not in config:
+                continue
+            with self.subTest(job=job_name):
+                self.assertRegex(
+                    config["container_image"],
+                    r"^[^@\s]+@sha256:[0-9a-f]{64}\Z",
+                    "Container image overrides must use a full SHA-256 digest pin",
+                )
 
     def test_container_options_on_windows_is_string_not_list(self):
         # Regression: a list value here caused

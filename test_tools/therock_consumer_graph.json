@@ -53,7 +53,8 @@
       "rocrand",
       "rocrtst",
       "rocshmem",
-      "rocthrust"
+      "rocthrust",
+      "rocwmma"
     ]
   },
   "aqlprofile": {
@@ -720,7 +721,6 @@
       "amdsmi",
       "kfdtest",
       "rocdecode",
-      "rocjitsu",
       "rocjpeg",
       "rocm_smi_lib",
       "rocprofiler-compute",

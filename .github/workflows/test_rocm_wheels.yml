@@ -107,7 +107,8 @@ jobs:
     runs-on: ${{ inputs.test_runs_on }}
     timeout-minutes: 30
     container:
-      image: ${{ contains(inputs.test_runs_on, 'linux') && inputs.container_image_url != '' && inputs.container_image_url || null }}
+      # Callers must supply a digest-pinned image, or no image for native runners.
+      image: ${{ contains(inputs.test_runs_on, 'linux') && inputs.container_image_url != '' && inputs.container_image_url || null }} # zizmor: ignore[unpinned-images]
       options: --ipc host
         --group-add video
         --device /dev/kfd
@@ -256,10 +257,10 @@ jobs:
         run: |
           pip freeze
 
-      # Importing the analyze command pulls in the whole extra, so this fails if
-      # any of its dependencies is missing from the wheel metadata.
+      # Fails if any package pinned in rocprofiler-compute's requirements.txt is
+      # missing or at the wrong version.
       - name: Test rocprof-compute analyze
         if: ${{ !cancelled() && steps.install_compute_analyze.outcome == 'success' }}
         timeout-minutes: 5
         run: |
-          rocprof-compute analyze --help
+          rocprof-compute analyze --verify-deps

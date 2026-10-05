@@ -72,7 +72,8 @@ jobs:
     container:
       # If the component has specified an alternate image, honor that option.
       # Otherwise use the default image.
-      image: >-
+      # Callers must supply digest-pinned images; fetch_test_configurations.py pins overrides.
+      image: >- # zizmor: ignore[unpinned-images]
         ${{ inputs.platform == 'linux' &&
             (fromJSON(inputs.component).container_image || inputs.default_container_image)
             || null
@@ -211,7 +212,16 @@ jobs:
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
-          ROCM_KPACK_DEBUG: "1"
+          TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
+          # General CI debug mode. runner.debug == '1' when a job is re-run with
+          # GitHub's "Enable debug logging" checkbox. Used to force turning debug
+          # options on.
+          THEROCK_CI_DEBUG: ${{ runner.debug == '1' && '1' || '0' }}
+          # ROCM_KPACK_DEBUG turns on the kpack loader's per-test diagnostics.
+          # Most components enable it (default "1"); a few opt out via their
+          # test_matrix "rocm_kpack_debug": "0" to keep -V ctest logs readable.
+          # test_runner.py forces this on when THEROCK_CI_DEBUG is set.
+          ROCM_KPACK_DEBUG: ${{ fromJSON(inputs.component).rocm_kpack_debug || '1' }}
           # Windows hip-tests (PAL=1, ROCR=0) set this via matrix; other components
           # leave it empty. #3587
           # An empty GPU_ENABLE_PAL is misread as ROCr on Windows (atoi("")==0),
