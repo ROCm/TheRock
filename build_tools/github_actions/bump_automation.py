@@ -22,22 +22,6 @@ BOT_EMAIL = "therockbot@amd.com"
 
 COMMON_CI_LABELS = ["ci:run-all-archs"]
 
-ROCM_SYSTEMS_FILES = [
-    ".github/workflows/therock-build-linux.yml",
-    ".github/workflows/therock-ci-linux.yml",
-    ".github/workflows/therock-ci-windows.yml",
-    ".github/workflows/therock-ci.yml",
-    ".github/workflows/therock-rccl-ci-linux.yml",
-    ".github/workflows/therock-rccl-test-jax-collective.yml",
-    ".github/workflows/therock-rccl-test-madengine.yml",
-    ".github/workflows/therock-rccl-test-packages-multi-node.yml",
-    ".github/workflows/therock-rccl-test-packages-single-node.yml",
-    ".github/workflows/therock-rccl-test-pytorch-distributed.yml",
-    ".github/workflows/therock-rccl-test-rocprof.yml",
-    ".github/workflows/therock-test-component.yml",
-    ".github/workflows/therock-test-packages.yml",
-]
-
 ROCM_LIBRARIES_CI_ENV_FILE = ".github/actions/ci-env/action.yml"
 
 FULL_COMMIT_SHA_PATTERN = re.compile(r"\b[0-9a-f]{40}\b")
@@ -54,7 +38,7 @@ STALE_THEROCK_REF_PR_AGE = timedelta(days=2)
 SUBMODULE_CONFIG = {
     "rocm-systems": {
         "repo": "ROCm/rocm-systems",
-        "files": ROCM_SYSTEMS_FILES,
+        "files": [],
         "updater": "ref",
         "token_key": "systems",
         # See the "rocm-libraries" entry below for why this is per-repo.
@@ -302,62 +286,6 @@ Bumps [{repo}](https://github.com/{repo}) from {base_url} to {head_url}.
 
 See full comparison here: {compare_url}
 """
-
-
-def update_ref_in_file(file_path: str, new_sha: str) -> None:
-    """
-    Update all ROCm/TheRock refs in a YAML file.
-    Replaces existing 'ref:' after 'repository: "ROCm/TheRock"'.
-    """
-    with open(file_path, "r") as f:
-        lines = f.readlines()
-
-    updated_lines = []
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        updated_lines.append(line)
-
-        if line.strip() == 'repository: "ROCm/TheRock"':
-            # Determine the indentation level of the 'repository:' line
-            repo_indent = len(line) - len(line.lstrip())
-            j = i + 1
-            ref_line_index = None
-            while j < len(lines):
-                next_line = lines[j]
-
-                # Skip empty lines
-                if next_line.strip() == "":
-                    j += 1
-                    continue
-                next_indent = len(next_line) - len(next_line.lstrip())
-                if next_indent < repo_indent:
-                    break
-
-                if next_line.strip().startswith("ref:"):
-                    ref_line_index = j
-                    break
-
-                j += 1
-
-            if ref_line_index is not None:
-                # Copy lines between repository and ref as-is (e.g., path: "TheRock")
-                for k in range(i + 1, ref_line_index):
-                    updated_lines.append(lines[k])
-
-                # Replace the existing ref line, preserving indentation and removing old comment
-                indent = lines[ref_line_index][: lines[ref_line_index].find("ref:")]
-                date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-                updated_lines.append(f"{indent}ref: {new_sha} # {date} commit\n")
-
-                # Skip past all lines we've already handled
-                i = ref_line_index
-        i += 1
-
-    with open(file_path, "w") as f:
-        f.writelines(updated_lines)
-
-    print(f"[INFO] Updated {file_path}")
 
 
 def update_ci_env_file(
@@ -811,13 +739,10 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
         files_to_update = list(config["files"])
         if updater == "ci-env":
             update_ci_env_file(ROCM_LIBRARIES_CI_ENV_FILE, after, baseline_run_id)
-            workflow_files = find_therock_workflow_files()
-            for f in workflow_files:
-                update_therock_workflow_file(f, after)
-            files_to_update.extend(workflow_files)
-        else:
-            for f in files_to_update:
-                update_ref_in_file(f, after)
+        workflow_files = find_therock_workflow_files()
+        for f in workflow_files:
+            update_therock_workflow_file(f, after)
+        files_to_update.extend(workflow_files)
 
         run(["git", "add"] + files_to_update)
 
