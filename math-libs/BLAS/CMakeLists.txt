@@ -178,6 +178,7 @@ therock_cmake_subproject_declare(hipBLASLt
     amd-hip
   BUILD_DEPS
     hipBLAS-common
+    mxDataGenerator
     rocm-cmake
     therock-googletest
     therock-msgpack-cxx
