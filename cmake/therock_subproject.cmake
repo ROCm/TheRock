@@ -999,12 +999,52 @@ function(therock_cmake_subproject_activate target_name)
         "    CMAKE_${_coverage_lang}_COMPILE_OBJECT \"\${CMAKE_${_coverage_lang}_COMPILE_OBJECT}\")\n"
         "endif()\n")
     endforeach()
+    # Uninstrumented kernels don't stop clang from giving every HIP translation
+    # unit a host-side shadow of its device counters, registered from a
+    # constructor, or the driver from force-linking the GPU half of the profile
+    # runtime (InstrProfilingPlatformROCm.cpp in libclang_rt.profile_rocm.a)
+    # to take the registrations. At exit that half asks the HIP runtime for the
+    # device side of each shadow, which only exists when the device code has
+    # profile data. The HIP runtime aborts ("Cannot create GlobalVar Obj") right
+    # after the first module writes its profile, so every other module's is
+    # lost. The GPU half also wraps hipModuleLoad*, hipLaunchKernel and the
+    # like. Linking a stub that defines each of its entry points as a no-op into
+    # every executable and shared library leaves nothing to pull it in for.
+    # -fuse-cuid=none would stop the shadows instead, but then every translation
+    # unit defines the same __hip_cuid_ and any library with two HIP sources
+    # fails to link. Should a compiler update add an entry point the stub lacks,
+    # links fail on duplicate symbols rather than bringing the GPU half back.
+    set(_coverage_profile_stub_source
+      "${THEROCK_SOURCE_DIR}/cmake/therock_coverage_profile_stub.c")
+    string(APPEND _coverage_host_only_contents
+      "set(_therock_coverage_stub \"\${CMAKE_BINARY_DIR}/therock_coverage_profile_stub.o\")\n"
+      "if(\"${_coverage_profile_stub_source}\" IS_NEWER_THAN \"\${_therock_coverage_stub}\")\n"
+      "  if(CMAKE_C_COMPILER)\n"
+      "    set(_therock_coverage_cc \"\${CMAKE_C_COMPILER}\")\n"
+      "  else()\n"
+      "    set(_therock_coverage_cc \"\${CMAKE_CXX_COMPILER}\")\n"
+      "  endif()\n"
+      "  execute_process(\n"
+      "    COMMAND \"\${_therock_coverage_cc}\" -x c -O2 -fPIC -c\n"
+      "      \"${_coverage_profile_stub_source}\" -o \"\${_therock_coverage_stub}\"\n"
+      "    RESULT_VARIABLE _therock_coverage_result)\n"
+      "  if(NOT _therock_coverage_result EQUAL 0)\n"
+      "    message(FATAL_ERROR \"Could not compile ${_coverage_profile_stub_source}\")\n"
+      "  endif()\n"
+      "endif()\n"
+      "foreach(_therock_coverage_kind IN ITEMS EXE SHARED MODULE)\n"
+      "  if(NOT CMAKE_\${_therock_coverage_kind}_LINKER_FLAGS MATCHES \"therock_coverage_profile_stub\")\n"
+      "    string(APPEND CMAKE_\${_therock_coverage_kind}_LINKER_FLAGS \" \${_therock_coverage_stub}\")\n"
+      "  endif()\n"
+      "endforeach()\n")
     file(CONFIGURE OUTPUT "${_cmake_project_coverage_file}"
       CONTENT "${_coverage_host_only_contents}" @ONLY ESCAPE_QUOTES)
-    list(APPEND _fprint_files "${_cmake_project_coverage_file}")
+    list(APPEND _fprint_files
+      "${_cmake_project_coverage_file}" "${_coverage_profile_stub_source}")
     set(_coverage_project_include_arg
       "-DCMAKE_PROJECT_INCLUDE=${_cmake_project_coverage_file}")
-    set(_coverage_configure_depends "${_cmake_project_coverage_file}")
+    set(_coverage_configure_depends
+      "${_cmake_project_coverage_file}" "${_coverage_profile_stub_source}")
   endif()
 
   file(CONFIGURE OUTPUT "${_cmake_project_init_file}" CONTENT "${_init_contents}" @ONLY ESCAPE_QUOTES)

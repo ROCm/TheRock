@@ -89,6 +89,29 @@ shared library gets undefined references and any executable linking it fails
 `--no-allow-shlib-undefined`. `therock_subproject.cmake` adds both libraries
 automatically.
 
+### The profile runtime's GPU half
+
+Keeping kernels uninstrumented does not stop the abort described above. Clang
+still gives every HIP translation unit a host-side shadow of its device
+counters, registered from a constructor. The driver still force-links
+`InstrProfilingPlatformROCm.cpp` from `libclang_rt.profile_rocm.a` to take those
+registrations. At exit, once a module has written its host profile, that file
+asks the HIP runtime for the device side of each shadow. The device side only
+exists when the device code has profile data, so the HIP runtime aborts
+(`Cannot create GlobalVar Obj for symbol: __llvm_profile_sections_<cuid>`). Every
+module whose profile writer has not run yet loses its profile, which is how an
+instrumented test executable costs the library under test its coverage. The same
+file also wraps `hipModuleLoad*`, `hipLaunchKernel` and the like.
+
+`therock_subproject.cmake` therefore compiles
+`cmake/therock_coverage_profile_stub.c`, which defines that file's five entry
+points as hidden no-ops. It adds the object to `CMAKE_EXE_LINKER_FLAGS`,
+`CMAKE_SHARED_LINKER_FLAGS` and `CMAKE_MODULE_LINKER_FLAGS`, so nothing pulls in
+the real one. If a compiler update adds an entry point the stub lacks, links
+fail on duplicate symbols. `-fuse-cuid=none` would remove the shadows instead,
+but then every translation unit defines the same `__hip_cuid_`, and any library
+with two HIP sources fails to link.
+
 ## Producing a report locally
 
 Set `LLVM_PROFILE_FILE` with `%p`/`%m` substitutions to keep per-process files
