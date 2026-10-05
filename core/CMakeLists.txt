@@ -254,6 +254,19 @@ if(_therock_enable_hsa_runtime)
 endif()
 
 if(THEROCK_ENABLE_HIP_RUNTIME)
+  set(_hip_clr_enabled ON)
+  if(THEROCK_DIST_AMDGPU_TARGETS AND NOT "${THEROCK_DIST_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_hip_clr_targets hip-clr ${THEROCK_DIST_AMDGPU_TARGETS})
+    if(NOT _hip_clr_targets)
+      message(STATUS
+        "hip-clr: no supported gfx targets remain after filtering "
+        "(THEROCK_DIST_AMDGPU_TARGETS='${THEROCK_DIST_AMDGPU_TARGETS}'); skipping subproject.")
+      set(_hip_clr_enabled OFF)
+    endif()
+  endif()
+endif()
+
+if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
   ##############################################################################
   # clr
   # The primary HIP compiler and runtime target. This is also the project used
@@ -384,7 +397,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     )
   endif()
 
-endif(THEROCK_ENABLE_HIP_RUNTIME)
+endif()
 
 if(THEROCK_ENABLE_WSL_ROCDXG)
   if(NOT THEROCK_WSL_WIN_SDK)
