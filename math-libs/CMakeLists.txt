@@ -101,52 +101,58 @@ endif(THEROCK_ENABLE_RAND)
 
 if(THEROCK_ENABLE_PRIM)
   ##############################################################################
-  # rocPRIM
+  # hipCCL (unified rocPRIM + hipCUB + rocThrust)
+  #
+  # rocPRIM, hipCUB and rocThrust are built together through the unified hipCCL
+  # superbuild (projects/hipccl/hipccl3 in rocm-libraries) instead of as three
+  # separate subprojects. The single subproject provides the per-component
+  # rocprim/hipcub/rocthrust package configs plus a hipccl umbrella, so
+  # downstream find_package() calls are unchanged. libhipcxx is built by its own
+  # subproject (THEROCK_ENABLE_LIBHIPCXX), so it is disabled here.
   ##############################################################################
 
-  therock_cmake_subproject_declare(rocPRIM
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM"
+  therock_cmake_subproject_declare(hipCCL
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipccl/hipccl3"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipCCL"
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
+      -DHIPCCL_BUILD_ALL=ON
+      -DHIPCCL_BUILD_LIBHIPCXX=OFF
       -DBUILD_TEST=OFF
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
       rocm-cmake
+      rocRAND
     RUNTIME_DEPS
       hip-clr
+      ${THEROCK_BUNDLED_SQLITE3}
   )
-  therock_cmake_subproject_glob_c_sources(rocPRIM
+  therock_cmake_subproject_glob_c_sources(hipCCL
     SUBDIRS
       .
   )
-  therock_cmake_subproject_provide_package(rocPRIM rocprim lib/cmake/rocprim)
-  therock_cmake_subproject_activate(rocPRIM)
+  therock_cmake_subproject_provide_package(hipCCL rocprim lib/cmake/rocprim)
+  therock_cmake_subproject_provide_package(hipCCL hipcub lib/cmake/hipcub)
+  therock_cmake_subproject_provide_package(hipCCL rocthrust lib/cmake/rocthrust)
+  therock_cmake_subproject_provide_package(hipCCL hipccl lib/cmake/hipccl)
+  therock_cmake_subproject_activate(hipCCL)
 
-  set(_rocprim_tests_enabled OFF)
-  if (THEROCK_BUILD_TESTING)
-    therock_check_subproject_targets(_rocprim_tests_enabled rocPRIM_tests)
-  endif()
-
-  if(THEROCK_BUILD_TESTING AND _rocprim_tests_enabled)
-    ##############################################################################
-    # rocPRIM tests
-    ##############################################################################
-
-    # rocPRIM_tests declared as a separate target to stop the tests from clogging up the critical build path for libs
-    # that depend on rocPRIM.
-    # Passing BACKGROUND_BUILD ensures that the tests aren't built (too) concurrently with other projects that are demanding.
-    therock_cmake_subproject_declare(rocPRIM_tests
-      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
-      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM_tests"
+  if(THEROCK_BUILD_TESTING)
+    # Separate background target so the prim test/benchmark binaries stay off
+    # the critical path of libraries that only need the prim headers.
+    therock_cmake_subproject_declare(hipCCL_tests
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipccl/hipccl3"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipCCL_tests"
       BACKGROUND_BUILD
       CMAKE_ARGS
         -DHIP_PLATFORM=amd
         -DROCM_PATH=
         -DROCM_DIR=
+        -DHIPCCL_BUILD_ALL=ON
+        -DHIPCCL_BUILD_LIBHIPCXX=OFF
         -DBUILD_TEST=ON
         -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
         -DUSE_SYSTEM_LIB=ON
@@ -157,96 +163,26 @@ if(THEROCK_ENABLE_PRIM)
       BUILD_DEPS
         rocm-cmake
         therock-googletest
-        rocPRIM
+        rocRAND
+        hipCCL
         ${_primlibs_benchmark_deps}
       RUNTIME_DEPS
         hip-clr
+        ${THEROCK_BUNDLED_SQLITE3}
     )
-    therock_cmake_subproject_glob_c_sources(rocPRIM_tests
+    therock_cmake_subproject_glob_c_sources(hipCCL_tests
       SUBDIRS
         .
     )
-    therock_cmake_subproject_activate(rocPRIM_tests)
-  endif(THEROCK_BUILD_TESTING AND _rocprim_tests_enabled)
-
-  set(_hipcub_tests_enabled OFF)
-  if (THEROCK_BUILD_TESTING)
-    therock_check_subproject_targets(_hipcub_tests_enabled hipCUB_tests)
+    therock_cmake_subproject_activate(hipCCL_tests)
   endif()
-
-  therock_cmake_subproject_declare(hipCUB
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipcub"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipCUB"
-    BACKGROUND_BUILD
-    CMAKE_ARGS
-      -DHIP_PLATFORM=amd
-      -DROCM_PATH=
-      -DROCM_DIR=
-      -DBUILD_TEST=${_hipcub_tests_enabled}
-      -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
-    CMAKE_INCLUDES
-      ${_primlibs_benchmark_includes}
-    COMPILER_TOOLCHAIN
-      amd-hip
-    BUILD_DEPS
-      rocm-cmake
-      rocPRIM
-      therock-googletest
-      ${_primlibs_benchmark_deps}
-    RUNTIME_DEPS
-      hip-clr
-  )
-  therock_cmake_subproject_glob_c_sources(hipCUB
-    SUBDIRS
-      .
-  )
-  therock_cmake_subproject_provide_package(hipCUB hipcub lib/cmake/hipcub)
-  therock_cmake_subproject_activate(hipCUB)
-
-  set(_rocthrust_tests_enabled OFF)
-  if(THEROCK_BUILD_TESTING)
-    therock_check_subproject_targets(_rocthrust_tests_enabled rocThrust_tests)
-  endif()
-
-  therock_cmake_subproject_declare(rocThrust
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocthrust"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocThrust"
-    BACKGROUND_BUILD
-    CMAKE_ARGS
-      -DHIP_PLATFORM=amd
-      -DROCM_PATH=
-      -DROCM_DIR=
-      -DBUILD_TEST=${_rocthrust_tests_enabled}
-      -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
-    CMAKE_INCLUDES
-      ${_primlibs_benchmark_includes}
-    COMPILER_TOOLCHAIN
-      amd-hip
-    BUILD_DEPS
-      rocm-cmake
-      rocPRIM
-      rocRAND
-      therock-googletest
-      ${_primlibs_benchmark_deps}
-    RUNTIME_DEPS
-      hip-clr
-      ${THEROCK_BUNDLED_SQLITE3}
-  )
-  therock_cmake_subproject_glob_c_sources(rocThrust
-    SUBDIRS
-      .
-  )
-  therock_cmake_subproject_provide_package(rocThrust rocthrust lib/cmake/rocthrust)
-  therock_cmake_subproject_activate(rocThrust)
 
   set(_prim_subproject_deps
-    rocPRIM
-    hipCUB
-    rocThrust
+    hipCCL
   )
 
   if(THEROCK_BUILD_TESTING)
-    list(APPEND _prim_subproject_deps rocPRIM_tests)
+    list(APPEND _prim_subproject_deps hipCCL_tests)
   endif()
 
   therock_provide_artifact(prim
