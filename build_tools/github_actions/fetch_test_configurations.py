@@ -25,16 +25,31 @@ import os
 import platform as platform_module
 from pathlib import Path
 
+import sys
 from github_actions_api import *
 from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
     select_weighted_label,
 )
-from test_controls import (
-    get_test_controls,
-    should_skip_component,
-    filter_components_by_controls,
-)
+
+# Load test_controls from CI_CONFIG_PATH (therock-ci-config) if available,
+# otherwise fall back to local copy for development/testing.
+def _load_test_controls():
+    ci_config_path = os.environ.get("CI_CONFIG_PATH", "").strip()
+    if ci_config_path:
+        config_path = Path(ci_config_path)
+        if (config_path / "test_controls.py").exists():
+            sys.path.insert(0, str(config_path))
+            import test_controls
+            return test_controls
+    # Fallback to local import (for development/testing without CI_CONFIG_PATH)
+    import test_controls
+    return test_controls
+
+_test_controls = _load_test_controls()
+get_test_controls = _test_controls.get_test_controls
+should_skip_component = _test_controls.should_skip_component
+filter_components_by_controls = _test_controls.filter_components_by_controls
 
 logging.basicConfig(level=logging.INFO)
 

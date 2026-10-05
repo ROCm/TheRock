@@ -83,12 +83,26 @@ from stage_reuse_decision import (
     compute_auto_stage_reuse,
     render_step_summary,
 )
-from test_controls import (
-    TestControls,
-    get_test_controls,
-    should_disable_tests,
-    get_test_filter_override,
-)
+
+# Load test_controls from CI_CONFIG_PATH (therock-ci-config) if available,
+# otherwise fall back to local copy for development/testing.
+def _load_test_controls():
+    ci_config_path = os.environ.get("CI_CONFIG_PATH", "").strip()
+    if ci_config_path:
+        config_path = Path(ci_config_path)
+        if (config_path / "test_controls.py").exists():
+            sys.path.insert(0, str(config_path))
+            import test_controls
+            return test_controls
+    # Fallback to local import (for development/testing without CI_CONFIG_PATH)
+    import test_controls
+    return test_controls
+
+_test_controls = _load_test_controls()
+TestControls = _test_controls.TestControls
+get_test_controls = _test_controls.get_test_controls
+should_disable_tests = _test_controls.should_disable_tests
+get_test_filter_override = _test_controls.get_test_filter_override
 
 _NULL_GIT_SHA = "0" * 40
 
