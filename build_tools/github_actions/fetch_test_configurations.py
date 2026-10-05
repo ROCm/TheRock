@@ -376,6 +376,8 @@ test_matrix = {
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
+        "emulate": "rocjitsu",
+        "emulate_test_type": "quick",
         # TODO(#2616): Enable full tests once known machine issues are resolved
         "total_shards_dict": {
             "linux": 1,
@@ -447,6 +449,8 @@ test_matrix = {
         "timeout_minutes": 45,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
+        "emulate": "rocjitsu",
+        "emulate_test_type": "quick",
         "total_shards_dict": {
             "linux": 2,
             "windows": 2,
@@ -458,6 +462,8 @@ test_matrix = {
         "timeout_minutes": 45,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
+        "emulate": "rocjitsu",
+        "emulate_test_type": "quick",
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
@@ -630,6 +636,8 @@ test_matrix = {
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
+        "emulate": "rocjitsu",
+        "emulate_test_type": "quick",
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
@@ -653,6 +661,8 @@ test_matrix = {
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
+        "emulate": "rocjitsu",
+        "emulate_test_type": "quick",
         "total_shards_dict": {
             "linux": 2,
             "windows": 2,
@@ -925,6 +935,8 @@ test_matrix = {
         "timeout_minutes": 90,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
+        "emulate": "rocjitsu",
+        "emulate_test_type": "quick",
         "total_shards_dict": {
             "linux": 5,
             "windows": 2,
