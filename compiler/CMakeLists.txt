@@ -217,6 +217,12 @@ if(THEROCK_ENABLE_COMPILER)
     list(APPEND _comgr_dll_name_cmake_args "-DCOMGR_DLL_NAME=${THEROCK_COMGR_DLL_NAME}")
   endif()
 
+  # Lets comgr honor CMAKE_MSVC_DEBUG_INFORMATION_FORMAT from its pre-hook.
+  set(_comgr_debug_info_cmake_args)
+  if(WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+    list(APPEND _comgr_debug_info_cmake_args -DCMAKE_POLICY_DEFAULT_CMP0141=NEW)
+  endif()
+
   therock_cmake_subproject_declare(amd-comgr
     USE_DIST_AMDGPU_TARGETS
     NO_INSTALL_RPATH  # See manual handling in the pre_hook.
@@ -233,6 +239,7 @@ if(THEROCK_ENABLE_COMPILER)
       "-DLLVM_VERSION_SUFFIX=-rocm${ROCM_MAJOR_VERSION}"
       -DLLVM_ENABLE_SYMBOL_VERSIONING=ON
       ${_comgr_dll_name_cmake_args}
+      ${_comgr_debug_info_cmake_args}
     BUILD_DEPS
       rocm-cmake
       ${_comgr_gtest_deps}
