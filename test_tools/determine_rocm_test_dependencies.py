@@ -79,11 +79,10 @@ _SUBTREE_MAP_NAME = "therock_subtree_map.json"
 
 # Hand overrides layered on top of the generated subtree map
 # (test_tools/therock_subtree_map.json, built from each subproject's
-# EXTERNAL_SOURCE_DIR). Every entry here is a subtree the static parser cannot
-# derive on its own; the derivable majority was retired in favor of the
-# generated map. An override REPLACES the generated value for its key (see
-# _load_subtree_alias_map), so these also correct the few subtrees the parser
-# maps to a narrower key than selection needs.
+# EXTERNAL_SOURCE_DIR). Every entry is a subtree the static parser cannot derive
+# from EXTERNAL_SOURCE_DIR; an override REPLACES the generated value for its key
+# (see _load_subtree_alias_map), which also corrects subtrees the parser maps to
+# a narrower key than selection needs.
 _SUBTREE_ALIAS_OVERRIDES = {
     # Not their own declared subproject — no EXTERNAL_SOURCE_DIR subtree for the
     # parser to relativize, so they never appear in the generated map.
@@ -110,9 +109,8 @@ _SUBTREE_ALIAS_OVERRIDES = {
     # Variable EXTERNAL_SOURCE_DIR (THEROCK_AMD_DBGAPI_SOURCE_DIR) the static
     # parser cannot resolve, so it is skipped from the generated map by design.
     "projects/rocdbgapi": ["amd-dbgapi"],
-    # In the generated map, but only as its own node ("mxdatagenerator"); the
-    # coupled GEMM keys below are a hand-tuned selection the mechanical
-    # subtree->key map cannot express, so the override replaces it.
+    # mxdatagenerator's self-node is intentionally replaced by its hand-tuned
+    # GEMM test coupling.
     "shared/mxdatagenerator": [
         "hipblas",
         "hipblaslt",
@@ -120,7 +118,8 @@ _SUBTREE_ALIAS_OVERRIDES = {
         "rocroller",
         "tensilelite",
     ],
-    # Generated map has ["origami"]; the tensilelite coupling is hand-added.
+    # origami is coupled to tensilelite for test selection (not derivable from
+    # EXTERNAL_SOURCE_DIR).
     "shared/origami": ["origami", "tensilelite"],
 }
 
@@ -149,11 +148,9 @@ def _load_subtree_alias_map() -> dict[str, list[str]]:
         )
     raw = json.loads(map_path.read_text(encoding="utf-8"))
     merged = {key.lower(): list(values) for key, values in raw.items()}
-    # Overrides REPLACE the generated value on a shared key (not union) so that,
-    # e.g., shared/mxdatagenerator can intentionally drop its self-node. The risk:
-    # a future parser-derived edge on an overridden subtree would be shadowed and
-    # silently dropped from selection (under-selection). test_overrides_do_not_
-    # shadow_generated_edges guards this, with a documented narrowing allow-list.
+    # Overrides REPLACE (not union) the generated value, so a narrowing override
+    # can drop a parser-derived edge; test_overrides_cover_generated_values guards
+    # against accidental drops, with a documented narrowing allow-list.
     for key, values in _SUBTREE_ALIAS_OVERRIDES.items():
         merged[key.lower()] = list(values)
     return merged
@@ -196,7 +193,7 @@ def _load_consumer_graph(therock_dir: Path | None = None) -> dict:
 
     Read directly from test_tools/ — no configure, no source fetch. Freshness is
     enforced by the consumer-graph parser test in the Test build_tools CI job
-    (build_tools/generate_consumer_graph.py is the authoritative generator).
+    (build_tools/generate_consumer_graph.py generates it).
 
     Synthetic subprojects declared in test_policies.toml's `[synthetic.<name>]`
     tables (see `_load_synthetic_subprojects`) are merged in here as ordinary

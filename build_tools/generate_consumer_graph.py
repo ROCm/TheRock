@@ -11,12 +11,12 @@ three committed files:
 * ``test_tools/therock_subtree_map.json`` — each external source subtree mapped to the
   graph key(s) built from it.
 * ``test_tools/therock_source_dir_map.json`` — each artifact mapped to the source
-  subtree(s) its therock_provide_artifact() SUBPROJECT_DEPS build from. Report-only
-  metadata; it is NOT authoritative for BUILD_TOPOLOGY.toml source_paths, which are
-  hand-curated and only partly coincide.
+  subtree(s) its therock_provide_artifact() SUBPROJECT_DEPS build from. Informational
+  metadata; it does not replace BUILD_TOPOLOGY.toml source_paths, which are
+  hand-curated and only partly overlap.
 
-This parser is the authoritative generator of all three files. See cmake_consumer_graph.py
-for the full description and limitations.
+This parser generates all three files. See cmake_consumer_graph.py for the full
+description and limitations.
 
 ``--check`` analyzes in memory and diffs the result against ALL committed files
 without writing, exiting non-zero on any difference. It is the drift gate: the
@@ -76,6 +76,13 @@ def _map_delta(generated: dict, committed: dict, noun: str) -> list[str]:
     return lines
 
 
+def _read_committed_map(path: Path) -> dict:
+    """Committed JSON map, or empty if missing so --check reports full drift."""
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Generate the committed consumer-graph metadata from the super-project CMake."
@@ -113,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
             _print_graph_delta(comparison)
             differs = True
 
-        committed_subtree = json.loads(SUBTREE_MAP_PATH.read_text(encoding="utf-8"))
+        committed_subtree = _read_committed_map(SUBTREE_MAP_PATH)
         subtree_delta = _map_delta(subtree_map, committed_subtree, "subtree")
         if subtree_delta:
             print(
@@ -123,9 +130,7 @@ def main(argv: list[str] | None = None) -> int:
             print("\n".join(subtree_delta))
             differs = True
 
-        committed_source_dir = json.loads(
-            SOURCE_DIR_MAP_PATH.read_text(encoding="utf-8")
-        )
+        committed_source_dir = _read_committed_map(SOURCE_DIR_MAP_PATH)
         source_dir_delta = _map_delta(source_dir_map, committed_source_dir, "artifact")
         if source_dir_delta:
             print(

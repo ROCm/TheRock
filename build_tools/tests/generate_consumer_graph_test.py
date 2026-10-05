@@ -55,6 +55,19 @@ def test_map_delta_sorts_keys() -> None:
     ]
 
 
+# --- _read_committed_map: missing file reads as empty ---
+
+
+def test_read_committed_map_missing_returns_empty(tmp_path: Path) -> None:
+    assert gcg._read_committed_map(tmp_path / "absent.json") == {}
+
+
+def test_read_committed_map_present_parses(tmp_path: Path) -> None:
+    path = tmp_path / "map.json"
+    path.write_text('{"a": ["x"]}', encoding="utf-8")
+    assert gcg._read_committed_map(path) == {"a": ["x"]}
+
+
 # --- main(): --check gate and write mode ---
 
 # main() formats its paths with relative_to(THEROCK_DIR), so the write-mode and
@@ -127,3 +140,21 @@ def test_check_returns_one_on_drift(
 
     assert gcg.main(["--check"]) == 1
     assert "differs from" in capsys.readouterr().out
+
+
+def test_check_reports_drift_when_committed_map_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A missing committed subtree/source-dir map reads as full drift, not a
+    # FileNotFoundError crash. Write all three first so the graph round-trips and
+    # only the deleted maps register as drift.
+    paths = _redirect_into(tmp_path, monkeypatch)
+    assert gcg.main([]) == 0
+    capsys.readouterr()
+    paths["SUBTREE_MAP_PATH"].unlink()
+    paths["SOURCE_DIR_MAP_PATH"].unlink()
+
+    assert gcg.main(["--check"]) == 1
+    out = capsys.readouterr().out
+    assert "subtree map differs from" in out
+    assert "source-dir map differs from" in out

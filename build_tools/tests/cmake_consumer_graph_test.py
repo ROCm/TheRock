@@ -336,10 +336,10 @@ therock_cmake_subproject_declare(variable-sourced
 
 
 def test_static_graph_matches_committed() -> None:
-    # Run against the real tree: the parser is the authoritative generator of the
-    # committed graph, so the two must match exactly — no reference-only (committed
-    # holds something the parser does not) and no generated-only (committed is stale)
-    # nodes or edges. Skips outside a git checkout.
+    # Run against the real tree: the parser generates the committed graph, so the two
+    # must match exactly — no reference-only (committed holds something the parser does
+    # not) and no generated-only (committed is stale) nodes or edges. Skips outside a
+    # git checkout.
     repo_root = Path(__file__).resolve().parents[2]
     committed = repo_root / "test_tools" / "therock_consumer_graph.json"
     if not (
@@ -367,9 +367,9 @@ def test_static_graph_matches_committed() -> None:
 
 
 def test_subtree_map_matches_committed() -> None:
-    # Run against the real tree: the parser is the authoritative generator of the
-    # committed subtree map, so build_subtree_map() must equal the committed file
-    # exactly. Skips outside a git checkout.
+    # Run against the real tree: the parser generates the committed subtree map, so
+    # build_subtree_map() must equal the committed file exactly. Skips outside a git
+    # checkout.
     repo_root = Path(__file__).resolve().parents[2]
     committed = repo_root / "test_tools" / "therock_subtree_map.json"
     if not (
@@ -468,9 +468,9 @@ therock_provide_artifact(meta
 
 
 def test_source_dir_map_unresolved_subproject_deps_is_omitted(tmp_path: Path) -> None:
-    # SUBPROJECT_DEPS feeds only the report-only source_dir_map, so an unresolved
+    # SUBPROJECT_DEPS feeds the informational source_dir_map only, so an unresolved
     # variable must not abort the analysis: the offending artifact is omitted (with
-    # a skipped diagnostic) and the authoritative graph/subtree_map still build.
+    # a skipped diagnostic) and the graph/subtree_map still build.
     _write(
         tmp_path / "CMakeLists.txt",
         """
@@ -490,15 +490,14 @@ therock_provide_artifact(thing
     assert result.build_source_dir_map() == {"good": ["projects/clr"]}
     # The failure is visible as a diagnostic, not silently swallowed.
     assert any("UNDEFINED_DEPS" in skipped.reason for skipped in result.skipped_paths)
-    # The authoritative outputs are unaffected and still build.
+    # The graph and subtree map are unaffected and still build.
     assert result.build_subtree_map() == {"projects/clr": ["hip-clr"]}
     assert isinstance(result.build_consumer_graph(), dict)
 
 
 def test_source_dir_map_matches_committed() -> None:
-    # The parser is the authoritative generator of the committed source-dir map, so
-    # build_source_dir_map() must equal the committed file exactly. Skips outside a
-    # git checkout.
+    # The parser generates the committed source-dir map, so build_source_dir_map()
+    # must equal the committed file exactly. Skips outside a git checkout.
     repo_root = Path(__file__).resolve().parents[2]
     committed = repo_root / "test_tools" / "therock_source_dir_map.json"
     if not (

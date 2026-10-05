@@ -258,11 +258,10 @@ class AnalysisResult:
 
         For every ``therock_provide_artifact()`` slice, join each ``SUBPROJECT_DEPS``
         subproject to its ``EXTERNAL_SOURCE_DIR`` subtree (relativized against the
-        rocm-libraries / rocm-systems roots, as in ``build_subtree_map``). This is
-        report-only metadata; it is NOT a drop-in for ``BUILD_TOPOLOGY.toml``
-        ``source_paths``, which are hand-curated CI
-        reuse hints that only partly coincide with this derivation. Artifacts whose
-        deps resolve to no statically-captured source dir are omitted.
+        rocm-libraries / rocm-systems roots, as in ``build_subtree_map``). This map is
+        informational; it does not replace ``BUILD_TOPOLOGY.toml`` ``source_paths``,
+        which are hand-curated and only partly overlap. Artifacts whose deps resolve to
+        no statically-captured source dir are omitted.
         """
         roots = (
             self.repository_root / "rocm-libraries",
@@ -970,7 +969,7 @@ class RepositoryAnalyzer:
     ) -> None:
         """Extract one ``therock_provide_artifact()`` slice's SUBPROJECT_DEPS.
 
-        Feeds only the report-only ``source_dir_map``, not the authoritative graph.
+        Feeds the informational ``source_dir_map`` only, not the consumer graph.
         Resolution failures are non-fatal: the artifact is omitted with a SkippedPath
         diagnostic instead of aborting the analysis.
         """
