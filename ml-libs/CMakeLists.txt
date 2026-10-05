@@ -303,6 +303,19 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
 endif(THEROCK_ENABLE_HIPBLASLTPROVIDER)
 
 if(THEROCK_ENABLE_HIPKERNELPROVIDER)
+  set(_hipkernelprovider_enabled ON)
+  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_hipkernelprovider_targets hipkernelprovider ${THEROCK_AMDGPU_TARGETS})
+    if(NOT _hipkernelprovider_targets)
+      message(STATUS
+        "hipkernelprovider: no supported gfx targets remain after filtering "
+        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
+      set(_hipkernelprovider_enabled OFF)
+    endif()
+  endif()
+endif()
+
+if(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
   ##############################################################################
   # hipDNN hip kernel provider
   ##############################################################################
