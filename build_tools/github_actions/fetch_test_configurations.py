@@ -1328,7 +1328,7 @@ def run():
         if platform in test_matrix[key]["platform"] and (
             key == "sanity" or key in project_array or "*" in project_array
         ):
-            logging.info(f"Including job {job_name} with test_type {test_type}")
+            logging.info(f"Requesting job {job_name} with test_type {test_type}")
 
             # Hip-tests on Windows run with both PAL and ROCR backends.
             # See: https://github.com/ROCm/TheRock/issues/3587
@@ -1445,6 +1445,8 @@ def run():
     # For ASan builds, use the sandbox runner to isolate potentially failing tests.
     # This matches multiple build variants, including "asan", "host-asan",
     # "asan-debug", and "host-asan-debug".
+    logging.info("")
+    logging.info("Assigning runners to requested jobs...")
     is_asan_build = "asan" in build_variant
     components_with_runners = []
     for component in all_components:
@@ -1460,7 +1462,7 @@ def run():
             else:
                 # No multi-GPU runner configured for this family; skip the component
                 logging.info(
-                    f"Excluding job {job_name}: multi-GPU required but no multi-GPU runner configured"
+                    f"  Excluding {job_name}: multi-GPU required but no multi-GPU runner configured"
                 )
                 continue
         elif "test_runner" not in component:
@@ -1470,10 +1472,12 @@ def run():
             if is_cpu_only:
                 if test_runs_on_cpu:
                     component["test_runner"] = test_runs_on_cpu
-                    print(f"  {job_name}: CPU-only, using runner: {test_runs_on_cpu}")
+                    logging.info(
+                        f"  {job_name}: CPU-only, using runner: {test_runs_on_cpu}"
+                    )
                 else:
-                    print(
-                        f"Excluding job {job_name}: CPU runner required but none configured"
+                    logging.info(
+                        f"  Excluding {job_name}: CPU runner required but none configured"
                     )
                     continue
             elif is_asan_build and test_runs_on_sandbox:
@@ -1491,7 +1495,7 @@ def run():
             else:
                 # No GPU runner available and component requires GPU - skip it
                 logging.info(
-                    f"Excluding job {job_name}: GPU runner required but none configured"
+                    f"  Excluding {job_name}: GPU runner required but none configured"
                 )
                 continue
         components_with_runners.append(component)

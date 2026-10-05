@@ -202,7 +202,7 @@ jobs:
           TEST_RUNS_ON_CPU: ${{ inputs.test_runs_on_cpu }}
         run: |
           python ./build_tools/github_actions/fetch_test_configurations.py \
-            --platform=${{ contains(inputs.test_runs_on, 'windows') && 'windows' || contains(inputs.test_runs_on_cpu, 'windows') && 'windows' || 'linux' }}
+            --platform=${{ (contains(inputs.test_runs_on, 'windows') || contains(inputs.test_runs_on_cpu, 'windows')) && 'windows' || 'linux' }}
 
   test_sanity_check:
     name: 'Test Sanity Check'
