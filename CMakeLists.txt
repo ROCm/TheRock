@@ -264,6 +264,18 @@ foreach(_proj IN LISTS _therock_coverage_selected)
   endif()
 endforeach()
 
+# Instrument the kernels too for the projects the registry marks
+# device_coverage, once their coverage is on by either route above. An explicit
+# -D<PROJECT>_ENABLE_DEVICE_COVERAGE wins in both directions, so a local build
+# can measure a project's host code alone or try another project's kernels.
+foreach(_proj IN LISTS THEROCK_COVERAGE_DEVICE_PROJECTS)
+  string(TOUPPER "${_proj}" _proj_upper)
+  if(${_proj_upper}_ENABLE_COVERAGE AND NOT DEFINED ${_proj_upper}_ENABLE_DEVICE_COVERAGE)
+    set(${_proj_upper}_ENABLE_DEVICE_COVERAGE ON)
+    message(STATUS "Coverage: enabling ${_proj_upper}_ENABLE_DEVICE_COVERAGE")
+  endif()
+endforeach()
+
 ################################################################################
 # Feature selection
 # Each feature added via therock_add_feature produces a boolean cache variable

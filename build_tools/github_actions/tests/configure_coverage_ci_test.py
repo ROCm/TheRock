@@ -240,6 +240,21 @@ class BuildCoverageMatrixTest(unittest.TestCase):
         self.assertEqual(entry["object_globs"], "lib/libhiprand.so*")
         self.assertEqual(entry["fetch_artifact_args"], "--rand")
 
+    def test_device_coverage_reaches_the_matrix(self):
+        # The report workflow keys the profile handling, the kpack swap and the
+        # device object extraction off this one boolean.
+        rocrand, hiprand = configure_coverage_ci.build_coverage_matrix(
+            ["rocrand", "hiprand"], ["gfx94X-dcgpu"], "ROCm/rocm-libraries", "main"
+        )
+        self.assertIs(rocrand["device_coverage"], True)
+        self.assertIs(hiprand["device_coverage"], False)
+
+    def test_device_coverage_is_only_set_on_measurable_projects(self):
+        for name, project in configure_coverage_ci.COVERAGE_PROJECTS.items():
+            if project.device_coverage:
+                with self.subTest(project=name):
+                    self.assertIn(name, configure_coverage_ci.SUPPORTED_PROJECTS)
+
     def test_header_only_projects_report_on_their_own_test_binaries(self):
         # rocPRIM, hipCUB and rocThrust install their tests into one flat bin/,
         # and --prim --tests brings all three into every one of their reports.
@@ -480,6 +495,19 @@ class EmitCmakeTest(unittest.TestCase):
                 "set(THEROCK_COVERAGE_OPTION_ROCPRIM_TESTS BUILD_CODE_COVERAGE)", text
             )
             self.assertNotIn("THEROCK_COVERAGE_OPTION_MIOPEN", text)
+
+    def test_emits_the_projects_whose_kernels_are_instrumented(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "therock_coverage_projects.cmake"
+            self.assertEqual(configure_coverage_ci.main(["--emit-cmake", str(out)]), 0)
+            device_line = next(
+                line
+                for line in out.read_text().splitlines()
+                if line.startswith("set(THEROCK_COVERAGE_DEVICE_PROJECTS")
+            )
+        self.assertIn("rocRAND", device_line)
+        # hipRAND's library has no kernels, so it stays host-only.
+        self.assertNotIn("hipRAND", device_line)
 
     def test_emit_cmake_needs_no_env(self):
         # Must work without PROJECTS_TO_TEST / AMDGPU_FAMILIES / GITHUB_OUTPUT set.
