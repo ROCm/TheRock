@@ -654,7 +654,7 @@ source_paths = ["rocfft", "hipfft"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "rand"]
-source_paths = ["rocprim", "hipcub", "rocthrust", "primbench"]
+source_paths = ["rocprim", "hipcub", "rocthrust", "primbench", "hipccl", "hipccl3"]
 
 [artifacts.sparse]
 artifact_group = "math-libs"
