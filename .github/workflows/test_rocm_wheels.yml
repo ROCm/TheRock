@@ -301,6 +301,23 @@ jobs:
         run: |
           python ./build_tools/github_actions/configure_asan_env.py
 
+      # TEMPORARY (diagnosing #8341): the other two console scripts that fail in
+      # testConsoleScripts. These live in the profiler venv, so they cannot be
+      # checked alongside the hipify ones above.
+      - name: DIAGNOSTIC - rocprof-sys-sample (fails in testConsoleScripts)
+        if: ${{ !cancelled() && steps.install_profiler.outcome == 'success' && contains(inputs.artifact_group, 'asan') }}
+        continue-on-error: true
+        env:
+          LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
+        run: rocprof-sys-sample --help
+
+      - name: DIAGNOSTIC - rocprof-sys-run (fails in testConsoleScripts)
+        if: ${{ !cancelled() && steps.install_profiler.outcome == 'success' && contains(inputs.artifact_group, 'asan') }}
+        continue-on-error: true
+        env:
+          LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
+        run: rocprof-sys-run --help
+
       - name: Test rocm[profiler]
         if: ${{ !cancelled() && steps.install_profiler.outcome == 'success' }}
         timeout-minutes: 5
