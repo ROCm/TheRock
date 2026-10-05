@@ -36,6 +36,9 @@ if(THEROCK_ENABLE_HIPFILE)
     SUBDIRS
       src
   )
+  # Consumers call find_package(hipfile); advertise HIPFILE as well for the same
+  # reason hip-clr advertises both hip and HIP.
+  therock_cmake_subproject_provide_package(hipfile hipfile lib/cmake/hipfile)
   therock_cmake_subproject_provide_package(hipfile HIPFILE lib/cmake/hipfile)
   therock_cmake_subproject_activate(hipfile)
   list(APPEND _hipfile_subproject_names hipfile)
