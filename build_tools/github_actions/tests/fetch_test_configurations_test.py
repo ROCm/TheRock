@@ -707,6 +707,19 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         fetch_test_configurations.run()
         self.assertEqual(self.gha_output["platform"], "linux")
 
+    def test_container_images_are_sha256_pinned(self):
+        # Check the full matrix, including jobs filtered out for a given run.
+        # Entries without an override use the workflow's default image.
+        for job_name, config in fetch_test_configurations.test_matrix.items():
+            if "container_image" not in config:
+                continue
+            with self.subTest(job=job_name):
+                self.assertRegex(
+                    config["container_image"],
+                    r"^[^@\s]+@sha256:[0-9a-f]{64}\Z",
+                    "Container image overrides must use a full SHA-256 digest pin",
+                )
+
     def test_container_options_on_windows_is_string_not_list(self):
         # Regression: a list value here caused
         # `options: ${{ fromJSON(...).container_options }}` in test_component.yml

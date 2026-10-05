@@ -627,6 +627,8 @@ jobs:
           echo "**Test Run:** ${TEST_RUN_URL}" >> "$GITHUB_STEP_SUMMARY"
 
   trigger-rccl-tests:
+    permissions:
+      actions: write # Dispatch downstream workflows.
     name: Trigger RCCL Tests (gfx950-dcgpu)
     needs: [create-branch, setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' }}
