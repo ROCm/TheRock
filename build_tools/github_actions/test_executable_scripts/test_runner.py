@@ -196,6 +196,13 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #   failing tests still show their full output; only passing-test noise is
 #   suppressed.
 COMPONENT_OVERRIDES = {
+    # amdsmi installs its amdsmitst gtest binary under share/amd_smi/tests, and
+    # the generated install-time CTestTestfile.cmake one directory below it
+    # (share/amd_smi/tests/ctest) so its relative "../amdsmitst" path resolves.
+    # Point ctest at that fragment directory instead of the default bin/amdsmi.
+    "amdsmi": {
+        "test_dir": ["share", "amd_smi", "tests", "ctest"],
+    },
     # ctest fragments live under libexec, not bin.
     # ctest_parallel pinned to 1: tests are pytest runs that parallelize
     # internally (-n), so concurrent ctest jobs over-subscribe.
@@ -399,6 +406,70 @@ def find_matching_gpu_arch(gpu_arch: str, available_gpu_archs: set[str]) -> str 
             return pattern
 
     return None
+
+
+def _cgroup_mentions_container():
+    try:
+        with open("/proc/1/cgroup") as f:
+            cgroup = f.read()
+    except OSError:
+        return False
+    return any(marker in cgroup for marker in ("docker", "kubepods", "containerd"))
+
+
+def _in_container():
+    """True for docker, podman, systemd-nspawn, and cgroup-marked containers."""
+    if os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv"):
+        return True
+    if os.environ.get("container"):
+        return True
+    return _cgroup_mentions_container()
+
+
+def detect_privilege_tier():
+    """Classify the runtime as 'baremetal', 'privileged', or 'unprivileged'.
+
+    Same check as test_amdsmi.py. amdsmitst treats uid 0 as privileged, but an
+    unprivileged container is uid 0 without CAP_SYS_ADMIN. Bit 21 of CapEff in
+    /proc/self/status is that capability. Outside a container the tier is
+    'baremetal' and write tests are left enabled.
+    """
+    if platform.system() != "Linux" or not _in_container():
+        return "baremetal"
+
+    cap_sys_admin = 21
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("CapEff:"):
+                    cap_eff = int(line.split()[1], 16)
+                    has_admin = cap_eff & (1 << cap_sys_admin)
+                    return "privileged" if has_admin else "unprivileged"
+    except (OSError, ValueError):
+        pass
+    # Unknown capability state inside a container: skip state-modifying tests.
+    return "unprivileged"
+
+
+def apply_amdsmi_privilege_env(env):
+    """Set AMDSMI_NON_PRIVILEGED for amdsmi when the container lacks CAP_SYS_ADMIN.
+
+    The gtest binary skips its read/write cases when this variable is set.
+    Other components are left unchanged, and an explicit caller setting is kept.
+    """
+    if test_component_job_name != "amdsmi":
+        return
+    if "AMDSMI_NON_PRIVILEGED" in env:
+        print(
+            "# AMDSMI_NON_PRIVILEGED already set "
+            f"({env['AMDSMI_NON_PRIVILEGED']!r}); leaving as-is"
+        )
+        return
+    tier = detect_privilege_tier()
+    print(f"# Detected privilege tier: {tier}")
+    if tier == "unprivileged":
+        env["AMDSMI_NON_PRIVILEGED"] = "1"
+        print("# Unprivileged runtime: setting AMDSMI_NON_PRIVILEGED=1")
 
 
 def check_available_labels():
@@ -658,6 +729,10 @@ def main():
         print("# Warning: No GPU specific test suites available")
     if exclude_labels:
         print(f"# Found exclude labels: {sorted(exclude_labels)}")
+    print()
+
+    # amdsmitst skips read/write cases when AMDSMI_NON_PRIVILEGED is set.
+    apply_amdsmi_privilege_env(environ_vars)
     print()
 
     # Generate a CTest resource-spec file when the component provides the
