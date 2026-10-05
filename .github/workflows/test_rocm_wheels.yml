@@ -195,6 +195,43 @@ jobs:
         run: |
           python ./build_tools/github_actions/configure_asan_env.py
 
+      # TEMPORARY (diagnosing #8341): core_test.py runs console scripts with
+      # stderr folded into stdout and drops the output when check_output raises,
+      # so the reason amd-smi and hipify-perl exit non-zero never reaches the
+      # log. Run them here with the same LD_PRELOAD and print what they say.
+      - name: DIAGNOSTIC - console scripts under LD_PRELOAD
+        if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' && contains(inputs.artifact_group, 'asan') }}
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
+        run: |
+          echo "LD_PRELOAD=${LD_PRELOAD}"
+          echo "ASAN_OPTIONS=${ASAN_OPTIONS}"
+          echo "LSAN_OPTIONS=${LSAN_OPTIONS}"
+          for spec in "amd-smi:" "hipify-perl:--help" "hipify-clang:--help" "rocminfo:"; do
+            name="${spec%%:*}"
+            arg="${spec#*:}"
+            path="$(command -v "${name}" || true)"
+            echo "===================== ${name} ${arg}"
+            echo "-- resolved to: ${path:-<not on PATH>}"
+            if [ -n "${path}" ]; then
+              echo "-- file type:"
+              head -c 64 "${path}" | file - || true
+            fi
+            set +e
+            if [ -n "${arg}" ]; then
+              out="$("${name}" "${arg}" 2>&1)"
+            else
+              out="$("${name}" 2>&1)"
+            fi
+            rc=$?
+            set -e
+            echo "-- exit code: ${rc}"
+            echo "-- output (last 40 lines):"
+            printf '%s\n' "${out}" | tail -40
+          done
+
       - name: Test rocm[libraries]
         id: test_libraries
         if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' }}
