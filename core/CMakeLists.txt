@@ -654,7 +654,20 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS AND _hip_tests_enabled
   list(APPEND _hip_tests_subproject_names hip-tests)
 endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS AND _hip_tests_enabled)
 
+set(_rocrtst_enabled ON)
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime)
+  if(THEROCK_TEST_AMDGPU_TARGETS AND NOT "${THEROCK_TEST_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_rocrtst_targets rocrtst ${THEROCK_TEST_AMDGPU_TARGETS})
+    if(NOT _rocrtst_targets)
+      message(STATUS
+        "rocrtst: no supported gfx targets remain after filtering "
+        "(THEROCK_TEST_AMDGPU_TARGETS='${THEROCK_TEST_AMDGPU_TARGETS}'); skipping subproject.")
+      set(_rocrtst_enabled OFF)
+    endif()
+  endif()
+endif()
+
+if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime AND _rocrtst_enabled)
   # rocrtst may optionally build against amdsmi when available (Linux).
   set(_rocrtst_build_deps
     amd-llvm
@@ -706,7 +719,7 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enab
     SUBPROJECT_DEPS
       rocrtst
   )
-endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime)
+endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime AND _rocrtst_enabled)
 
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_KFDTESTS)
 
