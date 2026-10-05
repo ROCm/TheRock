@@ -132,6 +132,34 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertGreater(len(components), 0)
 
     # -----------------------
+    # kpack debug opt-out
+    # -----------------------
+
+    def test_kpack_debug_opt_out_passed_through(self):
+        # A component opts out of kpack debug logs by setting
+        # "rocm_kpack_debug": "0" on its test_matrix entry. fetch_test_configurations
+        # passes the field through verbatim; the "1" default and the debug-re-run
+        # override both live in the workflow YAML, not here.
+        self._inject_job("kpack-opt-out", rocm_kpack_debug="0")
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        job = next(j for j in components if j["job_name"] == "kpack-opt-out")
+        self.assertEqual(job["rocm_kpack_debug"], "0")
+
+    def test_kpack_debug_absent_when_not_set(self):
+        # When a component omits "rocm_kpack_debug", the field is not emitted and
+        # the workflow applies its "1" default via fromJSON(...).rocm_kpack_debug.
+        self._inject_job("kpack-default")
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        job = next(j for j in components if j["job_name"] == "kpack-default")
+        self.assertNotIn("rocm_kpack_debug", job)
+
+    # -----------------------
     # Sharding behavior
     # -----------------------
 
