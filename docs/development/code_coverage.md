@@ -119,7 +119,9 @@ graph TD
     dispatch[Dispatch with projects_to_test] --> matrix[setup_coverage_matrix]
     matrix --> compilerRuntime[Build compiler-runtime]
     compilerRuntime --> mathLibs[Build instrumented math-libs]
+    matrix --> gate[Wait for a same-run baseline]
     mathLibs --> report[Per project: configure, test, report]
+    gate --> report
     report --> codecov[Codecov]
 ```
 
@@ -170,6 +172,25 @@ Coverage sets three of its inputs:
 - `external_repo_config` is forwarded from the caller, so a rocm-libraries
   nightly measures the commit it is testing. Without it the build uses
   TheRock's pinned submodules.
+
+### Waiting for a same-run baseline
+
+Only the tests need the baseline, so a caller that builds it in the same run
+(the rocm-libraries nightly) can start coverage alongside that build. When
+`baseline_run_id` is this run's id, `wait_for_baseline` runs
+`wait_for_baseline_stage.py`, which polls the run's jobs until the regular
+Linux build's `Stage - Math Libs (<family>)` job has succeeded for every family
+(`Stage - Compiler Runtime` when no math-libs project is selected).
+`coverage_report` needs it, so tests start once the baseline is in S3. A
+baseline from an earlier run skips the wait.
+
+The wait fails, skipping the tests, when that job fails, when the stage never
+runs (an earlier stage failed, or the caller marked it prebuilt or skipped),
+when the run builds the stage only for other families, or after 300 minutes.
+Jobs are matched by display name, ignoring those under the `Windows::` job,
+which reuse the names; `wait_for_baseline_stage_test.py` checks the names
+against `multi_arch_build_portable_linux.yml`. On a public repository, listing
+the jobs needs no `actions` permission.
 
 ### Test execution
 

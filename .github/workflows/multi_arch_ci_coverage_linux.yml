@@ -231,6 +231,40 @@ jobs:
       contents: read
       id-token: write
 
+  # A caller that builds the baseline in this same run (the rocm-libraries
+  # nightly) can start this workflow alongside that build. The tests install
+  # the baseline from S3, so hold them until that build's math-libs stage (which
+  # needs compiler-runtime) has succeeded, or its compiler-runtime stage when no
+  # math-libs project is selected.
+  wait_for_baseline:
+    name: Wait for Baseline
+    needs: setup_coverage_matrix
+    if: >-
+      ${{
+        inputs.baseline_run_id == github.run_id &&
+        needs.setup_coverage_matrix.outputs.coverage_matrix != '[]'
+      }}
+    runs-on: ubuntu-24.04
+    # Above the script's own 300-minute limit, so it reports the timeout.
+    timeout-minutes: 330
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+        with:
+          # Cross-repo callers pass ROCm/TheRock + ref; same-repo defaults to github.repository.
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+      - name: Wait for the baseline stage
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BASELINE_STAGE: ${{ needs.setup_coverage_matrix.outputs.needs_math_libs == 'true' && 'math-libs' || 'compiler-runtime' }}
+          AMDGPU_FAMILIES: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
+        run: |
+          python build_tools/github_actions/wait_for_baseline_stage.py \
+            --stage="${BASELINE_STAGE}" \
+            --amdgpu-families="${AMDGPU_FAMILIES}"
+
   # One test + report job per project. Each installs baseline_run_id and replaces
   # only its own project from this run's instrumented stack, so dependencies stay
   # non-instrumented even though the build instrumented them all at once.
@@ -243,6 +277,7 @@ jobs:
         setup_coverage_matrix,
         build_compiler_runtime,
         build_instrumented_math_libs,
+        wait_for_baseline,
       ]
     # Also guard the empty matrix: fromJSON('') would hard-error.
     if: >-
@@ -284,6 +319,7 @@ jobs:
       - setup_coverage_matrix
       - build_compiler_runtime
       - build_instrumented_math_libs
+      - wait_for_baseline
       - coverage_report
     runs-on: ubuntu-24.04
     steps:
