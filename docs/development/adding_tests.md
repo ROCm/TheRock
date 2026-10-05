@@ -204,7 +204,8 @@ component whose family has no multi-GPU pool still gets its emulated variant.
 >   override. `rocm-systems` currently puts a `gfx125X` override first, which
 >   would route mi450x emulated jobs onto the scarce MI455 GPU runners.
 >
-> `rocrtst` — the one emulated component today — lives in `rocm-systems`.
+> The current emulated component test categories live in both `rocm-libraries`
+> and `rocm-systems`.
 
 ### Pinned emulator source baseline
 
@@ -294,12 +295,18 @@ if emulation.is_emulated():
     ...  # already inside the mirage session; nothing to launch
 ```
 
-The two emulated components today are:
+The emulated components in the matrix are:
 
-| Component   | Script              | What it does                                                            |
-| ----------- | ------------------- | ----------------------------------------------------------------------- |
-| `emulation` | `test_emulation.py` | Checks that the emulated GPU comes up and reports the expected target   |
-| `rocrtst`   | `test_runner.py`    | Runs a rocrtst `test_categories.yaml` category against the emulated GPU |
+| Component   | Script              | What it does                                                          |
+| ----------- | ------------------- | --------------------------------------------------------------------- |
+| `emulation` | `test_emulation.py` | Checks that the emulated GPU comes up and reports the expected target |
+| `hipblas`   | `test_runner.py`    | Runs the hipBLAS `quick` category against the emulated GPU            |
+| `hipcub`    | `test_runner.py`    | Runs the hipCUB `quick` category against the emulated GPU             |
+| `rocfft`    | `test_runner.py`    | Runs the rocFFT `quick` category against the emulated GPU             |
+| `rocprim`   | `test_runner.py`    | Runs the rocPRIM `quick` category against the emulated GPU            |
+| `rocrand`   | `test_runner.py`    | Runs the rocRAND `quick` category against the emulated GPU            |
+| `rocrtst`   | `test_runner.py`    | Runs the rocrtst `quick` category against the emulated GPU            |
+| `rocwmma`   | `test_runner.py`    | Runs the rocWMMA `quick` category against the emulated GPU            |
 
 ### Choosing what an emulated job runs
 
@@ -321,13 +328,11 @@ follow the run's `TEST_TYPE`. The value has to be in `VALID_TEST_CATEGORIES` in
 [`test_runner.py`](../../build_tools/github_actions/test_executable_scripts/test_runner.py)
 — an unlisted value silently falls back to `quick`.
 
-Prefer an existing category over a new one, even a coarse fit. rocrtst is
-pinned to `quick`: 13 tests in 9.6 s under rocjitsu. Its `standard` covers 65
-tests in ~10 min, which the emulated budget could afford, but three of them
-fail on emulator gaps — so using it would first require a rocrtst-side
-exclusion list. If a component does add a tier for this, the ROCm-wide
-convention is the `ffm-*` family (`ffm-quick` and friends, already declared by
-rocwmma, rocthrust, hipcub, rocprim, rocfft and hipdnn), not a bespoke name.
+Prefer an existing category over a new one, even a coarse fit. The current
+emulated component jobs are pinned to `quick` so the lane stays bounded and does
+not follow a broader nightly `TEST_TYPE`. If a component needs a different
+slice, add that category in the component-owned `test_categories.yaml` rather
+than filtering individual tests in TheRock.
 
 ### Environment the emulated tests need
 

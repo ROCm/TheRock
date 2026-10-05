@@ -393,6 +393,39 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             "--rocrtst --tests --mirage --rocjitsu",
         )
 
+    def test_first_batch_jobs_add_emulated_variants(self):
+        emulated_components = {
+            "hipblas",
+            "hipcub",
+            "rocfft",
+            "rocprim",
+            "rocrand",
+            "rocwmma",
+        }
+        os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
+        os.environ["PROJECTS_TO_TEST"] = ",".join(sorted(emulated_components))
+
+        fetch_test_configurations.run()
+        components_by_name = {job["job_name"]: job for job in self._get_components()}
+
+        for component in emulated_components:
+            with self.subTest(component=component):
+                self.assertIn(component, components_by_name)
+                emulated_name = f"{component} (emulated mi350x)"
+                self.assertIn(emulated_name, components_by_name)
+                emulated_job = components_by_name[emulated_name]
+                self.assertEqual(emulated_job["test_component"], component)
+                self.assertEqual(emulated_job["test_type"], "quick")
+                self.assertEqual(emulated_job["total_shards"], 1)
+                self.assertEqual(emulated_job["shard_arr"], [1])
+                self.assertTrue(emulated_job["linux_cpu_runner"])
+                self.assertIn("--mirage", emulated_job["fetch_artifact_args"])
+                self.assertIn("--rocjitsu", emulated_job["fetch_artifact_args"])
+                self.assertIn("mirage run", emulated_job["test_script"])
+                self.assertNotIn("emulate", emulated_job)
+                self.assertNotIn("emulate_test_type", emulated_job)
+                self.assertNotIn("--device /dev/kfd", emulated_job["container_options"])
+
     # -----------------------
     # test_types tier gating
     # -----------------------
