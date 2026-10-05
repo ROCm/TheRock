@@ -40,6 +40,7 @@ class Label:
 COLOR_CI_GENERAL = "FFFF00"  # Yellow - general CI behavior labels
 COLOR_CI_GFX = "5A4D41"  # Brown - GPU architecture opt-in labels
 COLOR_CI_PACKAGING = "F28D35"  # Orange - packaging/build opt-in labels
+COLOR_CI_PLATFORM = "FF6B35"  # Orange - Platform selection labels
 COLOR_TEST = "3FA7D6"  # Blue - project-specific test labels
 COLOR_TEST_FILTER = "a2fab4"  # Light green - test level override labels
 COLOR_TEST_RUNNER = "23edeb"  # Cyan - test machine selection labels
@@ -61,6 +62,9 @@ CI_LABELS: list[Label] = [
     Label("ci:asan", COLOR_CI_GENERAL, "Opt-in to building ASAN"),
     Label("ci:host-asan", COLOR_CI_GENERAL, "Opt-in to running multi-arch host-asan CI on a pull request"),
     Label("ci:run-multi-gpu", COLOR_CI_GENERAL, "Opt-in to running multi-GPU tests"),
+    # ci:platform: labels (platform selection)
+    Label("ci:platform:linux", COLOR_CI_PLATFORM, "Run CI only on Linux (skip Windows builds/tests)"),
+    Label("ci:platform:windows", COLOR_CI_PLATFORM, "Run CI only on Windows (skip Linux builds/tests)"),
     # ci:gfx labels (GPU architecture opt-in)
     Label("ci:gfx103X-linux", COLOR_CI_GFX, "Opt-in to gfx103X-linux builds/tests"),
     Label("ci:gfx103X", COLOR_CI_GFX, "Opt-in to gfx103X builds/tests"),
