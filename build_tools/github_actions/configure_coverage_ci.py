@@ -534,12 +534,15 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         codecov_flag="amdsmi",
         source_repo=ROCM_SYSTEMS,
     ),
+    #
+    # rocm-systems -- profiler-apps stage
+    #
     "rocprofiler-compute": CoverageProject(
         cmake_target="rocprofiler-compute",
         artifact_names=["rocprofiler-compute"],
         artifact_relpaths=["profiler/rocprofiler-compute/stage"],
         unsupported_reason="a Python tool with no native instrumentation option",
-        stage=STAGE_COMPILER_RUNTIME,
+        stage=STAGE_PROFILER_APPS,
         test_component="rocprofiler-compute",
         coverage_config="projects/rocprofiler-compute/test_categories_coverage.yaml",
         object_globs=["lib/librocprofiler-compute*.so*"],
@@ -547,9 +550,6 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         codecov_flag="rocprofiler-compute",
         source_repo=ROCM_SYSTEMS,
     ),
-    #
-    # rocm-systems -- profiler-apps stage
-    #
     "rocprofiler-systems": CoverageProject(
         cmake_target="rocprofiler-systems",
         artifact_names=["rocprofiler-systems"],
