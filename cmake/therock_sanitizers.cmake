@@ -102,27 +102,28 @@ function(therock_sanitizer_configure
       string(APPEND _stanza "message(STATUS \"HOST_ASAN enabled - GPU_TARGETS unchanged\")\n")
     endif()
 
-    # Compact ASAN: shrink host+device objects. Injected here (not via
-    # super-project CMAKE_CXX_FLAGS) so gcc sysdeps never see clang/HIP-only
-    # flags like --offload-compress, which is HIP-only.
+    # Compact ASAN: shrink host objects. Injected here (not via super-project
+    # CMAKE_CXX_FLAGS) so gcc sysdeps never see clang/HIP-only flags.
     # A subproject opts out with -D{subproject}_ASAN_COMPACT=OFF without
     # changing its THEROCK_SANITIZER setting.
+    #
+    # --offload-compress is HIP-flags only: a COMPILE_LANGUAGE genex breaks
+    # RCCL's device-link custom commands. -Oz is host-only (-Xarch_host);
+    # device -Oz fails rocPRIM isel. No global -flto: it OOMs
+    # rocprofiler-systems and drops rocRoller symbols.
     set(_asan_compact "${THEROCK_ASAN_COMPACT}")
     if(DEFINED "${subproject_name}_ASAN_COMPACT")
       set(_asan_compact "${${subproject_name}_ASAN_COMPACT}")
     endif()
     if(_asan_compact AND (_sanitizer STREQUAL "ASAN" OR _sanitizer STREQUAL "HOST_ASAN"))
-      # -Oz must replace the default Release -O3 (FLAGS_<CONFIG> is appended
-      # after FLAGS_INIT). -Wl,--gc-sections is a link flag only.
-      string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -fsanitize-address-outline-instrumentation -gz -gline-tables-only -fdata-sections -ffunction-sections -flto\")\n")
-      string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -fsanitize-address-outline-instrumentation -gz -gline-tables-only -fdata-sections -ffunction-sections -flto\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -fsanitize-address-outline-instrumentation -gz -gline-tables-only -fdata-sections -ffunction-sections\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -fsanitize-address-outline-instrumentation -gz -gline-tables-only -fdata-sections -ffunction-sections\")\n")
       string(APPEND _stanza "string(APPEND CMAKE_HIP_FLAGS_INIT \" --offload-compress\")\n")
-      string(APPEND _stanza "add_compile_options($<$<COMPILE_LANGUAGE:HIP>:--offload-compress>)\n")
-      string(APPEND _stanza "set(CMAKE_C_FLAGS_RELEASE \"-Oz -DNDEBUG\" CACHE STRING \"\" FORCE)\n")
-      string(APPEND _stanza "set(CMAKE_CXX_FLAGS_RELEASE \"-Oz -DNDEBUG\" CACHE STRING \"\" FORCE)\n")
-      string(APPEND _stanza "string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT \" -flto -Wl,--gc-sections\")\n")
-      string(APPEND _stanza "string(APPEND CMAKE_SHARED_LINKER_FLAGS_INIT \" -flto -Wl,--gc-sections\")\n")
-      string(APPEND _stanza "string(APPEND CMAKE_MODULE_LINKER_FLAGS_INIT \" -flto -Wl,--gc-sections\")\n")
+      string(APPEND _stanza "set(CMAKE_C_FLAGS_RELEASE \"-O3 -Xarch_host -Oz -DNDEBUG\" CACHE STRING \"\" FORCE)\n")
+      string(APPEND _stanza "set(CMAKE_CXX_FLAGS_RELEASE \"-O3 -Xarch_host -Oz -DNDEBUG\" CACHE STRING \"\" FORCE)\n")
+      string(APPEND _stanza "string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT \" -Wl,--gc-sections\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_SHARED_LINKER_FLAGS_INIT \" -Wl,--gc-sections\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_MODULE_LINKER_FLAGS_INIT \" -Wl,--gc-sections\")\n")
       string(APPEND _stanza "message(STATUS \"ASAN compact flags enabled (fresh build directory required; do not toggle THEROCK_ASAN_COMPACT in place)\")\n")
     endif()
 
