@@ -124,7 +124,7 @@ option(THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY
 
 option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
-option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" OFF)
+option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" ON)
 set(THEROCK_COMGR_DLL_NAME "" CACHE STRING "Override the Comgr DLL name for the comgr build and CLR load (e.g. amd_comgr_opencl.dll); empty = component default")
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
@@ -267,8 +267,8 @@ cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL
   "THEROCK_ENABLE_COMPOSABLE_KERNEL" OFF)
 
 cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
-  "Enables building rocWMMA benchmarks" OFF
-  "THEROCK_ENABLE_ROCWMMA;THEROCK_BUILD_TESTING" OFF)
+  "Enables building rocWMMA benchmarks" ON
+  "THEROCK_ENABLE_ROCWMMA;THEROCK_BUILD_TESTING;NOT WIN32" OFF)
 
 # Additional manual features that don't map to artifacts
 
@@ -395,19 +395,21 @@ if(THEROCK_BUNDLE_SYSDEPS)
       message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON on Linux requires (easiest: `pip install meson`)")
     endif()
     # Core sysdeps (always part of the 'sysdeps' artifact)
-    set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
-    set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
-    set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
-    set(THEROCK_BUNDLED_LIBCAP therock-libcap)
-    set(THEROCK_BUNDLED_LIBDRM therock-libdrm)
-    set(THEROCK_BUNDLED_LIBIBERTY therock-libiberty)
-    set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
-    set(THEROCK_BUNDLED_LIBMNL therock-libmnl)
-    set(THEROCK_BUNDLED_LIBNL therock-libnl)
-    set(THEROCK_BUNDLED_NUMACTL therock-numactl)
-    set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
-    set(THEROCK_BUNDLED_ZLIB therock-zlib)
-    set(THEROCK_BUNDLED_ZSTD therock-zstd)
+    if(THEROCK_ENABLE_SYSDEPS)
+      set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
+      set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
+      set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
+      set(THEROCK_BUNDLED_LIBCAP therock-libcap)
+      set(THEROCK_BUNDLED_LIBDRM therock-libdrm)
+      set(THEROCK_BUNDLED_LIBIBERTY therock-libiberty)
+      set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
+      set(THEROCK_BUNDLED_LIBMNL therock-libmnl)
+      set(THEROCK_BUNDLED_LIBNL therock-libnl)
+      set(THEROCK_BUNDLED_NUMACTL therock-numactl)
+      set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
+      set(THEROCK_BUNDLED_ZLIB therock-zlib)
+      set(THEROCK_BUNDLED_ZSTD therock-zstd)
+    endif()
     # Optional sysdeps (gated on their artifact feature flags)
     if(THEROCK_ENABLE_SYSDEPS_EXPAT)
       set(THEROCK_BUNDLED_EXPAT therock-expat)
@@ -437,13 +439,15 @@ if(THEROCK_BUNDLE_SYSDEPS)
     endif()
     # macOS bundled deps - note: libcap, libdrm, numactl are Linux-specific
     # Core sysdeps
-    set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
-    set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
-    set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
-    set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
-    set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
-    set(THEROCK_BUNDLED_ZLIB therock-zlib)
-    set(THEROCK_BUNDLED_ZSTD therock-zstd)
+    if(THEROCK_ENABLE_SYSDEPS)
+      set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
+      set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
+      set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
+      set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
+      set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
+      set(THEROCK_BUNDLED_ZLIB therock-zlib)
+      set(THEROCK_BUNDLED_ZSTD therock-zstd)
+    endif()
     # Optional sysdeps
     if(THEROCK_ENABLE_SYSDEPS_EXPAT)
       set(THEROCK_BUNDLED_EXPAT therock-expat)
@@ -458,10 +462,12 @@ if(THEROCK_BUNDLE_SYSDEPS)
       set(THEROCK_BUNDLED_NCURSES therock-ncurses)
     endif()
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
-    set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
-    set(THEROCK_BUNDLED_ZLIB therock-zlib)
-    set(THEROCK_BUNDLED_ZSTD therock-zstd)
+    if(THEROCK_ENABLE_SYSDEPS)
+      set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
+      set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
+      set(THEROCK_BUNDLED_ZLIB therock-zlib)
+      set(THEROCK_BUNDLED_ZSTD therock-zstd)
+    endif()
     if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
       # meson is only needed to build the amd-mesa/libva sysdep; gate the
       # requirement so bundled-sysdeps builds without mesa don't need it.
@@ -495,7 +501,9 @@ endif()
 # Add subdirectories in dependency DAG order (which happens to be semi-alpha:
 # don't be fooled).
 add_subdirectory(third-party/sysdeps)
-add_subdirectory(base)
+if(THEROCK_ENABLE_BASE)
+  add_subdirectory(base)
+endif()
 add_subdirectory(third-party/googletest)
 add_subdirectory(compiler)
 add_subdirectory(third-party)
@@ -505,8 +513,9 @@ add_subdirectory(debug-tools)
 # performs optional find_package(rocdecode)/find_package(rocjpeg) for trace
 # feature detection.
 add_subdirectory(media-libs)
-# storage-libs (hipfile) must be added before profiler: rocprofiler-sdk performs
-# optional find_package(hipfile) for hipFILE trace feature detection.
+# storage-libs (hipfile) must be added before profiler: rocprofiler-sdk and
+# rocprofiler-systems both find_package(hipfile) (SDK for API tracing; systems
+# for optional GPU-direct storage I/O telemetry when the package is usable).
 add_subdirectory(storage-libs)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.

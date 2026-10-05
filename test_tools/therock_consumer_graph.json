@@ -36,6 +36,7 @@
       "rocr-runtime",
       "rocrtst",
       "therock-elfio",
+      "therock-grpc",
       "therock-spdlog"
     ]
   },
@@ -52,7 +53,8 @@
       "rocrand",
       "rocrtst",
       "rocshmem",
-      "rocthrust"
+      "rocthrust",
+      "rocwmma"
     ]
   },
   "aqlprofile": {
@@ -181,7 +183,9 @@
   },
   "hipfile": {
     "consumers": [
-      "rocprofiler-sdk"
+      "rocprofiler-sdk",
+      "rocprofiler-systems",
+      "rocprofiler-systems-examples"
     ]
   },
   "hipify": {
@@ -717,7 +721,6 @@
       "amdsmi",
       "kfdtest",
       "rocdecode",
-      "rocjitsu",
       "rocjpeg",
       "rocm_smi_lib",
       "rocprofiler-compute",

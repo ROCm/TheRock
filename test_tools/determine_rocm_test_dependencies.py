@@ -130,6 +130,11 @@ _CI_TEST_SELECTOR_ALIASES = {
     "hipdnn_samples": ["hipdnn-samples"],
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
     "rocr-debug-agent-tests": ["rocr-debug-agent"],
+    # The common GEMM suite is its own CI job. Aliasing here, rather than a
+    # test_include on [component.tensilelite], selects it wherever the
+    # tensilelite key lands in the result, not only when tensilelite itself
+    # is the changed project.
+    "tensilelite": ["tensilelite", "tensilelite-common"],
 }
 
 

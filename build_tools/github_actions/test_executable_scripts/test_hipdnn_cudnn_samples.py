@@ -37,6 +37,14 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 SHARD_INDEX = os.getenv("SHARD_INDEX", "1")
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", "1")
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+
+# CI-only ctest exclusions (regexes), keyed by AMDGPU family then OS
+# (platform.system() lowercased), e.g.
+# {"gfx110X-all": {"windows": ["run_convolution_dgrads_cpp"]}}. Expected
+# per-sample failures belong in the harness manifest.json instead, where they
+# are checked for staleness; this is for runner- or arch-specific problems.
+TESTS_TO_IGNORE: dict[str, dict[str, list[str]]] = {}
 
 # Location of the harness project inside the installed artifact tree.
 PAYLOAD_RELPATH = Path("share") / "hipdnn" / "cudnn_samples"
@@ -58,8 +66,9 @@ CMAKE_FALSE_VALUES = {"", "0", "OFF", "NO", "FALSE", "N", "IGNORE", "NOTFOUND"}
 CMAKE_GENERATOR = "Ninja"
 BUILD_KEEP_GOING_ARGS = ["-k", "0"]
 
-# The single test the harness registers when the compatibility shim is absent.
-SKIP_TEST_NAME = "cudnn_samples_skipped"
+# The single placeholder test the harness registers when the compatibility shim
+# is absent. Not a skip list: see TESTS_TO_IGNORE for that.
+SHIM_ABSENT_PLACEHOLDER_TEST = "cudnn_samples_skipped"
 
 # Per-translation-unit JSON sidecars, written by the harness.
 REPORT_DIR_NAME = "cudnn_samples_report"
@@ -140,6 +149,11 @@ def get_default_build_dir() -> Path:
     return Path(temp_root) / "cdnns"
 
 
+def prepend_env_paths(env: dict, var_name: str, paths: list):
+    existing = env.get(var_name)
+    env[var_name] = os.pathsep.join(paths + ([existing] if existing else []))
+
+
 def build_environment(artifacts_path: Path) -> dict:
     """Environment for CMake, the compiler, and the sample executables."""
     environ_vars = os.environ.copy()
@@ -150,18 +164,18 @@ def build_environment(artifacts_path: Path) -> dict:
         # runtime DLLs live in those subdirectories, and Windows resolves imports off
         # PATH. Missing them surfaces as exit 0xC0000135 (STATUS_DLL_NOT_FOUND) from
         # every sample, which the launcher correctly-but-unhelpfully reports as a crash.
-        prefixes = [
-            str(artifacts_path / "bin"),
-            str(artifacts_path / "lib"),
-            str(artifacts_path),
-        ]
-        existing = environ_vars.get("PATH", "")
-        environ_vars["PATH"] = ";".join(prefixes + ([existing] if existing else []))
+        prepend_env_paths(
+            environ_vars,
+            "PATH",
+            [
+                str(artifacts_path / "bin"),
+                str(artifacts_path / "lib"),
+                str(artifacts_path),
+            ],
+        )
     else:
-        existing = environ_vars.get("LD_LIBRARY_PATH", "")
-        rocm_lib = str(artifacts_path / "lib")
-        environ_vars["LD_LIBRARY_PATH"] = ":".join(
-            [rocm_lib] + ([existing] if existing else [])
+        prepend_env_paths(
+            environ_vars, "LD_LIBRARY_PATH", [str(artifacts_path / "lib")]
         )
 
     return environ_vars
@@ -226,6 +240,12 @@ def build(build_dir: Path, jobs: int, environ_vars: dict):
     )
 
 
+def get_tests_to_ignore() -> list:
+    """CI exclusions for the current AMDGPU family and OS."""
+    by_os = TESTS_TO_IGNORE.get(AMDGPU_FAMILIES or "", {})
+    return by_os.get(platform.system().lower(), [])
+
+
 def run_ctest(build_dir: Path, jobs: int, environ_vars: dict) -> int:
     """Run the harness test suite. Failures are reported, never raised."""
     test_cmd = [
@@ -236,6 +256,13 @@ def run_ctest(build_dir: Path, jobs: int, environ_vars: dict) -> int:
         "--parallel",
         str(jobs),
     ]
+    ignored_tests = get_tests_to_ignore()
+    if ignored_tests:
+        logging.info(
+            f"++ Ignoring {len(ignored_tests)} test(s) for "
+            f"{AMDGPU_FAMILIES}/{platform.system().lower()}: {ignored_tests}"
+        )
+        test_cmd.extend(["--exclude-regex", "|".join(ignored_tests)])
     logging.info(f"++ Test: {shlex.join(test_cmd)}")
     result = subprocess.run(test_cmd, check=False, cwd=THEROCK_DIR, env=environ_vars)
     logging.info(f"++ Test exited with {result.returncode}")
@@ -266,7 +293,7 @@ def list_registered_tests(build_dir: Path, environ_vars: dict) -> list:
 
 def is_skip_run(test_names: list) -> bool:
     """True when the harness registered only its shim-absent placeholder."""
-    return test_names == [SKIP_TEST_NAME]
+    return test_names == [SHIM_ABSENT_PLACEHOLDER_TEST]
 
 
 def is_cudnn_compatibility_installed(frontend_config: Path) -> bool:
@@ -281,19 +308,35 @@ def is_cudnn_compatibility_installed(frontend_config: Path) -> bool:
         frontend_config.read_text(encoding="utf-8"),
         re.MULTILINE,
     )
+    raw_value = match.group(1) if match else "<not set>"
+    logging.info(
+        f"hipdnn_frontend_cudnn_compatibility_FOUND={raw_value} in {frontend_config}"
+    )
     if not match:
         return False
     value = match.group(1).strip('"').upper()
     return value not in CMAKE_FALSE_VALUES and not value.endswith("-NOTFOUND")
 
 
+def append_step_summary(text: str):
+    """Append to the GitHub job summary; a no-op outside GitHub Actions."""
+    step_summary = os.getenv("GITHUB_STEP_SUMMARY")
+    if step_summary:
+        with open(step_summary, "a", encoding="utf-8") as summary_file:
+            summary_file.write(text)
+            summary_file.write("\n")
+
+
 def report_skip() -> int:
     """Announce that nothing was tested, and decide whether that is fatal."""
-    print(
-        "::notice title=cuDNN samples skipped::"
+    reason = (
         "hipDNN was built with HIPDNN_ENABLE_CUDNN_COMPATIBILITY off, so the "
-        "cuDNN compatibility shim is not installed. No sample was compiled or run."
+        "cuDNN compatibility shim is not installed. Skipping: 0 samples "
+        "configured, built, or run."
     )
+    logging.info(reason)
+    print(f"::notice title=cuDNN samples skipped::{reason}")
+    append_step_summary(f"## hipDNN cuDNN sample corpus: skipped\n\n{reason}\n")
     if os.getenv("HIPDNN_CUDNN_SAMPLES_REQUIRE_FLAG") == "1":
         print(
             "::error title=cuDNN samples required but skipped::"
@@ -461,12 +504,7 @@ def emit_report(build_dir: Path):
     # Always print: the step summary only exists under GitHub Actions, and a
     # local run needs to be readable too.
     print(report)
-
-    step_summary = os.getenv("GITHUB_STEP_SUMMARY")
-    if step_summary:
-        with open(step_summary, "a", encoding="utf-8") as summary_file:
-            summary_file.write(report)
-            summary_file.write("\n")
+    append_step_summary(report)
 
     for anomaly in anomalies:
         logging.warning(f"Report anomaly: {anomaly}")
@@ -531,7 +569,7 @@ def main() -> int:
         if ctest_returncode == 0:
             return report_skip()
         logging.error(
-            f"The harness registered only {SKIP_TEST_NAME}, but ctest exited "
+            f"The harness registered only {SHIM_ABSENT_PLACEHOLDER_TEST}, but ctest exited "
             f"with {ctest_returncode} instead of reporting it as skipped."
         )
         return ctest_returncode
