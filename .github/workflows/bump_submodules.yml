@@ -37,9 +37,7 @@ permissions:
 jobs:
   bump-submodules:
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      pull-requests: write
+    # PR writes use the GitHub App tokens below; GITHUB_TOKEN only needs read access.
 
     env:
       INPUT_SUBMODULE: ${{ github.event.inputs.submodule || 'all' }}
