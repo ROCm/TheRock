@@ -2,6 +2,19 @@
 # SPDX-License-Identifier: MIT
 
 if(THEROCK_ENABLE_RCCL)
+  set(_rccl_enabled ON)
+  if(THEROCK_TEST_AMDGPU_TARGETS AND NOT "${THEROCK_TEST_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_rccl_targets rccl ${THEROCK_TEST_AMDGPU_TARGETS})
+    if(NOT _rccl_targets)
+      message(STATUS
+        "rccl: no supported gfx targets remain after filtering "
+        "(THEROCK_TEST_AMDGPU_TARGETS='${THEROCK_TEST_AMDGPU_TARGETS}'); skipping subproject.")
+      set(_rccl_enabled OFF)
+    endif()
+  endif()
+endif()
+
+if(THEROCK_ENABLE_RCCL AND _rccl_enabled)
   # Most libraries need to depend on the profiler, but is conditionally only used
   # on Posix.
   set(optional_profiler_deps)
