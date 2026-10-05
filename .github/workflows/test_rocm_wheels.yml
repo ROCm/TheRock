@@ -257,10 +257,10 @@ jobs:
         run: |
           pip freeze
 
-      # Importing the analyze command pulls in the whole extra, so this fails if
-      # any of its dependencies is missing from the wheel metadata.
+      # Fails if any package pinned in rocprofiler-compute's requirements.txt is
+      # missing or at the wrong version.
       - name: Test rocprof-compute analyze
         if: ${{ !cancelled() && steps.install_compute_analyze.outcome == 'success' }}
         timeout-minutes: 5
         run: |
-          rocprof-compute analyze --help
+          rocprof-compute analyze --verify-deps
