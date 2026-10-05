@@ -481,6 +481,19 @@ if(THEROCK_ENABLE_OCL_ICD)
 endif(THEROCK_ENABLE_OCL_ICD)
 
 if(THEROCK_ENABLE_OCL_RUNTIME)
+  set(_ocl_clr_enabled ON)
+  if(THEROCK_DIST_AMDGPU_TARGETS AND NOT "${THEROCK_DIST_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_ocl_clr_targets ocl-clr ${THEROCK_DIST_AMDGPU_TARGETS})
+    if(NOT _ocl_clr_targets)
+      message(STATUS
+        "ocl-clr: no supported gfx targets remain after filtering "
+        "(THEROCK_DIST_AMDGPU_TARGETS='${THEROCK_DIST_AMDGPU_TARGETS}'); skipping subproject.")
+      set(_ocl_clr_enabled OFF)
+    endif()
+  endif()
+endif()
+
+if(THEROCK_ENABLE_OCL_RUNTIME AND _ocl_clr_enabled)
 
   set(OCL_CLR_CMAKE_ARGS)
   set(OCL_CLR_RUNTIME_DEPS)
@@ -581,7 +594,7 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
     )
   endif()
 
-endif(THEROCK_ENABLE_OCL_RUNTIME)
+endif()
 
 ##############################################################################
 # Runtime tests
