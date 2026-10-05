@@ -18,6 +18,7 @@ python build_tools/install_rocm_code_coverage_build.py
 """
 import os
 import re
+import shutil
 import sys
 import argparse
 import platform
@@ -34,6 +35,7 @@ from artifact_manager import (
 from _therock_utils.archive_util import open_archive_for_read
 from _therock_utils.artifacts import ArtifactName
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
+from _therock_utils.kpack_archive import read_kpack, replace_entries
 
 # Maps each --replace-<name> flag to its TheRock artifact and library folder.
 # e.g. rocBLAS ships in the 'blas' artifact (see BUILD_TOPOLOGY.toml).
@@ -146,6 +148,26 @@ def download_replacement_artifacts(
     return dest_dir
 
 
+def _matches_folder(path, folder):
+    """Whether path belongs to the library folder (e.g. 'rocRAND').
+
+    The non-letter that has to follow keeps hipBLAS from claiming hipBLASLt.
+    """
+    return re.search(rf"{folder}[^a-zA-Z]", path, flags=re.IGNORECASE) is not None
+
+
+def _read_relpaths(tf, archive):
+    """Returns the prefixes in an archive's leading artifact_manifest.txt."""
+    manifest_member = tf.next()
+    if manifest_member is None or manifest_member.name != "artifact_manifest.txt":
+        raise IOError(
+            f"Artifact archive {archive} must have artifact_manifest.txt "
+            "as its first member"
+        )
+    with tf.extractfile(manifest_member) as mf_file:
+        return [r for r in mf_file.read().decode().splitlines() if r]
+
+
 def _replace_scoped_member(tf, member, dest_path, output_dir, relpaths):
     """Write a single archive member into the flattened install tree.
 
@@ -209,17 +231,7 @@ def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
             log(f"Replacing '{folder}' paths from {archive.name} into {output_dir}")
             replaced = 0
             with open_archive_for_read(archive) as tf:
-                manifest_member = tf.next()
-                if (
-                    manifest_member is None
-                    or manifest_member.name != "artifact_manifest.txt"
-                ):
-                    raise IOError(
-                        f"Artifact archive {archive} must have artifact_manifest.txt "
-                        "as its first member"
-                    )
-                with tf.extractfile(manifest_member) as mf_file:
-                    relpaths = [r for r in mf_file.read().decode().splitlines() if r]
+                relpaths = _read_relpaths(tf, archive)
 
                 while member := tf.next():
                     for prefix in relpaths:
@@ -227,9 +239,7 @@ def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
                         if not member.name.startswith(prefix_slash):
                             continue
                         scoped_path = member.name[len(prefix_slash) :]
-                        if not re.search(
-                            rf"{folder}[^a-zA-Z]", scoped_path, flags=re.IGNORECASE
-                        ):
+                        if not _matches_folder(scoped_path, folder):
                             break
                         dest_path = output_dir / PurePosixPath(scoped_path)
                         _replace_scoped_member(
@@ -238,6 +248,62 @@ def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
                         replaced += 1
                         break
             log(f"  Replaced {replaced} '{folder}' path(s) from {archive.name}")
+
+
+def overlay_instrumented_device_code(artifacts, dest_dir, output_dir):
+    """Swap the replaced projects' device code objects into the installed kpacks.
+
+    A kpack-split build keeps every GPU code object out of the host libraries,
+    in one archive per artifact and target: .kpack/rand_lib_gfx942.kpack holds
+    rocRAND's and hipRAND's. No library folder appears in that name, so
+    replace_instrumented_libraries leaves it alone, and an instrumented host
+    library would run the baseline's uninstrumented kernels. Taking the whole
+    archive would instrument every sibling in it too, so only the entries keyed
+    under one of the project's folders come from the instrumented archive.
+    """
+    staging_dir = dest_dir / "device-code"
+    archives = sorted(
+        p for p in dest_dir.iterdir() if p.name.endswith((".tar.zst", ".tar.xz"))
+    )
+    for archive in archives:
+        an = ArtifactName.from_filename(archive.name)
+        folders = artifacts.get(an.name) if an else None
+        if not folders:
+            continue
+        with open_archive_for_read(archive) as tf:
+            relpaths = _read_relpaths(tf, archive)
+            while member := tf.next():
+                if not member.isfile() or not member.name.endswith(".kpack"):
+                    continue
+                prefix = next(
+                    (p for p in relpaths if member.name.startswith(p + "/")), None
+                )
+                if prefix is None:
+                    continue
+                scoped_path = PurePosixPath(member.name[len(prefix) + 1 :])
+                staged = staging_dir / scoped_path
+                staged.parent.mkdir(parents=True, exist_ok=True)
+                with tf.extractfile(member) as src, open(staged, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+
+                installed = output_dir / scoped_path
+                if not installed.exists():
+                    # Nothing of the baseline's to keep: the instrumented host
+                    # libraries look their kernels up in this file regardless.
+                    installed.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(staged, installed)
+                    log(f"  Installed {scoped_path} whole from {archive.name}")
+                    continue
+                swapped = replace_entries(
+                    read_kpack(installed),
+                    read_kpack(staged),
+                    lambda key: any(_matches_folder(key, f) for f in folders),
+                    installed,
+                )
+                log(
+                    f"  Swapped {swapped} {'/'.join(folders)} code object(s) "
+                    f"into {scoped_path} from {archive.name}"
+                )
 
 
 def main(argv):
@@ -271,6 +337,16 @@ def main(argv):
             "bucket is used for the replacement artifact lookup. Defaults to "
             "'ci' because instrumented builds always run as CI jobs. This is "
             "separate from the baseline's RELEASE_TYPE env var."
+        ),
+    )
+    parser.add_argument(
+        "--replace-device-code",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help=(
+            "Also swap the replaced components' GPU code objects into the "
+            "installed kpack archives. Needed for device coverage: without it "
+            "the instrumented host libraries run the baseline's kernels."
         ),
     )
     artifacts_group = parser.add_argument_group("replace_comps")
@@ -314,6 +390,8 @@ def main(argv):
 
     # replace selected library folder paths in selected component artifacts
     replace_instrumented_libraries(artifacts, dest_dir, opts.output_dir)
+    if args.replace_device_code:
+        overlay_instrumented_device_code(artifacts, dest_dir, opts.output_dir)
 
 
 if __name__ == "__main__":

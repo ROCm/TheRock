@@ -67,6 +67,13 @@ on:
         type: string
         default: ""
         description: "Codecov flag to file the report under"
+      device_coverage:
+        type: boolean
+        default: false
+        description: >-
+          Measure the project's GPU kernels too: keep the device-side profiles,
+          swap in the project's instrumented code objects, and report on them.
+          Set from the registry's device_coverage.
       amdgpu_families:
         type: string
         description: "GPU family to test coverage on"
@@ -170,6 +177,7 @@ jobs:
       ref: ${{ inputs.ref }}
       build_variant: coverage
       coverage_enabled: true
+      device_coverage: ${{ inputs.device_coverage }}
       coverage_artifact_prefix: coverage-profraw-${{ inputs.project_name }}-${{ inputs.amdgpu_families }}
 
   aggregate_coverage:
@@ -250,6 +258,7 @@ jobs:
           # summary still counts them.
           BUILD_WORKSPACE: /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}
           HTML_ENABLED: ${{ steps.fetch_sources.outcome == 'success' }}
+          DEVICE_COVERAGE: ${{ inputs.device_coverage }}
         run: |
           html_args=()
           if [[ "${HTML_ENABLED}" == "true" ]]; then
@@ -260,6 +269,12 @@ jobs:
           else
             echo "::warning::Sources unavailable; skipping the annotated HTML report."
           fi
+          # The instrumented code objects come out of the kpack archives the
+          # install step above put under OUTPUT_ARTIFACTS_DIR.
+          device_args=()
+          if [[ "${DEVICE_COVERAGE}" == "true" ]]; then
+            device_args=(--device-code --device-code-dir="${REPORT_DIR}/device-code")
+          fi
 
           python ./build_tools/github_actions/merge_coverage_report.py \
             --profraw-dir="${PROFRAW_DIR}" \
@@ -269,7 +284,8 @@ jobs:
             --lcov-output="${REPORT_DIR}/coverage.info" \
             --summary-output="${REPORT_DIR}/coverage_summary.txt" \
             --path-equivalence="${BUILD_WORKSPACE},${GITHUB_WORKSPACE}" \
-            "${html_args[@]}"
+            "${html_args[@]}" \
+            "${device_args[@]}"
 
       # Put totals on the run summary page, readable without downloading.
       - name: Publish the summary to the job page

@@ -11,6 +11,7 @@ on --run-github-repo while the instrumented replacement fetch must be keyed on
 
 import os
 import sys
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,6 +20,7 @@ from unittest import mock
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 import install_rocm_code_coverage_build as mod
+from kpack_archive_test import HIPRAND, ROCRAND, read_kernels, write_reference_kpack
 
 
 class _FakeBackend:
@@ -95,6 +97,91 @@ class TestCodeCoverageRepoSplit(unittest.TestCase):
         # since the default is evaluated at parse time inside main().
         captured = self._run_main([], env={"GITHUB_REPOSITORY": "ROCm/TheRock"})
         self.assertEqual(captured["github_repository"], "ROCm/TheRock")
+
+    def test_device_code_is_swapped_only_when_asked(self):
+        for extra, expected in (([], False), (["--replace-device-code"], True)):
+            with self.subTest(extra=extra):
+                with mock.patch.object(
+                    mod, "overlay_instrumented_device_code"
+                ) as overlay:
+                    self._run_main(extra)
+                self.assertEqual(overlay.called, expected)
+
+
+class TestDeviceCodeOverlay(unittest.TestCase):
+    KPACK = ".kpack/rand_lib_gfx942.kpack"
+
+    def setUp(self):
+        self._temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._temp_dir.cleanup)
+        self.root = Path(self._temp_dir.name)
+        self.dest_dir = self.root / "code-coverage-replacements"
+        self.output_dir = self.root / "build"
+        self.dest_dir.mkdir()
+        (self.output_dir / ".kpack").mkdir(parents=True)
+
+    def _write_instrumented_artifact(self, kernels):
+        """Writes rand_lib_gfx942 as the split leaves it: only the kpack."""
+        prefix = "math-libs/rocRAND/stage"
+        staging = self.root / "staging"
+        (staging / ".kpack").mkdir(parents=True)
+        write_reference_kpack(staging / self.KPACK, kernels)
+        (staging / "artifact_manifest.txt").write_text(prefix + "\n")
+        with tarfile.open(self.dest_dir / "rand_lib_gfx942.tar.xz", "w:xz") as tf:
+            tf.add(staging / "artifact_manifest.txt", arcname="artifact_manifest.txt")
+            tf.add(staging / self.KPACK, arcname=f"{prefix}/{self.KPACK}")
+
+    def test_only_the_projects_code_objects_are_swapped(self):
+        installed = self.output_dir / self.KPACK
+        write_reference_kpack(
+            installed,
+            {
+                (f"{ROCRAND}#0", "gfx942"): b"base-roc0",
+                (f"{HIPRAND}#0", "gfx942"): b"base-hip0",
+            },
+        )
+        self._write_instrumented_artifact(
+            {
+                (f"{ROCRAND}#0", "gfx942"): b"inst-roc0",
+                (f"{HIPRAND}#0", "gfx942"): b"inst-hip0",
+            }
+        )
+
+        mod.overlay_instrumented_device_code(
+            {"rand": ["rocRAND"]}, self.dest_dir, self.output_dir
+        )
+
+        # hipRAND shares the archive but was not asked for, so it keeps running
+        # the baseline's kernels.
+        self.assertEqual(
+            read_kernels(installed),
+            {
+                (f"{HIPRAND}#0", "gfx942"): b"base-hip0",
+                (f"{ROCRAND}#0", "gfx942"): b"inst-roc0",
+            },
+        )
+
+    def test_a_kpack_the_baseline_lacks_is_installed_whole(self):
+        kernels = {(f"{ROCRAND}#0", "gfx942"): b"inst-roc0"}
+        self._write_instrumented_artifact(kernels)
+
+        mod.overlay_instrumented_device_code(
+            {"rand": ["rocRAND"]}, self.dest_dir, self.output_dir
+        )
+
+        self.assertEqual(read_kernels(self.output_dir / self.KPACK), kernels)
+
+    def test_artifacts_not_being_replaced_are_left_alone(self):
+        installed = self.output_dir / self.KPACK
+        baseline = {(f"{ROCRAND}#0", "gfx942"): b"base-roc0"}
+        write_reference_kpack(installed, baseline)
+        self._write_instrumented_artifact({(f"{ROCRAND}#0", "gfx942"): b"inst-roc0"})
+
+        mod.overlay_instrumented_device_code(
+            {"blas": ["rocBLAS"]}, self.dest_dir, self.output_dir
+        )
+
+        self.assertEqual(read_kernels(installed), baseline)
 
 
 if __name__ == "__main__":

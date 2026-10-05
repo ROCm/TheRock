@@ -3,6 +3,7 @@
 
 import os
 import platform
+import struct
 import subprocess
 import sys
 import tempfile
@@ -10,14 +11,90 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import msgpack
+import pyzstd
+
 # Add repo root to PYTHONPATH
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 import merge_coverage_report
 
+ROCRAND_KEY = "math-libs/rocRAND/stage/lib/librocrand.so.1.1"
+HIPRAND_KEY = "math-libs/hipRAND/stage/lib/libhiprand.so.1.1"
+
 
 def is_windows() -> bool:
     return platform.system() == "Windows"
+
+
+def tiny_elf(*section_names: str) -> bytes:
+    """A 64-bit little-endian AMDGPU ELF image with empty sections of these names."""
+    names = ["", *section_names, ".shstrtab"]
+    strtab = b"".join(name.encode() + b"\0" for name in names)
+    name_offsets = [sum(len(n) + 1 for n in names[:i]) for i in range(len(names))]
+    shoff = 64 + len(strtab)
+    header = b"\x7fELF\x02\x01\x01" + b"\0" * 9
+    header += struct.pack(
+        "<HHIQQQIHHHHHH",
+        3,
+        224,
+        1,
+        0,
+        0,
+        shoff,
+        0,
+        64,
+        0,
+        0,
+        64,
+        len(names),
+        len(names) - 1,
+    )
+    sections = b"\0" * 64
+    for index in range(1, len(names)):
+        is_strtab = index == len(names) - 1
+        sections += struct.pack(
+            "<IIQQQQIIQQ",
+            name_offsets[index],
+            3 if is_strtab else 1,
+            0,
+            0,
+            64 if is_strtab else 0,
+            len(strtab) if is_strtab else 0,
+            0,
+            0,
+            1,
+            0,
+        )
+    return header + strtab + sections
+
+
+def write_kpack(path: Path, kernels: dict) -> None:
+    """Writes {(key, arch): code object} in rocm_kpack's zstd-per-kernel layout."""
+    toc, frames = {}, []
+    for ordinal, ((key, arch), data) in enumerate(kernels.items()):
+        toc.setdefault(key, {})[arch] = {"type": "hsaco", "ordinal": ordinal}
+        frames.append(pyzstd.compress(data))
+    blob = struct.pack("<I", len(frames)) + b"".join(
+        struct.pack("<I", len(f)) + f for f in frames
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "wb") as f:
+        f.write(struct.pack("<4sIQ", b"KPAK", 1, 0) + b"\0" * 48 + blob)
+        toc_offset = f.tell()
+        msgpack.pack(
+            {
+                "format_version": 1,
+                "toc": toc,
+                "compression_scheme": "zstd-per-kernel",
+                "zstd_offset": 64,
+                "zstd_size": len(blob),
+            },
+            f,
+            use_bin_type=True,
+        )
+        f.seek(8)
+        f.write(struct.pack("<Q", toc_offset))
 
 
 class TempDirTestBase(unittest.TestCase):
@@ -413,6 +490,164 @@ class MainRejectsEmptyReportsTest(TempDirTestBase):
         exit_code, _ = self._main(lcov="SF:a.cpp\nLF:10\nLH:1\nend_of_record\n")
 
         self.assertEqual(exit_code, 0)
+
+
+class ElfSectionNamesTest(unittest.TestCase):
+    def test_lists_every_section(self):
+        names = merge_coverage_report.elf_section_names(
+            tiny_elf("__llvm_covfun", "__llvm_covmap", ".text")
+        )
+
+        self.assertEqual(
+            names, {"", "__llvm_covfun", "__llvm_covmap", ".text", ".shstrtab"}
+        )
+
+    def test_anything_but_an_elf_image_has_no_sections(self):
+        for image in (b"", b"KPAK" + b"\0" * 60, tiny_elf(".text")[:70]):
+            with self.subTest(size=len(image)):
+                self.assertEqual(merge_coverage_report.elf_section_names(image), set())
+
+
+class CountDeviceProfilesTest(unittest.TestCase):
+    def test_counts_profiles_named_after_a_gpu_target(self):
+        names = [
+            "rocrand-shard1-123-456.profraw",
+            "gfx942_sramecc+_xnack-.0.rocrand-shard1-123-456.profraw",
+            "gfx90a.rocrand-shard1-123-456.profraw",
+        ]
+
+        self.assertEqual(
+            merge_coverage_report.count_device_profiles([Path(n) for n in names]), 2
+        )
+
+
+class ExtractDeviceObjectsTest(TempDirTestBase):
+    @unittest.skipIf(is_windows(), "symlinks require elevated privileges on Windows")
+    def test_takes_the_objects_instrumented_code_objects_only(self):
+        self.touch("rocm/lib/librocrand.so.1.1")
+        (self.root / "rocm/lib/librocrand.so").symlink_to("librocrand.so.1.1")
+        instrumented = tiny_elf("__llvm_covfun", "__llvm_covmap")
+        write_kpack(
+            self.root / "rocm/.kpack/rand_lib_gfx942.kpack",
+            {
+                (f"{ROCRAND_KEY}#0", "gfx942"): instrumented,
+                # A translation unit with no instrumented device code.
+                (f"{ROCRAND_KEY}#1", "gfx942"): tiny_elf(".text"),
+                # Shares the archive, but is not what the report is about.
+                (f"{HIPRAND_KEY}#0", "gfx942"): tiny_elf("__llvm_covfun"),
+            },
+        )
+        objects = merge_coverage_report.resolve_objects(
+            self.root / "rocm", ["lib/librocrand.so*"]
+        )
+
+        extracted = merge_coverage_report.extract_device_objects(
+            self.root / "rocm", objects, self.root / "device-code"
+        )
+
+        self.assertEqual(len(extracted), 1)
+        self.assertEqual(extracted[0].read_bytes(), instrumented)
+        self.assertNotIn("#", extracted[0].name)
+
+    def test_no_kpack_archives_yield_nothing(self):
+        self.touch("rocm/lib/librocrand.so.1.1")
+
+        self.assertEqual(
+            merge_coverage_report.extract_device_objects(
+                self.root / "rocm",
+                [self.root / "rocm/lib/librocrand.so.1.1"],
+                self.root / "device-code",
+            ),
+            [],
+        )
+
+
+class MainDeviceCodeTest(TempDirTestBase):
+    def setUp(self):
+        super().setUp()
+        self.touch("profraw/shard1/rocrand-shard1-1-2.profraw")
+        self.touch("rocm/lib/librocrand.so.1.1")
+        llvm_bin_dir = self.root / "rocm" / "lib" / "llvm" / "bin"
+        llvm_bin_dir.mkdir(parents=True)
+        for tool in ("llvm-profdata", "llvm-cov"):
+            (llvm_bin_dir / f"{tool}{merge_coverage_report.EXECUTABLE_SUFFIX}").touch()
+
+    def _main(self, *extra: str):
+        def fake_run(command, **kwargs):
+            tool, subcommand = Path(command[0]).stem, command[1]
+            if (tool, subcommand) == ("llvm-profdata", "show"):
+                return mock.Mock(stdout="Total functions: 3\n")
+            if subcommand == "export":
+                kwargs["stdout"].write("SF:a.cpp\nLF:10\nLH:1\nend_of_record\n")
+            return mock.Mock(stdout="")
+
+        with mock.patch("subprocess.run", side_effect=fake_run) as run:
+            exit_code = merge_coverage_report.main(
+                [
+                    "--profraw-dir",
+                    os.fspath(self.root / "profraw"),
+                    "--rocm-dir",
+                    os.fspath(self.root / "rocm"),
+                    "--object-globs",
+                    "lib/librocrand.so*",
+                    "--profdata-output",
+                    os.fspath(self.root / "out" / "coverage.profdata"),
+                    "--lcov-output",
+                    os.fspath(self.root / "out" / "coverage.info"),
+                    "--device-code",
+                    "--device-code-dir",
+                    os.fspath(self.root / "out" / "device-code"),
+                    *extra,
+                ]
+            )
+        exports = [c.args[0] for c in run.call_args_list if c.args[0][1] == "export"]
+        return exit_code, exports
+
+    def _add_device_code(self):
+        write_kpack(
+            self.root / "rocm/.kpack/rand_lib_gfx942.kpack",
+            {(f"{ROCRAND_KEY}#0", "gfx942"): tiny_elf("__llvm_covfun")},
+        )
+
+    def _add_device_profile(self):
+        self.touch("profraw/shard1/gfx942_sramecc+_xnack-.0.rocrand-shard1-1-2.profraw")
+
+    def test_device_code_objects_reach_llvm_cov(self):
+        self._add_device_code()
+        self._add_device_profile()
+
+        exit_code, (export,) = self._main()
+
+        self.assertEqual(exit_code, 0)
+        # The host library stays the positional object.
+        self.assertEqual(Path(export[2]).name, "librocrand.so.1.1")
+        device_objects = [export[i + 1] for i, a in enumerate(export) if a == "-object"]
+        self.assertEqual(len(device_objects), 1)
+        self.assertTrue(device_objects[0].endswith(".co"))
+
+    def test_no_instrumented_device_code_fails(self):
+        self._add_device_profile()
+
+        exit_code, exports = self._main()
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(exports, [])
+
+    def test_no_device_side_profile_fails(self):
+        self._add_device_code()
+
+        exit_code, exports = self._main()
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(exports, [])
+
+    def test_allow_empty_falls_back_to_host_code(self):
+        self._add_device_code()
+
+        exit_code, (export,) = self._main("--allow-empty")
+
+        self.assertEqual(exit_code, 0)
+        self.assertNotIn("-object", export)
 
 
 if __name__ == "__main__":

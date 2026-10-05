@@ -263,6 +263,7 @@ jobs:
       fetch_artifact_args: ${{ matrix.coverage.fetch_artifact_args }}
       build_stage: ${{ matrix.coverage.build_stage }}
       codecov_flag: ${{ matrix.coverage.codecov_flag }}
+      device_coverage: ${{ matrix.coverage.device_coverage }}
       amdgpu_families: ${{ matrix.coverage.amdgpu_families }}
       baseline_run_id: ${{ inputs.baseline_run_id }}
       baseline_release_type: ${{ inputs.baseline_release_type }}

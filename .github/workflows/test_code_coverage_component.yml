@@ -61,6 +61,13 @@ on:
           coverage run's projects keep their profiles apart.
         type: string
         default: "coverage-profraw"
+      device_coverage:
+        description: >-
+          The project's kernels are instrumented too. Swaps its instrumented
+          code objects into the installed kpack archives and keeps the
+          device-side profiles instead of dropping them.
+        type: boolean
+        default: false
       default_container_image:
         type: string
         default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98"
@@ -149,8 +156,13 @@ jobs:
           RELEASE_TYPE: ${{ inputs.release_type }}
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
           BASELINE_REPOSITORY: ${{ inputs.baseline_repository }}
+          DEVICE_COVERAGE: ${{ inputs.device_coverage }}
         run: |
           pip install -r requirements-test.txt
+          device_code_arg=()
+          if [[ "${DEVICE_COVERAGE}" == "true" ]]; then
+            device_code_arg=(--replace-device-code)
+          fi
           # Baseline tree comes from generic_run_id. When empty (self-contained
           # dispatch), fall back to this run's own instrumented artifacts;
           # --replace then re-extracts them, leaving the whole stack instrumented.
@@ -175,6 +187,7 @@ jobs:
             --tests \
             --output-dir=${{ env.OUTPUT_ARTIFACTS_DIR }} \
             --replace-${{ fromJSON(inputs.component).job_name }} \
+            "${device_code_arg[@]}" \
             ${FETCH_ARTIFACT_ARGS}
 
       # safe.directory must be set before Runner Health Status
@@ -263,15 +276,29 @@ jobs:
 
       # A device-side profile is named after its GPU target
       # (gfx942:sramecc+:xnack-.0.<name>.profraw). upload-artifact rejects the
-      # colons and with them every other file in the upload, and llvm-cov cannot
-      # use the profile against host objects anyway. Its presence means kernels
-      # were instrumented, which the build is meant to prevent, so say so.
-      - name: Drop device-side profiles
+      # colons and with them every other file in the upload. Under device
+      # coverage the profiles are the point, so the colons go and the files
+      # stay. Otherwise llvm-cov has no device objects to use them against, and
+      # their presence means kernels were instrumented, which the build is
+      # meant to prevent, so say so.
+      - name: Rename or drop device-side profiles
         if: ${{ always() && inputs.coverage_enabled }}
+        env:
+          DEVICE_COVERAGE: ${{ inputs.device_coverage }}
         run: |
           shopt -s nullglob
           device_profiles=("${GITHUB_WORKSPACE}"/coverage-report/profraw/*:*.profraw)
-          if (( ${#device_profiles[@]} )); then
+          if [[ "${DEVICE_COVERAGE}" == "true" ]]; then
+            for profile in "${device_profiles[@]}"; do
+              name="${profile##*/}"
+              mv -- "${profile}" "${profile%/*}/${name//:/_}"
+            done
+            if (( ${#device_profiles[@]} )); then
+              echo "Kept ${#device_profiles[@]} device-side profile(s)"
+            else
+              echo "::warning::Device coverage is on but this shard wrote no device-side profile"
+            fi
+          elif (( ${#device_profiles[@]} )); then
             echo "::warning::Kernels were instrumented; dropping ${#device_profiles[@]} device-side profile(s): ${device_profiles[*]##*/}"
             rm -f -- "${device_profiles[@]}"
           fi

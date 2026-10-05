@@ -23,19 +23,39 @@ A report that measured nothing fails rather than publishing 0%. Most ways the
 pipeline can break upstream of here still leave profraw files behind: an
 uninstrumented library writes profiles with no counters, and a process that
 crashes before its exit handler writes empty ones.
+
+With --device-code the report covers the objects' GPU kernels as well. Their
+counters arrive in separate device-side profiles, named after the GPU target,
+which merge with the host ones; the code objects llvm-cov needs to map them
+back to source are not in the host binaries of a kpack-split build, so they
+are pulled out of the .kpack archives installed alongside.
 """
 
 import argparse
 import logging
+import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, os.fspath(Path(__file__).resolve().parents[1]))
+
+from _therock_utils.kpack_archive import read_kpack
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 EXECUTABLE_SUFFIX = ".exe" if sys.platform == "win32" else ""
+
+# The profile runtime names a device-side profile after the GPU it was read
+# back from, "<target id>[.<n>].<LLVM_PROFILE_FILE name>"; the test job swaps
+# the target id's colons for underscores before upload.
+DEVICE_PROFILE_NAME = re.compile(r"^gfx[0-9a-z]+")
+# Present in a code object only when its translation unit had instrumented
+# device code. llvm-cov rejects objects without a coverage mapping.
+COVERAGE_MAPPING_SECTION = "__llvm_covfun"
 
 
 def find_llvm_tool(llvm_bin_dir: Path, tool_name: str) -> Path:
@@ -95,6 +115,72 @@ def resolve_objects(rocm_dir: Path, object_globs: list[str]) -> list[Path]:
                 continue
             objects.setdefault(match.resolve(), match)
     return sorted(objects.values())
+
+
+def count_device_profiles(profraw_files: list[Path]) -> int:
+    return sum(1 for f in profraw_files if DEVICE_PROFILE_NAME.match(f.name))
+
+
+def elf_section_names(image: bytes) -> set[str]:
+    """Returns the section names of a 64-bit little-endian ELF image.
+
+    Anything else, including a truncated image, yields no names.
+    """
+    if image[:4] != b"\x7fELF" or image[4:6] != b"\x02\x01":
+        return set()
+    try:
+        (shoff,) = struct.unpack_from("<Q", image, 0x28)
+        shentsize, shnum, shstrndx = struct.unpack_from("<HHH", image, 0x3A)
+
+        def section(index: int) -> tuple:
+            return struct.unpack_from("<IIQQQQIIQQ", image, shoff + index * shentsize)
+
+        strtab_offset = section(shstrndx)[4]
+        names = set()
+        for index in range(shnum):
+            start = strtab_offset + section(index)[0]
+            names.add(image[start : image.index(b"\0", start)].decode())
+        return names
+    except (struct.error, ValueError, UnicodeDecodeError):
+        return set()
+
+
+def extract_device_objects(
+    rocm_dir: Path, objects: list[Path], output_dir: Path
+) -> list[Path]:
+    """Writes out the instrumented GPU code objects of the given host objects.
+
+    A kpack-split build keeps device code out of the host binaries, in
+    archives under .kpack/ keyed "<stage prefix>/<binary>#<n>", one entry per
+    translation unit and GPU target, so a binary's code objects are the
+    entries whose key ends in its path under rocm_dir. Entries without a
+    coverage mapping are skipped: every HIP translation unit gets a code
+    object, instrumented device code or not.
+    """
+    rocm_root = rocm_dir.resolve()
+    wanted = set()
+    for obj in objects:
+        try:
+            wanted.add(obj.resolve().relative_to(rocm_root).as_posix())
+        except ValueError:
+            continue
+
+    extracted = []
+    for kpack_path in sorted(rocm_dir.glob("**/.kpack/*.kpack")):
+        archive = read_kpack(kpack_path)
+        with open(kpack_path, "rb") as kpack_file:
+            for key, arch, entry in archive.entries():
+                binary = key.rsplit("#", 1)[0]
+                if not any(binary == w or binary.endswith("/" + w) for w in wanted):
+                    continue
+                image = archive.code_object(kpack_file, entry)
+                if COVERAGE_MAPPING_SECTION not in elf_section_names(image):
+                    continue
+                name = re.sub(r"[^A-Za-z0-9._+-]", "_", f"{key}-{arch}") + ".co"
+                output_dir.mkdir(parents=True, exist_ok=True)
+                (output_dir / name).write_bytes(image)
+                extracted.append(output_dir / name)
+    return extracted
 
 
 def merge_profraw(llvm_profdata: Path, profraw_files: list[Path], output: Path) -> None:
@@ -297,7 +383,21 @@ def main(argv: list[str] | None = None) -> int:
         "--allow-empty",
         action="store_true",
         help="Exit successfully when no profraw files were collected, or "
-        "none of them hold any counters",
+        "none of them hold any counters. With --device-code, report host "
+        "code alone when no device code or device-side profile was found",
+    )
+    parser.add_argument(
+        "--device-code",
+        action="store_true",
+        help="Also report on the matched objects' GPU kernels: their "
+        "instrumented code objects are taken from the kpack archives under "
+        "--rocm-dir and handed to llvm-cov with the host objects",
+    )
+    parser.add_argument(
+        "--device-code-dir",
+        type=Path,
+        default=Path("coverage-report/device-code"),
+        help="Where --device-code writes the code objects it extracts",
     )
     args = parser.parse_args(argv)
 
@@ -327,6 +427,41 @@ def main(argv: list[str] | None = None) -> int:
             args.rocm_dir,
         )
         return 1
+
+    if args.device_code:
+        device_objects = extract_device_objects(
+            args.rocm_dir, objects, args.device_code_dir
+        )
+        device_profiles = count_device_profiles(profraw_files)
+        problem = None
+        if not device_objects:
+            problem = (
+                f"No code object of the {len(objects)} object(s) in the kpack "
+                f"archives under {args.rocm_dir} carries a coverage mapping. "
+                "Either the kernels were built without device instrumentation, "
+                "or the build was not kpack-split"
+            )
+        elif not device_profiles:
+            problem = (
+                f"None of the {len(profraw_files)} profraw file(s) is a "
+                "device-side profile. The kernels never ran, the HIP runtime "
+                "could not read their counters back, or the test job dropped "
+                "the profiles"
+            )
+        if problem:
+            if not args.allow_empty:
+                logging.error("%s.", problem)
+                return 1
+            logging.warning("%s; reporting host code only.", problem)
+        else:
+            logging.info(
+                "Reporting on %d device code object(s); %d of %d profile(s) "
+                "are device-side",
+                len(device_objects),
+                device_profiles,
+                len(profraw_files),
+            )
+            objects = objects + device_objects
 
     merge_profraw(llvm_profdata, profraw_files, args.profdata_output)
     if count_profiled_functions(llvm_profdata, args.profdata_output) == 0:
