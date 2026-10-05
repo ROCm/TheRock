@@ -252,6 +252,9 @@ test_matrix = {
     "rocblas": {
         "job_name": "rocblas",
         "fetch_artifact_args": "--blas --tests",
+        # Suppress per-test kpack debug logging (test_component.yml defaults it to
+        # "1" for diagnostics, which floods this suite's -V ctest output).
+        "rocm_kpack_debug": "0",
         # GHA step timeout: max category timeout in rocBLAS should be 24 hours / 6 shards = 4 hours per shard
         # 240 min + 20% margin = 288 min
         "timeout_minutes": 288,
@@ -372,6 +375,9 @@ test_matrix = {
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --solver --tests",
+        # Suppress per-test kpack debug logging (test_component.yml defaults it to
+        # "1" for diagnostics, which floods this suite's -V ctest output).
+        "rocm_kpack_debug": "0",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -1168,6 +1174,9 @@ test_matrix = {
     "hiptensor": {
         "job_name": "hiptensor",
         "fetch_artifact_args": "--hiptensor --tests",
+        # Suppress per-test kpack debug logging (test_component.yml defaults it to
+        # "1" for diagnostics, which floods this suite's -V ctest output).
+        "rocm_kpack_debug": "0",
         # Github Actions step timeout, applied to every tier (it does not vary by test_type).
         # Must be sized for the largest tier the nightly runs (comprehensive),
         # not quick/standard -- otherwise the step is killed mid-suite well

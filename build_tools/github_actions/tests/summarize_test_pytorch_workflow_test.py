@@ -20,6 +20,7 @@ def _make_args(
     torch_version="2.11.0+rocm7.12.0a20260501",
     pytorch_git_ref="release/2.11",
     python_version="3.12",
+    find_links="",
 ):
     return argparse.Namespace(
         index_url=index_url,
@@ -27,6 +28,7 @@ def _make_args(
         torch_version=torch_version,
         pytorch_git_ref=pytorch_git_ref,
         python_version=python_version,
+        find_links=find_links,
     )
 
 
@@ -39,6 +41,29 @@ def _run_and_capture(args) -> str:
 
 
 class TestIndexUrl(unittest.TestCase):
+    def test_find_links_only(self):
+        url = (
+            "https://therock-ci-artifacts.s3.amazonaws.com/123-linux/python/index.html"
+        )
+        text = _run_and_capture(
+            _make_args(index_url="", find_links=url, device_extras="device-gfx942")
+        )
+        self.assertIn(f"--find-links={url}", text)
+        self.assertNotIn(f"{url}/", text)
+        self.assertNotIn("--index-url", text)
+        self.assertNotIn("* Package index:", text)
+        self.assertIn("torch[device-gfx942]==2.11.0+rocm7.12.0a20260501", text)
+
+    def test_index_and_find_links(self):
+        text = _run_and_capture(
+            _make_args(
+                index_url="https://pypi.org/simple",
+                find_links="https://example.com/index.html",
+            )
+        )
+        self.assertIn("--index-url=https://pypi.org/simple/", text)
+        self.assertIn("--find-links=https://example.com/index.html", text)
+
     def test_with_device_extras(self):
         """Device extras are joined with the torch package name."""
         text = _run_and_capture(
