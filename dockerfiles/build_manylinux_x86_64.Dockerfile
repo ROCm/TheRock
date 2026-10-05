@@ -4,12 +4,12 @@
 # This will print a SHA image id, which you can run with (or equiv):
 #   sudo docker run --rm -it --entrypoint /bin/bash <<IMAGE>>
 #
-# To build and push to a test branch, create a pull request on a branch named:
-#   stage/docker/*
+# To publish a test image from any other branch, run the
+# publish_build_manylinux_x86_64.yml workflow manually against that branch.
 # We build our portable linux releases on the manylinux (RHEL-based)
 # images, with custom additional packages installed. We switch to
 # new upstream versions as needed.
-FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:531d7aa844bbb0c131d4ab011d3db741c4abc8d498cd5ccc86121046f62303b4
+FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:d632b5e68ab39e59e128dcf0e59e438b26f122d7f2d45f3eea69ffd2877ab017
 
 ######## Python and CMake setup #######
 # These images come with multiple python versions. We pin one for
@@ -149,3 +149,7 @@ RUN ./install_shared_pythons.sh /tmp/python-build && rm -rf /install-shared-pyth
 # We use the wildcard option to disable the checks. This was added
 # in git 2.35.3
 RUN git config --global --add safe.directory '*'
+
+# This build image requires root for CI steps that install build dependencies.
+# trivy:ignore:DS-0002
+USER root
