@@ -249,6 +249,19 @@ if(THEROCK_ENABLE_PRIM)
 endif(THEROCK_ENABLE_PRIM)
 
 if(THEROCK_ENABLE_FFT)
+  set(_fft_enabled ON)
+  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_fft_targets rocFFT ${THEROCK_AMDGPU_TARGETS})
+    if(NOT _fft_targets)
+      message(STATUS
+        "rocFFT/hipFFT: no supported gfx targets remain after filtering "
+        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subprojects.")
+      set(_fft_enabled OFF)
+    endif()
+  endif()
+endif()
+
+if(THEROCK_ENABLE_FFT AND _fft_enabled)
   if(WIN32)
     # TODO(#36): enable once `rocfft_aot_helper.exe` can access hiprtc0605.dll
     #   "The code execution cannot proceed because hiprtc0605.dll was not found."
@@ -343,7 +356,7 @@ if(THEROCK_ENABLE_FFT)
       test
     SUBPROJECT_DEPS ${_fft_subproject_names}
   )
-endif(THEROCK_ENABLE_FFT)
+endif()
 
 if(THEROCK_ENABLE_BLAS)
   add_subdirectory(support)
