@@ -1081,6 +1081,20 @@ class TestSelectTargets(unittest.TestCase):
         self.assertEqual(result.linux_families, [])
         self.assertGreater(len(result.windows_families), 0)
 
+    def test_pull_request_both_platform_labels_includes_both(self):
+        """PR with both ci:platform:linux and ci:platform:windows labels includes both."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:platform:linux", "ci:platform:windows"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertGreater(len(result.linux_families), 0)
+        self.assertGreater(len(result.windows_families), 0)
+
     def test_workflow_dispatch_per_platform(self):
         """workflow_dispatch selects families per platform."""
         inputs = cm.CIInputs(
