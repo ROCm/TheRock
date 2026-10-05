@@ -126,7 +126,9 @@ class CoverageProject:
             only these over the baseline install tree, so a run measuring
             hipRAND does not also pick up an instrumented rocRAND.
         object_globs: Globs, relative to the extracted artifact directory,
-            matching the instrumented binaries handed to `llvm-cov`.
+            matching the instrumented binaries handed to `llvm-cov`. A glob
+            prefixed with `!` removes its matches instead, for test binaries
+            that share an install directory with a sibling project's.
         fetch_artifact_args: Arguments to install_rocm_from_artifacts.py that
             pull the instrumented libraries into the report generation job.
         source_repo: The repo this project ships from (ROCM_LIBRARIES or
@@ -395,7 +397,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         artifact_names=["prim"],
         artifact_relpaths=["math-libs/rocPRIM/stage", "math-libs/rocPRIM_tests/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
-        object_globs=["bin/test_*"],
+        # hipCUB's tests install into the same bin/ as test_hipcub_*.
+        object_globs=["bin/test_*", "!bin/test_hipcub_*"],
         fetch_artifact_args="--prim --tests",
         # rocPRIM's tests are a sibling subproject, so both stage dirs are
         # overlaid and both are instrumented.
@@ -406,7 +409,7 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         artifact_names=["prim"],
         artifact_relpaths=["math-libs/hipCUB/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
-        object_globs=["bin/test_*"],
+        object_globs=["bin/test_hipcub_*"],
         fetch_artifact_args="--prim --tests",
     ),
     "rocthrust": CoverageProject(
@@ -414,15 +417,16 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         artifact_names=["prim"],
         artifact_relpaths=["math-libs/rocThrust/stage"],
         coverage_option="CODE_COVERAGE",
-        object_globs=["bin/test_*"],
+        object_globs=["bin/*.hip"],
         fetch_artifact_args="--prim --tests",
     ),
     "rocwmma": CoverageProject(
         cmake_target="rocWMMA",
         artifact_names=["rocwmma"],
         artifact_relpaths=["math-libs/rocWMMA/stage"],
-        coverage_option="CODE_COVERAGE",
-        object_globs=["bin/*_test*"],
+        # Prefixed, like hipTensor's above; a bare CODE_COVERAGE is never read.
+        coverage_option="ROCWMMA_CODE_COVERAGE",
+        object_globs=["bin/*_test*", "bin/gemm_*-validate"],
         fetch_artifact_args="--rocwmma --tests",
     ),
     #

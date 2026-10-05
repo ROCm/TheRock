@@ -18,10 +18,16 @@ The `llvm-profdata` and `llvm-cov` binaries must come from the same compiler
 that built the instrumented objects; a version mismatch produces an
 unhelpfully generic "malformed instrumentation profile data" error. Both live
 under `lib/llvm/bin` of an installed ROCm distribution.
+
+A report that measured nothing fails rather than publishing 0%. Most ways the
+pipeline can break upstream of here still leave profraw files behind: an
+uninstrumented library writes profiles with no counters, and a process that
+crashes before its exit handler writes empty ones.
 """
 
 import argparse
 import logging
+import re
 import shutil
 import subprocess
 import sys
@@ -64,10 +70,22 @@ def resolve_objects(rocm_dir: Path, object_globs: list[str]) -> list[Path]:
     Globs typically match a versioned family of symlinks (libfoo.so,
     libfoo.so.1, ...) that all resolve to one file, so results are deduplicated
     by real path to avoid handing llvm-cov the same object several times.
+
+    A glob starting with '!' takes its matches back out. Header-only projects
+    report against their test binaries, and those can share a directory with
+    a sibling project's (rocPRIM's bin/test_* also matches hipCUB's tests).
     """
+    excluded = {
+        match
+        for pattern in object_globs
+        if pattern.startswith("!")
+        for match in rocm_dir.glob(pattern[1:])
+    }
     objects: dict[Path, Path] = {}
     for pattern in object_globs:
-        matches = sorted(rocm_dir.glob(pattern))
+        if pattern.startswith("!"):
+            continue
+        matches = sorted(m for m in rocm_dir.glob(pattern) if m not in excluded)
         if not matches:
             logging.warning(
                 "No files matched object glob '%s' under %s", pattern, rocm_dir
@@ -91,6 +109,34 @@ def merge_profraw(llvm_profdata: Path, profraw_files: list[Path], output: Path) 
     ]
     logging.info("Merging %d profraw file(s) into %s", len(profraw_files), output)
     subprocess.run(command, check=True)
+
+
+def count_profiled_functions(llvm_profdata: Path, profdata: Path) -> int | None:
+    """Returns how many functions the merged profile holds counters for.
+
+    None if llvm-profdata's summary has no such line, so an unexpected format
+    skips the check rather than failing a good report.
+    """
+    result = subprocess.run(
+        [str(llvm_profdata), "show", str(profdata)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    match = re.search(r"^Total functions: (\d+)$", result.stdout, re.MULTILINE)
+    return int(match.group(1)) if match else None
+
+
+def count_lcov_lines(lcov: Path) -> tuple[int, int]:
+    """Returns (lines found, lines hit) summed over every file in an lcov report."""
+    found = hit = 0
+    with open(lcov) as lcov_file:
+        for line in lcov_file:
+            if line.startswith("LF:"):
+                found += int(line[3:])
+            elif line.startswith("LH:"):
+                hit += int(line[3:])
+    return found, hit
 
 
 def build_cov_command(
@@ -250,7 +296,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--allow-empty",
         action="store_true",
-        help="Exit successfully when no profraw files were collected",
+        help="Exit successfully when no profraw files were collected, or "
+        "none of them hold any counters",
     )
     args = parser.parse_args(argv)
 
@@ -282,14 +329,37 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     merge_profraw(llvm_profdata, profraw_files, args.profdata_output)
-    export_lcov(
-        llvm_cov,
-        args.profdata_output,
-        objects,
-        args.lcov_output,
-        args.path_equivalence,
-    )
+    if count_profiled_functions(llvm_profdata, args.profdata_output) == 0:
+        message = f"None of the {len(profraw_files)} profraw file(s) hold any counters"
+        if args.allow_empty:
+            logging.warning("%s, skipping report generation", message)
+            return 0
+        logging.error(
+            "%s. The processes that wrote them loaded no instrumented code: "
+            "either the coverage flags never reached the compiler, or every "
+            "process died before writing its profile.",
+            message,
+        )
+        return 1
+
+    try:
+        export_lcov(
+            llvm_cov,
+            args.profdata_output,
+            objects,
+            args.lcov_output,
+            args.path_equivalence,
+        )
+    except subprocess.CalledProcessError:
+        logging.error(
+            "llvm-cov could not export the %d object(s). If it found no "
+            "coverage data, they carry no coverage mapping: the project's "
+            "coverage option did not take effect in its build.",
+            len(objects),
+        )
+        return 1
     logging.info("Wrote coverage report to %s", args.lcov_output)
+    lines_found, lines_hit = count_lcov_lines(args.lcov_output)
 
     if args.summary_output:
         write_summary(
@@ -314,6 +384,16 @@ def main(argv: list[str] | None = None) -> int:
             demangler if demangler.is_file() else None,
         )
 
+    # Checked after the other renderings so the report still shows what was
+    # measured.
+    if lines_found and not lines_hit:
+        logging.error(
+            "None of the %d instrumented line(s) in the reported objects ran. "
+            "The counters came from other binaries: the tests loaded a "
+            "different copy of the project, or never reached it.",
+            lines_found,
+        )
+        return 1
     return 0
 
 

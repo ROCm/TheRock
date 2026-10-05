@@ -3,6 +3,7 @@
 
 import os
 import platform
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -114,6 +115,49 @@ class ResolveObjectsTest(TempDirTestBase):
         self.assertEqual(
             merge_coverage_report.resolve_objects(self.root, ["lib/nothing*"]), []
         )
+
+    def test_bang_glob_takes_matches_back_out(self):
+        self.touch("bin/test_basic")
+        self.touch("bin/test_hipcub_basic")
+
+        objects = merge_coverage_report.resolve_objects(
+            self.root, ["bin/test_*", "!bin/test_hipcub_*"]
+        )
+
+        self.assertEqual([o.name for o in objects], ["test_basic"])
+
+
+class CountProfiledFunctionsTest(unittest.TestCase):
+    def _count(self, stdout: str):
+        with mock.patch("subprocess.run", return_value=mock.Mock(stdout=stdout)) as run:
+            count = merge_coverage_report.count_profiled_functions(
+                Path("/llvm/llvm-profdata"), Path("/tmp/c.profdata")
+            )
+        self.assertEqual(run.call_args.args[0][1], "show")
+        return count
+
+    def test_reads_the_summary_line(self):
+        self.assertEqual(
+            self._count("Instrumentation level: Front-end\nTotal functions: 1305\n"),
+            1305,
+        )
+
+    def test_profile_without_counters_reads_as_zero(self):
+        self.assertEqual(self._count("Total functions: 0\n"), 0)
+
+    def test_unrecognized_output_skips_the_check(self):
+        self.assertIsNone(self._count("something else entirely\n"))
+
+
+class CountLcovLinesTest(TempDirTestBase):
+    def test_sums_over_every_file(self):
+        lcov = self.root / "coverage.info"
+        lcov.write_text(
+            "SF:a.cpp\nDA:1,1\nLF:10\nLH:4\nend_of_record\n"
+            "SF:b.cpp\nDA:1,0\nLF:5\nLH:0\nend_of_record\n"
+        )
+
+        self.assertEqual(merge_coverage_report.count_lcov_lines(lcov), (15, 4))
 
 
 class CommandConstructionTest(TempDirTestBase):
@@ -242,7 +286,9 @@ class MainTest(TempDirTestBase):
         for tool in ("llvm-profdata", "llvm-cov"):
             (llvm_bin_dir / f"{tool}{merge_coverage_report.EXECUTABLE_SUFFIX}").touch()
 
-        with mock.patch("subprocess.run") as run:
+        with mock.patch(
+            "subprocess.run", return_value=mock.Mock(stdout="Total functions: 3\n")
+        ) as run:
             exit_code = merge_coverage_report.main(
                 self._argv(
                     "--profdata-output",
@@ -253,11 +299,12 @@ class MainTest(TempDirTestBase):
             )
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(run.call_count, 2)
+        self.assertEqual(run.call_count, 3)
         invoked = [Path(call.args[0][0]).name for call in run.call_args_list]
         self.assertEqual(
             invoked,
             [
+                f"llvm-profdata{merge_coverage_report.EXECUTABLE_SUFFIX}",
                 f"llvm-profdata{merge_coverage_report.EXECUTABLE_SUFFIX}",
                 f"llvm-cov{merge_coverage_report.EXECUTABLE_SUFFIX}",
             ],
@@ -286,9 +333,86 @@ class MainTest(TempDirTestBase):
             )
 
         self.assertEqual(exit_code, 0)
-        # merge, then export, report and show off the one index.
+        # merge and check the index, then export, report and show off it.
         subcommands = [call.args[0][1] for call in run.call_args_list]
-        self.assertEqual(subcommands, ["merge", "export", "report", "show"])
+        self.assertEqual(subcommands, ["merge", "show", "export", "report", "show"])
+
+
+class MainRejectsEmptyReportsTest(TempDirTestBase):
+    """Every way the pipeline breaks upstream still leaves profraw files behind."""
+
+    def setUp(self):
+        super().setUp()
+        self.touch("profraw/shard0/a.profraw")
+        self.touch("rocm/lib/libhiprand.so")
+        llvm_bin_dir = self.root / "rocm" / "lib" / "llvm" / "bin"
+        llvm_bin_dir.mkdir(parents=True)
+        for tool in ("llvm-profdata", "llvm-cov"):
+            (llvm_bin_dir / f"{tool}{merge_coverage_report.EXECUTABLE_SUFFIX}").touch()
+
+    def _main(
+        self, *extra: str, functions: int = 3, lcov: str = "", export_fails=False
+    ):
+        def fake_run(command, **kwargs):
+            tool, subcommand = Path(command[0]).stem, command[1]
+            if (tool, subcommand) == ("llvm-profdata", "show"):
+                return mock.Mock(stdout=f"Total functions: {functions}\n")
+            if subcommand == "export":
+                if export_fails:
+                    raise subprocess.CalledProcessError(1, command)
+                kwargs["stdout"].write(lcov)
+            return mock.Mock(stdout="")
+
+        with mock.patch("subprocess.run", side_effect=fake_run) as run:
+            exit_code = merge_coverage_report.main(
+                [
+                    "--profraw-dir",
+                    os.fspath(self.root / "profraw"),
+                    "--rocm-dir",
+                    os.fspath(self.root / "rocm"),
+                    "--object-globs",
+                    "lib/libhiprand.so*",
+                    "--profdata-output",
+                    os.fspath(self.root / "out" / "coverage.profdata"),
+                    "--lcov-output",
+                    os.fspath(self.root / "out" / "coverage.info"),
+                    *extra,
+                ]
+            )
+        return exit_code, [call.args[0][1] for call in run.call_args_list]
+
+    def test_profiles_without_counters_fail_before_export(self):
+        # What an uninstrumented library writes: a header and nothing else.
+        exit_code, subcommands = self._main(functions=0)
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(subcommands, ["merge", "show"])
+
+    def test_profiles_without_counters_are_tolerated_with_allow_empty(self):
+        exit_code, _ = self._main("--allow-empty", functions=0)
+
+        self.assertEqual(exit_code, 0)
+
+    def test_objects_without_a_coverage_mapping_fail(self):
+        exit_code, _ = self._main(export_fails=True)
+
+        self.assertEqual(exit_code, 1)
+
+    def test_report_that_never_reaches_the_objects_fails(self):
+        exit_code, subcommands = self._main(
+            "--summary-output",
+            os.fspath(self.root / "out" / "coverage_summary.txt"),
+            lcov="SF:a.cpp\nLF:10\nLH:0\nend_of_record\n",
+        )
+
+        self.assertEqual(exit_code, 1)
+        # The summary is still written, so the job page shows the zero.
+        self.assertEqual(subcommands, ["merge", "show", "export", "report"])
+
+    def test_report_with_any_line_hit_passes(self):
+        exit_code, _ = self._main(lcov="SF:a.cpp\nLF:10\nLH:1\nend_of_record\n")
+
+        self.assertEqual(exit_code, 0)
 
 
 if __name__ == "__main__":
