@@ -25,6 +25,8 @@ endif()
 # rocm-kpack
 ################################################################################
 
+if(THEROCK_ENABLE_KPACK)
+
 therock_cmake_subproject_declare(rocm-kpack
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocm-kpack"
@@ -60,6 +62,8 @@ therock_provide_artifact(core-kpack
   SUBPROJECT_DEPS
     rocm-kpack
 )
+
+endif()
 
 if(THEROCK_ENABLE_CORE_AMDSMI)
 

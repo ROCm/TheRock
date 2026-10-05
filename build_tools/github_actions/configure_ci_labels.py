@@ -41,6 +41,8 @@ COLOR_CI_GENERAL = "FFFF00"  # Yellow - general CI behavior labels
 COLOR_CI_GFX = "5A4D41"  # Brown - GPU architecture opt-in labels (build + test)
 COLOR_CI_BUILD_GFX = "8B4513"  # Saddle brown - GPU architecture build-only labels
 COLOR_CI_TEST_GFX = "2E8B57"  # Sea green - GPU architecture test-only labels
+COLOR_CI_PACKAGING = "F28D35"  # Orange - packaging/build opt-in labels
+COLOR_CI_PLATFORM = "FF6B35"  # Orange - Platform selection labels
 COLOR_TEST = "3FA7D6"  # Blue - project-specific test labels
 COLOR_TEST_FILTER = "a2fab4"  # Light green - test level override labels
 COLOR_TEST_RUNNER = "23edeb"  # Cyan - test machine selection labels
@@ -62,6 +64,9 @@ CI_LABELS: list[Label] = [
     Label("ci:asan", COLOR_CI_GENERAL, "Opt-in to building ASAN"),
     Label("ci:host-asan", COLOR_CI_GENERAL, "Opt-in to running multi-arch host-asan CI on a pull request"),
     Label("ci:run-multi-gpu", COLOR_CI_GENERAL, "Opt-in to running multi-GPU tests"),
+    # ci:platform: labels (platform selection)
+    Label("ci:platform:linux", COLOR_CI_PLATFORM, "Run CI only on Linux (skip Windows builds/tests)"),
+    Label("ci:platform:windows", COLOR_CI_PLATFORM, "Run CI only on Windows (skip Linux builds/tests)"),
     # ci:gfx labels (GPU architecture opt-in)
     Label("ci:gfx103X-linux", COLOR_CI_GFX, "Opt-in to gfx103X-linux builds/tests"),
     Label("ci:gfx103X", COLOR_CI_GFX, "Opt-in to gfx103X builds/tests"),
@@ -163,6 +168,15 @@ CI_LABELS: list[Label] = [
     Label("test_runner:oem", COLOR_TEST_RUNNER, "Run tests on a machine configured with `oem` kernel"),
     # build_variant: labels
     Label("build_variant:asan", COLOR_BUILD_VARIANT, "If enabled, the pull request will run ASAN builds"),
+    # ci:packaging labels (opt-in to specific packaging/build jobs)
+    Label("ci:build-pytorch", COLOR_CI_PACKAGING, "Opt-in to building PyTorch packages"),
+    Label("ci:build-jax", COLOR_CI_PACKAGING, "Opt-in to building JAX packages"),
+    Label("ci:build-native-linux", COLOR_CI_PACKAGING, "Opt-in to building native Linux packages"),
+    Label("ci:build-python-packages", COLOR_CI_PACKAGING, "Opt-in to building Python packages"),
+    Label("ci:skip-pytorch", COLOR_CI_PACKAGING, "Skip PyTorch package builds"),
+    Label("ci:skip-jax", COLOR_CI_PACKAGING, "Skip JAX package builds"),
+    Label("ci:skip-native-linux", COLOR_CI_PACKAGING, "Skip native Linux package builds"),
+    Label("ci:skip-python-packages", COLOR_CI_PACKAGING, "Skip Python package builds"),
 ]
 # fmt: on
 

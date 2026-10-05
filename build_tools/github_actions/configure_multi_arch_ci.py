@@ -60,6 +60,7 @@ from _therock_utils.build_topology import get_topology
 from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
+    get_cpu_test_runner,
     select_build_runner,
 )
 from configure_ci_path_filters import (
@@ -1049,6 +1050,22 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 windows_names.append(target)
                 print(f"  Label '{label}' -> adding target {target}")
 
+        # Platform-specific labels use additive logic: if any ci:platform label is
+        # set, start with empty lists and add back only the requested platforms.
+        has_platform_linux = "ci:platform:linux" in ci_inputs.pr_labels
+        has_platform_windows = "ci:platform:windows" in ci_inputs.pr_labels
+        if has_platform_linux or has_platform_windows:
+            saved_linux = linux_names
+            saved_windows = windows_names
+            linux_names = []
+            windows_names = []
+            if has_platform_linux:
+                linux_names = saved_linux
+                print("  Label 'ci:platform:linux' -> including Linux builds/tests")
+            if has_platform_windows:
+                windows_names = saved_windows
+                print("  Label 'ci:platform:windows' -> including Windows builds/tests")
+
     # De-dup, validate, then filter by platform availability.
     linux_names = list(dict.fromkeys(linux_names))
     windows_names = list(dict.fromkeys(windows_names))
@@ -1312,6 +1329,18 @@ def decide_jobs(
     build_pytorch_action = JobAction.RUN if ci_inputs.build_pytorch else JobAction.SKIP
     build_jax_action = JobAction.RUN if ci_inputs.build_jax else JobAction.SKIP
 
+    # PR labels can override packaging job decisions.
+    pr_labels = ci_inputs.pr_labels
+    if "ci:build-pytorch" in pr_labels:
+        build_pytorch_action = JobAction.RUN
+    elif "ci:skip-pytorch" in pr_labels:
+        build_pytorch_action = JobAction.SKIP
+
+    if "ci:build-jax" in pr_labels:
+        build_jax_action = JobAction.RUN
+    elif "ci:skip-jax" in pr_labels:
+        build_jax_action = JobAction.SKIP
+
     # Other jobs run unconditionally with no configuration.
     # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
 
@@ -1569,10 +1598,21 @@ def _expand_build_config_for_platform(
                     f"(global={jobs.test_rocm.test_type})"
                 )
 
+        # CPU test runner for components that don't need GPU access (e.g.,
+        # components with linux_cpu_runner: True). This allows CPU-only tests
+        # to run even when GPU testing is gated (e.g., trigger_test_label_only).
+        test_runs_on_cpu = get_cpu_test_runner(platform)
+
+        # tests_enabled is true when any test runner (GPU or CPU) is available.
+        # This provides a single flag for workflows to gate test jobs.
+        tests_enabled = bool(test_runs_on or test_runs_on_cpu)
+
         family_info = {
             "amdgpu_family": platform_info["family"],
             "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
             "test-runs-on": test_runs_on,
+            "test-runs-on-cpu": test_runs_on_cpu,
+            "tests_enabled": tests_enabled,
             "sanity_check_only_for_family": platform_info.get(
                 "sanity_check_only_for_family", False
             ),
@@ -1646,6 +1686,25 @@ def _expand_build_config_for_platform(
         else []
     )
     build_native_linux = ci_inputs.build_native_linux
+
+    # PR labels can override packaging build decisions.
+    pr_labels = ci_inputs.pr_labels
+    if "ci:build-native-linux" in pr_labels:
+        build_native_linux = True
+    elif "ci:skip-native-linux" in pr_labels:
+        build_native_linux = False
+
+    if "ci:build-python-packages" in pr_labels:
+        build_python_packages = True
+    elif "ci:skip-python-packages" in pr_labels:
+        build_python_packages = False
+
+    # Ensure python packages are built if pytorch or jax are enabled,
+    # since they depend on rocm python packages.
+    if build_pytorch or build_jax:
+        if not build_python_packages:
+            print("  Enabling python packages (required by pytorch/jax)")
+        build_python_packages = True
 
     # When stages are skipped (partial build), disable package builds since
     # they require a complete artifact set. Prebuilt/reused stages are OK

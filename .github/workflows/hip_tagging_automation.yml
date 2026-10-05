@@ -38,6 +38,7 @@ jobs:
           private-key: ${{ secrets.ROCM_SYSTEMS_APP_PRIVATE_KEY }}
           owner: "ROCm"
           repositories: "rocm-systems"
+          permission-contents: write # Create and verify HIP version tags.
 
       - name: Install dependencies
         run: |
