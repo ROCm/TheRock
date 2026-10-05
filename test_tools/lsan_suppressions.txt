@@ -31,3 +31,17 @@ leak:PyUnicode_New
 leak:_imp_create_dynamic
 leak:PyInit_
 leak:PyModule_Create
+
+# Perl, for the same reason as CPython: hipify-perl runs under an uninstrumented
+# /usr/bin/perl, and every frame of its ~230KB of reported leaks is interpreter
+# internals. hipify-clang, the native equivalent, reports nothing.
+leak:perl
+
+# Perl's allocators and one-time startup state, for interpreters the module
+# match above misses (static builds, or a perl5.NN spelling).
+leak:Perl_safesysmalloc
+leak:Perl_safesysrealloc
+leak:Perl_safesyscalloc
+leak:Perl_reentrant_init
+leak:perl_construct
+leak:perl_parse
