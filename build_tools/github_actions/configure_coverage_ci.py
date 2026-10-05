@@ -276,6 +276,11 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         object_globs=["lib/librocsparse.so*"],
         fetch_artifact_args="--sparse",
         codecov_flag="rocSPARSE",
+        # Upstream's option already instruments the kernels, which make up
+        # nearly all of librocsparse.so; this only stops the device-side
+        # negation. The readback at exit aborts the test process unless the
+        # HIP runtime includes ROCm/rocm-systems#10894.
+        device_coverage=True,
     ),
     "hipsparse": CoverageProject(
         cmake_target="hipSPARSE",
@@ -314,6 +319,10 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         object_globs=["lib/librocsolver.so*"],
         fetch_artifact_args="--solver",
         codecov_flag="rocSOLVER",
+        # Upstream's option already instruments the kernels (at -O0, through
+        # rocsolver-common); this only stops the device-side negation. Much of
+        # the LAPACK work runs in rocSOLVER's own kernels, not in rocBLAS.
+        device_coverage=True,
     ),
     "hipsolver": CoverageProject(
         cmake_target="hipSOLVER",

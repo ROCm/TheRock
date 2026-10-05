@@ -243,11 +243,21 @@ class BuildCoverageMatrixTest(unittest.TestCase):
     def test_device_coverage_reaches_the_matrix(self):
         # The report workflow keys the profile handling, the kpack swap and the
         # device object extraction off this one boolean.
-        rocrand, hiprand = configure_coverage_ci.build_coverage_matrix(
-            ["rocrand", "hiprand"], ["gfx94X-dcgpu"], "ROCm/rocm-libraries", "main"
+        matrix = configure_coverage_ci.build_coverage_matrix(
+            ["rocrand", "rocsparse", "rocsolver", "hiprand"],
+            ["gfx94X-dcgpu"],
+            "ROCm/rocm-libraries",
+            "main",
         )
-        self.assertIs(rocrand["device_coverage"], True)
-        self.assertIs(hiprand["device_coverage"], False)
+        self.assertEqual(
+            {entry["project_name"]: entry["device_coverage"] for entry in matrix},
+            {
+                "rocrand": True,
+                "rocsparse": True,
+                "rocsolver": True,
+                "hiprand": False,
+            },
+        )
 
     def test_device_coverage_is_only_set_on_measurable_projects(self):
         for name, project in configure_coverage_ci.COVERAGE_PROJECTS.items():
@@ -505,9 +515,11 @@ class EmitCmakeTest(unittest.TestCase):
                 for line in out.read_text().splitlines()
                 if line.startswith("set(THEROCK_COVERAGE_DEVICE_PROJECTS")
             )
-        self.assertIn("rocRAND", device_line)
-        # hipRAND's library has no kernels, so it stays host-only.
-        self.assertNotIn("hipRAND", device_line)
+        for target in ("rocRAND", "rocSPARSE", "rocSOLVER"):
+            self.assertIn(target, device_line)
+        # Their libraries have no kernels, so they stay host-only.
+        for target in ("hipRAND", "hipSOLVER"):
+            self.assertNotIn(target, device_line)
 
     def test_emit_cmake_needs_no_env(self):
         # Must work without PROJECTS_TO_TEST / AMDGPU_FAMILIES / GITHUB_OUTPUT set.

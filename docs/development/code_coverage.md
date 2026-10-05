@@ -118,8 +118,10 @@ build.
 A project's GPU kernels can be measured along with its host code. It is opt-in
 per project, through `device_coverage=True` in `COVERAGE_PROJECTS`, and only
 worth it where the reported objects contain kernels: rocRAND's generators are
-all kernels, while hipRAND's and hipDNN's libraries have none. rocRAND is the
-one project enabled today.
+all kernels, while hipRAND's and hipDNN's libraries have none. It is enabled
+for rocRAND, rocSPARSE and rocSOLVER. rocSPARSE's and rocSOLVER's own coverage
+options already instrument their kernels, so for them it only drops the
+device-side negation; rocRAND's option is host-only, so the flags are added.
 
 ### Building with device coverage
 

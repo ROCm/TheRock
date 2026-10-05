@@ -171,6 +171,39 @@ class TestDeviceCodeOverlay(unittest.TestCase):
 
         self.assertEqual(read_kernels(self.output_dir / self.KPACK), kernels)
 
+    def test_siblings_sharing_an_archive_are_not_claimed(self):
+        # sparse_lib and solver_lib hold the hip* wrappers' code objects too.
+        cases = [
+            (
+                "math-libs/BLAS/rocSPARSE/stage/lib/librocsparse.so.1.0#3",
+                "rocSPARSE",
+                True,
+            ),
+            (
+                "math-libs/BLAS/hipSPARSE/stage/lib/libhipsparse.so.4#0",
+                "rocSPARSE",
+                False,
+            ),
+            (
+                "math-libs/BLAS/hipSPARSELt/stage/lib/libhipsparselt.so.0#1",
+                "rocSPARSE",
+                False,
+            ),
+            (
+                "math-libs/BLAS/rocSOLVER/stage/lib/librocsolver.so.0#7",
+                "rocSOLVER",
+                True,
+            ),
+            (
+                "math-libs/BLAS/hipSOLVER/stage/lib/libhipsolver.so.1#0",
+                "rocSOLVER",
+                False,
+            ),
+        ]
+        for key, folder, expected in cases:
+            with self.subTest(key=key, folder=folder):
+                self.assertIs(mod._matches_folder(key, folder), expected)
+
     def test_artifacts_not_being_replaced_are_left_alone(self):
         installed = self.output_dir / self.KPACK
         baseline = {(f"{ROCRAND}#0", "gfx942"): b"base-roc0"}
