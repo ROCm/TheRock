@@ -76,7 +76,7 @@
     {
       "name": "linux-release-asan-compact",
       "displayName": "Linux release ASAN compact build",
-      "description": "Release + full ASAN with size-oriented flags: outline instrumentation, -Oz, compressed line tables, offload compress, GC sections, LTO. Inherits linux-asan-base.",
+      "description": "Release + full ASAN with size-oriented flags: outline instrumentation, host-only -Oz, compressed line tables, HIP offload compress, GC sections. Inherits linux-asan-base.",
       "inherits": "linux-asan-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
