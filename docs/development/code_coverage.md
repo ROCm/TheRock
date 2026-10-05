@@ -55,12 +55,13 @@ effect on a normal build.
 
 ### Host code only
 
-Upstream coverage flags are unqualified and the HIP driver forwards them to
-device compilation. Two failures result: the runtime aborts looking up missing
-profiling symbols in the device image, and when readback succeeds it writes a
-profile named after the device target (colons included, breaking CI artifact
-upload). `therock_subproject.cmake` appends the negation scoped to device
-compilation:
+Unless a project opts into [device coverage](#device-coverage), only its host
+code is measured. Upstream coverage flags are unqualified and the HIP driver
+forwards them to device compilation. Two failures result: the runtime aborts
+looking up missing profiling symbols in the device image, and when readback
+succeeds it writes a profile named after the device target (colons included,
+breaking CI artifact upload). `therock_subproject.cmake` appends the negation
+scoped to device compilation:
 
 ```
 -Xarch_device -fno-profile-instr-generate -Xarch_device -fno-coverage-mapping
@@ -111,6 +112,83 @@ the script prefers the copies under `<rocm-dir>/lib/llvm/bin`. Only the HTML
 reads source files; lcov and the text table work from coverage mappings alone.
 Use `--path-equivalence <from>,<to>` if the source tree has moved since the
 build.
+
+## Device coverage
+
+A project's GPU kernels can be measured along with its host code. It is opt-in
+per project, through `device_coverage=True` in `COVERAGE_PROJECTS`, and only
+worth it where the reported objects contain kernels: rocRAND's generators are
+all kernels, while hipRAND's and hipDNN's libraries have none. rocRAND is the
+one project enabled today.
+
+### Building with device coverage
+
+`CMakeLists.txt` turns `device_coverage` into
+`<PROJECT>_ENABLE_DEVICE_COVERAGE=ON` once the project's coverage is on, and
+`therock_subproject.cmake` then appends the positive form of the device-scoped
+pair in place of the negation:
+
+```
+-Xarch_device -fprofile-instr-generate -Xarch_device -fcoverage-mapping
+```
+
+Being last on the compile line, it overrides an `-Xarch_host`-only upstream
+option such as rocRAND's, just as the negation overrides unqualified ones. An
+explicit `-D<PROJECT>_ENABLE_DEVICE_COVERAGE` wins in either direction, so a
+local build can measure rocRAND's host code alone, or try another project's
+kernels:
+
+```bash
+cmake -B build -GNinja . \
+  -DTHEROCK_AMDGPU_FAMILIES=gfx94X-dcgpu \
+  -DROCRAND_ENABLE_COVERAGE=ON
+```
+
+No other flag is needed, because the toolchain supplies the rest:
+
+| Piece                                          | Supplied by                                                                                       |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Device runtime, amdgcn `libclang_rt.profile.a` | amd-llvm's amdgcn-amd-amdhsa runtimes build; the linker wrapper links it into each device image   |
+| Host collector, `libclang_rt.profile_rocm.a`   | the driver, on any `--hip-link` (which `hip::device` adds)                                        |
+| Reading device counters back at exit           | `libclang_rt.profile_rocm.a`'s exit handler                                                       |
+| Not aborting on an unresolved descriptor       | the HIP runtime, since [ROCm/rocm-systems#10894](https://github.com/ROCm/rocm-systems/pull/10894) |
+
+The include `therock_subproject.cmake` generates for the project also runs
+`cmake/therock_coverage_device.cmake`, which fails the configure when the
+compiler has no amdgcn profile runtime. The linker wrapper only forwards the
+profile flags to the device link when that runtime exists, so otherwise the
+problem would surface later, as a device link error or a report without device
+coverage.
+
+RCCL needed far more than this
+([ROCm/rocm-systems#10650](https://github.com/ROCm/rocm-systems/pull/10650)):
+its device linker
+bypasses the driver, so it passes the device runtime, a profile section anchor,
+a `-u __llvm_profile_hip_collect_device_data` force-link and the host collector
+by hand. A library built the standard HIP way gets all of that from the driver.
+
+### Collecting and reporting device coverage
+
+At exit the collector writes one device-side profile per translation unit,
+named `<target id>[.<n>].<LLVM_PROFILE_FILE name>`, for example
+`gfx942:sramecc+:xnack-.0.rocrand-shard1-1234-5678.profraw`. They merge with
+the host profiles as they are.
+
+Kpack-split builds keep device code out of the host libraries, in one archive
+per artifact and GPU target (`.kpack/rand_lib_gfx942.kpack` holds rocRAND's
+and hipRAND's), keyed `<stage prefix>/<binary>#<n>`. Two consequences:
+
+- The hybrid install has to swap the project's code objects into the baseline's
+  archive, or the instrumented host library runs uninstrumented kernels.
+  `install_rocm_code_coverage_build.py --replace-device-code` replaces only the
+  entries under the project's folder, so siblings in the same archive keep the
+  baseline's kernels.
+- `llvm-cov` needs those code objects to map device counters back to source.
+  `merge_coverage_report.py --device-code` extracts the ones that carry a
+  coverage mapping and adds them as `-object` arguments.
+
+Kernels run noticeably slower once instrumented, which the coverage timeout
+multiplier already allows for.
 
 ## Coverage CI
 
@@ -178,12 +256,15 @@ Per shard, `test_code_coverage_component.yml` does three things:
 1. **Install baseline + swap project.** `install_rocm_code_coverage_build.py`
    installs from `--run-id` (the nightly) and replaces only the
    project-under-test from `--code-coverage-run-id` (`<run_id>-coverage`).
+   With device coverage it also gets `--replace-device-code`, which swaps the
+   project's code objects into the installed kpack archives.
 1. **Set `LLVM_PROFILE_FILE`** to a per-shard path (`%p`/`%m`) so concurrent
    processes don't overwrite each other.
 1. **Run tests and upload profraw** under `always()` — a failing shard still
-   exercised code. Device-side profiles (named after the GPU target, colons
-   included) are dropped with a warning first: one of them makes
-   `upload-artifact` reject the whole upload.
+   exercised code. Device-side profiles are named after the GPU target, colons
+   included, and one of them makes `upload-artifact` reject the whole upload.
+   With device coverage their colons become underscores; otherwise they are
+   dropped with a warning.
 
 With `BUILD_VARIANT=coverage`, `fetch_test_configurations.py` multiplies each
 component's `timeout_minutes` by 4, capped at 180 so the step ends inside the
@@ -248,6 +329,13 @@ publishing 0%:
 - No line in the reported objects ran: the tests loaded a different copy of the
   project, or never reached it.
 
+With device coverage the step runs with `--device-code`, which adds two more:
+
+- No code object with a coverage mapping in the kpack archives: the kernels
+  were built without device instrumentation.
+- No device-side profile: the kernels never ran, the runtime could not read
+  their counters back, or the test job dropped the profiles.
+
 The `coverage-report-<project>-<family>` artifact:
 
 | File                   | What it is                 |
@@ -298,6 +386,10 @@ actually installs — a miss fails the report job rather than publishing zero. A
 glob prefixed with `!` removes its matches, for test binaries that share an
 install directory with a sibling project's (rocPRIM's `bin/test_*` would
 otherwise include hipCUB's `bin/test_hipcub_*`).
+
+Set `device_coverage=True` only when the objects in `object_globs` contain
+kernels, and check a local build's report shows device functions first. See
+[Device coverage](#device-coverage).
 
 ## Blocked projects
 
