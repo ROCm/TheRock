@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import mock_open, patch
 
 # test_runner has module-level code that reads env vars and calls sys.exit
 # if TEST_COMPONENT is missing. Set required env vars before importing.
@@ -257,6 +257,63 @@ class ValidTestCategoriesTest(unittest.TestCase):
     def test_invalid_category_not_accepted(self):
         self.assertNotIn("smoke", test_runner.VALID_TEST_CATEGORIES)
         self.assertNotIn("", test_runner.VALID_TEST_CATEGORIES)
+
+
+class PrivilegeTierTest(unittest.TestCase):
+    """Tests for the amdsmi unprivileged-container check."""
+
+    def test_outside_container_is_baremetal(self):
+        with patch.object(test_runner, "_in_container", return_value=False):
+            self.assertEqual(test_runner.detect_privilege_tier(), "baremetal")
+
+    def test_container_without_sys_admin_is_unprivileged(self):
+        status = "Name:\tpython\nCapEff:\t00000000a80425fb\n"
+        with (
+            patch.object(test_runner, "_in_container", return_value=True),
+            patch.object(test_runner.platform, "system", return_value="Linux"),
+            patch("builtins.open", mock_open(read_data=status)),
+        ):
+            self.assertEqual(test_runner.detect_privilege_tier(), "unprivileged")
+
+    def test_container_with_sys_admin_is_privileged(self):
+        # Bit 21 (CAP_SYS_ADMIN) set.
+        status = "CapEff:\t0000000000200000\n"
+        with (
+            patch.object(test_runner, "_in_container", return_value=True),
+            patch.object(test_runner.platform, "system", return_value="Linux"),
+            patch("builtins.open", mock_open(read_data=status)),
+        ):
+            self.assertEqual(test_runner.detect_privilege_tier(), "privileged")
+
+    def test_amdsmi_unprivileged_sets_env_without_overriding(self):
+        original = test_runner.test_component_job_name
+        try:
+            test_runner.test_component_job_name = "amdsmi"
+            env = {}
+            with patch.object(
+                test_runner, "detect_privilege_tier", return_value="unprivileged"
+            ):
+                test_runner.apply_amdsmi_privilege_env(env)
+            self.assertEqual(env["AMDSMI_NON_PRIVILEGED"], "1")
+
+            env = {"AMDSMI_NON_PRIVILEGED": "0"}
+            with patch.object(
+                test_runner, "detect_privilege_tier", return_value="unprivileged"
+            ):
+                test_runner.apply_amdsmi_privilege_env(env)
+            self.assertEqual(env["AMDSMI_NON_PRIVILEGED"], "0")
+        finally:
+            test_runner.test_component_job_name = original
+
+    def test_other_components_are_unchanged(self):
+        original = test_runner.test_component_job_name
+        try:
+            test_runner.test_component_job_name = "miopen"
+            env = {}
+            test_runner.apply_amdsmi_privilege_env(env)
+            self.assertNotIn("AMDSMI_NON_PRIVILEGED", env)
+        finally:
+            test_runner.test_component_job_name = original
 
 
 if __name__ == "__main__":
