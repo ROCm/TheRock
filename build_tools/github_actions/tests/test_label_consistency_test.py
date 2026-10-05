@@ -58,9 +58,8 @@ class StageTestLabelConsistency(unittest.TestCase):
 
 class DuplicatedExpansionConsistency(unittest.TestCase):
     def test_shared_label_groups_are_identical(self):
-        # rocgdb/tensilelite are expanded identically in both packages; this keeps
-        # them in sync until they share one source (merge deferred: cross-package,
-        # only 2 shared entries).
+        # rocgdb/tensilelite are expanded identically in both packages; this
+        # guards that they stay in sync.
         tlg = ftc.TEST_LABEL_GROUPS
         csa = drtd._CI_TEST_SELECTOR_ALIASES
         for key in sorted(set(tlg) & set(csa)):
