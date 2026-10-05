@@ -21,6 +21,7 @@ Usage:
 import argparse
 import os
 import platform
+import shlex
 import shutil
 import subprocess
 import sys
@@ -71,29 +72,33 @@ def check_docker() -> bool:
 
 def build_reproduction_command(args: argparse.Namespace) -> str:
     """Build the command string for reproduction."""
+
+    def quote(value: object) -> str:
+        return shlex.quote(str(value))
+
     cmd = (
         f"python build_tools/github_actions/reproduce_test_failure.py "
-        f"--run-id {args.run_id} "
-        f"--repository {args.repository} "
-        f"--amdgpu-family {args.amdgpu_family} "
-        f'--test-script "{args.test_script}"'
+        f"--run-id {quote(args.run_id)} "
+        f"--repository {quote(args.repository)} "
+        f"--amdgpu-family {quote(args.amdgpu_family)} "
+        f"--test-script {quote(args.test_script)}"
     )
     if args.amdgpu_targets:
-        cmd += f" --amdgpu-targets {args.amdgpu_targets}"
+        cmd += f" --amdgpu-targets {quote(args.amdgpu_targets)}"
     if args.output_dir != "build":
-        cmd += f' --output-dir "{args.output_dir}"'
+        cmd += f" --output-dir {quote(args.output_dir)}"
     if args.shard_index != "1":
-        cmd += f" --shard-index {args.shard_index}"
+        cmd += f" --shard-index {quote(args.shard_index)}"
     if args.total_shards != "1":
-        cmd += f" --total-shards {args.total_shards}"
+        cmd += f" --total-shards {quote(args.total_shards)}"
     if args.test_type != "full":
-        cmd += f" --test-type {args.test_type}"
+        cmd += f" --test-type {quote(args.test_type)}"
     if args.fetch_artifact_args:
-        cmd += f' --fetch-artifact-args="{args.fetch_artifact_args}"'
+        cmd += f" --fetch-artifact-args {quote(args.fetch_artifact_args)}"
     if args.additional_requirements_files:
         cmd += (
-            " --additional-requirements-files="
-            f'"{args.additional_requirements_files}"'
+            " --additional-requirements-files "
+            f"{quote(args.additional_requirements_files)}"
         )
     return cmd
 
