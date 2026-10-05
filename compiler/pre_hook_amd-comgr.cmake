@@ -15,13 +15,11 @@ endif()
 
 set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/llvm/lib;$ORIGIN/rocm_sysdeps/lib")
 
-# Debug info for comgr's own objects only; statically linked LLVM is left out
-# to keep the PDB small.
-# /Z7 rather than /Zi to avoid collision with LLVM's shared PCH (error C2859).
+# Debug info for comgr's own objects only, not the statically linked LLVM.
+# Embedded (/Z7): /Zi collides with LLVM's shared PCH. Needs CMP0141 (CMakeLists.txt).
 # /OPT:REF,/OPT:ICF restore the Release defaults that /DEBUG turns off.
-# CMAKE_HOST_WIN32 rather than WIN32/MSVC, which are unset before project().
+# CMAKE_HOST_WIN32: WIN32/MSVC are unset before project().
 if(CMAKE_HOST_WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
-  string(APPEND CMAKE_C_FLAGS " /Z7")
-  string(APPEND CMAKE_CXX_FLAGS " /Z7")
+  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded)
   add_link_options("LINKER:/DEBUG,/OPT:REF,/OPT:ICF")
 endif()
