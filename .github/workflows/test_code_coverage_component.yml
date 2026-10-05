@@ -167,10 +167,10 @@ jobs:
       - name: Setup Additional Requirements
         if: ${{ fromJSON(inputs.component).additional_requirements_files != '' }}
         env:
-          ADDITIONAL_REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
+          REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
         run: |
           python ./build_tools/install_additional_requirements.py \
-            --requirements-files "${ADDITIONAL_REQUIREMENTS_FILES}"
+            --requirements-files "${REQUIREMENTS_FILES}"
 
         # TODO(#3755): Clean this up after final sanitizer environment variable flags are determined
       - name: Enable sanitizer-specific test flags
