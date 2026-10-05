@@ -38,8 +38,8 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         tarball_source, tarball_dest = mock_copy.call_args_list[0].args
         self.assertEqual(tarball_source.bucket, "therock-dev-artifacts")
         self.assertEqual(tarball_source.relative_path, "123-linux/tarballs")
-        self.assertEqual(tarball_dest.bucket, "therock-dev-tarball")
-        self.assertEqual(tarball_dest.relative_path, "v4/tarball")
+        self.assertEqual(tarball_dest.bucket, "therock-repo-amd-dev-core")
+        self.assertEqual(tarball_dest.relative_path, "v5/rocm/core/tarball")
         # Python staging then release
         python_source, python_dest_staging = mock_copy.call_args_list[1].args
         self.assertEqual(python_source.bucket, "therock-dev-artifacts")
@@ -67,7 +67,8 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         tarball_source, tarball_dest = mock_copy.call_args_list[0].args
         self.assertEqual(tarball_source.bucket, "therock-nightly-artifacts")
         self.assertEqual(tarball_source.relative_path, "99-windows/tarballs")
-        self.assertEqual(tarball_dest.bucket, "therock-nightly-tarball")
+        self.assertEqual(tarball_dest.bucket, "therock-repo-amd-nightly-core")
+        self.assertEqual(tarball_dest.relative_path, "v5/rocm/core/tarball")
 
         python_source, python_dest = mock_copy.call_args_list[1].args
         self.assertEqual(python_source.bucket, "therock-nightly-artifacts")
@@ -118,14 +119,18 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         deb_source, deb_dest = mock_copy.call_args_list[3].args
         self.assertEqual(deb_source.bucket, "therock-dev-artifacts")
         self.assertEqual(deb_source.relative_path, "123-linux/packages/deb")
-        self.assertEqual(deb_dest.bucket, "therock-dev-packages")
-        self.assertRegex(deb_dest.relative_path, r"^v4/deb/\d{8}-123$")
+        self.assertEqual(deb_dest.bucket, "therock-repo-amd-dev-core")
+        self.assertRegex(
+            deb_dest.relative_path, r"^v5/rocm/core/packages/deb/\d{8}-123$"
+        )
         # rpm packages
         rpm_source, rpm_dest = mock_copy.call_args_list[4].args
         self.assertEqual(rpm_source.bucket, "therock-dev-artifacts")
         self.assertEqual(rpm_source.relative_path, "123-linux/packages/rpm")
-        self.assertEqual(rpm_dest.bucket, "therock-dev-packages")
-        self.assertRegex(rpm_dest.relative_path, r"^v4/rpm/\d{8}-123$")
+        self.assertEqual(rpm_dest.bucket, "therock-repo-amd-dev-core")
+        self.assertRegex(
+            rpm_dest.relative_path, r"^v5/rocm/core/packages/rpm/\d{8}-123$"
+        )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_windows_skips_native_packages(self, mock_copy):
@@ -183,7 +188,8 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         tarball_source, tarball_dest = mock_copy.call_args_list[0].args
         self.assertEqual(tarball_source.relative_path, "123-linux/tarballs")
         # ASAN tarballs go to separate folder
-        self.assertEqual(tarball_dest.relative_path, "v4/tarball-asan")
+        self.assertEqual(tarball_dest.bucket, "therock-repo-amd-dev-core")
+        self.assertEqual(tarball_dest.relative_path, "v5/rocm/core/tarball-asan")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_file")
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.list_files")
@@ -234,22 +240,23 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
             dest_by_src[
                 "123-linux/python/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl"
             ],
-            "v5/rocm/core/whl/rocm-sdk-core/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl",
+            "v5/rocm/core/whl-next/rocm-sdk-core/"
+            "rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl",
         )
         self.assertEqual(
             dest_by_src["123-linux/python/rocm-7.13.0.tar.gz"],
-            "v5/rocm/core/whl/rocm/rocm-7.13.0.tar.gz",
+            "v5/rocm/core/whl-next/rocm/rocm-7.13.0.tar.gz",
         )
         self.assertEqual(
             dest_by_src[
                 "123-linux/python/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl"
             ],
-            "v5/rocm/core/whl/rocm-sdk-device-gfx1100/"
+            "v5/rocm/core/whl-next/rocm-sdk-device-gfx1100/"
             "rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl",
         )
-        # Destination bucket is the release python bucket.
+        # Destination bucket is the Core product bucket.
         for call in mock_copy_file.call_args_list:
-            self.assertEqual(call.args[1].bucket, "therock-dev-python")
+            self.assertEqual(call.args[1].bucket, "therock-repo-amd-dev-core")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_file")
@@ -353,11 +360,79 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         # deb packages go to packages-asan path
         deb_source, deb_dest = mock_copy.call_args_list[1].args
         self.assertEqual(deb_source.relative_path, "123-linux/packages/deb")
-        self.assertRegex(deb_dest.relative_path, r"^v4/packages-asan/deb/\d{8}-123$")
+        self.assertEqual(deb_dest.bucket, "therock-repo-amd-dev-core")
+        self.assertRegex(
+            deb_dest.relative_path,
+            r"^v5/rocm/core/packages-asan/deb/\d{8}-123$",
+        )
         # rpm packages go to packages-asan path
         rpm_source, rpm_dest = mock_copy.call_args_list[2].args
         self.assertEqual(rpm_source.relative_path, "123-linux/packages/rpm")
-        self.assertRegex(rpm_dest.relative_path, r"^v4/packages-asan/rpm/\d{8}-123$")
+        self.assertEqual(rpm_dest.bucket, "therock-repo-amd-dev-core")
+        self.assertRegex(
+            rpm_dest.relative_path,
+            r"^v5/rocm/core/packages-asan/rpm/\d{8}-123$",
+        )
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    def test_asan_debug_publishes_same_as_asan(self, mock_copy):
+        # 'asan-debug' is a build_variant_suffix alias for 'asan' (see
+        # amdgpu_family_matrix.py) — it must publish to the same tarball-asan
+        # path and skip python packages, exactly like 'asan'.
+        mock_copy.return_value = 2
+        main(
+            [
+                "--run-id",
+                "123",
+                "--platform",
+                "linux",
+                "--release-type",
+                "dev",
+                "--build-variant",
+                "asan-debug",
+                "--skip-native-packages",
+                "--dry-run",
+            ]
+        )
+
+        self.assertEqual(mock_copy.call_count, 1)
+        tarball_source, tarball_dest = mock_copy.call_args_list[0].args
+        self.assertEqual(tarball_source.relative_path, "123-linux/tarballs")
+        self.assertEqual(tarball_dest.bucket, "therock-repo-amd-dev-core")
+        self.assertEqual(tarball_dest.relative_path, "v5/rocm/core/tarball-asan")
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    def test_host_asan_variants_publish_same_as_asan(self, mock_copy):
+        # host-asan and host-asan-debug are also ASAN-family variants and are
+        # assumed to publish to the same "-asan" paths as full ASAN (see the
+        # ASSUMPTION note on _is_asan_variant — unverified against a real
+        # host-asan publish run, since nothing calls this script with
+        # "host-asan" today).
+        for build_variant in ("host-asan", "host-asan-debug"):
+            with self.subTest(build_variant=build_variant):
+                mock_copy.reset_mock()
+                mock_copy.return_value = 2
+                main(
+                    [
+                        "--run-id",
+                        "123",
+                        "--platform",
+                        "linux",
+                        "--release-type",
+                        "dev",
+                        "--build-variant",
+                        build_variant,
+                        "--skip-native-packages",
+                        "--dry-run",
+                    ]
+                )
+
+                self.assertEqual(mock_copy.call_count, 1)
+                tarball_source, tarball_dest = mock_copy.call_args_list[0].args
+                self.assertEqual(tarball_source.relative_path, "123-linux/tarballs")
+                self.assertEqual(
+                    tarball_dest.relative_path, "v5/rocm/core/tarball-asan"
+                )
 
 
 if __name__ == "__main__":

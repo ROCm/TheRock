@@ -66,6 +66,19 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   list(APPEND patch_source_commands   COMMAND
     bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${CMAKE_CURRENT_BINARY_DIR}/s")
 endif()
+
+# The nested configure below does not otherwise inherit compile flags, and zlib
+# links statically into shipped binaries.
+set(driver_build_flag_args)
+if(WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+  list(APPEND driver_build_flag_args
+    "-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}"
+    "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}"
+    "-DCMAKE_EXE_LINKER_FLAGS=${CMAKE_EXE_LINKER_FLAGS}"
+    "-DCMAKE_SHARED_LINKER_FLAGS=${CMAKE_SHARED_LINKER_FLAGS}"
+  )
+endif()
+
 # zlib provides a CMakeLists.txt, however, we have to do some post-processing
 # of the libraries in order to prepare them for our use, so we invoke it as
 # a sub-build. We do this uniformly across all platforms because it is easier
@@ -93,6 +106,7 @@ add_custom_target(
       "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
       "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
       "-DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}"
+      ${driver_build_flag_args}
       # Force lib/ to match the hardcoded paths throughout this file.
       -DCMAKE_INSTALL_LIBDIR=lib
       # On Windows we only use the static library; skip the shared build

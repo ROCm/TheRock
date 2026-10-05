@@ -124,8 +124,7 @@ option(THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY
 
 option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
-option(THEROCK_ENABLE_HOTSWAP "Enables the comgr hotswap transpiler/tool and loads it in the runtime via HSA_TOOLS_LIB" ON)
-option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" OFF)
+option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" ON)
 set(THEROCK_COMGR_DLL_NAME "" CACHE STRING "Override the Comgr DLL name for the comgr build and CLR load (e.g. amd_comgr_opencl.dll); empty = component default")
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
@@ -184,23 +183,6 @@ block(PROPAGATE ROCM_MAJOR_VERSION ROCM_MINOR_VERSION ROCM_PATCH_VERSION)
   else()
     message(FATAL_ERROR "Failed to determine ROCm version.")
   endif()
-endblock()
-
-# Various things need to be lined up across layers to precisely match the HIP version.
-# The only source of truth for this is from the HIP/VERSION file, so we parse it the
-# same way that clr does. While this *should* generally match the ROCM version, at
-# least from a major/minor perspective, the ROCM version is a "user" version, whereas
-# the HIP version is hardcoded into various places in the code.
-block(SCOPE_FOR VARIABLES PROPAGATE THEROCK_HIP_MAJOR_VERSION THEROCK_HIP_MINOR_VERSION)
-  set(VERSION_PATH "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip/VERSION")
-  if(NOT EXISTS "${VERSION_PATH}")
-    message(FATAL_ERROR "Could not find HIP VERSION file: ${VERSION_PATH}")
-  endif()
-  file(STRINGS "${VERSION_PATH}" VERSION_LIST REGEX "^[0-9]+")
-  list(GET VERSION_LIST 0 THEROCK_HIP_MAJOR_VERSION)
-  list(GET VERSION_LIST 1 THEROCK_HIP_MINOR_VERSION)
-  list(GET VERSION_LIST 2 THEROCK_HIP_PATCH_VERSION)
-  message(STATUS "HIP version: ${THEROCK_HIP_MAJOR_VERSION}.${THEROCK_HIP_MINOR_VERSION}.${THEROCK_HIP_PATCH_VERSION}")
 endblock()
 
 ################################################################################
@@ -480,6 +462,15 @@ if(THEROCK_BUNDLE_SYSDEPS)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)
     set(THEROCK_BUNDLED_ZSTD therock-zstd)
+    if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
+      # meson is only needed to build the amd-mesa/libva sysdep; gate the
+      # requirement so bundled-sysdeps builds without mesa don't need it.
+      find_program(MESON_BUILD meson)
+      if(NOT MESON_BUILD)
+        message(FATAL_ERROR "Building with THEROCK_ENABLE_SYSDEPS_AMD_MESA=ON on Windows requires `meson` (easiest: `pip install meson`)")
+      endif()
+      set(THEROCK_BUNDLED_AMDMESA therock-amd-mesa)
+    endif()
   else()
     message(FATAL_ERROR "Bundled system deps not supported on this platform (THEROCK_BUNDLE_SYSDEPS=ON)")
   endif()
@@ -514,8 +505,9 @@ add_subdirectory(debug-tools)
 # performs optional find_package(rocdecode)/find_package(rocjpeg) for trace
 # feature detection.
 add_subdirectory(media-libs)
-# storage-libs (hipfile) must be added before profiler: rocprofiler-sdk performs
-# optional find_package(hipfile) for hipFILE trace feature detection.
+# storage-libs (hipfile) must be added before profiler: rocprofiler-sdk and
+# rocprofiler-systems both find_package(hipfile) (SDK for API tracing; systems
+# for optional GPU-direct storage I/O telemetry when the package is usable).
 add_subdirectory(storage-libs)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.

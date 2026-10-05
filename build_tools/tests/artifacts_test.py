@@ -11,7 +11,11 @@ import sys
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.artifacts import ArtifactName
+from _therock_utils.artifacts import (
+    ArtifactCatalog,
+    ArtifactName,
+    prebuilt_marker_relpath,
+)
 import _therock_utils.artifact_builder as builder
 
 
@@ -40,6 +44,46 @@ class TmpDirTestCase(unittest.TestCase):
         p = self.temp_dir / relpath
         p.parent.mkdir(parents=True, exist_ok=True)
         p.touch()
+
+
+class ArtifactCatalogValidationTest(TmpDirTestCase):
+    def setUp(self):
+        super().setUp()
+        self.artifacts = self.temp_dir / "artifacts"
+        self.sources = []
+        for target in ("gfx1100", "gfx1101"):
+            root = self.artifacts / f"blas_lib_{target}"
+            stage = root / "stage"
+            stage.mkdir(parents=True)
+            (root / "artifact_manifest.txt").write_text("stage\n")
+            (stage / "data").write_text("identical")
+            self.sources.append(stage)
+
+    def test_identical_files_are_deduplicated(self):
+        matches = ArtifactCatalog(self.artifacts).validated_matches()
+        self.assertEqual(list(matches), ["data"])
+
+    def test_conflicting_contents_are_rejected(self):
+        (self.sources[1] / "data").write_text("different")
+        with self.assertRaisesRegex(ValueError, "Conflicting device path data"):
+            ArtifactCatalog(self.artifacts).validated_matches()
+
+    def test_file_directory_overlap_is_rejected(self):
+        (self.sources[1] / "data").unlink()
+        (self.sources[1] / "data").mkdir()
+        with self.assertRaisesRegex(ValueError, "Conflicting device path data"):
+            ArtifactCatalog(self.artifacts).validated_matches()
+
+    def test_file_symlink_overlap_is_rejected(self):
+        (self.sources[0] / "link").symlink_to("data")
+        (self.sources[1] / "link").write_text("identical")
+        with self.assertRaisesRegex(ValueError, "Conflicting device path link"):
+            ArtifactCatalog(self.artifacts).validated_matches()
+
+    def test_identical_symlinks_are_accepted(self):
+        for source in self.sources:
+            (source / "link").symlink_to("data")
+        self.assertIn("link", ArtifactCatalog(self.artifacts).validated_matches())
 
 
 class ArtifactNameTest(TmpDirTestCase):
@@ -626,6 +670,53 @@ class ComponentScannerTest(TmpDirTestCase):
             builder.ArtifactDescriptor.load_toml_file(
                 self.temp_dir / "descriptor.toml", artifact_name=""
             )
+
+
+class PrebuiltMarkerRelpathTest(unittest.TestCase):
+    """Tests for prebuilt_marker_relpath.
+
+    therock_subproject.cmake looks for the bootstrap marker at
+    "${_stage_dir}.prebuilt", so the marker must be named after the subproject
+    stage directory, not after the artifact basedir (which may be nested below
+    it).
+    """
+
+    def testStageBasedirUnchanged(self):
+        # The common case: the basedir is the stage dir itself.
+        self.assertEqual(
+            prebuilt_marker_relpath("core/ROCR-Runtime/stage"),
+            "core/ROCR-Runtime/stage.prebuilt",
+        )
+        self.assertEqual(
+            prebuilt_marker_relpath("math-libs/BLAS/hipBLASLt/stage"),
+            "math-libs/BLAS/hipBLASLt/stage.prebuilt",
+        )
+        # A stage dir may itself be nested below a build dir.
+        self.assertEqual(
+            prebuilt_marker_relpath("third-party/openmpi/build/stage"),
+            "third-party/openmpi/build/stage.prebuilt",
+        )
+
+    def testBasedirWithoutStageComponentUnchanged(self):
+        # Some descriptors declare a build dir as a basedir. There is no stage
+        # dir to attribute it to, so the behavior must be unchanged.
+        self.assertEqual(
+            prebuilt_marker_relpath("math-libs/hipthreads/build"),
+            "math-libs/hipthreads/build.prebuilt",
+        )
+
+    def testBasedirNestedBelowStageTruncates(self):
+        # A basedir below the stage dir must still mark the enclosing stage dir.
+        self.assertEqual(
+            prebuilt_marker_relpath("dctools/rdc/stage/portable-rdc"),
+            "dctools/rdc/stage.prebuilt",
+        )
+
+    def testInnermostStageComponentWins(self):
+        self.assertEqual(
+            prebuilt_marker_relpath("a/stage/b/stage/c/d"),
+            "a/stage/b/stage.prebuilt",
+        )
 
 
 if __name__ == "__main__":

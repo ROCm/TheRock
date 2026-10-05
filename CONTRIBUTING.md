@@ -15,7 +15,7 @@ These policies apply to all forms of activity and engagement in this project.
 ### Project governance
 
 See
-[ROCm Project Governance](https://github.com/ROCm/ROCm/blob/develop/GOVERNANCE.md),
+[ROCm Project Governance](GOVERNANCE.md),
 which also defines the code of conduct.
 
 ### Licensing
@@ -208,7 +208,7 @@ Discussion about new features is welcome via
 > intent to work on a pull request early in development, as this gives other
 > contributors time to offer advice and avoid duplicating effort.
 
-### Creating pull requests
+### Contributing via GitHub pull requests
 
 To keep code quality high across the project, we hold pull requests to the
 following standards:
@@ -220,6 +220,7 @@ following standards:
 | ✅ Pull requests should link an issue | <ul><li>[`therock-pr-bot.yml`](/.github/workflows/therock-pr-bot.yml)</li></ul>                                                              | <ul><li>[`pull_request_template.md`](/.github/pull_request_template.md)<li>Policy Bot [`FAQ.md`](/skills/therock_pr_bot/FAQ.md#-pr-description)</li></ul> |
 | ✅ Lint pre-commit checks             | <ul><li>[`pre-commit.yml`](.github/workflows/pre-commit.yml)</li></ul>                                                                       | <ul><li>[pre-commit checks](#pre-commit-checks)</li></ul>                                                                                                 |
 | ✅ Changes should be tested           | <ul><li>[`unit_tests.yml`](.github/workflows/unit_tests.yml)</li><li>[`therock-pr-bot.yml`](/.github/workflows/therock-pr-bot.yml)</li></ul> | <ul><li>[`TESTING.md`](/TESTING.md)</li><li>[`docs/development/adding_tests.md`](docs/development/adding_tests.md)</li></ul>                              |
+| ✅ Security scans                     | <ul><li>[`security_scan_pr.yml`](/.github/workflows/security_scan_pr.yml)</li></ul>                                                          | <ul><li>[Security scanners](#security-scanners)</li></ul>                                                                                                 |
 
 > [!NOTE]
 > For more information about the PR Policy Bot which enforces some of these
@@ -245,7 +246,7 @@ observed across multiple commits.
 > [!TIP]
 > These style guides are intended for both human developers _and_ AI agents.
 >
-> The repository's [`CLAUDE.md`](/CLAUDE.md) references them, as do the
+> The repository's [`AGENTS.md`](/AGENTS.md) references them, as do the
 > PR-quality skills for AI agents under [`skills/`](/skills/). Following these
 > guides during agent-driven development can help produce higher-quality
 > contributions that are easier for maintainers to review.
@@ -308,37 +309,114 @@ The `lychee` hook checks that repo-relative markdown links resolve to files that
 exist. It is confined to the `manual` stage because it downloads a `lychee`
 binary on first run, which the other hooks do not need.
 
-#### Requesting a code review
+#### Security scanners
+
+Separately from the correctness checks above, we scan the repository for
+secrets, unsafe Python, workflow vulnerabilities, and image
+misconfigurations. These run in CI via
+[`security_scan_pr.yml`](/.github/workflows/security_scan_pr.yml), which calls
+the shared [`ROCm/rocm-security-gh`](https://github.com/ROCm/rocm-security-gh)
+reusable workflow. See
+[the security scanning section in `TESTING.md`](/TESTING.md#therock-feature-area-security-scanning)
+for how the two security workflows fit together.
+
+Each scanner is runnable locally against the same configuration CI uses, which
+is faster than pushing a commit to see what CI says. The configurations live in
+[`build_tools/scan_tools/`](/build_tools/scan_tools/):
+
+```bash
+# Secrets, over the full git history (installed separately, see gitleaks docs).
+gitleaks detect --source . --config build_tools/scan_tools/gitleaks.toml \
+  --redact --verbose --no-banner
+
+# Secrets, working tree only. Much faster, and usually what you want locally.
+gitleaks detect --source . --config build_tools/scan_tools/gitleaks.toml \
+  --redact --no-banner --no-git
+
+# Unsafe patterns in Python (pip install bandit).
+bandit --configfile build_tools/scan_tools/bandit.yml --severity-level low \
+  --recursive .
+
+# GitHub Actions workflow vulnerabilities (pip install zizmor).
+zizmor --persona regular --config build_tools/scan_tools/zizmor.yml .
+
+# Dockerfile misconfigurations and dependency vulnerabilities (see trivy docs).
+trivy fs --config build_tools/scan_tools/trivy.yml \
+  --severity LOW,MEDIUM,HIGH,CRITICAL --scanners misconfig,vuln .
+```
+
+> [!NOTE]
+> These commands report every severity, while CI only fails on `HIGH` (and
+> `CRITICAL` for trivy). Expect more output locally than a red CI check implies.
+>
+> The commands also scan the whole repository, while pull request runs default
+> to scanning only what the pull request changed. A full-history `gitleaks` run
+> in particular reports pre-existing findings that the pull request check does
+> not.
+
+CodeQL is not in the list above because it needs the CodeQL CLI and a built
+database; it runs in CI only, configured by
+[`build_tools/scan_tools/codeql.yml`](/build_tools/scan_tools/codeql.yml).
+
+#### Using draft pull requests
 
 If you are not looking for a review on a pull request yet, please mark that pull
 request as a draft:
 
-- ![create_pr_as_draft](docs/assets/github_pr_create_as_draft.png)
 - GitHub Docs: [Creating a pull request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request)
+
+  ![create_pr_as_draft](docs/assets/github_pr_create_as_draft.png)
+
 - GitHub Docs: [Changing the stage of a pull request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/changing-the-stage-of-a-pull-request)
 
-When you are ready for a review, please request a review from a maintainer and
-mark the PR as not a draft as needed:
-
-- ![request_reviewers](docs/assets/github_pr_request_reviewers.png)
-- ![mark_pr_as_ready](docs/assets/github_pr_mark_as_ready.png)
-- GitHub Docs: [Requesting a pull request review](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/requesting-a-pull-request-review)
-
-You can check the git history to see who recently authored or approved PRs in
-the same files or folders:
-
-- CODEOWNERS
-  - GitHub Docs: [About code owners](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners)
-  - [`.github/CODEOWNERS`](/.github/CODEOWNERS)
-- Checking history
-  - GitHub Docs: [Viewing and understanding files](https://docs.github.com/en/repositories/working-with-files/using-files/viewing-and-understanding-files)
-  - GitHub Docs: [Differences between commit views](https://docs.github.com/en/pull-requests/committing-changes-to-your-project/viewing-and-comparing-commits/differences-between-commit-views)
-
-> [!TIP]
-> After addressing feedback, please
-> [re-request review](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/requesting-a-pull-request-review#requesting-reviews-from-collaborators-and-organization-members)
+> [!WARNING]
+> Reviews from CODEOWNERS are automatically requested
+> for non-draft pull requests, see
+> [About code owners](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners).
 >
-> ![rerequest_review](docs/assets/github_pr_rerequest_review.png)
->
-> this ensures that your pull request shows up for reviewers on dashboards such
-> as <https://github.com/pulls/reviews>.
+> If a pull request modifies files covered under
+> [`CODEOWNERS`](/.github/CODEOWNERS), such as the `rocm-libraries` submodule,
+> maintainers will be asked to review the changes. If a pull request is only
+> intended to be used for testing, please mark it as a draft to limit
+> review request notifications.
+
+#### Requesting a code review
+
+When you are ready for a review, please:
+
+1. Mark the PR as "ready for review" if it was a draft:
+
+   ![mark_pr_as_ready](docs/assets/github_pr_mark_as_ready.png)
+
+1. Request a review from a reviewer or maintainer (GitHub Docs:
+   [Requesting a pull request review](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/requesting-a-pull-request-review))
+
+   ![request_reviewers](docs/assets/github_pr_request_reviewers.png)
+
+   You can check the git history to see who recently authored or approved PRs in
+   the same files or folders:
+
+   - CODEOWNERS
+     - GitHub Docs: [About code owners](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners)
+     - [`.github/CODEOWNERS`](/.github/CODEOWNERS)
+   - Checking history
+     - GitHub Docs: [Viewing and understanding files](https://docs.github.com/en/repositories/working-with-files/using-files/viewing-and-understanding-files)
+     - GitHub Docs: [Differences between commit views](https://docs.github.com/en/pull-requests/committing-changes-to-your-project/viewing-and-comparing-commits/differences-between-commit-views)
+
+#### Responding to review feedback and re-requesting review
+
+After addressing review feedback, please
+[re-request review](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/requesting-a-pull-request-review#requesting-reviews-from-collaborators-and-organization-members)
+to ensure that your pull request shows up for reviewers on dashboards such
+as <https://github.com/pulls/reviews>:
+
+![rerequest_review](docs/assets/github_pr_rerequest_review.png)
+
+#### Merging approved changes
+
+Once a pull request has been approved, pull request authors with write access
+can merge their own changes, typically using the "squash and merge" strategy
+(see
+[Pull request merges](https://docs.github.com/en/pull-requests/reference/pull-request-merges))
+with the pull request description as the commit message. Contributors without
+write access can request that a maintainer merge on their behalf.

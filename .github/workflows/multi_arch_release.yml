@@ -4,7 +4,7 @@
 # This workflow is the entry point for multi-arch releases.
 #
 # For manual dev releases, trigger via workflow_dispatch on TheRock.
-# For scheduled nightly releases, rockrel will call this via workflow_call
+# For scheduled nightly releases, https://github.com/ROCm/rockrel will call this via workflow_call
 # (TODO: pass required inputs through to setup job explicitly as needed).
 #
 # If we want per-platform status badges, independent retryability, or
@@ -13,13 +13,17 @@
 # let us have this pre-trigger job freeze commits/versions so re-runs use
 # consistent values, see https://github.com/ROCm/TheRock/issues/1236.
 
+# Notes on security:
+#   * Higher-trust entry points: manual runs and automation from https://github.com/ROCm/rockrel.
+#   * Inherit Quartz credentials through nested workflows without repeating mappings.
+
 name: Multi-Arch Release
 
 on:
   workflow_call:
     inputs:
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease".'
+        description: 'Release type: "dev", "dev-bkc", "nightly", "nightly-bkc", or "prerelease".'
         type: string
         required: true
       prerelease_version:
@@ -59,11 +63,22 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      # Enable Quartz release-lineage tracking. When on, this run's id is
+      # propagated to every triggered workflow as quartz_tracking_id, formatted
+      # as "<github.run_id>;<release_type>". Tracking is currently only
+      # meaningful for rockrel-initiated runs; enabling it for a manual TheRock
+      # dispatch has no effect on Quartz tracking.
+      enable_quartz_tracking:
+        description: "Enable Quartz release-lineage tracking (off by default)."
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       release_type:
-        description: 'Release type; developer-triggered jobs should use "dev".'
+        description: 'Release type; ordinary developer-triggered jobs should use "dev".'
         type: choice
+        # Only dev-channel release types are exposed for manual dispatch in
+        # TheRock. Nightly release types are supplied by rockrel.
         options:
           - dev
         default: dev
@@ -97,6 +112,15 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      # Enable Quartz release-lineage tracking. When on, this run's id is
+      # propagated to every triggered workflow as quartz_tracking_id, formatted
+      # as "<github.run_id>;<release_type>". Tracking is currently only
+      # meaningful for rockrel-initiated runs; enabling it for a manual TheRock
+      # dispatch has no effect on Quartz tracking.
+      enable_quartz_tracking:
+        description: "Enable Quartz release-lineage tracking (off by default)."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -137,14 +161,15 @@ jobs:
       windows_amdgpu_families: ${{ inputs.windows_amdgpu_families }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
-    secrets: inherit
+      quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
+    secrets: inherit # zizmor: ignore[secrets-inherit]
 
   linux_release:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
     needs: setup
     if: ${{ needs.setup.outputs.linux_build_config != '' }}
     uses: ./.github/workflows/multi_arch_release_linux.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       build_config: ${{ needs.setup.outputs.linux_build_config }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
@@ -158,6 +183,7 @@ jobs:
       build_pytorch: ${{ inputs.build_pytorch }}
       build_jax: ${{ inputs.build_jax }}
       python_version: ${{ inputs.python_version }}
+      quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows
@@ -168,7 +194,7 @@ jobs:
     needs: setup
     if: ${{ needs.setup.outputs.windows_build_config != '' }}
     uses: ./.github/workflows/multi_arch_release_windows.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       build_config: ${{ needs.setup.outputs.windows_build_config }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
@@ -178,6 +204,7 @@ jobs:
       ref: ${{ needs.setup.outputs.ref }}
       build_pytorch: ${{ inputs.build_pytorch }}
       python_version: ${{ inputs.python_version }}
+      quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows

@@ -3,6 +3,9 @@
 
 # ROCm Emulation Tools
 
+set(THEROCK_ROCJITSU_TEST_JOBS "1" CACHE STRING
+  "Number of parallel jobs for rocJITsu tests")
+
 if(THEROCK_ENABLE_ROCJITSU)
   ##############################################################################
   # rocjitsu
@@ -36,17 +39,13 @@ if(THEROCK_ENABLE_ROCJITSU)
 
   therock_cmake_subproject_build_test(rocjitsu
     COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure --no-tests=error
+      -j "${THEROCK_ROCJITSU_TEST_JOBS}"
   )
 
   therock_test_validate_shared_lib(PATH rocjitsu/dist/lib
     LIB_NAMES
       librocjitsu.so
   )
-  therock_test_validate_shared_lib(PATH rocjitsu/dist/lib
-    LIB_NAMES
-      libhsa_hotswap_rocjitsu.so
-  )
-
   therock_provide_artifact(rocjitsu
     TARGET_NEUTRAL
     DESCRIPTOR artifact-rocjitsu.toml
@@ -77,6 +76,11 @@ if(THEROCK_ENABLE_ROCJITSU_HOTSWAP)
   )
 
   therock_cmake_subproject_activate(rocjitsu-hotswap)
+
+  therock_test_validate_shared_lib(PATH rocjitsu-hotswap/dist/lib
+    LIB_NAMES
+      libhsa_hotswap_rocjitsu.so
+  )
 
   therock_provide_artifact(rocjitsu-hotswap
     TARGET_NEUTRAL

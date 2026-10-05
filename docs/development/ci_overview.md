@@ -14,19 +14,26 @@ Instead of Jenkins and Groovy pipelines, TheRock uses **GitHub Actions** workflo
 
 ## CI Architecture
 
-TheRock uses a multi-stage CI pipeline that splits the build into stages (compiler-runtime → runtime-tests/math-libs, etc.) with dependency chaining. Below is a general diagram of the CI flow
+TheRock uses a multi-stage CI pipeline that splits the build into stages with
+dependency chaining. The Linux pipeline builds emulation separately from the
+compiler and runtime, while communication libraries wait for emulation because
+RCCL consumes rocjitsu-generated artifacts.
 
 ```mermaid
 graph TD
-    A[generic build] --> B1[arch build - gfx94X-dcgpu]
-    A[generic build] --> B2[arch build - gfx110X-dgpu]
-    B1 --> C[test - gfx94X-dcgpu]
-    B2 --> D[test - gfx110X-dgpu]
+    compilerRuntime[Compiler and runtime] --> emulation[Emulation]
+    compilerRuntime --> mathGfx94X[Math libraries - gfx94X]
+    compilerRuntime --> mathGfx110X[Math libraries - gfx110X]
+    compilerRuntime --> runtimeTests[Runtime tests]
+    emulation --> commLibraries[Communication libraries]
+    mathGfx94X --> testGfx94X[Tests - gfx94X]
+    mathGfx110X --> testGfx110X[Tests - gfx110X]
 ```
 
 Each stage runs as a separate job, uploads its artifacts and logs to S3, then downstream stages download and build on top of them. This allows for:
 
-- **Parallelization:** Multiple GPU families can build math-libs simultaneously once compiler-runtime completes
+- **Parallelization:** Emulation, runtime tests, and multiple GPU-family math
+  library builds can run as separate jobs once compiler-runtime completes
 - **Incremental builds:** Test-only runs can skip build stages by downloading pre-built artifacts
 - **Flexibility:** Different stages can run on different runner types (e.g., CPU-only for build, GPU for tests)
 

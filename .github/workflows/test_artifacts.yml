@@ -1,6 +1,10 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# Notes on security:
+#   * Inherit caller-provided secrets; limited-trust PR entry points restrict the set.
+#   * Higher-trust push/manual runs and https://github.com/ROCm/rockrel also supply secrets.
+
 name: Test Artifacts
 
 on:
@@ -18,9 +22,6 @@ on:
         default: ""
       test_runs_on:
         type: string
-      benchmark_runs_on:
-        type: string
-        default: ""
       sanity_check_only_for_family:
         type: boolean
         default: false
@@ -28,18 +29,12 @@ on:
         type: string
       test_labels:
         type: string
-      run_extended_tests:
-        type: string
-        default: 'false'
-      windows_hip_rocr_tests:
-        type: string
-        default: 'false'
       changed_projects:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
         default: ""
       release_type:
-        description: 'Release type: "ci" or "dev".'
+        description: 'Release type for the artifacts being tested.'
         type: choice
         options:
           - ci
@@ -57,7 +52,17 @@ on:
         options:
           - release
           - asan
+          - asan-debug
+          - host-asan
+          - host-asan-debug
         default: release
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_call:
     inputs:
       artifact_group:
@@ -72,9 +77,6 @@ on:
         default: ""
       test_runs_on:
         type: string
-      benchmark_runs_on:
-        type: string
-        default: ""
       sanity_check_only_for_family:
         type: boolean
         default: false
@@ -82,12 +84,6 @@ on:
         type: string
       test_labels:
         type: string
-      run_extended_tests:
-        type: string
-        default: 'false'
-      windows_hip_rocr_tests:
-        type: string
-        default: 'false'
       changed_projects:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
@@ -105,6 +101,9 @@ on:
         description: "Build variant (e.g., release, asan)."
         type: string
         default: "release"
+      quartz_tracking_id:
+        type: string
+        default: ""
   push:
     branches:
       - ADHOCBUILD
@@ -139,13 +138,17 @@ jobs:
 
       - name: Checking out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
       - name: Checkout CI config
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
+          persist-credentials: false
           repository: ROCm/therock-ci-config
           ref: main
           path: ci-config
@@ -175,8 +178,6 @@ jobs:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
-          RUN_EXTENDED_TESTS: ${{ inputs.run_extended_tests }}
-          WINDOWS_HIP_ROCR_TESTS: ${{ inputs.windows_hip_rocr_tests }}
           PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
           CI_CONFIG_PATH: ci-config
           BUILD_VARIANT: ${{ inputs.build_variant }}
@@ -187,8 +188,9 @@ jobs:
   test_sanity_check:
     name: 'Test Sanity Check'
     needs: configure_test_matrix
+    if: ${{ fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner != '' }}
     uses: './.github/workflows/test_component.yml'
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: ${{ inputs.artifact_group }}
@@ -203,6 +205,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       build_variant: ${{ inputs.build_variant }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   test_components:
     name: 'Test ${{ matrix.components.job_name }}'
@@ -224,7 +227,7 @@ jobs:
       matrix:
         components: ${{ fromJSON(needs.configure_test_matrix.outputs.components || '[]') }}
     uses: './.github/workflows/test_component.yml'
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: ${{ inputs.artifact_group }}
@@ -235,9 +238,8 @@ jobs:
       #      Only applies to workflow_dispatch events (not PR/workflow_call chains).
       #      Bot-triggered runs (e.g., nightly from rockrel) skip this and use rules below.
       #   2. Multi-GPU components use the multi-GPU runner (required for correct execution)
-      #   3. Benchmark components use the dedicated benchmark runner
-      #   4. CPU-only components use standard GitHub runners (aws-linux-scale-rocm-prod)
-      #   5. Per-component runner (set by fetch_test_configurations.py)
+      #   3. CPU-only components use standard GitHub runners (aws-linux-scale-rocm-prod)
+      #   4. Per-component runner (set by fetch_test_configurations.py)
       test_runs_on: >-
         ${{
           (github.event_name == 'workflow_dispatch' &&
@@ -246,9 +248,6 @@ jobs:
             inputs.test_runs_on) ||
           (matrix.components.multi_gpu_runner != '' &&
             matrix.components.multi_gpu_runner) ||
-          (matrix.components.is_benchmark == true &&
-            inputs.benchmark_runs_on != '' &&
-            inputs.benchmark_runs_on) ||
           (matrix.components.linux_cpu_runner == true &&
             'aws-linux-scale-rocm-prod') ||
           matrix.components.test_runner
@@ -259,6 +258,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       build_variant: ${{ inputs.build_variant }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}

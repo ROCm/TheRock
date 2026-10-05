@@ -14,7 +14,14 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from github_actions.github_actions_api import gha_set_output
 
-RELEASE_TYPES = ["ci", "dev", "nightly", "prerelease"]
+RELEASE_TYPES = [
+    "ci",
+    "dev",
+    "dev-bkc",
+    "nightly",
+    "nightly-bkc",
+    "prerelease",
+]
 
 # TODO: add opt-ins for CI runs to use python versions and JAX refs normally
 #       only included in release runs.
@@ -24,16 +31,6 @@ CI_PYTHON_VERSIONS = {
 }
 
 JAX_REF_CONFIGS = {
-    "rocm-jaxlib-v0.10.0": {
-        "jax_ref": "rocm-jaxlib-v0.10.0",
-        "jax_repository": "ROCm/jax",
-        "gfx_arch": "device-all",
-    },
-    "rocm-jaxlib-v0.10.1": {
-        "jax_ref": "rocm-jaxlib-v0.10.1",
-        "jax_repository": "ROCm/jax",
-        "gfx_arch": "device-all",
-    },
     "rocm-jaxlib-v0.10.2": {
         "jax_ref": "rocm-jaxlib-v0.10.2",
         "jax_repository": "ROCm/jax",
@@ -41,6 +38,20 @@ JAX_REF_CONFIGS = {
     },
     "rocm-jaxlib-v0.11.0": {
         "jax_ref": "rocm-jaxlib-v0.11.0",
+        "jax_repository": "ROCm/jax",
+        "gfx_arch": "device-all",
+        # JAX dropped Python 3.11 support in 0.11.0.
+        "exclude_python_versions": ["3.11"],
+    },
+    "rocm-jaxlib-v0.11.1": {
+        "jax_ref": "rocm-jaxlib-v0.11.1",
+        "jax_repository": "ROCm/jax",
+        "gfx_arch": "device-all",
+        # JAX dropped Python 3.11 support in 0.11.0.
+        "exclude_python_versions": ["3.11"],
+    },
+    "rocm-jaxlib-v0.11.2": {
+        "jax_ref": "rocm-jaxlib-v0.11.2",
         "jax_repository": "ROCm/jax",
         "gfx_arch": "device-all",
         # JAX dropped Python 3.11 support in 0.11.0.
@@ -55,10 +66,10 @@ JAX_REF_CONFIGS = {
 # should differ later.
 RELEASE_JAX_REFS = {
     "linux": [
-        "rocm-jaxlib-v0.10.0",
-        "rocm-jaxlib-v0.10.1",
         "rocm-jaxlib-v0.10.2",
         "rocm-jaxlib-v0.11.0",
+        "rocm-jaxlib-v0.11.1",
+        "rocm-jaxlib-v0.11.2",
     ],
 }
 
@@ -67,7 +78,7 @@ RELEASE_JAX_REFS = {
 # rather than every release version. Additional refs can be opted in as needed.
 CI_JAX_REFS = {
     "linux": [
-        "rocm-jaxlib-v0.11.0",
+        "rocm-jaxlib-v0.11.2",
     ],
 }
 

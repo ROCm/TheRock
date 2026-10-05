@@ -7,6 +7,9 @@
 > This page documents historical per-family releases while they are still
 > available but *no new per-family releases will be generated and previous*
 > *per-family releases may be deleted as file retention policies take effect*.
+> The legacy release domains and paths on this page are intentional. Historical
+> artifacts remain at their original URLs and are not mirrored into the current
+> `repo.amd.com` product layout.
 
 Per-family releases use **GPU-family-specific index URLs** - you choose the
 index URL that matches your GPU family, and all packages for that family are

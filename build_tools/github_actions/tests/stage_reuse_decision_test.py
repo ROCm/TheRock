@@ -7,7 +7,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -29,6 +29,19 @@ class _FakeStage:
         self.artifact_groups = groups
 
 
+class _FakeArtifact:
+    def __init__(
+        self,
+        artifact_type,
+        *,
+        platform=None,
+        disable_platforms=(),
+    ):
+        self.type = artifact_type
+        self.platform = platform
+        self.disable_platforms = list(disable_platforms)
+
+
 class FakeTopology:
     """Minimal BuildTopology stand-in for stage_impact + artifact derivation.
 
@@ -43,6 +56,10 @@ class FakeTopology:
         self.artifact_groups = {
             "base-group": type("G", (), {"source_sets": ["core"]})(),
             "blas-group": type("G", (), {"source_sets": ["libs"]})(),
+        }
+        self.artifacts = {
+            "base": _FakeArtifact("target-neutral"),
+            "blas": _FakeArtifact("target-specific"),
         }
 
     def get_source_set_to_artifact_groups(self):
@@ -67,6 +84,69 @@ class FakeTopology:
 
     def get_source_set_for_path(self, path, platform=None):
         return None
+
+    def get_source_sets_with_source_paths(self):
+        return []
+
+    def get_all_artifacts_for_source_set(self, source_set_name):
+        return frozenset()
+
+    def parse_changed_path(self, path):
+        return (None, None)
+
+    def get_artifacts_for_path(self, path):
+        return []
+
+
+class PartialReuseTopology(FakeTopology):
+    """Topology with two unaffected stages for partial-reuse validation."""
+
+    def __init__(self):
+        super().__init__()
+
+        self.build_stages["profiler-apps"] = _FakeStage(["profiler-group"])
+        self.artifact_groups["profiler-group"] = type(
+            "G",
+            (),
+            {"source_sets": ["systems"]},
+        )()
+        self.artifacts.update(
+            {
+                "rocprofiler-sdk": _FakeArtifact("target-neutral"),
+                "rocprofiler-systems": _FakeArtifact("target-neutral"),
+            }
+        )
+
+    def get_source_set_to_artifact_groups(self):
+        return {
+            "core": ["base-group"],
+            "libs": ["blas-group"],
+            "systems": ["profiler-group"],
+        }
+
+    def get_artifact_group_to_build_stages(self):
+        return {
+            "base-group": ["compiler-runtime"],
+            "blas-group": ["math-libs"],
+            "profiler-group": ["profiler-apps"],
+        }
+
+    def get_artifact_group_to_artifacts(self):
+        return {
+            "base-group": ["base"],
+            "blas-group": ["blas"],
+            "profiler-group": [
+                "rocprofiler-sdk",
+                "rocprofiler-systems",
+            ],
+        }
+
+    def get_artifacts_in_group(self, group_name):
+        return {
+            "base-group": [],
+            "blas-group": [],
+            "profiler-group": [],
+        }.get(group_name, [])
 
 
 def _baseline(run_id, matched_filenames):
@@ -111,12 +191,40 @@ class ModeParsingTest(unittest.TestCase):
 
     def test_explicit_modes(self):
         for value, expected in [
+            ("off", StageReuseMode.OFF),
             ("dry-run", StageReuseMode.DRY_RUN),
             ("reuse-stage", StageReuseMode.REUSE_STAGE),
             ("garbage", StageReuseMode.DRY_RUN),
         ]:
             with patch.dict(os.environ, {"STAGE_REUSE_MODE": value}):
                 self.assertEqual(StageReuseMode.from_environ(), expected)
+
+    def test_off_short_circuits_all_analysis_and_lookup(self):
+        baseline_selector = Mock()
+
+        with (
+            patch.object(srd, "_build_platforms") as build_platforms,
+            patch.object(srd, "get_topology") as get_topology,
+            patch.object(srd, "plan_stage_reuse") as plan_stage_reuse,
+        ):
+            result = compute_auto_stage_reuse(
+                changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+                mode=StageReuseMode.OFF,
+                linux_amdgpu_families=["gfx94X-dcgpu"],
+                baseline_selector=baseline_selector,
+            )
+
+        build_platforms.assert_not_called()
+        get_topology.assert_not_called()
+        plan_stage_reuse.assert_not_called()
+        baseline_selector.assert_not_called()
+
+        self.assertTrue(result.full_rebuild_required)
+        self.assertIsNone(result.baseline_run_id)
+        self.assertEqual(result.candidate_stages, ())
+        self.assertEqual(result.available_stages, ())
+        self.assertEqual(result.applied_reuse_stages, ())
+        self.assertIn("mode=off", "\n".join(result.report_lines))
 
 
 class AvailabilityGateTest(unittest.TestCase):
@@ -138,6 +246,36 @@ class AvailabilityGateTest(unittest.TestCase):
         self.assertIn("available in baseline", joined)
         self.assertIn("WOULD be skipped", joined)
 
+    def test_artifact_level_availability_with_selected_baseline(self):
+        plan = srd.StageReusePlan(
+            candidate_stages=("compiler-runtime",),
+            rebuild_stages=("math-libs",),
+            full_rebuild_required=False,
+            reasons=(),
+            impacted_artifacts=("blas",),
+            reusable_artifacts=("base",),
+            artifact_level_analysis=True,
+        )
+
+        with patch.object(srd, "plan_stage_reuse", return_value=plan):
+            result = compute_auto_stage_reuse(
+                changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+                mode=StageReuseMode.DRY_RUN,
+                linux_amdgpu_families=["generic"],
+                topology=FakeTopology(),
+                baseline_selector=_selector(
+                    _baseline(
+                        "123",
+                        ["base_lib_generic.tar.zst"],
+                    )
+                ),
+            )
+
+        self.assertEqual(result.baseline_run_id, "123")
+        self.assertTrue(result.artifact_level_analysis)
+        self.assertEqual(result.reusable_artifacts, ("base",))
+        self.assertEqual(result.rebuild_artifacts, ("blas",))
+
     def test_dry_run_unaffected_but_artifacts_missing_rebuilds(self):
         # compiler-runtime unaffected, but baseline only has blas (not base).
         result = compute_auto_stage_reuse(
@@ -151,7 +289,7 @@ class AvailabilityGateTest(unittest.TestCase):
         self.assertIn("compiler-runtime", result.unavailable_stages)
         self.assertEqual(result.available_stages, ())
         joined = "\n".join(result.report_lines)
-        self.assertIn("artifacts NOT available", joined)
+        self.assertIn("artifacts not in selected baseline", joined)
 
     def test_no_baseline_found_rebuilds_candidates(self):
         result = compute_auto_stage_reuse(
@@ -165,11 +303,11 @@ class AvailabilityGateTest(unittest.TestCase):
         self.assertEqual(result.available_stages, ())
         self.assertIsNone(result.baseline_run_id)
         joined = "\n".join(result.report_lines)
-        self.assertIn("no baseline run contains artifacts", joined)
+        # When no baseline is found, we now report it as "no commit-compatible baseline"
+        self.assertIn("no usable baseline run found", joined)
+        self.assertNotIn("all candidate runs are newer", joined)
 
-    def test_partial_family_availability_rebuilds(self):
-        # Needs base for a real family + generic; baseline only has the generic
-        # archive, so the real family's artifact is missing -> rebuild.
+    def test_target_neutral_artifact_only_requires_generic(self):
         result = compute_auto_stage_reuse(
             changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
             mode=StageReuseMode.DRY_RUN,
@@ -177,8 +315,9 @@ class AvailabilityGateTest(unittest.TestCase):
             topology=FakeTopology(),
             baseline_selector=_selector(_baseline("123", ["base_lib_generic.tar.zst"])),
         )
-        self.assertIn("compiler-runtime", result.unavailable_stages)
-        self.assertEqual(result.available_stages, ())
+
+        self.assertIn("compiler-runtime", result.available_stages)
+        self.assertNotIn("compiler-runtime", result.unavailable_stages)
 
     def test_reuse_stage_applies_only_available_stages(self):
         result = compute_auto_stage_reuse(
@@ -219,6 +358,64 @@ class AvailabilityGateTest(unittest.TestCase):
                 topology=FakeTopology(),
                 baseline_selector=boom,
             )
+
+    def test_incomplete_stage_does_not_block_complete_stage(self):
+        captured_requirements = {}
+
+        def selector(requirements_by_stage):
+            captured_requirements.update(requirements_by_stage)
+            return _baseline(
+                "123",
+                [
+                    "base_lib_generic.tar.zst",
+                    "rocprofiler-sdk_lib_generic.tar.zst",
+                ],
+            )
+
+        result = compute_auto_stage_reuse(
+            changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+            mode=StageReuseMode.DRY_RUN,
+            linux_amdgpu_families=["generic"],
+            topology=PartialReuseTopology(),
+            baseline_selector=selector,
+        )
+
+        self.assertEqual(
+            set(captured_requirements),
+            {
+                "compiler-runtime",
+                "profiler-apps",
+            },
+        )
+        self.assertEqual(
+            {
+                (
+                    requirement.name,
+                    requirement.target_family,
+                )
+                for requirement in captured_requirements["compiler-runtime"]
+            },
+            {
+                ("base", "generic"),
+            },
+        )
+        self.assertEqual(
+            {
+                (
+                    requirement.name,
+                    requirement.target_family,
+                )
+                for requirement in captured_requirements["profiler-apps"]
+            },
+            {
+                ("rocprofiler-sdk", "generic"),
+                ("rocprofiler-systems", "generic"),
+            },
+        )
+
+        self.assertIn("compiler-runtime", result.available_stages)
+        self.assertIn("profiler-apps", result.unavailable_stages)
+        self.assertEqual(result.baseline_run_id, "123")
 
 
 class GuardrailTest(unittest.TestCase):
@@ -298,7 +495,11 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
             ),
         ):
             selector = srd._default_baseline_selector(platform="linux")
-            result = selector([("base", "generic")])
+            result = selector(
+                {
+                    "compiler-runtime": (srd.RequiredArtifact("base", "generic"),),
+                }
+            )
 
         return captured, result
 
@@ -307,22 +508,36 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
             return ["sha-current", "sha-old", "sha-older"]
 
         captured, _ = self._run_with_env(
-            {"STAGE_REUSE_CURRENT_SHA": "sha-current"},
+            {
+                "GITHUB_REPOSITORY": "ROCm/TheRock",
+                "STAGE_REUSE_CURRENT_SHA": "sha-current",
+            },
             fake_history,
             fake_select="baseline",
         )
         # Real history passed through (NOT an empty list).
         self.assertEqual(
-            captured["ordered_commit_shas"], ["sha-current", "sha-old", "sha-older"]
+            captured["ordered_commit_shas"],
+            ["sha-current", "sha-old", "sha-older"],
         )
         self.assertEqual(captured["current_commit_sha"], "sha-current")
+        self.assertEqual(
+            captured["required_artifact_groups"],
+            {
+                "compiler-runtime": (srd.RequiredArtifact("base", "generic"),),
+            },
+        )
+        self.assertNotIn("required_artifacts", captured)
 
     def test_empty_history_disables_commit_rule(self):
         def fake_history(**kwargs):
             return []
 
         captured, _ = self._run_with_env(
-            {"STAGE_REUSE_CURRENT_SHA": "sha-current"},
+            {
+                "GITHUB_REPOSITORY": "ROCm/TheRock",
+                "STAGE_REUSE_CURRENT_SHA": "sha-current",
+            },
             fake_history,
             fake_select="baseline",
         )
@@ -335,7 +550,10 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
             raise GitHubAPIError("api down")
 
         captured, _ = self._run_with_env(
-            {"STAGE_REUSE_CURRENT_SHA": "sha-current"},
+            {
+                "GITHUB_REPOSITORY": "ROCm/TheRock",
+                "STAGE_REUSE_CURRENT_SHA": "sha-current",
+            },
             fake_history,
             fake_select="baseline",
         )
@@ -350,13 +568,116 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
             return ["x"]
 
         captured, _ = self._run_with_env(
-            {"STAGE_REUSE_CURRENT_SHA": None},
+            {
+                "GITHUB_REPOSITORY": "ROCm/TheRock",
+                "STAGE_REUSE_CURRENT_SHA": None,
+            },
             fake_history,
             fake_select="baseline",
         )
         self.assertEqual(calls["n"], 0)
         self.assertIsNone(captured["current_commit_sha"])
         self.assertIsNone(captured["ordered_commit_shas"])
+
+
+class ArtifactRequirementTest(unittest.TestCase):
+    def test_expands_ci_family_names_to_concrete_targets(self):
+        expanded = srd._expand_target_families(
+            [
+                "gfx94x",
+                "gfx110x",
+                "gfx1151",
+                "gfx120x",
+                "generic",
+            ]
+        )
+
+        self.assertEqual(
+            expanded,
+            (
+                "gfx942",
+                "gfx1100",
+                "gfx1101",
+                "gfx1102",
+                "gfx1103",
+                "gfx1151",
+                "gfx1200",
+                "gfx1201",
+            ),
+        )
+
+    def test_unknown_target_family_is_rejected(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "Cannot expand AMDGPU target family: unknown-family",
+        ):
+            srd._expand_target_families(["unknown-family"])
+
+    def test_target_neutral_artifact_requires_only_generic(self):
+        requirements = srd._required_artifacts_for_stages(
+            FakeTopology(),
+            ["compiler-runtime"],
+            ["gfx110x", "generic"],
+            platform="linux",
+        )
+
+        self.assertEqual(
+            {
+                (requirement.name, requirement.target_family)
+                for requirement in requirements
+            },
+            {
+                ("base", "generic"),
+            },
+        )
+
+    def test_target_specific_artifact_uses_concrete_targets(self):
+        requirements = srd._required_artifacts_for_stages(
+            FakeTopology(),
+            ["math-libs"],
+            ["gfx110x", "generic"],
+            platform="linux",
+        )
+
+        self.assertEqual(
+            {
+                (requirement.name, requirement.target_family)
+                for requirement in requirements
+            },
+            {
+                ("blas", "generic"),
+                ("blas", "gfx1100"),
+                ("blas", "gfx1101"),
+                ("blas", "gfx1102"),
+                ("blas", "gfx1103"),
+            },
+        )
+
+    def test_artifact_disabled_on_platform_is_not_required(self):
+        topology = FakeTopology()
+        topology.artifacts["blas"].disable_platforms = ["windows"]
+
+        requirements = srd._required_artifacts_for_stages(
+            topology,
+            ["math-libs"],
+            ["gfx110x", "generic"],
+            platform="windows",
+        )
+
+        self.assertEqual(requirements, [])
+
+    def test_platform_specific_artifact_is_not_required_elsewhere(self):
+        topology = FakeTopology()
+        topology.artifacts["base"].platform = "windows"
+
+        requirements = srd._required_artifacts_for_stages(
+            topology,
+            ["compiler-runtime"],
+            ["generic"],
+            platform="linux",
+        )
+
+        self.assertEqual(requirements, [])
 
 
 class PlatformAwareAvailabilityTest(unittest.TestCase):
@@ -397,7 +718,138 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
         self.assertEqual(result.platform_available["linux"], ("compiler-runtime",))
         self.assertEqual(result.platform_available["windows"], ())
         joined = "\n".join(result.report_lines)
+        self.assertIn("artifacts not in selected baseline", joined)
+        self.assertNotIn("all candidate runs are newer", joined)
         self.assertIn("missing on: windows", joined)
+
+    def test_artifact_reuse_requires_every_applicable_platform(self):
+        plan = srd.StageReusePlan(
+            candidate_stages=("compiler-runtime",),
+            rebuild_stages=("math-libs",),
+            full_rebuild_required=False,
+            reasons=(),
+            impacted_artifacts=("blas",),
+            reusable_artifacts=("base",),
+            artifact_level_analysis=True,
+        )
+
+        # The artifact exists in the Linux baseline but not Windows.
+        per_platform = {
+            "linux": _baseline("L1", ["base_lib_generic.tar.zst"]),
+            "windows": _baseline("L1", ["blas_lib_generic.tar.zst"]),
+        }
+
+        with patch.object(srd, "plan_stage_reuse", return_value=plan):
+            result = compute_auto_stage_reuse(
+                changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+                mode=StageReuseMode.DRY_RUN,
+                linux_amdgpu_families=["generic"],
+                windows_amdgpu_families=["generic"],
+                topology=FakeTopology(),
+                baseline_selector_factory=self._selector_factory(per_platform),
+            )
+
+        self.assertEqual(result.baseline_run_id, "L1")
+        self.assertEqual(result.reusable_artifacts, ())
+        self.assertEqual(result.rebuild_artifacts, ("base", "blas"))
+
+    def test_artifact_reuse_uses_requirement_expansion_for_family_aliases(self):
+        topology = FakeTopology()
+        plan = srd.StageReusePlan(
+            candidate_stages=("math-libs",),
+            rebuild_stages=("compiler-runtime",),
+            full_rebuild_required=False,
+            reasons=(),
+            impacted_artifacts=("base",),
+            reusable_artifacts=("blas",),
+            artifact_level_analysis=True,
+        )
+
+        per_platform = {
+            "linux": _baseline(
+                "L1",
+                [
+                    "blas_lib_generic.tar.zst",
+                    "blas_lib_gfx1100.tar.zst",
+                    "blas_lib_gfx1101.tar.zst",
+                    "blas_lib_gfx1102.tar.zst",
+                    "blas_lib_gfx1103.tar.zst",
+                ],
+            ),
+        }
+
+        with patch.object(srd, "plan_stage_reuse", return_value=plan):
+            result = compute_auto_stage_reuse(
+                changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+                mode=StageReuseMode.DRY_RUN,
+                linux_amdgpu_families=["gfx110x"],
+                topology=topology,
+                baseline_selector_factory=self._selector_factory(per_platform),
+            )
+
+        self.assertEqual(result.baseline_run_id, "L1")
+        self.assertEqual(result.reusable_artifacts, ("blas",))
+        self.assertEqual(result.rebuild_artifacts, ("base",))
+
+    def test_artifact_reuse_target_neutral_only_requires_generic(self):
+        plan = srd.StageReusePlan(
+            candidate_stages=("compiler-runtime",),
+            rebuild_stages=("math-libs",),
+            full_rebuild_required=False,
+            reasons=(),
+            impacted_artifacts=("blas",),
+            reusable_artifacts=("base",),
+            artifact_level_analysis=True,
+        )
+
+        per_platform = {
+            "linux": _baseline("L1", ["base_lib_generic.tar.zst"]),
+        }
+
+        with patch.object(srd, "plan_stage_reuse", return_value=plan):
+            result = compute_auto_stage_reuse(
+                changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+                mode=StageReuseMode.DRY_RUN,
+                linux_amdgpu_families=["gfx110x"],
+                topology=FakeTopology(),
+                baseline_selector_factory=self._selector_factory(per_platform),
+            )
+
+        self.assertEqual(result.baseline_run_id, "L1")
+        self.assertEqual(result.reusable_artifacts, ("base",))
+        self.assertEqual(result.rebuild_artifacts, ("blas",))
+
+    def test_disabled_platform_does_not_block_artifact_reuse(self):
+        topology = FakeTopology()
+        topology.artifacts["base"].disable_platforms = ["windows"]
+
+        plan = srd.StageReusePlan(
+            candidate_stages=("compiler-runtime",),
+            rebuild_stages=("math-libs",),
+            full_rebuild_required=False,
+            reasons=(),
+            impacted_artifacts=("blas",),
+            reusable_artifacts=("base",),
+            artifact_level_analysis=True,
+        )
+
+        per_platform = {
+            "linux": _baseline("L1", ["base_lib_generic.tar.zst"]),
+        }
+
+        with patch.object(srd, "plan_stage_reuse", return_value=plan):
+            result = compute_auto_stage_reuse(
+                changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+                mode=StageReuseMode.DRY_RUN,
+                linux_amdgpu_families=["generic"],
+                windows_amdgpu_families=["generic"],
+                topology=topology,
+                baseline_selector_factory=self._selector_factory(per_platform),
+            )
+
+        self.assertEqual(result.baseline_run_id, "L1")
+        self.assertEqual(result.reusable_artifacts, ("base",))
+        self.assertEqual(result.rebuild_artifacts, ("blas",))
 
     def test_stage_reused_when_present_on_both_platforms(self):
         per_platform = {
@@ -414,6 +866,63 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
         )
         self.assertEqual(result.applied_reuse_stages, ("compiler-runtime",))
         self.assertIn("compiler-runtime", result.available_stages)
+
+    def test_platforms_use_only_their_own_target_families(self):
+        captured_required = {}
+
+        per_platform = {
+            "linux": _baseline("B1", ["base_lib_generic.tar.zst"]),
+            "windows": _baseline("B1", ["base_lib_generic.tar.zst"]),
+        }
+
+        def selector_factory(platform):
+            def selector(requirements_by_stage):
+                captured_required[platform] = {
+                    (artifact.name, artifact.target_family)
+                    for stage_requirements in requirements_by_stage.values()
+                    for artifact in stage_requirements
+                }
+                return per_platform[platform]
+
+            return selector
+
+        result = compute_auto_stage_reuse(
+            changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+            mode=StageReuseMode.REUSE_STAGE,
+            linux_amdgpu_families=["gfx94x"],
+            windows_amdgpu_families=["gfx110x"],
+            topology=FakeTopology(),
+            baseline_selector_factory=selector_factory,
+        )
+
+        self.assertEqual(
+            captured_required["linux"],
+            {
+                ("base", "generic"),
+            },
+        )
+
+        self.assertEqual(
+            captured_required["windows"],
+            {
+                ("base", "generic"),
+            },
+        )
+
+        self.assertEqual(
+            result.platform_available["linux"],
+            ("compiler-runtime",),
+        )
+
+        self.assertEqual(
+            result.platform_available["windows"],
+            ("compiler-runtime",),
+        )
+
+        self.assertEqual(
+            result.applied_reuse_stages,
+            ("compiler-runtime",),
+        )
 
     def test_single_platform_default_is_linux(self):
         result = compute_auto_stage_reuse(

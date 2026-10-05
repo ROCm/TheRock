@@ -73,7 +73,8 @@ Sub-project directories:
 - [`base/`](/base/) : Utility sub-projects that are dependency free or minimally
   co-dependent, providing core dependencies for the rest of the system.
 - [`compiler/`](/compiler/) : Compiler sub-projects, most notably the
-  [AMD-LLVM](https://github.com/ROCm/llvm-project) build, `hipcc`, etc.
+  [AMD-LLVM](https://github.com/ROCm/llvm-project) build, `hipcc` (legacy —
+  see [hipcc migration guide](hipcc_migration.md)), etc.
 - [`core/`](/core/) : Core runtime sub-projects, including the low-level
   [ROCR-Runtime](https://github.com/ROCm/ROCR-Runtime) and
   higher level HIP runtimes.

@@ -26,7 +26,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checking out repository
+        timeout-minutes: 10
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setting up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -38,7 +41,12 @@ jobs:
 
       - name: Fetch sources
         # All subproject sources must be present for the graph to be complete.
-        run: python3 ./build_tools/fetch_sources.py --jobs 12 --depth 1
+        timeout-minutes: 30
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git --hostname github.com
+          python3 ./build_tools/fetch_sources.py --jobs 12 --depth 1
 
       - name: Configure (emits the consumer graph)
         # Configure only, no build. gfx94X-dcgpu enables every subproject; some

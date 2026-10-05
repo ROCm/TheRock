@@ -27,6 +27,7 @@
       "hipthreads",
       "kfdtest",
       "libhipcxx",
+      "mxdatagenerator",
       "ocl-clr",
       "rdc",
       "rocgdb",
@@ -35,6 +36,7 @@
       "rocr-runtime",
       "rocrtst",
       "therock-elfio",
+      "therock-grpc",
       "therock-spdlog"
     ]
   },
@@ -180,7 +182,9 @@
   },
   "hipfile": {
     "consumers": [
-      "rocprofiler-sdk"
+      "rocprofiler-sdk",
+      "rocprofiler-systems",
+      "rocprofiler-systems-examples"
     ]
   },
   "hipify": {
@@ -259,10 +263,14 @@
   },
   "rccl": {
     "consumers": [
-      "rccl-tests"
+      "rccl-tests",
+      "rccl-translate"
     ]
   },
   "rccl-tests": {
+    "consumers": []
+  },
+  "rccl-translate": {
     "consumers": []
   },
   "rdc": {
@@ -297,11 +305,14 @@
   },
   "rocjitsu": {
     "consumers": [
+      "rccl-translate",
       "rocjitsu-hotswap"
     ]
   },
   "rocjitsu-hotswap": {
-    "consumers": []
+    "consumers": [
+      "rccl-translate"
+    ]
   },
   "rocjpeg": {
     "consumers": [
@@ -367,7 +378,8 @@
   "rocm-kpack": {
     "consumers": [
       "hip-clr",
-      "hipkernelprovider"
+      "hipkernelprovider",
+      "rccl-translate"
     ]
   },
   "rocm_smi_lib": {
@@ -633,6 +645,7 @@
       "hipcub",
       "hipdnn",
       "hipdnn_integration_tests",
+      "hipdnn_samples",
       "hipfft",
       "hipfile",
       "hipkernelprovider",
@@ -649,6 +662,7 @@
       "rocblas",
       "rocfft",
       "rocprim_tests",
+      "rocprofiler-systems",
       "rocrand",
       "rocroller",
       "rocshmem",
@@ -771,6 +785,7 @@
       "hipkernelprovider",
       "miopen",
       "miopenprovider",
+      "rocprofiler-systems",
       "therock-frugally-deep"
     ]
   },
@@ -834,6 +849,7 @@
       "kfdtest",
       "rdc",
       "rocgdb",
+      "rocprofiler-compute",
       "rocr-runtime",
       "therock-elfutils",
       "therock-grpc"

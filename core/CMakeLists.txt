@@ -12,6 +12,15 @@ if(WIN32)
   set(_system_toolchain "")
 endif()
 
+# Optionally override the comgr DLL name that CLR dynamically loads (Windows).
+# Kept in sync with the comgr build side via the same THEROCK_COMGR_DLL_NAME
+# option, so the name CLR loads matches the name comgr is built as. Applies to
+# both CLR builds: hip-clr and ocl-clr each compile their own rocclr.
+set(_clr_comgr_dll_name_cmake_args)
+if(THEROCK_COMGR_DLL_NAME)
+  list(APPEND _clr_comgr_dll_name_cmake_args "-DCOMGR_DLL_NAME=${THEROCK_COMGR_DLL_NAME}")
+endif()
+
 ################################################################################
 # rocm-kpack
 ################################################################################
@@ -70,6 +79,7 @@ if(THEROCK_ENABLE_CORE_AMDSMI)
       CMAKE_ARGS
         "-DCMAKE_VERBOSE_MAKEFILE=OFF"
         "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
+        "-DENABLE_WSL_BACKEND=ON"
       BUILD_DEPS
         therock-googletest
       RUNTIME_DEPS
@@ -274,16 +284,6 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       ROCR-Runtime
     )
   endif()
-
-  # Optionally override the comgr DLL name that CLR dynamically loads (Windows).
-  # Kept in sync with the comgr build side via the same THEROCK_COMGR_DLL_NAME
-  # option, so the name CLR loads matches the name comgr is built as.
-  set(_clr_comgr_dll_name_cmake_args)
-  if(THEROCK_COMGR_DLL_NAME)
-    list(APPEND _clr_comgr_dll_name_cmake_args "-DCOMGR_DLL_NAME=${THEROCK_COMGR_DLL_NAME}")
-  endif()
-
-
 
   therock_cmake_subproject_declare(hip-clr
     USE_DIST_AMDGPU_TARGETS
@@ -508,6 +508,7 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       "${_system_toolchain}"
     CMAKE_ARGS
       "-DCLR_BUILD_OCL=ON"
+      ${_clr_comgr_dll_name_cmake_args}
       ${OCL_CLR_CMAKE_ARGS}
     BUILD_DEPS
       rocm-cmake
