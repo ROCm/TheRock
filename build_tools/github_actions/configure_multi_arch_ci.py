@@ -83,9 +83,9 @@ from stage_reuse_decision import (
     compute_auto_stage_reuse,
     render_step_summary,
 )
-from emergency_levers import (
-    EmergencyLevers,
-    get_emergency_levers,
+from test_controls import (
+    TestControls,
+    get_test_controls,
     should_disable_tests,
     get_test_filter_override,
 )
@@ -1295,12 +1295,12 @@ def _should_run_tests_for_family(
     Returns:
         Tuple of (should_run, reason_string) for logging.
     """
-    # Emergency lever check: tests_enabled=false completely disables tests
+    # Test controls check: tests_enabled=false completely disables tests
     # This takes highest priority and cannot be overridden by workflow_dispatch
-    levers = get_emergency_levers(family_name, platform, platform_info)
-    disable_tests, reason = should_disable_tests(levers)
+    controls = get_test_controls(family_name, platform, platform_info)
+    disable_tests, reason = should_disable_tests(controls)
     if disable_tests:
-        return False, f"emergency lever: {reason}"
+        return False, f"test control: {reason}"
 
     # workflow_dispatch implicitly allows all families
     if ci_inputs.is_workflow_dispatch:
@@ -1458,18 +1458,18 @@ def _expand_build_config_for_platform(
                 print(f"  {family_name}: tests disabled ({reason})")
 
         # Determine per-family test type override. Priority order:
-        # 1. Emergency lever test_filter_override (highest - for queue remediation)
+        # 1. Test control test_filter_override (highest - for queue remediation)
         # 2. Static test_type_for_family (for hardware-limited families)
         # 3. Global test_type from jobs.test_rocm (default)
         family_test_type = None
         if test_runs_on:
-            # Check emergency lever first (highest priority)
-            levers = get_emergency_levers(family_name, platform, platform_info)
-            lever_override = get_test_filter_override(levers)
-            if lever_override:
-                family_test_type = lever_override
+            # Check test control first (highest priority)
+            controls = get_test_controls(family_name, platform, platform_info)
+            control_override = get_test_filter_override(controls)
+            if control_override:
+                family_test_type = control_override
                 print(
-                    f"  {family_name}: emergency lever forcing test_type={family_test_type} "
+                    f"  {family_name}: test control forcing test_type={family_test_type} "
                     f"(global={jobs.test_rocm.test_type})"
                 )
             # Fall back to static test_type_for_family
@@ -1507,7 +1507,7 @@ def _expand_build_config_for_platform(
             family_info["test_labels_for_family"] = platform_info[
                 "test_labels_for_family"
             ]
-        # Pass through emergency lever disabled_test_components for fetch_test_configurations
+        # Pass through test control disabled_test_components for fetch_test_configurations
         if platform_info.get("disabled_test_components"):
             family_info["disabled_test_components"] = platform_info[
                 "disabled_test_components"
