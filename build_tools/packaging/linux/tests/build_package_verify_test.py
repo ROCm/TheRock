@@ -4,6 +4,9 @@
 
 """Unit tests for manifest-based ``build_package_verify.py``.
 
+Validates Created Packages filename presence under packages-dir; Failed /
+Skipped base-name sections are excluded from the presence check.
+
 Run::
 
     python3.12 -m unittest build_tools.packaging.linux.tests.build_package_verify_test -v
@@ -227,6 +230,51 @@ class RunCliTest(unittest.TestCase):
             )
             args = verify.parse_args(["--packages-dir", str(packages_dir)])
             self.assertEqual(verify.run(args), 2)
+
+    def test_run_passes_with_failed_and_skipped_sections(self) -> None:
+        """Presence check uses Created filenames only; Failed/Skipped are excluded."""
+        with tempfile.TemporaryDirectory() as tmp:
+            packages_dir = Path(tmp)
+            for name in (
+                "amdrocm-core-sdk7.15_7.15.0-1_amd64.deb",
+                "amdrocm-core-sdk7.15-gfx1100_7.15.0-1_amd64.deb",
+                "amdrocm-fft7.15_7.15.0-1_amd64.deb",
+            ):
+                (packages_dir / name).write_bytes(b"deb")
+            (packages_dir / verify.MANIFEST_NAME).write_text(
+                SAMPLE_MANIFEST,
+                encoding="utf-8",
+            )
+            args = verify.parse_args(
+                ["--packages-dir", str(packages_dir), "--pkg-type", "deb"],
+            )
+            self.assertEqual(verify.run(args), 0)
+
+    def test_run_errors_when_only_failed_base_names(self) -> None:
+        """Manifest with no .deb/.rpm filenames is a configuration error."""
+        with tempfile.TemporaryDirectory() as tmp:
+            packages_dir = Path(tmp)
+            (packages_dir / verify.MANIFEST_NAME).write_text(
+                "# Failed Packages:\namdrocm-ck\n",
+                encoding="utf-8",
+            )
+            args = verify.parse_args(["--packages-dir", str(packages_dir)])
+            self.assertEqual(verify.run(args), 2)
+
+    def test_run_errors_when_packages_dir_missing(self) -> None:
+        args = verify.parse_args(
+            ["--packages-dir", "/tmp/does-not-exist-pkg-verify-xyz"],
+        )
+        self.assertEqual(verify.run(args), 2)
+
+    def test_directory_entry_counts_as_missing(self) -> None:
+        """A directory with the package name is not a present package file."""
+        with tempfile.TemporaryDirectory() as tmp:
+            packages_dir = Path(tmp)
+            (packages_dir / "a.deb").mkdir()
+            result = verify.verify_manifest_packages(packages_dir, ["a.deb"])
+        self.assertFalse(result.passed)
+        self.assertEqual(result.missing, ["a.deb"])
 
 
 if __name__ == "__main__":

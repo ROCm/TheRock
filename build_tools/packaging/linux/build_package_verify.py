@@ -4,10 +4,13 @@
 
 """Verify built native Linux packages against ``built_packages.txt``.
 
-After ``build_package.py`` writes ``built_packages.txt``, confirm each listed
-package **filename** exists under ``--packages-dir``. Does not re-derive
-kpack/gfx-arch variants from ``package.json`` (avoids duplicating
-``build_package.py`` routing).
+After ``packaging_summary.write_build_manifest``, confirm each ``.deb`` /
+``.rpm`` filename listed under Created Packages exists as a regular file
+under ``--packages-dir``. Failed Packages and Skipped Packages list base
+names without package extensions and are excluded from the presence check
+(v1 exit criteria). Does not enumerate expected variants from
+``package.json``, and does not validate control fields (Package, Version,
+Depends/Requires).
 
 ```
 ./build_tools/packaging/linux/build_package_verify.py \\
@@ -182,8 +185,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(
         description=(
-            "Verify built .deb/.rpm files listed in built_packages.txt exist "
-            "under --packages-dir."
+            "Verify that each .deb/.rpm filename listed in built_packages.txt "
+            "(Created Packages) exists under --packages-dir. Does not "
+            "re-derive package.json expectations or inspect control metadata."
         ),
     )
     parser.add_argument(
