@@ -57,6 +57,12 @@ on:
       baseline_release_type:
         type: string
         default: nightly
+      artifact_run_id:
+        type: string
+        default: ""
+        description: >-
+          Run id the instrumented stack was pushed under, which the overlay and
+          the report read from. Empty uses github.run_id.
       codecov_flag:
         type: string
         default: ""
@@ -152,6 +158,7 @@ jobs:
       # artifact name and folder from the component job_name.
       generic_run_id: ${{ inputs.baseline_run_id }}
       baseline_repository: ${{ inputs.baseline_repository }}
+      code_coverage_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: multi-arch-coverage
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
@@ -215,7 +222,7 @@ jobs:
           FETCH_ARTIFACT_ARGS: ${{ inputs.fetch_artifact_args }}
         run: |
           python ./build_tools/install_rocm_from_artifacts.py \
-            --run-id=${{ github.run_id }} \
+            --run-id=${{ inputs.artifact_run_id || github.run_id }} \
             --artifact-group=${{ inputs.amdgpu_families }} \
             --output-dir=${OUTPUT_ARTIFACTS_DIR} \
             ${FETCH_ARTIFACT_ARGS}

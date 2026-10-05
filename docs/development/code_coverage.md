@@ -71,6 +71,16 @@ The later of a `-f`/`-fno-` pair wins; the project's own flags arrive after
 `CMAKE_<LANG>_COMPILE_OBJECT` via a generated file passed as
 `CMAKE_PROJECT_INCLUDE`.
 
+The same file clears `CMAKE_<LANG>_COMPILER_LAUNCHER`, so instrumented
+projects never compile through ccache. ccache (4.11 at least) removes every
+`-Xarch_<arch> <arg>` pair whose arch did not also arrive as an Apple-style
+`-arch`, from both the cache key and the command it runs. That drops the
+negation above, so kernels are instrumented after all, and drops the
+`-Xarch_host` spelling rocRAND's and hipRAND's own coverage options use, so
+those libraries are not instrumented at all. Neither fails the build; both
+only show up once the tests run. Projects that are not instrumented keep using
+the cache.
+
 ### The profile runtime's link dependencies
 
 `libclang_rt.profile_rocm.a` needs `-ldl` and `-lpthread`, which the driver
@@ -148,9 +158,18 @@ names each project. `CMakeLists.txt` expands group options to
 `<PROJECT>_ENABLE_COVERAGE` flags; `therock_subproject.cmake` translates each
 to the project's upstream name. Everything not selected builds normally.
 
-Build jobs use `multi_arch_build_portable_linux_artifacts.yml` directly;
-`extra_cmake_options` is the only build-side hook coverage adds. Artifacts
-publish under `release_type: ci`.
+Build jobs use `multi_arch_build_portable_linux_artifacts.yml` directly.
+Coverage sets three of its inputs:
+
+- `extra_cmake_options` carries `coverage_cmake_options`.
+- `artifact_run_id` is `<run_id>-coverage`. Artifacts and logs publish there
+  under `release_type: ci`, not under the run id itself. A caller that builds a
+  regular stack in the same run (the rocm-libraries nightly does, and uses it
+  as the baseline) publishes artifacts with the same names, which a shared
+  namespace would overwrite.
+- `external_repo_config` is forwarded from the caller, so a rocm-libraries
+  nightly measures the commit it is testing. Without it the build uses
+  TheRock's pinned submodules.
 
 ### Test execution
 
@@ -158,17 +177,20 @@ Per shard, `test_code_coverage_component.yml` does three things:
 
 1. **Install baseline + swap project.** `install_rocm_code_coverage_build.py`
    installs from `--run-id` (the nightly) and replaces only the
-   project-under-test from `--code-coverage-run-id`.
+   project-under-test from `--code-coverage-run-id` (`<run_id>-coverage`).
 1. **Set `LLVM_PROFILE_FILE`** to a per-shard path (`%p`/`%m`) so concurrent
    processes don't overwrite each other.
 1. **Run tests and upload profraw** under `always()` — a failing shard still
-   exercised code.
+   exercised code. Device-side profiles (named after the GPU target, colons
+   included) are dropped with a warning first: one of them makes
+   `upload-artifact` reject the whole upload.
 
-Coverage runs use each component's normal `timeout_minutes` from
-`fetch_test_configurations.py`; nothing extends it for instrumented builds.
-Instrumented tests run slower, and some upstream coverage options also lower the
-optimization level (hipRAND's `BUILD_CODE_COVERAGE` adds `-O0 -g`), so a
-component close to its limit may time out.
+With `BUILD_VARIANT=coverage`, `fetch_test_configurations.py` multiplies each
+component's `timeout_minutes` by 4, capped at 180 so the step ends inside the
+job's 210-minute limit, and never lowered below the release value.
+Instrumented tests run slower, and some upstream coverage options do more than
+instrument: hipRAND's `BUILD_CODE_COVERAGE` adds `-O0 -g`, and rocRAND's
+`CODE_COVERAGE` compiles in extra CPU-only test suites.
 
 #### Why there are two run ids
 
@@ -181,8 +203,9 @@ The baseline is read from `baseline_release_type` (normally `nightly`), not the
 coverage run's `ci` channel — artifacts are bucketed per channel. The swap
 downloads the project's whole artifact (`rand`, which also contains rocRAND)
 but extracts only the paths matching the project's library folder in
-`COMPONENT_MAP` (`hipRAND`). The two runs write to separate S3 paths; no files
-collide.
+`COMPONENT_MAP` (`hipRAND`). The instrumented stack lives under
+`<run_id>-coverage`, so even a baseline from the same workflow run is never
+overwritten by it.
 
 A missing instrumented artifact fails the install step. A swap that matches no
 files does not: the installer logs `Replaced 0` and the tests run against the
@@ -201,7 +224,7 @@ most for header-only projects (rocPRIM, hipCUB, rocThrust, rocWMMA).
 
 | Artifact     | Where                               | Purpose                       |
 | ------------ | ----------------------------------- | ----------------------------- |
-| Instrumented | CI bucket, this run                 | Stack under test + LLVM tools |
+| Instrumented | CI bucket, `<run_id>-coverage`      | Stack under test + LLVM tools |
 | Profraw      | GitHub Actions artifacts, per shard | Raw profiles for aggregation  |
 
 Profraw names include the project, GPU family, and shard index.
@@ -211,9 +234,19 @@ Profraw names include the project, GPU family, and shard index.
 `aggregate_coverage` runs under `if: !cancelled()` so partial reports survive
 shard failures. It downloads profraw artifacts, reinstalls the run's artifacts
 (LLVM tools must match the compiler that produced the profiles), then runs
-`merge_coverage_report.py`. Two conditions are fatal: no profraw files (tests
-didn't run or the wrong library was loaded) and no matching objects (`object_globs`
-doesn't match the project's install layout).
+`merge_coverage_report.py`. A report that measured nothing fails rather than
+publishing 0%:
+
+- No profraw files: the tests didn't run, or the wrong library was loaded.
+- No matching objects: `object_globs` doesn't match the project's install
+  layout.
+- Profiles with no counters: the processes loaded no instrumented code. Either
+  the coverage flags never reached the compiler, or every process crashed
+  before writing its profile.
+- Objects with no coverage mapping (`llvm-cov`: "no coverage data found"): the
+  project's coverage option did not take effect.
+- No line in the reported objects ran: the tests loaded a different copy of the
+  project, or never reached it.
 
 The `coverage-report-<project>-<family>` artifact:
 
@@ -253,13 +286,18 @@ Add an entry to `COVERAGE_PROJECTS` in `configure_coverage_ci.py`.
 `coverage_option` must name the CMake option the project implements, and it must
 select LLVM instrumentation (not gcov, which writes `.gcda` files this pipeline
 can't read). Names vary: most use `BUILD_CODE_COVERAGE` or `CODE_COVERAGE`;
-RCCL uses `ENABLE_CODE_COVERAGE`.
+RCCL uses `ENABLE_CODE_COVERAGE`; rocWMMA and hipTensor prefix the project
+(`ROCWMMA_CODE_COVERAGE`). A wrong name still configures and builds cleanly;
+it only shows up as a report with no coverage data.
 
 Verify a local instrumented build produces a non-empty report before committing
 the entry. Set `source_repo` (`ROCM_LIBRARIES` or `ROCM_SYSTEMS`) to route the
 project into the correct group alias; membership lists are generated at configure
 time, so no CMake edit is needed. `object_globs` must match what the project
-actually installs — a miss fails the report job rather than publishing zero.
+actually installs — a miss fails the report job rather than publishing zero. A
+glob prefixed with `!` removes its matches, for test binaries that share an
+install directory with a sibling project's (rocPRIM's `bin/test_*` would
+otherwise include hipCUB's `bin/test_hipcub_*`).
 
 ## Blocked projects
 

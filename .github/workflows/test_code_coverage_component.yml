@@ -17,6 +17,12 @@ on:
           own repository.
         type: string
         default: ""
+      code_coverage_run_id:
+        description: >-
+          Run id the instrumented stack was pushed under, passed as
+          --code-coverage-run-id. Empty uses github.run_id.
+        type: string
+        default: ""
       artifact_group:
         type: string
       amdgpu_families:
@@ -95,7 +101,7 @@ jobs:
       run:
         shell: bash
     env:
-      CODE_COVERAGE_RUN_ID: ${{ github.run_id }}
+      CODE_COVERAGE_RUN_ID: ${{ inputs.code_coverage_run_id || github.run_id }}
       OUTPUT_ARTIFACTS_DIR: "./build"
       THEROCK_BIN_DIR: "./build/bin"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
@@ -150,7 +156,7 @@ jobs:
           # --replace then re-extracts them, leaving the whole stack instrumented.
           generic_run_id="${{ inputs.generic_run_id }}"
           if [[ -z "${generic_run_id}" ]]; then
-            generic_run_id="${{ github.run_id }}"
+            generic_run_id="${CODE_COVERAGE_RUN_ID}"
           fi
           # Pass --run-github-repo only when set, so empty defaults to the
           # current repository. The generic baseline lives in a different repo
@@ -254,6 +260,21 @@ jobs:
             ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
         run: |
           ${{ fromJSON(inputs.component).test_script }}
+
+      # A device-side profile is named after its GPU target
+      # (gfx942:sramecc+:xnack-.0.<name>.profraw). upload-artifact rejects the
+      # colons and with them every other file in the upload, and llvm-cov cannot
+      # use the profile against host objects anyway. Its presence means kernels
+      # were instrumented, which the build is meant to prevent, so say so.
+      - name: Drop device-side profiles
+        if: ${{ always() && inputs.coverage_enabled }}
+        run: |
+          shopt -s nullglob
+          device_profiles=("${GITHUB_WORKSPACE}"/coverage-report/profraw/*:*.profraw)
+          if (( ${#device_profiles[@]} )); then
+            echo "::warning::Kernels were instrumented; dropping ${#device_profiles[@]} device-side profile(s): ${device_profiles[*]##*/}"
+            rm -f -- "${device_profiles[@]}"
+          fi
 
       # Upload even on test failure: partial coverage is useful and the
       # aggregation job tolerates missing shards.

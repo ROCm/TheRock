@@ -46,6 +46,10 @@ on:
         type: string
         description: "Test type to run against the instrumented build."
         default: "standard"
+      external_repo_config:
+        type: string
+        description: "JSON from detect_external_repo_config.py naming the external checkout to build (e.g. a rocm-libraries commit). Empty builds TheRock's pinned submodules."
+        default: ""
       quartz_tracking_id:
         type: string
         description: "Leave empty. Reserved for release tracking."
@@ -90,6 +94,10 @@ on:
         type: string
         description: "Test type to run against the instrumented build."
         default: "standard"
+      external_repo_config:
+        type: string
+        description: "JSON from detect_external_repo_config.py naming the external checkout to build. The rocm-libraries nightly passes its own, so coverage measures the commit under test; empty builds TheRock's pinned submodules."
+        default: ""
       quartz_tracking_id:
         type: string
         description: "Leave empty. Reserved for release tracking."
@@ -126,6 +134,11 @@ jobs:
       coverage_cmake_options: ${{ steps.matrix.outputs.coverage_cmake_options }}
       needs_math_libs: ${{ steps.matrix.outputs.needs_math_libs }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
+      # S3 namespace for the instrumented stack. A caller that builds a regular
+      # stack in the same run (the rocm-libraries nightly does, and uses it as
+      # the baseline) publishes artifacts with the same names under
+      # github.run_id, so sharing that namespace overwrites them.
+      artifact_run_id: ${{ github.run_id }}-coverage
     steps:
       - name: Checking out repository
         id: checkout
@@ -171,6 +184,8 @@ jobs:
       dist_amdgpu_families: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
       rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
       release_type: ci
+      artifact_run_id: ${{ needs.setup_coverage_matrix.outputs.artifact_run_id }}
+      external_repo_config: ${{ inputs.external_repo_config }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       # TheRock scripts for the instrumented build; cross-repo callers pass ROCm/TheRock + ref.
       repository: ${{ inputs.repository }}
@@ -206,6 +221,8 @@ jobs:
       extra_cmake_options: ${{ needs.setup_coverage_matrix.outputs.coverage_cmake_options }}
       rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
       release_type: ci
+      artifact_run_id: ${{ needs.setup_coverage_matrix.outputs.artifact_run_id }}
+      external_repo_config: ${{ inputs.external_repo_config }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       # TheRock scripts for the instrumented build; cross-repo callers pass ROCm/TheRock + ref.
       repository: ${{ inputs.repository }}
@@ -250,6 +267,7 @@ jobs:
       baseline_run_id: ${{ inputs.baseline_run_id }}
       baseline_release_type: ${{ inputs.baseline_release_type }}
       baseline_repository: ${{ inputs.baseline_repository }}
+      artifact_run_id: ${{ needs.setup_coverage_matrix.outputs.artifact_run_id }}
       test_type: ${{ inputs.test_type || 'standard' }}
       release_type: ci
       # Forwarded to L2's checkouts and the component jobs.

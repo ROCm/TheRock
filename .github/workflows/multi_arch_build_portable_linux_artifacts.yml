@@ -80,6 +80,14 @@ on:
         description: "Comma-separated artifact names to build (granular reuse). Empty = build all artifacts in stage."
         type: string
         default: ""
+      artifact_run_id:
+        description: >-
+          Run id to fetch inbound artifacts from and push this stage's artifacts
+          and logs under. Empty uses github.run_id. A variant build sharing a
+          workflow run with a regular one (coverage) passes its own id, since the
+          two produce artifacts with the same names.
+        type: string
+        default: ""
       quartz_tracking_id:
         type: string
         default: ""
@@ -107,6 +115,7 @@ jobs:
       ROCM_PACKAGE_VERSION: ${{ inputs.rocm_package_version }}
       RELEASE_TYPE: ${{ inputs.release_type }}
       REBUILD_ARTIFACTS: ${{ inputs.rebuild_artifacts }}
+      ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
       STAGE_NAME: ${{ inputs.stage_name }}
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       TEATIME_FORCE_INTERACTIVE: 0
@@ -169,7 +178,7 @@ jobs:
       - name: Fetch inbound artifacts
         run: |
           python build_tools/artifact_manager.py fetch \
-            --run-id=${{ github.run_id }} \
+            --run-id="${ARTIFACT_RUN_ID}" \
             --stage="${STAGE_NAME}" \
             --amdgpu-families="${AMDGPU_FAMILIES}" \
             --output-dir="${BUILD_DIR}" \
@@ -272,7 +281,7 @@ jobs:
       - name: Push stage artifacts
         run: |
           python build_tools/artifact_manager.py push \
-            --run-id ${{ github.run_id }} \
+            --run-id "${ARTIFACT_RUN_ID}" \
             --stage="${STAGE_NAME}" \
             --build-dir="${BUILD_DIR}"
 
@@ -280,7 +289,7 @@ jobs:
         if: ${{ always() }}
         run: |
           python build_tools/github_actions/post_stage_upload.py \
-            --run-id=${{ github.run_id }} \
+            --run-id="${ARTIFACT_RUN_ID}" \
             --stage="${STAGE_NAME}" \
             --build-dir="${BUILD_DIR}" \
             --amdgpu-family="${AMDGPU_FAMILIES}"

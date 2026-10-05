@@ -108,7 +108,9 @@ class CoverageProject:
         coverage_config: Per-project coverage metadata file, relative to the
             root of the repository named by COVERAGE_CONFIG_SOURCE.
         object_globs: Globs, relative to the extracted artifact directory,
-            matching the instrumented binaries handed to `llvm-cov`.
+            matching the instrumented binaries handed to `llvm-cov`. A glob
+            prefixed with `!` removes its matches instead, for test binaries
+            that share an install directory with a sibling project's.
         fetch_artifact_args: Arguments to install_rocm_from_artifacts.py that
             pull the instrumented libraries into the report generation job.
         codecov_flag: Flag the report is filed under in Codecov.
@@ -394,7 +396,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         stage=STAGE_MATH_LIBS,
         test_component="rocprim",
         coverage_config="projects/rocprim/test_categories_coverage.yaml",
-        object_globs=["bin/test_*"],
+        # hipCUB's tests install into the same bin/ as test_hipcub_*.
+        object_globs=["bin/test_*", "!bin/test_hipcub_*"],
         fetch_artifact_args="--prim --tests",
         codecov_flag="rocPRIM",
         # rocPRIM's tests are a sibling subproject, so both stage dirs are
@@ -409,7 +412,7 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         stage=STAGE_MATH_LIBS,
         test_component="hipcub",
         coverage_config="projects/hipcub/test_categories_coverage.yaml",
-        object_globs=["bin/test_*"],
+        object_globs=["bin/test_hipcub_*"],
         fetch_artifact_args="--prim --tests",
         codecov_flag="hipCUB",
     ),
@@ -421,7 +424,7 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         stage=STAGE_MATH_LIBS,
         test_component="rocthrust",
         coverage_config="projects/rocthrust/test_categories_coverage.yaml",
-        object_globs=["bin/test_*"],
+        object_globs=["bin/*.hip"],
         fetch_artifact_args="--prim --tests",
         codecov_flag="rocThrust",
     ),
@@ -429,11 +432,12 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         cmake_target="rocWMMA",
         artifact_names=["rocwmma"],
         artifact_relpaths=["math-libs/rocWMMA/stage"],
-        coverage_option="CODE_COVERAGE",
+        # Prefixed, like hipTensor's above; a bare CODE_COVERAGE is never read.
+        coverage_option="ROCWMMA_CODE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="rocwmma",
         coverage_config="projects/rocwmma/test_categories_coverage.yaml",
-        object_globs=["bin/*_test*"],
+        object_globs=["bin/*_test*", "bin/gemm_*-validate"],
         fetch_artifact_args="--rocwmma --tests",
         codecov_flag="rocWMMA",
     ),

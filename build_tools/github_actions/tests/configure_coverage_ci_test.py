@@ -16,6 +16,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 sys.path.insert(0, os.fspath(Path(__file__).parents[2]))
 
 import configure_coverage_ci
+import merge_coverage_report
 from _therock_utils.build_topology import get_topology
 
 
@@ -238,6 +239,30 @@ class BuildCoverageMatrixTest(unittest.TestCase):
         )
         self.assertEqual(entry["object_globs"], "lib/libhiprand.so*")
         self.assertEqual(entry["fetch_artifact_args"], "--rand")
+
+    def test_header_only_projects_report_on_their_own_test_binaries(self):
+        # rocPRIM, hipCUB and rocThrust install their tests into one flat bin/,
+        # and --prim --tests brings all three into every one of their reports.
+        installed = {
+            "rocprim": ["bin/test_basic", "bin/test_rocprim_tuple"],
+            "hipcub": ["bin/test_hipcub_basic"],
+            "rocthrust": ["bin/vector.hip"],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "bin").mkdir()
+            for names in installed.values():
+                for name in names:
+                    (root / name).touch()
+            for project, names in installed.items():
+                with self.subTest(project=project):
+                    objects = merge_coverage_report.resolve_objects(
+                        root,
+                        configure_coverage_ci.COVERAGE_PROJECTS[project].object_globs,
+                    )
+                    self.assertEqual(
+                        [o.relative_to(root).as_posix() for o in objects], sorted(names)
+                    )
 
 
 class BuildCoverageCmakeOptionsTest(unittest.TestCase):
