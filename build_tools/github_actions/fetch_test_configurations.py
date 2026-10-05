@@ -865,7 +865,7 @@ test_matrix = {
         # <name>_dev. Omitting the key takes the fetch-everything branch, which
         # is why "hipdnn_install" omits it too. Do not "fix" this by adding the
         # enumerated artifact flags back; find_package would fail.
-        "timeout_minutes": 60,
+        "timeout_minutes": 10,
         "test_script": f"python {_get_script_path('test_hipdnn_cudnn_samples.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
