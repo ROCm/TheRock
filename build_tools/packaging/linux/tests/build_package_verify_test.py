@@ -5,7 +5,8 @@
 """Unit tests for manifest-based ``build_package_verify.py``.
 
 Validates Created Packages filename presence under packages-dir; Failed /
-Skipped base-name sections are excluded from the presence check.
+Skipped base-name sections are excluded from the presence check. Also covers
+control-field comparison helpers (Version, Depends, Architecture).
 
 Run::
 
@@ -17,6 +18,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 LINUX_DIR = THIS_SCRIPT_DIR.parent
@@ -46,6 +48,22 @@ amdrocm-ck
 # Note: Package names shown are base names from package.json
 amdrocm-optional
 """
+
+
+def _presence_args(packages_dir: Path, *extra: str) -> list[str]:
+    """CLI argv for presence-only runs (skips control-field index build)."""
+    return [
+        "--packages-dir",
+        str(packages_dir),
+        "--pkg-type",
+        "deb",
+        "--rocm-version",
+        "7.15.0",
+        "--artifacts-dir",
+        str(packages_dir),
+        "--skip-control-fields",
+        *extra,
+    ]
 
 
 class ParseBuiltPackageNamesTest(unittest.TestCase):
@@ -165,6 +183,238 @@ class FormatReportTextTest(unittest.TestCase):
         self.assertIn("Overall result: FAIL", text)
         self.assertIn("b.deb", text)
 
+    def test_report_lists_field_mismatches(self) -> None:
+        result = verify.ManifestVerifyResult(
+            expected=["a.deb"],
+            found=["a.deb"],
+            field_mismatches=[
+                verify.FieldMismatch(
+                    filename="a.deb",
+                    package_name="pkg",
+                    field="Version",
+                    expected="7.15.0",
+                    actual="7.14.0",
+                )
+            ],
+        )
+        text = verify.format_report_text(result, Path("/tmp/built_packages.txt"))
+        self.assertIn("Field mismatches: 1", text)
+        self.assertIn("Version", text)
+
+
+class VersionsAndDepsHelpersTest(unittest.TestCase):
+    """Unit tests for version/depends comparison helpers."""
+
+    def test_expected_control_version_deb_with_suffix(self) -> None:
+        from packaging_utils import PackageConfig
+
+        cfg = PackageConfig(
+            artifacts_dir=Path("/tmp"),
+            dest_dir=Path("/tmp"),
+            pkg_type="deb",
+            rocm_version="7.15.0",
+            version_suffix="123",
+            install_prefix="/opt/rocm/core",
+            gfx_arch="",
+        )
+        self.assertEqual(verify.expected_control_version(cfg), "7.15.0-123")
+
+    def test_expected_control_version_rpm_default_release(self) -> None:
+        from packaging_utils import PackageConfig
+
+        cfg = PackageConfig(
+            artifacts_dir=Path("/tmp"),
+            dest_dir=Path("/tmp"),
+            pkg_type="rpm",
+            rocm_version="7.15.0",
+            version_suffix="",
+            install_prefix="/opt/rocm/core",
+            gfx_arch="",
+        )
+        self.assertEqual(verify.expected_control_version(cfg), "7.15.0-1")
+
+    def test_deb_tilde_version_match(self) -> None:
+        self.assertTrue(verify.versions_match("7.15.0-1", "7.15.0~1", "deb"))
+        self.assertFalse(verify.versions_match("7.15.0-1", "7.15.0~1", "rpm"))
+
+    def test_normalize_dep_tokens_strips_versions(self) -> None:
+        tokens = verify.normalize_dep_tokens(
+            "amdrocm-core (>= 7.15), amdrocm-runtime",
+            pkg_type="deb",
+        )
+        self.assertEqual(tokens, frozenset({"amdrocm-core", "amdrocm-runtime"}))
+
+    def test_normalize_dep_tokens_filters_rpm_auto_requires(self) -> None:
+        tokens = verify.normalize_dep_tokens(
+            "amdrocm-core, rpmlib(CompressedFileNames), libc.so.6()(64bit)",
+            pkg_type="rpm",
+        )
+        self.assertEqual(tokens, frozenset({"amdrocm-core"}))
+
+    def test_deps_match_allows_extra_actual(self) -> None:
+        self.assertTrue(
+            verify.deps_match("a, b", "a, b, c", "deb"),
+        )
+        self.assertFalse(
+            verify.deps_match("a, b", "a", "deb"),
+        )
+
+
+class VerifyControlFieldsTest(unittest.TestCase):
+    """Control-field comparison with mocked package metadata readers."""
+
+    def _expected(
+        self, name: str = "amdrocm-fft7.15"
+    ) -> dict[str, verify.ExpectedControl]:
+        return {
+            name: verify.ExpectedControl(
+                package_name=name,
+                version="7.15.0-1",
+                depends="amdrocm-runtime",
+                architecture="amd64",
+                base_package="amdrocm-fft",
+                versioned_pkg=True,
+                gfx_arch="",
+            )
+        }
+
+    def test_all_fields_match(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            packages_dir = Path(tmp)
+            (packages_dir / "a.deb").write_bytes(b"deb")
+            result = verify.ManifestVerifyResult(expected=["a.deb"], found=["a.deb"])
+            with patch.object(
+                verify,
+                "read_package_control_fields",
+                return_value={
+                    "package_name": "amdrocm-fft7.15",
+                    "version": "7.15.0-1",
+                    "depends": "amdrocm-runtime",
+                    "architecture": "amd64",
+                },
+            ):
+                verify.verify_control_fields(
+                    packages_dir,
+                    ["a.deb"],
+                    "deb",
+                    self._expected(),
+                    result,
+                )
+        self.assertTrue(result.passed)
+
+    def test_version_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            packages_dir = Path(tmp)
+            (packages_dir / "a.deb").write_bytes(b"deb")
+            result = verify.ManifestVerifyResult(expected=["a.deb"], found=["a.deb"])
+            with patch.object(
+                verify,
+                "read_package_control_fields",
+                return_value={
+                    "package_name": "amdrocm-fft7.15",
+                    "version": "7.14.0-1",
+                    "depends": "amdrocm-runtime",
+                    "architecture": "amd64",
+                },
+            ):
+                verify.verify_control_fields(
+                    packages_dir,
+                    ["a.deb"],
+                    "deb",
+                    self._expected(),
+                    result,
+                )
+        self.assertFalse(result.passed)
+        self.assertEqual(result.field_mismatches[0].field, "Version")
+
+    def test_depends_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            packages_dir = Path(tmp)
+            (packages_dir / "a.deb").write_bytes(b"deb")
+            result = verify.ManifestVerifyResult(expected=["a.deb"], found=["a.deb"])
+            with patch.object(
+                verify,
+                "read_package_control_fields",
+                return_value={
+                    "package_name": "amdrocm-fft7.15",
+                    "version": "7.15.0-1",
+                    "depends": "amdrocm-other",
+                    "architecture": "amd64",
+                },
+            ):
+                verify.verify_control_fields(
+                    packages_dir,
+                    ["a.deb"],
+                    "deb",
+                    self._expected(),
+                    result,
+                )
+        self.assertFalse(result.passed)
+        self.assertEqual(result.field_mismatches[0].field, "Depends")
+
+    def test_architecture_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            packages_dir = Path(tmp)
+            (packages_dir / "a.deb").write_bytes(b"deb")
+            result = verify.ManifestVerifyResult(expected=["a.deb"], found=["a.deb"])
+            with patch.object(
+                verify,
+                "read_package_control_fields",
+                return_value={
+                    "package_name": "amdrocm-fft7.15",
+                    "version": "7.15.0-1",
+                    "depends": "amdrocm-runtime",
+                    "architecture": "arm64",
+                },
+            ):
+                verify.verify_control_fields(
+                    packages_dir,
+                    ["a.deb"],
+                    "deb",
+                    self._expected(),
+                    result,
+                )
+        self.assertFalse(result.passed)
+        self.assertEqual(result.field_mismatches[0].field, "Architecture")
+
+    def test_unknown_package(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            packages_dir = Path(tmp)
+            (packages_dir / "a.deb").write_bytes(b"deb")
+            result = verify.ManifestVerifyResult(expected=["a.deb"], found=["a.deb"])
+            with patch.object(
+                verify,
+                "read_package_control_fields",
+                return_value={
+                    "package_name": "not-in-index",
+                    "version": "7.15.0-1",
+                    "depends": "",
+                    "architecture": "amd64",
+                },
+            ):
+                verify.verify_control_fields(
+                    packages_dir,
+                    ["a.deb"],
+                    "deb",
+                    self._expected(),
+                    result,
+                )
+        self.assertFalse(result.passed)
+        self.assertTrue(result.unknown_packages)
+
+    def test_presence_fails_before_field_compare(self) -> None:
+        """Missing files return exit 1 without requiring control-field tooling."""
+        with tempfile.TemporaryDirectory() as tmp:
+            packages_dir = Path(tmp)
+            (packages_dir / verify.MANIFEST_NAME).write_text(
+                "missing.deb\n",
+                encoding="utf-8",
+            )
+            args = verify.parse_args(_presence_args(packages_dir))
+            with patch.object(verify, "verify_control_fields") as mock_fields:
+                self.assertEqual(verify.run(args), 1)
+                mock_fields.assert_not_called()
+
 
 class RunCliTest(unittest.TestCase):
     """End-to-end CLI against a temp packages dir + manifest."""
@@ -178,14 +428,7 @@ class RunCliTest(unittest.TestCase):
                 f"# Created Packages:\n{deb_name}\n",
                 encoding="utf-8",
             )
-            args = verify.parse_args(
-                [
-                    "--packages-dir",
-                    str(packages_dir),
-                    "--pkg-type",
-                    "deb",
-                ],
-            )
+            args = verify.parse_args(_presence_args(packages_dir))
             self.assertEqual(verify.run(args), 0)
 
     def test_run_fails_when_file_missing(self) -> None:
@@ -195,13 +438,13 @@ class RunCliTest(unittest.TestCase):
                 "missing.deb\n",
                 encoding="utf-8",
             )
-            args = verify.parse_args(["--packages-dir", str(packages_dir)])
+            args = verify.parse_args(_presence_args(packages_dir))
             self.assertEqual(verify.run(args), 1)
 
     def test_run_errors_when_manifest_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             packages_dir = Path(tmp)
-            args = verify.parse_args(["--packages-dir", str(packages_dir)])
+            args = verify.parse_args(_presence_args(packages_dir))
             self.assertEqual(verify.run(args), 2)
 
     def test_run_errors_when_filter_matches_nothing(self) -> None:
@@ -212,12 +455,7 @@ class RunCliTest(unittest.TestCase):
                 encoding="utf-8",
             )
             args = verify.parse_args(
-                [
-                    "--packages-dir",
-                    str(packages_dir),
-                    "--name-prefix",
-                    "amdrocm-core-sdk",
-                ],
+                _presence_args(packages_dir, "--name-prefix", "amdrocm-core-sdk"),
             )
             self.assertEqual(verify.run(args), 2)
 
@@ -228,7 +466,7 @@ class RunCliTest(unittest.TestCase):
                 "../escape.deb\n",
                 encoding="utf-8",
             )
-            args = verify.parse_args(["--packages-dir", str(packages_dir)])
+            args = verify.parse_args(_presence_args(packages_dir))
             self.assertEqual(verify.run(args), 2)
 
     def test_run_passes_with_failed_and_skipped_sections(self) -> None:
@@ -245,9 +483,7 @@ class RunCliTest(unittest.TestCase):
                 SAMPLE_MANIFEST,
                 encoding="utf-8",
             )
-            args = verify.parse_args(
-                ["--packages-dir", str(packages_dir), "--pkg-type", "deb"],
-            )
+            args = verify.parse_args(_presence_args(packages_dir))
             self.assertEqual(verify.run(args), 0)
 
     def test_run_errors_when_only_failed_base_names(self) -> None:
@@ -258,12 +494,12 @@ class RunCliTest(unittest.TestCase):
                 "# Failed Packages:\namdrocm-ck\n",
                 encoding="utf-8",
             )
-            args = verify.parse_args(["--packages-dir", str(packages_dir)])
+            args = verify.parse_args(_presence_args(packages_dir))
             self.assertEqual(verify.run(args), 2)
 
     def test_run_errors_when_packages_dir_missing(self) -> None:
         args = verify.parse_args(
-            ["--packages-dir", "/tmp/does-not-exist-pkg-verify-xyz"],
+            _presence_args(Path("/tmp/does-not-exist-pkg-verify-xyz")),
         )
         self.assertEqual(verify.run(args), 2)
 
