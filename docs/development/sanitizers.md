@@ -1,5 +1,8 @@
 # Building ROCm with Sanitizers
 
+TheRock currently supports sanitizer builds (`ASAN`, `HOST_ASAN`, and `TSAN`)
+on Linux only. Windows sanitizer builds are not supported.
+
 ## Basic Usage
 
 Sanitizers can be enabled via the `THEROCK_SANITIZER` variable. We will be extending this to support all sanitizers. Presently supported sanitizers are:
@@ -207,6 +210,10 @@ with TSan. Before enabling reuse, both automatic baseline selection and
 explicit baseline copying must reject incompatible variants. Compatible
 TSan artifacts may then be reused. Release publishing is deferred until CI
 qualification succeeds.
+
+This workflow produces CI artifact tarballs for the selected GPU families.
+Python packages and native Linux packages (DEB/RPM) are disabled during
+initial TSan qualification.
 
 ### Runtime setup
 
