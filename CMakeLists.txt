@@ -124,7 +124,7 @@ option(THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY
 
 option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
-option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" OFF)
+option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" ON)
 set(THEROCK_COMGR_DLL_NAME "" CACHE STRING "Override the Comgr DLL name for the comgr build and CLR load (e.g. amd_comgr_opencl.dll); empty = component default")
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
@@ -267,8 +267,8 @@ cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL
   "THEROCK_ENABLE_COMPOSABLE_KERNEL" OFF)
 
 cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
-  "Enables building rocWMMA benchmarks" OFF
-  "THEROCK_ENABLE_ROCWMMA;THEROCK_BUILD_TESTING" OFF)
+  "Enables building rocWMMA benchmarks" ON
+  "THEROCK_ENABLE_ROCWMMA;THEROCK_BUILD_TESTING;NOT WIN32" OFF)
 
 # Additional manual features that don't map to artifacts
 
