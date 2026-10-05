@@ -9,6 +9,19 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
 endif()
 
 if(THEROCK_ENABLE_MIOPEN)
+  set(_miopen_enabled ON)
+  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_miopen_targets MIOpen ${THEROCK_AMDGPU_TARGETS})
+    if(NOT _miopen_targets)
+      message(STATUS
+        "MIOpen: no supported gfx targets remain after filtering "
+        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
+      set(_miopen_enabled OFF)
+    endif()
+  endif()
+endif()
+
+if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
   # MIOpen's CK use is gated on both the per-arch CK availability
   # (math-libs/CMakeLists.txt) and the user-facing
   # THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL opt-out, which lets
