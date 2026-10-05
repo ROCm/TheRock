@@ -641,7 +641,7 @@ jobs:
       actions: write # Dispatch downstream workflows.
     name: Trigger Linux Tests (gfx1151)
     needs: [create-branch, setup-linux, build-linux]
-    if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' && ((inputs.linux_amdgpu_families || 'all') == 'all' || contains(inputs.linux_amdgpu_families, 'gfx1151')) }}
+    if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' }}
     runs-on: ubuntu-24.04
     outputs:
       test_run_url: ${{ steps.trigger-tests.outputs.runUrlHtml }}
