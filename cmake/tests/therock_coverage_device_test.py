@@ -55,7 +55,10 @@ PROJECT = textwrap.dedent(
     add_library(right_order SHARED "${CMAKE_BINARY_DIR}/f.cpp")
     target_link_libraries(right_order PRIVATE "${COLLECTOR}" "${GENERIC}")
     add_library(plain SHARED "${CMAKE_BINARY_DIR}/f.cpp")
+    # rocSPARSE's unit tests name the same group as its library.
     add_executable(app "${CMAKE_BINARY_DIR}/f.cpp")
+    target_link_libraries(app PRIVATE
+      -Wl,--start-group "${GENERIC}" "${COLLECTOR}" -Wl,--end-group)
     add_subdirectory(sub)
     function(print_link_libraries)
       foreach(target names_runtime right_order plain app nested)
@@ -159,9 +162,9 @@ class CoverageDeviceIncludeTest(unittest.TestCase):
             self.value(output, "LIBS_nested").split(";"), [str(collector), str(generic)]
         )
 
-    def test_targets_that_need_no_reordering_are_left_alone(self):
-        # Inserting the collector into every link would make it resolve
-        # hipLaunchKernel in binaries with no instrumented code at all.
+    def test_other_targets_are_left_alone(self):
+        # The collector's hipLaunchKernel interceptors recurse in an executable
+        # that loads an instrumented library carrying its own.
         self.provide("lib/amdgcn-amd-amdhsa/libclang_rt.profile.a")
         generic = self.provide(f"{HOST_RUNTIME_DIR}/libclang_rt.profile.a")
         collector = self.provide(f"{HOST_RUNTIME_DIR}/libclang_rt.profile_rocm.a")
@@ -172,9 +175,11 @@ class CoverageDeviceIncludeTest(unittest.TestCase):
             self.value(output, "LIBS_right_order").split(";"),
             [str(collector), str(generic)],
         )
-        for target in ("plain", "app"):
-            with self.subTest(target=target):
-                self.assertNotIn("profile_rocm", self.value(output, f"LIBS_{target}"))
+        self.assertEqual(
+            self.value(output, "LIBS_app").split(";"),
+            ["-Wl,--start-group", str(generic), str(collector), "-Wl,--end-group"],
+        )
+        self.assertNotIn("profile_rocm", self.value(output, "LIBS_plain"))
         self.assertNotIn("profile_rocm", self.value(output, "EXE_RULE"))
 
     def test_arch_suffixed_host_collector_is_found(self):

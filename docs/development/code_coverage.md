@@ -166,16 +166,17 @@ The include `therock_subproject.cmake` generates for the project runs
   would surface later, as a device link error or a report without device
   coverage.
 - Once the project's targets exist, it inserts `libclang_rt.profile_rocm.a`
-  ahead of `libclang_rt.profile.a` in any target that names the latter itself.
-  Only the former's copy of `InstrProfilingFile.o` reads device counters back
-  at exit. The driver orders them correctly on a HIP link with
+  ahead of `libclang_rt.profile.a` in any shared library that names the latter
+  itself. Only the former's copy of `InstrProfilingFile.o` reads device
+  counters back at exit. The driver orders them correctly on a HIP link with
   `-fprofile-instr-generate`, but rocSPARSE keeps that flag off its link and
   names `clang_rt.profile clang_rt.profile_rocm` itself, in that order, so its
-  kernels were counted and never written. No other target is touched:
+  kernels were counted and never written. Executables are left alone, even
+  rocSPARSE's unit tests, which name the same group:
   `libclang_rt.profile_rocm.a` also defines `hipLaunchKernel` and the other
-  launch calls as interceptors, and ahead of a link's HIP runtime it resolves
-  them, giving binaries with no instrumented code their own interceptors, which
-  call themselves on the first kernel launch.
+  launch calls as interceptors, and an executable that carries them next to
+  those of an instrumented library it loads recurses on its first kernel
+  launch.
 
 RCCL needed far more than this
 ([ROCm/rocm-systems#10650](https://github.com/ROCm/rocm-systems/pull/10650)):

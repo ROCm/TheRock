@@ -20,14 +20,14 @@
 # can put them the other way round (rocSPARSE does, to keep the profile flags
 # off its link), and then its kernels are counted and never written. Once the
 # project has defined its targets, profile_rocm is inserted in front of the
-# generic archive in any target that names it.
+# generic archive in any shared library that names it.
 #
 # Only there: profile_rocm also defines hipLaunchKernel and the other launch
-# entry points, as interceptors. Placed ahead of a link's HIP runtime it is
-# what resolves those calls, so a binary with no instrumented code at all gets
-# a second, self-referencing set of interceptors and recurses on its first
-# kernel launch. Behind a project's own HIP runtime, as it is here, it only
-# supplies the profile runtime.
+# calls, as interceptors, and an executable that carries them next to those of
+# an instrumented library it loads recurses on its first kernel launch. That
+# rules out every link rule, where profile_rocm resolved the launch calls ahead
+# of the HIP runtime in every test executable, and rocSPARSE's unit tests,
+# which name the generic archive just as its library does.
 
 if(NOT DEFINED THEROCK_COVERAGE_DEVICE_PROFILE_RUNTIME
    OR NOT DEFINED THEROCK_COVERAGE_HOST_PROFILE_RUNTIME)
@@ -96,11 +96,16 @@ if(NOT DEFINED THEROCK_COVERAGE_DEVICE_PROFILE_RUNTIME
     "host collector ${THEROCK_COVERAGE_HOST_PROFILE_RUNTIME}")
 endif()
 
-# Puts the collector ahead of the generic profile archive wherever a target in
-# dir, or below it, names that archive before (or without) the collector.
+# Puts the collector ahead of the generic profile archive wherever a shared
+# library in dir, or below it, names that archive before (or without) the
+# collector.
 function(_therock_coverage_link_collector_first dir)
   get_property(_targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
   foreach(_target IN LISTS _targets)
+    get_target_property(_type "${_target}" TYPE)
+    if(NOT _type MATCHES "^(SHARED|MODULE)_LIBRARY$")
+      continue()
+    endif()
     get_target_property(_libs "${_target}" LINK_LIBRARIES)
     if(NOT _libs)
       continue()
