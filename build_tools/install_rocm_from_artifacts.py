@@ -300,7 +300,9 @@ def _untar_files(output_dir: Path, destination: Path):
     """
     log(f"Extracting {destination.name} to {str(output_dir)}")
     with tarfile.open(destination) as extracted_tar_file:
-        extracted_tar_file.extractall(output_dir, filter="tar")
+        # Preserve packaged modes and ownership; the data filter changes them.
+        # Only extract trusted ROCm artifacts: tar permits external link targets.
+        extracted_tar_file.extractall(output_dir, filter="tar")  # nosec B202
     destination.unlink()
 
 

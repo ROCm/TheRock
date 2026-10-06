@@ -87,15 +87,6 @@ if(WIN32)
   list(APPEND THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS -Wno-duplicate-decl-specifier)
 endif()
 
-# Options added to every subproject when THEROCK_FLAG_WINDOWS_DRIVER_BUILD is set.
-# The compile flag is spelled per compiler; the link flag goes through CMake's
-# LINKER: prefix, which handles the driver difference.
-# /machine and /DYNAMICBASE are omitted: CMake emits the former and the linker
-# defaults to the latter.
-set(THEROCK_WINDOWS_DRIVER_BUILD_MSVC_COMPILE_FLAGS "/guard:cf")
-set(THEROCK_WINDOWS_DRIVER_BUILD_CLANG_COMPILE_FLAGS "-mguard=cf")
-set(THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS "/guard:cf")
-
 # Generates a command prefix that can be prepended to any custom command line
 # to perform log/console redirection and pretty printing.
 # LOG_FILE: If given, command output will also be sent to this log file. If
@@ -877,16 +868,6 @@ function(therock_cmake_subproject_activate target_name)
   # deterministic output.
   if(WIN32)
     string(APPEND _init_contents "add_link_options(\"LINKER:/Brepro\")\n")
-  endif()
-
-  # Link half of the driver build options. This cannot go through
-  # CMAKE_<TYPE>_LINKER_FLAGS_INIT in the toolchain file: the private link dir
-  # handling above appends to CMAKE_<TYPE>_LINKER_FLAGS before enable_language()
-  # has populated it from *_INIT, which shadows the cache value and drops
-  # whatever the toolchain set.
-  if(MSVC AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
-    string(APPEND _init_contents
-      "add_link_options(\"LINKER:${THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS}\")\n")
   endif()
 
   if(_dep_provider_file)
@@ -1783,18 +1764,6 @@ function(_therock_cmake_subproject_setup_toolchain
       string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" @THEROCK_DEBUG_INFO_FLAGS@\")\n")
       string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" @THEROCK_DEBUG_INFO_FLAGS@\")\n")
     endif()
-  endif()
-
-  # Compile half of the driver build options. The link half is emitted as
-  # add_link_options() in the project_init file.
-  if(MSVC AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
-    if(compiler_toolchain)
-      set(_driver_build_compile_flags "${THEROCK_WINDOWS_DRIVER_BUILD_CLANG_COMPILE_FLAGS}")
-    else()
-      set(_driver_build_compile_flags "${THEROCK_WINDOWS_DRIVER_BUILD_MSVC_COMPILE_FLAGS}")
-    endif()
-    string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" ${_driver_build_compile_flags}\")\n")
-    string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_driver_build_compile_flags}\")\n")
   endif()
 
   # Customize debug info generation.

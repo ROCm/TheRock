@@ -410,7 +410,7 @@ jobs:
         # overrides it. The default is applied here rather than on the input
         # because GitHub reverts an emptied input back to its declared default,
         # which would make the two inputs impossible to use exclusively.
-        shell: cmd
+        shell: cmd # zizmor: ignore[misfeature]
         env:
           # Use the index if given; else the find-links page; else default to
           # the nightly repo.amd.com aggregate index (both empty is the bare-dispatch case).
@@ -457,7 +457,8 @@ jobs:
           fi
 
       - name: Sanity check wheel
-        shell: cmd
+        # Keep CMD for compatibility with the Windows wheel build and validation.
+        shell: cmd # zizmor: ignore[misfeature]
         run: |
           python external-builds/pytorch/sanity_check_wheel.py "%PACKAGE_DIST_DIR%"
 
@@ -546,7 +547,8 @@ jobs:
       # produced the requested package versions.
       - name: Write PyTorch package version outputs
         id: pytorch-versions
-        shell: cmd
+        # Keep CMD for compatibility with the Windows wheel build and validation.
+        shell: cmd # zizmor: ignore[misfeature]
         run: |
           python build_tools/github_actions/write_torch_versions.py --dist-dir "%PACKAGE_DIST_DIR%"
 
