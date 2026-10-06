@@ -6,6 +6,7 @@
 """Debian package creation functions for ROCm packaging."""
 
 import os
+import json
 import re
 import shutil
 import subprocess
@@ -23,6 +24,34 @@ logger = TheRockLogger(__name__)
 
 # Setup paths
 SCRIPT_DIR = Path(__file__).resolve().parent
+
+
+def load_alternatives_binaries() -> dict[str, list[str]]:
+    """Load package-specific binary alternatives from JSON."""
+
+    alternatives_file = (
+        SCRIPT_DIR / "template" / "scripts" / "amdrocm-alternatives.json"
+    )
+
+    with alternatives_file.open(encoding="utf-8") as file:
+        alternatives_binaries = json.load(file)
+    if not isinstance(alternatives_binaries, dict):
+        raise ValueError(f"{alternatives_file} must contain a JSON object")
+
+    for package_name, binaries in alternatives_binaries.items():
+        if not isinstance(package_name, str):
+            raise ValueError(
+                f"Invalid package name in {alternatives_file}: " f"{package_name!r}"
+            )
+
+        if not isinstance(binaries, list) or not all(
+            isinstance(binary, str) for binary in binaries
+        ):
+            raise ValueError(
+                f"Binary list for {package_name!r} must be a list " "of strings"
+            )
+
+    return alternatives_binaries
 
 
 def create_nonversioned_deb_package(pkg_name, config: PackageConfig):
@@ -362,7 +391,7 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
 
 
 def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
-    """Generate a Debian postinst/prerm file entry in `debian folder`.
+    """Generate Debian postinst/prerm maintainer scripts.
 
     Parameters:
     pkg_info: Package details parsed from a JSON file
@@ -371,14 +400,37 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
 
     Returns: None
     """
-    # Debian maintainer scripts that may be generated directly.
-    EXEC_SCRIPTS = {"preinst", "postinst", "prerm", "postrm", "config"}
+    # Maintainer scripts that may be supplied by the legacy
+    # package-specific template mechanism.
+    EXEC_SCRIPTS = {
+        "preinst",
+        "postinst",
+        "prerm",
+        "postrm",
+        "config",
+    }
+
     pkg_name = pkg_info.get("Package")
     parts = config.rocm_version.split(".")
+
     if len(parts) < 3:
         raise ValueError(
-            f"Version string '{config.rocm_version}' does not have major.minor.patch versions"
+            f"Version string '{config.rocm_version}' does not have "
+            "major.minor.patch versions"
         )
+
+    version_major_match = re.match(r"^\d+", parts[0])
+    version_minor_match = re.match(r"^\d+", parts[1])
+    version_patch_match = re.match(r"^\d+", parts[2])
+
+    if not all(
+        (
+            version_major_match,
+            version_minor_match,
+            version_patch_match,
+        )
+    ):
+        raise ValueError(f"Unable to parse version string '{config.rocm_version}'")
 
     env = Environment(
         loader=FileSystemLoader(str(SCRIPT_DIR)),
@@ -388,44 +440,53 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
             default=False,
         ),
     )
-    # Prepare your context dictionary
+
     context = {
         "install_prefix": config.install_prefix,
-        "version_major": int(re.match(r"^\d+", parts[0]).group()),
-        "version_minor": int(re.match(r"^\d+", parts[1]).group()),
-        "version_patch": int(re.match(r"^\d+", parts[2]).group()),
+        "version_major": int(version_major_match.group()),
+        "version_minor": int(version_minor_match.group()),
+        "version_patch": int(version_patch_match.group()),
         "target": "deb",
     }
 
-    templates_root = Path(SCRIPT_DIR) / "template" / "scripts"
+    templates_root = SCRIPT_DIR / "template" / "scripts"
+    alternatives_binaries = load_alternatives_binaries()
 
-    # New data-driven maintainer-script generation.
-    #
-    # For example:
-    #
-    #   amdrocm-core-data.j2
-    #       -> amdrocm-postinst.j2 -> debian/postinst
-    #       -> amdrocm-prerm.j2   -> debian/prerm
-    #
-    data_file = templates_root / f"{pkg_name}-data.j2"
-
-    if data_file.is_file():
-        data_template = data_file.relative_to(SCRIPT_DIR).as_posix()
+    # Packages listed in amdrocm-alternatives.json use the shared
+    # amdrocm-postinst.j2 and amdrocm-prerm.j2 templates.
+    if pkg_name in alternatives_binaries:
+        render_context = {
+            **context,
+            "package_name": pkg_name,
+            "binaries": alternatives_binaries[pkg_name],
+        }
 
         for script in ("postinst", "prerm"):
             template_name = f"template/scripts/amdrocm-{script}.j2"
             script_file = Path(deb_dir) / script
-
             template = env.get_template(template_name)
-            render_context = {
-                **context,
-                "data_template": data_template,
-            }
 
-            with script_file.open("w", encoding="utf-8") as f:
-                f.write(template.render(render_context))
+            with script_file.open("w", encoding="utf-8") as file:
+                file.write(template.render(render_context))
 
-            os.chmod(script_file, 0o755)
+            script_file.chmod(0o755)
+
+        return
+
+    # Preserve the existing behavior for packages that do not use the
+    # shared alternatives templates.
+    for script in EXEC_SCRIPTS:
+        pattern = f"{pkg_name}-{script}.j2"
+
+        for template_file in templates_root.glob(pattern):
+            script_file = Path(deb_dir) / script
+            template_name = template_file.relative_to(SCRIPT_DIR).as_posix()
+            template = env.get_template(template_name)
+
+            with script_file.open("w", encoding="utf-8") as file:
+                file.write(template.render(context))
+
+            script_file.chmod(0o755)
 
 
 def copy_package_contents(source_dir, destination_dir):
