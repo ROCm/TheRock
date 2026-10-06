@@ -265,7 +265,9 @@
     ]
   },
   "profiler-hub": {
-    "consumers": []
+    "consumers": [
+      "rocprofiler-systems"
+    ]
   },
   "profiler-hub-install-test": {
     "consumers": []
