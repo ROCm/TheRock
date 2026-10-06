@@ -1,8 +1,11 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# This file is both the super-project glue and the autotools driver.
+# Included from TheRock: source dir != this dir, so download FFTW and
+# declare the subprojects. Configured as the subproject (EXTERNAL_SOURCE_DIR
+# is this directory): the dirs match and the code after return() runs configure.
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-  # When included in TheRock, download sources and set up the sub-projects.
   # THEROCK_FLAG_FFTW3_AUTOTOOLS_BUILD selects an autotools build on Linux.
   # Otherwise the tarball is built with its own CMakeLists.txt.
   set(_fftw3_use_autotools OFF)
