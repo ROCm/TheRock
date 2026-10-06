@@ -5,9 +5,10 @@
 """
 Generate an index.html listing files in an S3 bucket.
 
-Usable as both a CLI tool (for local inspection) and an importable library
-(used by the tarball-index AWS Lambda handler in TheRock-Infra). The
-library entry point is `generate_index_s3()`.
+Usable as both a CLI tool (for local inspection) and an importable library.
+The library entry points are `generate_index_s3()` for flat artifact
+listings and `generate_directory_index_s3()` for direct child directory
+listings.
 
 Requirements:
  * `boto3` Python package must be installed, e.g.: pip install boto3
@@ -33,6 +34,78 @@ import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
 
 log = logging.getLogger(__name__)
+
+
+def _paginate_list_objects_v2(s3_client, bucket_name, **paginate_kwargs):
+    """Return a list_objects_v2 page iterator, mapping common S3 errors."""
+    try:
+        paginator = s3_client.get_paginator("list_objects_v2")
+        return paginator.paginate(Bucket=bucket_name, **paginate_kwargs)
+    except NoCredentialsError:
+        # Preserve specific exception type for callers to handle
+        log.exception(
+            "AWS credentials not found when accessing bucket '%s'", bucket_name
+        )
+        raise
+    except ClientError as e:
+        # Map common S3 errors to standard exceptions with chaining; otherwise re-raise
+        code = e.response.get("Error", {}).get("Code")
+        if code in {"AccessDenied", "UnauthorizedOperation"}:
+            raise PermissionError(f"Access denied to bucket '{bucket_name}'") from e
+        if code in {"NoSuchBucket", "404"}:
+            raise FileNotFoundError(f"Bucket '{bucket_name}' not found") from e
+        log.exception("ClientError while accessing bucket '%s'", bucket_name)
+        raise
+
+
+def _publish_html(s3_client, bucket_name, upload_key, html_content, upload) -> str:
+    """Upload html_content to s3://bucket_name/upload_key, or write it locally.
+
+    With upload=True the HTML is PUT to s3://bucket_name/upload_key and the
+    HTTPS URL is returned. Otherwise the HTML is written to ./index.html and
+    the local path is returned.
+    """
+    if upload:
+        # Upload directly from memory; avoids writing to a (potentially
+        # read-only) filesystem when called from AWS Lambda.
+        try:
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=upload_key,
+                Body=html_content.encode("utf-8"),
+                ContentType="text/html",
+            )
+        except ClientError as e:
+            code = e.response.get("Error", {}).get("Code")
+            if code in {"AccessDenied", "UnauthorizedOperation"}:
+                raise PermissionError(
+                    f"Access denied uploading to bucket '{bucket_name}'"
+                ) from e
+            if code in {"NoSuchBucket", "404"}:
+                raise FileNotFoundError(
+                    f"Bucket '{bucket_name}' not found during upload"
+                ) from e
+            log.error("Failed to upload index.html to bucket '%s': %s", bucket_name, e)
+            raise
+
+        region = s3_client.meta.region_name or "us-east-2"
+        if region == "us-east-2":
+            bucket_url = f"https://{bucket_name}.s3.amazonaws.com/{upload_key}"
+        else:
+            bucket_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{upload_key}"
+        log.info("index.html successfully uploaded. URL: %s", bucket_url)
+        return bucket_url
+
+    # Local-only mode: write next to the caller's working directory.
+    local_path = "index.html"
+    with open(local_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
+    log.info(
+        "index.html generated successfully for bucket '%s'. File saved as %s",
+        bucket_name,
+        local_path,
+    )
+    return local_path
 
 
 def extract_gpu_details(files):
@@ -86,24 +159,7 @@ def generate_index_s3(
     # Strip any leading or trailing slash from the prefix to standardize the directory path used to filter object.
     prefix = prefix.lstrip("/").rstrip("/")
     # List all objects and select matching direct-child files.
-    try:
-        paginator = s3_client.get_paginator("list_objects_v2")
-        page_iterator = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
-    except NoCredentialsError:
-        # Preserve specific exception type for callers to handle
-        log.exception(
-            "AWS credentials not found when accessing bucket '%s'", bucket_name
-        )
-        raise
-    except ClientError as e:
-        # Map common S3 errors to standard exceptions with chaining; otherwise re-raise
-        code = e.response.get("Error", {}).get("Code")
-        if code in {"AccessDenied", "UnauthorizedOperation"}:
-            raise PermissionError(f"Access denied to bucket '{bucket_name}'") from e
-        if code in {"NoSuchBucket", "404"}:
-            raise FileNotFoundError(f"Bucket '{bucket_name}' not found") from e
-        log.exception("ClientError while accessing bucket '%s'", bucket_name)
-        raise
+    page_iterator = _paginate_list_objects_v2(s3_client, bucket_name, Prefix=prefix)
 
     files = []
     for page in page_iterator:
@@ -234,47 +290,7 @@ def generate_index_s3(
     upload_prefix = f"{prefix}/" if prefix else ""
     upload_key = f"{upload_prefix}index.html"
 
-    if upload:
-        # Upload directly from memory; avoids writing to a (potentially
-        # read-only) filesystem when called from AWS Lambda.
-        try:
-            s3_client.put_object(
-                Bucket=bucket_name,
-                Key=upload_key,
-                Body=html_content.encode("utf-8"),
-                ContentType="text/html",
-            )
-        except ClientError as e:
-            code = e.response.get("Error", {}).get("Code")
-            if code in {"AccessDenied", "UnauthorizedOperation"}:
-                raise PermissionError(
-                    f"Access denied uploading to bucket '{bucket_name}'"
-                ) from e
-            if code in {"NoSuchBucket", "404"}:
-                raise FileNotFoundError(
-                    f"Bucket '{bucket_name}' not found during upload"
-                ) from e
-            log.error("Failed to upload index.html to bucket '%s': %s", bucket_name, e)
-            raise
-
-        region = s3_client.meta.region_name or "us-east-2"
-        if region == "us-east-2":
-            bucket_url = f"https://{bucket_name}.s3.amazonaws.com/{upload_key}"
-        else:
-            bucket_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{upload_key}"
-        log.info("index.html successfully uploaded. URL: %s", bucket_url)
-        return bucket_url
-
-    # Local-only mode: write next to the caller's working directory.
-    local_path = "index.html"
-    with open(local_path, "w", encoding="utf-8") as f:
-        f.write(html_content)
-    log.info(
-        "index.html generated successfully for bucket '%s'. File saved as %s",
-        bucket_name,
-        local_path,
-    )
-    return local_path
+    return _publish_html(s3_client, bucket_name, upload_key, html_content, upload)
 
 
 def generate_directory_index_s3(
@@ -289,26 +305,9 @@ def generate_directory_index_s3(
 
     prefix = prefix.lstrip("/").rstrip("/")
 
-    try:
-        paginator = s3_client.get_paginator("list_objects_v2")
-        page_iterator = paginator.paginate(
-            Bucket=bucket_name,
-            Prefix=f"{prefix}/",
-            Delimiter="/",
-        )
-    except NoCredentialsError:
-        log.exception(
-            "AWS credentials not found when accessing bucket '%s'", bucket_name
-        )
-        raise
-    except ClientError as e:
-        code = e.response.get("Error", {}).get("Code")
-        if code in {"AccessDenied", "UnauthorizedOperation"}:
-            raise PermissionError(f"Access denied to bucket '{bucket_name}'") from e
-        if code in {"NoSuchBucket", "404"}:
-            raise FileNotFoundError(f"Bucket '{bucket_name}' not found") from e
-        log.exception("ClientError while accessing bucket '%s'", bucket_name)
-        raise
+    page_iterator = _paginate_list_objects_v2(
+        s3_client, bucket_name, Prefix=f"{prefix}/", Delimiter="/"
+    )
 
     directories = []
 
@@ -361,40 +360,7 @@ def generate_directory_index_s3(
     upload_prefix = f"{prefix}/" if prefix else ""
     upload_key = f"{upload_prefix}index.html"
 
-    if upload:
-        try:
-            s3_client.put_object(
-                Bucket=bucket_name,
-                Key=upload_key,
-                Body=html_content.encode("utf-8"),
-                ContentType="text/html",
-            )
-        except ClientError as e:
-            code = e.response.get("Error", {}).get("Code")
-            if code in {"AccessDenied", "UnauthorizedOperation"}:
-                raise PermissionError(
-                    f"Access denied uploading to bucket '{bucket_name}'"
-                ) from e
-            if code in {"NoSuchBucket", "404"}:
-                raise FileNotFoundError(
-                    f"Bucket '{bucket_name}' not found during upload"
-                ) from e
-            log.error("Failed to upload index.html to bucket '%s': %s", bucket_name, e)
-            raise
-
-        region = s3_client.meta.region_name or "us-east-2"
-        if region == "us-east-2":
-            bucket_url = f"https://{bucket_name}.s3.amazonaws.com/{upload_key}"
-        else:
-            bucket_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{upload_key}"
-        log.info("index.html successfully uploaded. URL: %s", bucket_url)
-        return bucket_url
-
-    local_path = "index.html"
-    with open(local_path, "w", encoding="utf-8") as f:
-        f.write(html_content)
-
-    return local_path
+    return _publish_html(s3_client, bucket_name, upload_key, html_content, upload)
 
 
 if __name__ == "__main__":
