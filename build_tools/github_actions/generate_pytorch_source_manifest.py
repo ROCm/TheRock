@@ -366,8 +366,9 @@ def fetch_versions(
     https://github.com/pytorch/pytorch/blob/nightly/version.txt
 
     This step reads those base versions at the already-resolved commits and
-    appends TheRock's ROCm version suffix. Projects without a version_file, such
-    as Triton, must have their version filled in by their custom resolver.
+    strips torch/torchaudio/torchvision's legacy trailing a0 for release refs,
+    then appends TheRock's ROCm version suffix. Projects without a version_file,
+    such as Triton, must have their version filled in by their custom resolver.
     """
     updated: dict[str, GitSourceInfo] = {}
     for name, info in sources.items():
@@ -384,6 +385,11 @@ def fetch_versions(
         base_version = gha_fetch_text_file_contents(
             repo, version_file, info.commit
         ).strip()
+        if name in ("pytorch", "pytorch_audio", "pytorch_vision") and (
+            sources["pytorch"].branch or ""
+        ).startswith("release/"):
+            # Match pytorch/test-infra's get_base_version for release builds.
+            base_version = base_version.removesuffix("a0")
         full_version = f"{base_version}{version_suffix}"
         log(f"  {name}: {base_version} -> {full_version}")
         updated[name] = GitSourceInfo(
