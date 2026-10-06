@@ -397,7 +397,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
     )
   endif()
 
-endif()
+endif(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
 
 if(THEROCK_ENABLE_WSL_ROCDXG)
   if(NOT THEROCK_WSL_WIN_SDK)
@@ -594,7 +594,7 @@ if(THEROCK_ENABLE_OCL_RUNTIME AND _ocl_clr_enabled)
     )
   endif()
 
-endif()
+endif(THEROCK_ENABLE_OCL_RUNTIME AND _ocl_clr_enabled)
 
 ##############################################################################
 # Runtime tests
