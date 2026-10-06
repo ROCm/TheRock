@@ -424,6 +424,64 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_TYPE"] = "quick"
         self.assertNotIn("miopen-dbsync", self._selected_names())
 
+    def _dbsync_job(self, families, gated_gpu, gfx_target):
+        """Run selection for miopen-dbsync on `families`; return its job or None."""
+        os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync"
+        os.environ["AMDGPU_FAMILIES"] = families
+        if gated_gpu:
+            # configure_multi_arch_ci blanked the GPU runner (e.g. tests_on_trigger).
+            os.environ["TEST_RUNS_ON"] = ""
+        target = families.split("-")[0].lower()
+        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
+            target: {
+                "linux": {
+                    "test-runs-on": "" if gated_gpu else "some-gpu-runner",
+                    "fetch-gfx-targets": [gfx_target],
+                }
+            }
+        }
+        fetch_test_configurations.run()
+        jobs = [
+            j for j in self._get_components() if j["job_name"] == "miopen-dbsync"
+        ]
+        return jobs[0] if jobs else None
+
+    def test_miopen_dbsync_include_family_covers_gfx942_and_gfx950(self):
+        config = fetch_test_configurations.test_matrix["miopen-dbsync"]
+        self.assertEqual(config["include_family"]["linux"], ["gfx942", "gfx950"])
+
+    def test_miopen_dbsync_gfx950_scheduled_on_cpu_runner_when_gpu_gated(self):
+        job = self._dbsync_job("gfx950-dcgpu", True, "gfx950")
+        self.assertIsNotNone(job)
+        self.assertTrue(job["linux_cpu_runner"])
+        self.assertTrue(job["test_runner"])
+
+    def test_miopen_dbsync_gfx950_is_advisory(self):
+        job = self._dbsync_job("gfx950-dcgpu", True, "gfx950")
+        self.assertTrue(job["expect_failure"])
+
+    def test_miopen_dbsync_gfx942_stays_blocking(self):
+        job = self._dbsync_job("gfx94X-dcgpu", False, "gfx942")
+        self.assertIsNotNone(job)
+        self.assertNotIn("expect_failure", job)
+
+    def test_miopen_dbsync_excluded_on_other_families(self):
+        self.assertIsNone(self._dbsync_job("gfx120X-all", False, "gfx1200"))
+
+    def test_gpu_components_not_scheduled_on_gated_gfx950(self):
+        # The CPU lane must not leak GPU-requiring components onto gated gfx950.
+        os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync,rocblas"
+        os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
+        os.environ["TEST_RUNS_ON"] = ""
+        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
+            "gfx950": {
+                "linux": {"test-runs-on": "", "fetch-gfx-targets": ["gfx950"]}
+            }
+        }
+        names = self._selected_names()
+        self.assertIn("miopen-dbsync", names)
+        self.assertNotIn("rocblas", names)
+
     # -----------------------
     # Multi-GPU logic (RCCL)
     # -----------------------
