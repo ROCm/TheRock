@@ -31,7 +31,7 @@ Path and repo name are overridable via environment variables: ROCM_REPO_NAME (re
 APT list, Zypper/Yum repo file and section), ROCM_APT_SOURCES_LIST,
 ROCM_APT_KEYRING_FILE, ROCM_ZYPP_REPOS_DIR, ROCM_YUM_REPOS_DIR,
 ROCM_RDHC_REL_PATH (relative path from install prefix to rdhc binary).
-After install, Step 2 verifies transitive dependencies (``apt-get check`` + Depends/Pre-Depends
+After install, Step 2 verifies transitive dependencies (``sudo apt-get check`` + Depends/Pre-Depends
 closure for DEB; ``rpm -qR`` / ``rpm -q --whatprovides`` closure for RPM) unless
 ``NATIVE_LINUX_SKIP_DEP_VERIFY=1``. The resolved dependency closure is rendered as an indented
 tree with summary counts (packages in closure / dependency edges / roots), printed to the
@@ -509,8 +509,10 @@ def verify_debian_transitive_dependencies(
     errors: list[str] = []
     if report is not None:
         report.roots = list(root_packages)
+    # Install uses ``sudo apt``; ``apt-get check`` needs the same privilege to open
+    # the dpkg lock (non-root CI users otherwise get Permission denied / exit 100).
     chk = subprocess.run(
-        ["apt-get", "check"],
+        ["sudo", "apt-get", "check"],
         capture_output=True,
         text=True,
         timeout=DEP_VERIFY_SUBPROCESS_TIMEOUT,
@@ -585,9 +587,30 @@ def _rpm_requires_tokens(nevra: str) -> list[str]:
     return [ln.strip() for ln in (r.stdout or "").splitlines() if ln.strip()]
 
 
+# rpm -qR emits versioned Requires like ``amdrocm10.2 = 10.2.0~...``. Querying
+# ``rpm -q --whatprovides`` with the full comparison often returns no provider even
+# when the named capability is installed; strip the comparison for the lookup.
+_RPM_REQUIRE_VERSION_CMP = re.compile(r"\s*(>=|<=|=|>|<)\s*")
+
+
+def _rpm_capability_for_whatprovides(req: str) -> str:
+    """Return the capability name from an ``rpm -qR`` token (drop version compare)."""
+    r = req.strip()
+    if not r:
+        return r
+    m = _RPM_REQUIRE_VERSION_CMP.search(r)
+    if m:
+        return r[: m.start()].strip()
+    return r
+
+
 def _rpm_whatprovides_nevras(req: str) -> list[str]:
+    """Resolve installed NEVRAs that provide ``req`` (version compare stripped)."""
+    capability = _rpm_capability_for_whatprovides(req)
+    if not capability:
+        return []
     r = subprocess.run(
-        ["rpm", "-q", "--whatprovides", req],
+        ["rpm", "-q", "--whatprovides", capability],
         capture_output=True,
         text=True,
         timeout=DEP_VERIFY_SUBPROCESS_TIMEOUT,

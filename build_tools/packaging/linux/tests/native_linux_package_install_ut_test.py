@@ -2613,7 +2613,7 @@ class VerifyDebianTransitiveDependenciesTest(unittest.TestCase):
 
     @patch("native_linux_package_install_test.subprocess.run")
     def test_apt_get_check_failure_returns_false(self, mock_run):
-        # Test that a failing 'apt-get check' short-circuits to a failure result.
+        # Test that a failing 'sudo apt-get check' short-circuits to a failure result.
         mock_run.return_value = MagicMock(
             returncode=100, stdout="", stderr="broken deps"
         )
@@ -2624,6 +2624,8 @@ class VerifyDebianTransitiveDependenciesTest(unittest.TestCase):
         )
         self.assertFalse(ok)
         self.assertTrue(any("apt-get check failed" in e for e in errs))
+        mock_run.assert_called_once()
+        self.assertEqual(mock_run.call_args.args[0], ["sudo", "apt-get", "check"])
 
     @patch("native_linux_package_install_test._apt_cache_show_first_stanza")
     @patch("native_linux_package_install_test._deb_is_pkg_installed")
@@ -2640,6 +2642,7 @@ class VerifyDebianTransitiveDependenciesTest(unittest.TestCase):
         )
         self.assertTrue(ok)
         self.assertEqual(errs, [])
+        self.assertEqual(mock_run.call_args.args[0], ["sudo", "apt-get", "check"])
 
     @patch("native_linux_package_install_test._deb_is_pkg_installed")
     @patch("native_linux_package_install_test.subprocess.run")
@@ -2732,6 +2735,37 @@ class RpmRequireTokenClassificationTest(unittest.TestCase):
         )
 
 
+class RpmCapabilityForWhatprovidesTest(unittest.TestCase):
+    """Tests for _rpm_capability_for_whatprovides()."""
+
+    def test_strips_equality_version(self):
+        # Test that ``name = ver`` from rpm -qR becomes the bare capability name.
+        self.assertEqual(
+            native_linux_package_install_test._rpm_capability_for_whatprovides(
+                "amdrocm10.2 = 10.2.0~20261006g79d801b6-37409580799"
+            ),
+            "amdrocm10.2",
+        )
+
+    def test_strips_gte_version(self):
+        # Test that ``name >= ver`` strips to the capability name.
+        self.assertEqual(
+            native_linux_package_install_test._rpm_capability_for_whatprovides(
+                "libfoo >= 1.2.3"
+            ),
+            "libfoo",
+        )
+
+    def test_soname_unchanged(self):
+        # Test that a file soname capability without a version compare is unchanged.
+        self.assertEqual(
+            native_linux_package_install_test._rpm_capability_for_whatprovides(
+                "libc.so.6()(64bit)"
+            ),
+            "libc.so.6()(64bit)",
+        )
+
+
 class VerifyRpmTransitiveDependenciesTest(unittest.TestCase):
     """Tests for verify_rpm_transitive_dependencies()."""
 
@@ -2782,6 +2816,24 @@ class VerifyRpmTransitiveDependenciesTest(unittest.TestCase):
         )
         self.assertFalse(ok)
         self.assertTrue(any("no installed package provides" in e for e in errs))
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_whatprovides_strips_version_compare(self, mock_run):
+        # Test that versioned Requires query --whatprovides with the bare name.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="amdrocm10.2-10.2.0-1.x86_64\n",
+            stderr="",
+        )
+        providers = native_linux_package_install_test._rpm_whatprovides_nevras(
+            "amdrocm10.2 = 10.2.0~20261006g79d801b6-37409580799"
+        )
+        self.assertEqual(providers, ["amdrocm10.2-10.2.0-1.x86_64"])
+        mock_run.assert_called_once()
+        self.assertEqual(
+            mock_run.call_args.args[0],
+            ["rpm", "-q", "--whatprovides", "amdrocm10.2"],
+        )
 
 
 class VerifyTransitiveDependenciesInstalledTest(unittest.TestCase):
