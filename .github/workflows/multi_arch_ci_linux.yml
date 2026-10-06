@@ -61,7 +61,8 @@ jobs:
       contents: read
       id-token: write
     container:
-      image: python:3.12-slim
+      # https://hub.docker.com/_/python/tags?name=3.12-slim
+      image: python:3.12-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f
     steps:
       - name: Checking out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -151,6 +152,8 @@ jobs:
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
       test_runs_on: ${{ matrix.family_info.test-runs-on }}
+      test_runs_on_cpu: ${{ matrix.family_info.test-runs-on-cpu }}
+      tests_enabled: ${{ matrix.family_info.tests_enabled }}
       test_type: ${{ matrix.family_info.test_type || inputs.test_type }}
       # Per-family test_labels override global test_labels when specified
       # Convert array to JSON string for workflow input compatibility

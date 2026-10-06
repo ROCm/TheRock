@@ -72,7 +72,8 @@ jobs:
     container:
       # If the component has specified an alternate image, honor that option.
       # Otherwise use the default image.
-      image: >-
+      # Callers must supply digest-pinned images; fetch_test_configurations.py pins overrides.
+      image: >- # zizmor: ignore[unpinned-images]
         ${{ inputs.platform == 'linux' &&
             (fromJSON(inputs.component).container_image || inputs.default_container_image)
             || null
@@ -91,6 +92,8 @@ jobs:
       run:
         shell: bash
     env:
+      GENERIC_RUN_ID: ${{ inputs.generic_run_id }}
+      TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
       CODE_COVERAGE_RUN_ID: ${{ github.run_id }}
       OUTPUT_ARTIFACTS_DIR: "./build"
       THEROCK_BIN_DIR: "./build/bin"
@@ -113,7 +116,7 @@ jobs:
         if: ${{ runner.os == 'Windows' }}
         timeout-minutes: 5
         shell: powershell
-        run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
+        run: . "${env:GITHUB_WORKSPACE}\prejob\build_tools\github_actions\cleanup_processes.ps1"
 
       - name: Pre-job cleanup GPU processes on Linux
         if: ${{ runner.os == 'Linux' }}
@@ -135,14 +138,15 @@ jobs:
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
         run: |
           pip3 install -r requirements-test.txt
+          # FETCH_ARTIFACT_ARGS intentionally splits arguments supplied by fetch_test_configurations.py.
           python3 build_tools/install_rocm_code_coverage_build.py \
-            --code-coverage-run-id=${{ env.CODE_COVERAGE_RUN_ID }} \
-            --run-id=${{ inputs.generic_run_id }} \
-            --artifact-group=${{ inputs.amdgpu_families }} \
-            --amdgpu-targets=${{ inputs.amdgpu_targets }} \
+            --code-coverage-run-id="${CODE_COVERAGE_RUN_ID}" \
+            --run-id="${GENERIC_RUN_ID}" \
+            --artifact-group="${AMDGPU_FAMILIES}" \
+            --amdgpu-targets="${AMDGPU_TARGETS}" \
             --tests \
-            --output-dir=${{ env.OUTPUT_ARTIFACTS_DIR }} \
-            --replace-${{ fromJSON(inputs.component).job_name }} \
+            --output-dir="${OUTPUT_ARTIFACTS_DIR}" \
+            "--replace-${TEST_COMPONENT}" \
             ${FETCH_ARTIFACT_ARGS}
 
       # safe.directory must be set before Runner Health Status
@@ -163,9 +167,11 @@ jobs:
 
       - name: Setup Additional Requirements
         if: ${{ fromJSON(inputs.component).additional_requirements_files != '' }}
+        env:
+          REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
         run: |
           python ./build_tools/install_additional_requirements.py \
-            --requirements-files ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
+            --requirements-files "${REQUIREMENTS_FILES}"
 
         # TODO(#3755): Clean this up after final sanitizer environment variable flags are determined
       - name: Enable sanitizer-specific test flags
@@ -173,7 +179,7 @@ jobs:
         run: |
           echo "ASAN_OPTIONS=detect_odr_violation=0:quarantine_size_mb=600" >> $GITHUB_ENV
           echo "HSA_XNACK=1" >> $GITHUB_ENV
-          echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
+          echo "ASAN_SYMBOLIZER_PATH=${OUTPUT_ARTIFACTS_DIR}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
 
       # Instrumented binaries write one profraw per process. %p (pid) and %m
       # (binary signature) keep the files distinct so a shard that forks or
@@ -181,7 +187,6 @@ jobs:
       - name: Prepare coverage profile directory
         if: ${{ inputs.coverage_enabled }}
         env:
-          TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
           SHARD_INDEX: ${{ matrix.shard }}
         run: |
           mkdir -p "${GITHUB_WORKSPACE}/coverage-report/profraw"
@@ -208,7 +213,15 @@ jobs:
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
           TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
-          ROCM_KPACK_DEBUG: "1"
+          # General CI debug mode. runner.debug == '1' when a job is re-run with
+          # GitHub's "Enable debug logging" checkbox. Used to force turning debug
+          # options on.
+          THEROCK_CI_DEBUG: ${{ runner.debug == '1' && '1' || '0' }}
+          # ROCM_KPACK_DEBUG turns on the kpack loader's per-test diagnostics.
+          # Most components enable it (default "1"); a few opt out via their
+          # test_matrix "rocm_kpack_debug": "0" to keep -V ctest logs readable.
+          # test_runner.py forces this on when THEROCK_CI_DEBUG is set.
+          ROCM_KPACK_DEBUG: ${{ fromJSON(inputs.component).rocm_kpack_debug || '1' }}
           # Windows hip-tests (PAL=1, ROCR=0) set this via matrix; other components
           # leave it empty. #3587
           # An empty GPU_ENABLE_PAL is misread as ROCr on Windows (atoi("")==0),
@@ -225,7 +238,9 @@ jobs:
             (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
             (${{ inputs.amdgpu_families }})
             ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
-        run: |
+        # This input is intentionally a shell program from fetch_test_configurations.py.
+        # Callers must be trusted to select code, as with repository/ref above.
+        run: | # zizmor: ignore[template-injection]
           ${{ fromJSON(inputs.component).test_script }}
 
       # Uploaded even when the test step failed: partial coverage from a failing
@@ -249,7 +264,7 @@ jobs:
         if: ${{ always() && runner.os == 'Windows' }}
         timeout-minutes: 5
         shell: powershell
-        run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'
+        run: . "${env:GITHUB_WORKSPACE}\build_tools\github_actions\cleanup_processes.ps1"
 
       - name: Capture job summary
         id: summary
