@@ -483,10 +483,12 @@ class GitContext:
         """Create context for external repo builds (e.g., rocm-libraries).
 
         For external repos, we treat the repo name as both a changed file and
-        a submodule path so that:
-        1. Stage reuse analysis can determine which TheRock stages are affected
-        2. has_submodule_changes returns True, enabling submodule_bump_tests_only
-           families to run their tests
+        a submodule path so that stage reuse analysis can determine which
+        TheRock stages are affected.
+
+        Note: has_submodule_changes will be True, but _get_current_triggers()
+        ignores this for external repos since submodule_bump only applies to
+        TheRock itself (when its submodule pointers are updated).
         """
         print(f"External repo detected: {external_repo_name}")
         return GitContext(
@@ -1386,7 +1388,8 @@ def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[s
         triggers.add("presubmit")
 
     # Context-based triggers (can stack on top of event triggers)
-    if git_context.has_submodule_changes is True:
+    # submodule_bump only applies to TheRock, not external repos.
+    if git_context.has_submodule_changes is True and not ci_inputs.external_repo:
         triggers.add("submodule_bump")
 
     return triggers

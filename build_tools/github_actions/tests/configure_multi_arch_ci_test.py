@@ -2852,6 +2852,25 @@ class TestTriggerHelpers(unittest.TestCase):
         triggers = cm._get_current_triggers(ci_inputs, git_context)
         self.assertEqual(triggers, {"presubmit", "submodule_bump"})
 
+    def test_get_current_triggers_external_repo_no_submodule_bump(self):
+        """submodule_bump only applies to TheRock, not external repos."""
+        for event, expected in [
+            ("pull_request", {"presubmit"}),
+            ("push", {"postsubmit"}),
+        ]:
+            with self.subTest(event=event):
+                ci_inputs = cm.CIInputs(
+                    run_id="12345",
+                    event_name=event,
+                    commit_ref="main",
+                    base_ref="HEAD^",
+                    build_variant="release",
+                    external_repo='{"repository":"ROCm/rocm-libraries","ref":"main"}',
+                )
+                git_context = cm.GitContext.from_external_repo("rocm-libraries")
+                triggers = cm._get_current_triggers(ci_inputs, git_context)
+                self.assertEqual(triggers, expected)
+
     def test_should_run_tests_trigger_matching(self):
         """Verify test gating based on trigger match."""
         test_cases = [
