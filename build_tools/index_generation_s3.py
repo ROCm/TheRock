@@ -22,6 +22,9 @@ Generate index.html for all tarballs in a bucket to test locally:
 
 Generate index.html for all tarballs in a bucket and upload:
  ./index_generation_s3.py --bucket therock-dev-tarball --upload
+
+Generate index.html for direct child directories (not files) under a prefix:
+ ./index_generation_s3.py --bucket therock-dev-tarball --directory v5/rocm/extras/rocoptiq/windows-installers --directory-index --upload
 """
 
 import argparse
@@ -366,7 +369,7 @@ def generate_directory_index_s3(
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(
-        description="Generate index.html for S3 bucket .tar.gz files"
+        description="Generate index.html for an S3 bucket prefix"
     )
     parser.add_argument(
         "--bucket",
@@ -384,8 +387,24 @@ if __name__ == "__main__":
         default="",
         help="Directory to index. Defaults to the top level directory.",
     )
+    parser.add_argument(
+        "--directory-index",
+        action="store_true",
+        help=(
+            "List direct child subdirectories under --directory instead of "
+            "artifact files (default: list files)."
+        ),
+    )
     args = parser.parse_args()
     s3 = boto3.client("s3", region_name=args.region)
-    generate_index_s3(
-        s3_client=s3, bucket_name=args.bucket, prefix=args.directory, upload=args.upload
-    )
+    if args.directory_index:
+        generate_directory_index_s3(
+            s3_client=s3,
+            bucket_name=args.bucket,
+            prefix=args.directory,
+            upload=args.upload,
+        )
+    else:
+        generate_index_s3(
+            s3_client=s3, bucket_name=args.bucket, prefix=args.directory, upload=args.upload
+        )
