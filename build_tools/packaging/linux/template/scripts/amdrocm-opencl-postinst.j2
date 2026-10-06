@@ -3,7 +3,9 @@ set -e
 
 do_register_icd() {
     local pkg_install_prefix
-    local lib_path
+    local lib_dir
+    local lib_path=""
+    local candidate
     local icd_dir="/etc/OpenCL/vendors"
     local icd_file
 
@@ -14,21 +16,30 @@ do_register_icd() {
     pkg_install_prefix="${RPM_INSTALL_PREFIX0:-{{ install_prefix }}}"
     {% endif %}
 
-    lib_path="${pkg_install_prefix}/lib/opencl/libamdocl64.so"
+    lib_dir="${pkg_install_prefix}/lib/opencl"
+
+    # Prefer the SONAME-versioned runtime library. The unversioned symlink may
+    # be absent from runtime packages. [0-9] also excludes "libamdocl64.so.".
+    for candidate in "${lib_dir}"/libamdocl64.so.[0-9]* "${lib_dir}/libamdocl64.so"; do
+        if [ -e "$candidate" ]; then
+            lib_path="$candidate"
+            break
+        fi
+    done
 
     # Qualified by major.minor only, matching the granularity of the install
     icd_file="${icd_dir}/amdocl64_$(printf '%d%02d' \
         {{ version_major }} {{ version_minor }}).icd"
 
-    if [ ! -e "$lib_path" ]; then
-        echo "error: OpenCL runtime not found: $lib_path" >&2
+    if [ -z "$lib_path" ]; then
+        echo "error: OpenCL runtime not found in ${lib_dir}" >&2
         return 1
     fi
 
     install -d -m 0755 "$icd_dir"
 
-    # Use an absolute library path so discovery does not depend on
-    # libamdocl64.so being present in the system linker search path.
+    # Use an absolute path so OpenCL discovery does not depend on ld.so.conf.d
+    # or the system linker search path. See docs/packaging/native_packaging.md.
     printf '%s\n' "$lib_path" > "$icd_file"
     chmod 0644 "$icd_file"
 }

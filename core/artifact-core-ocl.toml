@@ -1,7 +1,23 @@
+[options]
+# Intentionally omit these files. Unmatched artifact files are otherwise
+# rejected by ComponentScanner.verify.
+unmatched_exclude = [
+  # Drop clr's ld.so.conf.d fragment. It hardcodes /opt/rocm/lib, while the
+  # OpenCL runtime lives in lib/opencl. The generated ICD uses an absolute
+  # library path, so no ldconfig registration is needed.
+  # See docs/packaging/native_packaging.md.
+  "etc/ld.so.conf.d/**",
+]
+
 # ocl-clr
 [components.lib."core/ocl-clr/stage"]
 exclude = [
   "bin/hsa-runtime64.dll",
+  # ocltst harness libraries belong to the 'test' component below. Without this
+  # they match the 'lib' default "**/*.so" pattern, which is applied first, and
+  # so ship in runtime packages that only take lib/run/dev.
+  "share/opencl/**",
+  "etc/ld.so.conf.d/**",
 ]
 include = [
   "etc/**",

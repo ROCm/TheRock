@@ -54,6 +54,31 @@ By default, RUNPATH in binaries and libraries is converted to RPATH during
 packaging. This ensures proper library loading behavior. To keep RUNPATH
 instead, use the `--runpath-pkg` option.
 
+## OpenCL ICD Registration
+
+`amdrocm-opencl` registers the AMD OpenCL implementation from `postinst` by
+writing an absolute library path to
+`/etc/OpenCL/vendors/amdocl64_<major><minor>.icd`. The file is removed from
+`prerm`. The version-qualified name allows parallel ROCm installs.
+
+Two details are intentional:
+
+- **No `ld.so.conf.d` fragment is shipped.** The fragment installed by `clr`
+  hardcodes `/opt/rocm/lib`, while the OpenCL runtime lives in `lib/opencl`.
+  Publishing a ROCm library directory globally can also shadow distro
+  libraries. Since the `.icd` contains an absolute path, no `ldconfig`
+  registration is required.
+
+  Any ROCm-wide `ld.so.conf.d` policy should be handled separately from the
+  OpenCL ICD package.
+
+- **The `.icd` points to the SONAME file** (`libamdocl64.so.2`), not the
+  unversioned `libamdocl64.so` symlink, because runtime packages are not
+  required to include that symlink.
+
+See https://github.com/ROCm/TheRock/issues/7667. These behaviors are covered by
+`build_tools/tests/opencl_icd_test.py`.
+
 ## Fields in package.json
 
 Mandatory fields for a package entry in package.json.
