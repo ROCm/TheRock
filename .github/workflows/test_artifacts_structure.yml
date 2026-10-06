@@ -115,5 +115,5 @@ jobs:
 
       - name: Validate artifact structure
         run: |
-          python -m pytest tests/test_artifact_structure.py \
+          python -m pytest tests/test_artifact_structure.py ml-libs/tests/miopen_artifacts_test.py \
             -v --log-cli-level=info --timeout=300

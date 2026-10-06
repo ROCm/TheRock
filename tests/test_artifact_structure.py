@@ -432,42 +432,6 @@ class TestArtifactStructure:
         )
 
     @pytest.mark.skipif(
-        not is_windows_platform(),
-        reason="Windows MIOpen installs system DBs directly under bin/",
-    )
-    def test_windows_miopen_system_databases(self, archive_index: list[ArchiveInfo]):
-        """Known gfx110X find/perf pairs must survive in per-arch library archives."""
-        required_basenames = {"gfx1100": "gfx110060", "gfx1102": "gfx110220"}
-        miopen_libs = {
-            name.target_family: info
-            for info in archive_index
-            if (name := ArtifactName.from_filename(info.filename))
-            and name.name == "miopen"
-            and name.component == "lib"
-        }
-        families = set(os.getenv("AMDGPU_FAMILIES", "").lower().split(";"))
-        if "gfx110x-all" not in families:
-            required_basenames = {
-                arch: basename
-                for arch, basename in required_basenames.items()
-                if arch in miopen_libs
-            }
-            if not required_basenames:
-                pytest.skip("No Windows gfx110X MIOpen artifacts in this run")
-
-        for arch, basename in required_basenames.items():
-            info = miopen_libs.get(arch)
-            assert info is not None, f"Missing MIOpen library artifact for {arch}"
-            expected_files = {
-                f"bin/{basename}.HIP.fdb.txt",
-                f"bin/{basename}.db.txt",
-            }
-            missing = expected_files - info.flattened_paths
-            assert not missing, (
-                f"{info.filename}: missing Windows MIOpen system DBs {sorted(missing)}"
-            )
-
-    @pytest.mark.skipif(
         is_windows_platform(),
         reason="package.json coverage check only applies to Linux artifacts; "
         "package.json (build_tools/packaging/linux/package.json) has no "
