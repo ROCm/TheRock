@@ -221,6 +221,21 @@ jobs:
           path: ci-config
         continue-on-error: true
 
+      # Checkout external repo config (skip-ci-config.toml) for path-based CI skip.
+      # This sparse checkout fetches only the .github directory to minimize checkout time.
+      - name: Checkout external repo config
+        if: inputs.external_repo != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          repository: ${{ fromJSON(inputs.external_repo).repository }}
+          ref: ${{ fromJSON(inputs.external_repo).ref }}
+          path: external-repo-config
+          sparse-checkout: .github
+          sparse-checkout-cone-mode: false
+        continue-on-error: true
+
       # Note: the script reads PR labels, the base ref, etc. from the event
       # payload (GITHUB_EVENT_PATH). That is the original event that started
       # the workflow run, which may not directly map to the "inputs" on
