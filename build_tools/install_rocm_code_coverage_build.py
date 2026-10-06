@@ -22,6 +22,7 @@ import shutil
 import sys
 import argparse
 import platform
+import tempfile
 from pathlib import Path, PurePosixPath
 
 from install_rocm_from_artifacts import main as install_from_artifacts_main
@@ -35,6 +36,7 @@ from artifact_manager import (
 from _therock_utils.archive_util import open_archive_for_read
 from _therock_utils.artifacts import ArtifactName
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
+from _therock_utils.elf_phdr import normalize_instrumented_binaries
 from _therock_utils.kpack_archive import read_kpack, replace_entries
 
 # Maps each --replace-<name> flag to its TheRock artifact and library folder.
@@ -261,49 +263,56 @@ def overlay_instrumented_device_code(artifacts, dest_dir, output_dir):
     archive would instrument every sibling in it too, so only the entries keyed
     under one of the project's folders come from the instrumented archive.
     """
-    staging_dir = dest_dir / "device-code"
     archives = sorted(
         p for p in dest_dir.iterdir() if p.name.endswith((".tar.zst", ".tar.xz"))
     )
-    for archive in archives:
-        an = ArtifactName.from_filename(archive.name)
-        folders = artifacts.get(an.name) if an else None
-        if not folders:
-            continue
-        with open_archive_for_read(archive) as tf:
-            relpaths = _read_relpaths(tf, archive)
-            while member := tf.next():
-                if not member.isfile() or not member.name.endswith(".kpack"):
-                    continue
-                prefix = next(
-                    (p for p in relpaths if member.name.startswith(p + "/")), None
-                )
-                if prefix is None:
-                    continue
-                scoped_path = PurePosixPath(member.name[len(prefix) + 1 :])
-                staged = staging_dir / scoped_path
-                staged.parent.mkdir(parents=True, exist_ok=True)
-                with tf.extractfile(member) as src, open(staged, "wb") as dst:
-                    shutil.copyfileobj(src, dst)
+    # Staged outside the install tree, where a stray .kpack would be picked up
+    # by anything that globs for them (the report does).
+    with tempfile.TemporaryDirectory(prefix="device-code-") as staging:
+        for archive in archives:
+            _overlay_archive_device_code(archive, artifacts, Path(staging), output_dir)
 
-                installed = output_dir / scoped_path
-                if not installed.exists():
-                    # Nothing of the baseline's to keep: the instrumented host
-                    # libraries look their kernels up in this file regardless.
-                    installed.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copyfile(staged, installed)
-                    log(f"  Installed {scoped_path} whole from {archive.name}")
-                    continue
-                swapped = replace_entries(
-                    read_kpack(installed),
-                    read_kpack(staged),
-                    lambda key: any(_matches_folder(key, f) for f in folders),
-                    installed,
-                )
-                log(
-                    f"  Swapped {swapped} {'/'.join(folders)} code object(s) "
-                    f"into {scoped_path} from {archive.name}"
-                )
+
+def _overlay_archive_device_code(archive, artifacts, staging_dir, output_dir):
+    """Swaps in the code objects one replacement archive carries for its folders."""
+    an = ArtifactName.from_filename(archive.name)
+    folders = artifacts.get(an.name) if an else None
+    if not folders:
+        return
+    with open_archive_for_read(archive) as tf:
+        relpaths = _read_relpaths(tf, archive)
+        while member := tf.next():
+            if not member.isfile() or not member.name.endswith(".kpack"):
+                continue
+            prefix = next(
+                (p for p in relpaths if member.name.startswith(p + "/")), None
+            )
+            if prefix is None:
+                continue
+            scoped_path = PurePosixPath(member.name[len(prefix) + 1 :])
+            staged = staging_dir / scoped_path
+            staged.parent.mkdir(parents=True, exist_ok=True)
+            with tf.extractfile(member) as src, open(staged, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+
+            installed = output_dir / scoped_path
+            if not installed.exists():
+                # Nothing of the baseline's to keep: the instrumented host
+                # libraries look their kernels up in this file regardless.
+                installed.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(staged, installed)
+                log(f"  Installed {scoped_path} whole from {archive.name}")
+                continue
+            swapped = replace_entries(
+                read_kpack(installed),
+                read_kpack(staged),
+                lambda key: any(_matches_folder(key, f) for f in folders),
+                installed,
+            )
+            log(
+                f"  Swapped {swapped} {'/'.join(folders)} code object(s) "
+                f"into {scoped_path} from {archive.name}"
+            )
 
 
 def main(argv):
@@ -392,6 +401,13 @@ def main(argv):
     replace_instrumented_libraries(artifacts, dest_dir, opts.output_dir)
     if args.replace_device_code:
         overlay_instrumented_device_code(artifacts, dest_dir, opts.output_dir)
+
+    # The kpack split relocates a fat binary's program headers, and in a shared
+    # library the profile runtime then reads them from the wrong address when
+    # it writes its profile at exit; see _therock_utils/elf_phdr.py.
+    roots = [opts.output_dir / "lib", opts.output_dir / "bin"]
+    for path in normalize_instrumented_binaries(roots):
+        log(f"Pinned the relocated program headers of {path} to their file offset")
 
 
 if __name__ == "__main__":

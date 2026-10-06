@@ -98,6 +98,15 @@ class TestCodeCoverageRepoSplit(unittest.TestCase):
         captured = self._run_main([], env={"GITHUB_REPOSITORY": "ROCm/TheRock"})
         self.assertEqual(captured["github_repository"], "ROCm/TheRock")
 
+    def test_instrumented_binaries_are_normalized_after_the_swap(self):
+        with mock.patch.object(
+            mod, "normalize_instrumented_binaries", return_value=[]
+        ) as normalize:
+            self._run_main([])
+
+        (roots,), _ = normalize.call_args
+        self.assertEqual([root.name for root in roots], ["lib", "bin"])
+
     def test_device_code_is_swapped_only_when_asked(self):
         for extra, expected in (([], False), (["--replace-device-code"], True)):
             with self.subTest(extra=extra):
@@ -160,6 +169,26 @@ class TestDeviceCodeOverlay(unittest.TestCase):
                 (f"{ROCRAND}#0", "gfx942"): b"inst-roc0",
             },
         )
+
+    def test_no_staged_copy_is_left_where_the_report_looks(self):
+        # The report globs the install tree for .kpack files, so a leftover
+        # staged copy would hand llvm-cov every code object twice.
+        write_reference_kpack(
+            self.output_dir / self.KPACK, {(f"{ROCRAND}#0", "gfx942"): b"base"}
+        )
+        self._write_instrumented_artifact({(f"{ROCRAND}#0", "gfx942"): b"inst"})
+
+        mod.overlay_instrumented_device_code(
+            {"rand": ["rocRAND"]}, self.dest_dir, self.output_dir
+        )
+
+        left = [
+            p.relative_to(self.root)
+            for d in (self.dest_dir, self.output_dir)
+            for p in d.rglob("*.kpack")
+            if p.is_file()
+        ]
+        self.assertEqual(left, [Path("build") / self.KPACK])
 
     def test_a_kpack_the_baseline_lacks_is_installed_whole(self):
         kernels = {(f"{ROCRAND}#0", "gfx942"): b"inst-roc0"}
