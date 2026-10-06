@@ -12,12 +12,10 @@ runner-local AWS files and OIDC roles the other caches already use.
 
 The copy lands under $RUNNER_TEMP rather than the workspace, which CI
 publishes as artifacts. Missing source files are not an error: the wheel
-build runs without a remote cache.
+build runs without a remote cache. Files that are present but empty are.
 
 Used by `.github/workflows/multi_arch_build_linux_jax_wheels_ci.yml`.
 """
-
-from __future__ import annotations
 
 import argparse
 import os
@@ -53,9 +51,7 @@ def materialize_credentials(source_dir: Path, dest_dir: Path) -> Path | None:
     """Copy the runner's cert/key into dest_dir, or return None if they are absent."""
     certificate = source_dir / CERT_NAME
     key = source_dir / KEY_NAME
-    missing = [
-        p for p in (certificate, key) if not p.is_file() or p.stat().st_size == 0
-    ]
+    missing = [p for p in (certificate, key) if not p.is_file()]
     if missing:
         _log(
             "No cache credentials at "
@@ -63,6 +59,11 @@ def materialize_credentials(source_dir: Path, dest_dir: Path) -> Path | None:
             + "; building without a remote cache."
         )
         return None
+    empty = [p for p in (certificate, key) if p.stat().st_size == 0]
+    if empty:
+        raise ValueError(
+            f"Cache credentials are present but empty: {', '.join(map(str, empty))}"
+        )
 
     if dest_dir.exists():
         shutil.rmtree(dest_dir)
@@ -103,9 +104,7 @@ def main(argv: list[str] | None = None) -> None:
     if dest_dir is None:
         runner_temp = os.environ.get("RUNNER_TEMP")
         if not runner_temp:
-            _log("RUNNER_TEMP is unset; building without a remote cache.")
-            gha_set_output({"credentials_dir": ""})
-            return
+            raise RuntimeError("RUNNER_TEMP is unset; pass --dest-dir")
         dest_dir = Path(runner_temp) / DEST_DIRNAME
 
     copied = materialize_credentials(args.source_dir, dest_dir)

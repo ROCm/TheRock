@@ -44,11 +44,11 @@ authentication from any pod in the cluster.
 
 ### Which builds use which cache
 
-| Build                     | Cache                             | Details                                                                 |
-| ------------------------- | --------------------------------- | ----------------------------------------------------------------------- |
-| ROCm CMake / Ninja stages | ccache → bazel-remote (this page) | Default for TheRock CI                                                  |
-| PyTorch wheels            | sccache → S3                      | [Cache buckets](s3_buckets.md#cache-buckets)                            |
-| JAX wheels                | Bazel remote cache on EngFlow     | [JAX README](../../external-builds/jax/README.md#ci-bazel-remote-cache) |
+| Build                     | Cache                             | Details                                                              |
+| ------------------------- | --------------------------------- | -------------------------------------------------------------------- |
+| ROCm CMake / Ninja stages | ccache → bazel-remote (this page) | Default for TheRock CI                                               |
+| PyTorch wheels            | sccache → S3                      | [Cache buckets](s3_buckets.md#cache-buckets)                         |
+| JAX wheels                | Bazel remote cache on EngFlow     | [JAX README](../../external-builds/jax/README.md#bazel-remote-cache) |
 
 This page covers ccache only. Builds that use another cache are linked above
 rather than documented here.

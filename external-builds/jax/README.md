@@ -172,13 +172,15 @@ read-only at `/data`. Set the repository variable
 `JAX_BAZEL_CACHE_CREDENTIALS_DIR` if the runner keeps the files somewhere else.
 
 `configure_jax_bazel_cache.py` runs inside the build container and prints no
-Bazel options when the files are missing, the release type is not `ci`, or the
-endpoint does not complete a TLS handshake. Those cases leave the build command
-unchanged.
+Bazel options when the files are missing or the release type is not `ci`; the
+build command is then unchanged. Credentials that are present but empty or
+rejected, or a cache that does not answer, fail the job rather than build
+uncached.
 
-Pull requests pass `--remote_upload_local_results=false`, so no proposed change
-can put an entry in front of a later build. Set `JAX_BAZEL_REMOTE_CACHE_URL` to
-point the build at a different cache.
+Only pushes to `main` upload. Pull requests and manual dispatches pass
+`--remote_upload_local_results=false`. That gate runs on the client, so what a
+pull request could write is decided by the certificate's scope on EngFlow. Set
+`JAX_BAZEL_REMOTE_CACHE_URL` to point the build at a different cache.
 
 EngFlow entries from `ROCm/jax` CI do not help TheRock: that CI compiles with
 `--config=rocm_rbe`, so the action keys differ. TheRock has to populate the

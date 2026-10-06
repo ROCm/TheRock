@@ -20,9 +20,9 @@ This runs *inside* the manylinux build container rather than on the runner. The
 container reaches the network through the Docker daemon and receives the
 credentials through a mount of the runner's `/data/ci-cert.*` files, so it is
 the only place that can tell whether Bazel will actually reach the cache. When
-those files are absent, the release type may not read shared entries, or the
-endpoint does not answer, this prints nothing and the build runs exactly as it
-would without a cache.
+those files are absent or the release type may not use the cache, this prints
+nothing and the build runs exactly as it would without a cache. Credentials
+that are present but rejected, or a cache that does not answer, raise instead.
 
 Options are printed to stdout so the caller can expand them into the build
 command; all logging goes to stderr.
@@ -51,6 +51,16 @@ DEFAULT_PROBE_TIMEOUT_SECONDS = 10
 DEFAULT_REMOTE_TIMEOUT_SECONDS = 60
 DEFAULT_TLS_PORT = 443
 
+# The HTTP/2 connection preface and an empty SETTINGS frame, which every gRPC
+# client sends first and a gRPC server answers with its own SETTINGS frame.
+HTTP2_CLIENT_PREFACE = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n" + bytes.fromhex(
+    "000000040000000000"
+)
+
+
+class CacheUnusableError(RuntimeError):
+    """The cache is configured and credentialed but cannot be used."""
+
 
 def _log(msg: str):
     print(f"[jax-bazel-cache] {msg}", file=sys.stderr)
@@ -59,14 +69,18 @@ def _log(msg: str):
 def resolve_cache_url(cache_url: str, release_type: str) -> str:
     """Returns the cache URL to use, or "" when caching is disabled.
 
-    An explicit `cache_url` wins so infrastructure can repoint the cache
-    without a code change; otherwise the release type decides.
+    The release type decides whether to cache at all; an explicit `cache_url`
+    only repoints where the cache is, so infrastructure can move it without a
+    code change.
     """
-    if cache_url:
-        return cache_url
-    if release_type in SHARED_CACHE_RELEASE_TYPES:
-        return REMOTE_CACHE_URL
-    return ""
+    if release_type not in SHARED_CACHE_RELEASE_TYPES:
+        return ""
+    return cache_url or REMOTE_CACHE_URL
+
+
+def upload_allowed(event_name: str, ref: str) -> bool:
+    """Only pushes to main write; pull requests and dispatches only read."""
+    return event_name == "push" and ref == "refs/heads/main"
 
 
 def endpoint_address(url: str) -> tuple[str, int]:
@@ -80,27 +94,31 @@ def probe_cache(
     certificate: Path,
     key: Path,
     timeout: float = DEFAULT_PROBE_TIMEOUT_SECONDS,
-) -> bool:
-    """Returns whether the cache completes a TLS handshake from this process.
+):
+    """Raises CacheUnusableError unless the cache accepts the client credentials.
 
-    This resolves the host, connects, and presents the client credentials, so a
-    stale or mismatched certificate is reported here rather than as a wall of
-    Bazel cache warnings during the build.
+    Under TLS 1.3 the server checks the client certificate after the handshake
+    has completed on the client side, so a rejection only arrives on the first
+    read. Sending the preface gRPC opens with and reading the reply surfaces it
+    here rather than as a wall of Bazel cache warnings during the build.
     """
     host, port = endpoint_address(url)
     if not host:
-        _log(f"Cannot parse a host out of {url!r}; building without a remote cache")
-        return False
+        raise CacheUnusableError(f"Cannot parse a host out of {url!r}")
+    context = ssl.create_default_context()
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    context.set_alpn_protocols(["h2"])
     try:
-        context = ssl.create_default_context()
-        context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.load_cert_chain(certfile=certificate, keyfile=key)
         with socket.create_connection((host, port), timeout=timeout) as sock:
-            with context.wrap_socket(sock, server_hostname=host):
-                return True
-    except (OSError, ssl.SSLError) as e:
-        _log(f"Cache unreachable ({e}); building without a remote cache")
-        return False
+            with context.wrap_socket(sock, server_hostname=host) as tls:
+                tls.sendall(HTTP2_CLIENT_PREFACE)
+                if not tls.recv(1):
+                    raise CacheUnusableError(f"{url} closed the connection")
+    except OSError as e:
+        raise CacheUnusableError(
+            f"Cannot use the cache at {url} with {certificate}: {e}"
+        ) from e
 
 
 def bazel_cache_options(
@@ -123,7 +141,7 @@ def main(argv: list[str] | None = None):
     parser.add_argument(
         "--cache-url",
         default=os.environ.get("JAX_BAZEL_REMOTE_CACHE_URL", ""),
-        help="Remote cache URL. Overrides the release-type default.",
+        help="Remote cache URL, for release types that may use the cache.",
     )
     parser.add_argument(
         "--release-type",
@@ -131,9 +149,14 @@ def main(argv: list[str] | None = None):
         help="Release types that must not read shared entries resolve to no cache.",
     )
     parser.add_argument(
-        "--allow-upload",
-        default=os.environ.get("JAX_BAZEL_CACHE_ALLOW_UPLOAD", "false"),
-        help="Whether this run may write results back to the cache.",
+        "--event-name",
+        default=os.environ.get("GITHUB_EVENT_NAME", ""),
+        help="GitHub event that started the run; only a push to main uploads.",
+    )
+    parser.add_argument(
+        "--ref",
+        default=os.environ.get("GITHUB_REF", ""),
+        help="Git ref the run is for, e.g. refs/heads/main.",
     )
     parser.add_argument(
         "--client-certificate",
@@ -167,14 +190,11 @@ def main(argv: list[str] | None = None):
         _log(f"No cache credentials at {', '.join(str(p) for p in missing)}")
         return
 
-    allow_upload = args.allow_upload.strip().lower() == "true"
+    allow_upload = upload_allowed(args.event_name, args.ref)
     _log(
         f"Cache mode: url={url} release_type={args.release_type} upload={allow_upload}"
     )
-    if not probe_cache(
-        url, args.client_certificate, args.client_key, args.probe_timeout
-    ):
-        return
+    probe_cache(url, args.client_certificate, args.client_key, args.probe_timeout)
 
     print(
         " ".join(

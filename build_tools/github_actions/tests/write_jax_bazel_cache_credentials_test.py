@@ -56,10 +56,12 @@ class MaterializeCredentialsTest(unittest.TestCase):
     def test_returns_none_when_the_source_dir_is_empty(self):
         self.assertIsNone(materialize_credentials(self.source_dir, self.dest_dir))
 
-    def test_returns_none_when_a_source_file_is_empty(self):
+    def test_raises_when_a_source_file_is_empty(self):
+        # Present but unusable is a broken runner, not an unprovisioned one.
         (self.source_dir / CERT_NAME).write_text("test certificate")
         (self.source_dir / KEY_NAME).write_text("")
-        self.assertIsNone(materialize_credentials(self.source_dir, self.dest_dir))
+        with self.assertRaises(ValueError):
+            materialize_credentials(self.source_dir, self.dest_dir)
 
     def test_replaces_a_stale_destination(self):
         self._write_source()
@@ -69,6 +71,7 @@ class MaterializeCredentialsTest(unittest.TestCase):
         self.assertFalse((self.dest_dir / "stale").exists())
         self.assertTrue((self.dest_dir / CERT_NAME).is_file())
 
+    @unittest.skipIf(os.name == "nt", "POSIX mode bits")
     def test_restricts_destination_permissions(self):
         self._write_source()
         materialize_credentials(self.source_dir, self.dest_dir)

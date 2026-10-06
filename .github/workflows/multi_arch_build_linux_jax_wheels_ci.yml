@@ -235,9 +235,6 @@ jobs:
         env:
           PYTHON_VERSION: ${{ inputs.python_version }}
           JAX_COMMIT: ${{ steps.checkout_jax.outputs.commit }}
-          # Pull requests read the cache without writing to it, so no proposed
-          # change can put an entry in front of a later build. Pushes fill it.
-          JAX_BAZEL_CACHE_ALLOW_UPLOAD: ${{ github.event_name != 'pull_request' }}
           JAX_BAZEL_REMOTE_CACHE_URL: ${{ vars.JAX_BAZEL_REMOTE_CACHE_URL }}
           CACHE_CREDENTIALS_DIR: ${{ steps.cache_credentials.outputs.credentials_dir }}
         run: |
@@ -255,7 +252,8 @@ jobs:
             --env ROCM_VERSION="${ROCM_VERSION}" \
             --env PYTHON_VERSION="${PYTHON_VERSION}" \
             --env RELEASE_TYPE="${RELEASE_TYPE}" \
-            --env JAX_BAZEL_CACHE_ALLOW_UPLOAD="${JAX_BAZEL_CACHE_ALLOW_UPLOAD}" \
+            --env GITHUB_EVENT_NAME \
+            --env GITHUB_REF \
             --env JAX_BAZEL_REMOTE_CACHE_URL="${JAX_BAZEL_REMOTE_CACHE_URL}" \
             --env ML_WHEEL_VERSION_SUFFIX="${version_suffix}" \
             --env PACKAGE_DIST_DIR="/workspace/jax-source/dist" \
@@ -263,6 +261,7 @@ jobs:
             --workdir /workspace/jax-source \
             "${MANYLINUX_IMAGE_TAG}" \
             bash -lc '
+              set -e
               ROCM_ROOT="$(rocm-sdk path --root)"
               bazel_cache_options="$(python /workspace/build_tools/github_actions/configure_jax_bazel_cache.py)"
               python build/build.py build \
