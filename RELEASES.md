@@ -675,6 +675,41 @@ ls install/.kpack/
 > See also [this issue](https://github.com/ROCm/TheRock/issues/1658) discussing
 > relevant environment variables.
 
+#### Enabling OpenCL from a tarball
+
+Because a tarball has no install step, nothing registers the AMD OpenCL runtime
+with the system ICD loader. The loader only reads `/etc/OpenCL/vendors`, so
+until you point it elsewhere `clinfo` reports zero platforms even though the
+runtime is present. Point it at the tarball's own vendors directory:
+
+```bash
+export OCL_ICD_VENDORS="$PWD/install/etc/OpenCL/vendors/"
+clinfo | grep "Number of platforms"
+```
+
+The shipped `amdocl64.icd` names the runtime by its bare file name, so the
+directory holding it must also be resolvable by the dynamic loader:
+
+```bash
+export LD_LIBRARY_PATH="$PWD/install/lib/opencl:$LD_LIBRARY_PATH"
+```
+
+Alternatively, skip the ICD file and name the runtime directly, which needs no
+`LD_LIBRARY_PATH`:
+
+```bash
+export OCL_ICD_FILENAMES="$PWD/install/lib/opencl/libamdocl64.so"
+```
+
+To register system-wide instead, write the absolute path into a vendors file
+(this is what the `.deb`/`.rpm` packages do on install):
+
+```bash
+sudo mkdir -p /etc/OpenCL/vendors
+echo "$PWD/install/lib/opencl/libamdocl64.so" | \
+  sudo tee /etc/OpenCL/vendors/amdocl64-therock.icd
+```
+
 ### Installing ASan-instrumented libraries
 
 ROCm ships a set of libraries built with
