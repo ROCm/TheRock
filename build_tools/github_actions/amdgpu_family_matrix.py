@@ -400,7 +400,7 @@ amdgpu_family_info_matrix = {
             "tests_on_trigger": ["nightly"],
         },
     },
-    # Limited hardware - builds on presubmit, tests only on submodule_bump
+    # Limited hardware - builds on presubmit, tests only on nightly
     "gfx125x": {
         "linux": {
             # NOTE: MI455 runner supply is very limited.
@@ -421,8 +421,8 @@ amdgpu_family_info_matrix = {
                 "submodule_bump",
                 "nightly",
             ],
-            # Tests only on submodule changes due to limited hardware
-            "tests_on_trigger": ["submodule_bump"],
+            # Tests only on nightly due to limited hardware
+            "tests_on_trigger": ["nightly"],
             # Force quick tests for MI455 hardware
             "test_type_for_family": "quick",
         },

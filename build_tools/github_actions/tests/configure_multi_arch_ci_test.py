@@ -2727,8 +2727,9 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
         """Verify trigger-based test gating for real families."""
         test_cases = [
             # (name, family_name, event, has_submodule, expect_tests)
+            # gfx125x tests only on nightly, not on submodule_bump
             ("gfx125x_pr_no_submodule", "gfx125X-dcgpu", "pull_request", False, False),
-            ("gfx125x_pr_with_submodule", "gfx125X-dcgpu", "pull_request", True, True),
+            ("gfx125x_pr_with_submodule", "gfx125X-dcgpu", "pull_request", True, False),
             ("gfx950_push_no_submodule", "gfx950-dcgpu", "push", False, False),
             ("gfx950_push_with_submodule", "gfx950-dcgpu", "push", True, True),
             (
@@ -2789,18 +2790,16 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
 
     def test_test_type_for_family_override(self):
         """test_type_for_family forces quick test type despite global full."""
+        # gfx125x only tests on nightly, so use schedule event
         ci_inputs = cm.CIInputs(
             run_id="12345",
-            event_name="pull_request",
-            commit_ref="feature",
-            base_ref="main",
+            event_name="schedule",
+            commit_ref="main",
+            base_ref=None,
             build_variant="release",
             linux_amdgpu_families=["gfx125x"],
         )
-        git_context = cm.GitContext(
-            changed_files=["some-submodule"],
-            submodule_paths=["some-submodule"],
-        )
+        git_context = cm.GitContext.empty()
         outputs = cm.configure(ci_inputs, git_context)
         family_info = self._find_family_info(outputs, "gfx125X-dcgpu")
 
