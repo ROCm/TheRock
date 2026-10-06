@@ -237,7 +237,8 @@ class ConfigureTest(unittest.TestCase):
         self.assertEqual(result.changed_projects, "")
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
-    def test_ci_workflow_changed_runs_all_tests(self, mock_api):
+    def test_skippable_workflow_change_skips_tests(self, mock_api):
+        """TheRock workflow changes that are in SKIPPABLE_PATH_PATTERNS skip tests."""
         mock_api.return_value = {".github/workflows/therock-ci.yml"}
         result = configure(
             event_name="pull_request",
@@ -246,7 +247,33 @@ class ConfigureTest(unittest.TestCase):
             head_sha="def456",
             config_path="",
         )
-        self.assertEqual(result.run_all_tests, True)
+        # .github/workflows/therock* is in SKIPPABLE_PATH_PATTERNS so should skip
+        self.assertEqual(result.run_all_tests, False)
+        self.assertEqual(result.skip_tests, True)
+
+    @patch("configure_external_repo_ci.get_modified_paths_api")
+    @patch("configure_external_repo_ci.load_repo_config")
+    def test_skippable_workflow_with_project_change(self, mock_config, mock_api):
+        """When a skippable workflow file AND a project file change together,
+        only the project should be detected as changed (not all configured projects)."""
+        mock_api.return_value = {
+            ".github/workflows/therock-multi-arch-ci.yml",
+            "projects/composablekernel/src/main.cpp",
+        }
+        mock_config.return_value = [
+            RepoEntry(name="composablekernel", url="", branch="", category="projects"),
+            RepoEntry(name="rocblas", url="", branch="", category="projects"),
+        ]
+        result = configure(
+            event_name="pull_request",
+            github_repo="ROCm/rocm-libraries",
+            base_sha="abc123",
+            head_sha="def456",
+            config_path=".github/repos-config.json",
+        )
+        # Should only detect the composablekernel change, not all configured projects
+        self.assertEqual(result.changed_projects, "projects/composablekernel")
+        self.assertEqual(result.run_all_tests, False)
         self.assertEqual(result.skip_tests, False)
 
     @patch("configure_external_repo_ci.get_modified_paths_api")

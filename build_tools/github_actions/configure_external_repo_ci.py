@@ -357,7 +357,14 @@ def configure(
         )
 
     # Apply the calling repository's workflow test policy.
-    if matches_patterns(modified_paths, CALLER_WORKFLOW_TRIGGER_PATTERNS):
+    # Only consider non-skippable workflow changes as triggers.
+    non_skippable_workflow_paths = [
+        p
+        for p in modified_paths
+        if matches_patterns([p], CALLER_WORKFLOW_TRIGGER_PATTERNS)
+        and not is_skippable(p)
+    ]
+    if non_skippable_workflow_paths:
         workflow_test_scope = WORKFLOW_TEST_SCOPE_BY_REPO.get(github_repo.lower())
         if workflow_test_scope != "configured-projects":
             logger.info(

@@ -72,36 +72,42 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
             get_paths.assert_called_once_with(repo, "base", "head")
             return result
 
-    def test_libraries_workflow_selects_library_projects(self):
+    def test_libraries_workflow_only_is_skipped(self):
+        """TheRock workflow files are in SKIPPABLE_PATH_PATTERNS, so workflow-only
+        changes should skip tests (no build/test impact from workflow file changes)."""
         result = self.configure({WORKFLOW})
 
         self.assertFalse(result.run_all_tests)
-        self.assertFalse(result.skip_tests)
-        self.assertEqual(set(result.changed_projects.split(",")), LIBRARY_PROJECTS)
-        self.assertNotIn("projects/rccl", result.changed_projects.split(","))
+        self.assertTrue(result.skip_tests)
+        self.assertEqual(result.changed_projects, "")
 
-    def test_libraries_workflow_with_known_source_selects_all_libraries(self):
+    def test_libraries_workflow_with_known_source_selects_only_changed_source(self):
+        """When a skippable workflow file AND a source file change together,
+        only the source change is detected (workflow file is ignored as skippable)."""
         result = self.configure({WORKFLOW, "projects/rocblas/src/rocblas.cpp"})
 
         self.assertFalse(result.run_all_tests)
-        self.assertEqual(set(result.changed_projects.split(",")), LIBRARY_PROJECTS)
+        self.assertFalse(result.skip_tests)
+        # Only rocblas should be detected, not all library projects
+        self.assertEqual(result.changed_projects, "projects/rocblas")
 
-    def test_systems_workflow_preserves_full_test_run(self):
+    def test_systems_workflow_only_is_skipped(self):
+        """TheRock workflow files are in SKIPPABLE_PATH_PATTERNS even for rocm-systems."""
         result = self.configure(
             {WORKFLOW},
             repo="ROCm/rocm-systems",
             entries=SYSTEM_ENTRIES,
         )
 
-        self.assertTrue(result.run_all_tests)
-        self.assertFalse(result.skip_tests)
+        self.assertFalse(result.run_all_tests)
+        self.assertTrue(result.skip_tests)
         self.assertEqual(result.changed_projects, "")
 
-    def test_shared_ci_changes_preserve_full_test_run(self):
+    def test_full_test_trigger_patterns_preserve_full_test_run(self):
+        """Paths in FULL_TEST_TRIGGER_PATTERNS should trigger run_all_tests."""
         for path in (
             ".github/repos-config.json",
             ".github/scripts/get_changed_projects.py",
-            "shared/ctest/categories.yaml",
         ):
             with self.subTest(path=path):
                 result = self.configure({WORKFLOW, path})
@@ -110,19 +116,31 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
                 self.assertFalse(result.skip_tests)
                 self.assertEqual(result.changed_projects, "")
 
+    def test_ctest_change_returns_shared_ctest(self):
+        """shared/ctest is in CI_RELEVANT_NON_SUBTREE_PREFIXES, so it should be
+        detected as a changed project, not trigger run_all_tests."""
+        result = self.configure({WORKFLOW, "shared/ctest/categories.yaml"})
+
+        self.assertFalse(result.run_all_tests)
+        self.assertFalse(result.skip_tests)
+        self.assertEqual(result.changed_projects, "shared/ctest")
+
     def test_workflow_with_unclassified_path_preserves_full_test_run(self):
         result = self.configure({WORKFLOW, "unexpected/config.py"})
 
         self.assertTrue(result.run_all_tests)
         self.assertEqual(result.changed_projects, "")
 
-    def test_workflow_without_config_preserves_full_test_run(self):
+    def test_workflow_without_config_is_skipped(self):
+        """TheRock workflow files are in SKIPPABLE_PATH_PATTERNS, so skipped regardless of config."""
         result = self.configure({WORKFLOW}, config_exists=False)
 
-        self.assertTrue(result.run_all_tests)
+        self.assertFalse(result.run_all_tests)
+        self.assertTrue(result.skip_tests)
         self.assertEqual(result.changed_projects, "")
 
-    def test_configured_repository_workflow_selects_its_projects(self):
+    def test_configured_repository_workflow_only_is_skipped(self):
+        """TheRock workflow files are in SKIPPABLE_PATH_PATTERNS, so skipped for any repo."""
         with patch.dict(
             ci.WORKFLOW_TEST_SCOPE_BY_REPO,
             {"rocm/example": "configured-projects"},
@@ -134,13 +152,15 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
             )
 
         self.assertFalse(result.run_all_tests)
-        self.assertFalse(result.skip_tests)
-        self.assertEqual(result.changed_projects, "projects/example")
+        self.assertTrue(result.skip_tests)
+        self.assertEqual(result.changed_projects, "")
 
-    def test_unknown_repository_workflow_preserves_full_test_run(self):
+    def test_unknown_repository_workflow_only_is_skipped(self):
+        """TheRock workflow files are in SKIPPABLE_PATH_PATTERNS, so skipped for unknown repos."""
         result = self.configure({WORKFLOW}, repo="ROCm/unknown")
 
-        self.assertTrue(result.run_all_tests)
+        self.assertFalse(result.run_all_tests)
+        self.assertTrue(result.skip_tests)
         self.assertEqual(result.changed_projects, "")
 
     def test_ordinary_source_changes_stay_selective(self):
@@ -150,8 +170,9 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
         self.assertFalse(result.skip_tests)
         self.assertEqual(result.changed_projects, "projects/rocblas")
 
-    def test_libraries_workflow_does_not_select_rccl_downstream(self):
-        result = self.configure({WORKFLOW})
+    def test_source_change_does_not_select_rccl_downstream(self):
+        """Test that a library source change doesn't pull in rccl as a downstream dependency."""
+        result = self.configure({"projects/rocblas/src/rocblas.cpp"})
         therock_root = Path(ci.__file__).resolve().parents[2]
         selector = therock_root / "test_tools/determine_rocm_test_dependencies.py"
 
