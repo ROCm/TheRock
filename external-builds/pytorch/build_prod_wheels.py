@@ -1365,6 +1365,18 @@ def do_build_pytorch_vision(
     env["BUILD_VERSION"] = build_version
     env["VERSION_NAME"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
+    # Pin the wheel's torch requirement (torch==X.Y.Z) to the installed torch,
+    # which torchvision compiles against. Reads metadata rather than importing
+    # torch so import-time warnings cannot leak into the version string.
+    env["PYTORCH_VERSION"] = capture(
+        [
+            sys.executable,
+            "-c",
+            "from importlib.metadata import version; "
+            "print(version('torch').split('+')[0])",
+        ],
+        cwd=tempfile.gettempdir(),
+    )
 
     env.update(
         {
