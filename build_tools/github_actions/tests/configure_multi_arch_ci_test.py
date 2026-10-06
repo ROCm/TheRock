@@ -2789,6 +2789,81 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
                         family_info["test-runs-on"], "", f"Expected no tests for {name}"
                     )
 
+    def test_multi_gpu_runners_gated_when_tests_disabled(self):
+        """Multi-GPU runners should not be included when tests are gated.
+
+        When a family's tests are disabled due to trigger gating (e.g., gfx950
+        only runs tests on submodule_bump), multi-GPU runner info should also
+        be excluded. This prevents multi-GPU tests from running when single-GPU
+        tests are correctly gated.
+        """
+        # gfx950 tests only on submodule_bump, so on a regular PR without
+        # submodule changes, both single-GPU and multi-GPU tests should be gated.
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="main",
+            build_variant="release",
+            linux_amdgpu_families=["gfx950"],
+        )
+        git_context = cm.GitContext.empty()  # No submodule changes
+        outputs = cm.configure(ci_inputs, git_context)
+        family_info = self._find_family_info(outputs, "gfx950-dcgpu")
+
+        self.assertIsNotNone(family_info)
+        # Single-GPU tests should be gated
+        self.assertEqual(family_info["test-runs-on"], "")
+        # Multi-GPU runner info should NOT be present when tests are gated
+        self.assertNotIn(
+            "test-runs-on-multi-gpu",
+            family_info,
+            "Multi-GPU runner should not be included when tests are gated",
+        )
+        self.assertNotIn(
+            "test-runs-on-multi-gpu-labels",
+            family_info,
+            "Multi-GPU runner labels should not be included when tests are gated",
+        )
+
+        # Verify multi-GPU info IS present when tests are enabled (with submodule)
+        git_context_with_submodule = cm.GitContext(
+            changed_files=["some-submodule"],
+            submodule_paths=["some-submodule"],
+        )
+        outputs_with_submodule = cm.configure(ci_inputs, git_context_with_submodule)
+        family_info_enabled = self._find_family_info(outputs_with_submodule, "gfx950-dcgpu")
+
+        self.assertIsNotNone(family_info_enabled)
+        self.assertNotEqual(family_info_enabled["test-runs-on"], "")
+        # Multi-GPU info should be present when tests are enabled.
+        self.assertIn(
+            "test-runs-on-multi-gpu",
+            family_info_enabled,
+            "Multi-GPU runner should be included when tests are enabled",
+        )
+
+        # Also test gfx94x which has both test-runs-on-multi-gpu and labels
+        ci_inputs_gfx94x = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="main",
+            build_variant="release",
+            linux_amdgpu_families=["gfx94x"],
+        )
+        outputs_gfx94x = cm.configure(ci_inputs_gfx94x, cm.GitContext.empty())
+        family_info_gfx94x = self._find_family_info(outputs_gfx94x, "gfx94X-dcgpu")
+
+        self.assertIsNotNone(family_info_gfx94x)
+        # gfx94x has presubmit tests enabled, so multi-GPU should be present
+        self.assertNotEqual(family_info_gfx94x["test-runs-on"], "")
+        self.assertIn(
+            "test-runs-on-multi-gpu-labels",
+            family_info_gfx94x,
+            "Multi-GPU runner labels should be included for gfx94x",
+        )
+
     def test_test_type_for_family_override(self):
         """test_type_for_family forces quick test type despite global full."""
         # gfx125x only tests on nightly, so use schedule event
