@@ -1750,14 +1750,12 @@ def _expand_build_config_for_platform(
             family_info["test_type"] = family_test_type
         if test_runs_on and "test-runs-on-labels" in platform_info:
             family_info["test-runs-on-labels"] = platform_info["test-runs-on-labels"]
-        # Include multi-GPU runner info only when GPU tests are enabled.
-        # When test_runs_on is empty (tests gated by trigger), multi-GPU tests
-        # should also be gated to respect the same trigger policy.
-        if test_runs_on and "test-runs-on-multi-gpu" in platform_info:
+        # Include multi-GPU runner info if available
+        if "test-runs-on-multi-gpu" in platform_info:
             family_info["test-runs-on-multi-gpu"] = platform_info[
                 "test-runs-on-multi-gpu"
             ]
-        if test_runs_on and "test-runs-on-multi-gpu-labels" in platform_info:
+        if "test-runs-on-multi-gpu-labels" in platform_info:
             family_info["test-runs-on-multi-gpu-labels"] = platform_info[
                 "test-runs-on-multi-gpu-labels"
             ]
