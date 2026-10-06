@@ -6,7 +6,6 @@
 """Debian package creation functions for ROCm packaging."""
 
 import os
-import json
 import re
 import shutil
 import subprocess
@@ -24,34 +23,6 @@ logger = TheRockLogger(__name__)
 
 # Setup paths
 SCRIPT_DIR = Path(__file__).resolve().parent
-
-
-def load_alternatives_binaries() -> dict[str, list[str]]:
-    """Load package-specific binary alternatives from JSON."""
-
-    alternatives_file = (
-        SCRIPT_DIR / "template" / "scripts" / "amdrocm-alternatives.json"
-    )
-
-    with alternatives_file.open(encoding="utf-8") as file:
-        alternatives_binaries = json.load(file)
-    if not isinstance(alternatives_binaries, dict):
-        raise ValueError(f"{alternatives_file} must contain a JSON object")
-
-    for package_name, binaries in alternatives_binaries.items():
-        if not isinstance(package_name, str):
-            raise ValueError(
-                f"Invalid package name in {alternatives_file}: " f"{package_name!r}"
-            )
-
-        if not isinstance(binaries, list) or not all(
-            isinstance(binary, str) for binary in binaries
-        ):
-            raise ValueError(
-                f"Binary list for {package_name!r} must be a list " "of strings"
-            )
-
-    return alternatives_binaries
 
 
 def create_nonversioned_deb_package(pkg_name, config: PackageConfig):

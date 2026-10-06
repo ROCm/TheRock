@@ -32,6 +32,11 @@ do_update_alternatives() {
     PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
 {% endif %}
 
+{% if package_name in ("amdrocm-base", "amdrocm-llvm") %}
+    # A relocated RPM payload does not create /opt/rocm.
+    mkdir -p /opt/rocm
+{% endif %}
+
 {% if package_name == "amdrocm-base" %}
     # Install /opt/rocm/core and /opt/rocm/core-<major>.
     update-alternatives --install \
