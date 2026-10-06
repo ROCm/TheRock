@@ -130,15 +130,6 @@ set(_fftw3_autotools_default OFF)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(_fftw3_autotools_default ON)
 endif()
-therock_declare_flag(
-  NAME HSA_HOTSWAP_DEFAULT_ON
-  DEFAULT_VALUE ON
-  DESCRIPTION "Enable automatic ROCr hotswap loading by default when HSA_HOTSWAP_ENABLE is unset"
-  CPP_DEFINES
-    HSA_HOTSWAP_DEFAULT_ON=1
-  SUB_PROJECTS
-    ROCR-Runtime
-)
 
 therock_declare_flag(
   NAME FFTW3_AUTOTOOLS_BUILD
@@ -147,9 +138,13 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
-  NAME FFTW3_AUTOTOOLS_BUILD
+  NAME HSA_HOTSWAP_DEFAULT_ON
   DEFAULT_VALUE ON
-  DESCRIPTION "Build third-party fftw3 with autotools on Linux. Ignored on Windows."
+  DESCRIPTION "Enable automatic ROCr hotswap loading by default when HSA_HOTSWAP_ENABLE is unset"
+  CPP_DEFINES
+    HSA_HOTSWAP_DEFAULT_ON=1
+  SUB_PROJECTS
+    ROCR-Runtime
 )
 
 therock_declare_flag(
