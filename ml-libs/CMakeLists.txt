@@ -207,7 +207,10 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
 
 endif(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
 
-if(THEROCK_ENABLE_MIOPENPROVIDER)
+# miopenprovider has an unconditional RUNTIME_DEP on MIOpen, so it can only be
+# declared when MIOpen itself is (MIOpen is skipped when no supported gfx
+# targets remain after filtering, e.g. THEROCK_AMDGPU_TARGETS='amdgcnspirv').
+if(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
   ##############################################################################
   # hipDNN MIOpen provider
   ##############################################################################
@@ -252,7 +255,7 @@ if(THEROCK_ENABLE_MIOPENPROVIDER)
     SUBPROJECT_DEPS
       miopenprovider
   )
-endif(THEROCK_ENABLE_MIOPENPROVIDER)
+endif(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
 
 if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
   ##############################################################################
