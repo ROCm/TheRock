@@ -228,10 +228,12 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TYPE: ${{ inputs.release_type }}
           FETCH_ARTIFACT_ARGS: ${{ inputs.fetch_artifact_args }}
+          ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
         run: |
           python ./build_tools/install_rocm_from_artifacts.py \
-            --run-id=${{ inputs.artifact_run_id || github.run_id }} \
-            --artifact-group=${{ inputs.amdgpu_families }} \
+            --run-id="${ARTIFACT_RUN_ID}" \
+            --artifact-group="${AMDGPU_FAMILIES}" \
             --output-dir=${OUTPUT_ARTIFACTS_DIR} \
             ${FETCH_ARTIFACT_ARGS}
 
@@ -259,12 +261,15 @@ jobs:
           BUILD_WORKSPACE: /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}
           HTML_ENABLED: ${{ steps.fetch_sources.outcome == 'success' }}
           DEVICE_COVERAGE: ${{ inputs.device_coverage }}
+          PROJECT_NAME: ${{ inputs.project_name }}
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+          OBJECT_GLOBS: ${{ inputs.object_globs }}
         run: |
           html_args=()
           if [[ "${HTML_ENABLED}" == "true" ]]; then
             html_args=(
               --html-output="${REPORT_DIR}/html"
-              --project-title="${{ inputs.project_name }} (${{ inputs.amdgpu_families }})"
+              --project-title="${PROJECT_NAME} (${AMDGPU_FAMILIES})"
             )
           else
             echo "::warning::Sources unavailable; skipping the annotated HTML report."
@@ -279,7 +284,7 @@ jobs:
           python ./build_tools/github_actions/merge_coverage_report.py \
             --profraw-dir="${PROFRAW_DIR}" \
             --rocm-dir="${OUTPUT_ARTIFACTS_DIR}" \
-            --object-globs="${{ inputs.object_globs }}" \
+            --object-globs="${OBJECT_GLOBS}" \
             --profdata-output="${REPORT_DIR}/coverage.profdata" \
             --lcov-output="${REPORT_DIR}/coverage.info" \
             --summary-output="${REPORT_DIR}/coverage_summary.txt" \
@@ -290,11 +295,14 @@ jobs:
       # Put totals on the run summary page, readable without downloading.
       - name: Publish the summary to the job page
         if: ${{ always() }}
+        env:
+          PROJECT_NAME: ${{ inputs.project_name }}
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
         run: |
           summary="${REPORT_DIR}/coverage_summary.txt"
           [[ -f "${summary}" ]] || exit 0
           {
-            echo "## Coverage: ${{ inputs.project_name }} (${{ inputs.amdgpu_families }})"
+            echo "## Coverage: ${PROJECT_NAME} (${AMDGPU_FAMILIES})"
             echo '```'
             tail -n 3 "${summary}"
             echo '```'
