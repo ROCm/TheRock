@@ -81,6 +81,28 @@ def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
                 link.symlink_to(target.name)
 
 
+def ensure_opencl_library_symlinks(core: PopulatedDistPackage) -> None:
+    """Recreate unversioned OpenCL library symlinks dropped during runtime.
+
+    The ICD file references `libamdocl64.so` by name, while
+    populate_runtime_files() keeps only the SONAME (for example,
+    `libamdocl64.so.2`).
+    """
+    for lib_subdir, pattern in (
+        ("lib/opencl", "libamdocl64*.so.*"),
+        ("lib", "libOpenCL.so.*"),
+    ):
+        lib_dir = core.platform_dir / lib_subdir
+        if not lib_dir.is_dir():
+            continue
+        for target in lib_dir.glob(pattern):
+            if target.is_symlink():
+                continue
+            link = target.with_suffix("")
+            if not link.exists():
+                link.symlink_to(target.name)
+
+
 def discover_llvm_host_triple(artifacts: ArtifactCatalog) -> str | None:
     """Discover the LLVM host triple for libomp's per-target runtime dir.
 
@@ -297,6 +319,7 @@ def run(args: argparse.Namespace):
             ],
         ),
     )
+    ensure_opencl_library_symlinks(core)
 
     profiler_artifacts = params.filter_artifacts(
         profiler_artifact_filter,
@@ -559,6 +582,7 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "core-hip",
         "core-kpack",
         "core-ocl",
+        "core-ocl-icd",
         "core-hipinfo",
         "core-runtime",
         "hipfile",
