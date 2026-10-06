@@ -321,10 +321,9 @@ class GetUnclassifiedPathsTest(unittest.TestCase):
 
 
 class ConfigureNonSubtreeTest(unittest.TestCase):
-    """Surfacing of non-subtree shared/* + emulation/* paths and the
-    unclassified-change fallback (rocm-systems multi-arch gap)."""
+    """Surfacing of non-subtree paths and the unclassified-change fallback."""
 
-    def _configure(self, paths, config=None):
+    def _configure(self, paths, config=None, repo="ROCm/rocm-systems"):
         with patch(
             "configure_external_repo_ci.get_modified_paths_api",
             return_value=set(paths),
@@ -335,7 +334,7 @@ class ConfigureNonSubtreeTest(unittest.TestCase):
         ):
             return configure(
                 event_name="pull_request",
-                github_repo="ROCm/rocm-systems",
+                github_repo=repo,
                 base_sha="abc123",
                 head_sha="def456",
                 config_path=".github/repos-config.json",
@@ -360,6 +359,14 @@ class ConfigureNonSubtreeTest(unittest.TestCase):
         r = self._configure(["shared/ctest/TestCategories.cmake"])
         self.assertFalse(r.run_all_tests)
         self.assertEqual(r.changed_projects, "shared/ctest")
+
+    def test_dnn_provider_cmake_surfaces_prefix(self):
+        r = self._configure(
+            ["dnn-providers/cmake/Tests.cmake"],
+            repo="ROCm/rocm-libraries",
+        )
+        self.assertFalse(r.run_all_tests)
+        self.assertEqual(r.changed_projects, "dnn-providers/cmake")
 
     def test_mixed_recognized_and_unclassified_runs_all(self):
         r = self._configure(

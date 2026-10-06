@@ -22,22 +22,6 @@ BOT_EMAIL = "therockbot@amd.com"
 
 COMMON_CI_LABELS = ["ci:run-all-archs"]
 
-ROCM_SYSTEMS_FILES = [
-    ".github/workflows/therock-build-linux.yml",
-    ".github/workflows/therock-ci-linux.yml",
-    ".github/workflows/therock-ci-windows.yml",
-    ".github/workflows/therock-ci.yml",
-    ".github/workflows/therock-rccl-ci-linux.yml",
-    ".github/workflows/therock-rccl-test-jax-collective.yml",
-    ".github/workflows/therock-rccl-test-madengine.yml",
-    ".github/workflows/therock-rccl-test-packages-multi-node.yml",
-    ".github/workflows/therock-rccl-test-packages-single-node.yml",
-    ".github/workflows/therock-rccl-test-pytorch-distributed.yml",
-    ".github/workflows/therock-rccl-test-rocprof.yml",
-    ".github/workflows/therock-test-component.yml",
-    ".github/workflows/therock-test-packages.yml",
-]
-
 ROCM_LIBRARIES_CI_ENV_FILE = ".github/actions/ci-env/action.yml"
 
 FULL_COMMIT_SHA_PATTERN = re.compile(r"\b[0-9a-f]{40}\b")
@@ -54,7 +38,7 @@ STALE_THEROCK_REF_PR_AGE = timedelta(days=2)
 SUBMODULE_CONFIG = {
     "rocm-systems": {
         "repo": "ROCm/rocm-systems",
-        "files": ROCM_SYSTEMS_FILES,
+        "files": [],
         "updater": "ref",
         "token_key": "systems",
         # See the "rocm-libraries" entry below for why this is per-repo.
@@ -151,6 +135,9 @@ def gh_api(
     if not response.ok:
         raise RuntimeError(f"GitHub API failed: {response.status_code} {response.text}")
 
+    if response.status_code == 204 or not response.text:
+        return None
+
     return response.json()
 
 
@@ -196,6 +183,25 @@ def _baseline_gate_jobs_succeeded(repo: str, token: str, run_id: str | int) -> b
         print(f"[WARN] Run {run_id} has no '{LIBRARIES_BASELINE_GATE_JOB_NAME}' job")
         return False
     return all(job.get("conclusion") == "success" for job in gate_jobs)
+
+
+def gh_api_paginate(token: str, endpoint: str) -> list:
+    """Fetch all pages of a GitHub list endpoint and return the combined results."""
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+    }
+    results = []
+    url = f"https://api.github.com/{endpoint}"
+    while url:
+        response = requests.get(url, headers=headers)
+        if not response.ok:
+            raise RuntimeError(
+                f"GitHub API failed: {response.status_code} {response.text}"
+            )
+        results.extend(response.json())
+        url = response.links.get("next", {}).get("url")
+    return results
 
 
 def get_baseline_run_id_from_merged_pr(
@@ -280,62 +286,6 @@ Bumps [{repo}](https://github.com/{repo}) from {base_url} to {head_url}.
 
 See full comparison here: {compare_url}
 """
-
-
-def update_ref_in_file(file_path: str, new_sha: str) -> None:
-    """
-    Update all ROCm/TheRock refs in a YAML file.
-    Replaces existing 'ref:' after 'repository: "ROCm/TheRock"'.
-    """
-    with open(file_path, "r") as f:
-        lines = f.readlines()
-
-    updated_lines = []
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        updated_lines.append(line)
-
-        if line.strip() == 'repository: "ROCm/TheRock"':
-            # Determine the indentation level of the 'repository:' line
-            repo_indent = len(line) - len(line.lstrip())
-            j = i + 1
-            ref_line_index = None
-            while j < len(lines):
-                next_line = lines[j]
-
-                # Skip empty lines
-                if next_line.strip() == "":
-                    j += 1
-                    continue
-                next_indent = len(next_line) - len(next_line.lstrip())
-                if next_indent < repo_indent:
-                    break
-
-                if next_line.strip().startswith("ref:"):
-                    ref_line_index = j
-                    break
-
-                j += 1
-
-            if ref_line_index is not None:
-                # Copy lines between repository and ref as-is (e.g., path: "TheRock")
-                for k in range(i + 1, ref_line_index):
-                    updated_lines.append(lines[k])
-
-                # Replace the existing ref line, preserving indentation and removing old comment
-                indent = lines[ref_line_index][: lines[ref_line_index].find("ref:")]
-                date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-                updated_lines.append(f"{indent}ref: {new_sha} # {date} commit\n")
-
-                # Skip past all lines we've already handled
-                i = ref_line_index
-        i += 1
-
-    with open(file_path, "w") as f:
-        f.writelines(updated_lines)
-
-    print(f"[INFO] Updated {file_path}")
 
 
 def update_ci_env_file(
@@ -471,7 +421,7 @@ def find_therock_workflow_files(root: Path = Path(".github")) -> list[str]:
 def close_stale_prs(submodule: str, old_sha: str, token: str) -> None:
     """Close all open PRs on TheRock that originated from old submodule SHA."""
     old_short = old_sha[:7]
-    prs = gh_api(token, f"repos/{THEROCK_REPO}/pulls?state=open")
+    prs = gh_api_paginate(token, f"repos/{THEROCK_REPO}/pulls?state=open&per_page=100")
     for pr in prs:
         title = pr["title"].lower()
         if f"bump {submodule}" in title and f"from {old_short}" in title:
@@ -493,6 +443,18 @@ def close_stale_prs(submodule: str, old_sha: str, token: str) -> None:
                 method="PATCH",
                 data={"state": "closed"},
             )
+
+            # Delete the head branch
+            branch_ref = pr["head"]["ref"]
+            try:
+                gh_api(
+                    token,
+                    f"repos/{THEROCK_REPO}/git/refs/heads/{branch_ref}",
+                    method="DELETE",
+                )
+                print(f"[INFO] Deleted branch {branch_ref}")
+            except Exception as e:
+                print(f"[WARN] Could not delete branch {branch_ref}: {e}")
 
 
 def _parse_github_datetime(value: str) -> datetime:
@@ -777,13 +739,10 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
         files_to_update = list(config["files"])
         if updater == "ci-env":
             update_ci_env_file(ROCM_LIBRARIES_CI_ENV_FILE, after, baseline_run_id)
-            workflow_files = find_therock_workflow_files()
-            for f in workflow_files:
-                update_therock_workflow_file(f, after)
-            files_to_update.extend(workflow_files)
-        else:
-            for f in files_to_update:
-                update_ref_in_file(f, after)
+        workflow_files = find_therock_workflow_files()
+        for f in workflow_files:
+            update_therock_workflow_file(f, after)
+        files_to_update.extend(workflow_files)
 
         run(["git", "add"] + files_to_update)
 
