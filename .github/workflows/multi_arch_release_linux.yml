@@ -100,6 +100,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      prebuilt_stages: ${{ fromJSON(inputs.build_config).prebuilt_stages }}
     permissions:
       contents: read
       id-token: write
