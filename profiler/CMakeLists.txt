@@ -430,11 +430,6 @@ if(THEROCK_ENABLE_ROCPROFSYS)
     message(STATUS "Detected Python root dirs for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}")
   endif()
 
-  set(_rocprofsys_profiler_hub_dep "")
-  if(THEROCK_ENABLE_PROFILER_HUB)
-    set(_rocprofsys_profiler_hub_dep profiler-hub)
-  endif()
-
   # When libiberty is bundled; otherwise let rocprofiler-systems build its own.
   if(THEROCK_BUNDLED_LIBIBERTY)
     set(_rocprofsys_build_libiberty OFF)
@@ -488,7 +483,6 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       amdsmi
       aqlprofile
       hip-clr
-      ${_rocprofsys_profiler_hub_dep}
       rocprofiler-register
       rocprofiler-sdk
       ${THEROCK_BUNDLED_LIBIBERTY}
