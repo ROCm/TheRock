@@ -187,6 +187,65 @@ def _find_tarfile(rocm_sdk_devel_path: Path):
     return tarfile_path, tarfile_mode
 
 
+OPENCL_VENDORS_RELPATH = "etc/OpenCL/vendors"
+OPENCL_ICD_NAME = "amdocl64.icd"
+
+
+def _find_opencl_vendor_library(root: Path) -> Path | None:
+    """Locate the AMD OpenCL vendor runtime in an expanded tree.
+
+    Prefers the highest SONAME-versioned real file over the unversioned linker
+    symlink, because runtime packages are only obliged to carry the former.
+    """
+    lib_dir = root / "lib" / "opencl"
+    if not lib_dir.is_dir():
+        return None
+
+    def soname_version(path: Path) -> tuple:
+        suffix = path.name.split(".so.", 1)[-1]
+        return tuple(int(p) if p.isdigit() else -1 for p in suffix.split("."))
+
+    versioned = sorted(
+        (
+            p
+            for p in lib_dir.glob("libamdocl64.so.*")
+            if p.name.split(".so.", 1)[-1][:1].isdigit()
+        ),
+        key=soname_version,
+        reverse=True,
+    )
+    for candidate in versioned + [lib_dir / "libamdocl64.so"]:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def register_opencl_icd(root: Path) -> Path | None:
+    """Point the bundled OpenCL ICD at the absolute vendor library path.
+
+    A relocatable pip install does not add lib/opencl to the dynamic loader
+    search path, so the ICD's bare `libamdocl64.so` name cannot be resolved.
+
+    Returns the directory to use as OCL_ICD_VENDORS, or None if OpenCL is absent.
+    """
+    vendors_dir = root / OPENCL_VENDORS_RELPATH
+    icd_path = vendors_dir / OPENCL_ICD_NAME
+    if not icd_path.exists():
+        return None
+    library = _find_opencl_vendor_library(root)
+    if library is None:
+        return None
+
+    contents = f"{library}\n"
+    # In the expanded devel tree this path is a symlink into the sibling core
+    # package. Replace the link rather than writing through it, so that another
+    # distribution's installed files are left untouched.
+    if icd_path.is_symlink() or icd_path.read_text() != contents:
+        icd_path.unlink()
+        icd_path.write_text(contents, newline="\n")
+    return vendors_dir
+
+
 def _resolve_link_target(parent: Path, target: str) -> Path:
     """Resolves a relative link target against parent, collapsing any '..'.
 
