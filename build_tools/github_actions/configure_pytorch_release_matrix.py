@@ -268,8 +268,6 @@ def check_source_versions(ref: str, sources: dict[str, GitSourceInfo]) -> list[s
             and not version.is_prerelease
         ):
             errors.append(f"{context}: expected a prerelease package version")
-        else:
-            print(f"Checked {context}")
     return errors
 
 
@@ -299,7 +297,10 @@ def check_matrix_versions(matrix: list[dict[str, str]], *, platform: str) -> Non
             pytorch_ref=ref, version_suffix="", platform=platform, projects=projects
         )
         sources = source_manifest.fetch_versions(sources=sources, version_suffix="")
-        errors.extend(check_source_versions(ref, sources))
+        ref_errors = check_source_versions(ref, sources)
+        for error in ref_errors:
+            print(f"ERROR: {error}", flush=True)
+        errors.extend(ref_errors)
         print()
     if errors:
         raise ValueError(

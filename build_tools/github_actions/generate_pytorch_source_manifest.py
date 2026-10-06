@@ -221,8 +221,12 @@ def _resolve_triton(
     base_version = gha_fetch_text_file_contents(
         pytorch_repo, ".ci/docker/triton_version.txt", pytorch_sha
     ).strip()
-    version = f"{base_version}{version_suffix}"
-    log(f"  triton: {base_version} -> {version}")
+    if version_suffix:
+        version = f"{base_version}{version_suffix}"
+        log(f"  triton: {base_version} -> {version}")
+    else:
+        version = base_version
+        log(f"  triton: {version}")
 
     if is_windows:
         pin = read_triton_windows_pin()
@@ -384,8 +388,12 @@ def fetch_versions(
         base_version = gha_fetch_text_file_contents(
             repo, version_file, info.commit
         ).strip()
-        full_version = f"{base_version}{version_suffix}"
-        log(f"  {name}: {base_version} -> {full_version}")
+        if version_suffix:
+            full_version = f"{base_version}{version_suffix}"
+            log(f"  {name}: {base_version} -> {full_version}")
+        else:
+            full_version = base_version
+            log(f"  {name}: {full_version}")
         updated[name] = GitSourceInfo(
             commit=info.commit, repo=info.repo, branch=info.branch, version=full_version
         )
