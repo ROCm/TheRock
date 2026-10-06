@@ -405,7 +405,7 @@ if(THEROCK_ENABLE_ROCALUTION)
       amd-hip
     BUILD_DEPS
       rocm-cmake
-      rocPRIM
+      hipCCL
       therock-googletest
     RUNTIME_DEPS
       hip-clr

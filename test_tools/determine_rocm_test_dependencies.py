@@ -87,6 +87,11 @@ _EXTERNAL_SUBTREE_ALIASES = {
     # rocPRIM is built inside the unified hipCCL superbuild, so walk from the
     # hipccl graph node; the hipccl selector alias maps it to the prim test jobs.
     "shared/primbench": ["hipccl", "rocrand"],
+    # The standalone projects/{rocprim,hipcub,rocthrust} trees still exist but
+    # are built via the unified hipCCL superbuild, so edits there select hipccl.
+    "projects/rocprim": ["hipccl"],
+    "projects/hipcub": ["hipccl"],
+    "projects/rocthrust": ["hipccl"],
     "shared/mxdatagenerator": [
         "hipblas",
         "hipblaslt",
