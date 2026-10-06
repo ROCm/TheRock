@@ -1364,11 +1364,9 @@ def run():
                     job_config_data["test_script"]
                     + f" && TEST_COMPONENT=hipblaslt-tensilelite python {_get_script_path('test_runner.py')}"
                 )
-                # +15 min over the pytest-only baseline for the added ctest
-                # stage; re-measure once CI timing is observed and adjust.
-                job_config_data["timeout_minutes"] = (
-                    job_config_data["timeout_minutes"] + 15
-                )
+                # Allow one hour for the combined pytest and ctest validation.
+                # The host-ASan run for #8733 exceeded the 30-minute budget.
+                job_config_data["timeout_minutes"] = 60
 
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
