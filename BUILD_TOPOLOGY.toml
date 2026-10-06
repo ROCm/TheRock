@@ -142,6 +142,12 @@ description = "ROCm media libraries submodules"
 submodules = []
 disable_platforms = ["windows"]
 
+[source_sets.cv-libs]
+description = "Computer vision libraries from rocm-libraries monorepo"
+submodules = []
+path_prefixes = ["rocm-libraries/projects/rpp"]
+disable_platforms = ["windows"]
+
 # ==============================================================================
 # BUILD STAGES - Pipeline jobs that build sets of artifact groups
 # ==============================================================================
@@ -348,7 +354,7 @@ source_sets = ["rocm-systems"]
 description = "Computer Vision Libraries"
 type = "generic"
 artifact_group_deps = ["third-party-sysdeps", "base", "core-runtime", "hip-runtime"]
-source_sets = ["rocm-libraries"]
+source_sets = ["cv-libs"]
 
 [artifact_groups.media-libs]
 description = "Media Libraries"
