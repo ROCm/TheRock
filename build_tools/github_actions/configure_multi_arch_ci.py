@@ -1082,13 +1082,13 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     # Validate that test-only families have corresponding build labels.
     # Tests depend on build artifacts, so ci:test:gfx* requires ci:gfx* or ci:build:gfx*.
     for target in linux_test_only:
-        if target not in linux_names:
+        if target not in linux_names and target not in linux_build_only:
             raise ValueError(
                 f"ci:test:{target} label requires a corresponding build label "
                 f"(ci:{target} or ci:build:{target}). Tests depend on build artifacts."
             )
     for target in windows_test_only:
-        if target not in windows_names:
+        if target not in windows_names and target not in windows_build_only:
             raise ValueError(
                 f"ci:test:{target} label requires a corresponding build label "
                 f"(ci:{target} or ci:build:{target}). Tests depend on build artifacts."

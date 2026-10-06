@@ -1389,6 +1389,23 @@ class TestSelectTargets(unittest.TestCase):
         self.assertIn("gfx950", result.linux_build_only_families)
         self.assertIn("gfx950", result.linux_test_only_families)
 
+    def test_test_only_label_with_build_only_label_windows_only_family(self):
+        """ci:test:gfx* with ci:build:gfx* works for Windows-only families."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            # gfx110x is Windows-only, test with build-only + test-only labels
+            pr_labels=["ci:build:gfx110x", "ci:test:gfx110x", "ci:platform:windows"],
+        )
+        result = cm.select_targets(inputs)
+        # Family should be in the Windows build list
+        self.assertIn("gfx110x", result.windows_families)
+        self.assertIn("gfx110x", result.windows_build_only_families)
+        self.assertIn("gfx110x", result.windows_test_only_families)
+
     def test_build_and_test_labels_case_insensitive(self):
         """Labels are processed case-insensitively."""
         inputs = cm.CIInputs(
