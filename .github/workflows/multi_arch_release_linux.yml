@@ -307,6 +307,7 @@ jobs:
             { "amdgpu_families": "${{ fromJSON(inputs.build_config).dist_amdgpu_families }}",
               "rocm_version": "${{ inputs.rocm_package_version }}",
               "rocm_package_find_links_url": "${{ needs.build_python_packages.outputs.package_find_links_url }}",
+              "use_asan": "${{ contains(inputs.build_variant, 'asan') }}",
               "release_type": "${{ inputs.release_type }}",
               "run_full_pytorch_tests": "${{ inputs.run_full_pytorch_tests }}",
               "ref": "${{ inputs.ref || '' }}",

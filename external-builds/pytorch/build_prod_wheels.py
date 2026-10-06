@@ -717,6 +717,11 @@ def _setup_common_build_env(
         env["OpenBLAS_HOME"] = str(host_math_path)
         env["OpenBLAS_LIB_NAME"] = "rocm-openblas"
 
+    # Host-ASAN releases set this. PyTorch's USE_ASAN option does the
+    # instrumentation; this builder does not choose a compiler or add flags.
+    if os.environ.get("USE_ASAN") == "1":
+        env["USE_ASAN"] = "1"
+
     return env
 
 

@@ -101,6 +101,10 @@ on:
           Only takes effect for gfx94X-dcgpu Python 3.12 builds.
         type: boolean
         default: false
+      use_asan:
+        description: "Set USE_ASAN=1 for the PyTorch build"
+        type: boolean
+        default: false
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -202,6 +206,10 @@ on:
           Only takes effect for gfx94X-dcgpu Python 3.12 builds.
         type: boolean
         default: false
+      use_asan:
+        description: "Set USE_ASAN=1 for the PyTorch build"
+        type: boolean
+        default: false
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -235,6 +243,7 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       CACHE_TYPE: ${{ inputs.cache_type }}
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
+      USE_ASAN: ${{ inputs.use_asan && '1' || '' }}
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       optional_build_prod_arguments: ""
       # TODO: Move the sccache bucket and IAM role mapping into a shared script.
