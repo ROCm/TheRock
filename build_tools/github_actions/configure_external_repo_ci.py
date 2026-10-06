@@ -64,6 +64,8 @@ SKIPPABLE_PATH_PATTERNS = [
     "docs/*",
     "projects/*/docs/*",
     "shared/*/docs/*",
+    # TODO(geomin12): temporary for testing on users/geomin12/external-ci-test
+    ".github/actions/ci-env/*",
 ]
 
 # Repositories that scope TheRock workflow changes to configured projects.
