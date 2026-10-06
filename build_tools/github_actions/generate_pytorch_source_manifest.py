@@ -89,6 +89,14 @@ REPOS: dict[str, RepoConfig] = {
         version_file="version.txt",
         related_commits_key="torchvision",
     ),
+    "apex": RepoConfig(
+        stable_repo="ROCm/apex",
+        nightly_repo="ROCm/apex",
+        nightly_branch="master",
+        version_file="version.txt",
+        related_commits_key="apex",
+        exclude_platforms=("windows",),
+    ),
     "triton": RepoConfig(
         stable_repo="ROCm/triton",
         nightly_repo="ROCm/triton",
@@ -96,14 +104,6 @@ REPOS: dict[str, RepoConfig] = {
         # resolve the exact commit and the base package version.
         # Windows release Triton is not enabled by default until PyTorch repos
         # publish a shared pin format for release branches.
-        exclude_platforms=("windows",),
-    ),
-    "apex": RepoConfig(
-        stable_repo="ROCm/apex",
-        nightly_repo="ROCm/apex",
-        nightly_branch="master",
-        version_file="version.txt",
-        related_commits_key="apex",
         exclude_platforms=("windows",),
     ),
 }
@@ -230,7 +230,9 @@ def _resolve_triton(
 
     if is_windows:
         pin = read_triton_windows_pin()
-        log(f"  triton-windows pin: {pin[:12]}")
+        log(
+            f"    triton-windows pin: https://github.com/{TRITON_WINDOWS_REPO}/tree/{pin}"
+        )
         return GitSourceInfo(
             commit=pin,
             repo=f"https://github.com/{TRITON_WINDOWS_REPO}",
@@ -246,7 +248,7 @@ def _resolve_triton(
     # Use PyTorch's explicit Triton pin. triton_version.txt only provides the
     # package version; the matching release branch can move independently.
     pin = gha_fetch_text_file_contents(pytorch_repo, pin_file, pytorch_sha).strip()
-    log(f"  triton pin: {pin[:12]}")
+    log(f"    triton pin: https://github.com/{triton_repo}/tree/{pin}")
     return GitSourceInfo(
         commit=pin,
         repo=f"https://github.com/{triton_repo}",
@@ -298,7 +300,9 @@ def resolve_sources(
         pytorch_config.nightly_repo if nightly else pytorch_config.stable_repo
     )
     pytorch_sha = gha_resolve_git_ref(pytorch_repo, pytorch_ref)
-    log(f"  {pytorch_repo}@{pytorch_ref} -> {pytorch_sha[:12]}")
+    log(
+        f"  {pytorch_repo}@{pytorch_ref} -> https://github.com/{pytorch_repo}/tree/{pytorch_sha}"
+    )
     sources["pytorch"] = GitSourceInfo(
         commit=pytorch_sha,
         repo=f"https://github.com/{pytorch_repo}",
@@ -338,7 +342,9 @@ def resolve_sources(
 
         if nightly:
             sha = gha_resolve_git_ref(config.nightly_repo, config.nightly_branch)
-            log(f"  {config.nightly_repo}@{config.nightly_branch} -> {sha[:12]}")
+            log(
+                f"  {config.nightly_repo}@{config.nightly_branch} -> https://github.com/{config.nightly_repo}/tree/{sha}"
+            )
             sources[name] = GitSourceInfo(
                 commit=sha,
                 repo=f"https://github.com/{config.nightly_repo}",
@@ -347,6 +353,8 @@ def resolve_sources(
         elif config.related_commits_key and config.related_commits_key in pins:
             pin = pins[config.related_commits_key]
             sources[name] = GitSourceInfo(commit=pin["commit"], repo=pin["origin"])
+            repo_url = pin["origin"].rstrip("/").removesuffix(".git")
+            log(f"    {name} pin: {repo_url}/tree/{pin['commit']}")
         elif config.related_commits_key:
             raise ValueError(
                 f"{pytorch_ref}: related_commits is missing "
