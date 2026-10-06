@@ -684,6 +684,74 @@ class MainFunctionTest(unittest.TestCase):
             }
         )
 
+    def test_asan_build_variant_adds_suffix_to_wheel_only(self):
+        """ASAN build variant adds .asan suffix only to wheel packages."""
+        with mock.patch.object(
+            compute_rocm_package_version, "gha_set_output"
+        ) as gha_set_output:
+            compute_rocm_package_version.main(
+                [
+                    "--release-type",
+                    "nightly",
+                    "--override-base-version",
+                    "7.99.0",
+                    "--build-variant",
+                    "asan-debug",
+                ]
+            )
+
+        gha_set_output.assert_called_once()
+        outputs = gha_set_output.call_args.args[0]
+        # Wheel gets .asan suffix
+        self.assertRegex(outputs["rocm_package_version"], r"^7\.99\.0a[0-9]{8}\.asan$")
+        # deb/rpm do NOT get .asan suffix
+        self.assertRegex(outputs["rocm_deb_package_version"], r"^7\.99\.0~[0-9]{8}$")
+        self.assertRegex(outputs["rocm_rpm_package_version"], r"^7\.99\.0~[0-9]{8}$")
+
+    def test_non_asan_build_variant_no_suffix(self):
+        """Non-ASAN build variant (release) does not add .asan suffix."""
+        with mock.patch.object(
+            compute_rocm_package_version, "gha_set_output"
+        ) as gha_set_output:
+            compute_rocm_package_version.main(
+                [
+                    "--release-type",
+                    "nightly",
+                    "--override-base-version",
+                    "7.99.0",
+                    "--build-variant",
+                    "release",
+                ]
+            )
+
+        gha_set_output.assert_called_once()
+        outputs = gha_set_output.call_args.args[0]
+        # No .asan suffix for release variant
+        self.assertRegex(outputs["rocm_package_version"], r"^7\.99\.0a[0-9]{8}$")
+        self.assertNotIn(".asan", outputs["rocm_package_version"])
+
+    def test_empty_build_variant_no_suffix(self):
+        """Empty build variant does not add .asan suffix."""
+        with mock.patch.object(
+            compute_rocm_package_version, "gha_set_output"
+        ) as gha_set_output:
+            compute_rocm_package_version.main(
+                [
+                    "--release-type",
+                    "nightly",
+                    "--override-base-version",
+                    "7.99.0",
+                    "--build-variant",
+                    "",
+                ]
+            )
+
+        gha_set_output.assert_called_once()
+        outputs = gha_set_output.call_args.args[0]
+        # No .asan suffix for empty variant
+        self.assertRegex(outputs["rocm_package_version"], r"^7\.99\.0a[0-9]{8}$")
+        self.assertNotIn(".asan", outputs["rocm_package_version"])
+
 
 if __name__ == "__main__":
     unittest.main()
