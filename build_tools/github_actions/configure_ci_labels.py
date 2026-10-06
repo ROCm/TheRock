@@ -38,7 +38,10 @@ class Label:
 # =============================================================================
 # Named constants for label colors to ensure consistency and easy updates.
 COLOR_CI_GENERAL = "FFFF00"  # Yellow - general CI behavior labels
-COLOR_CI_GFX = "5A4D41"  # Brown - GPU architecture opt-in labels
+COLOR_CI_GFX = "5A4D41"  # Brown - GPU architecture opt-in labels (build + test)
+COLOR_CI_BUILD_GFX = "8B4513"  # Saddle brown - GPU architecture build-only labels
+COLOR_CI_TEST_GFX = "2E8B57"  # Sea green - GPU architecture test-only labels
+COLOR_CI_PACKAGING = "F28D35"  # Orange - packaging/build opt-in labels
 COLOR_CI_PLATFORM = "FF6B35"  # Orange - Platform selection labels
 COLOR_TEST = "3FA7D6"  # Blue - project-specific test labels
 COLOR_TEST_FILTER = "a2fab4"  # Light green - test level override labels
@@ -85,6 +88,40 @@ CI_LABELS: list[Label] = [
     Label("ci:gfx908", COLOR_CI_GFX, "Opt-in to gfx908 builds/tests"),
     Label("ci:gfx90a", COLOR_CI_GFX, "Opt-in to gfx90a builds/tests"),
     Label("ci:gfx90c", COLOR_CI_GFX, "Opt-in to gfx90c builds/tests"),
+    # ci:build:gfx labels (GPU architecture build-only opt-in)
+    # These labels allow fine-grained control for specific use cases where you need
+    # builds without tests (e.g., verifying compilation for a specific arch).
+    Label("ci:build:gfx94x", COLOR_CI_BUILD_GFX, "Opt-in to gfx94x builds only (no tests)"),
+    Label("ci:build:gfx950", COLOR_CI_BUILD_GFX, "Opt-in to gfx950 builds only (no tests)"),
+    Label("ci:build:gfx90a", COLOR_CI_BUILD_GFX, "Opt-in to gfx90a builds only (no tests)"),
+    Label("ci:build:gfx110x", COLOR_CI_BUILD_GFX, "Opt-in to gfx110x builds only (no tests)"),
+    Label("ci:build:gfx1151", COLOR_CI_BUILD_GFX, "Opt-in to gfx1151 builds only (no tests)"),
+    Label("ci:build:gfx120x", COLOR_CI_BUILD_GFX, "Opt-in to gfx120x builds only (no tests)"),
+    Label("ci:build:gfx125x", COLOR_CI_BUILD_GFX, "Opt-in to gfx125x builds only (no tests)"),
+    Label("ci:build:gfx103x", COLOR_CI_BUILD_GFX, "Opt-in to gfx103x builds only (no tests)"),
+    Label("ci:build:gfx1150", COLOR_CI_BUILD_GFX, "Opt-in to gfx1150 builds only (no tests)"),
+    Label("ci:build:gfx1152", COLOR_CI_BUILD_GFX, "Opt-in to gfx1152 builds only (no tests)"),
+    Label("ci:build:gfx1153", COLOR_CI_BUILD_GFX, "Opt-in to gfx1153 builds only (no tests)"),
+    Label("ci:build:gfx900", COLOR_CI_BUILD_GFX, "Opt-in to gfx900 builds only (no tests)"),
+    Label("ci:build:gfx906", COLOR_CI_BUILD_GFX, "Opt-in to gfx906 builds only (no tests)"),
+    Label("ci:build:gfx908", COLOR_CI_BUILD_GFX, "Opt-in to gfx908 builds only (no tests)"),
+    Label("ci:build:gfx90c", COLOR_CI_BUILD_GFX, "Opt-in to gfx90c builds only (no tests)"),
+    Label("ci:build:gfx101x", COLOR_CI_BUILD_GFX, "Opt-in to gfx101x builds only (no tests)"),
+    # ci:test:gfx labels (GPU architecture test-only opt-in)
+    # These labels allow running tests for a specific arch without re-building.
+    # IMPORTANT: The corresponding ci:build:gfx or ci:gfx label MUST also be present,
+    # as tests depend on build artifacts. CI will error if a test label is used
+    # without the matching build label.
+    Label("ci:test:gfx94x", COLOR_CI_TEST_GFX, "Opt-in to gfx94x tests only (requires build)"),
+    Label("ci:test:gfx950", COLOR_CI_TEST_GFX, "Opt-in to gfx950 tests only (requires build)"),
+    Label("ci:test:gfx90a", COLOR_CI_TEST_GFX, "Opt-in to gfx90a tests only (requires build)"),
+    Label("ci:test:gfx110x", COLOR_CI_TEST_GFX, "Opt-in to gfx110x tests only (requires build)"),
+    Label("ci:test:gfx1151", COLOR_CI_TEST_GFX, "Opt-in to gfx1151 tests only (requires build)"),
+    Label("ci:test:gfx120x", COLOR_CI_TEST_GFX, "Opt-in to gfx120x tests only (requires build)"),
+    Label("ci:test:gfx125x", COLOR_CI_TEST_GFX, "Opt-in to gfx125x tests only (requires build)"),
+    Label("ci:test:gfx103x", COLOR_CI_TEST_GFX, "Opt-in to gfx103x tests only (requires build)"),
+    Label("ci:test:gfx1150", COLOR_CI_TEST_GFX, "Opt-in to gfx1150 tests only (requires build)"),
+    Label("ci:test:gfx1153", COLOR_CI_TEST_GFX, "Opt-in to gfx1153 tests only (requires build)"),
     # test: labels (project-specific test opt-in)
     Label("test:hipblaslt", COLOR_TEST, "Run full tests for hipblaslt"),
     Label("test:hipcub", COLOR_TEST, "Run full tests for hipcub"),
@@ -131,6 +168,15 @@ CI_LABELS: list[Label] = [
     Label("test_runner:oem", COLOR_TEST_RUNNER, "Run tests on a machine configured with `oem` kernel"),
     # build_variant: labels
     Label("build_variant:asan", COLOR_BUILD_VARIANT, "If enabled, the pull request will run ASAN builds"),
+    # ci:packaging labels (opt-in to specific packaging/build jobs)
+    Label("ci:build-pytorch", COLOR_CI_PACKAGING, "Opt-in to building PyTorch packages"),
+    Label("ci:build-jax", COLOR_CI_PACKAGING, "Opt-in to building JAX packages"),
+    Label("ci:build-native-linux", COLOR_CI_PACKAGING, "Opt-in to building native Linux packages"),
+    Label("ci:build-python-packages", COLOR_CI_PACKAGING, "Opt-in to building Python packages"),
+    Label("ci:skip-pytorch", COLOR_CI_PACKAGING, "Skip PyTorch package builds"),
+    Label("ci:skip-jax", COLOR_CI_PACKAGING, "Skip JAX package builds"),
+    Label("ci:skip-native-linux", COLOR_CI_PACKAGING, "Skip native Linux package builds"),
+    Label("ci:skip-python-packages", COLOR_CI_PACKAGING, "Skip Python package builds"),
 ]
 # fmt: on
 

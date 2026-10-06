@@ -144,7 +144,7 @@ therock_declare_flag(
 therock_declare_flag(
   NAME WINDOWS_DRIVER_BUILD
   DEFAULT_VALUE OFF
-  DESCRIPTION "Windows: build for the AMD driver package (Control Flow Guard)"
+  DESCRIPTION "Windows: build for the AMD driver package"
   GLOBAL_PROPAGATE_FLAG
 )
 

@@ -30,7 +30,6 @@ from bump_automation import (
     search_issues,
     submodule_changed,
     update_ci_env_file,
-    update_ref_in_file,
     update_therock_workflow_file,
 )
 
@@ -316,88 +315,6 @@ class SubmoduleChangedTest(unittest.TestCase):
     def test_returns_false_when_diff_whitespace_only(self):
         with patch("bump_automation.run", return_value="   \n  "):
             self.assertFalse(submodule_changed("abc", "def", "rocm-systems"))
-
-
-class UpdateRefInFileTest(unittest.TestCase):
-    def _run(self, content: str) -> str:
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
-            f.write(content)
-            path = f.name
-        try:
-            update_ref_in_file(path, "newsha1234567")
-            return Path(path).read_text()
-        finally:
-            os.unlink(path)
-
-    def test_updates_ref_line(self):
-        content = textwrap.dedent(
-            """\
-            uses: actions/checkout@v3
-            with:
-              repository: "ROCm/TheRock"
-              ref: oldsha1234567 # 2024-01-01 commit
-        """
-        )
-        result = self._run(content)
-        self.assertIn("ref: newsha1234567", result)
-        self.assertNotIn("oldsha1234567", result)
-
-    def test_preserves_other_lines(self):
-        content = textwrap.dedent(
-            """\
-            uses: actions/checkout@v3
-            with:
-              repository: "ROCm/TheRock"
-              ref: oldsha1234567
-            other: value
-        """
-        )
-        result = self._run(content)
-        self.assertIn("uses: actions/checkout@v3", result)
-        self.assertIn("other: value", result)
-
-    def test_handles_path_line_between_repository_and_ref(self):
-        content = textwrap.dedent(
-            """\
-            with:
-              repository: "ROCm/TheRock"
-              path: "TheRock"
-              ref: oldsha1234567
-        """
-        )
-        result = self._run(content)
-        self.assertIn('path: "TheRock"', result)
-        self.assertIn("ref: newsha1234567", result)
-
-    def test_no_change_when_no_matching_repository(self):
-        content = textwrap.dedent(
-            """\
-            uses: actions/checkout@v3
-            with:
-              repository: "ROCm/SomeOtherRepo"
-              ref: oldsha1234567
-        """
-        )
-        result = self._run(content)
-        self.assertIn("oldsha1234567", result)
-
-    def test_updates_multiple_occurrences(self):
-        content = textwrap.dedent(
-            """\
-            - uses: actions/checkout@v3
-              with:
-                repository: "ROCm/TheRock"
-                ref: oldsha0000001
-            - uses: actions/checkout@v3
-              with:
-                repository: "ROCm/TheRock"
-                ref: oldsha0000002
-        """
-        )
-        result = self._run(content)
-        self.assertEqual(result.count("ref: newsha1234567"), 2)
-        self.assertNotIn("oldsha0000001", result)
-        self.assertNotIn("oldsha0000002", result)
 
 
 class UpdateCiEnvFileTest(unittest.TestCase):
@@ -938,11 +855,11 @@ class HandlePushTest(unittest.TestCase):
         # submodule-only: must not clone any upstream repo.
         mock_tmp.assert_not_called()
 
-    def test_ref_updater_closes_stale_prs_with_its_own_bot_author(self):
+    def test_ref_updater_rewrites_discovered_workflows_and_closes_stale_prs(self):
         """rocm-systems' bump PRs are opened by "systems-assistant[bot]", a
         different GitHub App than rocm-libraries' "assistant-librarian[bot]".
-        handle_push must pass each repo's own bot identity through to
-        close_stale_therock_ref_prs rather than a single hardcoded value."""
+        handle_push must update every discovered workflow and pass the repo's
+        bot identity through to close_stale_therock_ref_prs."""
 
         def changed(before, after, path):
             return path == "rocm-systems"
@@ -952,31 +869,46 @@ class HandlePushTest(unittest.TestCase):
                 "bump_automation.get_submodule_sha", return_value="oldsha1234567"
             ):
                 with patch("bump_automation.close_stale_prs"):
-                    with patch("bump_automation.run"):
+                    with patch("bump_automation.run") as mock_run:
                         with patch("bump_automation.os.chdir"):
                             with patch(
                                 "bump_automation.os.path.exists", return_value=True
                             ):
-                                with patch("bump_automation.update_ref_in_file"):
+                                with patch(
+                                    "bump_automation.find_therock_workflow_files",
+                                    return_value=[
+                                        ".github/workflows/therock-multi-arch-ci.yml"
+                                    ],
+                                ) as mock_find_workflows:
                                     with patch(
-                                        "bump_automation.gh_api",
-                                        return_value={"number": 1},
-                                    ):
+                                        "bump_automation.update_therock_workflow_file"
+                                    ) as mock_update_workflow:
                                         with patch(
-                                            "bump_automation.close_stale_therock_ref_prs"
-                                        ) as mock_close_ref:
+                                            "bump_automation.gh_api",
+                                            return_value={"number": 1},
+                                        ):
                                             with patch(
-                                                "bump_automation.create_therock_bump"
-                                            ):
-                                                handle_push(
-                                                    "before",
-                                                    "after",
-                                                    {
-                                                        "systems": "systems-token",
-                                                        "libraries": "libraries-token",
-                                                    },
-                                                )
+                                                "bump_automation.close_stale_therock_ref_prs"
+                                            ) as mock_close_ref:
+                                                with patch(
+                                                    "bump_automation.create_therock_bump"
+                                                ):
+                                                    handle_push(
+                                                        "before",
+                                                        "after",
+                                                        {
+                                                            "systems": "systems-token",
+                                                            "libraries": "libraries-token",
+                                                        },
+                                                    )
 
+        mock_find_workflows.assert_called_once_with()
+        mock_update_workflow.assert_called_once_with(
+            ".github/workflows/therock-multi-arch-ci.yml", "after"
+        )
+        mock_run.assert_any_call(
+            ["git", "add", ".github/workflows/therock-multi-arch-ci.yml"]
+        )
         mock_close_ref.assert_called_once()
         self.assertEqual(mock_close_ref.call_args.args[0], "ROCm/rocm-systems")
         self.assertEqual(mock_close_ref.call_args.args[3], "systems-assistant[bot]")
