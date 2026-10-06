@@ -99,6 +99,78 @@ _NULL_GIT_SHA = "0" * 40
 # Default path where external repo config is checked out in setup_multi_arch.yml
 _EXTERNAL_REPO_CONFIG_DIR = "external-repo-config"
 
+# ---------------------------------------------------------------------------
+# Workflow test scoping for external repos
+# ---------------------------------------------------------------------------
+# When an external repo's PR only changes TheRock workflow files (e.g.,
+# .github/workflows/therock-multi-arch-ci.yml), we should scope the tests
+# to only that repo's configured projects instead of running all tests.
+#
+# This prevents a workflow-only change in rocm-libraries from triggering
+# rocm-systems tests like RCCL.
+
+# Repositories that scope TheRock workflow changes to configured projects.
+# Repositories absent from this map retain full-test coverage for safety.
+_WORKFLOW_TEST_SCOPE_BY_REPO = {
+    "rocm/rocm-libraries": "configured-projects",
+}
+
+# Patterns for TheRock workflow changes in the calling repository.
+_CALLER_WORKFLOW_PATTERNS = [
+    ".github/workflows/therock*",
+]
+
+# Changes to project discovery or shared test logic retain global coverage.
+# These affect test selection logic itself, so any change must trigger all tests.
+_FULL_TEST_TRIGGER_PATTERNS = [
+    ".github/scripts/therock*",
+    ".github/scripts/get_changed_projects.py",
+    ".github/scripts/ci_utils.py",
+    ".github/scripts/config_loader.py",
+    ".github/scripts/repo_config_model.py",
+    ".github/scripts/pr_detect_changed_subtrees.py",
+    ".github/repos-config.json",
+    # shared/ctest holds the CTest categorization logic consumed by every
+    # project's tests; a change there can alter selection everywhere.
+    "shared/ctest/*",
+]
+
+
+def _matches_patterns(paths: list[str], patterns: list[str]) -> bool:
+    """Check if any path matches any glob pattern."""
+    import fnmatch
+
+    for path in paths:
+        for pattern in patterns:
+            if fnmatch.fnmatch(path, pattern):
+                return True
+    return False
+
+
+def _get_all_project_prefixes_from_config(projects_config_path: str) -> list[str]:
+    """Get all project prefixes from repos-config.json.
+
+    Returns all configured project paths (e.g., ["projects/rocblas", "projects/hipblas"]).
+    """
+    full_path = Path(_EXTERNAL_REPO_CONFIG_DIR) / projects_config_path
+    if not full_path.exists():
+        return []
+
+    try:
+        with open(full_path, "r") as f:
+            config = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return []
+
+    prefixes: list[str] = []
+    for entry in config.get("repositories", []):
+        category = entry.get("category", "")
+        name = entry.get("name", "")
+        if category and name:
+            prefixes.append(f"{category}/{name}")
+
+    return sorted(prefixes)
+
 
 def _load_skip_ci_patterns_from_toml(config_path: str) -> Optional[list[str]]:
     """Load skip CI patterns from base config + external repo's TOML config file.
@@ -189,6 +261,101 @@ def _compute_changed_projects_from_files(
     result = sorted(matched_projects)
     print(f"  Computed {len(result)} changed projects from {len(changed_files)} files")
     return result
+
+
+def compute_changed_projects_with_workflow_scoping(
+    changed_files: list[str],
+    projects_config_path: str,
+    repo_full_name: str,
+) -> tuple[list[str], bool]:
+    """Compute changed projects with workflow test scoping for external repos.
+
+    This function implements the logic to scope tests when only TheRock workflow
+    files change in certain repositories.
+
+    For rocm-libraries:
+    - If ONLY .github/workflows/therock* files changed → return all configured
+      projects with run_all_tests=False (scope to library tests only)
+    - If shared CI files changed → return empty with run_all_tests=True
+    - If actual source files changed → return matched projects
+
+    For other repos (like rocm-systems):
+    - Workflow-only changes still trigger run_all_tests=True
+
+    Args:
+        changed_files: List of changed file paths from git diff.
+        projects_config_path: Path to repos-config.json relative to external repo.
+        repo_full_name: Full repository name (e.g., "ROCm/rocm-libraries").
+
+    Returns:
+        Tuple of (changed_projects, run_all_tests):
+        - changed_projects: List of project paths to test
+        - run_all_tests: True if all tests should run, False for scoped tests
+    """
+    if not changed_files:
+        return [], False
+
+    # Check for shared CI file changes first - these always trigger full tests
+    if _matches_patterns(changed_files, _FULL_TEST_TRIGGER_PATTERNS):
+        print("  Shared CI files changed - running all tests")
+        return [], True
+
+    # Check for TheRock workflow file changes
+    if _matches_patterns(changed_files, _CALLER_WORKFLOW_PATTERNS):
+        workflow_test_scope = _WORKFLOW_TEST_SCOPE_BY_REPO.get(repo_full_name.lower())
+
+        if workflow_test_scope != "configured-projects":
+            # Repo not in scoped list (e.g., rocm-systems) - run all tests
+            print(f"  Workflow changed in {repo_full_name} - running all tests")
+            return [], True
+
+        # Check if there are non-workflow changes that can't be classified
+        all_project_prefixes = _get_all_project_prefixes_from_config(
+            projects_config_path
+        )
+        if not all_project_prefixes:
+            print("  No config loaded - running all tests")
+            return [], True
+
+        # Get non-workflow changed files
+        other_paths = [
+            path
+            for path in changed_files
+            if not _matches_patterns([path], _CALLER_WORKFLOW_PATTERNS)
+        ]
+
+        if other_paths:
+            # There are non-workflow changes - compute which projects changed
+            changed_projects = _compute_changed_projects_from_files(
+                other_paths, projects_config_path
+            )
+            if changed_projects:
+                # Return the union of changed projects
+                print(
+                    f"  Workflow + source changes in {repo_full_name} - "
+                    f"testing {len(changed_projects)} changed project(s)"
+                )
+                return changed_projects, False
+            else:
+                # Non-workflow changes couldn't be mapped to projects - be conservative
+                print(
+                    f"  Unclassified changes with workflow in {repo_full_name} - "
+                    "running all tests"
+                )
+                return [], True
+
+        # Only workflow files changed - return all configured projects
+        print(
+            f"  Workflow-only change in {repo_full_name} - "
+            f"testing {len(all_project_prefixes)} configured project(s)"
+        )
+        return all_project_prefixes, False
+
+    # No workflow changes - compute changed projects normally
+    changed_projects = _compute_changed_projects_from_files(
+        changed_files, projects_config_path
+    )
+    return changed_projects, False
 
 
 # ---------------------------------------------------------------------------
@@ -2264,10 +2431,18 @@ def main():
                         )
 
                 if changed_files:
-                    computed_projects = _compute_changed_projects_from_files(
-                        changed_files, projects_config
+                    # Use workflow scoping logic to determine changed projects.
+                    # This handles the case where only TheRock workflow files changed
+                    # in rocm-libraries, scoping tests to library projects only.
+                    computed_projects, run_all_tests = (
+                        compute_changed_projects_with_workflow_scoping(
+                            changed_files, projects_config, repo_full_name
+                        )
                     )
-                    if computed_projects:
+                    if run_all_tests:
+                        # Keep changed_projects empty to trigger full test coverage
+                        print("  Running all tests (no project scoping)")
+                    elif computed_projects:
                         # Use dataclass replace to update ci_inputs immutably
                         ci_inputs = replace(
                             ci_inputs, changed_projects=computed_projects

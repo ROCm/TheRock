@@ -524,6 +524,146 @@ common = ["*.md", "docs/*"]
 
 
 # ---------------------------------------------------------------------------
+# Step 2b: Workflow Test Scoping for External Repos
+# ---------------------------------------------------------------------------
+
+
+class TestWorkflowTestScoping(unittest.TestCase):
+    """Test compute_changed_projects_with_workflow_scoping() logic.
+
+    When an external repo's PR only changes TheRock workflow files, we should
+    scope tests to only that repo's configured projects instead of running all
+    tests.
+    """
+
+    def setUp(self):
+        """Create a temp directory with a mock repos-config.json."""
+        import shutil
+
+        self.temp_dir = tempfile.mkdtemp()
+        self.config_dir = os.path.join(self.temp_dir, "external-repo-config")
+        os.makedirs(self.config_dir, exist_ok=True)
+
+        # Create a mock repos-config.json
+        self.config_path = ".github/repos-config.json"
+        config_file = os.path.join(self.config_dir, self.config_path)
+        os.makedirs(os.path.dirname(config_file), exist_ok=True)
+        with open(config_file, "w") as f:
+            json.dump(
+                {
+                    "repositories": [
+                        {
+                            "category": "projects",
+                            "name": "rocblas",
+                            "url": "ROCm/rocBLAS",
+                            "branch": "develop",
+                        },
+                        {
+                            "category": "projects",
+                            "name": "hipblas",
+                            "url": "ROCm/hipBLAS",
+                            "branch": "develop",
+                        },
+                        {
+                            "category": "shared",
+                            "name": "stinkytofu",
+                            "url": "ROCm/stinkytofu",
+                            "branch": "develop",
+                        },
+                    ]
+                },
+                f,
+            )
+
+        # Patch the external repo config directory
+        self._original_config_dir = cm._EXTERNAL_REPO_CONFIG_DIR
+        cm._EXTERNAL_REPO_CONFIG_DIR = self.config_dir
+
+    def tearDown(self):
+        """Restore original config directory and clean up."""
+        import shutil
+
+        cm._EXTERNAL_REPO_CONFIG_DIR = self._original_config_dir
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_workflow_only_change_in_rocm_libraries_scopes_to_projects(self):
+        """When only TheRock workflow files change in rocm-libraries, scope tests."""
+        changed_files = [".github/workflows/therock-multi-arch-ci.yml"]
+        projects, run_all = cm.compute_changed_projects_with_workflow_scoping(
+            changed_files, self.config_path, "ROCm/rocm-libraries"
+        )
+
+        self.assertFalse(run_all)
+        self.assertEqual(
+            sorted(projects),
+            ["projects/hipblas", "projects/rocblas", "shared/stinkytofu"],
+        )
+
+    def test_workflow_only_change_in_rocm_systems_runs_all_tests(self):
+        """rocm-systems is not in scoped list, so workflow changes run all tests."""
+        changed_files = [".github/workflows/therock-multi-arch-ci.yml"]
+        projects, run_all = cm.compute_changed_projects_with_workflow_scoping(
+            changed_files, self.config_path, "ROCm/rocm-systems"
+        )
+
+        self.assertTrue(run_all)
+        self.assertEqual(projects, [])
+
+    def test_shared_ci_file_change_runs_all_tests(self):
+        """Changes to shared CI files should always run all tests."""
+        changed_files = [".github/scripts/therock_helper.py"]
+        projects, run_all = cm.compute_changed_projects_with_workflow_scoping(
+            changed_files, self.config_path, "ROCm/rocm-libraries"
+        )
+
+        self.assertTrue(run_all)
+        self.assertEqual(projects, [])
+
+    def test_workflow_with_source_changes_returns_changed_projects(self):
+        """Workflow change + source change returns only changed projects."""
+        changed_files = [
+            ".github/workflows/therock-multi-arch-ci.yml",
+            "projects/rocblas/src/rocblas.cpp",
+        ]
+        projects, run_all = cm.compute_changed_projects_with_workflow_scoping(
+            changed_files, self.config_path, "ROCm/rocm-libraries"
+        )
+
+        self.assertFalse(run_all)
+        self.assertEqual(projects, ["projects/rocblas"])
+
+    def test_source_only_changes_computes_normally(self):
+        """Source-only changes compute changed projects normally."""
+        changed_files = ["projects/hipblas/src/hipblas.cpp"]
+        projects, run_all = cm.compute_changed_projects_with_workflow_scoping(
+            changed_files, self.config_path, "ROCm/rocm-libraries"
+        )
+
+        self.assertFalse(run_all)
+        self.assertEqual(projects, ["projects/hipblas"])
+
+    def test_empty_changed_files_returns_empty(self):
+        """Empty changed files returns empty projects."""
+        changed_files = []
+        projects, run_all = cm.compute_changed_projects_with_workflow_scoping(
+            changed_files, self.config_path, "ROCm/rocm-libraries"
+        )
+
+        self.assertFalse(run_all)
+        self.assertEqual(projects, [])
+
+    def test_repos_config_changes_run_all_tests(self):
+        """Changes to repos-config.json should run all tests."""
+        changed_files = [".github/repos-config.json"]
+        projects, run_all = cm.compute_changed_projects_with_workflow_scoping(
+            changed_files, self.config_path, "ROCm/rocm-libraries"
+        )
+
+        self.assertTrue(run_all)
+        self.assertEqual(projects, [])
+
+
+# ---------------------------------------------------------------------------
 # Step 3: Decide Jobs
 # ---------------------------------------------------------------------------
 
