@@ -406,5 +406,8 @@ if __name__ == "__main__":
         )
     else:
         generate_index_s3(
-            s3_client=s3, bucket_name=args.bucket, prefix=args.directory, upload=args.upload
+            s3_client=s3,
+            bucket_name=args.bucket,
+            prefix=args.directory,
+            upload=args.upload,
         )
