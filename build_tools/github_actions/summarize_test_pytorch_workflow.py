@@ -41,7 +41,7 @@ def run(args: argparse.Namespace):
     pytorch_web_url_with_branch = f"{pytorch_web_url}/tree/{args.pytorch_git_ref}"
 
     # Normalize the index URL to end with a single /
-    index_url = args.index_url.rstrip("/") + "/"
+    index_url = args.index_url.rstrip("/") + "/" if args.index_url else ""
 
     # Build package spec — add device extras and/or version when provided.
     package_spec = "torch"
@@ -61,7 +61,10 @@ def run(args: argparse.Namespace):
     summary += f"* Python version: `{args.python_version}`\n"
     if args.device_extras:
         summary += f"* Device extras: `{args.device_extras}`\n"
-    summary += f"* Package index: {index_url}\n"
+    if index_url:
+        summary += f"* Package index: {index_url}\n"
+    if args.find_links:
+        summary += f"* Package find-links: {args.find_links}\n"
     summary += f"* PyTorch source code: {pytorch_web_url_with_branch}\n"
 
     # Link to detailed documentation.
@@ -76,7 +79,10 @@ def run(args: argparse.Namespace):
     summary += "\n"
     summary += "# Install torch and test requirements\n"
     summary += "pip install" + LINE_CONTINUATION
-    summary += f"--index-url={index_url}" + LINE_CONTINUATION
+    if index_url:
+        summary += f"--index-url={index_url}" + LINE_CONTINUATION
+    if args.find_links:
+        summary += f"--find-links={args.find_links}" + LINE_CONTINUATION
     summary += f'"{package_spec}"'
     summary += "\n"
     summary += "pip install -r pytorch/.ci/docker/requirements-ci.txt\n"
@@ -109,6 +115,11 @@ if __name__ == "__main__":
         type=str,
         default="https://nightly.repo.amd.com/rocm/whl-next/",
         help="Full URL for a release index to use with 'pip install --index-url='",
+    )
+    parser.add_argument(
+        "--find-links",
+        default="",
+        help="Flat package page to use with 'pip install --find-links='",
     )
     parser.add_argument(
         "--device-extras",

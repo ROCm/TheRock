@@ -216,8 +216,7 @@ _SKIPPABLE_PATH_PATTERNS = [
     ".github/dependabot.yml",
     "*CODEOWNERS",
     "*LICENSE",
-    # Files used by gitleaks, no impact on CI.
-    "gitleaks.toml",
+    # Scanner configs consumed by the security scan workflows, no impact on CI.
     "build_tools/scan_tools/*",
     # Changes to dockerfiles do not currently affect CI workflows directly.
     # Docker images are built and published after commits are pushed, then
@@ -233,15 +232,17 @@ _SKIPPABLE_PATH_PATTERNS = [
     # ROCm build would not provide additional validation of the path filters.
     "build_tools/github_actions/configure_ci_path_filters.py",
     # Unit-test-only directories exercised by .github/workflows/unit_tests.yml.
-    # Keep these in sync with the pytest invocations in that workflow and the
-    # testpaths in pyproject.toml files. These are intentionally explicit
-    # directory roots: other test paths exercise built ROCm packages in CI.
+    # Keep these in sync with the testpaths paths in pyproject.toml.
     "build_tools/tests/*",
     "build_tools/github_actions/tests/*",
+    "build_tools/packaging/tests/*",
+    "build_tools/packaging/archives/tests/*",
     "build_tools/packaging/linux/tests/*",
     "build_tools/packaging/python/tests/*",
+    "build_tools/packaging/windows/tests/*",
     "build_tools/third_party/s3_management/tests/*",
-    "build_tools/scan_tools/github_actions/tests/*",
+    "cmake/tests/*",
+    "external-builds/pytorch/tests/*",
     "test_tools/tests/*",
 ]
 

@@ -12,17 +12,19 @@ with no separate manifest to maintain.
 | ----------------------------------------- | -------------------------------------------------- |
 | Python 3.11+                              | `pip install -r requirements.txt` from repo root   |
 | [WiX Toolset v4](https://wixtoolset.org/) | `dotnet tool install --global wix --version "4.*"` |
-| Built TheRock or artifact URL             | Local build or remote `.tar.zst` artifacts         |
+| Built TheRock or a CI run id              | Local build, or artifacts from a CI run            |
 
 ## Quick Start
 
-### From a remote artifact URL (recommended)
+### From a CI run (recommended)
 
 ```bat
-:: Generate the WiX source from nightly artifacts
+:: Generate the WiX source from a CI run's artifacts. Artifacts are fetched
+:: via build_tools\artifact_manager.py; the S3 bucket is resolved from the run
+:: id and public artifacts need no credentials.
 python build_tools\packaging\windows\generate_msi_wxs.py ^
     --package runtime ^
-    --artifacts-url https://therock-nightly-artifacts.s3.amazonaws.com/<run-id>-windows
+    --run-id <run-id>
 
 :: Compile to MSI (x64: SystemFolder -> C:\Windows\System32)
 wix build build_tools\packaging\windows\amdrocm-runtime.wxs ^
@@ -64,12 +66,13 @@ python build_tools\packaging\windows\generate_msi_wxs.py --list
 
 ### Artifact source
 
-| Flag                         | Default                       | Description                                                                                                                                                                             |
-| ---------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--artifacts-url URL`        | *(none)*                      | Base URL of a TheRock artifact storage directory containing `{name}_{component}_generic.tar.zst` files. When set, artifacts are downloaded, extracted, and used as precise stage trees. |
-| `--artifacts-cache-dir PATH` | `<script-dir>/artifact-cache` | Cache directory for downloaded and extracted artifacts. Reuse across runs to avoid re-downloading.                                                                                      |
-| `--build-root PATH`          | `build/`                      | CMake build directory containing per-component stage trees (`build/<basedir>/stage/`). Ignored when `--artifacts-url` is set.                                                           |
-| `--dist-root PATH`           | `build/dist/rocm`             | Merged ROCm distribution tree. Used as the fallback search root when stage dirs are absent, and for resolving `Source=` paths in the generated WXS.                                     |
+| Flag                         | Default                       | Description                                                                                                                                                 |
+| ---------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--run-id RUN_ID`            | *(none)*                      | GitHub Actions run id to fetch artifacts from (via `artifact_manager.py`). The S3 bucket is resolved from the run id; public artifacts need no credentials. |
+| `--run-github-repo O/R`      | `ROCm/TheRock`                | Repository that owns `--run-id` (for fork runs).                                                                                                            |
+| `--artifacts-cache-dir PATH` | `<script-dir>/artifact-cache` | Cache directory for downloaded and extracted artifacts. Reuse across runs to avoid re-downloading.                                                          |
+| `--build-root PATH`          | `build/`                      | CMake build directory containing per-component stage trees (`build/<basedir>/stage/`). Ignored when `--run-id` is set.                                      |
+| `--dist-root PATH`           | `build/dist/rocm`             | Merged ROCm distribution tree. Used as the fallback search root when stage dirs are absent, and for resolving `Source=` paths in the generated WXS.         |
 
 ### Output
 
@@ -87,19 +90,19 @@ The default install path is assembled as:
 
 For example: `C:\Program Files\AMD\ROCm\core-7.15\`
 
-| Flag                      | Default              | Description                                                                                                         |
-| ------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `--install-root ROOT`     | `ProgramFilesFolder` | Root of the install tree. Accepts a Windows Installer standard-directory token or an absolute path (e.g. `C:\AMD`). |
-| `--product-dir NAME`      | `AMD`                | First subdirectory under `--install-root`.                                                                          |
-| `--version-dir NAME`      | `ROCm`               | Second subdirectory under `--product-dir`.                                                                          |
-| `--package-version X.Y.Z` | From `version.json`  | MSI version string. Auto-detected from the repo's `version.json`.                                                   |
+| Flag                      | Default                | Description                                                                                                         |
+| ------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `--install-root ROOT`     | `ProgramFiles64Folder` | Root of the install tree. Accepts a Windows Installer standard-directory token or an absolute path (e.g. `C:\AMD`). |
+| `--product-dir NAME`      | `AMD`                  | First subdirectory under `--install-root`.                                                                          |
+| `--version-dir NAME`      | `ROCm`                 | Second subdirectory under `--product-dir`.                                                                          |
+| `--package-version X.Y.Z` | From `version.json`    | MSI version string. Auto-detected from the repo's `version.json`.                                                   |
 
 **Standard-directory tokens** resolve at install time on the target machine:
 
-| Token                            | Resolves to                              |
-| -------------------------------- | ---------------------------------------- |
-| `ProgramFilesFolder` *(default)* | `C:\Program Files\`                      |
-| `ProgramFiles64Folder`           | `C:\Program Files\` (always 64-bit view) |
+| Token                              | Resolves to                                          |
+| ---------------------------------- | ---------------------------------------------------- |
+| `ProgramFiles64Folder` *(default)* | `C:\Program Files\` (64-bit; correct for x64 ROCm)   |
+| `ProgramFilesFolder`               | `C:\Program Files (x86)\` (32-bit; not for x64 ROCm) |
 
 **Absolute paths** (e.g. `C:\AMD`) bake a fixed default into the MSI.
 
@@ -122,9 +125,9 @@ For each artifact in a package, the generator:
 1. Falls back to `--dist-root` when stage dirs are absent (e.g. dist-only
    builds), applying `fallback_excludes` to suppress known noise from other
    artifacts present in the merged tree.
-1. When `--artifacts-url` is set, downloads and extracts `.tar.zst` archives
-   into `--artifacts-cache-dir` and uses those as the stage trees, bypassing
-   both `--build-root` and the fallback entirely.
+1. When `--run-id` is set, fetches artifacts via `artifact_manager.py` into
+   `--artifacts-cache-dir` and uses those extracted trees, bypassing
+   `--build-root` entirely.
 
 Files are installed **flat** — `bin/`, `lib/`, and `share/` are direct
 children of `InstallDir`, regardless of the `basedir` path in the build tree.

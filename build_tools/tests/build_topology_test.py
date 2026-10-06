@@ -1303,26 +1303,38 @@ class SourcePathsInSyncTest(unittest.TestCase):
 class RealTopologyTest(unittest.TestCase):
     """Assertions against the repo's actual BUILD_TOPOLOGY.toml."""
 
-    def test_emulation_has_a_dedicated_build_stage(self):
+    def test_cv_libs_has_a_dedicated_build_stage(self):
         topology = get_topology()
 
         compiler_artifacts = topology.get_produced_artifacts("compiler-runtime")
-        self.assertNotIn("rocjitsu", compiler_artifacts)
-        self.assertNotIn("rocjitsu-hotswap", compiler_artifacts)
-        self.assertNotIn("mirage", compiler_artifacts)
+        self.assertNotIn("rpp", compiler_artifacts)
 
-        emulation_artifacts = topology.get_produced_artifacts("emulation")
-        self.assertEqual(
-            emulation_artifacts,
-            {"rocjitsu", "rocjitsu-hotswap", "mirage"},
-        )
-        emulation_inbound = topology.get_inbound_artifacts("emulation")
-        self.assertIn("base", emulation_inbound)
-        self.assertIn("sysdeps", emulation_inbound)
+        cv_libs_artifacts = topology.get_produced_artifacts("cv-libs")
+        self.assertEqual(cv_libs_artifacts, {"rpp"})
+        cv_libs_inbound = topology.get_inbound_artifacts("cv-libs")
+        self.assertIn("base", cv_libs_inbound)
+        self.assertIn("sysdeps", cv_libs_inbound)
 
+    def test_comm_libs_inbound_includes_emulation_artifacts(self):
+        topology = get_topology()
         comm_libs_inbound = topology.get_inbound_artifacts("comm-libs")
         self.assertIn("rocjitsu", comm_libs_inbound)
         self.assertIn("rocjitsu-hotswap", comm_libs_inbound)
+
+    def test_cv_libs_artifacts_declare_foundation_stage_deps(self):
+        # Stage selection must include the producers of inbound artifacts.
+        # Regression for https://github.com/ROCm/rocm-systems/issues/11198.
+        topology = get_topology()
+        cv_libs_inbound = topology.get_inbound_artifacts("cv-libs")
+        self.assertIn("base", cv_libs_inbound)
+        self.assertIn("sysdeps", cv_libs_inbound)
+
+        self.assertEqual(topology.get_stage_for_artifact("base"), "compiler-runtime")
+        self.assertEqual(topology.get_stage_for_artifact("sysdeps"), "compiler-runtime")
+
+        stages = topology.get_stages_for_artifacts(["rpp"])
+        self.assertIn("compiler-runtime", stages)
+        self.assertIn("cv-libs", stages)
 
     def test_hipkernelprovider_is_split_per_arch(self):
         # rocKE ships per-arch AOT bundles under engines/arch_content/rocke/<arch>,

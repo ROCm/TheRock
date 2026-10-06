@@ -1,0 +1,32 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# PR-time security scan. Requests human-readable reports only: findings are
+# uploaded as a build artifact and printed to the job summary, never to the
+# Security tab, so fork PRs (which never receive elevated tokens) behave
+# identically to same-repo PRs. See the scheduled counterpart
+# (security_scan_weekly.yml) for the SARIF / code-scanning upload.
+
+name: Security scan (PR)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    name: Security scan
+    uses: ROCm/rocm-security-gh/.github/workflows/security-baseline.yml@3a1bd0da89771757df435817daae14d1635b7fdb # v1.0.1
+    with:
+      report_formats: human
+      bandit_config_path: build_tools/scan_tools/bandit.yml
+      codeql_config_path: build_tools/scan_tools/codeql.yml
+      gitleaks_config_path: build_tools/scan_tools/gitleaks.toml
+      trivy_config_path: build_tools/scan_tools/trivy.yml
+      zizmor_config_path: build_tools/scan_tools/zizmor.yml

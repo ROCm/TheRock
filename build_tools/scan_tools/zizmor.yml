@@ -1,0 +1,13 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# zizmor configuration for TheRock, picked up by the rocm-security-gh
+# reusable scanner (.github/workflows/security_scan_pr.yml and
+# security_scan_weekly.yml) in place of its own org-wide default.
+# Reference: https://docs.zizmor.sh/configuration/
+
+rules:
+  self-repository:
+    # TODO: Remove this suppression and migrate to $/ once actionlint supports it.
+    # https://github.com/rhysd/actionlint/issues/711
+    disable: true

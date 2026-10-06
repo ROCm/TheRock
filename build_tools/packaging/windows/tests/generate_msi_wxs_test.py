@@ -8,6 +8,7 @@ import argparse
 import sys
 import tempfile
 import unittest
+import unittest.mock
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -21,8 +22,11 @@ from generate_msi_wxs import (
     collect_files_from_catalog,
     make_id,
     build_wxs,
+    build_all,
+    parse_args,
     create_wix_document,
     resolve_install_layout,
+    resolve_legacy_dlls,
     add_install_directory_tree,
     add_legacy_system32_feature,
     _stable_guid,
@@ -314,17 +318,28 @@ class TestBuildWxs(unittest.TestCase):
                     artifacts, artifact_name, component, self.BASEDIR, files
                 )
 
+        # Materialize every System32 DLL the package declares in the source-tree
+        # legacy dir so resolve_legacy_dlls (fail-fast on missing) is satisfied.
+        # Standing in for the build's DVC pull of rocm-systems.
+        legacy_dir = (
+            root / "rocm-systems" / "shared" / "amdgpu-windows-interop" / "legacy"
+        )
+        legacy_dir.mkdir(parents=True, exist_ok=True)
+        for dll in PACKAGES[package].legacy_system32_dlls:
+            (legacy_dir / dll).write_bytes(b"dll")
+
         defaults = dict(
             package=package,
             build_root=build,
+            repo_root=root,
             output=out,
-            install_root="ProgramFilesFolder",
+            install_root="ProgramFiles64Folder",
             product_dir="AMD",
             version_dir="ROCm",
             package_version="1.2.3",
-            artifacts_url=None,
+            run_id=None,
+            run_github_repo=None,
             artifacts_cache_dir=root / "artifact-cache",
-            fetch_legacy_dlls=False,
         )
         defaults.update(extra_args or {})
         # Override build_root so artifacts/ is under it
@@ -406,17 +421,30 @@ class TestBuildWxs(unittest.TestCase):
             empty_build.mkdir()
             out = root_path / "out.wxs"
             buf = io.StringIO()
+            # The System32 DLLs are a hard prerequisite, so provide them; this
+            # test is about missing *payload* artifacts, not System32 DLLs.
+            legacy_dir = (
+                root_path
+                / "rocm-systems"
+                / "shared"
+                / "amdgpu-windows-interop"
+                / "legacy"
+            )
+            legacy_dir.mkdir(parents=True)
+            for dll in PACKAGES["runtime"].legacy_system32_dlls:
+                (legacy_dir / dll).write_bytes(b"dll")
             args = argparse.Namespace(
                 package="runtime",
                 build_root=empty_build,
+                repo_root=root_path,
                 output=out,
-                install_root="ProgramFilesFolder",
+                install_root="ProgramFiles64Folder",
                 product_dir="AMD",
                 version_dir="ROCm",
                 package_version="1.2.3",
-                artifacts_url=None,
+                run_id=None,
+                run_github_repo=None,
                 artifacts_cache_dir=root_path / "artifact-cache",
-                fetch_legacy_dlls=False,
             )
             with redirect_stderr(buf):
                 build_wxs(args)
@@ -533,6 +561,205 @@ class TestBuildWxs(unittest.TestCase):
             self.assertIn("TARGETDIR", targetdirs)
 
 
+class TestBuildAll(unittest.TestCase):
+    """build_all writes one .wxs per requested package, named by output_stem."""
+
+    BASEDIR = "some/stage"
+
+    def _setup_tree(self, tmp: str, packages: list) -> Path:
+        """Create artifact dirs + legacy DLLs covering every requested package."""
+        root = Path(tmp)
+        artifacts = root / "artifacts"
+        artifacts.mkdir()
+        (root / "version.json").write_text('{"rocm-version": "1.2.3"}')
+
+        artifact_names = set()
+        for pkg in packages:
+            artifact_names.update(PACKAGES[pkg].artifacts)
+        for name in artifact_names:
+            _make_artifact_dir(artifacts, name, "lib", self.BASEDIR, [])
+
+        legacy_dir = (
+            root / "rocm-systems" / "shared" / "amdgpu-windows-interop" / "legacy"
+        )
+        legacy_dir.mkdir(parents=True, exist_ok=True)
+        legacy_dlls = set()
+        for pkg in packages:
+            legacy_dlls.update(PACKAGES[pkg].legacy_system32_dlls)
+        for dll in legacy_dlls:
+            (legacy_dir / dll).write_bytes(b"dll")
+        return root
+
+    def _args(self, root: Path, package_list: list, **overrides) -> argparse.Namespace:
+        defaults = dict(
+            package=None,
+            packages=None,
+            package_list=package_list,
+            build_root=root,
+            repo_root=root,
+            output=None,
+            output_dir=None,
+            default_output_dir=root,
+            install_root="ProgramFiles64Folder",
+            product_dir="AMD",
+            version_dir="ROCm",
+            package_version="1.2.3",
+            run_id=None,
+            run_github_repo=None,
+            artifacts_cache_dir=root / "artifact-cache",
+        )
+        defaults.update(overrides)
+        return argparse.Namespace(**defaults)
+
+    def test_multi_package_writes_named_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._setup_tree(tmp, ["runtime", "core"])
+            out = root / "out"
+            build_all(self._args(root, ["runtime", "core"], output_dir=out))
+            rt = out / "amdrocm-runtime.wxs"
+            core = out / "amdrocm-core.wxs"
+            self.assertTrue(rt.exists())
+            self.assertTrue(core.exists())
+            # Each file is the correct package (distinct UpgradeCode).
+            self.assertEqual(ET.parse(rt).getroot().tag, _ns("Wix"))
+            self.assertNotEqual(
+                ET.parse(rt).getroot().find(_ns("Package")).get("UpgradeCode"),
+                ET.parse(core).getroot().find(_ns("Package")).get("UpgradeCode"),
+            )
+
+    def test_multi_package_writes_exactly_n_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._setup_tree(tmp, ["runtime", "core"])
+            out = root / "out"
+            build_all(self._args(root, ["runtime", "core"], output_dir=out))
+            names = {p.name for p in out.glob("*.wxs")}
+            self.assertEqual(names, {"amdrocm-runtime.wxs", "amdrocm-core.wxs"})
+
+    def test_single_package_output_dir_uses_stem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._setup_tree(tmp, ["runtime"])
+            out = root / "out"
+            build_all(self._args(root, ["runtime"], output_dir=out))
+            self.assertTrue((out / "amdrocm-runtime.wxs").exists())
+            self.assertFalse((out / "out.wxs").exists())
+
+    def test_single_package_explicit_output_honored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._setup_tree(tmp, ["runtime"])
+            custom = root / "custom.wxs"
+            build_all(self._args(root, ["runtime"], output=custom))
+            self.assertTrue(custom.exists())
+
+    def test_single_package_no_flags_defaults_to_script_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._setup_tree(tmp, ["runtime"])
+            build_all(self._args(root, ["runtime"], default_output_dir=root))
+            self.assertTrue((root / "amdrocm-runtime.wxs").exists())
+
+
+class TestParseArgsPackages(unittest.TestCase):
+    """parse_args normalization + validation for --package/--packages/--output*."""
+
+    def _parse(self, *cli):
+        argv = ["generate_msi_wxs.py", *cli]
+        with unittest.mock.patch.object(sys, "argv", argv):
+            return parse_args()
+
+    def test_single_package_scalar_supported(self):
+        args = self._parse("--package", "runtime")
+        self.assertEqual(args.package_list, ["runtime"])
+        self.assertEqual(args.package, "runtime")
+
+    def test_packages_parses_comma_list(self):
+        args = self._parse("--packages", "runtime,core")
+        self.assertEqual(args.package_list, ["runtime", "core"])
+
+    def test_packages_dedupes_preserving_order(self):
+        args = self._parse("--packages", "runtime,core,runtime")
+        self.assertEqual(args.package_list, ["runtime", "core"])
+
+    def test_packages_strips_whitespace(self):
+        args = self._parse("--packages", " runtime , core ")
+        self.assertEqual(args.package_list, ["runtime", "core"])
+
+    def test_package_and_packages_mutually_exclusive(self):
+        with self.assertRaises(SystemExit):
+            self._parse("--package", "runtime", "--packages", "core")
+
+    def test_output_and_output_dir_mutually_exclusive(self):
+        with self.assertRaises(SystemExit):
+            self._parse(
+                "--package", "runtime", "--output", "x.wxs", "--output-dir", "d"
+            )
+
+    def test_output_rejected_with_multiple_packages(self):
+        with self.assertRaises(SystemExit):
+            self._parse("--packages", "runtime,core", "--output", "x.wxs")
+
+    def test_invalid_package_in_packages_errors(self):
+        with self.assertRaises(SystemExit):
+            self._parse("--packages", "runtime,bogus")
+
+    def test_no_package_errors(self):
+        with self.assertRaises(SystemExit):
+            self._parse("--output-dir", "d")
+
+    def test_list_exits_zero(self):
+        with self.assertRaises(SystemExit) as cm:
+            self._parse("--list")
+        self.assertEqual(cm.exception.code, 0)
+
+
+class TestResolveLegacyDlls(unittest.TestCase):
+    """resolve_legacy_dlls reads pre-present DLLs; it never fetches them."""
+
+    LEGACY_REL = Path("rocm-systems/shared/amdgpu-windows-interop/legacy")
+
+    def test_empty_names_returns_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.assertEqual(resolve_legacy_dlls(root / "artifacts", [], root), [])
+
+    def test_prefers_artifact_over_source_tree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact_dir = root / "artifacts"
+            (artifact_dir / "sub").mkdir(parents=True)
+            (artifact_dir / "sub" / "amdhip64_7.dll").write_bytes(b"art")
+            legacy = root / self.LEGACY_REL
+            legacy.mkdir(parents=True)
+            (legacy / "amdhip64_7.dll").write_bytes(b"src")
+            resolved = resolve_legacy_dlls(artifact_dir, ["amdhip64_7.dll"], root)
+            self.assertEqual(len(resolved), 1)
+            self.assertEqual(resolved[0][1].read_bytes(), b"art")
+
+    def test_falls_back_to_source_tree_legacy_dir(self):
+        # Driver-supplied DLLs live only in the rocm-systems source checkout
+        # (DVC-pulled by the build), not in the artifacts.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact_dir = root / "artifacts"
+            artifact_dir.mkdir()
+            legacy = root / self.LEGACY_REL
+            legacy.mkdir(parents=True)
+            (legacy / "amdhip64_6.dll").write_bytes(b"driver")
+            resolved = resolve_legacy_dlls(artifact_dir, ["amdhip64_6.dll"], root)
+            self.assertEqual(len(resolved), 1)
+            self.assertEqual(resolved[0][0], "amdhip64_6.dll")
+            self.assertEqual(resolved[0][1], legacy / "amdhip64_6.dll")
+
+    def test_missing_dll_is_fatal(self):
+        # Presence is a prerequisite: a declared DLL that cannot be found in the
+        # artifacts or the source checkout must fail, never silently ship an
+        # incomplete MSI.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact_dir = root / "artifacts"
+            artifact_dir.mkdir()
+            with self.assertRaises(FileNotFoundError):
+                resolve_legacy_dlls(artifact_dir, ["absent.dll"], root)
+
+
 class TestPackageDefs(unittest.TestCase):
     def test_all_upgrade_codes_unique(self):
         codes = [p.upgrade_code for p in PACKAGES.values()]
@@ -572,7 +799,7 @@ class TestBuildWxsHelpers(unittest.TestCase):
     def _args(self, **overrides):
         defaults = dict(
             package="runtime",
-            install_root="ProgramFilesFolder",
+            install_root="ProgramFiles64Folder",
             product_dir="AMD",
             version_dir="ROCm",
         )
@@ -594,11 +821,20 @@ class TestBuildWxsHelpers(unittest.TestCase):
 
     def test_install_layout_uses_standard_dir(self):
         std = resolve_install_layout(
-            self._args(install_root="ProgramFilesFolder"), "1.2.3"
+            self._args(install_root="ProgramFiles64Folder"), "1.2.3"
         )
         self.assertTrue(std.uses_standard_dir)
         custom = resolve_install_layout(self._args(install_root="C:\\AMD"), "1.2.3")
         self.assertFalse(custom.uses_standard_dir)
+
+    def test_default_install_root_is_64bit_program_files(self):
+        # ProgramFilesFolder resolves to C:\Program Files (x86) even in an x64
+        # package; ROCm is 64-bit, so the default must be ProgramFiles64Folder
+        # (C:\Program Files). Guards against regressing to the 32-bit token.
+        argv = ["generate_msi_wxs.py", "--package", "runtime"]
+        with unittest.mock.patch.object(sys, "argv", argv):
+            args = parse_args()
+        self.assertEqual(args.install_root, "ProgramFiles64Folder")
 
     def test_stable_guid_is_deterministic_and_upper(self):
         a = _stable_guid("System32", "amdhip64_7.dll")

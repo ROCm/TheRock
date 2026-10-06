@@ -17,6 +17,7 @@ unmatched_exclude = [
 include = [
   "lib/llvm/amdgcn/**",
   "lib/llvm/lib/*.bc",
+  "lib/llvm/lib/amdgcn-amd-amdhsa/*.bc",
   "lib/llvm/lib/*.ll",
   "lib/llvm/lib/*.modules.json",
   "lib/llvm/include/c++/**",
@@ -47,8 +48,15 @@ exclude = [
 # in the build tree because they need to be built separately in order to
 # install to different prefixes).
 [components.lib."compiler/amd-comgr/stage"]
+# 'run' is a catch-all here, so the PDB must be excluded to reach 'dbg' below.
 [components.run."compiler/amd-comgr/stage"]
+exclude = [
+  "**/*.pdb",
+]
 [components.dbg."compiler/amd-comgr/stage"]
+include = [
+  "**/*.pdb",
+]
 [components.dev."compiler/amd-comgr/stage"]
 [components.doc."compiler/amd-comgr/stage"]
 

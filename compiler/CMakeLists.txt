@@ -210,21 +210,17 @@ if(THEROCK_ENABLE_COMPILER)
   # version script, avoiding symbol interposition issues.
   ##############################################################################
 
-  set(_comgr_hotswap_cmake_args)
-  if(THEROCK_ENABLE_HOTSWAP)
-    list(APPEND _comgr_hotswap_cmake_args -DCOMGR_ENABLE_HOTSWAP_TRANSPILE=ON)
-    if(NOT WIN32)
-      list(APPEND _comgr_hotswap_cmake_args
-        -DHOTSWAP_BUILD_TOOL=ON
-        "-DHOTSWAP_TOOL_HSA_INCLUDE_ROOT=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime")
-    endif()
-  endif()
-
   # Optionally override the comgr DLL/shared-library output name (Windows). Kept
   # in sync with the CLR load side via the same THEROCK_COMGR_DLL_NAME option.
   set(_comgr_dll_name_cmake_args)
   if(THEROCK_COMGR_DLL_NAME)
     list(APPEND _comgr_dll_name_cmake_args "-DCOMGR_DLL_NAME=${THEROCK_COMGR_DLL_NAME}")
+  endif()
+
+  # Lets comgr honor CMAKE_MSVC_DEBUG_INFORMATION_FORMAT from its pre-hook.
+  set(_comgr_debug_info_cmake_args)
+  if(WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+    list(APPEND _comgr_debug_info_cmake_args -DCMAKE_POLICY_DEFAULT_CMP0141=NEW)
   endif()
 
   therock_cmake_subproject_declare(amd-comgr
@@ -242,8 +238,8 @@ if(THEROCK_ENABLE_COMPILER)
       -DTHEROCK_BUILD_COMGR_TESTS=${THEROCK_BUILD_COMGR_TESTS}
       "-DLLVM_VERSION_SUFFIX=-rocm${ROCM_MAJOR_VERSION}"
       -DLLVM_ENABLE_SYMBOL_VERSIONING=ON
-      ${_comgr_hotswap_cmake_args}
       ${_comgr_dll_name_cmake_args}
+      ${_comgr_debug_info_cmake_args}
     BUILD_DEPS
       rocm-cmake
       ${_comgr_gtest_deps}
@@ -327,7 +323,6 @@ if(THEROCK_ENABLE_HIPIFY)
 
   therock_cmake_subproject_declare(hipify
     USE_DIST_AMDGPU_TARGETS
-    NO_INSTALL_RPATH  # See manual handling in the pre_hook.
     EXTERNAL_SOURCE_DIR "hipify"
     BACKGROUND_BUILD
     INTERFACE_PROGRAM_DIRS
