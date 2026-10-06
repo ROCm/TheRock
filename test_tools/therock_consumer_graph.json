@@ -664,6 +664,7 @@
       "rocfft",
       "rocprim_tests",
       "rocprofiler-systems",
+      "rocr-debug-agent-tests",
       "rocrand",
       "rocroller",
       "rocshmem",
