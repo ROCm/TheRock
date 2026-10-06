@@ -823,29 +823,6 @@ class NativeLinuxPackageInstallTest:
         # Populated by _verify_transitive_dependencies_installed() on a non-skipped run.
         self.last_dependency_report: "DependencyReport | None" = None
 
-        # Metapackage install targets (four combinations of optional inputs):
-        #   gfx_arch + rocm_version -> amdrocm{major.minor}-{arch} per arch
-        #   gfx_arch only           -> amdrocm / amdrocm-core-sdk (arch not in name)
-        #   rocm_version only       -> amdrocm{major.minor} / amdrocm-core-sdk{major.minor}
-        #   neither                 -> unversioned amdrocm / amdrocm-core-sdk
-        ver = self.rocm_version_major_minor
-        if self.gfx_arch_list and ver:
-            self.package_names = []
-            for arch in self.gfx_arch_list:
-                self.package_names.extend(
-                    [
-                        f"amdrocm{ver}-{arch}",
-                        f"amdrocm-core-sdk{ver}-{arch}",
-                    ]
-                )
-        elif ver:
-            self.package_names = [
-                f"amdrocm{ver}",
-                f"amdrocm-core-sdk{ver}",
-            ]
-        else:
-            self.package_names = ["amdrocm", "amdrocm-core-sdk"]
-
     def setup_gpg_key(self) -> bool:
         """Setup GPG key for repositories that require GPG verification.
 

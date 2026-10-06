@@ -989,7 +989,6 @@ class RunTestsTestTypeTest(unittest.TestCase):
             gpg_key_url=None,
             packages_dir=None,
             pkg_type=None,
-            rocm_version=None,
             build_variant="",
         )
 
@@ -2345,19 +2344,25 @@ class VerifyNoRunpathTest(unittest.TestCase):
         self, mock_run, mock_rpath
     ):
         # Even with enough components present, a failed RUNPATH check fails Step 2.
+        # Skip transitive dep verify so this test isolates the RUNPATH gate.
         mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
-        with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "bin").mkdir()
-            (Path(d) / "lib").mkdir()
-            (Path(d) / "bin" / "rocminfo").write_text("")
-            (Path(d) / "bin" / "hipcc").write_text("")
-            t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
-                repo_url="https://example.com",
-                os_profile="ubuntu2404",
-                install_prefix=d,
-            )
-            with _suppress_script_output():
-                self.assertFalse(t.run_basic_verification())
+        with patch.dict(
+            os.environ,
+            {native_linux_package_install_test.ENV_NATIVE_LINUX_SKIP_DEP_VERIFY: "1"},
+            clear=False,
+        ):
+            with tempfile.TemporaryDirectory() as d:
+                (Path(d) / "bin").mkdir()
+                (Path(d) / "lib").mkdir()
+                (Path(d) / "bin" / "rocminfo").write_text("")
+                (Path(d) / "bin" / "hipcc").write_text("")
+                t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+                    repo_url="https://example.com",
+                    os_profile="ubuntu2404",
+                    install_prefix=d,
+                )
+                with _suppress_script_output():
+                    self.assertFalse(t.run_basic_verification())
         mock_rpath.assert_called_once()
 
 
@@ -2454,6 +2459,7 @@ class VerifyNoRunpathRealElfTest(unittest.TestCase):
         self.assertTrue(result)
         self.assertIn("not $ORIGIN-relative", output)
         self.assertIn("/opt/rocm/lib", output)
+
 
 class DebPkgNameFromDepTokenTest(unittest.TestCase):
     """Tests for _deb_pkg_name_from_dep_token()."""
