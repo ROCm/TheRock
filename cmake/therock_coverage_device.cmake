@@ -25,8 +25,8 @@
 # Only there: profile_rocm also defines hipLaunchKernel and the other launch
 # calls, as interceptors, and an executable that carries them next to those of
 # an instrumented library it loads recurses on its first kernel launch. That
-# rules out every link rule, where profile_rocm resolved the launch calls ahead
-# of the HIP runtime in every test executable, and rocSPARSE's unit tests,
+# rules out the link rules, where profile_rocm would resolve the launch calls
+# ahead of the HIP runtime in every executable, and rocSPARSE's unit tests,
 # which name the generic archive just as its library does.
 
 if(NOT DEFINED THEROCK_COVERAGE_DEVICE_PROFILE_RUNTIME
