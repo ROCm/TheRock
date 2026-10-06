@@ -171,9 +171,9 @@ class ROCmDevelTest(unittest.TestCase):
             if "libtest_linking_lib" in str(so_path):
                 # rocprim unit tests, not actual library files
                 continue
-            if "opencl" in str(so_path):
-                # We use OpenCL ICD from distro rather than TheRock
-                # and we do not build it
+            if "share/opencl/ocltst" in so_path.as_posix():
+                # ocltst harness libraries use their own search path and are not loaded
+                # standalone. The actual OpenCL runtime under lib/opencl is tested here.
                 continue
             if so_path.name.endswith(".abi3.so") or ".cpython-" in so_path.name:
                 # Python C extensions use symbols resolved at import time,

@@ -92,6 +92,48 @@ def clinfo_output() -> str:
     return run_command([str(THEROCK_BIN_DIR / "clinfo")], env=env).stdout
 
 
+OPENCL_VENDORS_DIR = THEROCK_BIN_DIR.parent / "etc" / "OpenCL" / "vendors"
+
+
+def opencl_icd_files() -> list[Path]:
+    if not OPENCL_VENDORS_DIR.is_dir():
+        return []
+    return sorted(OPENCL_VENDORS_DIR.glob("*.icd"))
+
+
+@pytest.fixture(scope="session")
+def clinfo_icd_output() -> str:
+    """Runs clinfo through the shipped ICD file instead of naming the runtime.
+
+    The clinfo_output fixture sets OCL_ICD_FILENAMES to an absolute library
+    path, which bypasses etc/OpenCL/vendors entirely. That hides the failure
+    users actually hit: an ICD file naming a library the loader cannot resolve
+    still enumerates zero platforms, with nothing reporting an error. See
+    https://github.com/ROCm/TheRock/issues/7667.
+
+    This mirrors the tarball recipe documented in RELEASES.md: point the loader
+    at the shipped vendors directory, and make lib/opencl resolvable so the
+    bare library name inside the ICD file can be found.
+    """
+    lib_dir = THEROCK_BIN_DIR.parent / "lib"
+    env = os.environ.copy()
+    env["OCL_ICD_VENDORS"] = str(OPENCL_VENDORS_DIR)
+    # Must not leak in from the environment: it would bypass the ICD file.
+    env.pop("OCL_ICD_FILENAMES", None)
+    library_dirs = (
+        lib_dir / "opencl",
+        lib_dir,
+        lib_dir / "llvm" / "lib",
+        lib_dir / "rocm_sysdeps" / "lib",
+    )
+    library_path = [str(path) for path in library_dirs if path.is_dir()]
+    if env.get("LD_LIBRARY_PATH"):
+        library_path.append(env["LD_LIBRARY_PATH"])
+    env["LD_LIBRARY_PATH"] = os.pathsep.join(library_path)
+
+    return run_command([str(THEROCK_BIN_DIR / "clinfo")], env=env).stdout
+
+
 class TestROCmSanity:
     @pytest.mark.skipif(
         is_asan(),
@@ -130,6 +172,62 @@ class TestROCmSanity:
         )
         assert process.returncode == 0, process.stdout + process.stderr
         assert "LLVM version" in process.stdout
+
+    @pytest.mark.skipif(
+        is_windows(),
+        reason="Windows registers the ICD in the registry, not a .icd file",
+    )
+    def test_opencl_icd_file_resolves(self):
+        """The library named inside each shipped .icd file must exist.
+
+        A dangling entry is silent: the loader finds the ICD file, fails to
+        dlopen the name inside it, and reports zero platforms. See
+        https://github.com/ROCm/TheRock/issues/7667.
+        """
+        icd_files = opencl_icd_files()
+        assert icd_files, f"No OpenCL ICD file found in {OPENCL_VENDORS_DIR}"
+        opencl_lib_dir = THEROCK_BIN_DIR.parent / "lib" / "opencl"
+        for icd_file in icd_files:
+            entry = icd_file.read_text().strip()
+            check.is_true(bool(entry), f"{icd_file} is empty")
+            if not entry:
+                continue
+            # An absolute path is used as-is. A bare name is resolved by the
+            # dynamic loader, which for this tree means lib/opencl.
+            resolved = Path(entry)
+            if not resolved.is_absolute():
+                resolved = opencl_lib_dir / entry
+            check.is_true(
+                resolved.exists(),
+                f"{icd_file} names '{entry}', which does not exist "
+                f"(resolved to {resolved})",
+            )
+
+    @pytest.mark.skipif(
+        is_windows(),
+        reason="Windows registers the ICD in the registry, not a .icd file",
+    )
+    @pytest.mark.skipif(
+        is_asan(),
+        reason="runtime GPU enumeration is flaky under ASAN, see TheRock#3312",
+    )
+    @pytest.mark.parametrize(
+        "to_search",
+        [
+            r"Platform\s*Name:\s*AMD Accelerated Parallel Processing",
+            r"Device\s*Type:\s*CL_DEVICE_TYPE_GPU",
+        ],
+        ids=[
+            "clinfo via ICD - AMD Platform Search",
+            "clinfo via ICD - GPU Device Type Search",
+        ],
+    )
+    def test_clinfo_via_icd_output(self, clinfo_icd_output: str, to_search: str):
+        check.is_not_none(
+            re.search(to_search, clinfo_icd_output),
+            f"Failed to search for {to_search} in clinfo output obtained through "
+            f"the shipped ICD file:\n{clinfo_icd_output}",
+        )
 
     @pytest.mark.skipif(is_windows(), reason="rocminfo is not supported on Windows")
     # TODO(#3312): Re-enable once rocminfo test is fixed for ASAN builds
