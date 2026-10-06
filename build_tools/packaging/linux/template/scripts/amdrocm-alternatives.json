@@ -1,0 +1,40 @@
+{
+  "amdrocm-core": [
+    "hipcc",
+    "hipconfig",
+    "hipify-clang",
+    "rocminfo",
+    "amd-smi",
+    "rocm_agent_enumerator",
+    "amdclang",
+    "amdclang++",
+    "amdclang-cl",
+    "amdclang-cpp",
+    "amdflang",
+    "amdlld"
+  ],
+  "amdrocm-core-devel": [
+    "MIOpenDriver"
+  ],
+  "amdrocm-developer-tools": [
+    "rocgdb",
+    "rocprofv3",
+    "rocprofv3-avail",
+    "rocprof-attach",
+    "rocprof-compute",
+    "rocprof-sys-attach",
+    "rocprof-sys-avail",
+    "rocprof-sys-causal",
+    "rocprof-sys-instrument",
+    "rocprof-sys-python",
+    "rocprof-sys-run",
+    "rocprof-sys-sample",
+    "rocpd",
+    "rocminfo",
+    "amd-smi",
+    "rocm_agent_enumerator"
+  ],
+  "amdrocm-base": [],
+  "amdrocm-llvm": []
+}
+

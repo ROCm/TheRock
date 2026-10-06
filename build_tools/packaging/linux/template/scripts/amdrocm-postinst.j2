@@ -1,7 +1,5 @@
 #!/bin/bash
 
-{% import data_template as data with context %}
-
 is_debian_like() {
     local id_like="$1"
 
@@ -22,12 +20,10 @@ do_update_alternatives() {
     local altscore now
     now=$(date -u +%s)
 
-    # Build the alternatives priority from the ROCm version.
+    # Build an alternatives priority from the ROCm version.
     altscore=$(({{ version_major }} - 3))
     altscore=$((altscore * 14 + {{ version_minor }}))
     altscore=$((altscore * 14 + {{ version_patch }}))
-
-    # Prefer the newest installation when semantic versions are equal.
     altscore=$((altscore * 1000000 + (now - 1600000000) / 60))
 
 {% if target == "deb" %}
@@ -36,17 +32,70 @@ do_update_alternatives() {
     PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
 {% endif %}
 
-    # Install directory and symbolic-link alternatives.
-{% for alternative in data.alternatives %}
+{% if package_name == "amdrocm-base" %}
+    # Install /opt/rocm/core and /opt/rocm/core-<major>.
     update-alternatives --install \
-        "{{ alternative.link }}" \
-        "{{ alternative.name }}" \
-        "$PKG_INSTALL_PREFIX{{ alternative.target_suffix }}" \
+        "/opt/rocm/core" \
+        "core" \
+        "$PKG_INSTALL_PREFIX" \
         "$altscore"
-{% endfor %}
 
-    # Install binary alternatives only when the binary exists.
-{% for binary in data.binaries %}
+    update-alternatives --install \
+        "/opt/rocm/core-{{ version_major }}" \
+        "core-{{ version_major }}" \
+        "$PKG_INSTALL_PREFIX" \
+        "$altscore"
+
+    # Install /opt/rocm/bin, /opt/rocm/lib, and /opt/rocm/include.
+    update-alternatives --install \
+        "/opt/rocm/bin" \
+        "rocm-bin" \
+        "$PKG_INSTALL_PREFIX/bin" \
+        "$altscore"
+
+    update-alternatives --install \
+        "/opt/rocm/lib" \
+        "rocm-lib" \
+        "$PKG_INSTALL_PREFIX/lib" \
+        "$altscore"
+
+    update-alternatives --install \
+        "/opt/rocm/include" \
+        "rocm-include" \
+        "$PKG_INSTALL_PREFIX/include" \
+        "$altscore"
+{% endif %}
+
+{% if package_name == "amdrocm-llvm" %}
+    # Install /opt/rocm/llvm, /opt/rocm/amdgcn,
+    # /opt/rocm/libexec, and /opt/rocm/share.
+    update-alternatives --install \
+        "/opt/rocm/llvm" \
+        "rocm-llvm" \
+        "$PKG_INSTALL_PREFIX/llvm" \
+        "$altscore"
+
+    update-alternatives --install \
+        "/opt/rocm/amdgcn" \
+        "rocm-amdgcn" \
+        "$PKG_INSTALL_PREFIX/amdgcn" \
+        "$altscore"
+
+    update-alternatives --install \
+        "/opt/rocm/libexec" \
+        "rocm-libexec" \
+        "$PKG_INSTALL_PREFIX/libexec" \
+        "$altscore"
+
+    update-alternatives --install \
+        "/opt/rocm/share" \
+        "rocm-share" \
+        "$PKG_INSTALL_PREFIX/share" \
+        "$altscore"
+{% endif %}
+
+    # Install package-specific binary alternatives.
+{% for binary in binaries %}
     if [ -e "$PKG_INSTALL_PREFIX/bin/{{ binary }}" ]; then
         update-alternatives --install \
             "/usr/bin/{{ binary }}" \
@@ -81,4 +130,3 @@ then
 else
     do_update_alternatives
 fi
-
