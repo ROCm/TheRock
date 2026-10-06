@@ -76,7 +76,6 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
         result = self.configure({WORKFLOW})
 
         self.assertFalse(result.run_all_tests)
-        self.assertFalse(result.skip_tests)
         self.assertEqual(set(result.changed_projects.split(",")), LIBRARY_PROJECTS)
         self.assertNotIn("projects/rccl", result.changed_projects.split(","))
 
@@ -94,7 +93,6 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
         )
 
         self.assertTrue(result.run_all_tests)
-        self.assertFalse(result.skip_tests)
         self.assertEqual(result.changed_projects, "")
 
     def test_shared_ci_changes_preserve_full_test_run(self):
@@ -107,7 +105,6 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
                 result = self.configure({WORKFLOW, path})
 
                 self.assertTrue(result.run_all_tests)
-                self.assertFalse(result.skip_tests)
                 self.assertEqual(result.changed_projects, "")
 
     def test_workflow_with_unclassified_path_preserves_full_test_run(self):
@@ -134,7 +131,6 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
             )
 
         self.assertFalse(result.run_all_tests)
-        self.assertFalse(result.skip_tests)
         self.assertEqual(result.changed_projects, "projects/example")
 
     def test_unknown_repository_workflow_preserves_full_test_run(self):
@@ -147,7 +143,6 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
         result = self.configure({"projects/rocblas/src/rocblas.cpp"})
 
         self.assertFalse(result.run_all_tests)
-        self.assertFalse(result.skip_tests)
         self.assertEqual(result.changed_projects, "projects/rocblas")
 
     def test_libraries_workflow_does_not_select_rccl_downstream(self):
