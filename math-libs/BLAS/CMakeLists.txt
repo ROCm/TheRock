@@ -51,6 +51,13 @@ else()
   set(_enable_rocRoller "ON")
 endif()
 
+# rocRoller has an unconditional dependency on mxDataGenerator, which is skipped
+# when no supported gfx targets remain after filtering (e.g.
+# THEROCK_AMDGPU_TARGETS='amdgcnspirv'). Disable rocRoller in that case.
+if(NOT _mxdatagenerator_enabled)
+  set(_enable_rocRoller "OFF")
+endif()
+
 if(_enable_rocRoller)
   therock_cmake_subproject_declare(rocRoller
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/rocroller"
@@ -141,6 +148,14 @@ if(NOT WIN32)
   endif()
 endif()
 
+# mxDataGenerator is skipped when no supported gfx targets remain after
+# filtering (e.g. THEROCK_AMDGPU_TARGETS='amdgcnspirv'); only depend on it when
+# it was actually declared.
+set(hipBLASLt_mxdatagenerator_dep)
+if(_mxdatagenerator_enabled)
+  set(hipBLASLt_mxdatagenerator_dep mxDataGenerator)
+endif()
+
 set(hipBLASLt_rocRoller_deps)
 if(_enable_rocRoller)
   list(APPEND hipBLASLt_rocRoller_build_deps
@@ -180,7 +195,7 @@ therock_cmake_subproject_declare(hipBLASLt
     amd-hip
   BUILD_DEPS
     hipBLAS-common
-    mxDataGenerator
+    ${hipBLASLt_mxdatagenerator_dep}
     rocm-cmake
     therock-googletest
     therock-msgpack-cxx

@@ -15,6 +15,10 @@ if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND
     set(_mxdatagenerator_enabled OFF)
   endif()
 endif()
+# mxDataGenerator is declared here (math-libs/support) but consumed by rocRoller
+# and hipBLASLt in the sibling math-libs/BLAS subdirectory. Push the resolved
+# value to the parent scope so those consumers can gate their deps on it.
+set(_mxdatagenerator_enabled ${_mxdatagenerator_enabled} PARENT_SCOPE)
 
 if(_mxdatagenerator_enabled)
   therock_cmake_subproject_declare(mxDataGenerator
