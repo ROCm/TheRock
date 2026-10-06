@@ -2788,6 +2788,32 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
                         family_info["test-runs-on"], "", f"Expected no tests for {name}"
                     )
 
+    def test_multi_gpu_runners_gated_when_tests_disabled(self):
+        """Multi-GPU runners excluded when tests are trigger-gated."""
+        # gfx950 tests only on submodule_bump; PR without submodule should gate both
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="main",
+            build_variant="release",
+            linux_amdgpu_families=["gfx950"],
+        )
+        outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+        family_info = self._find_family_info(outputs, "gfx950-dcgpu")
+
+        self.assertEqual(family_info["test-runs-on"], "")
+        self.assertNotIn("test-runs-on-multi-gpu", family_info)
+        self.assertNotIn("test-runs-on-multi-gpu-labels", family_info)
+
+        # With submodule change, multi-GPU info should be present
+        git_ctx = cm.GitContext(changed_files=["sub"], submodule_paths=["sub"])
+        outputs_enabled = cm.configure(ci_inputs, git_ctx)
+        family_enabled = self._find_family_info(outputs_enabled, "gfx950-dcgpu")
+
+        self.assertNotEqual(family_enabled["test-runs-on"], "")
+        self.assertIn("test-runs-on-multi-gpu", family_enabled)
+
     def test_test_type_for_family_override(self):
         """test_type_for_family forces quick test type despite global full."""
         # gfx125x only tests on nightly, so use schedule event
