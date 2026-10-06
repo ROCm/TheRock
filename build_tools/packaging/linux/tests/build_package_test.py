@@ -97,6 +97,7 @@ from packaging_utils import (  # noqa: E402
     GFX_META,
     PackageConfig,
     filter_components_fromartifactory,
+    filter_dependencies_by_artifacts,
     get_package_info,
     has_artifact_for_arch,
     is_gfxarch_package,
@@ -285,13 +286,18 @@ def _stage_package_artifacts(
 
             for component in components:
                 artifact_dir = artifacts_dir / f"{prefix}_{component}_{suffix}"
-                rel_path = f"{subdir_name}/{component}/{payload_name}"
-                payload = artifact_dir / rel_path
+                dir_path = f"{subdir_name}/{component}"
+                payload = artifact_dir / dir_path / payload_name
                 payload.parent.mkdir(parents=True, exist_ok=True)
                 payload.write_bytes(STAGING_PAYLOAD_BYTES)
                 manifest = artifact_dir / "artifact_manifest.txt"
-                # Artifact manifests list stage roots, not individual files.
-                manifest.write_text(f"{subdir_name}/{component}/\n", encoding="utf-8")
+                # Append to manifest: multiple subdirs may write to the same artifact dir
+                # within a single _stage_package_artifacts() call. This is safe because:
+                # 1. Each test gets an isolated temp directory (BuildPackageTestCase.setUp)
+                # 2. Tests run sequentially (standard unittest behavior)
+                # 3. Appends within one call are single-threaded
+                with manifest.open("a", encoding="utf-8") as f:
+                    f.write(f"{dir_path}\n")
                 if not manifest.exists():
                     raise RuntimeError(f"Failed to write artifact manifest: {manifest}")
                 created.append(artifact_dir / subdir_name / component)
@@ -318,20 +324,6 @@ def _read_control_file(pkg_name: str, config: PackageConfig) -> str:
     if not control_path.exists():
         raise AssertionError(f"Expected control file was not created: {control_path}")
     return control_path.read_text(encoding="utf-8")
-
-
-def _rules_path(pkg_name: str, config: PackageConfig) -> Path:
-    """Return path to generated ``debian/rules`` for a versioned DEB build."""
-    updated = update_package_name(pkg_name, replace(config, versioned_pkg=True))
-    return Path(config.dest_dir) / config.pkg_type / updated / "debian" / "rules"
-
-
-def _read_rules_file(pkg_name: str, config: PackageConfig) -> str:
-    """Read generated ``debian/rules`` after validating it was created."""
-    rules_path = _rules_path(pkg_name=pkg_name, config=config)
-    if not rules_path.exists():
-        raise AssertionError(f"Expected rules file was not created: {rules_path}")
-    return rules_path.read_text(encoding="utf-8")
 
 
 def _spec_path(pkg_name: str, config: PackageConfig) -> Path:
@@ -725,31 +717,6 @@ class CreateVersionedDebPackageTest(BuildPackageTestCase):
 
     @patch.object(deb_package, "move_packages_to_destination", return_value=[])
     @patch.object(deb_package, "package_with_dpkg_build")
-    def test_rules_file_excludes_code_objects_from_makeshlibs(
-        self, _mock_dpkg: object, _mock_move: object
-    ) -> None:
-        """The rendered ``debian/rules`` must override dh_makeshlibs to skip
-        ``.co`` GPU code objects. hip-tests ships an intentionally-corrupted ELF
-        fixture (elf_bad_shoff.co) that dh_makeshlibs cannot parse; without the
-        ``-X.co`` exclusion it aborts dpkg-buildpackage for the whole package.
-        """
-        cfg = _kpack_config(self.temp_dir)
-        _stage_package_artifacts(
-            pkg_name=PKG_FFT,
-            artifacts_dir=cfg.artifacts_dir,
-            gfx_arch=TEST_GFX_TARGET,
-            enable_kpack=True,
-        )
-        device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
-
-        deb_package.create_versioned_deb_package(pkg_name=PKG_FFT, config=device_cfg)
-
-        rules = _read_rules_file(pkg_name=PKG_FFT, config=device_cfg)
-        self.assertIn("override_dh_makeshlibs:", rules)
-        self.assertIn("dh_makeshlibs -X.co", rules)
-
-    @patch.object(deb_package, "move_packages_to_destination", return_value=[])
-    @patch.object(deb_package, "package_with_dpkg_build")
     def test_fft_meta_generates_control_file(
         self, _mock_dpkg: object, _mock_move: object
     ) -> None:
@@ -1139,6 +1106,196 @@ class CopyPackageContentsTest(BuildPackageTestCase):
             "dangling symlink should be preserved",
         )
         self.assertEqual((dest / "amdgcn").readlink(), Path("lib/llvm/amdgcn"))
+
+
+# Empty package skipping (#6766)
+# ---------------------------------------------------------------------------
+class EmptyPackageSkippingTest(BuildPackageTestCase):
+    """Packages with no artifacts are skipped in kpack mode."""
+
+    def test_skips_empty_non_meta_package(self) -> None:
+        """DEB/RPM generation skips gfxarch packages with no artifacts."""
+        test_cases = [
+            (
+                TEST_PKG_TYPE_DEB,
+                deb_package,
+                "package_with_dpkg_build",
+                "create_versioned_deb_package",
+            ),
+            (
+                TEST_PKG_TYPE_RPM,
+                rpm_package,
+                "package_with_rpmbuild",
+                "create_versioned_rpm_package",
+            ),
+        ]
+        for pkg_type, module, build_func, create_func in test_cases:
+            with self.subTest(pkg_type=pkg_type):
+                cfg = _kpack_config(self.temp_dir, pkg_type=pkg_type)
+                device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
+
+                with (
+                    patch.object(
+                        module, "move_packages_to_destination", return_value=[]
+                    ),
+                    patch.object(module, build_func) as mock_build,
+                ):
+                    result = getattr(module, create_func)(
+                        pkg_name=PKG_FFT, config=device_cfg
+                    )
+
+                self.assertEqual(result, [])
+                mock_build.assert_not_called()
+
+    def test_builds_meta_package_without_artifacts(self) -> None:
+        """DEB/RPM generation builds meta packages (they never have artifacts)."""
+        test_cases = [
+            (
+                TEST_PKG_TYPE_DEB,
+                deb_package,
+                "package_with_dpkg_build",
+                "create_versioned_deb_package",
+            ),
+            (
+                TEST_PKG_TYPE_RPM,
+                rpm_package,
+                "package_with_rpmbuild",
+                "create_versioned_rpm_package",
+            ),
+        ]
+        for pkg_type, module, build_func, create_func in test_cases:
+            with self.subTest(pkg_type=pkg_type):
+                cfg = _kpack_config(self.temp_dir, pkg_type=pkg_type)
+                meta_cfg = replace(cfg, gfx_arch=GFX_META)
+
+                with (
+                    patch.object(
+                        module, "move_packages_to_destination", return_value=[]
+                    ),
+                    patch.object(module, build_func) as mock_build,
+                ):
+                    getattr(module, create_func)(pkg_name=PKG_FFT, config=meta_cfg)
+
+                mock_build.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Host fallback mechanism (#6766)
+#
+# When a gfx-specific dependency has no artifacts for the target architecture
+# but does have host (generic) artifacts, the package should fall back to
+# depending on the host version instead of failing or omitting the dependency.
+#
+# Test scenario:
+#   - Building amdrocm-blas for gfx1100
+#   - amdrocm-blas depends on amdrocm-solver (both are gfxarch packages)
+#   - amdrocm-solver has artifacts for gfx942 but NOT for gfx1100
+#   - amdrocm-solver DOES have host (generic) artifacts
+#
+#   amdrocm-blas (gfx1100)
+#       └── depends on amdrocm-solver
+#                         ├── gfx1100 artifacts? ❌ NO
+#                         └── host artifacts?    ✅ YES → use host fallback
+#
+# Expected: Generated package should depend on amdrocm-solver-host7.1
+#           (not amdrocm-solver7.1-gfx1100 which doesn't exist)
+# ---------------------------------------------------------------------------
+PKG_BLAS = "amdrocm-blas"
+PKG_SOLVER = "amdrocm-solver"
+
+
+class HostFallbackTest(BuildPackageTestCase):
+    """Integration tests for host fallback when gfx-specific artifacts are missing."""
+
+    @patch.object(deb_package, "move_packages_to_destination", return_value=[])
+    @patch.object(deb_package, "package_with_dpkg_build")
+    def test_deb_device_package_uses_host_fallback_dependency(
+        self, _mock_dpkg: object, _mock_move: object
+    ) -> None:
+        """DEB device package falls back to host dependency when gfx artifacts missing."""
+        cfg = _kpack_config(self.temp_dir)
+
+        # Stage BLAS for gfx1100 (the package we're building)
+        _stage_package_artifacts(
+            pkg_name=PKG_BLAS,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=TEST_GFX_TARGET,
+            enable_kpack=True,
+        )
+        # Stage SOLVER for gfx942 only (NOT gfx1100) - makes it a gfxarch package
+        _stage_package_artifacts(
+            pkg_name=PKG_SOLVER,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=TEST_GFX_TARGET_ALT,
+            enable_kpack=True,
+        )
+        # Stage SOLVER host artifacts - this is what we'll fall back to
+        _stage_package_artifacts(
+            pkg_name=PKG_SOLVER,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=GFX_HOST,
+            enable_kpack=True,
+        )
+        # Stage RUNTIME (non-gfxarch dependency needed by BLAS)
+        _stage_package_artifacts(
+            pkg_name=PKG_RUNTIME,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=GFX_HOST,
+            enable_kpack=True,
+        )
+
+        device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
+        deb_package.create_versioned_deb_package(pkg_name=PKG_BLAS, config=device_cfg)
+
+        # Verify: BLAS depends on SOLVER-host (fallback), not SOLVER-gfx1100
+        control = _read_control_file(pkg_name=PKG_BLAS, config=device_cfg)
+        depends = _control_field(control, "Depends")
+        self.assertIn("amdrocm-solver-host", depends)
+
+    @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
+    @patch.object(rpm_package, "package_with_rpmbuild")
+    def test_rpm_device_package_uses_host_fallback_dependency(
+        self, _mock_rpmbuild: object, _mock_move: object
+    ) -> None:
+        """RPM device package falls back to host dependency when gfx artifacts missing."""
+        cfg = _kpack_config(self.temp_dir, pkg_type=TEST_PKG_TYPE_RPM)
+
+        # Stage BLAS for gfx1100 (the package we're building)
+        _stage_package_artifacts(
+            pkg_name=PKG_BLAS,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=TEST_GFX_TARGET,
+            enable_kpack=True,
+        )
+        # Stage SOLVER for gfx942 only (NOT gfx1100) - makes it a gfxarch package
+        _stage_package_artifacts(
+            pkg_name=PKG_SOLVER,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=TEST_GFX_TARGET_ALT,
+            enable_kpack=True,
+        )
+        # Stage SOLVER host artifacts - this is what we'll fall back to
+        _stage_package_artifacts(
+            pkg_name=PKG_SOLVER,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=GFX_HOST,
+            enable_kpack=True,
+        )
+        # Stage RUNTIME (non-gfxarch dependency needed by BLAS)
+        _stage_package_artifacts(
+            pkg_name=PKG_RUNTIME,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=GFX_HOST,
+            enable_kpack=True,
+        )
+
+        device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
+        rpm_package.create_versioned_rpm_package(pkg_name=PKG_BLAS, config=device_cfg)
+
+        # Verify: BLAS requires SOLVER-host (fallback), not SOLVER-gfx1100
+        spec = _read_spec_file(pkg_name=PKG_BLAS, config=device_cfg)
+        requires = _spec_field(spec, "Requires")
+        self.assertIn("amdrocm-solver-host", requires)
 
 
 if __name__ == "__main__":

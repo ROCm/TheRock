@@ -8,6 +8,7 @@ testpaths = [
     "build_tools/packaging/python/tests",
     "build_tools/packaging/windows/tests",
     "build_tools/third_party/s3_management/tests",
+    "cmake/tests",
     "external-builds/pytorch/tests",
     "test_tools/tests",
     "skills/therock_pr_bot/policy_check_test.py",
@@ -38,6 +39,7 @@ omit = [
     "build_tools/packaging/python/tests/*",
     "build_tools/packaging/windows/tests/*",
     "build_tools/third_party/s3_management/tests/*",
+    "cmake/tests/*",
     "external-builds/pytorch/tests/*",
     "external-builds/pytorch/smoke-tests/*",
     # Downloaded source checkouts and local environments are not TheRock tooling.

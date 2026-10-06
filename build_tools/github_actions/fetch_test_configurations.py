@@ -28,6 +28,7 @@ from pathlib import Path
 from github_actions_api import *
 from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
+    get_cpu_test_runner,
     select_weighted_label,
 )
 
@@ -252,6 +253,9 @@ test_matrix = {
     "rocblas": {
         "job_name": "rocblas",
         "fetch_artifact_args": "--blas --tests",
+        # Suppress per-test kpack debug logging (test_component.yml defaults it to
+        # "1" for diagnostics, which floods this suite's -V ctest output).
+        "rocm_kpack_debug": "0",
         # GHA step timeout: max category timeout in rocBLAS should be 24 hours / 6 shards = 4 hours per shard
         # 240 min + 20% margin = 288 min
         "timeout_minutes": 288,
@@ -372,6 +376,9 @@ test_matrix = {
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --solver --tests",
+        # Suppress per-test kpack debug logging (test_component.yml defaults it to
+        # "1" for diagnostics, which floods this suite's -V ctest output).
+        "rocm_kpack_debug": "0",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -853,15 +860,6 @@ test_matrix = {
             "linux": ["gfx125X-dcgpu"],
         },
     },
-    # profiler-hub install/consumption tests
-    "profiler-hub": {
-        "job_name": "profiler-hub",
-        "timeout_minutes": 5,
-        "test_script": f"python {_get_script_path('test_profiler_hub_install.py')}",
-        "platform": ["linux"],
-        "linux_cpu_runner": True,
-        "total_shards_dict": {"linux": 1},
-    },
     # MIOpen provider tests
     "miopenprovider": {
         "job_name": "miopenprovider",
@@ -915,8 +913,8 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 2,
+            "windows": 2,
         },
         "exclude_family": {
             "linux": [
@@ -1157,6 +1155,9 @@ test_matrix = {
     "hiptensor": {
         "job_name": "hiptensor",
         "fetch_artifact_args": "--hiptensor --tests",
+        # Suppress per-test kpack debug logging (test_component.yml defaults it to
+        # "1" for diagnostics, which floods this suite's -V ctest output).
+        "rocm_kpack_debug": "0",
         # Github Actions step timeout, applied to every tier (it does not vary by test_type).
         # Must be sized for the largest tier the nightly runs (comprehensive),
         # not quick/standard -- otherwise the step is killed mid-suite well
@@ -1218,6 +1219,19 @@ def run():
     test_runs_on_multi_gpu_default = None
     # For ASAN builds, use the sandbox runner if available
     test_runs_on_sandbox = None
+
+    # Check if GPU runner was passed from configure_multi_arch_ci.py via workflow.
+    # This carries the policy decision (e.g., trigger gating). When set to empty,
+    # GPU tests are gated but CPU-only tests (linux_cpu_runner: True) can still run.
+    test_runs_on_from_workflow = os.getenv("TEST_RUNS_ON")
+    # CPU runner: prefer workflow input, fall back to get_cpu_test_runner()
+    test_runs_on_cpu = os.getenv("TEST_RUNS_ON_CPU") or get_cpu_test_runner(platform)
+    gpu_tests_gated = test_runs_on_from_workflow == ""
+    if gpu_tests_gated:
+        logging.info(
+            "GPU tests gated (TEST_RUNS_ON is empty), only CPU-only components will run"
+        )
+
     if amdgpu_families:
         shortened_family = amdgpu_families.split("-")[0].lower()
         all_families = get_all_families_for_trigger_types(
@@ -1225,8 +1239,19 @@ def run():
         )
         if shortened_family in all_families:
             platform_info = all_families[shortened_family].get(platform, {})
-            test_runs_on_labels = platform_info.get("test-runs-on-labels")
-            test_runs_on_default = platform_info.get("test-runs-on", "")
+            # Use policy-gated value from workflow if available, otherwise use static matrix
+            if gpu_tests_gated:
+                # GPU tests are gated - don't use runner labels or defaults for GPU
+                test_runs_on_labels = None
+                test_runs_on_default = ""
+            elif test_runs_on_from_workflow is not None:
+                # Workflow provided a non-empty runner - use it but allow label distribution
+                test_runs_on_labels = platform_info.get("test-runs-on-labels")
+                test_runs_on_default = test_runs_on_from_workflow
+            else:
+                # Fallback to static matrix (backward compatibility)
+                test_runs_on_labels = platform_info.get("test-runs-on-labels")
+                test_runs_on_default = platform_info.get("test-runs-on", "")
             test_runs_on_multi_gpu_labels = platform_info.get(
                 "test-runs-on-multi-gpu-labels"
             )
@@ -1312,7 +1337,7 @@ def run():
         if platform in test_matrix[key]["platform"] and (
             key == "sanity" or key in project_array or "*" in project_array
         ):
-            logging.info(f"Including job {job_name} with test_type {test_type}")
+            logging.info(f"Requesting job {job_name} with test_type {test_type}")
 
             # Hip-tests on Windows run with both PAL and ROCR backends.
             # See: https://github.com/ROCm/TheRock/issues/3587
@@ -1429,6 +1454,8 @@ def run():
     # For ASan builds, use the sandbox runner to isolate potentially failing tests.
     # This matches multiple build variants, including "asan", "host-asan",
     # "asan-debug", and "host-asan-debug".
+    logging.info("")
+    logging.info("Assigning runners to requested jobs...")
     is_asan_build = "asan" in build_variant
     components_with_runners = []
     for component in all_components:
@@ -1444,14 +1471,26 @@ def run():
             else:
                 # No multi-GPU runner configured for this family; skip the component
                 logging.info(
-                    f"Excluding job {job_name}: multi-GPU required but no multi-GPU runner configured"
+                    f"  Excluding {job_name}: multi-GPU required but no multi-GPU runner configured"
                 )
                 continue
         elif "test_runner" not in component:
             # Regular components use standard runner labels.
             # Skip if test_runner is already pre-pinned (e.g. rocgdb-corefile).
-            # For ASAN builds, use the sandbox runner if available
-            if is_asan_build and test_runs_on_sandbox:
+            is_cpu_only = component.get("linux_cpu_runner", False)
+            if is_cpu_only:
+                if test_runs_on_cpu:
+                    component["test_runner"] = test_runs_on_cpu
+                    logging.info(
+                        f"  {job_name}: CPU-only, using runner: {test_runs_on_cpu}"
+                    )
+                else:
+                    logging.info(
+                        f"  Excluding {job_name}: CPU runner required but none configured"
+                    )
+                    continue
+            elif is_asan_build and test_runs_on_sandbox:
+                # For ASAN builds, use the sandbox runner if available
                 component["test_runner"] = test_runs_on_sandbox
                 logging.info(
                     f"  {job_name}: using ASAN sandbox runner: {test_runs_on_sandbox}"
@@ -1462,6 +1501,12 @@ def run():
                 )
             elif test_runs_on_default:
                 component["test_runner"] = test_runs_on_default
+            else:
+                # No GPU runner available and component requires GPU - skip it
+                logging.info(
+                    f"  Excluding {job_name}: GPU runner required but none configured"
+                )
+                continue
         components_with_runners.append(component)
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)
