@@ -636,7 +636,7 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "rocprofiler-sdk", "spdlog"]
 split_databases = ["rocblas", "hipblaslt"]
-source_paths = ["rocblas", "hipblas", "hipblas-common", "hipblaslt", "rocroller", "origami", "tensile", "stinkytofu"]
+source_paths = ["rocblas", "hipblas", "hipblas-common", "hipblaslt", "rocroller", "origami", "tensile", "stinkytofu", "mxdatagenerator"]
 
 [artifacts.rand]
 artifact_group = "math-libs"
