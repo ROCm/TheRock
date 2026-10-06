@@ -171,7 +171,7 @@ if(THEROCK_ENABLE_RCCL AND _rccl_enabled)
     SUBPROJECT_DEPS
       ${_rccl_subproject_names}
   )
-endif()
+endif(THEROCK_ENABLE_RCCL AND _rccl_enabled)
 
 if(THEROCK_ENABLE_ROCSHMEM)
   set(_rocshmem_enabled ON)
@@ -269,4 +269,4 @@ if(THEROCK_ENABLE_ROCSHMEM AND _rocshmem_enabled)
     SUBPROJECT_DEPS
       ${_rocshmem_subproject_names}
   )
-endif()
+endif(THEROCK_ENABLE_ROCSHMEM AND _rocshmem_enabled)

@@ -47,4 +47,4 @@ if(_mxdatagenerator_enabled)
     SUBPROJECT_DEPS
       mxDataGenerator
   )
-endif()
+endif(_mxdatagenerator_enabled)

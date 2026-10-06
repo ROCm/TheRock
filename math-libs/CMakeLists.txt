@@ -356,7 +356,7 @@ if(THEROCK_ENABLE_FFT AND _fft_enabled)
       test
     SUBPROJECT_DEPS ${_fft_subproject_names}
   )
-endif()
+endif(THEROCK_ENABLE_FFT AND _fft_enabled)
 
 if(THEROCK_ENABLE_BLAS)
   add_subdirectory(support)
@@ -506,7 +506,7 @@ if(THEROCK_ENABLE_ROCALUTION AND _rocalution_enabled)
     SUBPROJECT_DEPS
       rocALUTION
   )
-endif()
+endif(THEROCK_ENABLE_ROCALUTION AND _rocalution_enabled)
 
 if(THEROCK_ENABLE_LIBHIPCXX)
   ##############################################################################

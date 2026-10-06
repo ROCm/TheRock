@@ -94,7 +94,7 @@ if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
     SUBPROJECT_DEPS
       MIOpen
   )
-endif(THEROCK_ENABLE_MIOPEN)
+endif(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
 
 if(THEROCK_ENABLE_HIPDNN)
   ##############################################################################
@@ -361,7 +361,7 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
     SUBPROJECT_DEPS
       hipkernelprovider
   )
-endif(THEROCK_ENABLE_HIPKERNELPROVIDER)
+endif(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
 
 if(THEROCK_ENABLE_HIPDNN_SAMPLES)
   set(_hipdnn_samples_enabled ON)
@@ -415,4 +415,4 @@ if(THEROCK_ENABLE_HIPDNN_SAMPLES AND _hipdnn_samples_enabled)
     SUBPROJECT_DEPS
       hipDNN_samples
   )
-endif()
+endif(THEROCK_ENABLE_HIPDNN_SAMPLES AND _hipdnn_samples_enabled)
