@@ -153,7 +153,7 @@ The rest comes from the toolchain, with one link-order correction:
 | Piece                                          | Supplied by                                                                                       |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | Device runtime, amdgcn `libclang_rt.profile.a` | amd-llvm's amdgcn-amd-amdhsa runtimes build; the linker wrapper links it into each device image   |
-| Host collector, `libclang_rt.profile_rocm.a`   | `therock_coverage_device.cmake`, ahead of the project's own link libraries                        |
+| Host collector, `libclang_rt.profile_rocm.a`   | the driver on a HIP link; `therock_coverage_device.cmake` where a project names the runtime       |
 | Reading device counters back at exit           | `libclang_rt.profile_rocm.a`'s exit handler                                                       |
 | Not aborting on an unresolved descriptor       | the HIP runtime, since [ROCm/rocm-systems#10894](https://github.com/ROCm/rocm-systems/pull/10894) |
 
@@ -165,14 +165,17 @@ The include `therock_subproject.cmake` generates for the project runs
   flags to the device link when the first exists, so otherwise the problem
   would surface later, as a device link error or a report without device
   coverage.
-- It puts `libclang_rt.profile_rocm.a` in front of `<LINK_LIBRARIES>` in every
-  link rule. Only that archive's copy of `InstrProfilingFile.o` reads device
-  counters back at exit; `libclang_rt.profile.a`'s has the call compiled out.
-  The driver orders them correctly on a HIP link with `-fprofile-instr-generate`,
-  but rocSPARSE keeps that flag off its link and names
-  `clang_rt.profile clang_rt.profile_rocm` itself, in that order, so its kernels
-  were counted and never written. A link with no instrumented objects pulls
-  nothing from the archive.
+- Once the project's targets exist, it inserts `libclang_rt.profile_rocm.a`
+  ahead of `libclang_rt.profile.a` in any target that names the latter itself.
+  Only the former's copy of `InstrProfilingFile.o` reads device counters back
+  at exit. The driver orders them correctly on a HIP link with
+  `-fprofile-instr-generate`, but rocSPARSE keeps that flag off its link and
+  names `clang_rt.profile clang_rt.profile_rocm` itself, in that order, so its
+  kernels were counted and never written. No other target is touched:
+  `libclang_rt.profile_rocm.a` also defines `hipLaunchKernel` and the other
+  launch calls as interceptors, and ahead of a link's HIP runtime it resolves
+  them, giving binaries with no instrumented code their own interceptors, which
+  call themselves on the first kernel launch.
 
 RCCL needed far more than this
 ([ROCm/rocm-systems#10650](https://github.com/ROCm/rocm-systems/pull/10650)):

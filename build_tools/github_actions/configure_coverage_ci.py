@@ -278,9 +278,9 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         codecov_flag="rocSPARSE",
         # Upstream's option negates device instrumentation itself and links
         # clang_rt.profile ahead of clang_rt.profile_rocm, so device coverage
-        # here leans on both overrides in therock_coverage_device.cmake: the
-        # device flags last on the compile line, the collector first on the
-        # link line. Kernels make up nearly all of librocsparse.so.
+        # here leans on both overrides: the device flags last on the compile
+        # line, and therock_coverage_device.cmake moving the collector ahead of
+        # the generic archive. Kernels make up nearly all of librocsparse.so.
         device_coverage=True,
     ),
     "hipsparse": CoverageProject(

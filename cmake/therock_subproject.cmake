@@ -968,10 +968,10 @@ function(therock_cmake_subproject_activate target_name)
   # -Xarch_host-only upstream option (rocRAND's) or a project's own device-side
   # negation (rocSPARSE's) just as the negation overrides an unqualified one.
   # The linker wrapper then links the amdgcn libclang_rt.profile.a into every
-  # device image, and therock_coverage_device.cmake puts
-  # libclang_rt.profile_rocm.a ahead of the project's link libraries; its exit
-  # handler copies each translation unit's device counters into a profile named
-  # after the GPU target. The two failures above are handled downstream: the
+  # device image, and libclang_rt.profile_rocm.a, which the driver links on a
+  # HIP link and therock_coverage_device.cmake puts ahead of a generic profile
+  # runtime a project names itself, copies each translation unit's device
+  # counters at exit into a profile named after the GPU target. The two failures above are handled downstream: the
   # HIP runtime now returns an error for a descriptor it cannot resolve instead
   # of aborting (ROCm/rocm-systems#10894), and the test job renames the device
   # profiles instead of dropping them.
