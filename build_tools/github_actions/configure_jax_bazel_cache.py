@@ -43,10 +43,9 @@ REMOTE_CACHE_URL = "grpcs://wardite.cluster.engflow.com"
 CLIENT_CERTIFICATE = Path("/data/ci-cert.crt")
 CLIENT_KEY = Path("/data/ci-cert.key")
 
-# Release types that may read shared cache entries, mirroring the ccache policy
-# in setup_ccache.py. Stable releases repackage prerelease artifacts, so
-# "prerelease" and "nightly-bkc" are absent on purpose.
-SHARED_CACHE_RELEASE_TYPES = frozenset({"ci", "dev", "dev-bkc", "nightly"})
+# Release types that may use the cache. Only CI for now: release builds need a
+# cache of their own, as nightly has for ccache in setup_ccache.py.
+SHARED_CACHE_RELEASE_TYPES = frozenset({"ci"})
 
 DEFAULT_PROBE_TIMEOUT_SECONDS = 10
 DEFAULT_REMOTE_TIMEOUT_SECONDS = 60

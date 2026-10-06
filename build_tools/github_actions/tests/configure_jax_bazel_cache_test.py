@@ -28,15 +28,14 @@ from configure_jax_bazel_cache import (
 class ResolveCacheUrlTest(unittest.TestCase):
     """Tests which release types may read the shared cache."""
 
-    def test_ci_and_dev_use_the_shared_cache(self):
-        for release_type in ("ci", "dev", "dev-bkc", "nightly"):
-            self.assertEqual(resolve_cache_url("", release_type), REMOTE_CACHE_URL)
+    def test_ci_uses_the_shared_cache(self):
+        self.assertEqual(resolve_cache_url("", "ci"), REMOTE_CACHE_URL)
 
     def test_release_builds_get_no_shared_cache(self):
-        # Stable releases repackage prerelease artifacts, so they must not read
-        # entries another build could have written.
-        for release_type in ("nightly-bkc", "prerelease"):
-            self.assertEqual(resolve_cache_url("", release_type), "")
+        # Release builds need a cache of their own, as nightly has for ccache.
+        for release_type in ("dev", "dev-bkc", "nightly", "nightly-bkc", "prerelease"):
+            with self.subTest(release_type=release_type):
+                self.assertEqual(resolve_cache_url("", release_type), "")
 
     def test_unknown_release_type_gets_no_cache(self):
         self.assertEqual(resolve_cache_url("", "something-new"), "")
