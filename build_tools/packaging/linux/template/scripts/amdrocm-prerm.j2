@@ -1,7 +1,5 @@
 #!/bin/bash
 
-{% import data_template as data with context %}
-
 is_debian_like() {
     local id_like="$1"
 
@@ -25,21 +23,66 @@ do_remove_alternatives() {
     PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
 {% endif %}
 
-    # Remove binary alternatives first.
-{% for binary in data.binaries %}
+    # Remove package-specific binary alternatives first.
+{% for binary in binaries %}
     update-alternatives --remove \
         "{{ binary }}" \
         "$PKG_INSTALL_PREFIX/bin/{{ binary }}" \
         || true
 {% endfor %}
 
-    # Remove directory and symbolic-link alternatives.
-{% for alternative in data.alternatives %}
+{% if package_name == "amdrocm-base" %}
+    # Remove /opt/rocm/core and /opt/rocm/core-<major>.
     update-alternatives --remove \
-        "{{ alternative.name }}" \
-        "$PKG_INSTALL_PREFIX{{ alternative.target_suffix }}" \
+        "core" \
+        "$PKG_INSTALL_PREFIX" \
         || true
-{% endfor %}
+
+    update-alternatives --remove \
+        "core-{{ version_major }}" \
+        "$PKG_INSTALL_PREFIX" \
+        || true
+
+    # Remove /opt/rocm/bin, /opt/rocm/lib, and /opt/rocm/include.
+    update-alternatives --remove \
+        "rocm-bin" \
+        "$PKG_INSTALL_PREFIX/bin" \
+        || true
+
+    update-alternatives --remove \
+        "rocm-lib" \
+        "$PKG_INSTALL_PREFIX/lib" \
+        || true
+
+    update-alternatives --remove \
+        "rocm-include" \
+        "$PKG_INSTALL_PREFIX/include" \
+        || true
+{% endif %}
+
+{% if package_name == "amdrocm-llvm" %}
+    # Remove /opt/rocm/llvm, /opt/rocm/amdgcn,
+    # /opt/rocm/libexec, and /opt/rocm/share.
+    update-alternatives --remove \
+        "rocm-llvm" \
+        "$PKG_INSTALL_PREFIX/llvm" \
+        || true
+
+    update-alternatives --remove \
+        "rocm-amdgcn" \
+        "$PKG_INSTALL_PREFIX/amdgcn" \
+        || true
+
+    update-alternatives --remove \
+        "rocm-libexec" \
+        "$PKG_INSTALL_PREFIX/libexec" \
+        || true
+
+    update-alternatives --remove \
+        "rocm-share" \
+        "$PKG_INSTALL_PREFIX/share" \
+        || true
+{% endif %}
 }
 
 if [ -e /etc/os-release ] &&
@@ -62,4 +105,3 @@ then
 else
     do_remove_alternatives
 fi
-
