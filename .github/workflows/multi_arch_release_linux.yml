@@ -81,7 +81,53 @@ jobs:
           gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
           gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
 
+  copy_prebuilt_stages:
+    name: Copy Prebuilt Stages
+    if: ${{ fromJSON(inputs.build_config).prebuilt_stages != '' && fromJSON(inputs.build_config).baseline_run_id != '' }}
+    runs-on: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
+    permissions:
+      contents: read
+      id-token: write
+    container:
+      image: python:3.12-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Install artifact manager dependencies
+        run: pip install boto3
+
+      - name: Configure AWS credentials for artifact uploads
+        uses: ./.github/actions/configure_aws_artifacts_credentials
+        with:
+          release_type: ${{ inputs.release_type }}
+
+      - name: Copy prebuilt stage artifacts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
+          BUILD_CONFIG_BASELINE_RUN_ID: ${{ fromJSON(inputs.build_config).baseline_run_id }}
+          BUILD_CONFIG_BASELINE_REPOSITORY: ${{ fromJSON(inputs.build_config).baseline_repository }}
+          BUILD_CONFIG_PREBUILT_STAGES: ${{ fromJSON(inputs.build_config).prebuilt_stages }}
+          BUILD_CONFIG_REUSABLE_ARTIFACTS: ${{ fromJSON(inputs.build_config).reusable_artifacts }}
+          BUILD_CONFIG_DIST_AMDGPU_FAMILIES: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+        run: |
+          python build_tools/artifact_manager.py copy \
+            --source-run-id="${BUILD_CONFIG_BASELINE_RUN_ID}" \
+            --source-repository="${BUILD_CONFIG_BASELINE_REPOSITORY}" \
+            --stage="${BUILD_CONFIG_PREBUILT_STAGES}" \
+            --artifacts="${BUILD_CONFIG_REUSABLE_ARTIFACTS}" \
+            --amdgpu-families="${BUILD_CONFIG_DIST_AMDGPU_FAMILIES}" \
+            --expand-family-to-targets
+
   build_artifacts:
+    needs: copy_prebuilt_stages
+    if: ${{ !failure() && !cancelled() }}
     name: Build Artifacts
     uses: ./.github/workflows/multi_arch_build_portable_linux.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
@@ -124,7 +170,8 @@ jobs:
       id-token: write
 
   build_python_packages:
-    needs: [build_artifacts]
+    needs: [copy_prebuilt_stages, build_artifacts]
+    if: ${{ !failure() && !cancelled() }}
     name: Build Python Packages
     uses: ./.github/workflows/build_portable_linux_python_packages.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
