@@ -47,6 +47,14 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      prebuilt_stages:
+        description: "Comma-separated build stages to skip (or 'all' for all stages); artifacts are copied from baseline_run_id instead"
+        type: string
+        default: ""
+      baseline_run_id:
+        description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       release_type:
@@ -73,6 +81,14 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      prebuilt_stages:
+        description: "Comma-separated build stages to skip (or 'all' for all stages); artifacts are copied from baseline_run_id instead"
+        type: string
+        default: ""
+      baseline_run_id:
+        description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -96,6 +112,8 @@ jobs:
       python_version: ${{ inputs.python_version }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
+      prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
+      baseline_run_id: ${{ inputs.baseline_run_id || '' }}
     secrets: inherit # zizmor: ignore[secrets-inherit]
 
   linux_release:
