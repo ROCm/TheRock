@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 import configure_pytorch_release_matrix as m
+from github_actions.manifest_utils import GitSourceInfo
 from workflow_utils import (
     WORKFLOWS_DIR,
     get_matrix_references,
@@ -274,6 +275,75 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     # workflow reads `matrix.unknown`, this test fails until
                     # the generator emits that key for every row.
                     self.assertEqual(matrix_references - set(row), set())
+
+
+class CheckSourceVersionsTest(unittest.TestCase):
+    def test_release_and_non_release_version_policy(self):
+        cases = [
+            # version, accepted on release refs, accepted on other refs
+            ("0.29.0.dev1", False, True),
+            ("0.29.0a0", False, True),
+            ("0.29.0b1", False, True),
+            ("0.29.0rc1", False, True),
+            ("0.29.0", True, False),
+            ("invalid", False, False),
+            (None, False, False),
+        ]
+        for ref in ("release/2.14", "nightly", "users/alice/test-release"):
+            for version, release_ok, non_release_ok in cases:
+                with self.subTest(ref=ref, version=version):
+                    sources = {
+                        "pytorch_vision": GitSourceInfo(
+                            repo="https://github.com/ROCm/vision",
+                            commit="vision-sha",
+                            version=version,
+                        )
+                    }
+                    errors = m.check_source_versions(ref, sources)
+                    accepted = release_ok if ref == "release/2.14" else non_release_ok
+                    self.assertEqual(len(errors), 0 if accepted else 1)
+
+    def test_reports_all_invalid_projects(self):
+        sources = {
+            "pytorch_audio": GitSourceInfo(
+                repo="https://github.com/ROCm/audio",
+                commit="audio-sha",
+                version="2.14.0a0",
+            ),
+            "pytorch_vision": GitSourceInfo(
+                repo="https://github.com/ROCm/vision",
+                commit="vision-sha",
+                version="0.29.0a0",
+            ),
+            "triton": GitSourceInfo(
+                repo="https://github.com/ROCm/triton",
+                commit="triton-sha",
+                version="3.9.0",
+            ),
+        }
+        errors = m.check_source_versions("release/2.14", sources)
+        self.assertEqual(len(errors), 2)
+
+    def test_triton_exception(self):
+        cases = [
+            ("release/2.14", "3.9.0", True),
+            ("release/2.14", "3.9.0.dev1", False),
+            ("nightly", "3.9.0", True),
+            ("nightly", "3.9.0.dev1", True),
+            ("users/alice/bringup", "3.9.0", True),
+            ("nightly", "invalid", False),
+        ]
+        for ref, version, accepted in cases:
+            with self.subTest(ref=ref, version=version):
+                sources = {
+                    "triton": GitSourceInfo(
+                        repo="https://github.com/ROCm/triton",
+                        commit="triton-sha",
+                        version=version,
+                    )
+                }
+                errors = m.check_source_versions(ref, sources)
+                self.assertEqual(len(errors), 0 if accepted else 1)
 
 
 if __name__ == "__main__":
