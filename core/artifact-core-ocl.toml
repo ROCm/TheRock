@@ -40,6 +40,8 @@ exclude = [
 ]
 [components.test."core/ocl-clr/stage"]
 include = [
+  "tests/**",
+  "share/opencl/**",
   "bin/ocltst*",
   "bin/*oclgl*",
   "bin/*oclperf*",
