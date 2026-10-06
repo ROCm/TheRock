@@ -13,7 +13,12 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from deb_package import generate_debian_postscripts
-from packaging_utils import PackageConfig, get_package_info, load_alternatives_binaries
+from packaging_utils import (
+    PackageConfig,
+    get_package_info,
+    is_postinstallscripts_available,
+    load_alternatives_binaries,
+)
 from rpm_package import generate_rpm_postscripts
 
 pytestmark = pytest.mark.skipif(
@@ -51,6 +56,11 @@ def run(script: str, target: str, arg: str, stubs: str) -> subprocess.CompletedP
         capture_output=True,
         env={"PATH": "/usr/bin:/bin", "RPM_INSTALL_PREFIX0": PREFIX},
     )
+
+
+@pytest.mark.parametrize("package", PACKAGES)
+def test_package_runs_maintainer_scripts(package):
+    assert is_postinstallscripts_available(get_package_info(package))
 
 
 @pytest.mark.parametrize(

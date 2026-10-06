@@ -111,6 +111,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False",
     "Disable_DWZ": "True",
     "Disable_RPM_STRIP": "True"
@@ -1875,6 +1876,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
