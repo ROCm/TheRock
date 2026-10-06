@@ -684,8 +684,8 @@ class MainFunctionTest(unittest.TestCase):
             }
         )
 
-    def test_asan_build_variant_adds_suffix_to_wheel_only(self):
-        """ASAN build variant adds .asan suffix only to wheel packages."""
+    def test_asan_nightly_adds_plus_asan_suffix(self):
+        """ASAN nightly (no local version) adds +asan suffix to wheel only."""
         with mock.patch.object(
             compute_rocm_package_version, "gha_set_output"
         ) as gha_set_output:
@@ -702,11 +702,42 @@ class MainFunctionTest(unittest.TestCase):
 
         gha_set_output.assert_called_once()
         outputs = gha_set_output.call_args.args[0]
-        # Wheel gets .asan suffix
-        self.assertRegex(outputs["rocm_package_version"], r"^7\.99\.0a[0-9]{8}\.asan$")
-        # deb/rpm do NOT get .asan suffix
+        # Nightly has no local version, so wheel gets +asan suffix
+        self.assertRegex(outputs["rocm_package_version"], r"^7\.99\.0a[0-9]{8}\+asan$")
+        # deb/rpm do NOT get asan suffix
         self.assertRegex(outputs["rocm_deb_package_version"], r"^7\.99\.0~[0-9]{8}$")
         self.assertRegex(outputs["rocm_rpm_package_version"], r"^7\.99\.0~[0-9]{8}$")
+
+    def test_asan_dev_adds_dot_asan_suffix(self):
+        """ASAN dev (has local version) adds .asan suffix to wheel only."""
+        with mock.patch.object(
+            compute_rocm_package_version, "gha_set_output"
+        ) as gha_set_output:
+            compute_rocm_package_version.main(
+                [
+                    "--release-type",
+                    "dev",
+                    "--override-base-version",
+                    "7.99.0",
+                    "--override-git-sha",
+                    "abcdef1234567890",
+                    "--build-variant",
+                    "asan-debug",
+                ]
+            )
+
+        gha_set_output.assert_called_once()
+        outputs = gha_set_output.call_args.args[0]
+        # Dev has local version (+sha), so wheel gets .asan suffix
+        self.assertEqual(
+            outputs["rocm_package_version"],
+            "7.99.0.dev0+abcdef1234567890.asan",
+        )
+        # deb/rpm do NOT get asan suffix
+        self.assertRegex(outputs["rocm_deb_package_version"], r"^7\.99\.0~dev[0-9]{8}$")
+        self.assertRegex(
+            outputs["rocm_rpm_package_version"], r"^7\.99\.0~[0-9]{8}gabcdef12$"
+        )
 
     def test_non_asan_build_variant_no_suffix(self):
         """Non-ASAN build variant (release) does not add .asan suffix."""

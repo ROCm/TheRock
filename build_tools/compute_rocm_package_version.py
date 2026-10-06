@@ -41,7 +41,10 @@ Sample usage:
   # 7.99.0a20251021
 
   python compute_rocm_package_version.py --release-type=nightly --build-variant=asan-debug
-  # rocm_package_version=7.10.0a20251021.asan  (wheel only gets .asan suffix)
+  # rocm_package_version=7.10.0a20251021+asan  (wheel only, +asan when no local version)
+
+  python compute_rocm_package_version.py --release-type=dev --build-variant=asan-debug
+  # rocm_package_version=7.10.0.dev0+sha.asan  (wheel only, .asan appended to local version)
 """
 
 import argparse
@@ -220,10 +223,16 @@ def compute_version(
 
         rocm_package_version = base_version + version_suffix
 
-        # Add .asan suffix for ASAN wheel builds
+        # Add ASAN suffix for ASAN wheel builds
+        # - If version has local segment (+...), append .asan: 10.1.0.dev0+sha.asan
+        # - If version has no local segment, append +asan: 10.1.0a20260823+asan
         if build_variant and "asan" in build_variant:
-            rocm_package_version += ".asan"
-            _log(f"ASAN variant  : adding '.asan' suffix")
+            if "+" in rocm_package_version:
+                rocm_package_version += ".asan"
+                _log(f"ASAN variant  : adding '.asan' suffix (local version exists)")
+            else:
+                rocm_package_version += "+asan"
+                _log(f"ASAN variant  : adding '+asan' suffix (no local version)")
 
         _log(f"Full version  : '{rocm_package_version}'")
 
