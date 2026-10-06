@@ -18,9 +18,10 @@ filename carries the stream and the two layout shapes install different files:
 
 The flat builds cover the key paths. Those were renamed away from generic
 ``rocm`` names as a precaution; this checks that the built archive ships the
-renamed paths and not the previous ones. The builds also check the
-stream-to-filename mapping in the archive: ``rc`` installs
-``amdrocm-stablerc``, not ``amdrocm-rc``.
+renamed paths and not the previous ones. The builds also check that each
+archive installs the repository file the builder names for its stream; the
+name itself (``rc`` installs ``amdrocm-stablerc``, not ``amdrocm-rc``) is
+pinned by the unit tests.
 
 Streams come from the builder's own table, so one added there is inspected here
 without another edit. A stream whose shape this module does not handle raises
