@@ -127,7 +127,19 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_provide_package(rocPRIM rocprim lib/cmake/rocprim)
   therock_cmake_subproject_activate(rocPRIM)
 
-  if(THEROCK_BUILD_TESTING)
+  set(_rocprim_tests_enabled ON)
+  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_rocprim_tests_targets rocPRIM_tests ${THEROCK_AMDGPU_TARGETS})
+    if(NOT _rocprim_tests_targets)
+      message(STATUS
+        "rocPRIM_tests: no supported gfx targets remain after filtering "
+        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
+      set(_rocprim_tests_enabled OFF)
+    endif()
+  endif()
+
+
+  if(THEROCK_BUILD_TESTING AND _rocprim_tests_enabled)
     ##############################################################################
     # rocPRIM tests
     ##############################################################################
@@ -164,7 +176,7 @@ if(THEROCK_ENABLE_PRIM)
     )
     therock_cmake_subproject_activate(rocPRIM_tests)
 
-  endif()
+  endif(THEROCK_BUILD_TESTING AND _rocprim_tests_enabled)
 
   therock_cmake_subproject_declare(hipCUB
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipcub"
@@ -232,7 +244,7 @@ if(THEROCK_ENABLE_PRIM)
     rocThrust
   )
 
-  if(THEROCK_BUILD_TESTING)
+  if(THEROCK_BUILD_TESTING AND _rocprim_tests_enabled)
     list(APPEND _prim_subproject_deps rocPRIM_tests)
   endif()
 
