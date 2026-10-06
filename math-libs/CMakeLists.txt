@@ -112,6 +112,15 @@ if(THEROCK_ENABLE_PRIM)
   # subproject (THEROCK_ENABLE_LIBHIPCXX), so it is disabled here.
   ##############################################################################
 
+  # hipccl3 installs legacy include/<component> -> include/hipccl/<component>
+  # symlinks as a Linux migration aid; on Windows they stage as broken reparse
+  # points (WinError 123), so disable them there.
+  if(WIN32)
+    set(_hipccl_legacy_symlinks OFF)
+  else()
+    set(_hipccl_legacy_symlinks ON)
+  endif()
+
   therock_cmake_subproject_declare(hipCCL
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipccl/hipccl3"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipCCL"
@@ -121,6 +130,7 @@ if(THEROCK_ENABLE_PRIM)
       -DROCM_DIR=
       -DHIPCCL_BUILD_ALL=ON
       -DHIPCCL_BUILD_LIBHIPCXX=OFF
+      -DHIPCCL_INSTALL_LEGACY_HEADER_SYMLINKS=${_hipccl_legacy_symlinks}
       -DBUILD_TEST=OFF
     COMPILER_TOOLCHAIN
       amd-hip
@@ -154,6 +164,7 @@ if(THEROCK_ENABLE_PRIM)
         -DROCM_DIR=
         -DHIPCCL_BUILD_ALL=ON
         -DHIPCCL_BUILD_LIBHIPCXX=OFF
+        -DHIPCCL_INSTALL_LEGACY_HEADER_SYMLINKS=${_hipccl_legacy_symlinks}
         -DBUILD_TEST=ON
         -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
         -DUSE_SYSTEM_LIB=ON
