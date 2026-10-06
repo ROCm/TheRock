@@ -314,7 +314,7 @@ def _store_in_cache(src: Path, cache_file: Path) -> None:
         return
     # Unique temp name: distinct pointer files referencing the same content hash
     # are materialized by separate workers, which would otherwise race on a
-    # shared `<cache_file>.tmp` path. os.replace stays atomic and idempotent.
+    # shared `<cache_file>.tmp` path.
     tmp = cache_file.with_suffix(f"{cache_file.suffix}.{uuid.uuid4().hex}.tmp")
     try:
         try:
@@ -322,10 +322,14 @@ def _store_in_cache(src: Path, cache_file: Path) -> None:
         except OSError:
             shutil.copy2(src, tmp)
         try:
-            os.replace(tmp, cache_file)
-        except PermissionError:
-            # Windows raises PermissionError when two workers race to os.replace
-            # the same cache_file simultaneously (POSIX permits this silently).
+            if sys.platform == "win32":
+                # Windows rename refuses to overwrite an existing entry. Even a
+                # successful replace can briefly deny readers access to the old
+                # file while it is being deleted, so leave the winner in place.
+                os.rename(tmp, cache_file)
+            else:
+                os.replace(tmp, cache_file)
+        except (FileExistsError, PermissionError):
             # If the winner already wrote the correct content, treat as success.
             if cache_file.exists() and src.stat().st_size == cache_file.stat().st_size:
                 if _md5_of(src) == _md5_of(cache_file):

@@ -412,9 +412,8 @@ class TestStoreInCacheConcurrency(unittest.TestCase):
     Multiple .dvc pointer files can reference files with the same content hash
     (e.g. identical small tensors in different subdirectories). When fetched
     concurrently, all workers call _store_in_cache with the same cache_file
-    path. Each uses a unique temp name, but the final os.replace races on
-    Windows and raises PermissionError. The fix catches PermissionError and
-    verifies the winner wrote the correct content before treating it as success.
+    path. Windows publication must leave a competing winner in place and
+    verify its contents before accepting a collision as success.
     """
 
     def test_concurrent_calls_with_same_cache_file_do_not_raise(self):
@@ -424,7 +423,7 @@ class TestStoreInCacheConcurrency(unittest.TestCase):
             md5 = _md5_hex(data)
             cache_file = fda._cache_path(tmp / "cache", md5)
 
-            # Simulate the Windows race: both workers arrive at os.replace
+            # Simulate the Windows race: both workers arrive at publication
             # concurrently. Caller 1 writes cache_file; caller 2 then gets
             # PermissionError because Windows won't replace a file another
             # handle still has open. We model this with a two-phase barrier:
@@ -437,7 +436,7 @@ class TestStoreInCacheConcurrency(unittest.TestCase):
             gate = threading.Barrier(2)
             done = threading.Event()
 
-            def patched_replace(src, dst):
+            def patched_publish(src, dst):
                 with lock:
                     call_count[0] += 1
                     n = call_count[0]
@@ -462,9 +461,11 @@ class TestStoreInCacheConcurrency(unittest.TestCase):
                 except Exception as e:
                     errors.append(e)
 
-            # Patch fda's reference to os.replace (not the os module itself)
-            # so both threads see the same controlled replacement.
-            with mock.patch.object(fda.os, "replace", side_effect=patched_replace):
+            # Exercise Windows publication and its PermissionError handling.
+            with (
+                mock.patch.object(fda, "sys", platform="win32"),
+                mock.patch.object(fda.os, "rename", side_effect=patched_publish),
+            ):
                 threads = [
                     threading.Thread(target=worker, args=(src1,)),
                     threading.Thread(target=worker, args=(src2,)),
@@ -479,6 +480,53 @@ class TestStoreInCacheConcurrency(unittest.TestCase):
             self.assertEqual(cache_file.read_bytes(), data)
             leftover = list(cache_file.parent.glob("*.tmp"))
             self.assertEqual(leftover, [], f"leftover temp files: {leftover}")
+
+    def test_windows_publication_preserves_winning_cache_entry(self) -> None:
+        data = b"shared content"
+        for winner_data in (data, b"broken content", b"truncated"):
+            with self.subTest(
+                winner_data=winner_data
+            ), tempfile.TemporaryDirectory() as t:
+                tmp = Path(t)
+                src = tmp / "source"
+                src.write_bytes(data)
+                winner = tmp / "winner"
+                winner.write_bytes(winner_data)
+                cache_file = fda._cache_path(tmp / "cache", _md5_hex(data))
+                original_link = os.link
+                original_rename = os.rename
+
+                def link_and_publish_winner(source: Path, target: Path) -> None:
+                    original_link(source, target)
+                    # Another worker publishes after our cache-miss check.
+                    original_link(winner, cache_file)
+
+                def windows_rename(source: Path, target: Path) -> None:
+                    if sys.platform == "win32":
+                        original_rename(source, target)
+                    else:
+                        # Model Windows' no-overwrite rename with real files.
+                        original_link(source, target)
+                        source.unlink()
+
+                with (
+                    mock.patch.object(fda, "sys", platform="win32"),
+                    mock.patch.object(
+                        fda.os, "link", side_effect=link_and_publish_winner
+                    ),
+                    mock.patch.object(fda.os, "rename", side_effect=windows_rename),
+                ):
+                    if winner_data == data:
+                        fda._store_in_cache(src, cache_file)
+                    else:
+                        with self.assertRaises(FileExistsError):
+                            fda._store_in_cache(src, cache_file)
+
+                # Replacing the winner creates a Windows delete/rename window
+                # during which readers can get PermissionError opening it.
+                self.assertTrue(cache_file.samefile(winner))
+                self.assertEqual(cache_file.read_bytes(), winner_data)
+                self.assertEqual(list(cache_file.parent.glob("*.tmp")), [])
 
 
 class TestMaterializeFile(unittest.TestCase):
