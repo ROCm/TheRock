@@ -119,9 +119,10 @@ A project's GPU kernels can be measured along with its host code. It is opt-in
 per project, through `device_coverage=True` in `COVERAGE_PROJECTS`, and only
 worth it where the reported objects contain kernels: rocRAND's generators are
 all kernels, while hipRAND's and hipDNN's libraries have none. It is enabled
-for rocRAND, rocSPARSE and rocSOLVER. rocSPARSE's and rocSOLVER's own coverage
-options already instrument their kernels, so for them it only drops the
-device-side negation; rocRAND's option is host-only, so the flags are added.
+for rocRAND, rocSPARSE and rocSOLVER. rocSOLVER's own coverage option already
+instruments its kernels, so for it this only drops the device-side negation;
+rocRAND's option is host-only and rocSPARSE's negates device instrumentation
+itself, so for those two the device flags are what instrument the kernels.
 
 ### Building with device coverage
 
@@ -135,7 +136,8 @@ pair in place of the negation:
 ```
 
 Being last on the compile line, it overrides an `-Xarch_host`-only upstream
-option such as rocRAND's, just as the negation overrides unqualified ones. An
+option such as rocRAND's, or rocSPARSE's own device-side negation, just as the
+negation overrides unqualified ones. An
 explicit `-D<PROJECT>_ENABLE_DEVICE_COVERAGE` wins in either direction, so a
 local build can measure rocRAND's host code alone, or try another project's
 kernels:
@@ -146,21 +148,31 @@ cmake -B build -GNinja . \
   -DROCRAND_ENABLE_COVERAGE=ON
 ```
 
-No other flag is needed, because the toolchain supplies the rest:
+The rest comes from the toolchain, with one link-order correction:
 
 | Piece                                          | Supplied by                                                                                       |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | Device runtime, amdgcn `libclang_rt.profile.a` | amd-llvm's amdgcn-amd-amdhsa runtimes build; the linker wrapper links it into each device image   |
-| Host collector, `libclang_rt.profile_rocm.a`   | the driver, on any `--hip-link` (which `hip::device` adds)                                        |
+| Host collector, `libclang_rt.profile_rocm.a`   | `therock_coverage_device.cmake`, ahead of the project's own link libraries                        |
 | Reading device counters back at exit           | `libclang_rt.profile_rocm.a`'s exit handler                                                       |
 | Not aborting on an unresolved descriptor       | the HIP runtime, since [ROCm/rocm-systems#10894](https://github.com/ROCm/rocm-systems/pull/10894) |
 
-The include `therock_subproject.cmake` generates for the project also runs
-`cmake/therock_coverage_device.cmake`, which fails the configure when the
-compiler has no amdgcn profile runtime. The linker wrapper only forwards the
-profile flags to the device link when that runtime exists, so otherwise the
-problem would surface later, as a device link error or a report without device
-coverage.
+The include `therock_subproject.cmake` generates for the project runs
+`cmake/therock_coverage_device.cmake`, which does two things:
+
+- It fails the configure when the compiler has no amdgcn profile runtime, or no
+  `libclang_rt.profile_rocm.a`. The linker wrapper only forwards the profile
+  flags to the device link when the first exists, so otherwise the problem
+  would surface later, as a device link error or a report without device
+  coverage.
+- It puts `libclang_rt.profile_rocm.a` in front of `<LINK_LIBRARIES>` in every
+  link rule. Only that archive's copy of `InstrProfilingFile.o` reads device
+  counters back at exit; `libclang_rt.profile.a`'s has the call compiled out.
+  The driver orders them correctly on a HIP link with `-fprofile-instr-generate`,
+  but rocSPARSE keeps that flag off its link and names
+  `clang_rt.profile clang_rt.profile_rocm` itself, in that order, so its kernels
+  were counted and never written. A link with no instrumented objects pulls
+  nothing from the archive.
 
 RCCL needed far more than this
 ([ROCm/rocm-systems#10650](https://github.com/ROCm/rocm-systems/pull/10650)):
@@ -178,13 +190,26 @@ the host profiles as they are.
 
 Kpack-split builds keep device code out of the host libraries, in one archive
 per artifact and GPU target (`.kpack/rand_lib_gfx942.kpack` holds rocRAND's
-and hipRAND's), keyed `<stage prefix>/<binary>#<n>`. Two consequences:
+and hipRAND's), keyed `<stage prefix>/<binary>#<n>`. Three consequences:
+
+- The split moves a fat binary's program header table to a trailing `PT_LOAD`
+  whose address is not its file offset, and pins the two together again only
+  for executables. The profile runtime in an instrumented shared library finds
+  its headers at `&__ehdr_start + e_phoff` (`__llvm_write_binary_ids`), so it
+  reads the wrong memory when it writes its profile at exit: the test process
+  segfaults with an empty profile (librocsparse.so, librocsolver.so), or the
+  headers it parses are garbage (librocrand.so). This hits host-only coverage
+  just the same. `install_rocm_code_coverage_build.py` therefore pins the
+  headers of every instrumented binary it installs, with the same
+  normalization rocm_kpack applies to executables
+  (`build_tools/_therock_utils/elf_phdr.py`).
 
 - The hybrid install has to swap the project's code objects into the baseline's
   archive, or the instrumented host library runs uninstrumented kernels.
   `install_rocm_code_coverage_build.py --replace-device-code` replaces only the
   entries under the project's folder, so siblings in the same archive keep the
   baseline's kernels.
+
 - `llvm-cov` needs those code objects to map device counters back to source.
   `merge_coverage_report.py --device-code` extracts the ones that carry a
   coverage mapping and adds them as `-object` arguments.

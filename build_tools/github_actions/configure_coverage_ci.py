@@ -276,10 +276,11 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         object_globs=["lib/librocsparse.so*"],
         fetch_artifact_args="--sparse",
         codecov_flag="rocSPARSE",
-        # Upstream's option already instruments the kernels, which make up
-        # nearly all of librocsparse.so; this only stops the device-side
-        # negation. The readback at exit aborts the test process unless the
-        # HIP runtime includes ROCm/rocm-systems#10894.
+        # Upstream's option negates device instrumentation itself and links
+        # clang_rt.profile ahead of clang_rt.profile_rocm, so device coverage
+        # here leans on both overrides in therock_coverage_device.cmake: the
+        # device flags last on the compile line, the collector first on the
+        # link line. Kernels make up nearly all of librocsparse.so.
         device_coverage=True,
     ),
     "hipsparse": CoverageProject(

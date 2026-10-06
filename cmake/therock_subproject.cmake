@@ -984,15 +984,16 @@ function(therock_cmake_subproject_activate target_name)
   # Device coverage, for the projects that set <PROJECT>_ENABLE_DEVICE_COVERAGE
   # (CMakeLists.txt defaults it from the registry's device_coverage), puts the
   # positive form of the same pair in the same place, so it overrides an
-  # -Xarch_host-only upstream option (rocRAND's) just as the negation overrides
-  # an unqualified one. The toolchain does the rest on its own: the linker
-  # wrapper links the amdgcn libclang_rt.profile.a into every device image, and
-  # a --hip-link brings in libclang_rt.profile_rocm.a, whose exit handler copies
-  # each translation unit's device counters into a profile named after the GPU
-  # target. The two failures above are handled downstream: the HIP runtime now
-  # returns an error for a descriptor it cannot resolve instead of aborting
-  # (ROCm/rocm-systems#10894), and the test job renames the device profiles
-  # instead of dropping them.
+  # -Xarch_host-only upstream option (rocRAND's) or a project's own device-side
+  # negation (rocSPARSE's) just as the negation overrides an unqualified one.
+  # The linker wrapper then links the amdgcn libclang_rt.profile.a into every
+  # device image, and therock_coverage_device.cmake puts
+  # libclang_rt.profile_rocm.a ahead of the project's link libraries; its exit
+  # handler copies each translation unit's device counters into a profile named
+  # after the GPU target. The two failures above are handled downstream: the
+  # HIP runtime now returns an error for a descriptor it cannot resolve instead
+  # of aborting (ROCm/rocm-systems#10894), and the test job renames the device
+  # profiles instead of dropping them.
   set(_coverage_project_include_arg)
   set(_coverage_configure_depends)
   if(NOT MSVC AND ${_coverage_var_name})
