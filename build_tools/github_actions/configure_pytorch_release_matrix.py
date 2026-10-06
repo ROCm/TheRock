@@ -238,7 +238,7 @@ def generate_pytorch_matrix_for_release_type(
 
 
 def check_source_versions(ref: str, sources: dict[str, GitSourceInfo]) -> list[str]:
-    """Return version-policy errors for resolved source entries.
+    """Return version-policy errors for computed manifest versions.
 
     Release refs require final versions; other refs require prereleases, except
     for Triton. Returning all errors lets the matrix check report them together.
@@ -272,7 +272,7 @@ def check_source_versions(ref: str, sources: dict[str, GitSourceInfo]) -> list[s
 
 
 def check_matrix_versions(matrix: list[dict[str, str]], *, platform: str) -> None:
-    """Check package versions in source repositories once per selected ref.
+    """Check computed manifest package versions once per selected ref.
 
     Refs starting with "release/" require final (non-prerelease) package versions.
     Other refs require prerelease versions, except for Triton. All versions must

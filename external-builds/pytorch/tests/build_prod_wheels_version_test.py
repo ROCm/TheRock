@@ -110,6 +110,33 @@ class ComputeBuildVersionTest(unittest.TestCase):
             version = compute_build_version(self.source_dir, "+rocm7.10.0", "dev")
         self.assertEqual(version, "2.12.0a0+rocm7.10.0")
 
+    def test_release_strips_only_legacy_a0(self):
+        for base_version, expected in (
+            ("0.29.0a0", "0.29.0"),
+            ("2.14.0a0", "2.14.0"),
+            ("0.29.0", "0.29.0"),
+            ("0.29.0a1", "0.29.0a1"),
+            ("0.29.0b1", "0.29.0b1"),
+            ("0.29.0rc1", "0.29.0rc1"),
+            ("0.29.0.dev1", "0.29.0.dev1"),
+        ):
+            with self.subTest(base_version=base_version):
+                (self.source_dir / "version.txt").write_text(base_version)
+                version = compute_build_version(
+                    self.source_dir,
+                    "+rocm10.2.0a20261006",
+                    "nightly",
+                    strip_legacy_a0=True,
+                )
+                self.assertEqual(version, expected + "+rocm10.2.0a20261006")
+
+    def test_nightly_keeps_a0(self):
+        (self.source_dir / "version.txt").write_text("0.29.0a0")
+        self.assertEqual(
+            compute_build_version(self.source_dir, "+rocm10.2.0", "ci"),
+            "0.29.0a0+rocm10.2.0",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -416,6 +416,7 @@ jobs:
             --output-dir "${PACKAGE_DIST_DIR}" \
             ${cache_flag} \
             --release-type="${BUILD_RELEASE_TYPE}" \
+            --pytorch-git-ref="${PYTORCH_GIT_REF}" \
             --pytorch-rocm-arch "${AMDGPU_TARGETS}" \
             ${{ env.optional_build_prod_arguments }}
 
