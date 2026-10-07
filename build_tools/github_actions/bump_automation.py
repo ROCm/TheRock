@@ -725,7 +725,7 @@ def create_therock_bump(submodule: str, token: str) -> None:
         )
 
         try:
-            # Add CI labels to the PR (run-all-archs + asan for full coverage)
+            # Add the submodule-specific CI labels to the PR
             gh_api(
                 token,
                 f"repos/{THEROCK_REPO}/issues/{pr['number']}/labels",

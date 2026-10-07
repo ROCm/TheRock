@@ -507,11 +507,9 @@ class GitContext:
 
     @property
     def has_llvm_submodule_changes(self) -> bool:
-        return bool(
-            {"compiler/amd-llvm"}
-            & set(self.changed_files or [])
-            & set(self.submodule_paths or [])
-        )
+        return "compiler/amd-llvm" in (
+            self.changed_files or []
+        ) and "compiler/amd-llvm" in (self.submodule_paths or [])
 
     def log(self) -> None:
         """Log git context for CI diagnostics."""
@@ -794,10 +792,8 @@ def should_skip_ci(
         print("  Skipping: 'ci:skip' PR label")
         return True
 
-    # Skip ASAN on PRs unless an enabling label is present.
-    # This avoids running expensive ASAN builds on every PR.
-    # Labels that enable ASAN CI:
-    #   - ci:asan / ci:host-asan: explicit opt-in for ASAN testing
+    # LLVM pointer bumps run host-ASan debug automatically. Other PRs require
+    # ci:asan or ci:host-asan to opt in to expensive sanitizer builds.
     has_asan_label = (
         "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
     )
@@ -805,6 +801,7 @@ def should_skip_ci(
         ci_inputs.is_pull_request
         and ci_inputs.build_variant == "asan"
         and not has_asan_label
+        and not git_context.has_llvm_submodule_changes
     ):
         print(
             "  Skipping: ASAN PR without enabling label (add 'ci:asan' or 'ci:host-asan' to enable)"
@@ -1349,6 +1346,11 @@ def _expand_build_config_for_platform(
             test_runner_kernel = label.split(":")[1]
             break
 
+    has_host_asan_bump = bool(
+        {"rocm-libraries", "rocm-systems", "compiler/amd-llvm"}
+        & set(git_context.changed_files or [])
+        & set(git_context.submodule_paths or [])
+    )
     per_family_info: list[dict] = []
     for family_name in families:
         # select_targets already validates family names and filters by
@@ -1392,11 +1394,6 @@ def _expand_build_config_for_platform(
         if build_variant.startswith("host-asan"):
             # Library, system, and LLVM bumps exercise the host-ASan sandbox
             # in addition to scheduled and manually dispatched runs.
-            has_host_asan_bump = bool(
-                {"rocm-libraries", "rocm-systems", "compiler/amd-llvm"}
-                & set(git_context.changed_files or [])
-                & set(git_context.submodule_paths or [])
-            )
             if not (
                 ci_inputs.is_schedule
                 or ci_inputs.is_workflow_dispatch
