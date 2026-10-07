@@ -77,9 +77,6 @@ setup(
             "hipconfig=rocm_sdk_core._cli:hipconfig",
             "hipify-clang=rocm_sdk_core._cli:hipify_clang",
             "offload-arch=rocm_sdk_core._cli:offload_arch",
-            "roc-obj=rocm_sdk_core._cli:roc_obj",
-            "roc-obj-extract=rocm_sdk_core._cli:roc_obj_extract",
-            "roc-obj-ls=rocm_sdk_core._cli:roc_obj_ls",
         ]
         + (
             [

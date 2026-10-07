@@ -355,12 +355,13 @@ def _matches_forbidden(filename: str, pattern: str) -> bool:
     """Return True if `filename` matches a forbidden glob `pattern`.
 
     Handles `**/<x>` patterns so they also match root-level files (e.g. `.env`).
+    Matching is case-sensitive on every host because these are repository paths.
     """
     # GitHub returns POSIX-style paths.
-    if fnmatch.fnmatch(filename, pattern):
+    if fnmatch.fnmatchcase(filename, pattern):
         return True
     # Allow '**/<x>' patterns to also match root-level files (e.g. '.env').
-    if pattern.startswith("**/") and fnmatch.fnmatch(filename, pattern[3:]):
+    if pattern.startswith("**/") and fnmatch.fnmatchcase(filename, pattern[3:]):
         return True
     return False
 
@@ -372,13 +373,14 @@ def _is_test_file(filename: str, patterns: Iterable[str]) -> bool:
     '**/test/gtest/**' matches any file under a test/gtest/ directory).
     Patterns without a '/' are matched against the BASENAME only
     (e.g. 'test_*', '*_test.*').
+    Matching is case-sensitive on every host because these are repository paths.
     """
     base = Path(filename).name
     for pat in patterns:
         if "/" in pat:
             if _matches_forbidden(filename, pat):
                 return True
-        elif fnmatch.fnmatch(base, pat):
+        elif fnmatch.fnmatchcase(base, pat):
             return True
     return False
 

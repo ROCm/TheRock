@@ -652,7 +652,8 @@ def apply_patches(args, projects):
         # Note that this does not track the dirty state of the tree. If full
         # fidelity hashes of the tree state are needed for development/dirty
         # trees, then another mechanism must be used.
-        patches_hash = hashlib.sha1()
+        # Fingerprint patch contents for change detection, not authentication.
+        patches_hash = hashlib.sha1(usedforsecurity=False)
         for patch_file in patch_files:
             patch_contents = Path(patch_file).read_bytes()
             patches_hash.update(patch_contents)
