@@ -250,6 +250,18 @@ def generate_rpm_postscripts(pkg_info, config: PackageConfig):
     # This will hold rendered RPM script sections
     rpm_script_sections = {}
 
+    alternatives_binaries = load_alternatives_binaries()
+    if pkg_name in alternatives_binaries:
+        render_context = {
+            **context,
+            "package_name": pkg_name,
+            "binaries": alternatives_binaries[pkg_name],
+        }
+        for script in ("postinst", "prerm"):
+            template = env.get_template(f"template/scripts/amdrocm-{script}.j2")
+            rpm_script_sections[EXEC_SCRIPTS[script]] = template.render(render_context)
+        return rpm_script_sections
+
     for script, rpm_section in EXEC_SCRIPTS.items():
         pattern = f"{pkg_name}-{script}.j2"
 
