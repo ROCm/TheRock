@@ -211,6 +211,7 @@ jobs:
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
+            ${{ inputs.build_variant_cmake_preset == '' && '-Dhip-tests_CMAKE_ARGS=-DHIP_TESTS_ENABLE_WERROR=ON -Dhip-clr_CMAKE_ARGS=-DCLR_ENABLE_WERROR=ON' || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
