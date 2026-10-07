@@ -66,12 +66,14 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 run-name: Build Windows MSI packages (${{ inputs.packages }}, ${{ inputs.rocm_version }}${{ inputs.release_type && format(', {0}', inputs.release_type) || '' }})
 
 jobs:
   build:
+    permissions:
+      contents: read
+      id-token: write # Authenticate to AWS to upload MSI packages.
     name: Build MSI
     # The build is short and cheap, so use a GitHub-hosted runner rather than a
     # self-hosted scale-set.
@@ -91,6 +93,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 

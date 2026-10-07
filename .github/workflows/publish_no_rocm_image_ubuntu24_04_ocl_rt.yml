@@ -14,7 +14,8 @@ on:
 
 permissions:
   contents: read
-  packages: write
+  # Every job publishes a container image to GHCR.
+  packages: write # zizmor: ignore[excessive-permissions]
 
 jobs:
   publish_no_rocm_image_ubuntu24_04_ocl_rt:
