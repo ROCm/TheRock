@@ -67,7 +67,7 @@ def download_ccache_logs(
     dctx = zstandard.ZstdDecompressor()
     reader = dctx.stream_reader(io.BytesIO(data))
     with tarfile.open(fileobj=reader, mode="r|") as tf:
-        tf.extractall(out_dir, filter="tar")
+        tf.extractall(out_dir, filter="data")
 
     if not log_file.exists():
         print("ERROR: ccache.log not found in archive", file=sys.stderr)
