@@ -64,6 +64,10 @@ on:
         description: "Set USE_ASAN=1 for the PyTorch build"
         type: boolean
         default: false
+      pytorch_git_refs:
+        description: "Comma-separated PyTorch refs to build (empty for the release-type default)"
+        type: string
+        default: ""
       build_runs_on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
@@ -130,6 +134,10 @@ on:
         description: "Set USE_ASAN=1 for the PyTorch build"
         type: boolean
         default: false
+      pytorch_git_refs:
+        description: "Comma-separated PyTorch refs to build (empty for the release-type default)"
+        type: string
+        default: ""
       build_runs_on:
         description: "Build runner label"
         type: string
@@ -161,6 +169,7 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
       PYTHON_VERSION: ${{ inputs.python_version }}
+      PYTORCH_GIT_REFS: ${{ inputs.pytorch_git_refs }}
 
     steps:
       - name: "Quartz - started - release PyTorch wheels"
@@ -187,6 +196,7 @@ jobs:
         run: |
           python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
             --python-versions="${PYTHON_VERSION}" \
+            --pytorch-git-refs="${PYTORCH_GIT_REFS}" \
             --platform=linux \
             --release-type="${BUILD_RELEASE_TYPE}" \
             --amdgpu-families="${AMDGPU_FAMILIES}"

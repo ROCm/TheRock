@@ -48,7 +48,7 @@ on:
       python_version:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
-        default: ""
+        default: "3.12"
   workflow_dispatch:
     inputs:
       release_type:
@@ -74,7 +74,7 @@ on:
       python_version:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
-        default: ""
+        default: "3.12"
 
 permissions:
   contents: read
