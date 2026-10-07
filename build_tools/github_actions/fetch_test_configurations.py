@@ -343,7 +343,9 @@ test_matrix = {
     # declarations (e.g. gfx1103, gfx115X) would try to run all ~417 configs.
     #
     # In Math CI (4 xdist workers) this suite takes up to 2h03 on gfx950 and
-    # 64 min on gfx942. Runs unsharded; the timeout is sized for gfx950.
+    # 64 min on gfx942. Only gfx942 is on the PR path (gfx950 and gfx90a are
+    # postsubmit, gfx120X-all is nightly), so it runs unsharded; the timeout is
+    # sized for gfx950.
     #
     # Until the pinned rocm-libraries ships the hw-common category,
     # pytest_runner.py skips this job with a warning instead of failing.
