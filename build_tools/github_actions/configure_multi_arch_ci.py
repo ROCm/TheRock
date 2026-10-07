@@ -1800,7 +1800,8 @@ def expand_build_configs(
     """Build a BuildConfig for each platform that supports the variant.
 
     Returns BuildConfigs with a BuildConfig per platform, or None for
-    platforms where the variant isn't available or no families match.
+    platforms where the variant isn't available, no families match, or no
+    artifacts will be built or reused.
     """
     all_families = get_all_families_for_trigger_types(
         ["presubmit", "postsubmit", "nightly"]
@@ -1834,6 +1835,15 @@ def expand_build_configs(
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
 
+    # Prebuilt stages still supply artifacts; only SKIP removes a stage's work.
+    topology = get_topology()
+    active_artifacts = [
+        topology.artifacts[name]
+        for stage in topology.get_build_stages()
+        if jobs.build_rocm.stage_decisions.get(stage.name) != JobAction.SKIP
+        for name in topology.get_produced_artifacts(stage.name)
+    ]
+
     for platform, families, build_only, test_only in [
         (
             "linux",
@@ -1848,6 +1858,13 @@ def expand_build_configs(
             targets.windows_test_only_families,
         ),
     ]:
+        if not any(
+            artifact.platform in (None, platform)
+            and platform not in artifact.disable_platforms
+            for artifact in active_artifacts
+        ):
+            print(f"  Platform {platform} has no artifacts to build or reuse, skipping")
+            continue
         variant_config = all_build_variants.get(platform, {}).get(build_variant)
         if not variant_config:
             print(

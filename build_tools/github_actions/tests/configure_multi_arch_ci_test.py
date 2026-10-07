@@ -2225,6 +2225,54 @@ class TestWriteOutputs(unittest.TestCase):
         self.assertIn("enable_build_jobs=false", github_output)
         self.assertTrue(step_summary.startswith("## Multi-Arch CI Configuration"))
 
+    def test_platform_outputs_follow_selected_stages(self):
+        """Linux-only stages must not launch Windows artifact consumers.
+
+        Prebuilt stages count as work, but only inside the build allowlist.
+        Exercise the full setup pipeline and the outputs used by workflow gates.
+        """
+        cases = [
+            (["emulation"], "", False),
+            (["emulation"], "emulation", False),
+            (["emulation"], "compiler-runtime", False),
+            (["compiler-runtime"], "", True),
+            (["compiler-runtime"], "compiler-runtime", True),
+            ([], "", True),
+            ([], "all", True),
+        ]
+        for stages, prebuilt, expect_windows in cases:
+            with (
+                self.subTest(stages=stages, prebuilt=prebuilt),
+                patch.dict(os.environ, {"STAGE_REUSE_MODE": "dry-run"}),
+            ):
+                inputs = cm.CIInputs(
+                    run_id="12345",
+                    event_name="pull_request",
+                    commit_ref="feature",
+                    base_ref="HEAD^",
+                    build_variant="release",
+                    linux_amdgpu_families=["gfx94x"],
+                    windows_amdgpu_families=["gfx110x"],
+                    build_stages=stages,
+                    prebuilt_stages=prebuilt,
+                    baseline_run_id="123" if prebuilt else "",
+                )
+                outputs = cm.configure(inputs, cm.GitContext.empty())
+                github_output, _ = self._write_outputs(outputs)
+                values = dict(line.split("=", 1) for line in github_output.splitlines())
+                linux = json.loads(values["linux_build_config"])
+                self.assertEqual(linux["dist_amdgpu_families"], "gfx94X-dcgpu")
+                if expect_windows:
+                    windows = json.loads(values["windows_build_config"])
+                    self.assertEqual(windows["dist_amdgpu_families"], "gfx110X-all")
+                    self.assertEqual(linux["windows_amdgpu_families"], "gfx110X-all")
+                    if prebuilt:
+                        self.assertIn("compiler-runtime", windows["prebuilt_stages"])
+                        self.assertEqual(windows["baseline_run_id"], "123")
+                else:
+                    self.assertEqual(values["windows_build_config"], "")
+                    self.assertEqual(linux["windows_amdgpu_families"], "")
+
 
 # ---------------------------------------------------------------------------
 # End-to-end: configure() pipeline
