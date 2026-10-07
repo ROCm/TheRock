@@ -1465,30 +1465,7 @@
         "Artifact": "prim",
         "Artifact_Subdir": [
           {
-            "Name": "rocPRIM_tests",
-            "Components": [
-              "test"
-            ]
-          },
-          {
-            "Name": "hipCUB",
-            "Components": [
-              "test"
-            ]
-          },
-          {
-            "Name": "rocThrust",
-            "Components": [
-              "test"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "rocwmma",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocWMMA",
+            "Name": "hipCCL_tests",
             "Components": [
               "test"
             ]
@@ -1538,22 +1515,10 @@
         "Artifact": "prim",
         "Artifact_Subdir": [
           {
-            "Name": "rocPRIM",
+            "Name": "hipCCL",
             "Components": [
               "dev",
               "doc"
-            ]
-          },
-          {
-            "Name": "hipCUB",
-            "Components": [
-              "dev"
-            ]
-          },
-          {
-            "Name": "rocThrust",
-            "Components": [
-              "dev"
             ]
           }
         ]
@@ -1566,18 +1531,6 @@
             "Components": [
               "lib",
               "dev"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "rocwmma",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocWMMA",
-            "Components": [
-              "dev",
-              "lib"
             ]
           }
         ]
@@ -2305,7 +2258,8 @@
               "dev"
             ]
           }
-        ]
+        ],
+        "Artifact_Gfxarch": "False"
       },
       {
         "Artifact": "host-blas",
@@ -2319,10 +2273,23 @@
               "dev"
             ]
           }
+        ],
+        "Artifact_Gfxarch": "False"
+      },
+      {
+        "Artifact": "rocwmma",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocWMMA",
+            "Components": [
+              "dev",
+              "lib"
+            ]
+          }
         ]
       }
     ],
-    "Gfxarch": "False"
+    "Gfxarch": "True"
   },
   {
     "Package": "amdrocm-ck",
