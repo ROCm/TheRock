@@ -245,11 +245,11 @@ jobs:
         id: install_compute_analyze
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: |
-          python build_tools/setup_venv.py ${COMPUTE_ANALYZE_VENV_DIR} \
-            --packages "rocm-profiler[compute-analyze]==${{ inputs.rocm_version }}" \
-            --index-url=${{ inputs.package_index_url }} \
+          python build_tools/setup_venv.py "${COMPUTE_ANALYZE_VENV_DIR}" \
+            --packages "rocm-profiler[compute-analyze]==${ROCM_VERSION}" \
+            --index-url="${PACKAGE_INDEX_URL}" \
             --extra-index-url=https://pypi.org/simple \
-            --find-links=${{ inputs.package_find_links_url }} \
+            --find-links="${PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
 
       - name: Show installed packages (compute-analyze)
@@ -257,10 +257,10 @@ jobs:
         run: |
           pip freeze
 
-      # Importing the analyze command pulls in the whole extra, so this fails if
-      # any of its dependencies is missing from the wheel metadata.
+      # Fails if any package pinned in rocprofiler-compute's requirements.txt is
+      # missing or at the wrong version.
       - name: Test rocprof-compute analyze
         if: ${{ !cancelled() && steps.install_compute_analyze.outcome == 'success' }}
         timeout-minutes: 5
         run: |
-          rocprof-compute analyze --help
+          rocprof-compute analyze --verify-deps
