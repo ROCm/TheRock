@@ -994,6 +994,29 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         # rocblas requires GPU, should be excluded when no runner available
         self.assertNotIn("rocblas", names)
 
+    def test_multi_gpu_excluded_when_gpu_tests_gated(self):
+        """Multi-GPU tests excluded when TEST_RUNS_ON is empty (trigger gating)."""
+        os.environ["TEST_RUNS_ON"] = ""
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx942-prod",
+                        "test-runs-on-multi-gpu": "linux-mi300-mgpu",
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        names = {job["job_name"] for job in self._get_components()}
+        self.assertNotIn("rccl", names)
+        self.assertNotIn("rocshmem", names)
+
 
 if __name__ == "__main__":
     unittest.main()
