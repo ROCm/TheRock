@@ -343,7 +343,10 @@ def configure(
     if not modified_paths:
         logger.info("No modified paths - skipping tests")
         return ConfigureResult(
-            changed_projects="", run_all_tests=False, skip_tests=True, test_type="standard"
+            changed_projects="",
+            run_all_tests=False,
+            skip_tests=True,
+            test_type="standard",
         )
 
     logger.info(f"Modified paths: {len(modified_paths)} files")
@@ -364,14 +367,20 @@ def configure(
                 github_repo,
             )
             return ConfigureResult(
-                changed_projects="", run_all_tests=True, skip_tests=False, test_type="quick"
+                changed_projects="",
+                run_all_tests=True,
+                skip_tests=False,
+                test_type="quick",
             )
 
         config = load_repo_config(config_path)
         if not config:
             logger.warning("No config loaded - running all tests")
             return ConfigureResult(
-                changed_projects="", run_all_tests=True, skip_tests=False, test_type="quick"
+                changed_projects="",
+                run_all_tests=True,
+                skip_tests=False,
+                test_type="quick",
             )
 
         own_projects = get_valid_prefixes(config)
@@ -389,7 +398,10 @@ def configure(
                 " - running all tests"
             )
             return ConfigureResult(
-                changed_projects="", run_all_tests=True, skip_tests=False, test_type="quick"
+                changed_projects="",
+                run_all_tests=True,
+                skip_tests=False,
+                test_type="quick",
             )
 
         logger.info(
@@ -407,7 +419,10 @@ def configure(
     if not has_non_skippable(modified_paths):
         logger.info("Only skippable files changed - skipping tests")
         return ConfigureResult(
-            changed_projects="", run_all_tests=False, skip_tests=True, test_type="standard"
+            changed_projects="",
+            run_all_tests=False,
+            skip_tests=True,
+            test_type="standard",
         )
 
     # Find changed projects from config
