@@ -109,6 +109,7 @@ jobs:
       windows_amdgpu_families: "none"
       build_pytorch: ${{ inputs.build_pytorch }}
       build_jax: false
+      build_native_linux: false
       python_version: ${{ inputs.python_version }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}

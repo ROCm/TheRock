@@ -153,7 +153,7 @@ jobs:
 
   build_tarballs:
     needs: [copy_prebuilt_stages, build_artifacts]
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && !contains(inputs.build_variant, 'asan') }}
     name: Build Tarballs
     uses: ./.github/workflows/multi_arch_build_tarballs.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
@@ -193,7 +193,7 @@ jobs:
 
   build_native_deb_packages:
     needs: [copy_prebuilt_stages, build_artifacts]
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
     name: Build DEB Packages
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
@@ -213,7 +213,7 @@ jobs:
 
   build_native_rpm_packages:
     needs: [copy_prebuilt_stages, build_artifacts]
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
     name: Build RPM Packages
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
@@ -344,9 +344,9 @@ jobs:
   # TODO: Consider pulling ROCm packages from the published release index instead
   #   of the artifact bucket now that this waits for release bucket publication.
   trigger_release_pytorch_wheels:
-    needs: [build_python_packages, publish_to_release_buckets]
+    needs: [copy_prebuilt_stages, build_python_packages, publish_to_release_buckets]
     name: Trigger Release PyTorch Wheels
-    if: ${{ inputs.build_pytorch != false && fromJSON(inputs.build_config).build_pytorch == true }}
+    if: ${{ !failure() && !cancelled() && inputs.build_pytorch != false && fromJSON(inputs.build_config).build_pytorch == true }}
     runs-on: ubuntu-24.04
     permissions:
       actions: write

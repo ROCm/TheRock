@@ -349,7 +349,11 @@ def main(argv: list[str]) -> None:
     backend = create_storage_backend(dry_run=args.dry_run)
     is_asan = _is_asan_variant(args.build_variant)
 
-    publish_tarballs(artifacts_root, args.release_type, backend, args.build_variant)
+    # Skip tarballs for ASAN builds (not built)
+    if is_asan:
+        logger.info("Skipping tarballs for ASAN build")
+    else:
+        publish_tarballs(artifacts_root, args.release_type, backend, args.build_variant)
     # ASAN python packages require --structured for proper variant isolation
     # (whl-next-asan index). In legacy mode, skip to avoid mixing with standard wheels.
     if is_asan and not args.structured:
@@ -370,10 +374,16 @@ def main(argv: list[str]) -> None:
             structured=args.structured,
             index=python_index,
         )
-    if artifacts_root.platform == "linux" and not args.skip_native_packages:
+    if (
+        artifacts_root.platform == "linux"
+        and not args.skip_native_packages
+        and not is_asan
+    ):
         publish_native_linux_packages(
             artifacts_root, args.release_type, backend, args.build_variant
         )
+    elif is_asan:
+        logger.info("Skipping native packages for ASAN build")
 
 
 if __name__ == "__main__":
