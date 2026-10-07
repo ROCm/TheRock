@@ -17,9 +17,6 @@
   "emulation/rocjitsu": [
     "rocjitsu"
   ],
-  "profilers/profiler-hub": [
-    "profiler-hub"
-  ],
   "projects/OpenCL-Headers": [
     "ocl-icd"
   ],
