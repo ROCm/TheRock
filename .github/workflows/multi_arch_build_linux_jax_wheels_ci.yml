@@ -44,6 +44,10 @@ on:
         description: "release builds the plugin and PJRT wheels for a ref whose jax/jaxlib are on PyPI; nightly also builds jax and jaxlib from the same checkout, dated from its HEAD commit (for refs with no PyPI release, such as jax-ml/jax@main)."
         type: string
         default: "release"
+      publish:
+        description: "Accepted so a release matrix row can run here unchanged. CI uploads to run-scoped artifacts and tests from there either way."
+        type: boolean
+        default: true
       rocm_version:
         description: "ROCm package version to install and build against."
         type: string

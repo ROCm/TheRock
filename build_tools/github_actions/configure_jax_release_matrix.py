@@ -72,6 +72,9 @@ JAX_REF_CONFIGS = {
         # main has no release on PyPI, so jax and jaxlib are built from the same
         # checkout and dated from its HEAD commit (see resolve_jax_version.py).
         "wheel_type": "nightly",
+        # Built nightly for the signal, but not published or tested until
+        # whl-next routes jax and jaxlib, which the tests install from.
+        "publish": False,
         # JAX dropped Python 3.11 support in 0.11.0.
         "exclude_python_versions": ["3.11"],
     },
@@ -130,8 +133,8 @@ def generate_jax_matrix(
     *,
     jax_refs: list[str],
     python_versions: list[str],
-) -> list[dict[str, str]]:
-    matrix: list[dict[str, str]] = []
+) -> list[dict[str, str | bool]]:
+    matrix: list[dict[str, str | bool]] = []
     for py in python_versions:
         for ref in jax_refs:
             ref_cfg = JAX_REF_CONFIGS[ref]
@@ -163,6 +166,9 @@ def generate_jax_matrix(
                     # "release" builds the plugin for a ref on PyPI; "nightly"
                     # also builds jax and jaxlib, for refs with no release.
                     "wheel_type": ref_cfg.get("wheel_type", "release"),
+                    # Whether the release build uploads and then tests the
+                    # wheels; CI uploads to run-scoped artifacts either way.
+                    "publish": ref_cfg.get("publish", True),
                 }
             )
 
@@ -175,7 +181,7 @@ def generate_jax_matrix_for_release_type(
     platform: str,
     python_versions: list[str] | None = None,
     jax_refs: list[str] | None = None,
-) -> list[dict[str, str]]:
+) -> list[dict[str, str | bool]]:
     if release_type not in RELEASE_TYPES:
         raise ValueError(f"Unknown release_type: {release_type!r}")
     if platform not in ["linux"]:

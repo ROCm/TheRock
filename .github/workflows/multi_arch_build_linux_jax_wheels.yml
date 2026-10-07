@@ -50,6 +50,10 @@ on:
         description: "release builds the plugin and PJRT wheels for a ref whose jax/jaxlib are on PyPI; nightly also builds jax and jaxlib from the same checkout, dated from its HEAD commit (for refs with no PyPI release, such as jax-ml/jax@main)."
         type: string
         default: "release"
+      publish:
+        description: "Upload the wheels to the release bucket and test them from there. False builds only."
+        type: boolean
+        default: true
       rocm_version:
         description: "ROCm package version to install and build against."
         type: string
@@ -131,6 +135,10 @@ on:
           - release
           - nightly
         default: release
+      publish:
+        description: "Upload the wheels to the release bucket and test them from there. False builds only."
+        type: boolean
+        default: true
       rocm_version:
         description: "ROCm package version to install and build against."
         type: string
@@ -323,6 +331,7 @@ jobs:
             --dist-dir "${PACKAGE_DIST_DIR}"
 
       - name: Configure AWS Credentials
+        if: ${{ inputs.publish }}
         uses: ./.github/actions/configure_aws_product_publication_credentials
         with:
           release_type: ${{ inputs.release_type }}
@@ -330,6 +339,7 @@ jobs:
 
       - name: Upload JAX wheels to release bucket
         id: publish_jax_wheels
+        if: ${{ inputs.publish }}
         run: |
           python build_tools/github_actions/publish_jax_to_release_bucket.py \
             --source-dir="${PACKAGE_DIST_DIR}" \
@@ -344,7 +354,8 @@ jobs:
 
   configure_jax_tests:
     name: Configure JAX Tests
-    if: ${{ inputs.test_amdgpu_family != '' }}
+    # The tests install from the release index, so unpublished wheels go untested.
+    if: ${{ inputs.publish && inputs.test_amdgpu_family != '' }}
     runs-on: ubuntu-24.04
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}

@@ -41,6 +41,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
                 "rocm_jax_ref",
                 "gfx_arch",
                 "wheel_type",
+                "publish",
             },
         )
 
@@ -101,6 +102,17 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertEqual(matrix[0]["jax_repository"], "jax-ml/jax")
         self.assertEqual(matrix[0]["rocm_jax_ref"], "rocm-jax-infra")
         self.assertEqual(matrix[0]["wheel_type"], "nightly")
+
+    def test_tip_builds_without_publishing(self):
+        # whl-next does not route jax/jaxlib yet and the tests install from
+        # there, so tip is a build-only signal while every pinned ref publishes.
+        matrix = m.generate_jax_matrix_for_release_type(
+            release_type="nightly", platform="linux"
+        )
+        published = {row["jax_ref"]: row["publish"] for row in matrix}
+        self.assertIs(published.pop("main"), False)
+        self.assertTrue(published)
+        self.assertTrue(all(published.values()))
 
     def test_release_refs_build_release_wheels(self):
         # Every pinned ref has a jax/jaxlib release on PyPI, so its plugin
