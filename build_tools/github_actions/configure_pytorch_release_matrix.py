@@ -14,6 +14,7 @@ _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from github_actions.github_actions_api import gha_append_step_summary, gha_set_output
+from github_actions.manifest_utils import GitSourceInfo
 
 # Build matrix configuration.
 RELEASE_TYPES = [
@@ -236,6 +237,78 @@ def generate_pytorch_matrix_for_release_type(
     return matrix
 
 
+def check_source_versions(ref: str, sources: dict[str, GitSourceInfo]) -> list[str]:
+    """Return version-policy errors for resolved source entries.
+
+    Release refs require final versions; other refs require prereleases, except
+    for Triton. Returning all errors lets the matrix check report them together.
+    """
+    # Matrix generation without version checks needs only the standard library.
+    from packaging.version import InvalidVersion, Version
+
+    errors: list[str] = []
+    for project, source in sources.items():
+        context = (
+            f"{ref}: {project} {source.version!r} ({source.repo}/tree/{source.commit})"
+        )
+        try:
+            version = Version(source.version or "")
+        except InvalidVersion:
+            errors.append(f"{context}: invalid package version")
+            continue
+        # is_prerelease includes dev releases as well as alpha, beta, and RC.
+        # https://packaging.pypa.io/en/stable/version.html#packaging.version.Version.is_prerelease
+        if ref.startswith("release/") and version.is_prerelease:
+            errors.append(f"{context}: expected a stable package version")
+        # Triton may use a final base version on nightly: torch pins the exact
+        # Triton wheel, including its git/ROCm local version, for compatibility.
+        elif (
+            not ref.startswith("release/")
+            and project != "triton"
+            and not version.is_prerelease
+        ):
+            errors.append(f"{context}: expected a prerelease package version")
+    return errors
+
+
+def check_matrix_versions(matrix: list[dict[str, str]], *, platform: str) -> None:
+    """Check package versions in source repositories once per selected ref.
+
+    Refs starting with "release/" require final (non-prerelease) package versions.
+    Other refs require prerelease versions, except for Triton. All versions must
+    be valid version strings. This checks the source version policy before builds.
+
+    Note:
+      * This queries GitHub at resolved commits, without checking out code.
+      * Future scripts/steps may check out different code from floating refs.
+    """
+
+    # The manifest resolver also imports packaging transitively.
+    from github_actions import generate_pytorch_source_manifest as source_manifest
+
+    # TODO(https://github.com/ROCm/TheRock/issues/5110): move this code into
+    #     generate_pytorch_source_manifest.py once that is used in workflows?
+
+    errors: list[str] = []
+    for ref in dict.fromkeys(row["pytorch_git_ref"] for row in matrix):
+        print(f"Checking '{ref}' ref for valid versions")
+        projects = source_manifest.default_projects_for_pytorch_ref(platform, ref)
+        sources = source_manifest.resolve_sources(
+            pytorch_ref=ref, version_suffix="", platform=platform, projects=projects
+        )
+        sources = source_manifest.fetch_versions(sources=sources, version_suffix="")
+        ref_errors = check_source_versions(ref, sources)
+        for error in ref_errors:
+            print(f"ERROR: {error}", flush=True)
+        errors.extend(ref_errors)
+        print()
+    if errors:
+        raise ValueError(
+            "PyTorch release matrix contains unexpected package versions:\n  "
+            + "\n  ".join(errors)
+        )
+
+
 def format_matrix_summary(
     *,
     release_type: str,
@@ -390,6 +463,17 @@ def main(argv: list[str] | None = None) -> int:
             "filtered out of this list for that ref's matrix entry."
         ),
     )
+    parser.add_argument(
+        "--check-versions",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Checks current package versions in the GitHub sources for each "
+            "project in the matrix and fails if any unexpected versions are detected. "
+            "Refs starting with release/ require final (non-prerelease) versions; "
+            "other refs require prerelease versions except for Triton."
+        ),
+    )
     args = parser.parse_args(argv)
 
     python_versions = _split_values(args.python_versions) or None
@@ -402,6 +486,8 @@ def main(argv: list[str] | None = None) -> int:
         amdgpu_families=args.amdgpu_families,
         platform=args.platform,
     )
+    if args.check_versions:
+        check_matrix_versions(matrix, platform=args.platform)
     gha_append_step_summary(
         format_matrix_summary(
             release_type=args.release_type,
