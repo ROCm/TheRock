@@ -302,10 +302,10 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
 
     # Per-family test runner table
     lines.append(
-        "| Platform | Family | GPU Runner | Multi-GPU Runner | CPU Runner | Scope |"
+        "| Platform | Family | GPU Runner | Multi-GPU Runner | CPU Runner | Scope | Tests |"
     )
     lines.append(
-        "|----------|--------|------------|------------------|------------|-------|"
+        "|----------|--------|------------|------------------|------------|-------|-------|"
     )
     for platform, config in [
         ("Linux", outputs.builds.linux),
@@ -331,7 +331,12 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
                 scope = "sanity check only"
             else:
                 scope = test_rocm.test_type
+            configuration = entry.get("test_configuration", {})
+            components = list(configuration.get("components", []))
+            if configuration.get("sanity_component"):
+                components.insert(0, configuration["sanity_component"])
+            tests = ", ".join(f"`{c['job_name']}`" for c in components) or "—"
             lines.append(
-                f"| {platform} | {family} | {runner} | {multi_gpu_runner} | {cpu_runner} | {scope} |"
+                f"| {platform} | {family} | {runner} | {multi_gpu_runner} | {cpu_runner} | {scope} | {tests} |"
             )
     lines.append("")

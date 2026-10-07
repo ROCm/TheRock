@@ -55,6 +55,7 @@ def _get_artifact_path(artifact_path: str) -> str:
 # keys it expands to. Use this when a single label should select multiple
 # related jobs without relying on name-prefix inference.
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
+    "libhipcxx": ["libhipcxx_amdclang", "libhipcxx_hiprtc"],
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
     "tensilelite": ["tensilelite", "tensilelite-common"],
 }
@@ -1206,23 +1207,24 @@ test_matrix = {
 }
 
 
-def run():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--platform",
-        type=str,
-        default=platform_module.system().lower(),
-        help="Platform to configure tests for (linux or windows)",
-    )
-    args, _ = parser.parse_known_args()
-    platform = args.platform
-    projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
-    amdgpu_families = os.getenv("AMDGPU_FAMILIES")
-    test_type = os.getenv("TEST_TYPE", "standard")
-    test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
-    build_variant = os.getenv("BUILD_VARIANT", "release")
-    skip_stages = os.getenv("SKIP_STAGES", "").split(",")
+def configure_tests(
+    *,
+    platform: str,
+    projects_to_test: str = "*",
+    amdgpu_families: str | None = None,
+    test_type: str = "standard",
+    test_labels: list[str] | None = None,
+    build_variant: str = "release",
+    test_runs_on: str | None = None,
+    test_runs_on_cpu: str | None = None,
+    platform_info: dict | None = None,
+) -> dict:
+    """Select and configure test jobs for one platform/family.
 
+    Used by multi-arch setup and standalone artifact testing. An empty GPU
+    runner disables GPU jobs; None discovers runners from the family config.
+    """
+    test_labels = test_labels or []
     # Check for ci:run-multi-gpu label to force multi-GPU tests
     enable_multi_gpu_by_label = "ci:run-multi-gpu" in test_labels
     if enable_multi_gpu_by_label:
@@ -1240,9 +1242,9 @@ def run():
     # Check if GPU runner was passed from configure_multi_arch_ci.py via workflow.
     # This carries the policy decision (e.g., trigger gating). When set to empty,
     # GPU tests are gated but CPU-only tests (linux_cpu_runner: True) can still run.
-    test_runs_on_from_workflow = os.getenv("TEST_RUNS_ON")
+    test_runs_on_from_workflow = test_runs_on
     # CPU runner: prefer workflow input, fall back to get_cpu_test_runner()
-    test_runs_on_cpu = os.getenv("TEST_RUNS_ON_CPU") or get_cpu_test_runner(platform)
+    test_runs_on_cpu = test_runs_on_cpu or get_cpu_test_runner(platform)
     gpu_tests_gated = test_runs_on_from_workflow == ""
     if gpu_tests_gated:
         logging.info(
@@ -1254,8 +1256,9 @@ def run():
         all_families = get_all_families_for_trigger_types(
             ["presubmit", "postsubmit", "nightly"]
         )
-        if shortened_family in all_families:
-            platform_info = all_families[shortened_family].get(platform, {})
+        if platform_info is not None or shortened_family in all_families:
+            if platform_info is None:
+                platform_info = all_families[shortened_family].get(platform, {})
             # Use policy-gated value from workflow if available, otherwise use static matrix
             if gpu_tests_gated:
                 # GPU tests are gated - don't use runner labels or defaults for GPU
@@ -1296,12 +1299,6 @@ def run():
     all_components = []
     for key in test_matrix:
         job_name = test_matrix[key]["job_name"]
-
-        # Sanity needs the compiler/runtime tools and libraries. Reused stages
-        # supply these artifacts; skipped stages neither build nor copy them.
-        if key == "sanity" and "compiler-runtime" in skip_stages:
-            logging.info("Excluding sanity: compiler-runtime stage is skipped")
-            continue
 
         # Resolve the individual gfx targets for the current family once, so both
         # include_family and exclude_family can match either the family group
@@ -1367,7 +1364,7 @@ def run():
         # Note: Sanity goes through the same all_components loop as other components, but is separated
         # into its own sanity_component GHA output after the loop (see gha_set_output below).
         if platform in test_matrix[key]["platform"] and (
-            key == "sanity" or key in project_array or "*" in project_array
+            key in project_array or "*" in project_array
         ):
             logging.info(f"Requesting job {job_name} with test_type {test_type}")
 
@@ -1552,11 +1549,51 @@ def run():
     )
     output_matrix = [c for c in all_components if c.get("job_name") != "sanity"]
 
+    return {
+        "sanity_component": sanity_component,
+        "components": output_matrix,
+        "platform": platform,
+    }
+
+
+def parse_test_labels(raw: str) -> list[str]:
+    """Accept workflow JSON lists or a comma-separated manual test filter."""
+    if not raw.strip():
+        return []
+    if raw.lstrip().startswith("["):
+        labels = ast.literal_eval(raw)
+        if not isinstance(labels, list) or not all(isinstance(v, str) for v in labels):
+            raise ValueError(
+                "test_labels must be a list of strings or comma-separated names"
+            )
+        return labels
+    return [label.strip() for label in raw.split(",") if label.strip()]
+
+
+def run():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--platform",
+        type=str,
+        default=platform_module.system().lower(),
+        help="Platform to configure tests for (linux or windows)",
+    )
+    args, _ = parser.parse_known_args()
+    configuration = configure_tests(
+        platform=args.platform,
+        projects_to_test=os.getenv("PROJECTS_TO_TEST", "*"),
+        amdgpu_families=os.getenv("AMDGPU_FAMILIES"),
+        test_type=os.getenv("TEST_TYPE", "standard"),
+        test_labels=parse_test_labels(os.getenv("TEST_LABELS", "")),
+        build_variant=os.getenv("BUILD_VARIANT", "release"),
+        test_runs_on=os.getenv("TEST_RUNS_ON"),
+        test_runs_on_cpu=os.getenv("TEST_RUNS_ON_CPU"),
+    )
     gha_set_output(
         {
-            "sanity_component": json.dumps(sanity_component),
-            "components": json.dumps(output_matrix),
-            "platform": platform,
+            "sanity_component": json.dumps(configuration["sanity_component"]),
+            "components": json.dumps(configuration["components"]),
+            "platform": configuration["platform"],
         }
     )
 

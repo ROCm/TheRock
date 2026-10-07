@@ -126,6 +126,7 @@ _EXTERNAL_SUBTREE_ALIASES = {
 _EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
 
 _CI_TEST_SELECTOR_ALIASES = {
+    "libhipcxx": ["libhipcxx_amdclang", "libhipcxx_hiprtc"],
     "hipdnn_integration_tests": ["hipdnn-integration-tests"],
     "hipdnn_samples": ["hipdnn-samples"],
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
@@ -558,6 +559,21 @@ def _to_ci_test_selectors(projects: set[str]) -> set[str]:
     for project in projects:
         result.update(_CI_TEST_SELECTOR_ALIASES.get(project, [project]))
     return result
+
+
+def get_ci_test_selectors(changed_projects: list[str]) -> set[str]:
+    """Resolve external project names to CI tests, conservatively on unknown input."""
+    if not changed_projects or "*" in changed_projects:
+        return {"*"}
+    normalized = []
+    for project in changed_projects:
+        try:
+            normalized.extend(_normalize_changed_project(project))
+        except ValueError:
+            return {"*"}
+    if set(normalized) - set(list_subprojects()):
+        return {"*"}
+    return _to_ci_test_selectors(get_subprojects_to_test(normalized))
 
 
 def main():
