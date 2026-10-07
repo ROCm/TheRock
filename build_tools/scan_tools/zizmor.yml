@@ -6,4 +6,8 @@
 # security_scan_weekly.yml) in place of its own org-wide default.
 # Reference: https://docs.zizmor.sh/configuration/
 
-rules: {}
+rules:
+  self-repository:
+    # TODO: Remove this suppression and migrate to $/ once actionlint supports it.
+    # https://github.com/rhysd/actionlint/issues/711
+    disable: true

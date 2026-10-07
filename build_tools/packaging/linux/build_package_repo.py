@@ -109,8 +109,9 @@ def generate_release_file_with_checksums(
 
         file_size = file_path.stat().st_size
 
-        md5_hash = hashlib.md5()
-        sha1_hash = hashlib.sha1()
+        # Retain Debian MD5/SHA1 metadata checksums alongside SHA256.
+        md5_hash = hashlib.md5(usedforsecurity=False)
+        sha1_hash = hashlib.sha1(usedforsecurity=False)
         sha256_hash = hashlib.sha256()
 
         with open(file_path, "rb") as f:

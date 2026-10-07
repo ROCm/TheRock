@@ -116,6 +116,21 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in clinfo output:\n{clinfo_output}",
         )
 
+    def test_hipify_version(self):
+        executable = "hipify-clang.exe" if is_windows() else "hipify-clang"
+        # Exercise the installed tool's library search paths, not the test runner's.
+        env = os.environ.copy()
+        env.pop("LD_LIBRARY_PATH", None)
+        env.pop("LD_PRELOAD", None)
+        process = subprocess.run(
+            [str(THEROCK_BIN_DIR / executable), "--version"],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        assert process.returncode == 0, process.stdout + process.stderr
+        assert "LLVM version" in process.stdout
+
     @pytest.mark.skipif(is_windows(), reason="rocminfo is not supported on Windows")
     # TODO(#3312): Re-enable once rocminfo test is fixed for ASAN builds
     @pytest.mark.skipif(

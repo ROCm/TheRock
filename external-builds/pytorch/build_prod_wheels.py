@@ -1365,6 +1365,8 @@ def do_build_pytorch_vision(
     env["BUILD_VERSION"] = build_version
     env["VERSION_NAME"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
+    # Pin the wheel's torch requirement to the exact torch it compiles against.
+    env["PYTORCH_VERSION"] = get_installed_package_version("torch")
 
     env.update(
         {
