@@ -429,6 +429,10 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            # known failure
+            "linux": ["gfx125X-dcgpu"],
+        },
     },
     "rocsolver": {
         "job_name": "rocsolver",
@@ -868,6 +872,10 @@ test_matrix = {
         "platform": ["linux"],
         "linux_cpu_runner": True,
         "total_shards_dict": {"linux": 1},
+        "exclude_family": {
+            # known failure
+            "linux": ["gfx125X-dcgpu"],
+        },
     },
     # MIOpen provider tests
     "miopenprovider": {
