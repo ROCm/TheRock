@@ -684,6 +684,40 @@ class MainFunctionTest(unittest.TestCase):
             }
         )
 
+    def test_asan_suffix_varies_by_local_version(self):
+        """ASAN suffix is +asan (no local version) or .asan (has local version)."""
+        test_cases = [
+            # (release_type, override_git_sha, expected_pattern, description)
+            ("nightly", None, r"^7\.99\.0a[0-9]{8}\+asan$", "nightly gets +asan"),
+            ("release", None, r"^7\.99\.0\+asan$", "release gets +asan"),
+            (
+                "dev",
+                "abcdef1234567890",
+                r"^7\.99\.0\.dev0\+abcdef1234567890\.asan$",
+                "dev gets .asan",
+            ),
+        ]
+        for release_type, git_sha, pattern, desc in test_cases:
+            with self.subTest(desc=desc):
+                version = compute_rocm_package_version.compute_version(
+                    release_type=release_type,
+                    override_base_version="7.99.0",
+                    override_git_sha=git_sha,
+                    build_variant="asan-debug",
+                )
+                self.assertRegex(version, pattern)
+
+    def test_non_asan_variant_no_suffix(self):
+        """Non-ASAN build variants do not add asan suffix."""
+        for variant in ("release", ""):
+            with self.subTest(variant=variant or "(empty)"):
+                version = compute_rocm_package_version.compute_version(
+                    release_type="nightly",
+                    override_base_version="7.99.0",
+                    build_variant=variant,
+                )
+                self.assertNotIn("asan", version)
+
 
 if __name__ == "__main__":
     unittest.main()
