@@ -24,7 +24,9 @@ Usage:
 
 Outputs (to $GITHUB_OUTPUT):
     changed_projects: Comma-separated list of changed project paths
-    run_all_tests: "true" if CI files changed (run full test suite)
+    run_all_tests: "true" for schedule/dispatch, shared CI changes,
+                workflow changes without a configured project scope, or when
+                changed projects cannot be determined safely
     skip_tests: "true" if only docs/skippable files changed
 """
 
@@ -58,14 +60,25 @@ F = TypeVar("F", bound=Callable[..., object])
 SKIPPABLE_PATH_PATTERNS = [
     "*.md",
     "*.rst",
+    "*CODEOWNERS",
     "docs/*",
     "projects/*/docs/*",
     "shared/*/docs/*",
 ]
 
-# Patterns that trigger a full test run when changed (CI infrastructure)
-FULL_TEST_TRIGGER_PATTERNS = [
+# Repositories that scope TheRock workflow changes to configured projects.
+# Repositories absent from this map retain full-test coverage.
+WORKFLOW_TEST_SCOPE_BY_REPO = {
+    "rocm/rocm-libraries": "configured-projects",
+}
+
+# Patterns for TheRock workflow changes in the calling repository.
+CALLER_WORKFLOW_TRIGGER_PATTERNS = [
     ".github/workflows/therock*",
+]
+
+# Changes to project discovery or shared test logic retain global coverage.
+FULL_TEST_TRIGGER_PATTERNS = [
     ".github/scripts/therock*",
     ".github/scripts/get_changed_projects.py",
     ".github/scripts/ci_utils.py",
@@ -81,14 +94,13 @@ FULL_TEST_TRIGGER_PATTERNS = [
 
 # CI-relevant monorepo directories that are NOT subtree-synced repos and so are
 # absent from an external repo's repos-config.json. Without these, a PR confined
-# to shared/* or emulation/* yields no matched subtree -> empty changed_projects
-# -> TheRock falls back to building and testing everything. Each entry MUST have
-# a corresponding mapping in TheRock (build-topology alias + the test selector's
-# _EXTERNAL_SUBTREE_ALIASES); the test selector hard-fails on an unmapped
-# shared/* or emulation/* path, so keep this list in lock-step with TheRock when
-# adding directories. (Currently enumerates rocm-systems' non-subtree dirs;
-# rocm-libraries paths already resolve as repos-config subtrees.)
+# to one of these paths yields no matched subtree -> empty changed_projects ->
+# TheRock falls back to building and testing everything. Each entry MUST have a
+# corresponding mapping in TheRock (build-topology alias + the test selector's
+# _EXTERNAL_SUBTREE_ALIASES), so keep this list in lock-step with TheRock when
+# adding directories.
 CI_RELEVANT_NON_SUBTREE_PREFIXES = {
+    "dnn-providers/cmake",
     "shared/amdgpu-windows-interop",
     "shared/kpack",
     "shared/machine-readable-isa",
@@ -334,11 +346,58 @@ def configure(
 
     logger.info(f"Modified paths: {len(modified_paths)} files")
 
-    # Check if CI files changed (run all tests)
+    # Shared CI and test-selection changes can affect other repositories.
     if matches_patterns(modified_paths, FULL_TEST_TRIGGER_PATTERNS):
-        logger.info("CI files changed - running all tests")
+        logger.info("Shared CI files changed - running all tests")
         return ConfigureResult(
             changed_projects="", run_all_tests=True, skip_tests=False
+        )
+
+    # Apply the calling repository's workflow test policy.
+    if matches_patterns(modified_paths, CALLER_WORKFLOW_TRIGGER_PATTERNS):
+        workflow_test_scope = WORKFLOW_TEST_SCOPE_BY_REPO.get(github_repo.lower())
+        if workflow_test_scope != "configured-projects":
+            logger.info(
+                "Workflow changed in %s - running all tests",
+                github_repo,
+            )
+            return ConfigureResult(
+                changed_projects="", run_all_tests=True, skip_tests=False
+            )
+
+        config = load_repo_config(config_path)
+        if not config:
+            logger.warning("No config loaded - running all tests")
+            return ConfigureResult(
+                changed_projects="", run_all_tests=True, skip_tests=False
+            )
+
+        own_projects = get_valid_prefixes(config)
+
+        # A second, unknown change must retain the conservative full run.
+        other_paths = {
+            path
+            for path in modified_paths
+            if not matches_patterns([path], CALLER_WORKFLOW_TRIGGER_PATTERNS)
+        }
+        unclassified = get_unclassified_paths(other_paths, own_projects)
+        if unclassified:
+            logger.info(
+                f"Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
+                " - running all tests"
+            )
+            return ConfigureResult(
+                changed_projects="", run_all_tests=True, skip_tests=False
+            )
+
+        logger.info(
+            "Workflow changed in %s - testing configured projects",
+            github_repo,
+        )
+        return ConfigureResult(
+            changed_projects=",".join(sorted(own_projects)),
+            run_all_tests=False,
+            skip_tests=False,
         )
 
     # Check if only skippable files changed

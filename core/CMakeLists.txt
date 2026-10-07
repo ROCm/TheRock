@@ -25,6 +25,8 @@ endif()
 # rocm-kpack
 ################################################################################
 
+if(THEROCK_ENABLE_KPACK)
+
 therock_cmake_subproject_declare(rocm-kpack
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocm-kpack"
@@ -60,6 +62,8 @@ therock_provide_artifact(core-kpack
   SUBPROJECT_DEPS
     rocm-kpack
 )
+
+endif()
 
 if(THEROCK_ENABLE_CORE_AMDSMI)
 
@@ -486,10 +490,10 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
     list(APPEND OCL_CLR_RUNTIME_DEPS
       rocprofiler-register
     )
-    list(APPEND OCL_CLR_CMAKE_ARGS
-      "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
-    )
   endif()
+  list(APPEND OCL_CLR_CMAKE_ARGS
+    "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
+  )
   if(_therock_enable_hsa_runtime)
     list(APPEND OCL_CLR_RUNTIME_DEPS
       rocminfo  # Various things expect to be able to find the rocminfo tools

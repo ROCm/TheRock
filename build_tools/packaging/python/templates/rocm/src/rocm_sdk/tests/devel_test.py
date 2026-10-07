@@ -78,10 +78,13 @@ class ROCmDevelTest(unittest.TestCase):
 
         # CLI scripts by default run from _rocm_sdk_core.
         # When the devel package is installed they should run from _rocm_sdk_devel.
+        hipconfig = utils.find_console_script("hipconfig")
+        self.assertIsNotNone(
+            hipconfig,
+            msg=f"Could not find `hipconfig` console script for interpreter {sys.executable}",
+        )
         rocmpath_output = (
-            utils.run_command(["hipconfig", "--rocmpath"], capture=True)
-            .decode()
-            .strip()
+            utils.run_command([hipconfig, "--rocmpath"], capture=True).decode().strip()
         )
         rocmpath = Path(rocmpath_output)
         self.assertTrue(
@@ -146,6 +149,10 @@ class ROCmDevelTest(unittest.TestCase):
                 # recent addition from upstream, issue tracked in
                 # https://github.com/ROCm/TheRock/issues/2537
                 continue
+            if "libsqtt-marker" in str(so_path):
+                # LLVM pass plugin loaded via -fpass-plugin; it has unresolved
+                # LLVM symbols and is not intended to be dlopened standalone.
+                continue
             if "lib/roctracer" in str(so_path) or "share/roctracer" in str(so_path):
                 # Internal roctracer libraries are meant to be pre-loaded
                 # explicitly and cannot necessarily be loaded standalone.
@@ -164,9 +171,14 @@ class ROCmDevelTest(unittest.TestCase):
             if "libtest_linking_lib" in str(so_path):
                 # rocprim unit tests, not actual library files
                 continue
-            if "opencl" in str(so_path):
-                # We use OpenCL ICD from distro rather than TheRock
-                # and we do not build it
+            if (
+                "opencl" in str(so_path)
+                or "oclruntime" in so_path.name
+                or "oclperf" in so_path.name
+                or "oclgl" in so_path.name
+            ):
+                # OpenCL ICD comes from the distro; oclruntime/oclperf are
+                # test-only libraries that depend on libOpenCL.
                 continue
             if so_path.name.endswith(".abi3.so") or ".cpython-" in so_path.name:
                 # Python C extensions use symbols resolved at import time,

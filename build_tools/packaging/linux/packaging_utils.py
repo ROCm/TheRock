@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 
+import functools
 import json
 import os
 import platform
@@ -664,6 +665,7 @@ def process_main_dependencies_kpack(
     """
     is_meta = is_meta_package(pkg_info)
     pkg_name = pkg_info.get("Package")
+    host_fallback_deps = []  # Track deps that need host fallback
 
     if is_meta:
         if config.gfx_arch == GFX_META:
@@ -675,7 +677,7 @@ def process_main_dependencies_kpack(
             # Arch-specific metapackage: depend on actual runtime packages
             dep_list = pkg_info.get(field_key, [])
             # Filter deps without artifacts
-            dep_list = filter_dependencies_by_artifacts(
+            dep_list, host_fallback_deps = filter_dependencies_by_artifacts(
                 dep_list,
                 config.artifacts_dir,
                 config.gfx_arch,
@@ -697,16 +699,24 @@ def process_main_dependencies_kpack(
                 config.artifacts_dir,
             )
         ]
-        # Filter deps without artifacts
-        dep_list = filter_dependencies_by_artifacts(
+        # Host fallback is discarded (_) because we ARE the host package.
+        # There's nothing to fall back to - if a dependency has no host artifacts,
+        # it's a build configuration error that should fail, not silently degrade.
+        dep_list, _ = filter_dependencies_by_artifacts(
             dep_list, config.artifacts_dir, config.gfx_arch
         )
     elif not is_gfxarch_package(pkg_info, config.enable_kpack, config.artifacts_dir):
         # Non-gfxarch versioned package: use all dependencies directly
         # These packages don't have host/device split, so include everything
         dep_list = pkg_info.get(field_key, [])
-        # Filter deps without artifacts
-        dep_list = filter_dependencies_by_artifacts(
+        # Host fallback is discarded (_) because non-gfxarch packages are already
+        # architecture-independent. Their dependencies should either:
+        # 1. Be non-gfxarch themselves (no fallback needed), or
+        # 2. Be gfxarch packages resolved to their host variant (gfx_arch="" maps to generic)
+        # If a dependency has no artifacts at all, filter_dependencies_by_artifacts
+        # will exclude it and log a warning - this is the expected behavior for
+        # packages that weren't built in this configuration.
+        dep_list, _ = filter_dependencies_by_artifacts(
             dep_list, config.artifacts_dir, config.gfx_arch
         )
     else:
@@ -722,7 +732,7 @@ def process_main_dependencies_kpack(
             )
         ]
         # Filter deps without artifacts
-        gfxarch_deps = filter_dependencies_by_artifacts(
+        gfxarch_deps, host_fallback_deps = filter_dependencies_by_artifacts(
             gfxarch_deps,
             config.artifacts_dir,
             config.gfx_arch,
@@ -730,9 +740,21 @@ def process_main_dependencies_kpack(
         )
         dep_list = [pkg_name] + gfxarch_deps
 
-    if not dep_list:
+    # Resolve dependencies at the end
+    if not dep_list and not host_fallback_deps:
         return ""
-    return resolve_versioned_dependency_list(dep_list, config, is_meta)
+    deps = resolve_versioned_dependency_list(dep_list, config, is_meta)
+
+    # Add host fallback deps if any
+    if host_fallback_deps:
+        host_config = replace(config, gfx_arch=GFX_HOST)
+        host_deps = resolve_versioned_dependency_list(
+            host_fallback_deps, host_config, is_meta
+        )
+        if host_deps:
+            deps = f"{deps}, {host_deps}" if deps else host_deps
+
+    return deps
 
 
 def process_main_dependencies_single_arch(
@@ -1161,6 +1183,24 @@ def resolve_versioned_dependency_list(dep_list, config: PackageConfig, is_meta):
     return deps
 
 
+@functools.lru_cache(maxsize=None)
+def _artifact_dir_name_index(artifacts_dir: str) -> dict[str, list[str]]:
+    """One-time directory listing of artifacts_dir, indexed by each entry's
+    name with any ":xnack..." suffix stripped.
+
+    has_artifact_for_arch() calls this once per (package, arch, component)
+    combination across a full packaging run; caching the listing avoids
+    re-scanning a potentially large artifacts_dir on every call.
+    """
+    index: dict[str, list[str]] = {}
+    try:
+        for entry in Path(artifacts_dir).iterdir():
+            index.setdefault(entry.name.split(":", 1)[0], []).append(entry.name)
+    except FileNotFoundError:
+        pass
+    return index
+
+
 def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
     """Check if a package has artifacts available for a specific architecture.
 
@@ -1197,6 +1237,14 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
         else:
             artifact_suffix = gfx_arch
 
+        # GFX_HOST uses "generic" artifacts.
+        # This is the ONLY host-equivalent naming convention in the build system.
+        # All host/architecture-independent artifacts use the "generic" suffix
+        # (e.g., fft_lib_generic, rccl_test_generic). There are no other naming
+        # patterns for host artifacts.
+        if gfx_arch == GFX_HOST:
+            artifact_suffix = "generic"
+
         # When checking for a specific gfx architecture (not host/meta),
         # skip generic-only artifacts - they do not contribute to gfx-specific packages
         if gfx_arch not in (GFX_HOST, GFX_META) and artifact_suffix == "generic":
@@ -1206,30 +1254,52 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
             artifact_subdir = subdir["Name"]
             component_list = subdir["Components"]
             for component in component_list:
-                source_dir = (
-                    Path(artifacts_dir)
-                    / f"{artifact_prefix}_{component}_{artifact_suffix}"
+                # Check the plain artifact directory and any xnack variants
+                # (e.g. ":xnack+"), matching filter_components_fromartifactory().
+                # Some components (e.g. rand, solver, hiptensor, rocalution) are
+                # only ever built with an xnack suffix for gfx942/gfx950, so
+                # checking only the plain path here falsely reports them as
+                # missing and drops the arch from the meta package's Depends:.
+                #
+                # Looked up via a cached directory-name index (see
+                # _artifact_dir_name_index) rather than a fresh glob() per
+                # component, since this runs once per (package, arch,
+                # component) across a full packaging run.
+                base_pattern = f"{artifact_prefix}_{component}_{artifact_suffix}"
+                matching_names = _artifact_dir_name_index(str(artifacts_dir)).get(
+                    base_pattern, []
                 )
-                if not source_dir.exists():
-                    continue
 
-                # Check if the required subdirectory exists in the manifest
-                manifest_file = source_dir / "artifact_manifest.txt"
-                if not manifest_file.exists():
-                    continue
+                for name in matching_names:
+                    source_dir = Path(artifacts_dir) / name
 
-                try:
-                    with manifest_file.open("r", encoding="utf-8") as file:
-                        for line in file:
-                            match_found = (
-                                isinstance(artifact_subdir, str)
-                                and (artifact_subdir.lower() + "/") in line.lower()
-                            )
-                            if match_found and line.strip():
-                                # Found at least one required subdirectory in the manifest
-                                return True
-                except OSError:
-                    continue
+                    # Check if the required subdirectory exists in the manifest
+                    manifest_file = source_dir / "artifact_manifest.txt"
+                    if not manifest_file.exists():
+                        continue
+
+                    try:
+                        with manifest_file.open("r", encoding="utf-8") as file:
+                            for line in file:
+                                match_found = (
+                                    isinstance(artifact_subdir, str)
+                                    and (artifact_subdir.lower() + "/") in line.lower()
+                                )
+                                if match_found and line.strip():
+                                    # Verify the directory exists and has files
+                                    # (manifest may list dirs that weren't built or are empty)
+                                    subdir_path = source_dir / line.strip().rstrip("/")
+                                    try:
+                                        if subdir_path.is_dir() and any(
+                                            subdir_path.iterdir()
+                                        ):
+                                            return True
+                                    except (PermissionError, OSError):
+                                        # Race condition (dir deleted between checks) or
+                                        # permission issue - skip this path silently
+                                        continue
+                    except OSError:
+                        continue
 
     return False
 
@@ -1287,20 +1357,57 @@ def filter_dependencies_by_artifacts(
     gfx_arch: str,
     *,
     target_members: tuple[str, ...] = (),
-) -> list:
-    """Filter dependency list to exclude packages without artifacts.
+) -> tuple[list, list]:
+    """Filter dependency list based on artifact availability.
 
-    Removes dependencies that do not have artifacts available for the specified
-    architecture. This prevents installation failures due to missing packages.
+    For each dependency:
+    - If gfx-specific artifacts exist, keep in filtered list
+    - If no gfx artifacts but host artifacts exist, add to host fallback list
+    - If no artifacts at all, exclude the dependency
+
+    Host Fallback Mechanism:
+    ------------------------
+    When building a gfx-specific package (e.g., amdrocm-blas10.2-gfx1100), its
+    dependencies may not have artifacts for that specific GPU architecture. In
+    such cases, this function implements a fallback strategy:
+
+    1. First, check if the dependency has artifacts for the target gfx arch
+       (e.g., solver_lib_gfx1100)
+    2. If not found, check if host (generic) artifacts exist
+       (e.g., solver_lib_generic)
+    3. If host artifacts exist, add to host_fallback list so the package
+       depends on the host version (e.g., amdrocm-solver-host10.2) instead
+
+    This ensures that gfx-specific packages can still be built and installed
+    even when some dependencies only have host/generic artifacts available.
+
+    Artifact Naming Convention:
+    ---------------------------
+    Artifacts follow the pattern: {prefix}_{component}_{suffix}
+    - For gfx-specific: fft_lib_gfx1100, rccl_test_gfx942
+    - For host/generic: fft_lib_generic, rccl_test_generic
+
+    The GFX_HOST constant maps to "generic" suffix. There is no other
+    host-equivalent naming convention - all host artifacts use "generic".
 
     Parameters:
     dep_list: List of dependency package names
     artifacts_dir: Directory where artifacts are stored
     gfx_arch: Target architecture to check
+    target_members: Optional tuple of gfx architectures to check (for grouped targets)
 
-    Returns: Filtered dependency list
+    Returns: Tuple of (filtered_deps, host_fallback_deps) where:
+             - filtered_deps: dependencies with artifacts for target arch
+             - host_fallback_deps: dependencies to use host version instead
+
+    Example:
+        Building amdrocm-blas10.2-gfx1100 with dependency on amdrocm-solver:
+        - If solver_lib_gfx1100 exists: solver goes to filtered_deps
+        - If only solver_lib_generic exists: solver goes to host_fallback_deps
+        - If neither exists: solver is excluded with warning
     """
     filtered = []
+    host_fallback = []
     for dep in dep_list:
         dep_info = get_package_info(dep, raise_if_missing=False)
         if dep_info is None:
@@ -1308,7 +1415,8 @@ def filter_dependencies_by_artifacts(
             filtered.append(dep)
             continue
 
-        # Non-gfxarch packages are always available
+        # Non-gfxarch packages: missing artifacts should fail the build,
+        # so we don't filter them out here
         if not is_gfxarch_package(
             dep_info, enable_kpack=True, artifacts_dir=artifacts_dir
         ):
@@ -1321,7 +1429,15 @@ def filter_dependencies_by_artifacts(
             for member in (target_members or (gfx_arch,))
         ):
             filtered.append(dep)
+        elif gfx_arch != GFX_HOST and has_artifact_for_arch(
+            dep, artifacts_dir, GFX_HOST
+        ):
+            # Gfx-specific build missing artifacts, fall back to host version
+            logger.info(f"{dep} has no {gfx_arch} artifacts, using host fallback")
+            host_fallback.append(dep)
         else:
-            logger.warning(f"WORKAROUND: Excluding {dep} (no artifacts for {gfx_arch})")
+            logger.warning(
+                f"WORKAROUND: Excluding {dep} (no artifacts for {gfx_arch} or host)"
+            )
 
-    return filtered
+    return filtered, host_fallback

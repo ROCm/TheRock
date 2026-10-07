@@ -22,9 +22,14 @@ on:
         default: ""
       test_runs_on:
         type: string
-      benchmark_runs_on:
+      test_runs_on_cpu:
+        description: "CPU test runner label (for components that don't need GPU)"
         type: string
         default: ""
+      tests_enabled:
+        description: "Whether tests should run (true when any runner is available)"
+        type: boolean
+        default: true
       sanity_check_only_for_family:
         type: boolean
         default: false
@@ -32,9 +37,6 @@ on:
         type: string
       test_labels:
         type: string
-      run_extended_tests:
-        type: string
-        default: 'false'
       changed_projects:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
@@ -83,9 +85,14 @@ on:
         default: ""
       test_runs_on:
         type: string
-      benchmark_runs_on:
+      test_runs_on_cpu:
+        description: "CPU test runner label (for components that don't need GPU)"
         type: string
         default: ""
+      tests_enabled:
+        description: "Whether tests should run (true when any runner is available)"
+        type: boolean
+        default: true
       sanity_check_only_for_family:
         type: boolean
         default: false
@@ -93,9 +100,6 @@ on:
         type: string
       test_labels:
         type: string
-      run_extended_tests:
-        type: string
-        default: 'false'
       changed_projects:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
@@ -128,8 +132,7 @@ run-name: Test Artifacts (${{ inputs.amdgpu_families }}, ${{ inputs.release_type
 jobs:
   configure_test_matrix:
     name: "Configure test matrix (${{ inputs.amdgpu_families }})"
-    # if there is a test machine available
-    if: ${{ inputs.test_runs_on != '' }}
+    if: ${{ inputs.tests_enabled }}
     runs-on: ubuntu-24.04
     outputs:
       sanity_component: ${{ steps.configure.outputs.sanity_component }}
@@ -190,13 +193,16 @@ jobs:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
-          RUN_EXTENDED_TESTS: ${{ inputs.run_extended_tests }}
           PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
           CI_CONFIG_PATH: ci-config
           BUILD_VARIANT: ${{ inputs.build_variant }}
+          # Pass the policy-gated GPU runner label. When empty, GPU tests are gated
+          # but CPU-only tests (linux_cpu_runner: True) can still run.
+          TEST_RUNS_ON: ${{ inputs.test_runs_on }}
+          TEST_RUNS_ON_CPU: ${{ inputs.test_runs_on_cpu }}
         run: |
           python ./build_tools/github_actions/fetch_test_configurations.py \
-            --platform=${{ contains(inputs.test_runs_on, 'windows') && 'windows' || 'linux' }}
+            --platform=${{ (contains(inputs.test_runs_on, 'windows') || contains(inputs.test_runs_on_cpu, 'windows')) && 'windows' || 'linux' }}
 
   test_sanity_check:
     name: 'Test Sanity Check'
@@ -251,9 +257,7 @@ jobs:
       #      Only applies to workflow_dispatch events (not PR/workflow_call chains).
       #      Bot-triggered runs (e.g., nightly from rockrel) skip this and use rules below.
       #   2. Multi-GPU components use the multi-GPU runner (required for correct execution)
-      #   3. Benchmark components use the dedicated benchmark runner
-      #   4. CPU-only components use standard GitHub runners (aws-linux-scale-rocm-prod)
-      #   5. Per-component runner (set by fetch_test_configurations.py)
+      #   3. Per-component runner (set by fetch_test_configurations.py, includes CPU-only)
       test_runs_on: >-
         ${{
           (github.event_name == 'workflow_dispatch' &&
@@ -262,11 +266,6 @@ jobs:
             inputs.test_runs_on) ||
           (matrix.components.multi_gpu_runner != '' &&
             matrix.components.multi_gpu_runner) ||
-          (matrix.components.is_benchmark == true &&
-            inputs.benchmark_runs_on != '' &&
-            inputs.benchmark_runs_on) ||
-          (matrix.components.linux_cpu_runner == true &&
-            'aws-linux-scale-rocm-prod') ||
           matrix.components.test_runner
         }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
