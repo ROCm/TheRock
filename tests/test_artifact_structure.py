@@ -78,6 +78,10 @@ KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
     ("mirage", "dev"),  # new artifact, no packages yet.
     ("rocjitsu", "dev"),  # new artifact, no packages yet.
     ("rocprofiler-systems-examples", "test"),
+    (
+        "rocwmma",
+        "test",
+    ),  # rocWMMA ships via amdrocm-math-common (dev/lib); tests not distributed.
     ("rocrtst", "lib"),
     ("support", "dev"),
     ("support", "doc"),
