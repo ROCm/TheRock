@@ -639,6 +639,25 @@ amdgpu_family_info_matrix = {
             "tests_on_trigger": [],
         },
     },
+    # Nightly-only build, no tests (no hardware available)
+    "gfx117x": {
+        "linux": {
+            "test-runs-on": "",
+            "family": "gfx117X-all",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": [],
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx117X-all",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": [],
+        },
+    },
     # Nightly-only family, tests only on nightly
     "gfx1153": {
         "linux": {
