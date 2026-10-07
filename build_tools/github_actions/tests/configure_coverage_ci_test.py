@@ -268,7 +268,7 @@ class BuildCoverageMatrixTest(unittest.TestCase):
                 "rocprim": True,
                 "hipcub": True,
                 "rocthrust": True,
-                "rocwmma": True,
+                "rocwmma": False,
                 "hiprand": False,
                 "rocblas": False,
             },
@@ -549,14 +549,15 @@ class EmitCmakeTest(unittest.TestCase):
             "rocPRIM_tests",
             "hipCUB",
             "rocThrust",
-            "rocWMMA",
         ):
             self.assertIn(target, targets)
         # Their libraries have no kernels, so they stay host-only.
         for target in ("hipRAND", "hipSOLVER"):
             self.assertNotIn(target, targets)
-        # Its tests share processes with other instrumented libraries.
+        # rocBLAS's tests share processes with other instrumented libraries,
+        # and rocWMMA's instrumented tests take hours to compile.
         self.assertNotIn("rocBLAS", targets)
+        self.assertNotIn("rocWMMA", targets)
 
     def test_emit_cmake_needs_no_env(self):
         # Must work without PROJECTS_TO_TEST / AMDGPU_FAMILIES / GITHUB_OUTPUT set.

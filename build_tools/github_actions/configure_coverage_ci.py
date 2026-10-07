@@ -476,9 +476,9 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         object_globs=["bin/*_test*", "bin/gemm_*-validate", "!bin/test_thrust_*"],
         fetch_artifact_args="--rocwmma --tests",
         codecov_flag="rocWMMA",
-        # Header-only and almost entirely device code. Upstream's tests already
-        # take unqualified flags, so this only stops the device-side negation.
-        device_coverage=True,
+        # Not device_coverage, though it is almost entirely device code: with
+        # its kernels instrumented, single GEMM test sources take up to three
+        # hours to compile, and the tests no longer build within the stage job.
     ),
     #
     # rocm-systems -- comm-libs stage

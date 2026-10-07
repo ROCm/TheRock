@@ -126,9 +126,13 @@ for:
   drops the device-side negation; rocRAND's option is host-only and rocSPARSE's
   negates device instrumentation itself, so for those two the device flags are
   what instrument the kernels.
-- rocPRIM, hipCUB, rocThrust and rocWMMA, which are header-only: their kernels
-  are compiled into the test binaries their reports cover, and each of those
+- rocPRIM, hipCUB and rocThrust, which are header-only: their kernels are
+  compiled into the test binaries their reports cover, and each of those
   carries its own collector.
+
+rocWMMA is header-only too, and almost entirely device code, but with its
+kernels instrumented single GEMM test sources take up to three hours to
+compile, and its tests no longer build within the stage job.
 
 A process can hold only one copy of the collector: the HIP interceptors of two
 copies resolve each other as the real functions and recurse on the first kernel
