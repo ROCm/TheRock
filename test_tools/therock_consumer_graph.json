@@ -36,6 +36,7 @@
       "rocr-runtime",
       "rocrtst",
       "therock-elfio",
+      "therock-grpc",
       "therock-spdlog"
     ]
   },
@@ -52,7 +53,8 @@
       "rocrand",
       "rocrtst",
       "rocshmem",
-      "rocthrust"
+      "rocthrust",
+      "rocwmma"
     ]
   },
   "aqlprofile": {
@@ -181,7 +183,9 @@
   },
   "hipfile": {
     "consumers": [
-      "rocprofiler-sdk"
+      "rocprofiler-sdk",
+      "rocprofiler-systems",
+      "rocprofiler-systems-examples"
     ]
   },
   "hipify": {
@@ -642,6 +646,7 @@
       "hipcub",
       "hipdnn",
       "hipdnn_integration_tests",
+      "hipdnn_samples",
       "hipfft",
       "hipfile",
       "hipkernelprovider",
@@ -658,6 +663,7 @@
       "rocblas",
       "rocfft",
       "rocprim_tests",
+      "rocprofiler-systems",
       "rocrand",
       "rocroller",
       "rocshmem",
@@ -715,7 +721,6 @@
       "amdsmi",
       "kfdtest",
       "rocdecode",
-      "rocjitsu",
       "rocjpeg",
       "rocm_smi_lib",
       "rocprofiler-compute",
@@ -780,6 +785,7 @@
       "hipkernelprovider",
       "miopen",
       "miopenprovider",
+      "rocprofiler-systems",
       "therock-frugally-deep"
     ]
   },

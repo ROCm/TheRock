@@ -9,7 +9,9 @@ package dedupe skips only ``.deb`` / ``.rpm`` files.
 
 Coverage:
 
-  - ``upload_to_s3`` — uploads ``repodata/``; dedupes ``.rpm`` only (not metadata)
+  - ``upload_to_s3`` — uploads ``repodata/``; optional ``dedupe=True`` skips ``.rpm`` only
+  - ``upload_to_s3(dedupe=False)`` — overwrites existing ``.rpm`` keys (CI default)
+  - ``_resolve_upload_target`` — CI path returns ``dedupe=False``
   - ``s3_object_exists`` — ``head_object`` success and 404 handling (dedupe helper)
   - ``_package_install_url`` — RPM baseurl includes ``x86_64/``
 
@@ -100,6 +102,57 @@ class UploadToS3Test(unittest.TestCase):
         uploaded_keys = [call.args[2] for call in s3.upload_file.call_args_list]
         self.assertIn(f"{TEST_PREFIX}/x86_64/repodata/repomd.xml", uploaded_keys)
         self.assertNotIn(f"{TEST_PREFIX}/x86_64/pkg-a.rpm", uploaded_keys)
+
+    @patch("upload_package_repo.boto3.client")
+    @patch.object(upload_repo, "s3_object_exists", return_value=True)
+    def test_dedupe_false_overwrites_existing_rpm(
+        self, mock_exists: MagicMock, mock_boto_client: MagicMock
+    ) -> None:
+        """CI re-run must replace S3 RPMs even when the key already exists."""
+        s3 = MagicMock()
+        mock_boto_client.return_value = s3
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            arch_dir = package_dir / "x86_64"
+            arch_dir.mkdir(parents=True)
+            (arch_dir / "pkg-a.rpm").write_bytes(b"rpm-v2")
+            (arch_dir / "repodata").mkdir()
+            (arch_dir / "repodata" / "repomd.xml").write_text(
+                "<repomd/>", encoding="utf-8"
+            )
+
+            upload_repo.upload_to_s3(
+                str(package_dir), TEST_BUCKET, TEST_PREFIX, dedupe=False
+            )
+
+        mock_exists.assert_not_called()
+        uploaded_keys = [call.args[2] for call in s3.upload_file.call_args_list]
+        self.assertIn(f"{TEST_PREFIX}/x86_64/pkg-a.rpm", uploaded_keys)
+        self.assertIn(f"{TEST_PREFIX}/x86_64/repodata/repomd.xml", uploaded_keys)
+
+
+class ResolveUploadTargetTest(unittest.TestCase):
+    """CI ``--run-id`` uploads must not skip existing package objects."""
+
+    @patch.object(upload_repo, "WorkflowOutputRoot")
+    def test_ci_path_disables_dedupe(self, mock_root_cls: MagicMock) -> None:
+        loc = MagicMock()
+        loc.bucket = TEST_BUCKET
+        loc.relative_path = "35652120474-linux/packages/rpm"
+        mock_root_cls.from_workflow_run.return_value.native_linux_packages.return_value = (
+            loc
+        )
+        args = types.SimpleNamespace(run_id="35652120474")
+
+        bucket, prefix, install_url, dedupe = upload_repo._resolve_upload_target(
+            args, "rpm"
+        )
+
+        self.assertEqual(bucket, TEST_BUCKET)
+        self.assertEqual(prefix, loc.relative_path)
+        self.assertTrue(install_url.endswith("/x86_64"))
+        self.assertFalse(dedupe)
 
 
 class S3ObjectExistsTest(unittest.TestCase):
