@@ -2158,6 +2158,29 @@ class TestFormatSummary(unittest.TestCase):
         # on more exact formatting would create a change detector test.
         self.assertTrue(result.startswith("## Multi-Arch CI Configuration"))
 
+    def test_build_output_links_follow_enabled_platforms(self):
+        for linux, windows in [(True, False), (False, True), (True, True)]:
+            with self.subTest(linux=linux, windows=windows):
+                inputs = self._inputs(
+                    event_name="workflow_dispatch",
+                    linux_amdgpu_families=["gfx94x"] if linux else [],
+                    windows_amdgpu_families=["gfx110x"] if windows else [],
+                )
+                outputs = cm.configure(inputs, cm.GitContext.empty())
+                summary = format_summary(inputs, outputs)
+                for platform, enabled in [("Linux", linux), ("Windows", windows)]:
+                    rows = [
+                        line
+                        for line in summary.splitlines()
+                        if line.startswith(f"{platform} | ")
+                    ]
+                    self.assertEqual(len(rows), int(enabled))
+                    if enabled:
+                        # The enabled platform retains logs, artifacts, and manifests.
+                        self.assertEqual(rows[0].count("https://"), 3)
+                # The workflow-level report can be produced without a Linux build.
+                self.assertIn("Manifest diff *(if produced)* | https://", summary)
+
     def test_skipped_summary(self):
         outputs = cm.CIOutputs.skipped()
         result = format_summary(self._inputs(), outputs)
