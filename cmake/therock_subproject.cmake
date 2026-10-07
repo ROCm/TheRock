@@ -338,6 +338,14 @@ endfunction()
 #   --install via --component flags alongside default (all) target. Use this
 #   when a project marks certain components as EXCLUDE_FROM_ALL and you need to
 #   explicitly request them.
+# INSTALL_DISTRIBUTION: LLVM-style multi-distribution name(s) (e.g. "compiler" or
+#   "compiler;runtimes;dev;tools"). When set, stage uses
+#   `cmake --build --target install-<name>-distribution` for each name
+#   (or …-stripped when THEROCK_SPLIT_DEBUG_INFO) instead of `cmake --install`,
+#   and the build step targets `<name>-distribution` for each. Distributions are
+#   independent install umbrellas (e.g. runtimes does not pull in compiler).
+#   Override per project with -D<target>_INSTALL_DISTRIBUTION=…. Requires the
+#   subproject to configure LLVM_DISTRIBUTIONS / LLVM_<name>_DISTRIBUTION_COMPONENTS.
 #
 # Note that all transitive keywords (i.e. "INTERFACE_" prefixes) only consider
 # transitive deps along their RUNTIME_DEPS edges, not BUILD_DEPS.
@@ -363,7 +371,7 @@ function(therock_cmake_subproject_declare target_name)
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS;INSTALL_DISTRIBUTION"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -558,6 +566,7 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_EXTRA_DEPENDS "${ARG_EXTRA_DEPENDS}"
     THEROCK_OUTPUT_ON_FAILURE "${ARG_OUTPUT_ON_FAILURE}"
     THEROCK_OPTIONAL_INSTALL_COMPONENTS "${ARG_INSTALL_OPTIONAL_COMPONENTS}"
+    THEROCK_INSTALL_DISTRIBUTION "${ARG_INSTALL_DISTRIBUTION}"
 
     # RPATH
     THEROCK_NO_INSTALL_RPATH "${ARG_NO_INSTALL_RPATH}"
@@ -667,6 +676,16 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_output_on_failure "${target_name}" THEROCK_OUTPUT_ON_FAILURE)
   get_target_property(_logical_target_name "${target_name}" THEROCK_LOGICAL_TARGET_NAME)
   get_target_property(_optional_install_components "${target_name}" THEROCK_OPTIONAL_INSTALL_COMPONENTS)
+  get_target_property(_install_distribution "${target_name}" THEROCK_INSTALL_DISTRIBUTION)
+  if(NOT _install_distribution OR _install_distribution STREQUAL "THEROCK_INSTALL_DISTRIBUTION-NOTFOUND")
+    set(_install_distribution "")
+  endif()
+  # Allow -Damd-llvm_INSTALL_DISTRIBUTION="compiler;runtimes" style overrides.
+  if(DEFINED ${target_name}_INSTALL_DISTRIBUTION)
+    set(_install_distribution "${${target_name}_INSTALL_DISTRIBUTION}")
+  endif()
+  set(_install_distributions ${_install_distribution})
+  list(REMOVE_ITEM _install_distributions "")
 
   # RPATH properties: just mirror these to same named variables because we just
   # mirror them syntactically into the subprojet..
@@ -1087,12 +1106,21 @@ function(therock_cmake_subproject_activate target_name)
       OUTPUT_ON_FAILURE "${_output_on_failure}"
     )
 
+    set(_build_cmd "${CMAKE_COMMAND}" "--build" "${_binary_dir}")
+    if(_install_distributions)
+      foreach(_dist IN LISTS _install_distributions)
+        list(APPEND _build_cmd "--target" "${_dist}-distribution")
+      endforeach()
+      list(JOIN _install_distributions "," _install_distributions_pretty)
+      message(STATUS "  ${target_name}: INSTALL_DISTRIBUTION=${_install_distributions_pretty}")
+    endif()
+
     add_custom_command(
       OUTPUT "${_build_stamp_file}"
       COMMAND
         ${_build_log_prefix}
         "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
-        "${CMAKE_COMMAND}" "--build" "${_binary_dir}"
+        ${_build_cmd}
       COMMAND "${CMAKE_COMMAND}" -E touch "${_build_stamp_file}"
       WORKING_DIRECTORY "${_binary_dir}"
       COMMENT "Building sub-project ${target_name}${_build_comment_suffix}"
@@ -1148,10 +1176,35 @@ function(therock_cmake_subproject_activate target_name)
       # for interactive use.
       OUTPUT_ON_FAILURE "${THEROCK_QUIET_INSTALL}"
     )
+    # LLVM distributions install via build targets, not cmake --install.
+    # CMAKE_INSTALL_PREFIX was already set at configure time to the stage dir.
+    # Multiple distributions are independent; each install-* target is invoked.
+    set(_stage_install_commands)
+    if(_install_distributions)
+      set(_dist_install_cmd
+        "${CMAKE_COMMAND}" "--build" "${_binary_dir}"
+      )
+      foreach(_dist IN LISTS _install_distributions)
+        set(_dist_install_target "install-${_dist}-distribution")
+        if(THEROCK_SPLIT_DEBUG_INFO)
+          set(_dist_install_target "install-${_dist}-distribution-stripped")
+        endif()
+        list(APPEND _dist_install_cmd "--target" "${_dist_install_target}")
+      endforeach()
+      list(APPEND _stage_install_commands
+        COMMAND ${_install_log_prefix}
+                "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
+                ${_dist_install_cmd}
+      )
+    else()
+      list(APPEND _stage_install_commands
+        COMMAND ${_install_log_prefix}
+                "${CMAKE_COMMAND}" "--install" "${_binary_dir}" ${_install_strip_option}
+      )
+    endif()
     add_custom_command(
       OUTPUT "${_stage_stamp_file}"
-      # Install default (all target) to stage directory.
-      COMMAND ${_install_log_prefix} "${CMAKE_COMMAND}" --install "${_binary_dir}" ${_install_strip_option}
+      ${_stage_install_commands}
       # Expand optional components _install command(s).
       ${_optional_component_install_commands}
       # Populate local dist directory with this+all transitive stage installs.
