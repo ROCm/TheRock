@@ -402,11 +402,17 @@ jobs:
             cache_flag="--use-ccache"
           fi
 
-          # build_prod_wheels.py forwards each of these to pip and ignores an
-          # empty value, so pass both and supply whichever source applies:
+          # build_prod_wheels.py forwards --index-url and --find-links to pip
+          # (ignoring empty), so pass both and supply whichever source applies:
           # --index-url for a PEP 503 index, --find-links for a flat page.
+
           # --release-type lets the script tag dev builds' torch version with
           # the torch source commit (e.g. 2.12.0a0+git1a2b3c4d.rocm7.10.0).
+
+          # The --pytorch-git-ref ref/branch name helps select a0 version
+          # stripping for PyTorch release branches; ROCm's release type is
+          # independent and may itself be nightly.
+
           python ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \

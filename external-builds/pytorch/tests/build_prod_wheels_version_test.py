@@ -112,13 +112,9 @@ class ComputeBuildVersionTest(unittest.TestCase):
 
     def test_release_strips_only_legacy_a0(self):
         for base_version, expected in (
-            ("0.29.0a0", "0.29.0"),
-            ("2.14.0a0", "2.14.0"),
-            ("0.29.0", "0.29.0"),
-            ("0.29.0a1", "0.29.0a1"),
-            ("0.29.0b1", "0.29.0b1"),
-            ("0.29.0rc1", "0.29.0rc1"),
-            ("0.29.0.dev1", "0.29.0.dev1"),
+            ("0.29.0a0", "0.29.0"),  # a0 should be stripped (treated as final)
+            ("2.14.0a0", "2.14.0"),  # a0 should be stripped (treated as final)
+            ("0.29.0", "0.29.0"),  # final versions are unchanged
         ):
             with self.subTest(base_version=base_version):
                 (self.source_dir / "version.txt").write_text(base_version)
@@ -129,6 +125,29 @@ class ComputeBuildVersionTest(unittest.TestCase):
                     strip_legacy_a0=True,
                 )
                 self.assertEqual(version, expected + "+rocm10.2.0a20261006")
+                parsed_version = Version(version)
+                self.assertEqual(parsed_version.public, expected)
+                self.assertEqual(parsed_version.local, "rocm10.2.0a20261006")
+                # The ROCm local suffix does not determine prerelease status.
+                self.assertFalse(parsed_version.is_prerelease)
+
+    def test_release_rejects_remaining_prerelease_markers(self):
+        for base_version in (
+            "0.29.0a1",  # a1 is not stripped
+            "0.29.0b1",  # b1 is not stripped
+            "0.29.0rc1",  # rc1 is not stripped
+            "0.29.0.dev1",  # dev releases are also prereleases
+            "0.29.0a0.dev1",  # only a trailing a0 is stripped
+        ):
+            with self.subTest(base_version=base_version):
+                (self.source_dir / "version.txt").write_text(base_version)
+                with self.assertRaises(ValueError):
+                    compute_build_version(
+                        self.source_dir,
+                        "+rocm10.2.0a20261006",
+                        "nightly",
+                        strip_legacy_a0=True,
+                    )
 
     def test_nightly_keeps_a0(self):
         (self.source_dir / "version.txt").write_text("0.29.0a0")

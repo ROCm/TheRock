@@ -336,7 +336,12 @@ def compute_build_version(
     allows a commit hash in the local segment (after `+`).
 
     `strip_legacy_a0` removes torch/torchaudio/torchvision's trailing `a0` for
-    release-source builds, independently of the ROCm release type.
+    release-source builds, independently of the ROCm release type. Upstream
+    release branches can retain `a0` in version.txt; their release tooling
+    removes it so pip treats the resulting package as a final release.
+    ROCm nightly builds can also build these PyTorch release branches.
+    Raise ValueError if a prerelease marker remains after stripping `a0`.
+    Builds of PyTorch nightly retain `a0` to preserve our existing version scheme.
 
     TODO(#5110): reconcile with generate_pytorch_source_manifest.py once
     upfront, manifest-based version computation lands so the built version
@@ -345,7 +350,15 @@ def compute_build_version(
     base_version = (source_dir / "version.txt").read_text().strip()
     if strip_legacy_a0:
         # Match pytorch/test-infra's get_base_version for release builds.
+        # Other prerelease markers are intentionally preserved, not made final.
+        # https://github.com/pytorch/test-infra/blob/341df9bfb588e3d25d4124f39115b7115ddec58c/tools/pkg-helpers/pytorch_pkg_helpers/version.py#L53-L62
         base_version = base_version.removesuffix("a0")
+        # is_prerelease includes alpha, beta, RC, and dev releases.
+        if parse(base_version).is_prerelease:
+            raise ValueError(
+                f"{source_dir / 'version.txt'}: expected a final release version "
+                f"after stripping a0, got {base_version!r}"
+            )
     build_version = base_version + version_suffix
     if release_type in ("dev", "dev-bkc"):
         commit = get_source_commit_short(source_dir)

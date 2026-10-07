@@ -389,6 +389,8 @@ def fetch_versions(
             sources["pytorch"].branch or ""
         ).startswith("release/"):
             # Match pytorch/test-infra's get_base_version for release builds.
+            # Upstream release branches may still have a0 in version.txt.
+            # Preserve other prerelease markers for version-policy validation.
             base_version = base_version.removesuffix("a0")
         full_version = f"{base_version}{version_suffix}"
         log(f"  {name}: {base_version} -> {full_version}")
