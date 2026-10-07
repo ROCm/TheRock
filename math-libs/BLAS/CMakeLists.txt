@@ -51,6 +51,13 @@ else()
   set(_enable_rocRoller "ON")
 endif()
 
+# rocRoller has an unconditional dependency on mxDataGenerator, which is skipped
+# when no supported gfx targets remain after filtering (e.g.
+# THEROCK_AMDGPU_TARGETS='amdgcnspirv'). Disable rocRoller in that case.
+if(NOT _mxdatagenerator_enabled)
+  set(_enable_rocRoller "OFF")
+endif()
+
 if(_enable_rocRoller)
   therock_cmake_subproject_declare(rocRoller
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/rocroller"
@@ -141,6 +148,29 @@ if(NOT WIN32)
   endif()
 endif()
 
+# mxDataGenerator is skipped when no supported gfx targets remain after
+# filtering (e.g. THEROCK_AMDGPU_TARGETS='amdgcnspirv'); only depend on it when
+# it was actually declared.
+set(hipBLASLt_mxdatagenerator_dep)
+if(_mxdatagenerator_enabled)
+  set(hipBLASLt_mxdatagenerator_dep mxDataGenerator)
+endif()
+
+# hipBLASLt still builds when its gfx targets are filtered out (it falls back to
+# DEFAULT_GPU_TARGETS above), but its test/client surface hard-depends on
+# mxDataGenerator in several places:
+#   * clients/common            -> find_package(mxDataGenerator) (HIPBLASLT_ENABLE_MXDATAGENERATOR)
+#   * tensilelite/client        -> #include <mxDataGen.hpp> (TENSILELITE_ENABLE_CLIENT)
+#   * tensilelite/tests         -> (TENSILELITE_BUILD_TESTING)
+# mxDataGenerator is skipped when no supported gfx targets remain after filtering
+# (e.g. THEROCK_AMDGPU_TARGETS='amdgcnspirv'), so disable hipBLASLt's testing and
+# its mxDataGenerator usage in that case, keeping the library itself.
+set(_hipblaslt_build_testing ${THEROCK_BUILD_TESTING})
+set(_hipblaslt_enable_mxdatagenerator ${_mxdatagenerator_enabled})
+if(NOT _mxdatagenerator_enabled)
+  set(_hipblaslt_build_testing OFF)
+endif()
+
 set(hipBLASLt_rocRoller_deps)
 if(_enable_rocRoller)
   list(APPEND hipBLASLt_rocRoller_build_deps
@@ -166,10 +196,11 @@ therock_cmake_subproject_declare(hipBLASLt
     -DHIPBLASLT_ENABLE_BLIS=OFF  # TODO: Evaluate
     # TensileLite's C++ gtest suite (tests/) is Linux-only for now (unvalidated
     # on Windows); mirrors the TENSILELITE_ENABLE_CLIENT guard below.
-    -DTENSILELITE_BUILD_TESTING=$<IF:$<BOOL:${WIN32}>,OFF,${THEROCK_BUILD_TESTING}>
-    -DTENSILELITE_ENABLE_CLIENT=$<IF:$<BOOL:${WIN32}>,OFF,${THEROCK_BUILD_TESTING}>
-    -DHIPBLASLT_BUILD_TESTING=${THEROCK_BUILD_TESTING}
-    -DHIPBLASLT_INSTALL_TENSILELITE_TEST_ARTIFACTS=${THEROCK_BUILD_TESTING}
+    -DTENSILELITE_BUILD_TESTING=$<IF:$<BOOL:${WIN32}>,OFF,${_hipblaslt_build_testing}>
+    -DTENSILELITE_ENABLE_CLIENT=$<IF:$<BOOL:${WIN32}>,OFF,${_hipblaslt_build_testing}>
+    -DHIPBLASLT_BUILD_TESTING=${_hipblaslt_build_testing}
+    -DHIPBLASLT_INSTALL_TENSILELITE_TEST_ARTIFACTS=${_hipblaslt_build_testing}
+    -DHIPBLASLT_ENABLE_MXDATAGENERATOR=${_hipblaslt_enable_mxdatagenerator}
     -DROCISA_USE_STABLE_ABI=ON
     -DHIPBLASLT_ENABLE_ROCROLLER=${_enable_rocRoller}
     -DHIPBLASLT_ENABLE_FETCH=OFF
@@ -180,7 +211,7 @@ therock_cmake_subproject_declare(hipBLASLt
     amd-hip
   BUILD_DEPS
     hipBLAS-common
-    mxDataGenerator
+    ${hipBLASLt_mxdatagenerator_dep}
     rocm-cmake
     therock-googletest
     therock-msgpack-cxx
@@ -236,6 +267,9 @@ therock_cmake_subproject_declare(rocBLAS
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocblas"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocBLAS"
   BACKGROUND_BUILD
+  DEFAULT_GPU_TARGETS
+    gfx1100  # rocBLAS rejects an empty gfx target list; keep it buildable when
+             # its targets are filtered out (e.g. amdgcnspirv). Mirrors hipBLASLt.
   CMAKE_ARGS
     -DHIP_PLATFORM=amd
     -DROCM_PATH=

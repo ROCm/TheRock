@@ -9,6 +9,19 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
 endif()
 
 if(THEROCK_ENABLE_MIOPEN)
+  set(_miopen_enabled ON)
+  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_miopen_targets MIOpen ${THEROCK_AMDGPU_TARGETS})
+    if(NOT _miopen_targets)
+      message(STATUS
+        "MIOpen: no supported gfx targets remain after filtering "
+        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
+      set(_miopen_enabled OFF)
+    endif()
+  endif()
+endif()
+
+if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
   # MIOpen's CK use is gated on both the per-arch CK availability
   # (math-libs/CMakeLists.txt) and the user-facing
   # THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL opt-out, which lets
@@ -81,7 +94,7 @@ if(THEROCK_ENABLE_MIOPEN)
     SUBPROJECT_DEPS
       MIOpen
   )
-endif(THEROCK_ENABLE_MIOPEN)
+endif(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
 
 if(THEROCK_ENABLE_HIPDNN)
   ##############################################################################
@@ -194,7 +207,10 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
 
 endif(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
 
-if(THEROCK_ENABLE_MIOPENPROVIDER)
+# miopenprovider has an unconditional RUNTIME_DEP on MIOpen, so it can only be
+# declared when MIOpen itself is (MIOpen is skipped when no supported gfx
+# targets remain after filtering, e.g. THEROCK_AMDGPU_TARGETS='amdgcnspirv').
+if(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
   ##############################################################################
   # hipDNN MIOpen provider
   ##############################################################################
@@ -239,7 +255,7 @@ if(THEROCK_ENABLE_MIOPENPROVIDER)
     SUBPROJECT_DEPS
       miopenprovider
   )
-endif(THEROCK_ENABLE_MIOPENPROVIDER)
+endif(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
 
 if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
   ##############################################################################
@@ -290,6 +306,19 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
 endif(THEROCK_ENABLE_HIPBLASLTPROVIDER)
 
 if(THEROCK_ENABLE_HIPKERNELPROVIDER)
+  set(_hipkernelprovider_enabled ON)
+  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_hipkernelprovider_targets hipkernelprovider ${THEROCK_AMDGPU_TARGETS})
+    if(NOT _hipkernelprovider_targets)
+      message(STATUS
+        "hipkernelprovider: no supported gfx targets remain after filtering "
+        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
+      set(_hipkernelprovider_enabled OFF)
+    endif()
+  endif()
+endif()
+
+if(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
   ##############################################################################
   # hipDNN hip kernel provider
   ##############################################################################
@@ -335,9 +364,22 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
     SUBPROJECT_DEPS
       hipkernelprovider
   )
-endif(THEROCK_ENABLE_HIPKERNELPROVIDER)
+endif(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
 
 if(THEROCK_ENABLE_HIPDNN_SAMPLES)
+  set(_hipdnn_samples_enabled ON)
+  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_hipdnn_samples_targets hipDNN_samples ${THEROCK_AMDGPU_TARGETS})
+    if(NOT _hipdnn_samples_targets)
+      message(STATUS
+        "hipDNN_samples: no supported gfx targets remain after filtering "
+        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
+      set(_hipdnn_samples_enabled OFF)
+    endif()
+  endif()
+endif()
+
+if(THEROCK_ENABLE_HIPDNN_SAMPLES AND _hipdnn_samples_enabled)
   ##############################################################################
   # hipDNN samples
   ##############################################################################
@@ -376,4 +418,4 @@ if(THEROCK_ENABLE_HIPDNN_SAMPLES)
     SUBPROJECT_DEPS
       hipDNN_samples
   )
-endif(THEROCK_ENABLE_HIPDNN_SAMPLES)
+endif(THEROCK_ENABLE_HIPDNN_SAMPLES AND _hipdnn_samples_enabled)
