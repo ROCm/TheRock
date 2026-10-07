@@ -1,121 +1,58 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Get access to LLVM_VERSION_MAJOR
-include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/cmake/Modules/LLVMVersion.cmake")
-
-# Build LLVM and the comgr dependency.
+# TheRock-only overrides for amd-llvm.
+#
+# LLVM projects, runtimes, targets, distributions, tool allow-lists, external
+# projects (device-libs / SPIR-V / sqtt), install RPATH, and most OpenMP/Flang
+# options come from clang/cmake/caches/TheRock.cmake (via -C). Do not FORCE
+# those here or they will override the cache.
+#
 # Note that in LLVM "BUILD_SHARED_LIBS" enables an unsupported development mode.
-# The flag you want for a shared library build is LLVM_BUILD_LLVM_DYLIB.
+# The flag you want for a shared library build is LLVM_BUILD_LLVM_DYLIB (set by
+# the cache).
 set(BUILD_SHARED_LIBS OFF)
-if(WIN32)
-  set(LLVM_BUILD_LLVM_DYLIB OFF)
-  set(LLVM_LINK_LLVM_DYLIB OFF)
-  set(LIBUNWIND_ENABLE_SHARED OFF)
-  set(LIBUNWIND_ENABLE_STATIC ON)
-  # TODO(#36): Enable libunwind, libcxx, and libcxxabi on Windows?
-  #     Should they be supported? What depends on them?
-  set(LLVM_ENABLE_LIBCXX OFF)
-  set(LLVM_ENABLE_RUNTIMES "compiler-rt" CACHE STRING "Enabled runtimes" FORCE)
-  set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra" CACHE STRING "Enable LLVM projects" FORCE)
-else()
-  set(LLVM_BUILD_LLVM_DYLIB ON)
-  set(LLVM_LINK_LLVM_DYLIB ON)
-  set(LLVM_ENABLE_LIBCXX ON)
-  set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra;flang" CACHE STRING "Enable LLVM projects" FORCE)
-  set(LLVM_ENABLE_RUNTIMES "compiler-rt;libunwind;libcxx;libcxxabi;openmp;offload" CACHE STRING "Enabled runtimes" FORCE)
-  if("offload" IN_LIST LLVM_ENABLE_RUNTIMES)
-    set(OPENMP_ENABLE_LIBOMPTARGET ON)
-    set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
-    set(LIBOMPTARGET_ENABLE_DEBUG ON)
-    set(LIBOMPTARGET_NO_SANITIZER_AMDGPU ON)
-    set(LIBOMP_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../lib:\$ORIGIN/../../../lib:\$ORIGIN/../../../../lib")
-    # There is an issue with finding the zstd config built by TheRock when zstd
-    # is searched for in the llvm config. LLVM has a FindZSTD.cmake that is
-    # found in module mode, which ultimately fails to locate the library.
-    # For now we will switch the priorty for find_package to first search in
-    # CONFIG mode.
-    set(RUNTIMES_CMAKE_ARGS "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON")
 
-    # Use DWARF4 for sanitizer builds. dwz (the DWARF optimization tool used in
-    # Debian/Ubuntu packaging) doesn't fully support DWARF5 - it fails with
-    # "Unknown debugging section .debug_str_offsets" even in version 0.16
-    # (Ubuntu 26.04). This is an upstream dwz limitation, not something we
-    # can fix by updating distro packages. Revisit if dwz gains DWARF5 support.
-    if(THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN" OR THEROCK_SANITIZER STREQUAL "TSAN")
-        string(APPEND RUNTIMES_CMAKE_ARGS ";-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} -gdwarf-4;-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} -gdwarf-4")
-    endif()
-
-    # TODO: Guard for amd-staging only. Remove condition when compiler branch is updated.
-    if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/openmp/device/CMakeLists.txt")
-      list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
-      set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
-      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;flang-rt;openmp")
-      set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
-      set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
-      set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
-      # Hosts whose C long double is already IEEE-754 binary128 (ppc64le,
-      # riscv64) do not need libquadmath: flang-rt folds the F128 entry points
-      # into libflang_rt.runtime instead of building libflang_rt.quadmath.
-      #
-      # This must be a typed cache entry, not a normal variable.
-      # flang/cmake/modules/FlangCommon.cmake declares the variable with
-      # set(... CACHE STRING) and LLVM sets cmake_minimum_required(3.20), so
-      # CMP0126 is OLD there and that call would discard a normal variable of
-      # the same name, leaving the flang driver and the flang-rt runtimes build
-      # with different values. An existing typed cache entry makes the
-      # FlangCommon.cmake declaration a no-op, so this selection is
-      # authoritative for both.
-      if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le|riscv64")
-        set(FLANG_RUNTIME_F128_MATH_LIB "" CACHE STRING "Library implementing REAL(16) math for flang-rt" FORCE)
-      else()
-        set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath" CACHE STRING "Library implementing REAL(16) math for flang-rt" FORCE)
-      endif()
-      set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
-      #TODO: Enable when HWLOC dependency is figured out
-      #set(LIBOMP_USE_HWLOC ON)
-    endif()
-  endif()
-  # Setting "LIBOMP_COPY_EXPORTS" to `OFF` "aids parallel builds to not interfere
-  # with each other" as libomp and generated headers are copied into the original
-  # source otherwise. Defaults to `ON`.
-  set(LIBOMP_COPY_EXPORTS OFF)
-endif()
-
-# Set the LLVM_ENABLE_PROJECTS variable before including LLVM's CMakeLists.txt
-# Only enable BUILD_TESTING if LLVM tests are explicitly enabled
-if(THEROCK_BUILD_LLVM_TESTS)
-  set(BUILD_TESTING ON CACHE BOOL "Enable building LLVM tests" FORCE)
-else()
-  set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
-endif()
-
-# Enable LLVM tools when tests are enabled (tests need the tools) or when explicitly requested
-if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS OR THEROCK_BUILD_COMGR_TESTS)
-  set(LLVM_BUILD_TOOLS ON CACHE BOOL "Build LLVM tools required for tests" FORCE)
-  set(LLVM_INSTALL_UTILS ON CACHE BOOL "Install LLVM utility binaries like FileCheck" FORCE)
-endif()
-# we have never enabled benchmarks,
-# disabling more explicitly after a bug fix enabled.
-set(LLVM_INCLUDE_BENCHMARKS OFF)
-set(LLVM_TARGETS_TO_BUILD "AMDGPU;Native;SPIRV" CACHE STRING "Enable LLVM Targets" FORCE)
-
-# Packaging.
-set(PACKAGE_VENDOR "AMD" CACHE STRING "Vendor" FORCE)
-
-# Build device-libs and spirv-llvm-translator as part of the core
-# compiler default (as opposed to other components that are *users*
-# of the compiler).
-set(LLVM_EXTERNAL_ROCM_DEVICE_LIBS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/amd/device-libs")
-set(LLVM_EXTERNAL_SPIRV_LLVM_TRANSLATOR_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/spirv-llvm-translator")
-set(LLVM_EXTERNAL_SQTT_MARKER_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/amd/sqtt-marker")
-
-set(EXTERNAL_PROJECTS "rocm-device-libs;spirv-llvm-translator")
 if(NOT WIN32)
-    # LLVM plugins do not work on Windows unless LLVM_EXPORT_SYMBOLS_FOR_PLUGINS is set.
-    list(APPEND EXTERNAL_PROJECTS "sqtt-marker")
+  # There is an issue with finding the zstd config built by TheRock when zstd
+  # is searched for in the llvm config. LLVM has a FindZSTD.cmake that is
+  # found in module mode, which ultimately fails to locate the library.
+  # Prefer CONFIG mode for runtime ExternalProjects.
+  set(RUNTIMES_CMAKE_ARGS "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON")
+
+  # Use DWARF4 for sanitizer builds. dwz (the DWARF optimization tool used in
+  # Debian/Ubuntu packaging) doesn't fully support DWARF5 - it fails with
+  # "Unknown debugging section .debug_str_offsets" even in version 0.16
+  # (Ubuntu 26.04). This is an upstream dwz limitation, not something we
+  # can fix by updating distro packages. Revisit if dwz gains DWARF5 support.
+  if(THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN" OR THEROCK_SANITIZER STREQUAL "TSAN")
+    string(APPEND RUNTIMES_CMAKE_ARGS ";-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} -gdwarf-4;-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} -gdwarf-4")
+  endif()
+
+  # Hosts whose C long double is already IEEE-754 binary128 (ppc64le,
+  # riscv64) do not need libquadmath: flang-rt folds the F128 entry points
+  # into libflang_rt.runtime instead of building libflang_rt.quadmath.
+  #
+  # This must be a typed cache entry, not a normal variable.
+  # flang/cmake/modules/FlangCommon.cmake declares the variable with
+  # set(... CACHE STRING) and LLVM sets cmake_minimum_required(3.20), so
+  # CMP0126 is OLD there and that call would discard a normal variable of
+  # the same name, leaving the flang driver and the flang-rt runtimes build
+  # with different values. An existing typed cache entry makes the
+  # FlangCommon.cmake declaration a no-op, so this selection is
+  # authoritative for both.
+  #
+  # Kept here (not only in ROCm.cmake) so FORCE wins before flang configures,
+  # including for riscv64 which the cache file may not yet special-case.
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le|riscv64")
+    set(FLANG_RUNTIME_F128_MATH_LIB "" CACHE STRING "Library implementing REAL(16) math for flang-rt" FORCE)
+  else()
+    set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath" CACHE STRING "Library implementing REAL(16) math for flang-rt" FORCE)
+  endif()
+
+  # TODO: Enable when HWLOC dependency is figured out.
+  # set(LIBOMP_USE_HWLOC ON)
 endif()
-set(LLVM_EXTERNAL_PROJECTS "${EXTERNAL_PROJECTS}" CACHE STRING "Enable extra projects" FORCE)
 
 # TODO2: This mechanism has races in certain situations, failing to create a
 # symlink. Revisit once devicemanager code is made more robust.
@@ -130,99 +67,11 @@ set(LLVM_EXTERNAL_PROJECTS "${EXTERNAL_PROJECTS}" CACHE STRING "Enable extra pro
 # set(ROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_NEW "lib/clang/${LLVM_VERSION_MAJOR}/amdgcn" CACHE STRING "New devicelibs loc" FORCE)
 # set(ROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_OLD "amdgcn" CACHE STRING "Old devicelibs loc" FORCE)
 
-# Setup the install rpath (let CMake handle build RPATH per usual):
-# * Executables and libraries can always search their adjacent lib directory
-#   (which may be the same as the origin for libraries).
-# * Files in lib/llvm/(bin|lib) should search the project-wide lib/ directory
-#   so that dlopen of runtime files from the compiler can work.
-# * One might think that only EXEs need to be build this way, but the dlopen
-#   utilities can be compiled into libLLVM, in which case, that RUNPATH is
-#   primary.
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/../../../lib;$ORIGIN/../../rocm_sysdeps/lib")
-endif()
-
-# Disable all implicit LLVM tools by default so that we can allow-list just what
-# we want. It is unfortunate that LLVM doesn't have a global option to do this
-# bulk disabling. In the absence of that, we manually generate options using
-# the same logic as `create_llvm_tool_options` in `AddLLVM.cmake`. If this
-# ever drifts, we will build extra tools and (presumably) someone will notice
-# the bloat.
-
-function(therock_set_implicit_llvm_options type tools_dir required_tool_names)
-  file(GLOB subdirs "${tools_dir}/*")
-  foreach(dir ${subdirs})
-    if(NOT IS_DIRECTORY "${dir}" OR NOT EXISTS "${dir}/CMakeLists.txt")
-      continue()
-    endif()
-    cmake_path(GET dir FILENAME toolname)
-    string(REPLACE "-" "_" toolname "${toolname}")
-    string(TOUPPER "${toolname}" toolname)
-    set(_option_name "${type}_TOOL_${toolname}_BUILD")
-    set(_option_value OFF)
-    if("${toolname}" IN_LIST required_tool_names)
-      set(_option_value ON)
-    endif()
-    message(STATUS "Implicit tool option: ${_option_name} = ${_option_value}")
-    set(${_option_name} "${_option_value}" CACHE BOOL "Implicit disable ${type} tool" FORCE)
-  endforeach()
-endfunction()
-
-# When LLVM LIT tests or all tools are requested, build everything (don't selectively disable).
-# Comgr tests only need tools already in the minimal required set (clang, llvm-dis, llvm-objdump,
-# FileCheck via LLVM_INSTALL_UTILS), so they don't need the full tool build.
-if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS)
-  block()
-    # This list contains the minimum tooling that must be enabled to build LLVM.
-    # It is empically derived (either configure or ninja invocation will fail
-    # on a missing tool).
-    set(_llvm_required_tools
-      LLVM_AR
-      LLVM_AS
-      LLVM_CONFIG
-      LLVM_COV
-      LLVM_CXXFILT
-      LLVM_DIS
-      LLVM_DWARFDUMP
-      LLVM_LINK
-      LLVM_MC
-      LLVM_NM
-      LLVM_OFFLOAD_BINARY
-      LLVM_PROFDATA
-      LLVM_SHLIB
-      LLVM_OBJCOPY
-      LLVM_OBJDUMP
-      LLVM_READOBJ
-      LLVM_SYMBOLIZER
-      OPT
-      YAML2OBJ
-    )
-    if(WIN32)
-      # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
-      # we might as well build them from source ourselves.
-      list(APPEND _llvm_required_tools "LLVM_DLLTOOL")
-      list(APPEND _llvm_required_tools "LLVM_LIB")
-      list(APPEND _llvm_required_tools "LLVM_RANLIB")
-    endif()
-    therock_set_implicit_llvm_options(LLVM "${CMAKE_CURRENT_SOURCE_DIR}/tools" "${_llvm_required_tools}")
-
-    # Clang tools that are required.
-    set(_clang_required_tools
-      CLANG_HIP
-      CLANG_OFFLOAD_BUNDLER
-      CLANG_OFFLOAD_PACKAGER
-      CLANG_OFFLOAD_WRAPPER
-      CLANG_LINKER_WRAPPER
-      CLANG_SHLIB
-      DRIVER
-      LIBCLANG
-      OFFLOAD_ARCH
-    )
-    if(WIN32)
-      # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
-      # we might as well build them from source ourselves.
-      list(APPEND _clang_required_tools "CLANG_SCAN_DEPS")
-    endif()
-    therock_set_implicit_llvm_options(CLANG "${CMAKE_CURRENT_SOURCE_DIR}/../clang/tools" "${_clang_required_tools}")
-  endblock()
+# Keep CTest/BUILD_TESTING aligned with TheRock's LLVM test toggle. The cache
+# uses LLVM_INCLUDE_TESTS (passed from compiler/CMakeLists.txt) for tool/test
+# policy; this covers subprojects that still key off BUILD_TESTING.
+if(THEROCK_BUILD_LLVM_TESTS)
+  set(BUILD_TESTING ON CACHE BOOL "Enable building LLVM tests" FORCE)
+else()
+  set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
 endif()
