@@ -1242,22 +1242,31 @@ def run():
             # Use policy-gated value from workflow if available, otherwise use static matrix
             if gpu_tests_gated:
                 # GPU tests are gated - don't use runner labels or defaults for GPU
+                # This includes multi-GPU runners since they are also GPU tests
                 test_runs_on_labels = None
                 test_runs_on_default = ""
+                test_runs_on_multi_gpu_labels = None
+                test_runs_on_multi_gpu_default = ""
             elif test_runs_on_from_workflow is not None:
                 # Workflow provided a non-empty runner - use it but allow label distribution
                 test_runs_on_labels = platform_info.get("test-runs-on-labels")
                 test_runs_on_default = test_runs_on_from_workflow
+                test_runs_on_multi_gpu_labels = platform_info.get(
+                    "test-runs-on-multi-gpu-labels"
+                )
+                test_runs_on_multi_gpu_default = platform_info.get(
+                    "test-runs-on-multi-gpu", ""
+                )
             else:
                 # Fallback to static matrix (backward compatibility)
                 test_runs_on_labels = platform_info.get("test-runs-on-labels")
                 test_runs_on_default = platform_info.get("test-runs-on", "")
-            test_runs_on_multi_gpu_labels = platform_info.get(
-                "test-runs-on-multi-gpu-labels"
-            )
-            test_runs_on_multi_gpu_default = platform_info.get(
-                "test-runs-on-multi-gpu", ""
-            )
+                test_runs_on_multi_gpu_labels = platform_info.get(
+                    "test-runs-on-multi-gpu-labels"
+                )
+                test_runs_on_multi_gpu_default = platform_info.get(
+                    "test-runs-on-multi-gpu", ""
+                )
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
 
     logging.info(f"Selecting projects: {projects_to_test}")
