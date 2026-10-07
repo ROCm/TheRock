@@ -152,7 +152,8 @@ jobs:
       id-token: write
 
   build_tarballs:
-    needs: [build_artifacts]
+    needs: [copy_prebuilt_stages, build_artifacts]
+    if: ${{ !failure() && !cancelled() }}
     name: Build Tarballs
     uses: ./.github/workflows/multi_arch_build_tarballs.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
@@ -191,7 +192,8 @@ jobs:
       id-token: write
 
   build_native_deb_packages:
-    needs: [build_artifacts]
+    needs: [copy_prebuilt_stages, build_artifacts]
+    if: ${{ !failure() && !cancelled() }}
     name: Build DEB Packages
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
@@ -210,7 +212,8 @@ jobs:
       id-token: write
 
   build_native_rpm_packages:
-    needs: [build_artifacts]
+    needs: [copy_prebuilt_stages, build_artifacts]
+    if: ${{ !failure() && !cancelled() }}
     name: Build RPM Packages
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
@@ -229,7 +232,8 @@ jobs:
       id-token: write
 
   publish_to_release_buckets:
-    needs: [build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages]
+    needs: [copy_prebuilt_stages, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages]
+    if: ${{ !failure() && !cancelled() }}
     name: Publish to Release Buckets
     runs-on: ubuntu-24.04
     permissions:
