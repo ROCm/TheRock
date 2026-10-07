@@ -1,13 +1,18 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+import argparse
 import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from build_prod_wheels import _asan_import_env, _setup_common_build_env
+from build_prod_wheels import (
+    _asan_import_env,
+    _setup_common_build_env,
+    validate_build_args,
+)
 
 
 def _plant_asan_runtime(root: Path) -> Path:
@@ -63,6 +68,27 @@ class UseAsanEnvTest(unittest.TestCase):
             with mock.patch.dict(os.environ, {"USE_ASAN": "1"}):
                 with self.assertRaises(RuntimeError):
                     _setup_common_build_env(root, root, root, "gfx1100", None, False)
+
+    def test_use_asan_defaults_to_torch_only(self):
+        parser = argparse.ArgumentParser()
+        args = argparse.Namespace(
+            build_triton=None,
+            build_pytorch_audio=None,
+            build_pytorch_vision=None,
+            build_apex=None,
+            triton_dir=Path("/no/such/triton"),
+            pytorch_audio_dir=Path("/no/such/audio"),
+            pytorch_vision_dir=Path("/no/such/vision"),
+            apex_dir=Path("/no/such/apex"),
+            enable_pytorch_flash_attention=None,
+            pytorch_dir=Path("/no/such/pytorch"),
+        )
+        with mock.patch.dict(os.environ, {"USE_ASAN": "1"}):
+            validate_build_args(parser, args)
+        self.assertFalse(args.build_triton)
+        self.assertFalse(args.build_pytorch_audio)
+        self.assertFalse(args.build_pytorch_vision)
+        self.assertFalse(args.build_apex)
 
     def test_use_asan_is_absent_unless_requested(self):
         with tempfile.TemporaryDirectory() as temp_dir:

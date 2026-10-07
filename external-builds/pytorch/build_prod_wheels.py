@@ -520,6 +520,19 @@ def validate_build_args(
     parser: argparse.ArgumentParser, args: argparse.Namespace
 ) -> None:
     """Resolve automatic project selections and validate build arguments."""
+    # Host-ASAN wheels are torch-only. Companion projects load the same
+    # instrumented ROCm libraries and abort unless each of their build
+    # processes preloads the ASan runtime.
+    if os.environ.get("USE_ASAN") == "1":
+        for option_name in (
+            "build_triton",
+            "build_pytorch_audio",
+            "build_pytorch_vision",
+            "build_apex",
+        ):
+            if getattr(args, option_name) is None:
+                setattr(args, option_name, False)
+
     # If a project dir exists, enable that project --build-* option by default.
     if args.build_triton is None:
         args.build_triton = args.triton_dir is not None
