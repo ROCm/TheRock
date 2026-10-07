@@ -1017,6 +1017,37 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertNotIn("rccl", names)
         self.assertNotIn("rocshmem", names)
 
+    # -----------------------
+    # test_type_for_family enforcement
+    # -----------------------
+
+    def test_test_type_for_family_strict_override(self):
+        """test_type_for_family strictly overrides TEST_TYPE env var."""
+        os.environ["TEST_TYPE"] = "full"
+        os.environ["PROJECTS_TO_TEST"] = "hipblaslt"
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx942-prod",
+                        "test_type_for_family": "quick",
+                        "fetch-gfx-targets": ["gfx942"],
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        hipblaslt = next(j for j in components if j["job_name"] == "hipblaslt")
+        self.assertEqual(hipblaslt["test_type"], "quick")
+        self.assertEqual(hipblaslt["total_shards"], 1)  # quick uses single shard
+
 
 if __name__ == "__main__":
     unittest.main()
