@@ -29,6 +29,7 @@
       "libhipcxx",
       "mxdatagenerator",
       "ocl-clr",
+      "profiler-hub",
       "rdc",
       "rocgdb",
       "rocminfo",
@@ -262,6 +263,11 @@
       "hipsparselt"
     ]
   },
+  "profiler-hub": {
+    "consumers": [
+      "rocprofiler-systems"
+    ]
+  },
   "rccl": {
     "consumers": [
       "rccl-tests",
@@ -438,6 +444,7 @@
       "hipblaslt",
       "hipsparselt",
       "miopen",
+      "profiler-hub",
       "rccl",
       "rdc",
       "rocblas",
@@ -609,6 +616,7 @@
     "consumers": [
       "hipblaslt",
       "hipdnn",
+      "profiler-hub",
       "rccl",
       "rocprofiler-systems",
       "rocroller",
@@ -658,6 +666,7 @@
       "miopen",
       "miopenprovider",
       "mxdatagenerator",
+      "profiler-hub",
       "rccl",
       "rocalution",
       "rocblas",
@@ -811,6 +820,7 @@
     "consumers": [
       "hipblaslt",
       "hipdnn",
+      "profiler-hub",
       "rocprofiler-systems",
       "rocroller"
     ]
@@ -818,6 +828,7 @@
   "therock-sqlite3": {
     "consumers": [
       "miopen",
+      "profiler-hub",
       "rocprofiler-compute",
       "rocprofiler-sdk",
       "rocprofiler-systems",
