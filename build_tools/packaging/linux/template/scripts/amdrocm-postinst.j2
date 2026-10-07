@@ -1,0 +1,132 @@
+#!/bin/bash
+
+is_debian_like() {
+    local id_like="$1"
+
+    case " $id_like " in
+        (*" debian "*|*" ubuntu "*)
+            return 0
+            ;;
+        (*)
+            return 1
+            ;;
+    esac
+}
+
+do_update_alternatives() {
+    # Skip update if update-alternatives does not exist.
+    command -v update-alternatives >/dev/null || return 0
+
+    local altscore now
+    now=$(date -u +%s)
+
+    # Build an alternatives priority from the ROCm version.
+    altscore=$(({{ version_major }} - 3))
+    altscore=$((altscore * 14 + {{ version_minor }}))
+    altscore=$((altscore * 14 + {{ version_patch }}))
+    altscore=$((altscore * 1000000 + (now - 1600000000) / 60))
+
+{% if target == "deb" %}
+    PKG_INSTALL_PREFIX={{ install_prefix }}
+{% else %}
+    PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
+{% endif %}
+
+{% if package_name == "amdrocm-base" %}
+    # Install /opt/rocm/core and /opt/rocm/core-<major>.
+    update-alternatives --install \
+        "/opt/rocm/core" \
+        "core" \
+        "$PKG_INSTALL_PREFIX" \
+        "$altscore"
+
+    update-alternatives --install \
+        "/opt/rocm/core-{{ version_major }}" \
+        "core-{{ version_major }}" \
+        "$PKG_INSTALL_PREFIX" \
+        "$altscore"
+
+    # Install /opt/rocm/bin, /opt/rocm/lib, and /opt/rocm/include.
+    update-alternatives --install \
+        "/opt/rocm/bin" \
+        "rocm-bin" \
+        "$PKG_INSTALL_PREFIX/bin" \
+        "$altscore"
+
+    update-alternatives --install \
+        "/opt/rocm/lib" \
+        "rocm-lib" \
+        "$PKG_INSTALL_PREFIX/lib" \
+        "$altscore"
+
+    update-alternatives --install \
+        "/opt/rocm/include" \
+        "rocm-include" \
+        "$PKG_INSTALL_PREFIX/include" \
+        "$altscore"
+{% endif %}
+
+{% if package_name == "amdrocm-llvm" %}
+    # Install /opt/rocm/llvm, /opt/rocm/amdgcn,
+    # /opt/rocm/libexec, and /opt/rocm/share.
+    update-alternatives --install \
+        "/opt/rocm/llvm" \
+        "rocm-llvm" \
+        "$PKG_INSTALL_PREFIX/llvm" \
+        "$altscore"
+
+    update-alternatives --install \
+        "/opt/rocm/amdgcn" \
+        "rocm-amdgcn" \
+        "$PKG_INSTALL_PREFIX/amdgcn" \
+        "$altscore"
+
+    update-alternatives --install \
+        "/opt/rocm/libexec" \
+        "rocm-libexec" \
+        "$PKG_INSTALL_PREFIX/libexec" \
+        "$altscore"
+
+    update-alternatives --install \
+        "/opt/rocm/share" \
+        "rocm-share" \
+        "$PKG_INSTALL_PREFIX/share" \
+        "$altscore"
+{% endif %}
+
+    # Install package-specific binary alternatives.
+{% for binary in binaries %}
+    if [ -e "$PKG_INSTALL_PREFIX/bin/{{ binary }}" ]; then
+        update-alternatives --install \
+            "/usr/bin/{{ binary }}" \
+            "{{ binary }}" \
+            "$PKG_INSTALL_PREFIX/bin/{{ binary }}" \
+            "$altscore"
+    else
+        echo "$PKG_INSTALL_PREFIX/bin/{{ binary }} not found, but that is OK" >&2
+    fi
+{% endfor %}
+
+    true
+}
+
+if [ -e /etc/os-release ] &&
+   source /etc/os-release &&
+   is_debian_like "${ID_LIKE:-$ID}"
+then
+    case "$1" in
+        configure)
+            do_update_alternatives
+            ;;
+
+        abort-upgrade|abort-remove|abort-deconfigure)
+            echo "$1"
+            ;;
+
+        *)
+            exit 0
+            ;;
+    esac
+else
+    do_update_alternatives
+fi
