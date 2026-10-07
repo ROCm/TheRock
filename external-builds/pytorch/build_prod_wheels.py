@@ -228,12 +228,18 @@ def run_command(args: list[str | Path], cwd: Path, env: dict[str, str] | None = 
     subprocess.check_call(args, cwd=str(cwd), env=full_env)
 
 
-def capture(args: list[str | Path], cwd: Path) -> str:
+def capture(
+    args: list[str | Path], cwd: Path, env: dict[str, str] | None = None
+) -> str:
     args = [str(arg) for arg in args]
     print(f"++ Capture [{cwd}]$ {shlex.join(args)}")
+    full_env = None
+    if env:
+        full_env = dict(os.environ)
+        full_env.update(env)
     try:
         return subprocess.check_output(
-            args, cwd=str(cwd), stderr=subprocess.STDOUT, text=True
+            args, cwd=str(cwd), stderr=subprocess.STDOUT, text=True, env=full_env
         ).strip()
     except subprocess.CalledProcessError as e:
         print(f"Error capturing output: {e}")
@@ -719,11 +725,15 @@ def _setup_common_build_env(
 
     # Host-ASAN releases set this. PyTorch's USE_ASAN option does the
     # instrumentation; this builder does not choose a compiler or add flags.
-    # The installed SDK is already instrumented, so every child process has to
-    # preload that runtime or ASan aborts on startup.
+    # LD_PRELOAD is not set here: pip and other uninstrumented tools abort
+    # if the ASan runtime is preloaded. The torch import check adds it.
     if os.environ.get("USE_ASAN") == "1":
         env["USE_ASAN"] = "1"
-        _preload_host_asan_runtime(env, rocm_dir)
+        if _find_clang_asan_runtime(rocm_dir) is None:
+            raise RuntimeError(
+                "USE_ASAN=1 requires libclang_rt.asan.so from the ROCm Clang "
+                f"resource directory under {rocm_dir}"
+            )
 
     return env
 
@@ -745,13 +755,11 @@ def _find_clang_asan_runtime(rocm_dir: Path) -> Path | None:
     return max(chosen_from, key=lambda path: path.parents[2].name)
 
 
-def _preload_host_asan_runtime(env: dict[str, str], rocm_dir: Path) -> None:
-    """Preload the SDK ASan runtime for build tools and the torch import check.
+def _asan_import_env(rocm_dir: Path) -> dict[str, str]:
+    """Environment for importing a wheel linked against the host-ASAN SDK.
 
-    Host-ASAN libraries depend on libclang_rt.asan.so. ASan only initializes
-    when that runtime is first in the process, which a normal CPython is not.
-    LD_PRELOAD is copied into os.environ because the post-build import check
-    does not receive the wheel-build env dict.
+    Only the import check should use this. Preloading libclang_rt.asan.so into
+    pip makes uninstrumented Python crash in the DNS resolver.
     """
     runtime = _find_clang_asan_runtime(rocm_dir)
     if runtime is None:
@@ -760,20 +768,18 @@ def _preload_host_asan_runtime(env: dict[str, str], rocm_dir: Path) -> None:
             f"resource directory under {rocm_dir}"
         )
 
-    inherited = env.get("LD_PRELOAD", os.environ.get("LD_PRELOAD", ""))
+    inherited = os.environ.get("LD_PRELOAD", "")
     preload_parts = [str(runtime)]
     if inherited:
         preload_parts.append(inherited)
-    preload = os.pathsep.join(preload_parts)
-    env["LD_PRELOAD"] = preload
-    os.environ["LD_PRELOAD"] = preload
-
-    options = env.get("ASAN_OPTIONS", os.environ.get("ASAN_OPTIONS", ""))
+    options = os.environ.get("ASAN_OPTIONS", "")
     if "detect_leaks=" not in options:
         options = f"{options}:detect_leaks=0" if options else "detect_leaks=0"
-    env["ASAN_OPTIONS"] = options
-    os.environ["ASAN_OPTIONS"] = options
-    print(f"  ASAN runtime preload: {runtime}")
+    print(f"  ASAN import preload: {runtime}")
+    return {
+        "LD_PRELOAD": os.pathsep.join(preload_parts),
+        "ASAN_OPTIONS": options,
+    }
 
 
 def _do_build_wheels_core(
@@ -1359,10 +1365,18 @@ def do_build_pytorch(
         [sys.executable, "-m", "pip", "install", built_wheel], cwd=tempfile.gettempdir()
     )
 
-    print("+++ Sanity checking installed torch (unavailable is okay on CPU machines):")
+    import_env = None
+    if env.get("USE_ASAN") == "1":
+        import_env = _asan_import_env(Path(env["ROCM_HOME"]))
+        print("+++ Sanity checking installed torch with the host-ASAN runtime preloaded:")
+    else:
+        print(
+            "+++ Sanity checking installed torch (unavailable is okay on CPU machines):"
+        )
     sanity_check_output = capture(
         [sys.executable, "-c", "import torch; print(torch.cuda.is_available())"],
         cwd=tempfile.gettempdir(),
+        env=import_env,
     )
     if not sanity_check_output:
         raise RuntimeError("torch package sanity check failed (see output above)")

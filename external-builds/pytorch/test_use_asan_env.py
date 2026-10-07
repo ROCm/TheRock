@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from build_prod_wheels import _setup_common_build_env
+from build_prod_wheels import _asan_import_env, _setup_common_build_env
 
 
 def _plant_asan_runtime(root: Path) -> Path:
@@ -28,31 +28,34 @@ def _plant_asan_runtime(root: Path) -> Path:
 
 
 class UseAsanEnvTest(unittest.TestCase):
-    def test_use_asan_preloads_the_sdk_runtime(self):
+    def test_use_asan_does_not_preload_the_build_environment(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            runtime = _plant_asan_runtime(root)
+            _plant_asan_runtime(root)
             with mock.patch.dict(os.environ, {"USE_ASAN": "1"}, clear=False):
                 os.environ.pop("LD_PRELOAD", None)
                 os.environ.pop("ASAN_OPTIONS", None)
                 env = _setup_common_build_env(root, root, root, "gfx1100", None, False)
-                self.assertEqual(os.environ["LD_PRELOAD"], str(runtime))
-                self.assertEqual(os.environ["ASAN_OPTIONS"], "detect_leaks=0")
+                self.assertNotIn("LD_PRELOAD", os.environ)
+                self.assertNotIn("ASAN_OPTIONS", os.environ)
         self.assertEqual(env["USE_ASAN"], "1")
-        self.assertEqual(env["LD_PRELOAD"], str(runtime))
-        self.assertEqual(env["ASAN_OPTIONS"], "detect_leaks=0")
+        self.assertNotIn("LD_PRELOAD", env)
+        self.assertNotIn("ASAN_OPTIONS", env)
 
-    def test_use_asan_keeps_existing_preload_and_options(self):
+    def test_import_check_preloads_the_sdk_runtime(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             runtime = _plant_asan_runtime(root)
             with mock.patch.dict(
                 os.environ,
-                {"USE_ASAN": "1", "LD_PRELOAD": "/tmp/other.so", "ASAN_OPTIONS": "halt_on_error=0"},
+                {"LD_PRELOAD": "/tmp/other.so", "ASAN_OPTIONS": "halt_on_error=0"},
             ):
-                env = _setup_common_build_env(root, root, root, "gfx1100", None, False)
-        self.assertEqual(env["LD_PRELOAD"], f"{runtime}{os.pathsep}/tmp/other.so")
-        self.assertEqual(env["ASAN_OPTIONS"], "halt_on_error=0:detect_leaks=0")
+                import_env = _asan_import_env(root)
+                self.assertEqual(os.environ["LD_PRELOAD"], "/tmp/other.so")
+        self.assertEqual(
+            import_env["LD_PRELOAD"], f"{runtime}{os.pathsep}/tmp/other.so"
+        )
+        self.assertEqual(import_env["ASAN_OPTIONS"], "halt_on_error=0:detect_leaks=0")
 
     def test_use_asan_requires_the_sdk_runtime(self):
         with tempfile.TemporaryDirectory() as temp_dir:
