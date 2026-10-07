@@ -267,6 +267,9 @@ therock_cmake_subproject_declare(rocBLAS
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocblas"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocBLAS"
   BACKGROUND_BUILD
+  DEFAULT_GPU_TARGETS
+    gfx1100  # rocBLAS rejects an empty gfx target list; keep it buildable when
+             # its targets are filtered out (e.g. amdgcnspirv). Mirrors hipBLASLt.
   CMAKE_ARGS
     -DHIP_PLATFORM=amd
     -DROCM_PATH=
