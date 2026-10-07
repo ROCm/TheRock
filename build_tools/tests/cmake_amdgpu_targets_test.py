@@ -141,7 +141,7 @@ class CmakeTargetSelectionTest(unittest.TestCase):
             (
                 "set(THEROCK_AMDGPU_TARGETS gfx1250)",
                 "gfx1250",
-                "THEROCK_DIST_AMDGPU_TARGETS-NOTFOUND",
+                "gfx1250",
                 "all",
             ),
             (
@@ -165,7 +165,7 @@ class CmakeTargetSelectionTest(unittest.TestCase):
             (
                 "set(THEROCK_AMDGPU_TARGETS gfx1250-strict)",
                 "gfx1250-strict",
-                "THEROCK_DIST_AMDGPU_TARGETS-NOTFOUND",
+                "gfx1250-strict",
                 "all",
             ),
             (
