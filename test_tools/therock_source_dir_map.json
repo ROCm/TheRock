@@ -86,9 +86,6 @@
     "projects/rocprim",
     "projects/rocthrust"
   ],
-  "profiler-hub": [
-    "profilers/profiler-hub"
-  ],
   "rand": [
     "projects/hiprand",
     "projects/rocrand"
