@@ -119,10 +119,24 @@ A project's GPU kernels can be measured along with its host code. It is opt-in
 per project, through `device_coverage=True` in `COVERAGE_PROJECTS`, and only
 worth it where the reported objects contain kernels: rocRAND's generators are
 all kernels, while hipRAND's and hipDNN's libraries have none. It is enabled
-for rocRAND, rocSPARSE and rocSOLVER. rocSOLVER's own coverage option already
-instruments its kernels, so for it this only drops the device-side negation;
-rocRAND's option is host-only and rocSPARSE's negates device instrumentation
-itself, so for those two the device flags are what instrument the kernels.
+for:
+
+- rocRAND, rocSPARSE and rocSOLVER, whose libraries carry their kernels.
+  rocSOLVER's own coverage option already instruments them, so for it this only
+  drops the device-side negation; rocRAND's option is host-only and rocSPARSE's
+  negates device instrumentation itself, so for those two the device flags are
+  what instrument the kernels.
+- rocPRIM, hipCUB, rocThrust and rocWMMA, which are header-only: their kernels
+  are compiled into the test binaries their reports cover, and each of those
+  carries its own collector.
+
+A process can hold only one copy of the collector: the HIP interceptors of two
+copies resolve each other as the real functions and recurse on the first kernel
+launch. Every HIP link with `-fprofile-instr-generate` pulls one in, host-only
+or not, so a build must not instrument two binaries that one test process
+loads. That is why rocBLAS stays host-only, though its own kernels would
+qualify: the tests of rocSOLVER, rocSPARSE and rocWMMA load `librocblas.so`
+next to their own instrumented binary.
 
 ### Building with device coverage
 
@@ -209,7 +223,8 @@ and hipRAND's), keyed `<stage prefix>/<binary>#<n>`. Three consequences:
   (`build_tools/_therock_utils/elf_phdr.py`).
 
 - The hybrid install has to swap the project's code objects into the baseline's
-  archive, or the instrumented host library runs uninstrumented kernels.
+  archive, or its instrumented host binaries (the library, or a header-only
+  project's tests) run uninstrumented kernels.
   `install_rocm_code_coverage_build.py --replace-device-code` replaces only the
   entries under the project's folder, so siblings in the same archive keep the
   baseline's kernels.

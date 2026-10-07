@@ -971,10 +971,10 @@ function(therock_cmake_subproject_activate target_name)
   # device image, and libclang_rt.profile_rocm.a, which the driver links on a
   # HIP link and therock_coverage_device.cmake puts ahead of a generic profile
   # runtime a project names itself, copies each translation unit's device
-  # counters at exit into a profile named after the GPU target. The two failures above are handled downstream: the
-  # HIP runtime now returns an error for a descriptor it cannot resolve instead
-  # of aborting (ROCm/rocm-systems#10894), and the test job renames the device
-  # profiles instead of dropping them.
+  # counters at exit into a profile named after the GPU target. The two failures
+  # above are handled downstream: the HIP runtime now returns an error for a
+  # descriptor it cannot resolve instead of aborting (ROCm/rocm-systems#10894),
+  # and the test job renames the device profiles instead of dropping them.
   set(_coverage_project_include_arg)
   set(_coverage_configure_depends)
   if(NOT MSVC AND ${_coverage_var_name})

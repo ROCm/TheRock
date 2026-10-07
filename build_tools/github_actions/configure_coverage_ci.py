@@ -229,6 +229,10 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         object_globs=["lib/librocblas.so*"],
         fetch_artifact_args="--blas",
         codecov_flag="rocBLAS",
+        # Not device_coverage, though its own kernels would qualify: the tests
+        # of rocSOLVER, rocSPARSE and rocWMMA load librocblas.so next to their
+        # own instrumented binary, and two copies of the profile runtime's HIP
+        # interceptors in one process recurse on the first kernel launch.
     ),
     "hipblas": CoverageProject(
         cmake_target="hipBLAS",
@@ -417,13 +421,17 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         stage=STAGE_MATH_LIBS,
         test_component="rocprim",
         coverage_config="projects/rocprim/test_categories_coverage.yaml",
-        # hipCUB's tests install into the same bin/ as test_hipcub_*.
-        object_globs=["bin/test_*", "!bin/test_hipcub_*"],
+        # hipCUB's and rocThrust's tests install into the same bin/, as
+        # test_hipcub_* and test_thrust_*.
+        object_globs=["bin/test_*", "!bin/test_hipcub_*", "!bin/test_thrust_*"],
         fetch_artifact_args="--prim --tests",
         codecov_flag="rocPRIM",
         # rocPRIM's tests are a sibling subproject, so both stage dirs are
         # overlaid and both are instrumented.
         extra_cmake_targets=["rocPRIM_tests"],
+        # Header-only, so its kernels are compiled into the tests reported on,
+        # which upstream's option instruments with -Xarch_host only.
+        device_coverage=True,
     ),
     "hipcub": CoverageProject(
         cmake_target="hipCUB",
@@ -436,6 +444,9 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         object_globs=["bin/test_hipcub_*"],
         fetch_artifact_args="--prim --tests",
         codecov_flag="hipCUB",
+        # Header-only, like rocPRIM. Upstream's tests take unqualified flags,
+        # which the device-side negation would otherwise cancel.
+        device_coverage=True,
     ),
     "rocthrust": CoverageProject(
         cmake_target="rocThrust",
@@ -445,9 +456,12 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         stage=STAGE_MATH_LIBS,
         test_component="rocthrust",
         coverage_config="projects/rocthrust/test_categories_coverage.yaml",
-        object_globs=["bin/*.hip"],
+        # Two suites: test/ builds <name>.hip, testing/ builds test_thrust_<name>.
+        object_globs=["bin/*.hip", "bin/test_thrust_*"],
         fetch_artifact_args="--prim --tests",
         codecov_flag="rocThrust",
+        # Header-only, like rocPRIM; upstream's option is -Xarch_host only.
+        device_coverage=True,
     ),
     "rocwmma": CoverageProject(
         cmake_target="rocWMMA",
@@ -458,9 +472,13 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         stage=STAGE_MATH_LIBS,
         test_component="rocwmma",
         coverage_config="projects/rocwmma/test_categories_coverage.yaml",
-        object_globs=["bin/*_test*", "bin/gemm_*-validate"],
+        # rocThrust's test_thrust_unittest_tester also matches *_test*.
+        object_globs=["bin/*_test*", "bin/gemm_*-validate", "!bin/test_thrust_*"],
         fetch_artifact_args="--rocwmma --tests",
         codecov_flag="rocWMMA",
+        # Header-only and almost entirely device code. Upstream's tests already
+        # take unqualified flags, so this only stops the device-side negation.
+        device_coverage=True,
     ),
     #
     # rocm-systems -- comm-libs stage

@@ -244,7 +244,17 @@ class BuildCoverageMatrixTest(unittest.TestCase):
         # The report workflow keys the profile handling, the kpack swap and the
         # device object extraction off this one boolean.
         matrix = configure_coverage_ci.build_coverage_matrix(
-            ["rocrand", "rocsparse", "rocsolver", "hiprand"],
+            [
+                "rocrand",
+                "rocsparse",
+                "rocsolver",
+                "rocprim",
+                "hipcub",
+                "rocthrust",
+                "rocwmma",
+                "hiprand",
+                "rocblas",
+            ],
             ["gfx94X-dcgpu"],
             "ROCm/rocm-libraries",
             "main",
@@ -255,7 +265,12 @@ class BuildCoverageMatrixTest(unittest.TestCase):
                 "rocrand": True,
                 "rocsparse": True,
                 "rocsolver": True,
+                "rocprim": True,
+                "hipcub": True,
+                "rocthrust": True,
+                "rocwmma": True,
                 "hiprand": False,
+                "rocblas": False,
             },
         )
 
@@ -266,12 +281,22 @@ class BuildCoverageMatrixTest(unittest.TestCase):
                     self.assertIn(name, configure_coverage_ci.SUPPORTED_PROJECTS)
 
     def test_header_only_projects_report_on_their_own_test_binaries(self):
-        # rocPRIM, hipCUB and rocThrust install their tests into one flat bin/,
-        # and --prim --tests brings all three into every one of their reports.
+        # rocPRIM, hipCUB, rocThrust and rocWMMA install their tests into one
+        # flat bin/, so a build that instruments several of them puts every
+        # one's tests in each report's search path.
         installed = {
             "rocprim": ["bin/test_basic", "bin/test_rocprim_tuple"],
             "hipcub": ["bin/test_hipcub_basic"],
-            "rocthrust": ["bin/vector.hip"],
+            "rocthrust": [
+                "bin/vector.hip",
+                "bin/test_thrust_vector",
+                "bin/test_thrust_unittest_tester",
+            ],
+            "rocwmma": [
+                "bin/vector_test",
+                "bin/dlrm_dot_test-validate",
+                "bin/gemm_PGR0_LB0_MP0_MB_NC-validate",
+            ],
         }
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -515,11 +540,23 @@ class EmitCmakeTest(unittest.TestCase):
                 for line in out.read_text().splitlines()
                 if line.startswith("set(THEROCK_COVERAGE_DEVICE_PROJECTS")
             )
-        for target in ("rocRAND", "rocSPARSE", "rocSOLVER"):
-            self.assertIn(target, device_line)
+        targets = device_line.removesuffix(")").split()[1:]
+        for target in (
+            "rocRAND",
+            "rocSPARSE",
+            "rocSOLVER",
+            "rocPRIM",
+            "rocPRIM_tests",
+            "hipCUB",
+            "rocThrust",
+            "rocWMMA",
+        ):
+            self.assertIn(target, targets)
         # Their libraries have no kernels, so they stay host-only.
         for target in ("hipRAND", "hipSOLVER"):
-            self.assertNotIn(target, device_line)
+            self.assertNotIn(target, targets)
+        # Its tests share processes with other instrumented libraries.
+        self.assertNotIn("rocBLAS", targets)
 
     def test_emit_cmake_needs_no_env(self):
         # Must work without PROJECTS_TO_TEST / AMDGPU_FAMILIES / GITHUB_OUTPUT set.
