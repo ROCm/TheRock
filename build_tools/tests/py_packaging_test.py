@@ -807,7 +807,7 @@ class DevicePackagingTest(TmpDirTestCase):
             dest_dir=params.dest_dir,
             devel_tarball_compression=False,
         )
-        _run_kpack_split(args, params, core, None)
+        _run_kpack_split(args, params, core, None, None)
         devices = [p for p in params.populated_packages if p.logical_name == "device"]
         self.assertEqual(len(devices), 1)
         self.assertEqual(devices[0].target_family, "gfx1250")
