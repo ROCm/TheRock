@@ -139,3 +139,7 @@ def rocprof_sys_python() -> None:
 
 def rocprof_sys_attach() -> None:
     _exec("bin/rocprof-sys-attach")
+
+
+def rocsys() -> None:
+    _exec("bin/rocsys")

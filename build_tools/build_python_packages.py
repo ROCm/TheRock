@@ -630,6 +630,7 @@ def profiler_artifact_filter(an: ArtifactName) -> bool:
 # libprofiler-hub.so.0 is silently dropped despite librocprof-sys* needing it.
 PROFILER_WHEEL_INCLUDES = [
     # rocprofiler-systems
+    "bin/rocsys",
     "bin/rocprof-sys-*",
     "include/rocprofiler-systems/**",
     "lib/librocprof-sys*",

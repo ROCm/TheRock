@@ -2069,6 +2069,45 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
         self.assertTrue(profiler.files.has("lib/libprofiler-hub.so.0"))
         self.assertFalse(profiler.files.has("lib/libunrelated-dependency.so.1"))
 
+    def test_profiler_wheel_includes_rocsys(self):
+        """rocsys is the unified rocprofiler-systems CLI. The allowlist
+        pattern bin/rocprof-sys-* does not match that name, so bin/rocsys
+        must be selected explicitly. An unrelated binary in the same
+        artifact must still be dropped.
+        """
+        from build_python_packages import (
+            PROFILER_WHEEL_INCLUDES,
+            profiler_artifact_filter,
+        )
+
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "rocprofiler-systems",
+            "run",
+            "generic",
+            {
+                "bin/rocsys": "unified cli",
+                "bin/rocprof-sys-run": "existing cli",
+                "bin/not-a-profiler-tool": "should not be selected",
+            },
+        )
+
+        params = self._make_params(artifact_dir)
+        profiler_artifacts = params.filter_artifacts(
+            profiler_artifact_filter,
+            includes=PROFILER_WHEEL_INCLUDES,
+        )
+        profiler = PopulatedDistPackage(params, logical_name="profiler")
+        profiler.populate_runtime_files(profiler_artifacts)
+
+        self.assertTrue(
+            profiler.files.has("bin/rocsys"),
+            "bin/rocsys was dropped from the profiler wheel",
+        )
+        self.assertTrue(profiler.files.has("bin/rocprof-sys-run"))
+        self.assertFalse(profiler.files.has("bin/not-a-profiler-tool"))
+
 
 class EnsureProfilerLibrarySymlinksTest(unittest.TestCase):
     """Unit tests for ensure_profiler_library_symlinks() in isolation - no

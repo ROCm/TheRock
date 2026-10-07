@@ -296,6 +296,7 @@ ROCm Python packaging separates profiling functionality as follows:
 
   - `rocprof-compute`
   - `rocprof-sys-*`
+  - `rocsys`
   - profiler runtime libraries (from `rocprofiler-systems` and `rocprofiler-compute`)
 
 This separation allows you to install profiling tools only when needed.

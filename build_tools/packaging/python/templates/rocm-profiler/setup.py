@@ -104,6 +104,7 @@ setup(
                 "rocprof-sys-run=rocm_profiler._cli:rocprof_sys_run",
                 "rocprof-sys-sample=rocm_profiler._cli:rocprof_sys_sample",
                 "rocprof-sys-python=rocm_profiler._cli:rocprof_sys_python",
+                "rocsys=rocm_profiler._cli:rocsys",
             ]
             if platform.system() != "Windows"
             else []
