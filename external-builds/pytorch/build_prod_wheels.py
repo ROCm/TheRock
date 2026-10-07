@@ -719,10 +719,61 @@ def _setup_common_build_env(
 
     # Host-ASAN releases set this. PyTorch's USE_ASAN option does the
     # instrumentation; this builder does not choose a compiler or add flags.
+    # The installed SDK is already instrumented, so every child process has to
+    # preload that runtime or ASan aborts on startup.
     if os.environ.get("USE_ASAN") == "1":
         env["USE_ASAN"] = "1"
+        _preload_host_asan_runtime(env, rocm_dir)
 
     return env
+
+
+def _find_clang_asan_runtime(rocm_dir: Path) -> Path | None:
+    """Return the ROCm Clang shared ASan runtime, if the SDK ships one."""
+    resource_root = rocm_dir / "lib" / "llvm" / "lib" / "clang"
+    candidates = [
+        path
+        for path in resource_root.glob("*/lib/*/libclang_rt.asan.so")
+        if path.is_file()
+    ]
+    preferred = [
+        path for path in candidates if path.parent.name == "x86_64-unknown-linux-gnu"
+    ]
+    chosen_from = preferred or candidates
+    if not chosen_from:
+        return None
+    return max(chosen_from, key=lambda path: path.parents[2].name)
+
+
+def _preload_host_asan_runtime(env: dict[str, str], rocm_dir: Path) -> None:
+    """Preload the SDK ASan runtime for build tools and the torch import check.
+
+    Host-ASAN libraries depend on libclang_rt.asan.so. ASan only initializes
+    when that runtime is first in the process, which a normal CPython is not.
+    LD_PRELOAD is copied into os.environ because the post-build import check
+    does not receive the wheel-build env dict.
+    """
+    runtime = _find_clang_asan_runtime(rocm_dir)
+    if runtime is None:
+        raise RuntimeError(
+            "USE_ASAN=1 requires libclang_rt.asan.so from the ROCm Clang "
+            f"resource directory under {rocm_dir}"
+        )
+
+    inherited = env.get("LD_PRELOAD", os.environ.get("LD_PRELOAD", ""))
+    preload_parts = [str(runtime)]
+    if inherited:
+        preload_parts.append(inherited)
+    preload = os.pathsep.join(preload_parts)
+    env["LD_PRELOAD"] = preload
+    os.environ["LD_PRELOAD"] = preload
+
+    options = env.get("ASAN_OPTIONS", os.environ.get("ASAN_OPTIONS", ""))
+    if "detect_leaks=" not in options:
+        options = f"{options}:detect_leaks=0" if options else "detect_leaks=0"
+    env["ASAN_OPTIONS"] = options
+    os.environ["ASAN_OPTIONS"] = options
+    print(f"  ASAN runtime preload: {runtime}")
 
 
 def _do_build_wheels_core(
