@@ -88,9 +88,26 @@ if(THEROCK_ENABLE_COMPILER)
     message(STATUS "Using stable amd-llvm revision info: Repo='${LLVM_SMREV_REPO}', Revision='${LLVM_SMREV_REVISION}'")
   endif()
 
+  # Map TheRock test/tool toggles to what ROCm.cmake reads before/at -C.
+  # LLVM_INCLUDE_TESTS=ON also disables the cache's tool allow-list.
+  set(_llvm_include_tests OFF)
+  if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS)
+    set(_llvm_include_tests ON)
+  endif()
+
+  set(_therock_llvm_cache
+    "${CMAKE_CURRENT_SOURCE_DIR}/amd-llvm/clang/cmake/caches/TheRock.cmake")
+  if(NOT EXISTS "${_therock_llvm_cache}")
+    message(FATAL_ERROR
+      "Missing ${_therock_llvm_cache}. Sync amd-llvm to a revision that includes "
+      "clang/cmake/caches/TheRock.cmake (ROCm/llvm-project#4769).")
+  endif()
+
   therock_cmake_subproject_declare(amd-llvm
     USE_DIST_AMDGPU_TARGETS
-    NO_INSTALL_RPATH  # See manual handling in the pre_hook.
+    # RPATH is set by ROCm.cmake / TheRock.cmake; keep TheRock's post-hook from
+    # rewriting it.
+    NO_INSTALL_RPATH
     EXTERNAL_SOURCE_DIR "amd-llvm"
     # Note that LLVM top level CMakeLists.txt is in the llvm subdir of the
     # monorepo.
@@ -98,70 +115,30 @@ if(THEROCK_ENABLE_COMPILER)
     INTERFACE_PROGRAM_DIRS
       lib/llvm/bin
     CMAKE_ARGS
-      # Version configuration
+      # Values read by TheRock.cmake while -C runs must appear before -C.
+      "-DLLVM_EXTERNAL_SPIRV_LLVM_TRANSLATOR_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/spirv-llvm-translator"
+      "-DSANITIZER_HSA_INCLUDE_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/inc"
+      -DLLVM_INCLUDE_TESTS=${_llvm_include_tests}
+
+      -C${_therock_llvm_cache}
+
+      # TheRock-only / not owned by the cache.
       # Note that if LLVM_SMREV_REPO and LLVM_FORCE_VC_REVISION are empty,
       # LLVM will compute the tip of tree revision, which is appropriate for
       # pristine checkouts.
-      -DLLVM_APPEND_VC_REV=ON
       "-DLLVM_FORCE_VC_REPOSITORY=${LLVM_SMREV_REPO}"
       "-DLLVM_FORCE_VC_REVISION=${LLVM_SMREV_REVISION}"
-
-      # LIBCXX
-      -DLIBCXX_ENABLE_SHARED=OFF
-      -DLIBCXX_ENABLE_STATIC=ON
-      -DLIBCXX_INSTALL_LIBRARY=OFF
-      -DLIBCXX_INSTALL_HEADERS=OFF
-      -DLIBCXXABI_ENABLE_SHARED=OFF
-      -DLIBCXXABI_ENABLE_STATIC=ON
-
-      # Features
-      -DLLVM_INCLUDE_TESTS=${THEROCK_ENABLE_LLVM_TESTS}
       -DTHEROCK_BUILD_COMGR_TESTS=${THEROCK_BUILD_COMGR_TESTS}
       -DUSE_NEW_HOSTCALL_IMPL=${THEROCK_USE_NEW_HOSTCALL_IMPL}
-      -DLLVM_ENABLE_ZLIB=FORCE_ON
-      -DLLVM_ENABLE_Z3_SOLVER=OFF
-      -DLLVM_ENABLE_LIBXML2=OFF
-      -DCLANG_DEFAULT_LINKER=lld
-      -DCLANG_DEFAULT_RTLIB=compiler-rt
-      -DCLANG_DEFAULT_UNWINDLIB=libgcc
-      -DCLANG_ENABLE_AMDCLANG=ON
-      -DLLVM_INSTALL_TOOLCHAIN_ONLY=OFF
-      -DLLVM_BUILD_LLVM_C_DYLIB=OFF
-
-      # Build optimizations
-      -DLLVM_BUILD_EXAMPLES=${THEROCK_ENABLE_LLVM_TESTS}
-      -DLLVM_INCLUDE_EXAMPLES=${THEROCK_ENABLE_LLVM_TESTS}
-      -DLLVM_TOOL_LLVM_JITLINK_BUILD=${THEROCK_ENABLE_LLVM_TESTS}
-
-      # Coverage tools (needed for code coverage builds)
-      -DLLVM_TOOL_LLVM_COV_BUILD=ON
-      -DLLVM_TOOL_LLVM_PROFDATA_BUILD=ON
-
-      # Clang features.
-      -DCLANG_ENABLE_ARCMT=OFF
-      -DCLANG_ENABLE_STATIC_ANALYZER=OFF
-      -DCLANG_ENABLE_CLANGD=OFF
-      -DCLANG_TIDY_ENABLE_STATIC_ANALYZER=OFF
-
-      -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DOPENMP_ENABLE_LIBOMPTARGET=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DLIBOMPTARGET_BUILD_DEVICE_FORTRT=${THEROCK_CONDITION_IS_NON_WINDOWS}
       # FLANG_RUNTIME_F128_MATH_LIB is host-architecture dependent and is
       # selected in pre_hook_amd-llvm.cmake. Do not pass it as a CMAKE_ARGS -D
       # here: a -D value is written to the cache before the pre-hook runs and
       # would shadow the per-host selection made there.
-      -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      # ASAN features.
-      # Note that building AMDGPU ASAN extensions depends on various runtime headers
-      # (since it instruments them). These paths must line up and will be an error
-      # in the compiler-rt build if not found.
-      "-DSANITIZER_AMDGPU=${THEROCK_CONDITION_IS_NON_WINDOWS}"
-      "-DSANITIZER_HSA_INCLUDE_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/inc"
-      "-DSANITIZER_COMGR_INCLUDE_PATH=${CMAKE_CURRENT_SOURCE_DIR}/amd-llvm/amd/comgr/include"
-      # ASAN
       -DTHEROCK_SANITIZER=${THEROCK_SANITIZER}
-      # compiler-rt debug mode
       "-DCOMPILER_RT_DEBUG=${THEROCK_COMPILER_RT_DEBUG}"
+      # Keep examples in sync with the test toggle (cache defaults them OFF).
+      -DLLVM_BUILD_EXAMPLES=${THEROCK_BUILD_LLVM_TESTS}
+      -DLLVM_INCLUDE_EXAMPLES=${THEROCK_BUILD_LLVM_TESTS}
 
       ${_extra_llvm_cmake_args}
     BUILD_DEPS
@@ -175,6 +152,9 @@ if(THEROCK_ENABLE_COMPILER)
     # The entire LLVM install tree is placed inside of the overall ROCM lib/llvm
     # directory.
     INSTALL_DESTINATION "lib/llvm"
+    # e.g. distrubutions: compiler;runtimes;dev;tools;utils;multilibs — see ROCm.cmake.
+    # Controlled by THEROCK_ENABLE_*_DISTRIBUTION variables. Empty = full install.
+    INSTALL_DISTRIBUTION ${THEROCK_AMD_LLVM_DISTRIBUTION}
     INTERFACE_LINK_DIRS
       "lib/llvm/lib"
       ${THEROCK_LLVM_RPATH_WITH_TRIPLE}
