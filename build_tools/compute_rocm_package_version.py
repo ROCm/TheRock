@@ -39,6 +39,12 @@ Sample usage:
 
   python compute_rocm_package_version.py --release-type=nightly --override-base-version=7.99.0
   # 7.99.0a20251021
+
+  python compute_rocm_package_version.py --release-type=nightly --build-variant=asan-debug
+  # rocm_package_version=7.10.0a20251021+asan  (wheel only, +asan when no local version)
+
+  python compute_rocm_package_version.py --release-type=dev --build-variant=asan-debug
+  # rocm_package_version=7.10.0.dev0+sha.asan  (wheel only, .asan appended to local version)
 """
 
 import argparse
@@ -145,6 +151,7 @@ def compute_version(
     override_base_version: str | None = None,
     override_git_sha: str | None = None,
     version_data: Mapping[str, Any] | None = None,
+    build_variant: str | None = None,
 ) -> str:
     """Compute package version based on package type and release type.
 
@@ -158,6 +165,8 @@ def compute_version(
         override_git_sha: Explicit git SHA override, forwarded to get_git_sha().
             See get_git_sha() for details on when this is needed.
         version_data: Contents of version.json. Loaded automatically when required.
+        build_variant: Build variant (e.g., "release", "asan-debug"). When
+            variant contains "asan", adds ".asan" suffix for wheel packages.
 
     Returns:
         Computed version string appropriate for the package type
@@ -213,6 +222,18 @@ def compute_version(
         _log(f"Version suffix: '{version_suffix}'")
 
         rocm_package_version = base_version + version_suffix
+
+        # Add ASAN suffix for ASAN wheel builds
+        # - If version has local segment (+...), append .asan: 10.1.0.dev0+sha.asan
+        # - If version has no local segment, append +asan: 10.1.0a20260823+asan
+        if build_variant and "asan" in build_variant:
+            if "+" in rocm_package_version:
+                rocm_package_version += ".asan"
+                _log(f"ASAN variant  : adding '.asan' suffix (local version exists)")
+            else:
+                rocm_package_version += "+asan"
+                _log(f"ASAN variant  : adding '+asan' suffix (no local version)")
+
         _log(f"Full version  : '{rocm_package_version}'")
 
         return rocm_package_version
@@ -303,6 +324,12 @@ def main(argv):
         help="Explicit git SHA to embed in the version instead of auto-detecting",
     )
 
+    parser.add_argument(
+        "--build-variant",
+        type=str,
+        help="Build variant (e.g., 'release', 'asan-debug'). Adds '.asan' suffix for wheel packages when variant contains 'asan'.",
+    )
+
     args = parser.parse_args(argv)
 
     # Validation
@@ -326,6 +353,7 @@ def main(argv):
             override_base_version=args.override_base_version,
             override_git_sha=args.override_git_sha,
             version_data=version_data,
+            build_variant=args.build_variant,
         )
 
         # Set appropriate output variable based on package type
