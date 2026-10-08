@@ -124,19 +124,39 @@ def apply_asan_build_env(env: dict[str, str], rocm_dir: Path) -> None:
     if inherited_ld_library_path:
         ld_library_parts.append(inherited_ld_library_path)
 
+    # PyTorch reads USE_ASAN from the environment. With the image's default GCC
+    # the build reports USE_ASAN OFF, because that compiler's libasan is not
+    # this ROCm runtime.
     env["USE_ASAN"] = "1"
+    # gcc-toolset comes first on PATH in the manylinux image. Its libasan and
+    # ROCm's libclang_rt.asan.so abort with "incompatible ASan runtimes".
     env["CC"] = str(clang)
     env["CXX"] = str(clangxx)
+    # CMake records these separately from CC and CXX. Pin the same ROCm Clang
+    # so configure does not keep gcc-toolset.
     env["CMAKE_C_COMPILER"] = str(clang)
     env["CMAKE_CXX_COMPILER"] = str(clangxx)
+    # hipcc and the other build tools load the instrumented ROCm libraries.
+    # detect_leaks=0 keeps LeakSanitizer from aborting those tools.
+    # abort_on_error=1 fails the build, and print_stacktrace=1 logs the stack.
+    # A caller-supplied ASAN_OPTIONS is left in place.
     env["ASAN_OPTIONS"] = os.environ.get(
         "ASAN_OPTIONS", "detect_leaks=0:abort_on_error=1:print_stacktrace=1"
     )
+    # -shared-libasan looks up libclang_rt.asan.so while linking, and that
+    # directory is not on the default linker path. The ROCm lib directory is
+    # included so the instrumented libraries those tools load can resolve.
     env["LD_LIBRARY_PATH"] = os.path.pathsep.join(ld_library_parts)
+    # Prefer the ROCm Clang that matches this runtime over gcc-toolset.
     env["PATH"] = str(llvm_bin) + os.path.pathsep + env.get("PATH", "")
+    # ASan stack traces use frame pointers.
     append_env_text(env, "CFLAGS", "-fno-omit-frame-pointer")
     append_env_text(env, "CXXFLAGS", "-fno-omit-frame-pointer")
+    # ROCm is linked with the shared sanitizer runtime. A static libasan in
+    # the torch link aborts with "incompatible ASan runtimes".
     append_env_text(env, "LDFLAGS", "-shared-libasan")
+    # CMake turns on C++ module scanning for Clang. This wheel does not build
+    # modules, and the scan fails configure with this ROCm Clang.
     append_env_text(env, "CMAKE_ARGS", "-DCMAKE_CXX_SCAN_FOR_MODULES=OFF")
     print(f"  ASAN compiler: {clangxx}")
     print(f"  ASAN runtime: {runtime_path}")
