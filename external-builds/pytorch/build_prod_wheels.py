@@ -318,22 +318,47 @@ def get_source_commit_short(source_dir: Path, length: int = 8) -> str:
 
 
 def compute_build_version(
-    source_dir: Path, version_suffix: str, release_type: str
+    source_dir: Path,
+    version_suffix: str,
+    release_type: str,
+    *,
+    strip_legacy_a0: bool = False,
 ) -> str:
     """Compute a wheel version, tagging dev release types with the source commit.
 
     Reads `<source_dir>/version.txt` as the base version and appends
-    `version_suffix` (a PEP 440 local identifier like `+rocm7.10.0`). For `dev`
-    and `dev-bkc` builds, the 8-char source commit is merged into that single
-    local segment, e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0`, so each wheel
+    `version_suffix` (a PEP 440 local identifier like `+rocm7.10.0`).
+
+    For `dev` and `dev-bkc` builds, the 8-char source commit is merged into that
+    single local segment, e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0`, so each wheel
     (torch, torchaudio, torchvision) records exactly which source commit
     produced it. PyTorch's setup.py validates the version as PEP 440, which only
     allows a commit hash in the local segment (after `+`).
+
+    `strip_legacy_a0` removes torch/torchaudio/torchvision's trailing `a0` for
+    release-source builds, independently of the ROCm release type. Upstream
+    release branches can retain `a0` in version.txt; their release tooling
+    removes it so pip treats the resulting package as a final release.
+    ROCm nightly builds can also build these PyTorch release branches.
+    Raise ValueError if a prerelease marker remains after stripping `a0`.
+    Builds of PyTorch nightly retain `a0` to preserve our existing version scheme.
+
     TODO(#5110): reconcile with generate_pytorch_source_manifest.py once
     upfront, manifest-based version computation lands so the built version
     always matches what the manifest records.
     """
     base_version = (source_dir / "version.txt").read_text().strip()
+    if strip_legacy_a0:
+        # Match pytorch/test-infra's get_base_version for release builds.
+        # Other prerelease markers are intentionally preserved, not made final.
+        # https://github.com/pytorch/test-infra/blob/341df9bfb588e3d25d4124f39115b7115ddec58c/tools/pkg-helpers/pytorch_pkg_helpers/version.py#L53-L62
+        base_version = base_version.removesuffix("a0")
+        # is_prerelease includes alpha, beta, RC, and dev releases.
+        if parse(base_version).is_prerelease:
+            raise ValueError(
+                f"{source_dir / 'version.txt'}: expected a final release version "
+                f"after stripping a0, got {base_version!r}"
+            )
     build_version = base_version + version_suffix
     if release_type in ("dev", "dev-bkc"):
         commit = get_source_commit_short(source_dir)
@@ -1093,7 +1118,10 @@ def do_build_pytorch(
 ):
     # Compute version (dev builds are tagged with the torch source commit).
     pytorch_build_version = compute_build_version(
-        pytorch_dir, args.version_suffix, args.release_type
+        pytorch_dir,
+        args.version_suffix,
+        args.release_type,
+        strip_legacy_a0=args.pytorch_git_ref.startswith("release/"),
     )
     print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
@@ -1319,7 +1347,10 @@ def do_build_pytorch_audio(
 ):
     # Compute version (dev builds are tagged with the audio source commit).
     build_version = compute_build_version(
-        pytorch_audio_dir, args.version_suffix, args.release_type
+        pytorch_audio_dir,
+        args.version_suffix,
+        args.release_type,
+        strip_legacy_a0=args.pytorch_git_ref.startswith("release/"),
     )
     print(f"  pytorch audio BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
@@ -1359,7 +1390,10 @@ def do_build_pytorch_vision(
 ):
     # Compute version (dev builds are tagged with the vision source commit).
     build_version = compute_build_version(
-        pytorch_vision_dir, args.version_suffix, args.release_type
+        pytorch_vision_dir,
+        args.version_suffix,
+        args.release_type,
+        strip_legacy_a0=args.pytorch_git_ref.startswith("release/"),
     )
     print(f"  pytorch vision BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
@@ -1521,6 +1555,11 @@ def main(argv: list[str]):
         default=None,
         type=Path,
         help="PyTorch source directory",
+    )
+    build_p.add_argument(
+        "--pytorch-git-ref",
+        default="",
+        help="PyTorch source ref; release/* refs strip torch/torchaudio/torchvision's legacy a0 suffix",
     )
     build_p.add_argument(
         "--pytorch-audio-dir",
