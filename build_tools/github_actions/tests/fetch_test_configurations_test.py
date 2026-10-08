@@ -374,6 +374,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(emulation_job["job_name"], "emulation (emulated mi350x)")
         self.assertTrue(emulation_job["linux_cpu_runner"])
         self.assertEqual(emulation_job["fetch_artifact_args"], "--mirage --rocjitsu")
+        self.assertIn("test_tools/emulation_test.py", emulation_job["test_script"])
         self.assertNotIn("emulate", emulation_job)
         self.assertNotIn("emulate_only", emulation_job)
         self.assertNotIn("--device /dev/kfd", emulation_job["container_options"])

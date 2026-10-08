@@ -23,7 +23,10 @@ import json
 import logging
 import os
 import platform as platform_module
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "test_tools"))
 
 from github_actions_api import *
 import emulation
@@ -37,6 +40,7 @@ logging.basicConfig(level=logging.INFO)
 # Note: these paths are relative to the repository root. We could make that
 # more explicit, or use absolute paths.
 SCRIPT_DIR = Path("./build_tools/github_actions/test_executable_scripts")
+TEST_TOOLS_DIR = Path("./test_tools")
 OUTPUT_ARTIFACTS_DIR = Path(os.environ.get("OUTPUT_ARTIFACTS_DIR", "build"))
 
 
@@ -44,6 +48,12 @@ def _get_script_path(script_name: str) -> str:
     # Convert to posix (using `/` instead of `\\`) so test workflows can use
     # 'bash' as the shell on Linux and Windows.
     return (SCRIPT_DIR / script_name).as_posix()
+
+
+def _get_test_tool_path(script_name: str) -> str:
+    # Convert to posix (using `/` instead of `\\`) so test workflows can use
+    # 'bash' as the shell on Linux and Windows.
+    return (TEST_TOOLS_DIR / script_name).as_posix()
 
 
 def _get_artifact_path(artifact_path: str) -> str:
@@ -1156,7 +1166,7 @@ test_matrix = {
         "job_name": "emulation",
         "fetch_artifact_args": "--base-only",
         "timeout_minutes": 3,
-        "test_script": f"python {_get_script_path('test_emulation.py')}",
+        "test_script": f"python {_get_test_tool_path('emulation_test.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,

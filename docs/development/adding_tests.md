@@ -224,7 +224,7 @@ the selected baseline in the PR that enables it.
 
 ### Which families are emulated
 
-In [`emulation.py`](../../build_tools/github_actions/emulation.py),
+In [`emulation.py`](../../test_tools/emulation.py),
 `MIRAGE_PROFILE_BY_FAMILY_PREFIX` maps an AMDGPU family to one of mirage's
 builtin profiles (see
 [`profiles.rs`](https://github.com/ROCm/rocm-systems/blob/develop/emulation/mirage/builtin/src/profiles.rs)),
@@ -259,7 +259,7 @@ Everything the script does — compiling, launching test binaries, spawning ctes
 or pytest — happens inside that one session, and the script never invokes mirage
 itself. *Which* tests run is decided by the matrix entry's `emulate_test_type`,
 not by the script; `emulation.is_emulated()` exists for the few scripts that
-have to behave differently under an emulator (`test_emulation.py` refuses to run
+have to behave differently under an emulator (`emulation_test.py` refuses to run
 outside one).
 
 > [!NOTE]
@@ -272,7 +272,7 @@ outside one).
 > variable the workflow left unset stays unset inside the session rather than
 > becoming an empty string. A script that starts reading a new CI variable must
 > add it to `FORWARDED_ENV` in
-> [`emulation.py`](../../build_tools/github_actions/emulation.py), or it will be
+> [`emulation.py`](../../test_tools/emulation.py), or it will be
 > unset under emulation.
 
 Anything an emulated script can derive, it should derive rather than expect to
@@ -281,7 +281,7 @@ exactly this reason, which guarantees it points at the artifacts this job
 actually fetched.
 
 Scripts that need to behave differently under an emulator can ask, using
-[`emulation.py`](../../build_tools/github_actions/emulation.py):
+[`emulation.py`](../../test_tools/emulation.py):
 
 ```python
 import emulation
@@ -292,10 +292,10 @@ if emulation.is_emulated():
 
 The two emulated components today are:
 
-| Component   | Script              | What it does                                                            |
-| ----------- | ------------------- | ----------------------------------------------------------------------- |
-| `emulation` | `test_emulation.py` | Checks that the emulated GPU comes up and reports the expected target   |
-| `rocrtst`   | `test_runner.py`    | Runs a rocrtst `test_categories.yaml` category against the emulated GPU |
+| Component   | Script                                                    | What it does                                                            |
+| ----------- | --------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `emulation` | [`emulation_test.py`](../../test_tools/emulation_test.py) | Checks that the emulated GPU comes up and reports the expected target   |
+| `rocrtst`   | `test_runner.py`                                          | Runs a rocrtst `test_categories.yaml` category against the emulated GPU |
 
 ### Choosing what an emulated job runs
 

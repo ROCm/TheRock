@@ -17,10 +17,8 @@ TEST_TYPE selects how much to run; see docs/development/test_filtering.md.
 import logging
 import os
 import subprocess
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import emulation
 
 logging.basicConfig(level=logging.INFO)
@@ -94,7 +92,7 @@ def run_check(tool: str) -> str:
 def main() -> int:
     if not emulation.is_emulated():
         print(
-            "ERROR: test_emulation.py only runs in an emulated job "
+            "ERROR: emulation_test.py only runs in an emulated job "
             "(TEST_EMULATOR is unset).",
             file=sys.stderr,
         )
