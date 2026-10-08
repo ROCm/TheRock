@@ -1601,6 +1601,13 @@ def _expand_build_config_for_platform(
                     f"(global={jobs.test_rocm.test_type})"
                 )
 
+        # ci:cpu-test-only label: disable GPU tests, only run CPU-only tests.
+        # This is useful for changes that don't require GPU testing (e.g., docs,
+        # build scripts, CPU-only components).
+        if "ci:cpu-test-only" in ci_inputs.pr_labels and test_runs_on:
+            test_runs_on = ""
+            print(f"  {family_name}: GPU tests disabled by 'ci:cpu-test-only' label")
+
         # CPU test runner for components that don't need GPU access (e.g.,
         # components with linux_cpu_runner: True). This allows CPU-only tests
         # to run even when GPU testing is gated (e.g., trigger_test_label_only).
@@ -1800,7 +1807,8 @@ def expand_build_configs(
     """Build a BuildConfig for each platform that supports the variant.
 
     Returns BuildConfigs with a BuildConfig per platform, or None for
-    platforms where the variant isn't available or no families match.
+    platforms where the variant isn't available, no families match, or no
+    artifacts will be built or reused.
     """
     all_families = get_all_families_for_trigger_types(
         ["presubmit", "postsubmit", "nightly"]
@@ -1834,6 +1842,15 @@ def expand_build_configs(
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
 
+    # Prebuilt stages still supply artifacts; only SKIP removes a stage's work.
+    topology = get_topology()
+    active_artifacts = [
+        topology.artifacts[name]
+        for stage in topology.get_build_stages()
+        if jobs.build_rocm.stage_decisions.get(stage.name) != JobAction.SKIP
+        for name in topology.get_produced_artifacts(stage.name)
+    ]
+
     for platform, families, build_only, test_only in [
         (
             "linux",
@@ -1848,6 +1865,13 @@ def expand_build_configs(
             targets.windows_test_only_families,
         ),
     ]:
+        if not any(
+            artifact.platform in (None, platform)
+            and platform not in artifact.disable_platforms
+            for artifact in active_artifacts
+        ):
+            print(f"  Platform {platform} has no artifacts to build or reuse, skipping")
+            continue
         variant_config = all_build_variants.get(platform, {}).get(build_variant)
         if not variant_config:
             print(
