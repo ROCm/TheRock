@@ -93,11 +93,12 @@ class DashboardGenerationTest(unittest.TestCase):
             ),
         ):
             dashboard = self._generate()
+            command = test_rocprofiler_sdk.get_cmake_config_cmd()
 
         self.assertIn("-DROCPROFILER_MEMCHECK=AddressSanitizer", dashboard)
         self.assertIn(
-            "-DROCPROFILER_MEMCHECK_PRELOAD_ENV=LD_PRELOAD=/tmp/libclang_rt.asan.so",
-            dashboard,
+            f"-DROCPROFILER_MEMCHECK_PRELOAD_ENV=LD_PRELOAD={Path('/tmp/libclang_rt.asan.so')}",
+            command,
         )
         self.assertIn(
             'EXCLUDE "rocprofiler_sdk.unit.spm_core.check_packet_generation|',
