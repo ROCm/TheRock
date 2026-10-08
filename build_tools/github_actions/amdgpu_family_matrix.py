@@ -323,12 +323,8 @@ amdgpu_family_info_matrix = {
                 "submodule_bump",
                 "nightly",
             ],
-            # TEMPORARY (ROCm/TheRock#8688): gfx110X Windows presubmit testing
-            # removed for test-queue remediation. Builds still run on presubmit;
-            # tests are on-demand via the `ci:test:gfx110x` PR label (emergency
-            # lever in configure_multi_arch_ci.py). Superseded by the permanent
-            # build/test label system in #8692. To revert, re-add "presubmit".
             "tests_on_trigger": [
+                "presubmit",
                 "postsubmit",
                 "submodule_bump",
                 "nightly",
