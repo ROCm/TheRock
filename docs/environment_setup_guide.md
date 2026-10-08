@@ -86,9 +86,10 @@ README, with these workarounds:
   [ROCm/rocm-systems#9670](https://github.com/ROCm/rocm-systems/pull/9670)
   lands.
 - Shipping GCC is 15, which fails `rocjitsu` (emulation) with
-  `-Werror=free-nonheap-object`
-  ([ROCm/rocm-systems#13075](https://github.com/ROCm/rocm-systems/pull/13075)).
-  RCCL depends on `rocjitsu`, so disable both:
+  `-Werror=free-nonheap-object`. The fix
+  ([ROCm/rocm-systems#13075](https://github.com/ROCm/rocm-systems/pull/13075))
+  is merged but not yet in the `rocm-systems` submodule; until it is, disable
+  `rocjitsu` and RCCL, which depends on it:
   `-DTHEROCK_ENABLE_EMULATION=OFF -DTHEROCK_ENABLE_COMM_LIBS=OFF`.
 
 ### Arch Linux / EndeavourOS
