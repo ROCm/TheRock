@@ -88,33 +88,21 @@ class DashboardGenerationTest(unittest.TestCase):
             patch.object(test_rocprofiler_sdk, "is_asan", return_value=True),
             patch.object(
                 test_rocprofiler_sdk,
-                "get_asan_runtime_library",
-                return_value="/tmp/libclang_rt.asan-x86_64.so",
+                "get_asan_runtime_path",
+                return_value=Path("/tmp/libclang_rt.asan.so"),
             ),
         ):
             dashboard = self._generate()
 
         self.assertIn("-DROCPROFILER_MEMCHECK=AddressSanitizer", dashboard)
         self.assertIn(
+            "-DROCPROFILER_MEMCHECK_PRELOAD_ENV=LD_PRELOAD=/tmp/libclang_rt.asan.so",
+            dashboard,
+        )
+        self.assertIn(
             'EXCLUDE "rocprofiler_sdk.unit.spm_core.check_packet_generation|',
             dashboard,
         )
-
-    def test_asan_configure_uses_resolved_runtime(self):
-        # Per-target LLVM layouts use the unsuffixed runtime name. The runner
-        # must consume discovery rather than query an obsolete basename again.
-        with tempfile.TemporaryDirectory() as tmp:
-            runtime = Path(tmp) / "libclang_rt.asan.so"
-            runtime.touch()
-            with (
-                patch.dict(os.environ, {"ASAN_RUNTIME_PATH": str(runtime)}),
-                patch.object(test_rocprofiler_sdk, "is_asan", return_value=True),
-            ):
-                command = test_rocprofiler_sdk.get_cmake_config_cmd()
-            self.assertIn(
-                f"-DROCPROFILER_MEMCHECK_PRELOAD_ENV=LD_PRELOAD={runtime.resolve()}",
-                command,
-            )
 
     def test_strict_submission_is_encoded_in_dashboard(self):
         with patch.object(test_rocprofiler_sdk, "is_asan", return_value=False):
