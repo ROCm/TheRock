@@ -299,6 +299,12 @@ def resolve_runs(category_config, test_type):
     runs = category_config.get("runs")
     if runs is None:
         return [category_config]  # single-run category (backward compatible)
+    if (
+        not isinstance(runs, list)
+        or not runs
+        or not all(isinstance(r, dict) for r in runs)
+    ):
+        _fail(f"Category '{test_type}' 'runs:' must be a non-empty list of mappings")
     names = [r.get("name") for r in runs]
     if None in names or len(set(names)) != len(names):
         _fail(
@@ -344,17 +350,16 @@ if __name__ == "__main__":
     ) or (gpu_arch or "")
 
     exec_settings = config.get("execution_settings", {})
-    # Per-test timeout and worker count resolve as: env override > per-run/category
-    # YAML > tier/global default. test_categories.yaml ships inside the installed
-    # artifact, so these env overrides let CI steps / reproduce_test_failure.py tune
-    # them without a rebuild. PYTEST_TEST_TIMEOUT is the per-test timeout in seconds
-    # (passed to pytest-timeout); PYTEST_NUM_WORKERS is the pytest-xdist worker count.
-    tier_timeout = exec_settings.get("category_timeouts", {}).get(TEST_TYPE)
-    env_timeout = get_env_int_override("PYTEST_TEST_TIMEOUT")
+    # Per-test timeout and worker count resolve as: env override > YAML > default.
+    # test_categories.yaml ships inside the installed artifact, so these env
+    # overrides let CI steps / reproduce_test_failure.py tune them without a
+    # rebuild. PYTEST_TEST_TIMEOUT is the per-test timeout in seconds (passed to
+    # pytest-timeout); PYTEST_NUM_WORKERS is the pytest-xdist worker count.
+    timeout = get_env_int_override("PYTEST_TEST_TIMEOUT") or exec_settings.get(
+        "category_timeouts", {}
+    ).get(TEST_TYPE)
     env_workers = get_env_int_override("PYTEST_NUM_WORKERS")
 
-    # The environment (PYTHONPATH/LD_LIBRARY_PATH/PATH + configured extras) is
-    # shared across all sub-runs; {ROCM_PATH}/{AMDGPU_TARGETS} tokens resolved once.
     env = build_environment(rocm_path, TEST_COMPONENT_NAME)
     for key, value in (exec_settings.get("environment", {}) or {}).items():
         value = (
@@ -365,10 +370,9 @@ if __name__ == "__main__":
         env[key] = value
         logging.info(f"Set environment variable: {key}={value}")
 
-    # A category runs once, or once per `runs:` sub-run when that key is a list —
-    # needed when a tier mixes suites with different markers/args (e.g. `standard`
-    # = host unit `not gpu` AND GPU common `-m <arch>`). Each sub-run has its own
-    # paths/markers/args/timeout/JUnit; all run (run-all), step fails if any did.
+    # A category runs once, or once per `runs:` sub-run. Each sub-run has its own
+    # paths/markers/args/workers/JUnit and shares the category timeout and env; all
+    # sub-runs run, and the step fails if any of them failed.
     runs = resolve_runs(category_config, TEST_TYPE)
 
     junit_dir = os.getenv("JUNIT_XML_DIR")
@@ -377,21 +381,21 @@ if __name__ == "__main__":
     for run_cfg in runs:
         test_paths = run_cfg.get("test_paths", [])
         if not test_paths:
-            _fail(f"Category '{TEST_TYPE}' run defines no test_paths")
+            where = f" in run '{run_cfg['name']}'" if multi else ""
+            _fail(f"Category '{TEST_TYPE}' defines no test_paths{where}")
 
         marker_expr = build_marker_expression(run_cfg, gpu_arch, amdgpu_target)
 
-        # Extra pytest CLI options for this run. {ROCM_PATH} and {AMDGPU_TARGETS}
-        # tokens are substituted with runtime values.
+        # Extra pytest CLI options for this run.  {ROCM_PATH} and
+        # {AMDGPU_TARGETS} tokens are substituted with runtime values.
         pytest_args = [
             str(arg)
             .replace("{ROCM_PATH}", str(rocm_path))
             .replace("{AMDGPU_TARGETS}", amdgpu_target)
             for arg in (run_cfg.get("pytest_args", []) or [])
         ]
-        # parallel_workers may be overridden per run/category (e.g. GPU GEMM tests
-        # want more xdist workers than the default), falling back to the global.
-        timeout = env_timeout or run_cfg.get("timeout_seconds") or tier_timeout
+        # parallel_workers may be overridden per category or sub-run (e.g. GPU GEMM
+        # tests want more xdist workers than the default), falling back to the global.
         num_workers = env_workers or run_cfg.get(
             "parallel_workers", exec_settings.get("parallel_workers", 1)
         )

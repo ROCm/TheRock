@@ -133,6 +133,15 @@ class ResolveRunsTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             pytest_runner.resolve_runs({"runs": runs}, "standard")
 
+    def test_empty_runs_exits(self):
+        # An empty list would run nothing and exit green.
+        with self.assertRaises(SystemExit):
+            pytest_runner.resolve_runs({"runs": []}, "standard")
+
+    def test_runs_not_a_list_exits(self):
+        with self.assertRaises(SystemExit):
+            pytest_runner.resolve_runs({"runs": {"name": "host"}}, "standard")
+
 
 class ResolveComponentPathTest(unittest.TestCase):
     def test_known_component(self):
