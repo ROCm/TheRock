@@ -81,6 +81,7 @@ CI_LABELS: list[Label] = [
     Label("ci:gfx1151", COLOR_CI_GFX, "Opt-in to gfx1151 builds/tests"),
     Label("ci:gfx1152", COLOR_CI_GFX, "Opt-in to gfx1152 builds/tests"),
     Label("ci:gfx1153", COLOR_CI_GFX, "Opt-in to gfx1153 builds/tests"),
+    Label("ci:gfx117X-all", COLOR_CI_GFX, "Opt-in to gfx117X-all builds/tests"),
     Label("ci:gfx120X-all", COLOR_CI_GFX, "Opt-in to gfx120X-all builds/tests"),
     Label("ci:gfx125x", COLOR_CI_GFX, "Opt-in to gfx125x builds/tests"),
     Label("ci:gfx125X-dcgpu", COLOR_CI_GFX, "Opt-in to gfx125X-dcgpu builds/tests"),
