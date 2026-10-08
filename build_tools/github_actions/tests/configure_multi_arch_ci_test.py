@@ -1960,31 +1960,14 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
 
-    def test_host_asan_submodule_bump_runners(self):
+    def test_host_asan_submodule_bumps_are_build_only(self):
         targets = cm.TargetSelection(linux_families=["gfx94x", "gfx950"])
-        sandbox_runners = [
-            "linux-gfx942-8gpu-asan-sandbox-rocm",
-            "linux-gfx950-8gpu-asan-sandbox-rocm",
-        ]
-        disabled_runners = ["", ""]
         cases = (
-            ("rocm-libraries", "asan", "host-asan", sandbox_runners),
-            ("rocm-libraries", "host-asan-debug", "host-asan-debug", sandbox_runners),
-            ("rocm-systems", "asan", "host-asan", sandbox_runners),
-            ("rocm-systems", "host-asan-debug", "host-asan-debug", sandbox_runners),
-            ("compiler/amd-llvm", "asan", "host-asan-debug", sandbox_runners),
-            (
-                "compiler/amd-llvm",
-                "host-asan-debug",
-                "host-asan-debug",
-                sandbox_runners,
-            ),
-            ("compiler/hipify", "asan", "host-asan", disabled_runners),
-            ("compiler/hipify", "host-asan-debug", "host-asan-debug", disabled_runners),
-            ("README.md", "asan", "host-asan", disabled_runners),
-            ("README.md", "host-asan-debug", "host-asan-debug", disabled_runners),
+            ("rocm-libraries", "asan", "host-asan"),
+            ("rocm-systems", "asan", "host-asan"),
+            ("compiler/amd-llvm", "asan", "host-asan-debug"),
         )
-        for path, variant, expected_variant, expected_runners in cases:
+        for path, variant, expected_variant in cases:
             for event in ("pull_request", "push"):
                 with self.subTest(path=path, event=event, variant=variant):
                     result = cm.expand_build_configs(
@@ -2010,7 +1993,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     runners = [
                         entry["test-runs-on"] for entry in result.linux.per_family_info
                     ]
-                    self.assertEqual(runners, expected_runners)
+                    self.assertEqual(runners, ["", ""])
                     self.assertEqual(result.linux.build_variant_label, expected_variant)
                     self.assertEqual(
                         result.linux.build_variant_cmake_preset,
@@ -2319,21 +2302,17 @@ class TestConfigurePipeline(unittest.TestCase):
 
     def test_llvm_bump_asan_label_selection(self):
         """LLVM bumps run automatically; explicit full-ASan labels take precedence."""
-        host_sandbox_runners = [
-            "linux-gfx942-8gpu-asan-sandbox-rocm",
-            "linux-gfx950-8gpu-asan-sandbox-rocm",
-        ]
         cases = (
-            ([], "asan-debug", ["", ""]),
-            (["ci:host-asan"], "host-asan-debug", host_sandbox_runners),
-            (["ci:asan"], "asan-debug", ["", ""]),
-            (["ci:asan", "ci:host-asan"], "asan-debug", ["", ""]),
+            ([], "asan-debug"),
+            (["ci:host-asan"], "host-asan-debug"),
+            (["ci:asan"], "asan-debug"),
+            (["ci:asan", "ci:host-asan"], "asan-debug"),
         )
         git = cm.GitContext(
             changed_files=["compiler/amd-llvm"],
             submodule_paths=["compiler/amd-llvm"],
         )
-        for labels, expected_variant, expected_runners in cases:
+        for labels, expected_variant in cases:
             with self.subTest(labels=labels):
                 inputs = cm.CIInputs(
                     run_id="12345",
@@ -2354,7 +2333,7 @@ class TestConfigurePipeline(unittest.TestCase):
                 )
                 self.assertEqual(
                     [entry["test-runs-on"] for entry in linux.per_family_info],
-                    expected_runners,
+                    ["", ""],
                 )
 
     def test_skipped_outputs(self):

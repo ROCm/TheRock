@@ -265,7 +265,6 @@ amdgpu_family_info_matrix = {
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
             "test-runs-on-sandbox": "linux-gfx942-1gpu-asan-sandbox-rocm",
-            "test-runs-on-host-asan": "linux-gfx942-8gpu-asan-sandbox-rocm",
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             "test-runs-on-multi-gpu-labels": [
                 {"label": "linux-gfx942-8gpu-ossci-rocm", "count": 10},
@@ -462,7 +461,6 @@ amdgpu_family_info_matrix = {
         "linux": {
             "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
             "test-runs-on-sandbox": "linux-gfx950-1gpu-asan-sandbox-rocm",
-            "test-runs-on-host-asan": "linux-gfx950-8gpu-asan-sandbox-rocm",
             "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],

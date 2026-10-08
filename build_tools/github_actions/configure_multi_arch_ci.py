@@ -815,7 +815,7 @@ def should_skip_ci(
         print("  Skipping: 'ci:skip' PR label")
         return True
 
-    # LLVM pointer bumps run host-ASan debug automatically. Other PRs require
+    # LLVM pointer bumps run ASan debug builds automatically. Other PRs require
     # ci:asan or ci:host-asan to opt in to expensive sanitizer builds.
     has_asan_label = (
         "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
@@ -1483,11 +1483,6 @@ def _expand_build_config_for_platform(
             test_runner_kernel = label.split(":")[1]
             break
 
-    has_host_asan_bump = bool(
-        {"rocm-libraries", "rocm-systems", "compiler/amd-llvm"}
-        & set(git_context.changed_files or [])
-        & set(git_context.submodule_paths or [])
-    )
     per_family_info: list[dict] = []
     for family_name in families:
         # select_targets already validates family names and filters by
@@ -1529,22 +1524,16 @@ def _expand_build_config_for_platform(
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant.startswith("host-asan"):
-            # Library, system, and LLVM bumps exercise the host-ASan sandbox
-            # in addition to scheduled and manually dispatched runs.
-            if not (
-                ci_inputs.is_schedule
-                or ci_inputs.is_workflow_dispatch
-                or has_host_asan_bump
-            ):
+            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
+            # due to limited ASAN runner capacity and stability concerns.
+            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
                 test_runs_on = ""
                 print(
-                    f"  {family_name}: host-asan tests require nightly or a library/system/LLVM bump, "
+                    f"  {family_name}: host-asan tests only run on nightly, "
                     f"disabling tests"
                 )
             elif "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info.get(
-                    "test-runs-on-host-asan", platform_info["test-runs-on-sandbox"]
-                )
+                test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(
                     f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
                 )
