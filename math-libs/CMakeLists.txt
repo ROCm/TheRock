@@ -126,7 +126,6 @@ if(THEROCK_ENABLE_PRIM)
       amd-hip
     BUILD_DEPS
       rocm-cmake
-      rocRAND
     RUNTIME_DEPS
       hip-clr
       ${THEROCK_BUNDLED_SQLITE3}
