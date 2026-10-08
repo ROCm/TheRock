@@ -56,8 +56,9 @@ if(LLVM_ENABLE_PER_TARGET_RUNTIME_DIR)
 
     # compiler-rt sanitizers: per-target dir is
     #   lib/clang/<maj>/lib/<triple>/libclang_rt.*.so
-    # Legacy layout was lib/clang/<maj>/lib/linux/. Symlink the per-target
-    # names into lib/linux/ so older consumers still resolve them.
+    # Legacy layout was lib/clang/<maj>/lib/linux/libclang_rt.*-<arch>.so.
+    # Symlink those arch-suffixed names to the per-target unsuffixed files.
+    string(REGEX REPLACE "^([^-]+).*" "\\1" _clang_rt_arch "${THEROCK_LLVM_HOST_TRIPLE}")
     set(_compat_clang_rt_libs
       libclang_rt.asan.so
       libclang_rt.dyndd.so
@@ -71,11 +72,13 @@ if(LLVM_ENABLE_PER_TARGET_RUNTIME_DIR)
       libclang_rt.ubsan_standalone.so
     )
     foreach(_lib IN LISTS _compat_clang_rt_libs)
+      # libclang_rt.asan.so -> libclang_rt.asan-x86_64.so
+      string(REGEX REPLACE "\\.so$" "-${_clang_rt_arch}.so" _legacy_lib "${_lib}")
       install(CODE "
         set(_clang_lib \"\${CMAKE_INSTALL_PREFIX}/lib/clang/${LLVM_VERSION_MAJOR}/lib\")
         set(_src \"\${_clang_lib}/${THEROCK_LLVM_HOST_TRIPLE}/${_lib}\")
         set(_dest_dir \"\${_clang_lib}/linux\")
-        set(_dest \"\${_dest_dir}/${_lib}\")
+        set(_dest \"\${_dest_dir}/${_legacy_lib}\")
         if(EXISTS \"\${_src}\")
           file(MAKE_DIRECTORY \"\${_dest_dir}\")
           if(NOT EXISTS \"\${_dest}\")
