@@ -18,21 +18,6 @@ import checkout_from_manifest
 
 
 class PyTorchCheckoutFromManifestTest(unittest.TestCase):
-    def test_download_manifest_rejects_non_https(self):
-        for url in (
-            "http://example.com/manifest.json",
-            "file:///fixtures/manifest.json",
-            "https:///manifest.json",
-        ):
-            with self.subTest(url=url), mock.patch.object(
-                checkout_from_manifest.urllib.request, "urlretrieve"
-            ) as download:
-                with self.assertRaisesRegex(ValueError, "HTTPS"):
-                    checkout_from_manifest.download_manifest(
-                        manifest_url=url, output_path=Path("manifest.json")
-                    )
-                download.assert_not_called()
-
     def _write_manifest(self, path: Path, entries: object) -> Path:
         path.write_text(json.dumps(entries), encoding="utf-8")
         return path
@@ -341,6 +326,21 @@ class PyTorchCheckoutFromManifestTest(unittest.TestCase):
             "https://example.com/manifest.json", manifest_path
         )
         self.assertEqual(len(check_call.call_args_list), 1)
+
+    def test_download_manifest_rejects_non_https(self):
+        for url in (
+            "http://example.com/manifest.json",
+            "file:///fixtures/manifest.json",
+            "https:///manifest.json",
+        ):
+            with self.subTest(url=url), mock.patch.object(
+                checkout_from_manifest.urllib.request, "urlretrieve"
+            ) as download:
+                with self.assertRaisesRegex(ValueError, "HTTPS"):
+                    checkout_from_manifest.download_manifest(
+                        manifest_url=url, output_path=Path("manifest.json")
+                    )
+                download.assert_not_called()
 
     def test_expected_ref_mismatch_errors_before_checkout(self) -> None:
         manifest = {
