@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 // No-op definitions of every entry point into the GPU half of the LLVM profile
-// runtime (InstrProfilingPlatformROCm.cpp in libclang_rt.profile_rocm.a).
+// runtime (InstrProfilingPlatformROCm.cpp, in libclang_rt.profile.a and
+// libclang_rt.profile_rocm.a).
 // therock_subproject.cmake links this into each coverage-instrumented
 // executable and shared library so that the real ones are never linked; see the
 // coverage comments there.
