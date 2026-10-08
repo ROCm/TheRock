@@ -31,22 +31,6 @@ import aggregate_rpm_metadata as rpm
 # ---------------------------------------------------------------------------
 
 
-class TestFetchBytes(unittest.TestCase):
-    def test_rejects_non_https_before_downloading(self):
-        for module in (deb, rpm):
-            for url in (
-                "http://example.com/data",
-                "file:///fixtures/data",
-                "ftp://example.com/data",
-                "https:///data",
-            ):
-                with self.subTest(module=module.__name__, url=url):
-                    with patch.object(module.urllib.request, "urlopen") as download:
-                        with self.assertRaisesRegex(ValueError, "HTTPS"):
-                            module.fetch_bytes(url)
-                        download.assert_not_called()
-
-
 class TestDebParseSource(unittest.TestCase):
     def test_valid(self):
         result = deb.parse_source("core,https://example.com/deb,dists,pool/core")
@@ -466,6 +450,27 @@ class TestRpmBuildRepomdXml(unittest.TestCase):
         primary_gz = gzip.compress(primary_xml)
         result = rpm.build_repomd_xml(primary_gz, primary_xml, timestamp=1000000)
         self.assertIn(b"sha256", result)
+
+
+# ---------------------------------------------------------------------------
+# Shared download helper tests
+# ---------------------------------------------------------------------------
+
+
+class TestFetchBytes(unittest.TestCase):
+    def test_rejects_non_https_before_downloading(self):
+        for module in (deb, rpm):
+            for url in (
+                "http://example.com/data",
+                "file:///fixtures/data",
+                "ftp://example.com/data",
+                "https:///data",
+            ):
+                with self.subTest(module=module.__name__, url=url):
+                    with patch.object(module.urllib.request, "urlopen") as download:
+                        with self.assertRaisesRegex(ValueError, "HTTPS"):
+                            module.fetch_bytes(url)
+                        download.assert_not_called()
 
 
 if __name__ == "__main__":
