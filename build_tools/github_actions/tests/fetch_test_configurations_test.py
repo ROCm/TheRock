@@ -707,6 +707,46 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         fetch_test_configurations.run()
         self.assertEqual(self.gha_output["platform"], "linux")
 
+    def test_tsan_component_filter_preserves_requested_test_tier(self):
+        os.environ["BUILD_VARIANT"] = "tsan"
+        os.environ["TEST_LABELS"] = '["test:rocrand"]'
+        for tier in ("quick", "standard", "comprehensive"):
+            with self.subTest(tier=tier):
+                os.environ["TEST_TYPE"] = tier
+                fetch_test_configurations.run()
+                components = self._get_components()
+                self.assertEqual({job["job_name"] for job in components}, {"rocrand"})
+                for job in components:
+                    self.assertEqual(job["test_type"], tier)
+                    self.assertIn("/dev/kfd", job["container_options"])
+
+    def test_tsan_uses_the_regular_comprehensive_matrix(self):
+        os.environ["TEST_TYPE"] = "comprehensive"
+        os.environ["BUILD_VARIANT"] = "release"
+        fetch_test_configurations.run()
+        baseline_sanity = json.loads(self.gha_output["sanity_component"])
+        baseline = {
+            (job["job_name"], job["test_script"], job["total_shards"])
+            for job in self._get_components()
+        }
+
+        os.environ["BUILD_VARIANT"] = "tsan"
+        fetch_test_configurations.run()
+        tsan_sanity = json.loads(self.gha_output["sanity_component"])
+        tsan_components = self._get_components()
+        tsan = {
+            (job["job_name"], job["test_script"], job["total_shards"])
+            for job in tsan_components
+        }
+
+        self.assertEqual(tsan, baseline)
+        self.assertEqual(tsan_sanity["test_script"], baseline_sanity["test_script"])
+        self.assertEqual(tsan_sanity["test_type"], "comprehensive")
+        self.assertIn("rocblas", {job["job_name"] for job in tsan_components})
+        self.assertTrue(
+            any("/dev/kfd" in job["container_options"] for job in tsan_components)
+        )
+
     def test_container_images_are_sha256_pinned(self):
         # Check the full matrix, including jobs filtered out for a given run.
         # Entries without an override use the workflow's default image.
