@@ -492,7 +492,7 @@ def cancel_pr_workflow_runs(pr: dict[str, Any], actions_token: str) -> list[str]
 
 
 def _fail_if_cancel_errors(errors: list[str]) -> None:
-    """Raise after the rest of the push so runner health is not left green."""
+    """Raise after the rest of the push so the bump workflow is not left green."""
     if not errors:
         return
     raise RuntimeError(
