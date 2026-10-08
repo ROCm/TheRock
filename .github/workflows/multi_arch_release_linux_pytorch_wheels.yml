@@ -36,14 +36,10 @@ on:
         description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
         type: string
         default: ""
-      asan:
-        description: "Build a torch-only AddressSanitizer wheel against the installed ROCm SDK"
-        type: boolean
-        default: false
-      pytorch_git_refs:
-        description: "PyTorch refs to build. Empty uses the release-type default."
+      build_variant:
+        description: "Build variant (release, asan, asan-debug). ASAN variants build torch only."
         type: string
-        default: ""
+        default: "release"
       release_type:
         description: 'Release type; selects the S3 bucket'
         type: string
@@ -100,14 +96,10 @@ on:
         description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
         type: string
         default: ""
-      asan:
-        description: "Build a torch-only AddressSanitizer wheel against the installed ROCm SDK"
-        type: boolean
-        default: false
-      pytorch_git_refs:
-        description: "PyTorch refs to build. Empty uses the release-type default."
+      build_variant:
+        description: "Build variant (release, asan, asan-debug). ASAN variants build torch only."
         type: string
-        default: ""
+        default: "release"
       release_type:
         description: 'Release type; ordinary developer-triggered jobs should use "dev"'
         type: choice
@@ -169,7 +161,6 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
       PYTHON_VERSION: ${{ inputs.python_version }}
-      PYTORCH_GIT_REFS: ${{ inputs.pytorch_git_refs }}
 
     steps:
       - name: "Quartz - started - release PyTorch wheels"
@@ -196,7 +187,6 @@ jobs:
         run: |
           python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
             --python-versions="${PYTHON_VERSION}" \
-            --pytorch-git-refs="${PYTORCH_GIT_REFS}" \
             --platform=linux \
             --release-type="${BUILD_RELEASE_TYPE}" \
             --amdgpu-families="${AMDGPU_FAMILIES}"
@@ -221,8 +211,8 @@ jobs:
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
       test_amdgpu_families: ${{ matrix.test_amdgpu_families }}
-      test_level: ${{ inputs.asan && 'none' || matrix.test_level }}
-      asan: ${{ inputs.asan }}
+      test_level: ${{ startsWith(inputs.build_variant, 'asan') && 'none' || matrix.test_level }}
+      build_variant: ${{ inputs.build_variant }}
       python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       rocm_version: ${{ inputs.rocm_version }}
@@ -236,7 +226,7 @@ jobs:
       # The reusable build workflow dispatches the full PyTorch test suite for
       # each successfully built (nightly, gfx94X-dcgpu, py3.12) ref using that
       # build's own torch_version output (#5777).
-      run_full_pytorch_tests: ${{ inputs.asan == false && inputs.run_full_pytorch_tests }}
+      run_full_pytorch_tests: ${{ !startsWith(inputs.build_variant, 'asan') && inputs.run_full_pytorch_tests }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:
