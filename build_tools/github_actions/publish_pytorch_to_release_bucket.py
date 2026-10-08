@@ -91,10 +91,17 @@ def main(argv: list[str]) -> None:
     )
     parser.add_argument(
         "--python-index",
-        default="whl-next",
-        choices=["whl", "whl-next"],
-        help="Product-local index name for structured publishing (default: "
-        "whl-next). Selects the v5/rocm/pytorch/<index>/ path segment.",
+        default=None,
+        choices=["whl", "whl-next", "whl-next-asan"],
+        help="Product-local index name for structured publishing. Selects the "
+        "v5/rocm/pytorch/<index>/ path segment. Defaults to whl-next, or "
+        "whl-next-asan for ASAN builds.",
+    )
+    parser.add_argument(
+        "--build-variant",
+        default="release",
+        help="Build variant (release, asan, asan-debug, host-asan, etc.). "
+        "ASAN variants publish to whl-next-asan index by default.",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Print plan without uploading"
@@ -104,11 +111,21 @@ def main(argv: list[str]) -> None:
     if not args.source_dir.is_dir():
         raise FileNotFoundError(f"Source directory not found: {args.source_dir}")
 
+    # Determine python index: explicit --python-index takes precedence,
+    # then ASAN default, then whl-next
+    is_asan = "asan" in args.build_variant
+    if args.python_index is not None:
+        python_index = args.python_index
+    elif is_asan:
+        python_index = "whl-next-asan"
+    else:
+        python_index = "whl-next"
+
     backend = create_storage_backend(dry_run=args.dry_run)
 
     if args.structured:
         bucket = get_product_release_bucket_config(args.release_type, "pytorch")
-        _publish_structured(args.source_dir, bucket.name, args.python_index, backend)
+        _publish_structured(args.source_dir, bucket.name, python_index, backend)
         package_index_url = get_release_package_index_url(args.release_type)
     else:
         bucket = get_release_bucket_config(args.release_type, "python")
