@@ -587,20 +587,20 @@ class ParseArgumentsMutexTest(unittest.TestCase):
         return ptf.parse_arguments(argv)
 
     def test_defaults_resolve_after_mutex_check(self):
-        ns = self._parse(["--input-dir", "/tmp"])
+        ns = self._parse(["--input-dir", "/fixtures"])
         self.assertEqual(ns.dest_version, "release")
         self.assertEqual(ns.src_version_type, "rc")
 
     def test_skip_version_promotion_requires_multi_arch_targets(self):
         with self.assertRaises(SystemExit):
-            self._parse(["--input-dir", "/tmp", "--skip-version-promotion"])
+            self._parse(["--input-dir", "/fixtures", "--skip-version-promotion"])
 
     def test_skip_version_promotion_rejects_dest_version(self):
         with self.assertRaises(SystemExit):
             self._parse(
                 [
                     "--input-dir",
-                    "/tmp",
+                    "/fixtures",
                     "--skip-version-promotion",
                     "--multi-arch-targets",
                     "gfx950",
@@ -614,7 +614,7 @@ class ParseArgumentsMutexTest(unittest.TestCase):
             self._parse(
                 [
                     "--input-dir",
-                    "/tmp",
+                    "/fixtures",
                     "--skip-version-promotion",
                     "--multi-arch-targets",
                     "gfx950",
@@ -625,16 +625,16 @@ class ParseArgumentsMutexTest(unittest.TestCase):
 
     def test_dest_version_must_be_recognised(self):
         with self.assertRaises(SystemExit):
-            self._parse(["--input-dir", "/tmp", "--dest-version", "garbage"])
+            self._parse(["--input-dir", "/fixtures", "--dest-version", "garbage"])
 
     def test_dest_version_a_must_be_valid_calendar_date(self):
         with self.assertRaises(SystemExit):
             # Feb 30 doesn't exist.
-            self._parse(["--input-dir", "/tmp", "--dest-version", "a20260230"])
+            self._parse(["--input-dir", "/fixtures", "--dest-version", "a20260230"])
 
     def test_multi_arch_targets_passthrough(self):
         ns = self._parse(
-            ["--input-dir", "/tmp", "--multi-arch-targets", "gfx1010,gfx1201"]
+            ["--input-dir", "/fixtures", "--multi-arch-targets", "gfx1010,gfx1201"]
         )
         self.assertEqual(ns.multi_arch_targets, "gfx1010,gfx1201")
 

@@ -89,7 +89,7 @@ class DashboardGenerationTest(unittest.TestCase):
             patch.object(
                 test_rocprofiler_sdk,
                 "get_asan_runtime_library",
-                return_value="/tmp/libclang_rt.asan-x86_64.so",
+                return_value="/fixtures/libclang_rt.asan-x86_64.so",
             ),
         ):
             dashboard = self._generate()

@@ -405,7 +405,7 @@ class TestS3StorageBackendUploadFile(unittest.TestCase):
         mock_client = mock.MagicMock()
         backend._s3_client = mock_client
 
-        source = Path("/tmp/build.log")
+        source = Path("/fixtures/build.log")
         dest = StorageLocation("my-bucket", "run-1/logs/build.log")
         backend.upload_file(source, dest)
 
@@ -421,7 +421,7 @@ class TestS3StorageBackendUploadFile(unittest.TestCase):
         mock_client = mock.MagicMock()
         backend._s3_client = mock_client
 
-        source = Path("/tmp/index.html")
+        source = Path("/fixtures/index.html")
         dest = StorageLocation("my-bucket", "run-1/index.html")
         backend.upload_file(source, dest)
 
@@ -441,7 +441,7 @@ class TestS3StorageBackendUploadFile(unittest.TestCase):
         ]
         backend._s3_client = mock_client
 
-        source = Path("/tmp/data.json")
+        source = Path("/fixtures/data.json")
         dest = StorageLocation("bucket", "run-1/data.json")
 
         with mock.patch("_therock_utils.storage_backend.time.sleep"):
@@ -455,7 +455,7 @@ class TestS3StorageBackendUploadFile(unittest.TestCase):
         mock_client.upload_file.side_effect = Exception("persistent")
         backend._s3_client = mock_client
 
-        source = Path("/tmp/data.json")
+        source = Path("/fixtures/data.json")
         dest = StorageLocation("bucket", "run-1/data.json")
 
         with mock.patch("_therock_utils.storage_backend.time.sleep"):
@@ -470,7 +470,7 @@ class TestS3StorageBackendUploadFile(unittest.TestCase):
         mock_client = mock.MagicMock()
         backend._s3_client = mock_client
 
-        source = Path("/tmp/build.log")
+        source = Path("/fixtures/build.log")
         dest = StorageLocation("bucket", "run-1/build.log")
         backend.upload_file(source, dest)
 
@@ -570,9 +570,9 @@ class TestS3StorageBackendUploadFiles(unittest.TestCase):
         backend._s3_client = mock_client
 
         files = [
-            (Path("/tmp/a.log"), StorageLocation("bucket", "run-1/a.log")),
-            (Path("/tmp/b.log"), StorageLocation("bucket", "run-1/b.log")),
-            (Path("/tmp/c.log"), StorageLocation("bucket", "run-1/c.log")),
+            (Path("/fixtures/a.log"), StorageLocation("bucket", "run-1/a.log")),
+            (Path("/fixtures/b.log"), StorageLocation("bucket", "run-1/b.log")),
+            (Path("/fixtures/c.log"), StorageLocation("bucket", "run-1/c.log")),
         ]
         count = backend.upload_files(files)
 
@@ -595,7 +595,7 @@ class TestS3StorageBackendUploadFiles(unittest.TestCase):
         backend._s3_client = mock_client
 
         files = [
-            (Path("/tmp/only.log"), StorageLocation("bucket", "run-1/only.log")),
+            (Path("/fixtures/only.log"), StorageLocation("bucket", "run-1/only.log")),
         ]
 
         with mock.patch(
@@ -613,8 +613,8 @@ class TestS3StorageBackendUploadFiles(unittest.TestCase):
         backend._s3_client = mock_client
 
         files = [
-            (Path("/tmp/a.log"), StorageLocation("bucket", "run-1/a.log")),
-            (Path("/tmp/b.log"), StorageLocation("bucket", "run-1/b.log")),
+            (Path("/fixtures/a.log"), StorageLocation("bucket", "run-1/a.log")),
+            (Path("/fixtures/b.log"), StorageLocation("bucket", "run-1/b.log")),
         ]
 
         with mock.patch(
@@ -641,8 +641,8 @@ class TestS3StorageBackendUploadFiles(unittest.TestCase):
         backend._s3_client = mock_client
 
         files = [
-            (Path("/tmp/good.log"), StorageLocation("bucket", "run-1/good.log")),
-            (Path("/tmp/bad.log"), StorageLocation("bucket", "run-1/bad.log")),
+            (Path("/fixtures/good.log"), StorageLocation("bucket", "run-1/good.log")),
+            (Path("/fixtures/bad.log"), StorageLocation("bucket", "run-1/bad.log")),
         ]
 
         with mock.patch("_therock_utils.storage_backend.time.sleep"):
@@ -1090,7 +1090,7 @@ class TestCreateStorageBackend(unittest.TestCase):
         self.assertIsInstance(backend, S3StorageBackend)
 
     def test_returns_local_backend_with_staging_dir(self):
-        backend = create_storage_backend(staging_dir=Path("/tmp/staging"))
+        backend = create_storage_backend(staging_dir=Path("/fixtures/staging"))
         self.assertIsInstance(backend, LocalStorageBackend)
 
     def test_dry_run_passed_through(self):
@@ -1099,7 +1099,9 @@ class TestCreateStorageBackend(unittest.TestCase):
         self.assertTrue(backend._dry_run)
 
     def test_local_dry_run_passed_through(self):
-        backend = create_storage_backend(staging_dir=Path("/tmp/staging"), dry_run=True)
+        backend = create_storage_backend(
+            staging_dir=Path("/fixtures/staging"), dry_run=True
+        )
         self.assertIsInstance(backend, LocalStorageBackend)
         self.assertTrue(backend._dry_run)
 
@@ -1110,7 +1112,7 @@ class TestCreateStorageBackend(unittest.TestCase):
 
     def test_upload_concurrency_ignored_for_local(self):
         backend = create_storage_backend(
-            staging_dir=Path("/tmp/staging"), upload_concurrency=25
+            staging_dir=Path("/fixtures/staging"), upload_concurrency=25
         )
         self.assertIsInstance(backend, LocalStorageBackend)
 

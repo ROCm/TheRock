@@ -107,7 +107,8 @@ class GitHubAPITest(unittest.TestCase):
 
     def test_github_token_takes_priority(self):
         """GITHUB_TOKEN should be used when available, even if gh CLI is present."""
-        os.environ["GITHUB_TOKEN"] = "test-token-12345"
+        # Test-only dummy credential.
+        os.environ["GITHUB_TOKEN"] = "test-token-12345"  # nosec B105
 
         # Mock gh CLI as available and authenticated
         mock_result = mock.Mock()
@@ -155,7 +156,8 @@ class GitHubAPITest(unittest.TestCase):
 
     def test_auth_method_is_cached(self):
         """Auth method should be cached after first call to get_auth_method()."""
-        os.environ["GITHUB_TOKEN"] = "test-token-12345"
+        # Test-only dummy credential.
+        os.environ["GITHUB_TOKEN"] = "test-token-12345"  # nosec B105
         api = GitHubAPI()
         first_result = api.get_auth_method()
 
@@ -168,7 +170,8 @@ class GitHubAPITest(unittest.TestCase):
 
     def test_fresh_instance_detects_new_env(self):
         """A new GitHubAPI instance should detect changed environment."""
-        os.environ["GITHUB_TOKEN"] = "test-token-12345"
+        # Test-only dummy credential.
+        os.environ["GITHUB_TOKEN"] = "test-token-12345"  # nosec B105
         api1 = GitHubAPI()
         self.assertEqual(api1.get_auth_method(), GitHubAPI.AuthMethod.GITHUB_TOKEN)
 
@@ -182,7 +185,8 @@ class GitHubAPITest(unittest.TestCase):
 
     def test_is_authenticated_with_token(self):
         """is_authenticated should return True with GITHUB_TOKEN."""
-        os.environ["GITHUB_TOKEN"] = "test-token-12345"
+        # Test-only dummy credential.
+        os.environ["GITHUB_TOKEN"] = "test-token-12345"  # nosec B105
         api = GitHubAPI()
         self.assertTrue(api.is_authenticated())
 
@@ -203,21 +207,25 @@ class GitHubAPITest(unittest.TestCase):
         # No GITHUB_TOKEN env var and gh CLI unavailable: auto-detection alone
         # would land on UNAUTHENTICATED, but the explicit token should win.
         with mock.patch("github_actions_api.shutil.which", return_value=None):
-            api = GitHubAPI(github_token="explicit-token")
+            # Test-only dummy credential.
+            api = GitHubAPI(github_token="explicit-token")  # nosec B106
             self.assertEqual(api.get_auth_method(), GitHubAPI.AuthMethod.GITHUB_TOKEN)
             self.assertEqual(api._github_token, "explicit-token")
 
     def test_explicit_github_token_used_in_request_headers(self):
         """An explicit github_token should be sent as the Authorization header."""
-        api = GitHubAPI(github_token="explicit-token")
+        # Test-only dummy credential.
+        api = GitHubAPI(github_token="explicit-token")  # nosec B106
         headers = api._get_request_headers()
         self.assertEqual(headers["Authorization"], "Bearer explicit-token")
 
     def test_explicit_github_token_independent_of_env_token(self):
         """Two instances with different explicit tokens should not interfere."""
-        os.environ["GITHUB_TOKEN"] = "env-token"
+        # Test-only dummy credential.
+        os.environ["GITHUB_TOKEN"] = "env-token"  # nosec B105
         default_api = GitHubAPI()
-        app_api = GitHubAPI(github_token="app-token")
+        # Test-only dummy credential.
+        app_api = GitHubAPI(github_token="app-token")  # nosec B106
 
         self.assertEqual(
             default_api._get_request_headers()["Authorization"], "Bearer env-token"
@@ -237,7 +245,8 @@ class GitHubAPITest(unittest.TestCase):
 
     def test_rest_api_success(self):
         """REST API successful request should return parsed JSON."""
-        os.environ["GITHUB_TOKEN"] = "test-token"
+        # Test-only dummy credential.
+        os.environ["GITHUB_TOKEN"] = "test-token"  # nosec B105
         api = GitHubAPI()
 
         mock_response = mock.MagicMock()
@@ -376,7 +385,8 @@ class GitHubAPITest(unittest.TestCase):
 
     def test_rest_api_http_403_raises_github_api_error(self):
         """REST API 403 should raise GitHubAPIError with HTTPError cause."""
-        os.environ["GITHUB_TOKEN"] = "test-token"
+        # Test-only dummy credential.
+        os.environ["GITHUB_TOKEN"] = "test-token"  # nosec B105
         api = GitHubAPI()
 
         mock_error = HTTPError(
@@ -399,7 +409,8 @@ class GitHubAPITest(unittest.TestCase):
         """REST API rate limit (403 with rate limit body) should provide actionable guidance."""
         import io
 
-        os.environ["GITHUB_TOKEN"] = "test-token"
+        # Test-only dummy credential.
+        os.environ["GITHUB_TOKEN"] = "test-token"  # nosec B105
         api = GitHubAPI()
 
         # GitHub returns 403 with a JSON body containing the rate limit message
@@ -424,7 +435,8 @@ class GitHubAPITest(unittest.TestCase):
 
     def test_rest_api_http_404_raises_github_api_error(self):
         """REST API 404 should raise GitHubAPIError with HTTPError cause."""
-        os.environ["GITHUB_TOKEN"] = "test-token"
+        # Test-only dummy credential.
+        os.environ["GITHUB_TOKEN"] = "test-token"  # nosec B105
         api = GitHubAPI()
 
         mock_error = HTTPError(
@@ -445,7 +457,8 @@ class GitHubAPITest(unittest.TestCase):
 
     def test_rest_api_http_500_raises_github_api_error(self):
         """REST API 500 should raise GitHubAPIError with HTTPError cause."""
-        os.environ["GITHUB_TOKEN"] = "test-token"
+        # Test-only dummy credential.
+        os.environ["GITHUB_TOKEN"] = "test-token"  # nosec B105
         api = GitHubAPI()
 
         mock_error = HTTPError(
@@ -465,7 +478,8 @@ class GitHubAPITest(unittest.TestCase):
 
     def test_rest_api_network_error_raises_github_api_error(self):
         """REST API network error should raise GitHubAPIError with URLError cause."""
-        os.environ["GITHUB_TOKEN"] = "test-token"
+        # Test-only dummy credential.
+        os.environ["GITHUB_TOKEN"] = "test-token"  # nosec B105
         api = GitHubAPI()
 
         mock_error = URLError(reason="Connection refused")
@@ -479,7 +493,8 @@ class GitHubAPITest(unittest.TestCase):
 
     def test_rest_api_timeout_raises_github_api_error(self):
         """REST API timeout should raise GitHubAPIError with TimeoutError cause."""
-        os.environ["GITHUB_TOKEN"] = "test-token"
+        # Test-only dummy credential.
+        os.environ["GITHUB_TOKEN"] = "test-token"  # nosec B105
         api = GitHubAPI()
 
         with mock.patch("github_actions_api.urlopen", side_effect=TimeoutError()):
@@ -493,7 +508,8 @@ class GitHubAPITest(unittest.TestCase):
         """REST API invalid JSON should raise GitHubAPIError with JSONDecodeError cause."""
         import json
 
-        os.environ["GITHUB_TOKEN"] = "test-token"
+        # Test-only dummy credential.
+        os.environ["GITHUB_TOKEN"] = "test-token"  # nosec B105
         api = GitHubAPI()
 
         mock_response = mock.MagicMock()
@@ -509,7 +525,8 @@ class GitHubAPITest(unittest.TestCase):
 
     def test_rest_api_post_sends_json_body(self):
         """REST API POST should send JSON body with Content-Type header."""
-        os.environ["GITHUB_TOKEN"] = "test-token"
+        # Test-only dummy credential.
+        os.environ["GITHUB_TOKEN"] = "test-token"  # nosec B105
         api = GitHubAPI()
 
         mock_response = mock.MagicMock()
@@ -533,7 +550,8 @@ class GitHubAPITest(unittest.TestCase):
 
     def test_rest_api_patch_sends_json_body(self):
         """REST API PATCH should send JSON body."""
-        os.environ["GITHUB_TOKEN"] = "test-token"
+        # Test-only dummy credential.
+        os.environ["GITHUB_TOKEN"] = "test-token"  # nosec B105
         api = GitHubAPI()
 
         mock_response = mock.MagicMock()
@@ -581,7 +599,8 @@ class GitHubAPITest(unittest.TestCase):
 
     def test_rest_api_get_empty_body_raises_github_api_error(self):
         """REST API GET with empty body should raise GitHubAPIError (unchanged behavior)."""
-        os.environ["GITHUB_TOKEN"] = "test-token"
+        # Test-only dummy credential.
+        os.environ["GITHUB_TOKEN"] = "test-token"  # nosec B105
         api = GitHubAPI()
 
         mock_response = mock.MagicMock()
@@ -597,7 +616,8 @@ class GitHubAPITest(unittest.TestCase):
 
     def test_rest_api_post_empty_body_returns_empty_dict(self):
         """REST API POST with empty body may return {} without parsing JSON."""
-        os.environ["GITHUB_TOKEN"] = "test-token"
+        # Test-only dummy credential.
+        os.environ["GITHUB_TOKEN"] = "test-token"  # nosec B105
         api = GitHubAPI()
 
         mock_response = mock.MagicMock()

@@ -1161,7 +1161,8 @@ class RestrictFamiliesTest(TmpDirTestCase):
         content = dist_info_path.read_text()
         if ns is None:
             ns = {}
-        exec(content, ns)
+        # Execute our generated Python template to verify behavior.
+        exec(content, ns)  # nosec B102
         return ns
 
     def _make_two_family_params(self) -> Parameters:
@@ -1336,7 +1337,8 @@ class RestrictFamiliesTest(TmpDirTestCase):
         params = self._make_params(artifact_dir, version="7.0.0", version_suffix="rc1")
 
         ns: dict = {}
-        exec(params.dist_info_contents, ns)
+        # Execute our generated Python template to verify behavior.
+        exec(params.dist_info_contents, ns)  # nosec B102
 
         self.assertEqual(ns["__version__"], params.dist_info.__version__)
         self.assertEqual(
@@ -1451,7 +1453,8 @@ class CrossPlatformFamiliesTest(TmpDirTestCase):
 
     def _exec_dist_info(self, params: Parameters) -> dict:
         ns: dict = {}
-        exec(params.dist_info_contents, ns)
+        # Execute our generated Python template to verify behavior.
+        exec(params.dist_info_contents, ns)  # nosec B102
         return ns
 
     # ----- Backward compat: no kwargs => on-disk artifact view ------------

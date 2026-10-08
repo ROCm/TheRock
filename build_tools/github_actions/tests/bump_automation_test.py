@@ -683,7 +683,8 @@ class CloseStaleTheRockRefPrsTest(unittest.TestCase):
             close_stale_therock_ref_prs(
                 "ROCm/rocm-libraries",
                 current_pr_number=20,
-                token="token",
+                # Test-only dummy credential.
+                token="token",  # nosec B106
                 bot_author="assistant-librarian[bot]",
                 now=self.NOW,
             )
@@ -716,7 +717,8 @@ class CloseStaleTheRockRefPrsTest(unittest.TestCase):
             close_stale_therock_ref_prs(
                 "ROCm/rocm-libraries",
                 current_pr_number=20,
-                token="token",
+                # Test-only dummy credential.
+                token="token",  # nosec B106
                 bot_author="assistant-librarian[bot]",
                 now=self.NOW,
             )
@@ -733,7 +735,8 @@ class CloseStaleTheRockRefPrsTest(unittest.TestCase):
             close_stale_therock_ref_prs(
                 "ROCm/rocm-libraries",
                 current_pr_number=20,
-                token="token",
+                # Test-only dummy credential.
+                token="token",  # nosec B106
                 bot_author="assistant-librarian[bot]",
             )
 
@@ -774,7 +777,8 @@ class CloseStaleTheRockRefPrsTest(unittest.TestCase):
             close_stale_therock_ref_prs(
                 "ROCm/rocm-libraries",
                 current_pr_number=20,
-                token="token",
+                # Test-only dummy credential.
+                token="token",  # nosec B106
                 bot_author="assistant-librarian[bot]",
                 now=self.NOW,
             )

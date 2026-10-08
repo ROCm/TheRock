@@ -276,7 +276,7 @@ class TestReleaseDiscovery(unittest.TestCase):
 
     def test_dev_release_uses_dev_multiarch_tarball_bucket(self) -> None:
         version = "7.15.0.dev0+deadbeef"
-        output_dir = Path("/tmp/therock-test")
+        output_dir = Path("/fixtures/therock-test")
         asset_name = _tarball_name(mod.PLATFORM, "gfx94X-dcgpu", version)
         args = argparse.Namespace(
             artifact_group="gfx94X-dcgpu",
@@ -374,7 +374,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
     defaults = dict(
         run_id="12345",
         artifact_group="gfx110X-all",
-        output_dir=Path("/tmp/therock-test"),
+        output_dir=Path("/fixtures/therock-test"),
         # Non-empty amdgpu_targets skips the expand_families call.
         amdgpu_targets="gfx1100",
         dry_run=False,
