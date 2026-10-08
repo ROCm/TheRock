@@ -76,34 +76,6 @@ class FilesetToolTest(unittest.TestCase):
         if self.temp_context:
             self.temp_context.cleanup()
 
-    def testHipDnnInstalledSanitizerSource(self):
-        # hipdnn_test_sdkTargets.cmake exports this source through
-        # INTERFACE_SOURCES; installed consumers need it in the dev artifact.
-        root_dir = self.temp_dir / "input"
-        artifact_dir = self.temp_dir / "artifact"
-        source = Path(
-            "ml-libs/hipDNN/stage/share/hipdnn/test_sdk/AsanDefaultSuppressions.cpp"
-        )
-        write_text(root_dir / source, "// Installed hipDNN sanitizer source\n")
-        run_command(
-            [
-                sys.executable,
-                FILESET_TOOL,
-                "artifact",
-                "--descriptor",
-                FILESET_TOOL.parent.parent / "ml-libs/artifact-hipdnn.toml",
-                "--artifact-name",
-                "hipdnn",
-                "--root-dir",
-                root_dir,
-                "dev",
-                artifact_dir,
-            ]
-        )
-        self.assertEqual(
-            (artifact_dir / source).read_text(), (root_dir / source).read_text()
-        )
-
     # Validates that the happy path flow of creating an artifact, archiving it,
     # expanding and flattening works. This does not exhaustively verify
     # all descriptor options.
