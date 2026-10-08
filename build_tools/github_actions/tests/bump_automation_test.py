@@ -15,6 +15,7 @@ from bump_automation import (
     _baseline_gate_jobs_succeeded,
     _clone_url,
     _list_run_jobs,
+    _list_workflow_runs_for_head,
     close_stale_prs,
     close_stale_therock_ref_prs,
     create_therock_bump,
@@ -589,6 +590,182 @@ class CloseStalePrsTest(unittest.TestCase):
         self.assertEqual(len(patch_calls), 1)
         self.assertIn("pulls/99", patch_calls[0].args[1])
 
+    def _stale_pr(self, head_sha: str) -> dict:
+        return {
+            "number": 42,
+            "title": "Bump rocm-systems from abc1234 to xyz5678",
+            "head": {"ref": "bump-rocm-systems-xyz5678", "sha": head_sha},
+        }
+
+    def test_cancels_matching_active_runs_before_closing(self):
+        head_sha = "a" * 40
+        other_sha = "b" * 40
+        branch = "bump-rocm-systems-xyz5678"
+        queued = {
+            "total_count": 1,
+            "workflow_runs": [
+                {
+                    "id": 111,
+                    "status": "queued",
+                    "head_sha": head_sha,
+                    "head_branch": branch,
+                }
+            ],
+        }
+        in_progress = {
+            "total_count": 4,
+            "workflow_runs": [
+                {
+                    "id": 222,
+                    "status": "in_progress",
+                    "head_sha": head_sha,
+                    "head_branch": branch,
+                },
+                {
+                    "id": 333,
+                    "status": "in_progress",
+                    "head_sha": other_sha,
+                    "head_branch": branch,
+                },
+                {
+                    "id": 444,
+                    "status": "completed",
+                    "head_sha": head_sha,
+                    "head_branch": branch,
+                },
+                {
+                    "id": 555,
+                    "status": "in_progress",
+                    "head_sha": head_sha,
+                    "head_branch": "other-branch",
+                },
+            ],
+        }
+
+        def fake_api(token, endpoint, method="GET", data=None):
+            if method == "GET" and "status=queued" in endpoint:
+                return queued
+            if method == "GET" and "status=in_progress" in endpoint:
+                return in_progress
+            return None
+
+        with patch(
+            "bump_automation.gh_api_paginate", return_value=[self._stale_pr(head_sha)]
+        ):
+            with patch("bump_automation.gh_api", side_effect=fake_api) as mock_api:
+                close_stale_prs(
+                    "rocm-systems",
+                    "abc1234567890",
+                    "app-token",
+                    actions_token="actions-token",
+                )
+
+        cancel_calls = [
+            c
+            for c in mock_api.call_args_list
+            if c.kwargs.get("method") == "POST" and c.args[1].endswith("/cancel")
+        ]
+        self.assertEqual(
+            [c.args[1] for c in cancel_calls],
+            [
+                "repos/ROCm/TheRock/actions/runs/111/cancel",
+                "repos/ROCm/TheRock/actions/runs/222/cancel",
+            ],
+        )
+        self.assertTrue(all(c.args[0] == "actions-token" for c in cancel_calls))
+        list_calls = [
+            c for c in mock_api.call_args_list if "actions/runs?" in c.args[1]
+        ]
+        self.assertTrue(all(c.args[0] == "actions-token" for c in list_calls))
+        self.assertTrue(all(f"head_sha={head_sha}" in c.args[1] for c in list_calls))
+        close_index = next(
+            i
+            for i, c in enumerate(mock_api.call_args_list)
+            if c.kwargs.get("method") == "PATCH"
+        )
+        cancel_indexes = [
+            i
+            for i, c in enumerate(mock_api.call_args_list)
+            if c.kwargs.get("method") == "POST" and c.args[1].endswith("/cancel")
+        ]
+        self.assertTrue(cancel_indexes)
+        self.assertLess(max(cancel_indexes), close_index)
+
+    def test_cancel_failure_still_closes_pr(self):
+        head_sha = "c" * 40
+
+        def fake_api(token, endpoint, method="GET", data=None):
+            if method == "GET" and "status=queued" in endpoint:
+                return {
+                    "total_count": 1,
+                    "workflow_runs": [
+                        {
+                            "id": 777,
+                            "status": "queued",
+                            "head_sha": head_sha,
+                            "head_branch": "bump-rocm-systems-xyz5678",
+                        }
+                    ],
+                }
+            if method == "GET" and "status=in_progress" in endpoint:
+                raise RuntimeError("list failed")
+            if method == "POST" and endpoint.endswith("/cancel"):
+                raise RuntimeError("409")
+            return None
+
+        with patch(
+            "bump_automation.gh_api_paginate", return_value=[self._stale_pr(head_sha)]
+        ):
+            with patch("bump_automation.gh_api", side_effect=fake_api) as mock_api:
+                close_stale_prs(
+                    "rocm-systems",
+                    "abc1234567890",
+                    "app-token",
+                    actions_token="actions-token",
+                )
+
+        patch_calls = [
+            c for c in mock_api.call_args_list if c.kwargs.get("method") == "PATCH"
+        ]
+        self.assertEqual(len(patch_calls), 1)
+        self.assertIn("pulls/42", patch_calls[0].args[1])
+
+    def test_missing_head_sha_still_closes_without_cancel(self):
+        pr = self._make_pr(42, "Bump rocm-systems from abc1234 to xyz5678")
+        with patch("bump_automation.gh_api_paginate", return_value=[pr]):
+            with patch("bump_automation.gh_api") as mock_api:
+                close_stale_prs(
+                    "rocm-systems",
+                    "abc1234567890",
+                    "app-token",
+                    actions_token="actions-token",
+                )
+
+        cancel_calls = [
+            c for c in mock_api.call_args_list if "actions/runs" in c.args[1]
+        ]
+        self.assertEqual(cancel_calls, [])
+        patch_calls = [
+            c for c in mock_api.call_args_list if c.kwargs.get("method") == "PATCH"
+        ]
+        self.assertEqual(len(patch_calls), 1)
+
+    def test_lists_workflow_runs_across_pages(self):
+        first = {
+            "total_count": 101,
+            "workflow_runs": [{"id": i} for i in range(100)],
+        }
+        second = {"total_count": 101, "workflow_runs": [{"id": 100}]}
+        with patch("bump_automation.gh_api", side_effect=[first, second]) as mock_api:
+            runs = _list_workflow_runs_for_head(
+                "actions-token", "bump-branch", "a" * 40, "queued"
+            )
+
+        self.assertEqual([run["id"] for run in runs], list(range(101)))
+        self.assertIn("page=1", mock_api.call_args_list[0].args[1])
+        self.assertIn("page=2", mock_api.call_args_list[1].args[1])
+        self.assertIn("status=queued", mock_api.call_args_list[0].args[1])
+
 
 def _search_page(numbers: range, total_count: int) -> dict:
     return {
@@ -814,11 +991,13 @@ class HandlePushTest(unittest.TestCase):
                                 "libraries": "libraries-token",
                                 "rocgdb": "rocgdb-token",
                             },
+                            actions_token="gha-token",
                         )
 
         mock_close.assert_called_once()
         # rocgdb reuses the systems token, so close_stale_prs must receive it.
         self.assertEqual(mock_close.call_args.args[2], "systems-token")
+        self.assertEqual(mock_close.call_args.kwargs["actions_token"], "gha-token")
         # submodule-only entries have no upstream ref files, so the handler must
         # bail out before cloning the upstream repo.
         mock_tmp.assert_not_called()
