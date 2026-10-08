@@ -1430,7 +1430,8 @@ class TestSelectTargets(unittest.TestCase):
         (families, build_only, test_only) are cleared when a platform is excluded.
 
         Also tests ci:gfx* combined with ci:build:* and ci:test:* labels - the ci:gfx*
-        label adds to families but NOT to build_only, while ci:build:* adds to both.
+        label adds to families AND test_only (to bypass trigger gating), but NOT to
+        build_only. ci:build:* adds to build_only.
         """
         test_cases = [
             {
@@ -1456,7 +1457,7 @@ class TestSelectTargets(unittest.TestCase):
                 "linux_in_test_only": True,
             },
             {
-                # ci:gfx* adds to families but NOT build_only; ci:build:* adds to both
+                # ci:gfx* adds to families AND test_only; ci:build:* adds to build_only
                 # ci:test:* adds to test_only. Combined: family yes, build_only yes, test_only yes
                 "name": "ci:gfx + ci:build + ci:test + ci:platform:windows",
                 "labels": [
@@ -1472,14 +1473,15 @@ class TestSelectTargets(unittest.TestCase):
                 "windows_in_test_only": True,
             },
             {
-                # Just ci:gfx* + ci:platform - should NOT be in build_only or test_only
+                # ci:gfx* adds to families AND test_only (to bypass trigger gating),
+                # but NOT to build_only.
                 "name": "ci:gfx + ci:platform:windows (no build/test labels)",
                 "labels": ["ci:gfx110x", "ci:platform:windows"],
                 "expect_linux_empty": True,
                 "expect_windows_empty": False,
                 "windows_target": "gfx110x",
                 "windows_in_build_only": False,
-                "windows_in_test_only": False,
+                "windows_in_test_only": True,
             },
         ]
         for tc in test_cases:
