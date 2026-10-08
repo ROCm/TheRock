@@ -412,9 +412,6 @@ test_matrix = {
             "linux": [
                 # hipBLASLt does not support gfx103X (see TheRock#1062)
                 "gfx1030",
-                # FAILURE (3275+ gtest failures - too many to filter individually)
-                # https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038470972
-                "gfx125X-dcgpu",
             ],
         },
     },
