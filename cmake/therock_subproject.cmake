@@ -1003,6 +1003,14 @@ function(therock_cmake_subproject_activate target_name)
       string(APPEND _coverage_include_contents
         "add_link_options(-fprofile-instr-generate)\n")
     endif()
+    # Workarounds for a project's coverage-only CMake that does not build under
+    # TheRock, applied only while the project is instrumented.
+    set(_coverage_fixup "${THEROCK_SOURCE_DIR}/cmake/coverage/${_logical_target_name}.cmake")
+    if(EXISTS "${_coverage_fixup}")
+      string(APPEND _coverage_include_contents "include(\"${_coverage_fixup}\")\n")
+      list(APPEND _fprint_files "${_coverage_fixup}")
+      list(APPEND _coverage_configure_depends "${_coverage_fixup}")
+    endif()
     foreach(_coverage_lang IN ITEMS C CXX HIP)
       string(APPEND _coverage_include_contents
         "set(CMAKE_${_coverage_lang}_COMPILER_LAUNCHER \"\")\n")

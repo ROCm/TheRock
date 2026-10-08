@@ -41,12 +41,18 @@ whichever name `COVERAGE_PROJECTS` registers for that project. Passing the flag
 for an unregistered project is a configure error, not a silent no-op.
 
 Some projects have no option that writes `.profraw`: hipSPARSE's and
-rocALUTION's select gcov, and origami and hipblaslt-provider have none. Their
-entries set `self_instrumented=True` instead of `coverage_option`, and
+rocALUTION's select gcov, and MIOpen, origami and hipblaslt-provider have none.
+Their entries set `self_instrumented=True` instead of `coverage_option`, and
 `therock_subproject.cmake` instruments them itself: it adds
 `-fprofile-instr-generate -fcoverage-mapping` to their compile rule, ahead of
 the device-scoped flags described below, and `-fprofile-instr-generate` to
 their links. Their own option, if any, stays off.
+
+Where a project's coverage-only CMake does not build under TheRock,
+`cmake/coverage/<project>.cmake`, if it exists, is included while the project
+is instrumented. `hipBLASLt.cmake` gives the bare `rocroller` that hipBLASLt's
+coverage-only test link names a target forwarding to the imported
+`roc::rocroller`.
 
 ### Enabling a whole group
 
@@ -265,7 +271,9 @@ graph TD
 
 `multi_arch_ci_coverage_linux.yml` is the entry point: it computes the matrix,
 builds the instrumented stack, then fans out to
-`multi_arch_ci_coverage_report.yml` per project per GPU family.
+`multi_arch_ci_coverage_report.yml` per project per GPU family. The stack is
+compiler-runtime plus whichever of math-libs and cv-libs (rpp's stage, built
+once for all families, alongside math-libs) the selection needs.
 `configure_coverage_ci.py` is the registry — CMake target, build stage, test
 component, object globs, and Codecov flag for every onboarded project.
 

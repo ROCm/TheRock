@@ -133,6 +133,7 @@ jobs:
       families_matrix_json: ${{ steps.matrix.outputs.families_matrix_json }}
       coverage_cmake_options: ${{ steps.matrix.outputs.coverage_cmake_options }}
       needs_math_libs: ${{ steps.matrix.outputs.needs_math_libs }}
+      needs_cv_libs: ${{ steps.matrix.outputs.needs_cv_libs }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
       # S3 namespace for the instrumented stack. A caller that builds a regular
       # stack in the same run (the rocm-libraries nightly does, and uses it as
@@ -231,6 +232,35 @@ jobs:
       contents: read
       id-token: write
 
+  # rpp's stage. Generic, so one job for all families, and it needs only
+  # compiler-runtime, so it builds alongside math-libs.
+  build_instrumented_cv_libs:
+    name: Build Instrumented CV Libs
+    needs: [setup_coverage_matrix, build_compiler_runtime]
+    if: >-
+      ${{
+        !failure() && !cancelled() &&
+        needs.setup_coverage_matrix.outputs.needs_cv_libs == 'true'
+      }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: cv-libs
+      stage_display_name: "Stage - Coverage CV Libs"
+      timeout_minutes: 480 # 8 hours; instrumented builds are slower than normal
+      dist_amdgpu_families: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
+      extra_cmake_options: ${{ needs.setup_coverage_matrix.outputs.coverage_cmake_options }}
+      rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
+      release_type: ci
+      artifact_run_id: ${{ needs.setup_coverage_matrix.outputs.artifact_run_id }}
+      external_repo_config: ${{ inputs.external_repo_config }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+    permissions:
+      contents: read
+      id-token: write
+
   # One test + report job per project. Each installs baseline_run_id and replaces
   # only its own project from this run's instrumented stack, so dependencies stay
   # non-instrumented even though the build instrumented them all at once.
@@ -243,6 +273,7 @@ jobs:
         setup_coverage_matrix,
         build_compiler_runtime,
         build_instrumented_math_libs,
+        build_instrumented_cv_libs,
       ]
     # Also guard the empty matrix: fromJSON('') would hard-error.
     if: >-
@@ -285,6 +316,7 @@ jobs:
       - setup_coverage_matrix
       - build_compiler_runtime
       - build_instrumented_math_libs
+      - build_instrumented_cv_libs
       - coverage_report
     runs-on: ubuntu-24.04
     steps:

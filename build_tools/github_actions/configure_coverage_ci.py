@@ -52,6 +52,7 @@ STAGE_COMPILER_RUNTIME = "compiler-runtime"
 STAGE_MATH_LIBS = "math-libs"
 STAGE_COMM_LIBS = "comm-libs"
 STAGE_PROFILER_APPS = "profiler-apps"
+STAGE_CV_LIBS = "cv-libs"
 
 # Stages a project may be registered against, validated below.
 KNOWN_STAGES = frozenset(
@@ -60,13 +61,14 @@ KNOWN_STAGES = frozenset(
         STAGE_MATH_LIBS,
         STAGE_COMM_LIBS,
         STAGE_PROFILER_APPS,
+        STAGE_CV_LIBS,
     }
 )
 
-# Only compiler-runtime and math-libs have build jobs. rccl and rocshmem
-# (comm-libs) are blocked upstream, so selecting them is rejected here rather
-# than failing hours later on a missing inbound artifact.
-BUILDABLE_STAGES = frozenset({STAGE_COMPILER_RUNTIME, STAGE_MATH_LIBS})
+# Only compiler-runtime, math-libs and cv-libs have build jobs. rccl and
+# rocshmem (comm-libs) are blocked upstream, so selecting them is rejected here
+# rather than failing hours later on a missing inbound artifact.
+BUILDABLE_STAGES = frozenset({STAGE_COMPILER_RUNTIME, STAGE_MATH_LIBS, STAGE_CV_LIBS})
 
 
 @dataclass(frozen=True)
@@ -268,7 +270,9 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         # separate subproject found via its package config, so the bare name is
         # not a target here and reaches the linker as -lrocroller with no -L to
         # resolve it. hipBLASLt's own build gets away with it by having rocRoller
-        # in-tree. Fix belongs upstream in ROCm/rocm-libraries.
+        # in-tree. Fix belongs upstream in ROCm/rocm-libraries; until then
+        # cmake/coverage/hipBLASLt.cmake gives the bare name a target. Blocked
+        # until a run confirms that.
         blocked_reason=(
             "hipblaslt-test fails to link with 'unable to find library "
             "-lrocroller'; its coverage build needs roc::rocroller upstream"
@@ -432,7 +436,10 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         cmake_target="MIOpen",
         artifact_names=["miopen"],
         artifact_relpaths=["ml-libs/MIOpen/stage"],
-        unsupported_reason="no coverage option in its CMake",
+        # No coverage option upstream. Host-only: most of its kernels are
+        # compiled at run time, and its precompiled ones are composable_kernel
+        # instances, which take hours to compile instrumented.
+        self_instrumented=True,
         stage=STAGE_MATH_LIBS,
         test_component="miopen",
         coverage_config="projects/miopen/test_categories_coverage.yaml",
@@ -579,6 +586,24 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         object_globs=["lib/hipthreads/libhipthreads.a"],
         fetch_artifact_args="--hipthreads --tests",
         codecov_flag="hipthreads",
+    ),
+    #
+    # rocm-libraries -- cv-libs stage
+    #
+    "rpp": CoverageProject(
+        cmake_target="rpp",
+        artifact_names=["rpp"],
+        artifact_relpaths=["cv-libs/rpp/stage"],
+        # -Xarch_host only. Not device_coverage yet: the stage is
+        # target-neutral, so its kernels stay in librpp.so's fat binary rather
+        # than a kpack archive, which is where the report takes code objects.
+        coverage_option="CODE_COVERAGE",
+        stage=STAGE_CV_LIBS,
+        test_component="rpp",
+        coverage_config="projects/rpp/test_categories_coverage.yaml",
+        object_globs=["lib/librpp.so*"],
+        fetch_artifact_args="--rpp",
+        codecov_flag="rpp",
     ),
     #
     # rocm-systems -- comm-libs stage
@@ -925,8 +950,8 @@ def build_coverage_cmake_options(project_keys: list[str]) -> list[str]:
 def resolve_build_stages(project_keys: list[str]) -> set[str]:
     """Returns the stages the selection needs, rejecting stages with no build job.
 
-    Only compiler-runtime and math-libs have build jobs. A project from any
-    other stage would have nothing built for it, and that would not surface
+    Only compiler-runtime, math-libs and cv-libs have build jobs. A project from
+    any other stage would have nothing built for it, and that would not surface
     until the test job found no instrumented files to overlay, hours in, so it
     is an error here instead.
     """
@@ -1051,7 +1076,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         project_keys, amdgpu_families, config_repository, config_ref
     )
     coverage_flags = build_coverage_cmake_options(project_keys)
-    needs_math_libs = STAGE_MATH_LIBS in resolve_build_stages(project_keys)
+    stages = resolve_build_stages(project_keys)
+    needs_math_libs = STAGE_MATH_LIBS in stages
     outputs = {
         "coverage_matrix": json.dumps(matrix),
         "dist_amdgpu_families": ";".join(amdgpu_families),
@@ -1060,6 +1086,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         ),
         "coverage_cmake_options": " ".join(coverage_flags),
         "needs_math_libs": "true" if needs_math_libs else "false",
+        "needs_cv_libs": "true" if STAGE_CV_LIBS in stages else "false",
     }
 
     if args.print_matrix:

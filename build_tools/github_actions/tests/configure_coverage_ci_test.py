@@ -221,14 +221,14 @@ class BuildCoverageMatrixTest(unittest.TestCase):
 
     def test_unsupported_project_is_rejected_with_the_reason(self):
         with self.assertRaises(ValueError) as context:
-            configure_coverage_ci.parse_projects("miopen")
+            configure_coverage_ci.parse_projects("amdsmi")
         self.assertIn("not supported", str(context.exception))
         self.assertIn("no coverage option", str(context.exception))
 
     def test_unsupported_projects_stay_out_of_the_group_aliases(self):
         # They remain registered so the gap is tracked, but must not be
         # scheduled by a group selection.
-        for name in ("miopen", "hipthreads", "rocprofiler-sdk"):
+        for name in ("hipthreads", "amdsmi", "rocprofiler-sdk"):
             with self.subTest(project=name):
                 self.assertIn(name, configure_coverage_ci.COVERAGE_PROJECTS)
                 self.assertNotIn(name, configure_coverage_ci.parse_projects("all"))
@@ -236,7 +236,13 @@ class BuildCoverageMatrixTest(unittest.TestCase):
     def test_self_instrumented_projects_are_measurable(self):
         # Their own options are gcov ones, or absent, so TheRock instruments
         # them; they are scheduled like any other project.
-        for name in ("hipsparse", "rocalution", "origami", "hipblasltprovider"):
+        for name in (
+            "hipsparse",
+            "rocalution",
+            "origami",
+            "hipblasltprovider",
+            "miopen",
+        ):
             with self.subTest(project=name):
                 project = configure_coverage_ci.COVERAGE_PROJECTS[name]
                 self.assertTrue(project.self_instrumented)
@@ -402,10 +408,11 @@ class ResolveBuildStagesTest(unittest.TestCase):
             {"compiler-runtime"},
         )
 
-    def test_whole_rocm_libraries_group_stays_within_math_libs(self):
+    def test_whole_rocm_libraries_group_needs_math_libs_and_cv_libs(self):
+        # rpp is the one rocm-libraries project outside math-libs.
         keys = configure_coverage_ci.parse_projects("rocm_libraries_all")
         self.assertEqual(
-            configure_coverage_ci.resolve_build_stages(keys), {"math-libs"}
+            configure_coverage_ci.resolve_build_stages(keys), {"math-libs", "cv-libs"}
         )
 
     def test_comm_libs_project_is_rejected_with_a_actionable_message(self):
@@ -481,6 +488,23 @@ class MainTest(unittest.TestCase):
             self.assertIn('"object_globs": "lib/libhiprand.so*"', written)
             # hipRAND is a math-libs project, so that stage has to be built.
             self.assertIn("needs_math_libs=true", written)
+            self.assertIn("needs_cv_libs=false", written)
+
+    def test_rpp_needs_the_cv_libs_build(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output_path = Path(tmp) / "github_output"
+            output_path.touch()
+            os.environ["GITHUB_OUTPUT"] = os.fspath(output_path)
+            os.environ["PROJECTS_TO_TEST"] = "rpp"
+            os.environ["AMDGPU_FAMILIES"] = "gfx94X-dcgpu"
+            os.environ["COVERAGE_CONFIG_SOURCE"] = "ROCm/rocm-libraries@main"
+
+            self.assertEqual(configure_coverage_ci.main([]), 0)
+
+            written = output_path.read_text()
+            self.assertIn("needs_cv_libs=true", written)
+            self.assertIn("needs_math_libs=false", written)
+            self.assertIn("-DRPP_ENABLE_COVERAGE=ON", written)
 
 
 class EmitCmakeTest(unittest.TestCase):
@@ -506,10 +530,10 @@ class EmitCmakeTest(unittest.TestCase):
             self.assertNotIn("rccl", libraries_line)
             # Unmeasurable projects are excluded, or a group build would set a
             # flag their CMake does not implement.
-            self.assertNotIn("MIOpen", libraries_line)
             self.assertNotIn("hipthreads", libraries_line)
             # Self-instrumented ones are in; TheRock supplies their flags.
             self.assertIn("hipSPARSE", libraries_line.split())
+            self.assertIn("MIOpen", libraries_line.split())
             # The CMake group lists and the Python group sets decide the same
             # thing in two places, so a blocked project has to leave both or a
             # group build sets the flag the Python side just declined to.
@@ -560,7 +584,7 @@ class EmitCmakeTest(unittest.TestCase):
             )
             self.assertEqual(
                 self_line.removesuffix(")").split()[1:],
-                ["hipblasltprovider", "hipSPARSE", "origami", "rocALUTION"],
+                ["hipblasltprovider", "hipSPARSE", "MIOpen", "origami", "rocALUTION"],
             )
 
     def test_emits_the_projects_whose_kernels_are_instrumented(self):
