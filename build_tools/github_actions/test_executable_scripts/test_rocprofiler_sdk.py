@@ -25,7 +25,6 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from amdgpu_family_matrix import is_asan
-from configure_asan_env import get_asan_runtime_path
 
 # Base Paths
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
@@ -98,6 +97,8 @@ environ_vars = os.environ.copy()
 
 def get_asan_runtime_library():
     """Return the clang AddressSanitizer runtime path."""
+    from configure_asan_env import get_asan_runtime_path
+
     return str(get_asan_runtime_path(THEROCK_PATH))
 
 
