@@ -94,23 +94,29 @@ automatically.
 Keeping kernels uninstrumented does not stop the abort described above. Clang
 still gives every HIP translation unit a host-side shadow of its device
 counters, registered from a constructor. The driver still force-links
-`InstrProfilingPlatformROCm.cpp` from `libclang_rt.profile_rocm.a` to take those
-registrations. At exit, once a module has written its host profile, that file
-asks the HIP runtime for the device side of each shadow. The device side only
-exists when the device code has profile data, so the HIP runtime aborts
+`InstrProfilingPlatformROCm.cpp`, which both `libclang_rt.profile.a` and
+`libclang_rt.profile_rocm.a` carry, to take those registrations. At exit, once
+a module has written its host profile, that file asks the HIP runtime for the
+device side of each shadow. The device side only exists when the device code
+has profile data, so the HIP runtime aborts
 (`Cannot create GlobalVar Obj for symbol: __llvm_profile_sections_<cuid>`). Every
 module whose profile writer has not run yet loses its profile, which is how an
 instrumented test executable costs the library under test its coverage. The same
-file also wraps `hipModuleLoad*`, `hipLaunchKernel` and the like.
+file also wraps `hipLaunchKernel`, `hipModuleLoad` and the like, as weak
+definitions of those names.
 
 `therock_subproject.cmake` therefore compiles
 `cmake/therock_coverage_profile_stub.c`, which defines that file's five entry
 points as hidden no-ops. It adds the object to `CMAKE_EXE_LINKER_FLAGS`,
-`CMAKE_SHARED_LINKER_FLAGS` and `CMAKE_MODULE_LINKER_FLAGS`, so nothing pulls in
-the real one. If a compiler update adds an entry point the stub lacks, links
-fail on duplicate symbols. `-fuse-cuid=none` would remove the shadows instead,
-but then every translation unit defines the same `__hip_cuid_`, and any library
-with two HIP sources fails to link.
+`CMAKE_SHARED_LINKER_FLAGS` and `CMAKE_MODULE_LINKER_FLAGS`, followed by the
+HIP runtime under `--as-needed`, so nothing pulls in the real one. The HIP
+runtime has to come first because a link that reaches the profile runtime
+archives while `hipLaunchKernel` is still unresolved extracts the real file for
+its wrappers. The driver adds the archives after the HIP runtime, but rocSPARSE
+names them itself, ahead of it. If a compiler update adds an entry point the
+stub lacks, links fail on duplicate symbols. `-fuse-cuid=none` would remove the
+shadows instead, but then every translation unit defines the same
+`__hip_cuid_`, and any library with two HIP sources fails to link.
 
 ## Producing a report locally
 

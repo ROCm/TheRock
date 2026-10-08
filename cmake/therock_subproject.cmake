@@ -1002,18 +1002,26 @@ function(therock_cmake_subproject_activate target_name)
     # Uninstrumented kernels don't stop clang from giving every HIP translation
     # unit a host-side shadow of its device counters, registered from a
     # constructor, or the driver from force-linking the GPU half of the profile
-    # runtime (InstrProfilingPlatformROCm.cpp in libclang_rt.profile_rocm.a)
-    # to take the registrations. At exit that half asks the HIP runtime for the
-    # device side of each shadow, which only exists when the device code has
-    # profile data. The HIP runtime aborts ("Cannot create GlobalVar Obj") right
-    # after the first module writes its profile, so every other module's is
-    # lost. The GPU half also wraps hipModuleLoad*, hipLaunchKernel and the
-    # like. Linking a stub that defines each of its entry points as a no-op into
-    # every executable and shared library leaves nothing to pull it in for.
-    # -fuse-cuid=none would stop the shadows instead, but then every translation
-    # unit defines the same __hip_cuid_ and any library with two HIP sources
-    # fails to link. Should a compiler update add an entry point the stub lacks,
-    # links fail on duplicate symbols rather than bringing the GPU half back.
+    # runtime (InstrProfilingPlatformROCm.cpp, in both libclang_rt.profile.a
+    # and libclang_rt.profile_rocm.a) to take the registrations. At exit that
+    # half asks the HIP runtime for the device side of each shadow, which only
+    # exists when the device code has profile data. The HIP runtime aborts
+    # ("Cannot create GlobalVar Obj") right after the first module writes its
+    # profile, so every other module's is lost. Linking a stub that defines
+    # each of its entry points as a no-op into every executable and shared
+    # library takes the registrations instead. -fuse-cuid=none would stop the
+    # shadows instead, but then every translation unit defines the same
+    # __hip_cuid_ and any library with two HIP sources fails to link. Should a
+    # compiler update add an entry point the stub lacks, links fail on
+    # duplicate symbols rather than bringing the GPU half back.
+    #
+    # The GPU half also wraps hipLaunchKernel, hipModuleLoad and the like, as
+    # weak definitions of those names, so it is extracted for them too by a
+    # link that reaches the profile runtime archives while they are still
+    # unresolved. The driver adds the archives after the HIP runtime, but
+    # rocSPARSE names them itself, ahead of it. Putting the HIP runtime in
+    # front of every object resolves those functions first; --as-needed keeps
+    # it from becoming a dependency of anything that does not call into it.
     set(_coverage_profile_stub_source
       "${THEROCK_SOURCE_DIR}/cmake/therock_coverage_profile_stub.c")
     string(APPEND _coverage_host_only_contents
@@ -1032,9 +1040,17 @@ function(therock_cmake_subproject_activate target_name)
       "    message(FATAL_ERROR \"Could not compile ${_coverage_profile_stub_source}\")\n"
       "  endif()\n"
       "endif()\n"
+      "set(_therock_coverage_hip \"\")\n"
+      "if(THEROCK_TOOLCHAIN_ROOT)\n"
+      "  file(GLOB _therock_coverage_hip_libs \"\${THEROCK_TOOLCHAIN_ROOT}/lib/libamdhip64.so*\")\n"
+      "  if(_therock_coverage_hip_libs)\n"
+      "    list(GET _therock_coverage_hip_libs 0 _therock_coverage_hip_lib)\n"
+      "    set(_therock_coverage_hip \" -Wl,--push-state,--as-needed \${_therock_coverage_hip_lib} -Wl,--pop-state\")\n"
+      "  endif()\n"
+      "endif()\n"
       "foreach(_therock_coverage_kind IN ITEMS EXE SHARED MODULE)\n"
       "  if(NOT CMAKE_\${_therock_coverage_kind}_LINKER_FLAGS MATCHES \"therock_coverage_profile_stub\")\n"
-      "    string(APPEND CMAKE_\${_therock_coverage_kind}_LINKER_FLAGS \" \${_therock_coverage_stub}\")\n"
+      "    string(APPEND CMAKE_\${_therock_coverage_kind}_LINKER_FLAGS \" \${_therock_coverage_stub}\${_therock_coverage_hip}\")\n"
       "  endif()\n"
       "endforeach()\n")
     file(CONFIGURE OUTPUT "${_cmake_project_coverage_file}"
