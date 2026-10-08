@@ -1685,10 +1685,12 @@ def _expand_build_config_for_platform(
         # Flip back to False if the generated matrix is empty.
         build_jax = bool(jax_build_matrix)
 
-    # ASAN builds native Linux packages (deb/rpm) but not Python packages.
-    # The build_python_packages input allows callers to disable Python packages.
-    is_asan = suffix in ("asan", "host-asan")
-    build_python_packages = ci_inputs.build_python_packages and not is_asan
+    # Sanitizer builds produce artifact tarballs and disable Python packages.
+    # Native Linux packages (deb/rpm) are controlled by build_native_linux;
+    # the initial TSAN qualification workflow disables them.
+    # Other variants honor the build_python_packages input.
+    is_sanitizer = suffix in ("asan", "host-asan", "tsan")
+    build_python_packages = ci_inputs.build_python_packages and not is_sanitizer
     test_python_packages_matrix = (
         build_rocm_python_test_matrix(
             per_family_info=per_family_info,
