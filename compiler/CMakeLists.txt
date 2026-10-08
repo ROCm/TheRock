@@ -97,10 +97,22 @@ if(THEROCK_ENABLE_COMPILER)
 
   set(_therock_llvm_cache
     "${CMAKE_CURRENT_SOURCE_DIR}/amd-llvm/clang/cmake/caches/TheRock.cmake")
-  if(NOT EXISTS "${_therock_llvm_cache}")
-    message(FATAL_ERROR
-      "Missing ${_therock_llvm_cache}. Sync amd-llvm to a revision that includes "
-      "clang/cmake/caches/TheRock.cmake (ROCm/llvm-project#4769).")
+  # Only required when configuring amd-llvm from source. Math-libs (and other
+  # stages) may import a prebuilt amd-llvm stage without syncing the tree.
+  set(_amd_llvm_cmake_args)
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/amd-llvm/llvm/CMakeLists.txt")
+    if(NOT EXISTS "${_therock_llvm_cache}")
+      message(FATAL_ERROR
+        "Missing ${_therock_llvm_cache}. Sync amd-llvm to a revision that includes "
+        "clang/cmake/caches/TheRock.cmake (ROCm/llvm-project#4769).")
+    endif()
+    list(APPEND _amd_llvm_cmake_args
+      # Values read by TheRock.cmake while -C runs must appear before -C.
+      "-DLLVM_EXTERNAL_SPIRV_LLVM_TRANSLATOR_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/spirv-llvm-translator"
+      "-DSANITIZER_HSA_INCLUDE_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/inc"
+      -DLLVM_INCLUDE_TESTS=${_llvm_include_tests}
+      -C${_therock_llvm_cache}
+    )
   endif()
 
   therock_cmake_subproject_declare(amd-llvm
@@ -115,12 +127,7 @@ if(THEROCK_ENABLE_COMPILER)
     INTERFACE_PROGRAM_DIRS
       lib/llvm/bin
     CMAKE_ARGS
-      # Values read by TheRock.cmake while -C runs must appear before -C.
-      "-DLLVM_EXTERNAL_SPIRV_LLVM_TRANSLATOR_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/spirv-llvm-translator"
-      "-DSANITIZER_HSA_INCLUDE_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/inc"
-      -DLLVM_INCLUDE_TESTS=${_llvm_include_tests}
-
-      -C${_therock_llvm_cache}
+      ${_amd_llvm_cmake_args}
 
       # TheRock-only / not owned by the cache.
       # Note that if LLVM_SMREV_REPO and LLVM_FORCE_VC_REVISION are empty,
