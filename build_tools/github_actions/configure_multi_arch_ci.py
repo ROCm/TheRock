@@ -64,11 +64,10 @@ from amdgpu_family_matrix import (
     select_build_runner,
 )
 from configure_ci_path_filters import (
-    _EXTERNAL_REPO_CONFIG_DIR,
+    get_changed_files_for_external_repo,
     get_git_commit_hash,
     get_git_modified_paths,
     get_git_submodule_paths,
-    get_modified_paths_via_api,
     is_ci_run_required,
     load_skip_ci_patterns_for_external_repo,
 )
@@ -819,10 +818,9 @@ def should_skip_ci(
     # 2. Path filter skipping - check before ASAN label logic so we don't print
     #    "Running: ASAN CI triggered by PR label" when CI will be skipped anyway.
 
-    # 2a. External repo builds: run git diff in the external repo checkout to get
-    # changed files, then evaluate against skip patterns from the TOML config.
-    # This allows external repos to skip TheRock CI when only docs/metadata
-    # files are changed.
+    # 2a. External repo builds: get changed files and evaluate against skip patterns
+    # from the TOML config. This allows external repos to skip TheRock CI when only
+    # docs/metadata files are changed.
     if ci_inputs.external_repo:
         try:
             external_repo = json.loads(ci_inputs.external_repo)
@@ -831,106 +829,28 @@ def should_skip_ci(
                 f"Invalid external_repo JSON: {ci_inputs.external_repo!r}"
             ) from e
 
-        # Validate external_repo is a dict
         if not isinstance(external_repo, dict):
             raise ValueError(
                 f"external_repo must be a JSON object, got: {type(external_repo).__name__}"
             )
 
-        repo_full_name = external_repo.get("repository", "")
-        repo_name = repo_full_name.split("/")[-1]
+        repo_name = external_repo.get("repository", "").split("/")[-1]
 
-        # Get changed_files via GitHub API (faster, no full checkout needed).
-        changed_files: list[str] | None = None
-        event_name = external_repo.get("event_name", "")
-        base_sha = external_repo.get("base_sha")
-        head_sha = external_repo.get("head_sha")
-        # PR number enables using the PR files endpoint which correctly handles
-        # merge-base computation even when the target branch has been updated.
-        pr_number = external_repo.get("pr_number")
-
-        if event_name in ("schedule", "workflow_dispatch"):
-            print(f"  External repo {repo_name}: {event_name} event, no diff available")
-            changed_files = None
-        elif pr_number and repo_full_name:
-            # Use PR files API endpoint (best for PRs - handles merge-base correctly)
-            print(
-                f"  External repo {repo_name}: fetching changed files via GitHub API..."
-            )
-            print(f"    Using PR #{pr_number} files endpoint")
-            changed_files = get_modified_paths_via_api(
-                repo_full_name, base_sha or "", head_sha or "", pr_number=pr_number
-            )
-            if changed_files is not None:
-                print(
-                    f"  External repo {repo_name}: {len(changed_files)} file(s) changed"
-                )
-            else:
-                # API returned None (truncated or failed) - will run CI conservatively
-                print(
-                    f"  External repo {repo_name}: API returned truncated/failed result, "
-                    "running CI conservatively"
-                )
-        elif base_sha and head_sha and repo_full_name:
-            # Fall back to compare API for non-PR events (push, etc.)
-            print(
-                f"  External repo {repo_name}: fetching changed files via GitHub API..."
-            )
-            print(f"    Comparing {base_sha[:12]}...{head_sha[:12]}")
-            changed_files = get_modified_paths_via_api(
-                repo_full_name, base_sha, head_sha
-            )
-            if changed_files is not None:
-                print(
-                    f"  External repo {repo_name}: {len(changed_files)} file(s) changed"
-                )
-            else:
-                # API returned None (truncated or failed) - will run CI conservatively
-                print(
-                    f"  External repo {repo_name}: API returned truncated/failed result, "
-                    "running CI conservatively"
-                )
-        else:
-            # Fallback to git diff if SHAs not provided (legacy path)
-            external_repo_path = Path(_EXTERNAL_REPO_CONFIG_DIR)
-            base_ref = external_repo.get("base_ref")
-            if external_repo_path.exists() and external_repo_path.is_dir():
-                if not base_ref:
-                    base_ref = "HEAD^"
-                print(
-                    f"  External repo {repo_name}: computing changed files via git diff..."
-                )
-                changed_files = list(
-                    get_git_modified_paths(base_ref, cwd=str(external_repo_path)) or []
-                )
-                if changed_files is not None:
-                    print(
-                        f"  External repo {repo_name}: {len(changed_files)} file(s) changed"
-                    )
-            else:
-                print(
-                    f"  External repo {repo_name}: no SHAs provided and checkout not found"
-                )
+        # Get changed files via helper function (uses API or git diff)
+        changed_files = get_changed_files_for_external_repo(external_repo)
 
         # Get skip patterns from TOML config file
         skip_ci_config = external_repo.get("skip_ci_config")
         skip_ci_patterns = None
-
         if skip_ci_config:
-            # Load patterns from external repo's TOML config file
-            # (checked out to external-repo-config/ by setup_multi_arch.yml)
             skip_ci_patterns = load_skip_ci_patterns_for_external_repo(skip_ci_config)
 
-        # Evaluate skip logic using unified is_ci_run_required().
-        # Pass skip_patterns to use external repo's TOML patterns.
+        # Evaluate skip logic
         if not is_ci_run_required(changed_files, skip_ci_patterns, repo_name):
             print("  External repo build: CI can be skipped")
             return True
-        # If we reach here, CI is required. Continue to ASAN checks.
-        # Stage reuse will optimize builds regardless.
 
     # 2b. Local repo (TheRock): check changed files against built-in skip patterns.
-    # Pass skip_patterns=None to use _SKIPPABLE_PATH_PATTERNS.
     if not ci_inputs.external_repo and git_context.changed_files is not None:
         print(f"  Checking {len(git_context.changed_files)} changed file(s)...")
         if not is_ci_run_required(git_context.changed_files):

@@ -17,6 +17,7 @@ Public API:
     get_git_commit_hash() - Resolve a git ref to a commit hash
     get_git_modified_paths() - Get modified files from git diff compared to worktree
     get_git_submodule_paths() - Get list of git submodule paths in the repository
+    get_changed_files_for_external_repo() - Get changed files for external repos via API/git
     is_ci_run_required() - Check if CI run is required based on modified paths
     load_skip_ci_config() - Load skip-CI patterns from TOML config files
     load_skip_ci_patterns_for_external_repo() - Load skip-CI patterns for external repos
@@ -637,3 +638,82 @@ def _check_for_workflow_file_related_to_ci(
     if paths is None:
         return False
     return any(Path(p).name in ci_workflow_filenames for p in paths)
+
+
+def get_changed_files_for_external_repo(
+    external_repo: dict,
+) -> Optional[list[str]]:
+    """Get list of changed files for an external repository.
+
+    Determines changed files via GitHub API (preferred) or git diff (fallback).
+    The method used depends on the information available in external_repo:
+
+    1. For pull requests (pr_number available): Uses PR files endpoint
+    2. For push events (base_sha + head_sha): Uses compare endpoint
+    3. Fallback: Uses local git diff if checkout exists
+
+    Args:
+        external_repo: Dict containing repository info with optional keys:
+            - repository: Full repo name (e.g., "ROCm/rocm-libraries")
+            - event_name: GitHub event type (push, pull_request, etc.)
+            - pr_number: Pull request number (for PR events)
+            - base_sha: Base commit SHA
+            - head_sha: Head commit SHA
+            - base_ref: Base ref for git diff fallback
+
+    Returns:
+        List of changed file paths, or None if:
+        - Event type is schedule/workflow_dispatch (no meaningful diff)
+        - API/git diff fails or returns truncated results
+    """
+    repo_full_name = external_repo.get("repository", "")
+    repo_name = repo_full_name.split("/")[-1]
+    event_name = external_repo.get("event_name", "")
+    base_sha = external_repo.get("base_sha")
+    head_sha = external_repo.get("head_sha")
+    pr_number = external_repo.get("pr_number")
+
+    # Schedule/workflow_dispatch events don't have a meaningful diff
+    if event_name in ("schedule", "workflow_dispatch"):
+        print(f"  External repo {repo_name}: {event_name} event, no diff available")
+        return None
+
+    # Try PR files endpoint first (best for PRs - handles merge-base correctly)
+    if pr_number and repo_full_name:
+        print(f"  External repo {repo_name}: fetching changed files via GitHub API...")
+        print(f"    Using PR #{pr_number} files endpoint")
+        changed_files = get_modified_paths_via_api(
+            repo_full_name, base_sha or "", head_sha or "", pr_number=pr_number
+        )
+        if changed_files is not None:
+            print(f"  External repo {repo_name}: {len(changed_files)} file(s) changed")
+        else:
+            print(f"  External repo {repo_name}: API returned truncated/failed result")
+        return changed_files
+
+    # Fall back to compare API for non-PR events (push, etc.)
+    if base_sha and head_sha and repo_full_name:
+        print(f"  External repo {repo_name}: fetching changed files via GitHub API...")
+        print(f"    Comparing {base_sha[:12]}...{head_sha[:12]}")
+        changed_files = get_modified_paths_via_api(repo_full_name, base_sha, head_sha)
+        if changed_files is not None:
+            print(f"  External repo {repo_name}: {len(changed_files)} file(s) changed")
+        else:
+            print(f"  External repo {repo_name}: API returned truncated/failed result")
+        return changed_files
+
+    # Fallback to git diff if SHAs not provided (legacy path)
+    external_repo_path = Path(_EXTERNAL_REPO_CONFIG_DIR)
+    base_ref = external_repo.get("base_ref")
+    if external_repo_path.exists() and external_repo_path.is_dir():
+        if not base_ref:
+            base_ref = "HEAD^"
+        print(f"  External repo {repo_name}: computing changed files via git diff...")
+        changed_files = list(
+            get_git_modified_paths(base_ref, cwd=str(external_repo_path)) or []
+        )
+        print(f"  External repo {repo_name}: {len(changed_files)} file(s) changed")
+        return changed_files
+
+    print(f"  External repo {repo_name}: no SHAs provided and checkout not found")
+    return None
