@@ -95,6 +95,10 @@ class ROCmCoreTest(unittest.TestCase):
                 # recent addition from upstream, issue tracked in
                 # https://github.com/ROCm/TheRock/issues/2537
                 continue
+            if "libsqtt-marker" in str(so_path):
+                # LLVM pass plugin loaded via -fpass-plugin; it has unresolved
+                # LLVM symbols and is not intended to be dlopened standalone.
+                continue
             if "lib/roctracer" in str(so_path) or "share/roctracer" in str(so_path):
                 # Internal roctracer libraries are meant to be pre-loaded
                 # explicitly and cannot necessarily be loaded standalone.
@@ -102,19 +106,27 @@ class ROCmCoreTest(unittest.TestCase):
             if (
                 "lib/rocprofiler-sdk/" in str(so_path)
                 or "libexec/rocprofiler-sdk/" in str(so_path)
+                or "share/rocprofiler-sdk/tests/duplicate-sdk/" in str(so_path)
                 or "libpyrocpd" in str(so_path)
                 or "libpyroctx" in str(so_path)
             ):
-                # Internal rocprofiler-sdk libraries are meant to be pre-loaded
-                # explicitly and cannot necessarily be loaded standalone.
+                # Internal rocprofiler-sdk libraries cannot necessarily be loaded
+                # standalone. The duplicate SDK is a test fixture that requires the
+                # primary SDK to be preloaded by its test harness.
                 continue
             if "libtest_linking_lib" in str(so_path):
                 # rocprim unit tests, not actual library files
                 continue
-            if "opencl" in str(so_path):
-                # We use OpenCL ICD from distro rather than TheRock
-                # and we do not build it
+            if (
+                "opencl" in str(so_path)
+                or "oclruntime" in so_path.name
+                or "oclperf" in so_path.name
+                or "oclgl" in so_path.name
+            ):
+                # OpenCL ICD comes from the distro; oclruntime/oclperf are
+                # test-only libraries that depend on libOpenCL.
                 continue
+
             with self.subTest(msg="Check shared library loads", so_path=so_path):
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,

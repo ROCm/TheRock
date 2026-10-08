@@ -104,15 +104,23 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
         build_config.artifacts_dir,
         build_config.gfx_arch,
         build_config.enable_kpack,
+        target_members=package_target_members(build_config),
     )
     sourcedir_list.extend(dir_list)
 
+    # Filter out non-existing directories (log filtered paths to aid debugging
+    # build configuration issues where expected directories weren't created)
+    filtered_out = [path for path in sourcedir_list if not path.is_dir()]
+    if filtered_out:
+        logger.debug(f"Filtered out non-existent directories: {filtered_out}")
+    sourcedir_list = [path for path in sourcedir_list if path.is_dir()]
     logger.debug(f"sourcedir_list: {sourcedir_list}")
+
     # GFX_META is a versioned meta package (empty content, just dependencies)
     is_gfx_meta = build_config.enable_kpack and build_config.gfx_arch == GFX_META
     if not sourcedir_list and not is_meta and not is_gfx_meta:
         if build_config.enable_kpack:
-            logger.error(
+            logger.info(
                 f"{pkg_name}: Empty sourcedir_list and not a meta package, skipping"
             )
             return []
@@ -316,14 +324,14 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
             pkg_info, "DEBRecommends", config
         )
         debsuggests = process_secondary_dependencies(pkg_info, "DEBSuggests", config)
-        depends = process_main_dependencies(pkg_info, "DEBDepends", config)
+        depends = process_versioned_dependencies(pkg_info, "DEBDepends", config)
     else:
         # Get -> Transform -> Join
         provides = process_name_field(pkg_info, "Provides", debian_replace_devel_name)
         replaces = process_name_field(pkg_info, "Replaces", debian_replace_devel_name)
         conflicts = process_name_field(pkg_info, "Conflicts", debian_replace_devel_name)
         # Non-versioned package depends on versioned package itself
-        depends = resolve_versioned_dependencies([pkg_name], config, is_meta)
+        depends = process_nonversioned_dependencies(pkg_info, config)
 
     pkg_name = update_package_name(pkg_name, config)
 
@@ -442,13 +450,9 @@ def copy_package_contents(source_dir, destination_dir):
                 dst.symlink_to(link_target)
         elif src.is_dir():
             if not dst.is_symlink():
-                shutil.copytree(
-                    src,
-                    dst,
-                    dirs_exist_ok=True,
-                    symlinks=True,
-                    ignore_dangling_symlinks=True,
-                )
+                # Apply the same link-preserving merge at every directory depth.
+                copy_package_contents(src, dst)
+                shutil.copystat(src, dst)
             # else: skip - don't overwrite existing symlink with directory
         elif src.is_file():
             shutil.copy2(src, dst)

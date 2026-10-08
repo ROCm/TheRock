@@ -3,6 +3,9 @@
 
 # ROCm Emulation Tools
 
+set(THEROCK_ROCJITSU_TEST_JOBS "1" CACHE STRING
+  "Number of parallel jobs for rocJITsu tests")
+
 if(THEROCK_ENABLE_ROCJITSU)
   ##############################################################################
   # rocjitsu
@@ -19,8 +22,6 @@ if(THEROCK_ENABLE_ROCJITSU)
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocjitsu"
     CMAKE_ARGS
       -DBUILD_TESTING=${THEROCK_BUILD_TESTING}
-    RUNTIME_DEPS
-      ${THEROCK_BUNDLED_LIBDRM}
     INSTALL_RPATH_DIRS
       lib
   )
@@ -36,6 +37,7 @@ if(THEROCK_ENABLE_ROCJITSU)
 
   therock_cmake_subproject_build_test(rocjitsu
     COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure --no-tests=error
+      -j "${THEROCK_ROCJITSU_TEST_JOBS}"
   )
 
   therock_test_validate_shared_lib(PATH rocjitsu/dist/lib
