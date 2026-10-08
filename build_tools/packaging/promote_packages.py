@@ -108,7 +108,8 @@ spec = importlib.util.spec_from_file_location(
     "third_party_change_wheel_version", change_wheel_version_path
 )
 change_wheel_version = importlib.util.module_from_spec(spec)
-assert spec.loader is not None
+if spec.loader is None:
+    raise AssertionError("No loader for change_wheel_version")
 spec.loader.exec_module(change_wheel_version)
 
 if not hasattr(change_wheel_version, "change_wheel_version"):
@@ -1174,7 +1175,8 @@ def promote_targz_sdist(
                 if line.startswith("Version"):
                     version = Version(line.removeprefix("Version:").strip())
 
-        assert version, f"No version found in {filename}/PKG-INFO."
+        if not version:
+            raise AssertionError(f"No version found in {filename}/PKG-INFO.")
 
         print(f"  Detected version: {version}")
 
