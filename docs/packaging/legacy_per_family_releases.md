@@ -688,8 +688,8 @@ were published for Debian-based and RPM-based distributions.
 | AMD Ryzen 7 7840U / Ryzen 9 270 | gfx1103    | gfx110x    | amdrocm-gfx110x | amdrocm-core-sdk-gfx110x |
 | AMD Strix Point iGPU            | gfx1150    | gfx1150    | amdrocm-gfx1150 | amdrocm-core-sdk-gfx1150 |
 | AMD Strix Halo iGPU             | gfx1151    | gfx1151    | amdrocm-gfx1151 | amdrocm-core-sdk-gfx1151 |
-| AMD Fire Range iGPU             | gfx1152    | gfx1152    | amdrocm-gfx1152 | amdrocm-core-sdk-gfx1152 |
-| AMD Strix Halo XT               | gfx1153    | gfx1153    | amdrocm-gfx1153 | amdrocm-core-sdk-gfx1153 |
+| AMD Krackan Point iGPU          | gfx1152    | gfx1152    | amdrocm-gfx1152 | amdrocm-core-sdk-gfx1152 |
+| AMD Radeon 820M iGPU            | gfx1153    | gfx1153    | amdrocm-gfx1153 | amdrocm-core-sdk-gfx1153 |
 | AMD RX 9060 / XT                | gfx1200    | gfx120X    | amdrocm-gfx120x | amdrocm-core-sdk-gfx120x |
 | AMD RX 9070 / XT                | gfx1201    | gfx120X    | amdrocm-gfx120x | amdrocm-core-sdk-gfx120x |
 | Radeon VII                      | gfx906     | gfx906     | amdrocm-gfx906  | amdrocm-core-sdk-gfx906  |
