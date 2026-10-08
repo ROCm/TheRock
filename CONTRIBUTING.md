@@ -334,7 +334,8 @@ gitleaks detect --source . --config build_tools/scan_tools/gitleaks.toml \
   --redact --no-banner --no-git
 
 # Unsafe patterns in Python (pip install bandit).
-bandit --configfile build_tools/scan_tools/bandit.yml --severity-level low \
+bandit --ini build_tools/scan_tools/bandit.ini \
+  --configfile build_tools/scan_tools/bandit.yml --severity-level low \
   --recursive .
 
 # GitHub Actions workflow vulnerabilities (pip install zizmor).

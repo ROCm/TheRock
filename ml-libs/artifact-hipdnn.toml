@@ -10,6 +10,9 @@ include = [
 ]
 [components.dbg."ml-libs/hipDNN/stage"]
 [components.dev."ml-libs/hipDNN/stage"]
+include = [
+  "share/hipdnn/test_sdk/AsanDefaultSuppressions.cpp",
+]
 [components.doc."ml-libs/hipDNN/stage"]
 [components.test."ml-libs/hipDNN/stage"]
 include = [

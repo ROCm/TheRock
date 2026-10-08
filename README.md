@@ -294,7 +294,7 @@ To build with the [ccache](https://ccache.dev/) compiler cache:
 - `export CCACHE_SLOPPINESS=include_file_ctime` to support hard-linking
 - Proper setup of the `compiler_check` directive to do safe caching in the
   presence of compiler bootstrapping
-- Set the C/CXX compiler launcher options to cmake appropriately.
+- Set the C/CXX/HIP compiler launcher options to cmake appropriately.
 
 Since these options are very fiddly and prone to change over time, we recommend
 using the `./build_tools/setup_ccache.py` script to create a `.ccache` directory
@@ -309,6 +309,7 @@ eval "$(./build_tools/setup_ccache.py)"
 cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all \
   -DCMAKE_C_COMPILER_LAUNCHER=ccache \
   -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+  -DCMAKE_HIP_COMPILER_LAUNCHER=ccache \
   .
 
 cmake --build build
