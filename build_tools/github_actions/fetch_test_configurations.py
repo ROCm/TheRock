@@ -1286,6 +1286,17 @@ def run():
                 )
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
 
+            # Enforce test_type_for_family if set in the family matrix.
+            # This is a strict override - families with limited hardware (e.g., MI455)
+            # should always run quick tests regardless of what's passed in TEST_TYPE.
+            test_type_for_family = platform_info.get("test_type_for_family")
+            if test_type_for_family and test_type_for_family != test_type:
+                logging.info(
+                    f"Overriding test_type from '{test_type}' to '{test_type_for_family}' "
+                    f"(test_type_for_family for {amdgpu_families})"
+                )
+                test_type = test_type_for_family
+
     logging.info(f"Selecting projects: {projects_to_test}")
 
     logging.info(f"Using test_matrix ({len(test_matrix)} test(s))")
