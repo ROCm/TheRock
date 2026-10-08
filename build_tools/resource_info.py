@@ -40,6 +40,7 @@ import subprocess
 import shlex
 import html
 import re
+import traceback
 from typing import Dict, Tuple, List, Optional
 from pathlib import Path
 
@@ -770,7 +771,10 @@ def main() -> int:
             load_components_from_build_topology(repo_root)
             generate_summaries(log_dir)
         except Exception:
-            pass
+            # Stay non-fatal for callers, but surface the cause so a missing
+            # comp-summary.html can be diagnosed from the step log.
+            print("resource_info.py --finalize failed:", file=sys.stderr)
+            traceback.print_exc()
         return 0
 
     rc = run_and_log_command(repo_root, log_dir)

@@ -87,6 +87,13 @@ on:
       quartz_tracking_id:
         type: string
         default: ""
+      force_resource_profiling:
+        description: >-
+          Override for resource-usage profiling. "true" forces it on, "false"
+          forces it off, and "" (default) enables it for nightly builds only.
+          See #7692.
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -129,6 +136,7 @@ jobs:
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      force_resource_profiling: ${{ inputs.force_resource_profiling }}
     permissions:
       contents: read
       id-token: write
@@ -189,6 +197,7 @@ jobs:
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      force_resource_profiling: ${{ inputs.force_resource_profiling }}
     permissions:
       contents: read
       id-token: write
@@ -261,6 +270,7 @@ jobs:
       external_repo_config: ${{ inputs.external_repo_config }}
       rebuild_artifacts: ${{ inputs.rebuild_artifacts }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      force_resource_profiling: ${{ inputs.force_resource_profiling }}
     permissions:
       contents: read
       id-token: write
@@ -296,6 +306,7 @@ jobs:
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      force_resource_profiling: ${{ inputs.force_resource_profiling }}
     permissions:
       contents: read
       id-token: write
@@ -329,6 +340,7 @@ jobs:
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      force_resource_profiling: ${{ inputs.force_resource_profiling }}
     permissions:
       contents: read
       id-token: write
@@ -360,6 +372,7 @@ jobs:
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      force_resource_profiling: ${{ inputs.force_resource_profiling }}
     permissions:
       contents: read
       id-token: write
@@ -391,6 +404,7 @@ jobs:
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      force_resource_profiling: ${{ inputs.force_resource_profiling }}
     permissions:
       contents: read
       id-token: write
@@ -422,6 +436,7 @@ jobs:
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      force_resource_profiling: ${{ inputs.force_resource_profiling }}
     permissions:
       contents: read
       id-token: write
@@ -453,6 +468,7 @@ jobs:
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      force_resource_profiling: ${{ inputs.force_resource_profiling }}
     permissions:
       contents: read
       id-token: write
@@ -484,6 +500,7 @@ jobs:
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      force_resource_profiling: ${{ inputs.force_resource_profiling }}
     permissions:
       contents: read
       id-token: write
