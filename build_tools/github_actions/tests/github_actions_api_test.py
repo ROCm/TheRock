@@ -88,15 +88,6 @@ class GhaLoadGitHubEventTest(unittest.TestCase):
 class GitHubAPITest(unittest.TestCase):
     """Tests for GitHubAPI class."""
 
-    def test_rest_rejects_non_https_before_sending_credentials(self):
-        for url in ("http://example.com/api", "file:///fixtures/api", "https:///api"):
-            with self.subTest(url=url), mock.patch(
-                "github_actions_api.urlopen"
-            ) as download:
-                with self.assertRaisesRegex(GitHubAPIError, "HTTPS"):
-                    GitHubAPI()._send_request_via_rest_api(url, timeout_seconds=10)
-                download.assert_not_called()
-
     def setUp(self):
         # Save and clear GITHUB_TOKEN
         self._saved_token = os.environ.get("GITHUB_TOKEN")
@@ -621,6 +612,15 @@ class GitHubAPITest(unittest.TestCase):
             )
 
         self.assertEqual(result, {})
+
+    def test_rest_rejects_non_https_before_sending_credentials(self):
+        for url in ("http://example.com/api", "file:///fixtures/api", "https:///api"):
+            with self.subTest(url=url), mock.patch(
+                "github_actions_api.urlopen"
+            ) as download:
+                with self.assertRaisesRegex(GitHubAPIError, "HTTPS"):
+                    GitHubAPI()._send_request_via_rest_api(url, timeout_seconds=10)
+                download.assert_not_called()
 
 
 class GhaUpdatePrCommentTest(unittest.TestCase):

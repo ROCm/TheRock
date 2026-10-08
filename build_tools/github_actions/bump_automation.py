@@ -40,7 +40,8 @@ SUBMODULE_CONFIG = {
         "repo": "ROCm/rocm-systems",
         "files": [],
         "updater": "ref",
-        "credential_source": "systems",
+        # Selects an entry in the tokens dictionary, not a literal credential.
+        "token_key": "systems",  # nosec B105
         # See the "rocm-libraries" entry below for why this is per-repo.
         "bot_author": "systems-assistant[bot]",
         # Changes to rocm-systems should run the full matrix of CI jobs:
@@ -54,7 +55,8 @@ SUBMODULE_CONFIG = {
         "repo": "ROCm/rocm-libraries",
         "files": [ROCM_LIBRARIES_CI_ENV_FILE],
         "updater": "ci-env",
-        "credential_source": "libraries",
+        # Selects an entry in the tokens dictionary, not a literal credential.
+        "token_key": "libraries",  # nosec B105
         # GitHub App bot identity that opens "Update TheRock reference to
         # (...)" PRs on this repo; only used by the "ci-env" updater's stale
         # pin-PR cleanup. Each downstream repo has its own GitHub App (see
@@ -73,7 +75,8 @@ SUBMODULE_CONFIG = {
         "files": [],
         "updater": "submodule-only",
         # We will reuse the rocm-systems token for now.
-        "credential_source": "systems",
+        # Selects an entry in the tokens dictionary, not a literal credential.
+        "token_key": "systems",  # nosec B105
         "branch": "amd-staging-rocgdb-16",
         # Changes to rocgdb can run a limited matrix of CI jobs:
         #   * Build for all gfx archs
@@ -85,7 +88,8 @@ SUBMODULE_CONFIG = {
         "files": [],
         "updater": "submodule-only",
         # We will reuse the rocm-systems token for now.
-        "credential_source": "systems",
+        # Selects an entry in the tokens dictionary, not a literal credential.
+        "token_key": "systems",  # nosec B105
         # Changes to mesa-fork can run a limited matrix of CI jobs:
         #   * Build for all gfx archs
         #   * mesa-fork tests only (no impact on other project builds/tests)
@@ -690,7 +694,7 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
         return
 
     config = SUBMODULE_CONFIG[changed]
-    token = tokens[config["credential_source"]]
+    token = tokens[config["token_key"]]
     old_sha = get_submodule_sha(before, changed)
 
     print(f"[INFO] Detected {changed} change: {old_sha[:7]} -> {after[:7]}")
