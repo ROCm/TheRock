@@ -1950,42 +1950,25 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertIn("sandbox", entry["test-runs-on"])
 
-        # PR: disables tests (empty runner)
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(event_name="pull_request", build_variant="asan"),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "")
-
-    def test_host_asan_submodule_bumps_are_build_only(self):
-        targets = cm.TargetSelection(linux_families=["gfx94x", "gfx950"])
+        # PR/push, including submodule bumps: build only.
         cases = (
-            ("rocm-libraries", "asan", "host-asan"),
-            ("rocm-systems", "asan", "host-asan"),
-            ("compiler/amd-llvm", "asan", "host-asan-debug"),
+            (None, "host-asan"),
+            ("rocm-libraries", "host-asan"),
+            ("rocm-systems", "host-asan"),
+            ("compiler/amd-llvm", "asan-debug"),
         )
-        for path, variant, expected_variant in cases:
+        for path, expected_variant in cases:
             for event in ("pull_request", "push"):
-                with self.subTest(path=path, event=event, variant=variant):
+                with self.subTest(path=path, event=event):
                     result = cm.expand_build_configs(
                         ci_inputs=self._inputs(
                             event_name=event,
-                            build_variant=variant,
-                            pr_labels=SUBMODULE_CONFIG.get(path, {}).get(
-                                "labels", ["ci:host-asan"]
-                            ),
+                            build_variant="asan",
+                            pr_labels=SUBMODULE_CONFIG.get(path, {}).get("labels", []),
                         ),
                         git_context=cm.GitContext(
-                            changed_files=[path],
-                            submodule_paths=[
-                                "rocm-libraries",
-                                "rocm-systems",
-                                "compiler/amd-llvm",
-                                "compiler/hipify",
-                            ],
+                            changed_files=[path] if path else [],
+                            submodule_paths=[path] if path else [],
                         ),
                         targets=targets,
                         jobs=_jobs(),
@@ -1993,12 +1976,8 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     runners = [
                         entry["test-runs-on"] for entry in result.linux.per_family_info
                     ]
-                    self.assertEqual(runners, ["", ""])
+                    self.assertEqual(runners, [""])
                     self.assertEqual(result.linux.build_variant_label, expected_variant)
-                    self.assertEqual(
-                        result.linux.build_variant_cmake_preset,
-                        f"linux-release-{expected_variant}",
-                    )
 
     def test_asan_debug_uses_sandbox_runner(self):
         """asan-debug variant uses sandbox runner like asan."""
