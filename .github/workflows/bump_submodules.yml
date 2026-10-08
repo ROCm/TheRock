@@ -155,7 +155,8 @@ jobs:
             --actions_token "${ACTIONS_TOKEN}"
 
       - name: Post bump breadcrumbs to upstream PRs
-        if: github.event_name == 'push'
+        # A failed cancel fails the push step; still post breadcrumbs unless the job was cancelled.
+        if: github.event_name == 'push' && !cancelled()
         continue-on-error: true
         env:
           SYSTEMS_TOKEN: ${{ steps.systems-token.outputs.token }}
