@@ -52,7 +52,7 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
             ("ROCm/pytorch", "related_commits", shas["pytorch"]): related_commits,
             ("ROCm/pytorch", "version.txt", shas["pytorch"]): "2.10.0\n",
             ("pytorch/audio", "version.txt", shas["audio"]): "2.10.0\n",
-            ("pytorch/vision", "version.txt", shas["vision"]): "0.25.0\n",
+            ("pytorch/vision", "version.txt", shas["vision"]): "0.25.0a0\n",
         }
         return shas, resolves, files
 
@@ -119,9 +119,9 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
                 ".ci/docker/ci_commit_pins/triton.txt",
                 shas["pytorch"],
             ): shas["triton"],
-            ("ROCm/pytorch", "version.txt", shas["pytorch"]): "2.10.0\n",
-            ("pytorch/audio", "version.txt", shas["audio"]): "2.10.0\n",
-            ("pytorch/vision", "version.txt", shas["vision"]): "0.25.0\n",
+            ("ROCm/pytorch", "version.txt", shas["pytorch"]): "2.10.0a0\n",
+            ("pytorch/audio", "version.txt", shas["audio"]): "2.10.0a0\n",
+            ("pytorch/vision", "version.txt", shas["vision"]): "0.25.0a0\n",
             ("ROCm/apex", "version.txt", shas["apex"]): "1.10.0\n",
         }
 
