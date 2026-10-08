@@ -101,10 +101,10 @@ on:
           Only takes effect for gfx94X-dcgpu Python 3.12 builds.
         type: boolean
         default: false
-      asan:
-        description: "Build a torch-only AddressSanitizer wheel against the installed ROCm SDK"
-        type: boolean
-        default: false
+      build_variant:
+        description: "Build variant (release, asan, asan-debug). ASAN variants build torch only."
+        type: string
+        default: "release"
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -206,10 +206,10 @@ on:
           Only takes effect for gfx94X-dcgpu Python 3.12 builds.
         type: boolean
         default: false
-      asan:
-        description: "Build a torch-only AddressSanitizer wheel against the installed ROCm SDK"
-        type: boolean
-        default: false
+      build_variant:
+        description: "Build variant (release, asan, asan-debug). ASAN variants build torch only."
+        type: string
+        default: "release"
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -243,7 +243,7 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       CACHE_TYPE: ${{ inputs.cache_type }}
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
-      ASAN: ${{ inputs.asan }}
+      BUILD_VARIANT: ${{ inputs.build_variant }}
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       optional_build_prod_arguments: ""
       # TODO: Move the sccache bucket and IAM role mapping into a shared script.
@@ -316,7 +316,8 @@ jobs:
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --repo-hashtag nightly \
             --no-commit-hipify
-          if [[ "${ASAN}" != "true" ]]; then
+          # ASAN variants build torch only, so skip torchaudio, torchvision, triton, and apex.
+          if [[ "${BUILD_VARIANT}" != asan* ]]; then
             ./external-builds/pytorch/pytorch_audio_repo.py checkout \
               --repo-hashtag nightly \
               --no-commit-hipify
@@ -342,7 +343,8 @@ jobs:
             --gitrepo-origin "${pytorch_origin}" \
             --repo-hashtag "${PYTORCH_GIT_REF}" \
             --no-commit-hipify
-          if [[ "${ASAN}" != "true" ]]; then
+          # ASAN variants build torch only, so skip torchaudio, torchvision, triton, and apex.
+          if [[ "${BUILD_VARIANT}" != asan* ]]; then
             ./external-builds/pytorch/pytorch_audio_repo.py checkout \
               --require-related-commit \
               --no-commit-hipify
@@ -414,8 +416,9 @@ jobs:
           elif [ "${CACHE_TYPE}" = "ccache" ]; then
             cache_flag="--use-ccache"
           fi
+          # ASAN variants build torch only. --no-build-* keeps companion projects off.
           asan_flag=""
-          if [[ "${ASAN}" == "true" ]]; then
+          if [[ "${BUILD_VARIANT}" == asan* ]]; then
             asan_flag="--asan --no-build-triton --no-build-pytorch-audio --no-build-pytorch-vision --no-build-apex"
           fi
 
@@ -506,7 +509,8 @@ jobs:
             -j "$(nproc)"
           rm -f "${FAT_STAGE}"/torch-*.whl
 
-          if [[ "${ASAN}" != "true" ]]; then
+          # ASAN variants do not build torchvision, so there is no wheel to split.
+          if [[ "${BUILD_VARIANT}" != asan* ]]; then
             mv "${PACKAGE_DIST_DIR}"/torchvision-*.whl "${FAT_STAGE}/"
             python -m rocm_kpack.tools.split_python_wheels \
               --input "${FAT_STAGE}"/torchvision-*.whl \
@@ -528,8 +532,9 @@ jobs:
       - name: Write PyTorch package version outputs
         id: pytorch-versions
         run: |
+          # ASAN variants produce only the torch wheel.
           torch_only_flag=""
-          if [[ "${ASAN}" == "true" ]]; then
+          if [[ "${BUILD_VARIANT}" == asan* ]]; then
             torch_only_flag="--torch-only"
           fi
           python build_tools/github_actions/write_torch_versions.py \
@@ -537,7 +542,7 @@ jobs:
             ${torch_only_flag}
 
       - name: Configure AWS Credentials
-        if: ${{ inputs.asan != true }}
+        if: ${{ !startsWith(inputs.build_variant, 'asan') }}
         uses: ./.github/actions/configure_aws_product_publication_credentials
         with:
           release_type: ${{ inputs.release_type }}
@@ -545,7 +550,7 @@ jobs:
 
       - name: Upload PyTorch wheels to release bucket
         id: publish-pytorch-wheels
-        if: ${{ inputs.asan != true }}
+        if: ${{ !startsWith(inputs.build_variant, 'asan') }}
         run: |
           python build_tools/github_actions/publish_pytorch_to_release_bucket.py \
             --source-dir="${PACKAGE_DIST_DIR}" \
@@ -553,7 +558,7 @@ jobs:
             --structured
 
       - name: Upload ASAN torch wheel artifact
-        if: ${{ inputs.asan }}
+        if: ${{ startsWith(inputs.build_variant, 'asan') }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: pytorch-asan-wheel-${{ github.run_id }}-py${{ inputs.python_version }}
