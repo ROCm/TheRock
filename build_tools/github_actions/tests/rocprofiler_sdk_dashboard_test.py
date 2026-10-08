@@ -88,13 +88,18 @@ class DashboardGenerationTest(unittest.TestCase):
             patch.object(test_rocprofiler_sdk, "is_asan", return_value=True),
             patch.object(
                 test_rocprofiler_sdk,
-                "get_asan_runtime_library",
-                return_value="/fixtures/libclang_rt.asan-x86_64.so",
+                "get_asan_runtime_path",
+                return_value=Path("/fixtures/libclang_rt.asan.so"),
             ),
         ):
             dashboard = self._generate()
+            command = test_rocprofiler_sdk.get_cmake_config_cmd()
 
         self.assertIn("-DROCPROFILER_MEMCHECK=AddressSanitizer", dashboard)
+        self.assertIn(
+            f"-DROCPROFILER_MEMCHECK_PRELOAD_ENV=LD_PRELOAD={Path('/fixtures/libclang_rt.asan.so')}",
+            command,
+        )
         self.assertIn(
             'EXCLUDE "rocprofiler_sdk.unit.spm_core.check_packet_generation|',
             dashboard,
