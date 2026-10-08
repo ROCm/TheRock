@@ -89,14 +89,16 @@ def parse_needs_json(needs_json: str) -> list[JobResult]:
         A list of `JobResult` for each upstream job.
     """
     data = json.loads(needs_json)
-    assert isinstance(data, dict), f"Expected a JSON object, got {type(data).__name__}"
+    if not isinstance(data, dict):
+        raise AssertionError(f"Expected a JSON object, got {type(data).__name__}")
 
     results: list[JobResult] = []
     for job_name, job_info in data.items():
-        assert isinstance(job_info, dict), (
-            f"Expected a JSON object for job '{job_name}', "
-            f"got {type(job_info).__name__}"
-        )
+        if not isinstance(job_info, dict):
+            raise AssertionError(
+                f"Expected a JSON object for job '{job_name}', "
+                f"got {type(job_info).__name__}"
+            )
         result = job_info.get("result", "unknown")
         # The continue_on_error flag is conveyed as a job output string.
         outputs = job_info.get("outputs") or {}

@@ -106,7 +106,7 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
     # Use count if available, otherwise weight
     weight_key = "count" if "count" in labels_config[0] else "weight"
     weights = [config[weight_key] for config in labels_config]
-    selected = random.choices(labels_config, weights=weights, k=1)[0]
+    selected = random.SystemRandom().choices(labels_config, weights=weights, k=1)[0]
     print(
         f"  {context_name}: selected runner ({weight_key}={selected[weight_key]}): "
         f"{selected['label']}"

@@ -475,7 +475,7 @@ class TestBuildRunnerSelection(unittest.TestCase):
             ("linux", "release", "medium", "aws-linux-scale-rocm-medium"),
             ("windows", "release", "medium", "aws-windows-scale-rocm-prod-mix"),
         ]
-        with patch("random.random", return_value=0.5):
+        with patch("random.SystemRandom.random", return_value=0.5):
             for platform, variant, size, expected in cases:
                 with self.subTest(platform=platform, variant=variant, size=size):
                     self.assertEqual(
