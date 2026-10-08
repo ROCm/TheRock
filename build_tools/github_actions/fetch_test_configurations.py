@@ -121,13 +121,25 @@ _WSL_GPU_CONTAINER_OPTIONS = [
 # TheRock-Infra names these pools wsl-<arch>-gpu-rocm (plus a -test twin).
 _WSL_RUNNER_LABEL_MARKER = "wsl-"
 
+# WSL variants: components marked "wsl_variant": True can also run as a second
+# "<job_name> (WSL)" entry on a WSL-hosted GPU runner, next to the native Linux
+# entry. A variant is requested with a "test:<component>-wsl" label. Those labels
+# are additive: they add the WSL entry but do not narrow the native test selection.
+# The runner comes from the family's test-runs-on-kernel["wsl"] label, the same
+# key the test_runner:wsl label uses to move a whole run onto WSL.
+WSL_TEST_LABEL_SUFFIX = "-wsl"
+WSL_RUNNER_KERNEL_KEY = "wsl"
+
 
 def _is_wsl_runner(job_config: dict) -> bool:
     """Return True if this job is scheduled onto a WSL-hosted runner.
 
     The runner label is resolved before container options are built, so the
-    selected label is available on the job config.
+    selected label is available on the job config. WSL variant entries also
+    carry an explicit "wsl" marker.
     """
+    if job_config.get("wsl") is True:
+        return True
     for key in ("test_runner", "multi_gpu_runner"):
         label = job_config.get(key)
         if isinstance(label, str) and label.startswith(_WSL_RUNNER_LABEL_MARKER):
@@ -194,6 +206,39 @@ def _family_matches(
 _common_settings = {
     "additional_requirements_files": [],
 }
+
+
+def _make_wsl_variant(
+    base: dict, platform: str, test_type: str, wsl_runner: str
+) -> dict:
+    """Build the "<job_name> (WSL)" entry for a component with "wsl_variant".
+
+    The entry runs the same test script, pinned to the WSL-hosted GPU runner.
+    It is expect_failure (non-blocking) until WSL results are stable. The test
+    scripts key on TEST_COMPONENT, so test_component carries the original job
+    name; job_name only changes what is displayed.
+    """
+    total_shards = (
+        1
+        if test_type == "quick"
+        else base.get("total_shards_dict", {}).get(platform, 1)
+    )
+    entry = {**_common_settings, **base}
+    entry.pop("wsl_variant", None)
+    entry.update(
+        {
+            "job_name": f"{base['job_name']} (WSL)",
+            "test_component": base["job_name"],
+            "test_runner": wsl_runner,
+            "wsl": True,
+            "expect_failure": True,
+            "test_type": test_type,
+            "total_shards": total_shards,
+            "shard_arr": list(range(1, total_shards + 1)),
+        }
+    )
+    return entry
+
 
 # Common settings for rocgdb jobs
 _rocgdb_common = {
@@ -280,6 +325,7 @@ test_matrix = {
             "linux": 4,
             "windows": 4,
         },
+        "wsl_variant": True,
     },
     # hipFile (storage-libs) unit tests. CPU-only (mocked), so they run quickly
     # and do not require a GPU runner.
@@ -1212,6 +1258,7 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "wsl_variant": True,
     },
     # hipTensor tests
     "hiptensor": {
@@ -1281,6 +1328,8 @@ def run():
     test_runs_on_multi_gpu_default = None
     # For ASAN builds, use the sandbox runner if available
     test_runs_on_sandbox = None
+    # WSL-hosted GPU runner for "<job> (WSL)" variant entries (empty = none)
+    test_runs_on_wsl = ""
 
     # Check if GPU runner was passed from configure_multi_arch_ci.py via workflow.
     # This carries the policy decision (e.g., trigger gating). When set to empty,
@@ -1330,6 +1379,14 @@ def run():
                     "test-runs-on-multi-gpu", ""
                 )
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
+            if not gpu_tests_gated and "asan" not in build_variant:
+                test_runs_on_wsl = platform_info.get("test-runs-on-kernel", {}).get(
+                    WSL_RUNNER_KERNEL_KEY, ""
+                )
+                # test_runner:wsl already moved this whole run onto the WSL runner,
+                # so a second WSL copy of each component would only duplicate it.
+                if test_runs_on_wsl and test_runs_on_default == test_runs_on_wsl:
+                    test_runs_on_wsl = ""
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
@@ -1382,12 +1439,32 @@ def run():
         # Filter out ci: control labels - they're not test component selectors
         component_test_labels = [c for c in test_labels if not c.startswith("ci:")]
         parsed_test_labels = [c.split("test:")[-1] for c in component_test_labels]
+        # "test:<component>-wsl" labels request a WSL variant entry. They are
+        # additive, so they are left out of the native selection below.
+        wsl_requested = {
+            label.removesuffix(WSL_TEST_LABEL_SUFFIX)
+            for label in parsed_test_labels
+            if label.endswith(WSL_TEST_LABEL_SUFFIX)
+        }
+        parsed_test_labels = [
+            label
+            for label in parsed_test_labels
+            if not label.endswith(WSL_TEST_LABEL_SUFFIX)
+        ]
         expanded_test_labels = [
             member
             for label in parsed_test_labels
             for member in TEST_LABEL_GROUPS.get(label, [label])
         ]
-        if key != "sanity" and expanded_test_labels and key not in expanded_test_labels:
+        native_selected = not (
+            key != "sanity" and expanded_test_labels and key not in expanded_test_labels
+        )
+        wsl_selected = (
+            key in wsl_requested
+            and test_matrix[key].get("wsl_variant", False)
+            and platform == "linux"
+        )
+        if not native_selected and not wsl_selected:
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
             continue
 
@@ -1409,6 +1486,27 @@ def run():
             key == "sanity" or key in project_array or "*" in project_array
         ):
             logging.info(f"Requesting job {job_name} with test_type {test_type}")
+
+            if wsl_selected:
+                if test_runs_on_wsl:
+                    all_components.append(
+                        _make_wsl_variant(
+                            test_matrix[key], platform, test_type, test_runs_on_wsl
+                        )
+                    )
+                    logging.info(
+                        f"Including job {job_name} (WSL) on runner: {test_runs_on_wsl}"
+                    )
+                else:
+                    logging.info(
+                        f"Excluding job {job_name} (WSL): no WSL runner configured "
+                        f"for family {amdgpu_families}"
+                    )
+            if not native_selected:
+                logging.info(
+                    f"Excluding job {job_name}: only its WSL variant was requested"
+                )
+                continue
 
             # Hip-tests on Windows run with both PAL and ROCR backends.
             # See: https://github.com/ROCm/TheRock/issues/3587

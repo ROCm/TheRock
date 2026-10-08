@@ -819,6 +819,157 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
         self.assertIn("--device /dev/dxg", out["container_options"])
 
+    def test_container_options_for_explicit_wsl_marker(self):
+        """A WSL variant entry is WSL even if its runner label lacks the prefix."""
+        job = {"test_runner": "some-pool-label", "wsl": True}
+        options = fetch_test_configurations._build_container_options(job, "linux")[
+            "container_options"
+        ]
+        self.assertIn("--device /dev/dxg", options)
+        self.assertNotIn("/dev/kfd", options)
+
+    # -----------------------
+    # WSL variant entries ("<job> (WSL)" next to native Linux)
+    # -----------------------
+
+    _WSL_RUNNER = "wsl-gfx1101-gpu-rocm"
+    _NATIVE_RUNNER = "linux-gfx110X-gpu-rocm"
+
+    def _use_gfx110x_with_wsl_runner(self, wsl_runner=_WSL_RUNNER):
+        os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
+        linux = {"test-runs-on": self._NATIVE_RUNNER}
+        if wsl_runner:
+            linux["test-runs-on-kernel"] = {"wsl": wsl_runner}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
+            "gfx110x": {"linux": linux}
+        }
+
+    def _by_name(self):
+        return {job["job_name"]: job for job in self._get_components()}
+
+    def test_wsl_label_adds_variant_next_to_native(self):
+        self._use_gfx110x_with_wsl_runner()
+        os.environ["TEST_LABELS"] = json.dumps(
+            ["test:hip-tests", "test:rocrtst", "test:hip-tests-wsl", "test:rocrtst-wsl"]
+        )
+
+        fetch_test_configurations.run()
+        jobs = self._by_name()
+
+        self.assertEqual(
+            set(jobs), {"hip-tests", "rocrtst", "hip-tests (WSL)", "rocrtst (WSL)"}
+        )
+        self.assertEqual(jobs["hip-tests"]["test_runner"], self._NATIVE_RUNNER)
+        self.assertIn("/dev/kfd", jobs["hip-tests"]["container_options"])
+        self.assertNotIn("expect_failure", jobs["hip-tests"])
+
+        wsl = jobs["hip-tests (WSL)"]
+        self.assertEqual(wsl["test_runner"], self._WSL_RUNNER)
+        self.assertEqual(wsl["test_component"], "hip-tests")
+        self.assertTrue(wsl["expect_failure"])
+        self.assertIn("--device /dev/dxg", wsl["container_options"])
+        self.assertNotIn("/dev/kfd", wsl["container_options"])
+        self.assertEqual(wsl["shard_arr"], [1, 2, 3, 4])
+        self.assertEqual(wsl["test_script"], jobs["hip-tests"]["test_script"])
+
+    def test_wsl_labels_do_not_narrow_native_selection(self):
+        """Only -wsl labels: every native test still runs, plus the WSL entry."""
+        self._use_gfx110x_with_wsl_runner()
+        os.environ["TEST_LABELS"] = json.dumps(["test:rocrtst-wsl"])
+
+        fetch_test_configurations.run()
+        names = set(self._by_name())
+
+        self.assertIn("rocrtst (WSL)", names)
+        self.assertIn("rocrtst", names)
+        self.assertIn("rocblas", names)
+        self.assertNotIn("hip-tests (WSL)", names)
+
+    def test_wsl_variant_survives_native_label_filter(self):
+        """test:hip-tests + test:rocrtst-wsl: native hip-tests and WSL rocrtst only."""
+        self._use_gfx110x_with_wsl_runner()
+        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests", "test:rocrtst-wsl"])
+
+        fetch_test_configurations.run()
+
+        self.assertEqual(set(self._by_name()), {"hip-tests", "rocrtst (WSL)"})
+
+    def test_no_wsl_variant_without_label(self):
+        self._use_gfx110x_with_wsl_runner()
+        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests", "test:rocrtst"])
+
+        fetch_test_configurations.run()
+
+        self.assertEqual(set(self._by_name()), {"hip-tests", "rocrtst"})
+
+    def test_no_wsl_variant_without_wsl_runner(self):
+        self._use_gfx110x_with_wsl_runner(wsl_runner=None)
+        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests", "test:hip-tests-wsl"])
+
+        fetch_test_configurations.run()
+
+        self.assertEqual(set(self._by_name()), {"hip-tests"})
+
+    def test_no_wsl_variant_for_component_without_opt_in(self):
+        self._use_gfx110x_with_wsl_runner()
+        os.environ["TEST_LABELS"] = json.dumps(["test:rocblas", "test:rocblas-wsl"])
+
+        fetch_test_configurations.run()
+
+        self.assertEqual(set(self._by_name()), {"rocblas"})
+
+    def test_no_wsl_variant_when_gpu_tests_gated(self):
+        self._use_gfx110x_with_wsl_runner()
+        os.environ["TEST_RUNS_ON"] = ""
+        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests-wsl"])
+
+        fetch_test_configurations.run()
+
+        self.assertNotIn("hip-tests (WSL)", self._by_name())
+
+    def test_no_wsl_variant_on_windows(self):
+        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
+        os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
+        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
+            "gfx110x": {
+                "windows": {
+                    "test-runs-on": "windows-gfx110X-gpu-rocm",
+                    "test-runs-on-kernel": {"wsl": self._WSL_RUNNER},
+                }
+            }
+        }
+        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests-wsl"])
+
+        fetch_test_configurations.run()
+
+        self.assertFalse(any("(WSL)" in name for name in self._by_name()))
+
+    def test_no_duplicate_wsl_variant_when_run_already_on_wsl(self):
+        """test_runner:wsl moves the run onto WSL; no second WSL copy is added."""
+        self._use_gfx110x_with_wsl_runner()
+        os.environ["TEST_RUNS_ON"] = self._WSL_RUNNER
+        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests", "test:hip-tests-wsl"])
+
+        fetch_test_configurations.run()
+        jobs = self._by_name()
+
+        self.assertEqual(set(jobs), {"hip-tests"})
+        self.assertEqual(jobs["hip-tests"]["test_runner"], self._WSL_RUNNER)
+        self.assertIn("--device /dev/dxg", jobs["hip-tests"]["container_options"])
+
+    def test_wsl_variant_quick_runs_one_shard(self):
+        self._use_gfx110x_with_wsl_runner()
+        os.environ["TEST_TYPE"] = "quick"
+        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests", "test:hip-tests-wsl"])
+
+        fetch_test_configurations.run()
+        wsl = self._by_name()["hip-tests (WSL)"]
+
+        self.assertEqual(wsl["total_shards"], 1)
+        self.assertEqual(wsl["shard_arr"], [1])
+        self.assertEqual(wsl["test_type"], "quick")
+
     # -----------------------
     # ASAN sandbox runner selection
     # -----------------------

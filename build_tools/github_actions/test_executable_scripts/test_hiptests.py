@@ -28,6 +28,13 @@ CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_t
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from amdgpu_family_matrix import is_asan
 
+sys.path.append(str(THEROCK_DIR / "build_tools"))
+from _therock_utils.os_util import is_wsl_gpu
+
+# WSL reports as Linux. Its extra exclusions live under a separate "wsl" key and
+# are applied on top of the "linux" ones.
+IS_WSL = os_type == "linux" and is_wsl_gpu()
+
 env = os.environ.copy()
 
 if THEROCK_BIN_DIR_STR is None:
@@ -85,7 +92,16 @@ TEST_TO_IGNORE = {
         "windows": [
             "Unit_hipStreamValue_Wait_Blocking - uint64_t",
             "Unit_hipStreamValue_Wait_Blocking - uint32_t",
-        ]
+        ],
+        # WSL (GPU paravirtualization). The first three each wedge their shard:
+        # after the deliberate kernel fault or the blocking stream wait, the GPU
+        # queue never recovers and every later test in the shard times out.
+        "wsl": [
+            "Unit_hipGetLastError_KernelFailure_ValidAndInvalidOperations",
+            "Unit_hipGetLastError_KernelFailure_TwoStreams",
+            "Unit_hipStreamWaitValue_Default",
+            "Contract_MemBatchDiscard_HipMemPrefetchBatchAsync_PrefetchBatch_IsAcceptedOrUnsupported",
+        ],
     },
     "gfx125X-dcgpu": {
         "linux": [
@@ -196,8 +212,10 @@ def execute_tests(env):
         cmd.extend(["-L", "smoke"])
 
     ignored_tests = list(GENERIC_TEST_TO_IGNORE)
-    if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
-        ignored_tests += TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
+    family_ignores = TEST_TO_IGNORE.get(AMDGPU_FAMILIES, {})
+    ignored_tests += family_ignores.get(os_type, [])
+    if IS_WSL:
+        ignored_tests += family_ignores.get("wsl", [])
     if ignored_tests:
         cmd.extend(["--exclude-regex", "|".join(ignored_tests)])
 

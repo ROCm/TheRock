@@ -299,6 +299,11 @@ amdgpu_family_info_matrix = {
     "gfx110x": {
         "linux": {
             "test-runs-on": "linux-gfx110X-gpu-rocm",
+            # WSL-hosted V710 runners (TheRock-Infra wsl-* pools). Used by the
+            # test_runner:wsl label and by "<job> (WSL)" entries (test:*-wsl).
+            "test-runs-on-kernel": {
+                "wsl": "wsl-gfx1101-gpu-rocm",
+            },
             "family": "gfx110X-all",
             "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
             "bypass_tests_for_releases": True,

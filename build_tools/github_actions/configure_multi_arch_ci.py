@@ -198,6 +198,15 @@ def _get_allowed_test_labels_for_stages(build_stages: list[str]) -> list[str] | 
     return sorted(allowed) if allowed else []
 
 
+def _test_label_component(label: str) -> str:
+    """Component a test:* label needs artifacts for.
+
+    A "test:<component>-wsl" label runs the same component on a WSL runner, so it
+    needs the same build stages as "test:<component>".
+    """
+    return label.replace("test:", "").removesuffix("-wsl")
+
+
 # ---------------------------------------------------------------------------
 # Dataclasses — the typed interfaces between pipeline steps
 # ---------------------------------------------------------------------------
@@ -271,7 +280,7 @@ class CIInputs:
                     lbl
                     for lbl in labels
                     if not lbl.startswith("ci:")
-                    and lbl.replace("test:", "") not in allowed_labels
+                    and _test_label_component(lbl) not in allowed_labels
                 ]
                 if invalid:
                     raise ValueError(
@@ -373,7 +382,7 @@ class CIInputs:
                     lbl
                     for lbl in linux_test_labels
                     if not lbl.startswith("ci:")
-                    and lbl.replace("test:", "") not in allowed_labels
+                    and _test_label_component(lbl) not in allowed_labels
                 ]
                 if invalid:
                     raise ValueError(
@@ -388,7 +397,7 @@ class CIInputs:
                     lbl
                     for lbl in windows_test_labels
                     if not lbl.startswith("ci:")
-                    and lbl.replace("test:", "") not in allowed_labels
+                    and _test_label_component(lbl) not in allowed_labels
                 ]
                 if invalid:
                     raise ValueError(

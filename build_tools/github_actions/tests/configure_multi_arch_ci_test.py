@@ -727,6 +727,33 @@ class TestDecideJobs(unittest.TestCase):
         # Both labels are compatible with the stages
         self.assertEqual(outputs.linux_test_labels, ["test:hip-tests", "test:kfdtest"])
 
+    def test_build_stages_allows_wsl_variant_of_compatible_test_label(self):
+        """test:<component>-wsl needs the same stages as test:<component>."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            build_stages=["compiler-runtime", "runtime-tests"],
+            linux_test_labels=["test:hip-tests-wsl", "test:rocrtst-wsl"],
+        )
+        inputs.validate()
+
+    def test_build_stages_rejects_wsl_variant_of_incompatible_test_label(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            build_stages=["compiler-runtime", "runtime-tests"],
+            linux_test_labels=["test:rocblas-wsl"],
+        )
+        with self.assertRaises(ValueError) as ctx:
+            inputs.validate()
+        self.assertIn("rocblas-wsl", str(ctx.exception))
+
     def test_build_stages_allows_ci_control_labels(self):
         """ci: control labels like ci:run-multi-gpu are not rejected by build_stages validation."""
         inputs = cm.CIInputs(
@@ -1879,6 +1906,24 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
+
+    def test_test_runner_wsl_selects_wsl_runner_for_gfx110x(self):
+        """test_runner:wsl + ci:test:gfx110x moves gfx110x Linux tests onto WSL."""
+        targets = cm.TargetSelection(
+            linux_families=["gfx110x"],
+            linux_test_only_families=["gfx110x"],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="pull_request", pr_labels=["test_runner:wsl"]
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertEqual(entry["test-runs-on"], "wsl-gfx1101-gpu-rocm")
 
     def test_test_runner_kernel_clears_unsupported_family(self):
         """test_runner:oem label clears runner for families without kernel support."""
