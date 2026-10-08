@@ -49,15 +49,6 @@ if not HIPFILE_TEST_DIR.is_dir():
 
 
 def get_asan_lib_path() -> str:
-    configured_runtime = os.getenv("ASAN_RUNTIME_PATH")
-    if configured_runtime:
-        runtime_path = Path(configured_runtime)
-        if not runtime_path.is_file():
-            raise FileNotFoundError(
-                f"ASAN_RUNTIME_PATH does not name a file: {configured_runtime}"
-            )
-        return str(runtime_path.resolve())
-
     arch = platform.machine()
     clang_path = str(Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "clang++")
     # Per-target runtime directories use the unqualified filename; older
