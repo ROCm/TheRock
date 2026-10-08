@@ -1421,6 +1421,120 @@ class TestSelectTargets(unittest.TestCase):
         self.assertIn("gfx950", result.linux_build_only_families)
         self.assertIn("gfx950", result.linux_test_only_families)
 
+    def test_platform_label_clears_all_excluded_platform_lists(self):
+        """Platform labels must clear build_only and test_only lists for excluded platforms.
+
+        Regression test for bug: ci:build:gfx110x + ci:test:gfx110x + ci:platform:windows
+        raised ValueError because linux_test_only still had gfx110x but linux_names
+        was emptied by the platform filter. The fix ensures all per-platform lists
+        (families, build_only, test_only) are cleared when a platform is excluded.
+
+        Also tests ci:gfx* combined with ci:build:* and ci:test:* labels - the ci:gfx*
+        label adds to families but NOT to build_only, while ci:build:* adds to both.
+        """
+        test_cases = [
+            {
+                "name": "ci:build + ci:test + ci:platform:windows",
+                "labels": [
+                    "ci:build:gfx110x",
+                    "ci:test:gfx110x",
+                    "ci:platform:windows",
+                ],
+                "expect_linux_empty": True,
+                "expect_windows_empty": False,
+                "windows_target": "gfx110x",
+                "windows_in_build_only": True,
+                "windows_in_test_only": True,
+            },
+            {
+                "name": "ci:build + ci:test + ci:platform:linux",
+                "labels": ["ci:build:gfx950", "ci:test:gfx950", "ci:platform:linux"],
+                "expect_linux_empty": False,
+                "expect_windows_empty": True,
+                "linux_target": "gfx950",
+                "linux_in_build_only": True,
+                "linux_in_test_only": True,
+            },
+            {
+                # ci:gfx* adds to families but NOT build_only; ci:build:* adds to both
+                # ci:test:* adds to test_only. Combined: family yes, build_only yes, test_only yes
+                "name": "ci:gfx + ci:build + ci:test + ci:platform:windows",
+                "labels": [
+                    "ci:gfx110x",
+                    "ci:build:gfx110x",
+                    "ci:test:gfx110x",
+                    "ci:platform:windows",
+                ],
+                "expect_linux_empty": True,
+                "expect_windows_empty": False,
+                "windows_target": "gfx110x",
+                "windows_in_build_only": True,
+                "windows_in_test_only": True,
+            },
+            {
+                # Just ci:gfx* + ci:platform - should NOT be in build_only or test_only
+                "name": "ci:gfx + ci:platform:windows (no build/test labels)",
+                "labels": ["ci:gfx110x", "ci:platform:windows"],
+                "expect_linux_empty": True,
+                "expect_windows_empty": False,
+                "windows_target": "gfx110x",
+                "windows_in_build_only": False,
+                "windows_in_test_only": False,
+            },
+        ]
+        for tc in test_cases:
+            with self.subTest(tc["name"]):
+                inputs = cm.CIInputs(
+                    run_id="12345",
+                    event_name="pull_request",
+                    commit_ref="feature",
+                    base_ref="HEAD^",
+                    build_variant="release",
+                    pr_labels=tc["labels"],
+                )
+                # Should NOT raise ValueError
+                result = cm.select_targets(inputs)
+
+                if tc["expect_linux_empty"]:
+                    self.assertEqual(result.linux_families, [], "linux_families")
+                    self.assertEqual(
+                        result.linux_build_only_families, [], "linux_build_only"
+                    )
+                    self.assertEqual(
+                        result.linux_test_only_families, [], "linux_test_only"
+                    )
+                else:
+                    target = tc["linux_target"]
+                    self.assertIn(target, result.linux_families)
+                    if tc.get("linux_in_build_only"):
+                        self.assertIn(target, result.linux_build_only_families)
+                    else:
+                        self.assertNotIn(target, result.linux_build_only_families)
+                    if tc.get("linux_in_test_only"):
+                        self.assertIn(target, result.linux_test_only_families)
+                    else:
+                        self.assertNotIn(target, result.linux_test_only_families)
+
+                if tc["expect_windows_empty"]:
+                    self.assertEqual(result.windows_families, [], "windows_families")
+                    self.assertEqual(
+                        result.windows_build_only_families, [], "windows_build_only"
+                    )
+                    self.assertEqual(
+                        result.windows_test_only_families, [], "windows_test_only"
+                    )
+                else:
+                    target = tc["windows_target"]
+                    self.assertIn(target, result.windows_families)
+                    if tc.get("windows_in_build_only"):
+                        self.assertIn(target, result.windows_build_only_families)
+                    else:
+                        self.assertNotIn(target, result.windows_build_only_families)
+                    if tc.get("windows_in_test_only"):
+                        self.assertIn(target, result.windows_test_only_families)
+                    else:
+                        self.assertNotIn(target, result.windows_test_only_families)
+
 
 # ---------------------------------------------------------------------------
 # Step 5: Build Configs
