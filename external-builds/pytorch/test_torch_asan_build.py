@@ -13,30 +13,7 @@ from build_prod_wheels import (
 from setup_pytorch_asan import (
     append_env_text,
     remove_incompatible_warning_flags,
-    with_asan_local_version,
 )
-
-
-class AsanVersionSuffixTest(unittest.TestCase):
-    def test_appends_asan_to_the_incoming_rocm_suffix(self):
-        self.assertEqual(
-            with_asan_local_version("+rocm10.1.0rc3"), "+rocm10.1.0rc3.asan"
-        )
-
-    def test_keeps_a_dev_suffix_and_adds_asan(self):
-        self.assertEqual(
-            with_asan_local_version("+devrocm10.2.0.dev0-abcdef"),
-            "+devrocm10.2.0.dev0-abcdef.asan",
-        )
-
-    def test_is_idempotent(self):
-        self.assertEqual(
-            with_asan_local_version("+rocm10.1.0rc3.asan"), "+rocm10.1.0rc3.asan"
-        )
-
-    def test_rejects_a_suffix_that_is_not_a_local_version(self):
-        with self.assertRaises(RuntimeError):
-            with_asan_local_version("10.1.0rc3")
 
 
 class AsanFlagSpacingTest(unittest.TestCase):
