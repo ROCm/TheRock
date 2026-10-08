@@ -416,7 +416,7 @@ jobs:
           fi
           asan_flag=""
           if [[ "${ASAN}" == "true" ]]; then
-            asan_flag="--asan"
+            asan_flag="--asan --no-build-triton --no-build-pytorch-audio --no-build-pytorch-vision --no-build-apex"
           fi
 
           # build_prod_wheels.py forwards --index-url and --find-links to pip
