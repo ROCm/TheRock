@@ -587,7 +587,6 @@ def validate_build_args(
     if (
         args.enable_pytorch_flash_attention
         and args.pytorch_dir is not None
-        and not setup_pytorch_asan.keep_flash_attention_without_triton(args.asan)
         and not is_windows
         and not args.build_triton
     ):
@@ -803,11 +802,6 @@ def do_build(args: argparse.Namespace):
 
     if not args.version_suffix:
         args.version_suffix = get_version_suffix_for_installed_rocm_package()
-    if args.asan:
-        args.version_suffix = setup_pytorch_asan.with_asan_local_version(
-            args.version_suffix
-        )
-        print(f"  ASAN torch version suffix: {args.version_suffix}")
 
     triton_dir: Path | None = args.triton_dir
     pytorch_dir: Path | None = args.pytorch_dir
@@ -1170,11 +1164,7 @@ def do_build_pytorch(
         use_flash_attention = args.enable_pytorch_flash_attention
         print(f"Flash Attention explicitly set to: {use_flash_attention}")
         # Note: this may fail if aotriton is not supported, see below.
-    elif (
-        not setup_pytorch_asan.keep_flash_attention_without_triton(args.asan)
-        and not is_windows
-        and not triton_requirement
-    ):
+    elif not is_windows and not triton_requirement:
         print(f"Disabling Flash Attention on Linux since triton is not built")
         use_flash_attention = False
     else:
@@ -1618,9 +1608,8 @@ def main(argv: list[str]):
         default=False,
         help="Build the torch wheel with AddressSanitizer against the "
         "installed ROCm SDK. The workflow-supplied GPU list and ROCm version "
-        "are left unchanged. The torch local version gains an .asan suffix, "
-        "and triton, torchaudio, torchvision, and apex are not built unless "
-        "explicitly requested.",
+        "are left unchanged. Triton, torchaudio, torchvision, and apex are "
+        "not built unless explicitly requested.",
     )
     build_p.add_argument(
         "--pytorch-rocm-arch",

@@ -26,23 +26,6 @@ TORCH_IMPORT_SANITY_SKIP_MESSAGE = (
 )
 
 
-def with_asan_local_version(version_suffix: str) -> str:
-    """Add an asan marker to the torch local version.
-
-    The incoming suffix is whatever the installed ROCm package already
-    produced, for example ``+rocm10.1.0rc3``. The torch wheel becomes
-    ``+rocm10.1.0rc3.asan``. The ROCm package version itself is unchanged.
-    """
-    if not version_suffix.startswith("+") or version_suffix == "+":
-        raise RuntimeError(
-            "--asan expected a PEP 440 local version suffix such as "
-            f"+rocm10.1.0rc3, got {version_suffix!r}"
-        )
-    if version_suffix.endswith(".asan"):
-        return version_suffix
-    return f"{version_suffix}.asan"
-
-
 def disable_default_companion_builds(args) -> None:
     """Leave triton, torchaudio, torchvision, and apex off unless requested.
 
@@ -57,11 +40,6 @@ def disable_default_companion_builds(args) -> None:
         args.build_pytorch_vision = False
     if args.build_apex is None:
         args.build_apex = False
-
-
-def keep_flash_attention_without_triton(asan: bool) -> bool:
-    """ASAN builds torch without triton and still enables AOTriton by arch."""
-    return asan
 
 
 def append_env_text(env: dict[str, str], name: str, addition: str) -> None:
