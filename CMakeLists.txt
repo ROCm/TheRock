@@ -267,7 +267,7 @@ if(THEROCK_ENABLE_COMPILER)
     "Stage LLVM 'multilibs' distribution for amd-llvm" OFF
     "NOT WIN32" OFF)
   option(THEROCK_ENABLE_COMPILER_UTILS_DISTRIBUTION
-    "Stage LLVM 'utils' distribution for amd-llvm" OFF)
+    "Stage LLVM 'utils' distribution for amd-llvm" ON)
 
   set(_therock_amd_llvm_distribution)
   if(THEROCK_ENABLE_COMPILER_DISTRIBUTION)
