@@ -49,7 +49,7 @@ jobs:
       actions: read
       id-token: write
     with:
-      projects_to_test: "rocrand,rocsparse,rocsolver,rocprim,hipcub,rocthrust"
+      projects_to_test: "rocrand,rocsparse,rocsolver,rocprim,hipcub,rocthrust,rocblas,hipsparselt,rocalution,hipsparse,rocroller,origami,miopenprovider,hipkernelprovider,hipblasltprovider"
       amdgpu_families: "gfx94X-dcgpu"
       # With no baseline the test jobs install this run's own artifacts, which
       # publish to the ci channel rather than the nightly default.

@@ -993,6 +993,16 @@ function(therock_cmake_subproject_activate target_name)
       set(_coverage_device_flags
         "-Xarch_device -fno-profile-instr-generate -Xarch_device -fno-coverage-mapping")
     endif()
+    # A project with no option of its own that writes .profraw (none at all,
+    # or a gcov one) is instrumented here instead: the unqualified pair goes
+    # ahead of the device-scoped one, which then decides the kernels as for
+    # every other project, and the profile runtime goes on its links.
+    set(_coverage_self_flags)
+    if(_logical_target_name IN_LIST THEROCK_COVERAGE_SELF_INSTRUMENTED_PROJECTS)
+      set(_coverage_self_flags "-fprofile-instr-generate -fcoverage-mapping ")
+      string(APPEND _coverage_include_contents
+        "add_link_options(-fprofile-instr-generate)\n")
+    endif()
     foreach(_coverage_lang IN ITEMS C CXX HIP)
       string(APPEND _coverage_include_contents
         "set(CMAKE_${_coverage_lang}_COMPILER_LAUNCHER \"\")\n")
@@ -1004,10 +1014,18 @@ function(therock_cmake_subproject_activate target_name)
     foreach(_coverage_lang IN ITEMS C CXX HIP)
       string(APPEND _coverage_include_contents
         "if(CMAKE_${_coverage_lang}_COMPILE_OBJECT AND NOT CMAKE_${_coverage_lang}_COMPILE_OBJECT MATCHES \"Xarch_device -f(no-)?profile-instr-generate\")\n"
-        "  string(REPLACE \"<FLAGS>\" \"<FLAGS> ${_coverage_device_flags} -Wno-unused-command-line-argument\"\n"
+        "  string(REPLACE \"<FLAGS>\" \"<FLAGS> ${_coverage_self_flags}${_coverage_device_flags} -Wno-unused-command-line-argument\"\n"
         "    CMAKE_${_coverage_lang}_COMPILE_OBJECT \"\${CMAKE_${_coverage_lang}_COMPILE_OBJECT}\")\n"
         "endif()\n")
     endforeach()
+    # Every HIP link with -fprofile-instr-generate pulls in the profile
+    # runtime's collector, which defines hipLaunchKernel and the other launch
+    # calls as interceptors. Exported, the copies of two instrumented binaries
+    # in one process resolve each other as the real functions and recurse on
+    # the first kernel launch; kept out of the dynamic symbol table, each copy
+    # intercepts only its own binary's calls.
+    string(APPEND _coverage_include_contents
+      "add_link_options(\"LINKER:--exclude-libs,libclang_rt.profile_rocm.a\")\n")
     file(CONFIGURE OUTPUT "${_cmake_project_coverage_file}"
       CONTENT "${_coverage_include_contents}" @ONLY ESCAPE_QUOTES)
     list(APPEND _fprint_files "${_cmake_project_coverage_file}")
@@ -1046,7 +1064,8 @@ function(therock_cmake_subproject_activate target_name)
   #
   # _coverage_project_name and _coverage_var_name are set further up, where the
   # profile runtime's link libraries are added to the init file.
-  if(DEFINED ${_coverage_var_name})
+  if(DEFINED ${_coverage_var_name}
+     AND NOT _logical_target_name IN_LIST THEROCK_COVERAGE_SELF_INSTRUMENTED_PROJECTS)
     set(_coverage_option "${THEROCK_COVERAGE_OPTION_${_coverage_project_name}}")
     if(NOT _coverage_option)
       message(FATAL_ERROR

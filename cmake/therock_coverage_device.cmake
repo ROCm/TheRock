@@ -23,11 +23,9 @@
 # generic archive in any shared library that names it.
 #
 # Only there: profile_rocm also defines hipLaunchKernel and the other launch
-# calls, as interceptors, and an executable that carries them next to those of
-# an instrumented library it loads recurses on its first kernel launch. That
-# rules out the link rules, where profile_rocm would resolve the launch calls
-# ahead of the HIP runtime in every executable, and rocSPARSE's unit tests,
-# which name the generic archive just as its library does.
+# calls as interceptors, so in the link rules it would resolve those calls
+# ahead of the HIP runtime in every binary, instrumented or not. Executables
+# that name the generic archive, as rocSPARSE's unit tests do, keep it.
 
 if(NOT DEFINED THEROCK_COVERAGE_DEVICE_PROFILE_RUNTIME
    OR NOT DEFINED THEROCK_COVERAGE_HOST_PROFILE_RUNTIME)

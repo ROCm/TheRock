@@ -84,6 +84,11 @@ class CoverageProject:
             so therock_subproject.cmake translates TheRock's flag into this
             name when configuring the subproject. Being per-subproject is what
             keeps the generic names from instrumenting the whole build.
+        self_instrumented: Set instead of coverage_option when the project has
+            no option of its own that writes .profraw (none at all, or a gcov
+            one), so therock_subproject.cmake adds the clang profile flags to
+            its compiles and links itself. The project's own option, if any,
+            stays off.
         unsupported_reason: Set instead of coverage_option when the project
             cannot be measured by this pipeline. Such a project stays in the
             registry so the gap is recorded, but is left out of the group
@@ -135,6 +140,7 @@ class CoverageProject:
     test_component: str
     coverage_config: str
     coverage_option: str = ""
+    self_instrumented: bool = False
     unsupported_reason: str = ""
     blocked_reason: str = ""
     artifact_names: list[str] = field(default_factory=list)
@@ -145,6 +151,11 @@ class CoverageProject:
     source_repo: str = ROCM_LIBRARIES
     extra_cmake_targets: list[str] = field(default_factory=list)
     device_coverage: bool = False
+
+    @property
+    def measurable(self) -> bool:
+        """Whether a build can instrument the project, by either route."""
+        return bool(self.coverage_option) or self.self_instrumented
 
 
 # Projects that participate in coverage CI.
@@ -229,10 +240,10 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         object_globs=["lib/librocblas.so*"],
         fetch_artifact_args="--blas",
         codecov_flag="rocBLAS",
-        # Not device_coverage, though its own kernels would qualify: the tests
-        # of rocSOLVER, rocSPARSE and rocWMMA load librocblas.so next to their
-        # own instrumented binary, and two copies of the profile runtime's HIP
-        # interceptors in one process recurse on the first kernel launch.
+        # Upstream's option instruments the library with unqualified flags, so
+        # this only stops the device-side negation. Its GEMMs run Tensile code
+        # objects built outside the library and stay unmeasured.
+        device_coverage=True,
     ),
     "hipblas": CoverageProject(
         cmake_target="hipBLAS",
@@ -269,6 +280,33 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         fetch_artifact_args="--blas",
         codecov_flag="hipBLASLt",
     ),
+    "rocroller": CoverageProject(
+        cmake_target="rocRoller",
+        artifact_names=["blas"],
+        artifact_relpaths=["math-libs/BLAS/rocRoller/stage"],
+        # Instruments the library and its tests. It generates kernels at run
+        # time, so there is no device code to instrument.
+        coverage_option="ROCROLLER_ENABLE_COVERAGE",
+        stage=STAGE_MATH_LIBS,
+        test_component="rocroller",
+        coverage_config="shared/rocroller/test_categories_coverage.yaml",
+        object_globs=["lib/librocroller.so*"],
+        fetch_artifact_args="--blas",
+        codecov_flag="rocRoller",
+    ),
+    "origami": CoverageProject(
+        cmake_target="origami",
+        artifact_names=["blas"],
+        artifact_relpaths=["math-libs/BLAS/origami/stage"],
+        # No coverage option upstream; a host-only library.
+        self_instrumented=True,
+        stage=STAGE_MATH_LIBS,
+        test_component="origami",
+        coverage_config="shared/origami/test_categories_coverage.yaml",
+        object_globs=["lib/liborigami.so*"],
+        fetch_artifact_args="--blas",
+        codecov_flag="origami",
+    ),
     "rocsparse": CoverageProject(
         cmake_target="rocSPARSE",
         artifact_names=["sparse"],
@@ -291,9 +329,9 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         cmake_target="hipSPARSE",
         artifact_names=["sparse"],
         artifact_relpaths=["math-libs/BLAS/hipSPARSE/stage"],
-        unsupported_reason=(
-            "HIPSPARSE_ENABLE_COVERAGE selects gcov instrumentation, which writes .gcda files rather than the .profraw this pipeline merges"
-        ),
+        # HIPSPARSE_ENABLE_COVERAGE selects gcov instrumentation, which writes
+        # .gcda files rather than the .profraw this pipeline merges.
+        self_instrumented=True,
         stage=STAGE_MATH_LIBS,
         test_component="hipsparse",
         coverage_config="projects/hipsparse/test_categories_coverage.yaml",
@@ -312,6 +350,10 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         object_globs=["lib/libhipsparselt.so*"],
         fetch_artifact_args="--sparse",
         codecov_flag="hipSPARSELt",
+        # Upstream's option instruments the library with unqualified flags.
+        # Its prune and compress kernels are its own; the SpMM kernels are
+        # TensileLite code objects and stay unmeasured.
+        device_coverage=True,
     ),
     "rocsolver": CoverageProject(
         cmake_target="rocSOLVER",
@@ -345,15 +387,17 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         cmake_target="rocALUTION",
         artifact_names=["rocalution"],
         artifact_relpaths=["math-libs/rocALUTION/stage"],
-        unsupported_reason=(
-            "BUILD_CODE_COVERAGE selects gcov instrumentation, which writes .gcda files rather than the .profraw this pipeline merges"
-        ),
+        # BUILD_CODE_COVERAGE selects gcov instrumentation, which writes .gcda
+        # files rather than the .profraw this pipeline merges.
+        self_instrumented=True,
         stage=STAGE_MATH_LIBS,
         test_component="rocalution",
         coverage_config="projects/rocalution/test_categories_coverage.yaml",
-        object_globs=["lib/librocalution.so*"],
+        # The HIP backend is a library of its own, and carries the kernels.
+        object_globs=["lib/librocalution.so*", "lib/librocalution_hip.so*"],
         fetch_artifact_args="--rocalution",
         codecov_flag="rocALUTION",
+        device_coverage=True,
     ),
     "hiptensor": CoverageProject(
         cmake_target="hipTensor",
@@ -409,6 +453,45 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         object_globs=["lib/libhipdnn_backend.so*"],
         fetch_artifact_args="--hipdnn",
         codecov_flag="hipDNN",
+    ),
+    # hipDNN's engine plugins, from rocm-libraries' dnn-providers/. All are
+    # host-only; hip-kernel-provider compiles its kernels at run time.
+    "miopenprovider": CoverageProject(
+        cmake_target="miopenprovider",
+        artifact_names=["miopenprovider"],
+        artifact_relpaths=["ml-libs/miopenprovider/stage"],
+        coverage_option="MIOPENPROVIDER_ENABLE_COVERAGE",
+        stage=STAGE_MATH_LIBS,
+        test_component="miopenprovider",
+        coverage_config="dnn-providers/miopen-provider/test_categories_coverage.yaml",
+        object_globs=["lib/hipdnn_plugins/engines/libmiopen_plugin.so*"],
+        fetch_artifact_args="--miopenprovider",
+        codecov_flag="miopenprovider",
+    ),
+    "hipkernelprovider": CoverageProject(
+        cmake_target="hipkernelprovider",
+        artifact_names=["hipkernelprovider"],
+        artifact_relpaths=["ml-libs/hipkernelprovider/stage"],
+        coverage_option="HIPKERNELPROVIDER_ENABLE_COVERAGE",
+        stage=STAGE_MATH_LIBS,
+        test_component="hipkernelprovider",
+        coverage_config="dnn-providers/hip-kernel-provider/test_categories_coverage.yaml",
+        object_globs=["lib/hipdnn_plugins/engines/libhip_kernel_provider.so*"],
+        fetch_artifact_args="--hipkernelprovider",
+        codecov_flag="hipkernelprovider",
+    ),
+    "hipblasltprovider": CoverageProject(
+        cmake_target="hipblasltprovider",
+        artifact_names=["hipblasltprovider"],
+        artifact_relpaths=["ml-libs/hipblasltprovider/stage"],
+        # No coverage option upstream, unlike the other two providers.
+        self_instrumented=True,
+        stage=STAGE_MATH_LIBS,
+        test_component="hipblasltprovider",
+        coverage_config="dnn-providers/hipblaslt-provider/test_categories_coverage.yaml",
+        object_globs=["lib/hipdnn_plugins/engines/libhipblaslt_plugin.so*"],
+        fetch_artifact_args="--hipblasltprovider",
+        codecov_flag="hipblasltprovider",
     ),
     #
     # rocm-libraries -- math-libs stage, header-only
@@ -479,6 +562,23 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         # Not device_coverage, though it is almost entirely device code: with
         # its kernels instrumented, single GEMM test sources take up to three
         # hours to compile, and the tests no longer build within the stage job.
+    ),
+    "hipthreads": CoverageProject(
+        cmake_target="hipthreads",
+        artifact_names=["hipthreads"],
+        artifact_relpaths=["math-libs/hipthreads/stage"],
+        # Instrumenting the static library alone would also break those links,
+        # which would need the profile runtime they do not pass.
+        unsupported_reason=(
+            "its tests are lit tests, compiled and linked when they run, which "
+            "a build-time option cannot instrument"
+        ),
+        stage=STAGE_MATH_LIBS,
+        test_component="hipthreads",
+        coverage_config="projects/hipthreads/test_categories_coverage.yaml",
+        object_globs=["lib/hipthreads/libhipthreads.a"],
+        fetch_artifact_args="--hipthreads --tests",
+        codecov_flag="hipthreads",
     ),
     #
     # rocm-systems -- comm-libs stage
@@ -596,24 +696,31 @@ for _key, _proj in COVERAGE_PROJECTS.items():
     assert (
         _proj.stage in KNOWN_STAGES
     ), f"{_key}: stage must be one of {sorted(KNOWN_STAGES)}"
-    # An entry with neither would be selectable and instrument nothing; one
-    # with both leaves it ambiguous whether the project can be measured.
-    assert bool(_proj.coverage_option) != bool(
-        _proj.unsupported_reason
-    ), f"{_key}: set exactly one of coverage_option and unsupported_reason"
+    # An entry with none would be selectable and instrument nothing; one with
+    # several leaves it ambiguous how, or whether, the project is measured.
+    assert (
+        sum(
+            [
+                bool(_proj.coverage_option),
+                _proj.self_instrumented,
+                bool(_proj.unsupported_reason),
+            ]
+        )
+        == 1
+    ), f"{_key}: set exactly one of coverage_option, self_instrumented and unsupported_reason"
     # Without these the nightly test job cannot tell which files belong to the
     # project, and would measure an entirely non-instrumented install.
-    if _proj.coverage_option:
+    if _proj.measurable:
         assert _proj.artifact_names, f"{_key}: needs artifacts to overlay"
         assert _proj.artifact_relpaths, f"{_key}: needs relpaths to overlay"
-    # Device instrumentation rides on the host instrumentation the upstream
-    # option turns on; on its own it would be the only thing instrumented.
+    # Device instrumentation rides on the host instrumentation; on its own it
+    # would be the only thing instrumented.
     assert (
-        _proj.coverage_option or not _proj.device_coverage
-    ), f"{_key}: device_coverage needs a coverage_option"
+        _proj.measurable or not _proj.device_coverage
+    ), f"{_key}: device_coverage needs host instrumentation"
 
 SUPPORTED_PROJECTS: frozenset[str] = frozenset(
-    k for k, v in COVERAGE_PROJECTS.items() if v.coverage_option
+    k for k, v in COVERAGE_PROJECTS.items() if v.measurable
 )
 # Measurable, but the instrumented build is broken today. Kept selectable by
 # name so the block can be retested, and kept out of everything that picks
@@ -634,12 +741,12 @@ DEFAULT_PROJECTS: frozenset[str] = frozenset(
 ROCM_LIBRARIES_PROJECTS: frozenset[str] = frozenset(
     k
     for k, v in COVERAGE_PROJECTS.items()
-    if v.source_repo == ROCM_LIBRARIES and v.coverage_option and not v.blocked_reason
+    if v.source_repo == ROCM_LIBRARIES and v.measurable and not v.blocked_reason
 )
 ROCM_SYSTEMS_PROJECTS: frozenset[str] = frozenset(
     k
     for k, v in COVERAGE_PROJECTS.items()
-    if v.source_repo == ROCM_SYSTEMS and v.coverage_option and not v.blocked_reason
+    if v.source_repo == ROCM_SYSTEMS and v.measurable and not v.blocked_reason
 )
 
 # Group-alias tokens accepted by PROJECTS_TO_TEST (and the projects_to_test CI
@@ -841,7 +948,7 @@ def resolve_build_stages(project_keys: list[str]) -> set[str]:
 def emit_cmake(output_path: Path) -> None:
     """Writes the coverage group lists and option-name map as a CMake include.
 
-    Three things come out of here. The group lists drive the
+    Four things come out of here. The group lists drive the
     THEROCK_COVERAGE_*_ALL options, and are limited to projects that can be
     measured and are not currently blocked. The option map is not: a blocked
     project stays in it so that naming it explicitly still instruments it.
@@ -849,14 +956,16 @@ def emit_cmake(output_path: Path) -> None:
     subproject actually implements, since the names are not standardised
     upstream. The device list names the subprojects whose kernels are
     instrumented by default once their coverage is on, which CMakeLists.txt
-    turns into <PROJECT>_ENABLE_DEVICE_COVERAGE. CMakeLists.txt reads all
-    three so it does not hardcode any of them.
+    turns into <PROJECT>_ENABLE_DEVICE_COVERAGE. The self-instrumented list
+    names the subprojects therock_subproject.cmake adds the profile flags to
+    itself, having no option to pass. CMakeLists.txt and
+    therock_subproject.cmake read these so they do not hardcode any of them.
     """
 
     def targets(repo: str) -> list[str]:
         names: set[str] = set()
         for p in COVERAGE_PROJECTS.values():
-            if p.source_repo != repo or not p.coverage_option:
+            if p.source_repo != repo or not p.measurable:
                 continue
             # Kept in step with the Python group sets: a group flag that
             # instrumented a project whose instrumented build is known to fail
@@ -889,6 +998,15 @@ def emit_cmake(output_path: Path) -> None:
         },
         key=str.lower,
     )
+    self_instrumented_targets = sorted(
+        {
+            target
+            for p in COVERAGE_PROJECTS.values()
+            if p.self_instrumented
+            for target in [p.cmake_target, *p.extra_cmake_targets]
+        },
+        key=str.lower,
+    )
 
     output_path.write_text(
         "# Generated by configure_coverage_ci.py --emit-cmake; do not edit.\n"
@@ -897,6 +1015,7 @@ def emit_cmake(output_path: Path) -> None:
         f"set(THEROCK_COVERAGE_ROCM_LIBRARIES_PROJECTS {' '.join(targets(ROCM_LIBRARIES))})\n"
         f"set(THEROCK_COVERAGE_ROCM_SYSTEMS_PROJECTS {' '.join(targets(ROCM_SYSTEMS))})\n"
         f"set(THEROCK_COVERAGE_DEVICE_PROJECTS {' '.join(device_targets)})\n"
+        f"set(THEROCK_COVERAGE_SELF_INSTRUMENTED_PROJECTS {' '.join(self_instrumented_targets)})\n"
         + "".join(option_lines)
     )
 

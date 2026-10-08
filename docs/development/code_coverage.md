@@ -40,6 +40,14 @@ RCCL: `ENABLE_CODE_COVERAGE`), so `therock_subproject.cmake` translates it to
 whichever name `COVERAGE_PROJECTS` registers for that project. Passing the flag
 for an unregistered project is a configure error, not a silent no-op.
 
+Some projects have no option that writes `.profraw`: hipSPARSE's and
+rocALUTION's select gcov, and origami and hipblaslt-provider have none. Their
+entries set `self_instrumented=True` instead of `coverage_option`, and
+`therock_subproject.cmake` instruments them itself: it adds
+`-fprofile-instr-generate -fcoverage-mapping` to their compile rule, ahead of
+the device-scoped flags described below, and `-fprofile-instr-generate` to
+their links. Their own option, if any, stays off.
+
 ### Enabling a whole group
 
 | Option                                | Instruments                                  |
@@ -121,11 +129,13 @@ worth it where the reported objects contain kernels: rocRAND's generators are
 all kernels, while hipRAND's and hipDNN's libraries have none. It is enabled
 for:
 
-- rocRAND, rocSPARSE and rocSOLVER, whose libraries carry their kernels.
-  rocSOLVER's own coverage option already instruments them, so for it this only
-  drops the device-side negation; rocRAND's option is host-only and rocSPARSE's
-  negates device instrumentation itself, so for those two the device flags are
-  what instrument the kernels.
+- rocRAND, rocSPARSE, rocSOLVER, rocBLAS, hipSPARSELt and rocALUTION, whose
+  libraries carry their kernels. Most of their options already instrument
+  them, so for those this only drops the device-side negation; rocRAND's option
+  is host-only and rocSPARSE's negates device instrumentation itself, so for
+  those two the device flags are what instrument the kernels. rocBLAS's GEMMs
+  and hipSPARSELt's SpMM kernels are Tensile and TensileLite code objects built
+  outside the library, and stay unmeasured.
 - rocPRIM, hipCUB and rocThrust, which are header-only: their kernels are
   compiled into the test binaries their reports cover, and each of those
   carries its own collector.
@@ -134,13 +144,16 @@ rocWMMA is header-only too, and almost entirely device code, but with its
 kernels instrumented single GEMM test sources take up to three hours to
 compile, and its tests no longer build within the stage job.
 
-A process can hold only one copy of the collector: the HIP interceptors of two
-copies resolve each other as the real functions and recurse on the first kernel
-launch. Every HIP link with `-fprofile-instr-generate` pulls one in, host-only
-or not, so a build must not instrument two binaries that one test process
-loads. That is why rocBLAS stays host-only, though its own kernels would
-qualify: the tests of rocSOLVER, rocSPARSE and rocWMMA load `librocblas.so`
-next to their own instrumented binary.
+Every HIP link with `-fprofile-instr-generate` pulls a copy of the collector
+in, host-only or not, and one test process often loads several instrumented
+binaries: rocSOLVER's tests load `librocsolver.so` and `librocblas.so`. The
+collector's HIP interceptors would resolve each other across those copies as
+the real functions and recurse on the first kernel launch, so every coverage
+subproject links with `--exclude-libs,libclang_rt.profile_rocm.a`. That keeps
+each copy out of its binary's dynamic symbol table, and each intercepts only
+its own binary's calls. One side effect: a copy's supplemental HSA drain also
+picks up the other binaries' code objects, so their counts can be added twice.
+Coverage percentages are unaffected.
 
 ### Building with device coverage
 
@@ -189,12 +202,11 @@ The include `therock_subproject.cmake` generates for the project runs
   counters back at exit. The driver orders them correctly on a HIP link with
   `-fprofile-instr-generate`, but rocSPARSE keeps that flag off its link and
   names `clang_rt.profile clang_rt.profile_rocm` itself, in that order, so its
-  kernels were counted and never written. Executables are left alone, even
-  rocSPARSE's unit tests, which name the same group:
+  kernels were counted and never written. It goes no further, because
   `libclang_rt.profile_rocm.a` also defines `hipLaunchKernel` and the other
-  launch calls as interceptors, and an executable that carries them next to
-  those of an instrumented library it loads recurses on its first kernel
-  launch.
+  launch calls as interceptors: in the link rules it would resolve those calls
+  ahead of the HIP runtime in every binary, instrumented or not. Executables
+  that name the generic archive, as rocSPARSE's unit tests do, keep it.
 
 RCCL needed far more than this
 ([ROCm/rocm-systems#10650](https://github.com/ROCm/rocm-systems/pull/10650)):
@@ -426,7 +438,8 @@ select LLVM instrumentation (not gcov, which writes `.gcda` files this pipeline
 can't read). Names vary: most use `BUILD_CODE_COVERAGE` or `CODE_COVERAGE`;
 RCCL uses `ENABLE_CODE_COVERAGE`; rocWMMA and hipTensor prefix the project
 (`ROCWMMA_CODE_COVERAGE`). A wrong name still configures and builds cleanly;
-it only shows up as a report with no coverage data.
+it only shows up as a report with no coverage data. For a project with no such
+option, set `self_instrumented=True` instead and leave `coverage_option` empty.
 
 Verify a local instrumented build produces a non-empty report before committing
 the entry. Set `source_repo` (`ROCM_LIBRARIES` or `ROCM_SYSTEMS`) to route the

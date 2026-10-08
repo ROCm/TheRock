@@ -207,14 +207,16 @@ class BuildCoverageMatrixTest(unittest.TestCase):
                 self.assertTrue(project.stage)
                 self.assertTrue(project.test_component)
 
-    def test_every_measurable_project_names_an_upstream_option(self):
+    def test_every_measurable_project_says_how_it_is_instrumented(self):
         # TheRock's <PROJECT>_ENABLE_COVERAGE is only a knob; instrumentation
-        # happens when the subproject's own option is set. An entry without one
-        # builds and tests cleanly and then reports nothing.
+        # comes from the subproject's own option, or from TheRock adding the
+        # profile flags where it has none. An entry with neither builds and
+        # tests cleanly and then reports nothing.
         for name in sorted(configure_coverage_ci.SUPPORTED_PROJECTS):
+            project = configure_coverage_ci.COVERAGE_PROJECTS[name]
             with self.subTest(project=name):
-                self.assertTrue(
-                    configure_coverage_ci.COVERAGE_PROJECTS[name].coverage_option
+                self.assertNotEqual(
+                    bool(project.coverage_option), project.self_instrumented
                 )
 
     def test_unsupported_project_is_rejected_with_the_reason(self):
@@ -226,10 +228,20 @@ class BuildCoverageMatrixTest(unittest.TestCase):
     def test_unsupported_projects_stay_out_of_the_group_aliases(self):
         # They remain registered so the gap is tracked, but must not be
         # scheduled by a group selection.
-        for name in ("miopen", "hipsparse", "rocalution", "rocprofiler-sdk"):
+        for name in ("miopen", "hipthreads", "rocprofiler-sdk"):
             with self.subTest(project=name):
                 self.assertIn(name, configure_coverage_ci.COVERAGE_PROJECTS)
                 self.assertNotIn(name, configure_coverage_ci.parse_projects("all"))
+
+    def test_self_instrumented_projects_are_measurable(self):
+        # Their own options are gcov ones, or absent, so TheRock instruments
+        # them; they are scheduled like any other project.
+        for name in ("hipsparse", "rocalution", "origami", "hipblasltprovider"):
+            with self.subTest(project=name):
+                project = configure_coverage_ci.COVERAGE_PROJECTS[name]
+                self.assertTrue(project.self_instrumented)
+                self.assertFalse(project.coverage_option)
+                self.assertIn(name, configure_coverage_ci.parse_projects("all"))
 
     def test_object_globs_reach_the_matrix(self):
         # object_globs is what scopes a report to one project, so it has to
@@ -254,6 +266,9 @@ class BuildCoverageMatrixTest(unittest.TestCase):
                 "rocwmma",
                 "hiprand",
                 "rocblas",
+                "hipsparselt",
+                "rocalution",
+                "hipsparse",
             ],
             ["gfx94X-dcgpu"],
             "ROCm/rocm-libraries",
@@ -270,7 +285,10 @@ class BuildCoverageMatrixTest(unittest.TestCase):
                 "rocthrust": True,
                 "rocwmma": False,
                 "hiprand": False,
-                "rocblas": False,
+                "rocblas": True,
+                "hipsparselt": True,
+                "rocalution": True,
+                "hipsparse": False,
             },
         )
 
@@ -488,8 +506,10 @@ class EmitCmakeTest(unittest.TestCase):
             self.assertNotIn("rccl", libraries_line)
             # Unmeasurable projects are excluded, or a group build would set a
             # flag their CMake does not implement.
-            self.assertNotIn("MIOpen", text)
-            self.assertNotIn("hipSPARSE ", text)
+            self.assertNotIn("MIOpen", libraries_line)
+            self.assertNotIn("hipthreads", libraries_line)
+            # Self-instrumented ones are in; TheRock supplies their flags.
+            self.assertIn("hipSPARSE", libraries_line.split())
             # The CMake group lists and the Python group sets decide the same
             # thing in two places, so a blocked project has to leave both or a
             # group build sets the flag the Python side just declined to.
@@ -529,7 +549,19 @@ class EmitCmakeTest(unittest.TestCase):
             self.assertIn(
                 "set(THEROCK_COVERAGE_OPTION_ROCPRIM_TESTS BUILD_CODE_COVERAGE)", text
             )
-            self.assertNotIn("THEROCK_COVERAGE_OPTION_MIOPEN", text)
+            self.assertNotIn("THEROCK_COVERAGE_OPTION_MIOPEN ", text)
+            # Self-instrumented projects have no option to pass, and go on a
+            # list of their own instead.
+            self.assertNotIn("THEROCK_COVERAGE_OPTION_HIPSPARSE ", text)
+            self_line = next(
+                line
+                for line in text.splitlines()
+                if line.startswith("set(THEROCK_COVERAGE_SELF_INSTRUMENTED_PROJECTS")
+            )
+            self.assertEqual(
+                self_line.removesuffix(")").split()[1:],
+                ["hipblasltprovider", "hipSPARSE", "origami", "rocALUTION"],
+            )
 
     def test_emits_the_projects_whose_kernels_are_instrumented(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -549,14 +581,15 @@ class EmitCmakeTest(unittest.TestCase):
             "rocPRIM_tests",
             "hipCUB",
             "rocThrust",
+            "rocBLAS",
+            "hipSPARSELt",
+            "rocALUTION",
         ):
             self.assertIn(target, targets)
         # Their libraries have no kernels, so they stay host-only.
-        for target in ("hipRAND", "hipSOLVER"):
+        for target in ("hipRAND", "hipSOLVER", "hipSPARSE"):
             self.assertNotIn(target, targets)
-        # rocBLAS's tests share processes with other instrumented libraries,
-        # and rocWMMA's instrumented tests take hours to compile.
-        self.assertNotIn("rocBLAS", targets)
+        # rocWMMA's instrumented tests take hours to compile.
         self.assertNotIn("rocWMMA", targets)
 
     def test_emit_cmake_needs_no_env(self):
