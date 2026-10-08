@@ -1012,15 +1012,16 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 
     # Labels can extend the trigger/input-selected family set (both platforms).
     # We support three types of arch labels:
-    #   - ci:gfx* - opt-in to both build AND test (existing behavior)
+    #   - ci:gfx* - opt-in to both build AND test, bypassing trigger-based test
+    #     gating (tests_on_trigger). Use this when you want full build+test signal.
     #   - ci:build:gfx* - opt-in to build only (no tests)
     #   - ci:test:gfx* - opt-in to tests only (requires build label)
     #
     # This fine-grained control is helpful for specific use cases:
     #   - ci:build:gfx* alone: verify compilation for an arch without running tests
     #     (useful when you don't need/want test results, just build validation)
-    #   - ci:gfx* + ci:test:gfx*: normal build + explicitly request tests for an arch
-    #     that might not normally run tests on PRs
+    #   - ci:gfx*: build AND test, even for families that normally only test on
+    #     nightly (e.g., gfx1151 Windows with tests_on_trigger: ["nightly"])
     #
     # IMPORTANT: ci:test:gfx* labels require corresponding build labels (ci:gfx* or
     # ci:build:gfx*) because tests depend on build artifacts. CI will error if a
@@ -1030,40 +1031,45 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     linux_test_only: list[str] = []
     windows_test_only: list[str] = []
 
-    for label in ci_inputs.pr_labels:
-        if label == "ci:run-all-archs":
-            # Override to all families.
-            linux_names = list(all_families.keys())
-            windows_names = list(all_families.keys())
-            print("  Label 'ci:run-all-archs' -> all families")
-            break
-        if label.lower().startswith("ci:build:gfx"):
-            # Build-only label: ci:build:gfx94x -> gfx94x
-            target = label.lower().removeprefix("ci:build:").split("-")[0]
-            linux_names.append(target)
-            windows_names.append(target)
-            linux_build_only.append(target)
-            windows_build_only.append(target)
-            print(f"  Label '{label}' -> adding build-only target {target}")
-        elif label.lower().startswith("ci:test:gfx"):
-            # Test-only label: ci:test:gfx94x -> gfx94x
-            # Note: we don't add to linux_names/windows_names here because
-            # test requires build. Validation below will check that a
-            # corresponding build label exists.
-            target = label.lower().removeprefix("ci:test:").split("-")[0]
-            linux_test_only.append(target)
-            windows_test_only.append(target)
-            print(f"  Label '{label}' -> adding test-only target {target}")
-        elif label.lower().startswith("ci:gfx"):
-            # Trim suffixes from labels since amdgpu_family_matrix.py
-            # specifies families with no suffix (e.g. `gfx94x`) but
-            # we have some labels like `ci:gfx94X-dcgpu` or `ci:gfx103X-linux`.
-            # Family keys are lowercase, so normalize the target.
-            # Strip ci: prefix, then split on dash to get the base family.
-            target = label.lower().removeprefix("ci:").split("-")[0]
-            linux_names.append(target)
-            windows_names.append(target)
-            print(f"  Label '{label}' -> adding target {target}")
+    if ci_inputs.is_pull_request:
+        for label in ci_inputs.pr_labels:
+            if label == "ci:run-all-archs":
+                # Override to all families.
+                linux_names = list(all_families.keys())
+                windows_names = list(all_families.keys())
+                print("  Label 'ci:run-all-archs' -> all families")
+                break
+            if label.lower().startswith("ci:build:gfx"):
+                # Build-only label: ci:build:gfx94x -> gfx94x
+                target = label.lower().removeprefix("ci:build:").split("-")[0]
+                linux_names.append(target)
+                windows_names.append(target)
+                linux_build_only.append(target)
+                windows_build_only.append(target)
+                print(f"  Label '{label}' -> adding build-only target {target}")
+            elif label.lower().startswith("ci:test:gfx"):
+                # Test-only label: ci:test:gfx94x -> gfx94x
+                # Note: we don't add to linux_names/windows_names here because
+                # test requires build. Validation below will check that a
+                # corresponding build label exists.
+                target = label.lower().removeprefix("ci:test:").split("-")[0]
+                linux_test_only.append(target)
+                windows_test_only.append(target)
+                print(f"  Label '{label}' -> adding test-only target {target}")
+            elif label.lower().startswith("ci:gfx"):
+                # Trim suffixes from labels since amdgpu_family_matrix.py
+                # specifies families with no suffix (e.g. `gfx94x`) but
+                # we have some labels like `ci:gfx94X-dcgpu` or `ci:gfx103X-linux`.
+                # Family keys are lowercase, so normalize the target.
+                # Strip ci: prefix, then split on dash to get the base family.
+                target = label.lower().removeprefix("ci:").split("-")[0]
+                linux_names.append(target)
+                windows_names.append(target)
+                # ci:gfx* means "build AND test", so also add to test_only lists
+                # to bypass trigger-based test gating (tests_on_trigger).
+                linux_test_only.append(target)
+                windows_test_only.append(target)
+                print(f"  Label '{label}' -> adding target {target} (build + test)")
 
     # Platform-specific labels: if any ci:platform:* label is set, clear all
     # lists for platforms NOT requested. This includes families, build_only,
