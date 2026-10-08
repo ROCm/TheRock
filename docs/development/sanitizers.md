@@ -181,6 +181,37 @@ export LD_PRELOAD="${ASAN_LIB_PATH%/*}/$ASAN_LIB_NAME:${ROCM_ASAN_PATH}/lib/liba
 > in Step 2) is used to supply the directory. Add or remove libraries from
 > `LD_PRELOAD` depending on which ROCm components you need to instrument.
 
+## Using TSan-Instrumented Libraries
+
+TSAN instruments host code; it does not instrument GPU kernels or require
+`HSA_XNACK=1`. Use a TSAN build or install tree and its matching compiler/runtime.
+Do not load ASAN and TSAN runtimes into the same process.
+
+From a TheRock checkout, configure the same environment used by component CI:
+
+```bash
+export ROCM_TSAN_PATH=/path/to/tsan/rocm
+sanitizer_env=$(python build_tools/github_actions/configure_sanitizer_env.py \
+  --artifacts-dir "${ROCM_TSAN_PATH}" \
+  --build-variant tsan --output-format shell) && eval "${sanitizer_env}"
+```
+
+The helper resolves the runtime and symbolizer and sets library paths and
+sanitizer options. For ASAN artifacts, select `asan`, `host-asan`, `asan-debug`,
+or `host-asan-debug` instead.
+
+For an uninstrumented loader such as Python importing an instrumented extension,
+preload the runtime for that command only:
+
+```bash
+LD_PRELOAD="${TSAN_RUNTIME_PATH}" python /path/to/component_tests.py
+```
+
+CI uses the same scoped preload for probes and component scripts. Loading the
+runtime does not instrument existing code; rebuild relevant host dependencies
+with TSAN. Component CI disables retries for TSAN failures so race reports
+remain visible. GPU tests still require a working driver and supported hardware.
+
 ## Troubleshooting
 
 `HOST_ASAN` and `TSAN` bypass ccache because ccache 4.9.1 drops `-Xarch_host`
