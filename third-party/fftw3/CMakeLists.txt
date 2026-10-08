@@ -21,6 +21,14 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
   set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
 
+  # FFTW leaves SIMD codelets out unless they are requested. Enable them on
+  # Linux x86_64. FFTW picks the ISA at runtime.
+  string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _fftw3_proc)
+  set(_fftw3_x86_64 OFF)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND _fftw3_proc MATCHES "^(x86_64|amd64)$")
+    set(_fftw3_x86_64 ON)
+  endif()
+
   if(_fftw3_use_autotools)
     set(_download_stamp "${_source_dir}/download.stamp")
     therock_subproject_fetch(therock-fftw3-sources
@@ -38,6 +46,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(_fftw3_common_cmake_args
       "-DSOURCE_DIR=${_source_dir}"
       -DENABLE_THREADS=ON
+      -DENABLE_X86_SIMD=${_fftw3_x86_64}
     )
     set(_fftw3_extra_declare_args
       FPRINT_SOURCE_DIR "${_source_dir}"
@@ -65,6 +74,14 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
       -DCMAKE_POLICY_VERSION_MINIMUM=3.5
     )
+    # Upstream CMake stops at AVX2. AVX-512 is only an autotools switch.
+    if(_fftw3_x86_64)
+      list(APPEND _fftw3_common_cmake_args
+        -DENABLE_SSE2=ON
+        -DENABLE_AVX=ON
+        -DENABLE_AVX2=ON
+      )
+    endif()
     set(_fftw3_extra_declare_args)
   endif()
 
@@ -120,7 +137,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 endif()
 
 # Otherwise, this is the autotools sub-project build.
-# SOURCE_DIR, ENABLE_THREADS, and ENABLE_FLOAT come from the super-project.
+# SOURCE_DIR, ENABLE_THREADS, ENABLE_FLOAT, and ENABLE_X86_SIMD come from
+# the super-project.
 cmake_minimum_required(VERSION 3.25)
 project(FFTW_BUILD VERSION 3.3.10 LANGUAGES NONE)
 
@@ -139,6 +157,15 @@ set(_configure_args
 )
 if(ENABLE_THREADS)
   list(APPEND _configure_args --enable-threads)
+endif()
+# --enable-sse2 covers single and double. AVX-512 has no CMake equivalent.
+if(ENABLE_X86_SIMD)
+  list(APPEND _configure_args
+    --enable-sse2
+    --enable-avx
+    --enable-avx2
+    --enable-avx512
+  )
 endif()
 if(ENABLE_FLOAT)
   list(APPEND _configure_args --enable-float)
