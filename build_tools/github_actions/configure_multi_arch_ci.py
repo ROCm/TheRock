@@ -1835,22 +1835,28 @@ def expand_build_configs(
     # ASAN variant selection:
     # 1. ci:asan label -> asan (explicit full ASAN, highest priority)
     # 2. ci:host-asan label -> host-asan (explicit)
-    # 3. push/pull_request events -> host-asan (default for pre/postsubmit)
-    # 4. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
+    # 3. LLVM bumps -> asan-debug (device instrumentation and debug info)
+    # 4. push/pull_request events -> host-asan (default for pre/postsubmit)
+    # 5. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
     if build_variant == "asan":
         if "ci:asan" in ci_inputs.pr_labels:
             print("  Using full asan variant (ci:asan label)")
         elif "ci:host-asan" in ci_inputs.pr_labels:
             build_variant = "host-asan"
             print("  Using host-asan variant (ci:host-asan label)")
-        elif ci_inputs.is_push or ci_inputs.is_pull_request:
+        elif (
+            ci_inputs.is_push or ci_inputs.is_pull_request
+        ) and not git_context.has_llvm_submodule_changes:
             build_variant = "host-asan"
             print("  Using host-asan variant (push/pull_request default)")
 
-    # LLVM bump diagnostics need source locations from the debug preset.
-    if build_variant == "host-asan" and git_context.has_llvm_submodule_changes:
-        build_variant = "host-asan-debug"
-        print("  Using host-asan-debug variant for LLVM submodule bump")
+    # Exercise debug-info generation with the bumped LLVM compiler.
+    if (
+        build_variant in ("asan", "host-asan")
+        and git_context.has_llvm_submodule_changes
+    ):
+        build_variant += "-debug"
+        print(f"  Using {build_variant} variant for LLVM submodule bump")
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None

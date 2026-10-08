@@ -2319,15 +2319,15 @@ class TestConfigurePipeline(unittest.TestCase):
 
     def test_llvm_bump_asan_label_selection(self):
         """LLVM bumps run automatically; explicit full-ASan labels take precedence."""
-        sandbox_runners = [
+        host_sandbox_runners = [
             "linux-gfx942-8gpu-asan-sandbox-rocm",
             "linux-gfx950-8gpu-asan-sandbox-rocm",
         ]
         cases = (
-            ([], "host-asan-debug", sandbox_runners),
-            (["ci:host-asan"], "host-asan-debug", sandbox_runners),
-            (["ci:asan"], "asan", ["", ""]),
-            (["ci:asan", "ci:host-asan"], "asan", ["", ""]),
+            ([], "asan-debug", ["", ""]),
+            (["ci:host-asan"], "host-asan-debug", host_sandbox_runners),
+            (["ci:asan"], "asan-debug", ["", ""]),
+            (["ci:asan", "ci:host-asan"], "asan-debug", ["", ""]),
         )
         git = cm.GitContext(
             changed_files=["compiler/amd-llvm"],
