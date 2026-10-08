@@ -26,22 +26,6 @@ TORCH_IMPORT_SANITY_SKIP_MESSAGE = (
 )
 
 
-def disable_default_companion_builds(args) -> None:
-    """Leave triton, torchaudio, torchvision, and apex off unless requested.
-
-    Runs before the "a checkout directory means build it" defaults. An explicit
-    --build-* value is left alone.
-    """
-    if args.build_triton is None:
-        args.build_triton = False
-    if args.build_pytorch_audio is None:
-        args.build_pytorch_audio = False
-    if args.build_pytorch_vision is None:
-        args.build_pytorch_vision = False
-    if args.build_apex is None:
-        args.build_apex = False
-
-
 def append_env_text(env: dict[str, str], name: str, addition: str) -> None:
     """Append one compiler flag and keep the trailing space later appends expect.
 

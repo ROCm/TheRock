@@ -541,9 +541,6 @@ def validate_build_args(
     parser: argparse.ArgumentParser, args: argparse.Namespace
 ) -> None:
     """Resolve automatic project selections and validate build arguments."""
-    if args.asan:
-        setup_pytorch_asan.disable_default_companion_builds(args)
-
     # If a project dir exists, enable that project --build-* option by default.
     if args.build_triton is None:
         args.build_triton = args.triton_dir is not None
@@ -1608,8 +1605,7 @@ def main(argv: list[str]):
         default=False,
         help="Build the torch wheel with AddressSanitizer against the "
         "installed ROCm SDK. The workflow-supplied GPU list and ROCm version "
-        "are left unchanged. Triton, torchaudio, torchvision, and apex are "
-        "not built unless explicitly requested.",
+        "are left unchanged.",
     )
     build_p.add_argument(
         "--pytorch-rocm-arch",
