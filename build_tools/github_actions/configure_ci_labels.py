@@ -147,6 +147,8 @@ CI_LABELS: list[Label] = [
     Label("test:ocltst", COLOR_TEST, "Run ocltst tests"),
     Label("test:hip-tests", COLOR_TEST, "Run hip-tests"),
     Label("test:rocrtst", COLOR_TEST, "Run rocrtst tests"),
+    Label("test:hip-tests-wsl", COLOR_TEST, "Also run hip-tests on a WSL GPU runner (non-blocking)"),
+    Label("test:rocrtst-wsl", COLOR_TEST, "Also run rocrtst on a WSL GPU runner (non-blocking)"),
     Label("test:origami", COLOR_TEST, "Run origami tests"),
     Label("test:rocdecode", COLOR_TEST, "Run rocdecode tests"),
     Label("test:rocjpeg", COLOR_TEST, "Run rocjpeg tests"),
@@ -167,6 +169,7 @@ CI_LABELS: list[Label] = [
     Label("test_filter:full", COLOR_TEST_FILTER, "If enabled, the PR will run full tests"),
     # test_runner: labels (test machine selection)
     Label("test_runner:oem", COLOR_TEST_RUNNER, "Run tests on a machine configured with `oem` kernel"),
+    Label("test_runner:wsl", COLOR_TEST_RUNNER, "Run tests on a WSL GPU runner instead of native Linux"),
     # build_variant: labels
     Label("build_variant:asan", COLOR_BUILD_VARIANT, "If enabled, the pull request will run ASAN builds"),
     # ci:packaging labels (opt-in to specific packaging/build jobs)
