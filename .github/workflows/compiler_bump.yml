@@ -188,7 +188,7 @@ jobs:
     name: Setup Linux Release
     needs: create-branch
     if: ${{ inputs.dry_run != true }}
-    uses: ./.github/workflows/setup_multi_arch.yml # zizmor: ignore[self-repository]
+    uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "release"
       release_type: dev
@@ -207,7 +207,7 @@ jobs:
     name: Build Linux Release
     needs: [create-branch, setup-linux]
     if: ${{ inputs.dry_run != true && needs.setup-linux.outputs.linux_build_config != '' }}
-    uses: ./.github/workflows/multi_arch_build_portable_linux.yml # zizmor: ignore[self-repository]
+    uses: ./.github/workflows/multi_arch_build_portable_linux.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       matrix_per_family_json: ${{ toJSON(fromJSON(needs.setup-linux.outputs.linux_build_config).per_family_info) }}
@@ -231,7 +231,7 @@ jobs:
     name: Build Linux Tarballs
     needs: [create-branch, setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
-    uses: ./.github/workflows/multi_arch_build_tarballs.yml # zizmor: ignore[self-repository]
+    uses: ./.github/workflows/multi_arch_build_tarballs.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
@@ -249,7 +249,7 @@ jobs:
     name: Build Linux Python Packages
     needs: [create-branch, setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
-    uses: ./.github/workflows/build_portable_linux_python_packages.yml # zizmor: ignore[self-repository]
+    uses: ./.github/workflows/build_portable_linux_python_packages.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_group: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).artifact_group }}
@@ -269,7 +269,7 @@ jobs:
     name: Build Linux DEB Packages
     needs: [create-branch, setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
-    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml # zizmor: ignore[self-repository]
+    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
@@ -288,7 +288,7 @@ jobs:
     name: Build Linux RPM Packages
     needs: [create-branch, setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
-    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml # zizmor: ignore[self-repository]
+    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
@@ -325,7 +325,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Configure AWS Credentials
-        uses: ./.github/actions/configure_aws_product_publication_credentials # zizmor: ignore[self-repository]
+        uses: ./.github/actions/configure_aws_product_publication_credentials
         with:
           release_type: dev
           product: core
@@ -401,7 +401,7 @@ jobs:
     name: Setup Windows Release
     needs: create-branch
     if: ${{ inputs.dry_run != true }}
-    uses: ./.github/workflows/setup_multi_arch.yml # zizmor: ignore[self-repository]
+    uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "release"
       release_type: dev
@@ -420,7 +420,7 @@ jobs:
     name: Build Windows Release
     needs: [create-branch, setup-windows]
     if: ${{ inputs.dry_run != true && needs.setup-windows.outputs.windows_build_config != '' }}
-    uses: ./.github/workflows/multi_arch_build_windows.yml # zizmor: ignore[self-repository]
+    uses: ./.github/workflows/multi_arch_build_windows.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       matrix_per_family_json: ${{ toJSON(fromJSON(needs.setup-windows.outputs.windows_build_config).per_family_info) }}
@@ -444,7 +444,7 @@ jobs:
     name: Build Windows Tarballs
     needs: [create-branch, setup-windows, build-windows]
     if: ${{ inputs.dry_run != true && needs.build-windows.result == 'success' }}
-    uses: ./.github/workflows/multi_arch_build_tarballs.yml # zizmor: ignore[self-repository]
+    uses: ./.github/workflows/multi_arch_build_tarballs.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       dist_amdgpu_families: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).dist_amdgpu_families }}
@@ -461,7 +461,7 @@ jobs:
     name: Build Windows Python Packages
     needs: [create-branch, setup-windows, build-windows]
     if: ${{ inputs.dry_run != true && needs.build-windows.result == 'success' }}
-    uses: ./.github/workflows/build_windows_python_packages.yml # zizmor: ignore[self-repository]
+    uses: ./.github/workflows/build_windows_python_packages.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_group: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).artifact_group }}
@@ -499,7 +499,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Configure AWS Credentials
-        uses: ./.github/actions/configure_aws_product_publication_credentials # zizmor: ignore[self-repository]
+        uses: ./.github/actions/configure_aws_product_publication_credentials
         with:
           release_type: dev
           product: core

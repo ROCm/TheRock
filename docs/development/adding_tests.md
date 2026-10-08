@@ -206,25 +206,21 @@ component whose family has no multi-GPU pool still gets its emulated variant.
 >
 > `rocrtst` — the one emulated component today — lives in `rocm-systems`.
 
-### Pinned emulator source baseline
+### Emulator artifacts and baselines
 
 Emulated component jobs fetch `mirage` and `rocjitsu` artifacts from the current
-workflow run with `--mirage --rocjitsu`. The emulator baseline is pinned at the
-source stage instead: the Linux emulation artifact build checks out
-`ROCm/rocm-systems` at `PINNED_EMULATOR_ROCM_SYSTEMS_COMMIT` in
-[`multi_arch_build_portable_linux_artifacts.yml`](../../.github/workflows/multi_arch_build_portable_linux_artifacts.yml)
-and passes that checkout to CMake as `THEROCK_ROCM_SYSTEMS_SOURCE_DIR`.
+workflow run with `--mirage --rocjitsu`. The emulation stage builds those
+artifacts from the same TheRock source checkout as the rest of the workflow. For
+release workflows, that means the release branch's `rocm-systems` submodule. For
+external `rocm-systems` CI, the workflow can pass the external checkout through
+`THEROCK_ROCM_SYSTEMS_SOURCE_DIR`, just like the other source-package overrides.
 
-This keeps the emulator stable while component and library artifacts move with
-the PR under test. Without the source pin, a failing emulated job could be caused
-by the component change, by a runtime/library bug, or by a fresh `mirage` /
-`rocjitsu` change from the same rocm-systems checkout. A fixed emulator source
-commit gives CI a known baseline without depending on retention-bound workflow
-artifacts.
-
-To update the emulator baseline, choose the rocm-systems commit that should
-provide `mirage` and `rocjitsu`, update `PINNED_EMULATOR_ROCM_SYSTEMS_COMMIT`,
-and call out the bump in the PR description.
+This keeps the tested emulator artifacts aligned with the packages produced by
+the workflow and avoids checking out a second `rocm-systems` tree. It does not
+provide a historical emulator baseline by itself. If a CI lane needs a fixed
+prior emulator for bisection, use published/prebuilt emulator artifacts or
+[stage reuse](stage_reuse.md) rather than another source checkout, and document
+the selected baseline in the PR that enables it.
 
 ### Which families are emulated
 
