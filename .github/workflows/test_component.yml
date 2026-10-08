@@ -201,6 +201,13 @@ jobs:
             echo "KUBE_CPU_REQUEST not set, thread limits not configured"
           fi
 
+      # Some Windows tests build samples at test time with CMake (e.g. rocdecode).
+      # Load the VS Build Tools environment so CMake finds MSVC (cl.exe) instead of
+      # the Strawberry Perl gcc that is also on the runner's system PATH.
+      - name: Configure MSVC
+        if: ${{ runner.os == 'Windows' }}
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
       - name: Test
         id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
