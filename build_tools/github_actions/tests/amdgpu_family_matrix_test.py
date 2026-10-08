@@ -20,9 +20,11 @@ if "CI_CONFIG_PATH" in os.environ:
 
 import amdgpu_family_matrix
 from amdgpu_family_matrix import (
+    VALID_DISABLED_FRAMEWORK_TESTS,
     VALID_TRIGGERS,
     get_all_families_for_trigger_types,
     get_build_runner_labels,
+    is_framework_test_disabled_for_family,
     load_external_runner_config,
     select_build_runner,
 )
@@ -482,6 +484,56 @@ class TestBuildRunnerSelection(unittest.TestCase):
                         select_build_runner(platform, variant, size=size),
                         expected,
                     )
+
+
+class TestDisabledFrameworkTests(unittest.TestCase):
+    """Tests for disabled_framework_tests field."""
+
+    def setUp(self):
+        self._orig_env = os.environ.copy()
+        if "CI_CONFIG_PATH" in os.environ:
+            del os.environ["CI_CONFIG_PATH"]
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self._orig_env)
+
+    def test_disabled_framework_tests_field_values_are_valid(self):
+        """disabled_framework_tests values must be in VALID_DISABLED_FRAMEWORK_TESTS."""
+        for target_name, entry in ALL_FAMILIES.items():
+            for platform in ("linux", "windows"):
+                if platform not in entry:
+                    continue
+                disabled = entry[platform].get("disabled_framework_tests", [])
+                invalid = set(disabled) - VALID_DISABLED_FRAMEWORK_TESTS
+                if invalid:
+                    self.fail(f"{target_name}/{platform}: invalid {invalid}")
+
+    def test_is_framework_test_disabled(self):
+        """Test is_framework_test_disabled_for_family for various cases."""
+        cases = [
+            # (family, platform, framework, expected)
+            ("gfx125X-dcgpu", "linux", "pytorch", True),  # disabled in matrix
+            ("gfx125X-dcgpu", "linux", "jax", False),  # not disabled
+            ("gfx94X-dcgpu", "linux", "pytorch", False),  # no disabled_framework_tests
+            ("gfx94X-dcgpu", "linux", "jax", False),
+            ("unknown-family", "linux", "pytorch", False),  # unknown family
+        ]
+        for family, platform, framework, expected in cases:
+            with self.subTest(family=family, platform=platform, framework=framework):
+                result = is_framework_test_disabled_for_family(
+                    amdgpu_family=family, platform=platform, framework=framework
+                )
+                self.assertEqual(result, expected)
+
+    def test_is_framework_test_disabled_raises_for_invalid_framework(self):
+        """Invalid framework raises ValueError."""
+        with self.assertRaises(ValueError):
+            is_framework_test_disabled_for_family(
+                amdgpu_family="gfx94X-dcgpu",
+                platform="linux",
+                framework="invalid",
+            )
 
 
 if __name__ == "__main__":
