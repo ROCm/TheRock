@@ -508,12 +508,6 @@ class GitContext:
             return None
         return bool(set(self.submodule_paths) & set(self.changed_files))
 
-    @property
-    def has_llvm_submodule_changes(self) -> bool:
-        return "compiler/amd-llvm" in (
-            self.changed_files or []
-        ) and "compiler/amd-llvm" in (self.submodule_paths or [])
-
     def log(self) -> None:
         """Log git context for CI diagnostics."""
         if self.changed_files is None:
@@ -815,19 +809,19 @@ def should_skip_ci(
         print("  Skipping: 'ci:skip' PR label")
         return True
 
-    # LLVM pointer bumps run ASan debug builds automatically. Other PRs require
-    # ci:asan or ci:host-asan to opt in to expensive sanitizer builds.
+    # PRs require an explicit label to opt in to expensive sanitizer builds.
     has_asan_label = (
-        "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
+        "ci:asan-debug" in ci_inputs.pr_labels
+        or "ci:asan" in ci_inputs.pr_labels
+        or "ci:host-asan" in ci_inputs.pr_labels
     )
     if (
         ci_inputs.is_pull_request
         and ci_inputs.build_variant == "asan"
         and not has_asan_label
-        and not git_context.has_llvm_submodule_changes
     ):
         print(
-            "  Skipping: ASAN PR without enabling label (add 'ci:asan' or 'ci:host-asan' to enable)"
+            "  Skipping: ASAN PR without enabling label (add 'ci:asan-debug', 'ci:asan' or 'ci:host-asan' to enable)"
         )
         return True
 
@@ -1822,30 +1816,23 @@ def expand_build_configs(
     all_families = _apply_external_family_overrides(all_families)
     build_variant = ci_inputs.build_variant
     # ASAN variant selection:
-    # 1. ci:asan label -> asan (explicit full ASAN, highest priority)
-    # 2. ci:host-asan label -> host-asan (explicit)
-    # 3. LLVM bumps -> asan-debug (device instrumentation and debug info)
+    # 1. ci:asan-debug label -> asan-debug (full ASAN with debug info)
+    # 2. ci:asan label -> asan (explicit full ASAN)
+    # 3. ci:host-asan label -> host-asan (explicit)
     # 4. push/pull_request events -> host-asan (default for pre/postsubmit)
     # 5. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
     if build_variant == "asan":
-        if "ci:asan" in ci_inputs.pr_labels:
+        if "ci:asan-debug" in ci_inputs.pr_labels:
+            build_variant = "asan-debug"
+            print("  Using full asan-debug variant (ci:asan-debug label)")
+        elif "ci:asan" in ci_inputs.pr_labels:
             print("  Using full asan variant (ci:asan label)")
         elif "ci:host-asan" in ci_inputs.pr_labels:
             build_variant = "host-asan"
             print("  Using host-asan variant (ci:host-asan label)")
-        elif (
-            ci_inputs.is_push or ci_inputs.is_pull_request
-        ) and not git_context.has_llvm_submodule_changes:
+        elif ci_inputs.is_push or ci_inputs.is_pull_request:
             build_variant = "host-asan"
             print("  Using host-asan variant (push/pull_request default)")
-
-    # Exercise debug-info generation with the bumped LLVM compiler.
-    if (
-        build_variant in ("asan", "host-asan")
-        and git_context.has_llvm_submodule_changes
-    ):
-        build_variant += "-debug"
-        print(f"  Using {build_variant} variant for LLVM submodule bump")
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None

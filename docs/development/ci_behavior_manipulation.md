@@ -3,14 +3,16 @@
 **Multi-Arch CI** ([`multi_arch_ci.yml`](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml)) is configured by [`configure_multi_arch_ci.py`](../../build_tools/github_actions/configure_multi_arch_ci.py) and reads GPU family definitions from [`amdgpu_family_matrix.py`](../../build_tools/github_actions/amdgpu_family_matrix.py).
 
 Library and system submodule bump PRs automatically receive `ci:host-asan`
-and run host-ASan builds. LLVM pointer bumps (`compiler/amd-llvm`) automatically
-run `asan-debug` (`linux-release-asan-debug`) builds to exercise device
-instrumentation and debug-info generation with the new compiler.
+and run host-ASan builds. Add `ci:asan-debug` to LLVM promotion PRs to run
+`asan-debug` (`linux-release-asan-debug`) builds and exercise device
+instrumentation and debug-info generation with the new compiler. Submodule
+changes alone do not enable sanitizer CI.
 
 Sanitizer bump CI is build-only: GPU sanity checks and component tests remain
 limited to scheduled and manually dispatched runs. The `ci:host-asan` label
-selects host-ASan (`host-asan-debug` for LLVM bumps); `ci:asan` selects full ASan
-(`asan-debug` for LLVM bumps) and takes precedence if both labels are present.
+selects host-ASan; `ci:asan` selects full ASan; `ci:asan-debug` selects full ASan
+with debug information. When multiple labels are present, `ci:asan-debug` takes
+precedence over `ci:asan`, which takes precedence over `ci:host-asan`.
 The `ci:skip` label still skips CI. The separate Compiler Daily Bump workflow
 is unchanged.
 
@@ -35,8 +37,9 @@ The following labels may be added to a pull request to modify CI behavior:
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ci:skip`                  | Skip all builds and tests                                                                                                                                                                         |
 | `ci:run-all-archs`         | Build and test all possible architectures                                                                                                                                                         |
-| `ci:asan`                  | Select full ASan builds (`asan-debug` for LLVM bumps). GPU tests remain limited to nightly/manual runs. Takes precedence over `ci:host-asan`.                                                     |
-| `ci:host-asan`             | Select host-ASan builds (`host-asan-debug` for LLVM bumps). GPU tests remain limited to nightly/manual runs.                                                                                      |
+| `ci:asan-debug`            | Select full ASan builds with debug information. GPU tests remain limited to nightly/manual runs. Takes precedence over `ci:asan` and `ci:host-asan`.                                              |
+| `ci:asan`                  | Select full ASan builds. GPU tests remain limited to nightly/manual runs. Takes precedence over `ci:host-asan`.                                                                                   |
+| `ci:host-asan`             | Select host-ASan builds. GPU tests remain limited to nightly/manual runs.                                                                                                                         |
 | `ci:run-multi-gpu`         | Opt-in to running multi-GPU tests.                                                                                                                                                                |
 | `ci:platform:linux`        | Run CI only on Linux (skip Windows builds/tests)                                                                                                                                                  |
 | `ci:platform:windows`      | Run CI only on Windows (skip Linux builds/tests)                                                                                                                                                  |
