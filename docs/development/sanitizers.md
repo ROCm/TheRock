@@ -10,7 +10,7 @@ Sanitizers can be enabled via the `THEROCK_SANITIZER` variable. We will be exten
   - You want faster builds (no xnack+ kernel variants)
   - You only need to catch host-side memory errors
 - `OFF` : Explicitly disable sanitizers.
-- `TSAN` : Enables host-side ThreadSanitizer to detect data races, without device-side instrumentation.
+- `TSAN` : Enables host-side ThreadSanitizer without changing GPU targets.
 
 The sanitizer selection can be controlled per project by using a variable of the form `{subproject}_SANITIZER={VALUE}`. This is most commonly used to disable santiziers for specific projects once enabled globally.
 
@@ -183,35 +183,11 @@ export LD_PRELOAD="${ASAN_LIB_PATH%/*}/$ASAN_LIB_NAME:${ROCM_ASAN_PATH}/lib/liba
 
 ## Troubleshooting
 
-### Verify host instrumentation
+`HOST_ASAN` and `TSAN` bypass ccache because ccache 4.9.1 drops `-Xarch_host`
+and its argument even on cache misses. Rebuild affected objects after changing
+the sanitizer configuration; clearing the cache alone does not fix this.
 
-`HOST_ASAN` and `TSAN` apply sanitizer flags to host code in C, C++ and native
-HIP sources. These modes bypass ccache through `CCACHE_DISABLE=1` in the
-compiler launcher: ccache 4.9.1 drops `-Xarch_host` and its argument even on
-cache misses. Clearing the cache does not fix this. Rebuild affected objects
-after changing the launcher configuration.
-
-Run the integration controls against an installed ROCm development tree on
-Linux (CMake, Ninja and ccache must be available):
-
-```bash
-python tests/test_host_sanitizer.py \
-  --rocm-path /path/to/rocm \
-  --sanitizer TSAN \
-  --build-dir /path/to/new-test-directory \
-  --gpu-arch gfx950 \
-  --artifact /path/to/rocm/lib/libhipfile.so
-```
-
-Use `--sanitizer HOST_ASAN` with a compatible ASAN or unsanitized dependency
-tree to check address instrumentation. Do not mix ASAN and TSAN runtimes in
-one process. `--artifact` is optional and may be repeated for other shared
-libraries or dynamically linked executables.
-
-The test builds C, C++ and HIP controls both directly and through ccache. It
-checks memory-access instrumentation symbols, runs clean controls, requires
-intentional races or use-after-free errors to produce sanitizer reports, and
-checks that the HIP device kernel remains unsanitized. It also checks each
-supplied artifact for memory-access instrumentation symbols. Logs, objects
-and reports remain in the new build directory. These host controls compile
-device code but do not require a GPU; they do not qualify GPU execution.
+On Linux, `python tests/test_host_sanitizer.py --rocm-path /path/to/rocm --sanitizer TSAN --build-dir /path/to/new-directory` verifies C/C++/HIP host
+instrumentation, direct and ccache launches, clean runs, expected sanitizer
+reports, and unsanitized HIP device code. It requires CMake, Ninja and ccache.
+Use `--sanitizer HOST_ASAN` with a compatible dependency tree for ASAN controls.

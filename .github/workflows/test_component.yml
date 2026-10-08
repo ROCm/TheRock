@@ -131,10 +131,10 @@ jobs:
           ref: ${{ inputs.ref }}
 
       - name: Run setup test environment workflow
-        timeout-minutes: ${{ (inputs.build_variant == 'asan' || inputs.build_variant == 'tsan') && 60 || 15 }}
+        timeout-minutes: ${{ inputs.build_variant == 'asan' && 60 || 15 }}
         env:
           RETRY_THIS_STEP: "true"
-          STEP_TIMEOUT_MINUTES: ${{ (inputs.build_variant == 'asan' || inputs.build_variant == 'tsan') && '60' || '15' }}
+          STEP_TIMEOUT_MINUTES: ${{ inputs.build_variant == 'asan' && '60' || '15' }}
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
@@ -164,30 +164,12 @@ jobs:
           python ./build_tools/github_actions/configure_asan_env.py \
             --artifacts-dir "${{ env.OUTPUT_ARTIFACTS_DIR }}"
 
-      - name: Locate TSAN runtime
-        if: ${{ inputs.build_variant == 'tsan' }}
-        run: |
-          clang="${OUTPUT_ARTIFACTS_DIR}/llvm/bin/clang"
-          runtime=""
-          for name in libclang_rt.tsan.so "libclang_rt.tsan-$(uname -m).so"; do
-            candidate="$("${clang}" "-print-file-name=${name}")"
-            if [[ -f "${candidate}" ]]; then
-              runtime="$(realpath "${candidate}")"
-              break
-            fi
-          done
-          if [[ -z "${runtime}" ]]; then
-            echo "TSAN runtime not found in installed artifacts" >&2
-            exit 1
-          fi
-          echo "TSAN_RUNTIME_PATH=${runtime}" >> "${GITHUB_ENV}"
-
       - name: Driver / GPU sanity check
         if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
         timeout-minutes: 3
         env:
-          # Preload the sanitizer runtime before probes load instrumented libraries.
-          LD_PRELOAD: ${{ inputs.build_variant == 'tsan' && env.TSAN_RUNTIME_PATH || env.ASAN_RUNTIME_PATH }}
+          # Preload ASAN runtime so Python can load ASAN-instrumented libraries
+          LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
           # The probes load instrumented ROCm libraries, so LeakSanitizer reports
           # whatever those leak at exit and the probe returns non-zero. This step
           # answers "is the driver and GPU functional", not "is the runtime
@@ -223,12 +205,19 @@ jobs:
         id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
         env:
-          LD_PRELOAD: ${{ inputs.build_variant == 'tsan' && env.TSAN_RUNTIME_PATH || '' }}
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
           TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
-          ROCM_KPACK_DEBUG: "1"
+          # General CI debug mode. runner.debug == '1' when a job is re-run with
+          # GitHub's "Enable debug logging" checkbox. Used to force turning debug
+          # options on.
+          THEROCK_CI_DEBUG: ${{ runner.debug == '1' && '1' || '0' }}
+          # ROCM_KPACK_DEBUG turns on the kpack loader's per-test diagnostics.
+          # Most components enable it (default "1"); a few opt out via their
+          # test_matrix "rocm_kpack_debug": "0" to keep -V ctest logs readable.
+          # test_runner.py forces this on when THEROCK_CI_DEBUG is set.
+          ROCM_KPACK_DEBUG: ${{ fromJSON(inputs.component).rocm_kpack_debug || '1' }}
           # Windows hip-tests (PAL=1, ROCR=0) set this via matrix; other components
           # leave it empty. #3587
           # An empty GPU_ENABLE_PAL is misread as ROCr on Windows (atoi("")==0),

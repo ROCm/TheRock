@@ -410,7 +410,7 @@ jobs:
         # overrides it. The default is applied here rather than on the input
         # because GitHub reverts an emptied input back to its declared default,
         # which would make the two inputs impossible to use exclusively.
-        shell: cmd
+        shell: cmd # zizmor: ignore[misfeature]
         env:
           # Use the index if given; else the find-links page; else default to
           # the nightly repo.amd.com aggregate index (both empty is the bare-dispatch case).
@@ -427,9 +427,15 @@ jobs:
           if "!CACHE_TYPE!"=="ccache" set "CACHE_FLAG=--use-ccache"
 
           echo "Building PyTorch wheels for !AMDGPU_FAMILIES! (cache: !CACHE_TYPE!)"
-          REM build_prod_wheels.py forwards each of these to pip and ignores an
-          REM empty value, so pass both and supply whichever source applies:
+
+          REM build_prod_wheels.py forwards --index-url and --find-links to pip
+          REM (ignoring empty), so pass both and supply whichever source applies:
           REM --index-url for a PEP 503 index, --find-links for a flat page.
+
+          REM The --pytorch-git-ref ref/branch name helps select a0 version
+          REM stripping for PyTorch release branches; ROCm's release type is
+          REM independent and may itself be nightly.
+
           python ./external-builds/pytorch/build_prod_wheels.py ^
             build ^
             --install-rocm ^
@@ -440,6 +446,7 @@ jobs:
             --output-dir "!PACKAGE_DIST_DIR!" ^
             !CACHE_FLAG! ^
             --release-type="!BUILD_RELEASE_TYPE!" ^
+            --pytorch-git-ref="!PYTORCH_GIT_REF!" ^
             --pytorch-rocm-arch "!AMDGPU_TARGETS!" ^
             ${{ env.optional_build_prod_arguments }}
 
@@ -457,7 +464,8 @@ jobs:
           fi
 
       - name: Sanity check wheel
-        shell: cmd
+        # Keep CMD for compatibility with the Windows wheel build and validation.
+        shell: cmd # zizmor: ignore[misfeature]
         run: |
           python external-builds/pytorch/sanity_check_wheel.py "%PACKAGE_DIST_DIR%"
 
@@ -546,7 +554,8 @@ jobs:
       # produced the requested package versions.
       - name: Write PyTorch package version outputs
         id: pytorch-versions
-        shell: cmd
+        # Keep CMD for compatibility with the Windows wheel build and validation.
+        shell: cmd # zizmor: ignore[misfeature]
         run: |
           python build_tools/github_actions/write_torch_versions.py --dist-dir "%PACKAGE_DIST_DIR%"
 

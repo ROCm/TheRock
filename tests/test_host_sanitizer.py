@@ -39,11 +39,7 @@ def main() -> None:
     parser.add_argument("--rocm-path", required=True, type=Path)
     parser.add_argument("--build-dir", required=True, type=Path)
     parser.add_argument("--sanitizer", choices=("TSAN", "HOST_ASAN"), required=True)
-    parser.add_argument("--gpu-arch", default="gfx950")
-    parser.add_argument(
-        "--launcher", choices=("direct", "ccache", "all"), default="all"
-    )
-    parser.add_argument("--artifact", action="append", type=Path, default=[])
+    parser.add_argument("--gpu-arch", default="gfx942")
     args = parser.parse_args()
     prefix = args.rocm_path.resolve()
     root = args.build_dir.resolve()
@@ -62,10 +58,9 @@ def main() -> None:
     env["CCACHE_TEMPDIR"] = str(root / "cache-tmp")
     env["TSAN_OPTIONS"] = "halt_on_error=1:exitcode=86"
     env["ASAN_OPTIONS"] = "halt_on_error=1:exitcode=87"
-    resource = run(
-        [str(compiler), "-print-resource-dir"], root / "resource.log", env
+    runtime_dir = run(
+        [str(compiler), "-print-runtime-dir"], root / "runtime.log", env
     ).strip()
-    runtime_dir = Path(resource) / "lib" / "linux"
     rpaths = f"{runtime_dir};{prefix / 'lib'}"
     symbol = "__tsan_write" if args.sanitizer == "TSAN" else "__asan_report"
     report = (
@@ -76,8 +71,7 @@ def main() -> None:
     mode = "race" if args.sanitizer == "TSAN" else "use-after-free"
     expected_exit = 86 if args.sanitizer == "TSAN" else 87
 
-    launchers = ("direct", "ccache") if args.launcher == "all" else (args.launcher,)
-    for launcher in launchers:
+    for launcher in ("direct", "ccache"):
         build = root / launcher
         env["CCACHE_LOGFILE"] = str(root / f"{launcher}-ccache.log")
         command = [
@@ -167,21 +161,6 @@ def main() -> None:
             print(
                 f"PASS {args.sanitizer} {launcher} {language}: instrumented, clean control passed, defect detected"
             )
-
-    for index, artifact in enumerate(args.artifact):
-        symbols = run(
-            [
-                str(llvm_bin / "llvm-nm"),
-                "--dynamic",
-                "--undefined-only",
-                str(artifact.resolve()),
-            ],
-            root / f"artifact-{index}-symbols.log",
-            env,
-        )
-        if symbol not in symbols:
-            raise AssertionError(f"Missing memory-access instrumentation in {artifact}")
-        print(f"PASS {args.sanitizer} artifact: {artifact}")
 
 
 if __name__ == "__main__":

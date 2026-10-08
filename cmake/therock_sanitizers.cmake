@@ -29,13 +29,11 @@ function(therock_sanitizer_configure
   endif()
 
   # Our own toolchains get ASAN enabled consistently.
-  # ASAN: Full host+device address sanitizer (xnack+ GPU targets for gfx90a, gfx942, gfx950)
+  # ASAN: Full host+device address sanitizer (xnack+ GPU targets for gfx942, gfx950)
   # HOST_ASAN: Host-only address sanitizer (no device-side instrumentation)
   # TSAN: Host-only thread sanitizer (no device-side instrumentation).
   set(_stanza)
-  if(_sanitizer STREQUAL "ASAN" OR
-     _sanitizer STREQUAL "HOST_ASAN" OR
-     _sanitizer STREQUAL "TSAN")
+  if(_sanitizer STREQUAL "ASAN" OR _sanitizer STREQUAL "HOST_ASAN" OR _sanitizer STREQUAL "TSAN")
     string(APPEND _stanza "set(THEROCK_SANITIZER \"${_sanitizer}\")\n")
 
     # Set the compiler sanitizer string for the command line.
