@@ -19,6 +19,7 @@ Public API:
     get_git_submodule_paths() - Get list of git submodule paths in the repository
     is_ci_run_required() - Check if CI run is required based on modified paths
     load_skip_ci_config() - Load skip-CI patterns from TOML config files
+    load_skip_ci_patterns_for_external_repo() - Load skip-CI patterns for external repos
 """
 
 import fnmatch
@@ -196,6 +197,49 @@ def _get_therock_config() -> tuple[list[str], set[str]]:
     if _cached_skip_patterns is None:
         _cached_skip_patterns, _cached_ci_workflow_filenames = load_skip_ci_config()
     return _cached_skip_patterns, _cached_ci_workflow_filenames or set()
+
+
+# Default path where external repo config is checked out in setup_multi_arch.yml
+_EXTERNAL_REPO_CONFIG_DIR = "external-repo-config"
+
+
+def load_skip_ci_patterns_for_external_repo(config_path: str) -> list[str] | None:
+    """Load skip CI patterns from base config + external repo's TOML config file.
+
+    This function is used by configure_multi_arch_ci.py to load skip-CI patterns
+    for external repositories (like rocm-libraries, rocm-systems) that call into
+    TheRock's CI.
+
+    Loads patterns from:
+    1. Base config (skip-ci-base.toml in TheRock) - universal patterns for all repos
+    2. External repo's extension config - repo-specific patterns
+
+    The external repo config file is expected to be checked out to the
+    external-repo-config/ directory by setup_multi_arch.yml.
+
+    Args:
+        config_path: Relative path to the skip-CI config file within the external
+            repo (e.g., ".github/skip-ci-config.toml")
+
+    Returns:
+        Combined list of skip patterns (base + extension), or None if no patterns
+        could be loaded.
+    """
+    # The external repo config is checked out to external-repo-config/
+    full_path = Path(_EXTERNAL_REPO_CONFIG_DIR) / config_path
+    if not full_path.exists():
+        print(f"  Skip CI config not found: {full_path}")
+        # Still load base patterns even if extension config is missing
+        base_patterns, _ = load_skip_ci_config(extension_config_path=full_path)
+        if base_patterns:
+            print(f"  Using {len(base_patterns)} base skip-CI patterns only")
+            return base_patterns
+        return None
+
+    # Load base + extension patterns using the shared loader
+    patterns, _ = load_skip_ci_config(extension_config_path=full_path)
+    print(f"  Loaded {len(patterns)} total skip CI patterns (base + {config_path})")
+    return patterns
 
 
 # ============================================================================

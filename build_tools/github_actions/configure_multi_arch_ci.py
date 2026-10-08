@@ -64,12 +64,13 @@ from amdgpu_family_matrix import (
     select_build_runner,
 )
 from configure_ci_path_filters import (
+    _EXTERNAL_REPO_CONFIG_DIR,
     get_git_commit_hash,
     get_git_modified_paths,
     get_git_submodule_paths,
     get_modified_paths_via_api,
     is_ci_run_required,
-    load_skip_ci_config,
+    load_skip_ci_patterns_for_external_repo,
 )
 from configure_jax_release_matrix import generate_jax_matrix_for_release_type
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
@@ -88,33 +89,6 @@ from stage_reuse_decision import (
 )
 
 _NULL_GIT_SHA = "0" * 40
-
-# Default path where external repo config is checked out in setup_multi_arch.yml
-_EXTERNAL_REPO_CONFIG_DIR = "external-repo-config"
-
-
-def _load_skip_ci_patterns_from_toml(config_path: str) -> list[str] | None:
-    """Load skip CI patterns from base config + external repo's TOML config file.
-
-    Loads patterns from:
-    1. Base config (skip-ci-base.toml in TheRock) - universal patterns for all repos
-    2. External repo's extension config - repo-specific patterns
-    """
-    # The external repo config is checked out to external-repo-config/
-    full_path = Path(_EXTERNAL_REPO_CONFIG_DIR) / config_path
-    if not full_path.exists():
-        print(f"  Skip CI config not found: {full_path}")
-        # Still load base patterns even if extension config is missing
-        base_patterns, _ = load_skip_ci_config(extension_config_path=full_path)
-        if base_patterns:
-            print(f"  Using {len(base_patterns)} base skip-CI patterns only")
-            return base_patterns
-        return None
-
-    # Load base + extension patterns using the shared loader
-    patterns, _ = load_skip_ci_config(extension_config_path=full_path)
-    print(f"  Loaded {len(patterns)} total skip CI patterns (base + {config_path})")
-    return patterns
 
 
 # ---------------------------------------------------------------------------
@@ -513,10 +487,12 @@ class GitContext:
         """Create context for external repo builds (e.g., rocm-libraries).
 
         For external repos, we treat the repo name as both a changed file and
-        a submodule path so that:
-        1. Stage reuse analysis can determine which TheRock stages are affected
-        2. has_submodule_changes returns True, enabling submodule_bump_tests_only
-           families to run their tests
+        a submodule path so that stage reuse analysis can determine which
+        TheRock stages are affected.
+
+        Note: has_submodule_changes will be True, but _get_current_triggers()
+        ignores this for external repos since submodule_bump only applies to
+        TheRock itself (when its submodule pointers are updated).
         """
         print(f"External repo detected: {external_repo_name}")
         return GitContext(
@@ -943,7 +919,7 @@ def should_skip_ci(
         if skip_ci_config:
             # Load patterns from external repo's TOML config file
             # (checked out to external-repo-config/ by setup_multi_arch.yml)
-            skip_ci_patterns = _load_skip_ci_patterns_from_toml(skip_ci_config)
+            skip_ci_patterns = load_skip_ci_patterns_for_external_repo(skip_ci_config)
 
         # Evaluate skip logic using unified is_ci_run_required().
         # Pass skip_patterns to use external repo's TOML patterns.
@@ -1515,7 +1491,8 @@ def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[s
         triggers.add("presubmit")
 
     # Context-based triggers (can stack on top of event triggers)
-    if git_context.has_submodule_changes is True:
+    # submodule_bump only applies to TheRock, not external repos.
+    if git_context.has_submodule_changes is True and not ci_inputs.external_repo:
         triggers.add("submodule_bump")
 
     return triggers
@@ -1727,6 +1704,13 @@ def _expand_build_config_for_platform(
                     f"(global={jobs.test_rocm.test_type})"
                 )
 
+        # ci:cpu-test-only label: disable GPU tests, only run CPU-only tests.
+        # This is useful for changes that don't require GPU testing (e.g., docs,
+        # build scripts, CPU-only components).
+        if "ci:cpu-test-only" in ci_inputs.pr_labels and test_runs_on:
+            test_runs_on = ""
+            print(f"  {family_name}: GPU tests disabled by 'ci:cpu-test-only' label")
+
         # CPU test runner for components that don't need GPU access (e.g.,
         # components with linux_cpu_runner: True). This allows CPU-only tests
         # to run even when GPU testing is gated (e.g., trigger_test_label_only).
@@ -1750,12 +1734,14 @@ def _expand_build_config_for_platform(
             family_info["test_type"] = family_test_type
         if test_runs_on and "test-runs-on-labels" in platform_info:
             family_info["test-runs-on-labels"] = platform_info["test-runs-on-labels"]
-        # Include multi-GPU runner info if available
-        if "test-runs-on-multi-gpu" in platform_info:
+        # Include multi-GPU runner info only when GPU tests are enabled.
+        # When test_runs_on is empty (tests gated by trigger), multi-GPU tests
+        # should also be gated to respect the same trigger policy.
+        if test_runs_on and "test-runs-on-multi-gpu" in platform_info:
             family_info["test-runs-on-multi-gpu"] = platform_info[
                 "test-runs-on-multi-gpu"
             ]
-        if "test-runs-on-multi-gpu-labels" in platform_info:
+        if test_runs_on and "test-runs-on-multi-gpu-labels" in platform_info:
             family_info["test-runs-on-multi-gpu-labels"] = platform_info[
                 "test-runs-on-multi-gpu-labels"
             ]
@@ -1924,7 +1910,8 @@ def expand_build_configs(
     """Build a BuildConfig for each platform that supports the variant.
 
     Returns BuildConfigs with a BuildConfig per platform, or None for
-    platforms where the variant isn't available or no families match.
+    platforms where the variant isn't available, no families match, or no
+    artifacts will be built or reused.
     """
     all_families = get_all_families_for_trigger_types(
         ["presubmit", "postsubmit", "nightly"]
@@ -1958,6 +1945,15 @@ def expand_build_configs(
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
 
+    # Prebuilt stages still supply artifacts; only SKIP removes a stage's work.
+    topology = get_topology()
+    active_artifacts = [
+        topology.artifacts[name]
+        for stage in topology.get_build_stages()
+        if jobs.build_rocm.stage_decisions.get(stage.name) != JobAction.SKIP
+        for name in topology.get_produced_artifacts(stage.name)
+    ]
+
     for platform, families, build_only, test_only in [
         (
             "linux",
@@ -1972,6 +1968,13 @@ def expand_build_configs(
             targets.windows_test_only_families,
         ),
     ]:
+        if not any(
+            artifact.platform in (None, platform)
+            and platform not in artifact.disable_platforms
+            for artifact in active_artifacts
+        ):
+            print(f"  Platform {platform} has no artifacts to build or reuse, skipping")
+            continue
         variant_config = all_build_variants.get(platform, {}).get(build_variant)
         if not variant_config:
             print(

@@ -2203,7 +2203,7 @@ class TestWriteOutputs(unittest.TestCase):
 
             return (
                 github_output.read_text(),
-                step_summary.read_text(),
+                step_summary.read_text(encoding="utf-8"),
             )
 
     def test_running_ci(self):
@@ -2225,6 +2225,54 @@ class TestWriteOutputs(unittest.TestCase):
         # workflow steps can use them.
         self.assertIn("enable_build_jobs=false", github_output)
         self.assertTrue(step_summary.startswith("## Multi-Arch CI Configuration"))
+
+    def test_platform_outputs_follow_selected_stages(self):
+        """Linux-only stages must not launch Windows artifact consumers.
+
+        Prebuilt stages count as work, but only inside the build allowlist.
+        Exercise the full setup pipeline and the outputs used by workflow gates.
+        """
+        cases = [
+            (["emulation"], "", False),
+            (["emulation"], "emulation", False),
+            (["emulation"], "compiler-runtime", False),
+            (["compiler-runtime"], "", True),
+            (["compiler-runtime"], "compiler-runtime", True),
+            ([], "", True),
+            ([], "all", True),
+        ]
+        for stages, prebuilt, expect_windows in cases:
+            with (
+                self.subTest(stages=stages, prebuilt=prebuilt),
+                patch.dict(os.environ, {"STAGE_REUSE_MODE": "dry-run"}),
+            ):
+                inputs = cm.CIInputs(
+                    run_id="12345",
+                    event_name="pull_request",
+                    commit_ref="feature",
+                    base_ref="HEAD^",
+                    build_variant="release",
+                    linux_amdgpu_families=["gfx94x"],
+                    windows_amdgpu_families=["gfx110x"],
+                    build_stages=stages,
+                    prebuilt_stages=prebuilt,
+                    baseline_run_id="123" if prebuilt else "",
+                )
+                outputs = cm.configure(inputs, cm.GitContext.empty())
+                github_output, _ = self._write_outputs(outputs)
+                values = dict(line.split("=", 1) for line in github_output.splitlines())
+                linux = json.loads(values["linux_build_config"])
+                self.assertEqual(linux["dist_amdgpu_families"], "gfx94X-dcgpu")
+                if expect_windows:
+                    windows = json.loads(values["windows_build_config"])
+                    self.assertEqual(windows["dist_amdgpu_families"], "gfx110X-all")
+                    self.assertEqual(linux["windows_amdgpu_families"], "gfx110X-all")
+                    if prebuilt:
+                        self.assertIn("compiler-runtime", windows["prebuilt_stages"])
+                        self.assertEqual(windows["baseline_run_id"], "123")
+                else:
+                    self.assertEqual(values["windows_build_config"], "")
+                    self.assertEqual(linux["windows_amdgpu_families"], "")
 
 
 # ---------------------------------------------------------------------------
@@ -2789,6 +2837,32 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
                         family_info["test-runs-on"], "", f"Expected no tests for {name}"
                     )
 
+    def test_multi_gpu_runners_gated_when_tests_disabled(self):
+        """Multi-GPU runners excluded when tests are trigger-gated."""
+        # gfx950 tests only on submodule_bump; PR without submodule should gate both
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="main",
+            build_variant="release",
+            linux_amdgpu_families=["gfx950"],
+        )
+        outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+        family_info = self._find_family_info(outputs, "gfx950-dcgpu")
+
+        self.assertEqual(family_info["test-runs-on"], "")
+        self.assertNotIn("test-runs-on-multi-gpu", family_info)
+        self.assertNotIn("test-runs-on-multi-gpu-labels", family_info)
+
+        # With submodule change, multi-GPU info should be present
+        git_ctx = cm.GitContext(changed_files=["sub"], submodule_paths=["sub"])
+        outputs_enabled = cm.configure(ci_inputs, git_ctx)
+        family_enabled = self._find_family_info(outputs_enabled, "gfx950-dcgpu")
+
+        self.assertNotEqual(family_enabled["test-runs-on"], "")
+        self.assertIn("test-runs-on-multi-gpu", family_enabled)
+
     def test_test_type_for_family_override(self):
         """test_type_for_family forces quick test type despite global full."""
         # gfx125x only tests on nightly, so use schedule event
@@ -2852,6 +2926,25 @@ class TestTriggerHelpers(unittest.TestCase):
         )
         triggers = cm._get_current_triggers(ci_inputs, git_context)
         self.assertEqual(triggers, {"presubmit", "submodule_bump"})
+
+    def test_get_current_triggers_external_repo_no_submodule_bump(self):
+        """submodule_bump only applies to TheRock, not external repos."""
+        for event, expected in [
+            ("pull_request", {"presubmit"}),
+            ("push", {"postsubmit"}),
+        ]:
+            with self.subTest(event=event):
+                ci_inputs = cm.CIInputs(
+                    run_id="12345",
+                    event_name=event,
+                    commit_ref="main",
+                    base_ref="HEAD^",
+                    build_variant="release",
+                    external_repo='{"repository":"ROCm/rocm-libraries","ref":"main"}',
+                )
+                git_context = cm.GitContext.from_external_repo("rocm-libraries")
+                triggers = cm._get_current_triggers(ci_inputs, git_context)
+                self.assertEqual(triggers, expected)
 
     def test_should_run_tests_trigger_matching(self):
         """Verify test gating based on trigger match."""
@@ -3000,6 +3093,56 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
                 gfx103x_info = builds.linux.per_family_info[0]
                 # Should always use the primary label
                 self.assertEqual(gfx103x_info["test-runs-on"], "linux-gfx1030-gpu-rocm")
+
+
+# ---------------------------------------------------------------------------
+class TestCpuTestOnlyLabel(unittest.TestCase):
+    """ci:cpu-test-only label: disable GPU tests, keep CPU-only tests."""
+
+    def _expand(self, pr_labels=None, platform="linux", family="gfx94x"):
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^1",
+            build_variant="release",
+            pr_labels=pr_labels or [],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=ci_inputs,
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(**{f"{platform}_families": [family]}),
+            jobs=_jobs(),
+        )
+        return getattr(result, platform).per_family_info[0]
+
+    def test_label_disables_gpu_keeps_cpu(self):
+        """Label disables GPU tests but keeps CPU runner and tests_enabled."""
+        entry = self._expand(pr_labels=["ci:cpu-test-only"])
+        self.assertEqual(entry["test-runs-on"], "")
+        self.assertNotEqual(entry["test-runs-on-cpu"], "")
+        self.assertTrue(entry["tests_enabled"])
+
+    def test_without_label_gpu_tests_run(self):
+        """Without label, GPU tests run normally."""
+        self.assertNotEqual(self._expand()["test-runs-on"], "")
+
+    def test_works_on_windows(self):
+        """Label works on Windows."""
+        entry = self._expand(["ci:cpu-test-only"], platform="windows", family="gfx110x")
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_label_disables_multi_gpu(self):
+        """Label also disables multi-GPU tests."""
+        entry = self._expand(pr_labels=["ci:cpu-test-only"])
+        self.assertNotIn("test-runs-on-multi-gpu", entry)
+        self.assertNotIn("test-runs-on-multi-gpu-labels", entry)
+
+    def test_without_label_multi_gpu_present(self):
+        """Without label, multi-GPU info is present (when platform supports it)."""
+        entry = self._expand()
+        # gfx94x has multi-GPU support
+        self.assertIn("test-runs-on-multi-gpu-labels", entry)
 
 
 if __name__ == "__main__":

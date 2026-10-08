@@ -19,6 +19,7 @@ common = [
     # Skip-CI config files themselves (editing skip lists doesn't need full CI)
     "build_tools/github_actions/skip-ci-base.toml",
     "build_tools/github_actions/skip-ci-config.toml",
+    "build_tools/github_actions/configure_ci_path_filters.py",
 
     # Scanner configs consumed by security scan workflows, no impact on CI
     "build_tools/scan_tools/*",
@@ -33,11 +34,6 @@ common = [
 
     # AI skills and developer utilities - no impact on CI
     "skills/*",
-
-    # This module runs in the lightweight setup job before build jobs are
-    # enabled. Its behavior is covered by unit tests, while running the full
-    # ROCm build would not provide additional validation of the path filters.
-    "build_tools/github_actions/configure_ci_path_filters.py",
 
     # Unit-test-only directories exercised by .github/workflows/unit_tests.yml.
     # Keep these in sync with the pytest invocations in that workflow and the

@@ -1013,7 +1013,7 @@ class JobSummaryTest(unittest.TestCase):
         self.assertEqual(mirror.read_text(encoding="utf-8"), expected)
 
     def test_append_multiline_summary(self):
-        summary = "### Heading\n\n- bullet a\n- bullet b\n\n| col |\n| --- |"
+        summary = "### 📋 Heading\n\n- bullet a\n- bullet b\n\n| col |\n| --- |"
         with mock.patch.dict(os.environ, self.env, clear=False):
             gha_append_step_summary(summary)
 
