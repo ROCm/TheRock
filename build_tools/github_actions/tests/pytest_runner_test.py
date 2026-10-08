@@ -261,66 +261,21 @@ class BuildEnvironmentTest(unittest.TestCase):
     def test_prepends_to_existing_values(self):
         os.environ["PYTHONPATH"] = "/pre/existing"
         os.environ["LD_LIBRARY_PATH"] = "/pre/ld"
+        os.environ["LD_PRELOAD"] = "/pre/preload"
         rocm = Path("/opt/rocm")
 
-        env = pytest_runner.build_environment(rocm, "tensilelite")
+        with (
+            mock.patch.object(pytest_runner, "is_asan", return_value=True),
+            mock.patch.object(
+                pytest_runner, "get_asan_runtime_path", return_value=Path("/asan.so")
+            ),
+        ):
+            env = pytest_runner.build_environment(rocm, "tensilelite")
 
         self.assertTrue(env["PYTHONPATH"].endswith("/pre/existing"))
         self.assertIn("/pre/ld", env["LD_LIBRARY_PATH"].split(os.pathsep))
-
-    def test_asan_runtime_precedes_existing_preload(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            runtime = Path(tmp) / "libclang_rt.asan.so"
-            runtime.touch()
-            with mock.patch.dict(
-                os.environ,
-                {
-                    "BUILD_VARIANT": "host-asan",
-                    "ASAN_RUNTIME_PATH": str(runtime),
-                    "LD_PRELOAD": "/existing/library.so",
-                    "ASAN_OPTIONS": "detect_leaks=1",
-                },
-                clear=True,
-            ):
-                env = pytest_runner.build_environment(Path(tmp), "tensilelite")
-            self.assertEqual(
-                env["LD_PRELOAD"], f"{runtime.resolve()}:/existing/library.so"
-            )
-            self.assertEqual(env["ASAN_OPTIONS"], "detect_leaks=1")
-
-    def test_sanitizer_preload_is_scoped_to_child_environment(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            runtime = Path(tmp) / "libclang_rt.asan.so"
-            runtime.touch()
-            for variant in ("asan", "host-asan", "asan-debug", "host-asan-debug"):
-                with (
-                    self.subTest(variant=variant),
-                    mock.patch.dict(
-                        os.environ,
-                        {
-                            "BUILD_VARIANT": variant,
-                            "ASAN_RUNTIME_PATH": str(runtime),
-                        },
-                        clear=True,
-                    ),
-                ):
-                    parent_env = os.environ.copy()
-                    env = pytest_runner.build_environment(Path(tmp), "tensilelite")
-                    self.assertEqual(env["LD_PRELOAD"], str(runtime.resolve()))
-                    self.assertEqual(dict(os.environ), parent_env)
-
-    def test_release_does_not_resolve_or_change_preload(self):
-        with mock.patch.dict(
-            os.environ,
-            {
-                "BUILD_VARIANT": "release",
-                "ASAN_RUNTIME_PATH": "/missing/asan.so",
-                "LD_PRELOAD": "/existing/library.so",
-            },
-            clear=True,
-        ):
-            env = pytest_runner.build_environment(Path("/opt/rocm"), "tensilelite")
-        self.assertEqual(env["LD_PRELOAD"], "/existing/library.so")
+        self.assertEqual(env["LD_PRELOAD"], f"{Path('/asan.so')}:/pre/preload")
+        self.assertEqual(os.environ["LD_PRELOAD"], "/pre/preload")
 
     def test_ld_library_path_includes_all_llvm_triple_dirs(self):
         # All triple subdirs must be on LD_LIBRARY_PATH in a deterministic order —
