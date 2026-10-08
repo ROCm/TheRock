@@ -15,5 +15,5 @@ if(THEROCK_SANITIZER STREQUAL "ASAN" OR
   foreach(_var CMAKE_EXE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS)
     string(APPEND ${_var} " -fsanitize=${_sanitizer_string} -shared-libsan")
   endforeach()
-  message(STATUS "rocgdb pre_hook: appended ${THEROCK_SANITIZER} flags to CMAKE_{EXE,SHARED}_LINKER_FLAGS")
+  message(STATUS "rocgdb pre_hook: appended -fsanitize=${_sanitizer_string} -shared-libsan to CMAKE_{EXE,SHARED}_LINKER_FLAGS")
 endif()
