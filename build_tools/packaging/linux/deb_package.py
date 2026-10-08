@@ -6,7 +6,6 @@
 """Debian package creation functions for ROCm packaging."""
 
 import os
-import json
 import re
 import shutil
 import subprocess
@@ -24,34 +23,6 @@ logger = TheRockLogger(__name__)
 
 # Setup paths
 SCRIPT_DIR = Path(__file__).resolve().parent
-
-
-def load_alternatives_binaries() -> dict[str, list[str]]:
-    """Load package-specific binary alternatives from JSON."""
-
-    alternatives_file = (
-        SCRIPT_DIR / "template" / "scripts" / "amdrocm-alternatives.json"
-    )
-
-    with alternatives_file.open(encoding="utf-8") as file:
-        alternatives_binaries = json.load(file)
-    if not isinstance(alternatives_binaries, dict):
-        raise ValueError(f"{alternatives_file} must contain a JSON object")
-
-    for package_name, binaries in alternatives_binaries.items():
-        if not isinstance(package_name, str):
-            raise ValueError(
-                f"Invalid package name in {alternatives_file}: " f"{package_name!r}"
-            )
-
-        if not isinstance(binaries, list) or not all(
-            isinstance(binary, str) for binary in binaries
-        ):
-            raise ValueError(
-                f"Binary list for {package_name!r} must be a list " "of strings"
-            )
-
-    return alternatives_binaries
 
 
 def create_nonversioned_deb_package(pkg_name, config: PackageConfig):
@@ -124,8 +95,16 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
     generate_changelog_file(pkg_info, deb_dir, build_config)
     generate_rules_file(pkg_info, deb_dir, build_config)
     generate_control_file(pkg_info, deb_dir, build_config)
-    if is_postinstallscripts_available(pkg_info):
-        generate_debian_postscripts(pkg_info, deb_dir, build_config)
+
+    alternatives_binaries = load_alternatives_binaries()
+    package_name = pkg_info.get("Package")
+    json_package_config = alternatives_binaries.get(package_name)
+
+    # amdrocm-alternatives.json defines each package's maintainer scripts and controls whether they are generated.
+    if json_package_config is not None and is_postinstallscripts_available(pkg_info):
+        generate_debian_postscripts(
+            pkg_info, deb_dir, build_config, json_package_config
+        )
 
     sourcedir_list = []
     dir_list = filter_components_fromartifactory(
@@ -390,29 +369,27 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
         f.write("\n")  # Adds a blank line. For fixing missing final newline
 
 
-def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
+def generate_debian_postscripts(
+    pkg_info, deb_dir, config: PackageConfig, json_package_config: dict
+):
     """Generate Debian postinst/prerm maintainer scripts.
 
     Parameters:
     pkg_info: Package details parsed from a JSON file
     deb_dir: Directory where the `debian/control` file will be created
     config: Configuration object containing package metadata
+    json_package_config: Package alternatives configuration loaded from JSON
 
     Returns: None
     """
-    # Maintainer scripts that may be supplied by the legacy
-    # package-specific template mechanism.
-    EXEC_SCRIPTS = {
-        "preinst",
-        "postinst",
-        "prerm",
-        "postrm",
-        "config",
-    }
+    # Debian maintainer scripts supported by the template generator.
+    EXEC_SCRIPTS = {"preinst", "postinst", "prerm", "postrm", "config"}
 
     pkg_name = pkg_info.get("Package")
-    parts = config.rocm_version.split(".")
+    if not pkg_name:
+        raise ValueError("Package metadata does not contain a valid 'Package' name")
 
+    parts = config.rocm_version.split(".")
     if len(parts) < 3:
         raise ValueError(
             f"Version string '{config.rocm_version}' does not have "
@@ -432,6 +409,13 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
     ):
         raise ValueError(f"Unable to parse version string '{config.rocm_version}'")
 
+    unsupported_scripts = set(json_package_config["scripts"]) - EXEC_SCRIPTS
+    if unsupported_scripts:
+        raise ValueError(
+            f"Unsupported maintainer scripts for package {pkg_name!r}: "
+            f"{sorted(unsupported_scripts)}"
+        )
+
     env = Environment(
         loader=FileSystemLoader(str(SCRIPT_DIR)),
         autoescape=select_autoescape(
@@ -443,50 +427,34 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
 
     context = {
         "install_prefix": config.install_prefix,
-        "version_major": int(version_major_match.group()),
-        "version_minor": int(version_minor_match.group()),
-        "version_patch": int(version_patch_match.group()),
+        "version_major": int(re.match(r"^\d+", parts[0]).group()),
+        "version_minor": int(re.match(r"^\d+", parts[1]).group()),
+        "version_patch": int(re.match(r"^\d+", parts[2]).group()),
         "target": "deb",
+        "package_name": pkg_name,
+        "binaries": json_package_config["binaries"],
     }
 
-    templates_root = SCRIPT_DIR / "template" / "scripts"
-    alternatives_binaries = load_alternatives_binaries()
+    deb_dir = Path(deb_dir)
+    deb_dir.mkdir(parents=True, exist_ok=True)
 
-    # Packages listed in amdrocm-alternatives.json use the shared
-    # amdrocm-postinst.j2 and amdrocm-prerm.j2 templates.
-    if pkg_name in alternatives_binaries:
-        render_context = {
-            **context,
-            "package_name": pkg_name,
-            "binaries": alternatives_binaries[pkg_name],
-        }
+    for script in json_package_config["scripts"]:
+        template_name = f"template/scripts/amdrocm-{script}.j2"
+        script_file = deb_dir / script
 
-        for script in ("postinst", "prerm"):
-            template_name = f"template/scripts/amdrocm-{script}.j2"
-            script_file = Path(deb_dir) / script
+        try:
             template = env.get_template(template_name)
-
-            with script_file.open("w", encoding="utf-8") as file:
-                file.write(template.render(render_context))
-
+            rendered_script = template.render(context)
+            script_file.write_text(
+                rendered_script,
+                encoding="utf-8",
+            )
             script_file.chmod(0o755)
-
-        return
-
-    # Preserve the existing behavior for packages that do not use the
-    # shared alternatives templates.
-    for script in EXEC_SCRIPTS:
-        pattern = f"{pkg_name}-{script}.j2"
-
-        for template_file in templates_root.glob(pattern):
-            script_file = Path(deb_dir) / script
-            template_name = template_file.relative_to(SCRIPT_DIR).as_posix()
-            template = env.get_template(template_name)
-
-            with script_file.open("w", encoding="utf-8") as file:
-                file.write(template.render(context))
-
-            script_file.chmod(0o755)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to generate Debian {script} script "
+                f"for package {pkg_name!r}"
+            ) from exc
 
 
 def copy_package_contents(source_dir, destination_dir):

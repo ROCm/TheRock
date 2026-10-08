@@ -1325,3 +1325,75 @@ def filter_dependencies_by_artifacts(
             logger.warning(f"WORKAROUND: Excluding {dep} (no artifacts for {gfx_arch})")
 
     return filtered
+
+
+def load_alternatives_binaries() -> dict[str, dict[str, list[str]]]:
+    """Load and validate package-specific alternatives configuration."""
+
+    scripts_dir = Path(__file__).resolve().parent / "template" / "scripts"
+    alternatives_file = scripts_dir / "amdrocm-alternatives.json"
+
+    executable_scripts = {
+        "preinst",
+        "postinst",
+        "prerm",
+        "postrm",
+        "config",
+    }
+
+    try:
+        with alternatives_file.open(encoding="utf-8") as file:
+            alternatives = json.load(file)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            f"Alternatives configuration file was not found: " f"{alternatives_file}"
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"Invalid JSON in alternatives configuration file "
+            f"{alternatives_file}: {exc}"
+        ) from exc
+    except OSError as exc:
+        raise OSError(
+            f"Unable to read alternatives configuration file: " f"{alternatives_file}"
+        ) from exc
+
+    if not isinstance(alternatives, dict):
+        raise ValueError(f"{alternatives_file} must contain a JSON object")
+
+    for package_name, package_config in alternatives.items():
+        if not isinstance(package_name, str):
+            raise ValueError(
+                f"Invalid package name in {alternatives_file}: " f"{package_name!r}"
+            )
+
+        if not isinstance(package_config, dict):
+            raise ValueError(f"Configuration for {package_name!r} must be an object")
+
+        scripts = package_config.get("scripts")
+        binaries = package_config.get("binaries")
+
+        if not isinstance(scripts, list) or not all(
+            isinstance(script, str) for script in scripts
+        ):
+            raise ValueError(
+                f"'scripts' for {package_name!r} must be a list " "of strings"
+            )
+
+        unsupported_scripts = set(scripts) - executable_scripts
+        if unsupported_scripts:
+            raise ValueError(
+                f"Unsupported maintainer scripts for "
+                f"{package_name!r}: "
+                f"{sorted(unsupported_scripts)}. Supported scripts: "
+                f"{sorted(executable_scripts)}"
+            )
+
+        if not isinstance(binaries, list) or not all(
+            isinstance(binary, str) for binary in binaries
+        ):
+            raise ValueError(
+                f"'binaries' for {package_name!r} must be a list " "of strings"
+            )
+
+    return alternatives
