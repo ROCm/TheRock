@@ -296,7 +296,7 @@ source_sets = ["rocm-systems"]
 [artifact_groups.math-libs]
 description = "Math libraries (BLAS, FFT, RAND, etc.)"
 type = "per-arch"  # Built per GPU architecture
-artifact_group_deps = ["hip-runtime", "profiler-core"]
+artifact_group_deps = ["hip-runtime", "profiler-core", "core-amdsmi"]
 # rocm-systems provides shared kpack tooling used to produce kpack artifacts.
 source_sets = ["rocm-libraries", "rocm-systems", "math-libs"]
 
@@ -359,7 +359,7 @@ source_sets = ["amd-mesa", "rocm-systems"]
 [artifact_groups.rocjitsu]
 description = "ROCm emulation, virtualization, and instrumentation tools"
 type = "generic"
-artifact_group_deps = ["base", "third-party-sysdeps"]
+artifact_group_deps = []
 source_sets = ["rocm-systems"]
 disable_platforms = ["windows"]
 
@@ -677,7 +677,7 @@ artifact_deps = ["core-runtime", "core-hip", "blas", "prim", "rand", "sparse"]
 [artifacts.rocwmma]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "blas"]
+artifact_deps = ["core-runtime", "core-hip", "blas", "core-amdsmi"]
 
 [artifacts.composable-kernel]
 artifact_group = "math-libs"
@@ -834,6 +834,14 @@ artifact_deps = ["rocprofiler-sdk", "openmpi"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 
+[artifacts.profiler-hub]
+artifact_group = "profiler-core"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "base", "spdlog"]
+feature_name = "PROFILER_HUB"
+feature_group = "PROFILER"
+disable_platforms = ["windows"]
+
 [artifacts.rocprofiler-systems]
 artifact_group = "profiler-apps"
 type = "target-neutral"
@@ -901,7 +909,7 @@ disable_platforms = ["windows"]
 [artifacts.rocjitsu]
 artifact_group = "rocjitsu"
 type = "target-neutral"
-artifact_deps = ["base", "sysdeps"]
+artifact_deps = []
 feature_group = "EMULATION"
 disable_platforms = ["windows"]
 source_paths = ["rocjitsu", "machine-readable-isa"]
@@ -916,6 +924,6 @@ disable_platforms = ["windows"]
 [artifacts.mirage]
 artifact_group = "rocjitsu"
 type = "target-neutral"
-artifact_deps = ["base", "sysdeps"]
+artifact_deps = []
 feature_group = "EMULATION"
 disable_platforms = ["windows"]

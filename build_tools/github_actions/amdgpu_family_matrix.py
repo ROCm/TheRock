@@ -69,10 +69,14 @@ def load_external_runner_config() -> dict | None:
         _log(f"Failed to load CI config from {ci_config_path}: {e}")
         return None
     _log(f"Loaded external runner config from {ci_config_path}")
-    return {
+    result = {
         "runner_labels": config.get_gpu_runner_labels(),
         "build_runners": config.build_runners,
     }
+    # Load CPU test runners if explicitly configured (optional, falls back to build_runners)
+    if hasattr(config, "_raw") and "cpu_test_runners" in config._raw:
+        result["cpu_test_runners"] = config._raw["cpu_test_runners"]
+    return result
 
 
 def is_asan():
@@ -319,12 +323,8 @@ amdgpu_family_info_matrix = {
                 "submodule_bump",
                 "nightly",
             ],
-            # TEMPORARY (ROCm/TheRock#8688): gfx110X Windows presubmit testing
-            # removed for test-queue remediation. Builds still run on presubmit;
-            # tests are on-demand via the `ci:test:gfx110x` PR label (emergency
-            # lever in configure_multi_arch_ci.py). Superseded by the permanent
-            # build/test label system in #8692. To revert, re-add "presubmit".
             "tests_on_trigger": [
+                "presubmit",
                 "postsubmit",
                 "submodule_bump",
                 "nightly",
@@ -396,7 +396,7 @@ amdgpu_family_info_matrix = {
             "tests_on_trigger": ["nightly"],
         },
     },
-    # Limited hardware - builds on presubmit, tests only on submodule_bump
+    # Limited hardware - builds on presubmit, tests only on nightly
     "gfx125x": {
         "linux": {
             # NOTE: MI455 runner supply is very limited.
@@ -417,8 +417,8 @@ amdgpu_family_info_matrix = {
                 "submodule_bump",
                 "nightly",
             ],
-            # Tests only on submodule changes due to limited hardware
-            "tests_on_trigger": ["submodule_bump"],
+            # Tests only on nightly due to limited hardware
+            "tests_on_trigger": ["nightly"],
             # Force quick tests for MI455 hardware
             "test_type_for_family": "quick",
         },
@@ -830,3 +830,36 @@ def get_build_runner_labels():
         return external_config.get("build_runners", {})
 
     return BUILD_RUNNER_LABELS
+
+
+def get_cpu_test_runner(platform: str) -> str:
+    """Returns the CPU test runner label for components with linux_cpu_runner: True.
+
+    Falls back to the default build runner if no explicit cpu_test_runners config exists.
+
+    Args:
+        platform: "linux" or "windows"
+
+    Returns:
+        Runner label string, or empty string if not configured.
+    """
+    # First check for explicit cpu_test_runners in external config
+    external_config = load_external_runner_config()
+    if external_config is not None:
+        cpu_runners = external_config.get("cpu_test_runners", {})
+        if platform in cpu_runners:
+            return cpu_runners[platform]
+
+    # Fall back to the default build runner (CPU-only, no GPU)
+    build_runners = get_build_runner_labels()
+    if platform in build_runners and "default" in build_runners[platform]:
+        # Use the first runner with non-zero weight, or the first one
+        default_runners = build_runners[platform]["default"]
+        for runner in default_runners:
+            if runner.get("weight", 0) > 0:
+                return runner["label"]
+        # If all weights are zero, use the first one
+        if default_runners:
+            return default_runners[0]["label"]
+
+    return ""

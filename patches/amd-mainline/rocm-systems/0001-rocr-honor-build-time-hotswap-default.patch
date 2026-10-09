@@ -1,0 +1,48 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Fri, 25 Sep 2026 22:21:45 -0700
+Subject: [PATCH] fix(rocr): honor the build-time hotswap default
+
+Commit d091b08ef0f499de250ce3aac01277a5468c9c56 switched automatic
+hotswap loading to opt-in before the integration sequence was ready.
+Carry this compatibility patch in TheRock so its builds can restore the
+previous default while the upstream sequencing issue is resolved.
+
+Honor HSA_HOTSWAP_DEFAULT_ON when HSA_HOTSWAP_ENABLE is unset. Explicit
+environment values, including false and empty values, still take precedence,
+preserving the DBT launcher and debugger opt-outs. Builds without the define
+retain the opt-in behavior. TheRock supplies the define through its scoped
+HSA_HOTSWAP_DEFAULT_ON build flag.
+
+Reproduction: with HSA_HOTSWAP_ENABLE unset on a supported gfx1250 A0
+agent, the affected runtime skips automatic hook loading. Building with
+HSA_HOTSWAP_DEFAULT_ON=1 restores that path; HSA_HOTSWAP_ENABLE=0
+continues to disable it.
+
+Related upstream change:
+https://github.com/ROCm/rocm-systems/commit/d091b08ef0f499de250ce3aac01277a5468c9c56
+
+---
+ projects/rocr-runtime/runtime/hsa-runtime/core/util/flag.h | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/util/flag.h b/projects/rocr-runtime/runtime/hsa-runtime/core/util/flag.h
+index 778f879f5f43ade8b027a0ff1038d1d574346014..4a389578ce191ca2ab7db820817bec9055091645 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/util/flag.h
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/util/flag.h
+@@ -219,9 +219,13 @@ class Flag {
+     var = os::GetEnvVar("HSA_TOOLS_REPORT_REGISTER_FAILURE");
+     report_tool_register_failures_ = (var == "1") ? true : false;
+ 
+-    // Opt-in switch for the rocjitsu hotswap tool. Leave the tool disabled
+-    // unless the user explicitly requests it with a truthy value.
++    // Explicit environment settings override the build-time hotswap default.
++#if defined(HSA_HOTSWAP_DEFAULT_ON) && HSA_HOTSWAP_DEFAULT_ON
++    hotswap_enable_ = !os::IsEnvVarSet("HSA_HOTSWAP_ENABLE") ||
++        IsEnvVarTruthy("HSA_HOTSWAP_ENABLE");
++#else
+     hotswap_enable_ = IsEnvVarTruthy("HSA_HOTSWAP_ENABLE");
++#endif
+ 
+     var = os::GetEnvVar("HSA_DISABLE_FRAGMENT_ALLOCATOR");
+     disable_fragment_alloc_ = (var == "1") ? true : false;
