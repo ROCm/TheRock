@@ -69,6 +69,7 @@ package_dir = {
     "": "src",
     platform_package_name: f"platform/{platform_package_name}",
 }
+install_requires = []
 
 # rocprof-trace-decoder's CMake installs its Python API into the prefix at
 # lib/python3/site-packages/, which lands inside our platform dir and is never
@@ -83,6 +84,8 @@ for site_packages in sorted(platform_dir.glob("lib/python*/site-packages")):
     for name in find_packages(where=site_packages):
         packages.append(name)
         package_dir[name] = str(site_packages_rel / Path(*name.split(".")))
+    # Keep in sync with `dependencies` in rocprof-trace-decoder's pyproject.toml.
+    install_requires.append("pyelftools>=0.31")
     break
 
 version = os.environ.get("ROCM_SDK_VERSION")
@@ -99,6 +102,7 @@ setup(
     description="ROCm profiler applications (rocprofiler-systems and rocprofiler-compute)",
     packages=packages,
     package_dir=package_dir,
+    install_requires=install_requires,
     include_package_data=True,
     zip_safe=False,
     extras_require=extras_require,

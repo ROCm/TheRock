@@ -329,7 +329,13 @@ class MultiArchPackagingTest(TmpDirTestCase):
 
         wheel_path = next(wheel_dir.glob("rocm_profiler-*.whl"))
         with zipfile.ZipFile(wheel_path) as zf:
-            self.assertIn("rocprof_trace_decoder/__init__.py", set(zf.namelist()))
+            names = set(zf.namelist())
+            self.assertIn("rocprof_trace_decoder/__init__.py", names)
+            metadata_name = next(
+                name for name in names if name.endswith(".dist-info/METADATA")
+            )
+            metadata = zf.read(metadata_name).decode()
+            self.assertIn("Requires-Dist: pyelftools", metadata)
 
     def test_find_populated_searches_across_packages(self):
         """_find_populated locates a file regardless of which package owns it."""
