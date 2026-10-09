@@ -1254,8 +1254,6 @@ def decide_jobs(
         build_jax_action = JobAction.SKIP
 
     if "ci:skip-rocm" in pr_labels:
-        if targets.windows_families:
-            raise ValueError("ci:skip-rocm currently supports Linux only")
         if build_jax_action == JobAction.RUN:
             raise ValueError(
                 "ci:skip-rocm does not yet support JAX; use ci:skip-jax "
