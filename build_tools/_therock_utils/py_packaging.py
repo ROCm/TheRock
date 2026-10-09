@@ -653,8 +653,6 @@ class PopulatedDistPackage:
         devel_links: list[dict[str, str]] = []
         symlink_paths: list[Path] = []
         for root, dirnames, filenames in os.walk(package_path):
-            dirnames.sort()
-            filenames.sort()
             for name in [*dirnames, *filenames]:
                 link_path = Path(root) / name
                 if not link_path.is_symlink():
