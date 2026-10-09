@@ -10,8 +10,8 @@ calling environment.
 
 Files ending in .exe, .dll, or .pyd are checked for PE magic bytes before they
 are signed. Pass ``--all-files`` to check every file for PE magic bytes and
-include extensionless PE files. Signing is intentionally serial: each file is
-verified and signed in its own signtool invocation.
+include extensionless PE files. Each file is verified and signed with
+signtool.exe.
 
 Examples::
 
@@ -38,10 +38,8 @@ from datetime import datetime
 from pathlib import Path
 
 TIMESTAMP_URL = "http://timestamp.digicert.com"
-DIGEST = "sha256"
 CODE_SIGNING_OID = "1.3.6.1.5.5.7.3.3"
 PE_EXTENSIONS = {".exe", ".dll", ".pyd"}
-DEFAULT_STATUS_EVERY = 100
 
 
 @dataclass(frozen=True)
@@ -138,9 +136,7 @@ def resolve_cert(
     certs = detect_codesign_certs()
     if subject:
         subject_lower = subject.lower()
-        certs = [
-            cert for cert in certs if subject_lower in cert["subject"].lower()
-        ]
+        certs = [cert for cert in certs if subject_lower in cert["subject"].lower()]
 
     if not certs:
         message = "No code-signing certificate found in the Windows certificate store."
@@ -235,7 +231,6 @@ def build_signtool_cmd(
     path: Path,
     thumbprint: str,
     machine_store: bool,
-    timestamp_url: str,
     cert_file: str | None,
     csp: str | None,
     key: str | None,
@@ -245,11 +240,11 @@ def build_signtool_cmd(
         str(signtool),
         "sign",
         "/fd",
-        DIGEST,
+        "sha256",
         "/tr",
-        timestamp_url,
+        TIMESTAMP_URL,
         "/td",
-        DIGEST,
+        "sha256",
         "/sha1",
         thumbprint,
     ]
@@ -271,7 +266,6 @@ def sign_file(
     path: Path,
     thumbprint: str,
     machine_store: bool,
-    timestamp_url: str,
     cert_file: str | None,
     csp: str | None,
     key: str | None,
@@ -282,7 +276,6 @@ def sign_file(
         path=path,
         thumbprint=thumbprint,
         machine_store=machine_store,
-        timestamp_url=timestamp_url,
         cert_file=cert_file,
         csp=csp,
         key=key,
@@ -308,13 +301,12 @@ def sign_artifacts(
     signtool: Path,
     thumbprint: str,
     machine_store: bool,
-    timestamp_url: str,
     cert_file: str | None,
     csp: str | None,
     key: str | None,
     skip_signed: bool,
 ) -> SigningSummary:
-    """Verify and sign PE files serially."""
+    """Verify and sign PE files."""
     signed = 0
     skipped = 0
     failed = 0
@@ -331,7 +323,6 @@ def sign_artifacts(
             path=path,
             thumbprint=thumbprint,
             machine_store=machine_store,
-            timestamp_url=timestamp_url,
             cert_file=cert_file,
             csp=csp,
             key=key,
@@ -340,13 +331,13 @@ def sign_artifacts(
         else:
             failed += 1
 
-        if index % DEFAULT_STATUS_EVERY == 0 or index == total:
+        if index % 100 == 0 or index == total:
             batch_elapsed = time.monotonic() - batch_start_time
             batch_file_count = index - batch_start_index + 1
             print(
                 f"Processed batch {batch_number} ({batch_file_count} files) "
                 f"in {batch_elapsed:.1f} seconds; {index}/{total} total: "
-                f"{signed} signed, {skipped} skipped, {failed} failed"
+                f"{signed} signed, {skipped} skipped (already signed), {failed} failed"
             )
             batch_number += 1
             batch_start_index = index + 1
@@ -395,11 +386,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--signtool",
         type=Path,
         help="Path to signtool.exe; auto-detected from the Windows SDK if omitted",
-    )
-    parser.add_argument(
-        "--timestamp-url",
-        default=TIMESTAMP_URL,
-        help=f"Timestamp authority URL (default: {TIMESTAMP_URL})",
     )
     parser.add_argument(
         "--cert-file",
@@ -460,7 +446,7 @@ def main(argv: list[str]) -> int:
     files = iter_pe_files(args.input_dir, all_files=args.all_files)
     scan_elapsed = time.monotonic() - scan_start_time
     print(f"Found {len(files)} PE file(s).")
-    print(f"Eligible file scan time: {scan_elapsed:.1f} seconds")
+    print(f"File scan time: {scan_elapsed:.1f} seconds")
     if not files:
         return 0
 
@@ -479,7 +465,7 @@ def main(argv: list[str]) -> int:
     store = "local machine" if machine_store else "current user"
     print(f"Using signtool: {signtool}")
     print(f"Certificate: {thumbprint} ({store} store)")
-    print(f"Timestamp URL: {args.timestamp_url}")
+    print(f"Timestamp URL: {TIMESTAMP_URL}")
     print("Signing files serially with one signtool invocation per file.")
 
     start_time = datetime.now().astimezone()
@@ -490,7 +476,6 @@ def main(argv: list[str]) -> int:
         signtool=signtool,
         thumbprint=thumbprint,
         machine_store=machine_store,
-        timestamp_url=args.timestamp_url,
         cert_file=args.cert_file,
         csp=args.csp,
         key=args.key,
@@ -501,7 +486,7 @@ def main(argv: list[str]) -> int:
     print(f"Signing ended at: {end_time.isoformat(timespec='seconds')}")
     print(f"Total signing time: {total_elapsed:.1f} seconds")
     print(
-        f"Done: {summary.signed} signed, {summary.skipped} skipped, "
+        f"Done: {summary.signed} signed, {summary.skipped} skipped (already signed), "
         f"{summary.failed} failed out of {summary.total}."
     )
     return 1 if summary.failed else 0
