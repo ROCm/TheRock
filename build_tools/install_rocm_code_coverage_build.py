@@ -186,11 +186,28 @@ def _replace_scoped_member(tf, member, dest_path, output_dir, relpaths):
         raise IOError(f"Unhandled tar member: {member}")
 
 
+def _is_component_path(folder, prefix, scoped_path):
+    """Whether a member under manifest relpath `prefix` belongs to `folder`.
+
+    Everything under the component's own stage directories does, named after it
+    or not: the test binaries a header-only project's report measures are named
+    after what they test (rocThrust's bin/merge.hip, rocPRIM's
+    bin/test_block_scan). Elsewhere, and for the device code under .kpack/ that
+    every component in the artifact shares, only a path naming the component
+    does.
+    """
+    names_folder = rf"{folder}[^a-zA-Z]"
+    if re.search(names_folder, scoped_path, flags=re.IGNORECASE):
+        return True
+    in_own_stage = re.search(rf"(^|/){names_folder}", prefix + "/", flags=re.IGNORECASE)
+    return bool(in_own_stage) and not scoped_path.startswith(".kpack/")
+
+
 def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
     """Extract instrumented libs from downloaded archives into the install tree.
 
     Reads each archive's artifact_manifest.txt for relpath prefixes, then flattens
-    members into output_dir -- but only those matching the artifact's library
+    members into output_dir -- but only those belonging to the artifact's library
     folder (e.g. rocBLAS), leaving unrelated files in place. Instrumented shared
     libraries whose program header table kpack moved get it pinned back (see
     _therock_utils/elf_phdr.py); otherwise their profile writer can segfault
@@ -232,9 +249,7 @@ def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
                         if not member.name.startswith(prefix_slash):
                             continue
                         scoped_path = member.name[len(prefix_slash) :]
-                        if not re.search(
-                            rf"{folder}[^a-zA-Z]", scoped_path, flags=re.IGNORECASE
-                        ):
+                        if not _is_component_path(folder, prefix, scoped_path):
                             break
                         dest_path = output_dir / PurePosixPath(scoped_path)
                         _replace_scoped_member(

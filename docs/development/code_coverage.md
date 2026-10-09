@@ -24,7 +24,8 @@ rest come from the regular nightly build (the **baseline**):
 | **Coverage** | This run            | Only the one instrumented project  |
 
 The test runner installs the baseline, then replaces only the selected
-project's libraries with instrumented ones. See [Coverage CI](#coverage-ci).
+project's libraries and tests with instrumented ones. See
+[Coverage CI](#coverage-ci).
 
 ## Enabling coverage for a local build
 
@@ -255,8 +256,13 @@ changes. The baseline-install-then-overlay isolates exactly one project.
 The baseline is read from `baseline_release_type` (normally `nightly`), not the
 coverage run's `ci` channel — artifacts are bucketed per channel. The swap
 downloads the project's whole artifact (`rand`, which also contains rocRAND)
-but extracts only the paths matching the project's library folder in
-`COMPONENT_MAP` (`hipRAND`). The instrumented stack lives under
+but extracts only the project's files: everything under its own stage
+directories (`math-libs/hipRAND/stage`), and elsewhere only paths naming its
+library folder in `COMPONENT_MAP` (`hipRAND`). The stage directories are what
+bring in a header-only project's tests, which are named after what they test
+(rocThrust's `bin/merge.hip`). The device code under `.kpack/` is shared by
+every project in the artifact, so it is replaced only when its name names the
+project, as rocWMMA's does. The instrumented stack lives under
 `<run_id>-coverage`, so even a baseline from the same workflow run is never
 overwritten by it.
 
@@ -278,7 +284,9 @@ the table has to move above the library's address range.
 A missing instrumented artifact fails the install step. A swap that matches no
 files does not: the installer logs `Replaced 0` and the tests run against the
 baseline's uninstrumented binaries. The failure then surfaces in the report
-job, which finds no profraw files.
+job, which finds no profraw files. A swap that misses just the binaries the
+report measures leaves it counters from other programs: none of its
+instrumented lines ran, or only the few those programs share.
 
 #### What scopes a report to one project
 
