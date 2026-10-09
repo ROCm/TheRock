@@ -161,7 +161,24 @@ _rocgdb_common = {
 }
 
 
-# A component may restrict which GPU families it runs on via "include_family"
+# Runner assignment for test components
+# =====================================
+# Most components have their runner selected at runtime by the per-component loop
+# below, which draws from the AMDGPU-family runner pool configured in
+# amdgpu_family_matrix.py / therock-ci-config.
+#
+# A component may instead pre-pin its runner by setting "test_runner" directly in
+# its test_matrix entry. The loop will detect this and leave the value untouched.
+# Use this when a component must run on a specific machine class regardless of the
+# GPU family being tested. For example, rocgdb-corefile requires runners that have
+# GPU core-dump support enabled, identified by the label
+# "linux-gfx942-gpu-rocm-mathlib", which is registered separately in the runner pool.
+#
+# Similarly, "linux_cpu_runner: True" routes a component to a CPU-only machine
+# (currently aws-linux-scale-rocm-prod) via the test_artifacts.yml routing
+# expression. "multi_gpu_runner" routes to multi-GPU machines.
+#
+# A component may also restrict which GPU families it runs on via "include_family"
 # (opt-in) and "exclude_family" (opt-out). Each is a map keyed by platform
 # ("linux" and/or "windows") whose value is a list of family entries. A job runs
 # only when it matches an include (if any are listed for that platform) and
@@ -1501,7 +1518,9 @@ def run():
                     f"  Excluding {job_name}: multi-GPU required but no multi-GPU runner configured"
                 )
                 continue
-        else:
+        elif "test_runner" not in component:
+            # Regular components use standard runner labels.
+            # Skip if test_runner is already pre-pinned (e.g. rocgdb-corefile).
             is_cpu_only = component.get("linux_cpu_runner", False)
             if is_cpu_only:
                 if test_runs_on_cpu:
