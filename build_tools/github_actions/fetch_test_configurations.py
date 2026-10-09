@@ -706,8 +706,10 @@ test_matrix = {
     # The runner ships in the MIOpen dist (share/miopen/bin/run_dbsync_rocjitsu.py, pulled via
     # --miopen; defined in rocm-libraries projects/miopen/test/gtest/dbsync/): it resolves arch + CU
     # list from AMDGPU_FAMILIES, sparse-builds the pinned rocjitsu KMD, and runs StaticFDBSync once
-    # per CU with a CU-corrected config. include_family restricts it to gfx942, whose FAMILY_MAP
-    # entry covers both CU variants -- MI300X (304 CU) and MI300A (228 CU) -- in a single job.
+    # per CU with a CU-corrected config. gfx94X's FAMILY_MAP entry covers both CU variants --
+    # MI300X (304 CU) and MI300A (228 CU) -- in a single job, and the Navi families cover one
+    # entry per shipped SystemDB (gfx110X-all -> gfx110060 + gfx110220, gfx1151 -> gfx115128,
+    # gfx120X-all -> gfx120020 + gfx120140).
     # linux_cpu_runner: no scarce GPU test runner needed; uses the default no_rocm Ubuntu container
     # (the runner sudo-apt-installs cmake/build-essential/libdrm-dev to build rocjitsu).
     "miopen-dbsync": {
@@ -725,7 +727,24 @@ test_matrix = {
         "linux_cpu_runner": True,
         "test_types": ["standard", "comprehensive", "full"],
         "include_family": {
-            "linux": ["gfx942"],
+            "linux": [
+                "gfx942",
+                # gfx950 already has a FAMILY_MAP entry in the runner that this
+                # opt-in list was keeping unreachable.
+                "gfx950",
+                # Navi system DBs shipped in rocm-libraries
+                # projects/miopen/src/kernels/: gfx110060, gfx110220, gfx115128,
+                # gfx120020, gfx120140. Nothing gated them before. The Windows
+                # gfx110X lane runs on gfx1101 runners, where every Navi
+                # StaticFDBSync param is SKIPPED, which is how
+                # ROCm/rocm-libraries#13394 reached develop. See also
+                # ROCm/rocm-libraries#12013 and #13411.
+                "gfx1100",
+                "gfx1102",
+                "gfx1151",
+                "gfx1200",
+                "gfx1201",
+            ],
         },
         "total_shards_dict": {
             "linux": 1,
