@@ -100,29 +100,51 @@ class TestCodeCoverageRepoSplit(unittest.TestCase):
         self.assertEqual(captured["github_repository"], "ROCm/TheRock")
 
 
+def _write_archive(path, members):
+    """Write an artifact archive of `members`: name -> content, None for a dir."""
+    with tarfile.open(path, "w:xz") as tf:
+        for name, content in members.items():
+            info = tarfile.TarInfo(name)
+            if content is None:
+                info.type = tarfile.DIRTYPE
+                tf.addfile(info)
+            else:
+                info.size = len(content)
+                tf.addfile(info, io.BytesIO(content))
+
+
 class TestReplaceInstrumentedLibraries(unittest.TestCase):
+    def _replaced_files(self, archive_name, artifacts, members):
+        """Run the replacement into an empty tree; return the files it wrote."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            downloads = tmp / "downloads"
+            downloads.mkdir()
+            _write_archive(downloads / archive_name, members)
+            output_dir = tmp / "install"
+            with mock.patch.object(mod, "pin_phdr_table", return_value=False):
+                mod.replace_instrumented_libraries(artifacts, downloads, output_dir)
+            return sorted(
+                p.relative_to(output_dir).as_posix()
+                for p in output_dir.rglob("*")
+                if p.is_file()
+            )
+
     def test_pins_program_headers_of_every_replaced_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             downloads = tmp / "downloads"
             downloads.mkdir()
             prefix = "math-libs/BLAS/rocBLAS/stage"
+            other_prefix = "math-libs/BLAS/hipBLAS/stage"
             members = {
-                "artifact_manifest.txt": f"{prefix}\n".encode(),
+                "artifact_manifest.txt": f"{prefix}\n{other_prefix}\n".encode(),
                 f"{prefix}/lib/librocblas.so.5.8": b"instrumented library",
                 f"{prefix}/lib/rocblas/library": None,
                 f"{prefix}/lib/rocblas/library/TensileLibrary.dat": b"data",
-                f"{prefix}/lib/libhipblas.so.3.8": b"some other library",
+                f"{other_prefix}/lib/libhipblas.so.3.8": b"some other library",
             }
-            with tarfile.open(downloads / "blas_lib_generic.tar.xz", "w:xz") as tf:
-                for name, content in members.items():
-                    info = tarfile.TarInfo(name)
-                    if content is None:
-                        info.type = tarfile.DIRTYPE
-                        tf.addfile(info)
-                    else:
-                        info.size = len(content)
-                        tf.addfile(info, io.BytesIO(content))
+            _write_archive(downloads / "blas_lib_generic.tar.xz", members)
             output_dir = tmp / "install"
 
             with mock.patch.object(mod, "pin_phdr_table", return_value=False) as pin:
@@ -141,6 +163,52 @@ class TestReplaceInstrumentedLibraries(unittest.TestCase):
                     mock.call(data, require_section="__llvm_prf_cnts"),
                 ],
             )
+
+    def test_replaces_every_file_in_the_component_stage_dirs(self):
+        # Laid out like prim_test: tests named after what they test, and the
+        # device code of all three projects in hipCUB's stage directory.
+        stages = {
+            "hipCUB": "math-libs/hipCUB/stage",
+            "rocPRIM": "math-libs/rocPRIM_tests/stage",
+            "rocThrust": "math-libs/rocThrust/stage",
+        }
+        files = {
+            "hipCUB": ["bin/test_hipcub_block_scan"],
+            "rocPRIM": ["bin/test_block_scan"],
+            "rocThrust": ["bin/merge.hip", "bin/rocthrust/CTestTestfile.cmake"],
+        }
+        members = {
+            "artifact_manifest.txt": "".join(
+                f"{s}\n" for s in stages.values()
+            ).encode(),
+            f"{stages['hipCUB']}/.kpack/prim_test_gfx942.kpack": b"device code",
+        }
+        for folder, paths in files.items():
+            for path in paths:
+                members[f"{stages[folder]}/{path}"] = b"instrumented test"
+
+        for folder, paths in files.items():
+            with self.subTest(folder=folder):
+                self.assertEqual(
+                    self._replaced_files(
+                        "prim_test_generic.tar.xz", {"prim": [folder]}, members
+                    ),
+                    paths,
+                )
+
+    def test_replaces_device_code_named_after_the_component(self):
+        prefix = "math-libs/rocWMMA/stage"
+        members = {
+            "artifact_manifest.txt": f"{prefix}\n".encode(),
+            f"{prefix}/.kpack/rocwmma_test_gfx942.kpack": b"device code",
+            f"{prefix}/bin/gemm_xdl-validate": b"instrumented test",
+        }
+        self.assertEqual(
+            self._replaced_files(
+                "rocwmma_test_gfx942.tar.xz", {"rocwmma": ["rocWMMA"]}, members
+            ),
+            [".kpack/rocwmma_test_gfx942.kpack", "bin/gemm_xdl-validate"],
+        )
 
 
 if __name__ == "__main__":
