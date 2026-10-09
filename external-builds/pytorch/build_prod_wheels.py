@@ -1147,6 +1147,7 @@ def do_build_pytorch(
     if args.asan:
         setup_pytorch_asan.suppress_benchmark_c2y_warning(pytorch_dir)
         setup_pytorch_asan.link_rocshmem_device_bitcode(pytorch_dir)
+        setup_pytorch_asan.link_mkldnn_openmp(pytorch_dir)
 
     # Compute version (dev builds are tagged with the torch source commit).
     pytorch_build_version = compute_build_version(
