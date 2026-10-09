@@ -479,7 +479,6 @@
   "rocrand": {
     "consumers": [
       "composable_kernel",
-      "hipccl",
       "hipccl_tests",
       "hipdnn_integration_tests",
       "hiprand",

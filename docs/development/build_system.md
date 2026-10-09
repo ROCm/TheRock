@@ -161,6 +161,17 @@ Each sub-project, by default, uses a standard directory layout for its build:
 Subprojects that opt in to source file globbing even when otherwise skipped
 (e.g. `-DTHEROCK_DEV_PROJECTS=amd-llvm`).
 
+### `THEROCK_ENABLE_HIPCCL`
+
+Selects how the prim libraries are built (default `ON`, requires
+`THEROCK_ENABLE_PRIM`). When `ON`, rocPRIM, hipCUB and rocThrust are built
+together as the unified hipCCL superbuild (`projects/hipccl/hipccl3`). When
+`OFF`, they are built as the legacy separate subprojects
+(`projects/{rocprim,hipcub,rocthrust}`). Both source trees exist in
+rocm-libraries; this flag controls which one TheRock builds and ships, allowing
+the migration to be rolled out or reverted without a code change
+(e.g. `-DTHEROCK_ENABLE_HIPCCL=OFF`).
+
 ## Developer Cookbook
 
 TheRock aims to not just be a CI tool but to be a daily driver for developer
