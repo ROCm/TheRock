@@ -270,6 +270,15 @@ cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
   "Enables building rocWMMA benchmarks" ON
   "THEROCK_ENABLE_ROCWMMA;THEROCK_BUILD_TESTING;NOT WIN32" OFF)
 
+# Build rocPRIM/hipCUB/rocThrust as the unified hipCCL superbuild
+# (projects/hipccl/hipccl3) instead of the separate projects/{rocprim,hipcub,
+# rocthrust} subprojects. Both source trees exist in rocm-libraries; this flag
+# selects which TheRock builds and ships. Set OFF to fall back to the legacy
+# separate subprojects.
+cmake_dependent_option(THEROCK_ENABLE_HIPCCL
+  "Build the unified hipCCL superbuild instead of separate rocPRIM/hipCUB/rocThrust subprojects" ON
+  "THEROCK_ENABLE_PRIM" OFF)
+
 # Additional manual features that don't map to artifacts
 
 # Finalize all feature flags.

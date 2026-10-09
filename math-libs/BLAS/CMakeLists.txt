@@ -302,7 +302,7 @@ if(THEROCK_ENABLE_SPARSE)
     BUILD_DEPS
       rocm-cmake
       rocBLAS
-      hipCCL
+      ${_prim_build_dep}
       therock-googletest
     RUNTIME_DEPS
       hip-clr
@@ -440,7 +440,7 @@ if(THEROCK_ENABLE_SOLVER)
         amd-hip
       BUILD_DEPS
         rocm-cmake
-        hipCCL
+        ${_prim_build_dep}
         therock-fmt
         therock-googletest
       RUNTIME_DEPS
