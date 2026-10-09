@@ -218,8 +218,8 @@ When the generic artifacts are empty there is no host package:
 - no `-host` package is built;
 - the versioned meta (e.g. `amdrocm-ck-dev8.2`) depends on the device packages only;
 - each device package carries the host's non-gfxarch dependencies itself (`amdrocm-ck8.2`, `amdrocm-runtime-dev8.2`) next to its own-arch gfxarch dependencies;
-- a non-metapackage dependency with `Artifactory` and no generic content is dropped from dependency lists (metapackages and packages without `Artifactory` are always kept);
-- with no per-arch artifacts either (e.g. before the per-target CK archives exist), the package is non-gfxarch, builds nothing, and gets no non-versioned alias, so nothing depends on it.
+- a dependency marked `OptionalContent` in `package.json` (currently `amdrocm-ck-devel`) that has no generic content is dropped from dependency lists; every other package is kept, so a missing package stays a visible dangling dependency (metapackages are always kept);
+- with no per-arch artifacts either (e.g. before the per-target CK archives exist), an `OptionalContent` package is non-gfxarch, builds nothing, and gets no non-versioned alias, so nothing depends on it.
 
 ```
 amdrocm-ck-dev (non-versioned)

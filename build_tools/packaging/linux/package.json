@@ -2330,7 +2330,8 @@
         ]
       }
     ],
-    "Gfxarch": "True"
+    "Gfxarch": "True",
+    "OptionalContent": "True"
   },
   {
     "Package": "amdrocm-rccl-test",

@@ -1,4 +1,6 @@
 # composable-kernel
+# lib claims the headers and static archives wholesale, so only the per-target
+# conv archives and their cmake exports excluded below fall through to dev.
 [components.lib."math-libs/composable_kernel/stage"]
 include = [
   "include/**",

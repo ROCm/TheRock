@@ -51,7 +51,6 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 
 from packaging_summary import *
 from packaging_utils import *
-from packaging_utils import _has_generic_content
 from runpath_to_rpath import *
 
 from _therock_utils.artifacts import ArtifactCatalog
@@ -205,7 +204,7 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
     # Skip when there is no generic content: the device packages then carry the
     # host's dependencies themselves
     if not is_meta:
-        if _has_generic_content(pkg_info, config.artifacts_dir):
+        if has_generic_content(pkg_info, config.artifacts_dir):
             logger.info(f"Building host variant for {pkg_name}")
             pkg = build_host_package(pkg_name, config)
             if pkg:
@@ -246,7 +245,7 @@ def build_simple_package_variants(pkg_name, config: PackageConfig) -> list:
     Creates:
     - Versioned package (e.g., amdrocm-core8.2)
     - Non-versioned package with no arch suffix (e.g., amdrocm-core); not built
-      for a non-meta package that has no content
+      for an OptionalContent package that has no generic content
 
     Parameters:
         pkg_name: Name of the package to build
@@ -264,14 +263,12 @@ def build_simple_package_variants(pkg_name, config: PackageConfig) -> list:
     if pkg:
         built_packages.extend(pkg)
 
-    # A non-meta package with no content builds no versioned package, so an
-    # alias would depend on a package that does not exist. A versioned build
-    # that had content but failed still gets its alias.
-    if not is_meta_package(pkg_info) and not any(
-        path.is_dir()
-        for path in filter_components_fromartifactory(
-            pkg_name, config.artifacts_dir, "", config.enable_kpack
-        )
+    # An OptionalContent package with no generic content builds no versioned
+    # package, so an alias would depend on a package that does not exist. A
+    # versioned build that had content but failed still gets its alias. Other
+    # packages always get their alias.
+    if is_optional_content_package(pkg_info) and not has_generic_content(
+        pkg_info, config.artifacts_dir
     ):
         logger.info(f"Skipping non-versioned variant for {pkg_name}: no content")
         return built_packages

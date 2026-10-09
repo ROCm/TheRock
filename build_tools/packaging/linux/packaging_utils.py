@@ -531,7 +531,7 @@ def expand_kpack_meta_dependencies(pkg_name, gfxarch_list, config: PackageConfig
 
     # Add host package (with -host suffix) only when there is generic content
     pkg_info = get_package_info(pkg_name)
-    if _has_generic_content(pkg_info, config.artifacts_dir):
+    if has_generic_content(pkg_info, config.artifacts_dir):
         host_config = replace(config, versioned_pkg=True, gfx_arch=GFX_HOST)
         packages.append(update_package_name(pkg_name, host_config))
 
@@ -756,7 +756,7 @@ def process_main_dependencies_kpack(
             config.gfx_arch,
             target_members=package_target_members(config),
         )
-        if _has_generic_content(pkg_info, config.artifacts_dir):
+        if has_generic_content(pkg_info, config.artifacts_dir):
             dep_list = [pkg_name] + gfxarch_deps
         else:
             # Resolve the two lists separately: the generic list resolves as the
@@ -1363,7 +1363,7 @@ def _artifactory_has_content(pkg_info, artifacts_dir, gfx_arch):
     return False
 
 
-def _has_generic_content(pkg_info, artifacts_dir):
+def has_generic_content(pkg_info, artifacts_dir):
     """Check whether a package has files in its generic artifacts.
 
     In kpack mode a package without generic content has no -host variant.
@@ -1376,6 +1376,21 @@ def _has_generic_content(pkg_info, artifacts_dir):
              is non-empty, False otherwise (always False without Artifactory)
     """
     return _artifactory_has_content(pkg_info, artifacts_dir, GFX_HOST)
+
+
+def is_optional_content_package(pkg_info):
+    """Verifies whether the OptionalContent key is enabled for a package.
+
+    A package with OptionalContent builds no package when it has no generic
+    content, and is dropped from dependency lists in that case.
+
+    Parameters:
+    pkg_info (dict): A dictionary containing package details.
+
+    Returns:
+    bool: True if the package's content is optional, False otherwise.
+    """
+    return is_key_defined(pkg_info, "OptionalContent")
 
 
 def filter_archs_with_artifacts(
@@ -1490,20 +1505,19 @@ def filter_dependencies_by_artifacts(
             continue
 
         # Non-gfxarch packages: missing artifacts should fail the build,
-        # so we don't filter them out here. The exception is a non-meta
-        # package with Artifactory and no generic content: it builds no package
-        # (e.g. a -devel package whose generic artifacts are empty), so
-        # depending on it would dangle. Metapackages and packages without
-        # Artifactory (e.g. amdrocm-core) are always kept.
+        # so we don't filter them out here. The exception is a package with
+        # OptionalContent and no generic content: it builds no package, so
+        # depending on it would dangle. Packages without OptionalContent (and
+        # metapackages) are always kept, leaving a dangling dependency visible.
         if not is_gfxarch_package(
             dep_info, enable_kpack=True, artifacts_dir=artifacts_dir
         ):
             if (
-                not is_meta_package(dep_info)
-                and dep_info.get("Artifactory")
-                and not _has_generic_content(dep_info, artifacts_dir)
+                is_optional_content_package(dep_info)
+                and not is_meta_package(dep_info)
+                and not has_generic_content(dep_info, artifacts_dir)
             ):
-                logger.info(f"Excluding {dep} (no generic content)")
+                logger.info(f"Excluding {dep} (optional content, no generic content)")
                 continue
             filtered.append(dep)
             continue
