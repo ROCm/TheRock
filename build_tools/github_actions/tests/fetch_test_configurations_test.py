@@ -729,7 +729,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIsInstance(out["container_options"], str)
         self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
 
-
     # -----------------------
     # ASAN sandbox runner selection
     # -----------------------
