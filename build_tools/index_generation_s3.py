@@ -28,6 +28,7 @@ Generate index.html for direct child directories (not files) under a prefix:
 """
 
 import argparse
+import html
 import json
 import logging
 import os
@@ -215,7 +216,7 @@ def generate_index_s3(
     html_content = f"""
     <html>
     <head>
-        <title>{page_title}</title>
+        <title>{html.escape(page_title)}</title>
         <meta charset="utf-8"/>
         <meta http-equiv="x-ua-compatible" content="ie=edge"/>
         <meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -242,7 +243,7 @@ def generate_index_s3(
 
                 if (fileList.length === 0) {{
                     const li = document.createElement('li');
-                    li.textContent = '{empty_message}';
+                    li.textContent = {json.dumps(empty_message)};
                     ul.appendChild(li);
                     return;
                 }}
@@ -275,7 +276,7 @@ def generate_index_s3(
         </script>
     </head>
     <body>
-        <h1>{page_title}</h1>
+        <h1>{html.escape(page_title)}</h1>
         <div class="controls">
             <label for="sortOrder">Sort by:</label>
             <select id="sortOrder">
@@ -333,12 +334,12 @@ def generate_directory_index_s3(
     )
 
     if not directories_html:
-        directories_html = f"<li>{empty_message}</li>"
+        directories_html = f"<li>{html.escape(empty_message)}</li>"
 
     html_content = f"""
     <html>
     <head>
-        <title>{page_title}</title>
+        <title>{html.escape(page_title)}</title>
         <meta charset="utf-8"/>
         <meta http-equiv="x-ua-compatible" content="ie=edge"/>
         <meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -352,7 +353,7 @@ def generate_directory_index_s3(
         </style>
     </head>
     <body>
-        <h1>{page_title}</h1>
+        <h1>{html.escape(page_title)}</h1>
         <ul>
             {directories_html}
         </ul>
