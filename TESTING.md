@@ -187,6 +187,10 @@ to build system files, we generally look for
 - The build jobs should not significantly regress in duration.
 - The build artifacts should not unexpectedly grow in size.
 
+The [artifact structure workflow](/.github/workflows/test_artifacts_structure.yml)
+fetches generic, family, and per-target archives before checking for file
+overlaps. Kpack-split files may exist only in per-target archives.
+
 > [!IMPORTANT]
 > Certain types of changes benefit from additional validation, such as:
 >
