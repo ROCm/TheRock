@@ -17,6 +17,7 @@ from build_prod_wheels import (
 )
 from setup_pytorch_asan import (
     append_env_text,
+    link_mkldnn_openmp,
     link_rocshmem_device_bitcode,
     suppress_benchmark_c2y_warning,
 )
@@ -157,6 +158,43 @@ class AsanRocshmemBitcodeTest(unittest.TestCase):
             path.write_text(original)
 
             link_rocshmem_device_bitcode(pytorch_dir)
+            self.assertEqual(path.read_text(), original)
+
+
+class AsanMkldnnOpenmpTest(unittest.TestCase):
+    _OLDER_RELEASE = """\
+set_property(
+  TARGET caffe2::mkldnn PROPERTY INTERFACE_LINK_LIBRARIES
+  ${MKLDNN_LIBRARIES})
+"""
+
+    def test_older_release_links_openmp_with_onednn(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pytorch_dir = Path(tmp)
+            path = pytorch_dir / "cmake" / "public" / "mkldnn.cmake"
+            path.parent.mkdir(parents=True)
+            path.write_text(self._OLDER_RELEASE)
+
+            link_mkldnn_openmp(pytorch_dir)
+            patched = path.read_text()
+            link_mkldnn_openmp(pytorch_dir)
+            self.assertEqual(path.read_text(), patched)
+
+        self.assertIn("caffe2::openmp)", patched)
+        self.assertIn("APPEND PROPERTY INTERFACE_LINK_LIBRARIES", patched)
+
+    def test_release_2_14_is_left_unchanged(self):
+        original = (
+            self._OLDER_RELEASE
+            + "\nset_property(\n  TARGET caffe2::mkldnn APPEND PROPERTY INTERFACE_LINK_LIBRARIES\n  caffe2::openmp)\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            pytorch_dir = Path(tmp)
+            path = pytorch_dir / "cmake" / "public" / "mkldnn.cmake"
+            path.parent.mkdir(parents=True)
+            path.write_text(original)
+
+            link_mkldnn_openmp(pytorch_dir)
             self.assertEqual(path.read_text(), original)
 
 

@@ -203,6 +203,42 @@ def link_rocshmem_device_bitcode(pytorch_dir: Path) -> None:
     print(f"  Patched {path} to link rocSHMEM device bitcode for ASAN")
 
 
+# release/2.13's oneDNN builds static libdnnl.a with OpenMP but does not
+# export libomp. test_jit then fails on omp_*/__kmpc_*. release/2.14 adds
+# the detected runtime to the mkldnn interface. release/2.12's older oneDNN
+# does not leave this link unresolved.
+_MKLDNN_INTERFACE_LINE = (
+    "  TARGET caffe2::mkldnn PROPERTY INTERFACE_LINK_LIBRARIES\n  ${MKLDNN_LIBRARIES})"
+)
+_MKLDNN_OPENMP = """
+# oneDNN compiles the static dnnl library with -fopenmp but, for the non-SYCL
+# OMP runtime, adds no OpenMP link dependency to the target, expecting consumers
+# to provide it. PyTorch only propagates Intel's iomp5 via MKL_OPENMP_LIBRARY,
+# so a non-MKL OpenMP build leaves nothing linking libomp and binaries that pull
+# dnnl objects (e.g. the C++ test executables) fail to resolve omp_*/__kmpc_*
+# symbols. Carry the detected OpenMP runtime on the interface to cover that case.
+if(MKLDNN_FOUND AND TARGET caffe2::openmp)
+  set_property(
+    TARGET caffe2::mkldnn APPEND PROPERTY INTERFACE_LINK_LIBRARIES
+    caffe2::openmp)
+endif()
+"""
+
+
+def link_mkldnn_openmp(pytorch_dir: Path) -> None:
+    """Insert the release/2.14 oneDNN OpenMP link when it is absent."""
+    path = pytorch_dir / "cmake" / "public" / "mkldnn.cmake"
+    if not path.is_file():
+        return
+    text = path.read_text()
+    if "caffe2::openmp" in text or _MKLDNN_INTERFACE_LINE not in text:
+        return
+    if not text.endswith("\n"):
+        text += "\n"
+    path.write_text(text + _MKLDNN_OPENMP)
+    print(f"  Patched {path} to link OpenMP with oneDNN")
+
+
 def apply_asan_build_env(env: dict[str, str], rocm_dir: Path) -> None:
     """Point the torch build at the ROCm Clang shared ASan runtime.
 
