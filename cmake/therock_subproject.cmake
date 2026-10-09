@@ -1003,8 +1003,17 @@ function(therock_cmake_subproject_activate target_name)
       string(APPEND _coverage_include_contents
         "add_link_options(-fprofile-instr-generate)\n")
     endif()
+    # -Wno-unused-command-line-argument because -Xarch_device is unused for
+    # the plain C++ sources that make up most of these projects, and several
+    # of them build with -Werror.
+    set(_coverage_compile_flags
+      "${_coverage_self_flags}${_coverage_device_flags} -Wno-unused-command-line-argument")
+    string(APPEND _coverage_include_contents
+      "set(THEROCK_COVERAGE_COMPILE_FLAGS \"${_coverage_compile_flags}\")\n")
     # Workarounds for a project's coverage-only CMake that does not build under
-    # TheRock, applied only while the project is instrumented.
+    # TheRock, or for sources it compiles outside the compile rules below,
+    # which get THEROCK_COVERAGE_COMPILE_FLAGS. Applied only while the project
+    # is instrumented.
     set(_coverage_fixup "${THEROCK_SOURCE_DIR}/cmake/coverage/${_logical_target_name}.cmake")
     if(EXISTS "${_coverage_fixup}")
       string(APPEND _coverage_include_contents "include(\"${_coverage_fixup}\")\n")
@@ -1016,13 +1025,10 @@ function(therock_cmake_subproject_activate target_name)
         "set(CMAKE_${_coverage_lang}_COMPILER_LAUNCHER \"\")\n")
     endforeach()
     # Runs on every project() call, so the rewrite has to be idempotent.
-    # -Wno-unused-command-line-argument because -Xarch_device is unused for
-    # the plain C++ sources that make up most of these projects, and several
-    # of them build with -Werror.
     foreach(_coverage_lang IN ITEMS C CXX HIP)
       string(APPEND _coverage_include_contents
         "if(CMAKE_${_coverage_lang}_COMPILE_OBJECT AND NOT CMAKE_${_coverage_lang}_COMPILE_OBJECT MATCHES \"Xarch_device -f(no-)?profile-instr-generate\")\n"
-        "  string(REPLACE \"<FLAGS>\" \"<FLAGS> ${_coverage_self_flags}${_coverage_device_flags} -Wno-unused-command-line-argument\"\n"
+        "  string(REPLACE \"<FLAGS>\" \"<FLAGS> ${_coverage_compile_flags}\"\n"
         "    CMAKE_${_coverage_lang}_COMPILE_OBJECT \"\${CMAKE_${_coverage_lang}_COMPILE_OBJECT}\")\n"
         "endif()\n")
     endforeach()
@@ -1034,6 +1040,71 @@ function(therock_cmake_subproject_activate target_name)
     # intercepts only its own binary's calls.
     string(APPEND _coverage_include_contents
       "add_link_options(\"LINKER:--exclude-libs,libclang_rt.profile_rocm.a\")\n")
+    # With the kernels left uninstrumented, clang still gives every HIP
+    # translation unit a host-side shadow of its device counters, registered
+    # from a constructor, and the registrations link the GPU half of the
+    # profile runtime (InstrProfilingPlatformROCm.cpp, in both
+    # libclang_rt.profile.a and libclang_rt.profile_rocm.a), which the driver
+    # also force-links on a HIP link. At exit that half asks the HIP runtime
+    # for the device side of each shadow, which does not exist. And taken from
+    # libclang_rt.profile.a, as a library that links HIP only as hip::host
+    # (rpp) gets it, it leaves __sanitizer_internal_memcpy undefined: only
+    # libclang_rt.profile_rocm.a defines it, so the library does not load. A
+    # stub that defines each of its entry points as a no-op takes the
+    # registrations in the projects instrumented for host coverage only; the
+    # device coverage ones need the real ones. Should a compiler update add an
+    # entry point the stub lacks, links fail on duplicate symbols rather than
+    # bringing the GPU half back.
+    #
+    # The GPU half also wraps hipLaunchKernel, hipModuleLoad and the like, as
+    # weak definitions of those names, so it is extracted for them too by a
+    # link that reaches the profile runtime archives while they are still
+    # unresolved. The driver adds the archives after the HIP runtime, but
+    # rocSPARSE names them itself, ahead of it. Putting the HIP runtime in
+    # front of every object resolves those functions first; --as-needed keeps
+    # it from becoming a dependency of anything that does not call into it.
+    # Where device coverage links the GPU half anyway, its definitions still
+    # take precedence over the shared library's.
+    set(_coverage_profile_stub_source
+      "${THEROCK_SOURCE_DIR}/cmake/therock_coverage_profile_stub.c")
+    string(APPEND _coverage_include_contents "set(_therock_coverage_stub \"\")\n")
+    if(NOT ${_device_coverage_var_name})
+      string(APPEND _coverage_include_contents
+        "set(_therock_coverage_stub \"\${CMAKE_BINARY_DIR}/therock_coverage_profile_stub.o\")\n"
+        "if(\"${_coverage_profile_stub_source}\" IS_NEWER_THAN \"\${_therock_coverage_stub}\")\n"
+        "  if(CMAKE_C_COMPILER)\n"
+        "    set(_therock_coverage_cc \"\${CMAKE_C_COMPILER}\")\n"
+        "  else()\n"
+        "    set(_therock_coverage_cc \"\${CMAKE_CXX_COMPILER}\")\n"
+        "  endif()\n"
+        "  execute_process(\n"
+        "    COMMAND \"\${_therock_coverage_cc}\" -x c -O2 -fPIC -c\n"
+        "      \"${_coverage_profile_stub_source}\" -o \"\${_therock_coverage_stub}\"\n"
+        "    RESULT_VARIABLE _therock_coverage_result)\n"
+        "  if(NOT _therock_coverage_result EQUAL 0)\n"
+        "    message(FATAL_ERROR \"Could not compile ${_coverage_profile_stub_source}\")\n"
+        "  endif()\n"
+        "endif()\n"
+        "set(_therock_coverage_stub \" \${_therock_coverage_stub}\")\n")
+      list(APPEND _fprint_files "${_coverage_profile_stub_source}")
+      list(APPEND _coverage_configure_depends "${_coverage_profile_stub_source}")
+    endif()
+    string(APPEND _coverage_include_contents
+      "set(_therock_coverage_hip \"\")\n"
+      "if(THEROCK_TOOLCHAIN_ROOT)\n"
+      "  file(GLOB _therock_coverage_hip_libs \"\${THEROCK_TOOLCHAIN_ROOT}/lib/libamdhip64.so*\")\n"
+      "  if(_therock_coverage_hip_libs)\n"
+      "    list(GET _therock_coverage_hip_libs 0 _therock_coverage_hip_lib)\n"
+      "    set(_therock_coverage_hip \" -Wl,--push-state,--as-needed \${_therock_coverage_hip_lib} -Wl,--pop-state\")\n"
+      "  endif()\n"
+      "endif()\n"
+      "set(_therock_coverage_link \"\${_therock_coverage_stub}\${_therock_coverage_hip}\")\n"
+      "foreach(_therock_coverage_kind IN ITEMS EXE SHARED MODULE)\n"
+      "  string(FIND \"\${CMAKE_\${_therock_coverage_kind}_LINKER_FLAGS}\" \"\${_therock_coverage_link}\" _therock_coverage_pos)\n"
+      "  if(_therock_coverage_link AND _therock_coverage_pos EQUAL -1)\n"
+      "    string(APPEND CMAKE_\${_therock_coverage_kind}_LINKER_FLAGS \"\${_therock_coverage_link}\")\n"
+      "  endif()\n"
+      "endforeach()\n")
     file(CONFIGURE OUTPUT "${_cmake_project_coverage_file}"
       CONTENT "${_coverage_include_contents}" @ONLY ESCAPE_QUOTES)
     list(APPEND _fprint_files "${_cmake_project_coverage_file}")

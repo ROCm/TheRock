@@ -14,6 +14,11 @@ from pathlib import Path
 
 THEROCK_ROOT = Path(__file__).resolve().parents[2]
 HIPBLASLT_FIXUP = THEROCK_ROOT / "cmake" / "coverage" / "hipBLASLt.cmake"
+ROCALUTION_FIXUP = THEROCK_ROOT / "cmake" / "coverage" / "rocALUTION.cmake"
+COVERAGE_FLAGS = (
+    "-fprofile-instr-generate -fcoverage-mapping -Xarch_device "
+    "-fprofile-instr-generate -Xarch_device -fcoverage-mapping"
+)
 
 # hipBLASLt under TheRock, reduced to the part that fails: rocRoller arrives as
 # an imported target, and the coverage-only test link names it bare. The
@@ -86,6 +91,76 @@ class HipblasltFixupTest(unittest.TestCase):
         build = self.build()
         self.assertNotEqual(build.returncode, 0)
         self.assertIn("rocroller", build.stdout + build.stderr)
+
+
+# rocALUTION, reduced to what decides the flags its hipcc commands get: its
+# policy level, FindHIP creating HIP_CLANG_FLAGS as a cache entry after
+# project(), and hip_add_library() reading it in a subdirectory.
+ROCALUTION_PROJECT = textwrap.dedent(
+    """\
+    cmake_minimum_required(VERSION 3.19)
+    project(rocalution_like LANGUAGES NONE)
+    set(HIP_CLANG_FLAGS "" CACHE STRING "Semicolon delimited flags for CLANG")
+    add_subdirectory(src)
+    """
+)
+ROCALUTION_SRC = textwrap.dedent(
+    """\
+    file(WRITE "${CMAKE_BINARY_DIR}/hip_clang_flags.txt" "${HIP_CLANG_FLAGS}")
+    """
+)
+
+
+class RocalutionFixupTest(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        (self.root / "src" / "src").mkdir(parents=True)
+        (self.root / "src" / "CMakeLists.txt").write_text(ROCALUTION_PROJECT)
+        (self.root / "src" / "src" / "CMakeLists.txt").write_text(ROCALUTION_SRC)
+        self.build_dir = self.root / "build"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def configure_with(self, include_body: str) -> list[str]:
+        include = self.root / "coverage_include.cmake"
+        include.write_text(
+            f'set(THEROCK_COVERAGE_COMPILE_FLAGS "{COVERAGE_FLAGS}")\n' + include_body
+        )
+        configure = subprocess.run(
+            [
+                "cmake",
+                "-S",
+                str(self.root / "src"),
+                "-B",
+                str(self.build_dir),
+                f"-DCMAKE_PROJECT_INCLUDE={include}",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(configure.returncode, 0, configure.stdout + configure.stderr)
+        flags = (self.build_dir / "hip_clang_flags.txt").read_text()
+        return [flag for flag in flags.split(";") if flag]
+
+    def test_hipcc_commands_get_the_coverage_flags(self):
+        flags = self.configure_with(f'include("{ROCALUTION_FIXUP.as_posix()}")\n')
+        self.assertEqual(flags, COVERAGE_FLAGS.split())
+
+    def test_reconfiguring_does_not_repeat_them(self):
+        include_body = f'include("{ROCALUTION_FIXUP.as_posix()}")\n'
+        self.configure_with(include_body)
+        flags = self.configure_with(include_body)
+        self.assertEqual(flags, COVERAGE_FLAGS.split())
+
+    def test_a_normal_variable_would_not_reach_them(self):
+        # Keeps the tests above honest: FindHIP creating the cache entry drops
+        # a normal variable set from the project include.
+        flags = self.configure_with(
+            "set(HIP_CLANG_FLAGS ${THEROCK_COVERAGE_COMPILE_FLAGS})\n"
+        )
+        self.assertEqual(flags, [])
 
 
 if __name__ == "__main__":

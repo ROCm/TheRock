@@ -20,10 +20,13 @@ on:
       - ".github/workflows/test_code_coverage_component.yml"
       - "build_tools/_therock_utils/kpack_archive.py"
       - "build_tools/github_actions/configure_coverage_ci.py"
+      - "build_tools/github_actions/fetch_test_configurations.py"
       - "build_tools/github_actions/merge_coverage_report.py"
+      - "build_tools/github_actions/test_executable_scripts/test_runner.py"
       - "build_tools/install_rocm_code_coverage_build.py"
       - "cmake/coverage/**"
       - "cmake/therock_coverage_device.cmake"
+      - "cmake/therock_coverage_profile_stub.c"
       - "cmake/therock_subproject.cmake"
       - "CMakeLists.txt"
 

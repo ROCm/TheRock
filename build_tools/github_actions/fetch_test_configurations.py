@@ -545,6 +545,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        # Instrumented kernels take the suite past the coverage timeout in one
+        # shard. test_runner.py shards rocthrust by gtest case alone, so every
+        # shard still runs each test binary.
+        "coverage_total_shards_dict": {
+            "linux": 3,
+        },
         "exclude_family": {
             "linux": [
                 # CRITICAL FAILURE (amd-smi hangs): rocthrust test hangs during amd-smi GPU detection
@@ -1426,6 +1432,10 @@ def run():
                 job_config_data["timeout_minutes"] = _coverage_timeout_minutes(
                     job_config_data["timeout_minutes"]
                 )
+                job_config_data["total_shards_dict"] = {
+                    **job_config_data.get("total_shards_dict", {}),
+                    **job_config_data.get("coverage_total_shards_dict", {}),
+                }
 
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)

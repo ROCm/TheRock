@@ -260,6 +260,33 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             fetch_test_configurations.test_matrix["rocrand"]["timeout_minutes"],
         )
 
+    def test_coverage_variant_takes_coverage_shards(self):
+        os.environ["PROJECTS_TO_TEST"] = "rocthrust"
+        os.environ["BUILD_VARIANT"] = "coverage"
+        shards = fetch_test_configurations.test_matrix["rocthrust"][
+            "coverage_total_shards_dict"
+        ]["linux"]
+
+        fetch_test_configurations.run()
+
+        rocthrust = self._get_components()[0]
+        self.assertGreater(shards, 1)
+        self.assertEqual(rocthrust["total_shards"], shards)
+        self.assertEqual(rocthrust["shard_arr"], list(range(1, shards + 1)))
+
+    def test_release_variant_keeps_regular_shards(self):
+        os.environ["PROJECTS_TO_TEST"] = "rocthrust"
+        os.environ["BUILD_VARIANT"] = "release"
+
+        fetch_test_configurations.run()
+
+        self.assertEqual(
+            self._get_components()[0]["total_shards"],
+            fetch_test_configurations.test_matrix["rocthrust"]["total_shards_dict"][
+                "linux"
+            ],
+        )
+
     def test_coverage_timeout_is_multiplied(self):
         self.assertEqual(fetch_test_configurations._coverage_timeout_minutes(15), 60)
 

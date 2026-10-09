@@ -217,7 +217,11 @@ jobs:
         if: ${{ fromJSON(inputs.component).additional_requirements_files[0] != '' }}
         env:
           REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
+          # The script installs with uv, which otherwise wants a virtual
+          # environment; this job installs into the setup-python interpreter.
+          UV_SYSTEM_PYTHON: "1"
         run: |
+          pip3 install uv
           python ./build_tools/install_additional_requirements.py \
             --requirements-files "${REQUIREMENTS_FILES}"
 

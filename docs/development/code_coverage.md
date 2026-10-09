@@ -48,11 +48,14 @@ Their entries set `self_instrumented=True` instead of `coverage_option`, and
 the device-scoped flags described below, and `-fprofile-instr-generate` to
 their links. Their own option, if any, stays off.
 
-Where a project's coverage-only CMake does not build under TheRock,
+Where a project's coverage-only CMake does not build under TheRock, or the
+project compiles sources outside the compile rules,
 `cmake/coverage/<project>.cmake`, if it exists, is included while the project
 is instrumented. `hipBLASLt.cmake` gives the bare `rocroller` that hipBLASLt's
 coverage-only test link names a target forwarding to the imported
-`roc::rocroller`.
+`roc::rocroller`. `rocALUTION.cmake` puts the coverage flags in FindHIP's
+`HIP_CLANG_FLAGS`: rocALUTION builds its HIP backend with `hip_add_library()`,
+whose `hipcc` commands never see the compile rule.
 
 ### Enabling a whole group
 
@@ -160,6 +163,17 @@ each copy out of its binary's dynamic symbol table, and each intercepts only
 its own binary's calls. One side effect: a copy's supplemental HSA drain also
 picks up the other binaries' code objects, so their counts can be added twice.
 Coverage percentages are unaffected.
+
+Projects instrumented for host coverage only link a stub,
+`cmake/therock_coverage_profile_stub.c`, that defines the collector's entry
+points as no-ops. Clang still registers a host-side shadow of each HIP
+translation unit's device counters, and those registrations would otherwise
+pull the collector in. A library that links HIP only as `hip::host`, as rpp
+does, then gets it from `libclang_rt.profile.a`, which leaves
+`__sanitizer_internal_memcpy` undefined (only `libclang_rt.profile_rocm.a`
+defines it) and exports the interceptors. Every coverage link also puts the
+HIP runtime ahead of its objects, so the collector's weak `hipLaunchKernel`
+and the like are not extracted for a project's own calls.
 
 ### Building with device coverage
 
@@ -341,7 +355,21 @@ component's `timeout_minutes` by 4, capped at 180 so the step ends inside the
 job's 210-minute limit, and never lowered below the release value.
 Instrumented tests run slower, and some upstream coverage options do more than
 instrument: hipRAND's `BUILD_CODE_COVERAGE` adds `-O0 -g`, and rocRAND's
-`CODE_COVERAGE` compiles in extra CPU-only test suites.
+`CODE_COVERAGE` compiles in extra CPU-only test suites. A component can also
+set `coverage_total_shards_dict` to use more shards in coverage runs than in
+regular ones. rocThrust does, and `test_runner.py` shards it by gtest case
+alone, so every shard still runs each test binary.
+
+In coverage runs only, `test_runner.py` skips the tests in
+`COVERAGE_CTEST_EXCLUSIONS`, which fail because of the instrumentation and
+pass in the regular build:
+
+- rocPRIM's `test_config_dispatch`: it launches on `hipStreamLegacy`, and the
+  collector's `hipLaunchKernel` interceptor passes that handle to
+  `hipStreamGetDevice`, which dereferences it.
+- rocThrust's `scan_by_key.inclusive` and `reproducibility`: instrumented
+  kernels return wrong scan-by-key results. The same binaries pass with their
+  kernels left uninstrumented.
 
 #### Why there are two run ids
 
