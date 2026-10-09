@@ -2,18 +2,19 @@
 # SPDX-License-Identifier: MIT
 
 import argparse
+import os
+import sys
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent))
 
 from build_prod_wheels import (
     _setup_common_build_env,
     add_env_compiler_flags,
     validate_build_args,
 )
-from setup_pytorch_asan import (
-    append_env_text,
-    remove_incompatible_warning_flags,
-)
+from setup_pytorch_asan import append_env_text
 
 
 class AsanFlagSpacingTest(unittest.TestCase):
@@ -47,12 +48,15 @@ class AsanCompilerFlagsTest(unittest.TestCase):
             "gfx942",
             None,
             False,
+            asan=True,
         )
-        remove_incompatible_warning_flags(env)
 
         for name in ("CXXFLAGS", "CPPFLAGS"):
             self.assertNotIn("maybe-uninitialized", env.get(name, ""))
             self.assertNotIn("restrict", env.get(name, ""))
+        self.assertTrue(
+            env["PATH"].startswith("/tmp/rocm/lib/llvm/bin" + os.path.pathsep)
+        )
 
     def test_normal_linux_build_keeps_gcc_warning_workarounds(self):
         env = _setup_common_build_env(
@@ -66,11 +70,13 @@ class AsanCompilerFlagsTest(unittest.TestCase):
 
         self.assertIn("-Wno-error=maybe-uninitialized", env["CXXFLAGS"])
         self.assertIn("-Wno-error=restrict", env["CPPFLAGS"])
+        self.assertFalse(
+            "/tmp/rocm/lib/llvm/bin" in env["PATH"].split(os.path.pathsep)[0]
+        )
 
 
 class AsanBuildSelectionTest(unittest.TestCase):
-    def test_without_asan_existing_sources_still_enable_companions(self):
-        parser = argparse.ArgumentParser()
+    def _args(self, **overrides):
         source = Path(__file__).resolve().parent
         args = argparse.Namespace(
             asan=False,
@@ -85,6 +91,13 @@ class AsanBuildSelectionTest(unittest.TestCase):
             apex_dir=source,
             enable_pytorch_flash_attention=None,
         )
+        for name, value in overrides.items():
+            setattr(args, name, value)
+        return args
+
+    def test_without_asan_existing_sources_still_enable_companions(self):
+        parser = argparse.ArgumentParser()
+        args = self._args()
 
         validate_build_args(parser, args)
 
@@ -92,6 +105,24 @@ class AsanBuildSelectionTest(unittest.TestCase):
         self.assertTrue(args.build_pytorch_audio)
         self.assertTrue(args.build_pytorch_vision)
         self.assertTrue(args.build_apex)
+
+    def test_asan_leaves_companions_off_when_sources_exist(self):
+        parser = argparse.ArgumentParser()
+        args = self._args(asan=True)
+
+        validate_build_args(parser, args)
+
+        self.assertFalse(args.build_triton)
+        self.assertFalse(args.build_pytorch_audio)
+        self.assertFalse(args.build_pytorch_vision)
+        self.assertFalse(args.build_apex)
+
+    def test_asan_rejects_an_explicit_companion_build(self):
+        parser = argparse.ArgumentParser()
+        args = self._args(asan=True, build_pytorch_audio=True)
+
+        with self.assertRaises(SystemExit):
+            validate_build_args(parser, args)
 
 
 if __name__ == "__main__":
