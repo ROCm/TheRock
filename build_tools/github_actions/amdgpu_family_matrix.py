@@ -323,12 +323,8 @@ amdgpu_family_info_matrix = {
                 "submodule_bump",
                 "nightly",
             ],
-            # TEMPORARY (ROCm/TheRock#8688): gfx110X Windows presubmit testing
-            # removed for test-queue remediation. Builds still run on presubmit;
-            # tests are on-demand via the `ci:test:gfx110x` PR label (emergency
-            # lever in configure_multi_arch_ci.py). Superseded by the permanent
-            # build/test label system in #8692. To revert, re-add "presubmit".
             "tests_on_trigger": [
+                "presubmit",
                 "postsubmit",
                 "submodule_bump",
                 "nightly",
@@ -400,7 +396,7 @@ amdgpu_family_info_matrix = {
             "tests_on_trigger": ["nightly"],
         },
     },
-    # Limited hardware - builds on presubmit, tests only on submodule_bump
+    # Limited hardware - builds on presubmit, tests only on nightly
     "gfx125x": {
         "linux": {
             # NOTE: MI455 runner supply is very limited.
@@ -421,8 +417,8 @@ amdgpu_family_info_matrix = {
                 "submodule_bump",
                 "nightly",
             ],
-            # Tests only on submodule changes due to limited hardware
-            "tests_on_trigger": ["submodule_bump"],
+            # Tests only on nightly due to limited hardware
+            "tests_on_trigger": ["nightly"],
             # Force quick tests for MI455 hardware
             "test_type_for_family": "quick",
         },

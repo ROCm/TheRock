@@ -447,6 +447,10 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            # known failure
+            "linux": ["gfx125X-dcgpu"],
+        },
     },
     "rocsolver": {
         "job_name": "rocsolver",
@@ -884,6 +888,19 @@ test_matrix = {
             "linux": ["gfx125X-dcgpu"],
         },
     },
+    # profiler-hub install/consumption tests
+    "profiler-hub": {
+        "job_name": "profiler-hub",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_profiler_hub_install.py')}",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "total_shards_dict": {"linux": 1},
+        "exclude_family": {
+            # known failure
+            "linux": ["gfx125X-dcgpu"],
+        },
+    },
     # MIOpen provider tests
     "miopenprovider": {
         "job_name": "miopenprovider",
@@ -937,8 +954,8 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 2,
+            "windows": 2,
         },
         "exclude_family": {
             "linux": [
@@ -1266,23 +1283,43 @@ def run():
             # Use policy-gated value from workflow if available, otherwise use static matrix
             if gpu_tests_gated:
                 # GPU tests are gated - don't use runner labels or defaults for GPU
+                # This includes multi-GPU runners since they are also GPU tests
                 test_runs_on_labels = None
                 test_runs_on_default = ""
+                test_runs_on_multi_gpu_labels = None
+                test_runs_on_multi_gpu_default = ""
             elif test_runs_on_from_workflow is not None:
                 # Workflow provided a non-empty runner - use it but allow label distribution
                 test_runs_on_labels = platform_info.get("test-runs-on-labels")
                 test_runs_on_default = test_runs_on_from_workflow
+                test_runs_on_multi_gpu_labels = platform_info.get(
+                    "test-runs-on-multi-gpu-labels"
+                )
+                test_runs_on_multi_gpu_default = platform_info.get(
+                    "test-runs-on-multi-gpu", ""
+                )
             else:
                 # Fallback to static matrix (backward compatibility)
                 test_runs_on_labels = platform_info.get("test-runs-on-labels")
                 test_runs_on_default = platform_info.get("test-runs-on", "")
-            test_runs_on_multi_gpu_labels = platform_info.get(
-                "test-runs-on-multi-gpu-labels"
-            )
-            test_runs_on_multi_gpu_default = platform_info.get(
-                "test-runs-on-multi-gpu", ""
-            )
+                test_runs_on_multi_gpu_labels = platform_info.get(
+                    "test-runs-on-multi-gpu-labels"
+                )
+                test_runs_on_multi_gpu_default = platform_info.get(
+                    "test-runs-on-multi-gpu", ""
+                )
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
+
+            # Enforce test_type_for_family if set in the family matrix.
+            # This is a strict override - families with limited hardware (e.g., MI455)
+            # should always run quick tests regardless of what's passed in TEST_TYPE.
+            test_type_for_family = platform_info.get("test_type_for_family")
+            if test_type_for_family and test_type_for_family != test_type:
+                logging.info(
+                    f"Overriding test_type from '{test_type}' to '{test_type_for_family}' "
+                    f"(test_type_for_family for {amdgpu_families})"
+                )
+                test_type = test_type_for_family
 
     logging.info(f"Selecting projects: {projects_to_test}")
 

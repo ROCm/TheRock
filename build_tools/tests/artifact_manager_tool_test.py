@@ -1203,14 +1203,18 @@ class TestFetchExtractionCache(ArtifactManagerTestBase):
         self.assertEqual(second_result, second_output)
 
         cached_stage = extraction_cache_dir / archive_path.name / "component" / "stage"
+        # Cached extraction must preserve direct extraction's mode.
+        direct_executable_mode = stat.S_IMODE(
+            (direct_output / "executable").stat().st_mode
+        )
         for output_dir in (direct_output, first_output, second_output):
             self.assertEqual(
                 (output_dir / "regular.txt").read_text(), "artifact contents"
             )
-            if not is_windows():
-                self.assertEqual(
-                    stat.S_IMODE((output_dir / "executable").stat().st_mode), 0o755
-                )
+            self.assertEqual(
+                stat.S_IMODE((output_dir / "executable").stat().st_mode),
+                direct_executable_mode,
+            )
             self.assertTrue(
                 os.path.samefile(
                     output_dir / "regular.txt",
