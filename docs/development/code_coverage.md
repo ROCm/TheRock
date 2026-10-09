@@ -362,9 +362,10 @@ Instrumented tests run slower, and some upstream coverage options do more than
 instrument: hipRAND's `BUILD_CODE_COVERAGE` adds `-O0 -g`, and rocRAND's
 `CODE_COVERAGE` compiles in extra CPU-only test suites. A component can also
 set `coverage_total_shards_dict` to use more shards in coverage runs than in
-regular ones. rocThrust and MIOpen do. `test_runner.py` shards rocThrust by
-gtest case alone, so every shard still runs each test binary; MIOpen's suite is
-a single CTest entry, which every shard runs anyway.
+regular ones. rocThrust, hipTensor and MIOpen do. `test_runner.py` shards
+rocThrust and hipTensor by gtest case alone, so every shard still runs each
+test binary; MIOpen's suite is a single CTest entry, which every shard runs
+anyway.
 
 In coverage runs only, `test_runner.py` skips the tests in
 `COVERAGE_CTEST_EXCLUSIONS`, which fail because of the instrumentation and

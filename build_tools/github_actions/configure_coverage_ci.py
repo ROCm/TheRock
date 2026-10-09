@@ -420,7 +420,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         # amount of instantiated template code. Building it with a larger code
         # model is the likely fix and belongs upstream. Blocked meanwhile
         # because the failure takes the whole math-libs stage with it, and
-        # every other project in the stage along with it.
+        # every other project in the stage along with it. Built for gfx942
+        # alone, as the PR check does, it links, and its tests pass.
         blocked_reason=(
             "libhiptensor.so exceeds the small code model when instrumented; "
             "the link fails on out-of-range R_X86_64_PC32 relocations"

@@ -1217,6 +1217,12 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        # With its kernels instrumented, the suite takes about 160 of the 180
+        # minutes a coverage test step gets. test_runner.py shards hiptensor by
+        # gtest case alone, so every shard still runs each test binary.
+        "coverage_total_shards_dict": {
+            "linux": 2,
+        },
         "exclude_family": {
             # hipTensor requires composable_kernel, which is filtered out on some platforms,
             # so no hipTensor test artifact is produced for that family (see TheRock#2074).

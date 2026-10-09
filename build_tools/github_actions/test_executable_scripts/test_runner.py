@@ -109,20 +109,21 @@ SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
 
 # Components whose category label matches MULTIPLE ctest entries (e.g. rocsparse
-# registers both *_full_suite and *_ffm-full_suite under the same label, and
-# rocthrust registers one entry per test binary, sharded for coverage runs). For
+# registers both *_full_suite and *_ffm-full_suite under the same label). For
 # these we must NOT combine the ctest `--tests-information` stride with the
 # gtest GTEST_TOTAL_SHARDS sharding: the two axes compound and silently drop
 # ~(1 - 1/N) of the suite (only one (entry x gtest-sub-shard) pair runs per
 # shard). Instead, shard purely at the gtest case level -- every shard runs all
 # ctest entries and gtest splits the cases -- which yields complete, disjoint
 # coverage for any number of (gtest-binary) entries. Single-entry components are
-# unaffected either way, so this is safe to keep narrowly scoped.
+# unaffected either way, so this is safe to keep narrowly scoped. rocthrust and
+# hiptensor register one entry per test binary, and are sharded in coverage runs.
 GTEST_ONLY_SHARDING_COMPONENTS = {
     "rocsparse",
     "hipsparse",
     "hipkernelprovider",
     "rocthrust",
+    "hiptensor",
 }
 
 # Per-component, per-GPU-family ctest exclusions (ctest --exclude-regex patterns).
