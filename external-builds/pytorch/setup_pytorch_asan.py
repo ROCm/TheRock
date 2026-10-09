@@ -112,6 +112,45 @@ def _resolve_shared_asan_runtime(clangxx: Path, rocm_dir: Path) -> Path:
     )
 
 
+# release/2.12 and release/2.13 vendor a Google Benchmark that uses
+# __COUNTER__ under -Werror and -pedantic-errors. ROCm Clang 23+ reports
+# that as a C2y extension and stops the build. release/2.14 already adds
+# this suppression after the Benchmark subdirectory.
+_BENCHMARK_SUBDIR_LINE = (
+    "    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../third_party/benchmark)\n"
+)
+_BENCHMARK_C2Y_SUPPRESSION = """\
+    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../third_party/benchmark)
+    # Clang 23+ classifies __COUNTER__ in preprocessor conditions as a C2y
+    # extension. benchmark enables -Werror so this becomes fatal. Suppress
+    # only that warning on affected compilers without touching the submodule.
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "23.0")
+      if(TARGET benchmark)
+        target_compile_options(benchmark PRIVATE -Wno-c2y-extensions)
+      endif()
+      if(TARGET benchmark_main)
+        target_compile_options(benchmark_main PRIVATE -Wno-c2y-extensions)
+      endif()
+    endif()
+"""
+
+
+def suppress_benchmark_c2y_warning(pytorch_dir: Path) -> None:
+    """Insert the release/2.14 Benchmark warning suppression when it is absent.
+
+    ``CXXFLAGS`` cannot carry ``-Wno-c2y-extensions``: Benchmark appends
+    ``-pedantic-errors`` later, and that turns the warning back into an error.
+    """
+    path = pytorch_dir / "cmake" / "Dependencies.cmake"
+    if not path.is_file():
+        return
+    text = path.read_text()
+    if "-Wno-c2y-extensions" in text or _BENCHMARK_SUBDIR_LINE not in text:
+        return
+    path.write_text(text.replace(_BENCHMARK_SUBDIR_LINE, _BENCHMARK_C2Y_SUPPRESSION, 1))
+    print(f"  Patched {path} to suppress -Wc2y-extensions in Google Benchmark")
+
+
 def apply_asan_build_env(env: dict[str, str], rocm_dir: Path) -> None:
     """Point the torch build at the ROCm Clang shared ASan runtime.
 

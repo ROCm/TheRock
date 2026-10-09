@@ -4,6 +4,7 @@
 import argparse
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from build_prod_wheels import (
     add_env_compiler_flags,
     validate_build_args,
 )
-from setup_pytorch_asan import append_env_text
+from setup_pytorch_asan import append_env_text, suppress_benchmark_c2y_warning
 
 
 class AsanFlagSpacingTest(unittest.TestCase):
@@ -73,6 +74,47 @@ class AsanCompilerFlagsTest(unittest.TestCase):
         self.assertFalse(
             "/tmp/rocm/lib/llvm/bin" in env["PATH"].split(os.path.pathsep)[0]
         )
+
+
+class AsanBenchmarkWarningTest(unittest.TestCase):
+    _OLDER_RELEASE = """\
+  if(NOT USE_SYSTEM_BENCHMARK)
+    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../third_party/benchmark)
+  else()
+    add_library(benchmark SHARED IMPORTED)
+  endif()
+"""
+
+    def test_older_release_gains_the_2_14_suppression(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pytorch_dir = Path(tmp)
+            path = pytorch_dir / "cmake" / "Dependencies.cmake"
+            path.parent.mkdir()
+            path.write_text(self._OLDER_RELEASE)
+
+            suppress_benchmark_c2y_warning(pytorch_dir)
+            patched = path.read_text()
+            suppress_benchmark_c2y_warning(pytorch_dir)
+            self.assertEqual(path.read_text(), patched)
+
+        self.assertIn(
+            "target_compile_options(benchmark PRIVATE -Wno-c2y-extensions)", patched
+        )
+
+    def test_release_2_14_is_left_unchanged(self):
+        original = self._OLDER_RELEASE.replace(
+            "    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../third_party/benchmark)\n",
+            "    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../third_party/benchmark)\n"
+            "    target_compile_options(benchmark PRIVATE -Wno-c2y-extensions)\n",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            pytorch_dir = Path(tmp)
+            path = pytorch_dir / "cmake" / "Dependencies.cmake"
+            path.parent.mkdir()
+            path.write_text(original)
+
+            suppress_benchmark_c2y_warning(pytorch_dir)
+            self.assertEqual(path.read_text(), original)
 
 
 class AsanBuildSelectionTest(unittest.TestCase):
