@@ -98,13 +98,11 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
 
     alternatives_binaries = load_alternatives_binaries()
     package_name = pkg_info.get("Package")
-    json_package_config = alternatives_binaries.get(package_name)
+    json_pkg_config = alternatives_binaries.get(package_name)
 
     # amdrocm-alternatives.json defines each package's maintainer scripts and controls whether they are generated.
-    if json_package_config is not None and is_postinstallscripts_available(pkg_info):
-        generate_debian_postscripts(
-            pkg_info, deb_dir, build_config, json_package_config
-        )
+    if json_pkg_config is not None:
+        generate_debian_postscripts(pkg_info, deb_dir, build_config, json_pkg_config)
 
     sourcedir_list = []
     dir_list = filter_components_fromartifactory(
@@ -370,7 +368,7 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
 
 
 def generate_debian_postscripts(
-    pkg_info, deb_dir, config: PackageConfig, json_package_config: dict
+    pkg_info, deb_dir, config: PackageConfig, json_pkg_config: dict
 ):
     """Generate Debian postinst/prerm maintainer scripts.
 
@@ -378,7 +376,7 @@ def generate_debian_postscripts(
     pkg_info: Package details parsed from a JSON file
     deb_dir: Directory where the `debian/control` file will be created
     config: Configuration object containing package metadata
-    json_package_config: Package alternatives configuration loaded from JSON
+    json_pkg_config: Package alternatives configuration loaded from JSON
 
     Returns: None
     """
@@ -409,7 +407,10 @@ def generate_debian_postscripts(
     ):
         raise ValueError(f"Unable to parse version string '{config.rocm_version}'")
 
-    unsupported_scripts = set(json_package_config["scripts"]) - EXEC_SCRIPTS
+    scripts = json_pkg_config["scripts"]
+    binaries = json_pkg_config["binaries"]
+
+    unsupported_scripts = set(scripts) - EXEC_SCRIPTS
     if unsupported_scripts:
         raise ValueError(
             f"Unsupported maintainer scripts for package {pkg_name!r}: "
@@ -432,13 +433,13 @@ def generate_debian_postscripts(
         "version_patch": int(re.match(r"^\d+", parts[2]).group()),
         "target": "deb",
         "package_name": pkg_name,
-        "binaries": json_package_config["binaries"],
+        "binaries": binaries,
     }
 
     deb_dir = Path(deb_dir)
     deb_dir.mkdir(parents=True, exist_ok=True)
 
-    for script in json_package_config["scripts"]:
+    for script in scripts:
         template_name = f"template/scripts/amdrocm-{script}.j2"
         script_file = deb_dir / script
 

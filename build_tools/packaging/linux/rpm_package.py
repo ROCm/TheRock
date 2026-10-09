@@ -5,7 +5,6 @@
 
 """RPM package creation functions for ROCm packaging."""
 
-import json
 import os
 import re
 import subprocess
@@ -21,35 +20,6 @@ logger = TheRockLogger(__name__)
 
 # Setup paths
 SCRIPT_DIR = Path(__file__).resolve().parent
-
-
-def load_alternatives_binaries() -> dict[str, list[str]]:
-    """Load package-specific binary alternatives from JSON."""
-
-    alternatives_file = (
-        SCRIPT_DIR / "template" / "scripts" / "amdrocm-alternatives.json"
-    )
-
-    with alternatives_file.open(encoding="utf-8") as file:
-        alternatives_binaries = json.load(file)
-
-    if not isinstance(alternatives_binaries, dict):
-        raise ValueError(f"{alternatives_file} must contain a JSON object")
-
-    for package_name, binaries in alternatives_binaries.items():
-        if not isinstance(package_name, str):
-            raise ValueError(
-                f"Invalid package name in {alternatives_file}: " f"{package_name!r}"
-            )
-
-        if not isinstance(binaries, list) or not all(
-            isinstance(binary, str) for binary in binaries
-        ):
-            raise ValueError(
-                f"Binary list for {package_name!r} must be a list " "of strings"
-            )
-
-    return alternatives_binaries
 
 
 def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
@@ -135,7 +105,10 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     rpmrecommends = rpmsuggests = ""
     sourcedir_list = []
     rpm_scripts = []
+
     alternatives_binaries = load_alternatives_binaries()
+    package_name = pkg_info.get("Package")
+    json_pkg_config = alternatives_binaries.get(package_name)
 
     # amdrocm-debugger: Exclude libpython requires only (provides are not an issue).
     # Multiple Python-version-specific binaries are included; the wrapper script
@@ -181,10 +154,10 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
                     f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting"
                 )
 
-        # Packages listed in amdrocm-alternatives.json use the shared
-        # amdrocm-postinst.j2 and amdrocm-prerm.j2 templates.
-        if pkg_name in alternatives_binaries:
-            rpm_scripts = generate_rpm_postscripts(pkg_info, config)
+        # amdrocm-alternatives.json defines the RPM maintainer scripts
+        # and binaries for packages that use the shared templates.
+        if json_pkg_config is not None:
+            rpm_scripts = generate_rpm_postscripts(pkg_info, config, json_pkg_config)
 
     else:
         # Get -> Transform -> Join (no transform needed for RPM)
@@ -234,17 +207,21 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         f.write(template.render(context))
 
 
-def generate_rpm_postscripts(pkg_info, config: PackageConfig):
+def generate_rpm_postscripts(pkg_info, config: PackageConfig, json_pkg_config: dict):
     """Generate RPM %post and %preun sections.
 
     Parameters:
     pkg_info: Package details parsed from a JSON file
     config: Configuration object containing package metadata
+    json_pkg_config: Package alternatives configuration loaded from JSON
 
     Returns: Dictionary containing rendered RPM script sections.
     """
 
     pkg_name = pkg_info.get("Package")
+    if not pkg_name:
+        raise ValueError("Package metadata does not contain a valid 'Package' name")
+
     parts = config.rocm_version.split(".")
 
     if len(parts) < 3:
@@ -275,11 +252,26 @@ def generate_rpm_postscripts(pkg_info, config: PackageConfig):
         ),
     )
 
-    alternatives_binaries = load_alternatives_binaries()
+    rpm_sections = {
+        "preinst": "%pre",
+        "postinst": "%post",
+        "prerm": "%preun",
+        "postrm": "%postun",
+    }
 
-    if pkg_name not in alternatives_binaries:
+    scripts = json_pkg_config["scripts"]
+    binaries = json_pkg_config["binaries"]
+
+    logger.info(
+        f"RPM script configuration: package={pkg_name!r}, "
+        f"scripts={scripts}, binaries={binaries}"
+    )
+
+    unsupported_scripts = set(scripts) - set(rpm_sections)
+    if unsupported_scripts:
         raise ValueError(
-            f"No alternatives configuration found for RPM package " f"{pkg_name!r}"
+            f"Unsupported RPM maintainer scripts for package "
+            f"{pkg_name!r}: {sorted(unsupported_scripts)}"
         )
 
     context = {
@@ -289,17 +281,13 @@ def generate_rpm_postscripts(pkg_info, config: PackageConfig):
         "version_patch": int(version_patch_match.group()),
         "target": "rpm",
         "package_name": pkg_name,
-        "binaries": alternatives_binaries[pkg_name],
-    }
-
-    shared_scripts = {
-        "postinst": "%post",
-        "prerm": "%preun",
+        "binaries": binaries,
     }
 
     rpm_script_sections = {}
 
-    for script, rpm_section in shared_scripts.items():
+    for script in scripts:
+        rpm_section = rpm_sections[script]
         template_name = f"template/scripts/amdrocm-{script}.j2"
         template = env.get_template(template_name)
         rpm_script_sections[rpm_section] = template.render(context)
