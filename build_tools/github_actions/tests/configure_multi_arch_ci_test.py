@@ -3095,53 +3095,123 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-class TestCpuTestOnlyLabel(unittest.TestCase):
-    """ci:cpu-test-only label: disable GPU tests, keep CPU-only tests."""
+class TestCpuTestBehavior(unittest.TestCase):
+    """CPU test runner assignment: ci:cpu-test-only label and run-once dedup."""
 
-    def _expand(self, pr_labels=None, platform="linux", family="gfx94x"):
+    # -- ci:cpu-test-only label -----------------------------------------------
+
+    def test_label_disables_gpu_keeps_cpu(self):
+        """Label disables GPU tests but keeps CPU runner and tests_enabled."""
         ci_inputs = cm.CIInputs(
             run_id="1",
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^1",
             build_variant="release",
-            pr_labels=pr_labels or [],
+            pr_labels=["ci:cpu-test-only"],
         )
         result = cm.expand_build_configs(
             ci_inputs=ci_inputs,
             git_context=cm.GitContext(),
-            targets=cm.TargetSelection(**{f"{platform}_families": [family]}),
+            targets=cm.TargetSelection(linux_families=["gfx94x"]),
             jobs=_jobs(),
         )
-        return getattr(result, platform).per_family_info[0]
-
-    def test_label_disables_gpu_keeps_cpu(self):
-        """Label disables GPU tests but keeps CPU runner and tests_enabled."""
-        entry = self._expand(pr_labels=["ci:cpu-test-only"])
+        entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
         self.assertNotEqual(entry["test-runs-on-cpu"], "")
         self.assertTrue(entry["tests_enabled"])
-
-    def test_without_label_gpu_tests_run(self):
-        """Without label, GPU tests run normally."""
-        self.assertNotEqual(self._expand()["test-runs-on"], "")
-
-    def test_works_on_windows(self):
-        """Label works on Windows."""
-        entry = self._expand(["ci:cpu-test-only"], platform="windows", family="gfx110x")
-        self.assertEqual(entry["test-runs-on"], "")
-
-    def test_label_disables_multi_gpu(self):
-        """Label also disables multi-GPU tests."""
-        entry = self._expand(pr_labels=["ci:cpu-test-only"])
         self.assertNotIn("test-runs-on-multi-gpu", entry)
         self.assertNotIn("test-runs-on-multi-gpu-labels", entry)
 
-    def test_without_label_multi_gpu_present(self):
-        """Without label, multi-GPU info is present (when platform supports it)."""
-        entry = self._expand()
+    def test_without_label_gpu_and_multi_gpu_run(self):
+        """Without label, GPU and multi-GPU tests run normally."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=ci_inputs,
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(linux_families=["gfx94x"]),
+            jobs=_jobs(),
+        )
+        entry = result.linux.per_family_info[0]
+        self.assertNotEqual(entry["test-runs-on"], "")
         # gfx94x has multi-GPU support
         self.assertIn("test-runs-on-multi-gpu-labels", entry)
+
+    def test_label_works_on_windows(self):
+        """Label works on Windows."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^1",
+            build_variant="release",
+            pr_labels=["ci:cpu-test-only"],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=ci_inputs,
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(windows_families=["gfx110x"]),
+            jobs=_jobs(),
+        )
+        self.assertEqual(result.windows.per_family_info[0]["test-runs-on"], "")
+
+    # -- CPU test run-once (multi-family dedup) -------------------------------
+
+    def test_only_first_family_gets_cpu_runner(self):
+        """Only the first family gets a CPU runner; subsequent families skip CPU tests."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=ci_inputs,
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(linux_families=["gfx94x", "gfx110x"]),
+            jobs=_jobs(),
+        )
+        per_family = result.linux.per_family_info
+        self.assertGreater(len(per_family), 1)
+        # First family: CPU runner assigned, uses medium pool
+        self.assertIn("medium", per_family[0]["test-runs-on-cpu"])
+        # Subsequent families: no CPU runner, tests_enabled reflects GPU only
+        for entry in per_family[1:]:
+            self.assertEqual(entry["test-runs-on-cpu"], "")
+            has_gpu_runner = entry["test-runs-on"] != ""
+            self.assertEqual(entry["tests_enabled"], has_gpu_runner)
+
+    def test_cpu_test_only_label_multi_family(self):
+        """With ci:cpu-test-only and multiple families, only first family is active."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^1",
+            build_variant="release",
+            pr_labels=["ci:cpu-test-only"],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=ci_inputs,
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(linux_families=["gfx94x", "gfx110x"]),
+            jobs=_jobs(),
+        )
+        per_family = result.linux.per_family_info
+        # First family has CPU runner and tests_enabled
+        self.assertNotEqual(per_family[0]["test-runs-on-cpu"], "")
+        self.assertTrue(per_family[0]["tests_enabled"])
+        # Subsequent: GPU gated + no CPU runner = fully disabled
+        for entry in per_family[1:]:
+            self.assertEqual(entry["test-runs-on-cpu"], "")
+            self.assertFalse(entry["tests_enabled"])
 
 
 if __name__ == "__main__":
