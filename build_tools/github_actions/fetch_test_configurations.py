@@ -62,12 +62,10 @@ TEST_LABEL_GROUPS: dict[str, list[str]] = {
 
 
 # Base container options applied to all Linux containers
-# --ipc host - Allows shared memory between host and container
 # --user 0:0 - Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
 # --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
 # --ulimit nofile=1048576:1048576 - Increase open file limit for RCCL
 _BASE_CONTAINER_OPTIONS = [
-    "--ipc host",
     "--user 0:0",
     "--ulimit memlock=-1:-1",
     "--ulimit nofile=1048576:1048576",
@@ -744,6 +742,8 @@ test_matrix = {
         },
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+        # RCCL collective ops use cross-process shared memory via /dev/shm
+        "container_options": ["--ipc host"],
     },
     # rocSHMEM tests
     "rocshmem": {
@@ -758,6 +758,8 @@ test_matrix = {
         # rocSHMEM functional/unit tests launch via mpirun with RANKS 2..64, so
         # they need a multi-GPU runner (same setup as rccl).
         "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+        # rocSHMEM uses cross-process shared memory for multi-GPU communication
+        "container_options": ["--ipc host"],
     },
     # rocprofiler-sdk tests
     "rocprofiler-sdk": {
