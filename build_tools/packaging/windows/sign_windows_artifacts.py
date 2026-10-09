@@ -32,7 +32,9 @@ import json
 import struct
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 TIMESTAMP_URL = "http://timestamp.digicert.com"
@@ -317,6 +319,9 @@ def sign_artifacts(
     skipped = 0
     failed = 0
     total = len(files)
+    batch_number = 1
+    batch_start_index = 1
+    batch_start_time = time.monotonic()
 
     for index, path in enumerate(files, start=1):
         if skip_signed and is_signed(path, signtool):
@@ -336,10 +341,16 @@ def sign_artifacts(
             failed += 1
 
         if index % DEFAULT_STATUS_EVERY == 0 or index == total:
+            batch_elapsed = time.monotonic() - batch_start_time
+            batch_file_count = index - batch_start_index + 1
             print(
-                f"Processed {index}/{total} files: "
+                f"Processed batch {batch_number} ({batch_file_count} files) "
+                f"in {batch_elapsed:.1f} seconds; {index}/{total} total: "
                 f"{signed} signed, {skipped} skipped, {failed} failed"
             )
+            batch_number += 1
+            batch_start_index = index + 1
+            batch_start_time = time.monotonic()
 
     return SigningSummary(
         total=total,
@@ -445,8 +456,11 @@ def main(argv: list[str]) -> int:
         "all files" if args.all_files else ", ".join(sorted(PE_EXTENSIONS))
     )
     print(f"Scanning {args.input_dir} for PE files ({scan_description})...")
+    scan_start_time = time.monotonic()
     files = iter_pe_files(args.input_dir, all_files=args.all_files)
+    scan_elapsed = time.monotonic() - scan_start_time
     print(f"Found {len(files)} PE file(s).")
+    print(f"Eligible file scan time: {scan_elapsed:.1f} seconds")
     if not files:
         return 0
 
@@ -468,6 +482,9 @@ def main(argv: list[str]) -> int:
     print(f"Timestamp URL: {args.timestamp_url}")
     print("Signing files serially with one signtool invocation per file.")
 
+    start_time = datetime.now().astimezone()
+    start_monotonic = time.monotonic()
+    print(f"Signing started at: {start_time.isoformat(timespec='seconds')}")
     summary = sign_artifacts(
         files=files,
         signtool=signtool,
@@ -479,6 +496,10 @@ def main(argv: list[str]) -> int:
         key=args.key,
         skip_signed=args.skip_signed,
     )
+    end_time = datetime.now().astimezone()
+    total_elapsed = time.monotonic() - start_monotonic
+    print(f"Signing ended at: {end_time.isoformat(timespec='seconds')}")
+    print(f"Total signing time: {total_elapsed:.1f} seconds")
     print(
         f"Done: {summary.signed} signed, {summary.skipped} skipped, "
         f"{summary.failed} failed out of {summary.total}."
