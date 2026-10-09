@@ -10,10 +10,12 @@ bundled, and execute a profiler console script end-to-end.
 
 import importlib
 import locale
+import os
 from pathlib import Path
 import platform
 import shutil
 import subprocess
+import sys
 from typing import NamedTuple
 import unittest
 
@@ -64,6 +66,20 @@ CONSOLE_SCRIPT_TESTS = [
         "rocprof-sys-instrument", ["--version"], "rocprof-sys-instrument", True
     ),
 ]
+
+# Loads the decoder library, calls into it, and reads its symbols with
+# pyelftools (a requirement of rocm-profiler). Prints the loaded library path.
+TRACE_DECODER_SMOKE_SCRIPT = """
+from pathlib import Path
+import rocprof_trace_decoder as m
+from rocprof_trace_decoder import codegen
+with m.Decoder() as d:
+    assert d.status_string(m.DecoderStatus.SUCCESS)
+    lib_path = Path(d.lib_path).resolve()
+functions, _ = codegen.read_symbol_labels(str(lib_path))
+assert "rocprof_trace_decoder_parse" in {n for n, _ in functions.values()}
+print(lib_path)
+"""
 
 
 @unittest.skipIf(is_windows, "rocm-profiler is not supported on Windows")
@@ -218,7 +234,7 @@ class ROCmProfilerTest(unittest.TestCase):
                     )
 
     def test_rocprof_trace_decoder_python_api(self):
-        """The packaged rocprof_trace_decoder API must be importable.
+        """The packaged rocprof_trace_decoder API must load its library and run.
 
         Skips on ROCm builds whose rocprof-trace-decoder ships no Python API.
         """
@@ -228,3 +244,31 @@ class ROCmProfilerTest(unittest.TestCase):
             raise unittest.SkipTest(f"rocprof_trace_decoder is not installed: {e}")
 
         utils.assert_is_physical_package(trace_decoder_mod)
+
+        core_mod = importlib.import_module(
+            di.ALL_PACKAGES["core"].get_py_package_name()
+        )
+        core_lib_dir = Path(core_mod.__file__).resolve().parent / "lib"
+
+        # Run in an isolated process without these: the decoder's lookup and the
+        # dynamic loader both honor them, so a system ROCm could otherwise hide a
+        # packaging regression.
+        overrides = (
+            "ROCPROF_TRACE_DECODER_LIB",
+            "LD_LIBRARY_PATH",
+            "ROCM_PATH",
+            "ROCM_HOME",
+        )
+        env = {k: v for k, v in os.environ.items() if k not in overrides}
+        output_text = subprocess.check_output(
+            [sys.executable, "-c", TRACE_DECODER_SMOKE_SCRIPT],
+            env=env,
+            timeout=SUBPROCESS_TIMEOUT_SECONDS,
+        ).decode(locale.getpreferredencoding())
+
+        lib_path = Path(output_text.strip().splitlines()[-1])
+        self.assertEqual(
+            lib_path.parent,
+            core_lib_dir,
+            msg=f"Decoder loaded {lib_path}, not the library from {core_lib_dir}",
+        )
