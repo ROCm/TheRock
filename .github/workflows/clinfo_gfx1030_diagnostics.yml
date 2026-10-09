@@ -1,0 +1,91 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Temporary investigation for #8739; remove before merging the fixture fix.
+name: clinfo gfx1030 diagnostics
+
+on:
+  push:
+    branches:
+      - users/lambj/clinfo-gfx1030-diagnostics
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  compare:
+    name: Compare clinfo with and without packaged Comgr
+    runs-on: windows-gfx1030-gpu-rocm
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    env:
+      THEROCK_BIN_DIR: ./build/bin
+      AMDGPU_FAMILIES: gfx103X-all
+      BUILD_VARIANT: release
+      GPU_ENABLE_PAL: "1"
+      AMD_LOG_LEVEL: "4"
+      ROCM_KPACK_DEBUG: "1"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up tests with the failing nightly's artifacts
+        uses: ./.github/actions/setup_test_environment
+        with:
+          VENV_DIR: ${{ github.workspace }}/.venv
+          OUTPUT_ARTIFACTS_DIR: ./build
+          ARTIFACT_GROUP: gfx103X-all
+          AMDGPU_TARGETS: gfx1030
+          ARTIFACT_RUN_ID: "37245816266"
+          FETCH_ARTIFACT_ARGS: --sanity --run-github-repo ROCm/rockrel
+          RELEASE_TYPE: nightly
+
+      - name: Record GPU driver and Comgr files
+        shell: powershell
+        run: |
+          Get-CimInstance Win32_VideoController | Format-List Name, DriverVersion, DriverDate
+          foreach ($dll in @("$env:SystemRoot\System32\amd_comgr.dll", "$env:GITHUB_WORKSPACE\build\bin\amd_comgr.dll")) {
+            if (Test-Path -LiteralPath $dll) {
+              (Get-Item -LiteralPath $dll).VersionInfo | Format-List FileName, FileVersion, ProductVersion
+              Get-FileHash -LiteralPath $dll -Algorithm SHA256 | Format-List
+            } else {
+              Write-Host "Not present: $dll"
+            }
+          }
+
+      - name: Baseline - current fixture with stderr retained
+        id: baseline
+        continue-on-error: true
+        env:
+          THEROCK_CLINFO_COPY_COMGR: "0"
+        run: |
+          python -m pytest tests/test_rocm_sanity.py -k clinfo -v \
+            --log-cli-level=info --timeout=300 \
+            --log-file=clinfo-baseline.log --log-file-level=info \
+            --junitxml=clinfo-baseline.xml
+
+      - name: Candidate - packaged Comgr beside OpenCL.dll
+        id: candidate
+        if: ${{ !cancelled() && steps.baseline.outcome != 'skipped' }}
+        env:
+          THEROCK_CLINFO_COPY_COMGR: "1"
+        run: |
+          python -m pytest tests/test_rocm_sanity.py -k clinfo -v \
+            --log-cli-level=info --timeout=300 \
+            --log-file=clinfo-candidate.log --log-file-level=info \
+            --junitxml=clinfo-candidate.xml
+
+      - name: Save comparison logs
+        if: ${{ !cancelled() && steps.baseline.outcome != 'skipped' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: clinfo-gfx1030-comparison
+          path: |
+            clinfo-*.log
+            clinfo-*.xml
+          if-no-files-found: error
