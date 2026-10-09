@@ -684,39 +684,58 @@ class MainFunctionTest(unittest.TestCase):
             }
         )
 
-    def test_asan_suffix_varies_by_local_version(self):
-        """ASAN suffix is +asan (no local version) or .asan (has local version)."""
+    def test_build_variant_suffix_varies_by_local_version(self):
+        """Build variant suffix uses + (no local) or . (has local version)."""
         test_cases = [
-            # (release_type, override_git_sha, expected_pattern, description)
-            ("nightly", None, r"^7\.99\.0a[0-9]{8}\+asan$", "nightly gets +asan"),
-            ("release", None, r"^7\.99\.0\+asan$", "release gets +asan"),
+            # (release_type, git_sha, variant, expected_pattern, description)
+            ("nightly", None, "asan", r"^7\.99\.0a[0-9]{8}\+asan$", "nightly +asan"),
+            ("release", None, "asan", r"^7\.99\.0\+asan$", "release +asan"),
             (
                 "dev",
                 "abcdef1234567890",
+                "asan",
                 r"^7\.99\.0\.dev0\+abcdef1234567890\.asan$",
-                "dev gets .asan",
+                "dev .asan",
             ),
+            # Dashes are removed from variant names
+            (
+                "nightly",
+                None,
+                "host-asan",
+                r"^7\.99\.0a[0-9]{8}\+hostasan$",
+                "host-asan -> hostasan",
+            ),
+            (
+                "nightly",
+                None,
+                "asan-debug",
+                r"^7\.99\.0a[0-9]{8}\+asandebug$",
+                "asan-debug -> asandebug",
+            ),
+            # Other sanitizers work too
+            ("nightly", None, "tsan", r"^7\.99\.0a[0-9]{8}\+tsan$", "tsan supported"),
         ]
-        for release_type, git_sha, pattern, desc in test_cases:
+        for release_type, git_sha, variant, pattern, desc in test_cases:
             with self.subTest(desc=desc):
                 version = compute_rocm_package_version.compute_version(
                     release_type=release_type,
+                    build_variant=variant,
                     override_base_version="7.99.0",
                     override_git_sha=git_sha,
-                    build_variant="asan-debug",
                 )
                 self.assertRegex(version, pattern)
 
-    def test_non_asan_variant_no_suffix(self):
-        """Non-ASAN build variants do not add asan suffix."""
+    def test_release_variant_no_suffix(self):
+        """Empty or 'release' build variant does not add suffix."""
         for variant in ("release", ""):
             with self.subTest(variant=variant or "(empty)"):
                 version = compute_rocm_package_version.compute_version(
                     release_type="nightly",
-                    override_base_version="7.99.0",
                     build_variant=variant,
+                    override_base_version="7.99.0",
                 )
-                self.assertNotIn("asan", version)
+                # Should just be base version + nightly suffix, no variant
+                self.assertRegex(version, r"^7\.99\.0a[0-9]{8}$")
 
 
 if __name__ == "__main__":
