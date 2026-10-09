@@ -730,6 +730,11 @@ test_matrix = {
             "linux": 4,
             "windows": 4,
         },
+        # Instrumented, a quarter of the standard suite is only about half done
+        # when it reaches the suite's 60-minute CTest timeout.
+        "coverage_total_shards_dict": {
+            "linux": 10,
+        },
         "exclude_family": {
             "linux": [
                 # KNOWN FAILURE: Gemm solver FP16 tests fail on gfx125X
