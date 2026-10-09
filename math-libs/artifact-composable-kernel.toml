@@ -1,9 +1,14 @@
 # composable-kernel
 [components.lib."math-libs/composable_kernel/stage"]
+include = [
+  "include/**",
+  "lib/**",
+]
+exclude = [
+  "lib/libdevice_conv_operations_*.a",
+  "lib/device_conv_operations_*.lib",
+  "lib/cmake/composable_kernel/composable_kerneldevice_conv_operations_*Targets*.cmake",
+]
 [components.dbg."math-libs/composable_kernel/stage"]
 [components.dev."math-libs/composable_kernel/stage"]
-include = [
-  "include/ck/**",
-  "lib/cmake/composable_kernel/*",
-]
 [components.doc."math-libs/composable_kernel/stage"]

@@ -2285,10 +2285,9 @@
           {
             "Name": "composable_kernel",
             "Components": [
+              "lib",
               "run",
-              "dev",
-              "doc",
-              "lib"
+              "doc"
             ]
           }
         ]
@@ -2302,27 +2301,36 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amdrocm-composablekernel"
+      "amdrocm-ck",
+      "amdrocm-runtime-devel"
     ],
     "RPMRequires": [
-      "amdrocm-composablekernel"
+      "amdrocm-ck",
+      "amdrocm-runtime-devel"
     ],
     "Maintainer": "MIOpen Kernels Dev Team <dl.MIOpen@amd.com>",
-    "Description_Short": "Composable Kernel development headers and build files",
-    "Description_Long": "Development package for Composable Kernel library. Contains C++ template headers, CMake configuration, and build utilities for creating custom high-performance GPU kernels. Provides composable kernel abstractions for building ML primitives optimized for AMD GPU architectures.",
+    "Description_Short": "Composable Kernel per-target device operation archives",
+    "Description_Long": "Development package for Composable Kernel library. Contains the per-target static device operation archives and their CMake export files, one package per GPU target. The headers and CMake package configuration are in amdrocm-ck.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
     "License": "MIT",
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
-    "Components": [
-      "dev",
-      "doc"
+    "Artifactory": [
+      {
+        "Artifact": "composable-kernel",
+        "Artifact_Subdir": [
+          {
+            "Name": "composable_kernel",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      }
     ],
-    "Artifact": "composable-kernel",
-    "Gfxarch": "True",
-    "DisablePackaging": "True"
+    "Gfxarch": "True"
   },
   {
     "Package": "amdrocm-rccl-test",
@@ -3686,6 +3694,7 @@
       "amdrocm-runtime-devel",
       "amdrocm-llvm-devel",
       "amdrocm-fft-devel",
+      "amdrocm-ck-devel",
       "amdrocm-blas-devel",
       "amdrocm-sparse-devel",
       "amdrocm-solver-devel",
@@ -3707,6 +3716,7 @@
       "amdrocm-runtime-devel",
       "amdrocm-llvm-devel",
       "amdrocm-fft-devel",
+      "amdrocm-ck-devel",
       "amdrocm-blas-devel",
       "amdrocm-sparse-devel",
       "amdrocm-solver-devel",

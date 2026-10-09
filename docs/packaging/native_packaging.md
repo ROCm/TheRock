@@ -48,6 +48,12 @@ For the RPM use case, this naming convention is valid. However, for the
 Debian use case, the suffix should be -dev. Therefore, for Debian packages,
 the names are updated to use -dev.
 
+In multi-arch (kpack) mode a -devel package is generic unless it sets `Gfxarch`
+and per-arch artifacts exist for its components. Then it is built per GPU target
+(e.g. `amdrocm-ck-dev<version>-gfx942`). A package whose generic artifacts hold
+no files gets no `-host` package; its device packages carry the host's
+dependencies instead. See `nativepackage_dependency_tree.md`.
+
 ## RPATH Packages
 
 By default, RUNPATH in binaries and libraries is converted to RPATH during

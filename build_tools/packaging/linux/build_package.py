@@ -51,6 +51,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 
 from packaging_summary import *
 from packaging_utils import *
+from packaging_utils import _has_generic_content
 from runpath_to_rpath import *
 
 from _therock_utils.artifacts import ArtifactCatalog
@@ -172,9 +173,10 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
     """Build all variants for a gfxarch package in kpack mode (multi-arch).
 
     For regular gfxarch packages (Metapackage=False), creates:
-    - Host package (e.g., amdrocm-fft-host8.2) - generic artifacts
+    - Host package (e.g., amdrocm-fft-host8.2) - generic artifacts; not built
+      when the package has no generic content
     - Device packages (e.g., amdrocm-fft8.2-gfx1100, amdrocm-fft8.2-gfx94x) - arch-specific artifacts
-    - Meta package (e.g., amdrocm-fft8.2) - depends on host + all devices
+    - Meta package (e.g., amdrocm-fft8.2) - depends on host (if any) + all devices
     - Non-versioned package (e.g., amdrocm-fft) - user-facing, depends on meta
 
     For gfxarch metapackages (Metapackage=True + Gfxarch=True), creates:
@@ -200,11 +202,16 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
 
     # Host package (contains generic artifacts)
     # Skip for metapackages - they have no artifacts, only dependencies
+    # Skip when there is no generic content: the device packages then carry the
+    # host's dependencies themselves
     if not is_meta:
-        logger.info(f"Building host variant for {pkg_name}")
-        pkg = build_host_package(pkg_name, config)
-        if pkg:
-            built_packages.extend(pkg)
+        if _has_generic_content(pkg_info, config.artifacts_dir):
+            logger.info(f"Building host variant for {pkg_name}")
+            pkg = build_host_package(pkg_name, config)
+            if pkg:
+                built_packages.extend(pkg)
+        else:
+            logger.info(f"Skipping host variant for {pkg_name}: no generic content")
 
     # Device packages (one per owner, retaining all selected member targets)
     # For metapackages, these become arch-specific meta packages
@@ -238,7 +245,8 @@ def build_simple_package_variants(pkg_name, config: PackageConfig) -> list:
 
     Creates:
     - Versioned package (e.g., amdrocm-core8.2)
-    - Non-versioned package with no arch suffix (e.g., amdrocm-core)
+    - Non-versioned package with no arch suffix (e.g., amdrocm-core); not built
+      for a non-meta package that has no content
 
     Parameters:
         pkg_name: Name of the package to build
@@ -248,12 +256,25 @@ def build_simple_package_variants(pkg_name, config: PackageConfig) -> list:
         List of built package filenames
     """
     built_packages = []
+    pkg_info = get_package_info(pkg_name)
 
     # Versioned package
     logger.info(f"Building versioned variant for {pkg_name}")
     pkg = build_versioned_package(pkg_name, config)
     if pkg:
         built_packages.extend(pkg)
+
+    # A non-meta package with no content builds no versioned package, so an
+    # alias would depend on a package that does not exist. A versioned build
+    # that had content but failed still gets its alias.
+    if not is_meta_package(pkg_info) and not any(
+        path.is_dir()
+        for path in filter_components_fromartifactory(
+            pkg_name, config.artifacts_dir, "", config.enable_kpack
+        )
+    ):
+        logger.info(f"Skipping non-versioned variant for {pkg_name}: no content")
+        return built_packages
 
     # Non-versioned package
     logger.info(f"Building non-versioned variant for {pkg_name}")
