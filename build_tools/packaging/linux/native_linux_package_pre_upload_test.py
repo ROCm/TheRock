@@ -16,7 +16,7 @@ Scope (presence only):
 
 Example::
 
-    ./build_tools/packaging/linux/build_package_verify.py \\
+    ./build_tools/packaging/linux/native_linux_package_pre_upload_test.py \\
         --packages-dir output/packages \\
         --pkg-type deb
 """
@@ -28,7 +28,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Allow ``python build_tools/packaging/linux/build_package_verify.py`` from repo root.
+# Allow ``python build_tools/packaging/linux/native_linux_package_pre_upload_test.py`` from repo root.
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _BUILD_TOOLS_DIR = _SCRIPT_DIR.parent.parent
 for _path in (_BUILD_TOOLS_DIR, _SCRIPT_DIR):

@@ -2,14 +2,14 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Unit tests for presence-only ``build_package_verify.py``.
+"""Unit tests for presence-only ``native_linux_package_pre_upload_test.py``.
 
 Covers Created Packages filename parsing (Failed/Skipped ignored), path-safe
 presence checks, report formatting, and CLI exit codes.
 
 Run::
 
-    python3.12 -m unittest build_tools.packaging.linux.tests.build_package_verify_test -v
+    python3.12 -m unittest build_tools.packaging.linux.tests.native_linux_package_pre_upload_ut_test -v
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ for _path in (BUILD_TOOLS_DIR, LINUX_DIR):
     if path_str not in sys.path:
         sys.path.insert(0, path_str)
 
-import build_package_verify as verify  # noqa: E402
+import native_linux_package_pre_upload_test as verify  # noqa: E402
 
 SAMPLE_MANIFEST = """# Built Packages Manifest
 # Package Type: DEB
