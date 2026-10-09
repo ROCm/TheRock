@@ -477,7 +477,7 @@ def gha_append_step_summary(summary: str, mirror_to_job_file: bool = True):
     # Use double newlines to split sections in markdown.
     block = summary + "\n\n"
 
-    with open(step_summary_file, "a") as f:
+    with open(step_summary_file, "a", encoding="utf-8") as f:
         # Use double newlines to split sections in markdown.
         f.write(block)
 
