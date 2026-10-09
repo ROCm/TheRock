@@ -837,12 +837,12 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def _use_gfx110x_with_wsl_runner(self, wsl_runner=_WSL_RUNNER):
         os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
-        linux = {"test-runs-on": self._NATIVE_RUNNER}
+        family = {"linux": {"test-runs-on": self._NATIVE_RUNNER}}
         if wsl_runner:
-            linux["test-runs-on-kernel"] = {"wsl": wsl_runner}
+            family["wsl"] = {"test-runs-on": wsl_runner}
 
         fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
-            "gfx110x": {"linux": linux}
+            "gfx110x": family
         }
 
     def _by_name(self):
@@ -933,10 +933,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
         fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
             "gfx110x": {
-                "windows": {
-                    "test-runs-on": "windows-gfx110X-gpu-rocm",
-                    "test-runs-on-kernel": {"wsl": self._WSL_RUNNER},
-                }
+                "windows": {"test-runs-on": "windows-gfx110X-gpu-rocm"},
+                "wsl": {"test-runs-on": self._WSL_RUNNER},
             }
         }
         os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests-wsl"])
@@ -946,7 +944,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertFalse(any("(WSL)" in name for name in self._by_name()))
 
     def test_no_duplicate_wsl_variant_when_run_already_on_wsl(self):
-        """test_runner:wsl moves the run onto WSL; no second WSL copy is added."""
+        """A dispatch already targeting the WSL runner gets no second WSL copy."""
         self._use_gfx110x_with_wsl_runner()
         os.environ["TEST_RUNS_ON"] = self._WSL_RUNNER
         os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests", "test:hip-tests-wsl"])

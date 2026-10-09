@@ -1907,23 +1907,22 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
 
-    def test_test_runner_wsl_selects_wsl_runner_for_gfx110x(self):
-        """test_runner:wsl + ci:test:gfx110x moves gfx110x Linux tests onto WSL."""
+    def test_wsl_platform_entry_does_not_change_linux_runner(self):
+        """gfx110x's "wsl" entry is runner labels only; Linux tests keep the native runner."""
         targets = cm.TargetSelection(
             linux_families=["gfx110x"],
             linux_test_only_families=["gfx110x"],
         )
         result = cm.expand_build_configs(
-            ci_inputs=self._inputs(
-                event_name="pull_request", pr_labels=["test_runner:wsl"]
-            ),
+            ci_inputs=self._inputs(event_name="pull_request"),
             git_context=cm.GitContext(),
             targets=targets,
             jobs=_jobs(),
         )
         self.assertIsNotNone(result.linux)
+        self.assertEqual(len(result.linux.per_family_info), 1)
         entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "wsl-gfx1101-gpu-rocm")
+        self.assertEqual(entry["test-runs-on"], "linux-gfx110X-gpu-rocm")
 
     def test_test_runner_kernel_clears_unsupported_family(self):
         """test_runner:oem label clears runner for families without kernel support."""

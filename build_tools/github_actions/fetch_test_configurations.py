@@ -125,10 +125,10 @@ _WSL_RUNNER_LABEL_MARKER = "wsl-"
 # "<job_name> (WSL)" entry on a WSL-hosted GPU runner, next to the native Linux
 # entry. A variant is requested with a "test:<component>-wsl" label. Those labels
 # are additive: they add the WSL entry but do not narrow the native test selection.
-# The runner comes from the family's test-runs-on-kernel["wsl"] label, the same
-# key the test_runner:wsl label uses to move a whole run onto WSL.
+# The runner comes from the family's "wsl" platform entry ("test-runs-on"), which
+# sits next to "linux" and "windows" in amdgpu_family_matrix / therock-ci-config.
 WSL_TEST_LABEL_SUFFIX = "-wsl"
-WSL_RUNNER_KERNEL_KEY = "wsl"
+WSL_PLATFORM_KEY = "wsl"
 
 
 def _is_wsl_runner(job_config: dict) -> bool:
@@ -1379,12 +1379,18 @@ def run():
                     "test-runs-on-multi-gpu", ""
                 )
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
-            if not gpu_tests_gated and "asan" not in build_variant:
-                test_runs_on_wsl = platform_info.get("test-runs-on-kernel", {}).get(
-                    WSL_RUNNER_KERNEL_KEY, ""
+            if (
+                not gpu_tests_gated
+                and "asan" not in build_variant
+                and platform == "linux"
+            ):
+                test_runs_on_wsl = (
+                    all_families[shortened_family]
+                    .get(WSL_PLATFORM_KEY, {})
+                    .get("test-runs-on", "")
                 )
-                # test_runner:wsl already moved this whole run onto the WSL runner,
-                # so a second WSL copy of each component would only duplicate it.
+                # A dispatch that already targets the WSL runner (test_runs_on=wsl-...)
+                # runs every component there, so a second WSL copy would duplicate it.
                 if test_runs_on_wsl and test_runs_on_default == test_runs_on_wsl:
                     test_runs_on_wsl = ""
 

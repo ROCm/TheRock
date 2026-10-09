@@ -231,6 +231,10 @@ amdgpu_family_info_matrix dictionary fields:
 - test-runs-on-multi-gpu-labels: (optional) List of runner label configs for multi-GPU load balancing.
     Same format as test-runs-on-labels.
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
+
+A family may also carry a "wsl" entry next to "linux" and "windows". It holds runner labels
+only ("test-runs-on"): WSL jobs reuse the Linux build and test matrix and run on that runner as
+separate "<job> (WSL)" entries (see fetch_test_configurations.py).
 - family: (required) AMD GPU family name, used for test selection and artifact fetching
 - fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])
 - build_variants: (optional) list of build variants to build for this architecture (e.g. ["release", "asan"])
@@ -299,11 +303,6 @@ amdgpu_family_info_matrix = {
     "gfx110x": {
         "linux": {
             "test-runs-on": "linux-gfx110X-gpu-rocm",
-            # WSL-hosted V710 runners (TheRock-Infra wsl-* pools). Used by the
-            # test_runner:wsl label and by "<job> (WSL)" entries (test:*-wsl).
-            "test-runs-on-kernel": {
-                "wsl": "wsl-gfx1101-gpu-rocm",
-            },
             "family": "gfx110X-all",
             "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
             "bypass_tests_for_releases": True,
@@ -338,6 +337,12 @@ amdgpu_family_info_matrix = {
                 "submodule_bump",
                 "nightly",
             ],
+        },
+        # WSL-hosted V710 runners (TheRock-Infra wsl-* pools): a Windows host whose
+        # GitHub runner runs inside WSL2. Runner labels only; WSL jobs reuse the
+        # Linux build and test matrix and run as "<job> (WSL)" entries (test:*-wsl).
+        "wsl": {
+            "test-runs-on": "wsl-gfx1101-gpu-rocm",
         },
     },
     # Builds on presubmit, tests only on nightly
@@ -788,11 +793,16 @@ def _overlay_runner_config(families: dict, external_config: dict) -> dict:
             continue
 
         external_family = runner_labels[family_name]
-        for platform in ["linux", "windows"]:
-            if platform not in family_config:
-                continue
+        for platform in ["linux", "windows", "wsl"]:
             if platform not in external_family:
                 continue
+            if platform not in family_config:
+                # WSL carries runner labels only, so the external config may add it to a family
+                # that has no local "wsl" entry. Linux/Windows entries also need local build
+                # definitions, so those are never created from the external config.
+                if platform != "wsl":
+                    continue
+                family_config[platform] = {}
 
             # Overlay all keys from runner_labels onto local definitions
             external_platform = external_family[platform]
