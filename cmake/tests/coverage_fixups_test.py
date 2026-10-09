@@ -109,6 +109,23 @@ ROCALUTION_SRC = textwrap.dedent(
     file(WRITE "${CMAKE_BINARY_DIR}/hip_clang_flags.txt" "${HIP_CLANG_FLAGS}")
     """
 )
+# The same, reduced to the rocalution_hip library it links, created in the
+# subdirectory after the project include has run.
+ROCALUTION_LINK_PROJECT = textwrap.dedent(
+    """\
+    cmake_minimum_required(VERSION 3.19)
+    project(rocalution_like LANGUAGES C)
+    add_subdirectory(src)
+    """
+)
+ROCALUTION_LINK_SRC = textwrap.dedent(
+    """\
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/hip.c" "int hip(void) { return 0; }\\n")
+    add_library(rocalution_hip SHARED "${CMAKE_CURRENT_BINARY_DIR}/hip.c")
+    file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/link_options.txt"
+      CONTENT "$<TARGET_PROPERTY:rocalution_hip,LINK_OPTIONS>")
+    """
+)
 
 
 class RocalutionFixupTest(unittest.TestCase):
@@ -123,7 +140,7 @@ class RocalutionFixupTest(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    def configure_with(self, include_body: str) -> list[str]:
+    def configure(self, include_body: str, source: str = "src") -> None:
         include = self.root / "coverage_include.cmake"
         include.write_text(
             f'set(THEROCK_COVERAGE_COMPILE_FLAGS "{COVERAGE_FLAGS}")\n' + include_body
@@ -132,7 +149,7 @@ class RocalutionFixupTest(unittest.TestCase):
             [
                 "cmake",
                 "-S",
-                str(self.root / "src"),
+                str(self.root / source),
                 "-B",
                 str(self.build_dir),
                 f"-DCMAKE_PROJECT_INCLUDE={include}",
@@ -141,6 +158,9 @@ class RocalutionFixupTest(unittest.TestCase):
             text=True,
         )
         self.assertEqual(configure.returncode, 0, configure.stdout + configure.stderr)
+
+    def configure_with(self, include_body: str) -> list[str]:
+        self.configure(include_body)
         flags = (self.build_dir / "hip_clang_flags.txt").read_text()
         return [flag for flag in flags.split(";") if flag]
 
@@ -161,6 +181,17 @@ class RocalutionFixupTest(unittest.TestCase):
             "set(HIP_CLANG_FLAGS ${THEROCK_COVERAGE_COMPILE_FLAGS})\n"
         )
         self.assertEqual(flags, [])
+
+    @unittest.skipUnless(shutil.which("cc"), "needs a host C compiler")
+    def test_the_hip_library_links_as_a_hip_binary(self):
+        (self.root / "link" / "src").mkdir(parents=True)
+        (self.root / "link" / "CMakeLists.txt").write_text(ROCALUTION_LINK_PROJECT)
+        (self.root / "link" / "src" / "CMakeLists.txt").write_text(ROCALUTION_LINK_SRC)
+
+        self.configure(f'include("{ROCALUTION_FIXUP.as_posix()}")\n', source="link")
+
+        options = (self.build_dir / "link_options.txt").read_text().split(";")
+        self.assertIn("--hip-link", options)
 
 
 if __name__ == "__main__":

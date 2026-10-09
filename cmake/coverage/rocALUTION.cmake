@@ -18,3 +18,23 @@ if(NOT HIP_CLANG_FLAGS MATCHES "fcoverage-mapping")
   set(HIP_CLANG_FLAGS ${HIP_CLANG_FLAGS} ${_therock_coverage_flags}
     CACHE STRING "Semicolon delimited flags for CLANG" FORCE)
 endif()
+
+# hip_add_library() also links rocalution_hip as C++, and a C++ link with
+# -fprofile-instr-generate gets only libclang_rt.profile.a. The instrumented
+# kernels' registrations then take the GPU half of the profile runtime from
+# it, without the sanitizer helpers that only libclang_rt.profile_rocm.a
+# defines, and the library does not load. --hip-link has the driver link it
+# as it links any HIP binary, with libclang_rt.profile_rocm.a. The target
+# exists once the top-level CMakeLists.txt has run.
+get_property(_therock_coverage_hip_link_deferred GLOBAL
+  PROPERTY THEROCK_COVERAGE_ROCALUTION_HIP_LINK_DEFERRED)
+if(NOT _therock_coverage_hip_link_deferred)
+  set_property(GLOBAL PROPERTY THEROCK_COVERAGE_ROCALUTION_HIP_LINK_DEFERRED TRUE)
+  function(_therock_coverage_rocalution_hip_link)
+    if(TARGET rocalution_hip)
+      target_link_options(rocalution_hip PRIVATE --hip-link)
+    endif()
+  endfunction()
+  cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}"
+    CALL _therock_coverage_rocalution_hip_link)
+endif()

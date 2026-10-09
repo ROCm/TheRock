@@ -55,7 +55,9 @@ is instrumented. `hipBLASLt.cmake` gives the bare `rocroller` that hipBLASLt's
 coverage-only test link names a target forwarding to the imported
 `roc::rocroller`. `rocALUTION.cmake` puts the coverage flags in FindHIP's
 `HIP_CLANG_FLAGS`: rocALUTION builds its HIP backend with `hip_add_library()`,
-whose `hipcc` commands never see the compile rule.
+whose `hipcc` commands never see the compile rule. It also links that library
+with `--hip-link`, which `hip_add_library()` links as C++, so that it gets
+`libclang_rt.profile_rocm.a` like any other HIP binary.
 
 ### Enabling a whole group
 
