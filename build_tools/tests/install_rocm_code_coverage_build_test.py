@@ -116,6 +116,49 @@ class TestCodeCoverageRepoSplit(unittest.TestCase):
                     self._run_main(extra)
                 self.assertEqual(overlay.called, expected)
 
+    def test_test_links_are_added_for_the_replaced_components(self):
+        with mock.patch.object(mod, "add_coverage_test_links") as add_links:
+            self._run_main(["--replace-hipblaslt"])
+
+        (components, _), _ = add_links.call_args
+        self.assertEqual(components, ["rocblas", "hipblaslt"])
+
+
+class TestCoverageTestLinks(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.kernels = self.root / "lib/hipblaslt/library/gfx942"
+        self.kernels.mkdir(parents=True)
+        (self.kernels / "TensileLibrary_lazy_gfx942.dat.zlib").write_bytes(b"")
+        (self.root / "bin/hipblaslt").mkdir(parents=True)
+        (self.root / "bin/hipblaslt/CTestTestfile.cmake").write_text("")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_hipblaslt_tests_find_the_installed_kernels(self):
+        mod.add_coverage_test_links(["hipblaslt"], self.root)
+
+        link = self.root / "bin/hipblaslt/library"
+        self.assertTrue(link.is_symlink())
+        self.assertTrue((link / "gfx942/TensileLibrary_lazy_gfx942.dat.zlib").exists())
+
+    def test_other_components_get_no_links(self):
+        mod.add_coverage_test_links(["rocblas"], self.root)
+
+        self.assertFalse((self.root / "bin/hipblaslt/library").exists())
+
+    def test_an_existing_directory_is_left_alone(self):
+        existing = self.root / "bin/hipblaslt/library"
+        existing.mkdir()
+        (existing / "kept").write_text("")
+
+        mod.add_coverage_test_links(["hipblaslt"], self.root)
+
+        self.assertFalse(existing.is_symlink())
+        self.assertTrue((existing / "kept").exists())
+
 
 class TestDeviceCodeOverlay(unittest.TestCase):
     KPACK = ".kpack/rand_lib_gfx942.kpack"

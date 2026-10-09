@@ -73,6 +73,16 @@ COMPONENT_MAP = {
     "composablekernel": ("composable-kernel", "composable_kernel"),
 }
 
+# Links a component's coverage tests need on top of the installed tree, as
+# (link, target) pairs: the link relative to the output directory, the target
+# relative to the link. hipBLASLt's coverage-only test link puts the library's
+# own objects into hipblaslt-test, so the code that finds the Tensile,
+# extension-op and rocRoller kernels next to its own binary looks in
+# bin/hipblaslt/library instead of lib/hipblaslt/library.
+COVERAGE_TEST_LINKS = {
+    "hipblaslt": [("bin/hipblaslt/library", "../../lib/hipblaslt/library")],
+}
+
 
 def _read_passthrough_options(passthrough_argv):
     """Read options shared with install_rocm_from_artifacts without consuming them.
@@ -320,6 +330,20 @@ def _overlay_archive_device_code(archive, artifacts, staging_dir, output_dir):
             )
 
 
+def add_coverage_test_links(components, output_dir):
+    """Creates the COVERAGE_TEST_LINKS of `components` under `output_dir`,
+    leaving alone any path that already exists."""
+    for comp in components:
+        for link, target in COVERAGE_TEST_LINKS.get(comp, []):
+            link_path = output_dir / link
+            if link_path.exists() or link_path.is_symlink():
+                log(f"Not linking {link_path} to {target}: the path exists")
+                continue
+            link_path.parent.mkdir(parents=True, exist_ok=True)
+            link_path.symlink_to(target, target_is_directory=True)
+            log(f"Linked {link_path} to {target}")
+
+
 def main(argv):
     parser = argparse.ArgumentParser(prog="code-coverage-installer")
     parser.add_argument(
@@ -406,6 +430,10 @@ def main(argv):
     replace_instrumented_libraries(artifacts, dest_dir, opts.output_dir)
     if args.replace_device_code:
         overlay_instrumented_device_code(artifacts, dest_dir, opts.output_dir)
+    add_coverage_test_links(
+        [comp for comp in COMPONENT_MAP if getattr(args, f"replace_{comp}")],
+        opts.output_dir,
+    )
 
     # The kpack split relocates a fat binary's program headers, and in a shared
     # library the profile runtime then reads them from the wrong address when

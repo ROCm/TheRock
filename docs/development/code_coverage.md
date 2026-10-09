@@ -341,7 +341,10 @@ Per shard, `test_code_coverage_component.yml` does three things:
    installs from `--run-id` (the nightly) and replaces only the
    project-under-test from `--code-coverage-run-id` (`<run_id>-coverage`).
    With device coverage it also gets `--replace-device-code`, which swaps the
-   project's code objects into the installed kpack archives.
+   project's code objects into the installed kpack archives. For hipBLASLt it
+   also links `bin/hipblaslt/library` to `lib/hipblaslt/library`: the
+   coverage-only test link puts the library's own objects into
+   `hipblaslt-test`, which then looks for its kernels next to itself.
 1. **Set `LLVM_PROFILE_FILE`** to a per-shard path (`%p`/`%m`) so concurrent
    processes don't overwrite each other.
 1. **Run tests and upload profraw** under `always()` — a failing shard still
