@@ -1,0 +1,1014 @@
+From e08b0394880511271e28c3f19d6f42ddd7eff8f3 Mon Sep 17 00:00:00 2001
+From: Tony Davis <tony.davis@amd.com>
+Date: Thu, 8 Oct 2026 12:03:03 -0500
+Subject: [PATCH] test(hipblaslt): check every fast_check solution on every
+ iteration (#13005)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+JIRA ID : AIHPBLAS-5015
+
+Stack, in merge order: #12876, #12960, **#13005 (this PR)**, #13013,
+#13015, #13021, #13022, #13025, #13031. The diff here is only the
+every-solution, every-iteration layer; the base moves down the stack as
+those merge.
+
+## Summary
+
+Address-arithmetic bugs tend to live in a few solutions out of hundreds,
+and some only show up on some launches. A test that runs the heuristic's
+top pick once can miss both kinds. And when a failure does show up,
+nobody can reproduce it unless the report says which solution and which
+launch failed.
+
+This PR lets a test run every solution the library offers for a problem,
+and launch and check each one several times (`fast_check_repeat`). D is
+reset to the sentinel and the workspace to zero before every launch, so
+each check sees only that launch's work. One summary at the end lists
+every failing solution, its kernel and which launches failed.
+
+Stream-K needs a word of care. On gfx942 the library offers Stream-K
+solutions only when the process starts with
+`TENSILE_SOLUTION_SELECTION_METHOD=2`, which no CI lane sets today, so
+the Stream-K cases skip there and are for manual runs. On gfx950
+Stream-K is the only library, so they always run, and they overlap the
+default cases. A self-test corrupts one launch on purpose, to prove the
+report points at the right one. Cases that hit open defects are
+quarantined in `known_bugs.yaml`; see Defects found below.
+
+**CI time added** (one MI300X / one MI350X, ROCm 10.2, sum of per-test
+times): about 1 s / 2 s in pre_checkin (14 / 26 cases), and about 6 min
+/ 3 min in nightly (28 / 29 cases). With
+`TENSILE_SOLUTION_SELECTION_METHOD=2` on MI300X, this PR's Stream-K
+cases add about 4.5 min more.
+
+## Motivation
+
+Each address-arithmetic defect on AIHPBLAS-4988 lives in a handful of
+the hundreds of shipped solutions: 2 of 244 in ROCM-32046, 39 of 545 in
+ROCM-31290, 4 of 679 in ROCM-31258. Some defects are also intermittent.
+ROCM-31901 and ROCM-31905 fail only on some launches, and ROCM-31105
+needed repeated launches to show up. A test that runs only the
+heuristic's top pick, and checks only the first call, misses both kinds.
+When a failure does show up, the report also needs to say which solution
+and which launch failed, or nobody can reproduce it.
+
+## Technical Details
+
+Only client test code and test data change.
+
+- **Every iteration.** A new argument, `fast_check_repeat`, launches and
+checks each solution that many times, one solution at a time. Before
+every launch D is refilled with the sentinel, and the workspace is
+returned to the zeros of a fresh allocation, so a repeat cannot pass on
+partial sums an earlier launch left there (a Stream-K fixup that reads
+too early, for example). Zero rather than poison, because kernels may
+rely on their flags starting at zero. A failure message names the
+solution, its library index and kernel, and the iteration ("iteration 2
+of 4").
+- **Summary per solution.** `FastCheckSolutionLog` records pass or fail
+for each solution and iteration. At the end of the test, one failure
+lists every failing solution with its library index, kernel name and
+failing iterations. With hundreds of solutions, that list is the triage
+starting point.
+- **Self-test.** `fast_check_inject` corrupts one element of D after the
+launch on the named iteration. The case passes only if that iteration
+fails for every solution, its report names the corrupted element, and
+every other iteration passes. The corrupted value is the sentinel, so
+this exercises the per-iteration sentinel check; the probe-sum path is
+covered by the host self-tests in #12876.
+- **Stream-K.** A new argument, `requires_streamk`, skips the case with
+a message unless the process started with
+`TENSILE_SOLUTION_SELECTION_METHOD=2`. On gfx950 the case always runs,
+because Stream-K is the only library there. TensileLite reads that
+variable once per process (`Debug::Instance`), so
+`tensile_solution_selection_method` in a YAML case only has an effect if
+no earlier test in the process has run a GEMM. A Stream-K case whose
+solutions include no Stream-K kernel (TileProcessingStrategy StreamK,
+`TPSSK` in the kernel name) also skips with the reason, rather than
+passing while testing none.
+- **Every solution.** These cases use `algo_method: all`, which already
+includes the hand-written custom kernels (ROCM-31258). A new xf32 case
+on gfx950 runs them all.
+
+New YAML cases:
+
+- pre_checkin: the self-test (f32 and bf16, 4 solutions × 4 iterations);
+the heuristic's first 16 solutions × 4 iterations in f32, f16 and bf16
+for every transpose; and the same under Stream-K.
+- nightly: every supported solution × 3 iterations in f32, f16 and bf16
+on two ragged shapes; xf32 with custom kernels on gfx950; and every
+Stream-K solution × 3 iterations.
+
+## Defects found
+
+The cluster runs found two library defects. Each is filed and
+quarantined in `known_bugs.yaml` on the platforms it affects, with a
+time-box:
+
+- **ROCM-32151**: some bf16 Stream-K solutions on gfx942 and gfx950
+write about half the right value in the last partial M tile (rows 1024
+to 1030 at M = 1031), and gfx950 solution 354888 does it in every row.
+On gfx942 these solutions are offered only with
+`TENSILE_SOLUTION_SELECTION_METHOD=2`, so the bf16 every-solution case
+stays active there and fails only in that manual mode. `hipblaslt-bench
+-v` pinned to each solution index fails the CPU reference; the
+heuristic's default passes. The quarantine covers the whole bf16
+configuration on gfx950; there is no way yet to exclude single
+solutions.
+- **ROCM-32153**: gfx950 f16 solutions 405799 and 407668 return wrong,
+sometimes non-integer, values at 4099 x 2053 x 129. `hipblaslt-bench -v`
+confirms 407668.
+
+## Test Plan
+
+- Host self-test: the solution log lists only failing solutions, with
+their kernels and iterations, and is empty when everything passed.
+- Device self-test: the corruption helper changes exactly one element,
+and never to the value it held.
+- `matmul_fast_check_repeat_reports_injected_iteration`, plus a mutation
+check: corrupting iteration 3 instead of 2 must make the self-test fail
+on both counts.
+- All existing fast_check cases still pass with `fast_check_repeat` at
+its default of 1.
+- The Stream-K cases skip without the variable and run with it, and skip
+on a GPU whose library offers no Stream-K kernel.
+
+## Test Result
+
+**ROCm 10.2, at the stack tip (3364b793ac1, which includes this PR).**
+Every fast_check case and self-test passed or skipped for a stated
+reason on gfx90a, gfx942 and gfx950, with none failing; the counts are
+in #12876. With `TENSILE_SOLUTION_SELECTION_METHOD=2`:
+
+- gfx942 (MI300X): 52 passed, 12 quarantined, and the 6 bf16
+every-solution cases found ROCM-32151 again (all 32 failing solutions
+are Stream-K kernels).
+- gfx950 (MI350X): 43 passed and the other 28 are quarantined.
+- gfx90a (MI210), which has no Stream-K library: all 40 Stream-K cases
+now skip with "none of the N solutions for this case is a Stream-K
+kernel", where before they passed while testing none.
+
+Earlier development runs on gfx90a (MI210):
+
+- Mutation check: with the wrong iteration corrupted, the self-test
+failed for all 8 solutions with "the corrupted iteration 2 passed" and
+"iteration 3 was not corrupted but failed".
+- One run of the full filter crashed with a segmentation fault in a
+`matmul_fast_check_matches_unit_check` case that also runs the host
+reference; that case passed alone, its 64-case group passed, and later
+full runs passed, so I could not reproduce it.
+- gfx1250 was not run.
+
+## Submission Checklist
+
+- [x] Look over the contributing guidelines at
+https://github.com/ROCm/TheRock/blob/main/GOVERNANCE.md#pull-requests.
+
+## Risk level
+
+Low (2/5): test code and test data only, but it restructures the shared
+solution loop in `testing_matmul.hpp`. With `fast_check_repeat` at its
+default of 1 that loop runs each solution once, as before, and the
+workspace reset happens only for fast_check cases.
+
+---------
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+Co-authored-by: James Newling <james.newling@gmail.com>
+---
+ projects/hipblaslt/TESTING.md                 |   2 +-
+ .../clients/common/include/fast_check.hpp     |  40 ++++
+ .../common/include/hipblaslt_arguments.hpp    |  10 +-
+ .../clients/common/include/testing_matmul.hpp | 212 +++++++++++++++---
+ .../clients/common/src/fast_check.cpp         |  72 ++++++
+ .../common/src/hipblaslt_arguments.cpp        |   3 +
+ .../clients/tests/data/hipblaslt_common.yaml  |   6 +
+ .../clients/tests/data/known_bugs.yaml        |   9 +
+ .../clients/tests/data/matmul_gtest.yaml      | 165 ++++++++++++++
+ .../clients/tests/src/fast_check_gtest.cpp    |  91 ++++++++
+ 10 files changed, 580 insertions(+), 30 deletions(-)
+
+diff --git a/projects/hipblaslt/TESTING.md b/projects/hipblaslt/TESTING.md
+index 715037b0..da91a89a 100644
+--- a/projects/hipblaslt/TESTING.md
++++ b/projects/hipblaslt/TESTING.md
+@@ -244,7 +244,7 @@ There is no separate unit-test binary. The host-only tests that do exist are com
+ | `caching_library_gtest.cpp` | `CachingLibraryCollision` | Solution-cache keying under a forced hash collision |
+ | `ulp_gtest.cpp` | `UlpMantissaBits`, `UlpAsDouble`, `UlpDistance`, `UlpAccumulate`, `UlpCheckGeneral` | Units-in-the-last-place error-measurement helpers, pure math with no GPU dependency |
+ | `unit_gtest.cpp` | `UnitCheckIdentical` | Exact-storage checks used to skip element-by-element output comparisons when the addressed values have identical bytes |
+-| `fast_check_gtest.cpp` | `FastCheck_pre_checkin`, `FastCheckDevice_pre_checkin` | The `fast_check` verifier: fault injection into host-computed results (`FastCheck_pre_checkin`, no GPU), and the device padding, poison and probe-sum kernels plus 4 GiB-boundary buffer placement on small buffers (`FastCheckDevice_pre_checkin`, no hipBLASLt kernels) |
++| `fast_check_gtest.cpp` | `FastCheck_pre_checkin`, `FastCheckDevice_pre_checkin` | The `fast_check` verifier: fault injection into host-computed results and the per-solution failure summary (`FastCheck_pre_checkin`, no GPU), and the device padding, poison and probe-sum kernels plus 4 GiB-boundary buffer placement on small buffers (`FastCheckDevice_pre_checkin`, no hipBLASLt kernels) |
+ | `arch_revision_gtest.cpp` | `ArchRevisionSmoke` | ASIC-revision-to-library-arch mapping, a pure function reached by relative `#include` of an internal header (see point 1 below) |
+ 
+ That is a handful of test cases of genuinely hardware-independent logic, against a library of
+diff --git a/projects/hipblaslt/clients/common/include/fast_check.hpp b/projects/hipblaslt/clients/common/include/fast_check.hpp
+index 69b1e7c3..6d8a38ca 100644
+--- a/projects/hipblaslt/clients/common/include/fast_check.hpp
++++ b/projects/hipblaslt/clients/common/include/fast_check.hpp
+@@ -136,6 +136,46 @@ FastCheckResult fast_check_result_device(const FastCheckProblem&  problem,
+ // The probe vector entry for the given seed and index, in [1, kFastCheckModulus).
+ uint64_t fast_check_probe(uint64_t seed, uint64_t index);
+ 
++// Pass/fail for each solution and iteration of a test, so the end of the test can say which
++// solutions failed and on which iterations. Each defect class lives in a few of the hundreds of
++// shipped solutions, and intermittent defects fail only some iterations, so both are recorded.
++class FastCheckSolutionLog
++{
++public:
++    // Records one launch and check. solution is the position in the test's list, library_index
++    // the solution's index in the library, and kernel its kernel name, which may be left empty
++    // on passing iterations; the last non-empty name is kept.
++    void record(
++        size_t solution, int library_index, const std::string& kernel, int iteration, bool passed);
++
++    size_t solutions() const
++    {
++        return entries.size();
++    }
++    size_t failed_solutions() const;
++
++    // One line per failing solution, naming the solution, its library index and kernel, and the
++    // iterations that failed. Empty when every solution passed.
++    std::string summary(int iterations) const;
++
++private:
++    struct Entry
++    {
++        size_t           solution;
++        int              library_index;
++        std::string      kernel;
++        std::vector<int> failed_iterations;
++    };
++    std::vector<Entry> entries;
++};
++
++// Changes element (row, col) of the given batch of a device matrix to a different value: the
++// sentinel when the element does not already hold it, and the poison value otherwise. Used by
++// the fast_check_inject self-test to prove that a corrupted result is reported on the iteration
++// that produced it.
++hipError_t fast_check_corrupt_element_device(
++    const FastCheckMatrix& m, int64_t batch, int64_t row, int64_t col, hipStream_t stream);
++
+ // One device buffer a GEMM reads or writes, for the placement record in failure messages.
+ struct FastCheckBuffer
+ {
+diff --git a/projects/hipblaslt/clients/common/include/hipblaslt_arguments.hpp b/projects/hipblaslt/clients/common/include/hipblaslt_arguments.hpp
+index 8c4ffb1f..201cad16 100644
+--- a/projects/hipblaslt/clients/common/include/hipblaslt_arguments.hpp
++++ b/projects/hipblaslt/clients/common/include/hipblaslt_arguments.hpp
+@@ -178,7 +178,12 @@ struct Arguments
+     // scale_alpha_vec, workspace), and the bytes before the boundary (0 = middle)
+     char   placement[16];
+     size_t placement_offset;
+-    int8_t timing;
++    // fast_check: launches and checks per solution; the self-test iteration whose result
++    // is corrupted on purpose (-1 = none); and whether the case needs Stream-K solutions
++    int32_t fast_check_repeat;
++    int32_t fast_check_inject;
++    int8_t  requires_streamk;
++    int8_t  timing;
+ 
+     char transA;
+     char transB;
+@@ -311,6 +316,9 @@ struct Arguments
+     OPER(fast_check) SEP             \
+     OPER(placement) SEP              \
+     OPER(placement_offset) SEP       \
++    OPER(fast_check_repeat) SEP      \
++    OPER(fast_check_inject) SEP      \
++    OPER(requires_streamk) SEP       \
+     OPER(timing) SEP                 \
+     OPER(transA) SEP                 \
+     OPER(transB) SEP                 \
+diff --git a/projects/hipblaslt/clients/common/include/testing_matmul.hpp b/projects/hipblaslt/clients/common/include/testing_matmul.hpp
+index 6a66c483..6481bafa 100644
+--- a/projects/hipblaslt/clients/common/include/testing_matmul.hpp
++++ b/projects/hipblaslt/clients/common/include/testing_matmul.hpp
+@@ -1132,6 +1132,32 @@ inline std::string fast_check_unsupported_reason(const Arguments&     arg,
+     return {};
+ }
+ 
++// Returns why this process cannot select Stream-K solutions, or an empty string when it can.
++// TensileLite reads TENSILE_SOLUTION_SELECTION_METHOD once per process (Debug::Instance). A case's
++// tensile_solution_selection_method sets the variable per handle, after that read, so a case that
++// needs the Stream-K solutions needs the variable set when the process starts; this is that value.
++// On gfx950 the Stream-K library is the only one, and the variable has no effect.
++inline const bool kStreamKSelectedAtStartup = [] {
++    const char* method = getenv("TENSILE_SOLUTION_SELECTION_METHOD");
++    return method && !strcmp(method, "2");
++}();
++
++inline std::string streamk_unavailable_reason()
++{
++    int device = 0;
++    if(hipGetDevice(&device) == hipSuccess)
++    {
++        hipDeviceProp_t props;
++        if(hipGetDeviceProperties(&props, device) == hipSuccess
++           && !strncmp(props.gcnArchName, "gfx950", 6))
++            return {};
++    }
++    if(kStreamKSelectedAtStartup)
++        return {};
++    return "this case covers Stream-K solutions, which the library offers only when the process "
++           "starts with TENSILE_SOLUTION_SELECTION_METHOD=2";
++}
++
+ // Skips the test when buffer placement is unavailable on this platform, and fails it when the
+ // placement request is invalid.
+ #ifdef GOOGLE_TEST
+@@ -2425,6 +2451,42 @@ void testing_matmul_with_bias(const Arguments& arg,
+         }
+     }
+ 
++    if(arg.fast_check_repeat != 1 || arg.fast_check_inject != -1)
++    {
++        std::string why;
++        if(!arg.fast_check)
++            why = "fast_check_repeat and fast_check_inject require fast_check";
++        else if(arg.fast_check_repeat < 1)
++            why = "fast_check_repeat must be at least 1";
++        else if(arg.fast_check_inject < -1)
++            why = "fast_check_inject must be -1 (no injection) or an iteration number";
++        else if(arg.fast_check_inject >= arg.fast_check_repeat)
++            why = "fast_check_inject must name an iteration below fast_check_repeat";
++        if(!why.empty())
++        {
++#ifdef GOOGLE_TEST
++            FAIL() << why;
++#else
++            hipblaslt_cerr << why << std::endl;
++            return;
++#endif
++        }
++    }
++
++    if(arg.requires_streamk)
++    {
++        std::string why = streamk_unavailable_reason();
++        if(!why.empty())
++        {
++#ifdef GOOGLE_TEST
++            GTEST_SKIP() << why;
++#else
++            hipblaslt_cerr << why << std::endl;
++            return;
++#endif
++        }
++    }
++
+     // Calculating block count
+     auto plan = hipblaslt_bench::compute_rotating_buffer_plan(
+         arg.adaptive, arg.max_iters, arg.cold_iters, arg.iters, rotating, totalRotatingSizeNeeded);
+@@ -5109,6 +5171,27 @@ void testing_matmul_with_bias(const Arguments& arg,
+ 
+     CHECK_SOLUTION_FOUND(returnedAlgoCount);
+ 
++    // A Stream-K case that got no Stream-K kernel (TileProcessingStrategy StreamK, "TPSSK" in the
++    // kernel name) would pass while testing none.
++    if(arg.requires_streamk)
++    {
++        bool streamk = false;
++        for(auto& r : heuristicResult)
++            streamk |= hipblaslt_ext::getKernelNameFromAlgo(handle, r.algo).find("_TPSSK_")
++                       != std::string::npos;
++        if(!streamk)
++        {
++            const std::string why = "none of the " + std::to_string(heuristicResult.size())
++                                    + " solutions for this case is a Stream-K kernel";
++#ifdef GOOGLE_TEST
++            GTEST_SKIP() << why;
++#else
++            hipblaslt_cout << why << std::endl;
++            return;
++#endif
++        }
++    }
++
+     // A placed workspace replaces the normal one, which placement runs never use: placement
+     // requires fast_check, and fast_check refuses timing runs.
+     const bool placeWorkspace = !strcmp(arg.placement, "workspace");
+@@ -5595,11 +5678,19 @@ void testing_matmul_with_bias(const Arguments& arg,
+     }
+     if(!arg.timing)
+     {
+-        for(size_t sol = 0; sol < heuristicResult.size(); sol++)
++        // fast_check launches and checks each solution fast_check_repeat times, solution by
++        // solution, so a defect that fails only some launches is reported with its iteration.
++        const int            fcIterations = arg.fast_check ? std::max(1, arg.fast_check_repeat) : 1;
++        const bool           fcInjecting  = arg.fast_check && arg.fast_check_inject >= 0;
++        FastCheckSolutionLog fcLog;
++        for(size_t run = 0; run < heuristicResult.size() * fcIterations; run++)
+         {
++            const size_t sol  = run / fcIterations;
++            const int    iter = int(run % fcIterations);
+ #ifdef GOOGLE_TEST
+             SCOPED_TRACE(solution_description(
+-                handle, heuristicResult[sol].algo, sol, heuristicResult.size(), false));
++                             handle, heuristicResult[sol].algo, sol, heuristicResult.size(), false)
++                         + (fcIterations > 1 ? ", iteration " + std::to_string(iter) : ""));
+ #endif
+             if(placedWorkspace)
+             {
+@@ -5613,6 +5704,12 @@ void testing_matmul_with_bias(const Arguments& arg,
+                     CHECK_HIP_ERROR(
+                         fast_check_fill_sentinel_device((*dDp)[i].buf(), To, size_D[i], stream));
+             }
++            // Return the workspace to the zeros of a fresh allocation, so that a launch cannot
++            // pass on the partial sums an earlier launch left there (a Stream-K fixup that reads
++            // too early, for example). Zero rather than poison: kernels may rely on their flags
++            // starting at zero.
++            if(arg.fast_check && workspacePtr && workspace_size)
++                CHECK_HIP_ERROR(hipMemsetAsync(workspacePtr, 0, workspace_size, stream));
+             if((arg.unit_check || arg.norm_check || arg.allclose_check || arg.fast_check)
+                && arg.c_equal_d)
+             {
+@@ -5806,6 +5903,42 @@ void testing_matmul_with_bias(const Arguments& arg,
+             if(arg.fast_check)
+             {
+                 CHECK_HIP_ERROR(hipStreamSynchronize(stream));
++
++                // The self-test corrupts one element of the last batch of D after the launch,
++                // so only this iteration's result is wrong.
++                const int64_t injRow = M[0] / 2, injCol = N[0] / 2, injBatch = num_batches[0] - 1;
++                if(iter == arg.fast_check_inject)
++                    CHECK_HIP_ERROR(fast_check_corrupt_element_device(
++                        {(*dDp)[0].buf(), To, M[0], N[0], ldd[0], stride_d[0]},
++                        injBatch,
++                        injRow,
++                        injCol,
++                        stream));
++
++                // Failures are reported as they are found, except in the self-test, which
++                // collects them and checks that they fall on the corrupted iteration.
++                bool        iterPassed = true;
++                std::string iterReport;
++                auto        reportFailure = [&](const std::string& what, const std::string& text) {
++                    iterPassed = false;
++                    const std::string report
++                        = what + ", "
++                          + solution_description(
++                              handle, heuristicResult[sol].algo, sol, heuristicResult.size(), true)
++                          + (fcIterations > 1 ? ", iteration " + std::to_string(iter) + " of "
++                                                    + std::to_string(fcIterations)
++                                                     : "")
++                          + ":\n" + text;
++                    iterReport += report;
++                    if(fcInjecting)
++                        return;
++#ifdef GOOGLE_TEST
++                    ADD_FAILURE() << report;
++#else
++                    hipblaslt_cerr << report << std::endl;
++#endif
++                };
++
+                 for(int i = 0; i < gemm_count; i++)
+                 {
+                     FastCheckMatrix d_dev{(*dDp)[i].buf(), To, M[i], N[i], ldd[i], stride_d[i]};
+@@ -5838,7 +5971,7 @@ void testing_matmul_with_bias(const Arguments& arg,
+                         fp.bias_stride = arg.bias_stride > 0 ? arg.bias_stride : 0;
+                     }
+                     fp.seed = fast_check_seed(arg);
+-                    if(sol == 0)
++                    if(run == 0)
+                         fcExpected[i] = fast_check_expected(fp);
+                     FastCheckResult res = fast_check_result_device(fp, fcExpected[i], stream);
+                     if(!scan.passed || !res.passed)
+@@ -5856,20 +5989,9 @@ void testing_matmul_with_bias(const Arguments& arg,
+                             buffers.push_back({"scaleAlpha_vector",
+                                                dScaleAlphaVec[i].buf(),
+                                                size_scaleAlphaVec[i] * realDataTypeSize(Talpha)});
+-                        const std::string report
+-                            = "fast_check, "
+-                              + solution_description(handle,
+-                                                     heuristicResult[sol].algo,
+-                                                     sol,
+-                                                     heuristicResult.size(),
+-                                                     true)
+-                              + ":\n" + scan.message + res.message
+-                              + fast_check_describe_buffers(buffers);
+-#ifdef GOOGLE_TEST
+-                        ADD_FAILURE() << report;
+-#else
+-                        hipblaslt_cerr << report << std::endl;
+-#endif
++                        reportFailure("fast_check",
++                                      scan.message + res.message
++                                          + fast_check_describe_buffers(buffers));
+                     }
+                 }
+ 
+@@ -5899,25 +6021,59 @@ void testing_matmul_with_bias(const Arguments& arg,
+                 {
+                     FastCheckResult poison = placed->verify_poison(arg.placement, stream);
+                     if(!poison.passed)
++                        reportFailure("fast_check placement", poison.message);
++                    CHECK_HIP_ERROR(placed->fill_poison(stream));
++                }
++
++                fcLog.record(sol,
++                             hipblaslt_ext::getIndexFromAlgo(heuristicResult[sol].algo),
++                             iterPassed ? std::string()
++                                        : hipblaslt_ext::getKernelNameFromAlgo(
++                                              handle, heuristicResult[sol].algo),
++                             iter,
++                             iterPassed);
++
++                if(fcInjecting)
++                {
++                    // The corrupted iteration must fail and name the corrupted element; every
++                    // other iteration must pass.
++                    const std::string where = "batch " + std::to_string(injBatch) + ", row "
++                                              + std::to_string(injRow) + ", col "
++                                              + std::to_string(injCol);
++                    std::string selfTestError;
++                    if(iter == arg.fast_check_inject && iterPassed)
++                        selfTestError = "fast_check_inject: the corrupted iteration "
++                                        + std::to_string(iter) + " passed";
++                    else if(iter == arg.fast_check_inject
++                            && iterReport.find(where) == std::string::npos)
++                        selfTestError = "fast_check_inject: the report for iteration "
++                                        + std::to_string(iter) + " does not name " + where + ":\n"
++                                        + iterReport;
++                    else if(iter != arg.fast_check_inject && !iterPassed)
++                        selfTestError = "fast_check_inject: iteration " + std::to_string(iter)
++                                        + " was not corrupted but failed:\n" + iterReport;
++                    if(!selfTestError.empty())
+                     {
+-                        const std::string report
+-                            = "fast_check placement, "
+-                              + solution_description(handle,
+-                                                     heuristicResult[sol].algo,
+-                                                     sol,
+-                                                     heuristicResult.size(),
+-                                                     true)
+-                              + ":\n" + poison.message;
+ #ifdef GOOGLE_TEST
+-                        ADD_FAILURE() << report;
++                        ADD_FAILURE() << selfTestError;
+ #else
+-                        hipblaslt_cerr << report << std::endl;
++                        hipblaslt_cerr << selfTestError << std::endl;
+ #endif
+                     }
+-                    CHECK_HIP_ERROR(placed->fill_poison(stream));
+                 }
+             }
+         }
++
++        // Which solutions failed, and on which iterations, in one place at the end.
++        const std::string fcSummary = fcInjecting ? std::string() : fcLog.summary(fcIterations);
++        if(!fcSummary.empty())
++        {
++#ifdef GOOGLE_TEST
++            ADD_FAILURE() << fcSummary;
++#else
++            hipblaslt_cerr << fcSummary << std::endl;
++#endif
++        }
+     }
+     else
+     {
+diff --git a/projects/hipblaslt/clients/common/src/fast_check.cpp b/projects/hipblaslt/clients/common/src/fast_check.cpp
+index 443b8756..69e050f1 100644
+--- a/projects/hipblaslt/clients/common/src/fast_check.cpp
++++ b/projects/hipblaslt/clients/common/src/fast_check.cpp
+@@ -1597,3 +1597,75 @@ hipError_t fast_check_copy_region_to_host(void*                  host,
+     }
+     return hipStreamSynchronize(stream);
+ }
++
++void FastCheckSolutionLog::record(
++    size_t solution, int library_index, const std::string& kernel, int iteration, bool passed)
++{
++    auto it = std::find_if(
++        entries.begin(), entries.end(), [&](const Entry& e) { return e.solution == solution; });
++    if(it == entries.end())
++    {
++        entries.push_back({solution, library_index, kernel, {}});
++        it = entries.end() - 1;
++    }
++    if(!kernel.empty())
++        it->kernel = kernel;
++    if(!passed)
++        it->failed_iterations.push_back(iteration);
++}
++
++size_t FastCheckSolutionLog::failed_solutions() const
++{
++    return std::count_if(entries.begin(), entries.end(), [](const Entry& e) {
++        return !e.failed_iterations.empty();
++    });
++}
++
++std::string FastCheckSolutionLog::summary(int iterations) const
++{
++    const size_t failed = failed_solutions();
++    if(failed == 0)
++        return {};
++    std::ostringstream s;
++    s << "fast_check: " << failed << " of " << entries.size() << " solutions failed";
++    if(iterations > 1)
++        s << " (" << iterations << " iterations each)";
++    s << ":";
++    for(const Entry& e : entries)
++    {
++        if(e.failed_iterations.empty())
++            continue;
++        s << "\n  solution " << e.solution << " (library index " << e.library_index << ", kernel "
++          << e.kernel << ")";
++        if(iterations > 1)
++        {
++            s << ": iteration" << (e.failed_iterations.size() > 1 ? "s " : " ");
++            for(size_t i = 0; i < e.failed_iterations.size(); i++)
++                s << (i ? ", " : "") << e.failed_iterations[i];
++        }
++    }
++    return s.str();
++}
++
++hipError_t fast_check_corrupt_element_device(
++    const FastCheckMatrix& m, int64_t batch, int64_t row, int64_t col, hipStream_t stream)
++{
++    const size_t es = element_size(m.type);
++    if(es == 0)
++        return hipErrorInvalidValue;
++    char* p = static_cast<char*>(const_cast<void*>(m.data))
++              + (size_t(batch) * size_t(m.stride) + size_t(col) * size_t(m.ld) + size_t(row)) * es;
++    uint64_t   current = 0;
++    hipError_t err     = hipMemcpyAsync(&current, p, es, hipMemcpyDeviceToHost, stream);
++    if(err == hipSuccess)
++        err = hipStreamSynchronize(stream);
++    if(err != hipSuccess)
++        return err;
++    const uint64_t mask     = es >= 8 ? ~uint64_t(0) : (uint64_t(1) << (8 * es)) - 1;
++    const uint64_t sentinel = fast_check_sentinel_bits(m.type) & mask;
++    uint64_t replacement = (current & mask) != sentinel ? sentinel : fast_check_poison_bits(m.type);
++    err                  = hipMemcpyAsync(p, &replacement, es, hipMemcpyHostToDevice, stream);
++    if(err == hipSuccess)
++        err = hipStreamSynchronize(stream);
++    return err;
++}
+diff --git a/projects/hipblaslt/clients/common/src/hipblaslt_arguments.cpp b/projects/hipblaslt/clients/common/src/hipblaslt_arguments.cpp
+index 10c842ef..c05b6269 100644
+--- a/projects/hipblaslt/clients/common/src/hipblaslt_arguments.cpp
++++ b/projects/hipblaslt/clients/common/src/hipblaslt_arguments.cpp
+@@ -120,6 +120,9 @@ void Arguments::init()
+     fast_check     = 0;
+     placement[0]   = 0;
+     placement_offset = 0;
++    fast_check_repeat = 1;
++    fast_check_inject = -1;
++    requires_streamk  = 0;
+     timing         = 0;
+ 
+     transA = '*';
+diff --git a/projects/hipblaslt/clients/tests/data/hipblaslt_common.yaml b/projects/hipblaslt/clients/tests/data/hipblaslt_common.yaml
+index ce2b7d0d..cff67983 100644
+--- a/projects/hipblaslt/clients/tests/data/hipblaslt_common.yaml
++++ b/projects/hipblaslt/clients/tests/data/hipblaslt_common.yaml
+@@ -650,6 +650,9 @@ Arguments:
+   - fast_check: c_int8
+   - placement: c_char*16
+   - placement_offset: c_size_t
++  - fast_check_repeat: c_int32
++  - fast_check_inject: c_int32
++  - requires_streamk: c_int8
+   - timing: c_int8
+   - transA: c_char
+   - transB: c_char
+@@ -761,6 +764,9 @@ Defaults:
+   fast_check: 0
+   placement: ''
+   placement_offset: 0
++  fast_check_repeat: 1
++  fast_check_inject: -1
++  requires_streamk: 0
+   timing: 0
+   iters: 10
+   cold_iters: 2
+diff --git a/projects/hipblaslt/clients/tests/data/known_bugs.yaml b/projects/hipblaslt/clients/tests/data/known_bugs.yaml
+index 2236bddf..fdc4c02e 100644
+--- a/projects/hipblaslt/clients/tests/data/known_bugs.yaml
++++ b/projects/hipblaslt/clients/tests/data/known_bugs.yaml
+@@ -38,6 +38,15 @@ Known bugs:
+   # lists. Review by 2026-11-01.
+   - { name: matmul_fast_check_store_extent_ROCM31016, function: matmul, known_bug_platforms: gfx950 }
+   - { name: matmul_fast_check_size_t_output_overflow_all_solutions, function: matmul, a_type: bf16_r, known_bug_platforms: gfx950 }
++  # ROCM-32151: some bf16 solutions write about half the right value in the last
++  # partial M tile. On gfx942 they are offered only with
++  # TENSILE_SOLUTION_SELECTION_METHOD=2, which the Stream-K case needs. ROCM-32153:
++  # gfx950 f16 solutions 405799 and 407668 are wrong at 4099 x 2053 x 129. REMOVE each
++  # entry in the PR that fixes its defect. Review by 2026-11-01.
++  - { name: matmul_fast_check_every_solution_repeat, function: matmul, a_type: bf16_r, known_bug_platforms: gfx950 }
++  - { name: matmul_fast_check_streamk_every_solution_repeat, function: matmul, a_type: bf16_r, known_bug_platforms: "gfx942, gfx950" }
++  - { name: matmul_fast_check_every_solution_repeat, function: matmul, a_type: f16_r, M: 4099, known_bug_platforms: gfx950 }
++  - { name: matmul_fast_check_streamk_every_solution_repeat, function: matmul, a_type: f16_r, M: 4099, known_bug_platforms: gfx950 }
+   # ROCM-32062: the client CPU reference (cast_mul in cblas_interface.cpp) applies
+   # scaleAlpha_vector to the wrong rows of A when lda exceeds A's row count, so
+   # unit_check fails a correct GPU result. Host-side, so every platform is affected
+diff --git a/projects/hipblaslt/clients/tests/data/matmul_gtest.yaml b/projects/hipblaslt/clients/tests/data/matmul_gtest.yaml
+index 6dc28808..9ef68bcf 100755
+--- a/projects/hipblaslt/clients/tests/data/matmul_gtest.yaml
++++ b/projects/hipblaslt/clients/tests/data/matmul_gtest.yaml
+@@ -3489,6 +3489,171 @@ Tests:
+   unit_check: 0
+   fast_check: 1
+ 
++###############################################################################
++# fast_check every solution, every iteration (AIHPBLAS-5015).
++#
++# Each defect class lives in a few of the hundreds of shipped solutions (2 of 244
++# in ROCM-32046, 39 of 545 in ROCM-31290), and intermittent defects fail only some
++# launches (ROCM-31901, ROCM-31905, and ROCM-31105 under repeated launches). These
++# cases run every supported solution (algo_method 1, which includes hand-written
++# custom kernels) and launch and check each one fast_check_repeat times, with D
++# refilled with the sentinel before each launch. A failure names the solution, its
++# library index and kernel, and the iteration; the test ends with a summary of the
++# failing solutions and their iterations.
++###############################################################################
++
++# Self-test: one element of D is corrupted after the launch on iteration 2 of 4,
++# for every solution. The case passes only if every solution is reported on
++# iteration 2, with the corrupted element named, and on no other iteration.
++# Runtime on gfx90a: 2 cases, under 1 s.
++- name: matmul_fast_check_repeat_reports_injected_iteration
++  category: pre_checkin
++  function:
++    matmul:
++      - *single_precision
++      - *hpa_bf16_precision
++  matrix_size:
++    - { M: 131, N: 67, K: 200, lda: 263, ldb: 211, ldc: 140, ldd: 151 }
++  transA: N
++  transB: T
++  alpha: 2.0
++  beta: -2.0
++  batch_count: 3
++  requested_solution_num: 4
++  fast_check_repeat: 4
++  fast_check_inject: 2
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++
++# Every PR: the heuristic's first 16 solutions, each launched and checked 4 times,
++# on shapes with partial tiles in every dimension.
++# Runtime on gfx90a: 12 cases, about 3 s.
++- name: matmul_fast_check_repeat
++  category: pre_checkin
++  function:
++    matmul:
++      - *single_precision
++      - *hpa_half_precision
++      - *hpa_bf16_precision
++  matrix_size:
++    - { M: 1031, N: 517, K: 263, lda: 1040, ldb: 1033, ldc: 1031, ldd: 1100 }
++  transA_transB: *transA_transB_range
++  alpha: 2.0
++  beta: -2.0
++  requested_solution_num: 16
++  fast_check_repeat: 4
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++
++# Nightly: every supported solution, each launched and checked 3 times. For
++# 16-bit outputs the larger shape keeps K at 129, so almost every result stays
++# in the range bf16 stores exactly and the check runs on the device; at
++# K = 1031 most results round, and each check copies D back to the host.
++# Runtime on gfx90a: 24 cases, about 210 s.
++- name: matmul_fast_check_every_solution_repeat
++  category: nightly
++  function:
++    matmul:
++      - *single_precision
++      - *hpa_half_precision
++      - *hpa_bf16_precision
++  matrix_size:
++    - { M: 1031, N: 517, K: 263, lda: 1040, ldb: 1033, ldc: 1031, ldd: 1100 }
++    - { M: 4099, N: 2053, K: 129 }
++  transA_transB: *transA_transB_range
++  alpha: 2.0
++  beta: -2.0
++  algo_method: [1]
++  requested_solution_num: -1
++  fast_check_repeat: 3
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++
++# Runtime on gfx90a: 4 cases, about 50 s.
++- name: matmul_fast_check_every_solution_repeat_f32_large_k
++  category: nightly
++  function:
++    matmul: *single_precision
++  matrix_size:
++    - { M: 4099, N: 2053, K: 1031 }
++  transA_transB: *transA_transB_range
++  alpha: 2.0
++  beta: -2.0
++  algo_method: [1]
++  requested_solution_num: -1
++  fast_check_repeat: 3
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++
++# The xf32 fast path selects hand-written custom kernels on gfx950 (ROCM-31258).
++# Every supported solution, custom kernels included, launched and checked 3 times.
++- name: matmul_fast_check_every_solution_repeat_xf32
++  category: nightly
++  function:
++    matmul: *xf32_precision
++  matrix_size:
++    - { M: 4099, N: 2053, K: 32 }
++  transA: N
++  transB: N
++  alpha: 2.0
++  beta: -2.0
++  algo_method: [1]
++  requested_solution_num: -1
++  fast_check_repeat: 3
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++  gpu_arch: '950'
++
++# Stream-K solutions (the ROCM-31290 and GitHub PR 11962 families). TensileLite
++# offers them only when the process starts with TENSILE_SOLUTION_SELECTION_METHOD=2,
++# except on gfx950, where they are the only library; elsewhere these cases skip
++# with that message. Run them with:
++#   TENSILE_SOLUTION_SELECTION_METHOD=2 hipblaslt-test --gtest_filter='*fast_check_streamk*'
++- name: matmul_fast_check_streamk_repeat
++  category: pre_checkin
++  function:
++    matmul:
++      - *single_precision
++      - *hpa_half_precision
++      - *hpa_bf16_precision
++  matrix_size:
++    - { M: 1031, N: 517, K: 263, lda: 1040, ldb: 1033, ldc: 1031, ldd: 1100 }
++  transA_transB: *transA_transB_range
++  alpha: 2.0
++  beta: -2.0
++  requested_solution_num: 16
++  fast_check_repeat: 4
++  requires_streamk: 1
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++
++- name: matmul_fast_check_streamk_every_solution_repeat
++  category: nightly
++  function:
++    matmul:
++      - *single_precision
++      - *hpa_half_precision
++      - *hpa_bf16_precision
++  matrix_size:
++    - { M: 1031, N: 517, K: 263, lda: 1040, ldb: 1033, ldc: 1031, ldd: 1100 }
++    - { M: 4099, N: 2053, K: 129 }
++  transA_transB: *transA_transB_range
++  alpha: 2.0
++  beta: -2.0
++  algo_method: [1]
++  requested_solution_num: -1
++  fast_check_repeat: 3
++  requires_streamk: 1
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++
+ - name: matmul_96_complex
+   category: pre_checkin
+   function:
+diff --git a/projects/hipblaslt/clients/tests/src/fast_check_gtest.cpp b/projects/hipblaslt/clients/tests/src/fast_check_gtest.cpp
+index 6235b2aa..e45223a5 100644
+--- a/projects/hipblaslt/clients/tests/src/fast_check_gtest.cpp
++++ b/projects/hipblaslt/clients/tests/src/fast_check_gtest.cpp
+@@ -17,6 +17,7 @@
+ 
+ #include <hip/hip_runtime.h>
+ 
++#include <cmath>
+ #include <cstdint>
+ #include <cstring>
+ #include <vector>
+@@ -362,6 +363,37 @@ namespace
+         EXPECT_EQ(differ, 1000);
+     }
+ 
++    // The summary must list only the failing solutions, each with its library index, kernel and
++    // failing iterations, and must be empty when nothing failed.
++    TEST(FastCheck_pre_checkin, solution_log_names_failing_solutions_and_iterations)
++    {
++        FastCheckSolutionLog log;
++        for(int iter = 0; iter < 4; iter++)
++        {
++            log.record(0, 100, "", iter, true);
++            log.record(
++                1, 205, iter == 1 || iter == 3 ? "Cijk_MT64x64" : "", iter, iter != 1 && iter != 3);
++            log.record(2, 37, iter == 2 ? "Cijk_MT256x128_SK3" : "", iter, iter != 2);
++        }
++        EXPECT_EQ(log.solutions(), 3u);
++        EXPECT_EQ(log.failed_solutions(), 2u);
++        EXPECT_EQ(log.summary(4),
++                  "fast_check: 2 of 3 solutions failed (4 iterations each):\n"
++                  "  solution 1 (library index 205, kernel Cijk_MT64x64): iterations 1, 3\n"
++                  "  solution 2 (library index 37, kernel Cijk_MT256x128_SK3): iteration 2");
++
++        FastCheckSolutionLog clean;
++        clean.record(0, 1, "", 0, true);
++        EXPECT_EQ(clean.summary(1), "");
++
++        // With one iteration the summary does not list iterations.
++        FastCheckSolutionLog once;
++        once.record(0, 9, "Cijk_MT32x32", 0, false);
++        EXPECT_EQ(once.summary(1),
++                  "fast_check: 1 of 1 solutions failed:\n"
++                  "  solution 0 (library index 9, kernel Cijk_MT32x32)");
++    }
++
+     // ------------------------------------------------------------------------------------------
+     // fast_check_result_device: D in device memory
+     // ------------------------------------------------------------------------------------------
+@@ -587,6 +619,36 @@ namespace
+         EXPECT_TRUE(res.passed) << res.message;
+     }
+ 
++    // The fast_check_inject self-test corrupts exactly one element, and never leaves it holding
++    // the value it had: a correct value becomes the sentinel, and the sentinel becomes poison.
++    TEST(FastCheckDevice_pre_checkin, corrupt_element_changes_exactly_one_element)
++    {
++        DeviceMatrix       m;
++        std::vector<float> h(DeviceMatrix::total, 1.f);
++        m.write(h);
++        const int64_t batch = 1, row = 3, col = 2;
++        const size_t  idx = size_t(batch * DeviceMatrix::stride + col * DeviceMatrix::ld + row);
++        ASSERT_TRUE(DeviceMatrix::in_region(idx));
++
++        ASSERT_EQ(fast_check_corrupt_element_device(m.matrix(), batch, row, col, 0), hipSuccess);
++        auto out = m.read();
++        for(size_t i = 0; i < DeviceMatrix::total; i++)
++        {
++            if(i == idx)
++                EXPECT_TRUE(std::isnan(out[i]));
++            else
++                EXPECT_EQ(out[i], 1.f) << "offset " << i;
++        }
++
++        ASSERT_EQ(fast_check_corrupt_element_device(m.matrix(), batch, row, col, 0), hipSuccess);
++        EXPECT_EQ(m.read()[idx], kFastCheckPoisonValue);
++
++        FastCheckMatrix unsupported = m.matrix();
++        unsupported.type            = HIP_C_32F;
++        EXPECT_EQ(fast_check_corrupt_element_device(unsupported, batch, row, col, 0),
++                  hipErrorInvalidValue);
++    }
++
+     // A write into padding must be reported with its offset, in the poisoned (c_equal_d) mode and
+     // in the sentinel mode.
+     TEST(FastCheckDevice_pre_checkin, scan_reports_out_of_bounds_writes)
+@@ -971,6 +1033,35 @@ namespace
+         EXPECT_FALSE(fast_check_count_changed_device(m.d, HIP_C_32F, 8, 0).ok);
+     }
+ 
++    // The same in every supported type: the element becomes the sentinel, then the poison.
++    TEST(FastCheckDevice_pre_checkin, corrupt_element_works_in_every_type)
++    {
++        using DM = DeviceMatrix;
++        for(const auto& tc : kTypes)
++        {
++            std::vector<char> one(tc.size), h(DM::total * tc.size);
++            store_as(tc.type, 1, one.data());
++            for(size_t idx = 0; idx < DM::total; idx++)
++                std::memcpy(h.data() + idx * tc.size, one.data(), tc.size);
++            char* d = nullptr;
++            ASSERT_EQ(hipMalloc(&d, h.size()), hipSuccess);
++            ASSERT_EQ(hipMemcpy(d, h.data(), h.size(), hipMemcpyHostToDevice), hipSuccess);
++            FastCheckMatrix m{d, tc.type, DM::rows, DM::cols, DM::ld, DM::stride};
++            const size_t    idx      = size_t(1 * DM::stride + 2 * DM::ld + 3);
++            const uint64_t  sentinel = fast_check_sentinel_bits(tc.type);
++            const uint64_t  poison   = fast_check_poison_bits(tc.type);
++            for(uint64_t expected : {sentinel, poison})
++            {
++                ASSERT_EQ(fast_check_corrupt_element_device(m, 1, 3, 2, 0), hipSuccess);
++                uint64_t got = 0;
++                ASSERT_EQ(hipMemcpy(&got, d + idx * tc.size, tc.size, hipMemcpyDeviceToHost),
++                          hipSuccess);
++                EXPECT_EQ(std::memcmp(&got, &expected, tc.size), 0) << tc.name;
++            }
++            (void)hipFree(d);
++        }
++    }
++
+     // Configurations fast_check cannot check exactly are refused with a reason, before any sums.
+     TEST(FastCheck_pre_checkin, unsupported_configurations_are_refused)
+     {
+-- 
+2.43.0
+

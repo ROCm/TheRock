@@ -1,0 +1,97 @@
+From 7f6056ac469af7f0cad4a7cc6a7ee0271499003c Mon Sep 17 00:00:00 2001
+From: SreecharanGundaboluAMD <sgundabo@amd.com>
+Date: Thu, 8 Oct 2026 09:20:56 -0700
+Subject: [PATCH] fix(miopen): correct gfx1250 depthwise test applicability
+ (ALMIOPEN-2841) (#13289)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+JIRA ID : ALMIOPEN-2841
+
+## Motivation
+
+`miopen_gtest_quick_suite` reports failures on gfx1250. One of them is
+`Smoke/CPU_UnitTestConvSolverConvDepthwiseFwd2DDevApplicability_FP16.ConvDepthwiseFwd2D/0`.
+This is a device-applicability test, and its expected device list did
+not include gfx1250. The CK depthwise forward instances are already
+built for gfx1250, so `ConvDepthwiseFwd2D` is applicable there and the
+test expectation was stale.
+
+## Technical Details
+
+In `GetTestParams` in
+`projects/miopen/test/gtest/unit_conv_solver_ConvCkGroupedConvFwd.cpp`,
+`Gpu::gfx125X` is added to `supportedDevices`.
+
+- `src/ck_impl/CMakeLists.txt` lists `gfx1250` in `_CK_SUPPORTED_ARCHS`
+and builds the depthwise forward instances for it.
+- `ConvDepthwiseFwd2D::IsApplicable` has no wave-size or arch gate, so
+it applies on gfx1250 once the CK library is loaded.
+- `ConvDepthwiseBwdData2D` is intentionally unchanged. It rejects
+devices whose wavefront width is not 64, and gfx1250 is wave32.
+
+`GetTestParams` is shared with the bf16 GPU tests in the same file, so
+those also now expect gfx1250 to be supported.
+
+This PR only addresses the depthwise group from ALMIOPEN-2841. The
+GemmFwdRest, GemmBwdRest and GemmWrwUniversal failures listed in the
+ticket are not covered here.
+
+## Risk Assessment
+
+**Risk Level: 🟢 Low**
+
+### Impacted Components
+
+- MIOpen gtest `unit_conv_solver_ConvCkGroupedConvFwd` (test code only).
+
+### Potential Side Effects
+
+None for library behavior; only a test expectation changes. On gfx1250
+builds where the CK depthwise instances are not built, the test would
+now expect applicability and fail.
+
+### Mitigation Steps
+
+The change is one line in a test and is trivially revertible.
+
+## Test Plan
+
+Run on a gfx1250 target:
+
+```
+miopen_gtest --gtest_filter='*ConvDepthwiseFwd2D*'
+```
+
+Also run the same filter on gfx942 and gfx950 to confirm no change
+there.
+
+## Test Result
+
+Not yet run in this session. Pending verification on gfx1250 (and
+gfx942/gfx950 for regressions).
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-authored-by: Claude <noreply@anthropic.com>
+---
+ .../miopen/test/gtest/unit_conv_solver_ConvCkGroupedConvFwd.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/projects/miopen/test/gtest/unit_conv_solver_ConvCkGroupedConvFwd.cpp b/projects/miopen/test/gtest/unit_conv_solver_ConvCkGroupedConvFwd.cpp
+index 31ab9a7f..e3c1345e 100644
+--- a/projects/miopen/test/gtest/unit_conv_solver_ConvCkGroupedConvFwd.cpp
++++ b/projects/miopen/test/gtest/unit_conv_solver_ConvCkGroupedConvFwd.cpp
+@@ -134,7 +134,7 @@ auto GetTestParams(miopenDataType_t /*datatype*/)
+ // wavefronts; the matching depthwise instance set is selected per arch at build time.
+ #if MIOPEN_BACKEND_HIP
+     Gpu supportedDevices = Gpu::gfx908 | Gpu::gfx90A | Gpu::gfx94X | Gpu::gfx950 | Gpu::gfx110X |
+-                           Gpu::gfx115X | Gpu::gfx120X;
++                           Gpu::gfx115X | Gpu::gfx120X | Gpu::gfx125X;
+ #else
+     Gpu supportedDevices = Gpu::None;
+ #endif
+-- 
+2.43.0
+

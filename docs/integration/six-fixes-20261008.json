@@ -1,0 +1,43 @@
+{
+  "base_mainline": "08438bd9ddfcc7b20cb8e3675d3b29293d8534db",
+  "rocm_libraries_pin": "3e5ea29d2d629665876a7aa61c030632f79d703e",
+  "inherited_requested_prs": [
+    13182
+  ],
+  "patches": [
+    {
+      "path": "patches/amd-mainline/rocm-libraries/0001-pr-12876.patch",
+      "sha256": "d2a6106001cfb0bd794e5892a34621dc766ea534d39e14df19c9d17d9b854685"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-libraries/0002-pr-13274.patch",
+      "sha256": "5d117f56eaa4aa6b5478f57c696893cbb15d5bc1ae5d4e8ca4b41c9d8bdd63b5"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-libraries/0003-pr-13289.patch",
+      "sha256": "40005c01be91cab39610cf8290794398d0dbf3f34cf78ae1400a6a9445f89bc6"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-libraries/0004-pr-12960.patch",
+      "sha256": "4b1639a1f1958ccf38170f62a4652d692ccd18f18de400b67df9d801beb801db"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-libraries/0005-pr-13005.patch",
+      "sha256": "e6b727519ee7edb5cba42c31b324165a294b1f1242d91a1a007f351931d8d226"
+    },
+    {
+      "path": "patches/amd-mainline/rocm-libraries/0006-pr-13027.patch",
+      "sha256": "1812029d5496b49bee9ce4b80f05ce906c011057c3889bce5dae551fdc31b181"
+    }
+  ],
+  "workflow_inputs": {
+    "release_type": "dev",
+    "linux_amdgpu_families": "gfx125x,gfx1250-strict",
+    "windows_amdgpu_families": "none",
+    "build_pytorch": true,
+    "build_jax": true,
+    "run_full_pytorch_tests": false
+  },
+  "gpu_qualification": false,
+  "approved_prerequisite": 12876
+}

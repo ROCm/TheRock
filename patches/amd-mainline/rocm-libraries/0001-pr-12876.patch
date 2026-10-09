@@ -1,0 +1,3841 @@
+From 3bb5d92d4ce5bd6e978c43c529317bccd6de07e8 Mon Sep 17 00:00:00 2001
+From: Tony Davis <tony.davis@amd.com>
+Date: Thu, 8 Oct 2026 12:03:03 -0500
+Subject: [PATCH] test(hipblaslt): Add fast_check verification for large
+ integer_exact GEMMs (#12876)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+JIRA ID : AIHPBLAS-4988
+
+Stack, in merge order: **#12876 (this PR)**, #12960, #13005, #13013,
+#13015, #13021, #13022, #13025, #13031. Independent of the stack: #13027
+(rocisa 64-bit add lowering) and #13060 (address-carry lint).
+
+## Summary
+
+Recently we fixed some bugs where address, index or launch-size math was
+done in 32 bits when it needed 64. That kind of bug only shows up at big
+sizes or unlucky addresses, and it usually lives in a handful of
+solutions out of hundreds. Our tests have a hard time reaching it,
+because `unit_check` compares against an OpenBLAS GEMM on the host. That
+costs M·N·K and copies every padded buffer to the host, so the big-shape
+tests stay small and run only the heuristic's top pick, once.
+`integer_exact` already got rid of the tolerance, but not the cost.
+
+This PR adds fast_check, an opt-in check (`fast_check: 1`) for
+`integer_exact` tests. Instead of recomputing the GEMM, it compares a
+few random "fingerprints" of D with the same fingerprints computed from
+the inputs (Freivalds' algorithm, in exact modular arithmetic). That
+costs about as much as reading the matrices once, D never leaves the
+GPU, and a second set of fingerprints pins down which elements are
+wrong. Padding is filled with poison so stray reads show up, and D
+starts as a sentinel so missed writes show up. Every failure names the
+solution, its kernel and where each buffer sits in memory. Only test
+code changes.
+
+To make sure it catches what it's meant to, we reverted the ROCM-31016
+fix (dropped stores past 2 GiB). fast_check flagged the affected
+solutions and pointed at the exact element where the stores stopped. It
+has also found real defects: on gfx950 the ROCM-31016 shape and the bf16
+every-solution case fail today (ROCM-32152 and ROCM-32151), so those two
+cases are quarantined there, and running it next to `unit_check` found a
+bug in the CPU reference (ROCM-32062).
+
+**CI time added**, measured on one MI300X / one MI350X under ROCm 10.2
+at the stack tip (the sum of gtest's per-test times, not counting
+test-data parsing at startup):
+
+- This PR: about 32 s / 15 s in pre_checkin (108 cases; the 51
+self-tests take under a second), and about 3.5 min / 20 s in nightly (35
+/ 33 cases; gfx950 runs fewer because of the two quarantines above).
+- The whole stack: about 37 s / 58 s in pre_checkin, about 15 min / 9
+min in nightly, and about 3.5 min / 1 min in the new `stress` tier
+(#13021), which needs large-memory runners. On MI300X the Stream-K cases
+skip unless `TENSILE_SOLUTION_SELECTION_METHOD=2` is set; with it they
+add about 5.5 min.
+
+## Motivation
+
+hipBLASLt's gtest suite checks a matrix multiply (GEMM) result with
+`unit_check`, which compares the GPU output against a reference computed
+on the CPU. That reference costs time proportional to M·N·K, and the
+harness copies every input and output buffer, padding included, into
+pinned host memory. Tests for out-of-bounds indexing need large leading
+dimensions or large shapes, so this cost limits them. On gfx942,
+`matmul_size_t_index_overflow` with ldd = 1049100 spends 12 s of its
+14.4 s allocating host memory. The existing overflow tests therefore
+keep K small and run only the heuristic's first solution, even though
+indexing defects such as ROCM-31016 and ROCM-31258 affect specific
+kernels.
+
+## Technical Details
+
+This PR adds an opt-in YAML argument, `fast_check: 1`, for tests that
+use `initialization: integer_exact`. Under integer_exact, every input is
+a small integer, so the correct result is an exact integer as well. Only
+client test code and test data change. The library, TensileLite and
+kernel selection are untouched.
+
+- **Every element of D is checked without a CPU GEMM.** fast_check uses
+Freivalds' algorithm, which multiplies D by a random vector `r` and
+compares the result with `A·(B·r) + C·r + bias·sum(r)`. That costs time
+proportional to M·K + K·N + M·N instead of M·N·K. It does the same from
+the left with a second vector, to locate bad columns. The sums are taken
+modulo the prime 2^61 − 1, so the comparison is exact, and a wrong
+result passes one probe with probability below 2^−60. The input side is
+computed on the host once per test. D's side is computed on the GPU for
+each solution, so D is never copied to the host. When the probes
+disagree, the failure message lists the mismatched elements with their
+row, column and element offset, and marks offsets at or above 2^31 or
+2^32.
+- **Failure context.** Each failure names the solution: its position in
+the test's list, its library index and its kernel. It also lists every
+operand's address range and flags any that crosses a 4 GiB boundary,
+since some address defects depend on placement rather than size.
+- **Out-of-bounds reads.** The padding of A, B and C (rows past the
+matrix inside the leading dimension, and gaps between batches) is filled
+with 40, a value outside the integer_exact range [−2, 2]. A kernel that
+reads padding therefore produces a wrong D.
+- **Out-of-bounds writes and missed stores.** Before each solution runs,
+D's whole allocation is filled with 0xFF bytes, which form a NaN in f16,
+bf16 and f32. Afterwards a device kernel checks that every element
+outside the M × N × batch region still holds that pattern, and that no
+element inside it does. A failed launch of any of these fills or scans
+fails the test; it is never read as clean.
+- **Results above the exact range.** bf16 holds integers exactly only up
+to 256. fast_check compares each larger result with its correctly
+rounded value (round to nearest, ties to even, pinned by a self-test),
+so f16 and bf16 tests can use K above the 256 limit that `unit_check`
+imposes on integer_exact. Those elements are recomputed exactly, in
+parallel, on the host.
+- **Supported configurations:** alpha, beta, bias, `scaleAlpha_vector`,
+strided batches, and every transpose, including conjugate transpose,
+which stores real data the same way as transpose. An output with zero
+rows, columns or batches needs no check, so it reads no operands and
+launches nothing. The test fails with a stated reason for timing runs,
+activations, scale factors, grouped GEMM and pointer-array batches;
+later PRs in the stack lift several of these. Output types run against
+real kernels here are f32, f16 and bf16; the stack adds int8 and fp8
+cases (#13013, #13022). The code also accepts f64 and fp8 outputs, which
+only the self-tests exercise.
+
+New files are `clients/common/include/fast_check.hpp`,
+`clients/common/src/fast_check.cpp` and
+`clients/tests/src/fast_check_gtest.cpp`. `testing_matmul.hpp` calls
+them, and in fast_check-only runs it skips the CPU reference and the
+padded host copies.
+
+Running both checks on the same results found ROCM-32062, a separate
+defect in the CPU reference. When `scaleAlpha_vector` is combined with a
+leading dimension of A larger than its row count, `cast_mul` in
+`cblas_interface.cpp` scales the wrong rows of A, so `unit_check` fails
+a correct GPU result. No existing test combined the two. That case,
+`matmul_fast_check_epilogue_padded_lda_ROCM32062`, is quarantined in
+`known_bugs.yaml` until the fix PR removes the entry; #13015 adds a
+fast_check-only copy that keeps checking the GPU there.
+
+Related: ROCM-26455, ROCM-31016 (#12281), ROCM-31230 (#12332),
+ROCM-31258 (#12482), and the original overflow tests (#8231).
+
+## Test Plan
+
+- `FastCheck` (host only) and `FastCheckDevice` (small device buffers,
+no hipBLASLt kernels) in `fast_check_gtest.cpp`. These build correct
+results, inject faults, and check that each fault is reported: a wrong
+element, a pair of errors that cancel in a plain row sum, a shifted row,
+a duplicated column, an unwritten element, an out-of-bounds write, wrong
+rounding of a large bf16 result (including a tie), an empty buffer, an
+empty output (zero M, N or batch count, with null unused operands), and
+an unsupported type. They also require the device and host passes to
+reach the same verdict.
+- pre_checkin, 126 cases: fast_check and `unit_check` on the same
+results across precisions and transposes, including all nine N/T/C pairs
+on two rectangular f32 shapes with padded leading dimensions and three
+batches; the size_t index-overflow shapes in f32, f16 and bf16; and the
+ROCM-26455 shape with bias and `scaleAlpha_vector`.
+- nightly, 35 cases: element offsets and a batch base offset above 2^32;
+shapes up to 16385 × 16383 × 4097 with partial tiles; and every solution
+at the output-overflow and ROCM-31016 shapes.
+- Regression replay: revert the ROCM-31016 threshold and run
+`matmul_fast_check_store_extent_ROCM31016`.
+- `standard` tier (smoke, quick, pre_checkin) to confirm existing tests
+are unchanged.
+
+## Test Result
+
+**ROCm 10.2, at the stack tip (3364b793ac1, which includes this PR).**
+Built and run in a ROCm 10.2.0 image (TheRock 10.2.0a20260928). Every
+fast_check case and self-test, with none failing:
+
+| GPU | Ran | Passed | Skipped |
+| --- | --- | --- | --- |
+| gfx90a (MI210) | 496 | 410 | 86 |
+| gfx942 (MI300X) | 539 | 473 | 66 |
+| gfx950 (MI350X) | 559 | 486 | 73 |
+
+**After newling's review.** With the empty-output fix, at stack tip
+6296886715 (ROCm 10.2, before the rebase onto develop), the same filter
+ran 501 tests on gfx90a, 544 on gfx942 and 564 on gfx950, with 0
+failures. newling's conjugate-transpose case failed 10 of its 18 cases
+before the fix (all those with a C operand) and passed all 18 after, on
+gfx1201 with ROCm 7.1. On the current tip (86d4ac308c, with both fixes,
+rebased onto develop with #13119), the full fast_check filter on gfx942
+(MI300X) ran 561 tests: 495 passed, 66 skipped for a stated reason, and
+none failed, including all 18 conjugate-transpose cases and 28 fp8 fnuz
+cases.
+
+The skips are quarantined known bugs, shapes the library declines,
+Stream-K cases that need `TENSILE_SOLUTION_SELECTION_METHOD=2`, and on
+the shared MI210, cases that need more free memory than it had.
+
+Earlier development runs, on gfx942 (MI300A):
+
+- Self-tests: each of six deliberate source mutations, four in the host
+code and two in the GPU kernels, made at least one self-test fail.
+- With the ROCM-31016 fix reverted, 170 of the 1,093 solutions failed.
+The first reported 1793 elements never written, starting at element
+offset 2147481599, which is the 2^32-byte boundary for bf16. With the
+fix in place, all 1,093 passed in 144 s.
+- With the fix reverted, each failure names the kernel, for example
+`Cijk_Ailk_Bljk_BBS_BH_Bias_HA_S_SAV_UserArgs_MT128x448x32_…` (library
+index 75677). The placement record shows C and D, each about 4 GiB,
+crossing a 4 GiB boundary.
+- Same shapes, `unit_check` before and fast_check after: ldd = 1049100
+f32 went from 14.4 s to 0.7 s, and lda = 1049100 f32 from 8.3 s to 1.2
+s.
+- `standard` tier (smoke, quick, pre_checkin), run with the stack's
+second PR: 71,379 run, one failure, `matmul_fallback_compute_fp16`,
+which passes at the stack tip under ROCm 10.2 on an MI300X (see #12960).
+
+## Submission Checklist
+
+- [x] Look over the contributing guidelines at
+https://github.com/ROCm/TheRock/blob/main/GOVERNANCE.md#pull-requests.
+
+## Risk level
+
+Medium (3/5): test code and test data only, with no library or device
+behavior change, and existing tests take the same paths unless they set
+`fast_check`. It is rated 3 rather than 2 because it adds shared
+machinery to `testing_matmul.hpp` and new GPU kernels that every
+architecture runs, and about half a minute of pre_checkin.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+---------
+
+Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
+Co-authored-by: Cursor <cursoragent@cursor.com>
+Co-authored-by: James Newling <james.newling@gmail.com>
+---
+ projects/hipblaslt/TESTING.md                 |    1 +
+ .../clients/common/include/fast_check.hpp     |  185 ++
+ .../common/include/hipblaslt_arguments.hpp    |    2 +
+ .../clients/common/include/testing_matmul.hpp |  240 ++-
+ .../clients/common/src/CMakeLists.txt         |    1 +
+ .../clients/common/src/fast_check.cpp         | 1549 +++++++++++++++++
+ .../common/src/hipblaslt_arguments.cpp        |    1 +
+ .../clients/tests/data/hipblaslt_common.yaml  |    2 +
+ .../clients/tests/data/known_bugs.yaml        |   13 +
+ .../clients/tests/data/matmul_common.yaml     |   31 +
+ .../clients/tests/data/matmul_gtest.yaml      |  275 +++
+ .../clients/tests/src/CMakeLists.txt          |    1 +
+ .../clients/tests/src/fast_check_gtest.cpp    | 1089 ++++++++++++
+ 13 files changed, 3385 insertions(+), 5 deletions(-)
+ create mode 100644 projects/hipblaslt/clients/common/include/fast_check.hpp
+ create mode 100644 projects/hipblaslt/clients/common/src/fast_check.cpp
+ create mode 100644 projects/hipblaslt/clients/tests/src/fast_check_gtest.cpp
+
+diff --git a/projects/hipblaslt/TESTING.md b/projects/hipblaslt/TESTING.md
+index e0d27caf0..09372db92 100644
+--- a/projects/hipblaslt/TESTING.md
++++ b/projects/hipblaslt/TESTING.md
+@@ -244,6 +244,7 @@ There is no separate unit-test binary. The host-only tests that do exist are com
+ | `caching_library_gtest.cpp` | `CachingLibraryCollision` | Solution-cache keying under a forced hash collision |
+ | `ulp_gtest.cpp` | `UlpMantissaBits`, `UlpAsDouble`, `UlpDistance`, `UlpAccumulate`, `UlpCheckGeneral` | Units-in-the-last-place error-measurement helpers, pure math with no GPU dependency |
+ | `unit_gtest.cpp` | `UnitCheckIdentical` | Exact-storage checks used to skip element-by-element output comparisons when the addressed values have identical bytes |
++| `fast_check_gtest.cpp` | `FastCheck_pre_checkin`, `FastCheckDevice_pre_checkin` | The `fast_check` verifier: fault injection into host-computed results (`FastCheck`, no GPU), and the device padding, poison and probe-sum kernels on small buffers (`FastCheckDevice`, no hipBLASLt kernels) |
+ | `arch_revision_gtest.cpp` | `ArchRevisionSmoke` | ASIC-revision-to-library-arch mapping, a pure function reached by relative `#include` of an internal header (see point 1 below) |
+ 
+ That is a handful of test cases of genuinely hardware-independent logic, against a library of
+diff --git a/projects/hipblaslt/clients/common/include/fast_check.hpp b/projects/hipblaslt/clients/common/include/fast_check.hpp
+new file mode 100644
+index 000000000..d991b7f98
+--- /dev/null
++++ b/projects/hipblaslt/clients/common/include/fast_check.hpp
+@@ -0,0 +1,185 @@
++// Copyright Advanced Micro Devices, Inc., or its affiliates.
++// SPDX-License-Identifier: MIT
++
++// fast_check: verification of integer_exact GEMM results without a full host reference GEMM.
++//
++// A full host reference costs O(M*N*K). fast_check instead uses Freivalds' algorithm: multiply
++// the GPU result D by a random vector r and compare against A*(B*r) + C*r + bias*sum(r). The
++// expected side costs O(M*K + K*N + M*N) on the host, once per set of inputs; the D side runs on
++// the GPU for each solution. Every input is a small integer under integer_exact initialization,
++// so the comparison is exact. The sums are taken modulo the prime 2^61-1 with r drawn uniformly
++// from [1, 2^61-1), so a wrong D passes a probe with probability below 2^-60. One probe
++// multiplies D on the right (finds bad rows) and one on the left (finds bad columns); the two
++// lists locate individual bad elements for the failure message.
++//
++// fast_check also looks outside the M x N result, on the device so that the host never holds
++// the padding. The padding of A, B and C is filled with a value outside the integer_exact data
++// range, so a kernel that reads padding produces a wrong D. D is filled with a sentinel byte
++// pattern before each launch, and afterwards every element of D's allocation outside the
++// M x N x batch region must still hold it.
++
++#pragma once
++
++#include <hipblaslt/hipblaslt.h>
++
++#include <cstdint>
++#include <string>
++#include <vector>
++
++// The bit pattern written over every element of D before each launch, chosen per type, in the
++// low bytes. Floating types get a NaN: all-ones bytes, or 0x80 for the FNUZ fp8 types, whose only
++// NaN is 0x80. An element that is never written then stands out as non-finite. Integer types have
++// no NaN and get their minimum value. fast_check recomputes every integer element that holds the
++// type's minimum or maximum exactly, so an unwritten element is still caught, unless its correct
++// value saturates to the minimum.
++uint64_t fast_check_sentinel_bits(hipDataType type);
++
++// Value written into the padding of A, B and C. integer_exact data lies in [-2, 2]; 40 is far
++// outside that range and is exactly representable in every input type fast_check accepts,
++// including fp8 e4m3 and e5m2. It is finite so that kernels which load padding and multiply it by
++// zero, which is legitimate, still produce 0 rather than NaN.
++constexpr float kFastCheckPoisonValue = 40.0f;
++
++// The modulus for the probe sums, the Mersenne prime 2^61 - 1.
++constexpr uint64_t kFastCheckModulus = (uint64_t(1) << 61) - 1;
++
++// One column-major matrix in host memory as stored, before any transpose is applied.
++struct FastCheckMatrix
++{
++    const void* data   = nullptr; // first element of batch 0
++    hipDataType type   = HIP_R_32F;
++    int64_t     rows   = 0; // stored rows
++    int64_t     cols   = 0; // stored columns
++    int64_t     ld     = 0; // leading dimension, in elements
++    int64_t     stride = 0; // distance between batches, in elements
++};
++
++// D = alpha * diag(scale_alpha_vec) * op(A) * op(B) + beta * C + bias * 1^T, per batch.
++// Dimensions and batch_count must be nonnegative. If M, N or batch_count is zero,
++// there are no output elements and verification does not read any operands.
++struct FastCheckProblem
++{
++    int64_t M           = 0;
++    int64_t N           = 0;
++    int64_t K           = 0;
++    int64_t batch_count = 1;
++    bool    transA      = false;
++    bool    transB      = false;
++
++    FastCheckMatrix A;
++    FastCheckMatrix B;
++    FastCheckMatrix C;
++    FastCheckMatrix D;
++
++    // Type the GPU accumulates in; bounds the integers it holds exactly.
++    hipDataType compute_type = HIP_R_32F;
++
++    double alpha = 1;
++    double beta  = 0;
++
++    const void* scale_alpha_vec      = nullptr; // length M, or nullptr
++    hipDataType scale_alpha_vec_type = HIP_R_32F;
++
++    const void* bias        = nullptr; // length M per batch, or nullptr
++    hipDataType bias_type   = HIP_R_32F;
++    int64_t     bias_stride = 0; // distance between per-batch bias vectors, in elements
++
++    uint64_t seed = 0; // selects the random probe vectors
++
++    // D's layout on the device, used only to report element offsets in failure messages.
++    // Zero means use D's own ld and stride.
++    int64_t device_ldd      = 0;
++    int64_t device_stride_d = 0;
++};
++
++struct FastCheckResult
++{
++    bool        passed = true;
++    std::string message; // empty when passed
++};
++
++// Returns true when fast_check can load and round values of this type, and the reason when not.
++bool fast_check_supported_type(hipDataType type, std::string* why = nullptr);
++
++// The parts of the check that depend only on the inputs: probe vectors and the expected probe
++// sums of D. Compute once and pass to fast_check_result for every solution run on the same
++// inputs. problem.D supplies only its type here; its data is not read.
++struct FastCheckExpected
++{
++    FastCheckResult                    status; // fails on unsupported or non-integer inputs
++    std::vector<uint64_t>              row_probe; // r, length N
++    std::vector<uint64_t>              col_probe; // t, length M
++    std::vector<int64_t>               scale; // scaleAlpha_vector, or ones; length M
++    std::vector<std::vector<int64_t>>  bias; // per batch, length M
++    std::vector<std::vector<uint64_t>> row_sums; // per batch, expected D * r
++    std::vector<std::vector<uint64_t>> col_sums; // per batch, expected t^T * D
++};
++
++FastCheckExpected fast_check_expected(const FastCheckProblem& problem);
++
++// Verifies every element of D inside the M x N x batch region against the expected sums.
++FastCheckResult fast_check_result(const FastCheckProblem&  problem,
++                                  const FastCheckExpected& expected);
++
++// fast_check_expected followed by fast_check_result.
++FastCheckResult fast_check_gemm(const FastCheckProblem& problem);
++
++// fast_check_result with D left in device memory: problem.D describes D's device layout
++// (leading dimension and batch stride). The probe sums of D are computed on the GPU, so D is
++// never copied to the host. Elements outside the range D's type stores exactly are copied back
++// one by one and compared with the exact result. fp8 outputs, and results with more such
++// elements than fit in the device list, fall back to copying D and running fast_check_result.
++FastCheckResult fast_check_result_device(const FastCheckProblem&  problem,
++                                         const FastCheckExpected& expected,
++                                         hipStream_t              stream);
++
++// The probe vector entry for the given seed and index, in [1, kFastCheckModulus).
++uint64_t fast_check_probe(uint64_t seed, uint64_t index);
++
++// One device buffer a GEMM reads or writes, for the placement record in failure messages.
++struct FastCheckBuffer
++{
++    const char* name;
++    const void* base;
++    size_t      bytes;
++};
++
++// Lists each buffer's address range, one per line, and flags any range that crosses a 4 GiB
++// boundary. A kernel that drops the carry out of the low 32 bits of an address goes wrong only
++// past such a boundary, so the record shows whether a failure lines up with one.
++std::string fast_check_describe_buffers(const std::vector<FastCheckBuffer>& buffers);
++
++// Device helpers. A device matrix is described by FastCheckMatrix with data pointing to device
++// memory; total_elements is the size of its allocation in elements, which may extend past the
++// last batch.
++
++// Fills every element of a device buffer with fast_check_sentinel_bits(type). Returns the launch
++// error, or hipErrorInvalidValue for a type fast_check does not support.
++hipError_t fast_check_fill_sentinel_device(void*       buffer,
++                                           hipDataType type,
++                                           size_t      elements,
++                                           hipStream_t stream);
++
++// Writes kFastCheckPoisonValue into every element outside the rows x cols x batch region. Returns
++// as fast_check_fill_sentinel_device does.
++hipError_t fast_check_poison_padding_device(const FastCheckMatrix& m,
++                                            int64_t                batch_count,
++                                            size_t                 total_elements,
++                                            hipStream_t            stream);
++
++// Checks every element outside the rows x cols x batch region. With expect_poison, each must hold
++// kFastCheckPoisonValue (used when D shares C's poisoned memory); otherwise each must hold the
++// sentinel pattern. Without expect_poison, and when the sentinel decodes to NaN in the matrix
++// type, an element inside the region that still holds the sentinel is reported as never written.
++FastCheckResult fast_check_scan_padding_device(const FastCheckMatrix& m,
++                                               int64_t                batch_count,
++                                               size_t                 total_elements,
++                                               bool                   expect_poison,
++                                               hipStream_t            stream);
++
++// Copies the rows x cols x batch region of a device matrix into contiguous host memory
++// (leading dimension rows, batch stride rows * cols). host must hold that many elements.
++hipError_t fast_check_copy_region_to_host(void*                  host,
++                                          const FastCheckMatrix& device_matrix,
++                                          int64_t                batch_count,
++                                          hipStream_t            stream);
+diff --git a/projects/hipblaslt/clients/common/include/hipblaslt_arguments.hpp b/projects/hipblaslt/clients/common/include/hipblaslt_arguments.hpp
+index ab4a1840b..2c2128524 100644
+--- a/projects/hipblaslt/clients/common/include/hipblaslt_arguments.hpp
++++ b/projects/hipblaslt/clients/common/include/hipblaslt_arguments.hpp
+@@ -173,6 +173,7 @@ struct Arguments
+     int8_t allclose_check;
+     int8_t unit_check;
+     int8_t ulp_check;
++    int8_t fast_check;
+     int8_t timing;
+ 
+     char transA;
+@@ -303,6 +304,7 @@ struct Arguments
+     OPER(allclose_check) SEP         \
+     OPER(unit_check) SEP             \
+     OPER(ulp_check) SEP              \
++    OPER(fast_check) SEP             \
+     OPER(timing) SEP                 \
+     OPER(transA) SEP                 \
+     OPER(transB) SEP                 \
+diff --git a/projects/hipblaslt/clients/common/include/testing_matmul.hpp b/projects/hipblaslt/clients/common/include/testing_matmul.hpp
+index 839cd49b5..f8979ecac 100644
+--- a/projects/hipblaslt/clients/common/include/testing_matmul.hpp
++++ b/projects/hipblaslt/clients/common/include/testing_matmul.hpp
+@@ -31,6 +31,7 @@
+ #include "benchmark_timing.hpp"
+ #include "cblas_interface.hpp"
+ #include "efficiency_monitor.hpp"
++#include "fast_check.hpp"
+ #include "flops.hpp"
+ #include "hipBuffer.hpp"
+ #include "hipblaslt_bench_options.hpp"
+@@ -1091,6 +1092,71 @@ void dumpBuffer(const char* title, hipDataType To, HipHostBuffer& buf, size_t M,
+     return;
+ }
+ 
++// Returns why fast_check cannot verify this configuration, or an empty string when it can.
++inline std::string fast_check_unsupported_reason(const Arguments&     arg,
++                                                 hipblasLtBatchMode_t batchMode,
++                                                 bool                 do_swizzle,
++                                                 hipDataType          TiA,
++                                                 hipDataType          TiB,
++                                                 hipDataType          To,
++                                                 hipDataType          Tc)
++{
++    if(arg.initialization != hipblaslt_initialization::integer_exact)
++        return "fast_check requires initialization: integer_exact";
++    if(arg.timing)
++        return "fast_check does not support timing runs";
++    if(batchMode != HIPBLASLT_BATCH_MODE_STRIDED || arg.grouped_gemm > 0)
++        return "fast_check supports single strided-batched GEMMs only";
++    if(arg.activation_type != hipblaslt_activation_type::none || arg.gradient || arg.use_e
++       || arg.amaxD)
++        return "fast_check does not support activation, gradient, E output or amaxD";
++    if(arg.scaleA != hipblaslt_scaling_format::none || arg.scaleB != hipblaslt_scaling_format::none
++       || arg.scaleC || arg.scaleD || arg.scaleE)
++        return "fast_check does not support scaleA, scaleB, scaleC, scaleD or scaleE";
++    if(do_swizzle)
++        return "fast_check does not support swizzled A or B";
++    // fast_check models the bias as one value per row of D, which is what bias_source a and d
++    // allocate. bias_source b allocates one value per column.
++    if(arg.bias_vector && arg.bias_source == hipblaslt_bias_source::b)
++        return "fast_check supports a bias with one value per row of D (bias_source a or d), not "
++               "bias_source b";
++    if(arg.bias_vector && arg.bias_stride > 0 && arg.bias_stride < arg.M[0])
++        return "fast_check requires bias_stride to be at least M";
++    for(hipDataType t : {TiA, TiB, To, Tc})
++    {
++        std::string why;
++        if(!fast_check_supported_type(t, &why))
++            return why;
++    }
++    return {};
++}
++
++// Seed for the fast_check probe vectors: FNV-1a over the test name, so a failure reproduces.
++inline uint64_t fast_check_seed(const Arguments& arg)
++{
++    uint64_t h = 0xcbf29ce484222325ull;
++    for(const char* c = arg.name; *c; c++)
++        h = (h ^ uint8_t(*c)) * 0x100000001b3ull;
++    return h;
++}
++
++// Names one solution for failure messages: its position in this test's list and its library
++// index. with_kernel adds the kernel name.
++inline std::string solution_description(hipblasLtHandle_t      handle,
++                                        hipblasLtMatmulAlgo_t& algo,
++                                        size_t                 sol,
++                                        size_t                 count,
++                                        bool                   with_kernel)
++{
++    std::ostringstream s;
++    s << "solution " << sol << " of " << count << " (library index "
++      << hipblaslt_ext::getIndexFromAlgo(algo);
++    if(with_kernel)
++        s << ", kernel " << hipblaslt_ext::getKernelNameFromAlgo(handle, algo);
++    s << ")";
++    return s.str();
++}
++
+ void check(hipStream_t                   stream,
+            const Arguments&              arg,
+            const uint32_t&               gemm_count,
+@@ -1790,7 +1856,10 @@ void testing_matmul(const Arguments& arg)
+                            << std::endl;
+             return;
+         }
+-        if(is_16bit)
++        // fast_check models the rounding of large results into 16-bit outputs, so the limit
++        // applies only when a host reference comparison runs.
++        const bool host_reference = arg.unit_check || arg.norm_check || arg.allclose_check;
++        if(is_16bit && (host_reference || !arg.fast_check))
+         {
+             // alpha=2: |2*dot|<=8K; beta=-2 adds 2*C. fp16 exact int ~2048 => K<=256 for both betas used
+             const int32_t k_limit
+@@ -1989,6 +2058,10 @@ void testing_matmul_with_bias(const Arguments& arg,
+ 
+     std::vector<HipHostBuffer> hE, hE_gold, hBias, hBias_gold;
+     std::vector<HipHostBuffer> hA, hB, hC, hD_gold, hD_1;
++    // Contiguous host copies of the A, B and C regions, without padding, for fast_check, and the
++    // expected probe sums, which depend only on the inputs and are shared by every solution.
++    std::vector<std::unique_ptr<char[]>> fcA(gemm_count), fcB(gemm_count), fcC(gemm_count);
++    std::vector<FastCheckExpected>       fcExpected(gemm_count);
+     std::vector<HipHostBuffer> hScaleAlphaVec, hScaleA, hScaleB, hScaleC, hScaleD, hScaleE,
+         hAmaxD_gold, hAmaxD, hD_gold_epl, hD_gold_ScaleAlpha, hBias_gold_epl;
+ 
+@@ -2267,6 +2340,34 @@ void testing_matmul_with_bias(const Arguments& arg,
+ 
+     gpu_mem_gbytes = static_cast<double>(totalRotatingSizeNeeded) / (1024 * 1024 * 1024);
+ 
++    // fast_check alone needs no padded host copies of A, B and D, and no host reference.
++    const bool fast_check_only
++        = arg.fast_check && !(arg.unit_check || arg.norm_check || arg.allclose_check);
++    if(arg.fast_check)
++    {
++        std::string why = fast_check_unsupported_reason(
++            arg, batchMode, do_swizzle_a || do_swizzle_b, TiA, TiB, To, Tc);
++        for(int i = 0; i < gemm_count && why.empty(); i++)
++        {
++            if(lda[i] < A_row[i] || ldb[i] < B_row[i] || ldc[i] < M[i] || ldd[i] < M[i])
++                why = "fast_check requires each leading dimension to be at least the number of "
++                      "rows stored";
++            else if(num_batches[i] > 1
++                    && (stride_a[i] < lda[i] * A_col[i] || stride_b[i] < ldb[i] * B_col[i]
++                        || stride_c[i] < ldc[i] * N[i] || stride_d[i] < ldd[i] * N[i]))
++                why = "fast_check requires batch strides that do not overlap";
++        }
++        if(!why.empty())
++        {
++#ifdef GOOGLE_TEST
++            FAIL() << why;
++#else
++            hipblaslt_cerr << why << std::endl;
++            return;
++#endif
++        }
++    }
++
+     // Calculating block count
+     auto plan = hipblaslt_bench::compute_rotating_buffer_plan(
+         arg.adaptive, arg.max_iters, arg.cold_iters, arg.iters, rotating, totalRotatingSizeNeeded);
+@@ -2646,9 +2747,10 @@ void testing_matmul_with_bias(const Arguments& arg,
+             }
+ 
+             // Naming: dX is in GPU (device) memory. hK is in CPU (host) memory
+-            hA.emplace_back(TiA, size_A[i]);
+-            hB.emplace_back(TiB, size_B[i]);
+-            hC.emplace_back(To, size_C[i]);
++            hA.emplace_back(TiA, fast_check_only ? 0 : size_A[i]);
++            hB.emplace_back(TiB, fast_check_only ? 0 : size_B[i]);
++            // With c_equal_d, hC restores the shared C/D buffer before each solution.
++            hC.emplace_back(To, fast_check_only && !arg.c_equal_d ? 0 : size_C[i]);
+             hD_gold.emplace_back(To, size_D_copy[i]);
+             hD_1.emplace_back(To, size_D_copy[i]);
+             if(size_bias[i] * block_count != 0)
+@@ -3085,6 +3187,53 @@ void testing_matmul_with_bias(const Arguments& arg,
+ 
+         // generateMXInput already produced the reference floats and the
+         // kernel-ready scale layout for both A and B; nothing to do here.
++            if(arg.fast_check)
++            {
++                CHECK_HIP_ERROR(fast_check_poison_padding_device(
++                    {dA[i].buf(), TiA, A_row[i], A_col[i], lda[i], stride_a[i]},
++                    num_batches[i],
++                    size_A[i],
++                    stream));
++                CHECK_HIP_ERROR(fast_check_poison_padding_device(
++                    {dB[i].buf(), TiB, B_row[i], B_col[i], ldb[i], stride_b[i]},
++                    num_batches[i],
++                    size_B[i],
++                    stream));
++                CHECK_HIP_ERROR(fast_check_poison_padding_device(
++                    {dC[i].buf(), To, M[i], N[i], ldc[i], stride_c[i]},
++                    num_batches[i],
++                    size_C[i],
++                    stream));
++                CHECK_HIP_ERROR(hipStreamSynchronize(stream));
++
++                fcA[i].reset(
++                    new char[size_t(A_row[i] * A_col[i] * num_batches[i]) * realDataTypeSize(TiA)]);
++                fcB[i].reset(
++                    new char[size_t(B_row[i] * B_col[i] * num_batches[i]) * realDataTypeSize(TiB)]);
++                CHECK_HIP_ERROR(fast_check_copy_region_to_host(
++                    fcA[i].get(),
++                    {dA[i].buf(), TiA, A_row[i], A_col[i], lda[i], stride_a[i]},
++                    num_batches[i],
++                    stream));
++                CHECK_HIP_ERROR(fast_check_copy_region_to_host(
++                    fcB[i].get(),
++                    {dB[i].buf(), TiB, B_row[i], B_col[i], ldb[i], stride_b[i]},
++                    num_batches[i],
++                    stream));
++                // fast_check reads C only when beta is nonzero.
++                if(get_computeInterface(h_beta[i], Tc) != 0)
++                {
++                    fcC[i].reset(new char[size_t(M[i] * N[i] * num_batches[i]) * realDataTypeSize(To)]);
++                    CHECK_HIP_ERROR(fast_check_copy_region_to_host(
++                        fcC[i].get(),
++                        {dC[i].buf(), To, M[i], N[i], ldc[i], stride_c[i]},
++                        num_batches[i],
++                        stream));
++                }
++                if(fast_check_only && arg.c_equal_d)
++                    CHECK_HIP_ERROR(synchronize(hC[i], dC[i], 0, 0, 0, 0, 1, false, stream));
++            }
++
+             // broadcast first block
+             CHECK_HIP_ERROR(broadcast(dA[i], block_count));
+             CHECK_HIP_ERROR(broadcast(dB[i], block_count));
+@@ -5324,7 +5473,18 @@ void testing_matmul_with_bias(const Arguments& arg,
+     {
+         for(size_t sol = 0; sol < heuristicResult.size(); sol++)
+         {
+-            if((arg.unit_check || arg.norm_check || arg.allclose_check) && arg.c_equal_d)
++#ifdef GOOGLE_TEST
++            SCOPED_TRACE(solution_description(
++                handle, heuristicResult[sol].algo, sol, heuristicResult.size(), false));
++#endif
++            if(arg.fast_check && !arg.c_equal_d)
++            {
++                for(int i = 0; i < gemm_count; i++)
++                    CHECK_HIP_ERROR(
++                        fast_check_fill_sentinel_device((*dDp)[i].buf(), To, size_D[i], stream));
++            }
++            if((arg.unit_check || arg.norm_check || arg.allclose_check || arg.fast_check)
++               && arg.c_equal_d)
+             {
+                 if(batchMode == HIPBLASLT_BATCH_MODE_POINTER_ARRAY) // Iterate for batch_count for General Batched GEMM
+                 {
+@@ -5513,6 +5673,76 @@ void testing_matmul_with_bias(const Arguments& arg,
+                       Talpha,
+                       batchMode);
+             }
++            if(arg.fast_check)
++            {
++                CHECK_HIP_ERROR(hipStreamSynchronize(stream));
++                for(int i = 0; i < gemm_count; i++)
++                {
++                    FastCheckMatrix d_dev{(*dDp)[i].buf(), To, M[i], N[i], ldd[i], stride_d[i]};
++                    FastCheckResult scan = fast_check_scan_padding_device(
++                        d_dev, num_batches[i], size_D[i], arg.c_equal_d, stream);
++
++                    FastCheckProblem fp;
++                    fp.M           = M[i];
++                    fp.N           = N[i];
++                    fp.K           = K[i];
++                    fp.batch_count = num_batches[i];
++                    fp.transA      = transA != HIPBLAS_OP_N;
++                    fp.transB      = transB != HIPBLAS_OP_N;
++                    fp.A = {fcA[i].get(), TiA, A_row[i], A_col[i], A_row[i], A_row[i] * A_col[i]};
++                    fp.B = {fcB[i].get(), TiB, B_row[i], B_col[i], B_row[i], B_row[i] * B_col[i]};
++                    fp.C = {fcC[i].get(), To, M[i], N[i], M[i], M[i] * N[i]};
++                    fp.D = d_dev;
++                    fp.compute_type = Tc;
++                    fp.alpha        = get_computeInterface(h_alpha[i], Tc);
++                    fp.beta         = get_computeInterface(h_beta[i], Tc);
++                    if(arg.scaleAlpha_vector)
++                    {
++                        fp.scale_alpha_vec      = hScaleAlphaVec[i].buf();
++                        fp.scale_alpha_vec_type = Talpha;
++                    }
++                    if(arg.bias_vector)
++                    {
++                        fp.bias        = hBias[i].buf();
++                        fp.bias_type   = Tbias;
++                        fp.bias_stride = arg.bias_stride > 0 ? arg.bias_stride : 0;
++                    }
++                    fp.seed = fast_check_seed(arg);
++                    if(sol == 0)
++                        fcExpected[i] = fast_check_expected(fp);
++                    FastCheckResult res = fast_check_result_device(fp, fcExpected[i], stream);
++                    if(!scan.passed || !res.passed)
++                    {
++                        std::vector<FastCheckBuffer> buffers = {
++                            {"A", dA[i].buf(), size_A[i] * realDataTypeSize(TiA)},
++                            {"B", dB[i].buf(), size_B[i] * realDataTypeSize(TiB)},
++                            {"C", dC[i].buf(), size_C[i] * realDataTypeSize(To)},
++                            {"D", (*dDp)[i].buf(), size_D[i] * realDataTypeSize(To)},
++                            {"workspace", static_cast<unsigned char*>(*dWorkspace), workspace_size}};
++                        if(arg.bias_vector)
++                            buffers.push_back(
++                                {"bias", dBias[i].buf(), size_bias[i] * realDataTypeSize(Tbias)});
++                        if(arg.scaleAlpha_vector)
++                            buffers.push_back({"scaleAlpha_vector",
++                                               dScaleAlphaVec[i].buf(),
++                                               size_scaleAlphaVec[i] * realDataTypeSize(Talpha)});
++                        const std::string report
++                            = "fast_check, "
++                              + solution_description(handle,
++                                                     heuristicResult[sol].algo,
++                                                     sol,
++                                                     heuristicResult.size(),
++                                                     true)
++                              + ":\n" + scan.message + res.message
++                              + fast_check_describe_buffers(buffers);
++#ifdef GOOGLE_TEST
++                        ADD_FAILURE() << report;
++#else
++                        hipblaslt_cerr << report << std::endl;
++#endif
++                    }
++                }
++            }
+         }
+     }
+     else
+diff --git a/projects/hipblaslt/clients/common/src/CMakeLists.txt b/projects/hipblaslt/clients/common/src/CMakeLists.txt
+index d9f999343..cdaea2b6a 100755
+--- a/projects/hipblaslt/clients/common/src/CMakeLists.txt
++++ b/projects/hipblaslt/clients/common/src/CMakeLists.txt
+@@ -13,6 +13,7 @@ target_sources(hipblaslt-clients-common
+         "${CMAKE_CURRENT_SOURCE_DIR}/hipblaslt_arguments.cpp"
+         "${CMAKE_CURRENT_SOURCE_DIR}/hipblaslt_random.cpp"
+         "${CMAKE_CURRENT_SOURCE_DIR}/hipblaslt_init_device.cpp"
++        "${CMAKE_CURRENT_SOURCE_DIR}/fast_check.cpp"
+ )
+ 
+ if(HIPBLASLT_ENABLE_BLIS)
+diff --git a/projects/hipblaslt/clients/common/src/fast_check.cpp b/projects/hipblaslt/clients/common/src/fast_check.cpp
+new file mode 100644
+index 000000000..4c1a19e4c
+--- /dev/null
++++ b/projects/hipblaslt/clients/common/src/fast_check.cpp
+@@ -0,0 +1,1549 @@
++// Copyright Advanced Micro Devices, Inc., or its affiliates.
++// SPDX-License-Identifier: MIT
++
++#include "fast_check.hpp"
++
++#include <hip/hip_runtime.h>
++
++#include <algorithm>
++#include <atomic>
++#include <cmath>
++#include <cstring>
++#include <limits>
++#include <memory>
++#include <sstream>
++#include <type_traits>
++#include <vector>
++
++namespace
++{
++    constexpr uint64_t P = kFastCheckModulus;
++
++    // ------------------------------------------------------------------------------------------
++    // Arithmetic modulo P = 2^61 - 1
++    // ------------------------------------------------------------------------------------------
++
++    // x mod P for any 128-bit x. Folding uses 2^61 == 1 (mod P).
++    inline uint64_t mod_reduce(unsigned __int128 x)
++    {
++        unsigned __int128 y = (x & P) + (x >> 61);
++        y                   = (y & P) + (y >> 61);
++        uint64_t z          = uint64_t(y);
++        return z >= P ? z - P : z;
++    }
++
++    __host__ __device__ inline uint64_t mod_add(uint64_t a, uint64_t b)
++    {
++        uint64_t s = a + b;
++        return s >= P ? s - P : s;
++    }
++
++    inline uint64_t mod_mul(uint64_t a, uint64_t b)
++    {
++        return mod_reduce((unsigned __int128)a * b);
++    }
++
++    // Residue of v. Values strictly between -P and P, which covers every value the probe sums
++    // see, need no division.
++    __host__ __device__ inline uint64_t to_mod(int64_t v)
++    {
++        constexpr int64_t p = int64_t(P);
++        if(v > -p && v < p)
++            return v < 0 ? uint64_t(v + p) : uint64_t(v);
++        int64_t r = v % p;
++        return r < 0 ? uint64_t(r + p) : uint64_t(r);
++    }
++
++    // Sums products of residues. Each product is below 2^122, so 32 of them fit in the 128-bit
++    // sum on top of a reduced remainder.
++    struct ModAcc
++    {
++        unsigned __int128 sum   = 0;
++        uint32_t          terms = 0;
++
++        void add(uint64_t a, uint64_t b)
++        {
++            sum += (unsigned __int128)a * b;
++            if(++terms == 32)
++            {
++                sum   = mod_reduce(sum);
++                terms = 0;
++            }
++        }
++
++        uint64_t value() const
++        {
++            return mod_reduce(sum);
++        }
++    };
++
++    inline uint64_t splitmix64(uint64_t x)
++    {
++        x += 0x9e3779b97f4a7c15ull;
++        x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ull;
++        x = (x ^ (x >> 27)) * 0x94d049bb133111ebull;
++        return x ^ (x >> 31);
++    }
++
++    // ------------------------------------------------------------------------------------------
++    // Element types
++    // ------------------------------------------------------------------------------------------
++
++    size_t element_size(hipDataType t)
++    {
++        switch(t)
++        {
++        case HIP_R_64F:
++            return 8;
++        case HIP_R_32F:
++        case HIP_R_32I:
++            return 4;
++        case HIP_R_16F:
++        case HIP_R_16BF:
++            return 2;
++        case HIP_R_8F_E4M3_FNUZ:
++        case HIP_R_8F_E5M2_FNUZ:
++        case HIP_R_8F_E4M3:
++        case HIP_R_8F_E5M2:
++        case HIP_R_8I:
++            return 1;
++        default:
++            return 0;
++        }
++    }
++
++    template <typename T>
++    inline double to_double(T x)
++    {
++        if constexpr(std::is_same_v<T, hipblaslt_f8_fnuz> || std::is_same_v<T, hipblaslt_bf8_fnuz>
++                     || std::is_same_v<T, hipblaslt_f8> || std::is_same_v<T, hipblaslt_bf8>)
++            return float(static_cast<hipblasLtHalf>(x));
++        else if constexpr(std::is_same_v<T, hipblasLtHalf> || std::is_same_v<T, hip_bfloat16>)
++            return float(x);
++        else
++            return double(x);
++    }
++
++    // Calls f with a typed null pointer selecting the C++ type for t; returns false when t is
++    // not supported.
++    template <typename F>
++    bool dispatch_type(hipDataType t, F&& f)
++    {
++        switch(t)
++        {
++        case HIP_R_32F:
++            f(static_cast<const float*>(nullptr));
++            return true;
++        case HIP_R_64F:
++            f(static_cast<const double*>(nullptr));
++            return true;
++        case HIP_R_16F:
++            f(static_cast<const hipblasLtHalf*>(nullptr));
++            return true;
++        case HIP_R_16BF:
++            f(static_cast<const hip_bfloat16*>(nullptr));
++            return true;
++        case HIP_R_8F_E4M3_FNUZ:
++            f(static_cast<const hipblaslt_f8_fnuz*>(nullptr));
++            return true;
++        case HIP_R_8F_E5M2_FNUZ:
++            f(static_cast<const hipblaslt_bf8_fnuz*>(nullptr));
++            return true;
++        case HIP_R_8F_E4M3:
++            f(static_cast<const hipblaslt_f8*>(nullptr));
++            return true;
++        case HIP_R_8F_E5M2:
++            f(static_cast<const hipblaslt_bf8*>(nullptr));
++            return true;
++        case HIP_R_32I:
++            f(static_cast<const int32_t*>(nullptr));
++            return true;
++        case HIP_R_8I:
++            f(static_cast<const int8_t*>(nullptr));
++            return true;
++        default:
++            return false;
++        }
++    }
++
++    inline double load(const void* p, hipDataType t, size_t i)
++    {
++        double v = std::numeric_limits<double>::quiet_NaN();
++        dispatch_type(t, [&](auto typed_null) {
++            using T = std::remove_const_t<std::remove_pointer_t<decltype(typed_null)>>;
++            v       = to_double(static_cast<const T*>(p)[i]);
++        });
++        return v;
++    }
++
++    // The value a type stores for an exactly computed integer, after round-to-nearest-even
++    // (floating types) or saturation (integer types).
++    double round_to_type(double v, hipDataType t)
++    {
++        switch(t)
++        {
++        case HIP_R_32F:
++            return double(float(v));
++        case HIP_R_64F:
++            return v;
++        case HIP_R_16F:
++            return double(float(hipblasLtHalf(float(v))));
++        case HIP_R_16BF:
++            return double(float(hip_bfloat16(float(v))));
++        case HIP_R_8F_E4M3_FNUZ:
++            return to_double(hipblaslt_f8_fnuz(float(v)));
++        case HIP_R_8F_E5M2_FNUZ:
++            return to_double(hipblaslt_bf8_fnuz(float(v)));
++        case HIP_R_8F_E4M3:
++            return to_double(hipblaslt_f8(float(v)));
++        case HIP_R_8F_E5M2:
++            return to_double(hipblaslt_bf8(float(v)));
++        case HIP_R_32I:
++            return std::clamp(v, -2147483648.0, 2147483647.0);
++        case HIP_R_8I:
++            return std::clamp(v, -128.0, 127.0);
++        default:
++            return std::numeric_limits<double>::quiet_NaN();
++        }
++    }
++
++    // Every integer with magnitude below this value is exactly representable in the type.
++    double exact_limit(hipDataType t)
++    {
++        switch(t)
++        {
++        case HIP_R_64F:
++            return 0x1p53;
++        case HIP_R_32F:
++            return 0x1p24;
++        case HIP_R_32I:
++            return 0x1p31;
++        case HIP_R_16F:
++            return 0x1p11;
++        case HIP_R_16BF:
++            return 0x1p8;
++        case HIP_R_8I:
++            return 128;
++        case HIP_R_8F_E4M3_FNUZ:
++        case HIP_R_8F_E4M3:
++            return 0x1p4;
++        case HIP_R_8F_E5M2_FNUZ:
++        case HIP_R_8F_E5M2:
++            return 0x1p3;
++        default:
++            return 0;
++        }
++    }
++
++    // Stored values below this magnitude take the fast path. For integer types it leaves out the
++    // extremes: a correct result reaches them only by saturating, and the sentinel uses the
++    // minimum, so those elements are always recomputed exactly.
++    double fast_limit(hipDataType t)
++    {
++        switch(t)
++        {
++        case HIP_R_8I:
++            return 127;
++        case HIP_R_32I:
++            return 2147483647.0;
++        default:
++            return exact_limit(t);
++        }
++    }
++
++    inline bool is_exact_integer(double v)
++    {
++        return std::isfinite(v) && v == std::trunc(v) && std::fabs(v) < 0x1p61;
++    }
++
++    // ------------------------------------------------------------------------------------------
++    // Host matrix views and products
++    // ------------------------------------------------------------------------------------------
++
++    // A strided view of a matrix: element (r, c) is at base[r * rs + c * cs].
++    struct View
++    {
++        const void* base;
++        hipDataType type;
++        int64_t     rs;
++        int64_t     cs;
++
++        double at(int64_t r, int64_t c) const
++        {
++            return load(base, type, size_t(r * rs + c * cs));
++        }
++
++        View transposed() const
++        {
++            return {base, type, cs, rs};
++        }
++    };
++
++    View batch_view(const FastCheckMatrix& m, int64_t batch, bool trans)
++    {
++        // A buffer that is not read (C when beta is 0) may be null and must not be offset.
++        const void* base = m.data ? static_cast<const char*>(m.data)
++                                        + size_t(batch) * size_t(m.stride) * element_size(m.type)
++                                  : nullptr;
++        return trans ? View{base, m.type, m.ld, 1} : View{base, m.type, 1, m.ld};
++    }
++
++    // out[r] = sum over c of m(r, c) * v[c], modulo P. Sets non_integer when an element is not an
++    // exact integer.
++    void mul_right(const View&                  m,
++                   int64_t                      rows,
++                   int64_t                      cols,
++                   const std::vector<uint64_t>& v,
++                   std::vector<uint64_t>&       out,
++                   std::atomic<bool>&           non_integer)
++    {
++        out.assign(size_t(rows), 0);
++        auto element = [&](int64_t r, int64_t c) -> uint64_t {
++            double x = m.at(r, c);
++            if(!is_exact_integer(x))
++            {
++                non_integer = true;
++                return 0;
++            }
++            return to_mod(int64_t(x));
++        };
++
++        if(std::llabs(m.rs) <= std::llabs(m.cs))
++        {
++            // Rows are adjacent in memory: walk each column over a block of rows.
++            constexpr int64_t block = 256;
++#pragma omp parallel for schedule(dynamic)
++            for(int64_t r0 = 0; r0 < rows; r0 += block)
++            {
++                int64_t             r1 = std::min(rows, r0 + block);
++                std::vector<ModAcc> acc(size_t(r1 - r0));
++                for(int64_t c = 0; c < cols; c++)
++                    for(int64_t r = r0; r < r1; r++)
++                        acc[size_t(r - r0)].add(element(r, c), v[size_t(c)]);
++                for(int64_t r = r0; r < r1; r++)
++                    out[size_t(r)] = acc[size_t(r - r0)].value();
++            }
++        }
++        else
++        {
++#pragma omp parallel for schedule(dynamic, 64)
++            for(int64_t r = 0; r < rows; r++)
++            {
++                ModAcc acc;
++                for(int64_t c = 0; c < cols; c++)
++                    acc.add(element(r, c), v[size_t(c)]);
++                out[size_t(r)] = acc.value();
++            }
++        }
++    }
++
++    // ------------------------------------------------------------------------------------------
++    // Comparison and reporting, shared by the host and device passes over D
++    // ------------------------------------------------------------------------------------------
++
++    struct BadElement
++    {
++        int64_t batch;
++        int64_t row;
++        int64_t col;
++        double  expected; // value a correct kernel stores
++        double  got;
++    };
++
++    constexpr size_t kMaxReported = 8;
++
++    // The inputs of one batch, for recomputing single elements exactly.
++    struct BatchInputs
++    {
++        View                        opA; // M x K
++        View                        opB; // K x N
++        View                        C; // M x N
++        const std::vector<int64_t>& scale;
++        const std::vector<int64_t>& bias;
++        int64_t                     K;
++        int64_t                     alpha;
++        int64_t                     beta;
++
++        // The exact result, saturated to the int64 range: each factor may be close to 2^61, and
++        // a result that does not fit is far beyond every compute type's exact range anyway.
++        int64_t exact(int64_t i, int64_t j) const
++        {
++            __int128 acc = 0;
++            for(int64_t k = 0; k < K; k++)
++                acc = mul_add(int64_t(opA.at(i, k)), int64_t(opB.at(k, j)), acc);
++            __int128 v = mul_add(mul_add(alpha, scale[size_t(i)], 0), acc, bias[size_t(i)]);
++            if(beta != 0)
++                v = mul_add(beta, int64_t(C.at(i, j)), v);
++            return int64_t(std::clamp<__int128>(v, INT64_MIN, INT64_MAX));
++        }
++
++        // a * b + c, saturating at the int128 limits instead of overflowing.
++        static __int128 mul_add(__int128 a, __int128 b, __int128 c)
++        {
++            constexpr __int128 hi = ~(__int128(1) << 127), lo = -hi - 1;
++            __int128           p;
++            if(__builtin_mul_overflow(a, b, &p))
++                return (a < 0) != (b < 0) ? lo : hi;
++            if(__builtin_add_overflow(p, c, &p))
++                return c < 0 ? lo : hi;
++            return p;
++        }
++    };
++
++    BatchInputs batch_inputs(const FastCheckProblem& p, const FastCheckExpected& e, int64_t b)
++    {
++        return {batch_view(p.A, b, p.transA),
++                batch_view(p.B, b, p.transB),
++                batch_view(p.C, b, false),
++                e.scale,
++                e.bias[size_t(b)],
++                p.K,
++                int64_t(p.alpha),
++                int64_t(p.beta)};
++    }
++
++    std::string format_offset(const FastCheckProblem& p, const BadElement& e)
++    {
++        int64_t            ld     = p.device_ldd ? p.device_ldd : p.D.ld;
++        int64_t            stride = p.device_stride_d ? p.device_stride_d : p.D.stride;
++        int64_t            offset = e.batch * stride + e.col * ld + e.row;
++        std::ostringstream s;
++        s << "batch " << e.batch << ", row " << e.row << ", col " << e.col << ": expected "
++          << e.expected << ", got " << e.got << " (element offset " << offset << " = 0x" << std::hex
++          << offset << std::dec;
++        if(offset >= (int64_t(1) << 32))
++            s << ", at or above 2^32";
++        else if(offset >= (int64_t(1) << 31))
++            s << ", at or above 2^31";
++        s << ")";
++        return s.str();
++    }
++
++    // Collects the outcome of every batch and formats the result.
++    struct Report
++    {
++        const FastCheckProblem& p;
++        const int64_t           slow_budget;
++        const double            acc_limit;
++
++        std::atomic<int64_t>    slow_elements{0};
++        std::atomic<bool>       over_budget{false};
++        std::atomic<int64_t>    beyond_compute_range{0};
++        std::vector<BadElement> bad_elements;
++        int64_t                 bad_element_count = 0;
++        int64_t                 bad_row_count     = 0;
++        int64_t                 bad_col_count     = 0;
++        std::vector<BadElement> located;
++
++        explicit Report(const FastCheckProblem& problem)
++            : p(problem)
++            // Elements outside the range D's type stores exactly each cost a K-length dot
++            // product; the budget keeps that to about 2^34 multiply-adds.
++            , slow_budget(
++                  std::max<int64_t>(1, (int64_t(1) << 34) / std::max<int64_t>(problem.K, 1)))
++            , acc_limit(exact_limit(problem.compute_type))
++        {
++        }
++
++        // An element whose stored value is outside the range D's type holds exactly, or is not an
++        // integer. Compares it with the exact result and returns the value for the probe sums.
++        int64_t slow_element(const BatchInputs&       in,
++                             int64_t                  b,
++                             int64_t                  i,
++                             int64_t                  j,
++                             double                   stored,
++                             std::vector<BadElement>& bad,
++                             int64_t&                 bad_count)
++        {
++            if(over_budget || ++slow_elements > slow_budget)
++            {
++                over_budget = true;
++                return 0;
++            }
++            int64_t value   = in.exact(i, j);
++            double  rounded = round_to_type(double(value), p.D.type);
++            if(std::fabs(double(value)) >= acc_limit)
++                ++beyond_compute_range;
++            else if(!(rounded == stored) && bad_count++ < int64_t(kMaxReported))
++                bad.push_back({b, i, j, rounded, stored});
++            return value;
++        }
++
++        void add_bad(const std::vector<BadElement>& bad, int64_t count)
++        {
++            bad_element_count += count;
++            for(auto& el : bad)
++                if(bad_elements.size() < kMaxReported)
++                    bad_elements.push_back(el);
++        }
++
++        // Compares one batch's probe sums with the expected ones and locates mismatched
++        // elements where a bad row meets a bad column. stored_at reads one element of D.
++        template <typename StoredAt>
++        void compare(const FastCheckExpected&     e,
++                     const BatchInputs&           in,
++                     int64_t                      b,
++                     const std::vector<uint64_t>& got_row,
++                     const std::vector<uint64_t>& got_col,
++                     StoredAt&&                   stored_at)
++        {
++            std::vector<int64_t> bad_rows, bad_cols;
++            for(int64_t i = 0; i < p.M; i++)
++                if(e.row_sums[size_t(b)][size_t(i)] != got_row[size_t(i)])
++                    bad_rows.push_back(i);
++            for(int64_t j = 0; j < p.N; j++)
++                if(e.col_sums[size_t(b)][size_t(j)] != got_col[size_t(j)])
++                    bad_cols.push_back(j);
++            bad_row_count += int64_t(bad_rows.size());
++            bad_col_count += int64_t(bad_cols.size());
++
++            const size_t search = 64;
++            for(size_t a = 0;
++                a < std::min(search, bad_rows.size()) && located.size() < kMaxReported;
++                a++)
++                for(size_t c = 0;
++                    c < std::min(search, bad_cols.size()) && located.size() < kMaxReported;
++                    c++)
++                {
++                    int64_t i = bad_rows[a], j = bad_cols[c];
++                    double  stored   = stored_at(i, j);
++                    double  expected = round_to_type(double(in.exact(i, j)), p.D.type);
++                    if(!(expected == stored))
++                        located.push_back({b, i, j, expected, stored});
++                }
++        }
++
++        FastCheckResult finish() const
++        {
++            FastCheckResult    result;
++            std::ostringstream msg;
++            auto               fail = [&](const std::string& text) {
++                result.passed = false;
++                msg << text << "\n";
++            };
++            if(over_budget)
++                fail("fast_check stopped: more than " + std::to_string(slow_budget)
++                     + " elements of D are outside the range its type stores exactly, and each "
++                       "one costs a K-length dot product. Use a 32-bit output type, reduce K, "
++                       "alpha or the scale factors, or use unit_check for this shape.");
++            if(beyond_compute_range > 0)
++                fail(std::to_string(beyond_compute_range.load())
++                     + " elements of D exceed the range the compute type holds exactly, so their "
++                       "GPU values depend on summation order. Reduce K, alpha or the scale "
++                       "factors, or use unit_check for this shape.");
++            if(bad_element_count > 0)
++            {
++                std::ostringstream s;
++                s << bad_element_count << " elements of D are wrong or not finite:";
++                for(auto& el : bad_elements)
++                    s << "\n  " << format_offset(p, el);
++                fail(s.str());
++            }
++            if(bad_row_count > 0 || bad_col_count > 0)
++            {
++                std::ostringstream s;
++                s << "Probe sums disagree in " << bad_row_count << " rows and " << bad_col_count
++                  << " columns of D.";
++                if(!located.empty())
++                {
++                    s << " Mismatched elements found where they cross:";
++                    for(auto& el : located)
++                        s << "\n  " << format_offset(p, el);
++                }
++                fail(s.str());
++            }
++            result.message = msg.str();
++            return result;
++        }
++    };
++} // namespace
++
++bool fast_check_supported_type(hipDataType type, std::string* why)
++{
++    if(element_size(type) != 0)
++        return true;
++    if(why)
++        *why = "fast_check does not support data type " + std::to_string(int(type));
++    return false;
++}
++
++uint64_t fast_check_probe(uint64_t seed, uint64_t index)
++{
++    // Uniform in [1, P): zero would leave a row or column out of the check.
++    return 1 + splitmix64(splitmix64(seed) ^ index) % (P - 1);
++}
++
++std::string fast_check_describe_buffers(const std::vector<FastCheckBuffer>& buffers)
++{
++    constexpr uint64_t four_gib = uint64_t(1) << 32;
++    std::ostringstream s;
++    s << "Buffer placement:";
++    for(const auto& b : buffers)
++    {
++        if(!b.base || !b.bytes)
++            continue;
++        uint64_t begin = uint64_t(reinterpret_cast<uintptr_t>(b.base));
++        uint64_t end   = begin + b.bytes; // one past the last byte
++        s << "\n  " << b.name << ": 0x" << std::hex << begin << " to 0x" << end << std::dec << " ("
++          << b.bytes << " bytes)";
++        uint64_t boundary = (begin / four_gib + 1) * four_gib;
++        if(boundary < end)
++            s << ", crosses a 4 GiB boundary at 0x" << std::hex << boundary << std::dec;
++    }
++    return s.str();
++}
++
++FastCheckExpected fast_check_expected(const FastCheckProblem& p)
++{
++    FastCheckExpected  e;
++    std::ostringstream msg;
++    auto               fail = [&](const std::string& text) {
++        e.status.passed = false;
++        msg << text << "\n";
++    };
++    auto finish = [&]() -> FastCheckExpected {
++        e.status.message = msg.str();
++        return std::move(e);
++    };
++
++    for(const auto* m : {&p.A, &p.B, &p.C, &p.D})
++    {
++        std::string why;
++        if(!fast_check_supported_type(m->type, &why))
++            fail(why);
++    }
++    if(exact_limit(p.compute_type) == 0)
++        fail("fast_check does not support compute type " + std::to_string(int(p.compute_type)));
++    if(!is_exact_integer(p.alpha) || !is_exact_integer(p.beta))
++        fail("fast_check requires integer alpha and beta");
++    if(!e.status.passed)
++        return finish();
++
++    // An empty output needs neither input fingerprints nor operand storage.
++    if(p.M == 0 || p.N == 0 || p.batch_count == 0)
++        return finish();
++
++    const int64_t M = p.M, N = p.N, K = p.K;
++
++    e.scale.assign(size_t(M), 1);
++    if(p.scale_alpha_vec)
++        for(int64_t i = 0; i < M; i++)
++        {
++            double s = load(p.scale_alpha_vec, p.scale_alpha_vec_type, size_t(i));
++            if(!is_exact_integer(s))
++            {
++                fail("fast_check requires integer scaleAlpha_vector entries");
++                return finish();
++            }
++            e.scale[size_t(i)] = int64_t(s);
++        }
++
++    // Row probe r (length N) and column probe t (length M).
++    e.row_probe.resize(size_t(N));
++    e.col_probe.resize(size_t(M));
++    uint64_t sum_r = 0;
++    for(int64_t j = 0; j < N; j++)
++    {
++        e.row_probe[size_t(j)] = fast_check_probe(2 * p.seed, uint64_t(j));
++        sum_r                  = mod_add(sum_r, e.row_probe[size_t(j)]);
++    }
++    std::vector<uint64_t> ts(static_cast<size_t>(M));
++    for(int64_t i = 0; i < M; i++)
++    {
++        e.col_probe[size_t(i)] = fast_check_probe(2 * p.seed + 1, uint64_t(i));
++        ts[size_t(i)]          = mod_mul(e.col_probe[size_t(i)], to_mod(e.scale[size_t(i)]));
++    }
++
++    const uint64_t    alpha_m = to_mod(int64_t(p.alpha)), beta_m = to_mod(int64_t(p.beta));
++    const bool        use_c = p.beta != 0;
++    std::atomic<bool> non_integer_input{false};
++
++    e.bias.resize(size_t(p.batch_count));
++    e.row_sums.resize(size_t(p.batch_count));
++    e.col_sums.resize(size_t(p.batch_count));
++    for(int64_t b = 0; b < p.batch_count; b++)
++    {
++        auto& bias = e.bias[size_t(b)];
++        bias.assign(size_t(M), 0);
++        if(p.bias)
++        {
++            const void* base = static_cast<const char*>(p.bias)
++                               + size_t(b) * size_t(p.bias_stride) * element_size(p.bias_type);
++            for(int64_t i = 0; i < M; i++)
++            {
++                double v = load(base, p.bias_type, size_t(i));
++                if(!is_exact_integer(v))
++                {
++                    fail("fast_check requires integer bias entries");
++                    return finish();
++                }
++                bias[size_t(i)] = int64_t(v);
++            }
++        }
++
++        const View opA = batch_view(p.A, b, p.transA); // M x K
++        const View opB = batch_view(p.B, b, p.transB); // K x N
++        const View C   = batch_view(p.C, b, false); // M x N
++
++        // Expected D*r = alpha * diag(scale) * opA * (opB * r) + beta * C * r + bias * sum(r)
++        // and t^T*D = alpha * ((t .* scale)^T * opA) * opB + beta * t^T * C + (t^T * bias) * 1^T.
++        std::vector<uint64_t> y, z, cr, u, w, ct;
++        mul_right(opB, K, N, e.row_probe, y, non_integer_input);
++        mul_right(opA, M, K, y, z, non_integer_input);
++        mul_right(opA.transposed(), K, M, ts, u, non_integer_input);
++        mul_right(opB.transposed(), N, K, u, w, non_integer_input);
++        if(use_c)
++        {
++            mul_right(C, M, N, e.row_probe, cr, non_integer_input);
++            mul_right(C.transposed(), N, M, e.col_probe, ct, non_integer_input);
++        }
++        if(non_integer_input)
++        {
++            fail("fast_check found a non-integer value in A, B or C; it requires integer_exact "
++                 "initialization");
++            return finish();
++        }
++
++        uint64_t sum_t_bias = 0;
++        for(int64_t i = 0; i < M; i++)
++            sum_t_bias
++                = mod_add(sum_t_bias, mod_mul(e.col_probe[size_t(i)], to_mod(bias[size_t(i)])));
++
++        auto& rows = e.row_sums[size_t(b)];
++        rows.resize(size_t(M));
++        for(int64_t i = 0; i < M; i++)
++        {
++            uint64_t v = mod_mul(mod_mul(alpha_m, to_mod(e.scale[size_t(i)])), z[size_t(i)]);
++            if(use_c)
++                v = mod_add(v, mod_mul(beta_m, cr[size_t(i)]));
++            rows[size_t(i)] = mod_add(v, mod_mul(to_mod(bias[size_t(i)]), sum_r));
++        }
++        auto& cols = e.col_sums[size_t(b)];
++        cols.resize(size_t(N));
++        for(int64_t j = 0; j < N; j++)
++        {
++            uint64_t v = mod_add(mod_mul(alpha_m, w[size_t(j)]), sum_t_bias);
++            if(use_c)
++                v = mod_add(v, mod_mul(beta_m, ct[size_t(j)]));
++            cols[size_t(j)] = v;
++        }
++    }
++    return finish();
++}
++
++FastCheckResult fast_check_result(const FastCheckProblem& p, const FastCheckExpected& e)
++{
++    if(!e.status.passed)
++        return e.status;
++    if(p.M == 0 || p.N == 0 || p.batch_count == 0)
++        return {};
++
++    Report        rep(p);
++    const int64_t M = p.M, N = p.N;
++    const double  out_limit = fast_limit(p.D.type);
++
++    for(int64_t b = 0; b < p.batch_count && !rep.over_budget; b++)
++    {
++        const BatchInputs in = batch_inputs(p, e, b);
++        const View        D  = batch_view(p.D, b, false);
++
++        // D*r and t^T*D in one pass over D. Each thread owns a block of rows; column sums are
++        // reduced across blocks afterwards.
++        const int64_t                        block    = std::max<int64_t>(64, (M + 255) / 256);
++        const int64_t                        n_blocks = (M + block - 1) / block;
++        std::vector<uint64_t>                got_row(static_cast<size_t>(M));
++        std::vector<uint64_t>                got_col_partial(size_t(n_blocks) * size_t(N));
++        std::vector<std::vector<BadElement>> bad_per_block(static_cast<size_t>(n_blocks));
++        std::vector<int64_t>                 bad_count_per_block(size_t(n_blocks), 0);
++        const uint64_t*                      r = e.row_probe.data();
++        const uint64_t*                      t = e.col_probe.data();
++
++        dispatch_type(p.D.type, [&](auto typed_null) {
++            using T          = std::remove_const_t<std::remove_pointer_t<decltype(typed_null)>>;
++            const T* d_batch = static_cast<const T*>(D.base);
++
++#pragma omp parallel for schedule(dynamic)
++            for(int64_t blk = 0; blk < n_blocks; blk++)
++            {
++                const int64_t       i0 = blk * block, i1 = std::min(M, i0 + block);
++                std::vector<ModAcc> row_acc(size_t(i1 - i0));
++                for(int64_t j = 0; j < N; j++)
++                {
++                    ModAcc   col_acc;
++                    const T* d_col = d_batch + size_t(j) * size_t(p.D.ld);
++                    for(int64_t i = i0; i < i1; i++)
++                    {
++                        double  stored = to_double(d_col[i]);
++                        int64_t value  = 0;
++                        // A NaN fails the range test and takes the slow path.
++                        bool fast = std::fabs(stored) < out_limit;
++                        if(fast)
++                        {
++                            value = int64_t(stored);
++                            fast  = double(value) == stored;
++                        }
++                        if(!fast)
++                            value = rep.slow_element(in,
++                                                     b,
++                                                     i,
++                                                     j,
++                                                     stored,
++                                                     bad_per_block[size_t(blk)],
++                                                     bad_count_per_block[size_t(blk)]);
++                        uint64_t vm = to_mod(value);
++                        row_acc[size_t(i - i0)].add(vm, r[j]);
++                        col_acc.add(vm, t[i]);
++                    }
++                    got_col_partial[size_t(blk) * size_t(N) + size_t(j)] = col_acc.value();
++                }
++                for(int64_t i = i0; i < i1; i++)
++                    got_row[size_t(i)] = row_acc[size_t(i - i0)].value();
++            }
++        });
++        if(rep.over_budget)
++            break;
++
++        for(int64_t blk = 0; blk < n_blocks; blk++)
++            rep.add_bad(bad_per_block[size_t(blk)], bad_count_per_block[size_t(blk)]);
++
++        std::vector<uint64_t> got_col(size_t(N), 0);
++        for(int64_t j = 0; j < N; j++)
++            for(int64_t blk = 0; blk < n_blocks; blk++)
++                got_col[size_t(j)] = mod_add(got_col[size_t(j)],
++                                             got_col_partial[size_t(blk) * size_t(N) + size_t(j)]);
++
++        rep.compare(e, in, b, got_row, got_col, [&](int64_t i, int64_t j) { return D.at(i, j); });
++    }
++    return rep.finish();
++}
++
++FastCheckResult fast_check_gemm(const FastCheckProblem& p)
++{
++    return fast_check_result(p, fast_check_expected(p));
++}
++
++// ----------------------------------------------------------------------------------------------
++// Device helpers
++// ----------------------------------------------------------------------------------------------
++
++namespace
++{
++    __device__ inline uint64_t device_mod_mul(uint64_t a, uint64_t b)
++    {
++        // a * b = hi * 2^64 + lo with hi below 2^58, and 2^64 == 8 (mod P).
++        uint64_t lo = a * b;
++        uint64_t hi = __umul64hi(a, b);
++        uint64_t x  = (lo & P) + (lo >> 61) + (hi << 3);
++        x           = (x & P) + (x >> 61);
++        return x >= P ? x - P : x;
++    }
++
++    // Reads one element of D as an integer when it is an exact integer below limit in magnitude.
++    template <typename T>
++    __device__ inline bool device_exact_value(T x, double limit, int64_t& v, double& stored)
++    {
++        if constexpr(std::is_same_v<T, hipblasLtHalf> || std::is_same_v<T, hip_bfloat16>)
++            stored = float(x);
++        else
++            stored = double(x);
++        if(!(fabs(stored) < limit))
++            return false;
++        v = int64_t(stored);
++        return double(v) == stored;
++    }
++
++    // partial[chunk * M + i] = sum over the chunk's columns j of D(i, j) * r[j]. Elements that
++    // are not exact integers below limit add nothing and are listed for the host instead.
++    template <typename T>
++    __global__ void row_probe_kernel(const T*            D,
++                                     int64_t             M,
++                                     int64_t             N,
++                                     int64_t             ld,
++                                     int64_t             cols_per_chunk,
++                                     double              limit,
++                                     const uint64_t*     r,
++                                     uint64_t*           partial,
++                                     unsigned long long* special_count,
++                                     uint64_t*           special_offset,
++                                     double*             special_value,
++                                     uint64_t            special_capacity)
++    {
++        int64_t i = int64_t(blockIdx.x) * blockDim.x + threadIdx.x;
++        if(i >= M)
++            return;
++        int64_t  j0  = int64_t(blockIdx.y) * cols_per_chunk;
++        int64_t  j1  = j0 + cols_per_chunk < N ? j0 + cols_per_chunk : N;
++        uint64_t acc = 0;
++        for(int64_t j = j0; j < j1; j++)
++        {
++            int64_t v;
++            double  stored;
++            if(device_exact_value(D[size_t(j) * size_t(ld) + size_t(i)], limit, v, stored))
++                acc = mod_add(acc, device_mod_mul(to_mod(v), r[j]));
++            else
++            {
++                unsigned long long slot = atomicAdd(special_count, 1ull);
++                if(slot < special_capacity)
++                {
++                    special_offset[slot] = uint64_t(j) * uint64_t(ld) + uint64_t(i);
++                    special_value[slot]  = stored;
++                }
++            }
++        }
++        partial[size_t(blockIdx.y) * size_t(M) + size_t(i)] = acc;
++    }
++
++    // partial[chunk * N + j] = sum over the chunk's rows i of t[i] * D(i, j), skipping the same
++    // elements row_probe_kernel lists.
++    template <typename T>
++    __global__ void col_probe_kernel(const T*        D,
++                                     int64_t         M,
++                                     int64_t         N,
++                                     int64_t         ld,
++                                     int64_t         rows_per_chunk,
++                                     double          limit,
++                                     const uint64_t* t,
++                                     uint64_t*       partial)
++    {
++        __shared__ uint64_t sums[256];
++        int64_t             j   = blockIdx.x;
++        int64_t             i0  = int64_t(blockIdx.y) * rows_per_chunk;
++        int64_t             i1  = i0 + rows_per_chunk < M ? i0 + rows_per_chunk : M;
++        uint64_t            acc = 0;
++        const T*            col = D + size_t(j) * size_t(ld);
++        for(int64_t i = i0 + threadIdx.x; i < i1; i += blockDim.x)
++        {
++            int64_t v;
++            double  stored;
++            if(device_exact_value(col[i], limit, v, stored))
++                acc = mod_add(acc, device_mod_mul(to_mod(v), t[i]));
++        }
++        sums[threadIdx.x] = acc;
++        __syncthreads();
++        for(unsigned s = blockDim.x / 2; s > 0; s /= 2)
++        {
++            if(threadIdx.x < s)
++                sums[threadIdx.x] = mod_add(sums[threadIdx.x], sums[threadIdx.x + s]);
++            __syncthreads();
++        }
++        if(threadIdx.x == 0)
++            partial[size_t(blockIdx.y) * size_t(N) + size_t(j)] = sums[0];
++    }
++
++    __device__ inline bool in_region(
++        size_t idx, int64_t rows, int64_t cols, int64_t ld, int64_t stride, int64_t batch_count)
++    {
++        size_t b = 0, rem = idx;
++        if(batch_count > 1)
++        {
++            b   = idx / size_t(stride);
++            rem = idx - b * size_t(stride);
++        }
++        if(b >= size_t(batch_count))
++            return false;
++        size_t j = rem / size_t(ld);
++        size_t i = rem - j * size_t(ld);
++        return j < size_t(cols) && i < size_t(rows);
++    }
++
++    template <typename U>
++    __global__ void poison_kernel(U*      p,
++                                  size_t  total,
++                                  int64_t rows,
++                                  int64_t cols,
++                                  int64_t ld,
++                                  int64_t stride,
++                                  int64_t batch,
++                                  U       value)
++    {
++        for(size_t idx = blockIdx.x * size_t(blockDim.x) + threadIdx.x; idx < total;
++            idx += size_t(gridDim.x) * blockDim.x)
++            if(!in_region(idx, rows, cols, ld, stride, batch))
++                p[idx] = value;
++    }
++
++    // counters: [0] padding mismatches, [1] first padding mismatch offset,
++    //           [2] unwritten elements,  [3] first unwritten offset
++    template <typename U>
++    __global__ void scan_kernel(const U*            p,
++                                size_t              total,
++                                int64_t             rows,
++                                int64_t             cols,
++                                int64_t             ld,
++                                int64_t             stride,
++                                int64_t             batch,
++                                U                   padding_value,
++                                bool                check_unwritten,
++                                U                   sentinel,
++                                unsigned long long* counters)
++    {
++        for(size_t idx = blockIdx.x * size_t(blockDim.x) + threadIdx.x; idx < total;
++            idx += size_t(gridDim.x) * blockDim.x)
++        {
++            U v = p[idx];
++            if(in_region(idx, rows, cols, ld, stride, batch))
++            {
++                if(check_unwritten && v == sentinel)
++                {
++                    atomicAdd(&counters[2], 1ull);
++                    atomicMin(&counters[3], (unsigned long long)idx);
++                }
++            }
++            else if(v != padding_value)
++            {
++                atomicAdd(&counters[0], 1ull);
++                atomicMin(&counters[1], (unsigned long long)idx);
++            }
++        }
++    }
++
++    uint64_t poison_bits(hipDataType t)
++    {
++        uint64_t bits = 0;
++        auto     put  = [&](auto value) { std::memcpy(&bits, &value, sizeof(value)); };
++        switch(t)
++        {
++        case HIP_R_32F:
++            put(float(kFastCheckPoisonValue));
++            break;
++        case HIP_R_64F:
++            put(double(kFastCheckPoisonValue));
++            break;
++        case HIP_R_16F:
++            put(hipblasLtHalf(kFastCheckPoisonValue));
++            break;
++        case HIP_R_16BF:
++            put(hip_bfloat16(kFastCheckPoisonValue));
++            break;
++        case HIP_R_8F_E4M3_FNUZ:
++            put(hipblaslt_f8_fnuz(kFastCheckPoisonValue));
++            break;
++        case HIP_R_8F_E5M2_FNUZ:
++            put(hipblaslt_bf8_fnuz(kFastCheckPoisonValue));
++            break;
++        case HIP_R_8F_E4M3:
++            put(hipblaslt_f8(kFastCheckPoisonValue));
++            break;
++        case HIP_R_8F_E5M2:
++            put(hipblaslt_bf8(kFastCheckPoisonValue));
++            break;
++        case HIP_R_32I:
++            put(int32_t(kFastCheckPoisonValue));
++            break;
++        case HIP_R_8I:
++            put(int8_t(kFastCheckPoisonValue));
++            break;
++        default:
++            break;
++        }
++        return bits;
++    }
++
++    uint64_t sentinel_bits(hipDataType t)
++    {
++        switch(t)
++        {
++        case HIP_R_8F_E4M3_FNUZ:
++        case HIP_R_8F_E5M2_FNUZ:
++        case HIP_R_8I:
++            return 0x80;
++        case HIP_R_32I:
++            return 0x80000000;
++        default:
++        {
++            const size_t es = element_size(t);
++            return es >= 8 ? ~uint64_t(0) : (uint64_t(1) << (8 * es)) - 1;
++        }
++        }
++    }
++
++    bool sentinel_is_nan(hipDataType t)
++    {
++        uint64_t bits = sentinel_bits(t);
++        return std::isnan(load(&bits, t, 0));
++    }
++
++    unsigned grid_for(size_t total)
++    {
++        return unsigned(std::min<size_t>((total + 255) / 256, 16384));
++    }
++
++    // Writes `value` into every element outside the rows x cols x batch region.
++    template <typename U>
++    hipError_t launch_poison(
++        const FastCheckMatrix& m, int64_t batch, size_t total, uint64_t value, hipStream_t stream)
++    {
++        // HIP rejects a launch with an empty grid.
++        if(total == 0)
++            return hipSuccess;
++        hipLaunchKernelGGL(poison_kernel<U>,
++                           dim3(grid_for(total)),
++                           dim3(256),
++                           0,
++                           stream,
++                           static_cast<U*>(const_cast<void*>(m.data)),
++                           total,
++                           m.rows,
++                           m.cols,
++                           m.ld,
++                           m.stride,
++                           batch,
++                           U(value));
++        return hipGetLastError();
++    }
++
++    // Leaves a buffer of a type fast_check does not support alone and says so.
++    hipError_t fill_outside_region(
++        const FastCheckMatrix& m, int64_t batch, size_t total, uint64_t value, hipStream_t stream)
++    {
++        switch(element_size(m.type))
++        {
++        case 1:
++            return launch_poison<uint8_t>(m, batch, total, value, stream);
++        case 2:
++            return launch_poison<uint16_t>(m, batch, total, value, stream);
++        case 4:
++            return launch_poison<uint32_t>(m, batch, total, value, stream);
++        case 8:
++            return launch_poison<uint64_t>(m, batch, total, value, stream);
++        default:
++            return hipErrorInvalidValue;
++        }
++    }
++
++    template <typename U>
++    hipError_t launch_scan(const FastCheckMatrix& m,
++                           int64_t                batch,
++                           size_t                 total,
++                           bool                   expect_poison,
++                           unsigned long long*    d_counters,
++                           hipStream_t            stream)
++    {
++        U sentinel      = U(sentinel_bits(m.type));
++        U padding_value = expect_poison ? U(poison_bits(m.type)) : sentinel;
++        if(total == 0)
++            return hipSuccess;
++        hipLaunchKernelGGL(scan_kernel<U>,
++                           dim3(grid_for(total)),
++                           dim3(256),
++                           0,
++                           stream,
++                           static_cast<const U*>(m.data),
++                           total,
++                           m.rows,
++                           m.cols,
++                           m.ld,
++                           m.stride,
++                           batch,
++                           padding_value,
++                           !expect_poison && sentinel_is_nan(m.type),
++                           sentinel,
++                           d_counters);
++        return hipGetLastError();
++    }
++
++    std::string describe_offset(const FastCheckMatrix& m, int64_t batch, uint64_t offset)
++    {
++        std::ostringstream s;
++        s << "element offset " << offset << " = 0x" << std::hex << offset << std::dec;
++        uint64_t b = 0, rem = offset;
++        if(batch > 1)
++        {
++            b   = offset / uint64_t(m.stride);
++            rem = offset - b * uint64_t(m.stride);
++        }
++        s << " (batch " << b << ", row " << rem % uint64_t(m.ld) << ", col " << rem / uint64_t(m.ld)
++          << ")";
++        return s.str();
++    }
++
++    // Device memory released when it goes out of scope.
++    template <typename T>
++    struct DeviceArray
++    {
++        T* ptr = nullptr;
++        explicit DeviceArray(size_t n)
++        {
++            if(n && hipMalloc(&ptr, n * sizeof(T)) != hipSuccess)
++                ptr = nullptr;
++        }
++        ~DeviceArray()
++        {
++            (void)hipFree(ptr);
++        }
++        DeviceArray(const DeviceArray&)            = delete;
++        DeviceArray& operator=(const DeviceArray&) = delete;
++    };
++
++    // Copies D's region to the host and runs the host pass; used when the device pass cannot.
++    FastCheckResult
++        device_fallback(const FastCheckProblem& p, const FastCheckExpected& e, hipStream_t stream)
++    {
++        const size_t bytes
++            = size_t(p.M) * size_t(p.N) * size_t(p.batch_count) * element_size(p.D.type);
++        std::unique_ptr<char[]> host(new char[bytes]);
++        hipError_t err = fast_check_copy_region_to_host(host.get(), p.D, p.batch_count, stream);
++        if(err != hipSuccess)
++            return {false, std::string("fast_check could not copy D: ") + hipGetErrorString(err)};
++        FastCheckProblem hp = p;
++        hp.D.data           = host.get();
++        hp.D.ld             = p.M;
++        hp.D.stride         = p.M * p.N;
++        hp.device_ldd       = p.device_ldd ? p.device_ldd : p.D.ld;
++        hp.device_stride_d  = p.device_stride_d ? p.device_stride_d : p.D.stride;
++        return fast_check_result(hp, e);
++    }
++} // namespace
++
++FastCheckResult fast_check_result_device(const FastCheckProblem&  p,
++                                         const FastCheckExpected& e,
++                                         hipStream_t              stream)
++{
++    if(!e.status.passed)
++        return e.status;
++    // Chunk sizing divides by M and N; empty outputs require no device work.
++    if(p.M == 0 || p.N == 0 || p.batch_count == 0)
++        return {};
++
++    // The device pass handles the types the GPU converts natively; fp8 outputs use the host pass.
++    switch(p.D.type)
++    {
++    case HIP_R_32F:
++    case HIP_R_64F:
++    case HIP_R_16F:
++    case HIP_R_16BF:
++    case HIP_R_32I:
++    case HIP_R_8I:
++        break;
++    default:
++        return device_fallback(p, e, stream);
++    }
++
++    const int64_t M = p.M, N = p.N;
++    const double  out_limit = fast_limit(p.D.type);
++    Report        rep(p);
++    const size_t  es = element_size(p.D.type);
++
++    // Chunk the columns of the row probe and the rows of the column probe for parallelism, with
++    // the partial sums capped at about 2^25 entries (256 MiB).
++    const int64_t partial_cap = int64_t(1) << 25;
++    int64_t       col_chunks
++        = std::clamp<int64_t>((N + 255) / 256, 1, std::max<int64_t>(1, partial_cap / M));
++    col_chunks                   = std::min<int64_t>(col_chunks, 65535);
++    const int64_t cols_per_chunk = (N + col_chunks - 1) / col_chunks;
++    col_chunks                   = (N + cols_per_chunk - 1) / cols_per_chunk;
++    int64_t row_chunks
++        = std::clamp<int64_t>((M + 4095) / 4096, 1, std::max<int64_t>(1, partial_cap / N));
++    row_chunks                   = std::min<int64_t>(row_chunks, 65535);
++    const int64_t rows_per_chunk = (M + row_chunks - 1) / row_chunks;
++    row_chunks                   = (M + rows_per_chunk - 1) / rows_per_chunk;
++    const uint64_t special_capacity
++        = uint64_t(std::min<int64_t>(rep.slow_budget, int64_t(1) << 22));
++
++    DeviceArray<uint64_t>           d_r{size_t(N)}, d_t{size_t(M)};
++    DeviceArray<uint64_t>           d_row_partial(size_t(col_chunks) * size_t(M));
++    DeviceArray<uint64_t>           d_col_partial(size_t(row_chunks) * size_t(N));
++    DeviceArray<unsigned long long> d_special_count(1);
++    DeviceArray<uint64_t>           d_special_offset(special_capacity);
++    DeviceArray<double>             d_special_value(special_capacity);
++    if(!d_r.ptr || !d_t.ptr || !d_row_partial.ptr || !d_col_partial.ptr || !d_special_count.ptr
++       || !d_special_offset.ptr || !d_special_value.ptr)
++        return device_fallback(p, e, stream);
++
++    hipError_t err = hipMemcpyAsync(
++        d_r.ptr, e.row_probe.data(), size_t(N) * sizeof(uint64_t), hipMemcpyHostToDevice, stream);
++    if(err == hipSuccess)
++        err = hipMemcpyAsync(d_t.ptr,
++                             e.col_probe.data(),
++                             size_t(M) * sizeof(uint64_t),
++                             hipMemcpyHostToDevice,
++                             stream);
++    if(err != hipSuccess)
++        return {false,
++                std::string("fast_check could not copy its probes: ") + hipGetErrorString(err)};
++
++    std::vector<uint64_t> row_partial(size_t(col_chunks) * size_t(M));
++    std::vector<uint64_t> col_partial(size_t(row_chunks) * size_t(N));
++    std::vector<uint64_t> special_offset;
++    std::vector<double>   special_value;
++
++    for(int64_t b = 0; b < p.batch_count && !rep.over_budget; b++)
++    {
++        const void* d_batch
++            = static_cast<const char*>(p.D.data) + size_t(b) * size_t(p.D.stride) * es;
++        unsigned long long special_count = 0;
++        err = hipMemsetAsync(d_special_count.ptr, 0, sizeof(unsigned long long), stream);
++
++        dispatch_type(p.D.type, [&](auto typed_null) {
++            using T = std::remove_const_t<std::remove_pointer_t<decltype(typed_null)>>;
++            if constexpr(std::is_same_v<T, float> || std::is_same_v<T, double>
++                         || std::is_same_v<T, hipblasLtHalf> || std::is_same_v<T, hip_bfloat16>
++                         || std::is_same_v<T, int32_t> || std::is_same_v<T, int8_t>)
++            {
++                hipLaunchKernelGGL(row_probe_kernel<T>,
++                                   dim3(unsigned((M + 255) / 256), unsigned(col_chunks)),
++                                   dim3(256),
++                                   0,
++                                   stream,
++                                   static_cast<const T*>(d_batch),
++                                   M,
++                                   N,
++                                   p.D.ld,
++                                   cols_per_chunk,
++                                   out_limit,
++                                   d_r.ptr,
++                                   d_row_partial.ptr,
++                                   d_special_count.ptr,
++                                   d_special_offset.ptr,
++                                   d_special_value.ptr,
++                                   special_capacity);
++                hipLaunchKernelGGL(col_probe_kernel<T>,
++                                   dim3(unsigned(N), unsigned(row_chunks)),
++                                   dim3(256),
++                                   0,
++                                   stream,
++                                   static_cast<const T*>(d_batch),
++                                   M,
++                                   N,
++                                   p.D.ld,
++                                   rows_per_chunk,
++                                   out_limit,
++                                   d_t.ptr,
++                                   d_col_partial.ptr);
++            }
++        });
++        if(err == hipSuccess)
++            err = hipGetLastError();
++        if(err == hipSuccess)
++            err = hipMemcpyAsync(row_partial.data(),
++                                 d_row_partial.ptr,
++                                 row_partial.size() * sizeof(uint64_t),
++                                 hipMemcpyDeviceToHost,
++                                 stream);
++        if(err == hipSuccess)
++            err = hipMemcpyAsync(col_partial.data(),
++                                 d_col_partial.ptr,
++                                 col_partial.size() * sizeof(uint64_t),
++                                 hipMemcpyDeviceToHost,
++                                 stream);
++        if(err == hipSuccess)
++            err = hipMemcpyAsync(&special_count,
++                                 d_special_count.ptr,
++                                 sizeof(special_count),
++                                 hipMemcpyDeviceToHost,
++                                 stream);
++        if(err == hipSuccess)
++            err = hipStreamSynchronize(stream);
++        if(err != hipSuccess)
++            return {false, std::string("fast_check device pass failed: ") + hipGetErrorString(err)};
++
++        // Too many elements outside the exact range for the list: the host pass reports them.
++        if(special_count > special_capacity)
++            return device_fallback(p, e, stream);
++
++        special_offset.resize(size_t(special_count));
++        special_value.resize(size_t(special_count));
++        if(special_count)
++        {
++            err = hipMemcpyAsync(special_offset.data(),
++                                 d_special_offset.ptr,
++                                 special_offset.size() * sizeof(uint64_t),
++                                 hipMemcpyDeviceToHost,
++                                 stream);
++            if(err == hipSuccess)
++                err = hipMemcpyAsync(special_value.data(),
++                                     d_special_value.ptr,
++                                     special_value.size() * sizeof(double),
++                                     hipMemcpyDeviceToHost,
++                                     stream);
++            if(err == hipSuccess)
++                err = hipStreamSynchronize(stream);
++            if(err != hipSuccess)
++                return {false,
++                        std::string("fast_check could not copy its element list: ")
++                            + hipGetErrorString(err)};
++        }
++
++        std::vector<uint64_t> got_row(size_t(M), 0), got_col(size_t(N), 0);
++        for(int64_t c = 0; c < col_chunks; c++)
++            for(int64_t i = 0; i < M; i++)
++                got_row[size_t(i)]
++                    = mod_add(got_row[size_t(i)], row_partial[size_t(c) * size_t(M) + size_t(i)]);
++        for(int64_t c = 0; c < row_chunks; c++)
++            for(int64_t j = 0; j < N; j++)
++                got_col[size_t(j)]
++                    = mod_add(got_col[size_t(j)], col_partial[size_t(c) * size_t(N) + size_t(j)]);
++
++        // The listed elements entered neither probe sum on the device: check each one (a
++        // K-length dot product, so in parallel) and add the exact value to both sums.
++        const BatchInputs                    in        = batch_inputs(p, e, b);
++        const int64_t                        n_special = int64_t(special_offset.size());
++        const int64_t                        block     = 256;
++        const int64_t                        n_blocks  = (n_special + block - 1) / block;
++        std::vector<int64_t>                 values(special_offset.size(), 0);
++        std::vector<std::vector<BadElement>> bad_per_block(static_cast<size_t>(n_blocks));
++        std::vector<int64_t>                 bad_count_per_block(static_cast<size_t>(n_blocks), 0);
++#pragma omp parallel for schedule(dynamic)
++        for(int64_t blk = 0; blk < n_blocks; blk++)
++            for(int64_t s = blk * block; s < std::min(n_special, (blk + 1) * block); s++)
++            {
++                if(rep.over_budget)
++                    break;
++                values[size_t(s)]
++                    = rep.slow_element(in,
++                                       b,
++                                       int64_t(special_offset[size_t(s)] % uint64_t(p.D.ld)),
++                                       int64_t(special_offset[size_t(s)] / uint64_t(p.D.ld)),
++                                       special_value[size_t(s)],
++                                       bad_per_block[size_t(blk)],
++                                       bad_count_per_block[size_t(blk)]);
++            }
++        if(rep.over_budget)
++            break;
++        for(int64_t blk = 0; blk < n_blocks; blk++)
++            rep.add_bad(bad_per_block[size_t(blk)], bad_count_per_block[size_t(blk)]);
++        for(size_t s = 0; s < special_offset.size(); s++)
++        {
++            int64_t  i         = int64_t(special_offset[s] % uint64_t(p.D.ld));
++            int64_t  j         = int64_t(special_offset[s] / uint64_t(p.D.ld));
++            uint64_t vm        = to_mod(values[s]);
++            got_row[size_t(i)] = mod_add(got_row[size_t(i)], mod_mul(vm, e.row_probe[size_t(j)]));
++            got_col[size_t(j)] = mod_add(got_col[size_t(j)], mod_mul(vm, e.col_probe[size_t(i)]));
++        }
++
++        rep.compare(e, in, b, got_row, got_col, [&](int64_t i, int64_t j) {
++            std::vector<char> one(es);
++            (void)hipMemcpy(one.data(),
++                            static_cast<const char*>(d_batch)
++                                + (size_t(j) * size_t(p.D.ld) + size_t(i)) * es,
++                            es,
++                            hipMemcpyDeviceToHost);
++            return load(one.data(), p.D.type, 0);
++        });
++    }
++    return rep.finish();
++}
++
++uint64_t fast_check_sentinel_bits(hipDataType type)
++{
++    return sentinel_bits(type);
++}
++
++hipError_t fast_check_fill_sentinel_device(void*       buffer,
++                                           hipDataType type,
++                                           size_t      elements,
++                                           hipStream_t stream)
++{
++    // An empty region makes every element padding.
++    return fill_outside_region(
++        {buffer, type, 0, 0, 1, 0}, 1, elements, sentinel_bits(type), stream);
++}
++
++hipError_t fast_check_poison_padding_device(const FastCheckMatrix& m,
++                                            int64_t                batch_count,
++                                            size_t                 total_elements,
++                                            hipStream_t            stream)
++{
++    return fill_outside_region(m, batch_count, total_elements, poison_bits(m.type), stream);
++}
++
++FastCheckResult fast_check_scan_padding_device(const FastCheckMatrix& m,
++                                               int64_t                batch_count,
++                                               size_t                 total_elements,
++                                               bool                   expect_poison,
++                                               hipStream_t            stream)
++{
++    FastCheckResult                 result;
++    unsigned long long              init[4] = {0, ~0ull, 0, ~0ull};
++    DeviceArray<unsigned long long> d_counters(4);
++    if(!d_counters.ptr
++       || hipMemcpyAsync(d_counters.ptr, init, sizeof(init), hipMemcpyHostToDevice, stream)
++              != hipSuccess)
++        return {false, "fast_check could not allocate its scan counters"};
++    // A failed launch, or an unsupported type, would otherwise leave the counters clean.
++    hipError_t err = hipErrorInvalidValue;
++    switch(element_size(m.type))
++    {
++    case 1:
++        err = launch_scan<uint8_t>(
++            m, batch_count, total_elements, expect_poison, d_counters.ptr, stream);
++        break;
++    case 2:
++        err = launch_scan<uint16_t>(
++            m, batch_count, total_elements, expect_poison, d_counters.ptr, stream);
++        break;
++    case 4:
++        err = launch_scan<uint32_t>(
++            m, batch_count, total_elements, expect_poison, d_counters.ptr, stream);
++        break;
++    case 8:
++        err = launch_scan<uint64_t>(
++            m, batch_count, total_elements, expect_poison, d_counters.ptr, stream);
++        break;
++    default:
++        break;
++    }
++    if(err != hipSuccess)
++        return {false, std::string("fast_check scan failed: ") + hipGetErrorString(err)};
++    unsigned long long counters[4];
++    err = hipMemcpyAsync(counters, d_counters.ptr, sizeof(counters), hipMemcpyDeviceToHost, stream);
++    if(err == hipSuccess)
++        err = hipStreamSynchronize(stream);
++    if(err != hipSuccess)
++        return {false, std::string("fast_check scan failed: ") + hipGetErrorString(err)};
++
++    std::ostringstream msg;
++    if(counters[0] > 0)
++    {
++        result.passed = false;
++        msg << counters[0] << " elements outside the " << m.rows << " x " << m.cols << " x "
++            << batch_count << " region were changed (out-of-bounds write); first at "
++            << describe_offset(m, batch_count, counters[1]) << "\n";
++    }
++    if(counters[2] > 0)
++    {
++        result.passed = false;
++        msg << counters[2] << " elements inside the region were never written; first at "
++            << describe_offset(m, batch_count, counters[3]) << "\n";
++    }
++    result.message = msg.str();
++    return result;
++}
++
++hipError_t fast_check_copy_region_to_host(void*                  host,
++                                          const FastCheckMatrix& m,
++                                          int64_t                batch_count,
++                                          hipStream_t            stream)
++{
++    const size_t es    = element_size(m.type);
++    const size_t width = size_t(m.rows) * es;
++    for(int64_t b = 0; b < batch_count; b++)
++    {
++        char*       dst = static_cast<char*>(host) + size_t(b) * width * size_t(m.cols);
++        const char* src = static_cast<const char*>(m.data) + size_t(b) * size_t(m.stride) * es;
++        hipError_t  err = hipMemcpy2DAsync(dst,
++                                          width,
++                                          src,
++                                          size_t(m.ld) * es,
++                                          width,
++                                          size_t(m.cols),
++                                          hipMemcpyDeviceToHost,
++                                          stream);
++        if(err != hipSuccess)
++        {
++            // Some pitches exceed what the 2D copy accepts; fall back to one copy per column.
++            (void)hipGetLastError();
++            for(int64_t j = 0; j < m.cols; j++)
++            {
++                err = hipMemcpyAsync(dst + size_t(j) * width,
++                                     src + size_t(j) * size_t(m.ld) * es,
++                                     width,
++                                     hipMemcpyDeviceToHost,
++                                     stream);
++                if(err != hipSuccess)
++                    return err;
++            }
++        }
++    }
++    return hipStreamSynchronize(stream);
++}
+diff --git a/projects/hipblaslt/clients/common/src/hipblaslt_arguments.cpp b/projects/hipblaslt/clients/common/src/hipblaslt_arguments.cpp
+index d9858d855..56eb4c9a4 100644
+--- a/projects/hipblaslt/clients/common/src/hipblaslt_arguments.cpp
++++ b/projects/hipblaslt/clients/common/src/hipblaslt_arguments.cpp
+@@ -117,6 +117,7 @@ void Arguments::init()
+     allclose_check = 0;
+     unit_check     = 1;
+     ulp_check      = 0;
++    fast_check     = 0;
+     timing         = 0;
+ 
+     transA = '*';
+diff --git a/projects/hipblaslt/clients/tests/data/hipblaslt_common.yaml b/projects/hipblaslt/clients/tests/data/hipblaslt_common.yaml
+index c9a49553b..378d15249 100644
+--- a/projects/hipblaslt/clients/tests/data/hipblaslt_common.yaml
++++ b/projects/hipblaslt/clients/tests/data/hipblaslt_common.yaml
+@@ -647,6 +647,7 @@ Arguments:
+   - allclose_check: c_int8
+   - unit_check: c_int8
+   - ulp_check: c_int8
++  - fast_check: c_int8
+   - timing: c_int8
+   - transA: c_char
+   - transB: c_char
+@@ -755,6 +756,7 @@ Defaults:
+   allclose_check: 0
+   unit_check: 1
+   ulp_check: 0
++  fast_check: 0
+   timing: 0
+   iters: 10
+   cold_iters: 2
+diff --git a/projects/hipblaslt/clients/tests/data/known_bugs.yaml b/projects/hipblaslt/clients/tests/data/known_bugs.yaml
+index 4dda3bc25..2236bddf0 100644
+--- a/projects/hipblaslt/clients/tests/data/known_bugs.yaml
++++ b/projects/hipblaslt/clients/tests/data/known_bugs.yaml
+@@ -31,6 +31,19 @@ Known bugs:
+   # REMOVE this entry once the output-store path is fixed so the case re-activates
+   # as an enforced bit-exact regression gate.
+ 
++  # ROCM-32152: on gfx950 some direct-to-LDS kernels (DTLA1_DTLB1) write wrong values
++  # into large outputs, a different set of elements on each run. ROCM-32151: on gfx950
++  # bf16 solution 354888 writes about half the right value. Both show up in these
++  # every-solution cases. REMOVE each entry in the PR that fixes the last defect it
++  # lists. Review by 2026-11-01.
++  - { name: matmul_fast_check_store_extent_ROCM31016, function: matmul, known_bug_platforms: gfx950 }
++  - { name: matmul_fast_check_size_t_output_overflow_all_solutions, function: matmul, a_type: bf16_r, known_bug_platforms: gfx950 }
++  # ROCM-32062: the client CPU reference (cast_mul in cblas_interface.cpp) applies
++  # scaleAlpha_vector to the wrong rows of A when lda exceeds A's row count, so
++  # unit_check fails a correct GPU result. Host-side, so every platform is affected
++  # and no platform is listed. REMOVE this entry in the PR that fixes ROCM-32062;
++  # the test then becomes its regression gate. Review by 2026-11-01.
++  - { name: matmul_fast_check_epilogue_padded_lda_ROCM32062, function: matmul }
+   # ROCM-27082: gfx950 MXFP4 subtile scaleAlphaVec TN cases fail the norm/accuracy
+   # check on asymmetric (M!=N) tiles. Square tiles (128x128, 192x192) still pass and
+   # remain covered. Suspected TensileLite codegen regression; remove once root-caused.
+diff --git a/projects/hipblaslt/clients/tests/data/matmul_common.yaml b/projects/hipblaslt/clients/tests/data/matmul_common.yaml
+index a7ae19a4e..2b3d7a7f7 100644
+--- a/projects/hipblaslt/clients/tests/data/matmul_common.yaml
++++ b/projects/hipblaslt/clients/tests/data/matmul_common.yaml
+@@ -119,6 +119,37 @@ Definitions:
+   - &size_t_stagger_incs_overflow
+     - { M: 2048, N: 1, K: 32, lda: 67108864, ldb: 32, ldc: 2048, ldd: 2048 }
+ 
++  ###########################################################################
++  # fast_check shapes (see clients/common/include/fast_check.hpp).
++  ###########################################################################
++
++  # Small shapes for comparing fast_check with unit_check on the same result. Every
++  # leading dimension is padded, and K stays at or below 256 so unit_check's 16-bit
++  # integer_exact limit still allows both checks.
++  - &fast_check_crosscheck_sizes
++    - { M: 131, N: 67, K: 200, lda: 263, ldb: 211, ldc: 140, ldd: 151 }
++    - { M: 1031, N: 517, K: 256, lda: 1040, ldb: 1033, ldc: 1031, ldd: 1100 }
++
++  # No dimension is a multiple of any common macro-tile size (16 through 256), so
++  # every kernel runs partial tiles in M, N and K. A host reference GEMM for the
++  # first shape costs about 1.1e12 multiply-adds; fast_check costs about 3e8.
++  - &fast_check_large_sizes
++    - { M: 16385, N: 16383, K: 4097 }
++    - { M: 8191, N: 8193, K: 8195 }
++
++  # The same M and N for 16-bit outputs, with K small enough that almost every
++  # result stays below 256, the largest integer range bf16 holds exactly; the few
++  # larger results are checked one at a time.
++  - &fast_check_large_16bit_sizes
++    - { M: 16385, N: 16383, K: 129 }
++    - { M: 8191, N: 8193, K: 257 }
++
++  # The output element index crosses 2^32: (N-1)*ldd = 2048*2097155 = 4,294,973,440,
++  # above 2^32 = 4,294,967,296. C and D each hold 4.3e9 elements. lda and ldb cover
++  # both transposes.
++  - &fast_check_output_index_2_32
++    - { M: 1000, N: 2049, K: 64, lda: 1000, ldb: 2049, ldc: 2097155, ldd: 2097155 }
++
+ 
+   - &deepbench_sizes
+     - { M: 192, N: 64, K: 784 }
+diff --git a/projects/hipblaslt/clients/tests/data/matmul_gtest.yaml b/projects/hipblaslt/clients/tests/data/matmul_gtest.yaml
+index 81d8aaef0..21b47ca5b 100755
+--- a/projects/hipblaslt/clients/tests/data/matmul_gtest.yaml
++++ b/projects/hipblaslt/clients/tests/data/matmul_gtest.yaml
+@@ -3108,6 +3108,281 @@ Tests:
+   unit_check: 1
+   gpu_arch: '1201'
+ 
++###############################################################################
++# fast_check: verification without a host reference GEMM.
++#
++# unit_check compares D against a host reference GEMM, which costs O(M*N*K) and
++# copies every padded buffer to pinned host memory. On gfx942 the ldd = 1049100
++# case above spends 12 s of its 14.4 s allocating pinned host memory and the
++# lda = 1049100 case spends 3.8 s in the reference. fast_check (fast_check.hpp)
++# instead checks every element of D with Freivalds' algorithm in O(M*K + K*N +
++# M*N) host work on unpadded copies, and checks the padding on the device:
++#   - A, B and C padding holds a poison value (40), so a kernel that reads
++#     padding produces a wrong D;
++#   - D is filled with a NaN sentinel before each solution runs, and afterwards
++#     every element outside the M x N x batch region must still hold it, so an
++#     out-of-bounds write fails the test, as does an element never written.
++# fast_check requires integer_exact. It also models the rounding of results too
++# large for a 16-bit output, so 16-bit types can use K above 256 here.
++#
++# Runtimes below were measured on gfx942 (MI300A) with all fast_check cases in one
++# process: about 75 s for the pre_checkin cases and 260 s for the nightly cases.
++# A large case run on its own can take several seconds longer, because its device
++# memory is allocated fresh instead of reused.
++###############################################################################
++
++# Both checks on the same results: they must agree. Covers every transpose, both
++# integer_exact alpha/beta pairs, padded leading dimensions and strided batches.
++# Runtime on gfx942: 48 cases, about 48 s.
++- name: matmul_fast_check_matches_unit_check
++  category: pre_checkin
++  function:
++    matmul:
++      - *single_precision
++      - *hpa_half_precision
++      - *hpa_bf16_precision
++  matrix_size: *fast_check_crosscheck_sizes
++  transA_transB: *transA_transB_range
++  alpha_beta: *integer_exact_alpha_beta
++  batch_count: 3
++  initialization: integer_exact
++  unit_check: 1
++  fast_check: 1
++
++# For real inputs, conjugate transpose has the same layout and values as transpose.
++# Unequal M, N and K expose a wrong transpose flag in the compact input copies.
++- name: matmul_fast_check_conjugate_transpose
++  category: pre_checkin
++  function:
++    matmul: *single_precision
++  matrix_size:
++    - { M: 13, N: 11, K: 17, lda: 19, ldb: 19, ldc: 17, ldd: 19 }
++    - { M: 13, N: 19, K: 7, lda: 17, ldb: 23, ldc: 17, ldd: 19 }
++  transA: [ N, T, C ]
++  transB: [ N, T, C ]
++  alpha: 2.0
++  beta: -2.0
++  batch_count: 3
++  initialization: integer_exact
++  unit_check: 1
++  fast_check: 1
++
++# Both checks with the epilogue fast_check supports (bias and scaleAlpha_vector),
++# and with C and D sharing memory, where D's padding must keep C's poison value.
++# lda equals A's row count here; see the padded-lda case below.
++# Runtime on gfx942: 8 cases, under 1 s.
++- name: matmul_fast_check_matches_unit_check_epilogue
++  category: pre_checkin
++  function:
++    matmul:
++      - *single_precision
++      - *hpa_bf16_precision
++  matrix_size:
++    - { M: 131, N: 67, K: 200, lda: 131, ldb: 211, ldc: 140, ldd: 151 }
++    - { M: 1031, N: 517, K: 256, lda: 1031, ldb: 1033, ldc: 1031, ldd: 1100 }
++  transA: N
++  transB: T
++  alpha_beta: *integer_exact_alpha_beta
++  bias_vector: 1
++  bias_type: f32_r
++  scaleAlpha_vector: 1
++  initialization: integer_exact
++  unit_check: 1
++  fast_check: 1
++
++# The same with a padded lda. The CPU reference applies scaleAlpha_vector to the
++# wrong rows of A when lda exceeds A's row count (ROCM-32062), so unit_check
++# fails a GPU result fast_check accepts. Quarantined in known_bugs.yaml.
++# Runtime on gfx942: 8 cases; skipped while quarantined.
++- name: matmul_fast_check_epilogue_padded_lda_ROCM32062
++  category: pre_checkin
++  function:
++    matmul:
++      - *single_precision
++      - *hpa_bf16_precision
++  matrix_size: *fast_check_crosscheck_sizes
++  transA: N
++  transB: T
++  alpha_beta: *integer_exact_alpha_beta
++  bias_vector: 1
++  bias_type: f32_r
++  scaleAlpha_vector: 1
++  initialization: integer_exact
++  unit_check: 1
++  fast_check: 1
++
++# Runtime on gfx942: 8 cases, about 1 s.
++- name: matmul_fast_check_matches_unit_check_c_equal_d
++  category: pre_checkin
++  function:
++    matmul:
++      - *single_precision
++      - *hpa_bf16_precision
++  matrix_size:
++    - { M: 1031, N: 517, K: 256, lda: 1040, ldb: 1033, ldc: 1100, ldd: 1100 }
++  transA_transB: *transA_transB_range
++  alpha: 2.0
++  beta: -2.0
++  c_equal_d: true
++  initialization: integer_exact
++  unit_check: 1
++  fast_check: 1
++
++# The size_t index-overflow sweep with fast_check alone, in all three precisions.
++# matmul_size_t_index_overflow_hpa above must use rand_int because integer_exact
++# with unit_check caps 16-bit K at 256; fast_check removes that cap.
++# Runtime on gfx942: 36 cases, about 24 s.
++- name: matmul_fast_check_size_t_index_overflow
++  category: pre_checkin
++  function:
++    matmul:
++      - *single_precision
++      - *hpa_half_precision
++      - *hpa_bf16_precision
++  matrix_size: *size_t_index_overflow
++  transA: [ N, T ]
++  transB: [ N, T ]
++  alpha: 2.0
++  beta: -2.0
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++  gpu_arch: '9(0a|42|50)'
++
++# The ROCM-26455 shape and epilogue with fast_check alone.
++# Runtime on gfx942: 8 cases, about 2 s.
++- name: matmul_fast_check_size_t_output_overflow_epilogue
++  category: pre_checkin
++  function:
++    matmul:
++      - *single_precision
++      - *hpa_bf16_precision
++  matrix_size: *size_t_output_overflow
++  transA: [ N, T ]
++  transB: [ N, T ]
++  alpha: 1.0
++  beta: 0.0
++  bias_vector: 1
++  bias_type: f32_r
++  scaleAlpha_vector: 1
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++  gpu_arch: '9(42|50)'
++
++# Output element offsets above 2^32 (32-bit unsigned wrap), and a batch base
++# offset above 2^32: 3 batches with stride 2^31 + 2 put batch 2 at element
++# 4,294,967,300.
++# Runtime on gfx942: 4 cases, about 1 s.
++- name: matmul_fast_check_offset_above_2_32
++  category: nightly
++  function:
++    matmul: *hpa_bf16_precision
++  matrix_size: *fast_check_output_index_2_32
++  transA: [ N, T ]
++  transB: [ N, T ]
++  alpha: 2.0
++  beta: -2.0
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++  gpu_arch: '9(0a|42|50)'
++
++# Runtime on gfx942: 4 cases, about 2 s.
++- name: matmul_fast_check_batch_offset_above_2_32
++  category: nightly
++  function:
++    matmul: *hpa_bf16_precision
++  matrix_size:
++    - { M: 64, N: 64, K: 64, lda: 64, ldb: 64, ldc: 64, ldd: 64,
++        stride_a: 4096, stride_b: 4096, stride_c: 2147483650, stride_d: 2147483650 }
++  batch_count: 3
++  transA: [ N, T ]
++  transB: [ N, T ]
++  alpha: 2.0
++  beta: -2.0
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++  gpu_arch: '9(0a|42|50)'
++
++# Large shapes with partial tiles in every dimension.
++# Runtime on gfx942: 8 cases, about 10 s.
++- name: matmul_fast_check_large
++  category: nightly
++  function:
++    matmul: *single_precision
++  matrix_size: *fast_check_large_sizes
++  transA_transB: *transA_transB_range
++  alpha: 2.0
++  beta: -2.0
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++
++# Runtime on gfx942: 16 cases, about 15 s.
++- name: matmul_fast_check_large_16bit
++  category: nightly
++  function:
++    matmul:
++      - *hpa_half_precision
++      - *hpa_bf16_precision
++  matrix_size: *fast_check_large_16bit_sizes
++  transA_transB: *transA_transB_range
++  alpha: 2.0
++  beta: -2.0
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++
++# ROCM-31016: kernels bound D's stores with num_records = 0xfffff000, and the
++# solution predicate used to compare a shape's store extent against 2^32. At
++# M = 8,388,607, N = 256 in bf16 with ldd = M, one MacroTile1 = 256 tile spans
++# all of D, 4,294,966,784 bytes, which lies between the two. Kernels admitted
++# there dropped the last stores without an error. Every offered solution runs,
++# because the defect is specific to kernels with MacroTile1 = 256. The D sentinel
++# reports the dropped stores as elements never written.
++# Runtime on gfx942: 1 case covering 1,093 solutions, about 144 s.
++- name: matmul_fast_check_store_extent_ROCM31016
++  category: nightly
++  function:
++    matmul: *hpa_bf16_precision
++  matrix_size:
++    - { M: 8388607, N: 256, K: 48 }
++  transA: N
++  transB: N
++  alpha: 2.0
++  beta: 0.0
++  algo_method: [1]
++  requested_solution_num: -1
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++  gpu_arch: '9(42|50)'
++
++# Every supported solution, not only the heuristic's first choice, on the
++# ldc = ldd = 1049100 output-overflow shape. An indexing defect is usually specific
++# to one kernel, so a check of only the top pick misses it once a retune changes
++# that pick.
++# Runtime on gfx942: 2 cases covering every solution, about 88 s.
++- name: matmul_fast_check_size_t_output_overflow_all_solutions
++  category: nightly
++  function:
++    matmul:
++      - *single_precision
++      - *hpa_bf16_precision
++  matrix_size: *size_t_output_overflow
++  transA: N
++  transB: T
++  alpha: 2.0
++  beta: -2.0
++  algo_method: [1]
++  requested_solution_num: -1
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++  gpu_arch: '9(0a|42|50)'
++
+ 
+ - name: matmul_96_complex
+   category: pre_checkin
+diff --git a/projects/hipblaslt/clients/tests/src/CMakeLists.txt b/projects/hipblaslt/clients/tests/src/CMakeLists.txt
+index 5e190f896..d7251b259 100755
+--- a/projects/hipblaslt/clients/tests/src/CMakeLists.txt
++++ b/projects/hipblaslt/clients/tests/src/CMakeLists.txt
+@@ -32,6 +32,7 @@ target_sources(hipblaslt-test
+         ${CMAKE_CURRENT_SOURCE_DIR}/arguments_a2a_gtest.cpp
+         ${CMAKE_CURRENT_SOURCE_DIR}/unit_gtest.cpp
+         ${CMAKE_CURRENT_SOURCE_DIR}/algo_errors_gtest.cpp
++        ${CMAKE_CURRENT_SOURCE_DIR}/fast_check_gtest.cpp
+ )
+ 
+ if(NOT WIN32)
+diff --git a/projects/hipblaslt/clients/tests/src/fast_check_gtest.cpp b/projects/hipblaslt/clients/tests/src/fast_check_gtest.cpp
+new file mode 100644
+index 000000000..a1a4c39ff
+--- /dev/null
++++ b/projects/hipblaslt/clients/tests/src/fast_check_gtest.cpp
+@@ -0,0 +1,1089 @@
++// Copyright Advanced Micro Devices, Inc., or its affiliates.
++// SPDX-License-Identifier: MIT
++
++// Tests for the fast_check verifier in clients/common/include/fast_check.hpp. The
++// FastCheck_pre_checkin suite is host-only: it builds small integer GEMM problems on the CPU,
++// computes D exactly, injects a fault, and checks that fast_check reports it. The
++// FastCheckDevice_pre_checkin suite exercises the padding poison, scan and probe-sum kernels on
++// small device buffers and launches no hipBLASLt kernels. The _pre_checkin suffix puts both suites
++// in the standard test tier, which selects tests by name. Together they take about 0.5 s on
++// gfx942.
++
++#include <gtest/gtest.h>
++
++#include "fast_check.hpp"
++
++#include <hip/hip_runtime.h>
++
++#include <cstdint>
++#include <cstring>
++#include <vector>
++
++namespace
++{
++    // A small strided-batched problem held in float, with integer values in the integer_exact
++    // ranges: A and C in [0, 2], B in [-2, 2], scale in [1, 3], bias in [-3, 3].
++    struct HostProblem
++    {
++        int64_t M, N, K, batch;
++        bool    transA, transB;
++        int64_t lda, ldb, ldc, ldd;
++        float   alpha, beta;
++        bool    with_scale, with_bias;
++
++        std::vector<float> A, B, C, D, scale, bias;
++
++        HostProblem(int64_t m,
++                    int64_t n,
++                    int64_t k,
++                    int64_t b,
++                    bool    ta,
++                    bool    tb,
++                    float   al,
++                    float   be,
++                    bool    sc,
++                    bool    bi)
++            : M(m)
++            , N(n)
++            , K(k)
++            , batch(b)
++            , transA(ta)
++            , transB(tb)
++            , alpha(al)
++            , beta(be)
++            , with_scale(sc)
++            , with_bias(bi)
++        {
++            // Leading dimensions larger than the rows, so the padding is never read.
++            lda            = (transA ? K : M) + 3;
++            ldb            = (transB ? N : K) + 2;
++            ldc            = M + 1;
++            ldd            = M + 5;
++            uint32_t state = 12345;
++            auto     next  = [&](int lo, int hi) {
++                state = state * 1664525u + 1013904223u;
++                return float(lo + int((state >> 8) % uint32_t(hi - lo + 1)));
++            };
++            A.assign(size_t(stride_a() * batch), 99.f);
++            B.assign(size_t(stride_b() * batch), 99.f);
++            C.assign(size_t(stride_c() * batch), 99.f);
++            for(int64_t s = 0; s < batch; s++)
++            {
++                for(int64_t c = 0; c < (transA ? M : K); c++)
++                    for(int64_t r = 0; r < (transA ? K : M); r++)
++                        A[size_t(s * stride_a() + c * lda + r)] = next(0, 2);
++                for(int64_t c = 0; c < (transB ? K : N); c++)
++                    for(int64_t r = 0; r < (transB ? N : K); r++)
++                        B[size_t(s * stride_b() + c * ldb + r)] = next(-2, 2);
++                for(int64_t c = 0; c < N; c++)
++                    for(int64_t r = 0; r < M; r++)
++                        C[size_t(s * stride_c() + c * ldc + r)] = next(0, 2);
++            }
++            scale.assign(size_t(M), 1.f);
++            if(with_scale)
++                for(auto& v : scale)
++                    v = next(1, 3);
++            bias.assign(size_t(M * batch), 0.f);
++            if(with_bias)
++                for(auto& v : bias)
++                    v = next(-3, 3);
++            D.assign(size_t(stride_d() * batch), 99.f);
++            for(int64_t s = 0; s < batch; s++)
++                for(int64_t j = 0; j < N; j++)
++                    for(int64_t i = 0; i < M; i++)
++                        D[size_t(s * stride_d() + j * ldd + i)] = float(exact(s, i, j));
++        }
++
++        int64_t stride_a() const
++        {
++            return lda * (transA ? M : K);
++        }
++        int64_t stride_b() const
++        {
++            return ldb * (transB ? K : N);
++        }
++        int64_t stride_c() const
++        {
++            return ldc * N;
++        }
++        int64_t stride_d() const
++        {
++            return ldd * N + 7; // a gap between batches
++        }
++
++        double a(int64_t s, int64_t i, int64_t k) const
++        {
++            return A[size_t(s * stride_a() + (transA ? i * lda + k : k * lda + i))];
++        }
++        double b(int64_t s, int64_t k, int64_t j) const
++        {
++            return B[size_t(s * stride_b() + (transB ? k * ldb + j : j * ldb + k))];
++        }
++        double exact(int64_t s, int64_t i, int64_t j) const
++        {
++            double acc = 0;
++            for(int64_t k = 0; k < K; k++)
++                acc += a(s, i, k) * b(s, k, j);
++            return alpha * scale[size_t(i)] * acc + beta * C[size_t(s * stride_c() + j * ldc + i)]
++                   + bias[size_t(s * M + i)];
++        }
++        float& d(int64_t s, int64_t i, int64_t j)
++        {
++            return D[size_t(s * stride_d() + j * ldd + i)];
++        }
++
++        FastCheckProblem problem() const
++        {
++            FastCheckProblem p;
++            p.M           = M;
++            p.N           = N;
++            p.K           = K;
++            p.batch_count = batch;
++            p.transA      = transA;
++            p.transB      = transB;
++            p.A           = {A.data(), HIP_R_32F, transA ? K : M, transA ? M : K, lda, stride_a()};
++            p.B           = {B.data(), HIP_R_32F, transB ? N : K, transB ? K : N, ldb, stride_b()};
++            p.C           = {C.data(), HIP_R_32F, M, N, ldc, stride_c()};
++            p.D           = {D.data(), HIP_R_32F, M, N, ldd, stride_d()};
++            p.alpha       = alpha;
++            p.beta        = beta;
++            if(with_scale)
++                p.scale_alpha_vec = scale.data();
++            if(with_bias)
++            {
++                p.bias        = bias.data();
++                p.bias_stride = M;
++            }
++            p.seed = 7;
++            return p;
++        }
++    };
++
++    HostProblem default_problem(bool transA = false, bool transB = false)
++    {
++        return HostProblem(37, 29, 23, 2, transA, transB, 2.f, -2.f, true, true);
++    }
++
++    // ------------------------------------------------------------------------------------------
++    // fast_check_gemm on host data
++    // ------------------------------------------------------------------------------------------
++
++    // Guards against false failures: a correct D must pass for every transpose combination, with
++    // alpha, beta, scaleAlpha_vector, bias and strided batches all in play.
++    TEST(FastCheck_pre_checkin, correct_result_passes_all_transposes)
++    {
++        for(bool ta : {false, true})
++            for(bool tb : {false, true})
++            {
++                HostProblem hp  = default_problem(ta, tb);
++                auto        res = fast_check_gemm(hp.problem());
++                EXPECT_TRUE(res.passed) << "transA=" << ta << " transB=" << tb << "\n"
++                                        << res.message;
++            }
++    }
++
++    // Fails if the row or column probe skips any element, or if a mismatch is not located.
++    TEST(FastCheck_pre_checkin, single_wrong_element_is_found_and_located)
++    {
++        HostProblem hp = default_problem();
++        hp.d(1, 17, 11) += 1;
++        auto res = fast_check_gemm(hp.problem());
++        ASSERT_FALSE(res.passed);
++        EXPECT_NE(res.message.find("1 rows and 1 columns"), std::string::npos) << res.message;
++        EXPECT_NE(res.message.find("batch 1, row 17, col 11"), std::string::npos) << res.message;
++        // The offset uses D's layout: batch * stride_d + col * ldd + row.
++        int64_t offset = hp.stride_d() + 11 * hp.ldd + 17;
++        EXPECT_NE(res.message.find("element offset " + std::to_string(offset)), std::string::npos)
++            << res.message;
++    }
++
++    // A plain checksum (all-ones probe) misses errors that sum to zero within a row; the random
++    // probe does not. Fails if the probe vector degenerates to constant entries.
++    TEST(FastCheck_pre_checkin, errors_that_cancel_in_a_plain_row_sum_are_found)
++    {
++        HostProblem hp = default_problem();
++        hp.d(0, 5, 3) += 1;
++        hp.d(0, 5, 4) -= 1;
++        auto res = fast_check_gemm(hp.problem());
++        ASSERT_FALSE(res.passed);
++        EXPECT_NE(res.message.find("row 5, col 3"), std::string::npos) << res.message;
++    }
++
++    // Models an off-by-one row index in the store: every column of row i holds row i+1's value.
++    TEST(FastCheck_pre_checkin, row_shifted_by_one_is_found)
++    {
++        HostProblem hp = default_problem();
++        for(int64_t j = 0; j < hp.N; j++)
++            hp.d(0, 9, j) = hp.d(0, 10, j);
++        auto res = fast_check_gemm(hp.problem());
++        EXPECT_FALSE(res.passed);
++    }
++
++    // Models a wrong column base pointer: column 8 is written with column 7's values.
++    TEST(FastCheck_pre_checkin, column_duplicated_from_neighbor_is_found)
++    {
++        HostProblem hp = default_problem();
++        for(int64_t i = 0; i < hp.M; i++)
++            hp.d(1, i, 8) = hp.d(1, i, 7);
++        auto res = fast_check_gemm(hp.problem());
++        EXPECT_FALSE(res.passed);
++    }
++
++    // An element still holding the NaN sentinel must be reported directly.
++    TEST(FastCheck_pre_checkin, non_finite_element_is_reported)
++    {
++        HostProblem hp       = default_problem();
++        uint32_t    sentinel = uint32_t(fast_check_sentinel_bits(HIP_R_32F));
++        std::memcpy(&hp.d(0, 0, 0), &sentinel, sizeof(sentinel));
++        auto res = fast_check_gemm(hp.problem());
++        ASSERT_FALSE(res.passed);
++        EXPECT_NE(res.message.find("not finite"), std::string::npos) << res.message;
++    }
++
++    // The probe and the expected-value terms must use C only when beta is nonzero, and must not
++    // read C at all otherwise (C may be uninitialized when beta == 0).
++    TEST(FastCheck_pre_checkin, beta_zero_ignores_c)
++    {
++        HostProblem hp(16, 9, 5, 1, false, true, 2.f, 0.f, false, false);
++        for(auto& v : hp.C)
++            v = 1e30f;
++        auto res = fast_check_gemm(hp.problem());
++        EXPECT_TRUE(res.passed) << res.message;
++
++        // The fast_check-only harness does not copy C when beta is 0, so C may be null.
++        HostProblem      batched(16, 9, 5, 3, false, true, 2.f, 0.f, false, false);
++        FastCheckProblem p = batched.problem();
++        p.C.data           = nullptr;
++        res                = fast_check_gemm(p);
++        EXPECT_TRUE(res.passed) << res.message;
++    }
++
++    // bf16 holds integers exactly only below 256. A correct kernel stores the rounded value of a
++    // larger result, which must pass; a stored value that is not the correct rounding must fail.
++    TEST(FastCheck_pre_checkin, rounding_above_the_exact_range_is_modelled)
++    {
++        const int64_t             M = 4, N = 3, K = 2;
++        std::vector<float>        A = {100, 100, 1, 1, 100, 100, 1, 1}; // M x K
++        std::vector<float>        B = {3, 0, 0, 1, 1, 0}; // K x N
++        std::vector<hip_bfloat16> D(size_t(M * N));
++        for(int64_t j = 0; j < N; j++)
++            for(int64_t i = 0; i < M; i++)
++            {
++                double acc = 0;
++                for(int64_t k = 0; k < K; k++)
++                    acc += A[size_t(k * M + i)] * B[size_t(j * K + k)];
++                D[size_t(j * M + i)] = hip_bfloat16(float(2 * acc + 1)); // e.g. 601 -> 600
++            }
++        FastCheckProblem p;
++        p.M = M, p.N = N, p.K = K;
++        p.A     = {A.data(), HIP_R_32F, M, K, M, M * K};
++        p.B     = {B.data(), HIP_R_32F, K, N, K, K * N};
++        p.C     = {A.data(), HIP_R_32F, M, N, M, M * N};
++        p.D     = {D.data(), HIP_R_16BF, M, N, M, M * N};
++        p.alpha = 2;
++        std::vector<float> bias(size_t(M), 1.f);
++        p.bias      = bias.data();
++        p.bias_type = HIP_R_32F;
++
++        auto res = fast_check_gemm(p);
++        EXPECT_TRUE(res.passed) << res.message;
++
++        D[0]           = hip_bfloat16(float(float(D[0]) + 4)); // a representable but wrong value
++        auto res_wrong = fast_check_gemm(p);
++        ASSERT_FALSE(res_wrong.passed);
++        EXPECT_NE(res_wrong.message.find("row 0, col 0"), std::string::npos) << res_wrong.message;
++    }
++
++    TEST(FastCheck_pre_checkin, non_integer_alpha_is_rejected)
++    {
++        HostProblem hp = default_problem();
++        auto        p  = hp.problem();
++        p.alpha        = 1.5;
++        auto res       = fast_check_gemm(p);
++        ASSERT_FALSE(res.passed);
++        EXPECT_NE(res.message.find("integer alpha"), std::string::npos) << res.message;
++    }
++
++    // The placement record must flag a buffer that crosses a 4 GiB boundary, give the boundary,
++    // and leave buffers that stay inside one 4 GiB window unflagged.
++    TEST(FastCheck_pre_checkin, placement_record_flags_4gib_crossings)
++    {
++        const uint64_t four_gib = uint64_t(1) << 32;
++        auto           at = [](uint64_t a) { return reinterpret_cast<const void*>(uintptr_t(a)); };
++        std::string    record = fast_check_describe_buffers({
++            {"A", at(3 * four_gib - 0x600000), 0x1000000}, // crosses 3 * 2^32
++            {"B", at(5 * four_gib), 0x1000}, // starts exactly on a boundary
++            {"C", at(7 * four_gib - 0x1000), 0x1000}, // ends exactly on a boundary
++            {"unused", nullptr, 0},
++        });
++        EXPECT_NE(record.find("A: 0x2ffa00000 to 0x300a00000 (16777216 bytes), crosses a 4 GiB "
++                              "boundary at 0x300000000"),
++                  std::string::npos)
++            << record;
++        EXPECT_NE(record.find("B: 0x500000000 to 0x500001000 (4096 bytes)\n"), std::string::npos)
++            << record;
++        EXPECT_EQ(record.find("C: 0x6fffff000 to 0x700000000 (4096 bytes), crosses"),
++                  std::string::npos)
++            << record;
++        EXPECT_EQ(record.find("unused"), std::string::npos) << record;
++    }
++
++    // The sentinel must be a NaN wherever the type has one, so an unwritten element is non-finite.
++    // FNUZ fp8 has a single NaN, 0x80, which all-ones bytes are not.
++    TEST(FastCheck_pre_checkin, sentinel_is_nan_where_the_type_has_one)
++    {
++        EXPECT_EQ(fast_check_sentinel_bits(HIP_R_32F), 0xffffffffu);
++        EXPECT_EQ(fast_check_sentinel_bits(HIP_R_16BF), 0xffffu);
++        for(hipDataType t : {HIP_R_8F_E4M3_FNUZ, HIP_R_8F_E5M2_FNUZ})
++        {
++            uint8_t bits = uint8_t(fast_check_sentinel_bits(t));
++            EXPECT_EQ(bits, 0x80);
++            hipblaslt_f8_fnuz f;
++            std::memcpy(&f, &bits, 1);
++            EXPECT_TRUE(f.is_nan());
++        }
++        EXPECT_EQ(fast_check_sentinel_bits(HIP_R_8I), 0x80u);
++        EXPECT_EQ(fast_check_sentinel_bits(HIP_R_32I), 0x80000000u);
++    }
++
++    TEST(FastCheck_pre_checkin, probe_entries_are_nonzero_residues_and_depend_on_seed)
++    {
++        int differ = 0;
++        for(uint64_t i = 0; i < 1000; i++)
++        {
++            uint64_t v = fast_check_probe(3, i);
++            EXPECT_GE(v, 1u);
++            EXPECT_LT(v, kFastCheckModulus);
++            EXPECT_EQ(v, fast_check_probe(3, i));
++            differ += v != fast_check_probe(4, i);
++        }
++        EXPECT_EQ(differ, 1000);
++    }
++
++    // ------------------------------------------------------------------------------------------
++    // fast_check_result_device: D in device memory
++    // ------------------------------------------------------------------------------------------
++
++    // Copies D, with its padded leading dimension and batch gap, to the device and runs the
++    // device pass against the same expected sums the host pass uses.
++    template <typename T>
++    FastCheckResult device_result(FastCheckProblem p, const std::vector<T>& d_host)
++    {
++        T* d = nullptr;
++        EXPECT_EQ(hipMalloc(&d, d_host.size() * sizeof(T)), hipSuccess);
++        EXPECT_EQ(hipMemcpy(d, d_host.data(), d_host.size() * sizeof(T), hipMemcpyHostToDevice),
++                  hipSuccess);
++        auto e   = fast_check_expected(p);
++        p.D.data = d;
++        auto res = fast_check_result_device(p, e, 0);
++        (void)hipFree(d);
++        return res;
++    }
++
++    // The device pass must reach the same verdict as the host pass, for a correct D and for each
++    // fault, and must locate the fault the same way.
++    TEST(FastCheckDevice_pre_checkin, device_pass_agrees_with_host_pass)
++    {
++        struct Fault
++        {
++            const char* name;
++            void (*inject)(HostProblem&);
++            const char* located; // text both messages must contain, or nullptr
++        };
++        const Fault faults[] = {
++            {"none", [](HostProblem&) {}, nullptr},
++            {"single element",
++             [](HostProblem& hp) { hp.d(1, 17, 11) += 1; },
++             "batch 1, row 17, col 11"},
++            {"cancelling pair",
++             [](HostProblem& hp) {
++                 hp.d(0, 5, 3) += 1;
++                 hp.d(0, 5, 4) -= 1;
++             },
++             "row 5, col 3"},
++            {"row shift",
++             [](HostProblem& hp) {
++                 for(int64_t j = 0; j < hp.N; j++)
++                     hp.d(0, 9, j) = hp.d(0, 10, j);
++             },
++             nullptr},
++            {"sentinel left in D",
++             [](HostProblem& hp) {
++                 uint32_t sentinel = uint32_t(fast_check_sentinel_bits(HIP_R_32F));
++                 std::memcpy(&hp.d(1, 2, 3), &sentinel, sizeof(sentinel));
++             },
++             "batch 1, row 2, col 3"},
++        };
++        for(bool ta : {false, true})
++            for(const auto& f : faults)
++            {
++                HostProblem hp = default_problem(ta, !ta);
++                f.inject(hp);
++                auto host   = fast_check_gemm(hp.problem());
++                auto device = device_result(hp.problem(), hp.D);
++                EXPECT_EQ(host.passed, device.passed)
++                    << f.name << "\nhost: " << host.message << "\ndevice: " << device.message;
++                EXPECT_EQ(device.passed, std::string(f.name) == "none") << f.name << "\n"
++                                                                        << device.message;
++                if(f.located)
++                {
++                    EXPECT_NE(host.message.find(f.located), std::string::npos) << host.message;
++                    EXPECT_NE(device.message.find(f.located), std::string::npos) << device.message;
++                }
++            }
++    }
++
++    // bf16 results above 256 take the device pass's per-element path: a correctly rounded value
++    // passes and a wrong one fails with its location.
++    TEST(FastCheckDevice_pre_checkin, device_pass_models_bf16_rounding)
++    {
++        const int64_t             M = 4, N = 3, K = 2;
++        std::vector<float>        A = {100, 100, 1, 1, 100, 100, 1, 1};
++        std::vector<float>        B = {3, 0, 0, 1, 1, 0};
++        std::vector<float>        bias(size_t(M), 1.f);
++        std::vector<hip_bfloat16> D(size_t(M * N));
++        for(int64_t j = 0; j < N; j++)
++            for(int64_t i = 0; i < M; i++)
++            {
++                double acc = 0;
++                for(int64_t k = 0; k < K; k++)
++                    acc += A[size_t(k * M + i)] * B[size_t(j * K + k)];
++                D[size_t(j * M + i)] = hip_bfloat16(float(2 * acc + 1));
++            }
++        FastCheckProblem p;
++        p.M = M, p.N = N, p.K = K;
++        p.A     = {A.data(), HIP_R_32F, M, K, M, M * K};
++        p.B     = {B.data(), HIP_R_32F, K, N, K, K * N};
++        p.C     = {A.data(), HIP_R_32F, M, N, M, M * N};
++        p.D     = {nullptr, HIP_R_16BF, M, N, M, M * N};
++        p.alpha = 2;
++        p.bias  = bias.data();
++
++        auto res = device_result(p, D);
++        EXPECT_TRUE(res.passed) << res.message;
++        D[0] = hip_bfloat16(float(float(D[0]) + 4));
++        res  = device_result(p, D);
++        ASSERT_FALSE(res.passed);
++        EXPECT_NE(res.message.find("row 0, col 0"), std::string::npos) << res.message;
++    }
++
++    // Results above the exact range must round to nearest, ties to even, on both passes. In bf16
++    // the integers from 512 to 1024 are 4 apart: 603 rounds to 604 (truncation would give 600),
++    // and the tie 602 rounds to 600, whose mantissa is even (rounding half up would give 604).
++    TEST(FastCheckDevice_pre_checkin, rounding_is_to_nearest_even)
++    {
++        struct Case
++        {
++            float exact, right, wrong;
++        };
++        for(const Case& c : {Case{603, 604, 600}, Case{602, 600, 604}, Case{-603, -604, -600}})
++        {
++            std::vector<float>        A = {c.exact}, B = {1};
++            std::vector<hip_bfloat16> D = {hip_bfloat16(c.right)};
++            FastCheckProblem          p;
++            p.M = p.N = p.K = 1;
++            p.A             = {A.data(), HIP_R_32F, 1, 1, 1, 1};
++            p.B             = {B.data(), HIP_R_32F, 1, 1, 1, 1};
++            p.C             = {A.data(), HIP_R_32F, 1, 1, 1, 1};
++            p.D             = {D.data(), HIP_R_16BF, 1, 1, 1, 1};
++            EXPECT_TRUE(fast_check_gemm(p).passed) << c.exact;
++            EXPECT_TRUE(device_result(p, D).passed) << c.exact;
++
++            D[0] = hip_bfloat16(c.wrong);
++            EXPECT_FALSE(fast_check_gemm(p).passed) << c.exact;
++            EXPECT_FALSE(device_result(p, D).passed) << c.exact;
++        }
++    }
++
++    // fp8 outputs are not converted on the device; the device call copies D and uses the host
++    // pass, and must still find a wrong element.
++    TEST(FastCheckDevice_pre_checkin, fp8_output_falls_back_to_the_host_pass)
++    {
++        HostProblem hp(24, 10, 2, 1, false, false, 1.f, 0.f, false, false); // |D| <= 8
++        std::vector<hipblaslt_f8_fnuz> d8(hp.D.size());
++        for(size_t n = 0; n < hp.D.size(); n++)
++            d8[n] = hipblaslt_f8_fnuz(hp.D[n]);
++        FastCheckProblem p = hp.problem();
++        p.D.type           = HIP_R_8F_E4M3_FNUZ;
++
++        auto res = device_result(p, d8);
++        EXPECT_TRUE(res.passed) << res.message;
++        d8[size_t(3 * hp.ldd + 7)] = hipblaslt_f8_fnuz(hp.D[size_t(3 * hp.ldd + 7)] + 1.f);
++        res                        = device_result(p, d8);
++        ASSERT_FALSE(res.passed);
++        EXPECT_NE(res.message.find("row 7, col 3"), std::string::npos) << res.message;
++    }
++
++    // ------------------------------------------------------------------------------------------
++    // Device padding helpers
++    // ------------------------------------------------------------------------------------------
++
++    struct DeviceMatrix
++    {
++        // 5 x 3 region, ld 8, two batches with stride 30, and 7 elements after the last batch.
++        static constexpr int64_t rows = 5, cols = 3, ld = 8, stride = 30, batch = 2;
++        static constexpr size_t  total = size_t(stride * batch + 7);
++
++        float* d = nullptr;
++
++        DeviceMatrix()
++        {
++            EXPECT_EQ(hipMalloc(&d, total * sizeof(float)), hipSuccess);
++        }
++        ~DeviceMatrix()
++        {
++            (void)hipFree(d);
++        }
++
++        FastCheckMatrix matrix() const
++        {
++            return {d, HIP_R_32F, rows, cols, ld, stride};
++        }
++
++        static bool in_region(size_t idx)
++        {
++            int64_t b = int64_t(idx) / stride, rem = int64_t(idx) % stride;
++            return b < batch && rem / ld < cols && rem % ld < rows;
++        }
++
++        std::vector<float> read() const
++        {
++            std::vector<float> h(total);
++            EXPECT_EQ(hipMemcpy(h.data(), d, total * sizeof(float), hipMemcpyDeviceToHost),
++                      hipSuccess);
++            return h;
++        }
++
++        void write(const std::vector<float>& h)
++        {
++            EXPECT_EQ(hipMemcpy(d, h.data(), total * sizeof(float), hipMemcpyHostToDevice),
++                      hipSuccess);
++        }
++
++        void set(size_t idx, float v)
++        {
++            EXPECT_EQ(hipMemcpy(d + idx, &v, sizeof(float), hipMemcpyHostToDevice), hipSuccess);
++        }
++    };
++
++    // Poison must cover all padding (column tails, batch gap, tail after the last batch) and
++    // leave the region untouched.
++    TEST(FastCheckDevice_pre_checkin, poison_fills_exactly_the_padding)
++    {
++        DeviceMatrix       m;
++        std::vector<float> h(DeviceMatrix::total, 1.f);
++        m.write(h);
++        fast_check_poison_padding_device(m.matrix(), DeviceMatrix::batch, DeviceMatrix::total, 0);
++        ASSERT_EQ(hipDeviceSynchronize(), hipSuccess);
++        auto out = m.read();
++        for(size_t idx = 0; idx < DeviceMatrix::total; idx++)
++            EXPECT_EQ(out[idx], DeviceMatrix::in_region(idx) ? 1.f : kFastCheckPoisonValue)
++                << "offset " << idx;
++
++        auto res = fast_check_scan_padding_device(
++            m.matrix(), DeviceMatrix::batch, DeviceMatrix::total, true, 0);
++        EXPECT_TRUE(res.passed) << res.message;
++    }
++
++    // A write into padding must be reported with its offset, in the poisoned (c_equal_d) mode and
++    // in the sentinel mode.
++    TEST(FastCheckDevice_pre_checkin, scan_reports_out_of_bounds_writes)
++    {
++        DeviceMatrix m;
++        // Offset 36 is batch 1, row 6, col 0: column padding of batch 1.
++        const size_t pad_offset = 36;
++        ASSERT_FALSE(DeviceMatrix::in_region(pad_offset));
++
++        std::vector<float> h(DeviceMatrix::total, 1.f);
++        m.write(h);
++        fast_check_poison_padding_device(m.matrix(), DeviceMatrix::batch, DeviceMatrix::total, 0);
++        m.set(pad_offset, 2.f);
++        auto res = fast_check_scan_padding_device(
++            m.matrix(), DeviceMatrix::batch, DeviceMatrix::total, true, 0);
++        ASSERT_FALSE(res.passed);
++        EXPECT_NE(res.message.find("1 elements outside"), std::string::npos) << res.message;
++        EXPECT_NE(res.message.find("element offset 36"), std::string::npos) << res.message;
++        EXPECT_NE(res.message.find("batch 1, row 6, col 0"), std::string::npos) << res.message;
++
++        // Sentinel mode: fill everything, write the region, then stray into the batch gap.
++        fast_check_fill_sentinel_device(m.d, HIP_R_32F, DeviceMatrix::total, 0);
++        std::vector<float> s = m.read();
++        for(size_t idx = 0; idx < DeviceMatrix::total; idx++)
++            if(DeviceMatrix::in_region(idx))
++                s[idx] = 3.f;
++        m.write(s);
++        res = fast_check_scan_padding_device(
++            m.matrix(), DeviceMatrix::batch, DeviceMatrix::total, false, 0);
++        EXPECT_TRUE(res.passed) << res.message;
++        m.set(DeviceMatrix::total - 1, 3.f);
++        res = fast_check_scan_padding_device(
++            m.matrix(), DeviceMatrix::batch, DeviceMatrix::total, false, 0);
++        ASSERT_FALSE(res.passed);
++        EXPECT_NE(res.message.find("element offset " + std::to_string(DeviceMatrix::total - 1)),
++                  std::string::npos)
++            << res.message;
++    }
++
++    // An element of the region that still holds the sentinel was never stored by the kernel.
++    TEST(FastCheckDevice_pre_checkin, scan_reports_unwritten_elements)
++    {
++        DeviceMatrix m;
++        fast_check_fill_sentinel_device(m.d, HIP_R_32F, DeviceMatrix::total, 0);
++        std::vector<float> s = m.read();
++        for(size_t idx = 0; idx < DeviceMatrix::total; idx++)
++            if(DeviceMatrix::in_region(idx) && idx != 33)
++                s[idx] = 3.f;
++        m.write(s);
++        auto res = fast_check_scan_padding_device(
++            m.matrix(), DeviceMatrix::batch, DeviceMatrix::total, false, 0);
++        ASSERT_FALSE(res.passed);
++        EXPECT_NE(res.message.find("1 elements inside the region were never written"),
++                  std::string::npos)
++            << res.message;
++        EXPECT_NE(res.message.find("element offset 33"), std::string::npos) << res.message;
++    }
++
++    // Integer outputs saturate, and their sentinel is a valid value. A correct saturated result
++    // must pass; a wrong saturated value, and an element still holding the sentinel where the
++    // correct value is -1, must both fail, on the host pass and on the device pass.
++    TEST(FastCheckDevice_pre_checkin, integer_output_saturation_and_sentinel)
++    {
++        // D = A * B with int8 data, an int32 accumulator and an int8 output. With B = {1, 1} the
++        // exact results are 200, -200, -1 and 5; the first two saturate to 127 and -128.
++        const int64_t       M = 4, N = 1, K = 2;
++        std::vector<int8_t> A = {100, -100, -1, 2, 100, -100, 0, 3}; // M x K
++        std::vector<int8_t> B = {1, 1}; // K x N
++        std::vector<int8_t> D = {127, -128, -1, 5}; // M x N
++        FastCheckProblem    p;
++        p.M = M, p.N = N, p.K = K;
++        p.A            = {A.data(), HIP_R_8I, M, K, M, M * K};
++        p.B            = {B.data(), HIP_R_8I, K, N, K, K * N};
++        p.C            = {D.data(), HIP_R_8I, M, N, M, M * N};
++        p.D            = {D.data(), HIP_R_8I, M, N, M, M * N};
++        p.compute_type = HIP_R_32I;
++
++        auto host = fast_check_gemm(p);
++        EXPECT_TRUE(host.passed) << host.message;
++        auto device = device_result(p, D);
++        EXPECT_TRUE(device.passed) << device.message;
++
++        std::vector<int8_t> wrong = D;
++        wrong[0]                  = 126; // 200 saturates to 127, not 126
++        p.D.data                  = wrong.data();
++        host                      = fast_check_gemm(p);
++        ASSERT_FALSE(host.passed);
++        EXPECT_NE(host.message.find("row 0, col 0"), std::string::npos) << host.message;
++        device = device_result(p, wrong);
++        ASSERT_FALSE(device.passed);
++        EXPECT_NE(device.message.find("row 0, col 0"), std::string::npos) << device.message;
++
++        std::vector<int8_t> unwritten = D;
++        unwritten[2]                  = int8_t(fast_check_sentinel_bits(HIP_R_8I)); // expected -1
++        p.D.data                      = unwritten.data();
++        host                          = fast_check_gemm(p);
++        ASSERT_FALSE(host.passed);
++        EXPECT_NE(host.message.find("row 2, col 0"), std::string::npos) << host.message;
++        device = device_result(p, unwritten);
++        ASSERT_FALSE(device.passed);
++        EXPECT_NE(device.message.find("row 2, col 0"), std::string::npos) << device.message;
++    }
++
++    // With the FNUZ sentinel (0x80, a NaN), the device scan reports an unwritten element of an
++    // FNUZ fp8 output. An all-ones sentinel is a valid FNUZ value and would hide it.
++    TEST(FastCheckDevice_pre_checkin, scan_reports_unwritten_fnuz_elements)
++    {
++        const int64_t rows = 4, cols = 4, ld = 8;
++        const size_t  total = size_t(ld * cols);
++        uint8_t*      d     = nullptr;
++        ASSERT_EQ(hipMalloc(&d, total), hipSuccess);
++        FastCheckMatrix m{d, HIP_R_8F_E4M3_FNUZ, rows, cols, ld, 0};
++        fast_check_fill_sentinel_device(d, HIP_R_8F_E4M3_FNUZ, total, 0);
++        std::vector<uint8_t> h(total);
++        ASSERT_EQ(hipMemcpy(h.data(), d, total, hipMemcpyDeviceToHost), hipSuccess);
++        for(int64_t j = 0; j < cols; j++)
++            for(int64_t i = 0; i < rows; i++)
++                if(!(i == 3 && j == 2))
++                    h[size_t(j * ld + i)] = 0x08; // a finite FNUZ value
++        ASSERT_EQ(hipMemcpy(d, h.data(), total, hipMemcpyHostToDevice), hipSuccess);
++        auto res = fast_check_scan_padding_device(m, 1, total, false, 0);
++        (void)hipFree(d);
++        ASSERT_FALSE(res.passed);
++        EXPECT_NE(res.message.find("1 elements inside the region were never written"),
++                  std::string::npos)
++            << res.message;
++        EXPECT_NE(res.message.find("element offset 19"), std::string::npos) << res.message;
++    }
++
++    // ------------------------------------------------------------------------------------------
++    // Every supported type
++    // ------------------------------------------------------------------------------------------
++
++    struct TypeCase
++    {
++        hipDataType type;
++        size_t      size;
++        const char* name;
++    };
++
++    const TypeCase kTypes[] = {{HIP_R_64F, 8, "f64"},
++                               {HIP_R_32F, 4, "f32"},
++                               {HIP_R_16F, 2, "f16"},
++                               {HIP_R_16BF, 2, "bf16"},
++                               {HIP_R_32I, 4, "i32"},
++                               {HIP_R_8I, 1, "i8"},
++                               {HIP_R_8F_E4M3, 1, "f8"},
++                               {HIP_R_8F_E5M2, 1, "bf8"},
++                               {HIP_R_8F_E4M3_FNUZ, 1, "f8_fnuz"},
++                               {HIP_R_8F_E5M2_FNUZ, 1, "bf8_fnuz"}};
++
++    // Stores v in type t, rounding to nearest even, as the GPU stores a result.
++    void store_as(hipDataType t, double v, void* dst)
++    {
++        auto put = [dst](auto x) { std::memcpy(dst, &x, sizeof(x)); };
++        switch(t)
++        {
++        case HIP_R_64F:
++            return put(v);
++        case HIP_R_32F:
++            return put(float(v));
++        case HIP_R_16F:
++            return put(hipblasLtHalf(float(v)));
++        case HIP_R_16BF:
++            return put(hip_bfloat16(float(v)));
++        case HIP_R_32I:
++            return put(int32_t(v));
++        case HIP_R_8I:
++            return put(int8_t(v));
++        case HIP_R_8F_E4M3:
++            return put(hipblaslt_f8(float(v)));
++        case HIP_R_8F_E5M2:
++            return put(hipblaslt_bf8(float(v)));
++        case HIP_R_8F_E4M3_FNUZ:
++            return put(hipblaslt_f8_fnuz(float(v)));
++        case HIP_R_8F_E5M2_FNUZ:
++            return put(hipblaslt_bf8_fnuz(float(v)));
++        default:
++            FAIL() << "no conversion for type " << int(t);
++        }
++    }
++
++    std::vector<char> convert(const std::vector<float>& v, const TypeCase& t)
++    {
++        std::vector<char> out(v.size() * t.size);
++        for(size_t i = 0; i < v.size(); i++)
++            store_as(t.type, v[i], out.data() + i * t.size);
++        return out;
++    }
++
++    // A, B, C and D all in one type. K = 3 keeps every result within 14, which every type holds,
++    // though E5M2 rounds the ones above 8; D is stored the way the GPU rounds it.
++    struct TypedProblem
++    {
++        TypeCase          t;
++        HostProblem       hp{13, 11, 3, 2, false, true, 1.f, 1.f, false, false};
++        std::vector<char> A, B, C, D;
++
++        explicit TypedProblem(const TypeCase& tc)
++            : t(tc)
++            , A(convert(hp.A, tc))
++            , B(convert(hp.B, tc))
++            , C(convert(hp.C, tc))
++            , D(convert(hp.D, tc))
++        {
++        }
++
++        FastCheckProblem problem()
++        {
++            FastCheckProblem p = hp.problem();
++            p.A.data = A.data(), p.B.data = B.data(), p.C.data = C.data(), p.D.data = D.data();
++            p.A.type = p.B.type = p.C.type = p.D.type = t.type;
++            p.compute_type = t.type == HIP_R_8I || t.type == HIP_R_32I ? HIP_R_32I : HIP_R_32F;
++            return p;
++        }
++
++        char* d(int64_t s, int64_t i, int64_t j)
++        {
++            return D.data() + size_t(s * hp.stride_d() + j * hp.ldd + i) * t.size;
++        }
++    };
++
++    FastCheckResult device_result_bytes(FastCheckProblem p, const std::vector<char>& d_host)
++    {
++        void* d = nullptr;
++        EXPECT_EQ(hipMalloc(&d, d_host.size()), hipSuccess);
++        EXPECT_EQ(hipMemcpy(d, d_host.data(), d_host.size(), hipMemcpyHostToDevice), hipSuccess);
++        auto e   = fast_check_expected(p);
++        p.D.data = d;
++        auto res = fast_check_result_device(p, e, 0);
++        (void)hipFree(d);
++        return res;
++    }
++
++    // In every supported type, a correct D passes the host and device passes, and a wrong
++    // element and an element left holding the sentinel are both located by each.
++    TEST(FastCheckDevice_pre_checkin, every_type_passes_and_locates_faults)
++    {
++        for(const auto& tc : kTypes)
++        {
++            TypedProblem tp(tc);
++            auto         host = fast_check_gemm(tp.problem());
++            EXPECT_TRUE(host.passed) << tc.name << "\n" << host.message;
++            auto device = device_result_bytes(tp.problem(), tp.D);
++            EXPECT_TRUE(device.passed) << tc.name << "\n" << device.message;
++
++            // Exactly 0 and 1 differ in every type.
++            TypedProblem wrong(tc);
++            store_as(tc.type, wrong.hp.d(1, 7, 5) == 0 ? 1 : 0, wrong.d(1, 7, 5));
++            host = fast_check_gemm(wrong.problem());
++            EXPECT_FALSE(host.passed) << tc.name;
++            EXPECT_NE(host.message.find("batch 1, row 7, col 5"), std::string::npos)
++                << tc.name << "\n"
++                << host.message;
++            device = device_result_bytes(wrong.problem(), wrong.D);
++            EXPECT_FALSE(device.passed) << tc.name;
++            EXPECT_NE(device.message.find("batch 1, row 7, col 5"), std::string::npos)
++                << tc.name << "\n"
++                << device.message;
++
++            TypedProblem unwritten(tc);
++            uint64_t     sentinel = fast_check_sentinel_bits(tc.type);
++            std::memcpy(unwritten.d(0, 2, 3), &sentinel, tc.size);
++            host = fast_check_gemm(unwritten.problem());
++            EXPECT_FALSE(host.passed) << tc.name;
++            EXPECT_NE(host.message.find("batch 0, row 2, col 3"), std::string::npos)
++                << tc.name << "\n"
++                << host.message;
++            device = device_result_bytes(unwritten.problem(), unwritten.D);
++            EXPECT_FALSE(device.passed) << tc.name;
++            EXPECT_NE(device.message.find("batch 0, row 2, col 3"), std::string::npos)
++                << tc.name << "\n"
++                << device.message;
++        }
++    }
++
++    // In every supported type, poison covers exactly the padding, the scan passes it and reports
++    // a changed padding element and an unwritten one, and the region copy drops the padding.
++    TEST(FastCheckDevice_pre_checkin, every_type_poisons_scans_and_copies)
++    {
++        using DM = DeviceMatrix;
++        for(const auto& tc : kTypes)
++        {
++            const size_t bytes = DM::total * tc.size;
++            char*        d     = nullptr;
++            ASSERT_EQ(hipMalloc(&d, bytes), hipSuccess);
++            FastCheckMatrix   m{d, tc.type, DM::rows, DM::cols, DM::ld, DM::stride};
++            std::vector<char> one(tc.size), h(bytes);
++            store_as(tc.type, 1, one.data());
++            for(size_t idx = 0; idx < DM::total; idx++)
++                std::memcpy(h.data() + idx * tc.size, one.data(), tc.size);
++            ASSERT_EQ(hipMemcpy(d, h.data(), bytes, hipMemcpyHostToDevice), hipSuccess);
++
++            fast_check_poison_padding_device(m, DM::batch, DM::total, 0);
++            auto res = fast_check_scan_padding_device(m, DM::batch, DM::total, true, 0);
++            EXPECT_TRUE(res.passed) << tc.name << "\n" << res.message;
++            ASSERT_EQ(hipMemcpy(d + 36 * tc.size, h.data(), tc.size, hipMemcpyHostToDevice),
++                      hipSuccess);
++            res = fast_check_scan_padding_device(m, DM::batch, DM::total, true, 0);
++            EXPECT_FALSE(res.passed) << tc.name;
++            EXPECT_NE(res.message.find("batch 1, row 6, col 0"), std::string::npos)
++                << tc.name << "\n"
++                << res.message;
++
++            fast_check_fill_sentinel_device(d, tc.type, DM::total, 0);
++            std::vector<char> s(bytes);
++            ASSERT_EQ(hipMemcpy(s.data(), d, bytes, hipMemcpyDeviceToHost), hipSuccess);
++            for(size_t idx = 0; idx < DM::total; idx++)
++                if(DM::in_region(idx) && idx != 33)
++                    std::memcpy(s.data() + idx * tc.size, one.data(), tc.size);
++            ASSERT_EQ(hipMemcpy(d, s.data(), bytes, hipMemcpyHostToDevice), hipSuccess);
++            res = fast_check_scan_padding_device(m, DM::batch, DM::total, false, 0);
++            // An integer sentinel is a valid value, so the scan cannot tell it was never
++            // written; the value pass recomputes it exactly instead.
++            if(tc.type == HIP_R_8I || tc.type == HIP_R_32I)
++                EXPECT_TRUE(res.passed) << tc.name << "\n" << res.message;
++            else
++            {
++                EXPECT_FALSE(res.passed) << tc.name;
++                EXPECT_NE(res.message.find("element offset 33"), std::string::npos)
++                    << tc.name << "\n"
++                    << res.message;
++            }
++
++            std::vector<char> compact(size_t(DM::rows * DM::cols * DM::batch) * tc.size);
++            ASSERT_EQ(fast_check_copy_region_to_host(compact.data(), m, DM::batch, 0), hipSuccess);
++            size_t n = 0;
++            for(int64_t b = 0; b < DM::batch; b++)
++                for(int64_t j = 0; j < DM::cols; j++)
++                    for(int64_t i = 0; i < DM::rows; i++, n++)
++                        EXPECT_EQ(std::memcmp(
++                                      compact.data() + n * tc.size,
++                                      s.data() + size_t(b * DM::stride + j * DM::ld + i) * tc.size,
++                                      tc.size),
++                                  0)
++                            << tc.name << " batch " << b << ", row " << i << ", col " << j;
++            (void)hipFree(d);
++        }
++    }
++
++    // Configurations fast_check cannot check exactly are refused with a reason, before any sums.
++    TEST(FastCheck_pre_checkin, unsupported_configurations_are_refused)
++    {
++        auto refused = [](const FastCheckProblem& p, const char* reason) {
++            auto res = fast_check_gemm(p);
++            EXPECT_FALSE(res.passed) << reason;
++            EXPECT_NE(res.message.find(reason), std::string::npos) << res.message;
++        };
++        HostProblem hp = default_problem();
++
++        FastCheckProblem p = hp.problem();
++        p.D.type           = HIP_C_32F;
++        refused(p, "does not support data type");
++
++        p              = hp.problem();
++        p.compute_type = HIP_C_32F;
++        refused(p, "does not support compute type");
++
++        std::vector<float> scale = hp.scale;
++        scale[3]                 = 1.5f;
++        p                        = hp.problem();
++        p.scale_alpha_vec        = scale.data();
++        refused(p, "integer scaleAlpha_vector");
++
++        std::vector<float> bias = hp.bias;
++        bias[4]                 = 0.25f;
++        p                       = hp.problem();
++        p.bias                  = bias.data();
++        refused(p, "integer bias");
++
++        HostProblem fractional = default_problem();
++        fractional.A[0]        = 0.5f;
++        refused(fractional.problem(), "non-integer value in A, B or C");
++    }
++
++    // A type fast_check does not support is never scanned as clean, the fills leave it alone,
++    // and the device pass returns the refusal from fast_check_expected.
++    TEST(FastCheckDevice_pre_checkin, unsupported_types_are_never_clean)
++    {
++        DeviceMatrix       m;
++        std::vector<float> h(DeviceMatrix::total, 1.f);
++        m.write(h);
++        FastCheckMatrix complex = m.matrix();
++        complex.type            = HIP_C_32F;
++        EXPECT_EQ(fast_check_fill_sentinel_device(m.d, HIP_C_32F, DeviceMatrix::total, 0),
++                  hipErrorInvalidValue);
++        EXPECT_EQ(
++            fast_check_poison_padding_device(complex, DeviceMatrix::batch, DeviceMatrix::total, 0),
++            hipErrorInvalidValue);
++        ASSERT_EQ(hipDeviceSynchronize(), hipSuccess);
++        EXPECT_EQ(m.read(), h);
++        auto res = fast_check_scan_padding_device(
++            complex, DeviceMatrix::batch, DeviceMatrix::total, true, 0);
++        EXPECT_FALSE(res.passed);
++        EXPECT_NE(res.message.find("scan failed"), std::string::npos) << res.message;
++
++        HostProblem      hp = default_problem();
++        FastCheckProblem p  = hp.problem();
++        p.D.type            = HIP_C_32F;
++        res                 = fast_check_result_device(p, fast_check_expected(p), 0);
++        EXPECT_FALSE(res.passed);
++        EXPECT_NE(res.message.find("does not support data type"), std::string::npos) << res.message;
++    }
++
++    // An empty operand (K = 0 leaves A and B empty) launches nothing and scans clean.
++    TEST(FastCheckDevice_pre_checkin, empty_buffers_launch_nothing)
++    {
++        DeviceMatrix m;
++        (void)hipGetLastError();
++        fast_check_fill_sentinel_device(m.d, HIP_R_32F, 0, 0);
++        fast_check_poison_padding_device(m.matrix(), 1, 0, 0);
++        auto res = fast_check_scan_padding_device(m.matrix(), 1, 0, true, 0);
++        EXPECT_TRUE(res.passed) << res.message;
++        res = fast_check_scan_padding_device(m.matrix(), 1, 0, false, 0);
++        EXPECT_TRUE(res.passed) << res.message;
++        EXPECT_EQ(hipGetLastError(), hipSuccess);
++    }
++
++    // Empty outputs have no elements to verify, even when the unused operands are null.
++    TEST(FastCheckDevice_pre_checkin, empty_results_launch_nothing)
++    {
++        for(auto dims : {std::vector<int64_t>{0, 5, 1},
++                         std::vector<int64_t>{5, 0, 1},
++                         std::vector<int64_t>{5, 5, 0}})
++            for(int64_t k : {0, 7})
++            {
++                SCOPED_TRACE(::testing::Message() << "M=" << dims[0] << ", N=" << dims[1]
++                                                  << ", batch=" << dims[2] << ", K=" << k);
++                FastCheckProblem p;
++                p.M           = dims[0];
++                p.N           = dims[1];
++                p.K           = k;
++                p.beta        = 1;
++                p.batch_count = dims[2];
++                auto expected = fast_check_expected(p);
++                ASSERT_TRUE(expected.status.passed) << expected.status.message;
++                auto host = fast_check_result(p, expected);
++                EXPECT_TRUE(host.passed) << host.message;
++                (void)hipGetLastError();
++                auto device = fast_check_result_device(p, expected, nullptr);
++                EXPECT_TRUE(device.passed) << device.message;
++                EXPECT_EQ(hipGetLastError(), hipSuccess);
++
++                // No-work handling must not mask an error reported by the expected pass.
++                expected.status = {false, "invalid inputs"};
++                EXPECT_FALSE(fast_check_result(p, expected).passed);
++                EXPECT_FALSE(fast_check_result_device(p, expected, nullptr).passed);
++            }
++    }
++
++    // An exact result beyond the range the compute type holds exactly is reported as such: its
++    // GPU value depends on the summation order, so it is neither right nor wrong.
++    TEST(FastCheck_pre_checkin, results_beyond_the_compute_range_are_reported)
++    {
++        // 100 * 100 + 100 * 100 = 20000, which f16 stores exactly but f16 arithmetic does not
++        // hold exactly (above 2^11).
++        std::vector<hipblasLtHalf> A(2, hipblasLtHalf(100.f)), B(2, hipblasLtHalf(100.f)),
++            D(1, hipblasLtHalf(20000.f));
++        FastCheckProblem p;
++        p.M = 1, p.N = 1, p.K = 2;
++        p.A            = {A.data(), HIP_R_16F, 1, 2, 1, 2};
++        p.B            = {B.data(), HIP_R_16F, 2, 1, 2, 2};
++        p.C            = {D.data(), HIP_R_16F, 1, 1, 1, 1};
++        p.D            = {D.data(), HIP_R_16F, 1, 1, 1, 1};
++        p.compute_type = HIP_R_16F;
++        auto res       = fast_check_gemm(p);
++        EXPECT_FALSE(res.passed);
++        EXPECT_NE(res.message.find("compute type holds"), std::string::npos) << res.message;
++    }
++
++    // An alpha near 2^61 makes the exact results overflow 64 bits; fast_check must report the
++    // result as wrong or out of range, not overflow.
++    TEST(FastCheck_pre_checkin, huge_alpha_does_not_overflow)
++    {
++        HostProblem      hp = default_problem();
++        FastCheckProblem p  = hp.problem();
++        p.alpha             = 0x1p60;
++        auto res            = fast_check_gemm(p);
++        EXPECT_FALSE(res.passed);
++        EXPECT_FALSE(res.message.empty());
++    }
++
++    TEST(FastCheckDevice_pre_checkin, copy_region_to_host_drops_the_padding)
++    {
++        DeviceMatrix       m;
++        std::vector<float> h(DeviceMatrix::total);
++        for(size_t idx = 0; idx < DeviceMatrix::total; idx++)
++            h[idx] = float(idx);
++        m.write(h);
++        std::vector<float> compact(
++            size_t(DeviceMatrix::rows * DeviceMatrix::cols * DeviceMatrix::batch));
++        ASSERT_EQ(
++            fast_check_copy_region_to_host(compact.data(), m.matrix(), DeviceMatrix::batch, 0),
++            hipSuccess);
++        size_t n = 0;
++        for(int64_t b = 0; b < DeviceMatrix::batch; b++)
++            for(int64_t j = 0; j < DeviceMatrix::cols; j++)
++                for(int64_t i = 0; i < DeviceMatrix::rows; i++)
++                    EXPECT_EQ(compact[n++],
++                              float(b * DeviceMatrix::stride + j * DeviceMatrix::ld + i));
++    }
++} // namespace
+-- 
+2.43.0
+

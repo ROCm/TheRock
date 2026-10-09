@@ -1,0 +1,420 @@
+From 1a95cc6fa4f1c335d9c4d10e96cab762420dce44 Mon Sep 17 00:00:00 2001
+From: Tony Davis <tony.davis@amd.com>
+Date: Thu, 8 Oct 2026 12:10:59 -0500
+Subject: [PATCH] fix(rocisa): split 64-bit add immediates correctly (#13027)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+JIRA ID : AIHPBLAS-5022
+
+Independent of the fast_check stack; based on `develop`. The
+address-carry lint that started out in this PR now has its own, #13060.
+
+## Summary
+
+While looking at how rocisa lowers 64-bit adds on targets without a
+native one (gfx90a, gfx942, gfx950), we noticed that `splitSrcs` copies
+an immediate into both 32-bit halves. That's right for the packed-F32
+operations that share it, but for a 64-bit `ptr += imm` it would also
+add `imm × 2^32` and move the pointer by hundreds of GiB. The vector
+form also put the immediate where gfx9 can't encode a literal, so most
+immediates wouldn't even assemble.
+
+This PR fixes that lowering with a new `splitSrcs64`, puts a vector
+immediate where the hardware can encode it, and adds tests that check,
+and assemble, the emitted carry chain on gfx90a, gfx942 and gfx950.
+Nothing on develop lowers an immediate through this path yet (the
+immediate callers are gfx1250 TDM code, and gfx1250 has a native 64-bit
+add), so this closes the door before anyone walks through it. The
+lowering tests failed 45 of the original 57 cases before the fix, and
+every case passes after it.
+
+**CI time added**: about 7 s in the rocisa tests (`tox -e rocisa`), most
+of it assembling the emitted pairs.
+
+## Motivation
+
+Classes C and C2 on AIHPBLAS-4988 are mistakes in emitted 64-bit address
+arithmetic, so some can be caught before a kernel ever runs. There have
+been at least three 64-bit address bugs in a few weeks: ROCM-31230;
+ROCM-32046, where the carry out of the low dword is dropped; and the
+launch-size narrowing in ROCM-31290. A lowering that adds `imm × 2^32`
+to a pointer would be another, so it's worth fixing while nothing uses
+it.
+
+## Technical Details
+
+- **Splitting the immediate.** On targets without `s_add_u64` or
+`v_add_nc_u64`, `SAddU64` and `VAddNCU64` lower to a 32-bit carry chain.
+A new `splitSrcs64` splits each source for the two 64-bit adds:
+  - a register pair splits into its two registers;
+- a 32-bit immediate gets its sign extension (0 or -1) in the high half;
+- a larger one arrives from Python as a double, and splits as a 64-bit
+integer up to 2^53 in magnitude, where that double is still exact;
+anything larger is rejected, since it may already have been rounded;
+  - a symbol it cannot split is rejected.
+
+The packed operations keep `splitSrcs`. An immediate above 2^31 used to
+reach the assembly as a double (`s_add_u32 s4, s4, 4294967299.0`).
+- **Where a vector immediate goes.** VOP2 takes a literal only in src0,
+and VOP3 on gfx9 takes none, so `v_add_co_u32 v4, vcc, v4, <literal>`
+does not assemble. The lowered `VAddNCU64` now puts the immediate in
+src0 (the add is commutative). `v_addc_co_u32` reads vcc as well, which
+leaves no room for a literal at all, so an immediate whose high half is
+not an inline constant (−16 to 64) is rejected with a message; every int
+immediate has a high half of 0 or −1. `SAddU64` (SOP2) takes a literal
+in either position, so it is unchanged.
+- **Tests.** `rocisa/test/test_lowering64.py` checks the emitted pair on
+gfx90a, gfx942 and gfx950. For register operands, the low add must set
+the carry and the high add must consume it, from the next registers. For
+immediates (positive, negative, at ±2^31, above 2^32 and at ±(2^53 −
+1)), the high half must be the sign extension or the true high 32 bits.
+Symbolic immediates, immediates of 2^53 or more in magnitude, and vector
+immediates with a non-inline high half must be rejected. Every emitted
+scalar and vector pair is also assembled with `amdclang++` for each
+target, since a string check can't see an operand the hardware cannot
+encode.
+- **Hand-written kernel limits** are already checked on develop by
+`Tensile/Tests/unit/test_CustomKernels_buffer_oob.py`, from the
+ROCM-31258 fix, so this PR doesn't duplicate that.
+- **Race detection (class G).** `rocjitsu race check (gfx94X-dcgpu)`
+already runs on rocm-libraries PRs
+(`therock-rocjitsu-race-check-linux.yml`), and RocJITsu is what found
+the GitHub PR 12605 race. Two gaps: the job is gfx94X only, while the
+ROCM-31905 single-LDS-buffer kernels are on gfx1250; and on recent PRs
+it fails during setup (`requirements-test.txt` not found) before
+checking anything. I'd fix the setup and add gfx950 and gfx1250 coverage
+for those kernel families rather than add a second race detector. I
+haven't changed the workflow here.
+
+## Test Plan
+
+- `test_lowering64.py` before and after the fix, and with the vector
+immediate left in src1.
+- The full rocisa and TensileLite unit and characterization suites.
+
+## Test Result
+
+In a ROCm 10.2.0 image (TheRock 10.2.0a20260928), on a gfx90a host, at
+2ac9fca2844:
+
+- `test_lowering64.py`: 117 passed on gfx90a, gfx942 and gfx950,
+including the assembled pairs. With the vector immediate left in src1,
+33 cases fail (assembler: "literal operands are not supported"). With
+the old `splitSrcs`, 45 of the original 57 cases failed (every immediate
+case, plus the symbol case).
+- Full TensileLite unit and rocisa suites: 10,174 passed, 380 skipped, 2
+xfailed, 1 xpassed, none failed. With this host's ROCm 7.1 toolchain the
+same suites had 157 failures and 14 errors on develop, almost all
+gfx1250, TDM and MX code it cannot assemble.
+- Automated GitHub checks are pending.
+
+## Submission Checklist
+
+- [x] Look over the contributing guidelines at
+https://github.com/ROCm/TheRock/blob/main/GOVERNANCE.md#pull-requests.
+
+## Risk level
+
+Low (2/5): the change only affects 64-bit add lowering of immediates on
+targets without a native 64-bit add, which nothing on develop emits.
+rocisa is code generation, so per the hipBLASLt overlay this needs
+coverage on the affected architectures in CI and two code-owner
+approvals.
+
+---------
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+---
+ .../rocisa/include/instruction/common.hpp     |  20 ++-
+ .../include/instruction/instruction.hpp       |  53 ++++++
+ .../rocisa/test/test_lowering64.py            | 164 ++++++++++++++++++
+ 3 files changed, 235 insertions(+), 2 deletions(-)
+ create mode 100644 projects/hipblaslt/tensilelite/rocisa/test/test_lowering64.py
+
+diff --git a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/instruction/common.hpp b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/instruction/common.hpp
+index e5dfbbd4..2ff156bb 100644
+--- a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/instruction/common.hpp
++++ b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/instruction/common.hpp
+@@ -303,7 +303,7 @@ namespace rocisa
+                     = std::dynamic_pointer_cast<RegisterContainer>(dst)->splitRegContainer();
+                 std::vector<InstructionInput> srcs1;
+                 std::vector<InstructionInput> srcs2;
+-                splitSrcs(srcs, srcs1, srcs2);
++                splitSrcs64(srcs, srcs1, srcs2);
+                 // s_add_u32 sets SCC, s_addc_u32 consumes it (carry is implicit).
+                 instructions
+                     = {std::make_shared<SAddU32>(dst1, srcs1[0], srcs1[1], comment),
+@@ -3564,7 +3564,23 @@ namespace rocisa
+                     = std::dynamic_pointer_cast<RegisterContainer>(dst)->splitRegContainer();
+                 std::vector<InstructionInput> srcs1;
+                 std::vector<InstructionInput> srcs2;
+-                splitSrcs(srcs, srcs1, srcs2);
++                splitSrcs64(srcs, srcs1, srcs2);
++                // VOP2 takes a literal only in src0, so an immediate goes first (the add is
++                // commutative). The carry-in add reads vcc as well, which leaves no room for a
++                // literal at all: its half of an immediate must be an inline constant.
++                if(std::holds_alternative<int>(srcs1[1]) && !std::holds_alternative<int>(srcs1[0]))
++                {
++                    std::swap(srcs1[0], srcs1[1]);
++                    std::swap(srcs2[0], srcs2[1]);
++                }
++                for(const auto& s : srcs2)
++                    if(std::holds_alternative<int>(s)
++                       && (std::get<int>(s) < -16 || std::get<int>(s) > 64))
++                        throw std::invalid_argument(
++                            "64-bit vector add: cannot split an immediate whose high half "
++                            + std::to_string(std::get<int>(s))
++                            + " is not an inline constant (-16 to 64); v_addc_co_u32 cannot "
++                              "encode it next to its carry");
+                 auto vcc = std::make_shared<VCC>();
+                 instructions
+                     = {std::make_shared<VAddCOU32>(dst1, vcc, srcs1[0], srcs1[1], comment),
+diff --git a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/instruction/instruction.hpp b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/instruction/instruction.hpp
+index f05c789c..676bc789 100644
+--- a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/instruction/instruction.hpp
++++ b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/instruction/instruction.hpp
+@@ -27,9 +27,12 @@
+ #include "format.hpp"
+ #include "helper.hpp"
+ 
++#include <cmath>
++#include <cstdint>
+ #include <iostream>
+ #include <memory>
+ #include <sstream>
++#include <stdexcept>
+ #include <string>
+ #include <variant>
+ #include <vector>
+@@ -116,6 +119,56 @@ namespace rocisa
+         }
+     }
+ 
++    // Splits the sources of a 64-bit integer add into its low and high 32-bit halves. A register
++    // pair splits into its two registers. An immediate splits into its low 32 bits and its high
++    // 32 bits, the sign extension for a 32-bit value; copying the immediate into both halves, as
++    // splitSrcs does for packed operations, would also add it times 2^32. An immediate above 2^31
++    // reaches here as a double holding an integer. A symbol cannot be split and is rejected.
++    // A double is exact only below 2^53 in magnitude; at or beyond that, a Python integer may
++    // have been rounded on its way in, so it is rejected rather than split as another value.
++    inline void splitSrcs64(const std::vector<InstructionInput>& srcs,
++                            std::vector<InstructionInput>&       srcs1,
++                            std::vector<InstructionInput>&       srcs2)
++    {
++        for(const auto& s : srcs)
++        {
++            std::visit(
++                [&srcs1, &srcs2](auto&& arg) -> void {
++                    using T = std::decay_t<decltype(arg)>;
++                    if constexpr(std::is_same_v<T, std::shared_ptr<rocisa::Container>>)
++                    {
++                        auto regContainer = std::dynamic_pointer_cast<RegisterContainer>(arg);
++
++                        auto [r1, r2] = regContainer->splitRegContainer();
++                        srcs1.push_back(r1);
++                        srcs2.push_back(r2);
++                    }
++                    else if constexpr(std::is_same_v<T, int>)
++                    {
++                        srcs1.push_back(arg);
++                        srcs2.push_back(arg < 0 ? -1 : 0);
++                    }
++                    else if constexpr(std::is_same_v<T, double>)
++                    {
++                        if(arg != std::trunc(arg) || std::fabs(arg) >= 0x1p53)
++                            throw std::invalid_argument(
++                                "64-bit add: cannot split immediate " + std::to_string(arg)
++                                + ", which is not an integer below 2^53 in magnitude, into"
++                                  " 32-bit halves");
++                        const uint64_t v = static_cast<uint64_t>(static_cast<int64_t>(arg));
++                        srcs1.push_back(static_cast<int>(static_cast<uint32_t>(v)));
++                        srcs2.push_back(static_cast<int>(static_cast<uint32_t>(v >> 32)));
++                    }
++                    else
++                    {
++                        throw std::invalid_argument("64-bit add: cannot split immediate '" + arg
++                                                    + "' into 32-bit halves");
++                    }
++                },
++                s);
++        }
++    }
++
+     struct Instruction : public Item
+     {
+         InstType         instType;
+diff --git a/projects/hipblaslt/tensilelite/rocisa/test/test_lowering64.py b/projects/hipblaslt/tensilelite/rocisa/test/test_lowering64.py
+new file mode 100644
+index 00000000..af74ce34
+--- /dev/null
++++ b/projects/hipblaslt/tensilelite/rocisa/test/test_lowering64.py
+@@ -0,0 +1,164 @@
++# Copyright Advanced Micro Devices, Inc., or its affiliates.
++# SPDX-License-Identifier: MIT
++
++"""Lowering of 64-bit integer adds on targets without a native 64-bit add.
++
++SAddU64 and VAddNCU64 lower to a pair of 32-bit adds on targets that lack s_add_u64 and
++v_add_nc_u64 (gfx942, gfx950, ...): the low add sets the carry and the high add consumes it.
++A register pair splits into its two halves. An immediate must split into its low 32 bits and
++the sign extension of those into the high half, never the immediate again: with it, ptr += imm
++would also add imm * 2^32 and move the pointer hundreds of GiB (AMD-ROCm-Internal PR 2557,
++class C2 on AIHPBLAS-4988).
++"""
++
++import os
++import shutil
++import subprocess
++
++import pytest
++
++import rocisa
++from rocisa.container import sgpr, vgpr
++from rocisa.instruction import SAddU64, VAddNCU64
++
++# Targets without a native 64-bit add, so both instructions take the lowered path.
++_ISAS = [(9, 0, 10), (9, 4, 2), (9, 5, 0)]
++
++
++def _init(isa):
++    rocm_path = os.environ.get("ROCM_PATH", "/opt/rocm")
++    search_path = os.pathsep.join(
++        [os.path.join(rocm_path, "bin"), os.path.join(rocm_path, "lib", "llvm", "bin")]
++    )
++    assembler = shutil.which("amdclang++", path=search_path) or "amdclang++"
++    ri = rocisa.rocIsa.getInstance()
++    ri.init(isa, assembler, False)
++    ri.setKernel(isa, 64)
++    return ri
++
++
++@pytest.fixture(params=_ISAS, ids=lambda isa: rocisa.isaToGfx(isa))
++def lowered_isa(request):
++    ri = _init(request.param)
++    caps = ri.getAsmCaps()
++    if caps["s_add_u64"] or caps["v_add_nc_u64"]:
++        pytest.skip(f"{rocisa.isaToGfx(request.param)} has a native 64-bit add")
++    yield request.param
++    _init((9, 4, 2))
++
++
++def _lines(inst):
++    """The emitted instructions, without comments, as (mnemonic, operands) pairs."""
++    out = []
++    for line in str(inst).splitlines():
++        line = line.split("//")[0].strip()
++        if line:
++            mnemonic, _, rest = line.partition(" ")
++            out.append((mnemonic, [o.strip() for o in rest.split(",")]))
++    return out
++
++
++def _as_int(text):
++    return int(text, 0)
++
++
++# (immediate, expected low 32 bits as a signed value, expected high 32 bits)
++_IMMEDIATES = [
++    (5, 5, 0),
++    (0, 0, 0),
++    (-8, -8, -1),
++    (0x7FFFFFFF, 0x7FFFFFFF, 0),
++    (-(2**31), -(2**31), -1),
++    # Above 2^31: Python passes these through as doubles, which must split as 64-bit integers.
++    (2**31 + 5, -(2**31) + 5, 0),
++    (2**32 + 3, 3, 1),
++    (3 * 2**32 + 7, 7, 3),
++    # The largest magnitudes a double carries exactly.
++    (2**53 - 1, -1, 2**21 - 1),
++    (-(2**53 - 1), 1, -(2**21)),
++]
++
++
++def test_saddu64_registers_lower_to_a_carry_chain(lowered_isa):
++    lines = _lines(SAddU64(dst=sgpr(4, 2), src0=sgpr(6, 2), src1=sgpr(8, 2)))
++    assert lines == [("s_add_u32", ["s4", "s6", "s8"]), ("s_addc_u32", ["s5", "s7", "s9"])]
++
++
++@pytest.mark.parametrize("imm,low,high", _IMMEDIATES)
++def test_saddu64_immediate_high_half_is_the_sign_extension(lowered_isa, imm, low, high):
++    lines = _lines(SAddU64(dst=sgpr(4, 2), src0=sgpr(4, 2), src1=imm))
++    assert [m for m, _ in lines] == ["s_add_u32", "s_addc_u32"]
++    (_, lo_ops), (_, hi_ops) = lines
++    assert lo_ops[:2] == ["s4", "s4"] and hi_ops[:2] == ["s5", "s5"]
++    assert _as_int(lo_ops[2]) == low
++    assert _as_int(hi_ops[2]) == high, f"high half of {imm:#x} must be {high}, got {hi_ops[2]}"
++
++
++def test_vaddncu64_registers_lower_to_a_carry_chain(lowered_isa):
++    lines = _lines(VAddNCU64(dst=vgpr(4, 2), src0=vgpr(6, 2), src1=vgpr(8, 2)))
++    assert [m for m, _ in lines] == ["v_add_co_u32", "v_addc_co_u32"]
++    (_, lo_ops), (_, hi_ops) = lines
++    assert lo_ops[0] == "v4" and lo_ops[2:] == ["v6", "v8"]
++    assert hi_ops[0] == "v5" and hi_ops[2:4] == ["v7", "v9"]
++    # The low add writes the carry and the high add reads the same carry register.
++    assert lo_ops[1] == hi_ops[1] == hi_ops[4]
++
++
++def _inline(v):
++    return -16 <= v <= 64
++
++
++@pytest.mark.parametrize("imm,low,high", _IMMEDIATES)
++def test_vaddncu64_immediate_high_half_is_the_sign_extension(lowered_isa, imm, low, high):
++    inst = VAddNCU64(dst=vgpr(4, 2), src0=vgpr(4, 2), src1=imm)
++    if not _inline(high):
++        # v_addc_co_u32 reads vcc, which leaves no room for a literal next to it.
++        with pytest.raises(Exception, match="not an inline constant"):
++            str(inst)
++        return
++    lines = _lines(inst)
++    assert [m for m, _ in lines] == ["v_add_co_u32", "v_addc_co_u32"]
++    (_, lo_ops), (_, hi_ops) = lines
++    # VOP2 takes a literal only in src0, so the immediate comes first.
++    assert _as_int(lo_ops[2]) == low and lo_ops[3] == "v4"
++    assert _as_int(hi_ops[2]) == high and hi_ops[3] == "v5"
++
++
++def _assemble(isa, text, tmp_path):
++    rocm_path = os.environ.get("ROCM_PATH", "/opt/rocm")
++    search_path = os.pathsep.join(
++        [os.path.join(rocm_path, "bin"), os.path.join(rocm_path, "lib", "llvm", "bin")]
++    )
++    clang = shutil.which("amdclang++", path=search_path) or shutil.which("amdclang++")
++    if not clang:
++        pytest.skip("amdclang++ not found")
++    src = tmp_path / "lowered.s"
++    src.write_text(text + "\n")
++    return subprocess.run(
++        [clang, "-x", "assembler", "-target", "amdgcn-amd-amdhsa",
++         f"-mcpu={rocisa.isaToGfx(isa)}", "-c", str(src), "-o", str(tmp_path / "lowered.o")],
++        capture_output=True, text=True,
++    )  # fmt: skip
++
++
++# String checks miss an operand the hardware cannot encode; the assembler does not.
++@pytest.mark.parametrize("imm,low,high", _IMMEDIATES)
++def test_lowered_immediate_adds_assemble(lowered_isa, imm, low, high, tmp_path):
++    insts = [SAddU64(dst=sgpr(4, 2), src0=sgpr(4, 2), src1=imm)]
++    if _inline(high):
++        insts.append(VAddNCU64(dst=vgpr(4, 2), src0=vgpr(4, 2), src1=imm))
++    text = "\n".join(str(i) for i in insts)
++    result = _assemble(lowered_isa, text, tmp_path)
++    assert result.returncode == 0, f"{text}\n{result.stderr}"
++
++
++def test_symbolic_immediate_is_rejected(lowered_isa):
++    with pytest.raises(Exception, match="cannot split"):
++        str(SAddU64(dst=sgpr(4, 2), src0=sgpr(4, 2), src1="SomeSymbol"))
++
++
++# A double cannot tell these from a neighbor: 2^53 + 1 and 2^63 - 1 round to 2^53 and 2^63.
++@pytest.mark.parametrize("imm", [2**53, 2**53 + 1, -(2**53), 2**63 - 1, -(2**63), 2**63])
++def test_immediate_a_double_cannot_hold_exactly_is_rejected(lowered_isa, imm):
++    with pytest.raises(Exception, match="cannot split"):
++        str(SAddU64(dst=sgpr(4, 2), src0=sgpr(4, 2), src1=imm))
+-- 
+2.43.0
+

@@ -1,0 +1,1487 @@
+From 4fb52aed152d37fd123912c3b55b64a8966b7940 Mon Sep 17 00:00:00 2001
+From: Tony Davis <tony.davis@amd.com>
+Date: Thu, 8 Oct 2026 12:03:03 -0500
+Subject: [PATCH] test(hipblaslt): place fast_check operands across 4 GiB
+ boundaries (#12960)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+JIRA ID : AIHPBLAS-4994
+
+Stack, in merge order: #12876, **#12960 (this PR)**, #13005, #13013,
+#13015, #13021, #13022, #13025, #13031. The diff here is only the
+placement harness; the base moves to `develop` when #12876 merges.
+
+## Summary
+
+Some address bugs don't depend on how big the problem is. They depend on
+where the buffer sits. If an operand straddles a 4 GiB boundary, a
+kernel that drops the carry reads or writes exactly 4 GiB away. With
+`hipMalloc` that happens rarely and at random, so a test can pass for
+months and then fail once with no way to reproduce it. fast_check's
+poison and sentinel can't see an access that far outside the buffer, and
+on some GPUs that stray access faults hard enough to need a reset.
+
+This PR adds controlled placement. A `placement` argument maps a chosen
+operand (A, B, C, D, bias, the scale vector or the workspace) across a 4
+GiB boundary using HIP virtual memory. It also maps poison windows
+exactly 4 GiB above and below. A bad read gets poison, so fast_check
+reports a wrong answer instead of the GPU faulting. A bad write lands in
+the poison, where a scan finds it. So a rare, random crash becomes a
+deterministic, safe test.
+
+A self-test simulates a dropped carry and checks that it's caught. Two
+deliberate mutations (checking only one window, and never filling the
+poison) each make that self-test fail. The motivating defect,
+ROCM-32046, is in gfx1250 MXFP8 Stream-K kernels, which no GPU here can
+run; MX operands get placement in #13031, and the cases here check f32
+and bf16 kernels on every GPU CI runs.
+
+**CI time added** (one MI300X / one MI350X, ROCm 10.2, sum of per-test
+times): about 1 s / under 1 s in pre_checkin (12 cases), and about 2 min
+/ 40 s in nightly (14 every-solution cases).
+
+## Motivation
+
+Some hipBLASLt address defects depend on where a buffer sits in memory
+rather than on the problem size. ROCM-32046 drops the carry out of the
+low 32 bits of an address in two MXFP8 Stream-K solutions on gfx1250, so
+it goes wrong only when an operand's base crosses a 4 GiB boundary. With
+`hipMalloc` that crossing is rare and random, so a test can pass for
+months and then fail once with no reproduction. The wrong access lands
+exactly 4 GiB away, outside every allocation. fast_check's padding
+poison and D sentinel cannot see it, and on gfx1250 the resulting page
+fault can leave the GPU unusable until it is reset (ROCM-32049).
+
+## Technical Details
+
+Only client test code and test data change.
+
+- **Placement.** A new test argument, `placement`, names one operand:
+`a`, `b`, `c`, `d`, `bias`, `scale_alpha_vec` or `workspace`.
+`placement_offset` sets how many bytes of it lie below the boundary; 0,
+the default, means half. `PlacedRegion` in the new `hip_placement.hpp`
+uses HIP virtual memory management (`hipMemAddressReserve`,
+`hipMemCreate`, `hipMemMap`). It reserves address space and maps the
+operand so that it crosses a 4 GiB boundary.
+- **Poison windows.** Two more mappings of the same size sit exactly 4
+GiB below and above the operand. Both are filled with the fast_check
+poison value, and so is the rest of the operand's own mapping past its
+last element. A read whose carry was dropped returns poison, so
+fast_check reports a wrong D instead of the GPU faulting. A write whose
+carry was dropped, or that runs past the end, changes the poison, and a
+device scan after every solution reports the element it was meant for.
+- **The workspace.** Solutions need different amounts of workspace, and
+any of them may use the whole size it is given. The placed workspace is
+twice the largest size, and each solution starts it so that its own
+reported range straddles the boundary with the whole workspace size
+still mapped after it. A self-test checks that for sizes from 300 bytes
+to the full workspace.
+- **No silent fallback.** A placement case fails if no buffer was
+placed, or if the placed range does not cross the boundary.
+- **`HipDeviceBuffer`.** A new constructor allocates a buffer this way.
+Every place that passes the operand to the library uses the placed
+pointer without further changes. Its move operations now clear the
+moved-from pointer. Before this, a moved-from buffer re-checked guard
+bytes in memory owned by the moved-to buffer; that was harmless with
+`hipMalloc`, but would fault on a placed buffer.
+- **Requirements.** Placement requires `fast_check`. If the GPU or
+platform lacks virtual memory management (Windows, for one), the test
+skips with that reason. An invalid request fails the test.
+
+## Test Plan
+
+- `FastCheckDevice` self-tests:
+- a kernel that computes addresses with the carry dropped on purpose
+must read the poison value and have its write reported at the right
+element;
+- each solution's share of a placed workspace must straddle the boundary
+and stay mapped, and a write past the end of a placed buffer must be
+reported;
+  - requests that cannot cross a boundary are rejected;
+- a placed buffer keeps its address when `std::vector` growth moves it.
+- pre_checkin cases: on a 1031 × 517 × 263 GEMM in f32 and bf16, place
+A, B, C and D in turn, and bias and the scaleAlpha vector with their
+epilogue, using the heuristic's first 16 solutions.
+- nightly cases: the same placements, plus the workspace, with every
+supported solution.
+- `standard` tier, because the `HipDeviceBuffer` move change affects
+every test.
+
+## Test Result
+
+**ROCm 10.2, at the stack tip (3364b793ac1, which includes this PR).**
+Every fast_check case and self-test passed or skipped for a stated
+reason on gfx90a (MI210), gfx942 (MI300X) and gfx950 (MI350X), with none
+failing; the counts are in #12876. The placement cases all ran on all
+three, including the workspace placement with every solution (more than
+2,000 solutions on gfx90a, each with its own straddling range).
+
+Earlier development runs:
+
+- Self-tests (gfx942, MI300A): two deliberate mutations, one checking
+only the window above and one never filling the poison, each made the
+carry-drop self-test fail.
+- The first version of the per-solution workspace placed each solution's
+range near the end of a workspace-sized mapping, and solution 1 of the
+every-solution case faulted the GPU: hipBLASLt may use the whole
+workspace size it is given, not just the size its heuristic reports.
+Doubling the mapping fixed it.
+- `standard` tier (gfx942, MI300A, before the per-solution workspace
+change): 71,379 run, 71,373 passed, 5 skipped, 1 failed,
+`matmul_fallback_compute_fp16`, a workspace request larger than the test
+allocates. At the stack tip under ROCm 10.2, all 16 of its cases pass on
+an MI300X, so that failure looks tied to the MI300A or the ROCm 7.1
+environment rather than to this PR.
+- ROCM-32046 itself is on gfx1250 MXFP8 kernels, which none of these
+machines can run.
+
+## Submission Checklist
+
+- [x] Look over the contributing guidelines at
+https://github.com/ROCm/TheRock/blob/main/GOVERNANCE.md#pull-requests.
+
+## Risk level
+
+Medium (3/5): test code and test data only, but the `HipDeviceBuffer`
+move change affects every client test that stores buffers in a
+`std::vector`, so the `standard` tier must pass before merge.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+---------
+
+Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
+Co-authored-by: Cursor <cursoragent@cursor.com>
+Co-authored-by: James Newling <james.newling@gmail.com>
+---
+ projects/hipblaslt/TESTING.md                 |   2 +-
+ .../clients/common/include/fast_check.hpp     |  18 ++
+ .../clients/common/include/hipBuffer.hpp      |  59 +++-
+ .../clients/common/include/hip_placement.hpp  | 268 ++++++++++++++++++
+ .../common/include/hipblaslt_arguments.hpp    |   6 +
+ .../clients/common/include/testing_matmul.hpp | 216 ++++++++++++--
+ .../clients/common/src/fast_check.cpp         | 120 +++++---
+ .../common/src/hipblaslt_arguments.cpp        |   2 +
+ .../clients/tests/data/hipblaslt_common.yaml  |   4 +
+ .../clients/tests/data/matmul_gtest.yaml      | 105 +++++++
+ .../clients/tests/src/fast_check_gtest.cpp    | 206 ++++++++++++++
+ .../clients/tests/src/matmul_gtest.cpp        |   2 +
+ 12 files changed, 945 insertions(+), 63 deletions(-)
+ create mode 100644 projects/hipblaslt/clients/common/include/hip_placement.hpp
+
+diff --git a/projects/hipblaslt/TESTING.md b/projects/hipblaslt/TESTING.md
+index 09372db9..715037b0 100644
+--- a/projects/hipblaslt/TESTING.md
++++ b/projects/hipblaslt/TESTING.md
+@@ -244,7 +244,7 @@ There is no separate unit-test binary. The host-only tests that do exist are com
+ | `caching_library_gtest.cpp` | `CachingLibraryCollision` | Solution-cache keying under a forced hash collision |
+ | `ulp_gtest.cpp` | `UlpMantissaBits`, `UlpAsDouble`, `UlpDistance`, `UlpAccumulate`, `UlpCheckGeneral` | Units-in-the-last-place error-measurement helpers, pure math with no GPU dependency |
+ | `unit_gtest.cpp` | `UnitCheckIdentical` | Exact-storage checks used to skip element-by-element output comparisons when the addressed values have identical bytes |
+-| `fast_check_gtest.cpp` | `FastCheck_pre_checkin`, `FastCheckDevice_pre_checkin` | The `fast_check` verifier: fault injection into host-computed results (`FastCheck`, no GPU), and the device padding, poison and probe-sum kernels on small buffers (`FastCheckDevice`, no hipBLASLt kernels) |
++| `fast_check_gtest.cpp` | `FastCheck_pre_checkin`, `FastCheckDevice_pre_checkin` | The `fast_check` verifier: fault injection into host-computed results (`FastCheck_pre_checkin`, no GPU), and the device padding, poison and probe-sum kernels plus 4 GiB-boundary buffer placement on small buffers (`FastCheckDevice_pre_checkin`, no hipBLASLt kernels) |
+ | `arch_revision_gtest.cpp` | `ArchRevisionSmoke` | ASIC-revision-to-library-arch mapping, a pure function reached by relative `#include` of an internal header (see point 1 below) |
+ 
+ That is a handful of test cases of genuinely hardware-independent logic, against a library of
+diff --git a/projects/hipblaslt/clients/common/include/fast_check.hpp b/projects/hipblaslt/clients/common/include/fast_check.hpp
+index d991b7f9..69b1e7c3 100644
+--- a/projects/hipblaslt/clients/common/include/fast_check.hpp
++++ b/projects/hipblaslt/clients/common/include/fast_check.hpp
+@@ -153,6 +153,24 @@ std::string fast_check_describe_buffers(const std::vector<FastCheckBuffer>& buff
+ // memory; total_elements is the size of its allocation in elements, which may extend past the
+ // last batch.
+ 
++// Bytes per element, or 0 when fast_check does not support the type.
++size_t fast_check_element_size(hipDataType type);
++
++// The bit pattern of kFastCheckPoisonValue in the given type, in the low bytes.
++uint64_t fast_check_poison_bits(hipDataType type);
++
++// Counts the elements of a device range that no longer hold kFastCheckPoisonValue.
++struct FastCheckChanged
++{
++    uint64_t count = 0;
++    uint64_t first = 0; // index of the first changed element, when count > 0
++    bool     ok    = true; // false when the scan itself failed
++};
++FastCheckChanged fast_check_count_changed_device(const void* data,
++                                                 hipDataType type,
++                                                 size_t      elements,
++                                                 hipStream_t stream);
++
+ // Fills every element of a device buffer with fast_check_sentinel_bits(type). Returns the launch
+ // error, or hipErrorInvalidValue for a type fast_check does not support.
+ hipError_t fast_check_fill_sentinel_device(void*       buffer,
+diff --git a/projects/hipblaslt/clients/common/include/hipBuffer.hpp b/projects/hipblaslt/clients/common/include/hipBuffer.hpp
+index 317a268e..ea07ca21 100644
+--- a/projects/hipblaslt/clients/common/include/hipBuffer.hpp
++++ b/projects/hipblaslt/clients/common/include/hipBuffer.hpp
+@@ -28,8 +28,13 @@
+ 
+ #include "d_vector.hpp"
+ #include "datatype_interface.hpp"
++#include "hip_placement.hpp"
+ #include "hipblaslt_ostream.hpp"
+ 
++#include <memory>
++#include <string>
++#include <utility>
++
+ class HipDeviceBuffer : public d_vector_type
+ {
+ public:
+@@ -40,16 +45,59 @@ public:
+     {
+     }
+ 
++    // Places the buffer across a 4 GiB virtual-address boundary, offset_below bytes after its
++    // start, with poison memory mapped 4 GiB below and above it (see hip_placement.hpp). buf()
++    // is null when placement fails; *why and *unsupported then say why.
++    HipDeviceBuffer(hipDataType  dtype,
++                    std::size_t  numElements,
++                    std::size_t  offset_below,
++                    std::string* why,
++                    bool*        unsupported)
++        : d_vector_type(dtype, numElements, false)
++        , numBytes(realDataTypeSize(dtype) * numElements)
++        , placed(PlacedRegion::create(numBytes, offset_below, dtype, why, unsupported))
++        , buffer(placed ? placed->ptr() : nullptr)
++    {
++    }
++
+     ~HipDeviceBuffer()
+     {
+-        this->device_vector_teardown(static_cast<char*>(buffer));
++        // A placed buffer has no guard pads, and its memory belongs to `placed`.
++        this->device_vector_teardown(placed ? nullptr : static_cast<char*>(buffer));
+         buffer = nullptr;
+     }
+ 
+     HipDeviceBuffer(const HipDeviceBuffer&)            = delete;
+-    HipDeviceBuffer(HipDeviceBuffer&&)                 = default;
+     HipDeviceBuffer& operator=(const HipDeviceBuffer&) = delete;
+-    HipDeviceBuffer& operator=(HipDeviceBuffer&&)      = default;
++
++    // The moved-from buffer must forget its pointer, or its destructor would check guard pads
++    // in memory it no longer owns, which for a placed buffer is not mapped.
++    HipDeviceBuffer(HipDeviceBuffer&& other) noexcept
++        : d_vector_type(std::move(other))
++        , numBytes(other.numBytes)
++        , placed(std::move(other.placed))
++        , buffer(std::exchange(other.buffer, nullptr))
++    {
++    }
++
++    HipDeviceBuffer& operator=(HipDeviceBuffer&& other) noexcept
++    {
++        if(this != &other)
++        {
++            this->device_vector_teardown(placed ? nullptr : static_cast<char*>(buffer));
++            d_vector_type::operator=(std::move(other));
++            numBytes = other.numBytes;
++            placed   = std::move(other.placed);
++            buffer   = std::exchange(other.buffer, nullptr);
++        }
++        return *this;
++    }
++
++    // The placement of this buffer, or null when it was allocated normally.
++    const PlacedRegion* placement() const
++    {
++        return placed.get();
++    }
+ 
+     void* buf()
+     {
+@@ -84,8 +132,9 @@ public:
+     }
+ 
+ private:
+-    std::size_t numBytes;
+-    void*       buffer;
++    std::size_t                   numBytes;
++    std::unique_ptr<PlacedRegion> placed;
++    void*                         buffer;
+ };
+ 
+ class HipHostBuffer
+diff --git a/projects/hipblaslt/clients/common/include/hip_placement.hpp b/projects/hipblaslt/clients/common/include/hip_placement.hpp
+new file mode 100644
+index 00000000..ffb4c256
+--- /dev/null
++++ b/projects/hipblaslt/clients/common/include/hip_placement.hpp
+@@ -0,0 +1,268 @@
++// Copyright Advanced Micro Devices, Inc., or its affiliates.
++// SPDX-License-Identifier: MIT
++
++// Placement of a device buffer across a 4 GiB virtual-address boundary, for testing address
++// arithmetic that drops the carry out of the low 32 bits of an address (ROCM-32046). Such a
++// defect goes wrong only when a buffer crosses a 4 GiB boundary, and the wrong access lands
++// exactly 4 GiB away, outside every allocation.
++//
++// PlacedRegion reserves address space with HIP virtual memory management and maps three windows
++// of the same size: the buffer, starting a chosen number of bytes before a 4 GiB boundary, and
++// two poison windows exactly 4 GiB below and above it, filled with kFastCheckPoisonValue. A read
++// whose carry is dropped lands in the low window and returns the poison value instead of
++// faulting, so the GEMM result is wrong rather than the GPU stopping. A write whose carry is
++// dropped changes the poison, which verify_poison() reports.
++
++#pragma once
++
++#include "fast_check.hpp"
++
++#include <hip/hip_runtime.h>
++
++#include <algorithm>
++#include <memory>
++#include <sstream>
++#include <string>
++#include <utility>
++#include <vector>
++
++class PlacedRegion
++{
++public:
++    static constexpr uint64_t k4GiB = uint64_t(1) << 32;
++
++    // Maps `bytes` so that the 4 GiB boundary falls `offset_below` bytes after the start.
++    // offset_below = 0 picks the middle of the buffer, rounded down to the mapping granularity.
++    // Returns nullptr and sets *why on failure; *unsupported is true when the GPU or platform
++    // cannot do this at all, as opposed to an invalid request.
++    static std::unique_ptr<PlacedRegion> create(
++        size_t bytes, size_t offset_below, hipDataType type, std::string* why, bool* unsupported)
++    {
++        auto fail = [&](const std::string& text, bool platform) {
++            if(why)
++                *why = text;
++            if(unsupported)
++                *unsupported = platform;
++            return std::unique_ptr<PlacedRegion>();
++        };
++#ifdef _WIN32
++        return fail("buffer placement needs HIP virtual memory management, which is not "
++                    "supported on Windows",
++                    true);
++#else
++        int device = 0, vmm = 0;
++        if(hipGetDevice(&device) != hipSuccess
++           || hipDeviceGetAttribute(
++                  &vmm, hipDeviceAttributeVirtualMemoryManagementSupported, device)
++                  != hipSuccess
++           || !vmm)
++            return fail("this GPU does not support HIP virtual memory management", true);
++
++        const size_t es = fast_check_element_size(type);
++        if(!es)
++            return fail("buffer placement does not support data type " + std::to_string(int(type)),
++                        false);
++
++        std::unique_ptr<PlacedRegion> r(new PlacedRegion);
++        r->m_type               = type;
++        r->m_prop.type          = hipMemAllocationTypePinned;
++        r->m_prop.location.type = hipMemLocationTypeDevice;
++        r->m_prop.location.id   = device;
++        size_t granularity      = 0;
++        if(hipMemGetAllocationGranularity(
++               &granularity, &r->m_prop, hipMemAllocationGranularityMinimum)
++               != hipSuccess
++           || !granularity || granularity % es)
++            return fail("could not get a usable mapping granularity", true);
++
++        if(offset_below == 0)
++            offset_below = std::max<size_t>(granularity, bytes / 2 / granularity * granularity);
++        if(offset_below % granularity)
++            return fail("the placement offset must be a multiple of the mapping granularity ("
++                            + std::to_string(granularity) + " bytes)",
++                        false);
++        if(offset_below >= bytes)
++            return fail("a " + std::to_string(bytes) + "-byte buffer cannot cross a 4 GiB boundary "
++                            + std::to_string(offset_below) + " bytes after its start",
++                        false);
++
++        r->m_bytes = bytes;
++        r->m_span  = (bytes + granularity - 1) / granularity * granularity;
++        if(r->m_span >= k4GiB)
++            return fail("a placed buffer must be smaller than 4 GiB", false);
++
++        // Reserve enough to put both poison windows around a boundary inside the reservation,
++        // and compute the boundary from the address actually returned; the address hint is not
++        // guaranteed.
++        r->m_reserved_bytes = 4 * k4GiB + 2 * r->m_span;
++        if(hipMemAddressReserve(&r->m_reserved, r->m_reserved_bytes, 0, nullptr, 0) != hipSuccess)
++        {
++            r->m_reserved = nullptr;
++            return fail("could not reserve address space for placement", false);
++        }
++        const uint64_t base     = reinterpret_cast<uint64_t>(r->m_reserved);
++        const uint64_t boundary = (base + k4GiB + r->m_span + k4GiB - 1) / k4GiB * k4GiB;
++        r->m_windows[0]         = boundary - offset_below; // the buffer
++        r->m_windows[1]         = r->m_windows[0] - k4GiB; // poison below
++        r->m_windows[2]         = r->m_windows[0] + k4GiB; // poison above
++
++        hipMemAccessDesc access{};
++        access.location = r->m_prop.location;
++        access.flags    = hipMemAccessFlagsProtReadWrite;
++        for(int w = 0; w < 3; w++)
++        {
++            // Each window has its own handle: a mapping must cover a whole handle.
++            void* at = reinterpret_cast<void*>(r->m_windows[w]);
++            if(hipMemCreate(&r->m_handles[w], r->m_span, &r->m_prop, 0) != hipSuccess)
++                return fail("could not allocate " + std::to_string(r->m_span)
++                                + " bytes of device memory for placement",
++                            false);
++            r->m_created[w] = true;
++            if(hipMemMap(at, r->m_span, 0, r->m_handles[w], 0) != hipSuccess)
++                return fail("could not map placed memory", false);
++            r->m_mapped[w] = true;
++            if(hipMemSetAccess(at, r->m_span, &access, 1) != hipSuccess)
++                return fail("could not enable access to placed memory", false);
++        }
++        if(r->fill_poison(nullptr) != hipSuccess || hipDeviceSynchronize() != hipSuccess)
++            return fail("could not fill the placement poison windows", false);
++        return r;
++#endif
++    }
++
++    ~PlacedRegion()
++    {
++        (void)hipDeviceSynchronize();
++        for(int w = 0; w < 3; w++)
++        {
++            if(m_mapped[w])
++                (void)hipMemUnmap(reinterpret_cast<void*>(m_windows[w]), m_span);
++            if(m_created[w])
++                (void)hipMemRelease(m_handles[w]);
++        }
++        if(m_reserved)
++            (void)hipMemAddressFree(m_reserved, m_reserved_bytes);
++    }
++
++    PlacedRegion(const PlacedRegion&)            = delete;
++    PlacedRegion& operator=(const PlacedRegion&) = delete;
++
++    void* ptr() const
++    {
++        return reinterpret_cast<void*>(m_windows[0]);
++    }
++
++    // The first byte at or above the 4 GiB boundary the buffer crosses.
++    uint64_t boundary() const
++    {
++        return (m_windows[0] / k4GiB + 1) * k4GiB;
++    }
++
++    // Bytes mapped for the buffer: its size rounded up to the mapping granularity.
++    size_t span() const
++    {
++        return m_span;
++    }
++
++    // Whether [p, p + bytes) crosses the boundary.
++    bool crosses(const void* p, size_t bytes) const
++    {
++        const uint64_t at = reinterpret_cast<uint64_t>(p);
++        return at < boundary() && at + bytes > boundary();
++    }
++
++    // A 256-byte aligned start inside the buffer window from which a range of `bytes` straddles
++    // the boundary near its middle, while `room` bytes from the start (at least `bytes`) stay
++    // inside the buffer. Different solutions use different amounts of one placed workspace, each
++    // needs its own range to cross, and each may touch up to the whole workspace size it was
++    // given. A range of 256 bytes or less cannot cross from an aligned start.
++    void* straddle(size_t bytes, size_t room) const
++    {
++        room = std::max(room, bytes);
++        if(bytes <= 256 || room > m_bytes)
++            return ptr();
++        const uint64_t lo   = m_windows[0];
++        const uint64_t hi   = (m_windows[0] + m_bytes - room) / 256 * 256;
++        const uint64_t half = std::max<uint64_t>(256, bytes / 2 / 256 * 256);
++        return reinterpret_cast<void*>(std::clamp(boundary() - half, lo, std::max(lo, hi)));
++    }
++
++    // Refills both poison windows, and the buffer window past the buffer's end, with
++    // kFastCheckPoisonValue.
++    hipError_t fill_poison(hipStream_t stream) const
++    {
++        hipError_t err = hipSuccess;
++        for(const auto& [at, elements] : poisoned_ranges())
++        {
++            hipError_t e = fast_check_poison_padding_device(
++                {reinterpret_cast<void*>(at), m_type, 0, 0, 1, 0}, 1, elements, stream);
++            if(e != hipSuccess)
++                err = e;
++        }
++        return err;
++    }
++
++    // Fails when any element of either poison window no longer holds the poison value: a write
++    // reached an address exactly 4 GiB away from where it belonged.
++    FastCheckResult verify_poison(const std::string& operand, hipStream_t stream) const
++    {
++        FastCheckResult    result;
++        std::ostringstream msg;
++        const size_t       es     = fast_check_element_size(m_type);
++        const auto         ranges = poisoned_ranges();
++        for(size_t w = 0; w < ranges.size(); w++)
++        {
++            const auto [at, elements] = ranges[w];
++            FastCheckChanged c        = fast_check_count_changed_device(
++                reinterpret_cast<const void*>(at), m_type, elements, stream);
++            if(!c.ok)
++                return {false, "could not scan the placement poison windows"};
++            if(!c.count)
++                continue;
++            result.passed = false;
++            if(w < 2)
++            {
++                const char* where = w == 0 ? "below" : "above";
++                msg << c.count << " elements of the poison window 4 GiB " << where << " " << operand
++                    << " were written. The first is " << operand << " element " << c.first
++                    << " (byte offset " << c.first * es << ") moved 4 GiB " << where
++                    << ", the effect of an address that "
++                    << (w == 0 ? "lost the carry out of its low 32 bits"
++                               : "gained a carry into its high 32 bits")
++                    << ".\n";
++            }
++            else
++                msg << c.count << " elements past the end of " << operand
++                    << " were written; the first is element " << m_bytes / es + c.first << ".\n";
++        }
++        result.message = msg.str();
++        return result;
++    }
++
++private:
++    PlacedRegion() = default;
++
++    // (address, elements) of each poisoned range: the windows 4 GiB below and above the buffer,
++    // then the mapped tail of the buffer window after the buffer's last element.
++    std::vector<std::pair<uint64_t, size_t>> poisoned_ranges() const
++    {
++        const size_t                             es = fast_check_element_size(m_type);
++        std::vector<std::pair<uint64_t, size_t>> ranges
++            = {{m_windows[1], m_span / es}, {m_windows[2], m_span / es}};
++        const size_t used = (m_bytes + es - 1) / es;
++        if(m_span / es > used)
++            ranges.push_back({m_windows[0] + used * es, m_span / es - used});
++        return ranges;
++    }
++
++    hipDataType                     m_type{};
++    hipMemAllocationProp            m_prop{};
++    size_t                          m_bytes          = 0;
++    size_t                          m_span           = 0; // bytes mapped per window
++    void*                           m_reserved       = nullptr;
++    size_t                          m_reserved_bytes = 0;
++    uint64_t                        m_windows[3]     = {}; // buffer, poison below, poison above
++    hipMemGenericAllocationHandle_t m_handles[3]{};
++    bool                            m_created[3] = {};
++    bool                            m_mapped[3]  = {};
++};
+diff --git a/projects/hipblaslt/clients/common/include/hipblaslt_arguments.hpp b/projects/hipblaslt/clients/common/include/hipblaslt_arguments.hpp
+index 2c212852..8c4ffb1f 100644
+--- a/projects/hipblaslt/clients/common/include/hipblaslt_arguments.hpp
++++ b/projects/hipblaslt/clients/common/include/hipblaslt_arguments.hpp
+@@ -174,6 +174,10 @@ struct Arguments
+     int8_t unit_check;
+     int8_t ulp_check;
+     int8_t fast_check;
++    // fast_check: operand to place across a 4 GiB boundary (a, b, c, d, bias,
++    // scale_alpha_vec, workspace), and the bytes before the boundary (0 = middle)
++    char   placement[16];
++    size_t placement_offset;
+     int8_t timing;
+ 
+     char transA;
+@@ -305,6 +309,8 @@ struct Arguments
+     OPER(unit_check) SEP             \
+     OPER(ulp_check) SEP              \
+     OPER(fast_check) SEP             \
++    OPER(placement) SEP              \
++    OPER(placement_offset) SEP       \
+     OPER(timing) SEP                 \
+     OPER(transA) SEP                 \
+     OPER(transB) SEP                 \
+diff --git a/projects/hipblaslt/clients/common/include/testing_matmul.hpp b/projects/hipblaslt/clients/common/include/testing_matmul.hpp
+index f8979eca..6a66c483 100644
+--- a/projects/hipblaslt/clients/common/include/testing_matmul.hpp
++++ b/projects/hipblaslt/clients/common/include/testing_matmul.hpp
+@@ -59,6 +59,7 @@
+ #include <hipblaslt/hipblaslt.h>
+ #include <iomanip>
+ #include <map>
++#include <memory>
+ #include <numeric>
+ #include <omp.h>
+ #include <optional>
+@@ -1131,6 +1132,32 @@ inline std::string fast_check_unsupported_reason(const Arguments&     arg,
+     return {};
+ }
+ 
++// Skips the test when buffer placement is unavailable on this platform, and fails it when the
++// placement request is invalid.
++#ifdef GOOGLE_TEST
++#define CHECK_PLACEMENT(ok, unsupported, why) \
++    do                                        \
++    {                                         \
++        if(!(ok))                             \
++        {                                     \
++            if(unsupported)                   \
++                GTEST_SKIP() << (why);        \
++            else                              \
++                FAIL() << (why);              \
++        }                                     \
++    } while(0)
++#else
++#define CHECK_PLACEMENT(ok, unsupported, why)     \
++    do                                            \
++    {                                             \
++        if(!(ok))                                 \
++        {                                         \
++            hipblaslt_cerr << (why) << std::endl; \
++            return;                               \
++        }                                         \
++    } while(0)
++#endif
++
+ // Seed for the fast_check probe vectors: FNV-1a over the test name, so a failure reproduces.
+ inline uint64_t fast_check_seed(const Arguments& arg)
+ {
+@@ -2368,6 +2395,36 @@ void testing_matmul_with_bias(const Arguments& arg,
+         }
+     }
+ 
++    if(arg.placement[0])
++    {
++        static const char* operands[]
++            = {"a", "b", "c", "d", "bias", "scale_alpha_vec", "workspace"};
++        std::string why;
++        if(!arg.fast_check)
++            why = "placement requires fast_check";
++        else if(std::none_of(std::begin(operands), std::end(operands), [&](const char* o) {
++                    return !strcmp(o, arg.placement);
++                }))
++            why = std::string("unknown placement operand '") + arg.placement + "'";
++        else if(HMM)
++            why = "placement does not support HMM";
++        else if(arg.c_equal_d && !strcmp(arg.placement, "d"))
++            why = "with c_equal_d, D is C: place c instead of d";
++        else if(!strcmp(arg.placement, "bias") && !arg.bias_vector)
++            why = "placing the bias requires bias_vector";
++        else if(!strcmp(arg.placement, "scale_alpha_vec") && !arg.scaleAlpha_vector)
++            why = "placing the scaleAlpha vector requires scaleAlpha_vector";
++        if(!why.empty())
++        {
++#ifdef GOOGLE_TEST
++            FAIL() << why;
++#else
++            hipblaslt_cerr << why << std::endl;
++            return;
++#endif
++        }
++    }
++
+     // Calculating block count
+     auto plan = hipblaslt_bench::compute_rotating_buffer_plan(
+         arg.adaptive, arg.max_iters, arg.cold_iters, arg.iters, rotating, totalRotatingSizeNeeded);
+@@ -2665,17 +2722,44 @@ void testing_matmul_with_bias(const Arguments& arg,
+                 epilogue_on[i] = true;
+             }
+ 
+-            // allocate memory on device
+-            dA.emplace_back(TiA, size_dA[i] * block_count, HMM);
++            // allocate memory on device; the operand named by arg.placement crosses a 4 GiB
++            // boundary. allocate() returns false when that placement failed.
++            std::string placement_why;
++            bool        placement_unsupported = false;
++            auto        allocate              = [&](std::vector<HipDeviceBuffer>& v,
++                                hipDataType                   type,
++                                size_t                        elements,
++                                const char*                   operand) {
++                if(i == 0 && !strcmp(arg.placement, operand))
++                {
++                    v.emplace_back(type,
++                                   elements,
++                                   size_t(arg.placement_offset),
++                                   &placement_why,
++                                   &placement_unsupported);
++                    return v.back().buf() != nullptr;
++                }
++                v.emplace_back(type, elements, HMM);
++                return true;
++            };
++            CHECK_PLACEMENT(allocate(dA, TiA, size_dA[i] * block_count, "a"),
++                            placement_unsupported,
++                            placement_why);
+             CHECK_DEVICE_ALLOCATION(hipGetLastError());
+-            dB.emplace_back(TiB, size_dB[i] * block_count, HMM);
++            CHECK_PLACEMENT(allocate(dB, TiB, size_dB[i] * block_count, "b"),
++                            placement_unsupported,
++                            placement_why);
+             CHECK_DEVICE_ALLOCATION(hipGetLastError());
+-            dC.emplace_back(To, size_C[i] * block_count, HMM);
++            CHECK_PLACEMENT(allocate(dC, To, size_C[i] * block_count, "c"),
++                            placement_unsupported,
++                            placement_why);
+             CHECK_DEVICE_ALLOCATION(hipGetLastError());
+ 
+             if(!arg.c_equal_d)
+             {
+-                dD.emplace_back(To, size_D[i] * block_count, HMM);
++                CHECK_PLACEMENT(allocate(dD, To, size_D[i] * block_count, "d"),
++                                placement_unsupported,
++                                placement_why);
+                 CHECK_DEVICE_ALLOCATION(hipGetLastError());
+                 dDp = &dD;
+             }
+@@ -2684,13 +2768,20 @@ void testing_matmul_with_bias(const Arguments& arg,
+ 
+             if(size_bias[i] * block_count != 0)
+             {
+-                dBias.emplace_back(Tbias, size_bias[i] * block_count, HMM);
++                CHECK_PLACEMENT(allocate(dBias, Tbias, size_bias[i] * block_count, "bias"),
++                                placement_unsupported,
++                                placement_why);
+                 CHECK_DEVICE_ALLOCATION(hipGetLastError());
+             }
+ 
+             if(arg.scaleAlpha_vector)
+             {
+-                dScaleAlphaVec.emplace_back(Talpha, size_scaleAlphaVec[i] * block_count, HMM);
++                CHECK_PLACEMENT(allocate(dScaleAlphaVec,
++                                         Talpha,
++                                         size_scaleAlphaVec[i] * block_count,
++                                         "scale_alpha_vec"),
++                                placement_unsupported,
++                                placement_why);
+                 CHECK_DEVICE_ALLOCATION(hipGetLastError());
+             }
+ 
+@@ -4016,7 +4107,7 @@ void testing_matmul_with_bias(const Arguments& arg,
+         HIPBLAS_STATUS_SUCCESS);
+ 
+     // set workspace
+-    device_vector<unsigned char>* dWorkspace     = nullptr;
++    std::unique_ptr<device_vector<unsigned char>> dWorkspace;
+     size_t                        workspace_size = 0;
+ 
+     // set user args
+@@ -5018,9 +5109,42 @@ void testing_matmul_with_bias(const Arguments& arg,
+ 
+     CHECK_SOLUTION_FOUND(returnedAlgoCount);
+ 
+-    dWorkspace = new device_vector<unsigned char>(workspace_size * block_count, 1, HMM);
++    // A placed workspace replaces the normal one, which placement runs never use: placement
++    // requires fast_check, and fast_check refuses timing runs.
++    const bool placeWorkspace = !strcmp(arg.placement, "workspace");
++    dWorkspace                = std::make_unique<device_vector<unsigned char>>(
++        placeWorkspace ? 0 : workspace_size * block_count, 1, HMM);
+     CHECK_DEVICE_ALLOCATION(dWorkspace->memcheck());
+ 
++    // The workspace the checked solutions use. A placed workspace moves for each solution, so
++    // that solution's own workspace straddles the 4 GiB boundary.
++    std::unique_ptr<PlacedRegion> placedWorkspace;
++    void*                         workspacePtr   = static_cast<unsigned char*>(*dWorkspace);
++    size_t                        workspaceBytes = workspace_size;
++    if(placeWorkspace)
++    {
++        std::string why;
++        bool        unsupported = false;
++        // Whether any solution needs a workspace depends on the library and GPU, so a run with
++        // none has nothing to place: a skip, not a failure.
++        if(workspace_size == 0)
++        {
++            why         = "no solution here uses a workspace, so there is nothing to place";
++            unsupported = true;
++        }
++        else
++            // Twice the workspace (plus room for the boundary to land on a mapping granule), so
++            // that each solution's start can sit below the boundary with the whole workspace
++            // size, which any solution may use, still mapped after it.
++            placedWorkspace = PlacedRegion::create(2 * workspace_size + (size_t(4) << 20),
++                                                   size_t(arg.placement_offset),
++                                                   HIP_R_8I,
++                                                   &why,
++                                                   &unsupported);
++        CHECK_PLACEMENT(placedWorkspace != nullptr, unsupported, why);
++        workspacePtr = placedWorkspace->ptr();
++    }
++
+     if(arg.use_user_args)
+     {
+         CHECK_HIP_ERROR(
+@@ -5477,6 +5601,12 @@ void testing_matmul_with_bias(const Arguments& arg,
+             SCOPED_TRACE(solution_description(
+                 handle, heuristicResult[sol].algo, sol, heuristicResult.size(), false));
+ #endif
++            if(placedWorkspace)
++            {
++                workspacePtr
++                    = placedWorkspace->straddle(heuristicResult[sol].workspaceSize, workspace_size);
++                workspaceBytes = heuristicResult[sol].workspaceSize;
++            }
+             if(arg.fast_check && !arg.c_equal_d)
+             {
+                 for(int i = 0; i < gemm_count; i++)
+@@ -5509,7 +5639,7 @@ void testing_matmul_with_bias(const Arguments& arg,
+                     CHECK_HIPBLASLT_ERROR(
+                         gemmVec[0].initialize(heuristicResult[sol].algo,
+                                               tuningVec[heuristicTuningIndex[sol]],
+-                                              *dWorkspace));
++                                              workspacePtr));
+                     CHECK_HIPBLASLT_ERROR(gemmVec[0].run(stream));
+                 }
+                 else if(batchMode == HIPBLASLT_BATCH_MODE_POINTER_ARRAY) //For General Batch GEMM
+@@ -5537,7 +5667,7 @@ void testing_matmul_with_bias(const Arguments& arg,
+                                                           ddd[0],
+                                                           matD[0],
+                                                           &heuristicResult[sol].algo,
+-                                                          *dWorkspace,
++                                                          workspacePtr,
+                                                           workspace_size,
+                                                           stream),
+                                           HIPBLAS_STATUS_SUCCESS);
+@@ -5558,7 +5688,7 @@ void testing_matmul_with_bias(const Arguments& arg,
+                                                           (*dDp)[0].buf(),
+                                                           matD[0],
+                                                           &heuristicResult[sol].algo,
+-                                                          *dWorkspace,
++                                                          workspacePtr,
+                                                           workspace_size,
+                                                           stream),
+                                           HIPBLAS_STATUS_SUCCESS);
+@@ -5573,7 +5703,7 @@ void testing_matmul_with_bias(const Arguments& arg,
+                     CHECK_HIPBLASLT_ERROR(
+                         groupedGemmVec[0].initialize(heuristicResult[sol].algo,
+                                                      tuningVec[heuristicTuningIndex[0]],
+-                                                     *dWorkspace));
++                                                     workspacePtr));
+                     groupedGemmVec[0].getDefaultValueForDeviceUserArguments(userArgs);
+                     // Copy them to device memory
+                     CHECK_HIP_ERROR(hipMemcpy(d_userArgs,
+@@ -5589,7 +5719,7 @@ void testing_matmul_with_bias(const Arguments& arg,
+                     CHECK_HIPBLASLT_ERROR(
+                         groupedGemmVec[0].initialize(heuristicResult[sol].algo,
+                                                      tuningVec[heuristicTuningIndex[0]],
+-                                                     *dWorkspace,
++                                                     workspacePtr,
+                                                      false,
+                                                      stream));
+ 
+@@ -5713,12 +5843,12 @@ void testing_matmul_with_bias(const Arguments& arg,
+                     FastCheckResult res = fast_check_result_device(fp, fcExpected[i], stream);
+                     if(!scan.passed || !res.passed)
+                     {
+-                        std::vector<FastCheckBuffer> buffers = {
+-                            {"A", dA[i].buf(), size_A[i] * realDataTypeSize(TiA)},
+-                            {"B", dB[i].buf(), size_B[i] * realDataTypeSize(TiB)},
+-                            {"C", dC[i].buf(), size_C[i] * realDataTypeSize(To)},
+-                            {"D", (*dDp)[i].buf(), size_D[i] * realDataTypeSize(To)},
+-                            {"workspace", static_cast<unsigned char*>(*dWorkspace), workspace_size}};
++                        std::vector<FastCheckBuffer> buffers
++                            = {{"A", dA[i].buf(), size_A[i] * realDataTypeSize(TiA)},
++                               {"B", dB[i].buf(), size_B[i] * realDataTypeSize(TiB)},
++                               {"C", dC[i].buf(), size_C[i] * realDataTypeSize(To)},
++                               {"D", (*dDp)[i].buf(), size_D[i] * realDataTypeSize(To)},
++                               {"workspace", workspacePtr, workspaceBytes}};
+                         if(arg.bias_vector)
+                             buffers.push_back(
+                                 {"bias", dBias[i].buf(), size_bias[i] * realDataTypeSize(Tbias)});
+@@ -5742,6 +5872,50 @@ void testing_matmul_with_bias(const Arguments& arg,
+ #endif
+                     }
+                 }
++
++                // A write that missed a placed operand by exactly 4 GiB lands in its poison.
++                const PlacedRegion* placed = placedWorkspace.get();
++                for(auto* v : {&dA, &dB, &dC, &dD, &dBias, &dScaleAlphaVec})
++                    if(!placed && !v->empty() && (*v)[0].placement())
++                        placed = (*v)[0].placement();
++                // A placement that silently fell back to a normal allocation would pass while
++                // testing nothing.
++                const bool straddles = placed
++                                       && (placed != placedWorkspace.get() || workspaceBytes <= 256
++                                           || placed->crosses(workspacePtr, workspaceBytes));
++                if(*arg.placement && !straddles)
++                {
++                    const std::string report
++                        = std::string("fast_check placement: ") + arg.placement
++                          + " was to cross a 4 GiB boundary but "
++                          + (placed ? "this solution's range does not" : "no buffer was placed");
++#ifdef GOOGLE_TEST
++                    ADD_FAILURE() << report;
++#else
++                    hipblaslt_cerr << report << std::endl;
++#endif
++                }
++                if(placed)
++                {
++                    FastCheckResult poison = placed->verify_poison(arg.placement, stream);
++                    if(!poison.passed)
++                    {
++                        const std::string report
++                            = "fast_check placement, "
++                              + solution_description(handle,
++                                                     heuristicResult[sol].algo,
++                                                     sol,
++                                                     heuristicResult.size(),
++                                                     true)
++                              + ":\n" + poison.message;
++#ifdef GOOGLE_TEST
++                        ADD_FAILURE() << report;
++#else
++                        hipblaslt_cerr << report << std::endl;
++#endif
++                    }
++                    CHECK_HIP_ERROR(placed->fill_poison(stream));
++                }
+             }
+         }
+     }
+@@ -6533,8 +6707,6 @@ void testing_matmul_with_bias(const Arguments& arg,
+         }
+     }
+ 
+-    if(dWorkspace != nullptr)
+-        delete dWorkspace;
+     if(userArgs != nullptr)
+         CHECK_HIP_ERROR(hipFree(userArgs));
+     if(d_userArgs != nullptr)
+diff --git a/projects/hipblaslt/clients/common/src/fast_check.cpp b/projects/hipblaslt/clients/common/src/fast_check.cpp
+index 4c1a19e4..443b8756 100644
+--- a/projects/hipblaslt/clients/common/src/fast_check.cpp
++++ b/projects/hipblaslt/clients/common/src/fast_check.cpp
+@@ -1447,48 +1447,98 @@ hipError_t fast_check_poison_padding_device(const FastCheckMatrix& m,
+     return fill_outside_region(m, batch_count, total_elements, poison_bits(m.type), stream);
+ }
+ 
++namespace
++{
++    // Runs scan_kernel and returns its counters: [0] padding mismatches, [1] first padding
++    // mismatch, [2] unwritten elements, [3] first unwritten element.
++    hipError_t run_scan(const FastCheckMatrix& m,
++                        int64_t                batch_count,
++                        size_t                 total_elements,
++                        bool                   expect_poison,
++                        hipStream_t            stream,
++                        unsigned long long (&counters)[4])
++    {
++        unsigned long long              init[4] = {0, ~0ull, 0, ~0ull};
++        DeviceArray<unsigned long long> d_counters(4);
++        if(!d_counters.ptr)
++            return hipErrorOutOfMemory;
++        hipError_t err
++            = hipMemcpyAsync(d_counters.ptr, init, sizeof(init), hipMemcpyHostToDevice, stream);
++        if(err != hipSuccess)
++            return err;
++        // A failed launch, or an unsupported type, would otherwise leave the counters clean.
++        err = hipErrorInvalidValue;
++        switch(element_size(m.type))
++        {
++        case 1:
++            err = launch_scan<uint8_t>(
++                m, batch_count, total_elements, expect_poison, d_counters.ptr, stream);
++            break;
++        case 2:
++            err = launch_scan<uint16_t>(
++                m, batch_count, total_elements, expect_poison, d_counters.ptr, stream);
++            break;
++        case 4:
++            err = launch_scan<uint32_t>(
++                m, batch_count, total_elements, expect_poison, d_counters.ptr, stream);
++            break;
++        case 8:
++            err = launch_scan<uint64_t>(
++                m, batch_count, total_elements, expect_poison, d_counters.ptr, stream);
++            break;
++        default:
++            // An unsupported type would otherwise scan nothing and look clean.
++            return hipErrorInvalidValue;
++        }
++        if(err != hipSuccess)
++            return err;
++        err = hipMemcpyAsync(
++            counters, d_counters.ptr, sizeof(counters), hipMemcpyDeviceToHost, stream);
++        if(err == hipSuccess)
++            err = hipStreamSynchronize(stream);
++        return err;
++    }
++} // namespace
++
++size_t fast_check_element_size(hipDataType type)
++{
++    return element_size(type);
++}
++
++uint64_t fast_check_poison_bits(hipDataType type)
++{
++    return poison_bits(type);
++}
++
++FastCheckChanged fast_check_count_changed_device(const void* data,
++                                                 hipDataType type,
++                                                 size_t      elements,
++                                                 hipStream_t stream)
++{
++    // An empty region makes every element padding, so the scan compares all of them with the
++    // poison value.
++    FastCheckMatrix    m{data, type, 0, 0, 1, 0};
++    unsigned long long counters[4];
++    FastCheckChanged   changed;
++    if(run_scan(m, 1, elements, true, stream, counters) != hipSuccess)
++    {
++        changed.ok = false;
++        return changed;
++    }
++    changed.count = counters[0];
++    changed.first = counters[1];
++    return changed;
++}
++
+ FastCheckResult fast_check_scan_padding_device(const FastCheckMatrix& m,
+                                                int64_t                batch_count,
+                                                size_t                 total_elements,
+                                                bool                   expect_poison,
+                                                hipStream_t            stream)
+ {
+-    FastCheckResult                 result;
+-    unsigned long long              init[4] = {0, ~0ull, 0, ~0ull};
+-    DeviceArray<unsigned long long> d_counters(4);
+-    if(!d_counters.ptr
+-       || hipMemcpyAsync(d_counters.ptr, init, sizeof(init), hipMemcpyHostToDevice, stream)
+-              != hipSuccess)
+-        return {false, "fast_check could not allocate its scan counters"};
+-    // A failed launch, or an unsupported type, would otherwise leave the counters clean.
+-    hipError_t err = hipErrorInvalidValue;
+-    switch(element_size(m.type))
+-    {
+-    case 1:
+-        err = launch_scan<uint8_t>(
+-            m, batch_count, total_elements, expect_poison, d_counters.ptr, stream);
+-        break;
+-    case 2:
+-        err = launch_scan<uint16_t>(
+-            m, batch_count, total_elements, expect_poison, d_counters.ptr, stream);
+-        break;
+-    case 4:
+-        err = launch_scan<uint32_t>(
+-            m, batch_count, total_elements, expect_poison, d_counters.ptr, stream);
+-        break;
+-    case 8:
+-        err = launch_scan<uint64_t>(
+-            m, batch_count, total_elements, expect_poison, d_counters.ptr, stream);
+-        break;
+-    default:
+-        break;
+-    }
+-    if(err != hipSuccess)
+-        return {false, std::string("fast_check scan failed: ") + hipGetErrorString(err)};
++    FastCheckResult    result;
+     unsigned long long counters[4];
+-    err = hipMemcpyAsync(counters, d_counters.ptr, sizeof(counters), hipMemcpyDeviceToHost, stream);
+-    if(err == hipSuccess)
+-        err = hipStreamSynchronize(stream);
++    hipError_t err = run_scan(m, batch_count, total_elements, expect_poison, stream, counters);
+     if(err != hipSuccess)
+         return {false, std::string("fast_check scan failed: ") + hipGetErrorString(err)};
+ 
+diff --git a/projects/hipblaslt/clients/common/src/hipblaslt_arguments.cpp b/projects/hipblaslt/clients/common/src/hipblaslt_arguments.cpp
+index 56eb4c9a..10c842ef 100644
+--- a/projects/hipblaslt/clients/common/src/hipblaslt_arguments.cpp
++++ b/projects/hipblaslt/clients/common/src/hipblaslt_arguments.cpp
+@@ -118,6 +118,8 @@ void Arguments::init()
+     unit_check     = 1;
+     ulp_check      = 0;
+     fast_check     = 0;
++    placement[0]   = 0;
++    placement_offset = 0;
+     timing         = 0;
+ 
+     transA = '*';
+diff --git a/projects/hipblaslt/clients/tests/data/hipblaslt_common.yaml b/projects/hipblaslt/clients/tests/data/hipblaslt_common.yaml
+index 378d1524..ce2b7d0d 100644
+--- a/projects/hipblaslt/clients/tests/data/hipblaslt_common.yaml
++++ b/projects/hipblaslt/clients/tests/data/hipblaslt_common.yaml
+@@ -648,6 +648,8 @@ Arguments:
+   - unit_check: c_int8
+   - ulp_check: c_int8
+   - fast_check: c_int8
++  - placement: c_char*16
++  - placement_offset: c_size_t
+   - timing: c_int8
+   - transA: c_char
+   - transB: c_char
+@@ -757,6 +759,8 @@ Defaults:
+   unit_check: 1
+   ulp_check: 0
+   fast_check: 0
++  placement: ''
++  placement_offset: 0
+   timing: 0
+   iters: 10
+   cold_iters: 2
+diff --git a/projects/hipblaslt/clients/tests/data/matmul_gtest.yaml b/projects/hipblaslt/clients/tests/data/matmul_gtest.yaml
+index 21b47ca5..6dc28808 100755
+--- a/projects/hipblaslt/clients/tests/data/matmul_gtest.yaml
++++ b/projects/hipblaslt/clients/tests/data/matmul_gtest.yaml
+@@ -3384,6 +3384,111 @@ Tests:
+   gpu_arch: '9(0a|42|50)'
+ 
+ 
++###############################################################################
++# fast_check placement (AIHPBLAS-4994).
++#
++# Some address defects depend on where a buffer sits, not on problem size: a
++# kernel that drops the carry out of the low 32 bits of an address (ROCM-32046)
++# goes wrong only when a buffer crosses a 4 GiB boundary, and the wrong access
++# lands exactly 4 GiB away, outside every allocation. These cases place one
++# operand at a time across a 4 GiB virtual-address boundary (by default half of
++# it on each side) with poison memory mapped 4 GiB below and above it. A
++# dropped-carry read returns poison and fast_check reports a wrong D; a
++# dropped-carry write changes the poison and the test reports it. The defect
++# does not depend on size, so small shapes suffice, and every solution runs
++# because such defects are specific to a few kernels.
++###############################################################################
++
++# Every PR: each operand placed in turn, with the heuristic's first 16 solutions.
++# The workspace is placed only in the all-solutions cases below: at this shape
++# none of the first 16 f32 solutions uses one.
++# Runtime on gfx942: 8 cases, about 4 s.
++- name: matmul_fast_check_placement
++  category: pre_checkin
++  function:
++    matmul:
++      - *single_precision
++      - *hpa_bf16_precision
++  matrix_size:
++    - { M: 1031, N: 517, K: 263 }
++  transA: N
++  transB: N
++  alpha: 2.0
++  beta: -2.0
++  placement: [ a, b, c, d ]
++  requested_solution_num: 16
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++
++# The side operands, with the epilogue that reads them.
++# Runtime on gfx942: 4 cases, about 4 s.
++- name: matmul_fast_check_placement_epilogue
++  category: pre_checkin
++  function:
++    matmul:
++      - *single_precision
++      - *hpa_bf16_precision
++  matrix_size:
++    - { M: 1031, N: 517, K: 263 }
++  transA: N
++  transB: T
++  alpha: 1.0
++  beta: 0.0
++  bias_vector: 1
++  bias_type: f32_r
++  scaleAlpha_vector: 1
++  placement: [ bias, scale_alpha_vec ]
++  requested_solution_num: 16
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++
++# Nightly: the same placements with every supported solution, about 6 minutes on
++# gfx942.
++# Runtime on gfx942: 10 cases, about 178 s.
++- name: matmul_fast_check_placement_all_solutions
++  category: nightly
++  function:
++    matmul:
++      - *single_precision
++      - *hpa_bf16_precision
++  matrix_size:
++    - { M: 1031, N: 517, K: 263 }
++  transA: N
++  transB: N
++  alpha: 2.0
++  beta: -2.0
++  placement: [ a, b, c, d, workspace ]
++  algo_method: [1]
++  requested_solution_num: -1
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++
++# Runtime on gfx942: 4 cases, about 190 s.
++- name: matmul_fast_check_placement_epilogue_all_solutions
++  category: nightly
++  function:
++    matmul:
++      - *single_precision
++      - *hpa_bf16_precision
++  matrix_size:
++    - { M: 1031, N: 517, K: 263 }
++  transA: N
++  transB: T
++  alpha: 1.0
++  beta: 0.0
++  bias_vector: 1
++  bias_type: f32_r
++  scaleAlpha_vector: 1
++  placement: [ bias, scale_alpha_vec ]
++  algo_method: [1]
++  requested_solution_num: -1
++  initialization: integer_exact
++  unit_check: 0
++  fast_check: 1
++
+ - name: matmul_96_complex
+   category: pre_checkin
+   function:
+diff --git a/projects/hipblaslt/clients/tests/src/fast_check_gtest.cpp b/projects/hipblaslt/clients/tests/src/fast_check_gtest.cpp
+index a1a4c39f..6235b2aa 100644
+--- a/projects/hipblaslt/clients/tests/src/fast_check_gtest.cpp
++++ b/projects/hipblaslt/clients/tests/src/fast_check_gtest.cpp
+@@ -12,6 +12,8 @@
+ #include <gtest/gtest.h>
+ 
+ #include "fast_check.hpp"
++#include "hipBuffer.hpp"
++#include "hip_placement.hpp"
+ 
+ #include <hip/hip_runtime.h>
+ 
+@@ -925,6 +927,50 @@ namespace
+         }
+     }
+ 
++    // In every supported type, the poison bits are kFastCheckPoisonValue as the type stores it,
++    // and the count of changed poison finds a single changed element.
++    TEST(FastCheckDevice_pre_checkin, every_type_counts_changed_poison)
++    {
++        const size_t elements = 300;
++        for(const auto& tc : kTypes)
++        {
++            std::vector<char> poison(tc.size);
++            store_as(tc.type, kFastCheckPoisonValue, poison.data());
++            uint64_t bits = fast_check_poison_bits(tc.type);
++            EXPECT_EQ(std::memcmp(&bits, poison.data(), tc.size), 0) << tc.name;
++
++            std::vector<char> h(elements * tc.size);
++            for(size_t idx = 0; idx < elements; idx++)
++                std::memcpy(h.data() + idx * tc.size, poison.data(), tc.size);
++            char* d = nullptr;
++            ASSERT_EQ(hipMalloc(&d, h.size()), hipSuccess);
++            ASSERT_EQ(hipMemcpy(d, h.data(), h.size(), hipMemcpyHostToDevice), hipSuccess);
++            auto changed = fast_check_count_changed_device(d, tc.type, elements, 0);
++            EXPECT_TRUE(changed.ok) << tc.name;
++            EXPECT_EQ(changed.count, 0u) << tc.name;
++
++            store_as(tc.type, 1, h.data() + 217 * tc.size);
++            ASSERT_EQ(hipMemcpy(d, h.data(), h.size(), hipMemcpyHostToDevice), hipSuccess);
++            changed = fast_check_count_changed_device(d, tc.type, elements, 0);
++            (void)hipFree(d);
++            EXPECT_TRUE(changed.ok) << tc.name;
++            EXPECT_EQ(changed.count, 1u) << tc.name;
++            EXPECT_EQ(changed.first, 217u) << tc.name;
++        }
++    }
++
++    // A type the scans do not support is an error, never a clean scan.
++    TEST(FastCheckDevice_pre_checkin, scans_refuse_an_unsupported_type)
++    {
++        DeviceMatrix    m;
++        FastCheckMatrix complex = m.matrix();
++        complex.type            = HIP_C_32F;
++        auto res = fast_check_scan_padding_device(complex, DeviceMatrix::batch, 8, true, 0);
++        EXPECT_FALSE(res.passed);
++        EXPECT_NE(res.message.find("scan failed"), std::string::npos) << res.message;
++        EXPECT_FALSE(fast_check_count_changed_device(m.d, HIP_C_32F, 8, 0).ok);
++    }
++
+     // Configurations fast_check cannot check exactly are refused with a reason, before any sums.
+     TEST(FastCheck_pre_checkin, unsupported_configurations_are_refused)
+     {
+@@ -1067,6 +1113,166 @@ namespace
+         EXPECT_FALSE(res.message.empty());
+     }
+ 
++    // Reads word `word` of `base` twice: through the correct address, and through an address whose
++    // low 32 bits were computed without carrying into the high 32 bits.
++    __global__ void read_with_dropped_carry(const uint32_t* base,
++                                            uint64_t        word,
++                                            uint32_t*       correct,
++                                            uint32_t*       dropped)
++    {
++        uint64_t b       = reinterpret_cast<uint64_t>(base);
++        uint64_t right   = b + word * 4;
++        uint64_t wrapped = (b & ~uint64_t(0xffffffff)) | uint32_t(uint32_t(b) + uint32_t(word * 4));
++        *correct         = *reinterpret_cast<const uint32_t*>(right);
++        *dropped         = *reinterpret_cast<const uint32_t*>(wrapped);
++    }
++
++    __global__ void write_with_dropped_carry(uint32_t* base, uint64_t word, uint32_t value)
++    {
++        uint64_t b       = reinterpret_cast<uint64_t>(base);
++        uint64_t wrapped = (b & ~uint64_t(0xffffffff)) | uint32_t(uint32_t(b) + uint32_t(word * 4));
++        *reinterpret_cast<uint32_t*>(wrapped) = value;
++    }
++
++    // The placement harness must turn a dropped-carry read into a poison value instead of a fault,
++    // and report a dropped-carry write with the element it was meant for.
++    TEST(FastCheckDevice_pre_checkin, placed_region_catches_dropped_carry)
++    {
++        const size_t bytes = 8 << 20, below = 4 << 20;
++        std::string  why;
++        bool         unsupported = false;
++        auto         region = PlacedRegion::create(bytes, below, HIP_R_32F, &why, &unsupported);
++        if(!region && unsupported)
++            GTEST_SKIP() << why;
++        ASSERT_TRUE(region) << why;
++
++        const uint64_t start = reinterpret_cast<uint64_t>(region->ptr());
++        ASSERT_EQ(region->boundary() - start, below);
++
++        std::vector<uint32_t> data(bytes / 4);
++        for(size_t n = 0; n < data.size(); n++)
++            data[n] = uint32_t(n);
++        ASSERT_EQ(hipMemcpy(region->ptr(), data.data(), bytes, hipMemcpyHostToDevice), hipSuccess);
++
++        const uint64_t word = below / 4 + 100; // 100 words past the boundary
++        uint32_t*      d_out;
++        ASSERT_EQ(hipMalloc(&d_out, 2 * sizeof(uint32_t)), hipSuccess);
++        hipLaunchKernelGGL(read_with_dropped_carry,
++                           dim3(1),
++                           dim3(1),
++                           0,
++                           0,
++                           static_cast<const uint32_t*>(region->ptr()),
++                           word,
++                           d_out,
++                           d_out + 1);
++        uint32_t out[2];
++        ASSERT_EQ(hipMemcpy(out, d_out, sizeof(out), hipMemcpyDeviceToHost), hipSuccess);
++        (void)hipFree(d_out);
++        const float poison = kFastCheckPoisonValue;
++        uint32_t    poison_bits;
++        std::memcpy(&poison_bits, &poison, sizeof(poison_bits));
++        EXPECT_EQ(out[0], uint32_t(word));
++        EXPECT_EQ(out[1], poison_bits);
++
++        auto clean = region->verify_poison("A", 0);
++        EXPECT_TRUE(clean.passed) << clean.message;
++
++        hipLaunchKernelGGL(write_with_dropped_carry,
++                           dim3(1),
++                           dim3(1),
++                           0,
++                           0,
++                           static_cast<uint32_t*>(region->ptr()),
++                           word,
++                           0x12345678u);
++        ASSERT_EQ(hipDeviceSynchronize(), hipSuccess);
++        auto written = region->verify_poison("A", 0);
++        ASSERT_FALSE(written.passed);
++        EXPECT_NE(
++            written.message.find("1 elements of the poison window 4 GiB below A were written"),
++            std::string::npos)
++            << written.message;
++        EXPECT_NE(written.message.find("A element " + std::to_string(word)), std::string::npos)
++            << written.message;
++
++        ASSERT_EQ(region->fill_poison(0), hipSuccess);
++        auto refilled = region->verify_poison("A", 0);
++        EXPECT_TRUE(refilled.passed) << refilled.message;
++    }
++
++    TEST(FastCheckDevice_pre_checkin, placement_rejects_requests_that_cannot_cross)
++    {
++        std::string why;
++        bool        unsupported = false;
++        if(!PlacedRegion::create(1 << 20, 0, HIP_R_32F, &why, &unsupported) && unsupported)
++            GTEST_SKIP() << why;
++        EXPECT_FALSE(PlacedRegion::create(4096, 8192, HIP_R_32F, &why, &unsupported));
++        EXPECT_FALSE(unsupported);
++        EXPECT_NE(why.find("cannot cross"), std::string::npos) << why;
++        EXPECT_FALSE(PlacedRegion::create(1 << 20, 100, HIP_R_32F, &why, &unsupported));
++        EXPECT_NE(why.find("multiple of the mapping granularity"), std::string::npos) << why;
++    }
++
++    // Solutions use different amounts of one placed workspace, and each one's range must cross the
++    // boundary while staying inside the mapped window. A write past the end of a placed buffer,
++    // into the rest of its mapped window, must be reported.
++    TEST(FastCheckDevice_pre_checkin, placed_workspace_straddles_for_every_size)
++    {
++        const size_t bytes = (size_t(16) << 20) - 4096;
++        std::string  why;
++        bool         unsupported = false;
++        auto         region      = PlacedRegion::create(bytes, 0, HIP_R_8I, &why, &unsupported);
++        if(!region && unsupported)
++            GTEST_SKIP() << why;
++        ASSERT_TRUE(region) << why;
++
++        // As the harness places a workspace: twice the largest size, so any solution may use all
++        // of it from wherever its own range starts.
++        const uint64_t lo   = reinterpret_cast<uint64_t>(region->ptr());
++        const size_t   room = bytes / 2;
++        for(size_t ws : {size_t(300), size_t(4096), size_t(1) << 20, size_t(5) << 20, room})
++        {
++            void*          p  = region->straddle(ws, room);
++            const uint64_t at = reinterpret_cast<uint64_t>(p);
++            EXPECT_TRUE(region->crosses(p, ws)) << ws;
++            EXPECT_EQ(at % 256, 0u) << ws;
++            EXPECT_GE(at, lo) << ws;
++            EXPECT_LE(at + room, lo + bytes) << ws;
++        }
++
++        auto clean = region->verify_poison("workspace", 0);
++        EXPECT_TRUE(clean.passed) << clean.message;
++        if(region->span() > bytes)
++        {
++            ASSERT_EQ(hipMemset(static_cast<char*>(region->ptr()) + bytes, 1, 1), hipSuccess);
++            auto tail = region->verify_poison("workspace", 0);
++            EXPECT_FALSE(tail.passed);
++            EXPECT_NE(tail.message.find("past the end of workspace"), std::string::npos)
++                << tail.message;
++        }
++    }
++
++    // std::vector growth moves its elements. A placed buffer must keep its address through the
++    // move, and the moved-from object must not touch the placed memory when it is destroyed.
++    TEST(FastCheckDevice_pre_checkin, placed_buffer_survives_vector_growth)
++    {
++        std::string                  why;
++        bool                         unsupported = false;
++        std::vector<HipDeviceBuffer> buffers;
++        buffers.emplace_back(HIP_R_32F, size_t(1 << 20), size_t(0), &why, &unsupported);
++        if(!buffers.back().buf() && unsupported)
++            GTEST_SKIP() << why;
++        ASSERT_TRUE(buffers.back().buf()) << why;
++        void* placed = buffers[0].buf();
++        for(int n = 0; n < 16; n++)
++            buffers.emplace_back(HIP_R_32F, size_t(1024));
++        EXPECT_EQ(buffers[0].buf(), placed);
++        ASSERT_TRUE(buffers[0].placement());
++        EXPECT_EQ(buffers[0].placement()->ptr(), placed);
++        EXPECT_EQ(hipMemset(placed, 0, 4 << 20), hipSuccess);
++    }
++
+     TEST(FastCheckDevice_pre_checkin, copy_region_to_host_drops_the_padding)
+     {
+         DeviceMatrix       m;
+diff --git a/projects/hipblaslt/clients/tests/src/matmul_gtest.cpp b/projects/hipblaslt/clients/tests/src/matmul_gtest.cpp
+index 86f23438..c7bcbac8 100644
+--- a/projects/hipblaslt/clients/tests/src/matmul_gtest.cpp
++++ b/projects/hipblaslt/clients/tests/src/matmul_gtest.cpp
+@@ -171,6 +171,8 @@ namespace
+ 
+                 if(arg.c_equal_d)
+                     name << "_C_EQUAL_D";
++                if(arg.placement[0])
++                    name << "_PLACE_" << arg.placement;
+                 // grouped gemm only supports ext
+                 if(arg.use_ext || arg.grouped_gemm > 0)
+                     name << "_APIExt";
+-- 
+2.43.0
+
