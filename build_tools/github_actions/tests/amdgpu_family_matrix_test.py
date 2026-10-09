@@ -157,6 +157,64 @@ class TestFamilyMatrixInvariants(unittest.TestCase):
                         f"builds_on_trigger: {extra_test_triggers}"
                     )
 
+    def test_test_labels_on_trigger_keys_are_enabled_triggers(self):
+        """test_labels_on_trigger keys must be triggers the family actually tests on.
+
+        Scoping labels to a trigger that isn't in tests_on_trigger is dead config:
+        no tests run there at all, so the labels silently do nothing.
+        """
+        for target_name, entry in ALL_FAMILIES.items():
+            for platform in ("linux", "windows"):
+                if platform not in entry:
+                    continue
+                platform_info = entry[platform]
+                labels_on_trigger = platform_info.get("test_labels_on_trigger", {})
+                if not labels_on_trigger:
+                    continue
+
+                test_triggers = set(platform_info.get("tests_on_trigger", []))
+                extra = set(labels_on_trigger) - test_triggers
+                if extra:
+                    self.fail(
+                        f"{target_name}/{platform} has test_labels_on_trigger keys "
+                        f"not in tests_on_trigger: {extra}"
+                    )
+
+                for trigger, labels in labels_on_trigger.items():
+                    if not labels:
+                        self.fail(
+                            f"{target_name}/{platform} has empty "
+                            f"test_labels_on_trigger[{trigger!r}]. Omit the key to "
+                            f"run the full matrix on that trigger."
+                        )
+
+    def test_test_labels_on_trigger_name_real_components(self):
+        """Every test_labels_on_trigger label must select at least one real job.
+
+        A typo here is silent: the label matches no component, so the family runs
+        only the sanity job on that trigger. That is exactly the kind of coverage
+        gap this field exists to close, so fail loudly instead.
+        """
+        import fetch_test_configurations as ftc
+
+        known = set(ftc.test_matrix) | set(ftc.TEST_LABEL_GROUPS)
+        for target_name, entry in ALL_FAMILIES.items():
+            for platform in ("linux", "windows"):
+                if platform not in entry:
+                    continue
+                labels_on_trigger = entry[platform].get("test_labels_on_trigger", {})
+                for trigger, labels in labels_on_trigger.items():
+                    for label in labels:
+                        # fetch_test_configurations strips the "test:" prefix before
+                        # matching against test_matrix keys.
+                        component = label.split("test:")[-1]
+                        if component not in known:
+                            self.fail(
+                                f"{target_name}/{platform} "
+                                f"test_labels_on_trigger[{trigger!r}] names unknown "
+                                f"component {component!r}. Valid: {sorted(known)}"
+                            )
+
 
 class TestTriggerFiltering(unittest.TestCase):
     """Tests for trigger-based family filtering."""

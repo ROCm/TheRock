@@ -58,6 +58,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from _therock_utils.build_topology import get_topology
 
 from amdgpu_family_matrix import (
+    TRIGGER_BREADTH_ORDER,
     all_build_variants,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
@@ -885,6 +886,24 @@ def _filter_families_by_platform(
     ]
 
 
+def _filter_families_by_platform_trigger(
+    families: dict[str, dict], platform: str, triggers: set[str]
+) -> list[str]:
+    """Keep families whose entry for this platform opts into one of these triggers.
+
+    get_all_families_for_trigger_types() returns the whole family when *any*
+    platform opts in, so the result cannot be applied to both platform lists
+    directly: a family that builds on presubmit for Linux only would otherwise
+    also be built on Windows.
+    """
+    return [
+        name
+        for name, config in families.items()
+        if platform in config
+        and set(config[platform].get("builds_on_trigger", [])) & triggers
+    ]
+
+
 def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     """Determine GPU families per platform based on trigger type and inputs.
 
@@ -960,18 +979,24 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
         # Smallest default set for fast PR feedback. PR labels can extend
         # the set below (ci:gfx* for individual families, ci:run-all-archs
         # for everything).
-        defaults = list(get_all_families_for_trigger_types(["presubmit"]).keys())
-        linux_names = list(defaults)
-        windows_names = list(defaults)
+        defaults = get_all_families_for_trigger_types(["presubmit"])
+        linux_names = _filter_families_by_platform_trigger(
+            defaults, "linux", {"presubmit"}
+        )
+        windows_names = _filter_families_by_platform_trigger(
+            defaults, "windows", {"presubmit"}
+        )
     elif ci_inputs.is_push:
         # Broader than PR: presubmit + postsubmit. Code has landed, so
         # we validate on more targets (e.g. gfx950) without paying full
         # nightly cost.
-        defaults = list(
-            get_all_families_for_trigger_types(["presubmit", "postsubmit"]).keys()
+        defaults = get_all_families_for_trigger_types(["presubmit", "postsubmit"])
+        linux_names = _filter_families_by_platform_trigger(
+            defaults, "linux", {"presubmit", "postsubmit"}
         )
-        linux_names = list(defaults)
-        windows_names = list(defaults)
+        windows_names = _filter_families_by_platform_trigger(
+            defaults, "windows", {"presubmit", "postsubmit"}
+        )
     elif ci_inputs.is_schedule:
         # Schedule trigger: all families implicitly allowed (like workflow_dispatch).
         # Use explicit inputs if provided, else all families.
@@ -1436,6 +1461,41 @@ def _should_run_tests_for_family(
     )
 
 
+def _resolve_test_labels_on_trigger(
+    platform_info: dict,
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+) -> list[str] | None:
+    """Resolve test_labels_on_trigger to a label list for the current triggers.
+
+    Lets a capacity-limited family run a cheap subset of components on the PR
+    path while keeping its full test matrix on broader triggers.
+
+    Several triggers can be active at once, so the broadest one in
+    TRIGGER_BREADTH_ORDER decides. A trigger absent from the dict is
+    unrestricted: a push carrying a submodule bump is both "postsubmit" and
+    "submodule_bump", and resolves against "postsubmit" to run everything.
+
+    Returns:
+        The label list for the deciding trigger, or None when the family should
+        run its full test matrix.
+    """
+    labels_on_trigger = platform_info.get("test_labels_on_trigger", {})
+    if not labels_on_trigger:
+        return None
+
+    # workflow_dispatch is a deliberate manual choice; don't second-guess it.
+    if ci_inputs.is_workflow_dispatch:
+        return None
+
+    current_triggers = _get_current_triggers(ci_inputs, git_context)
+    for trigger in TRIGGER_BREADTH_ORDER:
+        if trigger in current_triggers:
+            return labels_on_trigger.get(trigger)
+
+    return None
+
+
 def _expand_build_config_for_platform(
     families: list[str],
     platform: str,
@@ -1642,11 +1702,50 @@ def _expand_build_config_for_platform(
             family_info["test-runs-on-multi-gpu-labels"] = platform_info[
                 "test-runs-on-multi-gpu-labels"
             ]
-        # Per-family test labels allow limiting which tests run for specific architectures
-        if "test_labels_for_family" in platform_info:
-            family_info["test_labels_for_family"] = platform_info[
+        # Per-family test labels allow limiting which tests run for specific
+        # architectures. A trigger-scoped list (test_labels_on_trigger) wins over
+        # the static test_labels_for_family when it resolves for this run.
+        #
+        # An explicit component selection always beats both: the per-family list
+        # is a capacity default, not a ceiling, so someone who asks for a
+        # component with a test:* PR label gets it rather than having the label
+        # silently do nothing. Leaving test_labels_for_family unset here makes the
+        # workflow fall through to its `|| inputs.test_labels` branch.
+        #
+        # ci:* entries are control labels (e.g. ci:run-multi-gpu), not component
+        # selectors, so they do not count as a selection. This mirrors how
+        # fetch_test_configurations.py decides whether to filter -- without it, an
+        # unrelated ci:* label would widen the family back to its full matrix.
+        platform_test_labels = (
+            ci_inputs.linux_test_labels
+            if platform == "linux"
+            else ci_inputs.windows_test_labels
+        )
+        explicit_components = [
+            label for label in platform_test_labels if not label.startswith("ci:")
+        ]
+        test_labels_for_family = None
+        if explicit_components:
+            if "test_labels_on_trigger" in platform_info or platform_info.get(
                 "test_labels_for_family"
-            ]
+            ):
+                print(
+                    f"  {family_name}: per-family test labels overridden by "
+                    f"explicit selection {explicit_components}"
+                )
+        else:
+            test_labels_for_family = _resolve_test_labels_on_trigger(
+                platform_info, ci_inputs, git_context
+            )
+            if test_labels_for_family is not None:
+                print(
+                    f"  {family_name}: limiting tests to {test_labels_for_family} "
+                    f"(test_labels_on_trigger)"
+                )
+            else:
+                test_labels_for_family = platform_info.get("test_labels_for_family")
+        if test_labels_for_family:
+            family_info["test_labels_for_family"] = test_labels_for_family
         per_family_info.append(family_info)
 
     if not per_family_info:

@@ -2971,6 +2971,129 @@ class TestTriggerHelpers(unittest.TestCase):
                 self.assertEqual(should_run, expected_run)
 
 
+class TestResolveTestLabelsOnTrigger(unittest.TestCase):
+    """Unit tests for _resolve_test_labels_on_trigger."""
+
+    SMOKE = ["test:hip-tests", "test:rocrtst"]
+    PLATFORM_INFO = {
+        "test_labels_on_trigger": {
+            "presubmit": SMOKE,
+            "submodule_bump": SMOKE,
+        }
+    }
+
+    def _resolve(self, event, platform_info=None, submodule_change=False):
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name=event,
+            commit_ref="feature" if event == "pull_request" else "main",
+            base_ref="main" if event == "pull_request" else "HEAD^",
+            build_variant="release",
+        )
+        git_context = (
+            cm.GitContext(
+                changed_files=["some-submodule"], submodule_paths=["some-submodule"]
+            )
+            if submodule_change
+            else cm.GitContext.empty()
+        )
+        return cm._resolve_test_labels_on_trigger(
+            self.PLATFORM_INFO if platform_info is None else platform_info,
+            ci_inputs,
+            git_context,
+        )
+
+    def test_presubmit_restricts(self):
+        """A plain PR resolves to the presubmit subset."""
+        self.assertEqual(self._resolve("pull_request"), self.SMOKE)
+
+    def test_submodule_bump_pr_restricts(self):
+        """A submodule-bump PR is presubmit+submodule_bump; both are restricted."""
+        self.assertEqual(
+            self._resolve("pull_request", submodule_change=True), self.SMOKE
+        )
+
+    def test_postsubmit_unrestricted(self):
+        """postsubmit is unlisted, so the full matrix runs."""
+        self.assertIsNone(self._resolve("push"))
+
+    def test_submodule_bump_push_unrestricted(self):
+        """A push carrying a bump resolves against the broader postsubmit trigger."""
+        self.assertIsNone(self._resolve("push", submodule_change=True))
+
+    def test_nightly_unrestricted(self):
+        self.assertIsNone(self._resolve("schedule"))
+
+    def test_workflow_dispatch_unrestricted(self):
+        """Manual runs are a deliberate choice and are never narrowed."""
+        self.assertIsNone(self._resolve("workflow_dispatch"))
+
+    def test_absent_field_unrestricted(self):
+        self.assertIsNone(self._resolve("pull_request", platform_info={}))
+
+    FAMILIES = {
+        "mock-limited": {
+            "linux": {
+                "test-runs-on": "linux-runner",
+                "family": "mock-limited",
+                "fetch-gfx-targets": ["gfx0000"],
+                "build_variants": ["release"],
+                "builds_on_trigger": ["presubmit", "postsubmit"],
+                "tests_on_trigger": ["presubmit", "postsubmit"],
+                "test_labels_for_family": ["test:static"],
+                "test_labels_on_trigger": {"presubmit": SMOKE},
+            }
+        }
+    }
+
+    def _configure_pr(self, **ci_kwargs):
+        """Run the pipeline for a PR and return mock-limited's family_info."""
+        with patch(
+            "configure_multi_arch_ci.get_all_families_for_trigger_types",
+            side_effect=lambda _triggers: dict(self.FAMILIES),
+        ):
+            ci_inputs = cm.CIInputs(
+                run_id="12345",
+                event_name="pull_request",
+                commit_ref="feature",
+                base_ref="main",
+                build_variant="release",
+                **ci_kwargs,
+            )
+            outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+        return outputs.builds.linux.per_family_info[0]
+
+    def test_overrides_static_test_labels_for_family(self):
+        """test_labels_on_trigger wins over the static field on a matching trigger."""
+        self.assertEqual(self._configure_pr()["test_labels_for_family"], self.SMOKE)
+
+    def test_explicit_test_label_beats_per_family_labels(self):
+        """An explicit test:* selection wins; the label must not be a no-op."""
+        family_info = self._configure_pr(
+            pr_labels=["test:rocblas"], linux_test_labels=["test:rocblas"]
+        )
+        self.assertNotIn("test_labels_for_family", family_info)
+
+    def test_ci_control_label_does_not_override_per_family_labels(self):
+        """ci:* labels are control flags, not component selectors.
+
+        Treating them as a selection would silently widen a capacity-limited
+        family back to its full test matrix.
+        """
+        family_info = self._configure_pr(
+            pr_labels=["ci:run-multi-gpu"], linux_test_labels=["ci:run-multi-gpu"]
+        )
+        self.assertEqual(family_info["test_labels_for_family"], self.SMOKE)
+
+    def test_ci_label_mixed_with_test_label_still_overrides(self):
+        """A test:* label alongside a ci:* control label still wins."""
+        family_info = self._configure_pr(
+            pr_labels=["ci:run-multi-gpu", "test:rocblas"],
+            linux_test_labels=["ci:run-multi-gpu", "test:rocblas"],
+        )
+        self.assertNotIn("test_labels_for_family", family_info)
+
+
 # ---------------------------------------------------------------------------
 # Multi-label runner selection
 # ---------------------------------------------------------------------------

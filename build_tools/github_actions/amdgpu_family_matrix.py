@@ -35,6 +35,13 @@ from pathlib import Path
 # when manually triggered, so it's not included in the explicit trigger lists.
 VALID_TRIGGERS = frozenset(["presubmit", "postsubmit", "submodule_bump", "nightly"])
 
+# Triggers ordered from broadest test coverage to narrowest. Several triggers can
+# be active at once (a push carrying a submodule bump is both "postsubmit" and
+# "submodule_bump"), so test_labels_on_trigger resolution walks this order and
+# lets the broadest active trigger decide. See _resolve_test_labels_on_trigger()
+# in configure_multi_arch_ci.py.
+TRIGGER_BREADTH_ORDER = ("nightly", "postsubmit", "submodule_bump", "presubmit")
+
 
 def _log(*args, **kwargs):
     print(*args, **kwargs)
@@ -246,6 +253,18 @@ amdgpu_family_info_matrix dictionary fields:
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
 - test_type_for_family (optional): forces the test type for this family (e.g., "quick"), overriding the global test_type. Useful for families with limited hardware that should always run quick tests.
 - test_labels_for_family (optional): list of test labels to filter which tests run for this family
+- test_labels_on_trigger (optional): dict mapping a trigger name to the list of test
+    labels to run for that trigger, e.g. {"presubmit": ["test:hip-tests"]}.
+    Use this to give a capacity-limited family cheap coverage on the PR path while
+    keeping its full test matrix after merge. Keys must be a subset of
+    tests_on_trigger (enforced by amdgpu_family_matrix_test.py) and label values
+    must name an entry in fetch_test_configurations.py's test_matrix (or a group in
+    its TEST_LABEL_GROUPS).
+    Resolution: when several triggers are active, the broadest one listed in
+    TRIGGER_BREADTH_ORDER decides. A trigger that is absent from this dict is
+    unrestricted, so a push carrying a submodule bump ("postsubmit" +
+    "submodule_bump") still runs the full matrix. Overrides test_labels_for_family.
+    Note: the sanity component always runs regardless of test labels.
 - disabled_framework_tests (optional): list of ML framework tests to skip on architecture
     Valid values: "pytorch", "jax"
 """
@@ -427,7 +446,9 @@ amdgpu_family_info_matrix = {
             "disabled_framework_tests": ["pytorch"],
         },
     },
-    # Postsubmit family - builds on postsubmit, tests on postsubmit and nightly
+    # Builds and tests on all triggers, but the PR path is restricted to a small
+    # regression canary (see test_labels_on_trigger) because gfx90a runner
+    # capacity cannot absorb the full matrix on every pull request.
     "gfx90a": {
         "linux": {
             "test-runs-on": "linux-gfx90a-1gpu-ossci-rocm",
@@ -435,13 +456,23 @@ amdgpu_family_info_matrix = {
             "fetch-gfx-targets": ["gfx90a"],
             "build_variants": ["release", "asan-debug"],
             "builds_on_trigger": [
+                "presubmit",
                 "postsubmit",
                 "submodule_bump",
                 "nightly",
             ],
-            "tests_on_trigger": ["postsubmit", "nightly"],
-            # Only run tests when gfx90a label is present on PR
-            "trigger_test_label_only": True,
+            "tests_on_trigger": [
+                "presubmit",
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
+            # Catch gfx90a regressions before they land without paying for the
+            # full matrix on every PR. Postsubmit and nightly stay unrestricted.
+            "test_labels_on_trigger": {
+                "presubmit": ["test:hip-tests", "test:rocrtst", "test:rocgdb-gpu"],
+                "submodule_bump": ["test:hip-tests", "test:rocrtst", "test:rocgdb-gpu"],
+            },
         },
         "windows": {
             "test-runs-on": "",
