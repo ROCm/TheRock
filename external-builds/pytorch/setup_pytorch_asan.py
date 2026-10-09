@@ -12,18 +12,50 @@ import platform
 import subprocess
 from pathlib import Path
 
-# ROCm Clang rejects the GCC -Wno-error workarounds that the normal Linux
-# wheel build puts in CXXFLAGS and CPPFLAGS.
-_GCC_WARNING_FLAGS = (
-    "-Wno-error=maybe-uninitialized",
-    "-Wno-error=uninitialized",
-    "-Wno-error=restrict",
+_ASAN_COMPANION_BUILDS = (
+    ("build_triton", "--build-triton"),
+    ("build_pytorch_audio", "--build-pytorch-audio"),
+    ("build_pytorch_vision", "--build-pytorch-vision"),
+    ("build_apex", "--build-apex"),
 )
 
-TORCH_IMPORT_SANITY_SKIP_MESSAGE = (
-    "+++ Skipping torch import sanity check for --asan. "
-    "The shared runtime is applied with LD_PRELOAD when the wheel is used."
-)
+
+def apply_asan_companion_policy(parser, args) -> None:
+    """Build torch only.
+
+    An explicit companion ``--build-*`` flag is rejected. An unset flag is
+    forced off before the checkout-directory default can turn it on.
+    ``--no-build-*`` is left as false.
+    """
+    if not args.asan:
+        return
+    requested = [
+        flag for attr, flag in _ASAN_COMPANION_BUILDS if getattr(args, attr) is True
+    ]
+    if requested:
+        parser.error(
+            "--asan builds torch only and cannot be combined with "
+            + ", ".join(requested)
+        )
+    for attr, _flag in _ASAN_COMPANION_BUILDS:
+        if getattr(args, attr) is None:
+            setattr(args, attr, False)
+
+
+def import_sanity_env(env: dict[str, str]) -> dict[str, str]:
+    """Environment for ``import torch`` so the shared runtime is loaded first."""
+    runtime = env.get("ASAN_RUNTIME_PATH", "")
+    if not runtime:
+        raise RuntimeError(
+            "--asan import check requires ASAN_RUNTIME_PATH from apply_asan_build_env"
+        )
+    return {
+        "LD_PRELOAD": runtime,
+        "ASAN_OPTIONS": env.get(
+            "ASAN_OPTIONS", "detect_leaks=0:abort_on_error=1:print_stacktrace=1"
+        ),
+        "LD_LIBRARY_PATH": env.get("LD_LIBRARY_PATH", ""),
+    }
 
 
 def append_env_text(env: dict[str, str], name: str, addition: str) -> None:
@@ -41,19 +73,6 @@ def append_env_text(env: dict[str, str], name: str, addition: str) -> None:
     if current and not current.endswith((" ", "\t")):
         current += " "
     env[name] = f"{current}{addition} "
-
-
-def remove_incompatible_warning_flags(env: dict[str, str]) -> None:
-    """Drop GCC -Wno-error workarounds that ROCm Clang rejects."""
-    for name in ("CFLAGS", "CXXFLAGS", "CPPFLAGS"):
-        current = env.get(name)
-        if not current:
-            continue
-        kept = [token for token in current.split() if token not in _GCC_WARNING_FLAGS]
-        if kept:
-            env[name] = " ".join(kept) + " "
-        else:
-            env.pop(name, None)
 
 
 def _capture(args: list[str], cwd: Path) -> str:
@@ -105,8 +124,6 @@ def apply_asan_build_env(env: dict[str, str], rocm_dir: Path) -> None:
     ):
         raise RuntimeError("--asan is supported only on Linux x86_64")
 
-    remove_incompatible_warning_flags(env)
-
     llvm_bin = rocm_dir / "lib" / "llvm" / "bin"
     clang = llvm_bin / "clang"
     clangxx = llvm_bin / "clang++"
@@ -117,6 +134,7 @@ def apply_asan_build_env(env: dict[str, str], rocm_dir: Path) -> None:
             )
 
     runtime_path = _resolve_shared_asan_runtime(clangxx, rocm_dir)
+    env["ASAN_RUNTIME_PATH"] = str(runtime_path)
     inherited_ld_library_path = env.get(
         "LD_LIBRARY_PATH", os.environ.get("LD_LIBRARY_PATH", "")
     )
@@ -147,8 +165,6 @@ def apply_asan_build_env(env: dict[str, str], rocm_dir: Path) -> None:
     # directory is not on the default linker path. The ROCm lib directory is
     # included so the instrumented libraries those tools load can resolve.
     env["LD_LIBRARY_PATH"] = os.path.pathsep.join(ld_library_parts)
-    # Prefer the ROCm Clang that matches this runtime over gcc-toolset.
-    env["PATH"] = str(llvm_bin) + os.path.pathsep + env.get("PATH", "")
     # ASan stack traces use frame pointers.
     append_env_text(env, "CFLAGS", "-fno-omit-frame-pointer")
     append_env_text(env, "CXXFLAGS", "-fno-omit-frame-pointer")
