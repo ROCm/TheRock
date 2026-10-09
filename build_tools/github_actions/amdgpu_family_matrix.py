@@ -854,17 +854,15 @@ def get_cpu_test_runner(platform: str) -> str:
         if platform in cpu_runners:
             return cpu_runners[platform]
 
-    # Fall back to the default build runner (CPU-only, no GPU)
+    # Fall back to the medium build runner (CPU-only tests don't need large machines)
     build_runners = get_build_runner_labels()
-    if platform in build_runners and "default" in build_runners[platform]:
-        # Use the first runner with non-zero weight, or the first one
-        default_runners = build_runners[platform]["default"]
-        for runner in default_runners:
+    if platform in build_runners and "medium" in build_runners[platform]:
+        medium_runners = build_runners[platform]["medium"]
+        for runner in medium_runners:
             if runner.get("weight", 0) > 0:
                 return runner["label"]
-        # If all weights are zero, use the first one
-        if default_runners:
-            return default_runners[0]["label"]
+        if medium_runners:
+            return medium_runners[0]["label"]
 
     return ""
 

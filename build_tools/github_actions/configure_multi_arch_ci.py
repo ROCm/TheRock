@@ -1611,7 +1611,14 @@ def _expand_build_config_for_platform(
         # CPU test runner for components that don't need GPU access (e.g.,
         # components with linux_cpu_runner: True). This allows CPU-only tests
         # to run even when GPU testing is gated (e.g., trigger_test_label_only).
-        test_runs_on_cpu = get_cpu_test_runner(platform)
+        # CPU tests are architecture-independent, so only schedule them for the
+        # first family to avoid redundant runs across GPU targets.
+        if not per_family_info:
+            # First family: assign CPU runner
+            test_runs_on_cpu = get_cpu_test_runner(platform)
+        else:
+            # Subsequent families: skip CPU tests (already scheduled above)
+            test_runs_on_cpu = ""
 
         # tests_enabled is true when any test runner (GPU or CPU) is available.
         # This provides a single flag for workflows to gate test jobs.
