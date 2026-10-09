@@ -231,7 +231,71 @@ class IndexGenerationS3Test(unittest.TestCase):
         html = self._uploaded_html()
         self.assertIn('href="win11/"', html)
         self.assertIn('href="win12/"', html)
-        self.assertNotIn("nested/", html)
+        self.paginator.paginate.assert_called_once_with(
+            Bucket=self.bucket_name,
+            Prefix=f"{windows_prefix}/",
+            Delimiter="/",
+        )
+
+    def test_directory_index_top_level_prefix_uses_empty_s3_prefix(self) -> None:
+        """An empty (top-level) prefix must not send Prefix='/' to S3."""
+        self.paginator.paginate.return_value = [
+            {"CommonPrefixes": [{"Prefix": "win11/"}, {"Prefix": "win12/"}]}
+        ]
+
+        index_generation_s3.generate_directory_index_s3(
+            s3_client=self.s3_client,
+            bucket_name=self.bucket_name,
+            prefix="",
+            upload=True,
+        )
+
+        self.paginator.paginate.assert_called_once_with(
+            Bucket=self.bucket_name, Prefix="", Delimiter="/"
+        )
+
+    def test_directory_index_raises_by_default_when_empty(self) -> None:
+        """A bad/misspelled prefix must fail loudly, not publish an empty index."""
+        self.paginator.paginate.return_value = [{"CommonPrefixes": []}]
+
+        with self.assertRaises(FileNotFoundError):
+            index_generation_s3.generate_directory_index_s3(
+                s3_client=self.s3_client,
+                bucket_name=self.bucket_name,
+                prefix="nonexistent",
+                upload=True,
+            )
+        self.s3_client.put_object.assert_not_called()
+
+    def test_directory_index_allows_empty_when_opted_in(self) -> None:
+        """Directory indexes can opt into publishing an empty index."""
+        self.paginator.paginate.return_value = [{"CommonPrefixes": []}]
+
+        index_generation_s3.generate_directory_index_s3(
+            s3_client=self.s3_client,
+            bucket_name=self.bucket_name,
+            prefix="nonexistent",
+            upload=True,
+            allow_empty=True,
+        )
+
+        self.assertIn("No directories available.", self._uploaded_html())
+
+    def test_page_title_and_empty_message_are_escaped(self) -> None:
+        """Apostrophes in caller-supplied text must not break HTML/JS output."""
+        index_generation_s3.generate_index_s3(
+            s3_client=self.s3_client,
+            bucket_name=self.bucket_name,
+            prefix=self.prefix,
+            upload=True,
+            allow_empty=True,
+            page_title="Windows Installer's Index",
+            empty_message="No installer's available.",
+        )
+
+        html = self._uploaded_html()
+        self.assertIn("<title>Windows Installer&#x27;s Index</title>", html)
+        self.assertIn('li.textContent = "No installer\'s available.";', html)
 
 
 if __name__ == "__main__":
