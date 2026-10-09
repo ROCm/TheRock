@@ -54,6 +54,13 @@ and per-arch artifacts exist for its components. Then it is built per GPU target
 no files gets no `-host` package; its device packages carry the host's
 dependencies instead. See `nativepackage_dependency_tree.md`.
 
+The per-arch decision looks only at whether a `<artifact>_<component>_gfx*`
+directory exists for one of the package's components. A package that sets
+`Gfxarch` therefore changes from generic to per-arch when such an artifact first
+appears, which moves its files into `-host` and per-target packages. Before
+giving another `-devel` package per-arch `dev` or `run` artifacts, plan that
+change.
+
 ## RPATH Packages
 
 By default, RUNPATH in binaries and libraries is converted to RPATH during
