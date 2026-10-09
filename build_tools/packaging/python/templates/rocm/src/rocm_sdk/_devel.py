@@ -29,17 +29,21 @@ it, as the alternative is to increase the package size by 2-5x and break
 symlink relationships.
 """
 
+import csv
 import importlib
 import importlib.metadata as md
 import io
 import json
 import os
-from pathlib import Path
 import platform
 import re
 import shutil
 import sys
 import tarfile
+import time
+from collections.abc import Callable
+from pathlib import Path
+from typing import NamedTuple, TypeVar
 
 from . import _dist_info as di
 
@@ -218,16 +222,92 @@ def _devel_link_ok(dest_path: Path, target: str) -> bool:
         return False
 
 
-def _record_has_entries(record_path: Path, names: list[str]) -> bool:
-    """True if RECORD exists, has no duplicate rows, and lists every name.
+# A just-installed wheel on a shared mount can be read back empty or with a
+# NUL byte. The same file is often intact a moment later, so these reads are
+# retried. A read that stays bad must name the distribution and the file.
+_METADATA_READ_ATTEMPTS = 3
+_METADATA_READ_PAUSE_S = 0.05
+
+_Parsed = TypeVar("_Parsed")
+
+
+class DevelMetadataReadError(RuntimeError):
+    """A wheel RECORD or .devel_links file stayed unreadable after retries."""
+
+
+class DeviceLinkPlan(NamedTuple):
+    """One device wheel's RECORD, devel-link entries, and distribution name."""
+
+    record_path: Path
+    links: list[dict[str, str]]
+    dist_name: str
+
+
+def _read_with_retry(
+    path: Path,
+    dist_name: str,
+    parse: Callable[[str], _Parsed],
+) -> _Parsed:
+    """Return parse(text) from one read of path, retrying a torn file.
+
+    parse runs on that attempt's text, so the file is not opened again.
+    csv.Error and json.JSONDecodeError are retried. The final error names
+    the distribution and the path.
+    """
+    reason = "empty"
+    last_error: Exception | None = None
+    for attempt in range(_METADATA_READ_ATTEMPTS):
+        try:
+            data = path.read_bytes()
+            if b"\x00" in data or not data.strip():
+                reason = "contains NUL" if b"\x00" in data else "empty"
+                last_error = None
+            else:
+                return parse(data.decode("utf-8"))
+        except (OSError, UnicodeDecodeError, csv.Error, json.JSONDecodeError) as exc:
+            reason = str(exc)
+            last_error = exc
+        if attempt + 1 < _METADATA_READ_ATTEMPTS:
+            time.sleep(_METADATA_READ_PAUSE_S)
+    message = f"Failed to read {path} for distribution {dist_name}: {reason}"
+    if last_error is None:
+        raise DevelMetadataReadError(message)
+    raise DevelMetadataReadError(message) from last_error
+
+
+def _read_device_record_files(
+    dist: md.Distribution, dist_name: str
+) -> list[md.PackagePath]:
+    """RECORD rows from one validated read. dist.files would open the file again.
+
+    PathDistribution stores the dist-info directory on _path. There is no
+    public accessor.
+    """
+
+    def parse(text: str) -> list[md.PackagePath]:
+        paths: list[md.PackagePath] = []
+        for row in csv.reader(text.splitlines()):
+            if not row or not row[0]:
+                continue
+            entry = md.PackagePath(row[0])
+            entry.dist = dist
+            paths.append(entry)
+        return paths
+
+    return _read_with_retry(Path(dist._path) / "RECORD", dist_name, parse)
+
+
+def _record_has_entries(record_path: Path, names: list[str], dist_name: str) -> bool:
+    """True if RECORD has no duplicate rows and lists every name.
 
     Returning False on a duplicate row makes the fast path fall through so
     `_ensure_record_entries` can rewrite RECORD and drop the duplicates.
+    A torn read raises instead of looking like a RECORD with no rows.
     """
-    if not record_path.exists():
-        return False
     existing = set()
-    for line in record_path.read_text().splitlines():
+    for line in _read_with_retry(
+        record_path, dist_name, lambda text: text
+    ).splitlines():
         if not line.strip():
             continue
         name = line.split(",", 1)[0]
@@ -242,13 +322,13 @@ def _without_post_release(version: str) -> str:
     return re.sub(r"\.post\d+", "", version, count=1)
 
 
-def _discover_device_link_plans(site_lib_path: Path, expected_version: str):
+def _discover_device_link_plans(
+    site_lib_path: Path, expected_version: str
+) -> list[DeviceLinkPlan]:
     """Find installed rocm-sdk-device-* wheels and their devel-link manifests.
 
-    Returns a list of (record_path, links) where links is the list of
-    {"relpath", "target"} entries from that wheel's `_devel_links` manifest and
-    record_path is that wheel's RECORD (so newly materialized devel links can be
-    recorded against the wheel that owns the underlying device files).
+    Each plan names the wheel's RECORD, the {"relpath", "target"} entries from
+    its `_devel_links` manifest, and the distribution those links belong to.
     """
     # importlib.metadata caches path scans by directory mtime. On filesystems with
     # coarse mtime resolution, a device wheel installed immediately after a prior
@@ -276,7 +356,7 @@ def _discover_device_link_plans(site_lib_path: Path, expected_version: str):
             )
             continue
 
-        files = dist.files
+        files = _read_device_record_files(dist, name)
         if not files:
             continue
         manifest_file = None
@@ -291,35 +371,46 @@ def _discover_device_link_plans(site_lib_path: Path, expected_version: str):
         manifest_path = Path(manifest_file.locate())
         if not manifest_path.is_file():
             continue
-        links = json.loads(manifest_path.read_text()).get("links", [])
+        links = _read_with_retry(
+            manifest_path,
+            name,
+            lambda text: json.loads(text).get("links", []),
+        )
         if not links:
             continue
-        plans.append((Path(record_file.locate()), links))
+        plans.append(
+            DeviceLinkPlan(
+                record_path=Path(record_file.locate()),
+                links=links,
+                dist_name=name,
+            )
+        )
     return plans
 
 
-def _ensure_record_entries(record_path: Path, names: list[str]):
+def _ensure_record_entries(record_path: Path, names: list[str], dist_name: str):
     """Append RECORD entries for materialized devel links, de-duplicated.
 
     Reads the existing RECORD, drops any duplicate paths, appends the new
     site-packages-relative paths (with empty hash/size, per the PyPA spec), and
     rewrites the file. Writes only when there is something to add or a duplicate
-    row to remove.
+    row to remove. A torn read raises and leaves RECORD unchanged.
     """
     lines = []
     seen = set()
     changed = False
-    if record_path.exists():
-        for line in record_path.read_text().splitlines():
-            if not line.strip():
-                continue
-            path0 = line.split(",", 1)[0]
-            if path0 in seen:
-                # Drop a duplicate row; rewriting the file removes it.
-                changed = True
-                continue
-            seen.add(path0)
-            lines.append(line)
+    for line in _read_with_retry(
+        record_path, dist_name, lambda text: text
+    ).splitlines():
+        if not line.strip():
+            continue
+        path0 = line.split(",", 1)[0]
+        if path0 in seen:
+            # Drop a duplicate row; rewriting the file removes it.
+            changed = True
+            continue
+        seen.add(path0)
+        lines.append(line)
     additions = [n for n in names if n not in seen]
     if not additions and not changed:
         return
@@ -365,17 +456,18 @@ def _reconcile_device_links(
     # orphaned link).
     if all(
         _devel_link_ok(devel_py_pkg_path / link["relpath"], link["target"])
-        for _record_path, links in plans
-        for link in links
+        for plan in plans
+        for link in plan.links
     ) and all(
         _record_has_entries(
-            record_path,
+            plan.record_path,
             [
                 _record_name(site_lib_path, devel_py_pkg_path, link["relpath"])
-                for link in links
+                for link in plan.links
             ],
+            plan.dist_name,
         )
-        for record_path, links in plans
+        for plan in plans
     ):
         return 0
 
@@ -384,9 +476,9 @@ def _reconcile_device_links(
         file_lock = FileLock(lock_file)
         try:
             created = 0
-            for record_path, links in plans:
+            for plan in plans:
                 recorded_names = []
-                for link in links:
+                for link in plan.links:
                     relpath = link["relpath"]
                     dest_path = devel_py_pkg_path / relpath
                     recorded_names.append(
@@ -407,7 +499,7 @@ def _reconcile_device_links(
                         dest_path.unlink()
                     dest_path.hardlink_to(hardlink_target)
                     created += 1
-                _ensure_record_entries(record_path, recorded_names)
+                _ensure_record_entries(plan.record_path, recorded_names, plan.dist_name)
             return created
         finally:
             file_lock.unlock()
