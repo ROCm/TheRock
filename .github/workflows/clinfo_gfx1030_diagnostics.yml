@@ -15,15 +15,25 @@ permissions:
 
 jobs:
   compare:
-    name: Compare clinfo with and without packaged Comgr
-    runs-on: windows-gfx1030-gpu-rocm
+    name: Validate clinfo (${{ matrix.family }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - family: gfx103X-all
+            target: gfx1030
+            runner: windows-gfx1030-gpu-rocm
+          - family: gfx110X-all
+            target: gfx1101
+            runner: windows-gfx110X-gpu-rocm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     defaults:
       run:
         shell: bash
     env:
       THEROCK_BIN_DIR: ./build/bin
-      AMDGPU_FAMILIES: gfx103X-all
+      AMDGPU_FAMILIES: ${{ matrix.family }}
       BUILD_VARIANT: release
       GPU_ENABLE_PAL: "1"
       AMD_LOG_LEVEL: "4"
@@ -31,6 +41,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
           persist-credentials: false
 
@@ -39,8 +50,8 @@ jobs:
         with:
           VENV_DIR: ${{ github.workspace }}/.venv
           OUTPUT_ARTIFACTS_DIR: ./build
-          ARTIFACT_GROUP: gfx103X-all
-          AMDGPU_TARGETS: gfx1030
+          ARTIFACT_GROUP: ${{ matrix.family }}
+          AMDGPU_TARGETS: ${{ matrix.target }}
           ARTIFACT_RUN_ID: "37245816266"
           FETCH_ARTIFACT_ARGS: --sanity --run-github-repo ROCm/rockrel
           RELEASE_TYPE: nightly
@@ -58,33 +69,19 @@ jobs:
             }
           }
 
-      - name: Baseline - current fixture with stderr retained
-        id: baseline
-        continue-on-error: true
-        env:
-          THEROCK_CLINFO_COPY_COMGR: "0"
+      - name: Validate the final clinfo fixture
+        id: validate
         run: |
           python -m pytest tests/test_rocm_sanity.py -k clinfo -v \
             --log-cli-level=info --timeout=300 \
-            --log-file=clinfo-baseline.log --log-file-level=info \
-            --junitxml=clinfo-baseline.xml
+            --log-file=clinfo-validation.log --log-file-level=info \
+            --junitxml=clinfo-validation.xml
 
-      - name: Candidate - packaged Comgr beside OpenCL.dll
-        id: candidate
-        if: ${{ !cancelled() && steps.baseline.outcome != 'skipped' }}
-        env:
-          THEROCK_CLINFO_COPY_COMGR: "1"
-        run: |
-          python -m pytest tests/test_rocm_sanity.py -k clinfo -v \
-            --log-cli-level=info --timeout=300 \
-            --log-file=clinfo-candidate.log --log-file-level=info \
-            --junitxml=clinfo-candidate.xml
-
-      - name: Save comparison logs
-        if: ${{ !cancelled() && steps.baseline.outcome != 'skipped' }}
+      - name: Save validation logs
+        if: ${{ !cancelled() && steps.validate.outcome != 'skipped' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: clinfo-gfx1030-comparison
+          name: clinfo-validation-${{ matrix.family }}
           path: |
             clinfo-*.log
             clinfo-*.xml
