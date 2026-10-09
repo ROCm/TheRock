@@ -1251,7 +1251,11 @@ class HostFallbackTest(BuildPackageTestCase):
     def test_deb_device_package_uses_host_fallback_dependency(
         self, _mock_dpkg: object, _mock_move: object
     ) -> None:
-        """DEB device package falls back to host dependency when gfx artifacts missing."""
+        """DEB device package falls back to host dependency when gfx artifacts missing.
+
+        Also verifies host packages include gfxarch dependencies as host-versioned form
+        to ensure version-locked dependencies rather than version-ambiguous library deps.
+        """
         cfg = _kpack_config(self.temp_dir)
 
         # Stage BLAS for gfx1100 (the package we're building)
@@ -1259,6 +1263,13 @@ class HostFallbackTest(BuildPackageTestCase):
             pkg_name=PKG_BLAS,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=TEST_GFX_TARGET,
+            enable_kpack=True,
+        )
+        # Stage BLAS host artifacts (needed for host package test)
+        _stage_package_artifacts(
+            pkg_name=PKG_BLAS,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=GFX_HOST,
             enable_kpack=True,
         )
         # Stage SOLVER for gfx942 only (NOT gfx1100) - makes it a gfxarch package
@@ -1286,8 +1297,15 @@ class HostFallbackTest(BuildPackageTestCase):
         device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
         deb_package.create_versioned_deb_package(pkg_name=PKG_BLAS, config=device_cfg)
 
-        # Verify: BLAS depends on SOLVER-host (fallback), not SOLVER-gfx1100
+        # Verify: BLAS device depends on SOLVER-host (fallback), not SOLVER-gfx1100
         control = _read_control_file(pkg_name=PKG_BLAS, config=device_cfg)
+        depends = _control_field(control, "Depends")
+        self.assertIn("amdrocm-solver-host", depends)
+
+        # Also verify: BLAS host includes SOLVER-host (gfxarch dep as host-versioned)
+        host_cfg = replace(cfg, gfx_arch=GFX_HOST)
+        deb_package.create_versioned_deb_package(pkg_name=PKG_BLAS, config=host_cfg)
+        control = _read_control_file(pkg_name=PKG_BLAS, config=host_cfg)
         depends = _control_field(control, "Depends")
         self.assertIn("amdrocm-solver-host", depends)
 
@@ -1296,7 +1314,11 @@ class HostFallbackTest(BuildPackageTestCase):
     def test_rpm_device_package_uses_host_fallback_dependency(
         self, _mock_rpmbuild: object, _mock_move: object
     ) -> None:
-        """RPM device package falls back to host dependency when gfx artifacts missing."""
+        """RPM device package falls back to host dependency when gfx artifacts missing.
+
+        Also verifies host packages include gfxarch dependencies as host-versioned form
+        to ensure version-locked dependencies rather than version-ambiguous library deps.
+        """
         cfg = _kpack_config(self.temp_dir, pkg_type=TEST_PKG_TYPE_RPM)
 
         # Stage BLAS for gfx1100 (the package we're building)
@@ -1304,6 +1326,13 @@ class HostFallbackTest(BuildPackageTestCase):
             pkg_name=PKG_BLAS,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=TEST_GFX_TARGET,
+            enable_kpack=True,
+        )
+        # Stage BLAS host artifacts (needed for host package test)
+        _stage_package_artifacts(
+            pkg_name=PKG_BLAS,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=GFX_HOST,
             enable_kpack=True,
         )
         # Stage SOLVER for gfx942 only (NOT gfx1100) - makes it a gfxarch package
@@ -1331,8 +1360,15 @@ class HostFallbackTest(BuildPackageTestCase):
         device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
         rpm_package.create_versioned_rpm_package(pkg_name=PKG_BLAS, config=device_cfg)
 
-        # Verify: BLAS requires SOLVER-host (fallback), not SOLVER-gfx1100
+        # Verify: BLAS device requires SOLVER-host (fallback), not SOLVER-gfx1100
         spec = _read_spec_file(pkg_name=PKG_BLAS, config=device_cfg)
+        requires = _spec_field(spec, "Requires")
+        self.assertIn("amdrocm-solver-host", requires)
+
+        # Also verify: BLAS host includes SOLVER-host (gfxarch dep as host-versioned)
+        host_cfg = replace(cfg, gfx_arch=GFX_HOST)
+        rpm_package.create_versioned_rpm_package(pkg_name=PKG_BLAS, config=host_cfg)
+        spec = _read_spec_file(pkg_name=PKG_BLAS, config=host_cfg)
         requires = _spec_field(spec, "Requires")
         self.assertIn("amdrocm-solver-host", requires)
 

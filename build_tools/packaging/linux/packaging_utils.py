@@ -687,18 +687,11 @@ def process_main_dependencies_kpack(
         # GFX_META for non-meta gfxarch packages: depend on host + all device packages
         dep_list = expand_kpack_meta_dependencies(pkg_name, config.gfxarch_list, config)
     elif config.gfx_arch == GFX_HOST:
-        # Host package: only include non-gfxarch dependencies
-        # Gfxarch deps are pulled via the gfx-specific package
+        # Host package: include all dependencies (both gfxarch and non-gfxarch)
+        # Gfxarch deps are resolved to their host-versioned form (e.g., blas-host)
+        # to ensure version-locked dependencies rather than relying on auto-detected
+        # library deps (librocblas.so.5) which are version-ambiguous.
         dep_list = pkg_info.get(field_key, [])
-        dep_list = [
-            dep
-            for dep in dep_list
-            if not is_gfxarch_package(
-                get_package_info(dep, raise_if_missing=False) or {},
-                config.enable_kpack,
-                config.artifacts_dir,
-            )
-        ]
         # Host fallback is discarded (_) because we ARE the host package.
         # There's nothing to fall back to - if a dependency has no host artifacts,
         # it's a build configuration error that should fail, not silently degrade.
