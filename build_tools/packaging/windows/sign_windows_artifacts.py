@@ -282,16 +282,16 @@ def sign_file(
     )
     result = subprocess.run(
         command,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     if result.returncode == 0:
         return True
 
-    output = (result.stderr or result.stdout or "(no output)").strip()
-    print(f"Failed to sign {path}:\n{output}", file=sys.stderr)
+    print(
+        f"Failed to sign {path} (signtool exit code {result.returncode})",
+        file=sys.stderr,
+    )
     return False
 
 
@@ -461,12 +461,6 @@ def main(argv: list[str]) -> int:
     except FileNotFoundError as error:
         print(f"Error: {error}", file=sys.stderr)
         return 2
-
-    store = "local machine" if machine_store else "current user"
-    print(f"Using signtool: {signtool}")
-    print(f"Certificate: {thumbprint} ({store} store)")
-    print(f"Timestamp URL: {TIMESTAMP_URL}")
-    print("Signing files serially with one signtool invocation per file.")
 
     start_time = datetime.now().astimezone()
     start_monotonic = time.monotonic()
