@@ -302,25 +302,37 @@ def generate_directory_index_s3(
     bucket_name,
     prefix: str,
     upload: bool = False,
+    allow_empty: bool = False,
     page_title: str = "Directory index",
     empty_message: str = "No directories available.",
 ) -> str:
-    """Generate index.html listing direct child directories."""
+    """Generate index.html for direct child directories at s3://bucket_name/prefix.
+
+    Raises FileNotFoundError when the prefix has no child directories unless
+    allow_empty=True.
+    """
 
     prefix = prefix.lstrip("/").rstrip("/")
+    list_prefix = f"{prefix}/" if prefix else ""
 
     page_iterator = _paginate_list_objects_v2(
-        s3_client, bucket_name, Prefix=f"{prefix}/", Delimiter="/"
+        s3_client, bucket_name, Prefix=list_prefix, Delimiter="/"
     )
 
     directories = []
 
     for page in page_iterator:
         for common_prefix in page.get("CommonPrefixes", []):
-            directory = common_prefix["Prefix"].removeprefix(f"{prefix}/")
+            directory = common_prefix["Prefix"].removeprefix(list_prefix)
             directories.append(directory.rstrip("/") + "/")
 
     directories.sort()
+
+    if not directories and not allow_empty:
+        raise FileNotFoundError(
+            f"No child directories found in bucket {bucket_name} "
+            f"under prefix '{prefix}'."
+        )
 
     log.info(
         "Found %d child directories in bucket '%s' under prefix '%s'.",
