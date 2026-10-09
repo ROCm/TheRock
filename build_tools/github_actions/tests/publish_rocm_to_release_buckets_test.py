@@ -1,16 +1,25 @@
 #!/usr/bin/env python
 """Unit tests for publish_rocm_to_release_buckets.py."""
 
+import datetime
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 
-from github_actions.publish_rocm_to_release_buckets import main
+from github_actions.publish_rocm_to_release_buckets import (
+    main,
+    publish_native_linux_packages,
+)
+from _therock_utils.s3_buckets import get_release_bucket_config
+from _therock_utils.storage_backend import LocalStorageBackend
 from _therock_utils.storage_location import StorageLocation
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 
 class TestPublishRocmToReleaseBuckets(unittest.TestCase):
@@ -433,6 +442,130 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                 self.assertEqual(
                     tarball_dest.relative_path, "v5/rocm/core/tarball-asan"
                 )
+
+
+class TestRepoPackagePromotion(unittest.TestCase):
+    """The amdrocm-repo bootstrap package is carried by the existing copy.
+
+    ``native_linux_repo_package()`` puts the bootstrap package under
+    ``packages/{pkg_type}/repo/{os_profile}/``, which is inside the prefix
+    ``publish_native_linux_packages`` already copies. Nothing declares that
+    relationship, so it holds only as long as the copy stays recursive and the
+    two prefixes stay nested.
+
+    These tests drive a real ``LocalStorageBackend`` and assert files on disk,
+    unlike the rest of this module, which mocks ``copy_directory`` and checks
+    the locations passed to it. Mocking the copy cannot show whether the
+    bootstrap package is actually transported.
+    """
+
+    RUN_ID = "12345"
+    PROFILES = ("ubuntu2404", "rhel10")
+
+    def _seed(self, root, backend, staging):
+        """Write a repository tree plus one bootstrap package per profile."""
+        for pkg_type in ("deb", "rpm"):
+            packages = root.native_linux_packages(pkg_type)
+            # Layout mirrors upload_package_repo.py: APT uses pool/ + dists/,
+            # rpm puts packages under x86_64/ with repodata/ alongside.
+            contents = (
+                ["pool/main/r/rocm/rocm_7.14.0_amd64.deb", "dists/stable/Release"]
+                if pkg_type == "deb"
+                else ["x86_64/rocm-7.14.0.x86_64.rpm", "x86_64/repodata/repomd.xml"]
+            )
+            for rel in contents:
+                self._write(
+                    StorageLocation(packages.bucket, f"{packages.relative_path}/{rel}"),
+                    staging,
+                )
+            for profile in self.PROFILES:
+                self._write(root.native_linux_repo_package(pkg_type, profile), staging)
+
+    @staticmethod
+    def _write(location, staging):
+        path = location.local_path(staging)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"CONTENTS")
+
+    def _promote(self, release_type):
+        """Run the real promotion into a temp tree; return the staging dir."""
+        staging = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, staging, ignore_errors=True)
+        root = WorkflowOutputRoot(
+            get_release_bucket_config(release_type, "packages").name,
+            "",
+            self.RUN_ID,
+            "linux",
+        )
+        backend = LocalStorageBackend(staging_dir=staging)
+        self._seed(root, backend, staging)
+        publish_native_linux_packages(root, release_type, backend)
+        return staging
+
+    def _promoted_suffixes(self, release_type):
+        """Paths written outside the source prefix, relative to the destination.
+
+        The destination prefix is a literal inside the module and has already
+        moved once (v4/packages -> v5/rocm/core/packages), which silently turned
+        these tests red without anything here changing. What they exist to prove
+        is that the copy is recursive enough to carry repo/<profile>/ -- not
+        where the release lands -- so the prefix is discovered rather than
+        pinned, and only the tail is asserted.
+        """
+        staging = self._promote(release_type)
+        source = f"{self.RUN_ID}-linux/"
+        written = {
+            p.relative_to(staging).as_posix()
+            for p in staging.rglob("*")
+            if p.is_file() and not p.relative_to(staging).as_posix().startswith(source)
+        }
+        self.assertTrue(written, "promotion wrote nothing outside the source prefix")
+        return written
+
+    @staticmethod
+    def _has_suffix(written, suffix):
+        return any(p.endswith(suffix) for p in written)
+
+    def test_prerelease_carries_every_profile_package(self):
+        written = self._promoted_suffixes("prerelease")
+
+        for pkg_type in ("deb", "rpm"):
+            for profile in self.PROFILES:
+                suffix = f"/{pkg_type}/repo/{profile}/amdrocm-repo.{pkg_type}"
+                self.assertTrue(
+                    self._has_suffix(written, suffix),
+                    f"nothing promoted ending in {suffix}; got {sorted(written)}",
+                )
+
+    def test_prerelease_carries_the_repository_alongside(self):
+        # A test that only checked the bootstrap package would still pass if the
+        # copy had silently stopped carrying the repository itself.
+        written = self._promoted_suffixes("prerelease")
+
+        for suffix in (
+            "/deb/pool/main/r/rocm/rocm_7.14.0_amd64.deb",
+            "/deb/dists/stable/Release",
+            "/rpm/x86_64/rocm-7.14.0.x86_64.rpm",
+            "/rpm/x86_64/repodata/repomd.xml",
+        ):
+            self.assertTrue(
+                self._has_suffix(written, suffix),
+                f"nothing promoted ending in {suffix}; got {sorted(written)}",
+            )
+
+    def test_dated_lines_carry_the_package_too(self):
+        # dev and nightly promote under {date}-{run_id} rather than a fixed
+        # prefix, so the destination shape differs and is worth covering. The
+        # date is computed the same way the module computes it rather than
+        # hardcoded.
+        written = self._promoted_suffixes("dev")
+
+        dated = f"{datetime.date.today().strftime('%Y%m%d')}-{self.RUN_ID}"
+        suffix = f"/deb/{dated}/repo/ubuntu2404/amdrocm-repo.deb"
+        self.assertTrue(
+            self._has_suffix(written, suffix),
+            f"nothing promoted ending in {suffix}; got {sorted(written)}",
+        )
 
 
 if __name__ == "__main__":
