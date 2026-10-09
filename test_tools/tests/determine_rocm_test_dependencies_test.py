@@ -591,7 +591,7 @@ class TestCliInputParsing(_FixtureTestCase):
         projects = set(json.loads(proc.stdout.strip()))
         self.assertNotIn("rocgdb", projects)
         self.assertTrue(
-            {"rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"}.issubset(projects)
+            {"rocgdb-cpu", "rocgdb-gpu"}.issubset(projects)
         )
 
     def test_hipblaslt_change_selects_neither_tensilelite_job(self) -> None:
@@ -967,7 +967,6 @@ class TestRealCommittedPolicies(unittest.TestCase):
     _DEBUGGER_TESTS = {
         "rocgdb-cpu",
         "rocgdb-gpu",
-        "rocgdb-corefile",
         "rocr-debug-agent",
     }
 
