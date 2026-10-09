@@ -41,6 +41,10 @@ on:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
         default: ""
+      skip_stages:
+        description: "Build stages excluded from the build and artifact reuse (comma-separated)"
+        type: string
+        default: ""
       release_type:
         description: 'Release type for the artifacts being tested.'
         type: choice
@@ -102,6 +106,10 @@ on:
         type: string
       changed_projects:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
+        type: string
+        default: ""
+      skip_stages:
+        description: "Build stages excluded from the build and artifact reuse (comma-separated)"
         type: string
         default: ""
       release_type:
@@ -194,6 +202,7 @@ jobs:
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
           PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
+          SKIP_STAGES: ${{ inputs.skip_stages }}
           CI_CONFIG_PATH: ci-config
           BUILD_VARIANT: ${{ inputs.build_variant }}
           # Pass the policy-gated GPU runner label. When empty, GPU tests are gated
@@ -230,7 +239,7 @@ jobs:
     name: 'Test ${{ matrix.components.job_name }}'
     needs: [test_sanity_check, configure_test_matrix]
     # Run when:
-    #   - sanity check passed
+    #   - sanity check passed or its prerequisite stage was excluded
     #   - there are components to test
     #   - sanity_check_only_for_family is not set
     if: >-
