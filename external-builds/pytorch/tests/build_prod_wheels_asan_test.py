@@ -15,7 +15,11 @@ from build_prod_wheels import (
     add_env_compiler_flags,
     validate_build_args,
 )
-from setup_pytorch_asan import append_env_text, suppress_benchmark_c2y_warning
+from setup_pytorch_asan import (
+    append_env_text,
+    link_rocshmem_device_bitcode,
+    suppress_benchmark_c2y_warning,
+)
 
 
 class AsanFlagSpacingTest(unittest.TestCase):
@@ -114,6 +118,45 @@ class AsanBenchmarkWarningTest(unittest.TestCase):
             path.write_text(original)
 
             suppress_benchmark_c2y_warning(pytorch_dir)
+            self.assertEqual(path.read_text(), original)
+
+
+class AsanRocshmemBitcodeTest(unittest.TestCase):
+    def test_older_release_links_the_device_bitcode(self):
+        original = (
+            "      target_link_libraries(torch_rocshmem PRIVATE roc::rocshmem)\n"
+            "      target_link_libraries(torch_hip PRIVATE torch_rocshmem)\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            pytorch_dir = Path(tmp)
+            path = pytorch_dir / "caffe2" / "CMakeLists.txt"
+            path.parent.mkdir()
+            path.write_text(original)
+
+            link_rocshmem_device_bitcode(pytorch_dir)
+            patched = path.read_text()
+            link_rocshmem_device_bitcode(pytorch_dir)
+            self.assertEqual(path.read_text(), patched)
+
+        self.assertIn(
+            'target_link_options(torch_rocshmem PRIVATE "SHELL:-Xoffload-linker ${_dev_bc}")',
+            patched,
+        )
+        self.assertIn("librocshmem_device_${_arch_base}.bc", patched)
+        self.assertTrue(patched.splitlines()[1].startswith("      # The ASAN"))
+
+    def test_release_2_14_is_left_unchanged(self):
+        original = (
+            "        target_link_libraries(torch_rocshmem PRIVATE roc::rocshmem)\n"
+            '        set(_dev_bc "${ROCM_PATH}/lib/librocshmem_device_${_arch_base}.bc")\n'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            pytorch_dir = Path(tmp)
+            path = pytorch_dir / "caffe2" / "CMakeLists.txt"
+            path.parent.mkdir()
+            path.write_text(original)
+
+            link_rocshmem_device_bitcode(pytorch_dir)
             self.assertEqual(path.read_text(), original)
 
 

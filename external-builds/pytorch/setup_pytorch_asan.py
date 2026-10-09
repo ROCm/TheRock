@@ -9,6 +9,7 @@ the installed ROCm version stay as the caller supplied them.
 
 import os
 import platform
+import re
 import subprocess
 from pathlib import Path
 
@@ -149,6 +150,57 @@ def suppress_benchmark_c2y_warning(pytorch_dir: Path) -> None:
         return
     path.write_text(text.replace(_BENCHMARK_SUBDIR_LINE, _BENCHMARK_C2Y_SUPPRESSION, 1))
     print(f"  Patched {path} to suppress -Wc2y-extensions in Google Benchmark")
+
+
+# An ASAN ROCm SDK keeps rocSHMEM's device implementations in
+# librocshmem_device_<arch>.bc. release/2.12 and release/2.13 link only the
+# host archive, so the device link reports those symbols as undefined.
+# release/2.14 already passes the bitcode to the offload linker.
+_ROCSHMEM_LINK_LINE = re.compile(
+    r"^(?P<indent>[ \t]*)target_link_libraries\(torch_rocshmem PRIVATE roc::rocshmem\)\n",
+    re.MULTILINE,
+)
+_ROCSHMEM_DEVICE_BITCODE = """\
+# The ASAN ROCm SDK ships the __device__ implementations of the rocSHMEM
+# API in per-arch bitcode (librocshmem_device_<arch>.bc), separate from
+# the host archive. Pass it straight to the device (offload) linker so it
+# joins the device LTO link as bitcode and the symbols our kernels
+# reference stay live. Routing it through the normal HIP input path
+# instead recompiles it in isolation with -fvisibility=hidden and
+# -amdgpu-internalize-symbols, which dead-strips the library symbols
+# before the consumer's references are ever seen.
+if(USE_ASAN)
+  foreach(_arch ${_torch_rocshmem_build_arches})
+    string(REGEX REPLACE ":.*" "" _arch_base "${_arch}")
+    set(_dev_bc "${ROCM_PATH}/lib/librocshmem_device_${_arch_base}.bc")
+    if(EXISTS "${_dev_bc}")
+      target_link_options(torch_rocshmem PRIVATE "SHELL:-Xoffload-linker ${_dev_bc}")
+    else()
+      message(WARNING "rocSHMEM device bitcode not found for ${_arch_base}: ${_dev_bc}")
+    endif()
+  endforeach()
+endif()
+"""
+
+
+def link_rocshmem_device_bitcode(pytorch_dir: Path) -> None:
+    """Insert the release/2.14 rocSHMEM device-bitcode link when it is absent."""
+    path = pytorch_dir / "caffe2" / "CMakeLists.txt"
+    if not path.is_file():
+        return
+    text = path.read_text()
+    if "librocshmem_device_" in text:
+        return
+    match = _ROCSHMEM_LINK_LINE.search(text)
+    if match is None:
+        return
+    indent = match.group("indent")
+    block = "".join(
+        indent + line if line.strip() else line
+        for line in _ROCSHMEM_DEVICE_BITCODE.splitlines(keepends=True)
+    )
+    path.write_text(text[: match.end()] + block + text[match.end() :])
+    print(f"  Patched {path} to link rocSHMEM device bitcode for ASAN")
 
 
 def apply_asan_build_env(env: dict[str, str], rocm_dir: Path) -> None:

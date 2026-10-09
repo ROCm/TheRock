@@ -1146,6 +1146,7 @@ def do_build_pytorch(
     # __COUNTER__ warning. release/2.14 already does, and this leaves it alone.
     if args.asan:
         setup_pytorch_asan.suppress_benchmark_c2y_warning(pytorch_dir)
+        setup_pytorch_asan.link_rocshmem_device_bitcode(pytorch_dir)
 
     # Compute version (dev builds are tagged with the torch source commit).
     pytorch_build_version = compute_build_version(
