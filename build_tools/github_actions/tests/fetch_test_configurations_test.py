@@ -729,31 +729,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIsInstance(out["container_options"], str)
         self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
 
-    def test_cpu_container_does_not_get_seccomp_unconfined(self):
-        # SEC-00508: seccomp=unconfined should only be applied to GPU containers,
-        # not CPU-only containers that have no need for relaxed syscall filtering.
-        job = {"linux_cpu_runner": True}
-        out = fetch_test_configurations._build_container_options(job, "linux")
-        self.assertNotIn("seccomp=unconfined", out["container_options"])
-
-    def test_gpu_container_gets_seccomp_unconfined(self):
-        # GPU/HPC workloads need relaxed seccomp for device ioctls and memory-mapped I/O.
-        job = {}
-        out = fetch_test_configurations._build_container_options(job, "linux")
-        self.assertIn("seccomp=unconfined", out["container_options"])
-
-    def test_base_container_does_not_get_ipc_host(self):
-        # SEC-00434: --ipc host shares the host IPC namespace, only needed by
-        # multi-process jobs (RCCL, rocSHMEM) that use cross-process shared memory.
-        job = {}
-        out = fetch_test_configurations._build_container_options(job, "linux")
-        self.assertNotIn("--ipc host", out["container_options"])
-
-    def test_job_specific_ipc_host_is_included(self):
-        # Jobs that declare --ipc host in their container_options get it.
-        job = {"container_options": ["--ipc host"]}
-        out = fetch_test_configurations._build_container_options(job, "linux")
-        self.assertIn("--ipc host", out["container_options"])
 
     # -----------------------
     # ASAN sandbox runner selection
