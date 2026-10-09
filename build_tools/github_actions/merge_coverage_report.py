@@ -204,7 +204,6 @@ def write_html(
     output_dir: Path,
     path_equivalence: str | None = None,
     project_title: str | None = None,
-    demangler: Path | None = None,
 ) -> None:
     """Renders the browsable report into output_dir, entry point index.html.
 
@@ -212,13 +211,27 @@ def write_html(
     machine is reported by llvm-cov as uncovered rather than annotated. Files
     generated into the build tree are never in a source checkout, so a few
     misses here are expected and not worth failing over.
+
+    Each file is shown once, its counts summed over every template
+    instantiation as in the lcov. llvm-cov's default also repeats a header's
+    source for each instantiation, which made rocWMMA's report 3.3GB with
+    single pages near 1GB. Without those views no function name is printed,
+    so the report skips demangling, which llvm-cov does for every name up
+    front and which cost rocWMMA 3GB of the 16GB a hosted runner has.
     """
     command = build_cov_command(llvm_cov, "show", profdata, objects, path_equivalence)
-    command.extend(["--format=html", f"-output-dir={output_dir}"])
+    command.extend(
+        [
+            "--format=html",
+            f"-output-dir={output_dir}",
+            "-show-instantiations=false",
+            # Every file rendered in parallel holds its own coverage on top of
+            # the mappings of all the objects, which are most of the memory.
+            "-num-threads=1",
+        ]
+    )
     if project_title:
         command.append(f"--project-title={project_title}")
-    if demangler:
-        command.append(f"-Xdemangler={demangler}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     logging.info("Writing HTML report to %s", output_dir / "index.html")
@@ -371,9 +384,6 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     if args.html_output:
-        # Demangling is what makes the C++ report readable; skip it rather
-        # than fail if this distribution has no llvm-cxxfilt.
-        demangler = llvm_bin_dir / f"llvm-cxxfilt{EXECUTABLE_SUFFIX}"
         write_html(
             llvm_cov,
             args.profdata_output,
@@ -381,7 +391,6 @@ def main(argv: list[str] | None = None) -> int:
             args.html_output,
             args.path_equivalence,
             args.project_title,
-            demangler if demangler.is_file() else None,
         )
 
     # Checked after the other renderings so the report still shows what was

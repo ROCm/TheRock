@@ -212,7 +212,6 @@ class CommandConstructionTest(TempDirTestBase):
                 objects,
                 output_dir,
                 project_title="hiprand",
-                demangler=Path("/llvm/llvm-cxxfilt"),
             )
 
         command = run.call_args.args[0]
@@ -220,7 +219,22 @@ class CommandConstructionTest(TempDirTestBase):
         self.assertIn("--format=html", command)
         self.assertIn(f"-output-dir={output_dir}", command)
         self.assertIn("--project-title=hiprand", command)
-        self.assertIn(f"-Xdemangler={Path('/llvm/llvm-cxxfilt')}", command)
+
+    def test_html_shows_each_file_once_and_one_at_a_time(self):
+        # Per-instantiation views, demangling, and files rendered in parallel
+        # made rocWMMA's report 3.3GB and its rendering outgrow a 16GB runner.
+        with mock.patch("subprocess.run") as run:
+            merge_coverage_report.write_html(
+                Path("/llvm/llvm-cov"),
+                Path("/tmp/c.profdata"),
+                [self.touch("bin/gemm_xdl-validate")],
+                self.root / "out" / "html",
+            )
+
+        command = run.call_args.args[0]
+        self.assertIn("-show-instantiations=false", command)
+        self.assertIn("-num-threads=1", command)
+        self.assertEqual([arg for arg in command if arg.startswith("-Xdemangler")], [])
 
     def test_path_equivalence_reaches_every_rendering(self):
         objects = [self.touch("lib/a.so")]

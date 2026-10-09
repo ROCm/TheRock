@@ -367,6 +367,11 @@ Totals are also written to the job summary page. The HTML step runs
 skipped, not failed, when `CODECOV_TOKEN` is absent, and an upload error doesn't
 fail the job either; both leave a warning on the run.
 
+The annotated view shows each file once, its counts summed over every template
+instantiation as in the lcov. With llvm-cov's per-instantiation views, demangled,
+rocWMMA's report was 3.3GB and rendering it outgrew the 16GB hosted runner the
+report job runs on.
+
 ## Selecting projects to run
 
 `projects_to_test` takes comma-separated project names or group aliases
