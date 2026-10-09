@@ -57,7 +57,11 @@ def download_ccache_logs(
         sys.exit(1)
 
     try:
-        with urllib.request.urlopen(url) as resp:
+        with urllib.request.urlopen(
+            url,
+            timeout=60,
+            # Fixed HTTPS S3 endpoint.
+        ) as resp:  # nosec B310
             data = resp.read()
     except urllib.error.HTTPError as e:
         print(f"ERROR: {e.code} fetching {url}", file=sys.stderr)
