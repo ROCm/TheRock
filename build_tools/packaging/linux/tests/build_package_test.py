@@ -1558,6 +1558,10 @@ class CkDevPackagingTest(_KpackBuildTestCase):
             )
 
     def test_failed_versioned_build_still_gets_alias_when_content_exists(self) -> None:
+        # A versioned build that fails despite having content must not be
+        # mistaken for "no content": the alias is still built, so its dangling
+        # dependency fails the install simulation instead of the failure being
+        # hidden.
         cfg = self._config(CK_TARGETS)
         self._stage_ck_runtime_files(cfg)
         _stage_package_artifacts(PKG_CK_DEVEL, cfg.artifacts_dir, GFX_HOST)
@@ -1758,11 +1762,19 @@ class PackageSetRegressionTest(_KpackBuildTestCase):
             for dep in self._depends(built, name):
                 if dep.startswith("amdrocm"):
                     self.assertIn(dep, built, f"{name} depends on missing {dep}")
-        for name in built:
-            if "-gfx" in name and not name.startswith("amdrocm-core"):
-                host = re.sub(r"7\.1-gfx\w+$", "-host7.1", name)
-                if host in built:
-                    self.assertIn(host, self._depends(built, name))
+        for name in all_names:
+            pkg_info = get_package_info(name)
+            if is_meta_package(pkg_info) or not self._is_device_split(pkg_info):
+                continue
+            base = pkg_info["Package"].removesuffix("-devel")
+            host = f"{base}-host7.1"
+            self.assertIn(host, built, f"{name} has no host package")
+            for target in targets:
+                self.assertIn(host, self._depends(built, f"{base}7.1-{target}"))
+
+    @staticmethod
+    def _is_device_split(pkg_info: dict) -> bool:
+        return is_key_defined(pkg_info, "Gfxarch") and not is_devel_package(pkg_info)
 
     def test_fft_devel_stays_generic(self) -> None:
         cfg = self._config(CK_TARGETS)
