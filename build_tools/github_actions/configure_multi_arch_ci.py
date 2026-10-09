@@ -56,6 +56,7 @@ from pathlib import Path
 # Add parent directory to path for _therock_utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from _therock_utils.build_topology import get_topology
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 from amdgpu_family_matrix import (
     all_build_variants,
@@ -224,7 +225,7 @@ class CIInputs:
     build_native_linux: bool = True
     python_versions: list[str] = field(default_factory=list)
 
-    # PR labels (from event payload for pull_request events)
+    # PR labels from the event payload, or workflow_dispatch's pr_labels input.
     pr_labels: list[str] = field(default_factory=list)
 
     # Per-platform GPU family selections parsed from reusable workflow inputs.
@@ -258,8 +259,27 @@ class CIInputs:
     def validate(self) -> None:
         """Validate inputs for consistency (fail-fast behavior).
 
-        Raises ValueError if test labels require stages not in build_stages.
+        Raises ValueError for conflicting build selections or test labels
+        requiring stages not in build_stages.
         """
+        if "ci:skip-rocm" in self.pr_labels:
+            conflicts = {
+                "ci:build-rocm",
+                "ci:build-python-packages",
+                "ci:build-native-linux",
+            }.intersection(self.pr_labels)
+            if conflicts:
+                raise ValueError(f"ci:skip-rocm conflicts with {sorted(conflicts)}")
+            if self.build_variant != "release":
+                raise ValueError(
+                    "ci:skip-rocm requires build_variant='release'; stable ROCm "
+                    "packages are not published for other variants"
+                )
+            if self.build_stages or self.prebuilt_stages or self.baseline_run_id:
+                raise ValueError(
+                    "ci:skip-rocm cannot be combined with build_stages, "
+                    "prebuilt_stages, or baseline_run_id"
+                )
         allowed_labels = _get_allowed_test_labels_for_stages(self.build_stages)
         if allowed_labels is not None:
             for platform, labels in [
@@ -322,7 +342,9 @@ class CIInputs:
 
         pr_labels: list[str] = []
         base_ref: str | None = "HEAD^1"
-        if event_name == "pull_request":
+        if event_name == "workflow_dispatch":
+            pr_labels = _parse_comma_list(os.environ.get("PR_LABELS", ""))
+        elif event_name == "pull_request":
             # Extract label name strings from the event payload's label objects:
             #   Sample input:  [{"name": "ci:skip", "color": "fff", ...}, ...]
             #   Sample output: ["ci:skip", ...]
@@ -564,8 +586,8 @@ class TargetSelection:
 #
 # Each node gets a JobAction: RUN, PREBUILT, or SKIP.
 #   - RUN:      Build from source (or run tests).
-#   - PREBUILT: Fetch artifacts from a prior successful run. Only valid for
-#               build job groups (build-rocm, build-rocm-python).
+#   - PREBUILT: Use artifacts from a prior successful run or published packages.
+#               Only valid for build job groups (build-rocm, build-rocm-python).
 #   - SKIP:     Don't run at all. Used when no downstream job needs this
 #               node's outputs.
 #
@@ -716,6 +738,11 @@ class BuildConfig:
     build_python_packages: bool
     build_pytorch: bool
     build_jax: bool
+    build_rocm: bool = True
+    # Framework dependency source: exactly one URL is populated. An index URL
+    # selects unpinned published packages instead of this run's ROCm packages.
+    rocm_package_index_url: str = ""
+    rocm_package_find_links_url: str = ""
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
     pytorch_build_matrix: list[dict[str, str]] = field(default_factory=list)
     jax_build_matrix: list[dict[str, str]] = field(default_factory=list)
@@ -835,6 +862,12 @@ def should_skip_ci(
     # CI for docs-only changes, experimental projects, etc.
     if ci_inputs.external_repo:
         print("  External repo build: skipping path filter checks, using stage reuse")
+        return False
+
+    if {"ci:build-rocm", "ci:build-pytorch", "ci:build-jax"}.intersection(
+        ci_inputs.pr_labels
+    ):
+        print("  Explicit build label: skipping path filter checks")
         return False
 
     # If we have a list of changed files (push/pull_request events), check if
@@ -1207,8 +1240,42 @@ def decide_jobs(
     those platforms.
     """
 
+    ci_inputs.validate()
+    pr_labels = ci_inputs.pr_labels
+    build_pytorch_action = JobAction.RUN if ci_inputs.build_pytorch else JobAction.SKIP
+    build_jax_action = JobAction.RUN if ci_inputs.build_jax else JobAction.SKIP
+    if "ci:build-pytorch" in pr_labels:
+        build_pytorch_action = JobAction.RUN
+    elif "ci:skip-pytorch" in pr_labels:
+        build_pytorch_action = JobAction.SKIP
+    if "ci:build-jax" in pr_labels:
+        build_jax_action = JobAction.RUN
+    elif "ci:skip-jax" in pr_labels:
+        build_jax_action = JobAction.SKIP
+
+    if "ci:skip-rocm" in pr_labels:
+        if targets.windows_families:
+            raise ValueError("ci:skip-rocm currently supports Linux only")
+        if build_jax_action == JobAction.RUN:
+            raise ValueError(
+                "ci:skip-rocm does not yet support JAX; use ci:skip-jax "
+                "or build_jax=false"
+            )
+        # Published packages satisfy the framework dependency. No ROCm stages
+        # are built or copied, and there is no need to look up baseline runs.
+        return JobDecisions(
+            build_rocm=BuildRocmDecision(action=JobAction.SKIP),
+            test_rocm=TestRocmDecision(action=JobAction.SKIP),
+            build_rocm_python=JobGroupDecision(action=JobAction.PREBUILT),
+            build_pytorch=JobGroupDecision(action=build_pytorch_action),
+            test_pytorch=JobGroupDecision(action=build_pytorch_action),
+            build_jax=JobGroupDecision(action=build_jax_action),
+        )
+
     # Build ROCm.
     stage_reuse_mode = StageReuseMode.from_environ()
+    if "ci:build-rocm" in pr_labels:
+        stage_reuse_mode = StageReuseMode.OFF
 
     if stage_reuse_mode is StageReuseMode.OFF:
         # Strong off is authoritative: do not parse or honor explicit
@@ -1327,21 +1394,6 @@ def decide_jobs(
                 test_type=test_type,
                 test_type_reason="ASAN tests skipped due to non-nightly trigger",
             )
-
-    build_pytorch_action = JobAction.RUN if ci_inputs.build_pytorch else JobAction.SKIP
-    build_jax_action = JobAction.RUN if ci_inputs.build_jax else JobAction.SKIP
-
-    # PR labels can override packaging job decisions.
-    pr_labels = ci_inputs.pr_labels
-    if "ci:build-pytorch" in pr_labels:
-        build_pytorch_action = JobAction.RUN
-    elif "ci:skip-pytorch" in pr_labels:
-        build_pytorch_action = JobAction.SKIP
-
-    if "ci:build-jax" in pr_labels:
-        build_jax_action = JobAction.RUN
-    elif "ci:skip-jax" in pr_labels:
-        build_jax_action = JobAction.SKIP
 
     # Other jobs run unconditionally with no configuration.
     # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
@@ -1713,7 +1765,8 @@ def _expand_build_config_for_platform(
 
     # Ensure python packages are built if pytorch or jax are enabled,
     # since they depend on rocm python packages.
-    if build_pytorch or build_jax:
+    use_published_packages = jobs.build_rocm_python.action == JobAction.PREBUILT
+    if (build_pytorch or build_jax) and not use_published_packages:
         if not build_python_packages:
             print("  Enabling python packages (required by pytorch/jax)")
         build_python_packages = True
@@ -1735,6 +1788,23 @@ def _expand_build_config_for_platform(
         jax_build_matrix = []
         test_python_packages_matrix = []
 
+    build_rocm = jobs.build_rocm.action != JobAction.SKIP
+    if not build_rocm:
+        build_native_linux = False
+    if use_published_packages:
+        build_python_packages = False
+        test_python_packages_matrix = []
+        rocm_package_index_url = "https://stable.repo.amd.com/rocm/whl-next/"
+        rocm_package_find_links_url = ""
+    else:
+        rocm_package_index_url = ""
+        packages_loc = WorkflowOutputRoot.from_workflow_run(
+            run_id=ci_inputs.run_id,
+            platform=platform,
+            release_type=ci_inputs.release_type,
+        ).python_packages()
+        rocm_package_find_links_url = f"{packages_loc.https_url}/index.html"
+
     return BuildConfig(
         per_family_info=per_family_info,
         dist_amdgpu_families=dist_amdgpu_families,
@@ -1743,6 +1813,9 @@ def _expand_build_config_for_platform(
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
         build_native_linux=build_native_linux,
+        build_rocm=build_rocm,
+        rocm_package_index_url=rocm_package_index_url,
+        rocm_package_find_links_url=rocm_package_find_links_url,
         build_python_packages=build_python_packages,
         build_pytorch=build_pytorch,
         build_jax=build_jax,

@@ -36,6 +36,10 @@ on:
         description: "Comma-separated Windows test options. Use test:* to filter tests (e.g. test:rocprim). Use test_filter:* to set test type (e.g. test_filter:quick)."
         default: ""
       # --- Build control ---
+      pr_labels:
+        type: string
+        default: ""
+        description: "Comma-separated CI labels, e.g. ci:build-pytorch,ci:skip-rocm,ci:skip-jax"
       build_stages:
         type: string
         default: ""
@@ -118,6 +122,7 @@ jobs:
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "release"
+      pr_labels: ${{ inputs.pr_labels || '' }}
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
       windows_amdgpu_families: ${{ inputs.windows_amdgpu_families || '' }}
       linux_test_labels: ${{ inputs.linux_test_labels || '' }}

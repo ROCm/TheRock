@@ -32,6 +32,10 @@ on:
         description: "Comma-separated list of test labels for Linux."
         type: string
         default: ""
+      pr_labels:
+        description: "Comma-separated CI labels for workflow_dispatch (PR events use their own labels)."
+        type: string
+        default: ""
       windows_test_labels:
         description: "Comma-separated list of test labels for Windows."
         type: string
@@ -229,6 +233,7 @@ jobs:
         id: configure
         env:
           BUILD_VARIANT: ${{ inputs.build_variant }}
+          PR_LABELS: ${{ inputs.pr_labels }}
           RELEASE_TYPE: ${{ inputs.release_type }}
           BUILD_PYTHON_PACKAGES: ${{ inputs.build_python_packages }}
           BUILD_PYTORCH: ${{ inputs.build_pytorch }}

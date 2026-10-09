@@ -350,9 +350,8 @@ jobs:
         with:
           release_type: ci
 
-      # Appends to the same therock-ci-artifacts/<run>-linux/python/ prefix
-      # that the ROCm python job already populated — one find-links URL
-      # covers the whole SDK + PyTorch stack.
+      # When ROCm was built in this run, its wheels share this prefix;
+      # otherwise only the new PyTorch wheels are uploaded.
       - name: Upload PyTorch wheels
         run: |
           python build_tools/github_actions/upload_python_packages.py \
