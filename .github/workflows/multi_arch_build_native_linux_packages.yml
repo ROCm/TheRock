@@ -55,6 +55,11 @@ on:
         type: string
         required: false
         default: "aws-linux-scale-rocm-prod"
+      enable_repo_package:
+        description: "Build, verify and publish the amdrocm-repo package"
+        type: boolean
+        required: false
+        default: true
     outputs:
       package_repository_url:
         description: "Public repository URL for package installation"
@@ -66,6 +71,61 @@ permissions:
 run-name: Build ${{ inputs.native_package_type }} packages (${{ inputs.rocm_version }}, ${{ inputs.dist_amdgpu_families }}${{ inputs.release_type && format(', {0}', inputs.release_type) || '' }})
 
 jobs:
+  # Resolve the parameters used to build and publish the amdrocm-repo package:
+  # the OS-profile build matrix for this package type, each profile's container
+  # image, and the repo.amd.com stream the build line configures, with its
+  # packages base URL, signing-key URL and build sub-folder.
+  #
+  # The build line and the stream are different vocabularies: prerelease
+  # configures rc. release_type stays the workflow input because it also selects
+  # the artifact bucket; the stream is derived from it.
+  setup_repo_params:
+    name: Resolve amdrocm-repo parameters
+    # nightly and prerelease are the lines that publish the package. release
+    # configures a stream too, but has no artifacts bucket to publish into.
+    # ASAN variants are promoted under packages-asan, which the resolved
+    # repository URL does not point at, so they skip.
+    if: inputs.enable_repo_package && contains(fromJSON('["nightly", "prerelease"]'), inputs.release_type) && !contains(inputs.build_variant, 'asan')
+    runs-on: ubuntu-24.04
+    # Resolves parameters only; it needs no cloud credentials.
+    permissions:
+      contents: read
+    env:
+      NATIVE_PACKAGE_TYPE: ${{ inputs.native_package_type }}
+      RELEASE_TYPE: ${{ inputs.release_type }}
+      ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+    outputs:
+      os_profiles: ${{ steps.derive.outputs.os_profiles }}
+      images: ${{ steps.derive.outputs.images }}
+      stream: ${{ steps.derive.outputs.stream }}
+      repo_base_url: ${{ steps.derive.outputs.repo_base_url }}
+      gpg_key_url: ${{ steps.derive.outputs.gpg_key_url }}
+      repo_sub_folder: ${{ steps.derive.outputs.repo_sub_folder }}
+    steps:
+      - name: Checking out repository
+        timeout-minutes: 15
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Python requirements
+        run: pip install jinja2
+
+      - name: Derive amdrocm-repo parameters
+        id: derive
+        run: |
+          python ./build_tools/packaging/linux/get_url_repo_params.py get-repo-params \
+            --pkg-type "${NATIVE_PACKAGE_TYPE}" \
+            --release-type "${RELEASE_TYPE}" \
+            --run-id "${ARTIFACT_RUN_ID}"
+
   build_native_packages:
     permissions:
       contents: read
@@ -172,6 +232,25 @@ jobs:
             --package-dir "${{ env.PACKAGE_DIST_DIR }}" \
             --release-type "${RELEASE_TYPE}"
 
+      # Build the amdrocm-repo package for every OS profile of this package type
+      # and check that its payload is the expected files, at the expected paths,
+      # owned by root. This container can build both package types but has
+      # neither dnf nor zypper, so the packages are inspected rather than
+      # installed.
+      #
+      # Runs on every line, so this check is the same code on a pull request and
+      # on a release build. The repository URL is a placeholder and is never
+      # contacted: the build needs no key it has to fetch and no repository it
+      # has to reach. See the script's docstring for how that is guaranteed.
+      - name: Build and inspect amdrocm-repo packages
+        if: inputs.enable_repo_package
+        run: |
+          python ./build_tools/packaging/linux/inspect_repo_package.py \
+            --pkg-type "${NATIVE_PACKAGE_TYPE}" \
+            --rocm-version "${ROCM_VERSION}" \
+            --repo-base-url https://example.com/rocm/core/packages \
+            --repo-sub-folder 20000101-inspect
+
       - name: Configure AWS credentials for artifact uploads
         uses: ./.github/actions/configure_aws_artifacts_credentials
         with:
@@ -202,3 +281,100 @@ jobs:
           workflow_step_outputs: ${{ toJSON(steps) }}
           gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
           gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
+  # Build the amdrocm-repo package for each OS profile of this package type and
+  # publish it to this run's artifacts bucket, from which release promotion
+  # copies it with the rest of the packages.
+  stage_repo_package:
+    name: Stage amdrocm-repo (${{ matrix.os_profile }})
+    needs: [setup_repo_params]
+    if: inputs.enable_repo_package && needs.setup_repo_params.outputs.repo_base_url != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        # setup_repo_params does not run on the lines that do not publish, and a
+        # skipped job's outputs are empty strings, which fromJSON cannot parse.
+        # Fall back to an empty matrix so this job skips cleanly.
+        os_profile: ${{ fromJSON(needs.setup_repo_params.outputs.os_profiles || '[]') }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
+    permissions:
+      contents: read
+      id-token: write # Authenticate to AWS to publish the amdrocm-repo package.
+    container:
+      # get_url_repo_params.py manages image references for each OS profile.
+      # zizmor cannot inspect the dynamically selected image.
+      image: ${{ fromJSON(needs.setup_repo_params.outputs.images || '{}')[matrix.os_profile] }} # zizmor: ignore[unpinned-images]
+    env:
+      ROCM_VERSION: ${{ inputs.rocm_version }}
+      NATIVE_PACKAGE_TYPE: ${{ inputs.native_package_type }}
+      RELEASE_TYPE: ${{ inputs.release_type }}
+      ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      OS_PROFILE: ${{ matrix.os_profile }}
+      STREAM: ${{ needs.setup_repo_params.outputs.stream }}
+      REPO_BASE_URL: ${{ needs.setup_repo_params.outputs.repo_base_url }}
+      GPG_KEY_URL: ${{ needs.setup_repo_params.outputs.gpg_key_url }}
+      REPO_SUB_FOLDER: ${{ needs.setup_repo_params.outputs.repo_sub_folder }}
+    steps:
+      - name: Checkout
+        timeout-minutes: 15
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Install system prerequisites
+        run: |
+          bash build_tools/packaging/linux/setup_repo_build_deps.sh \
+            --os-profile "${OS_PROFILE}"
+
+      - name: Setup Python
+        run: |
+          bash build_tools/packaging/linux/setup_python_cmd.sh \
+            --os-profile "${OS_PROFILE}" \
+            --install-runtime \
+            --output-format github
+
+      - name: Install Python dependencies
+        run: |
+          $PYTHON_CMD -m venv /tmp/repo-venv
+          /tmp/repo-venv/bin/python -m pip install --upgrade pip
+          /tmp/repo-venv/bin/python -m pip install jinja2 boto3
+          echo "PYTHON_CMD=/tmp/repo-venv/bin/python" >> "$GITHUB_ENV"
+          # configure_aws_artifacts_credentials runs bare `python`, which these
+          # per-distro images do not provide. A venv always does, so putting its
+          # bin/ on PATH lets the credentials action run here and the package
+          # publish from the job that built it.
+          echo "/tmp/repo-venv/bin" >> "$GITHUB_PATH"
+
+      - name: Build amdrocm-repo
+        run: |
+          # The build sub-folder is empty except on a per-build stream, which is
+          # the only kind the builder accepts one for. The key URL is empty on an
+          # unsigned stream, where the builder needs none.
+          $PYTHON_CMD build_tools/packaging/linux/build_repo_package.py \
+            --os-profile "${OS_PROFILE}" \
+            --stream "${STREAM}" \
+            --repo-base-url "${REPO_BASE_URL}" \
+            --gpg-key-url "${GPG_KEY_URL}" \
+            --repo-sub-folder "${REPO_SUB_FOLDER}" \
+            --rocm-version "${ROCM_VERSION}" \
+            --dest-dir repo-package-out \
+            --verify-repo-url
+
+      # Configured after the build so the key fetch, the repository check and
+      # the package build run without artifacts-bucket credentials.
+      - name: Configure AWS credentials for artifact uploads
+        uses: ./.github/actions/configure_aws_artifacts_credentials
+        with:
+          release_type: ${{ inputs.release_type }}
+
+      - name: Publish amdrocm-repo
+        run: |
+          pkg="$($PYTHON_CMD build_tools/packaging/linux/inspect_repo_package.py locate \
+            --dest-dir repo-package-out --pkg-type "${NATIVE_PACKAGE_TYPE}")"
+          $PYTHON_CMD build_tools/packaging/linux/publish_repo_package.py \
+            --file "$pkg" \
+            --run-id "${ARTIFACT_RUN_ID}" \
+            --os-profile "${OS_PROFILE}" \
+            --pkg-type "${NATIVE_PACKAGE_TYPE}"
