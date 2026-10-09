@@ -232,11 +232,23 @@ _Parsed = TypeVar("_Parsed")
 
 
 class DevelMetadataReadError(RuntimeError):
-    """A wheel RECORD or .devel_links file stayed unreadable after retries."""
+    """A wheel RECORD or .devel_links file stayed unreadable after retries.
+
+    The message names the distribution and the file path. RECORD must not be
+    rewritten from the failed read.
+    """
 
 
 class DeviceLinkPlan(NamedTuple):
-    """One device wheel's RECORD, devel-link entries, and distribution name."""
+    """One device wheel's devel-link work.
+
+    Attributes:
+        record_path: That wheel's RECORD. New devel links are appended here so
+            pip uninstall removes them.
+        links: {"relpath", "target"} entries from the wheel's .devel_links
+            manifest.
+        dist_name: Distribution name, included in read errors for this wheel.
+    """
 
     record_path: Path
     links: list[dict[str, str]]
@@ -250,9 +262,10 @@ def _read_with_retry(
 ) -> _Parsed:
     """Return parse(text) from one read of path, retrying a torn file.
 
-    parse runs on that attempt's text, so the file is not opened again.
-    csv.Error and json.JSONDecodeError are retried. The final error names
-    the distribution and the path.
+    A shared mount can return an empty file or one that contains a NUL byte.
+    parse runs only on the bytes from this attempt, so path is not opened
+    again. csv.Error and json.JSONDecodeError are retried the same way. The
+    final error names dist_name and path.
     """
     reason = "empty"
     last_error: Exception | None = None
@@ -260,6 +273,7 @@ def _read_with_retry(
         try:
             data = path.read_bytes()
             if b"\x00" in data or not data.strip():
+                # Torn bytes. Do not parse them, and do not chain an older error.
                 reason = "contains NUL" if b"\x00" in data else "empty"
                 last_error = None
             else:
@@ -275,13 +289,18 @@ def _read_with_retry(
     raise DevelMetadataReadError(message) from last_error
 
 
+def _read_text(path: Path, dist_name: str) -> str:
+    """Return file text from one validated read, retrying a torn file."""
+    return _read_with_retry(path, dist_name, parse=lambda text: text)
+
+
 def _read_device_record_files(
     dist: md.Distribution, dist_name: str
 ) -> list[md.PackagePath]:
-    """RECORD rows from one validated read. dist.files would open the file again.
+    """Return RECORD rows parsed from the same bytes checked for a torn read.
 
-    PathDistribution stores the dist-info directory on _path. There is no
-    public accessor.
+    dist.files would open RECORD again. PathDistribution stores the dist-info
+    directory on the private _path attribute, and there is no public accessor.
     """
 
     def parse(text: str) -> list[md.PackagePath]:
@@ -290,11 +309,16 @@ def _read_device_record_files(
             if not row or not row[0]:
                 continue
             entry = md.PackagePath(row[0])
+            # locate() looks up the distribution; PackagePath does not set it.
             entry.dist = dist
             paths.append(entry)
         return paths
 
-    return _read_with_retry(Path(dist._path) / "RECORD", dist_name, parse)
+    return _read_with_retry(
+        path=Path(dist._path) / "RECORD",
+        dist_name=dist_name,
+        parse=parse,
+    )
 
 
 def _record_has_entries(record_path: Path, names: list[str], dist_name: str) -> bool:
@@ -305,9 +329,7 @@ def _record_has_entries(record_path: Path, names: list[str], dist_name: str) -> 
     A torn read raises instead of looking like a RECORD with no rows.
     """
     existing = set()
-    for line in _read_with_retry(
-        record_path, dist_name, lambda text: text
-    ).splitlines():
+    for line in _read_text(record_path, dist_name).splitlines():
         if not line.strip():
             continue
         name = line.split(",", 1)[0]
@@ -335,7 +357,7 @@ def _discover_device_link_plans(
     # scan may otherwise be missed.
     importlib.invalidate_caches()
 
-    plans = []
+    plans: list[DeviceLinkPlan] = []
     for dist in md.distributions(path=[str(site_lib_path)]):
         name = dist.metadata["Name"]
         if not name:
@@ -371,10 +393,11 @@ def _discover_device_link_plans(
         manifest_path = Path(manifest_file.locate())
         if not manifest_path.is_file():
             continue
+        # json.loads runs on this attempt's text. A truncated file is retried.
         links = _read_with_retry(
-            manifest_path,
-            name,
-            lambda text: json.loads(text).get("links", []),
+            path=manifest_path,
+            dist_name=name,
+            parse=lambda text: json.loads(text).get("links", []),
         )
         if not links:
             continue
@@ -388,7 +411,7 @@ def _discover_device_link_plans(
     return plans
 
 
-def _ensure_record_entries(record_path: Path, names: list[str], dist_name: str):
+def _ensure_record_entries(record_path: Path, names: list[str], dist_name: str) -> None:
     """Append RECORD entries for materialized devel links, de-duplicated.
 
     Reads the existing RECORD, drops any duplicate paths, appends the new
@@ -399,9 +422,7 @@ def _ensure_record_entries(record_path: Path, names: list[str], dist_name: str):
     lines = []
     seen = set()
     changed = False
-    for line in _read_with_retry(
-        record_path, dist_name, lambda text: text
-    ).splitlines():
+    for line in _read_text(record_path, dist_name).splitlines():
         if not line.strip():
             continue
         path0 = line.split(",", 1)[0]
@@ -460,12 +481,12 @@ def _reconcile_device_links(
         for link in plan.links
     ) and all(
         _record_has_entries(
-            plan.record_path,
-            [
+            record_path=plan.record_path,
+            names=[
                 _record_name(site_lib_path, devel_py_pkg_path, link["relpath"])
                 for link in plan.links
             ],
-            plan.dist_name,
+            dist_name=plan.dist_name,
         )
         for plan in plans
     ):
@@ -477,7 +498,7 @@ def _reconcile_device_links(
         try:
             created = 0
             for plan in plans:
-                recorded_names = []
+                recorded_names: list[str] = []
                 for link in plan.links:
                     relpath = link["relpath"]
                     dest_path = devel_py_pkg_path / relpath
@@ -499,7 +520,11 @@ def _reconcile_device_links(
                         dest_path.unlink()
                     dest_path.hardlink_to(hardlink_target)
                     created += 1
-                _ensure_record_entries(plan.record_path, recorded_names, plan.dist_name)
+                _ensure_record_entries(
+                    record_path=plan.record_path,
+                    names=recorded_names,
+                    dist_name=plan.dist_name,
+                )
             return created
         finally:
             file_lock.unlock()

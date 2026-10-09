@@ -379,6 +379,7 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
         )
 
     def _no_retry_pause(self):
+        """Skip the pause between metadata read attempts."""
         return unittest.mock.patch.object(_devel, "_METADATA_READ_PAUSE_S", 0)
 
     def _repair_on_retry(self, restore):
@@ -392,6 +393,7 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
         )
 
     def _device_metadata_path(self, record: Path, family: str, kind: str) -> Path:
+        """RECORD, or the .devel_links manifest, for one synthetic device wheel."""
         if kind == "record":
             return record
         return self.site / LIBS_NAME / ".devel_links" / f"{family}.json"
