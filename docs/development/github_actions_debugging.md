@@ -2,9 +2,52 @@
 
 Table of contents:
 
+- [Testing selected ROCm components](#testing-selected-rocm-components)
 - [Testing release workflows](#testing-release-workflows)
 - [Connecting to Kubernetes runners for interactive debugging](#connecting-to-kubernetes-runners-for-interactive-debugging)
 - [Working effectively from forks](#working-effectively-from-forks)
+
+## Testing selected ROCm components
+
+Use `test_artifacts.yml` to test artifacts from an existing run. Set
+`projects_to_test` to exact test names, for example
+`tensilelite,tensilelite-common` or `libhipcxx_amdclang,libhipcxx_hiprtc`.
+This overrides `changed_projects`, bypasses consumer expansion, and does not
+add sanity unless `sanity` is requested. `*` requests all tests. Platform,
+GPU-family, runner availability, and test-tier restrictions still apply.
+
+```bash
+gh workflow run test_artifacts.yml --repo ROCm/TheRock --ref <branch> \
+  -f artifact_run_id=<existing-run-id> \
+  -f release_type=ci \
+  -f artifact_group=multi-arch-release \
+  -f amdgpu_families=gfx94X-dcgpu \
+  -f test_runs_on=<runner-label> \
+  -f test_type=standard \
+  -f projects_to_test=tensilelite,tensilelite-common
+```
+
+Use `release_type=ci` for CI artifacts or `dev` for development-release
+artifacts; this workflow tests existing artifacts rather than publishing a
+release. The artifact run must contain everything the selected tests require.
+
+Leave `projects_to_test` empty to use `changed_projects`: these are modified
+source projects, whose consumer tests are selected using `test_policies.toml`.
+If both are empty, all tests are selected. `test_labels` is an optional further
+filter and accepts comma-separated names or a JSON list; group names such as
+`tensilelite` and `libhipcxx` expand to their associated suites.
+
+`amdgpu_families` identifies the GPU family and its runner configuration.
+`amdgpu_targets` optionally narrows fetched artifacts to individual targets
+within that family (for example `gfx942`).
+
+Multi-arch CI selects test jobs during setup and lists them in its summary.
+External callers must pass their `changed_projects` to `setup_multi_arch.yml`
+when updating their TheRock pin; passing them only to the later platform
+workflow cannot affect an already selected test configuration.
+Sanity is selected for changes to its compiler/runtime dependencies, with full
+testing retained when change scope is unknown. Excluding `compiler-runtime`
+from the build also excludes sanity because its artifacts are unavailable.
 
 ## Testing release workflows
 

@@ -72,12 +72,17 @@ from configure_ci_path_filters import (
 from configure_jax_release_matrix import generate_jax_matrix_for_release_type
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
 from configure_rocm_python_test_matrix import build_rocm_python_test_matrix
+from fetch_test_configurations import configure_tests, test_matrix
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "test_tools"))
+from determine_rocm_test_dependencies import get_ci_test_selectors
+
 from github_actions_api import (
     gha_append_step_summary,
     gha_load_github_event,
     gha_set_output,
 )
-from stage_impact import analyze_artifact_impact_from_projects
+from stage_impact import analyze_artifact_impact_from_projects, analyze_stage_impact
 from stage_reuse_decision import (
     AutoStageReuse,
     StageReuseMode,
@@ -1436,6 +1441,28 @@ def _should_run_tests_for_family(
     )
 
 
+def _select_projects_to_test(
+    ci_inputs: CIInputs, git_context: GitContext, jobs: JobDecisions
+) -> set[str]:
+    """Use the existing consumer policy and stage impact to select tests early."""
+    projects = get_ci_test_selectors(ci_inputs.changed_projects)
+    sanity_enabled = True
+    if not ci_inputs.changed_projects and git_context.changed_files:
+        impact = analyze_stage_impact(git_context.changed_files)
+        sanity_enabled = bool(
+            impact.full_rebuild_required
+            or impact.unmatched_inputs
+            or "compiler-runtime" in impact.rebuild_stages
+        )
+    if "compiler-runtime" in jobs.build_rocm.skipped_stages:
+        sanity_enabled = False
+    if not sanity_enabled:
+        if "*" in projects:
+            projects = set(test_matrix)
+        projects.discard("sanity")
+    return projects
+
+
 def _expand_build_config_for_platform(
     families: list[str],
     platform: str,
@@ -1478,6 +1505,9 @@ def _expand_build_config_for_platform(
             test_runner_kernel = label.split(":")[1]
             break
 
+    projects_to_test = ",".join(
+        sorted(_select_projects_to_test(ci_inputs, git_context, jobs))
+    )
     per_family_info: list[dict] = []
     for family_name in families:
         # select_targets already validates family names and filters by
@@ -1647,6 +1677,25 @@ def _expand_build_config_for_platform(
             family_info["test_labels_for_family"] = platform_info[
                 "test_labels_for_family"
             ]
+        test_labels = platform_info.get("test_labels_for_family") or (
+            ci_inputs.linux_test_labels
+            if platform == "linux"
+            else ci_inputs.windows_test_labels
+        )
+        test_configuration = configure_tests(
+            platform=platform,
+            projects_to_test=projects_to_test,
+            amdgpu_families=platform_info["family"],
+            test_type=family_test_type or jobs.test_rocm.test_type,
+            test_labels=test_labels,
+            build_variant=build_variant,
+            test_runs_on=test_runs_on,
+            test_runs_on_cpu=test_runs_on_cpu,
+            platform_info=platform_info,
+        )
+        if family_info["sanity_check_only_for_family"]:
+            test_configuration["components"] = []
+        family_info["test_configuration"] = test_configuration
         per_family_info.append(family_info)
 
     if not per_family_info:

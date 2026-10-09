@@ -1508,6 +1508,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "test-runs-on",
             "test-runs-on-cpu",
             "tests_enabled",
+            "test_configuration",
             "sanity_check_only_for_family",
         }
         optional_keys = {
@@ -2281,6 +2282,75 @@ class TestWriteOutputs(unittest.TestCase):
 
 class TestConfigurePipeline(unittest.TestCase):
     """Test the full pipeline via configure()."""
+
+    def test_setup_selects_sanity_from_changed_components(self):
+        cases = [
+            (["projects/rocblas"], [], False),
+            (["emulation/rocjitsu"], ["emulation"], False),
+            (["projects/hip"], ["emulation"], False),
+            (["projects/hip"], ["compiler-runtime"], True),
+            (["projects/clr"], [], True),
+            (["projects/rocr-runtime"], [], True),
+            (["projects/rocminfo"], [], True),
+            (["hipify"], [], True),
+            (["amd-llvm"], [], True),
+            (["ocl-clr"], [], True),
+            (["projects/rocm-core"], [], True),
+            (["shared/kpack"], [], True),
+            (["projects/rocblas", "unknown-project"], [], True),
+            ([], [], True),
+        ]
+        for changed, stages, expected in cases:
+            with self.subTest(changed=changed, stages=stages):
+                inputs = cm.CIInputs(
+                    run_id="12345",
+                    event_name="workflow_dispatch",
+                    commit_ref="feature",
+                    base_ref="HEAD^",
+                    build_variant="release",
+                    linux_amdgpu_families=["gfx94x"],
+                    changed_projects=changed,
+                    build_stages=stages,
+                )
+                outputs = cm.configure(inputs, cm.GitContext.empty())
+                tests = outputs.builds.linux.per_family_info[0]["test_configuration"]
+                self.assertEqual(tests["sanity_component"] is not None, expected)
+                if changed == ["projects/rocblas"]:
+                    self.assertIn(
+                        "rocblas", {c["job_name"] for c in tests["components"]}
+                    )
+                if changed == ["emulation/rocjitsu"]:
+                    self.assertEqual(tests["components"], [])
+                # Verify the configuration is serialized for reusable workflows.
+                serialized = outputs.builds.linux.to_dict()["per_family_info"][0]
+                self.assertEqual(serialized["test_configuration"], tests)
+
+    @patch.dict(os.environ, {"STAGE_REUSE_MODE": "off"})
+    def test_setup_uses_native_change_scope_for_sanity(self):
+        for changed, expected in [
+            (["rocm-libraries"], False),
+            (["rocm-systems"], True),
+            (["rocm-libraries", "unknown/path"], True),
+            (["build_tools/github_actions/fetch_test_configurations.py"], True),
+        ]:
+            with self.subTest(changed=changed):
+                inputs = cm.CIInputs(
+                    run_id="12345",
+                    event_name="pull_request",
+                    commit_ref="feature",
+                    base_ref="HEAD^",
+                    build_variant="release",
+                    linux_amdgpu_families=["gfx94x"],
+                )
+                outputs = cm.configure(
+                    inputs,
+                    cm.GitContext(
+                        changed_files=changed,
+                        submodule_paths=["rocm-libraries", "rocm-systems"],
+                    ),
+                )
+                tests = outputs.builds.linux.per_family_info[0]["test_configuration"]
+                self.assertEqual(tests["sanity_component"] is not None, expected)
 
     def test_skipped_outputs(self):
         """CIOutputs.skipped produces empty, disabled outputs."""

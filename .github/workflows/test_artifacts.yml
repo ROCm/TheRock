@@ -16,8 +16,10 @@ on:
         type: string
         default: ""
       amdgpu_families:
+        description: "GPU family whose artifacts and test runners to use (e.g. gfx94X-dcgpu)"
         type: string
       amdgpu_targets:
+        description: "Optional individual GPU targets to fetch within the family (e.g. gfx942)"
         type: string
         default: ""
       test_runs_on:
@@ -36,13 +38,14 @@ on:
       test_type:
         type: string
       test_labels:
+        description: "Optional test filter: comma-separated names or a JSON list (e.g. tensilelite,tensilelite-common)"
         type: string
       changed_projects:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
         default: ""
-      skip_stages:
-        description: "Build stages excluded from the build and artifact reuse (comma-separated)"
+      projects_to_test:
+        description: "Exact test names, comma-separated (e.g. tensilelite,tensilelite-common). Overrides changed_projects; * selects all."
         type: string
         default: ""
       release_type:
@@ -77,14 +80,20 @@ on:
         default: ""
   workflow_call:
     inputs:
+      test_configuration:
+        description: "Test jobs selected by multi-arch setup (JSON)"
+        type: string
+        default: ""
       artifact_group:
         type: string
       artifact_run_id:
         type: string
         default: ""
       amdgpu_families:
+        description: "GPU family whose artifacts and test runners to use (e.g. gfx94X-dcgpu)"
         type: string
       amdgpu_targets:
+        description: "Optional individual GPU targets to fetch within the family (e.g. gfx942)"
         type: string
         default: ""
       test_runs_on:
@@ -103,13 +112,14 @@ on:
       test_type:
         type: string
       test_labels:
+        description: "Optional test filter: comma-separated names or a JSON list (e.g. tensilelite,tensilelite-common)"
         type: string
       changed_projects:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
         default: ""
-      skip_stages:
-        description: "Build stages excluded from the build and artifact reuse (comma-separated)"
+      projects_to_test:
+        description: "Exact test names, comma-separated (e.g. tensilelite,tensilelite-common). Overrides changed_projects; * selects all."
         type: string
         default: ""
       release_type:
@@ -143,9 +153,9 @@ jobs:
     if: ${{ inputs.tests_enabled }}
     runs-on: ubuntu-24.04
     outputs:
-      sanity_component: ${{ steps.configure.outputs.sanity_component }}
-      components: ${{ steps.configure.outputs.components }}
-      platform: ${{ steps.configure.outputs.platform }}
+      sanity_component: ${{ inputs.test_configuration != '' && toJSON(fromJSON(inputs.test_configuration).sanity_component) || steps.configure.outputs.sanity_component }}
+      components: ${{ inputs.test_configuration != '' && toJSON(fromJSON(inputs.test_configuration).components) || steps.configure.outputs.components }}
+      platform: ${{ fromJSON(inputs.test_configuration || '{}').platform || steps.configure.outputs.platform }}
       shard_arr: ${{ steps.configure.outputs.shard_arr }}
     steps:
       - name: "Quartz - started - test ROCm artifacts"
@@ -160,6 +170,7 @@ jobs:
           gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
 
       - name: Checking out repository
+        if: ${{ inputs.test_configuration == '' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 5
         with:
@@ -168,6 +179,7 @@ jobs:
           ref: ${{ inputs.ref }}
 
       - name: Checkout CI config
+        if: ${{ inputs.test_configuration == '' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 5
         with:
@@ -178,11 +190,13 @@ jobs:
         continue-on-error: true
 
       - name: Setting up Python
+        if: ${{ inputs.test_configuration == '' }}
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: 3.12
 
       - name: "Determine test dependencies"
+        if: ${{ inputs.test_configuration == '' && inputs.projects_to_test == '' }}
         id: test_deps
         # Reads the committed consumer graph directly (no fetch/configure); kept
         # in sync by test_consumer_graph_drift.yml.
@@ -195,14 +209,14 @@ jobs:
             --gha-output
 
       - name: "Configuring CI options"
+        if: ${{ inputs.test_configuration == '' }}
         id: configure
         env:
           ARTIFACT_GROUP: ${{ inputs.artifact_group }}
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
-          PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
-          SKIP_STAGES: ${{ inputs.skip_stages }}
+          PROJECTS_TO_TEST: ${{ inputs.projects_to_test || steps.test_deps.outputs.projects_to_test }}
           CI_CONFIG_PATH: ci-config
           BUILD_VARIANT: ${{ inputs.build_variant }}
           # Pass the policy-gated GPU runner label. When empty, GPU tests are gated
@@ -239,7 +253,7 @@ jobs:
     name: 'Test ${{ matrix.components.job_name }}'
     needs: [test_sanity_check, configure_test_matrix]
     # Run when:
-    #   - sanity check passed or its prerequisite stage was excluded
+    #   - sanity check passed or was not selected
     #   - there are components to test
     #   - sanity_check_only_for_family is not set
     if: >-

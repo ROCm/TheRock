@@ -99,36 +99,15 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(len(components), 1)
         self.assertEqual(components[0]["job_name"], "hipblas")
 
-    def test_sanity_follows_skipped_stages(self):
-        # The same stage allowlist must apply to sanity even when project and
-        # label filters select unrelated component tests.
-        for platform, family in [("linux", "gfx94X-dcgpu"), ("windows", "gfx110X-all")]:
-            for skipped, expected in [
-                ("", True),
-                ("emulation", True),
-                ("compiler-runtime", False),
-                ("compiler-runtime,math-libs", False),
-            ]:
-                with self.subTest(platform=platform, skipped=skipped):
-                    sys.argv = [
-                        "fetch_test_configurations.py",
-                        f"--platform={platform}",
-                    ]
-                    os.environ.update(
-                        AMDGPU_FAMILIES=family,
-                        SKIP_STAGES=skipped,
-                        PROJECTS_TO_TEST="hipblas",
-                        TEST_LABELS='["test:hipblas"]',
-                    )
-                    fetch_test_configurations.run()
-                    sanity = json.loads(self.gha_output["sanity_component"])
-                    self.assertEqual(sanity is not None, expected)
-                    if expected:
-                        self.assertEqual(sanity["job_name"], "sanity")
-                        self.assertTrue(sanity["test_runner"])
-                    self.assertEqual(
-                        [c["job_name"] for c in self._get_components()], ["hipblas"]
-                    )
+    def test_exact_projects_do_not_add_sanity(self):
+        os.environ["PROJECTS_TO_TEST"] = "tensilelite,tensilelite-common"
+        os.environ["TEST_LABELS"] = "tensilelite,tensilelite-common"
+        fetch_test_configurations.run()
+        self.assertIsNone(json.loads(self.gha_output["sanity_component"]))
+        self.assertEqual(
+            {c["job_name"] for c in self._get_components()},
+            {"tensilelite", "tensilelite-common"},
+        )
 
     def test_test_labels_filter(self):
         os.environ["TEST_LABELS"] = json.dumps(["rocblas", "hipblas"])

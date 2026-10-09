@@ -39,16 +39,17 @@ consumers = ["hipblaslt", "hipsparselt"]
 
 [component.rocr-runtime]
 level = 3
-test_include = ["amd-dbgapi", "ocl-icd", "rocgdb"]
+test_include = ["amd-dbgapi", "ocl-icd", "rocgdb", "sanity"]
 
 [component.hip-clr]
 # Backs the "amd-hip" toolchain most of the tree builds with.
 level = 3
 # Only the couplings the walk does not already reach: hipinfo is a hip-clr tool
 # target (not a graph key); rocrtst and rocgdb have no graph path from hip-clr.
-test_include = ["hipinfo", "rocrtst", "rocgdb"]
+test_include = ["hipinfo", "rocrtst", "rocgdb", "sanity"]
 
 [component.amd-llvm]
+test_include = ["sanity"]
 # The compiler builds ~everything; its consumers come from the graph via
 # COMPILER_TOOLCHAIN edges, so no hand-list is needed.
 level = 3
@@ -64,7 +65,7 @@ test_include = ["hip-tests"]
 test_include = ["hipfft", "rocfft", "rocprofiler-systems-examples"]
 
 [component.rocprofiler-register]
-test_include = ["hipfile"]
+test_include = ["hipfile", "sanity"]
 
 [component.aqlprofile]
 test_include = ["rocprofiler-systems-examples"]
@@ -118,3 +119,27 @@ test_include = ["hipfft", "rocfft", "rocprim"]
 
 [component.rocsparse]
 test_include = ["rocblas", "rocprim", "rocsolver"]
+
+[component.hipify]
+test_include = ["sanity"]
+
+[component.hipcc]
+test_include = ["sanity"]
+
+[component.ocl-clr]
+test_include = ["sanity"]
+
+[component.ocl-icd]
+test_include = ["sanity"]
+
+[component.rocminfo]
+test_include = ["sanity"]
+
+[component.rocm-core]
+test_include = ["sanity"]
+
+[component.rocm_smi_lib]
+test_include = ["sanity"]
+
+[component.rocm-kpack]
+test_include = ["sanity"]
