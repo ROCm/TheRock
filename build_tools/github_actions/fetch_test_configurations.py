@@ -864,6 +864,26 @@ test_matrix = {
             "linux": ["gfx125X-dcgpu"],
         },
     },
+    # NVIDIA cuDNN sample corpus built against hipDNN's cuDNN compatibility
+    # shim. Distinct from "hipdnn-samples" above, which is hipDNN's own sample
+    # suite; these two are easy to confuse and test entirely different things.
+    "hipdnn-cudnn-samples": {
+        "job_name": "hipdnn-cudnn-samples",
+        # No "fetch_artifact_args" on purpose: this job calls
+        # find_package(hipdnn_frontend), whose config file and headers live in
+        # the "dev" component, and install_rocm_from_artifacts.py expands each
+        # selected artifact to <name>_lib plus <name>_test only -- never
+        # <name>_dev. Omitting the key takes the fetch-everything branch, which
+        # is why "hipdnn_install" omits it too. Do not "fix" this by adding the
+        # enumerated artifact flags back; find_package would fail.
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_hipdnn_cudnn_samples.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
     # profiler-hub install/consumption tests
     "profiler-hub": {
         "job_name": "profiler-hub",
@@ -1285,6 +1305,17 @@ def run():
                     "test-runs-on-multi-gpu", ""
                 )
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
+
+            # Enforce test_type_for_family if set in the family matrix.
+            # This is a strict override - families with limited hardware (e.g., MI455)
+            # should always run quick tests regardless of what's passed in TEST_TYPE.
+            test_type_for_family = platform_info.get("test_type_for_family")
+            if test_type_for_family and test_type_for_family != test_type:
+                logging.info(
+                    f"Overriding test_type from '{test_type}' to '{test_type_for_family}' "
+                    f"(test_type_for_family for {amdgpu_families})"
+                )
+                test_type = test_type_for_family
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
