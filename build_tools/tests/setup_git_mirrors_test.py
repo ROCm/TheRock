@@ -35,7 +35,7 @@ def _make_submodule(
 ) -> SubmoduleInfo:
     """Helper to build a SubmoduleInfo for tests."""
     if mirror_dir is None:
-        mirror_dir = Path("/tmp/test-mirrors")
+        mirror_dir = Path("/fixtures/test-mirrors")
     return SubmoduleInfo(
         name=name,
         path=path,

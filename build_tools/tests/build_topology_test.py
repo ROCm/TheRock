@@ -1292,7 +1292,7 @@ class SourcePathsInSyncTest(unittest.TestCase):
                 continue
             try:
                 content = cmake_file.read_text()
-            except Exception:
+            except (OSError, UnicodeError):
                 continue
             for pattern in patterns:
                 for match in pattern.finditer(content):

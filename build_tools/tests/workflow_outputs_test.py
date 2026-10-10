@@ -32,8 +32,8 @@ class TestStorageLocation(unittest.TestCase):
 
     def test_local_path(self):
         loc = StorageLocation("my-bucket", "12345-linux/logs/group/build.log")
-        result = loc.local_path(Path("/tmp/staging"))
-        expected = Path("/tmp/staging/12345-linux/logs/group/build.log")
+        result = loc.local_path(Path("/fixtures/staging"))
+        expected = Path("/fixtures/staging/12345-linux/logs/group/build.log")
         self.assertEqual(result, expected)
 
     def test_frozen(self):

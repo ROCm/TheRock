@@ -200,15 +200,11 @@ class GetEnvIntOverrideTest(unittest.TestCase):
 
 class LoadTestCategoriesYamlTest(unittest.TestCase):
     def setUp(self):
-        self._tmp = (
-            Path(os.environ.get("PYTEST_RUNNER_TMP", "/tmp")) / f"pr_yaml_{os.getpid()}"
+        temporary_dir = tempfile.TemporaryDirectory(
+            dir=os.environ.get("PYTEST_RUNNER_TMP")
         )
-        self._tmp.mkdir(parents=True, exist_ok=True)
-
-    def tearDown(self):
-        for p in self._tmp.glob("*"):
-            p.unlink()
-        self._tmp.rmdir()
+        self.addCleanup(temporary_dir.cleanup)
+        self._tmp = Path(temporary_dir.name)
 
     def test_valid_yaml(self):
         path = self._tmp / "ok.yaml"
@@ -308,12 +304,12 @@ class BuildEnvironmentTest(unittest.TestCase):
 class RunPytestTest(unittest.TestCase):
     def setUp(self):
         # A cwd with one existing and one missing test path.
-        self._cwd = Path("/tmp") / f"pr_run_{os.getpid()}"
-        (self._cwd / "exists").mkdir(parents=True, exist_ok=True)
-
-    def tearDown(self):
-        (self._cwd / "exists").rmdir()
-        self._cwd.rmdir()
+        temporary_dir = tempfile.TemporaryDirectory(
+            dir=os.environ.get("PYTEST_RUNNER_TMP")
+        )
+        self.addCleanup(temporary_dir.cleanup)
+        self._cwd = Path(temporary_dir.name)
+        (self._cwd / "exists").mkdir()
 
     def _run(self, **kwargs):
         """Invoke run_pytest with subprocess.run mocked; return (rc, cmd)."""

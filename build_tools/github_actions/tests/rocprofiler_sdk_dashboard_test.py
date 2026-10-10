@@ -89,7 +89,7 @@ class DashboardGenerationTest(unittest.TestCase):
             patch.object(
                 test_rocprofiler_sdk,
                 "get_asan_runtime_path",
-                return_value=Path("/tmp/libclang_rt.asan.so"),
+                return_value=Path("/fixtures/libclang_rt.asan.so"),
             ),
         ):
             dashboard = self._generate()
@@ -97,7 +97,7 @@ class DashboardGenerationTest(unittest.TestCase):
 
         self.assertIn("-DROCPROFILER_MEMCHECK=AddressSanitizer", dashboard)
         self.assertIn(
-            f"-DROCPROFILER_MEMCHECK_PRELOAD_ENV=LD_PRELOAD={Path('/tmp/libclang_rt.asan.so')}",
+            f"-DROCPROFILER_MEMCHECK_PRELOAD_ENV=LD_PRELOAD={Path('/fixtures/libclang_rt.asan.so')}",
             command,
         )
         self.assertIn(
