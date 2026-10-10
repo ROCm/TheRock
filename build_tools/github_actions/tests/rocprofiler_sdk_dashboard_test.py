@@ -86,9 +86,8 @@ class DashboardGenerationTest(unittest.TestCase):
     def test_asan_dashboard_preserves_mainline_configuration_and_exclusions(self):
         with (
             patch.object(test_rocprofiler_sdk, "is_asan", return_value=True),
-            patch.object(
-                test_rocprofiler_sdk,
-                "get_asan_runtime_path",
+            patch(
+                "configure_asan_env.get_asan_runtime_path",
                 return_value=Path("/tmp/libclang_rt.asan.so"),
             ),
         ):
