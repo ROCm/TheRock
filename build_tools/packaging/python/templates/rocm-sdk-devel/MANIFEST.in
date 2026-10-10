@@ -1,2 +1,2 @@
-recursive-include src/* *.tar
-recursive-include src/* *.tar.xz
+include src/rocm_sdk_devel/.devel_links/*.json
+recursive-include platform/* *

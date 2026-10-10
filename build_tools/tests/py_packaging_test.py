@@ -160,7 +160,9 @@ class MultiArchPackagingTest(TmpDirTestCase):
             f.write_text(content)
         (subdir / "artifact_manifest.txt").write_text("stage\n")
 
-    def _make_params(self, artifact_dir: Path) -> Parameters:
+    def _make_params(
+        self, artifact_dir: Path, *, kpack_split: bool = False
+    ) -> Parameters:
         dest_dir = self.temp_dir / "packages"
         dest_dir.mkdir(parents=True, exist_ok=True)
         return Parameters(
@@ -168,6 +170,7 @@ class MultiArchPackagingTest(TmpDirTestCase):
             version="0.0.1.test",
             version_suffix="",
             artifacts=ArtifactCatalog(artifact_dir),
+            kpack_split=kpack_split,
         )
 
     def test_each_library_package_independently_owns_shared_relpaths(self):
@@ -353,6 +356,46 @@ class MultiArchPackagingTest(TmpDirTestCase):
         owner, _ = result
         self.assertIs(owner, lib_gfx94, "gfx94X devel must link to gfx94X libraries")
 
+    def test_devel_manifest_uses_matching_target_family(self):
+        """The final devel manifest names its target-specific runtime package."""
+        # Create a target-specific runtime artifact.
+        artifact_dir = self.temp_dir / "artifacts"
+        shared_relpath = "lib/librocblas.txt"
+        self._add_artifact(
+            artifact_dir,
+            "blas",
+            "lib",
+            "gfx94X-dcgpu",
+            {shared_relpath: "gfx94X rocblas"},
+        )
+
+        # Package the runtime and devel artifacts.
+        params = self._make_params(artifact_dir)
+        lib_gfx94 = PopulatedDistPackage(
+            params, logical_name="libraries", target_family="gfx94X-dcgpu"
+        )
+        lib_gfx94.populate_runtime_files(
+            params.filter_artifacts(lambda an: an.target_family == "gfx94X-dcgpu")
+        )
+        devel_gfx94 = PopulatedDistPackage(
+            params, logical_name="devel", target_family="gfx94X-dcgpu"
+        )
+        devel_gfx94.populate_devel_files()
+
+        # Verify the manifest targets the matching runtime package.
+        manifest = json.loads(
+            (devel_gfx94.pure_dir / ".devel_links/devel.json").read_text()
+        )
+        self.assertEqual(
+            manifest["links"],
+            [
+                {
+                    "relpath": shared_relpath,
+                    "target": "../../_rocm_sdk_libraries_gfx94X_dcgpu/lib/librocblas.txt",
+                }
+            ],
+        )
+
     def test_find_populated_falls_back_to_generic_package(self):
         """A target-specific devel package can find files from a generic (core) package.
 
@@ -402,6 +445,111 @@ class MultiArchPackagingTest(TmpDirTestCase):
             owner,
             core,
             "core (generic) file must be reachable from arch-specific devel",
+        )
+
+    def test_devel_package_keeps_files_and_records_runtime_links(self):
+        """Keep devel files in wheel staging and record runtime links."""
+        # Create runtime and devel artifacts.
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "sdk",
+            "lib",
+            "generic",
+            {"lib/libshared.txt": "runtime payload"},
+        )
+        self._add_artifact(
+            artifact_dir,
+            "sdk",
+            "dev",
+            "generic",
+            {"include/direct.h": "development payload"},
+        )
+
+        # Package the runtime and devel artifacts.
+        params = self._make_params(artifact_dir, kpack_split=True)
+        runtime = PopulatedDistPackage(params, logical_name="libraries")
+        runtime.populate_runtime_files(
+            params.filter_artifacts(lambda an: an.component == "lib")
+        )
+        devel = PopulatedDistPackage(params, logical_name="devel")
+        devel.populate_devel_files()
+
+        # Verify files remain in the wheel and runtime links move to the manifest.
+        self.assertEqual(
+            (devel.platform_dir / "include/direct.h").read_text(),
+            "development payload",
+        )
+        self.assertFalse(os.path.lexists(devel.platform_dir / "lib/libshared.txt"))
+        manifest = json.loads((devel.pure_dir / ".devel_links/devel.json").read_text())
+        self.assertEqual(
+            manifest,
+            {
+                "version": "0.0.1.test",
+                "links": [
+                    {
+                        "relpath": "lib/libshared.txt",
+                        "target": "../../_rocm_sdk_libraries/lib/libshared.txt",
+                    }
+                ],
+            },
+        )
+
+    def test_devel_package_preserves_direct_file_mode(self):
+        """A representative direct devel executable retains its source mode."""
+        # Create an executable development file.
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "sdk",
+            "dev",
+            "generic",
+            {"bin/direct-tool": "#!/bin/sh\n"},
+        )
+        source_tool = artifact_dir / "sdk_dev_generic/stage/bin/direct-tool"
+        source_tool.chmod(0o755)
+
+        # Package the development artifact.
+        params = self._make_params(artifact_dir, kpack_split=True)
+        devel = PopulatedDistPackage(params, logical_name="devel")
+        devel.populate_devel_files(addl_artifact_names=("sdk",))
+
+        # Verify the staged executable retains its source mode.
+        self.assertEqual(
+            stat.S_IMODE((devel.platform_dir / "bin/direct-tool").stat().st_mode),
+            stat.S_IMODE(source_tool.stat().st_mode),
+        )
+
+    def test_devel_package_serializes_source_symlink(self):
+        """A source symlink is serialized without entering wheel staging."""
+        # Create a development artifact containing a source symlink.
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "sdk",
+            "dev",
+            "generic",
+            {"include/direct.h": "development payload"},
+        )
+        source_link = artifact_dir / "sdk_dev_generic/stage/include/direct-link.h"
+        source_link.symlink_to("direct.h")
+
+        # Package the artifact and inspect the generated link metadata.
+        params = self._make_params(artifact_dir, kpack_split=True)
+        devel = PopulatedDistPackage(params, logical_name="devel")
+        devel.populate_devel_files(addl_artifact_names=("sdk",))
+
+        # Verify the wheel staging tree contains only the target file and the
+        # source link is represented by its original path and target.
+        self.assertEqual(
+            (devel.platform_dir / "include/direct.h").read_text(),
+            "development payload",
+        )
+        self.assertFalse(os.path.lexists(devel.platform_dir / "include/direct-link.h"))
+        manifest = json.loads((devel.pure_dir / ".devel_links/devel.json").read_text())
+        self.assertEqual(
+            manifest["links"],
+            [{"relpath": "include/direct-link.h", "target": "direct.h"}],
         )
 
 
@@ -805,7 +953,6 @@ class DevicePackagingTest(TmpDirTestCase):
         args = argparse.Namespace(
             build_packages=False,
             dest_dir=params.dest_dir,
-            devel_tarball_compression=False,
         )
         _run_kpack_split(args, params, core, None)
         devices = [p for p in params.populated_packages if p.logical_name == "device"]
