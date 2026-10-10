@@ -37,8 +37,19 @@ s3://{bucket}/{external_repo}{run_id}-{platform}/
 | --------------- | ------------------------------- | --------------------------------------------------------------------- |
 | `bucket`        | `therock-ci-artifacts`          | Selected based on repo, fork status, release type                     |
 | `external_repo` | `""` or `"githubuser-TheRock/"` | Non-empty for forks and non-TheRock repos (format: `{owner}-{repo}/`) |
-| `run_id`        | `12345678901`                   | GitHub Actions workflow run ID                                        |
+| `run_id`        | `12345678901`                   | GitHub Actions workflow run ID; see [Variant builds](#variant-builds) |
 | `platform`      | `linux` or `windows`            | Build platform                                                        |
+
+### Variant builds
+
+A variant build that shares its workflow run with a regular build publishes
+under `{run_id}-{variant}` instead, because both produce artifacts with the same
+names. A caller that builds a regular stack and a coverage-instrumented one in
+the same run gets them under `12345678901-linux/` and
+`12345678901-coverage-linux/`. Pass the suffixed id as `artifact_run_id` to
+`multi_arch_build_portable_linux_artifacts.yml`, and as `--run-id` to anything
+that reads the variant's outputs. A lookup through the GitHub API uses the id
+without its suffix.
 
 ### Directory structure
 
@@ -269,7 +280,8 @@ the GitHub API to fetch workflow run metadata (for fork detection and bucket
 cutover dating). Most callers running inside their own CI workflow do not need
 this — environment variables (`GITHUB_REPOSITORY`, `IS_PR_FROM_FORK`) suffice.
 Set `lookup_workflow_run=True` when looking up another repository's workflow
-run, e.g. when fetching artifacts.
+run, e.g. when fetching artifacts. A `-{variant}` suffix on `run_id` is
+dropped for the lookup.
 
 ### StorageBackend
 

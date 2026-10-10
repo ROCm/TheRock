@@ -52,6 +52,24 @@ def _get_artifact_path(artifact_path: str) -> str:
     return (OUTPUT_ARTIFACTS_DIR / artifact_path).as_posix()
 
 
+# BUILD_VARIANT=coverage runs tests against instrumented libraries, which take
+# far longer than the release timeouts below allow for: every executed region
+# bumps a counter, and some upstream coverage options also drop optimization
+# (hipRAND adds -O0) or compile in extra CPU-only test suites (rocRAND).
+# The cap keeps the step inside test_code_coverage_component.yml's job
+# timeout-minutes (210), which would otherwise cut it off first.
+COVERAGE_TIMEOUT_MULTIPLIER = 4
+COVERAGE_TIMEOUT_CAP_MINUTES = 180
+
+
+def _coverage_timeout_minutes(timeout_minutes: int) -> int:
+    """Scales a component's timeout for an instrumented run, never shortening it."""
+    scaled = min(
+        timeout_minutes * COVERAGE_TIMEOUT_MULTIPLIER, COVERAGE_TIMEOUT_CAP_MINUTES
+    )
+    return max(timeout_minutes, scaled)
+
+
 # Maps a group label (the part after "test:") to the individual test matrix
 # keys it expands to. Use this when a single label should select multiple
 # related jobs without relying on name-prefix inference.
@@ -517,6 +535,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+        # Instrumented kernels take the suite past the coverage timeout in one
+        # shard. test_runner.py shards rocthrust by gtest case alone, so every
+        # shard still runs each test binary.
+        "coverage_total_shards_dict": {
+            "linux": 3,
         },
         "exclude_family": {
             "linux": [
@@ -1447,6 +1471,15 @@ def run():
                 job_config_data["timeout_minutes"] = (
                     job_config_data["timeout_minutes"] + 15
                 )
+
+            if build_variant == "coverage":
+                job_config_data["timeout_minutes"] = _coverage_timeout_minutes(
+                    job_config_data["timeout_minutes"]
+                )
+                job_config_data["total_shards_dict"] = {
+                    **job_config_data.get("total_shards_dict", {}),
+                    **job_config_data.get("coverage_total_shards_dict", {}),
+                }
 
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)

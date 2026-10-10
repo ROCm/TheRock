@@ -109,7 +109,8 @@ SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
 
 # Components whose category label matches MULTIPLE ctest entries (e.g. rocsparse
-# registers both *_full_suite and *_ffm-full_suite under the same label). For
+# registers both *_full_suite and *_ffm-full_suite under the same label, and
+# rocthrust registers one entry per test binary, sharded for coverage runs). For
 # these we must NOT combine the ctest `--tests-information` stride with the
 # gtest GTEST_TOTAL_SHARDS sharding: the two axes compound and silently drop
 # ~(1 - 1/N) of the suite (only one (entry x gtest-sub-shard) pair runs per
@@ -117,7 +118,12 @@ TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
 # ctest entries and gtest splits the cases -- which yields complete, disjoint
 # coverage for any number of (gtest-binary) entries. Single-entry components are
 # unaffected either way, so this is safe to keep narrowly scoped.
-GTEST_ONLY_SHARDING_COMPONENTS = {"rocsparse", "hipsparse", "hipkernelprovider"}
+GTEST_ONLY_SHARDING_COMPONENTS = {
+    "rocsparse",
+    "hipsparse",
+    "hipkernelprovider",
+    "rocthrust",
+}
 
 # Per-component, per-GPU-family ctest exclusions (ctest --exclude-regex patterns).
 # Structure: { "component": { "gpu_family": ["test_pattern1", "test_pattern2"] } }
@@ -135,6 +141,24 @@ COMPONENT_CTEST_EXCLUSIONS = {
             "test_l1_cache_counters",
         ],
     },
+}
+
+# Per-component ctest exclusions for coverage runs (BUILD_VARIANT=coverage) only:
+# tests that fail because of the coverage instrumentation and pass in the
+# regular build. Structure: { "component": ["test_pattern1", "test_pattern2"] }
+COVERAGE_CTEST_EXCLUSIONS = {
+    "rocprim": [
+        # SEGFAULT: HostMatchesDevice launches on hipStreamLegacy, and the
+        # profile runtime's hipLaunchKernel interceptor passes that handle to
+        # hipStreamGetDevice, which dereferences it.
+        "^test_config_dispatch_",
+    ],
+    "rocthrust": [
+        # WRONG RESULTS: instrumented kernels return wrong scan-by-key results.
+        # The same test binaries pass with the kernels left uninstrumented.
+        r"^scan_by_key\.inclusive\.hip_",
+        r"^reproducibility\.hip_",
+    ],
 }
 
 use_gtest_only_sharding = test_component_job_name in GTEST_ONLY_SHARDING_COMPONENTS
@@ -619,13 +643,19 @@ def build_ctest_command(
     if resource_spec_file:
         cmd.extend(["--resource-spec-file", resource_spec_file])
 
-    # Apply per-component, per-GPU-family ctest exclusions via --exclude-regex.
+    # Apply per-component, per-GPU-family ctest exclusions, and for coverage
+    # runs the coverage ones, via --exclude-regex.
+    exclude_patterns = []
     ctest_exclusions = COMPONENT_CTEST_EXCLUSIONS.get(test_component_job_name, {})
     if amdgpu_families and amdgpu_families in ctest_exclusions:
-        exclude_patterns = ctest_exclusions[amdgpu_families]
-        if exclude_patterns:
-            cmd.extend(["--exclude-regex", "|".join(exclude_patterns)])
-            print(f"# Excluding ctest tests by regex: {exclude_patterns}")
+        exclude_patterns.extend(ctest_exclusions[amdgpu_families])
+    if os.getenv("BUILD_VARIANT") == "coverage":
+        exclude_patterns.extend(
+            COVERAGE_CTEST_EXCLUSIONS.get(test_component_job_name, [])
+        )
+    if exclude_patterns:
+        cmd.extend(["--exclude-regex", "|".join(exclude_patterns)])
+        print(f"# Excluding ctest tests by regex: {exclude_patterns}")
 
     return cmd
 

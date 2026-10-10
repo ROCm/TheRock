@@ -18,9 +18,11 @@ python build_tools/install_rocm_code_coverage_build.py
 """
 import os
 import re
+import shutil
 import sys
 import argparse
 import platform
+import tempfile
 from pathlib import Path, PurePosixPath
 
 from install_rocm_from_artifacts import main as install_from_artifacts_main
@@ -34,10 +36,11 @@ from artifact_manager import (
 from _therock_utils.archive_util import open_archive_for_read
 from _therock_utils.artifacts import ArtifactName
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
+from _therock_utils.elf_phdr import normalize_instrumented_binaries
+from _therock_utils.kpack_archive import read_kpack, replace_entries
 
-# Maps each --replace-<name> flag (argparse dest) to the TheRock artifact name
-# that ships the instrumented library. rocBLAS is packaged in the 'blas'
-# artifact and rocSOLVER in the 'solver' artifact (see BUILD_TOPOLOGY.toml).
+# Maps each --replace-<name> flag to its TheRock artifact and library folder.
+# e.g. rocBLAS ships in the 'blas' artifact (see BUILD_TOPOLOGY.toml).
 COMPONENT_MAP = {
     # component: (artifact_name, library_folder),
     "rocfft": ("fft", "rocFFT"),
@@ -45,7 +48,12 @@ COMPONENT_MAP = {
     "hipblas": ("blas", "hipBLAS"),
     "rocblas": ("blas", "rocBLAS"),
     "hipblaslt": ("blas", "hipBLASLt"),
+    "rocroller": ("blas", "rocRoller"),
+    "origami": ("blas", "origami"),
     "hipdnn": ("hipdnn", "hipDNN"),
+    "miopenprovider": ("miopenprovider", "miopenprovider"),
+    "hipkernelprovider": ("hipkernelprovider", "hipkernelprovider"),
+    "hipblasltprovider": ("hipblasltprovider", "hipblasltprovider"),
     "hiprand": ("rand", "hipRAND"),
     "rocrand": ("rand", "rocRAND"),
     "hipsolver": ("solver", "hipSOLVER"),
@@ -67,10 +75,9 @@ COMPONENT_MAP = {
 
 
 def _read_passthrough_options(passthrough_argv):
-    """Read (without consuming) options shared with install_rocm_from_artifacts.
+    """Read options shared with install_rocm_from_artifacts without consuming them.
 
-    These are parsed non-destructively so the same argv can still be forwarded
-    to install_rocm_from_artifacts.py unchanged.
+    Parsed non-destructively so the same argv still forwards unchanged.
     """
     reader = argparse.ArgumentParser(add_help=False)
     # --amdgpu-family and --artifact-group share a dest, mirroring install_rocm_from_artifacts.
@@ -86,8 +93,8 @@ def _read_passthrough_options(passthrough_argv):
 def _target_families(family, amdgpu_targets):
     """Build the family match set: generic + family + expanded gfx targets.
 
-    blas/solver are target-specific artifacts named per family (mono-arch) or
-    per gfx target (kpack-split), so both spellings must be matched.
+    Target-specific artifacts (blas/solver) are named per family (mono-arch) or
+    per gfx target (kpack-split), so match both spellings.
     """
     families = ["generic"]
     if family:
@@ -97,16 +104,25 @@ def _target_families(family, amdgpu_targets):
     return families
 
 
-def download_replacement_artifacts(code_coverage_run_id, artifact_names, opts):
-    """Download the instrumented replacement artifacts from the code-coverage run.
+def download_replacement_artifacts(
+    code_coverage_run_id,
+    artifact_names,
+    opts,
+    code_coverage_run_github_repo,
+    code_coverage_release_type,
+):
+    """Download instrumented replacement artifacts from the code-coverage run.
 
-    Uses the code coverage run ID as the run-id for the S3 backend, then fetches
-    every component tar matching the requested artifact names and target family.
+    Fetches every component tar matching the requested artifact names and family.
+    The coverage run lives in its own repo (--code-coverage-run-github-repo),
+    separate from the generic baseline's --run-github-repo. Pass it explicitly:
+    the S3 bucket lookup 404s if the run id is queried against the wrong repo.
     """
     backend = create_backend_from_env(
         run_id=code_coverage_run_id,
-        github_repository=opts.run_github_repo,
+        github_repository=code_coverage_run_github_repo,
         platform=platform.system().lower(),
+        release_type=code_coverage_release_type,
     )
     log(f"Fetching replacement artifacts from {backend.base_uri}")
 
@@ -139,12 +155,31 @@ def download_replacement_artifacts(code_coverage_run_id, artifact_names, opts):
     return dest_dir
 
 
+def _matches_folder(path, folder):
+    """Whether path belongs to the library folder (e.g. 'rocRAND').
+
+    The non-letter that has to follow keeps hipBLAS from claiming hipBLASLt.
+    """
+    return re.search(rf"{folder}[^a-zA-Z]", path, flags=re.IGNORECASE) is not None
+
+
+def _read_relpaths(tf, archive):
+    """Returns the prefixes in an archive's leading artifact_manifest.txt."""
+    manifest_member = tf.next()
+    if manifest_member is None or manifest_member.name != "artifact_manifest.txt":
+        raise IOError(
+            f"Artifact archive {archive} must have artifact_manifest.txt "
+            "as its first member"
+        )
+    with tf.extractfile(manifest_member) as mf_file:
+        return [r for r in mf_file.read().decode().splitlines() if r]
+
+
 def _replace_scoped_member(tf, member, dest_path, output_dir, relpaths):
     """Write a single archive member into the flattened install tree.
 
-    Mirrors the file/symlink/dir/hardlink handling used when TheRock flattens
-    an artifact archive, so replaced files keep their exec bits and link
-    structure. Any existing file/symlink at dest_path is removed first.
+    Mirrors TheRock's file/symlink/dir/hardlink flattening so replaced files
+    keep their exec bits and link structure. Removes any existing file first.
     """
     if dest_path.is_symlink() or (dest_path.exists() and not dest_path.is_dir()):
         os.unlink(dest_path)
@@ -163,8 +198,8 @@ def _replace_scoped_member(tf, member, dest_path, output_dir, relpaths):
     elif member.issym():
         dest_path.symlink_to(member.linkname)
     elif member.islnk():
-        # Hardlink target is archive-relative; strip its manifest prefix so it
-        # resolves to the already-written file in the flattened output tree.
+        # Hardlink target is archive-relative; strip the manifest prefix to
+        # resolve it against the already-written flattened file.
         for prefix in relpaths:
             prefix_slash = prefix + "/"
             if member.linkname.startswith(prefix_slash):
@@ -182,10 +217,9 @@ def _replace_scoped_member(tf, member, dest_path, output_dir, relpaths):
 def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
     """Extract instrumented libs from downloaded archives into the install tree.
 
-    For every replacement archive under dest_dir, read its artifact_manifest.txt
-    to learn the relpath prefixes, then flatten (strip prefix) each member into
-    output_dir -- but only members whose scoped path matches the artifact's
-    library folder (rocBLAS/rocSOLVER), so unrelated files are left in place.
+    Reads each archive's artifact_manifest.txt for relpath prefixes, then flattens
+    members into output_dir -- but only those matching the artifact's library
+    folder (e.g. rocBLAS), leaving unrelated files in place.
     """
     archives = sorted(
         p for p in dest_dir.iterdir() if p.name.endswith((".tar.zst", ".tar.xz"))
@@ -204,17 +238,7 @@ def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
             log(f"Replacing '{folder}' paths from {archive.name} into {output_dir}")
             replaced = 0
             with open_archive_for_read(archive) as tf:
-                manifest_member = tf.next()
-                if (
-                    manifest_member is None
-                    or manifest_member.name != "artifact_manifest.txt"
-                ):
-                    raise IOError(
-                        f"Artifact archive {archive} must have artifact_manifest.txt "
-                        "as its first member"
-                    )
-                with tf.extractfile(manifest_member) as mf_file:
-                    relpaths = [r for r in mf_file.read().decode().splitlines() if r]
+                relpaths = _read_relpaths(tf, archive)
 
                 while member := tf.next():
                     for prefix in relpaths:
@@ -222,9 +246,7 @@ def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
                         if not member.name.startswith(prefix_slash):
                             continue
                         scoped_path = member.name[len(prefix_slash) :]
-                        if not re.search(
-                            rf"{folder}[^a-zA-Z]", scoped_path, flags=re.IGNORECASE
-                        ):
+                        if not _matches_folder(scoped_path, folder):
                             break
                         dest_path = output_dir / PurePosixPath(scoped_path)
                         _replace_scoped_member(
@@ -235,12 +257,111 @@ def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
             log(f"  Replaced {replaced} '{folder}' path(s) from {archive.name}")
 
 
+def overlay_instrumented_device_code(artifacts, dest_dir, output_dir):
+    """Swap the replaced projects' device code objects into the installed kpacks.
+
+    A kpack-split build keeps every GPU code object out of the host libraries,
+    in one archive per artifact and target: .kpack/rand_lib_gfx942.kpack holds
+    rocRAND's and hipRAND's. No library folder appears in that name, so
+    replace_instrumented_libraries leaves it alone, and an instrumented host
+    library would run the baseline's uninstrumented kernels. Taking the whole
+    archive would instrument every sibling in it too, so only the entries keyed
+    under one of the project's folders come from the instrumented archive.
+    """
+    archives = sorted(
+        p for p in dest_dir.iterdir() if p.name.endswith((".tar.zst", ".tar.xz"))
+    )
+    # Staged outside the install tree, where a stray .kpack would be picked up
+    # by anything that globs for them (the report does).
+    with tempfile.TemporaryDirectory(prefix="device-code-") as staging:
+        for archive in archives:
+            _overlay_archive_device_code(archive, artifacts, Path(staging), output_dir)
+
+
+def _overlay_archive_device_code(archive, artifacts, staging_dir, output_dir):
+    """Swaps in the code objects one replacement archive carries for its folders."""
+    an = ArtifactName.from_filename(archive.name)
+    folders = artifacts.get(an.name) if an else None
+    if not folders:
+        return
+    with open_archive_for_read(archive) as tf:
+        relpaths = _read_relpaths(tf, archive)
+        while member := tf.next():
+            if not member.isfile() or not member.name.endswith(".kpack"):
+                continue
+            prefix = next(
+                (p for p in relpaths if member.name.startswith(p + "/")), None
+            )
+            if prefix is None:
+                continue
+            scoped_path = PurePosixPath(member.name[len(prefix) + 1 :])
+            staged = staging_dir / scoped_path
+            staged.parent.mkdir(parents=True, exist_ok=True)
+            with tf.extractfile(member) as src, open(staged, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+
+            installed = output_dir / scoped_path
+            if not installed.exists():
+                # Nothing of the baseline's to keep: the instrumented host
+                # libraries look their kernels up in this file regardless.
+                installed.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(staged, installed)
+                log(f"  Installed {scoped_path} whole from {archive.name}")
+                continue
+            swapped = replace_entries(
+                read_kpack(installed),
+                read_kpack(staged),
+                lambda key: any(_matches_folder(key, f) for f in folders),
+                installed,
+            )
+            log(
+                f"  Swapped {swapped} {'/'.join(folders)} code object(s) "
+                f"into {scoped_path} from {archive.name}"
+            )
+
+
 def main(argv):
     parser = argparse.ArgumentParser(prog="code-coverage-installer")
     parser.add_argument(
         "--code-coverage-run-id",
         type=str,
         help="run id of the build from which instrumental components needs to be replaced",
+    )
+    # Repo owning --code-coverage-run-id (the instrumented run), separate from
+    # --run-github-repo (the generic baseline). Defaults to $GITHUB_REPOSITORY.
+    # parse_known_args consumes it so it does not leak into the generic install.
+    parser.add_argument(
+        "--code-coverage-run-github-repo",
+        type=str,
+        default=os.environ.get("GITHUB_REPOSITORY"),
+        help=(
+            "GitHub repository (owner/name) that owns --code-coverage-run-id, "
+            "used to resolve the instrumented artifact backend. Defaults to "
+            "$GITHUB_REPOSITORY (the coverage run's own repo). This is separate "
+            "from --run-github-repo, which owns the generic --run-id build."
+        ),
+    )
+    parser.add_argument(
+        "--code-coverage-release-type",
+        type=str,
+        default="ci",
+        help=(
+            "Release type of the instrumented build identified by "
+            "--code-coverage-run-id (e.g. 'ci', 'nightly'). Controls which S3 "
+            "bucket is used for the replacement artifact lookup. Defaults to "
+            "'ci' because instrumented builds always run as CI jobs. This is "
+            "separate from the baseline's RELEASE_TYPE env var."
+        ),
+    )
+    parser.add_argument(
+        "--replace-device-code",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help=(
+            "Also swap the replaced components' GPU code objects into the "
+            "installed kpack archives. Needed for device coverage: without it "
+            "the instrumented host libraries run the baseline's kernels."
+        ),
     )
     artifacts_group = parser.add_argument_group("replace_comps")
     for comp in COMPONENT_MAP.keys():
@@ -272,13 +393,26 @@ def main(argv):
             "--code-coverage-run-id is required when using --replace-* options"
         )
 
-    # download selected component artifacts
+    # download selected component artifacts (instrumented, from the coverage repo)
     dest_dir = download_replacement_artifacts(
-        args.code_coverage_run_id, artifacts.keys(), opts
+        args.code_coverage_run_id,
+        artifacts.keys(),
+        opts,
+        args.code_coverage_run_github_repo,
+        args.code_coverage_release_type,
     )
 
     # replace selected library folder paths in selected component artifacts
     replace_instrumented_libraries(artifacts, dest_dir, opts.output_dir)
+    if args.replace_device_code:
+        overlay_instrumented_device_code(artifacts, dest_dir, opts.output_dir)
+
+    # The kpack split relocates a fat binary's program headers, and in a shared
+    # library the profile runtime then reads them from the wrong address when
+    # it writes its profile at exit; see _therock_utils/elf_phdr.py.
+    roots = [opts.output_dir / "lib", opts.output_dir / "bin"]
+    for path in normalize_instrumented_binaries(roots):
+        log(f"Pinned the relocated program headers of {path} to their file offset")
 
 
 if __name__ == "__main__":
