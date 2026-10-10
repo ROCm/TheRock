@@ -134,6 +134,42 @@ The script produces these versions for each release type:
 | dev          | `X.Y.Z.dev0+NNNN`                          | `7.10.0.dev0+efed3c3b10a5cce8578f58f8eb288582c26d18c4`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
 | dev-bkc      | `X.Y.Z.dev0+NNNN`<br>(same as regular dev) | `10.1.0.dev0+efed3c3b10a5cce8578f58f8eb288582c26d18c4`                                                                                                              |
 
+### Build variant suffixes
+
+For instrumented builds like ASAN (AddressSanitizer) or TSAN (ThreadSanitizer),
+wheel package versions include a build variant suffix to distinguish them from
+standard builds. The suffix is appended to the local version segment following
+[PEP 440](https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers).
+
+The build variant name is sanitized by removing dashes before appending:
+
+| Build variant | Sanitized suffix |
+| ------------- | ---------------- |
+| `asan`        | `asan`           |
+| `host-asan`   | `hostasan`       |
+| `asan-debug`  | `asandebug`      |
+| `tsan`        | `tsan`           |
+
+Example versions with ASAN variant:
+
+| Release type | Standard version        | ASAN variant version         |
+| ------------ | ----------------------- | ---------------------------- |
+| stable       | `10.0.0`                | `10.0.0+asan`                |
+| nightly      | `10.1.0a20261007`       | `10.1.0a20261007+asan`       |
+| nightly-bkc  | `10.1.0a20260811+bkc.x` | `10.1.0a20260811+bkc.x.asan` |
+| dev          | `10.1.0.dev0+sha`       | `10.1.0.dev0+sha.asan`       |
+
+The suffix is added as:
+
+- `+<variant>` when no local version segment exists (stable, nightly, prerelease)
+- `.<variant>` appended to the existing local version segment (dev, nightly-bkc)
+
+Build variants with value `release` or empty string use default behavior (no suffix).
+
+ASAN wheel packages are published to a separate index (`whl-next-asan`) to keep
+them isolated from standard builds. This allows users to explicitly opt into
+instrumented builds for memory error detection during development and testing.
+
 ### Post releases
 
 A post release is a follow-up release of an existing package version, written
