@@ -147,6 +147,8 @@ CI_LABELS: list[Label] = [
     Label("test:ocltst", COLOR_TEST, "Run ocltst tests"),
     Label("test:hip-tests", COLOR_TEST, "Run hip-tests"),
     Label("test:rocrtst", COLOR_TEST, "Run rocrtst tests"),
+    Label("test:hip-tests-wsl", COLOR_TEST, "Also run hip-tests on a WSL GPU runner (non-blocking)"),
+    Label("test:rocrtst-wsl", COLOR_TEST, "Also run rocrtst on a WSL GPU runner (non-blocking)"),
     Label("test:origami", COLOR_TEST, "Run origami tests"),
     Label("test:rocdecode", COLOR_TEST, "Run rocdecode tests"),
     Label("test:rocjpeg", COLOR_TEST, "Run rocjpeg tests"),

@@ -275,6 +275,39 @@ class TestExternalConfig(unittest.TestCase):
         self.assertEqual(result["gfx94x"]["linux"]["family"], "gfx94X-dcgpu")
         self.assertIn("release", result["gfx94x"]["linux"]["build_variants"])
 
+    def test_get_all_families_overlays_wsl_platform_entry(self):
+        """A "wsl" entry (runner labels only) is overlaid, and added where none exists locally."""
+        fake_config = {
+            "runner_labels": {
+                "gfx110x": {"wsl": {"test-runs-on": "wsl-external-runner"}},
+                "gfx94x": {
+                    "wsl": {"test-runs-on": "wsl-gfx94x-runner"},
+                    "windows": {"test-runs-on": "should-not-be-created"},
+                },
+            }
+        }
+        with mock.patch.object(
+            amdgpu_family_matrix,
+            "load_external_runner_config",
+            return_value=fake_config,
+        ):
+            result = get_all_families_for_trigger_types(["nightly"])
+
+        self.assertEqual(
+            result["gfx110x"]["wsl"]["test-runs-on"], "wsl-external-runner"
+        )
+        # The Linux entry keeps its own runner.
+        self.assertEqual(
+            result["gfx110x"]["linux"]["test-runs-on"], "linux-gfx110X-gpu-rocm"
+        )
+        self.assertEqual(result["gfx94x"]["wsl"]["test-runs-on"], "wsl-gfx94x-runner")
+        # Linux/Windows entries need local build definitions, so they are never created.
+        self.assertNotIn("windows", result["gfx94x"])
+        # The local matrix itself is not mutated by the overlay.
+        self.assertNotIn(
+            "wsl", amdgpu_family_matrix.amdgpu_family_info_matrix["gfx94x"]
+        )
+
     def test_get_all_families_falls_back_to_local_when_no_external_config(self):
         """get_all_families_for_trigger_types uses local matrix when no external config."""
         if "CI_CONFIG_PATH" in os.environ:

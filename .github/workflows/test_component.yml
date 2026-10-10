@@ -208,7 +208,9 @@ jobs:
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
-          TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
+          # Variant entries such as "hip-tests (WSL)" keep the original component
+          # name in test_component; the test scripts key on it.
+          TEST_COMPONENT: ${{ fromJSON(inputs.component).test_component || fromJSON(inputs.component).job_name }}
           # General CI debug mode. runner.debug == '1' when a job is re-run with
           # GitHub's "Enable debug logging" checkbox. Used to force turning debug
           # options on.
