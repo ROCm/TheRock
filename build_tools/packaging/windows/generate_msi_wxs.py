@@ -40,7 +40,9 @@ import subprocess
 import sys
 import urllib.request
 import uuid
-import xml.etree.ElementTree as ET
+
+# Only constructs XML; does not parse input.
+import xml.etree.ElementTree as ET  # nosec B405
 from dataclasses import dataclass, field
 from pathlib import Path
 
