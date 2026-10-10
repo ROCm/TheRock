@@ -148,6 +148,8 @@ inline system deps into the audio and vision wheels as needed.
 import argparse
 import json
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from packaging.version import parse
 import platform
@@ -159,6 +161,7 @@ import tarfile
 import tempfile
 import textwrap
 import urllib.request
+import zipfile
 
 script_dir = Path(__file__).resolve().parent
 
@@ -917,7 +920,40 @@ def do_build(args: argparse.Namespace):
             print(f"ccache --show-stats output:\n{ccache_stats_output}")
 
 
-def build_triton_windows(args: argparse.Namespace, triton_dir: Path) -> str:
+@contextmanager
+def stage_triton_ockl(triton_dir: Path, env: dict[str, str]) -> Iterator[bytes]:
+    """Temporarily stage the OCKL implementation matching the SDK's HIP runtime."""
+    if not env.get("HIP_DEVICE_LIB_PATH"):
+        raise ValueError("Building Triton requires the SDK's HIP_DEVICE_LIB_PATH")
+    sdk_libdir = Path(env["HIP_DEVICE_LIB_PATH"])
+    sdk_ockl = sdk_libdir / "ockl.bc"
+    expected = sdk_ockl.read_bytes()
+    bundled_ockl = triton_dir / "third_party" / "amd" / "backend" / "lib" / "ockl.bc"
+    original = bundled_ockl.read_bytes()
+    print(f"++ Staging SDK hostcall device library: {sdk_ockl}")
+    # OCKL and HIP share the hostcall buffer ABI. Triton's checked-in bitcode
+    # can use a different layout. Keep the copy's fresh timestamp so incremental
+    # setuptools builds also replace the previously staged package data.
+    try:
+        shutil.copyfile(sdk_ockl, bundled_ockl)
+        yield expected
+    finally:
+        bundled_ockl.write_bytes(original)
+
+
+def check_triton_ockl(built_wheel: Path, expected_ockl: bytes) -> None:
+    """Reject stale package data before making the wheel available to consumers."""
+    member = "triton/backends/amd/lib/ockl.bc"
+    with zipfile.ZipFile(built_wheel) as wheel:
+        if member not in wheel.namelist() or wheel.read(member) != expected_ockl:
+            raise ValueError(
+                f"Triton wheel did not package the SDK's OCKL: {built_wheel}"
+            )
+
+
+def build_triton_windows(
+    args: argparse.Namespace, triton_dir: Path, env: dict[str, str]
+) -> str:
     """Build triton wheel for Windows using triton-windows repository."""
     print("Building Triton for Windows (using triton-windows repository)")
 
@@ -951,14 +987,17 @@ def build_triton_windows(args: argparse.Namespace, triton_dir: Path) -> str:
         remove_dir_if_exists(triton_dir / "build")
 
     print("+++ Building triton:")
-    run_command(
-        [sys.executable, "-m", "build", "--wheel"],
-        cwd=triton_dir,
-        env=windows_env,
-    )
-
-    # Build produces wheel named "triton" (overridden via TRITON_WHEEL_NAME)
-    built_wheel = find_built_wheel(triton_dir / "dist", "triton")
+    with stage_triton_ockl(triton_dir, env) as expected_ockl:
+        run_command(
+            [sys.executable, "-m", "build", "--wheel"],
+            cwd=triton_dir,
+            env=windows_env,
+        )
+        # Build produces wheel named "triton" (overridden via TRITON_WHEEL_NAME)
+        built_wheel = find_built_wheel(triton_dir / "dist", "triton")
+        # Windows currently checks the payload bytes only. Compatibility with
+        # triton-windows' separately pinned LLVM still needs native qualification.
+        check_triton_ockl(built_wheel, expected_ockl)
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
 
@@ -1033,17 +1072,33 @@ def build_triton_linux(
     remove_dir_if_exists(triton_python_dir / "dist")
     if args.clean:
         remove_dir_if_exists(triton_python_dir / "build")
-    run_command(
-        [sys.executable, "setup.py", "bdist_wheel"], cwd=triton_python_dir, env=env
-    )
-    built_wheel = find_built_wheel(triton_python_dir / "dist", triton_wheel_name)
+    with stage_triton_ockl(triton_dir, env) as expected_ockl:
+        run_command(
+            [sys.executable, "setup.py", "bdist_wheel"], cwd=triton_python_dir, env=env
+        )
+        built_wheel = find_built_wheel(triton_python_dir / "dist", triton_wheel_name)
+        check_triton_ockl(built_wheel, expected_ockl)
     print(f"Found built wheel: {built_wheel}")
-    copy_to_output(args, built_wheel)
 
     print("+++ Installing built triton:")
     run_command(
         [sys.executable, "-m", "pip", "install", built_wheel], cwd=tempfile.gettempdir()
     )
+
+    # Triton's LLVM must be able to consume the SDK bitcode. Compile a hostcall
+    # kernel without a GPU before making this wheel available to later builds.
+    print("+++ Sanity checking installed triton:")
+    with tempfile.TemporaryDirectory(prefix="triton-hostcall-") as cache_dir:
+        run_command(
+            [
+                sys.executable,
+                script_dir / "triton_hostcall.py",
+                "--compile-only",
+            ],
+            cwd=tempfile.gettempdir(),
+            env={"TRITON_CACHE_DIR": cache_dir, "TRITON_INTERPRET": "0"},
+        )
+    copy_to_output(args, built_wheel)
 
     installed_triton_version = get_installed_package_version(triton_wheel_name)
     return f"{triton_wheel_name}=={installed_triton_version}"
@@ -1054,7 +1109,7 @@ def do_build_triton(
 ) -> str:
     """Build triton wheel. Dispatches to platform-specific build functions."""
     if is_windows:
-        return build_triton_windows(args, triton_dir)
+        return build_triton_windows(args, triton_dir, env)
     else:
         return build_triton_linux(args, triton_dir, env)
 

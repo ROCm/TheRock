@@ -19,3 +19,4 @@ The following operations are covered in these smoke tests:
 - **Matrix-Vector Multiplication (`torch.mv`)**
 - **General Matrix Multiplication (`torch.matmul`)**
 - **Convolution (`torch.conv2d` and `torch.nn.functional.conv_transpose2d`)**
+- **Triton device printing and HIP hostcall synchronization (Linux)**
