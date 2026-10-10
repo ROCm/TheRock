@@ -12,8 +12,8 @@
 # Stages disabled on Windows: comm-libs, dctools-core, profiler-apps
 # (see BUILD_TOPOLOGY.toml disable_platforms)
 #
-# media-libs runs on Windows but builds only sysdeps-amd-mesa (VA-API);
-# rocdecode/rocjpeg remain disable_platforms=["windows"].
+# media-libs runs on Windows and builds sysdeps-amd-mesa (VA-API) and rocdecode
+# (via the vaon12 backend); rocjpeg remains disable_platforms=["windows"].
 #
 # Artifacts flow between stages via S3 using the artifact_manager.py tool.
 
@@ -239,9 +239,9 @@ jobs:
   # ==========================================================================
   # STAGE: media-libs (generic, parallel to math-libs)
   # ==========================================================================
-  # On Windows this builds only sysdeps-amd-mesa (VA-API). rocdecode/rocjpeg
-  # are disable_platforms=["windows"] in BUILD_TOPOLOGY.toml and are filtered
-  # out by configure_stage.py, so they are not built here.
+  # On Windows this builds sysdeps-amd-mesa (VA-API) and rocdecode (vaon12
+  # backend). rocjpeg is still disable_platforms=["windows"] in
+  # BUILD_TOPOLOGY.toml and is filtered out by configure_stage.py.
   media-libs:
     needs: compiler-runtime
     if: >-
