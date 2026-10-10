@@ -124,6 +124,18 @@ therock_declare_flag(
   DESCRIPTION "Include experimental HRX runtime in core-runtime"
 )
 
+# Autotools is only available on Linux. Default OFF elsewhere so configure
+# does not warn about a flag that platform cannot honor.
+set(_fftw3_autotools_default OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(_fftw3_autotools_default ON)
+endif()
+therock_declare_flag(
+  NAME FFTW3_AUTOTOOLS_BUILD
+  DEFAULT_VALUE ${_fftw3_autotools_default}
+  DESCRIPTION "Build third-party fftw3 with autotools on Linux. Ignored on Windows."
+)
+
 therock_declare_flag(
   NAME HSA_HOTSWAP_DEFAULT_ON
   DEFAULT_VALUE ON
