@@ -13,6 +13,8 @@ Sanitizers can be enabled via the `THEROCK_SANITIZER` variable. We will be exten
 
 The sanitizer selection can be controlled per project by using a variable of the form `{subproject}_SANITIZER={VALUE}`. This is most commonly used to disable santiziers for specific projects once enabled globally.
 
+`linux-release-asan-compact` is an additional variant. It does not replace `linux-release-asan`, `linux-release-asan-debug`, `linux-release-host-asan`, or `linux-release-host-asan-debug`. Compact flags apply only when `THEROCK_ASAN_COMPACT` is ON. A subproject can keep normal ASAN and skip the compact flags with `{subproject}_ASAN_COMPACT=OFF` (for example `-Dcomposable_kernel_ASAN_COMPACT=OFF`).
+
 Because ROCm includes a compiler and uses multiple toolchains to build, there are only certain configurations of the project that support ASAN: generally, we allow ASAN to be enabled for any component that is built with the ROCm version of LLVM. This ensures that we only link to a single ASAN support library (each process can have only one) and can setup RPATH entries and other settings so that anything so compiled will function without further flags, preloads, path settings, etc. We are in the process of switching more of the project to bootstrap off of the built-in compiler, which will make more of the project capable of being instrumented out of the box with a sanitizer.
 
 ### CMake Preset
@@ -20,6 +22,8 @@ Because ROCm includes a compiler and uses multiple toolchains to build, there ar
 In order to simplify use, the following presets are available for setting up specific sanitizer strategies:
 
 - `--preset linux-release-asan`: Full ASAN build with both host and device instrumentation. Enables ASAN globally and selectively disables it for the compiler and certain system libraries that are not yet ready for generic sanitizer builds. Requires xnack-capable hardware (gfx942, gfx950) at runtime.
+- `--preset linux-release-asan-debug`: Same as `linux-release-asan` but `RelWithDebInfo` with `-g1 -gdwarf-4` so ASAN reports include line numbers.
+- `--preset linux-release-asan-compact`: Same as `linux-release-asan` plus size-oriented flags (`THEROCK_ASAN_COMPACT`): `-fsanitize-address-outline-instrumentation`, host-only `-Oz` (`-O3 -Xarch_host -Oz`, so device code stays at `-O3`), `-gz`, `-gline-tables-only`, `-fdata-sections`/`-ffunction-sections`, and `-Wl,--gc-sections`. `--offload-compress` is added only on `CMAKE_HIP_FLAGS`, not via `$<COMPILE_LANGUAGE:HIP>` (that generator expression breaks RCCL device-link custom commands). Global `-flto` is not applied: full LTO OOMs rocprofiler-systems and drops rocRoller template symbols. These are injected only into Clang/HIP subprojects. **Requires a fresh build directory:** compact flags use `*_FLAGS_INIT` (applied on first configure only) and `FORCE` the Release flags. Do not enable or disable `THEROCK_ASAN_COMPACT` in an existing tree; delete the build directory and reconfigure with this preset (or `-DTHEROCK_ASAN_COMPACT=ON`) from the start.
 - `--preset linux-release-host-asan`: Host-only ASAN build without device-side instrumentation. Same as above but GPU_TARGETS are not modified to include xnack+ variants. Can run on any GPU hardware.
 - TODO: compiler-asan preset: We will enable a build mode such that the compiler and base libraries can also be instrumented. We will use this for qualifying compiler builds but not generally for *using* the compiler.
 
