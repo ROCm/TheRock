@@ -1,0 +1,135 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Installs and verifies the Windows MSI packages produced by an arbitrary build
+# run. Standalone and dispatchable (fork-friendly: MSIs are downloaded from the
+# public artifacts prefix, no credentials required), and callable from
+# ci/release. Mirrors test_native_linux_packages_install.yml.
+
+name: Test Native Windows Packages Install
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_run_id:
+        description: "Run id whose published Windows MSIs to install and verify"
+        type: string
+        required: true
+      artifact_github_repo:
+        description: "GitHub repository that owns artifact_run_id"
+        type: string
+        default: ROCm/TheRock
+      packages:
+        description: "Packages to test, comma-separated (e.g. 'runtime,core')."
+        type: string
+        default: runtime
+      rocm_version:
+        description: "ROCm version stamped on the MSI (e.g. '10.2.0')."
+        type: string
+        required: true
+      release_type:
+        description: "Release type selecting the source artifacts bucket."
+        type: choice
+        options:
+          - ci
+          - dev
+        default: ci
+      run_uninstall:
+        description: "Also uninstall and verify a clean teardown."
+        type: boolean
+        default: true
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      artifact_run_id:
+        type: string
+        required: true
+      artifact_github_repo:
+        type: string
+        default: ROCm/TheRock
+      packages:
+        type: string
+        default: runtime
+      rocm_version:
+        type: string
+        required: true
+      release_type:
+        # Matches the MSI build workflow's default so the test reads from the
+        # same bucket the producer wrote to.
+        type: string
+        default: ci
+      run_uninstall:
+        type: boolean
+        default: true
+      repository:
+        type: string
+        default: ""
+      ref:
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+run-name: Test Windows MSI install (${{ inputs.packages }}, ${{ inputs.rocm_version }})
+
+jobs:
+  test:
+    name: Test MSI install
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    env:
+      ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
+      ARTIFACT_GITHUB_REPO: ${{ inputs.artifact_github_repo }}
+      RELEASE_TYPE: ${{ inputs.release_type }}
+      PACKAGES: ${{ inputs.packages }}
+      ROCM_VERSION: ${{ inputs.rocm_version }}
+      # Download target; the install/uninstall tests consume these files via
+      # MSI_DIR and never touch the network themselves.
+      MSI_DIR: ${{ github.workspace }}/msi-packages
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Python requirements
+        run: pip install -r requirements.txt
+
+      # Download once; the tests below re-use these files (no network in tests).
+      - name: Download MSI packages
+        run: |
+          python build_tools/packaging/windows/download_msi_packages.py \
+            --artifact-run-id "${ARTIFACT_RUN_ID}" \
+            --artifact-github-repo "${ARTIFACT_GITHUB_REPO}" \
+            --release-type "${RELEASE_TYPE}" \
+            --packages "${PACKAGES}" \
+            --dest-dir "${MSI_DIR}"
+
+      - name: Install and verify MSI packages
+        run: |
+          python -m pytest \
+            build_tools/packaging/windows/native_windows_package_install_test.py -vv -s
+
+      - name: Uninstall and verify teardown
+        if: ${{ inputs.run_uninstall }}
+        run: |
+          python -m pytest \
+            build_tools/packaging/windows/native_windows_package_uninstall_test.py -vv -s

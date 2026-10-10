@@ -29,6 +29,9 @@ from generate_msi_wxs import (
     resolve_legacy_dlls,
     add_install_directory_tree,
     add_legacy_system32_feature,
+    parse_major_minor,
+    expected_msi_filename,
+    install_subdir_for,
     _stable_guid,
     _read_rocm_version,
 )
@@ -813,11 +816,29 @@ class TestBuildWxsHelpers(unittest.TestCase):
         self.assertEqual(layout.version, "7.15.3")
         self.assertEqual(layout.subdir_name, "core-7.15")
 
-    def test_resolve_install_layout_handles_short_version(self):
-        # Missing minor/patch components resolve to empty strings, not errors.
-        layout = resolve_install_layout(self._args(), "8")
-        self.assertEqual(layout.major, "8")
-        self.assertEqual(layout.minor, "")
+    def test_resolve_install_layout_rejects_short_version(self):
+        # A version without major.minor has no well-defined install subdir or
+        # discovery key, so it is rejected rather than silently resolved.
+        with self.assertRaises(ValueError):
+            resolve_install_layout(self._args(), "8")
+
+    def test_parse_major_minor(self):
+        self.assertEqual(parse_major_minor("10.2.0"), ("10", "2"))
+        self.assertEqual(parse_major_minor("7.0"), ("7", "0"))
+        with self.assertRaises(ValueError):
+            parse_major_minor("10")
+        with self.assertRaises(ValueError):
+            parse_major_minor("")
+
+    def test_expected_msi_filename(self):
+        self.assertEqual(expected_msi_filename("runtime"), "amdrocm-runtime.msi")
+        self.assertEqual(expected_msi_filename("core"), "amdrocm-core.msi")
+        with self.assertRaises(ValueError):
+            expected_msi_filename("bogus")
+
+    def test_install_subdir_for(self):
+        self.assertEqual(install_subdir_for("runtime", "10.2.0"), "core-10.2")
+        self.assertEqual(install_subdir_for("core", "7.0.1"), "core-7.0")
 
     def test_install_layout_uses_standard_dir(self):
         std = resolve_install_layout(

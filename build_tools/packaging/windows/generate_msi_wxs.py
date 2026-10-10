@@ -598,6 +598,48 @@ def _stable_guid(*parts: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, "/".join(parts))).upper()
 
 
+def parse_major_minor(version: str) -> tuple[str, str]:
+    """Return ``(major, minor)`` from a dotted version like ``10.2.0``.
+
+    Raises ``ValueError`` on a version without at least major and minor
+    components. The MSI install path and discovery key are both scoped to
+    ``major.minor``, so consumers (the generator and the install test) share
+    this parse to stay consistent.
+    """
+    parts = version.split(".")
+    if len(parts) < 2 or not parts[0] or not parts[1]:
+        raise ValueError(f"version must be at least major.minor (got {version!r})")
+    return parts[0], parts[1]
+
+
+def expected_msi_filename(package: str) -> str:
+    """Return the MSI filename the generator writes for ``package``.
+
+    The generator names each package's output ``<output_stem>.msi``; the install
+    test imports this so it looks for the same filename the build produced,
+    without duplicating the stem-to-filename rule.
+    """
+    try:
+        return f"{PACKAGES[package].output_stem}.msi"
+    except KeyError as e:
+        raise ValueError(
+            f"unknown package {package!r}; choose from {', '.join(PACKAGES)}"
+        ) from e
+
+
+def install_subdir_for(package: str, version: str) -> str:
+    """Return the versioned install subdirectory name for ``package``.
+
+    Expands the package's ``install_subdir`` template (e.g. ``core-{major}.{minor}``)
+    the same way resolve_install_layout does, so the install test derives the
+    install location from the same rule the generator uses.
+    """
+    major, minor = parse_major_minor(version)
+    return PACKAGES[package].install_subdir.format(
+        version=version, major=major, minor=minor
+    )
+
+
 @dataclass
 class PackageInputs:
     """Everything gathered from disk before any WiX XML is emitted.
@@ -704,9 +746,7 @@ def resolve_package_inputs(
 
 def resolve_install_layout(args: argparse.Namespace, version: str) -> InstallLayout:
     """Resolve the install location and versioned subdirectory name."""
-    parts = version.split(".")
-    major = parts[0] if len(parts) > 0 else ""
-    minor = parts[1] if len(parts) > 1 else ""
+    major, minor = parse_major_minor(version)
     package = PACKAGES[args.package]
     subdir_name = package.install_subdir.format(
         version=version, major=major, minor=minor
