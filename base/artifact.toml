@@ -55,8 +55,16 @@ include = [
 ]
 
 # therock-aux-overlay
+# Only share/therock stays in base (dist_info.json, therock_manifest.json).
+# bin/, lib/cmake/, llvm, and amdgcn are compiler-related and assigned to amd-llvm_dev.
 [components.lib."base/aux-overlay/stage"]
 default_patterns = false
 include = [
   "**/*",
+]
+exclude = [
+  "bin/**",
+  "lib/cmake/**",
+  "llvm",
+  "amdgcn",
 ]
