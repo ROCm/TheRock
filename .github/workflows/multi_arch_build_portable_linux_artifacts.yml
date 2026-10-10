@@ -49,6 +49,13 @@ on:
         required: false
         default: ""
         description: "CMake preset name for this build variant (optional)"
+      extra_cmake_options:
+        type: string
+        required: false
+        default: ""
+        description: >-
+          Extra -D options appended to the configure command, after the
+          stage-derived arguments. Used by variant builds such as coverage.
       release_type:
         description: 'Release type; controls artifact bucket and IAM role'
         type: string
@@ -198,11 +205,17 @@ jobs:
         # configure_stage.py emits argument fragments from repository build configuration.
         # Trust that configuration and the caller-provided preset/external repo options
         # as executable build inputs; their shell quoting and multiple arguments are intentional.
+        env:
+          # Reaches the script as data rather than as text substituted into it,
+          # so a caller's options cannot run as shell commands. Split into an
+          # array because the input carries several -D options in one string.
+          EXTRA_CMAKE_OPTIONS: ${{ inputs.extra_cmake_options }}
         run: | # zizmor: ignore[template-injection]
           SUBPROJECT_TEST_JOBS="$(( $(nproc) / 2 ))"
           if ((SUBPROJECT_TEST_JOBS > 16)); then
             SUBPROJECT_TEST_JOBS=16
           fi
+          read -r -a extra_cmake_options <<< "${EXTRA_CMAKE_OPTIONS}"
           cmake -B "${BUILD_DIR}" -S . -GNinja \
             -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
             -DTHEROCK_ROCJITSU_TEST_JOBS="${SUBPROJECT_TEST_JOBS}" \
@@ -212,7 +225,8 @@ jobs:
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
-            ${{ steps.stage_config.outputs.cmake_args }}
+            ${{ steps.stage_config.outputs.cmake_args }} \
+            "${extra_cmake_options[@]}"
 
       - name: Build stage
         run: |
