@@ -238,6 +238,20 @@ therock_add_amdgpu_target(gfx1153 "AMD Radeon 820M iGPU" FAMILY igpu-all gfx115X
     rccl-tests
 )
 
+# gfx117X family
+therock_add_amdgpu_target(gfx1170 "AMD gfx1170 iGPU" FAMILY igpu-all gfx117X-all gfx117X-igpu
+  EXCLUDE_TARGET_PROJECTS
+    hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    rccl # https://github.com/ROCm/TheRock/issues/150
+    rccl-tests
+)
+therock_add_amdgpu_target(gfx1171 "AMD gfx1171 iGPU" FAMILY igpu-all gfx117X-all gfx117X-igpu
+  EXCLUDE_TARGET_PROJECTS
+    hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    rccl # https://github.com/ROCm/TheRock/issues/150
+    rccl-tests
+)
+
 # gfx120X family
 therock_add_amdgpu_target(gfx1200 "AMD RX 9060 / XT" FAMILY dgpu-all gfx120X-all
   EXCLUDE_TARGET_PROJECTS
