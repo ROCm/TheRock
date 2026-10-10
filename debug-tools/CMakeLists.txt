@@ -281,13 +281,14 @@ if(THEROCK_ENABLE_ROCGDB)
     "Build rocgdb against upstream GDB master (skips AMD-specific files like NOTICES.txt, roccoremerge)"
     OFF)
 
-  # When ON, download the test_rocgdb.py CI wrapper script from ROCm/ROCgdb
-  # amd-staging if it is not already present in the rocgdb source tree, and
-  # install it into tests/rocgdb. Required by TheRock CI when building a
-  # rocgdb source tree that is not part of the branches exercised by CI.
+  # When ON, download the test_rocgdb.py CI wrapper script and its
+  # rocjitsu_emulator.py module from ROCm/ROCgdb amd-staging if either is
+  # missing from the rocgdb source tree, and install them into
+  # tests/rocgdb. Required by TheRock CI when building a rocgdb source tree
+  # that is not part of the branches exercised by CI.
   # Off by default to avoid a network fetch at configure time.
   option(THEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT
-    "Download test_rocgdb.py from ROCm/ROCgdb amd-staging if missing in rocgdb source tree"
+    "Download test_rocgdb.py and rocjitsu_emulator.py from ROCm/ROCgdb amd-staging if missing in rocgdb source tree"
     OFF)
 
   therock_cmake_subproject_declare(rocgdb
