@@ -1,0 +1,46 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Host-ASan Nightly
+
+on:
+  schedule:
+    # Tuesday and Thursday at 08:17 UTC.
+    - cron: "17 8 * * 2,4"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  setup:
+    uses: ./.github/workflows/setup_multi_arch.yml
+    with:
+      build_variant: "host-asan-debug"
+      linux_amdgpu_families: "gfx94x"
+      windows_amdgpu_families: "none"
+      build_python_packages: false
+      build_pytorch: false
+      build_jax: false
+      build_native_linux: false
+
+  linux_build_and_test:
+    needs: setup
+    if: >-
+      ${{
+        needs.setup.outputs.linux_build_config != '' &&
+        needs.setup.outputs.enable_build_jobs == 'true'
+      }}
+    uses: ./.github/workflows/multi_arch_ci_linux.yml
+    with:
+      build_config: ${{ needs.setup.outputs.linux_build_config }}
+      test_labels: ${{ needs.setup.outputs.linux_test_labels }}
+      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
+      rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
+      rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
+      test_type: ${{ needs.setup.outputs.test_type }}
+      ref: ${{ needs.setup.outputs.ref }}
+    permissions:
+      contents: read
+      id-token: write

@@ -1527,6 +1527,8 @@ def _expand_build_config_for_platform(
                     f"  {family_name}: host-asan tests only run on nightly, "
                     f"disabling tests"
                 )
+            elif family_name == "gfx94x":
+                print(f"  {family_name}: using host-asan CI runner: {test_runs_on}")
             elif "test-runs-on-sandbox" in platform_info:
                 test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(
