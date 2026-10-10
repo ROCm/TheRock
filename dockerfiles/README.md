@@ -147,6 +147,20 @@ options):
   tarball from the `tarball-multi-arch/` path (contains per-family `.kpack/`
   files for every supported GPU target).
 
+When using `INSTALL_METHOD=packages`, the `PROFILE` build argument selects
+how much of the ROCm SDK to install:
+
+- `full` (default): Installs the complete ROCm SDK including all math/ML
+  libraries (rocBLAS, hipBLAS, MIOpen, RCCL, etc.), profilers, debugger,
+  and development headers. Produces an image of ~7–8 GB.
+- `slim`: Installs a minimal HIP/runtime development profile containing
+  only the compiler toolchain (`hipcc`/`amdclang++`), HIP runtime,
+  development headers, and base utilities (`rocminfo`). Intentionally
+  excludes prebuilt math/ML libraries (rocBLAS, MIOpen, RCCL, etc.).
+  Produces a lightweight image of ~745 MB content size — suitable for
+  HIP application development and derivative container builds that install
+  specialized libraries as needed.
+
 Supporting scripts:
 
 - [`install_rocm_deps.sh`](install_rocm_deps.sh): Auto-detects the distribution
@@ -162,15 +176,19 @@ Supporting scripts:
   ```bash
   # One-liner installation via packages
   curl -sSL https://raw.githubusercontent.com/ROCm/TheRock/main/dockerfiles/install_rocm_packages.sh | \
-    sudo bash -s -- <VERSION> <AMDGPU_FAMILY> [RELEASE_TYPE]
+    sudo bash -s -- <VERSION> <AMDGPU_FAMILY> [RELEASE_TYPE] [PROFILE]
 
-  # Example: Install ROCm 7.13.0a20260322 for gfx110x (nightly)
+  # Example: Install ROCm 7.13.0a20260322 for gfx110x (nightly, full)
   curl -sSL https://raw.githubusercontent.com/ROCm/TheRock/main/dockerfiles/install_rocm_packages.sh | \
     sudo bash -s -- 7.13.0a20260322 gfx110x nightlies
 
   # Example: Install ROCm 7.13.0a20260322 with multi-arch (all GPU families)
   curl -sSL https://raw.githubusercontent.com/ROCm/TheRock/main/dockerfiles/install_rocm_packages.sh | \
     sudo bash -s -- 7.13.0a20260322 multi-arch nightlies
+
+  # Example: Slim install — only HIP compiler, runtime, and headers
+  curl -sSL https://raw.githubusercontent.com/ROCm/TheRock/main/dockerfiles/install_rocm_packages.sh | \
+    sudo bash -s -- 7.14.0 multi-arch stable slim
   ```
 
 - [`install_rocm_tarball.sh`](install_rocm_tarball.sh): Downloads ROCm tarball
