@@ -6,6 +6,7 @@
 Unit tests for build_topology module.
 """
 
+import json
 import os
 import re
 import sys
@@ -1344,6 +1345,95 @@ class RealTopologyTest(unittest.TestCase):
         hkp = topology.artifacts["hipkernelprovider"]
         self.assertEqual(hkp.type, "target-specific")
         self.assertIn("hipkernelprovider", hkp.split_databases)
+
+
+class SourceDirMapVsBuildTopologyTest(unittest.TestCase):
+    """Check the generated source_dir_map against the hand BUILD_TOPOLOGY.toml
+    source_paths: the derivable entries must keep agreeing and the non-derivable
+    set must not grow.
+    """
+
+    # Hand source_paths basenames EXACTLY equal the parser-derived subtrees.
+    _AGREE = {
+        "base",
+        "composable-kernel",
+        "core-amdsmi",
+        "core-kpack",
+        "fft",
+        "hipblasltprovider",
+        "hipdnn-integration-tests",
+        "hipkernelprovider",
+        "miopenprovider",
+        "rccl",
+        "solver",
+        "sparse",
+        "support",
+    }
+    # Hand source_paths add curated subtrees not in the artifact's SUBPROJECT_DEPS
+    # (derived is a strict subset), except core-hiptests which is a genuine name
+    # divergence (hand "hip-tests" vs derived "catch"). Frozen so the non-derivable
+    # set that a future full-retirement must handle by hand cannot grow unnoticed.
+    _DIVERGE = {
+        "blas",
+        "core-hip",
+        "core-hiptests",
+        "core-runtime",
+        "prim",
+        "rand",
+        "rocjitsu",
+        "rocprofiler-sdk",
+    }
+    # Variable EXTERNAL_SOURCE_DIR (THEROCK_AMD_DBGAPI_SOURCE_DIR) -> no static derivation.
+    _NO_DERIVATION = {"amd-dbgapi"}
+
+    def _load(self):
+        sdm_path = REPO_ROOT / "test_tools" / "therock_source_dir_map.json"
+        toml_path = REPO_ROOT / "BUILD_TOPOLOGY.toml"
+        if not (
+            (REPO_ROOT / ".git").exists() and sdm_path.exists() and toml_path.exists()
+        ):
+            self.skipTest("not a TheRock git checkout with a committed source-dir map")
+        source_dir_map = json.loads(sdm_path.read_text(encoding="utf-8"))
+        return source_dir_map, BuildTopology(str(toml_path))
+
+    def test_classification_matches(self):
+        source_dir_map, topology = self._load()
+        derived = {
+            artifact: {path.split("/")[-1].lower() for path in paths}
+            for artifact, paths in source_dir_map.items()
+        }
+        hand = {}
+        for artifact in topology.artifacts.values():
+            source_paths = getattr(artifact, "source_paths", None) or []
+            # Skip the implicit default source_paths == [artifact_name].
+            if source_paths and source_paths != [artifact.name]:
+                hand[artifact.name] = {name.lower() for name in source_paths}
+
+        agree, diverge, no_derivation = set(), set(), set()
+        for artifact, hand_set in hand.items():
+            derived_set = derived.get(artifact, set())
+            if not derived_set:
+                no_derivation.add(artifact)
+            elif derived_set == hand_set:
+                agree.add(artifact)
+            else:
+                diverge.add(artifact)
+
+        self.assertEqual(agree, self._AGREE)
+        self.assertEqual(diverge, self._DIVERGE)
+        self.assertEqual(no_derivation, self._NO_DERIVATION)
+
+    def test_every_derived_subtree_is_real(self):
+        source_dir_map, _ = self._load()
+        subtree_path = REPO_ROOT / "test_tools" / "therock_subtree_map.json"
+        subtrees = set(json.loads(subtree_path.read_text(encoding="utf-8")))
+        for artifact, paths in source_dir_map.items():
+            for path in paths:
+                self.assertIn(
+                    path,
+                    subtrees,
+                    f"{artifact} source dir {path!r} is not a known subtree",
+                )
 
 
 if __name__ == "__main__":

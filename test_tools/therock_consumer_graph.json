@@ -24,13 +24,13 @@
       "hip-clr",
       "hipcc",
       "hipify",
+      "hipinfo",
       "hipthreads",
+      "hrx",
       "kfdtest",
       "libhipcxx",
       "mxdatagenerator",
       "ocl-clr",
-      "profiler-hub",
-      "profiler-hub-install-test",
       "rdc",
       "rocgdb",
       "rocminfo",
@@ -87,6 +87,7 @@
       "hipdnn_samples",
       "hipfft",
       "hipfile",
+      "hipinfo",
       "hipkernelprovider",
       "hiprand",
       "hipsolver",
@@ -121,7 +122,8 @@
       "rocthrust",
       "roctracer",
       "rocwmma",
-      "rpp"
+      "rpp",
+      "therock-wsl-rocdxg"
     ]
   },
   "hip-tests": {
@@ -196,6 +198,9 @@
       "rccl-tests"
     ]
   },
+  "hipinfo": {
+    "consumers": []
+  },
   "hipkernelprovider": {
     "consumers": []
   },
@@ -219,6 +224,9 @@
     "consumers": []
   },
   "hipthreads": {
+    "consumers": []
+  },
+  "hrx": {
     "consumers": []
   },
   "kfdtest": {
@@ -263,14 +271,6 @@
       "hipblaslt",
       "hipsparselt"
     ]
-  },
-  "profiler-hub": {
-    "consumers": [
-      "rocprofiler-systems"
-    ]
-  },
-  "profiler-hub-install-test": {
-    "consumers": []
   },
   "rccl": {
     "consumers": [
@@ -477,6 +477,7 @@
     "consumers": [
       "aqlprofile",
       "hip-clr",
+      "hrx",
       "kfdtest",
       "ocl-clr",
       "rdc",
@@ -563,6 +564,7 @@
   "therock-catch2": {
     "consumers": [
       "hip-tests",
+      "hrx",
       "origami",
       "rocroller"
     ]
@@ -619,7 +621,6 @@
     "consumers": [
       "hipblaslt",
       "hipdnn",
-      "profiler-hub",
       "rccl",
       "rocprofiler-systems",
       "rocroller",
@@ -669,7 +670,6 @@
       "miopen",
       "miopenprovider",
       "mxdatagenerator",
-      "profiler-hub",
       "rccl",
       "rocalution",
       "rocblas",
@@ -798,7 +798,6 @@
       "hipkernelprovider",
       "miopen",
       "miopenprovider",
-      "profiler-hub",
       "rocprofiler-systems",
       "therock-frugally-deep"
     ]
@@ -814,6 +813,14 @@
       "therock-hwloc"
     ]
   },
+  "therock-openmpi": {
+    "consumers": [
+      "rccl-tests",
+      "rocprofiler-compute",
+      "rocprofiler-sdk",
+      "rocprofiler-systems"
+    ]
+  },
   "therock-simde": {
     "consumers": [
       "hip-clr",
@@ -825,7 +832,6 @@
     "consumers": [
       "hipblaslt",
       "hipdnn",
-      "profiler-hub",
       "rocprofiler-systems",
       "rocroller"
     ]
@@ -833,7 +839,6 @@
   "therock-sqlite3": {
     "consumers": [
       "miopen",
-      "profiler-hub",
       "rocprofiler-compute",
       "rocprofiler-sdk",
       "rocprofiler-systems",
@@ -849,6 +854,9 @@
     "consumers": [
       "hipfile"
     ]
+  },
+  "therock-wsl-rocdxg": {
+    "consumers": []
   },
   "therock-yaml-cpp": {
     "consumers": [

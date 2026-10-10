@@ -150,7 +150,10 @@ def _resolve_skipped_stages(build_stages: list[str]) -> list[str]:
 
 # Maps build stages to the test labels that can run with artifacts from those
 # stages. Used to auto-filter tests when build_stages narrows the build graph.
-# Test labels not listed here require a full build.
+# Test labels not listed here require a full build. Most labels have a
+# fetch_test_configurations.test_matrix entry; kfdtest and composable-kernel are
+# real artifacts tested through other paths and have none (see
+# label_consistency_test, which guards against a genuinely unknown label).
 STAGE_TO_TEST_LABELS: dict[str, list[str]] = {
     "compiler-runtime": ["kfdtest"],
     "runtime-tests": ["hip-tests", "rocrtst"],
