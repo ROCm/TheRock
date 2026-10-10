@@ -62,20 +62,17 @@ TEST_LABEL_GROUPS: dict[str, list[str]] = {
 
 
 # Base container options applied to all Linux containers
-# --ipc host - Allows shared memory between host and container
 # --user 0:0 - Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
 # --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
 # --ulimit nofile=1048576:1048576 - Increase open file limit for RCCL
-# --security-opt seccomp=unconfined - enables memory mapping, and is recommended for containers running in HPC environments
 _BASE_CONTAINER_OPTIONS = [
-    "--ipc host",
     "--user 0:0",
     "--ulimit memlock=-1:-1",
     "--ulimit nofile=1048576:1048576",
-    "--security-opt seccomp=unconfined",
 ]
 
 # GPU-specific container options (only applied when linux_cpu_runner != True)
+# --security-opt seccomp=unconfined - enables memory mapping and device ioctls needed by ROCm/HPC GPU workloads
 # --group-add video - Grants access to GPU video group
 # --device /dev/kfd - AMD KFD device for GPU compute
 # --device /dev/dri - Direct Rendering Infrastructure devices
@@ -83,6 +80,7 @@ _BASE_CONTAINER_OPTIONS = [
 # --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
 # -e ROCR_VISIBLE_DEVICES - Pass host's GPU isolation env var to container (used on ARC runners)
 _GPU_CONTAINER_OPTIONS = [
+    "--security-opt seccomp=unconfined",
     "--group-add video",
     "--device /dev/kfd",
     "--device /dev/dri",
@@ -744,6 +742,8 @@ test_matrix = {
         },
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+        # RCCL collective ops use cross-process shared memory via /dev/shm
+        "container_options": ["--ipc host"],
     },
     # rocSHMEM tests
     "rocshmem": {
@@ -758,6 +758,8 @@ test_matrix = {
         # rocSHMEM functional/unit tests launch via mpirun with RANKS 2..64, so
         # they need a multi-GPU runner (same setup as rccl).
         "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+        # rocSHMEM uses cross-process shared memory for multi-GPU communication
+        "container_options": ["--ipc host"],
     },
     # rocprofiler-sdk tests
     "rocprofiler-sdk": {
