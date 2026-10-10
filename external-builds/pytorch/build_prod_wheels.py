@@ -160,7 +160,10 @@ import tempfile
 import textwrap
 import urllib.request
 
+import rewrite_torch_runpath
+
 script_dir = Path(__file__).resolve().parent
+
 
 is_windows = platform.system() == "Windows"
 
@@ -481,6 +484,20 @@ def copy_to_output(args: argparse.Namespace, src_file: Path):
     print(f"++ Copy {src_file} -> {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src_file, output_dir)
+
+
+def rewrite_linux_wheel_runpath(wheel: Path) -> None:
+    """Replace CMake-baked absolute _rocm_sdk_devel RUNPATHs with $ORIGIN relatives.
+
+    pytorch/.ci/manywheel/repair_wheel.py does this for official pytorch.org
+    wheels, but is only called from manywheel/build.sh. TheRock builds via
+    ``python -m build`` / ``setup.py bdist_wheel`` and would otherwise ship
+    manylinux ``/opt/_internal/...`` and ``/opt/python/...`` paths.
+    """
+    if is_windows:
+        return
+    print(f"+++ Rewriting ELF RPATH on {wheel.name}")
+    rewrite_torch_runpath.rewrite_wheel_runpath(wheel)
 
 
 def directory_if_exists(dir: Path) -> Path | None:
@@ -1324,6 +1341,7 @@ def do_build_pytorch(
     run_command(build_command, cwd=pytorch_dir, env=env)
     built_wheel = find_built_wheel(pytorch_dir / "dist", "torch")
     print(f"Found built wheel: {built_wheel}")
+    rewrite_linux_wheel_runpath(built_wheel)
     copy_to_output(args, built_wheel)
 
     print("+++ Installing built torch:")
@@ -1382,6 +1400,7 @@ def do_build_pytorch_audio(
     )
     built_wheel = find_built_wheel(pytorch_audio_dir / "dist", "torchaudio")
     print(f"Found built wheel: {built_wheel}")
+    rewrite_linux_wheel_runpath(built_wheel)
     copy_to_output(args, built_wheel)
 
 
@@ -1426,6 +1445,7 @@ def do_build_pytorch_vision(
     )
     built_wheel = find_built_wheel(pytorch_vision_dir / "dist", "torchvision")
     print(f"Found built wheel: {built_wheel}")
+    rewrite_linux_wheel_runpath(built_wheel)
     copy_to_output(args, built_wheel)
 
 
@@ -1456,6 +1476,7 @@ def do_build_apex(args: argparse.Namespace, apex_dir: Path, env: dict[str, str])
     )
     built_wheel = find_built_wheel(apex_dir / "dist", "apex")
     print(f"Found built wheel: {built_wheel}")
+    rewrite_linux_wheel_runpath(built_wheel)
     copy_to_output(args, built_wheel)
 
 
