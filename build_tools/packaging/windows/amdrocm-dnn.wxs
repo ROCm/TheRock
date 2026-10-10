@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+xmlns:dep="http://wixtoolset.org/schemas/v4/wxs/dependency"
+xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+<!-- Common settings -->
+<?include common.wxi ?>
+
+<!-- Package components -->
+<Fragment>
+  <?include amdrocm-dnn-components.wxi ?>
+</Fragment>
+
+<Package Name="amdrocm-dnn" Version="1.0.0.0" Manufacturer="Advanced Micro Devices, Inc." UpgradeCode="103E00E5-DD84-485E-BBD9-56F48B74ECA1" Scope="perMachine">
+  <MediaTemplate EmbedCab="yes" />
+
+  <!-- Directory structure -->
+  <StandardDirectory Id="ProgramFiles64Folder">
+    <Directory Id="INSTALLFOLDER" Name="AMD\$(var.ProductName)\$(var.ProductVersion)">
+    <?include amdrocm-dnn-structure.wxi ?>
+  </Directory>
+  </StandardDirectory>
+  <!-- Feature description -->
+  <Feature Id="amdrocm_dnn_files" Title="ROCm HIPDNN Package" Level="1" Display="expand">
+    <?include amdrocm-dnn-feature.wxi ?>
+  </Feature>
+  <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER"/>
+</Package>
+</Wix>

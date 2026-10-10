@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Directory map -->
+    <Directory Id="amdrocm_runtime_b" Name="bin" />
+    <Directory Id="amdrocm_runtime_i" Name="include" />
+    <Directory Id="amdrocm_runtime_s" Name="share" />
+</Include>
