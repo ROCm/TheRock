@@ -378,6 +378,95 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
             ),
         )
 
+    def _no_retry_pause(self):
+        """Skip the pause between metadata read attempts."""
+        return unittest.mock.patch.object(_devel, "_METADATA_READ_PAUSE_S", 0)
+
+    def _repair_on_retry(self, restore):
+        """Replace the retry pause so the next real read sees a repaired file."""
+
+        def sleep(_seconds):
+            restore()
+
+        return unittest.mock.patch.object(
+            _devel, "time", unittest.mock.Mock(sleep=sleep)
+        )
+
+    def _device_metadata_path(self, record: Path, family: str, kind: str) -> Path:
+        """RECORD, or the .devel_links manifest, for one synthetic device wheel."""
+        if kind == "record":
+            return record
+        return self.site / LIBS_NAME / ".devel_links" / f"{family}.json"
+
+    def test_torn_metadata_recovers_on_retry(self):
+        # NUL RECORD and empty .devel_links are the two torn reads from the
+        # ticket. Once the next attempt sees intact bytes, reconcile links.
+        torn = (("gfx942", "record", b"\x00"), ("gfx950", "manifest", b""))
+        for family, kind, bad in torn:
+            with self.subTest(kind=kind):
+                relpath = f".kpack/blas_lib_{family}.kpack"
+                record = self._add_device_wheel(family, {relpath: "kpack data"})
+                path = self._device_metadata_path(record, family, kind)
+                good = path.read_bytes()
+                path.write_bytes(bad)
+                with self._no_retry_pause(), self._repair_on_retry(
+                    lambda p=path, data=good: p.write_bytes(data)
+                ):
+                    self.assertEqual(self._reconcile(), 1)
+                self.assertTrue((self.devel_dir / relpath).is_file())
+                self.assertIn(f"{DEVEL_NAME}/{relpath}", self._record_paths(record))
+
+    def test_persistent_torn_metadata_names_distribution_and_path(self):
+        # A file that stays torn names the distribution and path, and does
+        # not rewrite RECORD or create the link.
+        torn = (("gfx942", "record", b"\x00"), ("gfx950", "manifest", b""))
+        for family, kind, bad in torn:
+            with self.subTest(kind=kind):
+                relpath = f".kpack/blas_lib_{family}.kpack"
+                record = self._add_device_wheel(family, {relpath: "kpack data"})
+                path = self._device_metadata_path(record, family, kind)
+                path.write_bytes(bad)
+                before = record.read_bytes()
+                try:
+                    with self._no_retry_pause():
+                        with self.assertRaises(_devel.DevelMetadataReadError) as caught:
+                            self._reconcile()
+                    message = str(caught.exception)
+                    self.assertIn(f"rocm-sdk-device-{family}", message)
+                    self.assertIn(str(path), message)
+                    self.assertEqual(record.read_bytes(), before)
+                    self.assertFalse((self.devel_dir / relpath).exists())
+                finally:
+                    # Drop this wheel so the next case is not blocked by it.
+                    for child in record.parent.iterdir():
+                        child.unlink()
+                    record.parent.rmdir()
+
+    def test_torn_record_reread_does_not_rewrite_record(self):
+        # Discovery reads a good RECORD, then the rewrite reads it empty.
+        # There is no pause between those reads, so the test supplies the bytes.
+        record = self._add_device_wheel(
+            "gfx942", {".kpack/blas_lib_gfx942.kpack": "kpack data"}
+        )
+        before = record.read_bytes()
+        real = Path.read_bytes
+        record_reads = 0
+
+        def read_bytes(path):
+            nonlocal record_reads
+            data = real(path)
+            if path.name != "RECORD":
+                return data
+            record_reads += 1
+            return data if record_reads == 1 else b""
+
+        with self._no_retry_pause(), unittest.mock.patch.object(
+            Path, "read_bytes", read_bytes
+        ):
+            with self.assertRaises(_devel.DevelMetadataReadError):
+                self._reconcile()
+        self.assertEqual(record.read_bytes(), before)
+
 
 if __name__ == "__main__":
     unittest.main()
