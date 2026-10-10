@@ -2,6 +2,10 @@
 [components.lib."ml-libs/MIOpen/stage"]
 include = [
   "share/miopen/**",
+  # Windows installs system databases directly under bin/.
+  "bin/gfx*.db.txt",
+  "bin/gfx*.fdb.txt",
+  "bin/gfx*.kdb",
 ]
 [components.run."ml-libs/MIOpen/stage"]
 exclude = [
