@@ -706,8 +706,9 @@ test_matrix = {
     # The runner ships in the MIOpen dist (share/miopen/bin/run_dbsync_rocjitsu.py, pulled via
     # --miopen; defined in rocm-libraries projects/miopen/test/gtest/dbsync/): it resolves arch + CU
     # list from AMDGPU_FAMILIES, sparse-builds the pinned rocjitsu KMD, and runs StaticFDBSync once
-    # per CU with a CU-corrected config. include_family restricts it to gfx942, whose FAMILY_MAP
-    # entry covers both CU variants -- MI300X (304 CU) and MI300A (228 CU) -- in a single job.
+    # per CU with a CU-corrected config. include_family restricts it to the arches rocjitsu has a
+    # KMD config for: gfx942, whose FAMILY_MAP entry covers both CU variants -- MI300X (304 CU) and
+    # MI300A (228 CU) -- in a single job, and gfx950 (MI355X, 256 CU; advisory via expect_failure).
     # linux_cpu_runner: no scarce GPU test runner needed; uses the default no_rocm Ubuntu container
     # (the runner sudo-apt-installs cmake/build-essential/libdrm-dev to build rocjitsu).
     "miopen-dbsync": {
@@ -717,15 +718,15 @@ test_matrix = {
         # job entirely on the `quick` tier -- no job is scheduled, so no artifact fetch
         # or rocjitsu build is paid for on quick (the runner script also self-skips on
         # TEST_TYPE=quick as a backstop). Runs serially (MIOPEN_DBSYNC_MAX_THREADS=1)
-        # under rocjitsu; full set (gfx942 304+228) + artifact fetch + rocjitsu build
-        # measures ~15 min, so 30 gives margin and fails a hung interposer faster.
+        # under rocjitsu; full set (gfx942 304+228, gfx950 256) + artifact fetch + rocjitsu
+        # build measures ~15 min, so 30 gives margin and fails a hung interposer faster.
         "timeout_minutes": 30,
         "test_script": "python ./build/share/miopen/bin/run_dbsync_rocjitsu.py",
         "platform": ["linux"],
         "linux_cpu_runner": True,
         "test_types": ["standard", "comprehensive", "full"],
         "include_family": {
-            "linux": ["gfx942"],
+            "linux": ["gfx942", "gfx950"],
         },
         "total_shards_dict": {
             "linux": 1,
@@ -1424,6 +1425,14 @@ def run():
 
             job_config_data = {**_common_settings, **test_matrix[key]}
             job_config_data["test_type"] = test_type
+
+            # gfx950 dbsync is advisory (non-blocking) while it is re-qualified:
+            # test_component.yml maps expect_failure to continue-on-error. gfx942
+            # stays blocking. Mirrors the benchmark components' use of this field.
+            # TODO(ALMIOPEN-2674): drop "gfx950-dcgpu" once gfx950 dbsync has been
+            # green for a few consecutive standard/comprehensive/full runs.
+            if key == "miopen-dbsync" and amdgpu_families in {"gfx950-dcgpu"}:
+                job_config_data["expect_failure"] = True
 
             # tensilelite: append the tensilelite/tests C++ gtest suite (run via
             # ctest -L <test_type>, driven by the shared test_runner.py) after
