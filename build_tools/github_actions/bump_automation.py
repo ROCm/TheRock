@@ -40,7 +40,8 @@ SUBMODULE_CONFIG = {
         "repo": "ROCm/rocm-systems",
         "files": [],
         "updater": "ref",
-        "token_key": "systems",
+        # Selects an entry in the tokens dictionary, not a literal credential.
+        "token_key": "systems",  # nosec B105
         # See the "rocm-libraries" entry below for why this is per-repo.
         "bot_author": "systems-assistant[bot]",
         # Changes to rocm-systems should run the full matrix of CI jobs:
@@ -54,7 +55,8 @@ SUBMODULE_CONFIG = {
         "repo": "ROCm/rocm-libraries",
         "files": [ROCM_LIBRARIES_CI_ENV_FILE],
         "updater": "ci-env",
-        "token_key": "libraries",
+        # Selects an entry in the tokens dictionary, not a literal credential.
+        "token_key": "libraries",  # nosec B105
         # GitHub App bot identity that opens "Update TheRock reference to
         # (...)" PRs on this repo; only used by the "ci-env" updater's stale
         # pin-PR cleanup. Each downstream repo has its own GitHub App (see
@@ -73,7 +75,8 @@ SUBMODULE_CONFIG = {
         "files": [],
         "updater": "submodule-only",
         # We will reuse the rocm-systems token for now.
-        "token_key": "systems",
+        # Selects an entry in the tokens dictionary, not a literal credential.
+        "token_key": "systems",  # nosec B105
         "branch": "amd-staging-rocgdb-16",
         # Changes to rocgdb can run a limited matrix of CI jobs:
         #   * Build for all gfx archs
@@ -85,7 +88,8 @@ SUBMODULE_CONFIG = {
         "files": [],
         "updater": "submodule-only",
         # We will reuse the rocm-systems token for now.
-        "token_key": "systems",
+        # Selects an entry in the tokens dictionary, not a literal credential.
+        "token_key": "systems",  # nosec B105
         # Changes to mesa-fork can run a limited matrix of CI jobs:
         #   * Build for all gfx archs
         #   * mesa-fork tests only (no impact on other project builds/tests)
@@ -194,7 +198,7 @@ def gh_api_paginate(token: str, endpoint: str) -> list:
     results = []
     url = f"https://api.github.com/{endpoint}"
     while url:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=60)
         if not response.ok:
             raise RuntimeError(
                 f"GitHub API failed: {response.status_code} {response.text}"
@@ -418,8 +422,97 @@ def find_therock_workflow_files(root: Path = Path(".github")) -> list[str]:
     return files
 
 
-def close_stale_prs(submodule: str, old_sha: str, token: str) -> None:
-    """Close all open PRs on TheRock that originated from old submodule SHA."""
+def _list_workflow_runs_for_head(
+    token: str, branch: str, head_sha: str
+) -> list[dict[str, Any]]:
+    """Return workflow runs for one branch and SHA, following pagination."""
+    runs: list[dict[str, Any]] = []
+    page = 1
+
+    while True:
+        result = gh_api(
+            token,
+            (
+                f"repos/{THEROCK_REPO}/actions/runs"
+                f"?branch={quote(branch, safe='')}"
+                f"&head_sha={quote(head_sha, safe='')}"
+                f"&per_page=100&page={page}"
+            ),
+        )
+        page_runs = (result or {}).get("workflow_runs", [])
+        runs.extend(page_runs)
+
+        if len(page_runs) < 100 or len(runs) >= (result or {}).get("total_count", 0):
+            return runs
+
+        page += 1
+
+
+def cancel_pr_workflow_runs(pr: dict[str, Any], actions_token: str) -> list[str]:
+    """Cancel non-completed runs for this PR head. Returns failure messages.
+
+    Matches head SHA and branch exactly. Completed runs are left alone. Callers
+    finish the rest of the push before raising, so a cancel failure does not
+    skip closing PRs or opening the next bump.
+    """
+    errors: list[str] = []
+    number = pr["number"]
+    head = pr.get("head") or {}
+    branch = head.get("ref")
+    head_sha = head.get("sha")
+    if not branch or not head_sha:
+        message = f"PR #{number} is missing head ref or sha"
+        print(f"[WARN] {message}; skipping cancel")
+        errors.append(message)
+        return errors
+
+    try:
+        runs = _list_workflow_runs_for_head(actions_token, branch, head_sha)
+    except RuntimeError as e:
+        message = f"Could not list runs for PR #{number}: {e}"
+        print(f"[WARN] {message}")
+        errors.append(message)
+        return errors
+
+    for run in runs:
+        if run.get("head_sha") != head_sha or run.get("head_branch") != branch:
+            continue
+        # waiting, requested, and pending can still start after the PR is closed.
+        if run.get("status") == "completed":
+            continue
+        run_id = run["id"]
+        try:
+            gh_api(
+                actions_token,
+                f"repos/{THEROCK_REPO}/actions/runs/{run_id}/cancel",
+                method="POST",
+            )
+            print(f"[INFO] Cancelled workflow run {run_id} for PR #{number}")
+        except RuntimeError as e:
+            message = f"Could not cancel workflow run {run_id} for PR #{number}: {e}"
+            print(f"[WARN] {message}")
+            errors.append(message)
+    return errors
+
+
+def _fail_if_cancel_errors(errors: list[str]) -> None:
+    """Raise after the rest of the push so the bump workflow is not left green."""
+    if not errors:
+        return
+    raise RuntimeError(
+        "Failed to cancel workflow runs for stale bump PRs:\n" + "\n".join(errors)
+    )
+
+
+def close_stale_prs(
+    submodule: str, old_sha: str, token: str, actions_token: str | None = None
+) -> list[str]:
+    """Close all open PRs on TheRock that originated from old submodule SHA.
+
+    Returns cancel failures. Does not raise, so the caller can finish ref
+    updates and the next bump PR before failing the step.
+    """
+    errors: list[str] = []
     old_short = old_sha[:7]
     prs = gh_api_paginate(token, f"repos/{THEROCK_REPO}/pulls?state=open&per_page=100")
     for pr in prs:
@@ -427,6 +520,14 @@ def close_stale_prs(submodule: str, old_sha: str, token: str) -> None:
         if f"bump {submodule}" in title and f"from {old_short}" in title:
             number = pr["number"]
             print(f"[INFO] Closing stale PR #{number}")
+
+            # Cancel before close: GitHub keeps Actions running after the PR closes.
+            if actions_token:
+                errors.extend(cancel_pr_workflow_runs(pr, actions_token))
+            else:
+                message = f"No actions token; leaving workflow runs for PR #{number}"
+                print(f"[WARN] {message}")
+                errors.append(message)
 
             # Add a comment to the PR being closed
             gh_api(
@@ -455,6 +556,7 @@ def close_stale_prs(submodule: str, old_sha: str, token: str) -> None:
                 print(f"[INFO] Deleted branch {branch_ref}")
             except Exception as e:
                 print(f"[WARN] Could not delete branch {branch_ref}: {e}")
+    return errors
 
 
 def _parse_github_datetime(value: str) -> datetime:
@@ -678,7 +780,12 @@ def handle_schedule(tokens: dict[str, str], submodule: str = "all") -> None:
         create_therock_bump("third-party/sysdeps/common/mesa-fork", tokens["mesa-fork"])
 
 
-def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
+def handle_push(
+    before: str,
+    after: str,
+    tokens: dict[str, str],
+    actions_token: str | None = None,
+) -> None:
     """Push event: update TheRock refs, close stale PRs, create next bump PR."""
     changed = None
     for path in SUBMODULE_CONFIG:
@@ -695,13 +802,16 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
 
     print(f"[INFO] Detected {changed} change: {old_sha[:7]} -> {after[:7]}")
 
-    close_stale_prs(changed, old_sha, token)
+    cancel_errors = close_stale_prs(
+        changed, old_sha, token, actions_token=actions_token or None
+    )
 
     # submodule-only entries (e.g. rocgdb) have no back-ref files to update in
     # the upstream repo; closing stale bump PRs above is all the push handler
     # needs to do for them.
     if config.get("updater") == "submodule-only":
         print(f"[INFO] {changed} uses submodule-only bumping, skipping ref update")
+        _fail_if_cancel_errors(cancel_errors)
         return
 
     # For ci-env updater, get baseline run ID from the merged PR
@@ -731,6 +841,7 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
             if not os.path.exists(f):
                 print(f"[ERROR] File not found: {f}")
                 os.chdir(original_cwd)
+                _fail_if_cancel_errors(cancel_errors)
                 return
 
         run(["git", "checkout", "-b", branch])
@@ -785,6 +896,8 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
     except Exception as e:
         print(f"[WARN] create_therock_bump failed: {e}")
 
+    _fail_if_cancel_errors(cancel_errors)
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -800,6 +913,11 @@ def main() -> None:
     parser.add_argument("--libraries_token", required=True)
     parser.add_argument("--rocgdb_token", required=True)
     parser.add_argument("--mesa_token", required=True)
+    parser.add_argument(
+        "--actions_token",
+        default="",
+        help="TheRock GITHUB_TOKEN used to cancel runs on stale bump PRs.",
+    )
     args = parser.parse_args()
 
     run(["git", "config", "--global", "user.name", BOT_NAME])
@@ -815,7 +933,9 @@ def main() -> None:
     if args.event_type == "schedule":
         handle_schedule(tokens, args.submodule)
     elif args.event_type == "push":
-        handle_push(args.before, args.after, tokens)
+        if not args.actions_token:
+            parser.error("--actions_token is required when --event_type is push")
+        handle_push(args.before, args.after, tokens, actions_token=args.actions_token)
 
 
 if __name__ == "__main__":

@@ -10,6 +10,10 @@ workflow file, so that a local run reproduces what CI runs.
 | `generic.py`       | every JAX version                           |
 | `jax_<version>.py` | that JAX version only, e.g. `jax_0.10.2.py` |
 
+`<version>` is the release number alone, so a build of upstream tip, versioned
+as the nightly it pairs with, reads the file of the release that nightly leads
+to: `0.11.2.dev20260914+rocm7.14.0a20260914` reads `jax_0.11.2.py`.
+
 Each file defines a `skip_tests` dict whose top-level keys select where the
 entries apply:
 

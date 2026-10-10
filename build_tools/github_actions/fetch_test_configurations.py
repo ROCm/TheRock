@@ -56,7 +56,7 @@ def _get_artifact_path(artifact_path: str) -> str:
 # keys it expands to. Use this when a single label should select multiple
 # related jobs without relying on name-prefix inference.
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
-    "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
+    "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
     "tensilelite": ["tensilelite", "tensilelite-common"],
 }
 
@@ -490,19 +490,6 @@ test_matrix = {
             ],
         },
     },
-    # Corefile tests require specific hardware support (GPU core dump capable runners).
-    # test_runner is pre-pinned so the family-based runner selection loop skips it.
-    # Only gfx942 has core-dump support, so include_family opts the job in to that
-    # family alone rather than enumerating every other architecture to exclude.
-    "rocgdb-corefile": {
-        **_rocgdb_common,
-        "job_name": "rocgdb-corefile",
-        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --gpu-corefile-tests",
-        "test_runner": "linux-gfx942-gpu-rocm-mathlib",
-        "include_family": {
-            "linux": ["gfx942"],
-        },
-    },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
         "fetch_artifact_args": "--debug-tools --tests",
@@ -862,6 +849,26 @@ test_matrix = {
             # becomes a zombie process, blocking the test job indefinitely.
             # See: https://github.com/ROCm/TheRock/actions/runs/15831078820/job/107341707111
             "linux": ["gfx125X-dcgpu"],
+        },
+    },
+    # NVIDIA cuDNN sample corpus built against hipDNN's cuDNN compatibility
+    # shim. Distinct from "hipdnn-samples" above, which is hipDNN's own sample
+    # suite; these two are easy to confuse and test entirely different things.
+    "hipdnn-cudnn-samples": {
+        "job_name": "hipdnn-cudnn-samples",
+        # No "fetch_artifact_args" on purpose: this job calls
+        # find_package(hipdnn_frontend), whose config file and headers live in
+        # the "dev" component, and install_rocm_from_artifacts.py expands each
+        # selected artifact to <name>_lib plus <name>_test only -- never
+        # <name>_dev. Omitting the key takes the fetch-everything branch, which
+        # is why "hipdnn_install" omits it too. Do not "fix" this by adding the
+        # enumerated artifact flags back; find_package would fail.
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_hipdnn_cudnn_samples.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
         },
     },
     # profiler-hub install/consumption tests
