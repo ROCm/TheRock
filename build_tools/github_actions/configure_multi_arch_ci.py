@@ -998,15 +998,16 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 
     # PR labels can extend the family set (both platforms).
     # We support three types of arch labels:
-    #   - ci:gfx* - opt-in to both build AND test (existing behavior)
+    #   - ci:gfx* - opt-in to both build AND test, bypassing trigger-based test
+    #     gating (tests_on_trigger). Use this when you want full build+test signal.
     #   - ci:build:gfx* - opt-in to build only (no tests)
     #   - ci:test:gfx* - opt-in to tests only (requires build label)
     #
     # This fine-grained control is helpful for specific use cases:
     #   - ci:build:gfx* alone: verify compilation for an arch without running tests
     #     (useful when you don't need/want test results, just build validation)
-    #   - ci:gfx* + ci:test:gfx*: normal build + explicitly request tests for an arch
-    #     that might not normally run tests on PRs
+    #   - ci:gfx*: build AND test, even for families that normally only test on
+    #     nightly (e.g., gfx1151 Windows with tests_on_trigger: ["nightly"])
     #
     # IMPORTANT: ci:test:gfx* labels require corresponding build labels (ci:gfx* or
     # ci:build:gfx*) because tests depend on build artifacts. CI will error if a
@@ -1050,23 +1051,30 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 target = label.lower().removeprefix("ci:").split("-")[0]
                 linux_names.append(target)
                 windows_names.append(target)
-                print(f"  Label '{label}' -> adding target {target}")
+                # ci:gfx* means "build AND test", so also add to test_only lists
+                # to bypass trigger-based test gating (tests_on_trigger).
+                linux_test_only.append(target)
+                windows_test_only.append(target)
+                print(f"  Label '{label}' -> adding target {target} (build + test)")
 
-        # Platform-specific labels use additive logic: if any ci:platform label is
-        # set, start with empty lists and add back only the requested platforms.
+        # Platform-specific labels: if any ci:platform:* label is set, clear all
+        # lists for platforms NOT requested. This includes families, build_only,
+        # and test_only lists to prevent validation errors and stale data.
         has_platform_linux = "ci:platform:linux" in ci_inputs.pr_labels
         has_platform_windows = "ci:platform:windows" in ci_inputs.pr_labels
         if has_platform_linux or has_platform_windows:
-            saved_linux = linux_names
-            saved_windows = windows_names
-            linux_names = []
-            windows_names = []
             if has_platform_linux:
-                linux_names = saved_linux
                 print("  Label 'ci:platform:linux' -> including Linux builds/tests")
+            else:
+                linux_names = []
+                linux_build_only = []
+                linux_test_only = []
             if has_platform_windows:
-                windows_names = saved_windows
                 print("  Label 'ci:platform:windows' -> including Windows builds/tests")
+            else:
+                windows_names = []
+                windows_build_only = []
+                windows_test_only = []
 
     # De-dup, validate, then filter by platform availability.
     linux_names = list(dict.fromkeys(linux_names))
@@ -1082,13 +1090,13 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     # Validate that test-only families have corresponding build labels.
     # Tests depend on build artifacts, so ci:test:gfx* requires ci:gfx* or ci:build:gfx*.
     for target in linux_test_only:
-        if target not in linux_names:
+        if target not in linux_names and target not in linux_build_only:
             raise ValueError(
                 f"ci:test:{target} label requires a corresponding build label "
                 f"(ci:{target} or ci:build:{target}). Tests depend on build artifacts."
             )
     for target in windows_test_only:
-        if target not in windows_names:
+        if target not in windows_names and target not in windows_build_only:
             raise ValueError(
                 f"ci:test:{target} label requires a corresponding build label "
                 f"(ci:{target} or ci:build:{target}). Tests depend on build artifacts."
