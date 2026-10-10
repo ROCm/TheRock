@@ -74,23 +74,12 @@ Tested on a bare-metal Ubuntu 26.04.1 install (GCC 15.2, CMake 4.2.3), not a
 reference image.
 
 Built for gfx1151 in October 2026 using the Ubuntu 24.04 setup steps from the
-README, with these workarounds:
+README, with this workaround:
 
 - Shipping CMake is 4.2, which fails rocRAND (and other rocPRIM-based
   projects) at configure with `ADD_LIBRARY called with SHARED option but the target platform does not support dynamic linking`
   ([#8847](https://github.com/ROCm/TheRock/issues/8847)). Use CMake 3 from
   the venv: see the [CMake](#cmake) advice below.
-- `rocprofiler-sdk` fails with `'sqlite3.h' file not found`
-  ([#5868](https://github.com/ROCm/TheRock/issues/5868)). Install
-  `libsqlite3-dev` until
-  [ROCm/rocm-systems#9670](https://github.com/ROCm/rocm-systems/pull/9670)
-  lands.
-- Shipping GCC is 15, which fails `rocjitsu` (emulation) with
-  `-Werror=free-nonheap-object`. The fix
-  ([ROCm/rocm-systems#13075](https://github.com/ROCm/rocm-systems/pull/13075))
-  is merged but not yet in the `rocm-systems` submodule; until it is, disable
-  `rocjitsu` and RCCL, which depends on it:
-  `-DTHEROCK_ENABLE_EMULATION=OFF -DTHEROCK_ENABLE_COMM_LIBS=OFF`.
 
 ### Arch Linux / EndeavourOS
 
