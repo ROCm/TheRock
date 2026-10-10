@@ -68,6 +68,19 @@ Workarounds:
 
 - Shipping CMake is too old (3.22): see above advice for CMake
 
+### Ubuntu 26.04
+
+Tested on a bare-metal Ubuntu 26.04.1 install (GCC 15.2, CMake 4.2.3), not a
+reference image.
+
+Built for gfx1151 in October 2026 using the Ubuntu 24.04 setup steps from the
+README, with this workaround:
+
+- Shipping CMake is 4.2, which fails rocRAND (and other rocPRIM-based
+  projects) at configure with `ADD_LIBRARY called with SHARED option but the target platform does not support dynamic linking`
+  ([#8847](https://github.com/ROCm/TheRock/issues/8847)). Use CMake 3 from
+  the venv: see the [CMake](#cmake) advice below.
+
 ### Arch Linux / EndeavourOS
 
 Arch-based distributions ship the latest toolchain versions, which occasionally
@@ -155,7 +168,7 @@ below for guidance — `-j8` is a safe starting point on a 32 GB system.
 
 ### CMake
 
-Different project components enforce different CMake version ranges. The `cmake_minimum_version` in the top level CMake file (presently 3.25) should be considered the project wide minimum. As of September 2025, CMake 4 is supported on Linux - but not on Windows.
+Different project components enforce different CMake version ranges. The `cmake_minimum_version` in the top level CMake file (presently 3.25) should be considered the project wide minimum. As of September 2025, CMake 4 is supported on Linux - but not on Windows. Linux builds with CMake 4 currently fail to configure rocRAND and other rocPRIM-based projects ([#8847](https://github.com/ROCm/TheRock/issues/8847)), so use CMake 3 until that is fixed.
 
 There are various, easy ways to acquire specific CMake versions. For Windows and users wanting to use CMake 3, it can be easily installed with:
 
