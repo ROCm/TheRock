@@ -36,8 +36,10 @@ import fnmatch
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, fields
 from typing import (
@@ -169,8 +171,8 @@ def get_modified_paths_api(
 ) -> Optional[Set[str]]:
     """Get paths of files changed using GitHub API (compare endpoint).
 
-    Returns None if the result is truncated (>300 files) to signal caller
-    should fall back to run_all_tests.
+    Returns None if the result may be truncated (300 files), so the caller
+    can obtain a complete diff using Git.
     """
     result = subprocess.run(
         [
@@ -185,11 +187,66 @@ def get_modified_paths_api(
     )
     data = json.loads(result.stdout)
     files = data.get("files", [])
-    # GitHub compare API returns max 300 files; if truncated, fall back to run-all
+    # GitHub compare API returns at most 300 files, even with pagination.
     if len(files) >= 300:
         logger.warning("Compare API returned 300+ files, result may be truncated")
         return None
-    return {f["filename"] for f in files}
+    paths = {f["filename"] for f in files}
+    paths.update(f["previous_filename"] for f in files if "previous_filename" in f)
+    return paths
+
+
+def get_modified_paths_git(github_repo: str, base_sha: str, head_sha: str) -> set[str]:
+    """Compute a complete three-dot diff without relying on the caller's checkout.
+
+    Callers may check out only CI configuration at a shallow merge commit. Fetch
+    the two event commits into a temporary bare repository instead. A tree filter
+    keeps the full commit graph needed for merge-base computation; Git downloads
+    the trees needed for the diff on demand, without fetching file contents.
+    """
+    for sha in (base_sha, head_sha):
+        if not re.fullmatch(r"[0-9a-fA-F]{40}|[0-9a-fA-F]{64}", sha):
+            raise ValueError(f"Expected a full commit SHA, got {sha!r}")
+
+    with tempfile.TemporaryDirectory(prefix="therock-ci-diff-") as directory:
+
+        def git(*args: str) -> str:
+            return subprocess.run(
+                ["git", "-C", directory, *args],
+                capture_output=True,
+                encoding="utf-8",
+                errors="surrogateescape",
+                check=True,
+                timeout=180,
+                env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+            ).stdout
+
+        git("init", "--bare")
+        git("remote", "add", "origin", f"https://github.com/{github_repo}.git")
+        git("config", "remote.origin.promisor", "true")
+        git("config", "remote.origin.partialclonefilter", "tree:0")
+        git(
+            "fetch",
+            "--filter=tree:0",
+            "--no-tags",
+            "--no-recurse-submodules",
+            "origin",
+            base_sha,
+            head_sha,
+        )
+        # Report both sides of a rename so moving a file between projects tests
+        # both projects. NUL delimiters preserve spaces, newlines and Unicode.
+        output = git(
+            "diff",
+            "--name-only",
+            "--no-renames",
+            "--no-ext-diff",
+            "--no-textconv",
+            "-z",
+            f"{base_sha}...{head_sha}",
+            "--",
+        )
+        return {path for path in output.split("\0") if path}
 
 
 def matches_patterns(paths: Iterable[str], patterns: Iterable[str]) -> bool:
@@ -318,24 +375,35 @@ def configure(
             changed_projects="", run_all_tests=True, skip_tests=False, test_type="quick"
         )
 
-    # Get modified paths via GitHub API
-    if event_name == "pull_request" and base_sha and head_sha:
-        logger.info(f"Getting PR diff via API: {base_sha}...{head_sha}")
-        modified_paths = get_modified_paths_api(github_repo, base_sha, head_sha)
-    elif event_name == "push" and base_sha and head_sha:
-        # For push, the caller passes github.event.before as base_sha;
-        # the compare API does not understand git "^" ancestry syntax.
-        logger.info(f"Getting push diff via API: {base_sha}...{head_sha}")
-        modified_paths = get_modified_paths_api(github_repo, base_sha, head_sha)
-    else:
+    if not base_sha or not head_sha:
         logger.warning("No SHAs provided - running all tests")
         return ConfigureResult(
             changed_projects="", run_all_tests=True, skip_tests=False, test_type="quick"
         )
 
-    # If API returned None (truncated results), fall back to run-all
+    # For push, base_sha is github.event.before. Both paths retain the compare
+    # endpoint's three-dot semantics.
+    logger.info(f"Getting {event_name} diff via API: {base_sha}...{head_sha}")
+    try:
+        modified_paths = get_modified_paths_api(github_repo, base_sha, head_sha)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+        logger.warning("Compare API unavailable: %s", getattr(e, "stderr", None) or e)
+        modified_paths = None
+
     if modified_paths is None:
-        logger.info("Truncated API response - running all tests")
+        logger.info("Getting complete changed paths using Git")
+        try:
+            modified_paths = get_modified_paths_git(github_repo, base_sha, head_sha)
+        except (
+            subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+            OSError,
+            ValueError,
+        ) as e:
+            logger.warning("Git diff unavailable: %s", getattr(e, "stderr", None) or e)
+
+    if modified_paths is None:
+        logger.warning("Cannot determine changed paths - running all tests")
         return ConfigureResult(
             changed_projects="", run_all_tests=True, skip_tests=False, test_type="quick"
         )

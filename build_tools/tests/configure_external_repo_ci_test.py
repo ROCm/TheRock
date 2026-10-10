@@ -4,8 +4,11 @@
 
 """Tests for configure_external_repo_ci.py."""
 
+import json
 import os
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -18,6 +21,8 @@ from configure_external_repo_ci import (
     RepoEntry,
     configure,
     find_matched_subtrees,
+    get_modified_paths_api,
+    get_modified_paths_git,
     get_unclassified_paths,
     get_valid_prefixes,
     has_non_skippable,
@@ -25,6 +30,142 @@ from configure_external_repo_ci import (
     load_repo_config,
     matches_patterns,
 )
+
+
+class GitDiffFallbackTest(unittest.TestCase):
+    """Exercise the fallback against real, divergent Git histories."""
+
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.repo = Path(self.temp.name) / "remote"
+        self.repo.mkdir()
+        self.env = patch.dict(
+            os.environ,
+            {
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_CONFIG_GLOBAL": os.devnull,
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": f"url.{self.repo.as_uri()}.insteadOf",
+                "GIT_CONFIG_VALUE_0": "https://github.com/ROCm/ci-test.git",
+            },
+        )
+        self.env.start()
+        self.addCleanup(self.env.stop)
+        self.git("init", "-b", "main")
+        self.git("config", "user.name", "CI test")
+        self.git("config", "user.email", "ci-test@example.invalid")
+        self.git("config", "uploadpack.allowFilter", "true")
+        self.git("config", "uploadpack.allowAnySHA1InWant", "true")
+        self.write("projects/rocblas/deleted.cpp", "delete me")
+        self.write("projects/rocblas/moved.cpp", "move me")
+        ancestor = self.commit()
+        self.write("projects/miopen/base-only.cpp", "unrelated base change")
+        self.base = self.commit()
+        self.git("checkout", "-b", "pr", ancestor)
+        (self.repo / "projects/rocblas/deleted.cpp").unlink()
+        self.write("projects/hipblas/moved café file.cpp", "move me")
+        (self.repo / "projects/rocblas/moved.cpp").unlink()
+        self.paths = {
+            "projects/rocblas/deleted.cpp",
+            "projects/rocblas/moved.cpp",
+            "projects/hipblas/moved café file.cpp",
+        }
+        for i in range(301):
+            path = f"projects/rocblas/logic/{i}.txt"
+            self.write(path, "logic data")
+            self.paths.add(path)
+        self.head = self.commit()
+        self.config = Path(self.temp.name) / "repos-config.json"
+        self.config.write_text(
+            json.dumps(
+                {
+                    "repositories": [
+                        {
+                            "name": name,
+                            "category": "projects",
+                            "url": "",
+                            "branch": "main",
+                        }
+                        for name in ("rocblas", "hipblas", "miopen")
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def git(self, *args: str) -> str:
+        return subprocess.check_output(
+            ["git", "-C", str(self.repo), *args], stderr=subprocess.PIPE, text=True
+        ).strip()
+
+    def write(self, path: str, data: str) -> None:
+        target = self.repo / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(data, encoding="utf-8")
+
+    def commit(self) -> str:
+        self.git("add", ".")
+        self.git("commit", "-m", "test fixture")
+        return self.git("rev-parse", "HEAD")
+
+    def test_api_failure_or_truncation_selects_changed_projects(self) -> None:
+        api_error = subprocess.CalledProcessError(
+            1, ["gh", "api"], stderr="HTTP 422: diff is taking too long to generate"
+        )
+        for error in (api_error, None):
+            with self.subTest(error=error), patch(
+                "configure_external_repo_ci.get_modified_paths_api",
+                side_effect=error,
+                return_value=None,
+            ):
+                result = configure(
+                    "pull_request",
+                    "ROCm/ci-test",
+                    self.base,
+                    self.head,
+                    str(self.config),
+                )
+                self.assertEqual(
+                    result.changed_projects, "projects/hipblas,projects/rocblas"
+                )
+                self.assertFalse(result.skip_tests)
+                self.assertFalse(result.run_all_tests)
+
+    def test_git_diff_preserves_all_paths_and_merge_base(self) -> None:
+        paths = get_modified_paths_git("ROCm/ci-test", self.base, self.head)
+        self.assertEqual(paths, self.paths)
+
+    def test_unavailable_commit_runs_all_tests(self) -> None:
+        with patch(
+            "configure_external_repo_ci.get_modified_paths_api", return_value=None
+        ):
+            result = configure(
+                "pull_request", "ROCm/ci-test", self.base, "0" * 40, str(self.config)
+            )
+        self.assertFalse(result.skip_tests)
+        self.assertTrue(result.run_all_tests)
+
+
+class CompareApiPathsTest(unittest.TestCase):
+    def test_rename_includes_both_projects(self) -> None:
+        payload = {
+            "files": [
+                {
+                    "filename": "projects/hipblas/moved.cpp",
+                    "previous_filename": "projects/rocblas/moved.cpp",
+                    "status": "renamed",
+                }
+            ]
+        }
+        with patch(
+            "configure_external_repo_ci.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout=json.dumps(payload)),
+        ):
+            paths = get_modified_paths_api("ROCm/ci-test", "base", "head")
+        self.assertEqual(
+            paths, {"projects/rocblas/moved.cpp", "projects/hipblas/moved.cpp"}
+        )
 
 
 class IsSkippableTest(unittest.TestCase):
