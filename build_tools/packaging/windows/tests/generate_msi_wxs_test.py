@@ -524,11 +524,50 @@ class TestBuildWxs(unittest.TestCase):
             set_dirs = [s.get("Id") for s in root.iter(_ns("SetDirectory"))]
             self.assertIn("InstallDir", set_dirs)
 
-    def test_no_legacy_system32_cleanup(self):
+    def test_legacy_system32_cleanup_uses_removefile_not_customaction(self):
+        # Cleanup is declarative WiX <RemoveFile>, never a shell CustomAction.
         with tempfile.TemporaryDirectory() as tmp:
             root = self._run(tmp, self._minimal_specs("runtime"))
             actions = [ca.get("Id") for ca in root.iter(_ns("CustomAction"))]
             self.assertNotIn("RemoveLegacyROCmDlls", actions)
+            self.assertEqual(actions, [])
+
+    def test_legacy_system32_cleanup_removes_all_declared_dlls(self):
+        # A default (non-legacy) install scrubs every declared legacy DLL name
+        # from System32, on both install and uninstall.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._run(tmp, self._minimal_specs("runtime"))
+            removes = {
+                rf.get("Name"): rf.get("On") for rf in root.iter(_ns("RemoveFile"))
+            }
+            for dll in PACKAGES["runtime"].legacy_system32_dlls:
+                self.assertEqual(removes.get(dll), "both", f"{dll} not removed On=both")
+
+    def test_legacy_cleanup_feature_is_mutually_exclusive_with_install(self):
+        # LegacyCleanup is on by default (Level 1) and dropped to Level 0 when
+        # LEGACY_INSTALL=1, the mirror of LegacyInstall — so a single install
+        # never both places and removes the same DLL.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._run(tmp, self._minimal_specs("runtime"))
+            cleanup = next(
+                f for f in root.iter(_ns("Feature")) if f.get("Id") == "LegacyCleanup"
+            )
+            self.assertEqual(cleanup.get("Level"), "1")
+            override = cleanup.find(_ns("Level"))
+            self.assertEqual(override.get("Value"), "0")
+            self.assertEqual(override.get("Condition"), 'LEGACY_INSTALL = "1"')
+
+    def test_single_system64_directory_shared(self):
+        # Both the install and cleanup features target System64Folder; WiX
+        # rejects a duplicate StandardDirectory Id, so exactly one is emitted.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._run(tmp, self._minimal_specs("runtime"))
+            sys_dirs = [
+                s
+                for s in root.iter(_ns("StandardDirectory"))
+                if s.get("Id") == "System64Folder"
+            ]
+            self.assertEqual(len(sys_dirs), 1)
 
     def test_component_refs_match_components(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -885,6 +924,32 @@ class TestBuildWxsHelpers(unittest.TestCase):
         self.assertIsNone(doc.package.find(_ns("StandardDirectory")))
         feature_ids = {f.get("Id") for f in doc.package.findall(_ns("Feature"))}
         self.assertNotIn("LegacyInstall", feature_ids)
+        # No DLLs declared => neither install nor cleanup feature is emitted.
+        self.assertNotIn("LegacyCleanup", feature_ids)
+
+    def test_legacy_system32_feature_is_opt_in(self):
+        # The System32 copies are opt-in: the feature defaults to Level 0 (not
+        # installed) and is raised to Level 1 only when LEGACY_INSTALL=1. The
+        # LEGACY_INSTALL property defaults to "0". Guards against regressing to
+        # the old install-by-default behavior.
+        doc = create_wix_document(PACKAGES["runtime"], "1.2.3")
+        prop = next(
+            p
+            for p in doc.package.iter(_ns("Property"))
+            if p.get("Id") == "LEGACY_INSTALL"
+        )
+        self.assertEqual(prop.get("Value"), "0")
+
+        add_legacy_system32_feature(doc, [("amdhip64_7.dll", Path("amdhip64_7.dll"))])
+        feature = next(
+            f
+            for f in doc.package.findall(_ns("Feature"))
+            if f.get("Id") == "LegacyInstall"
+        )
+        self.assertEqual(feature.get("Level"), "0")
+        level_override = feature.find(_ns("Level"))
+        self.assertEqual(level_override.get("Value"), "1")
+        self.assertEqual(level_override.get("Condition"), 'LEGACY_INSTALL = "1"')
 
 
 if __name__ == "__main__":

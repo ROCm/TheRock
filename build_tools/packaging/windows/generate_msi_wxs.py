@@ -763,8 +763,11 @@ def create_wix_document(package: PackageDef, version: str) -> WixDocument:
         pkg, _tag("Property"), Id="ENABLE_LONG_PATHS", Value="1", Secure="yes"
     )
     ET.SubElement(pkg, _tag("Property"), Id="INSTALLFOLDER", Secure="yes")
-    # Legacy System32 install is on by default; set LEGACY_INSTALL=0 to disable.
-    ET.SubElement(pkg, _tag("Property"), Id="LEGACY_INSTALL", Value="1", Secure="yes")
+    # Legacy System32 install is off by default; set LEGACY_INSTALL=1 to enable.
+    # The current runtime DLLs are already installed under the install dir's bin/
+    # and reachable via PATH, so copying them into System32 is opt-in for apps
+    # that load ROCm DLLs from System32 rather than PATH.
+    ET.SubElement(pkg, _tag("Property"), Id="LEGACY_INSTALL", Value="0", Secure="yes")
     # When INSTALLFOLDER is set on the command line, redirect InstallDir to it.
     # Runs in both UI and execute sequences so repair/modify picks it up too.
     ET.SubElement(
@@ -974,32 +977,59 @@ def add_long_paths_feature(doc: WixDocument, package: PackageDef) -> None:
     ET.SubElement(feature, _tag("ComponentRef"), Id="LongPathsEnable")
 
 
+def _get_or_create_system64_dir(doc: WixDocument) -> ET.Element:
+    """Return the shared System64Folder <StandardDirectory>, creating it once.
+
+    System64Folder is the real C:\\Windows\\System32 in an x64 package;
+    SystemFolder resolves to the WOW64-redirected SysWOW64 regardless of package
+    architecture, which is not what we want for 64-bit DLLs. Both the legacy
+    install feature and the cleanup feature target it, and WiX rejects a second
+    StandardDirectory with the same Id, so it is cached on the document.
+    """
+    cached = doc.directory_cache.get("System64Folder")
+    if cached is None:
+        cached = ET.SubElement(
+            doc.package, _tag("StandardDirectory"), Id="System64Folder"
+        )
+        doc.directory_cache["System64Folder"] = cached
+    return cached
+
+
 def add_legacy_system32_feature(
     doc: WixDocument, legacy_dlls: list[tuple[str, Path]]
 ) -> None:
-    """Add the legacy System32 DLL feature (on unless LEGACY_INSTALL=0).
+    """Add the opt-in legacy System32 DLL feature plus its cleanup counterpart.
 
-    No-op when the package has no legacy DLLs to install.
+    The two features are mutually exclusive, keyed off LEGACY_INSTALL (default
+    "0"):
+      - LegacyInstall (Level 0 by default; raised to 1 when LEGACY_INSTALL=1)
+        copies the DLLs into System32.
+      - LegacyCleanup (Level 1 by default; dropped to 0 when LEGACY_INSTALL=1)
+        removes those same DLL names from System32 on both install and
+        uninstall, so a default (non-legacy) install scrubs stale copies left by
+        an AMD driver, an older ROCm installer, or a prior LEGACY_INSTALL=1
+        install that would otherwise shadow the runtime shipped under bin/.
+
+    No file is both installed and removed by a single install because exactly one
+    of the two features is active for any given LEGACY_INSTALL value.
+
+    No-op when the package declares no legacy DLLs.
     """
     if not legacy_dlls:
         return
 
-    # System64Folder is the real C:\Windows\System32 in an x64 package;
-    # SystemFolder resolves to the WOW64-redirected SysWOW64 regardless of
-    # package architecture, which is not what we want for 64-bit DLLs.
-    system_dir = ET.SubElement(
-        doc.package, _tag("StandardDirectory"), Id="System64Folder"
-    )
+    system_dir = _get_or_create_system64_dir(doc)
     feature = ET.SubElement(
         doc.package,
         _tag("Feature"),
         Id="LegacyInstall",
         Title="Legacy System32 DLLs",
-        Level="1",
+        Level="0",
     )
-    # Turn the feature off when LEGACY_INSTALL=0. Default property value
-    # is "1", so the feature is enabled unless explicitly disabled.
-    ET.SubElement(feature, _tag("Level"), Value="0", Condition='LEGACY_INSTALL = "0"')
+    # Turn the feature on when LEGACY_INSTALL=1. Default feature Level is 0
+    # (not installed) and the default property value is "0", so System32 copies
+    # are opt-in and installed only when explicitly requested.
+    ET.SubElement(feature, _tag("Level"), Value="1", Condition='LEGACY_INSTALL = "1"')
     for dll_name, source in legacy_dlls:
         install_rel = Path("System32") / dll_name
         comp_id = make_id(install_rel, "c")
@@ -1018,6 +1048,63 @@ def add_legacy_system32_feature(
             KeyPath="yes",
         )
         ET.SubElement(feature, _tag("ComponentRef"), Id=comp_id)
+
+    add_legacy_system32_cleanup_feature(doc, system_dir, legacy_dlls)
+
+
+def add_legacy_system32_cleanup_feature(
+    doc: WixDocument,
+    system_dir: ET.Element,
+    legacy_dlls: list[tuple[str, Path]],
+) -> None:
+    """Remove the declared legacy DLL names from System32 on a non-legacy install.
+
+    Uses declarative WiX <RemoveFile On="both"> (delete on install and
+    uninstall) rather than a shell CustomAction. The removals live in one
+    component whose keypath is an HKLM registry marker (System32 is not under the
+    install tree, so a file keypath there would be wrong); the component is
+    gated by the LegacyCleanup feature, which is off when LEGACY_INSTALL=1.
+    """
+    feature = ET.SubElement(
+        doc.package,
+        _tag("Feature"),
+        Id="LegacyCleanup",
+        Title="Remove Legacy System32 DLLs",
+        Level="1",
+    )
+    # Mirror image of LegacyInstall: drop this feature to Level 0 when the user
+    # opted into the System32 install, so the same install never both places and
+    # removes a DLL.
+    ET.SubElement(feature, _tag("Level"), Value="0", Condition='LEGACY_INSTALL = "1"')
+
+    component = ET.SubElement(
+        system_dir,
+        _tag("Component"),
+        Id="LegacyCleanup",
+        Guid=_stable_guid("System32", "LegacyCleanup"),
+    )
+    # System32 holds no install-owned file to anchor the keypath, so use an
+    # HKLM registry marker (the EnvPath/LongPaths convention for non-file
+    # components).
+    ET.SubElement(
+        component,
+        _tag("RegistryValue"),
+        Root="HKLM",
+        Key="Software\\AMD\\ROCm\\LegacyCleanup",
+        Name="Performed",
+        Value="1",
+        Type="integer",
+        KeyPath="yes",
+    )
+    for dll_name, _ in legacy_dlls:
+        ET.SubElement(
+            component,
+            _tag("RemoveFile"),
+            Id=make_id(Path("System32Cleanup") / dll_name, "rf"),
+            Name=dll_name,
+            On="both",
+        )
+    ET.SubElement(feature, _tag("ComponentRef"), Id="LegacyCleanup")
 
 
 def write_wxs(root: ET.Element, output_path: Path) -> None:
