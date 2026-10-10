@@ -21,8 +21,6 @@ Example::
         --pkg-type deb
 """
 
-from __future__ import annotations
-
 import argparse
 import sys
 from dataclasses import dataclass, field
