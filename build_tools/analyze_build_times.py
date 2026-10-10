@@ -46,7 +46,7 @@ NAME_MAPPING = {
     "ocl-clr": "core-ocl",
     "ROCR-Runtime": "core-runtime",
     "blas": "rocBLAS",
-    "prim": "rocPRIM",
+    "prim": "hipCCL",
     "fft": "rocFFT",
     "rand": "rocRAND",
     "miopen": "MIOpen",
