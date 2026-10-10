@@ -412,7 +412,11 @@ def download_llvm_for_triton_windows(triton_dir: Path) -> Path:
 
         print("  Downloading (this may take a few minutes, ~500MB)...")
         try:
-            urllib.request.urlretrieve(download_url, download_path)
+            urllib.request.urlretrieve(
+                download_url,
+                download_path,
+                # Fixed HTTPS LLVM endpoint.
+            )  # nosec B310
         except Exception as e:
             raise RuntimeError(
                 f"Failed to download LLVM from {download_url}: {e}\n"
@@ -1218,7 +1222,8 @@ def do_build_pytorch(
         # libdrm/drm.h.
         rocm_dir = get_rocm_path("root")
         sysdeps_dir = rocm_dir / "lib" / "rocm_sysdeps"
-        assert sysdeps_dir.exists(), f"No sysdeps directory found: {sysdeps_dir}"
+        if not sysdeps_dir.exists():
+            raise FileNotFoundError(f"No sysdeps directory found: {sysdeps_dir}")
         add_env_compiler_flags(env, "CXXFLAGS", f"-I{sysdeps_dir / 'include'}")
         # Add correct include path for roctracer.h (for Kineto)
         add_env_compiler_flags(
