@@ -366,18 +366,25 @@ class TestShouldSkipCI(unittest.TestCase):
     def test_asan_pr_without_label_skips(self):
         """ASAN PR without enabling label skips CI."""
         inputs = self._inputs(build_variant="asan", pr_labels=[])
-        git = cm.GitContext(
-            changed_files=["CMakeLists.txt", "build_tools/script.py"],
-        )
-        self.assertTrue(cm.should_skip_ci(inputs, git))
+        for changed_files in (
+            ["CMakeLists.txt", "build_tools/script.py"],
+            ["compiler/amd-llvm"],
+        ):
+            with self.subTest(changed_files=changed_files):
+                git = cm.GitContext(
+                    changed_files=changed_files, submodule_paths=["compiler/amd-llvm"]
+                )
+                self.assertTrue(cm.should_skip_ci(inputs, git))
 
-    def test_asan_pr_with_ci_asan_label_runs(self):
-        """ASAN PR with ci:asan label runs CI."""
-        inputs = self._inputs(build_variant="asan", pr_labels=["ci:asan"])
+    def test_asan_pr_with_enabling_label_runs(self):
+        """Each sanitizer label opts a PR into ASAN CI."""
         git = cm.GitContext(
             changed_files=["CMakeLists.txt", "build_tools/script.py"],
         )
-        self.assertFalse(cm.should_skip_ci(inputs, git))
+        for label in ("ci:asan-debug", "ci:asan", "ci:host-asan"):
+            with self.subTest(label=label):
+                inputs = self._inputs(build_variant="asan", pr_labels=[label])
+                self.assertFalse(cm.should_skip_ci(inputs, git))
 
     def test_asan_non_pr_runs(self):
         """ASAN on schedule/push runs regardless of labels."""
@@ -2281,6 +2288,47 @@ class TestWriteOutputs(unittest.TestCase):
 
 class TestConfigurePipeline(unittest.TestCase):
     """Test the full pipeline via configure()."""
+
+    def test_asan_label_selection(self):
+        """Labels select sanitizer builds independently of submodule changes."""
+        cases = (
+            ([], None),
+            (["ci:host-asan"], "host-asan"),
+            (["ci:asan"], "asan"),
+            (["ci:asan-debug"], "asan-debug"),
+            (["ci:asan", "ci:host-asan"], "asan"),
+            (["ci:asan-debug", "ci:asan", "ci:host-asan"], "asan-debug"),
+            (["ci:asan-debug", "ci:skip"], None),
+        )
+        for path in ("CMakeLists.txt", "compiler/amd-llvm"):
+            git = cm.GitContext(
+                changed_files=[path], submodule_paths=["compiler/amd-llvm"]
+            )
+            for labels, expected_variant in cases:
+                with self.subTest(path=path, labels=labels):
+                    inputs = cm.CIInputs(
+                        run_id="12345",
+                        event_name="pull_request",
+                        commit_ref="feature",
+                        base_ref="HEAD^",
+                        build_variant="asan",
+                        pr_labels=labels,
+                        linux_amdgpu_families=["gfx94x", "gfx950"],
+                    )
+                    result = cm.configure(inputs, git)
+                    self.assertEqual(result.is_ci_enabled, expected_variant is not None)
+                    if expected_variant is None:
+                        continue
+                    linux = result.builds.linux
+                    self.assertEqual(linux.build_variant_label, expected_variant)
+                    self.assertEqual(
+                        linux.build_variant_cmake_preset,
+                        f"linux-release-{expected_variant}",
+                    )
+                    self.assertEqual(
+                        [entry["test-runs-on"] for entry in linux.per_family_info],
+                        ["", ""],
+                    )
 
     def test_skipped_outputs(self):
         """CIOutputs.skipped produces empty, disabled outputs."""
