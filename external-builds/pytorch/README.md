@@ -425,10 +425,9 @@ If you want to make changes to PyTorch source code, prefer in this order:
 1. Contributing to downstream `release/` branches in forked repositories
 
 > [!NOTE]
-> We used to support applying git patches as part of checkout out PyTorch
-> repositories. This system has been removed as ROCm-specific changes are now
-> maintained in the https://github.com/ROCm/pytorch/ fork rather than as patch
-> files.
+> Prefer landing changes in `ROCm/pytorch`. `--patchset <name>` still applies
+> `patches/pytorch/<name>/<repo>/{base,hipified}` with `git am` around HIPIFY.
+> `--no-patch` skips that. `save-patches` writes local commits back.
 
 ### Checking out PyTorch repositories
 

@@ -63,6 +63,12 @@ on:
           pre-merge testing). Defaults to ROCm/pytorch for stable refs.
         type: string
         default: ""
+      pytorch_patchset:
+        description: >-
+          Optional patchset under external-builds/pytorch/patches. Applied to
+          the torch checkout when set. Leave empty to skip.
+        type: string
+        default: ""
       rocm_version:
         description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
         type: string
@@ -137,6 +143,12 @@ on:
         description: >-
           Optional PyTorch git origin override (for example, a fork URL for
           pre-merge testing). Defaults to ROCm/pytorch for stable refs.
+        type: string
+        default: ""
+      pytorch_patchset:
+        description: >-
+          Optional patchset under external-builds/pytorch/patches. Applied to
+          the torch checkout when set. Leave empty to skip.
         type: string
         default: ""
       rocm_version:
@@ -218,6 +230,7 @@ jobs:
       PYTHON_VERSION: ${{ inputs.python_version }}
       PYTORCH_GITREPO_ORIGIN: ${{ inputs.pytorch_gitrepo_origin }}
       PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
+      PYTORCH_PATCHSET: ${{ inputs.pytorch_patchset }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       CACHE_TYPE: ${{ inputs.cache_type }}
@@ -326,9 +339,14 @@ jobs:
         timeout-minutes: 30
         run: |
           git config --global core.longpaths true
+          patchset_args=()
+          if [ -n "${PYTORCH_PATCHSET}" ]; then
+            patchset_args+=(--patchset "${PYTORCH_PATCHSET}")
+          fi
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
             --repo-hashtag nightly \
+            "${patchset_args[@]}" \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_audio \
@@ -348,10 +366,15 @@ jobs:
           if [ -z "${pytorch_origin}" ]; then
             pytorch_origin="https://github.com/ROCm/pytorch.git"
           fi
+          patchset_args=()
+          if [ -n "${PYTORCH_PATCHSET}" ]; then
+            patchset_args+=(--patchset "${PYTORCH_PATCHSET}")
+          fi
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
             --gitrepo-origin "${pytorch_origin}" \
             --repo-hashtag "${PYTORCH_GIT_REF}" \
+            "${patchset_args[@]}" \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_audio \
