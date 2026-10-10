@@ -846,6 +846,49 @@ class TestS3StorageBackendListFiles(unittest.TestCase):
 
         self.assertEqual(len(files), 2)
 
+    def test_lists_keys_nested_below_the_prefix(self):
+        """Keys below the prefix survive the include filtering.
+
+        Callers rely on listing being recursive. publish_native_linux_packages
+        copies a whole package repository with one copy_directory call, and the
+        amdrocm-repo bootstrap package sits two levels down under
+        repo/<os-profile>/.
+
+        This covers the half of that guarantee that lives in this method, which
+        is that a nested key is returned rather than skipped. The other half is
+        that the request itself is recursive, and the paginator is mocked here
+        so this test cannot see it. test_paginate_passes_no_delimiter covers it.
+        """
+        pages = [
+            {
+                "Contents": [
+                    {"Key": "run-1/packages/deb/pool/main/r/rocm/rocm.deb"},
+                    {"Key": "run-1/packages/deb/repo/ubuntu2404/amdrocm-repo.deb"},
+                ]
+            }
+        ]
+        backend = self._make_backend_with_pages(pages)
+        loc = StorageLocation("bucket", "run-1/packages/deb")
+
+        files = backend.list_files(loc)
+
+        self.assertEqual(
+            [f.relative_path for f in files],
+            [
+                "run-1/packages/deb/pool/main/r/rocm/rocm.deb",
+                "run-1/packages/deb/repo/ubuntu2404/amdrocm-repo.deb",
+            ],
+        )
+
+    def test_paginate_passes_no_delimiter(self):
+        """A Delimiter would turn the recursive listing above into one level."""
+        backend = self._make_backend_with_pages([{}])
+        mock_paginator = backend._s3_client.get_paginator.return_value
+
+        backend.list_files(StorageLocation("bucket", "run-1/packages/deb"))
+
+        self.assertNotIn("Delimiter", mock_paginator.paginate.call_args.kwargs)
+
     def test_paginate_uses_trailing_slash(self):
         """Prefix should end with / to list directory contents."""
         backend = self._make_backend_with_pages([{}])
