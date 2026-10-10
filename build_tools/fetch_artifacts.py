@@ -45,7 +45,10 @@ import shutil
 import sys
 
 from _therock_utils.archive_util import open_archive_for_read
-from _therock_utils.artifact_backend import ArtifactBackend, S3Backend
+from _therock_utils.artifact_backend import (
+    ArtifactBackend,
+    s3_backend_from_env,
+)
 from _therock_utils.os_util import rmtree_with_retry
 from _therock_utils.artifacts import (
     ArtifactName,
@@ -227,7 +230,10 @@ def run(args):
         github_repository=run_github_repo,
         lookup_workflow_run=True,
     )
-    backend = S3Backend(output_root=output_root)
+    # Route downloads through the node-local Dragonfly s3-shim when the runner
+    # sets THEROCK_ARTIFACT_HTTP_BASE (e.g. http://$NODE_IP:4011); otherwise
+    # behavior is unchanged (direct boto3 S3). Listing stays on boto3 either way.
+    backend = s3_backend_from_env(output_root)
 
     # Parse individual GPU targets (comma-separated string to list).
     amdgpu_targets = (

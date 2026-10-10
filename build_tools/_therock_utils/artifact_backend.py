@@ -330,6 +330,90 @@ class S3Backend(ArtifactBackend):
             return False
 
 
+class ShimS3Backend(S3Backend):
+    """S3Backend that DOWNLOADS via a node-local Dragonfly s3-shim (plain HTTP
+    GET) instead of boto3, so repeat artifact pulls serve P2P from the mesh and
+    cut direct S3 egress. Only download_artifact is redirected; list/exists/
+    upload/copy stay on boto3 (metadata + CI-publish paths, not egress-heavy).
+
+    The shim 302s the artifact GET to the node dfdaemon, which back-sources the
+    real object via a proxy rule, so the request path must be the PATH-STYLE
+    object path ``/{bucket}/{key}`` (per-run buckets work behind one shim). Reads
+    are already anonymous against a public bucket, so nothing is lost over HTTP.
+    Enabled by THEROCK_ARTIFACT_HTTP_BASE (e.g. http://$NODE_IP:4011).
+    """
+
+    def __init__(self, output_root: WorkflowOutputRoot, shim_base: str):
+        super().__init__(output_root=output_root)
+        self._shim_base = shim_base.rstrip("/")
+
+    def download_artifact(self, artifact_key: str, dest_path: Path) -> None:
+        """Download via the shim (HTTP GET), atomically, with length check.
+
+        On any shim/dfdaemon failure OTHER than a genuine 404, fall back to the
+        boto3 S3 path (``super().download_artifact``) so routing through the shim
+        can never make CI worse than a direct S3 pull — e.g. a dfdaemon 403 for a
+        bucket the proxy rule doesn't cover, a shim outage, or a truncated read.
+        A real 404 is a missing artifact and surfaces as FileNotFoundError (the
+        caller treats that as "skip"), exactly like S3Backend.
+        """
+        import urllib.error
+        import urllib.request
+
+        loc = self.output_root.artifact(artifact_key)
+        url = f"{self._shim_base}/{self.bucket}/{loc.relative_path}"
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = dest_path.with_name(dest_path.name + ".part")
+        try:
+            with urllib.request.urlopen(url, timeout=600) as resp:
+                expected = resp.headers.get("Content-Length")
+                written = 0
+                with open(tmp, "wb") as f:
+                    while chunk := resp.read(1 << 20):
+                        f.write(chunk)
+                        written += len(chunk)
+            # Guard against a silent short read poisoning the download cache
+            # (the caller treats an existing file as "cached — skip").
+            if expected is not None and written != int(expected):
+                raise IOError(
+                    f"short read {written}/{expected} bytes for {artifact_key}"
+                )
+            os.replace(tmp, dest_path)
+            return
+        except urllib.error.HTTPError as e:
+            tmp.unlink(missing_ok=True)
+            # 404 is treated as a genuine missing object (skip, no S3 fallback).
+            # This assumes dfdaemon surfaces a proxy-rule/back-source error as
+            # 403/5xx (which DOES fall back below), and only passes through a real
+            # upstream 404. If a future dfdaemon returned 404 for an unmapped rule,
+            # an existing artifact would be silently skipped instead of retried on
+            # S3 -- monitor this if the shim is widened past the canary.
+            if e.code == 404:
+                raise FileNotFoundError(artifact_key) from e
+            reason = f"HTTP {e.code}"
+        except Exception as e:  # noqa: BLE001 - any shim/network error -> S3 fallback
+            tmp.unlink(missing_ok=True)
+            reason = type(e).__name__
+        # Non-404 shim failure: fall back to direct S3 so the shim can never make
+        # CI worse than today (a returned-None here would look like a missing
+        # artifact to artifact_manager.download_artifact).
+        print(
+            f"  !! shim download failed ({reason}) for {artifact_key}; falling back to S3",
+            flush=True,
+        )
+        super().download_artifact(artifact_key, dest_path)
+
+
+def s3_backend_from_env(output_root: WorkflowOutputRoot) -> S3Backend:
+    """Return a ShimS3Backend when THEROCK_ARTIFACT_HTTP_BASE is set (route
+    downloads through the node-local Dragonfly s3-shim), else a plain S3Backend.
+    Off the shim env, behavior is byte-identical to before."""
+    shim_base = os.getenv("THEROCK_ARTIFACT_HTTP_BASE")
+    if shim_base:
+        return ShimS3Backend(output_root=output_root, shim_base=shim_base)
+    return S3Backend(output_root=output_root)
+
+
 def create_backend_from_env(
     run_id: Optional[str] = None,
     github_repository: Optional[str] = None,
@@ -365,4 +449,4 @@ def create_backend_from_env(
     output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=run_id, platform=platform_name, github_repository=github_repository
     )
-    return S3Backend(output_root=output_root)
+    return s3_backend_from_env(output_root)
