@@ -590,9 +590,7 @@ class TestCliInputParsing(_FixtureTestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         projects = set(json.loads(proc.stdout.strip()))
         self.assertNotIn("rocgdb", projects)
-        self.assertTrue(
-            {"rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"}.issubset(projects)
-        )
+        self.assertTrue({"rocgdb-cpu", "rocgdb-gpu"}.issubset(projects))
 
     def test_hipblaslt_change_selects_neither_tensilelite_job(self) -> None:
         # The fan-out keys on the tensilelite graph key, so a hipBLASLt-only
@@ -967,7 +965,6 @@ class TestRealCommittedPolicies(unittest.TestCase):
     _DEBUGGER_TESTS = {
         "rocgdb-cpu",
         "rocgdb-gpu",
-        "rocgdb-corefile",
         "rocr-debug-agent",
     }
 

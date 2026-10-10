@@ -22,7 +22,7 @@ import subprocess
 import sys
 from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from urllib.request import urlopen, Request
 
 
@@ -188,10 +188,11 @@ class GitHubAPI:
         Raises:
             GitHubAPIError: If the request fails for any reason.
         """
-        assert self._gh_cli_path is not None, (
-            "_send_request_via_gh_cli called without gh CLI path set. "
-            "Call get_auth_method() first."
-        )
+        if self._gh_cli_path is None:
+            raise AssertionError(
+                "_send_request_via_gh_cli called without gh CLI path set. "
+                "Call get_auth_method() first."
+            )
 
         # Strip the base URL to get the API path
         api_path = url.removeprefix("https://api.github.com")
@@ -249,6 +250,8 @@ class GitHubAPI:
         Raises:
             GitHubAPIError: If the request fails for any reason.
         """
+        if urlsplit(url).scheme != "https" or not urlsplit(url).netloc:
+            raise GitHubAPIError(f"Expected an HTTPS API URL: {url}")
         headers = self._get_request_headers()
         data: bytes | None = None
         if body is not None:
@@ -257,14 +260,18 @@ class GitHubAPI:
         request = Request(url, data=data, headers=headers, method=method)
 
         try:
-            with urlopen(request, timeout=timeout_seconds) as response:
+            with urlopen(
+                request,
+                timeout=timeout_seconds,
+                # HTTPS URL checked above.
+            ) as response:  # nosec B310
                 response_body = response.read().decode("utf-8")
         except HTTPError as e:
             # Try to read the error response body for more context
             error_body = ""
             try:
                 error_body = e.read().decode("utf-8")
-            except Exception:
+            except (OSError, UnicodeError):
                 pass  # If we can't read it, continue with generic message
 
             if e.code == 403:
