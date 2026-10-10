@@ -94,6 +94,7 @@
       "hipsparselt",
       "hiptensor",
       "hipthreads",
+      "hrr",
       "libhipcxx",
       "miopen",
       "miopenprovider",
@@ -351,6 +352,7 @@
       "hipsparselt",
       "hiptensor",
       "hipthreads",
+      "hrr",
       "libhipcxx",
       "miopen",
       "ocl-clr",
@@ -563,6 +565,7 @@
   "therock-catch2": {
     "consumers": [
       "hip-tests",
+      "hrr",
       "origami",
       "rocroller"
     ]
@@ -880,6 +883,11 @@
       "rocm-kpack",
       "rocr-runtime",
       "therock-elfutils"
+    ]
+  },
+  "hrr": {
+    "consumers": [
+      "hip-tests"
     ]
   }
 }
