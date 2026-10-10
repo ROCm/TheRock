@@ -574,6 +574,8 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "sysdeps-amd-mesa",
         "sysdeps-expat",
         "sysdeps-gmp",
+        "sysdeps-hwloc",
+        "sysdeps-libpciaccess", 
         "sysdeps-mpfr",
         "sysdeps-ncurses",
         "sysdeps-util-linux",
