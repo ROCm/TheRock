@@ -52,8 +52,10 @@ project wide:
   - `THEROCK_BUNDLED_LIBLZMA`
   - `THEROCK_BUNDLED_LIBMNL`
   - `THEROCK_BUNDLED_LIBNL`
+  - `THEROCK_BUNDLED_LTTNG_UST`
   - `THEROCK_BUNDLED_NUMACTL`
   - `THEROCK_BUNDLED_SQLITE3`
+  - `THEROCK_BUNDLED_USERSPACE_RCU`
   - `THEROCK_BUNDLED_UTIL_LINUX`
   - `THEROCK_BUNDLED_ZLIB`
   - `THEROCK_BUNDLED_ZSTD`
@@ -166,6 +168,24 @@ Supported sub-libraries: `libnl` (core), `libnl-genl` (generic netlink)
 - Alternatives: `pkg_check_modules(LIBNL3_GENL REQUIRED IMPORTED_TARGET libnl-genl-3.0)`
 - Dependencies: Automatically links `libnl::libnl`
 
+## LTTng-UST
+
+The LTTng userspace tracer, used by the HIP/HSA curated tracepoint providers.
+Optional and **off by default** — enable with `-DTHEROCK_ENABLE_LTTNG=ON`
+(which also builds its userspace-rcu dependency). Only the default C/C++
+libraries are built; the Java (JNI) and Python agents are not. When toggling
+this in an existing build tree, also pass `-DTHEROCK_RESET_FEATURES=ON` once so
+the cached artifact-feature flags pick up the group change (see the development
+guide).
+
+- Canonical method: `pkg_check_modules(LTTNG_UST REQUIRED IMPORTED_TARGET lttng-ust)`
+- Import library: `PkgConfig::LTTNG_UST`
+- Vars: `LTTNG_UST_INCLUDE_DIRS`
+- Alternatives: `pkg_check_modules(LTTNG_UST_CTL REQUIRED IMPORTED_TARGET lttng-ust-ctl)`
+  for the control (`liblttng-ust-ctl`) library.
+- Note: liblttng-ust links `-ldl`; consumers loading tracepoint providers at
+  runtime should add the `lib/rocm_sysdeps/lib` RPATH.
+
 ## MPFR
 
 - Canonical method: `find_package(mpfr)`
@@ -222,6 +242,19 @@ Note: `libmount` links `libblkid` transitively, so consumers that only use
 - Canonical method: `pkg_check_modules(LIBBLKID REQUIRED IMPORTED_TARGET blkid)`
 - Import library: `PkgConfig::LIBBLKID`
 - Alternatives: none
+
+## userspace-rcu
+
+Userspace RCU (liburcu), a dependency of LTTng-UST. Built as part of the same
+optional `-DTHEROCK_ENABLE_LTTNG=ON` feature group. lttng-ust resolves it via
+pkg-config (headers / static inlines only — there is no `DT_NEEDED` on liburcu),
+so it is not usually depended on directly.
+
+- Canonical method: `pkg_check_modules(URCU REQUIRED IMPORTED_TARGET liburcu)`
+- Import library: `PkgConfig::URCU`
+- Alternatives: the flavored variants ship their own `.pc` files
+  (`liburcu-bp`, `liburcu-cds`, `liburcu-mb`, `liburcu-memb`, `liburcu-qsbr`,
+  `liburcu-signal`).
 
 ## zlib
 
