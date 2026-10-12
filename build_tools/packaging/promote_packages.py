@@ -157,7 +157,7 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
         "--src-version-type",
         help=(
             "Source marker to look for. 'rc' and 'a' match that prerelease segment. "
-            "'dev' matches the git<sha> local prefix that dev and dev-bkc PyTorch "
+            "'dev' matches the git<sha> local prefix that dev PyTorch "
             "builds add (e.g. 2.12.0+git1a2b3c4d.rocm7.13.0 -> 2.12.0+rocm7.13.0). "
             "Defaults to 'rc'."
         ),
@@ -445,7 +445,7 @@ def update_metadata_rocm_requires_dist(
                     print(line, end="")
 
 
-# dev/dev-bkc wheels prefix the local version with git<sha>. (build_prod_wheels.py).
+# dev wheels prefix the local version with git<sha>. (build_prod_wheels.py).
 _DEV_GIT_LOCAL_RE = re.compile(r"^git[0-9a-f]+\.")
 
 

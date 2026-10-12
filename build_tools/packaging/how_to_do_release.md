@@ -186,7 +186,7 @@ unchanged.
 
 ### Promoting dev (`git<sha>`) PyTorch builds
 
-`dev` and `dev-bkc` PyTorch builds record the source commit in the local
+`dev` PyTorch builds record the source commit in the local
 version (`2.12.0+git1a2b3c4d.rocm7.13.0`). `--src-version-type=dev` strips
 that prefix and leaves the ROCm suffix, which should already be a release
 version. Wheels without the `git<sha>.` prefix (for example apex) are skipped.
