@@ -8,6 +8,7 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
   list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
 endif()
 
+set(_miopen_enabled OFF)
 if(THEROCK_ENABLE_MIOPEN)
   set(_miopen_enabled ON)
   if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
@@ -20,6 +21,11 @@ if(THEROCK_ENABLE_MIOPEN)
     endif()
   endif()
 endif()
+# ml-libs is configured before examples; push the resolved value so the
+# cpp-sdk-user example can reflect MIOpen's actual built status (it is skipped
+# when filtered out for the selected gfx targets, e.g. amdgcnspirv) rather than
+# find_package()-ing a missing miopen. Mirrors _ck_enabled in math-libs.
+set(_miopen_enabled ${_miopen_enabled} PARENT_SCOPE)
 
 if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
   # MIOpen's CK use is gated on both the per-arch CK availability

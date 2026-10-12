@@ -286,6 +286,7 @@ if(THEROCK_ENABLE_PRIM)
   )
 endif(THEROCK_ENABLE_PRIM)
 
+set(_fft_enabled OFF)
 if(THEROCK_ENABLE_FFT)
   set(_fft_enabled ON)
   if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
@@ -298,6 +299,10 @@ if(THEROCK_ENABLE_FFT)
     endif()
   endif()
 endif()
+# Push to parent scope so the cpp-sdk-user example reflects FFT's actual built
+# status (skipped when filtered out, e.g. amdgcnspirv) rather than
+# find_package()-ing a missing rocfft/hipfft. Mirrors _ck_enabled.
+set(_fft_enabled ${_fft_enabled} PARENT_SCOPE)
 
 if(THEROCK_ENABLE_FFT AND _fft_enabled)
   if(WIN32)
@@ -481,6 +486,7 @@ if(THEROCK_ENABLE_ROCWMMA)
   )
 endif(THEROCK_ENABLE_ROCWMMA)
 
+set(_rocalution_enabled OFF)
 if(THEROCK_ENABLE_ROCALUTION)
   set(_rocalution_enabled ON)
   if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
@@ -493,6 +499,10 @@ if(THEROCK_ENABLE_ROCALUTION)
     endif()
   endif()
 endif()
+# Push to parent scope so the cpp-sdk-user example reflects rocALUTION's actual
+# built status (skipped when filtered out, e.g. amdgcnspirv) rather than
+# find_package()-ing a missing rocalution. Mirrors _ck_enabled.
+set(_rocalution_enabled ${_rocalution_enabled} PARENT_SCOPE)
 
 if(THEROCK_ENABLE_ROCALUTION AND _rocalution_enabled)
   ##############################################################################
