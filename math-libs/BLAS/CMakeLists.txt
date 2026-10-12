@@ -263,6 +263,19 @@ else()
   set(_blas_build_samples ${THEROCK_BUILD_TESTING})
 endif()
 
+# Tensile has no amdgcnspirv support: its TensileSupportedArchitectures.cmake
+# hard-rejects the target (true even on rocm-libraries develop). rocBLAS can
+# build without Tensile and route GEMM through hipBLASLt instead. When the gfx
+# target list contains amdgcnspirv, build rocBLAS hipBLASLt-only so the Tensile
+# arch validation is skipped.
+set(_rocblas_use_tensile ON)
+if("${THEROCK_AMDGPU_TARGETS}" MATCHES "amdgcnspirv")
+  message(STATUS
+    "rocBLAS: amdgcnspirv is unsupported by Tensile; building hipBLASLt-only "
+    "(BUILD_WITH_TENSILE=OFF).")
+  set(_rocblas_use_tensile OFF)
+endif()
+
 therock_cmake_subproject_declare(rocBLAS
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocblas"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocBLAS"
@@ -272,7 +285,7 @@ therock_cmake_subproject_declare(rocBLAS
     -DROCM_PATH=
     -DROCM_DIR=
     -Dhipblaslt_path=
-    -DBUILD_WITH_TENSILE=ON
+    -DBUILD_WITH_TENSILE=${_rocblas_use_tensile}
     -DBUILD_WITH_HIPBLASLT=ON
     # TODO: With `Tensile_TEST_LOCAL_PATH` set, the resulting build path is ${Tensile_TEST_LOCAL_PATH}/build.
     "-DTensile_TEST_LOCAL_PATH=${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile"
