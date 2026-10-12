@@ -27,7 +27,6 @@ CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_t
 # Importing is_asan from amdgpu_family_matrix.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from amdgpu_family_matrix import is_asan
-from configure_asan_env import get_asan_runtime_path
 
 env = os.environ.copy()
 
@@ -108,6 +107,8 @@ GENERIC_TEST_TO_IGNORE = [
 
 
 def get_asan_lib_path():
+    from configure_asan_env import get_asan_runtime_path
+
     return str(get_asan_runtime_path(THEROCK_BIN_DIR.resolve().parent))
 
 
