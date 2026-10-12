@@ -2495,7 +2495,7 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
 
     Key scenarios:
     - PR (presubmit): presubmit families build, presubmit tests run
-    - PR + ci:run-all-archs: ALL families build, only presubmit tests run
+    - PR + ci:run-all-archs: ALL families build AND test
     - PR + submodule changes: submodule_bump tests enabled
     - Push (postsubmit): presubmit+postsubmit families build/test
     - Schedule (nightly): ALL families build, nightly tests run
@@ -2677,8 +2677,8 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
                             f, tested, f"{f} should not be tested on {event}"
                         )
 
-    def test_pr_with_ci_run_all_archs_builds_all_but_filters_tests(self):
-        """ci:run-all-archs builds ALL families but still filters tests by trigger."""
+    def test_pr_with_ci_run_all_archs_builds_and_tests_all(self):
+        """ci:run-all-archs builds AND tests ALL families with test runners."""
         with patch(
             "configure_multi_arch_ci.get_all_families_for_trigger_types",
             side_effect=self._mock_get_all_families,
@@ -2696,12 +2696,21 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
             tested = self._get_tested_families(outputs)
 
             # All families should be built
-            for f in ["mock-primary", "mock-postsubmit-only", "mock-nightly-only"]:
-                self.assertIn(f, built)
-            # But only presubmit tests run
-            self.assertIn("mock-primary", tested)
-            self.assertNotIn("mock-nightly-only", tested)
-            self.assertNotIn("mock-postsubmit-only", tested)
+            for f in [
+                "mock-primary",
+                "mock-postsubmit-only",
+                "mock-nightly-only",
+                "mock-submodule-test",
+            ]:
+                self.assertIn(f, built, f"{f} should be built with ci:run-all-archs")
+            # All families with test runners should also be tested
+            for f in [
+                "mock-primary",
+                "mock-nightly-only",
+                "mock-postsubmit-only",
+                "mock-submodule-test",
+            ]:
+                self.assertIn(f, tested, f"{f} should be tested with ci:run-all-archs")
 
     def test_submodule_changes_enable_submodule_tests(self):
         """Submodule changes activate submodule_bump trigger for tests."""
@@ -2969,6 +2978,26 @@ class TestTriggerHelpers(unittest.TestCase):
                     cm.GitContext.empty(),
                 )
                 self.assertEqual(should_run, expected_run)
+
+    def test_should_run_tests_ci_run_all_archs_bypasses_trigger(self):
+        """ci:run-all-archs label bypasses trigger-based test gating."""
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="main",
+            build_variant="release",
+            pr_labels=["ci:run-all-archs"],
+        )
+        for triggers in [["nightly"], [], ["submodule_bump"]]:
+            with self.subTest(tests_on_trigger=triggers):
+                should_run, reason = cm._should_run_tests_for_family(
+                    {"tests_on_trigger": triggers},
+                    ci_inputs,
+                    cm.GitContext.empty(),
+                )
+                self.assertTrue(should_run)
+                self.assertIn("ci:run-all-archs", reason)
 
 
 # ---------------------------------------------------------------------------

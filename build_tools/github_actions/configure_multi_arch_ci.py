@@ -1406,8 +1406,9 @@ def _should_run_tests_for_family(
     submodule_bump_tests_only, trigger_test_label_only) with a unified trigger-based
     approach.
 
-    workflow_dispatch (on_demand) implicitly allows all families to run tests,
-    since it's a manual trigger where users explicitly choose what to run.
+    workflow_dispatch (on_demand) and ci:run-all-archs label implicitly allow
+    all families to run tests, since both represent explicit user intent to
+    run the full matrix.
 
     Returns:
         Tuple of (should_run, reason_string) for logging.
@@ -1415,6 +1416,10 @@ def _should_run_tests_for_family(
     # workflow_dispatch implicitly allows all families
     if ci_inputs.is_workflow_dispatch:
         return True, "workflow_dispatch (on_demand)"
+
+    # ci:run-all-archs label means build AND test all families
+    if "ci:run-all-archs" in ci_inputs.pr_labels:
+        return True, "ci:run-all-archs label"
 
     tests_on_trigger = set(platform_info.get("tests_on_trigger", []))
 
