@@ -122,8 +122,9 @@ class InstallPytorchCiPackagesTest(unittest.TestCase):
             env["CMAKE_PREFIX_PATH"],
             os.pathsep.join([f"{SDK_ROOT}/lib/cmake", "/existing"]),
         )
-        self.assertEqual(env["CC"], f"{SDK_ROOT}/lib/llvm/bin/clang")
-        self.assertEqual(env["CXX"], f"{SDK_ROOT}/lib/llvm/bin/clang++")
+        llvm_bin = Path(SDK_ROOT) / "lib" / "llvm" / "bin"
+        self.assertEqual(env["CC"], str(llvm_bin / "clang"))
+        self.assertEqual(env["CXX"], str(llvm_bin / "clang++"))
 
     def test_find_links_is_passed_to_rocm_devel_install(self):
         self.write_pin("0.0.2\n")
