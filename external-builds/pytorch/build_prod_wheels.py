@@ -1296,20 +1296,15 @@ def do_build_pytorch(
                 )
 
     if is_windows:
-        # The PyPI `ninja` package is unusable on Windows: 1.11.1 loops without
+        # PyPI `ninja` before 1.13.2 is unusable on Windows: 1.11.1 loops without
         # making progress and 1.13.0 has an MSVC link.exe RSP-file regression
-        # (LNK1104/LNK1181), and no fixed version has been published
-        # (scikit-build/ninja-python-distributions#308). requirements-build.txt
-        # just pulled it in, so remove it; the runner provides a good system
-        # ninja (>=1.13.1) on PATH that CMake uses instead.
+        # (ninja-build/ninja#2616). Some PyTorch branches still pin
+        # ninja==1.13.0 in requirements-build.txt, so upgrade past it.
         run_command(
-            [sys.executable, "-m", "pip", "uninstall", "ninja", "-y"],
+            [sys.executable, "-m", "pip", "install", "ninja>=1.13.2"]
+            + pip_install_args,
             cwd=pytorch_dir,
         )
-        # With the PyPI ninja gone, `python -m build`'s PEP 517 dependency check
-        # would abort with "Missing dependencies: ninja". Skip that check: the
-        # backend drives CMake, which finds the system ninja on PATH.
-        build_command.append("--skip-dependency-check")
 
     print("+++ Building pytorch:")
     remove_dir_if_exists(pytorch_dir / "dist")

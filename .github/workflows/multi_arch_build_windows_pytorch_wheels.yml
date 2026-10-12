@@ -293,7 +293,7 @@ jobs:
           if command -v ninja >/dev/null 2>&1; then
             printf '%s\n' "ninja already installed: $(ninja --version)"
           else
-            choco install --no-progress -y ninja --version 1.13.1
+            choco install --no-progress -y ninja --version 1.13.2
           fi
 
       # Build a fixed version of libuv from source, no matter the pytorch ref.
