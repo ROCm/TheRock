@@ -13,14 +13,16 @@ It optionally also restricts which gfx target architectures are referenced by th
 package metadata.
 
 Promotion is parameterised by:
-  --src-version-type   prerelease type to look for in source: 'rc' or 'a'
+  --src-version-type   source marker: 'rc', 'a', or 'dev'
   --dest-version       form to apply: 'release' (strip prerelease),
                        'rc<N>' (e.g. 'rc1'), or 'a<YYYYMMDD>' (e.g. 'a20260501')
+                       'dev' only supports 'release'.
 
 Common workflows:
   - rc -> release (default)  e.g. 7.10.0rc1       -> 7.10.0
   - a  -> release            e.g. 7.13.0a20260501 -> 7.13.0
   - a  -> rc                 e.g. 7.13.0a20260501 -> 7.13.0rc1
+  - dev -> release           e.g. 2.12.0+git1a2b3c4d.rocm7.13.0 -> 2.12.0+rocm7.13.0
 Other combinations are mechanically possible but not typical.
 
 When promoting torch-family wheels to a stable release, ROCm package
@@ -69,6 +71,9 @@ TYPICAL USAGE:
 
   # Promote alpha to release candidate (e.g. 7.13.0a20260430 -> 7.13.0rc1)
   python ./build_tools/packaging/promote_packages.py --input-dir=./release_candidates/ --src-version-type=a --dest-version=rc1
+
+  # Promote a dev-release-type PyTorch build (strips the git<sha> local prefix):
+  python ./build_tools/packaging/promote_packages.py --input-dir=./dev_packages/ --src-version-type=dev
 
   # Restrict to a positive arch list (no version change); per-gfx wheels for
   # other archs are skipped/deleted, multi-arch aggregator wheels are rewritten:
@@ -150,12 +155,17 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
     )
     parser.add_argument(
         "--src-version-type",
-        help="Source prerelease type to look for in package versions (e.g. 'a', 'rc'). Defaults to 'rc'.",
+        help=(
+            "Source marker to look for. 'rc' and 'a' match that prerelease segment. "
+            "'dev' matches the git<sha> local prefix that dev and dev-bkc PyTorch "
+            "builds add (e.g. 2.12.0+git1a2b3c4d.rocm7.13.0 -> 2.12.0+rocm7.13.0). "
+            "Defaults to 'rc'."
+        ),
         # Sentinel default: lets us distinguish "user did not pass --src-version-type"
         # from "user explicitly passed --src-version-type=rc" (needed for the
         # --skip-version-promotion mutex check below). Resolved to "rc" after that check.
         default=None,
-        choices=["rc", "a"],
+        choices=["rc", "a", "dev"],
     )
     parser.add_argument(
         "--dest-version",
@@ -245,6 +255,12 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
         args.src_version_type = "rc"
     if args.delete_old_on_success is None:
         args.delete_old_on_success = False
+
+    if args.src_version_type == "dev" and args.dest_version != "release":
+        parser.error(
+            "--src-version-type=dev only supports --dest-version=release "
+            "(it strips the git<sha> local prefix added by dev builds)"
+        )
 
     return args
 
@@ -384,6 +400,7 @@ def update_metadata_rocm_requires_dist(
     old_rocm_version: str,
     new_rocm_version: str,
     *,
+    new_version: Version | str | None = None,
     float_rocm_dependency_patch: bool = False,
 ) -> None:
     """Update ROCm references in METADATA Summary and Requires-Dist fields."""
@@ -398,6 +415,9 @@ def update_metadata_rocm_requires_dist(
             inplace=True,
         ) as f:
             for line in f:
+                # dev builds embed git<sha> in the package version, not the ROCm version.
+                if new_version is not None:
+                    line = line.replace(str(old_version), str(new_version))
                 lower_line = line.casefold()
                 if line.startswith("Summary:") and (
                     "therock" in lower_line or "rocm" in lower_line
@@ -425,6 +445,38 @@ def update_metadata_rocm_requires_dist(
                     print(line, end="")
 
 
+# dev/dev-bkc wheels prefix the local version with git<sha>. (build_prod_wheels.py).
+_DEV_GIT_LOCAL_RE = re.compile(r"^git[0-9a-f]+\.")
+
+
+def _version_matches_src(version_text: str, src_version_type: str) -> bool:
+    """Return whether `version_text` carries the `src_version_type` marker."""
+    if src_version_type == "dev":
+        return _DEV_GIT_LOCAL_RE.match(version_text) is not None
+    return src_version_type in version_text
+
+
+def _src_mismatch_message(src_version_type: str) -> str:
+    if src_version_type == "dev":
+        return (
+            "  [ERROR] dev promotion expects a local version starting with "
+            "git<sha>. Skipping!"
+        )
+    return (
+        f"  [ERROR] Only prerelease versions of type '{src_version_type}' "
+        "can be promoted! Skipping!"
+    )
+
+
+def _embedded_rocm_version(version: Version) -> str:
+    """ROCm version embedded in a package version (`+rocm<ver>` or `.rocm<ver>`)."""
+    text = str(version)
+    for sep in ("+rocm", ".rocm"):
+        if sep in text:
+            return text.split(sep, 1)[-1]
+    return text
+
+
 def compute_new_version_str(
     version_str: str, src_version_type: str, dest_version: str
 ) -> str:
@@ -436,7 +488,16 @@ def compute_new_version_str(
         (`7.13.0a20260430` -> `7.13.0`, `2.10.0+rocm7.13.0a20260430` -> `2.10.0+rocm7.13.0`).
       - otherwise: replace it with `dest_version`
         (`7.13.0a20260430` -> `7.13.0rc1` when called with src='a', dest='rc1').
+
+    `src_version_type == "dev"` only supports `dest_version == "release"` and
+    strips a leading `git<sha>.` (`git1a2b3c4d.rocm7.13.0` -> `rocm7.13.0`).
     """
+    if src_version_type == "dev":
+        if dest_version != "release":
+            raise ValueError(
+                "--src-version-type=dev only supports --dest-version=release"
+            )
+        return _DEV_GIT_LOCAL_RE.sub("", version_str)
     # src_version_type is constrained to "rc" or "a" by argparse; regex-safe.
     replacement = "" if dest_version == "release" else dest_version
     return re.sub(rf"{src_version_type}\d*", replacement, version_str)
@@ -963,16 +1024,8 @@ def wheel_change_extra_files(
             if len(file.name) == len(package_name_no_version):
                 package_name_no_version = file.name
 
-    old_rocm_version = (
-        str(old_version)
-        if "rocm" not in str(old_version)
-        else str(old_version).split("+rocm")[-1]
-    )
-    new_rocm_version = (
-        str(new_version)
-        if "rocm" not in str(new_version)
-        else str(new_version).split("+rocm")[-1]
-    )
+    old_rocm_version = _embedded_rocm_version(old_version)
+    new_rocm_version = _embedded_rocm_version(new_version)
     float_rocm_dependency_patch = dest_version == "release" and is_torch_package_name(
         package_name_no_version
     )
@@ -987,6 +1040,7 @@ def wheel_change_extra_files(
         old_version,
         old_rocm_version,
         new_rocm_version,
+        new_version=new_version,
         float_rocm_dependency_patch=float_rocm_dependency_patch,
     )
     # Per-arch device wheels (amd_torch_device_gfx, amd_torchvision_device_gfx,
@@ -1041,6 +1095,7 @@ def wheel_change_extra_files(
             return
 
     def rewrite_exact(line: str) -> str:
+        line = line.replace(str(old_version), str(new_version))
         return line.replace(old_rocm_version, new_rocm_version)
 
     def rewrite_float_version(line: str) -> str:
@@ -1106,20 +1161,16 @@ def promote_wheel(
         return True
 
     if original_version.local:  # torch packages
-        if src_version_type not in original_version.local:
-            print(
-                f"  [ERROR] Only prerelease versions of type '{src_version_type}' can be promoted! Skipping!"
-            )
+        if not _version_matches_src(str(original_version.local), src_version_type):
+            print(_src_mismatch_message(src_version_type))
             return False
         new_local_version = compute_new_version_str(
             str(original_version.local), src_version_type, dest_version
         )
         new_base_version = str(original_version.public)
     else:  # rocm packages
-        if src_version_type not in str(original_version):
-            print(
-                f"  [ERROR] Only prerelease versions of type '{src_version_type}' can be promoted! Skipping!"
-            )
+        if not _version_matches_src(str(original_version), src_version_type):
+            print(_src_mismatch_message(src_version_type))
             return False
         new_local_version = None
         # For non-local versions, transform the public version directly.
@@ -1184,10 +1235,8 @@ def promote_targz_sdist(
             # `multi_arch_targets` presence is enforced at the main() boundary.
             new_version_str = str(version)
         else:
-            if src_version_type not in str(version):
-                print(
-                    f"  [ERROR] Only prerelease versions of type '{src_version_type}' can be promoted! Skipping!"
-                )
+            if not _version_matches_src(str(version), src_version_type):
+                print(_src_mismatch_message(src_version_type))
                 return False
             new_version_str = compute_new_version_str(
                 str(version), src_version_type, dest_version
@@ -1248,10 +1297,8 @@ def promote_targz_tarball(
     print(f"Promoting tarball from rc to final: {filename.name}")
     print(f"  Detected version: {old_version}")
 
-    if src_version_type not in str(old_version):
-        print(
-            f"  [ERROR] Only prerelease versions of type '{src_version_type}' can be promoted! Skipping!"
-        )
+    if not _version_matches_src(str(old_version), src_version_type):
+        print(_src_mismatch_message(src_version_type))
         return False
 
     new_version_str = compute_new_version_str(

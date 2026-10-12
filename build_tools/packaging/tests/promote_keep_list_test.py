@@ -305,6 +305,47 @@ class ApplyKeepListToMetadataTest(unittest.TestCase):
         self.assertNotIn("rocm-sdk-core==7.13.0\n", result)
         Metadata.from_email(result, validate=True)
 
+    def test_dev_git_prefix_rewritten_and_rocm_dep_floated(self):
+        old = "2.12.0+git1a2b3c4d.rocm7.13.0"
+        new = "2.12.0+rocm7.13.0"
+        body = f"""\
+Metadata-Version: 2.2
+Name: torch
+Version: {old}
+Requires-Dist: rocm-sdk-core==7.13.0
+Requires-Dist: amd-torch-device-gfx942=={old}
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / f"torch-{new}"
+            torch_dir = root / "torch"
+            dist_info = root / f"torch-{old}.dist-info"
+            torch_dir.mkdir(parents=True)
+            dist_info.mkdir()
+            (torch_dir / "_rocm_init.py").write_text(
+                "check_version='7.13.0')\n", encoding="utf-8"
+            )
+            (torch_dir / "version.py").write_text(
+                f"__version__ = '{old}'\n", encoding="utf-8"
+            )
+            (dist_info / "METADATA").write_text(body, encoding="utf-8")
+
+            ptf.wheel_change_extra_files(
+                root, Version(old), Version(new), dest_version="release"
+            )
+
+            self.assertEqual(
+                (torch_dir / "version.py").read_text(encoding="utf-8"),
+                f"__version__ = '{new}'\n",
+            )
+            self.assertIn(
+                "check_version='7.13.*'",
+                (torch_dir / "_rocm_init.py").read_text(encoding="utf-8"),
+            )
+            result = (dist_info / "METADATA").read_text(encoding="utf-8")
+        self.assertIn(f"Requires-Dist: amd-torch-device-gfx942=={new}", result)
+        self.assertIn("Requires-Dist: rocm-sdk-core~=7.13.0", result)
+        self.assertNotIn("git1a2b3c4d", result)
+
     def test_stable_patch_compatible_spec_rejects_earlier_patch(self):
         specifier_text = ptf.stable_patch_compatible_spec("7.13.1")
         self.assertEqual(specifier_text, "~=7.13.1")
@@ -578,6 +619,30 @@ class ComputeNewVersionStrTest(unittest.TestCase):
             "rocm7.13.0",
         )
 
+    def test_dev_git_prefix_strips_to_rocm_suffix(self):
+        self.assertEqual(
+            ptf.compute_new_version_str("git1a2b3c4d.rocm7.13.0", "dev", "release"),
+            "rocm7.13.0",
+        )
+
+    def test_dev_does_not_match_pep440_dev_release(self):
+        self.assertFalse(ptf._version_matches_src("7.13.0.dev0", "dev"))
+        self.assertTrue(ptf._version_matches_src("git1a2b3c4d.rocm7.13.0", "dev"))
+
+    def test_dev_rejects_non_release_dest(self):
+        with self.assertRaises(ValueError):
+            ptf.compute_new_version_str("git1a2b3c4d.rocm7.13.0", "dev", "rc1")
+
+    def test_embedded_rocm_version_git_local(self):
+        self.assertEqual(
+            ptf._embedded_rocm_version(Version("2.12.0+git1a2b3c4d.rocm7.13.0")),
+            "7.13.0",
+        )
+        self.assertEqual(
+            ptf._embedded_rocm_version(Version("2.12.0+rocm7.13.0a20260501")),
+            "7.13.0a20260501",
+        )
+
 
 class ParseArgumentsMutexTest(unittest.TestCase):
     """`--skip-version-promotion` is mutex with the version flags; sentinel
@@ -626,6 +691,24 @@ class ParseArgumentsMutexTest(unittest.TestCase):
     def test_dest_version_must_be_recognised(self):
         with self.assertRaises(SystemExit):
             self._parse(["--input-dir", "/tmp", "--dest-version", "garbage"])
+
+    def test_dev_src_rejects_non_release_dest(self):
+        with self.assertRaises(SystemExit):
+            self._parse(
+                [
+                    "--input-dir",
+                    "/tmp",
+                    "--src-version-type",
+                    "dev",
+                    "--dest-version",
+                    "rc1",
+                ]
+            )
+
+    def test_dev_src_defaults_dest_to_release(self):
+        ns = self._parse(["--input-dir", "/tmp", "--src-version-type", "dev"])
+        self.assertEqual(ns.src_version_type, "dev")
+        self.assertEqual(ns.dest_version, "release")
 
     def test_dest_version_a_must_be_valid_calendar_date(self):
         with self.assertRaises(SystemExit):
