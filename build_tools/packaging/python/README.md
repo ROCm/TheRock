@@ -4,6 +4,22 @@
 packages are exposed through `/rocm/whl-next/`, their owning product paths,
 and the streams where they are available.
 
+### Audience and required access
+
+This workflow spans public source changes and internal deployment:
+
+- Any contributor can complete steps 1 and 2 and submit the changes through a
+  TheRock pull request. These steps do not require infrastructure access.
+- An infrastructure maintainer completes steps 3 and 4. They need permission to
+  publish product content, access the internal infrastructure repository, deploy
+  CloudFront functions, and upload the aggregate root index.
+- Preparing a content snapshot from S3 additionally requires read access to the
+  corresponding product buckets.
+
+Contributors without the deployment permissions should coordinate the handoff
+with an infrastructure maintainer after updating the dependency policy and
+ownership manifest.
+
 ### 1. Update dependency policy when needed
 
 For a new mirrored dependency, add its version policy to `DEPENDENCIES` in
@@ -64,39 +80,13 @@ packages. Strict completeness additionally requires the checked product roots
 to contain only packages exposed through the aggregate index for that stream.
 Skipping strict completeness never adds ownership or routes.
 
-#### Optional content snapshot
+#### Optional content validation
 
-Prepare a snapshot only when using content validation; manifest-only generation
-does not require one.
+Skip this section for manifest-only generation.
 
-Downloading a snapshot requires AWS credentials with read access to the selected
-product buckets. Developers without this access can use manifest-only generation.
-
-`--content-root` is a local directory containing downloaded product index HTML,
-not a bucket name or URL. Prepare it separately; neither the validator nor the
-infra generator downloads it.
-
-Use the product indexes for the stream being validated:
-`/rocm/core/whl-next/`, `/rocm/pytorch/whl-next/`, and `/rocm/jax/whl-next/`,
-as applicable. Do not use the aggregate `/rocm/whl-next/` index: the validator
-compares product content against aggregate ownership.
-
-1. Choose one stream and a new snapshot directory. Include every product root
-   referenced by active ownership for that stream. For strict completeness,
-   also include existing product roots whose owners appear only in inactive
-   manifest entries.
-1. Download each product's root `index.html` and its linked package
-   `index.html` pages. Preserve the public paths beneath the snapshot directory.
-   If downloading from S3, omit the storage prefix `v5/` from local paths.
-   Wheel files are not needed.
-1. Keep the root HTML unmodified, including links to unowned packages. Filtering
-   those links would hide mismatches from strict completeness validation.
-1. Pass the snapshot directory to `--content-root` with the same `--stream`.
-   Missing roots, missing owned package links, or empty owned package pages fail
-   content validation. Linked wheel objects are not checked.
-
-For example, download nightly HTML from the product buckets into a fresh local
-snapshot. These commands read S3 and write local files only:
+1. Download the product index HTML for the stream being validated into a new
+   local snapshot directory. For example, these commands download the nightly
+   product indexes from S3 without writing to the buckets:
 
 ```bash
 # Copy core index HTML, excluding wheels and other artifacts.
@@ -115,7 +105,36 @@ aws s3 sync s3://therock-repo-amd-nightly-jax/v5/rocm/jax/whl-next/ \
   --exclude '*' --include 'index.html' --include '*/index.html'
 ```
 
-The resulting layout is:
+2. Pass the snapshot directory to the infrastructure generator with the matching
+   stream:
+
+```bash
+python tools/cloudfront_functions/generate_rocm_python_index_and_router.py \
+  --therock-repo /path/to/TheRock \
+  --stream nightly \
+  --content-root /tmp/rocm-whl-next-nightly-snapshot \
+  --output-dir /tmp/rocm-whl-next-output
+```
+
+##### Snapshot layout and requirements
+
+- `--content-root` is a local directory, not a bucket name or URL.
+- Use the product indexes for the selected stream, such as
+  `/rocm/core/whl-next/`, `/rocm/pytorch/whl-next/`, and
+  `/rocm/jax/whl-next/`. Do not use the aggregate `/rocm/whl-next/` index.
+- Include each product's root `index.html` and every linked package `index.html`.
+  Wheel files are not needed or checked.
+- Preserve the public paths below `/rocm/`. When downloading from S3, omit the
+  storage prefix `v5/` from local paths.
+- Keep root HTML unmodified, including links to unowned packages, so strict
+  completeness validation can detect ownership gaps.
+- Include every product root referenced by active ownership for the stream.
+  Strict completeness also checks existing roots referenced only by inactive
+  ownership entries.
+- Missing roots, missing owned package links, and empty owned package pages fail
+  content validation.
+
+The snapshot used in the example has this layout:
 
 ```text
 /tmp/rocm-whl-next-nightly-snapshot/
@@ -127,10 +146,9 @@ The resulting layout is:
   rocm/jax/whl-next/<package>/index.html
 ```
 
-Use `--content-root /tmp/rocm-whl-next-nightly-snapshot --stream nightly`.
-For other streams, adjust both the source buckets and local directory. Product
-roots may change while downloading; if validation exposes inconsistent pages,
-prepare a fresh snapshot after publication has completed.
+For other streams, adjust the source buckets, `--stream`, and local directory.
+Product roots may change while downloading; if validation exposes inconsistent
+pages, prepare a fresh snapshot after publication has completed.
 
 #### Deploy generated artifacts
 
