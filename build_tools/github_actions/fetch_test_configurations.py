@@ -742,6 +742,8 @@ test_matrix = {
         },
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+        # RCCL collective ops use cross-process shared memory via /dev/shm
+        "container_options": ["--ipc host"],
     },
     # rocSHMEM tests
     "rocshmem": {
@@ -756,6 +758,8 @@ test_matrix = {
         # rocSHMEM functional/unit tests launch via mpirun with RANKS 2..64, so
         # they need a multi-GPU runner (same setup as rccl).
         "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+        # rocSHMEM uses cross-process shared memory for multi-GPU communication
+        "container_options": ["--ipc host"],
     },
     # rocprofiler-sdk tests
     "rocprofiler-sdk": {
