@@ -75,16 +75,12 @@ def append_env_text(env: dict[str, str], name: str, addition: str) -> None:
     env[name] = f"{current}{addition} "
 
 
-def _capture(args: list[str], cwd: Path) -> str:
+def _command_output(args: list[str], cwd: Path) -> str:
+    """Run a command and return its output. A non-zero exit fails the build."""
     print(f"++ Capture [{cwd}]$ {' '.join(args)}")
-    try:
-        return subprocess.check_output(
-            args, cwd=str(cwd), stderr=subprocess.STDOUT, text=True
-        ).strip()
-    except subprocess.CalledProcessError as error:
-        print(f"Error capturing output: {error}")
-        print(f"Output from the failed command:\n{error.output}")
-        return ""
+    return subprocess.check_output(
+        args, cwd=str(cwd), stderr=subprocess.STDOUT, text=True
+    ).strip()
 
 
 def _resolve_shared_asan_runtime(clangxx: Path, rocm_dir: Path) -> Path:
@@ -94,7 +90,7 @@ def _resolve_shared_asan_runtime(clangxx: Path, rocm_dir: Path) -> Path:
         f"libclang_rt.asan-{platform.machine().lower()}.so",
         "libclang_rt.asan.so",
     ):
-        runtime_text = _capture(
+        runtime_text = _command_output(
             [str(clangxx), f"-print-file-name={runtime_name}"], rocm_dir
         )
         runtime_attempts.append(f"{runtime_name} -> {runtime_text!r}")
@@ -142,29 +138,37 @@ def apply_asan_build_env(env: dict[str, str], rocm_dir: Path) -> None:
     if inherited_ld_library_path:
         ld_library_parts.append(inherited_ld_library_path)
 
-    # PyTorch reads USE_ASAN from the environment. With the image's default GCC
-    # the build reports USE_ASAN OFF, because that compiler's libasan is not
-    # this ROCm runtime.
-    env["USE_ASAN"] = "1"
-    # gcc-toolset comes first on PATH in the manylinux image. Its libasan and
-    # ROCm's libclang_rt.asan.so abort with "incompatible ASan runtimes".
-    env["CC"] = str(clang)
-    env["CXX"] = str(clangxx)
-    # CMake records these separately from CC and CXX. Pin the same ROCm Clang
-    # so configure does not keep gcc-toolset.
-    env["CMAKE_C_COMPILER"] = str(clang)
-    env["CMAKE_CXX_COMPILER"] = str(clangxx)
-    # hipcc and the other build tools load the instrumented ROCm libraries.
-    # detect_leaks=0 keeps LeakSanitizer from aborting those tools.
-    # abort_on_error=1 fails the build, and print_stacktrace=1 logs the stack.
-    # A caller-supplied ASAN_OPTIONS is left in place.
-    env["ASAN_OPTIONS"] = os.environ.get(
-        "ASAN_OPTIONS", "detect_leaks=0:abort_on_error=1:print_stacktrace=1"
+    # USE_ASAN: PyTorch reads this from the environment. With the image's
+    # default GCC the build reports USE_ASAN OFF, because that compiler's
+    # libasan is not this ROCm runtime.
+    # CC, CXX: gcc-toolset comes first on PATH in the manylinux image. Its
+    # libasan and ROCm's libclang_rt.asan.so abort with "incompatible ASan
+    # runtimes".
+    # CMAKE_C_COMPILER, CMAKE_CXX_COMPILER: CMake records these separately
+    # from CC and CXX. Pin the same ROCm Clang so configure does not keep
+    # gcc-toolset.
+    # ASAN_OPTIONS: hipcc and the other build tools load the instrumented
+    # ROCm libraries. detect_leaks=0 keeps LeakSanitizer from aborting those
+    # tools. abort_on_error=1 fails the build, and print_stacktrace=1 logs
+    # the stack. A caller-supplied ASAN_OPTIONS is left in place.
+    # LD_LIBRARY_PATH: -shared-libasan looks up libclang_rt.asan.so while
+    # linking, and that directory is not on the default linker path. The
+    # ROCm lib directory is included so the instrumented libraries those
+    # tools load can resolve.
+    env.update(
+        {
+            "USE_ASAN": "1",
+            "CC": str(clang),
+            "CXX": str(clangxx),
+            "CMAKE_C_COMPILER": str(clang),
+            "CMAKE_CXX_COMPILER": str(clangxx),
+            "ASAN_OPTIONS": os.environ.get(
+                "ASAN_OPTIONS",
+                "detect_leaks=0:abort_on_error=1:print_stacktrace=1",
+            ),
+            "LD_LIBRARY_PATH": os.path.pathsep.join(ld_library_parts),
+        }
     )
-    # -shared-libasan looks up libclang_rt.asan.so while linking, and that
-    # directory is not on the default linker path. The ROCm lib directory is
-    # included so the instrumented libraries those tools load can resolve.
-    env["LD_LIBRARY_PATH"] = os.path.pathsep.join(ld_library_parts)
     # ASan stack traces use frame pointers.
     append_env_text(env, "CFLAGS", "-fno-omit-frame-pointer")
     append_env_text(env, "CXXFLAGS", "-fno-omit-frame-pointer")
