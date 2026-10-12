@@ -5,7 +5,7 @@
 """Download public product-local Python indexes for aggregate validation.
 
 For example, ``https://nightly.repo.amd.com/rocm/whl-next/`` is the aggregate
-nightly index. Its package URLs route to product-local indexes such as::
+nightly index. Its package URLs route to product-local indexes such as:
 
     /rocm/core/whl-next/
     /rocm/pytorch/whl-next/
@@ -13,7 +13,7 @@ nightly index. Its package URLs route to product-local indexes such as::
 
 This helper reads the ownership manifest, selects the product indexes relevant
 to one stream, and downloads their root and linked package ``index.html`` pages
-into the local layout expected by ``aggregate_index.py --content-root``::
+into the local layout expected by ``aggregate_index.py --content-root``:
 
     <output-dir>/rocm/<owner-path>/index.html
     <output-dir>/rocm/<owner-path>/<normalized-package>/index.html
@@ -22,7 +22,7 @@ The snapshot includes index HTML used to check package publication and
 ownership. It does not include the aggregate index, wheel files, or other
 artifacts.
 
-For example, download the nightly product indexes over HTTPS with::
+For example, download the nightly product indexes over HTTPS with:
 
     python build_tools/packaging/python/download_rocm_python_index_snapshot.py \
       --stream nightly \
