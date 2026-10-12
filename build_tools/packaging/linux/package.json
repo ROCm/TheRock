@@ -1782,8 +1782,12 @@
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
-    "DEBDepends": [],
-    "RPMRequires": [],
+    "DEBDepends": [
+      "amdrocm-llvm"
+    ],
+    "RPMRequires": [
+      "amdrocm-llvm"
+    ],
     "Maintainer": "ROCm Compiler Support <rocm.compiler.support@amd.com>",
     "Description_Short": "Automated CUDA to HIP source code translation tool",
     "Description_Long": "HIPIFY is a source-to-source translation tool that automatically converts CUDA C++ code to HIP C++. Translates CUDA runtime and driver API calls along with usage of the CUDA math and utility libraries to their HIP equivalents. Enables migration of CUDA applications to run on AMD GPUs through the HIP abstraction layer.",
@@ -2495,10 +2499,12 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "libc6",
-      "amdrocm-base"
+      "amdrocm-base",
+      "amdrocm-sysdeps"
     ],
     "RPMRequires": [
-      "amdrocm-base"
+      "amdrocm-base",
+      "amdrocm-sysdeps"
     ],
     "Maintainer": "rocSHMEM Maintainer <rocshmem-maintainer@amd.com>",
     "Description_Short": "ROCm OpenSHMEM library for GPU focused intra-kernel networking",
@@ -2888,9 +2894,11 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
+      "amdrocm-runtime",
       "amdrocm-sysdeps"
     ],
     "RPMRequires": [
+      "amdrocm-runtime",
       "amdrocm-sysdeps"
     ],
     "Maintainer": "ROCm Debugger Support <rocm-gdb.support@amd.com>",
