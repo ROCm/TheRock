@@ -96,6 +96,11 @@ Actions workflow page:
 Inputs allow per-platform family selection, test label filtering, and prebuilt
 stage configuration.
 
+The `pr_labels` input accepts comma-separated labels using the same names and
+label-driven behavior as pull requests. For example,
+`test:rocprim,test_filter:comprehensive` selects rocPRIM tests and requests
+comprehensive testing.
+
 ## Prebuilt stages
 
 > [!NOTE]
