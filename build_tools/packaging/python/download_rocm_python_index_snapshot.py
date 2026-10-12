@@ -2,11 +2,32 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Download product-local Python index HTML for aggregate validation.
+"""Download public product-local Python indexes for aggregate validation.
 
-The downloaded directory mirrors the public ``/rocm/...`` paths expected by
-``aggregate_index.py --content-root``. Only root and package ``index.html``
-files are downloaded; wheel files and other artifacts are not needed.
+For example, ``https://nightly.repo.amd.com/rocm/whl-next/`` is the aggregate
+nightly index. Its package URLs route to product-local indexes such as::
+
+    /rocm/core/whl-next/
+    /rocm/pytorch/whl-next/
+    /rocm/jax/whl-next/
+
+This helper reads the ownership manifest, selects the product indexes relevant
+to one stream, and downloads their root and linked package ``index.html`` pages
+into the local layout expected by ``aggregate_index.py --content-root``::
+
+    <output-dir>/rocm/<owner-path>/index.html
+    <output-dir>/rocm/<owner-path>/<normalized-package>/index.html
+
+The snapshot includes index HTML used to check package publication and
+ownership. It does not include the aggregate index, wheel files, or other
+artifacts.
+
+For example, download the nightly product indexes over HTTPS with::
+
+    python build_tools/packaging/python/download_rocm_python_index_snapshot.py \
+      --stream nightly \
+      --origin https://nightly.repo.amd.com \
+      --output-dir /tmp/rocm-whl-next-nightly-snapshot
 """
 
 import argparse
@@ -176,7 +197,8 @@ def main(argv: list[str]) -> int:
             output_dir=args.output_dir,
         )
     except (ManifestError, IndexValidationError, SnapshotDownloadError, OSError) as e:
-        parser.error(str(e))
+        print(f"error: {e}", file=sys.stderr)
+        return 1
 
     print(f"output_dir: {args.output_dir}")
     return 0
