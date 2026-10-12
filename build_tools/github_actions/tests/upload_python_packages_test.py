@@ -119,7 +119,7 @@ class TestMultiArchUploadPath(unittest.TestCase):
 
     def test_multiarch_upload_path(self):
         output_root = _make_output_root()
-        packages_loc = output_root.python_packages("")
+        packages_loc = output_root.python_packages()
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             dist_dir = Path(tmp)
             staging_dir = Path(staging)
