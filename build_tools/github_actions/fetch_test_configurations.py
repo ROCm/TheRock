@@ -204,11 +204,16 @@ _rocgdb_common = {
 # not in the list; omit the field to run on every tier (the default). For example, a
 # component whose suite is too slow for the quick sanity tier opts out of it with:
 #   "test_types": ["standard", "comprehensive", "full"]
+#
+# A component's "skip_stages" lists build stages whose absence excludes the test.
+# If any listed stage is in SKIP_STAGES, the component is skipped. Reused stages
+# still supply artifacts and do not exclude tests. Omit the field for no stage gate.
 
 test_matrix = {
     # Sanity runs first when compiler-runtime artifacts are available.
     "sanity": {
         "job_name": "sanity",
+        "skip_stages": ["compiler-runtime"],
         "fetch_artifact_args": "--sanity",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_sanity.py')}",
@@ -1297,10 +1302,13 @@ def run():
     for key in test_matrix:
         job_name = test_matrix[key]["job_name"]
 
-        # Sanity needs the compiler/runtime tools and libraries. Reused stages
-        # supply these artifacts; skipped stages neither build nor copy them.
-        if key == "sanity" and "compiler-runtime" in skip_stages:
-            logging.info("Excluding sanity: compiler-runtime stage is skipped")
+        excluded_stages = set(skip_stages).intersection(
+            test_matrix[key].get("skip_stages", [])
+        )
+        if excluded_stages:
+            logging.info(
+                f"Excluding {job_name}: stages {sorted(excluded_stages)} are skipped"
+            )
             continue
 
         # Resolve the individual gfx targets for the current family once, so both

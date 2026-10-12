@@ -130,6 +130,26 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                         [c["job_name"] for c in self._get_components()], ["hipblas"]
                     )
 
+    def test_component_follows_configured_skipped_stages(self):
+        os.environ["PROJECTS_TO_TEST"] = "hipblas,rocblas"
+        with patch.dict(
+            fetch_test_configurations.test_matrix["hipblas"],
+            {"skip_stages": ["math-libs", "primitives"]},
+        ):
+            for skipped, expected in [
+                ("", {"hipblas", "rocblas"}),
+                ("emulation", {"hipblas", "rocblas"}),
+                ("math-libs", {"rocblas"}),
+                ("primitives", {"rocblas"}),
+                ("emulation,primitives", {"rocblas"}),
+            ]:
+                with self.subTest(skipped=skipped):
+                    os.environ["SKIP_STAGES"] = skipped
+                    fetch_test_configurations.run()
+                    self.assertEqual(
+                        {c["job_name"] for c in self._get_components()}, expected
+                    )
+
     def test_test_labels_filter(self):
         os.environ["TEST_LABELS"] = json.dumps(["rocblas", "hipblas"])
 
