@@ -243,6 +243,23 @@ function(therock_provide_artifact slice_name)
     set(_split_manifest_files)
     set(_split_component_dirs)
 
+    # The device code in this artifact only covers the targets its subprojects
+    # were NOT excluded from (THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_<subproject>).
+    # Passing the global THEROCK_AMDGPU_TARGETS blindly makes split_artifacts.py
+    # refuse artifacts whose subprojects are all excluded for the active target
+    # (e.g. rocSOLVER/rocSPARSE under amdgcnspirv): it finds fat binaries but no
+    # matching device code. Build the union of each subproject's kept targets and
+    # pass that instead; when the union is empty, omit --gpu-targets so the
+    # splitter emits an unfiltered generic artifact rather than refusing.
+    set(_artifact_gpu_targets)
+    if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" STREQUAL "THEROCK_AMDGPU_TARGETS-NOTFOUND")
+      foreach(_sub ${ARG_SUBPROJECT_DEPS})
+        therock_filter_amdgpu_targets(_sub_targets "${_sub}" ${THEROCK_AMDGPU_TARGETS})
+        list(APPEND _artifact_gpu_targets ${_sub_targets})
+      endforeach()
+      list(REMOVE_DUPLICATES _artifact_gpu_targets)
+    endif()
+
     foreach(_component ${ARG_COMPONENTS})
       set(_unsplit_component_dir "${_artifacts_base_dir}/${slice_name}_${_component}${_bundle_suffix}")
       set(_unsplit_manifest "${_unsplit_component_dir}/artifact_manifest.txt")
@@ -264,8 +281,8 @@ function(therock_provide_artifact slice_name)
       if(_split_databases)
         list(APPEND _split_command_args --split-databases ${_split_databases})
       endif()
-      if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" STREQUAL "THEROCK_AMDGPU_TARGETS-NOTFOUND")
-        list(APPEND _split_command_args --gpu-targets ${THEROCK_AMDGPU_TARGETS})
+      if(_artifact_gpu_targets)
+        list(APPEND _split_command_args --gpu-targets ${_artifact_gpu_targets})
       endif()
 
       add_custom_command(
