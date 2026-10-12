@@ -25,6 +25,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from amdgpu_family_matrix import is_asan
+from configure_asan_env import get_asan_runtime_path
 
 # Base Paths
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
@@ -97,29 +98,7 @@ environ_vars = os.environ.copy()
 
 def get_asan_runtime_library():
     """Return the clang AddressSanitizer runtime path."""
-    machine = platform.machine()
-    if machine in ("x86_64", "AMD64"):
-        arch = "x86_64"
-    elif machine == "aarch64":
-        arch = "aarch64"
-    else:
-        raise RuntimeError(f"Unsupported ASan runtime architecture: {machine}")
-
-    asan_lib = f"libclang_rt.asan-{arch}.so"
-    result = subprocess.run(
-        [str(THEROCK_CLANG_PLUS_PATH), f"-print-file-name={asan_lib}"],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=environ_vars,
-    )
-    resolved = result.stdout.strip()
-    if not resolved or resolved == asan_lib or not Path(resolved).is_file():
-        raise FileNotFoundError(
-            f"Could not locate ASan runtime '{asan_lib}' via {THEROCK_CLANG_PLUS_PATH} "
-            f"(got: '{resolved}')"
-        )
-    return str(Path(resolved).resolve())
+    return str(get_asan_runtime_path(THEROCK_PATH))
 
 
 def setup_env():
@@ -134,7 +113,7 @@ def setup_env():
 
     if is_asan():
         # Installed test binaries are built with -shared-libsan, so the clang
-        # resource dir holding libclang_rt.asan-<arch>.so must be on the loader
+        # resource dir holding the ASan runtime must be on the loader
         # search path. Match rocprofiler-sdk sanitizer defaults for launchers.
         ld_lib_paths.append(str(Path(get_asan_runtime_library()).parent))
 
