@@ -1,10 +1,10 @@
-# Updating ROCm aggregate Python index ownership
+## Updating ROCm aggregate Python index ownership
 
 [`rocm_whl_next_ownership.yaml`](rocm_whl_next_ownership.yaml) defines which
 packages are exposed through `/rocm/whl-next/`, their owning product paths,
 and the streams where they are available.
 
-## 1. Update dependency policy when needed
+### 1. Update dependency policy when needed
 
 For a new mirrored dependency, add its version policy to `DEPENDENCIES` in
 [`mirror_python_dependencies.py`](mirror_python_dependencies.py). Mirroring
@@ -14,7 +14,7 @@ package through the aggregate index.
 See [Mirroring Third-Party Python Dependencies](../../../docs/packaging/python_packaging.md#mirroring-third-party-python-dependencies)
 for the mirroring commands and publication behavior.
 
-## 2. Add aggregate ownership
+### 2. Add aggregate ownership
 
 If the package should be available through the aggregate index, add its PEP 503
 normalized name to the manifest. For example, `example_package` becomes
@@ -36,14 +36,14 @@ A package present in a product index without ownership for the selected stream
 gets no aggregate root link or CloudFront route. Its aggregate URL returns 404.
 Product indexes may intentionally contain packages outside aggregate ownership.
 
-## 3. Publish and verify product content
+### 3. Publish and verify product content
 
 Publish the package to the affected product buckets and wait for the product
 indexer to create its package page and wheel links. Verify those links before
 deploying a new aggregate route. For mirrored dependencies, the public package
 page is `/rocm/core/whl-next/<normalized-package>/`.
 
-## 4. Generate and deploy aggregate artifacts
+### 4. Generate and deploy aggregate artifacts
 
 Use `tools/cloudfront_functions/generate_rocm_python_index_and_router.py` in the infra
 repository. The generator calls this repository's `aggregate_index.py` and the
@@ -64,7 +64,7 @@ packages. Strict completeness additionally requires the checked product roots
 to contain only packages exposed through the aggregate index for that stream.
 Skipping strict completeness never adds ownership or routes.
 
-### Optional content snapshot
+#### Optional content snapshot
 
 Prepare a snapshot only when using content validation; manifest-only generation
 does not require one.
@@ -132,7 +132,7 @@ For other streams, adjust both the source buckets and local directory. Product
 roots may change while downloading; if validation exposes inconsistent pages,
 prepare a fresh snapshot after publication has completed.
 
-### Deploy generated artifacts
+#### Deploy generated artifacts
 
 For additions, deploy the CloudFront routing functions first and upload the
 matching aggregate root HTML afterwards. Once the product page and wheels exist,
