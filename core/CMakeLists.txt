@@ -254,6 +254,19 @@ if(_therock_enable_hsa_runtime)
 endif()
 
 if(THEROCK_ENABLE_HIP_RUNTIME)
+  set(_hip_clr_enabled ON)
+  if(THEROCK_DIST_AMDGPU_TARGETS AND NOT "${THEROCK_DIST_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_hip_clr_targets hip-clr ${THEROCK_DIST_AMDGPU_TARGETS})
+    if(NOT _hip_clr_targets)
+      message(STATUS
+        "hip-clr: no supported gfx targets remain after filtering "
+        "(THEROCK_DIST_AMDGPU_TARGETS='${THEROCK_DIST_AMDGPU_TARGETS}'); skipping subproject.")
+      set(_hip_clr_enabled OFF)
+    endif()
+  endif()
+endif()
+
+if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
   ##############################################################################
   # clr
   # The primary HIP compiler and runtime target. This is also the project used
@@ -384,7 +397,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     )
   endif()
 
-endif(THEROCK_ENABLE_HIP_RUNTIME)
+endif(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
 
 if(THEROCK_ENABLE_WSL_ROCDXG)
   if(NOT THEROCK_WSL_WIN_SDK)
@@ -468,6 +481,19 @@ if(THEROCK_ENABLE_OCL_ICD)
 endif(THEROCK_ENABLE_OCL_ICD)
 
 if(THEROCK_ENABLE_OCL_RUNTIME)
+  set(_ocl_clr_enabled ON)
+  if(THEROCK_DIST_AMDGPU_TARGETS AND NOT "${THEROCK_DIST_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_ocl_clr_targets ocl-clr ${THEROCK_DIST_AMDGPU_TARGETS})
+    if(NOT _ocl_clr_targets)
+      message(STATUS
+        "ocl-clr: no supported gfx targets remain after filtering "
+        "(THEROCK_DIST_AMDGPU_TARGETS='${THEROCK_DIST_AMDGPU_TARGETS}'); skipping subproject.")
+      set(_ocl_clr_enabled OFF)
+    endif()
+  endif()
+endif()
+
+if(THEROCK_ENABLE_OCL_RUNTIME AND _ocl_clr_enabled)
 
   set(OCL_CLR_CMAKE_ARGS)
   set(OCL_CLR_RUNTIME_DEPS)
@@ -568,7 +594,7 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
     )
   endif()
 
-endif(THEROCK_ENABLE_OCL_RUNTIME)
+endif(THEROCK_ENABLE_OCL_RUNTIME AND _ocl_clr_enabled)
 
 ##############################################################################
 # Runtime tests
@@ -576,7 +602,20 @@ endif(THEROCK_ENABLE_OCL_RUNTIME)
 # downstream stages like math-libs, dctools-core, etc.
 ##############################################################################
 
+set(_hip_tests_enabled ON)
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
+  if(THEROCK_TEST_AMDGPU_TARGETS AND NOT "${THEROCK_TEST_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_hip_tests_targets hip-tests ${THEROCK_TEST_AMDGPU_TARGETS})
+    if(NOT _hip_tests_targets)
+      message(STATUS
+        "hip-tests: no supported gfx targets remain after filtering "
+        "(THEROCK_TEST_AMDGPU_TARGETS='${THEROCK_TEST_AMDGPU_TARGETS}'); skipping subproject.")
+      set(_hip_tests_enabled OFF)
+    endif()
+  endif()
+endif()
+
+if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS AND _hip_tests_enabled)
   set(HIP_TESTS_CMAKE_ARGS)
   set(_hip_tests_subproject_names)
   therock_cmake_subproject_declare(hip-tests
@@ -613,9 +652,22 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
       hip-tests
   )
   list(APPEND _hip_tests_subproject_names hip-tests)
-endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
+endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS AND _hip_tests_enabled)
 
+set(_rocrtst_enabled ON)
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime)
+  if(THEROCK_TEST_AMDGPU_TARGETS AND NOT "${THEROCK_TEST_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_rocrtst_targets rocrtst ${THEROCK_TEST_AMDGPU_TARGETS})
+    if(NOT _rocrtst_targets)
+      message(STATUS
+        "rocrtst: no supported gfx targets remain after filtering "
+        "(THEROCK_TEST_AMDGPU_TARGETS='${THEROCK_TEST_AMDGPU_TARGETS}'); skipping subproject.")
+      set(_rocrtst_enabled OFF)
+    endif()
+  endif()
+endif()
+
+if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime AND _rocrtst_enabled)
   # rocrtst may optionally build against amdsmi when available (Linux).
   set(_rocrtst_build_deps
     amd-llvm
@@ -667,7 +719,7 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enab
     SUBPROJECT_DEPS
       rocrtst
   )
-endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime)
+endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime AND _rocrtst_enabled)
 
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_KFDTESTS)
 
