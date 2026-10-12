@@ -70,8 +70,8 @@ Workarounds:
 
 ### Ubuntu 26.04
 
-Tested on a bare-metal Ubuntu 26.04.1 install (GCC 15.2, CMake 4.2.3), not a
-reference image.
+Tested on Ubuntu 26.04.1 (GCC 15.2, CMake 4.2.3), both bare metal and the
+`ubuntu:26.04` container image.
 
 Built for gfx1151 in October 2026 using the Ubuntu 26.04 setup steps from the
 README, with this workaround:
