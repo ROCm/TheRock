@@ -305,14 +305,15 @@ class ApplyKeepListToMetadataTest(unittest.TestCase):
         self.assertNotIn("rocm-sdk-core==7.13.0\n", result)
         Metadata.from_email(result, validate=True)
 
-    def test_dev_git_prefix_rewritten_and_rocm_dep_floated(self):
-        old = "2.12.0+git1a2b3c4d.rocm7.13.0"
-        new = "2.12.0+rocm7.13.0"
+    def test_dev_git_prefix_keeps_rc_rocm_pin(self):
+        # A dev build against an RC, e.g. rocm 10.0.0rc4, drops git<sha> only.
+        old = "2.12.0+git1a2b3c4d.rocm10.0.0rc4"
+        new = "2.12.0+rocm10.0.0rc4"
         body = f"""\
 Metadata-Version: 2.2
 Name: torch
 Version: {old}
-Requires-Dist: rocm-sdk-core==7.13.0
+Requires-Dist: rocm-sdk-core==10.0.0rc4
 Requires-Dist: amd-torch-device-gfx942=={old}
 """
         with tempfile.TemporaryDirectory() as tmp:
@@ -322,7 +323,7 @@ Requires-Dist: amd-torch-device-gfx942=={old}
             torch_dir.mkdir(parents=True)
             dist_info.mkdir()
             (torch_dir / "_rocm_init.py").write_text(
-                "check_version='7.13.0')\n", encoding="utf-8"
+                "check_version='10.0.0rc4')\n", encoding="utf-8"
             )
             (torch_dir / "version.py").write_text(
                 f"__version__ = '{old}'\n", encoding="utf-8"
@@ -337,13 +338,14 @@ Requires-Dist: amd-torch-device-gfx942=={old}
                 (torch_dir / "version.py").read_text(encoding="utf-8"),
                 f"__version__ = '{new}'\n",
             )
-            self.assertIn(
-                "check_version='7.13.*'",
+            self.assertEqual(
                 (torch_dir / "_rocm_init.py").read_text(encoding="utf-8"),
+                "check_version='10.0.0rc4')\n",
             )
             result = (dist_info / "METADATA").read_text(encoding="utf-8")
         self.assertIn(f"Requires-Dist: amd-torch-device-gfx942=={new}", result)
-        self.assertIn("Requires-Dist: rocm-sdk-core~=7.13.0", result)
+        self.assertIn("Requires-Dist: rocm-sdk-core==10.0.0rc4", result)
+        self.assertNotIn("~=", result)
         self.assertNotIn("git1a2b3c4d", result)
 
     def test_stable_patch_compatible_spec_rejects_earlier_patch(self):
@@ -621,22 +623,22 @@ class ComputeNewVersionStrTest(unittest.TestCase):
 
     def test_dev_git_prefix_strips_to_rocm_suffix(self):
         self.assertEqual(
-            ptf.compute_new_version_str("git1a2b3c4d.rocm7.13.0", "dev", "release"),
-            "rocm7.13.0",
+            ptf.compute_new_version_str("git1a2b3c4d.rocm10.0.0rc4", "dev", "release"),
+            "rocm10.0.0rc4",
         )
 
     def test_dev_does_not_match_pep440_dev_release(self):
         self.assertFalse(ptf._version_matches_src("7.13.0.dev0", "dev"))
-        self.assertTrue(ptf._version_matches_src("git1a2b3c4d.rocm7.13.0", "dev"))
+        self.assertTrue(ptf._version_matches_src("git1a2b3c4d.rocm10.0.0rc4", "dev"))
 
     def test_dev_rejects_non_release_dest(self):
         with self.assertRaises(ValueError):
-            ptf.compute_new_version_str("git1a2b3c4d.rocm7.13.0", "dev", "rc1")
+            ptf.compute_new_version_str("git1a2b3c4d.rocm10.0.0rc4", "dev", "rc1")
 
     def test_embedded_rocm_version_git_local(self):
         self.assertEqual(
-            ptf._embedded_rocm_version(Version("2.12.0+git1a2b3c4d.rocm7.13.0")),
-            "7.13.0",
+            ptf._embedded_rocm_version(Version("2.12.0+git1a2b3c4d.rocm10.0.0rc4")),
+            "10.0.0rc4",
         )
         self.assertEqual(
             ptf._embedded_rocm_version(Version("2.12.0+rocm7.13.0a20260501")),

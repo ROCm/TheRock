@@ -22,7 +22,7 @@ Common workflows:
   - rc -> release (default)  e.g. 7.10.0rc1       -> 7.10.0
   - a  -> release            e.g. 7.13.0a20260501 -> 7.13.0
   - a  -> rc                 e.g. 7.13.0a20260501 -> 7.13.0rc1
-  - dev -> release           e.g. 2.12.0+git1a2b3c4d.rocm7.13.0 -> 2.12.0+rocm7.13.0
+  - dev -> release           e.g. 2.12.0+git1a2b3c4d.rocm10.0.0rc4 -> 2.12.0+rocm10.0.0rc4
 Other combinations are mechanically possible but not typical.
 
 When promoting torch-family wheels to a stable release, ROCm package
@@ -158,7 +158,7 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
         help=(
             "Source marker to look for. 'rc' and 'a' match that prerelease segment. "
             "'dev' matches the git<sha> local prefix that dev PyTorch "
-            "builds add (e.g. 2.12.0+git1a2b3c4d.rocm7.13.0 -> 2.12.0+rocm7.13.0). "
+            "builds add (e.g. 2.12.0+git1a2b3c4d.rocm10.0.0rc4 -> 2.12.0+rocm10.0.0rc4). "
             "Defaults to 'rc'."
         ),
         # Sentinel default: lets us distinguish "user did not pass --src-version-type"
@@ -490,7 +490,7 @@ def compute_new_version_str(
         (`7.13.0a20260430` -> `7.13.0rc1` when called with src='a', dest='rc1').
 
     `src_version_type == "dev"` only supports `dest_version == "release"` and
-    strips a leading `git<sha>.` (`git1a2b3c4d.rocm7.13.0` -> `rocm7.13.0`).
+    strips a leading `git<sha>.` (`git1a2b3c4d.rocm10.0.0rc4` -> `rocm10.0.0rc4`).
     """
     if src_version_type == "dev":
         if dest_version != "release":

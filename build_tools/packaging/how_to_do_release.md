@@ -187,12 +187,12 @@ unchanged.
 ### Promoting dev (`git<sha>`) PyTorch builds
 
 `dev` PyTorch builds record the source commit in the local
-version (`2.12.0+git1a2b3c4d.rocm7.13.0`). `--src-version-type=dev` strips
-that prefix and leaves the ROCm suffix, which should already be a release
-version. Wheels without the `git<sha>.` prefix (for example apex) are skipped.
+version (`2.12.0+git1a2b3c4d.rocm10.0.0rc4`). `--src-version-type=dev` strips
+that prefix and leaves the ROCm suffix unchanged, including an rc segment.
+Wheels without the `git<sha>.` prefix (for example apex) are skipped.
 
 ```bash
-# 2.12.0+git1a2b3c4d.rocm7.13.0 -> 2.12.0+rocm7.13.0
+# 2.12.0+git1a2b3c4d.rocm10.0.0rc4 -> 2.12.0+rocm10.0.0rc4
 python build_tools/packaging/promote_packages.py \
    --input-dir=./promotion/download/<arch> \
    --src-version-type=dev \
