@@ -1530,7 +1530,7 @@ def _expand_build_config_for_platform(
                     f"  {family_name}: {build_variant} does not run tests on "
                     f"{sorted(current_triggers)}, disabling tests"
                 )
-            elif "test-runs-on-sandbox" in platform_info:
+            elif platform_info.get("test-runs-on-sandbox"):
                 test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(
                     f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
@@ -1549,7 +1549,7 @@ def _expand_build_config_for_platform(
                     f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
                     f"disabling tests"
                 )
-            elif "test-runs-on-sandbox" in platform_info:
+            elif platform_info.get("test-runs-on-sandbox"):
                 test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
             else:
