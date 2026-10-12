@@ -151,7 +151,8 @@ Write-Host "Patched $LibvaMesonBuild"
 # Windows-specific differences from the Linux patch:
 #   * MSVC has no dladdr()/asprintf()/strndup(), so the module directory comes
 #     from GetModuleHandleExA()+GetModuleFileNameA() and strings are built with
-#     snprintf()+malloc().
+#     snprintf()+malloc(). The module path buffer grows on truncation so long
+#     installation paths (beyond MAX_PATH) are still resolved.
 #   * libva's compat_win32.h maps secure_getenv() to a helper that returns a
 #     pointer into a single static buffer, so the LIBVA_DRIVERS_PATH value is
 #     copied before ROCM_PATH is read, otherwise it would be overwritten.
@@ -188,24 +189,42 @@ $searchNew = Convert-Lf @'
         char *rocm_dir = NULL;
         char *rocm_path;
         HMODULE self_module = NULL;
-        char module_path[MAX_PATH];
-        DWORD len;
+        char *module_path = NULL;
+        DWORD size = MAX_PATH;
+        DWORD len = 0;
         int n;
 
         if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
                                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                                (LPCSTR)&va_openDriver, &self_module)) {
-            len = GetModuleFileNameA(self_module, module_path, MAX_PATH);
-            if (len > 0 && len < MAX_PATH) {
+            /* GetModuleFileNameA() returns the buffer size when the path was
+             * truncated, so grow the buffer until it fits (long paths). */
+            for (;;) {
+                char *buf = (char *)realloc(module_path, size);
+                if (!buf) {
+                    len = 0;
+                    break;
+                }
+                module_path = buf;
+                len = GetModuleFileNameA(self_module, module_path, size);
+                if (len < size)
+                    break;
+                len = 0;
+                if (size >= 32768)
+                    break;
+                size = size * 2 > 32768 ? 32768 : size * 2;
+            }
+            if (len > 0) {
                 char *last_sep = strrchr(module_path, '\\');
                 char *last_fwd = strrchr(module_path, '/');
-                if (last_fwd > last_sep)
+                if (!last_sep || (last_fwd && last_fwd > last_sep))
                     last_sep = last_fwd;
                 if (last_sep) {
                     *last_sep = '\0';
                     self_dir = strdup(module_path);
                 }
             }
+            free(module_path);
         }
 
         rocm_path = secure_getenv("ROCM_PATH");
