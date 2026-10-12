@@ -201,7 +201,7 @@ class GetEnvIntOverrideTest(unittest.TestCase):
 class LoadTestCategoriesYamlTest(unittest.TestCase):
     def setUp(self):
         temporary_dir = tempfile.TemporaryDirectory(
-            dir=os.environ.get("PYTEST_RUNNER_TMP")
+            dir=os.environ.get("PYTEST_RUNNER_TMP"), ignore_cleanup_errors=True
         )
         self.addCleanup(temporary_dir.cleanup)
         self._tmp = Path(temporary_dir.name)
@@ -305,7 +305,7 @@ class RunPytestTest(unittest.TestCase):
     def setUp(self):
         # A cwd with one existing and one missing test path.
         temporary_dir = tempfile.TemporaryDirectory(
-            dir=os.environ.get("PYTEST_RUNNER_TMP")
+            dir=os.environ.get("PYTEST_RUNNER_TMP"), ignore_cleanup_errors=True
         )
         self.addCleanup(temporary_dir.cleanup)
         self._cwd = Path(temporary_dir.name)
