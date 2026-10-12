@@ -1142,6 +1142,11 @@ def do_build_pytorch(
     *,
     triton_requirement: str | None,
 ):
+    # release/2.12 and release/2.13 do not yet suppress Benchmark's
+    # __COUNTER__ warning. release/2.14 already does, and this leaves it alone.
+    if args.asan:
+        setup_pytorch_asan.suppress_benchmark_c2y_warning(pytorch_dir)
+
     # Compute version (dev builds are tagged with the torch source commit).
     pytorch_build_version = compute_build_version(
         pytorch_dir,
