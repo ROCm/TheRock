@@ -613,6 +613,17 @@ class GitHubAPITest(unittest.TestCase):
 
         self.assertEqual(result, {})
 
+    def test_rest_rejects_non_https_before_sending_credentials(self):
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        for url in ("http://example.com/api", "file:///fixtures/api", "https:///api"):
+            with self.subTest(url=url):
+                with mock.patch("github_actions_api.urlopen") as urlopen:
+                    with self.assertRaisesRegex(GitHubAPIError, "HTTPS"):
+                        api.send_request(url)
+                    urlopen.assert_not_called()
+
 
 class GhaUpdatePrCommentTest(unittest.TestCase):
     """Tests for gha_update_pr_comment."""

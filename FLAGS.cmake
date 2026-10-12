@@ -125,6 +125,16 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
+  NAME HSA_HOTSWAP_DEFAULT_ON
+  DEFAULT_VALUE ON
+  DESCRIPTION "Enable automatic ROCr hotswap loading by default when HSA_HOTSWAP_ENABLE is unset"
+  CPP_DEFINES
+    HSA_HOTSWAP_DEFAULT_ON=1
+  SUB_PROJECTS
+    ROCR-Runtime
+)
+
+therock_declare_flag(
   NAME HSA_WINDOWS_SHARED_RUNTIME
   DEFAULT_VALUE OFF
   DESCRIPTION "Emit ROCR-Runtime and rocminfo from core-runtime on Windows"
