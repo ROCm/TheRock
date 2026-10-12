@@ -32,22 +32,20 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
             ]
         )
 
-        # Calls: tarballs, python -> v3/whl-staging, python -> v3/whl
-        self.assertEqual(mock_copy.call_count, 3)
+        # Calls: tarballs, python -> v4/whl
+        self.assertEqual(mock_copy.call_count, 2)
         # First call: tarballs
         tarball_source, tarball_dest = mock_copy.call_args_list[0].args
         self.assertEqual(tarball_source.bucket, "therock-dev-artifacts")
         self.assertEqual(tarball_source.relative_path, "123-linux/tarballs")
         self.assertEqual(tarball_dest.bucket, "therock-repo-amd-dev-core")
         self.assertEqual(tarball_dest.relative_path, "v5/rocm/core/tarball")
-        # Python staging then release
-        python_source, python_dest_staging = mock_copy.call_args_list[1].args
+        # Python packages publish directly
+        python_source, python_dest = mock_copy.call_args_list[1].args
         self.assertEqual(python_source.bucket, "therock-dev-artifacts")
         self.assertEqual(python_source.relative_path, "123-linux/python")
-        self.assertEqual(python_dest_staging.bucket, "therock-dev-python")
-        self.assertEqual(python_dest_staging.relative_path, "v3/whl-staging")
-        _, python_dest_release = mock_copy.call_args_list[2].args
-        self.assertEqual(python_dest_release.relative_path, "v3/whl")
+        self.assertEqual(python_dest.bucket, "therock-dev-python")
+        self.assertEqual(python_dest.relative_path, "v4/whl")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_nightly_windows_copies_to_correct_buckets(self, mock_copy):
@@ -76,7 +74,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         self.assertEqual(python_dest.bucket, "therock-nightly-python")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
-    def test_kpack_split_uses_v4_whl_directly(self, mock_copy):
+    def test_python_packages_use_v4_whl_directly(self, mock_copy):
         mock_copy.return_value = 2
         main(
             [
@@ -86,8 +84,6 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                 "linux",
                 "--release-type",
                 "dev",
-                "--kpack-split",
-                "true",
                 "--skip-native-packages",
                 "--dry-run",
             ]
@@ -113,10 +109,10 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
             ]
         )
 
-        # Calls: tarballs, python -> v3/whl-staging, python -> v3/whl, deb, rpm
-        self.assertEqual(mock_copy.call_count, 5)
+        # Calls: tarballs, python -> v4/whl, deb, rpm
+        self.assertEqual(mock_copy.call_count, 4)
         # deb packages
-        deb_source, deb_dest = mock_copy.call_args_list[3].args
+        deb_source, deb_dest = mock_copy.call_args_list[2].args
         self.assertEqual(deb_source.bucket, "therock-dev-artifacts")
         self.assertEqual(deb_source.relative_path, "123-linux/packages/deb")
         self.assertEqual(deb_dest.bucket, "therock-repo-amd-dev-core")
@@ -124,7 +120,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
             deb_dest.relative_path, r"^v5/rocm/core/packages/deb/\d{8}-123$"
         )
         # rpm packages
-        rpm_source, rpm_dest = mock_copy.call_args_list[4].args
+        rpm_source, rpm_dest = mock_copy.call_args_list[3].args
         self.assertEqual(rpm_source.bucket, "therock-dev-artifacts")
         self.assertEqual(rpm_source.relative_path, "123-linux/packages/rpm")
         self.assertEqual(rpm_dest.bucket, "therock-repo-amd-dev-core")
@@ -146,8 +142,8 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                 "--dry-run",
             ]
         )
-        # Only tarballs + python x2 (3 calls) — native packages skipped for windows
-        self.assertEqual(mock_copy.call_count, 3)
+        # Only tarballs + python; native packages skipped for windows
+        self.assertEqual(mock_copy.call_count, 2)
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_raises_when_no_tarballs_found(self, mock_copy):
@@ -223,8 +219,6 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                 "linux",
                 "--release-type",
                 "dev",
-                "--kpack-split",
-                "true",
                 "--structured",
                 "--skip-native-packages",
                 "--dry-run",
@@ -277,8 +271,6 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                 "linux",
                 "--release-type",
                 "dev",
-                "--kpack-split",
-                "true",
                 "--structured",
                 "--python-index",
                 "whl-next",
@@ -302,28 +294,6 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         mock_copy_dir.return_value = 2  # tarballs succeed
         mock_list.return_value = []
         with self.assertRaises(FileNotFoundError):
-            main(
-                [
-                    "--run-id",
-                    "123",
-                    "--platform",
-                    "linux",
-                    "--release-type",
-                    "dev",
-                    "--kpack-split",
-                    "true",
-                    "--structured",
-                    "--skip-native-packages",
-                    "--dry-run",
-                ]
-            )
-
-    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
-    def test_structured_requires_kpack_split(self, mock_copy):
-        # Structured only applies to the multi-arch (kpack-split) path; using it
-        # with the legacy per-family layout is rejected.
-        mock_copy.return_value = 2
-        with self.assertRaises(SystemExit):
             main(
                 [
                     "--run-id",

@@ -185,9 +185,8 @@ pip install "rocm[libraries,devel,device-gfx942]" --pre \
 > [!TIP]
 > For CI-style testing with the same directory layout used by workflows, use
 > [`build_tools/github_actions/upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)
-> with `--output-dir` instead of directly calling the indexer. This generates
-> the index and organizes files into the `{run_id}-{platform}/python/{artifact_group}/`
-> structure used by CI uploads.
+> with `--output-dir`. This stages packages locally under
+> `{run_id}-{platform}/python/`.
 
 ## Mirroring Third-Party Python Dependencies
 
