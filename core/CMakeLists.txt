@@ -630,10 +630,6 @@ endif(THEROCK_ENABLE_OCL_RUNTIME)
 
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
   set(HIP_TESTS_CMAKE_ARGS)
-  set(HIP_TESTS_RUNTIME_DEPS)
-  if(THEROCK_ENABLE_CORE_HRR)
-    list(APPEND HIP_TESTS_RUNTIME_DEPS hrr)
-  endif()
   set(_hip_tests_subproject_names)
   therock_cmake_subproject_declare(hip-tests
     USE_TEST_AMDGPU_TARGETS
@@ -650,7 +646,6 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
       therock-catch2
     RUNTIME_DEPS
       hip-clr
-      ${HIP_TESTS_RUNTIME_DEPS}
       ${THEROCK_BUNDLED_NUMACTL}
     INTERFACE_LINK_DIRS
       lib

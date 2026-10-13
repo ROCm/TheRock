@@ -632,7 +632,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 [artifacts.core-hiptests]
 artifact_group = "runtime-tests"
 type = "target-neutral"
-artifact_deps = ["core-hip", "core-hrr"]
+artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 source_paths = ["hip-tests"]
 
