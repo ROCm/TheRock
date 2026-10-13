@@ -13,7 +13,7 @@ status: draft
 - **How.** They are generated from the C headers by a standalone tool (`rocm-fortran`), committed, and kept in sync by a CI hook that suggests the regenerated diff on any header PR.
 - **What ships.** Per library: one module (`use rocblas`, `use hip`), a static `lib<lib>_fortran.a`, the `.mod` files under `include/fortran/<compiler>/`, the generated `.F90` under `share/<lib>/fortran/`, and a CMake package `<lib>-fortran` exporting `roc::rocblas_fortran`, `hip::hip_fortran`, and so on. ROCm ships them precompiled for `amdflang`; other compilers build them from the installed source.
 - **How it builds.** Each project builds its own binding behind one guarded switch, `BUILD_FORTRAN_BINDINGS` (on on Linux, skipped without a Fortran compiler); TheRock builds and packages them with the C libraries, using the `amdflang` it builds.
-- **When.** The packaged bindings land in ROCm 10.2. `ROCm/hipfort` is maintained beside them through 10.x and removed at 11.0. The hand-written modules some libraries ship (`rocblas_module.f90`, `rocsparse.f90`, ...) are replaced at 10.2.
+- **When.** The packaged bindings land in ROCm 10.3. `ROCm/hipfort` is maintained beside them through 10.x and removed at 11.0. The hand-written modules some libraries ship (`rocblas_module.f90`, `rocsparse.f90`, ...) are replaced at 10.3.
 - **For users.** hipfort users rename their `use` lines and link targets; their calls do not change. The migration guides live in the hipfort documentation.
 
 ## Overview
@@ -29,8 +29,8 @@ Each math library's bindings go to `rocm-libraries`, next to that project.
 The generator (`rocm-fortran`) is a standalone build-time tool, in its own repository.
 CI keeps everything in sync: when a C header changes, it regenerates the affected module and suggests the diff on the PR, like `clang-format`.
 
-For ROCm 7.14 / 10.0 / 10.1, the goal is narrow: repair the existing hipfort without breaking anything, bringing its bindings current with the headers (they lag by one release).
-The real change lands in ROCm 10.2: packaging returns, and the bindings split across `rocm-systems` and `rocm-libraries`.
+For ROCm 7.14 / 10.0 / 10.1 / 10.2, the goal is narrow: repair the existing hipfort without breaking anything, bringing its bindings current with the headers (they lag by one release).
+The real change lands in ROCm 10.3: packaging returns, and the bindings split across `rocm-systems` and `rocm-libraries`.
 From then on the co-located, generated bindings this RFC describes are the deliverable; hipfort, under its current name and layout, is maintained beside them through the 10.x series and removed at ROCm 11.0.
 This document fixes the direction, not a date, and is the source of truth for the design.
 
@@ -642,15 +642,15 @@ Across repos, `rocm-systems` and `rocm-libraries` gain a `fortran/` subdirectory
 
 The target ROCm version is simply whichever headers the generator reads, from the `rocm-libraries` monorepo (`develop`) or a ROCm install.
 
-The immediate step is bringing the committed bindings current with ROCm 7.14 / 10.0 / 10.1.
-Packaging for 10.2 is best-effort.
+The immediate step is bringing the committed bindings current with ROCm 7.14 / 10.0 / 10.1 / 10.2.
+Packaging targets 10.3.
 This RFC fixes the destination and the order of steps, not a packaging date.
 
 The transition runs on two tracks, both emitted by the same generator.
 The compatibility track is `ROCm/hipfort` with its current layout: the `hipfort_` prefix, the CUDA backend, and the split modules (interfaces, types, enums).
-It is kept as source, not packaged, so existing users who build it themselves see no break through ROCm 7.14, 10.0, and 10.1, and it stays **maintained beside the packaged track through the whole 10.x series**, so that from 10.2 to 11.0 a user can migrate on their own schedule, one file at a time.
+It is kept as source, not packaged, so existing users who build it themselves see no break through ROCm 7.14, 10.0, 10.1, and 10.2, and it stays **maintained beside the packaged track through the whole 10.x series**, so that from 10.3 to 11.0 a user can migrate on their own schedule, one file at a time.
 
-A packaged binding is versioned with its library and holds for a major ROCm series: a binding built for 10.2 is valid on any 10.x.y, and its CMake package accepts any version with the same major number (`SameMajorVersion`).
+A packaged binding is versioned with its library and holds for a major ROCm series: a binding built for 10.3 is valid on any 10.x.y, and its CMake package accepts any version with the same major number (`SameMajorVersion`).
 A user revisits their build at a major release, not at every point release.
 
 That covers one population out of four, so here are all of them.
@@ -658,13 +658,13 @@ That covers one population out of four, so here are all of them.
 | How you get hipfort today                                                                | What the transition does to you                                                                                                                                                                                                                                                                                                                       |
 | :--------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | You build it from source                                                                 | Nothing. The compatibility track keeps its layout, module names, and CUDA backend.                                                                                                                                                                                                                                                                    |
-| You install a package                                                                    | Nothing, because there is no package to lose: packaging *returns* at 10.2, it does not continue (a ROCm 10.0 install ships no hipfort package, `.mod`, or archive).                                                                                                                                                                                   |
-| You use a library's own Fortran module (`rocblas_module.f90`, `rocsparse.f90`, ...)      | A real break at 10.2, when the generated module supersedes it. See What changes for a library repository.                                                                                                                                                                                                                                             |
-| You build one code on several ROCm versions, some older than 10.2 (a site frozen on 6.x) | Nothing until your oldest system reaches 10.2: the compatibility track covers every system, using the hipfort release tagged for each ROCm (`rocm-<version>`). A thin wrapper module can also select `use hipfort_<lib>` or `use <lib>` per system at compile time. The packaged bindings can be generated for an older release's headers on request. |
+| You install a package                                                                    | Nothing, because there is no package to lose: packaging *returns* at 10.3, it does not continue (a ROCm 10.0 install ships no hipfort package, `.mod`, or archive).                                                                                                                                                                                   |
+| You use a library's own Fortran module (`rocblas_module.f90`, `rocsparse.f90`, ...)      | A real break at 10.3, when the generated module supersedes it. See What changes for a library repository.                                                                                                                                                                                                                                             |
+| You build one code on several ROCm versions, some older than 10.3 (a site frozen on 6.x) | Nothing until your oldest system reaches 10.3: the compatibility track covers every system, using the hipfort release tagged for each ROCm (`rocm-<version>`). A thin wrapper module can also select `use hipfort_<lib>` or `use <lib>` per system at compile time. The packaged bindings can be generated for an older release's headers on request. |
 
 Only the third row is a break, and it is an owned, coordinated one rather than a side effect.
 If some distribution does still publish a hipfort package, it keeps being published through the transition, and any de-packaging is announced with that distributor.
-The packaged track lands in ROCm 10.2: packaging returns and the bindings split across `rocm-systems` and `rocm-libraries`, dropping the `hipfort_` prefix, collapsing each library to a single Fortran module, and dropping the CUDA backend from the package.
+The packaged track lands in ROCm 10.3: packaging returns and the bindings split across `rocm-systems` and `rocm-libraries`, dropping the `hipfort_` prefix, collapsing each library to a single Fortran module, and dropping the CUDA backend from the package.
 Emitting both is cheap, because the generator already supports multiple layouts.
 The compatibility track then lingers as source only, and is retired at ROCm 11.0, leaving the packaged track as the sole deliverable.
 
@@ -706,15 +706,15 @@ One capability does not carry over: the CUDA (`nvptx`) backend is not built for 
 `roctx` does carry over, as `use roctx` and `roc::roctx_fortran` from rocprofiler-sdk.
 
 The user-facing migration guides, with the full per-library table, the compile and link lines, when a user has to build a binding, and a scripted rename, live in the hipfort documentation ([ROCm/hipfort#548](https://github.com/ROCm/hipfort/pull/548)) rather than in this RFC, so that they track the packaging as it lands instead of freezing with this document.
-There are two, because the populations differ: one for hipfort users (a rename, with an overlap until 11.0) and one for users of a library's own module (call-site changes, at 10.2).
+There are two, because the populations differ: one for hipfort users (a rename, with an overlap until 11.0) and one for users of a library's own module (call-site changes, at 10.3).
 
 ## Rollout and success criteria
 
 The rollout is staged, and each stage has a clear exit.
 
-1. **Bring current (7.14 / 10.0 / 10.1).** The committed bindings match today's headers. The CI hook is not implemented yet: it needs the generator repository to be public, so that a public CI job can run it, and then a path-filtered workflow per monorepo. Both are small. The hook starts in *advisory* mode, suggesting regenerated diffs without blocking a merge.
+1. **Bring current (7.14 / 10.0 / 10.1 / 10.2).** The committed bindings match today's headers. The CI hook is not implemented yet: it needs the generator repository to be public, so that a public CI job can run it, and then a path-filtered workflow per monorepo. Both are small. The hook starts in *advisory* mode, suggesting regenerated diffs without blocking a merge.
    Until it runs, a binding is refreshed by regenerating it and committing the result by hand, which is how the co-location PRs were produced.
-1. **Co-locate and package (10.2).** Each in-scope library has a `fortran/` directory, each project builds its per-library `.mod` and `lib<lib>_fortran.a` and TheRock packages them, and the `bindings-in-sync` gate becomes *enforcing*.
+1. **Co-locate and package (10.3).** Each in-scope library has a `fortran/` directory, each project builds its per-library `.mod` and `lib<lib>_fortran.a` and TheRock packages them, and the `bindings-in-sync` gate becomes *enforcing*.
 1. **Retire the compatibility track (11.0).** `ROCm/hipfort` under its current name is removed, and the packaged track is the sole deliverable.
 
 It is done when `hip`, `roctx`, and all eleven in-scope libraries carry a co-located `fortran/` (generated source, curated metadata, tests); a header PR that changes a binding fails the enforcing gate until the regenerated `.F90` is committed; `find_package(<lib>-fortran)` exposes `<ns>::<lib>_fortran` when built (and `find_package(<lib>)` too, once rocm-cmake has the optional include); TheRock builds and packages them (see Packaging in TheRock); and an external consumer compiles and links against the installed package for at least amdflang and gfortran.
