@@ -421,7 +421,7 @@ def update_metadata_rocm_requires_dist(
         ) as f:
             for line in f:
                 # Full-version pins (e.g. device wheels) carry pytorch-dev git<sha> outside the ROCm part.
-                if new_version is not None:
+                if new_version is not None and line.startswith("Requires-Dist:"):
                     line = line.replace(str(old_version), str(new_version))
                 lower_line = line.casefold()
                 if line.startswith("Summary:") and (
