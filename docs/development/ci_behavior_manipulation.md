@@ -99,87 +99,50 @@ stage configuration.
 #### Running tests against existing artifacts (`test_artifacts.yml`)
 
 The [`test_artifacts.yml`](https://github.com/ROCm/TheRock/actions/workflows/test_artifacts.yml)
-workflow runs tests against pre-built artifacts. It can be triggered manually
-via workflow dispatch.
+workflow runs tests against pre-built artifacts without rebuilding. This is
+useful for testing specific components on a branch, validating new runners, or
+re-running failed tests.
 
-**Quick-start example — test a single component:**
+##### Step 1: Find a recent build run ID
 
-| Input | Value |
-|---|---|
-| `artifact_group` | `multi-arch-release` |
-| `amdgpu_families` | `gfx94X-dcgpu` |
-| `test_type` | `standard` |
-| `test_labels` | `test:rocblas` |
+Navigate to **Actions** >
+[**Multi-Arch CI**](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml)
+and find a recent successful run on `main`. The run must have built artifacts
+for the GPU family you want to test (e.g. `gfx94X-dcgpu` for MI300). Note the
+run ID from the URL.
 
-**Quick-start example — test everything downstream of a project change:**
+##### Step 2: Trigger the workflow
 
-| Input | Value |
-|---|---|
-| `artifact_group` | `multi-arch-release` |
-| `amdgpu_families` | `gfx94X-dcgpu` |
-| `test_type` | `standard` |
-| `changed_projects` | `rocblas` |
+Navigate to **Actions** >
+[**Test Artifacts**](https://github.com/ROCm/TheRock/actions/workflows/test_artifacts.yml)
+\> **Run workflow** and fill in:
 
-##### `test_labels` vs `changed_projects`
-
-These two inputs serve different purposes and can be used independently or
-together:
-
-- **`test_labels`** — directly selects which test components to run by name.
-  Use the `test:<component>` format (e.g. `test:rocblas`, `test:hipblas`).
-  Only the named components will run (plus sanity, which always runs).
-
-- **`changed_projects`** — specifies which *source projects* changed, then
-  walks the consumer dependency graph to determine which downstream projects
-  need testing.  For example, `changed_projects=rocblas` may also select
-  `hipblas` and other consumers of rocblas.  Leave empty to run all tests.
-
-When both are set, a test component must match **both** filters to run.
-
-##### `test_labels` format
-
-`test_labels` accepts two formats:
-
-1. **Comma-separated string** (recommended for manual runs):
-   `test:rocblas,test:hipblas`
-
-2. **Python list literal**:
-   `["test:rocblas", "test:hipblas"]`
-
-Label groups expand automatically:
-
-| Label | Expands to |
-|---|---|
-| `test:rocgdb` | `rocgdb-cpu`, `rocgdb-gpu` |
-| `test:tensilelite` | `tensilelite`, `tensilelite-common` |
-
-##### `amdgpu_families` vs `amdgpu_targets`
-
-- **`amdgpu_families`** — the GPU family group string that selects which
-  hardware family the tests target. Common values:
-
-  | Value | GPU targets |
-  |---|---|
-  | `gfx94X-dcgpu` | gfx942 |
-  | `gfx110X-all` | gfx1100, gfx1101, gfx1102, gfx1103 |
-  | `gfx120X-all` | gfx1200, gfx1201 |
-  | `gfx125X-dcgpu` | gfx1250 |
-  | `gfx950-dcgpu` | gfx950 |
-
-- **`amdgpu_targets`** — optional, specific chip variants within the family
-  (e.g. `gfx942`). Leave empty to use the default targets for the family.
-
-##### `test_type`
-
-Controls the depth and duration of testing. See
-[test_filtering.md](test_filtering.md) for details.
-
-| Type | Duration | Use case |
+| Input | Value | Notes |
 |---|---|---|
-| `quick` | < 5 min | Sanity checks, build system changes |
-| `standard` | < 30 min | Component changes, submodule bumps |
-| `comprehensive` | < 2 hours | Nightly, extended coverage |
-| `full` | 2+ hours | Pre-release, maximum confidence |
+| `artifact_run_id` | Run ID from Step 1 | Leave empty to use latest artifacts |
+| `artifact_group` | `multi-arch-release` | |
+| `amdgpu_families` | e.g. `gfx94X-dcgpu` | See table below for common values |
+| `test_runs_on` | Runner label | e.g. `linux-gfx942-1gpu-ccs-ossci-rocm` |
+| `test_type` | `standard` | Or `quick`, `comprehensive`, `full` — see [test_filtering.md](test_filtering.md) |
+| `test_labels` | e.g. `test:rocblas,test:hipblas` | Comma-separated. Leave empty to run all |
+
+Common `amdgpu_families` values:
+
+| Family | GPU targets |
+|---|---|
+| `gfx94X-dcgpu` | gfx942 |
+| `gfx110X-all` | gfx1100, gfx1101, gfx1102, gfx1103 |
+| `gfx120X-all` | gfx1200, gfx1201 |
+| `gfx125X-dcgpu` | gfx1250 |
+| `gfx950-dcgpu` | gfx950 |
+
+> [!TIP]
+> Some `test_labels` expand to multiple jobs automatically:
+> `test:tensilelite` runs both `tensilelite` and `tensilelite-common`,
+> `test:rocgdb` runs both `rocgdb-cpu` and `rocgdb-gpu`.
+
+See also [machine_bring_up.md](machine_bring_up.md) for validating new runners
+using this workflow.
 
 ## Prebuilt stages
 
