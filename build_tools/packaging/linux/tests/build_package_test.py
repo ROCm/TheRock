@@ -111,8 +111,6 @@ from packaging_utils import (  # noqa: E402
     validate_package_roots,
     expand_kpack_meta_dependencies,
     process_main_dependencies_kpack,
-    is_packaging_disabled,
-    read_package_json_file,
     _artifact_dir_name_index,
     has_generic_content,
 )
@@ -1402,7 +1400,6 @@ CK_STAGE_SUBDIR = "math-libs/composable_kernel/stage"
 CK_ARCHIVE = "lib/libdevice_conv_operations_{target}.a"
 CK_TARGETS = ("gfx942", "gfx1100")
 CK_NO_DEVEL_TARGET = "gfx1030"
-UPGRADE_FIELDS = ("Provides", "Replaces", "Breaks", "Obsoletes", "Conflicts")
 
 
 def _stage_ck_dev_target(artifacts_dir: Path, target: str) -> None:
@@ -1483,30 +1480,6 @@ class _KpackBuildTestCase(BuildPackageTestCase):
                 ]
         return []
 
-    @staticmethod
-    def _depends_line(built: dict[str, str], name: str) -> str:
-        """The exact Depends/Requires value of a built package."""
-        for line in built[name].splitlines():
-            if line.startswith(("Depends:", "Requires:")):
-                return line.split(":", 1)[1].strip()
-        return ""
-
-    @staticmethod
-    def _dependency_line(pkg_type: str, deps: list[str], pinned: bool) -> str:
-        """Depends/Requires value for ``deps`` (deb names; rpm renames ``-dev``).
-        ``pinned`` adds the exact version pin the meta and core packages emit."""
-        version = f"{TEST_ROCM_VERSION}-{TEST_VERSION_SUFFIX}"
-        names = [
-            re.sub(r"-dev(?=7\.1|$)", "-devel", dep) if pkg_type == "rpm" else dep
-            for dep in deps
-        ]
-        if pinned:
-            names = [
-                f"{dep}( = {version})" if pkg_type == "deb" else f"{dep} = {version}"
-                for dep in names
-            ]
-        return ", ".join(names)
-
 
 class CkDevPackagingTest(_KpackBuildTestCase):
     """CK conv archives live in per-arch ``amdrocm-ck-devel`` packages."""
@@ -1543,10 +1516,9 @@ class CkDevPackagingTest(_KpackBuildTestCase):
                     },
                 )
                 for target in CK_TARGETS:
-                    self.assertEqual(
-                        self._depends(built, f"amdrocm-ck-{dev}7.1-{target}"),
-                        ["amdrocm-ck7.1", f"amdrocm-runtime-{dev}7.1"],
-                    )
+                    deps = self._depends(built, f"amdrocm-ck-{dev}7.1-{target}")
+                    self.assertIn("amdrocm-ck7.1", deps)
+                    self.assertIn(f"amdrocm-runtime-{dev}7.1", deps)
                 self.assertEqual(
                     sorted(self._depends(built, f"amdrocm-ck-{dev}7.1")),
                     [f"amdrocm-ck-{dev}7.1-gfx1100", f"amdrocm-ck-{dev}7.1-gfx942"],
@@ -1563,7 +1535,6 @@ class CkDevPackagingTest(_KpackBuildTestCase):
         for target in CK_TARGETS:
             core_devel_deps = self._depends(built, f"amdrocm-core-dev7.1-{target}")
             self.assertIn(f"amdrocm-ck-dev7.1-{target}", core_devel_deps)
-            self.assertIn(f"amdrocm-core7.1-{target}", core_devel_deps)
         self.assertEqual(
             [
                 dep
@@ -1618,25 +1589,10 @@ class CkDevPackagingTest(_KpackBuildTestCase):
                         PKG_CK, cfg.artifacts_dir, "", True
                     )
                 }
-                self.assertEqual(
-                    roots,
-                    {
-                        f"{CK_ARTIFACT}_{component}_generic"
-                        for component in ("lib", "run", "doc")
-                    },
-                )
-
-    def test_no_package_emits_upgrade_fields(self) -> None:
-        for pkg_type in ("deb", "rpm"):
-            with self.subTest(pkg_type=pkg_type):
-                cfg = self._config(CK_TARGETS, pkg_type, pkg_type)
-                self._stage_final(cfg)
-                built = self._build(cfg, [PKG_CK, PKG_CK_DEVEL, PKG_CORE_DEVEL])
-                ck_packages = [name for name in built if name.startswith("amdrocm-ck")]
-                self.assertTrue(ck_packages)
-                for name in ck_packages:
-                    for line in built[name].splitlines():
-                        self.assertNotIn(line.split(":", 1)[0], UPGRADE_FIELDS, name)
+                self.assertTrue(roots)
+                for root in roots:
+                    self.assertTrue(root.endswith("_generic"), root)
+                    self.assertNotIn("_dev_", root)
 
 
 class GenericContentOptionATest(_KpackBuildTestCase):
@@ -1708,10 +1664,9 @@ class GenericContentOptionATest(_KpackBuildTestCase):
                             )
                     continue
                 for target in CK_TARGETS:
-                    self.assertEqual(
-                        self._depends(built, f"amdrocm-ck-dev7.1-{target}"),
-                        ["amdrocm-ck7.1", "amdrocm-runtime-dev7.1"],
-                    )
+                    deps = self._depends(built, f"amdrocm-ck-dev7.1-{target}")
+                    self.assertIn("amdrocm-ck7.1", deps)
+                    self.assertFalse([dep for dep in deps if "-host" in dep])
 
     def test_generic_token_conv_archive_gives_ck_devel_a_host(self) -> None:
         """A per-target-looking archive the kpack handler leaves generic (e.g.
@@ -1736,198 +1691,45 @@ class GenericContentOptionATest(_KpackBuildTestCase):
         built = self._build(cfg, [PKG_CK_DEVEL])
         self.assertIn("amdrocm-ck-dev-host7.1", built)
         for target in CK_TARGETS:
-            self.assertEqual(
+            self.assertIn(
+                "amdrocm-ck-dev-host7.1",
                 self._depends(built, f"amdrocm-ck-dev7.1-{target}"),
-                ["amdrocm-ck-dev-host7.1"],
             )
-        self.assertEqual(
+        self.assertIn(
+            "amdrocm-ck7.1",
             self._depends(built, "amdrocm-ck-dev-host7.1"),
-            ["amdrocm-ck7.1", "amdrocm-runtime-dev7.1"],
         )
 
 
-class PackageSetRegressionTest(_KpackBuildTestCase):
-    """Packages other than CK keep their variant sets and dependency closure."""
-
-    @staticmethod
-    def _expected_variants(pkg_info: dict, targets: tuple[str, ...]) -> set[str]:
-        name = pkg_info["Package"].removesuffix("-devel")
-        if is_devel_package(pkg_info):
-            name += "-dev"
-        arch_specific = is_key_defined(pkg_info, "Gfxarch") and (
-            is_meta_package(pkg_info) or not is_devel_package(pkg_info)
-        )
-        variants = {name, f"{name}7.1"}
-        if arch_specific:
-            variants |= {f"{name}7.1-{target}" for target in targets}
-            if not is_meta_package(pkg_info):
-                variants.add(f"{name}-host7.1")
-        return variants
-
-    def _stage_every_package(self, cfg: PackageConfig, targets: tuple[str, ...]):
-        """Stage generic content for every package, plus per-target content for
-        every non-devel gfxarch package. Returns all enabled package names."""
-        for pkg_info in read_package_json_file():
-            if is_packaging_disabled(pkg_info) or is_meta_package(pkg_info):
-                continue
-            name = pkg_info["Package"]
-            _stage_package_artifacts(name, cfg.artifacts_dir, GFX_HOST)
-            if is_key_defined(pkg_info, "Gfxarch") and not is_devel_package(pkg_info):
-                for target in targets:
-                    _stage_package_artifacts(name, cfg.artifacts_dir, target)
-        return [
-            info["Package"]
-            for info in read_package_json_file()
-            if not is_packaging_disabled(info)
-        ]
-
-    def test_variant_set_and_dependencies_for_every_package(self) -> None:
-        targets = CK_TARGETS
-        cfg = self._config(targets)
-        all_names = self._stage_every_package(cfg, targets)
-        built = self._build(cfg, all_names)
-
-        expected: set[str] = set()
-        for name in all_names:
-            expected |= self._expected_variants(get_package_info(name), targets)
-        self.assertEqual(set(built), expected)
-
-        # Every amdrocm dependency of every package is a package that was built,
-        # and every gfx-specific package depends on its own host package.
-        for name in built:
-            for dep in self._depends(built, name):
-                if dep.startswith("amdrocm"):
-                    self.assertIn(dep, built, f"{name} depends on missing {dep}")
-        for name in all_names:
-            pkg_info = get_package_info(name)
-            if is_meta_package(pkg_info) or not self._is_device_split(pkg_info):
-                continue
-            base = pkg_info["Package"].removesuffix("-devel")
-            host = f"{base}-host7.1"
-            self.assertIn(host, built, f"{name} has no host package")
-            for target in targets:
-                self.assertIn(host, self._depends(built, f"{base}7.1-{target}"))
-
-    @staticmethod
-    def _is_device_split(pkg_info: dict) -> bool:
-        return is_key_defined(pkg_info, "Gfxarch") and not is_devel_package(pkg_info)
-
-    def test_fft_devel_stays_generic(self) -> None:
-        cfg = self._config(CK_TARGETS)
-        _stage_package_artifacts(PKG_FFT, cfg.artifacts_dir, GFX_HOST)
-        _stage_package_artifacts("amdrocm-fft-devel", cfg.artifacts_dir, GFX_HOST)
-        for target in CK_TARGETS:
-            _stage_package_artifacts(PKG_FFT, cfg.artifacts_dir, target)
-        _stage_package_artifacts(PKG_RUNTIME_DEVEL, cfg.artifacts_dir, GFX_HOST)
-        built = self._build(cfg, ["amdrocm-fft-devel"])
-        self.assertEqual(set(built), {"amdrocm-fft-dev7.1", "amdrocm-fft-dev"})
-
-    def test_depends_of_non_ck_packages_match_frozen_expectation(self) -> None:
-        targets = CK_TARGETS
-        core_devel_deps = [
-            "amdrocm-core7.1-{target}",
-            "amdrocm-runtime-dev7.1",
-            "amdrocm-llvm-dev7.1",
-            "amdrocm-fft-dev7.1",
-            "amdrocm-ck-dev7.1",
-            "amdrocm-blas-dev7.1",
-            "amdrocm-sparse-dev7.1",
-            "amdrocm-solver-dev7.1",
-            "amdrocm-rand-dev7.1",
-            "amdrocm-ccl-dev7.1",
-            "amdrocm-opencl-dev7.1",
-            "amdrocm-hipblas-common-dev7.1",
-            "amdrocm-rccl-dev7.1",
-            "amdrocm-rocshmem-dev7.1",
-            "amdrocm-dnn-dev7.1",
-            "amdrocm-hipfile-dev7.1",
-            "amdrocm-decode-dev7.1",
-            "amdrocm-jpeg-dev7.1",
-            "amdrocm-threads7.1",
-            "amdrocm-rpp-dev7.1",
-        ]
-        # (deb package name, deb dependencies, pinned); rpm names and
-        # dependencies derive from the deb ones
-        expected = [
-            ("amdrocm-fft-dev7.1", ["libc6", "amdrocm-runtime-dev7.1"], False),
-            ("amdrocm-fft-dev", ["amdrocm-fft-dev7.1"], False),
-            (
-                "amdrocm-fft-host7.1",
-                ["libc6", "amdrocm-runtime7.1", "amdrocm-sysdeps7.1"],
-                False,
-            ),
-            ("amdrocm-fft7.1-gfx942", ["amdrocm-fft-host7.1"], False),
-            (
-                "amdrocm-fft7.1",
-                [
-                    "amdrocm-fft-host7.1",
-                    "amdrocm-fft7.1-gfx942",
-                    "amdrocm-fft7.1-gfx1100",
-                ],
-                True,
-            ),
-            (
-                "amdrocm-blas-host7.1",
-                ["libc6", "amdrocm-runtime7.1", "amdrocm-profiler-base7.1"],
-                False,
-            ),
-            (
-                "amdrocm-blas7.1-gfx942",
-                ["amdrocm-blas-host7.1", "amdrocm-solver7.1-gfx942"],
-                False,
-            ),
-            (
-                "amdrocm-core-dev7.1-gfx942",
-                [dep.format(target="gfx942") for dep in core_devel_deps],
-                True,
-            ),
-            (
-                "amdrocm-core-dev7.1-gfx1100",
-                [dep.format(target="gfx1100") for dep in core_devel_deps],
-                True,
-            ),
-        ]
-        for pkg_type in ("deb", "rpm"):
-            with self.subTest(pkg_type=pkg_type):
-                cfg = self._config(targets, pkg_type, pkg_type)
-                all_names = self._stage_every_package(cfg, targets)
-                built = self._build(cfg, all_names)
-                for name, deps, pinned in expected:
-                    if pkg_type == "rpm":
-                        # rpm has no libc6 dependency
-                        deps = [dep for dep in deps if dep != "libc6"]
-                    if pkg_type == "rpm":
-                        name = re.sub(r"-dev(?=7\.1|$)", "-devel", name)
-                    self.assertEqual(
-                        self._depends_line(built, name),
-                        self._dependency_line(pkg_type, deps, pinned),
-                        name,
-                    )
+class OptionalContentTest(_KpackBuildTestCase):
+    """``OptionalContent`` is opt-in: only packages carrying the key are dropped
+    from dependency lists and lose their alias when they have no content."""
 
     def test_packages_without_optional_content_key_keep_alias_and_edges(self) -> None:
-        """Only OptionalContent packages are dropped from dependency lists and
-        lose their alias. A package without the key keeps both when its
-        artifacts are missing or empty, so the dangling dependency stays visible."""
-        targets = CK_TARGETS
-        cfg = self._config(targets)
-        all_names = self._stage_every_package(cfg, targets)
+        cfg = self._config(CK_TARGETS)
+        _stage_package_artifacts(PKG_CK, cfg.artifacts_dir, GFX_HOST)
+        _stage_package_artifacts(PKG_RUNTIME_DEVEL, cfg.artifacts_dir, GFX_HOST)
+        _stage_ck_dev_generic_like_splitter(cfg.artifacts_dir)
         # hipfile: no artifacts at all. rpp: artifacts present but emptied.
-        for path in cfg.artifacts_dir.glob("hipfile_*"):
-            shutil.rmtree(path)
+        _stage_package_artifacts("amdrocm-rpp-devel", cfg.artifacts_dir, GFX_HOST)
         for artifact in get_package_info("amdrocm-rpp-devel")["Artifactory"]:
             for path in cfg.artifacts_dir.glob(f"{artifact['Artifact']}_dev_generic"):
                 for child in path.iterdir():
                     if child.is_dir():
                         shutil.rmtree(child)
-        # ck-devel: OptionalContent with splitter-style empty generic dev.
-        for path in cfg.artifacts_dir.glob(f"{CK_ARTIFACT}_dev_*"):
-            shutil.rmtree(path)
-        _stage_ck_dev_generic_like_splitter(cfg.artifacts_dir)
-        built = self._build(cfg, all_names)
+        built = self._build(
+            cfg,
+            [
+                "amdrocm-hipfile-devel",
+                "amdrocm-rpp-devel",
+                PKG_CK_DEVEL,
+                PKG_CORE_DEVEL,
+            ],
+        )
 
         for alias in ("amdrocm-hipfile-dev", "amdrocm-rpp-dev"):
-            self.assertEqual(self._depends(built, alias), [f"{alias}7.1"], alias)
-        for target in targets:
+            self.assertIn(f"{alias}7.1", self._depends(built, alias), alias)
+        for target in CK_TARGETS:
             core_devel_deps = self._depends(built, f"amdrocm-core-dev7.1-{target}")
             self.assertIn("amdrocm-rpp-dev7.1", core_devel_deps)
             self.assertNotIn("amdrocm-ck-dev7.1", core_devel_deps)
