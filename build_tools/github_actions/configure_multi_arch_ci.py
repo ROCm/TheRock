@@ -64,10 +64,12 @@ from amdgpu_family_matrix import (
     select_build_runner,
 )
 from configure_ci_path_filters import (
+    get_changed_files_for_external_repo,
     get_git_commit_hash,
     get_git_modified_paths,
     get_git_submodule_paths,
     is_ci_run_required,
+    load_skip_ci_patterns_for_external_repo,
 )
 from configure_jax_release_matrix import generate_jax_matrix_for_release_type
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
@@ -86,6 +88,7 @@ from stage_reuse_decision import (
 )
 
 _NULL_GIT_SHA = "0" * 40
+
 
 # ---------------------------------------------------------------------------
 # Input parsing helpers
@@ -801,18 +804,60 @@ def should_skip_ci(
     - 'ci:skip' PR label
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
+    - ASAN builds on PRs without ci:asan or ci:host-asan labels
 
-    For external repo builds, path filtering is skipped since the external repo
-    name is used for stage reuse analysis, not for CI skip decisions.
+    For external repo builds, path filtering uses changed_files and
+    skip_ci_patterns from the external_repo JSON (both must be provided).
+    Schedule and workflow_dispatch runs always run CI.
     """
+    # 1. Common skip behavior
     if "ci:skip" in ci_inputs.pr_labels:
         print("  Skipping: 'ci:skip' PR label")
         return True
 
-    # Skip ASAN on PRs unless an enabling label is present.
-    # This avoids running expensive ASAN builds on every PR.
-    # Labels that enable ASAN CI:
-    #   - ci:asan / ci:host-asan: explicit opt-in for ASAN testing
+    # 2. Path filter skipping - check before ASAN label logic so we don't print
+    #    "Running: ASAN CI triggered by PR label" when CI will be skipped anyway.
+
+    # 2a. External repo builds: get changed files and evaluate against skip patterns
+    # from the TOML config. This allows external repos to skip TheRock CI when only
+    # docs/metadata files are changed.
+    if ci_inputs.external_repo:
+        try:
+            external_repo = json.loads(ci_inputs.external_repo)
+        except (json.JSONDecodeError, TypeError) as e:
+            raise ValueError(
+                f"Invalid external_repo JSON: {ci_inputs.external_repo!r}"
+            ) from e
+
+        if not isinstance(external_repo, dict):
+            raise ValueError(
+                f"external_repo must be a JSON object, got: {type(external_repo).__name__}"
+            )
+
+        repo_name = external_repo.get("repository", "").split("/")[-1]
+
+        # Get changed files via helper function (uses API or git diff)
+        changed_files = get_changed_files_for_external_repo(external_repo)
+
+        # Get skip patterns from TOML config file
+        skip_ci_config = external_repo.get("skip_ci_config")
+        skip_ci_patterns = None
+        if skip_ci_config:
+            skip_ci_patterns = load_skip_ci_patterns_for_external_repo(skip_ci_config)
+
+        # Evaluate skip logic
+        if not is_ci_run_required(changed_files, skip_ci_patterns, repo_name):
+            print("  External repo build: CI can be skipped")
+            return True
+
+    # 2b. Local repo (TheRock): check changed files against built-in skip patterns.
+    if not ci_inputs.external_repo and git_context.changed_files is not None:
+        print(f"  Checking {len(git_context.changed_files)} changed file(s)...")
+        if not is_ci_run_required(git_context.changed_files):
+            print("  TheRock: CI can be skipped")
+            return True
+
+    # 3. ASAN skip - only evaluated if path filtering didn't skip CI
     has_asan_label = (
         "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
     )
@@ -828,28 +873,6 @@ def should_skip_ci(
 
     if has_asan_label and ci_inputs.build_variant == "asan":
         print("  Running: ASAN CI triggered by PR label")
-
-    # External repo builds skip path filtering - they always run CI and use
-    # stage reuse to determine which stages to rebuild.
-    # TODO(#3343): Reuse skip path filters from external repos to short-circuit
-    # CI for docs-only changes, experimental projects, etc.
-    if ci_inputs.external_repo:
-        print("  External repo build: skipping path filter checks, using stage reuse")
-        return False
-
-    # If we have a list of changed files (push/pull_request events), check if
-    # CI should run for that set of changed files. For example: if only .md
-    # files are changed, skip CI.
-    if git_context.changed_files is not None:
-        print(
-            f"  Checking {len(git_context.changed_files)} changed file(s) "
-            f"against path filters..."
-        )
-        if not is_ci_run_required(git_context.changed_files):
-            print("  Skipping: no CI-relevant files changed")
-            return True
-        else:
-            print("  CI-relevant files changed, running CI")
 
     return False
 
@@ -1406,8 +1429,9 @@ def _should_run_tests_for_family(
     submodule_bump_tests_only, trigger_test_label_only) with a unified trigger-based
     approach.
 
-    workflow_dispatch (on_demand) implicitly allows all families to run tests,
-    since it's a manual trigger where users explicitly choose what to run.
+    workflow_dispatch (on_demand) and ci:run-all-archs label implicitly allow
+    all families to run tests, since both represent explicit user intent to
+    run the full matrix.
 
     Returns:
         Tuple of (should_run, reason_string) for logging.
@@ -1415,6 +1439,10 @@ def _should_run_tests_for_family(
     # workflow_dispatch implicitly allows all families
     if ci_inputs.is_workflow_dispatch:
         return True, "workflow_dispatch (on_demand)"
+
+    # ci:run-all-archs label means build AND test all families
+    if "ci:run-all-archs" in ci_inputs.pr_labels:
+        return True, "ci:run-all-archs label"
 
     tests_on_trigger = set(platform_info.get("tests_on_trigger", []))
 
@@ -1601,6 +1629,13 @@ def _expand_build_config_for_platform(
                     f"(global={jobs.test_rocm.test_type})"
                 )
 
+        # ci:cpu-test-only label: disable GPU tests, only run CPU-only tests.
+        # This is useful for changes that don't require GPU testing (e.g., docs,
+        # build scripts, CPU-only components).
+        if "ci:cpu-test-only" in ci_inputs.pr_labels and test_runs_on:
+            test_runs_on = ""
+            print(f"  {family_name}: GPU tests disabled by 'ci:cpu-test-only' label")
+
         # CPU test runner for components that don't need GPU access (e.g.,
         # components with linux_cpu_runner: True). This allows CPU-only tests
         # to run even when GPU testing is gated (e.g., trigger_test_label_only).
@@ -1624,12 +1659,14 @@ def _expand_build_config_for_platform(
             family_info["test_type"] = family_test_type
         if test_runs_on and "test-runs-on-labels" in platform_info:
             family_info["test-runs-on-labels"] = platform_info["test-runs-on-labels"]
-        # Include multi-GPU runner info if available
-        if "test-runs-on-multi-gpu" in platform_info:
+        # Include multi-GPU runner info only when GPU tests are enabled.
+        # When test_runs_on is empty (tests gated by trigger), multi-GPU tests
+        # should also be gated to respect the same trigger policy.
+        if test_runs_on and "test-runs-on-multi-gpu" in platform_info:
             family_info["test-runs-on-multi-gpu"] = platform_info[
                 "test-runs-on-multi-gpu"
             ]
-        if "test-runs-on-multi-gpu-labels" in platform_info:
+        if test_runs_on and "test-runs-on-multi-gpu-labels" in platform_info:
             family_info["test-runs-on-multi-gpu-labels"] = platform_info[
                 "test-runs-on-multi-gpu-labels"
             ]
@@ -1798,7 +1835,8 @@ def expand_build_configs(
     """Build a BuildConfig for each platform that supports the variant.
 
     Returns BuildConfigs with a BuildConfig per platform, or None for
-    platforms where the variant isn't available or no families match.
+    platforms where the variant isn't available, no families match, or no
+    artifacts will be built or reused.
     """
     all_families = get_all_families_for_trigger_types(
         ["presubmit", "postsubmit", "nightly"]
@@ -1832,6 +1870,15 @@ def expand_build_configs(
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
 
+    # Prebuilt stages still supply artifacts; only SKIP removes a stage's work.
+    topology = get_topology()
+    active_artifacts = [
+        topology.artifacts[name]
+        for stage in topology.get_build_stages()
+        if jobs.build_rocm.stage_decisions.get(stage.name) != JobAction.SKIP
+        for name in topology.get_produced_artifacts(stage.name)
+    ]
+
     for platform, families, build_only, test_only in [
         (
             "linux",
@@ -1846,6 +1893,13 @@ def expand_build_configs(
             targets.windows_test_only_families,
         ),
     ]:
+        if not any(
+            artifact.platform in (None, platform)
+            and platform not in artifact.disable_platforms
+            for artifact in active_artifacts
+        ):
+            print(f"  Platform {platform} has no artifacts to build or reuse, skipping")
+            continue
         variant_config = all_build_variants.get(platform, {}).get(build_variant)
         if not variant_config:
             print(
