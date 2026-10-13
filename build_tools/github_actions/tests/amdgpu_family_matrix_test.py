@@ -276,12 +276,21 @@ class TestExternalConfig(unittest.TestCase):
         self.assertIn("release", result["gfx94x"]["linux"]["build_variants"])
 
     def test_get_all_families_falls_back_to_local_when_no_external_config(self):
-        """get_all_families_for_trigger_types uses local matrix when no external config."""
-        if "CI_CONFIG_PATH" in os.environ:
-            del os.environ["CI_CONFIG_PATH"]
-        result = get_all_families_for_trigger_types(["presubmit"])
-        # Should contain entries from local presubmit matrix
-        self.assertIn("gfx94x", result)
+        """Local fallback applies sandbox scope without mutating shared definitions."""
+        os.environ.pop("CI_CONFIG_PATH", None)
+        os.environ["GITHUB_REPOSITORY"] = "ROCm/rocm-systems"
+        local = amdgpu_family_matrix.amdgpu_family_info_matrix
+        # A disabled call followed by a PR catches shared-state mutation.
+        for event in ["schedule", "workflow_dispatch", "pull_request"]:
+            os.environ["GITHUB_EVENT_NAME"] = event
+            result = get_all_families_for_trigger_types([])
+            for family in ("gfx94x", "gfx950"):
+                label = local[family]["linux"]["test-runs-on-sandbox"]
+                self.assertTrue(label)
+                self.assertEqual(
+                    result[family]["linux"]["test-runs-on-sandbox"],
+                    label if event == "pull_request" else "",
+                )
 
     def test_get_build_runner_labels_uses_external_config_when_available(self):
         """get_build_runner_labels uses external config when available."""
@@ -335,7 +344,7 @@ class TestExternalConfig(unittest.TestCase):
         self.assertIn("release", result["gfx94x"]["linux"]["build_variants"])
 
     def test_runner_labels_overlays_all_keys(self):
-        """runner_labels section overlays all its keys onto local definitions."""
+        """Overlay runner keys while reserving sandbox pools for rocm-systems PRs."""
         fake_config = {
             "runner_labels": {
                 "gfx94x": {
@@ -343,26 +352,45 @@ class TestExternalConfig(unittest.TestCase):
                         "test-runs-on": "external-runner",
                         "test-runs-on-multi-gpu": "external-multi-gpu",
                         "custom-runner-key": "custom-value",
+                        "test-runs-on-sandbox": "external-sandbox",
+                        "test-runs-on-sandbox-labels": [
+                            {"label": "external-sandbox", "count": 4}
+                        ],
                     }
                 }
             }
         }
-        with mock.patch.object(
-            amdgpu_family_matrix,
-            "load_external_runner_config",
-            return_value=fake_config,
-        ):
-            result = get_all_families_for_trigger_types(["presubmit"])
-
-        # All keys from runner_labels should be overlaid
-        self.assertEqual(result["gfx94x"]["linux"]["test-runs-on"], "external-runner")
-        self.assertEqual(
-            result["gfx94x"]["linux"]["test-runs-on-multi-gpu"], "external-multi-gpu"
-        )
-        self.assertEqual(result["gfx94x"]["linux"]["custom-runner-key"], "custom-value")
-        # Local build config should still be present (not in runner_labels)
-        self.assertEqual(result["gfx94x"]["linux"]["family"], "gfx94X-dcgpu")
-        self.assertIn("release", result["gfx94x"]["linux"]["build_variants"])
+        for repository, event, enabled in [
+            ("ROCm/rocm-systems", "pull_request", True),
+            ("ROCm/rocm-systems", "schedule", False),
+            ("ROCm/rocm-systems", "workflow_dispatch", False),
+            ("ROCm/rocm-systems", "push", False),
+            ("ROCm/TheRock", "pull_request", False),
+        ]:
+            os.environ["GITHUB_REPOSITORY"] = repository
+            os.environ["GITHUB_EVENT_NAME"] = event
+            with self.subTest(repository=repository, event=event), mock.patch.object(
+                amdgpu_family_matrix,
+                "load_external_runner_config",
+                return_value=fake_config,
+            ):
+                result = get_all_families_for_trigger_types(["presubmit"])
+                runners = result["gfx94x"]["linux"]
+                self.assertEqual(runners["test-runs-on"], "external-runner")
+                self.assertEqual(
+                    runners["test-runs-on-multi-gpu"], "external-multi-gpu"
+                )
+                self.assertEqual(runners["custom-runner-key"], "custom-value")
+                self.assertEqual(
+                    runners["test-runs-on-sandbox"],
+                    "external-sandbox" if enabled else "",
+                )
+                self.assertEqual(
+                    runners["test-runs-on-sandbox-labels"],
+                    [{"label": "external-sandbox", "count": 4}] if enabled else [],
+                )
+                self.assertEqual(runners["family"], "gfx94X-dcgpu")
+                self.assertIn("release", runners["build_variants"])
 
     def test_v1_external_config_extracts_runner_labels(self):
         """V1 config format (gpu_families) is handled for backward compatibility."""
