@@ -1,6 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+import importlib
 import os
 import sys
 import tempfile
@@ -257,6 +258,44 @@ class ValidTestCategoriesTest(unittest.TestCase):
     def test_invalid_category_not_accepted(self):
         self.assertNotIn("smoke", test_runner.VALID_TEST_CATEGORIES)
         self.assertNotIn("", test_runner.VALID_TEST_CATEGORIES)
+
+
+class CiDebugEnvTest(unittest.TestCase):
+    """Tests for the THEROCK_CI_DEBUG -> ROCM_KPACK_DEBUG force-on behavior.
+
+    This runs at module import time, so each case re-imports test_runner with a
+    controlled environment and inspects the resulting environ_vars.
+    """
+
+    def _reload_environ(self, env):
+        base = {"THEROCK_BIN_DIR": _tmpdir, "TEST_COMPONENT": "rocblas"}
+        with patch.dict(os.environ, {**base, **env}, clear=True):
+            return importlib.reload(test_runner).environ_vars
+
+    def test_ci_debug_forces_kpack_debug_on(self):
+        # THEROCK_CI_DEBUG=1 overrides a component's ROCM_KPACK_DEBUG=0 opt-out.
+        environ_vars = self._reload_environ(
+            {"THEROCK_CI_DEBUG": "1", "ROCM_KPACK_DEBUG": "0"}
+        )
+        self.assertEqual(environ_vars["ROCM_KPACK_DEBUG"], "1")
+
+    def test_ci_debug_off_preserves_kpack_opt_out(self):
+        # Without THEROCK_CI_DEBUG the component's opt-out is left untouched.
+        environ_vars = self._reload_environ(
+            {"THEROCK_CI_DEBUG": "0", "ROCM_KPACK_DEBUG": "0"}
+        )
+        self.assertEqual(environ_vars["ROCM_KPACK_DEBUG"], "0")
+
+    def test_ci_debug_absent_preserves_kpack_opt_out(self):
+        # THEROCK_CI_DEBUG unset behaves the same as "0".
+        environ_vars = self._reload_environ({"ROCM_KPACK_DEBUG": "0"})
+        self.assertEqual(environ_vars["ROCM_KPACK_DEBUG"], "0")
+
+
+def tearDownModule():
+    # Restore the module to the import-time environment so other test modules
+    # in the same process see the original test_runner state.
+    importlib.reload(test_runner)
 
 
 if __name__ == "__main__":
