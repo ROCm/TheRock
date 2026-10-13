@@ -431,12 +431,15 @@ def update_metadata_rocm_requires_dist(
             inplace=True,
         ) as f:
             for line in f:
-                # Full-version pins (e.g. device wheels) carry the dev git<sha> outside the ROCm part.
-                if new_version is not None:
-                    line = line.replace(str(old_version), str(new_version))
-                # Other pins still carry dev ROCm, e.g. `rocm[libraries]==10.2.0.dev0+<sha>`; triton keeps its git<sha>.
-                if strip_dev:
-                    line = strip_dev_markers(line, keep_git="triton" in line)
+                if line.startswith("Requires-Dist:"):
+                    # Full-version pins (e.g. device wheels) carry the dev git<sha> outside the ROCm part.
+                    if new_version is not None:
+                        line = line.replace(str(old_version), str(new_version))
+                    # Other pins still carry dev ROCm, e.g. `rocm[libraries]==10.2.0.dev0+<sha>`; triton keeps its git<sha>.
+                    if strip_dev:
+                        line = strip_dev_markers(
+                            line, keep_git=line.startswith("Requires-Dist: triton")
+                        )
                 lower_line = line.casefold()
                 if line.startswith("Summary:") and (
                     "therock" in lower_line or "rocm" in lower_line
