@@ -6,9 +6,14 @@
 Generate an index.html listing files in an S3 bucket.
 
 Usable as both a CLI tool (for local inspection) and an importable library.
-The library entry points are `generate_index_s3()` for flat artifact
-listings and `generate_directory_index_s3()` for direct child directory
-listings.
+Shared page-rendering/publishing logic lives in `_S3IndexGenerator`, with
+`ArtifactIndexGenerator` (flat artifact listings) and `DirectoryIndexGenerator`
+(direct child directory listings) building on it. `generate_tarball_index_s3()`
+and `generate_windows_installer_index_s3()` are the explicit, artifact-type-specific
+entry points built on `ArtifactIndexGenerator`; `generate_directory_index_s3()`
+is built on `DirectoryIndexGenerator`. A new artifact type gets its own thin
+wrapper function around `ArtifactIndexGenerator` rather than a generic
+catch-all entry point.
 
 Requirements:
  * `boto3` Python package must be installed, e.g.: pip install boto3
@@ -128,92 +133,27 @@ def extract_gpu_details(files):
     return sorted(list(gpu_families))
 
 
-def generate_index_s3(
-    s3_client,
-    bucket_name,
-    prefix: str,
-    upload: bool = False,
-    allow_empty: bool = False,
-    artifact_suffix: str = ".tar.gz",
-    page_title: str = "Tarball index",
-    show_filter: bool = True,
-    empty_message: str = "No tarballs available.",
-) -> str:
-    """Generate index.html for direct-child artifacts at s3://bucket_name/prefix.
+class _S3IndexGenerator:
+    """Shared plumbing for building and publishing an S3 index.html page.
 
-    With upload=True the index is PUT to s3://bucket_name/<prefix>/index.html
-    and the HTTPS URL is returned. Otherwise the index is written to
-    ./index.html and the local path is returned.
-
-    artifact_suffix controls which direct-child files are included.
-
-    page_title controls the generated page title.
-
-    show_filter controls whether the GPU-family filter is included in the
-    generated HTML. It should remain True for tarballs and can be set to False
-    for other artifact types such as Windows installers.
-
-    empty_message controls the message shown when the generated file list is
-    empty.
-
-    Raises FileNotFoundError when the prefix has no matching files unless
-    allow_empty=True. Empty indexes are useful for event-driven regeneration
-    after the final artifact under a product-local prefix is deleted.
+    Subclasses collect the entries to list (artifact files, child
+    directories, ...) and call `_render_page()` / `_publish()` to produce and
+    upload the resulting index.html.
     """
-    # Strip any leading or trailing slash from the prefix to standardize the directory path used to filter object.
-    prefix = prefix.lstrip("/").rstrip("/")
-    # List all objects and select matching direct-child files.
-    page_iterator = _paginate_list_objects_v2(s3_client, bucket_name, Prefix=prefix)
 
-    files = []
-    for page in page_iterator:
-        for obj in page.get("Contents", []):
-            key = obj["Key"]
-            if key.endswith(artifact_suffix) and os.path.dirname(key) == prefix:
-                # Only append the filename without the full path.
-                files.append(
-                    (key.removeprefix(f"{prefix}/"), obj["LastModified"].timestamp())
-                )
+    def __init__(self, s3_client, bucket_name):
+        self.s3_client = s3_client
+        self.bucket_name = bucket_name
 
-    if not files and not allow_empty:
-        raise FileNotFoundError(
-            f"No {artifact_suffix} files found in bucket {bucket_name} "
-            f"under prefix '{prefix}'."
+    def _paginate(self, **paginate_kwargs):
+        return _paginate_list_objects_v2(
+            self.s3_client, self.bucket_name, **paginate_kwargs
         )
 
-    # Prepare filter options and files array for JS.
-    gpu_families = extract_gpu_details(files) if show_filter else []
-    if show_filter:
-        log.info(
-            "Detected GPU families (%d): %s",
-            len(gpu_families),
-            ", ".join(gpu_families) if gpu_families else "none",
-        )
-    gpu_families_options = "".join(
-        [f'<option value="{family}">{family}</option>' for family in gpu_families]
-    )
-    files_js_array = json.dumps([{"name": f[0], "mtime": f[1]} for f in files])
-    log.info(
-        "Found %d %s files in bucket '%s'.",
-        len(files),
-        artifact_suffix,
-        bucket_name,
-    )
-
-    if show_filter:
-        filter_html = f"""
-        <label for="filter">Filter by:</label>
-        <select id="filter">
-            <option value="all">All</option>
-            <option value="multiarch">Multiarch</option>
-            {gpu_families_options}
-        </select>
-        """
-    else:
-        filter_html = ""
-
-    # HTML content for displaying files
-    html_content = f"""
+    def _render_page(
+        self, page_title: str, body: str, style: str = "", script: str = ""
+    ) -> str:
+        return f"""
     <html>
     <head>
         <title>{html.escape(page_title)}</title>
@@ -223,14 +163,123 @@ def generate_index_s3(
         <style>
             body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; color: #333; }}
             h1 {{ color: #0056b3; }}
-            select {{ margin-bottom: 10px; padding: 5px; font-size: 16px; }}
             ul {{ list-style-type: none; padding: 0; }}
             li {{ margin-bottom: 5px; padding: 10px; background-color: white; border-radius: 5px; box-shadow: 0 0 5px rgba(0,0,0,0.1); }}
             a {{ text-decoration: none; color: #0056b3; word-break: break-all; }}
             a:hover {{ color: #003d82; }}
-            .controls {{ display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }}
-            label {{ font-weight: bold; }}
+            {style}
         </style>
+        {script}
+    </head>
+    <body>
+        <h1>{html.escape(page_title)}</h1>
+        {body}
+    </body>
+    </html>
+    """
+
+    def _publish(self, upload_key: str, html_content: str, upload: bool) -> str:
+        return _publish_html(
+            self.s3_client, self.bucket_name, upload_key, html_content, upload
+        )
+
+
+class ArtifactIndexGenerator(_S3IndexGenerator):
+    """Flat index of direct-child artifact files sharing a common suffix.
+
+    Used for tarballs, Windows installers, and other flat artifact listings
+    that differ only in suffix, page title, and whether the GPU-family
+    filter is shown.
+    """
+
+    def __init__(self, s3_client, bucket_name, artifact_suffix: str, show_filter: bool):
+        super().__init__(s3_client, bucket_name)
+        self.artifact_suffix = artifact_suffix
+        self.show_filter = show_filter
+
+    def generate(
+        self,
+        prefix: str,
+        upload: bool = False,
+        allow_empty: bool = False,
+        page_title: str = "Artifact index",
+        empty_message: str = "No artifacts available.",
+    ) -> str:
+        """Generate index.html for direct-child artifacts at s3://bucket_name/prefix.
+
+        With upload=True the index is PUT to s3://bucket_name/<prefix>/index.html
+        and the HTTPS URL is returned. Otherwise the index is written to
+        ./index.html and the local path is returned.
+
+        Raises FileNotFoundError when the prefix has no matching files unless
+        allow_empty=True. Empty indexes are useful for event-driven regeneration
+        after the final artifact under a product-local prefix is deleted.
+        """
+        # Strip any leading or trailing slash from the prefix to standardize the directory path used to filter object.
+        prefix = prefix.lstrip("/").rstrip("/")
+        # List all objects and select matching direct-child files.
+        page_iterator = self._paginate(Prefix=prefix)
+
+        files = []
+        for page in page_iterator:
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                if (
+                    key.endswith(self.artifact_suffix)
+                    and os.path.dirname(key) == prefix
+                ):
+                    # Only append the filename without the full path.
+                    files.append(
+                        (
+                            key.removeprefix(f"{prefix}/"),
+                            obj["LastModified"].timestamp(),
+                        )
+                    )
+
+        if not files and not allow_empty:
+            raise FileNotFoundError(
+                f"No {self.artifact_suffix} files found in bucket {self.bucket_name} "
+                f"under prefix '{prefix}'."
+            )
+
+        # Prepare filter options and files array for JS.
+        gpu_families = extract_gpu_details(files) if self.show_filter else []
+        if self.show_filter:
+            log.info(
+                "Detected GPU families (%d): %s",
+                len(gpu_families),
+                ", ".join(gpu_families) if gpu_families else "none",
+            )
+        gpu_families_options = "".join(
+            [f'<option value="{family}">{family}</option>' for family in gpu_families]
+        )
+        files_js_array = json.dumps([{"name": f[0], "mtime": f[1]} for f in files])
+        log.info(
+            "Found %d %s files in bucket '%s'.",
+            len(files),
+            self.artifact_suffix,
+            self.bucket_name,
+        )
+
+        if self.show_filter:
+            filter_html = f"""
+            <label for="filter">Filter by:</label>
+            <select id="filter">
+                <option value="all">All</option>
+                <option value="multiarch">Multiarch</option>
+                {gpu_families_options}
+            </select>
+            """
+        else:
+            filter_html = ""
+
+        style = """
+            select { margin-bottom: 10px; padding: 5px; font-size: 16px; }
+            .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+            label { font-weight: bold; }
+        """
+
+        script = f"""
         <script>
             const files = {files_js_array};
             function applyFilter(fileList, filter) {{
@@ -274,9 +323,9 @@ def generate_index_s3(
                 }}
             }});
         </script>
-    </head>
-    <body>
-        <h1>{html.escape(page_title)}</h1>
+        """
+
+        body = f"""
         <div class="controls">
             <label for="sortOrder">Sort by:</label>
             <select id="sortOrder">
@@ -286,15 +335,123 @@ def generate_index_s3(
             {filter_html}
         </div>
         <ul id="fileList"></ul>
-    </body>
-    </html>
-    """
+        """
 
-    # Generate a prefix for the case that the index file should go to a subdirectory. Empty otherwise.
-    upload_prefix = f"{prefix}/" if prefix else ""
-    upload_key = f"{upload_prefix}index.html"
+        html_content = self._render_page(page_title, body, style=style, script=script)
 
-    return _publish_html(s3_client, bucket_name, upload_key, html_content, upload)
+        # Generate a prefix for the case that the index file should go to a subdirectory. Empty otherwise.
+        upload_prefix = f"{prefix}/" if prefix else ""
+        upload_key = f"{upload_prefix}index.html"
+
+        return self._publish(upload_key, html_content, upload)
+
+
+class DirectoryIndexGenerator(_S3IndexGenerator):
+    """Index of direct child directories under a prefix."""
+
+    def generate(
+        self,
+        prefix: str,
+        upload: bool = False,
+        allow_empty: bool = False,
+        page_title: str = "Directory index",
+        empty_message: str = "No directories available.",
+    ) -> str:
+        """Generate index.html for direct child directories at s3://bucket_name/prefix.
+
+        Raises FileNotFoundError when the prefix has no child directories unless
+        allow_empty=True.
+        """
+
+        prefix = prefix.lstrip("/").rstrip("/")
+        list_prefix = f"{prefix}/" if prefix else ""
+
+        page_iterator = self._paginate(Prefix=list_prefix, Delimiter="/")
+
+        directories = []
+
+        for page in page_iterator:
+            for common_prefix in page.get("CommonPrefixes", []):
+                directory = common_prefix["Prefix"].removeprefix(list_prefix)
+                directories.append(directory.rstrip("/") + "/")
+
+        directories.sort()
+
+        if not directories and not allow_empty:
+            raise FileNotFoundError(
+                f"No child directories found in bucket {self.bucket_name} "
+                f"under prefix '{prefix}'."
+            )
+
+        log.info(
+            "Found %d child directories in bucket '%s' under prefix '%s'.",
+            len(directories),
+            self.bucket_name,
+            prefix,
+        )
+
+        directories_html = "".join(
+            f'<li><a href="{directory}">{directory}</a></li>\n'
+            for directory in directories
+        )
+
+        if not directories_html:
+            directories_html = f"<li>{html.escape(empty_message)}</li>"
+
+        body = f"""
+        <ul>
+            {directories_html}
+        </ul>
+        """
+
+        html_content = self._render_page(page_title, body)
+
+        upload_prefix = f"{prefix}/" if prefix else ""
+        upload_key = f"{upload_prefix}index.html"
+
+        return self._publish(upload_key, html_content, upload)
+
+
+def generate_tarball_index_s3(
+    s3_client,
+    bucket_name,
+    prefix: str,
+    upload: bool = False,
+    allow_empty: bool = False,
+    page_title: str = "Tarball index",
+    empty_message: str = "No tarballs available.",
+) -> str:
+    """Generate index.html listing .tar.gz tarballs at s3://bucket_name/prefix."""
+    return ArtifactIndexGenerator(
+        s3_client, bucket_name, artifact_suffix=".tar.gz", show_filter=True
+    ).generate(
+        prefix,
+        upload=upload,
+        allow_empty=allow_empty,
+        page_title=page_title,
+        empty_message=empty_message,
+    )
+
+
+def generate_windows_installer_index_s3(
+    s3_client,
+    bucket_name,
+    prefix: str,
+    upload: bool = False,
+    allow_empty: bool = False,
+    page_title: str = "Windows Installers",
+    empty_message: str = "No Windows installers available.",
+) -> str:
+    """Generate index.html listing .msi Windows installers at s3://bucket_name/prefix."""
+    return ArtifactIndexGenerator(
+        s3_client, bucket_name, artifact_suffix=".msi", show_filter=False
+    ).generate(
+        prefix,
+        upload=upload,
+        allow_empty=allow_empty,
+        page_title=page_title,
+        empty_message=empty_message,
+    )
 
 
 def generate_directory_index_s3(
@@ -306,77 +463,18 @@ def generate_directory_index_s3(
     page_title: str = "Directory index",
     empty_message: str = "No directories available.",
 ) -> str:
-    """Generate index.html for direct child directories at s3://bucket_name/prefix.
+    """Generate index.html listing direct child directories at s3://bucket_name/prefix.
 
     Raises FileNotFoundError when the prefix has no child directories unless
     allow_empty=True.
     """
-
-    prefix = prefix.lstrip("/").rstrip("/")
-    list_prefix = f"{prefix}/" if prefix else ""
-
-    page_iterator = _paginate_list_objects_v2(
-        s3_client, bucket_name, Prefix=list_prefix, Delimiter="/"
-    )
-
-    directories = []
-
-    for page in page_iterator:
-        for common_prefix in page.get("CommonPrefixes", []):
-            directory = common_prefix["Prefix"].removeprefix(list_prefix)
-            directories.append(directory.rstrip("/") + "/")
-
-    directories.sort()
-
-    if not directories and not allow_empty:
-        raise FileNotFoundError(
-            f"No child directories found in bucket {bucket_name} "
-            f"under prefix '{prefix}'."
-        )
-
-    log.info(
-        "Found %d child directories in bucket '%s' under prefix '%s'.",
-        len(directories),
-        bucket_name,
+    return DirectoryIndexGenerator(s3_client, bucket_name).generate(
         prefix,
+        upload=upload,
+        allow_empty=allow_empty,
+        page_title=page_title,
+        empty_message=empty_message,
     )
-
-    directories_html = "".join(
-        f'<li><a href="{directory}">{directory}</a></li>\n' for directory in directories
-    )
-
-    if not directories_html:
-        directories_html = f"<li>{html.escape(empty_message)}</li>"
-
-    html_content = f"""
-    <html>
-    <head>
-        <title>{html.escape(page_title)}</title>
-        <meta charset="utf-8"/>
-        <meta http-equiv="x-ua-compatible" content="ie=edge"/>
-        <meta name="viewport" content="width=device-width, initial-scale=1"/>
-        <style>
-            body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; color: #333; }}
-            h1 {{ color: #0056b3; }}
-            ul {{ list-style-type: none; padding: 0; }}
-            li {{ margin-bottom: 5px; padding: 10px; background-color: white; border-radius: 5px; box-shadow: 0 0 5px rgba(0,0,0,0.1); }}
-            a {{ text-decoration: none; color: #0056b3; word-break: break-all; }}
-            a:hover {{ color: #003d82; }}
-        </style>
-    </head>
-    <body>
-        <h1>{html.escape(page_title)}</h1>
-        <ul>
-            {directories_html}
-        </ul>
-    </body>
-    </html>
-    """
-
-    upload_prefix = f"{prefix}/" if prefix else ""
-    upload_key = f"{upload_prefix}index.html"
-
-    return _publish_html(s3_client, bucket_name, upload_key, html_content, upload)
 
 
 if __name__ == "__main__":
@@ -418,7 +516,7 @@ if __name__ == "__main__":
             upload=args.upload,
         )
     else:
-        generate_index_s3(
+        generate_tarball_index_s3(
             s3_client=s3,
             bucket_name=args.bucket,
             prefix=args.directory,

@@ -38,7 +38,7 @@ class IndexGenerationS3Test(unittest.TestCase):
     def test_empty_prefix_raises_by_default(self) -> None:
         """Existing callers must continue to reject an empty prefix."""
         with self.assertRaises(FileNotFoundError) as raised:
-            index_generation_s3.generate_index_s3(
+            index_generation_s3.generate_tarball_index_s3(
                 s3_client=self.s3_client,
                 bucket_name=self.bucket_name,
                 prefix=self.prefix,
@@ -62,7 +62,7 @@ class IndexGenerationS3Test(unittest.TestCase):
                 for target in ("multiarch", "gfx90a", "gfx1100")
             ]
         )
-        index_generation_s3.generate_index_s3(
+        index_generation_s3.generate_tarball_index_s3(
             s3_client=self.s3_client,
             bucket_name=self.bucket_name,
             prefix=self.prefix,
@@ -91,7 +91,7 @@ class IndexGenerationS3Test(unittest.TestCase):
                 }
             ]
         )
-        index_generation_s3.generate_index_s3(
+        index_generation_s3.generate_tarball_index_s3(
             s3_client=self.s3_client,
             bucket_name=self.bucket_name,
             prefix=self.prefix,
@@ -104,7 +104,7 @@ class IndexGenerationS3Test(unittest.TestCase):
 
         # Regenerate the index after that final tarball is deleted.
         self._set_contents([])
-        result = index_generation_s3.generate_index_s3(
+        result = index_generation_s3.generate_tarball_index_s3(
             s3_client=self.s3_client,
             bucket_name=self.bucket_name,
             prefix=self.prefix,
@@ -128,7 +128,7 @@ class IndexGenerationS3Test(unittest.TestCase):
         self.assertNotIn('"name": "test-rvs.tar.gz"', empty_html)
 
     def test_index_supports_custom_artifact_options(self) -> None:
-        """Custom artifact settings support non-tarball flat indexes."""
+        """The Windows installer helper lists .msi files, not tarballs, with no filter."""
         windows_prefix = "v5/rocm/extras/rocoptiq/windows-installers/win11"
         msi_key = f"{windows_prefix}/roc-optiq-1.1.0.0-win64.msi"
         tarball_key = f"{windows_prefix}/ignored.tar.gz"
@@ -146,14 +146,11 @@ class IndexGenerationS3Test(unittest.TestCase):
             ]
         )
 
-        index_generation_s3.generate_index_s3(
+        index_generation_s3.generate_windows_installer_index_s3(
             s3_client=self.s3_client,
             bucket_name=self.bucket_name,
             prefix=windows_prefix,
             upload=True,
-            artifact_suffix=".msi",
-            page_title="Windows Installers",
-            show_filter=False,
         )
 
         html = self._uploaded_html()
@@ -165,18 +162,15 @@ class IndexGenerationS3Test(unittest.TestCase):
         self.assertNotIn("Multiarch", html)
 
     def test_index_supports_custom_empty_message(self) -> None:
-        """Custom empty messages are used for non-tarball indexes."""
+        """The Windows installer helper accepts a caller-supplied empty_message."""
         windows_prefix = "v5/rocm/extras/rocoptiq/windows-installers/win11"
 
-        index_generation_s3.generate_index_s3(
+        index_generation_s3.generate_windows_installer_index_s3(
             s3_client=self.s3_client,
             bucket_name=self.bucket_name,
             prefix=windows_prefix,
             upload=True,
             allow_empty=True,
-            artifact_suffix=".msi",
-            page_title="Windows Installers",
-            show_filter=False,
             empty_message="No Windows installers available.",
         )
 
@@ -283,7 +277,7 @@ class IndexGenerationS3Test(unittest.TestCase):
 
     def test_page_title_and_empty_message_are_escaped(self) -> None:
         """Apostrophes in caller-supplied text must not break HTML/JS output."""
-        index_generation_s3.generate_index_s3(
+        index_generation_s3.generate_tarball_index_s3(
             s3_client=self.s3_client,
             bucket_name=self.bucket_name,
             prefix=self.prefix,
