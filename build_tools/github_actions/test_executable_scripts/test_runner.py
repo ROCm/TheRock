@@ -117,7 +117,7 @@ TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
 # ctest entries and gtest splits the cases -- which yields complete, disjoint
 # coverage for any number of (gtest-binary) entries. Single-entry components are
 # unaffected either way, so this is safe to keep narrowly scoped.
-GTEST_ONLY_SHARDING_COMPONENTS = {"rocsparse", "hipsparse"}
+GTEST_ONLY_SHARDING_COMPONENTS = {"rocsparse", "hipsparse", "hipkernelprovider"}
 
 # Per-component, per-GPU-family ctest exclusions (ctest --exclude-regex patterns).
 # Structure: { "component": { "gpu_family": ["test_pattern1", "test_pattern2"] } }

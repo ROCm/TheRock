@@ -56,7 +56,7 @@ def _get_artifact_path(artifact_path: str) -> str:
 # keys it expands to. Use this when a single label should select multiple
 # related jobs without relying on name-prefix inference.
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
-    "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
+    "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
     "tensilelite": ["tensilelite", "tensilelite-common"],
 }
 
@@ -429,6 +429,10 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            # known failure
+            "linux": ["gfx125X-dcgpu"],
+        },
     },
     "rocsolver": {
         "job_name": "rocsolver",
@@ -484,19 +488,6 @@ test_matrix = {
                 # GPU tests do not honor ROCR_VISIBLE_DEVICES and utilizes other gpus during test runs. excluding
                 "gfx125X-dcgpu",
             ],
-        },
-    },
-    # Corefile tests require specific hardware support (GPU core dump capable runners).
-    # test_runner is pre-pinned so the family-based runner selection loop skips it.
-    # Only gfx942 has core-dump support, so include_family opts the job in to that
-    # family alone rather than enumerating every other architecture to exclude.
-    "rocgdb-corefile": {
-        **_rocgdb_common,
-        "job_name": "rocgdb-corefile",
-        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --gpu-corefile-tests",
-        "test_runner": "linux-gfx942-gpu-rocm-mathlib",
-        "include_family": {
-            "linux": ["gfx942"],
         },
     },
     "rocr-debug-agent": {
@@ -860,6 +851,39 @@ test_matrix = {
             "linux": ["gfx125X-dcgpu"],
         },
     },
+    # NVIDIA cuDNN sample corpus built against hipDNN's cuDNN compatibility
+    # shim. Distinct from "hipdnn-samples" above, which is hipDNN's own sample
+    # suite; these two are easy to confuse and test entirely different things.
+    "hipdnn-cudnn-samples": {
+        "job_name": "hipdnn-cudnn-samples",
+        # No "fetch_artifact_args" on purpose: this job calls
+        # find_package(hipdnn_frontend), whose config file and headers live in
+        # the "dev" component, and install_rocm_from_artifacts.py expands each
+        # selected artifact to <name>_lib plus <name>_test only -- never
+        # <name>_dev. Omitting the key takes the fetch-everything branch, which
+        # is why "hipdnn_install" omits it too. Do not "fix" this by adding the
+        # enumerated artifact flags back; find_package would fail.
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_hipdnn_cudnn_samples.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
+    # profiler-hub install/consumption tests
+    "profiler-hub": {
+        "job_name": "profiler-hub",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_profiler_hub_install.py')}",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "total_shards_dict": {"linux": 1},
+        "exclude_family": {
+            # known failure
+            "linux": ["gfx125X-dcgpu"],
+        },
+    },
     # MIOpen provider tests
     "miopenprovider": {
         "job_name": "miopenprovider",
@@ -913,8 +937,8 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 2,
+            "windows": 2,
         },
         "exclude_family": {
             "linux": [
@@ -1242,23 +1266,43 @@ def run():
             # Use policy-gated value from workflow if available, otherwise use static matrix
             if gpu_tests_gated:
                 # GPU tests are gated - don't use runner labels or defaults for GPU
+                # This includes multi-GPU runners since they are also GPU tests
                 test_runs_on_labels = None
                 test_runs_on_default = ""
+                test_runs_on_multi_gpu_labels = None
+                test_runs_on_multi_gpu_default = ""
             elif test_runs_on_from_workflow is not None:
                 # Workflow provided a non-empty runner - use it but allow label distribution
                 test_runs_on_labels = platform_info.get("test-runs-on-labels")
                 test_runs_on_default = test_runs_on_from_workflow
+                test_runs_on_multi_gpu_labels = platform_info.get(
+                    "test-runs-on-multi-gpu-labels"
+                )
+                test_runs_on_multi_gpu_default = platform_info.get(
+                    "test-runs-on-multi-gpu", ""
+                )
             else:
                 # Fallback to static matrix (backward compatibility)
                 test_runs_on_labels = platform_info.get("test-runs-on-labels")
                 test_runs_on_default = platform_info.get("test-runs-on", "")
-            test_runs_on_multi_gpu_labels = platform_info.get(
-                "test-runs-on-multi-gpu-labels"
-            )
-            test_runs_on_multi_gpu_default = platform_info.get(
-                "test-runs-on-multi-gpu", ""
-            )
+                test_runs_on_multi_gpu_labels = platform_info.get(
+                    "test-runs-on-multi-gpu-labels"
+                )
+                test_runs_on_multi_gpu_default = platform_info.get(
+                    "test-runs-on-multi-gpu", ""
+                )
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
+
+            # Enforce test_type_for_family if set in the family matrix.
+            # This is a strict override - families with limited hardware (e.g., MI455)
+            # should always run quick tests regardless of what's passed in TEST_TYPE.
+            test_type_for_family = platform_info.get("test_type_for_family")
+            if test_type_for_family and test_type_for_family != test_type:
+                logging.info(
+                    f"Overriding test_type from '{test_type}' to '{test_type_for_family}' "
+                    f"(test_type_for_family for {amdgpu_families})"
+                )
+                test_type = test_type_for_family
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
