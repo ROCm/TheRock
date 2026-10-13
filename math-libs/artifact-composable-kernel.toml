@@ -1,6 +1,5 @@
 # composable-kernel
-# lib takes everything under include/ and lib/ except the per-target conv
-# archives and their CMake exports, which fall through to dev.
+# lib excludes the per-target conv archives and CMake exports; they fall to dev.
 [components.lib."math-libs/composable_kernel/stage"]
 include = [
   "include/**",

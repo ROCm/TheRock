@@ -674,19 +674,9 @@ def build_pkg(task: BuildTask) -> tuple[str, list[str], str | None]:
 
 
 def partition_packages_without_content(pkg_list, config: PackageConfig):
-    """Split out packages that have no content to package in kpack mode.
-
-    A package for which has_no_content() holds builds nothing, so it is reported
-    as skipped. Outside kpack mode every package is kept. A package whose
-    content check raises is kept, so build_pkg reports it as failed.
-
-    Parameters:
-        pkg_list: Package names selected for the build
-        config: Configuration object
-
-    Returns:
-        (kept, skipped): package names to build, and package names skipped
-    """
+    """Return (kept, skipped) package names. In kpack mode a package is skipped
+    when has_no_content() holds, and kept when that check raises (build_pkg
+    then reports the failure)."""
     if not config.enable_kpack:
         return list(pkg_list), []
     kept = []
@@ -778,8 +768,7 @@ def run(args: argparse.Namespace):
         failed=failed_pkglist,
     )
 
-    # Print build summary; create dest_dir so the manifest is written even when
-    # every package was skipped.
+    # Print build summary; dest_dir may not exist if every package was skipped
     config.dest_dir.mkdir(parents=True, exist_ok=True)
     print_build_summary(config, pkglist_status)
     if had_collision:

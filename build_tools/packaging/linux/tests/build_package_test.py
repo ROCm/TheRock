@@ -1379,14 +1379,9 @@ class HostFallbackTest(BuildPackageTestCase):
         self.assertIn("amdrocm-solver-host", requires)
 
 
-# ---------------------------------------------------------------------------
-# Generic packaging logic (host variants, OptionalContent, per-arch -devel
-# packages, dependency resolution), tested on a synthetic package list that
-# replaces ``package.json``.
-# ---------------------------------------------------------------------------
+# Generic kpack packaging logic, tested on a synthetic package.json.
 class _KpackBuildTestCase(BuildPackageTestCase):
-    """Builds packages with only the native build tools mocked; ``_build`` returns
-    the DEB control / RPM spec text of every package built."""
+    """``_build`` returns the control/spec text of each package built (tools mocked)."""
 
     def setUp(self) -> None:
         super().setUp()
@@ -1424,12 +1419,8 @@ class _KpackBuildTestCase(BuildPackageTestCase):
 
     @staticmethod
     def _depends(built: dict[str, str], name: str) -> list[str]:
-        """Dependency package names (version qualifiers stripped) of a built package.
-
-        Every ``Depends:`` / ``Requires:`` field is read, with indented
-        continuation lines folded in. An empty field yields ``[]``; empty
-        elements of a non-empty field are kept so a malformed list stays visible.
-        """
+        """Dependency names (versions stripped) from all Depends:/Requires: fields;
+        an empty field yields [], empty elements of a non-empty field are kept."""
         fields: list[str] = []
         in_field = False
         for line in built[name].splitlines():
@@ -1548,13 +1539,8 @@ FAKE_PACKAGES = [
 def _stage_fake(
     artifacts_dir: Path, pkg_name: str, suffix: str, content: str = "files"
 ) -> None:
-    """Stage ``<artifact>_<component>_<suffix>`` for a synthetic package.
-
-    ``content`` is ``"files"`` (a payload file), ``"empty_dir"`` (the manifest
-    line and an existing empty directory) or ``"manifest_only"`` (the manifest
-    line with no directory, as the kpack splitter leaves a fully split
-    generic artifact).
-    """
+    """Stage ``<artifact>_<component>_<suffix>``; ``content`` is "files",
+    "empty_dir" or "manifest_only" (manifest line, no directory)."""
     artifact, subdir, component = FAKE_ARTIFACTS[pkg_name]
     artifact_dir = artifacts_dir / f"{artifact}_{component}_{suffix}"
     artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -1571,12 +1557,9 @@ def _stage_fake(
 
 
 class _FakePackagesTestCase(_KpackBuildTestCase):
-    """Reads ``FAKE_PACKAGES`` as ``package.json``."""
-
     def setUp(self) -> None:
         super().setUp()
-        # Other test modules may load their own copies of the packaging modules,
-        # so patch every namespace that the code under test reads package.json from.
+        # Patch package.json in every module namespace; other tests may load copies.
         namespaces: dict[int, dict] = {}
         for module in (
             build_package,
@@ -1614,7 +1597,6 @@ class GenericContentTest(_FakePackagesTestCase):
         _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic", "manifest_only")
         _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic", "empty_dir")
         _stage_fake(cfg.artifacts_dir, FAKE_STRICT, "generic", "files")
-        # Files exist, but under a subdir the package does not own.
         other = cfg.artifacts_dir / "fakeplain_lib_generic"
         (other / "Other/lib").mkdir(parents=True)
         (other / "Other/lib" / STAGING_PAYLOAD_NAME).write_bytes(STAGING_PAYLOAD_BYTES)
@@ -1655,9 +1637,6 @@ class GenericContentTest(_FakePackagesTestCase):
 
 
 class DevelGfxarchRuleTest(_FakePackagesTestCase):
-    """A non-meta -devel package is arch-specific only when it declares Gfxarch,
-    opts in with OptionalContent, and some per-arch artifact holds files."""
-
     def _is_gfxarch(self, cfg: PackageConfig, pkg_name: str) -> bool:
         return is_gfxarch_package(get_package_info(pkg_name), True, cfg.artifacts_dir)
 
@@ -1716,9 +1695,6 @@ class OptionalContentDependencyFilterTest(_FakePackagesTestCase):
 
 
 class HostlessVariantsTest(_FakePackagesTestCase):
-    """An OptionalContent package's variants and dependency edges follow which of
-    its generic and per-arch artifacts hold files."""
-
     def _stage_opt_devel(
         self,
         cfg: PackageConfig,
@@ -1755,9 +1731,7 @@ class HostlessVariantsTest(_FakePackagesTestCase):
                     )
                     for target in FAKE_TARGETS:
                         deps = self._depends(built, f"{name}{FAKE_VER}-{target}")
-                        # generic dep
                         self.assertIn(f"amdrocm-fakesupport{FAKE_VER}", deps)
-                        # arch dep
                         self.assertIn(f"amdrocm-fakebase{FAKE_VER}-{target}", deps)
                         self.assertFalse([dep for dep in deps if "-host" in dep])
                     self.assertCountEqual(
@@ -1865,9 +1839,6 @@ class HostlessVariantsTest(_FakePackagesTestCase):
 
 
 class NonOptionalPackagesKeepVariantsTest(_FakePackagesTestCase):
-    """A package keeps its variants and dependency edges unless it sets
-    OptionalContent and has no generic content."""
-
     def test_gfxarch_package_without_generic_content_keeps_host_edges(self) -> None:
         cfg = self._config(FAKE_TARGETS)
         _stage_fake(cfg.artifacts_dir, FAKE_SUPPORT, "generic")
@@ -1919,9 +1890,6 @@ class NonOptionalPackagesKeepVariantsTest(_FakePackagesTestCase):
 
 
 class PackagesWithoutContentPartitionTest(_FakePackagesTestCase):
-    """In kpack mode only an OptionalContent package with no content at all is
-    reported as skipped."""
-
     def test_only_optional_packages_without_any_content_are_skipped(self) -> None:
         # label, package, staged (suffix, content) pairs, kpack mode, skipped
         rows = (
@@ -1989,8 +1957,6 @@ class RunReportsPackagesWithoutContentTest(_FakePackagesTestCase):
 
 
 class PackageJsonConsistencyTest(unittest.TestCase):
-    """Generic consistency rules for the real ``package.json``."""
-
     DEPENDENCY_FIELD_SUFFIXES = ("Depends", "Requires", "Recommends", "Suggests")
 
     def setUp(self) -> None:
