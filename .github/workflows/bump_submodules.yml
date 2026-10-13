@@ -33,13 +33,12 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
   bump-submodules:
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      pull-requests: write
+    # App tokens create and close PRs. GITHUB_TOKEN cancels runs on those PRs.
 
     env:
       INPUT_SUBMODULE: ${{ github.event.inputs.submodule || 'all' }}
@@ -81,6 +80,9 @@ jobs:
           owner: "ROCm"
           # We will reuse the rocm-systems token for rocgdb and mesa-fork for now.
           repositories: "rocm-systems,rocgdb,mesa-fork,TheRock"
+          permission-contents: write      # Push bump branches and delete stale branches.
+          permission-pull-requests: write # Manage PRs, labels, and breadcrumb comments.
+          permission-workflows: write     # Update TheRock refs in upstream workflow files.
 
       - name: Generate GitHub App token rocm-libraries
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -90,6 +92,10 @@ jobs:
           private-key: ${{ secrets.ROCM_LIBRARIES_APP_PRIVATE_KEY }}
           owner: "ROCm"
           repositories: "rocm-libraries,TheRock"
+          permission-actions: read        # Find successful CI runs for stage reuse.
+          permission-contents: write      # Push bump branches and delete stale branches.
+          permission-pull-requests: write # Manage PRs, labels, and breadcrumb comments.
+          permission-workflows: write     # Update TheRock refs in upstream workflow files.
 
       - name: Install prerequisites
         run: |
@@ -130,11 +136,13 @@ jobs:
             --mesa_token "${SYSTEMS_TOKEN}"
 
       # Temporary clones and pushes use SYSTEMS_TOKEN or LIBRARIES_TOKEN from the App token steps.
+      # ACTIONS_TOKEN is the workflow GITHUB_TOKEN (actions: write) and only cancels runs.
       - name: Run push automation
         if: github.event_name == 'push'
         env:
           SYSTEMS_TOKEN: ${{ steps.systems-token.outputs.token }}
           LIBRARIES_TOKEN: ${{ steps.librarian-token.outputs.token }}
+          ACTIONS_TOKEN: ${{ github.token }}
         run: |
           python3 build_tools/github_actions/bump_automation.py \
             --event_type "push" \
@@ -143,10 +151,12 @@ jobs:
             --systems_token "${SYSTEMS_TOKEN}" \
             --libraries_token "${LIBRARIES_TOKEN}" \
             --rocgdb_token "${SYSTEMS_TOKEN}" \
-            --mesa_token "${SYSTEMS_TOKEN}"
+            --mesa_token "${SYSTEMS_TOKEN}" \
+            --actions_token "${ACTIONS_TOKEN}"
 
       - name: Post bump breadcrumbs to upstream PRs
-        if: github.event_name == 'push'
+        # A failed cancel fails the push step; still post breadcrumbs unless the job was cancelled.
+        if: github.event_name == 'push' && !cancelled()
         continue-on-error: true
         env:
           SYSTEMS_TOKEN: ${{ steps.systems-token.outputs.token }}

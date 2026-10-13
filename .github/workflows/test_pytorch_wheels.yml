@@ -17,10 +17,16 @@ on:
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       package_index_url:
-        description: Python package index URL to test, typically a repo.amd.com aggregate whl-next index
-        required: true
+        description: Full Python package index URL for use with --index-url.
         type: string
         default: "https://nightly.repo.amd.com/rocm/whl-next/"
+      package_find_links_url:
+        description: >-
+          Flat package page for use with --find-links. For CI artifacts, set this
+          to the run's python/index.html and package_index_url to
+          https://dev.repo.amd.com/rocm/whl-next/ for dependencies.
+        type: string
+        default: ""
       python_version:
         required: true
         type: string
@@ -69,8 +75,16 @@ on:
         required: true
         type: string
       package_index_url:
-        required: true
+        description: Full Python package index URL for use with --index-url.
         type: string
+        default: ""
+      package_find_links_url:
+        description: >-
+          Flat package page for use with --find-links. For CI artifacts, set this
+          to the run's python/index.html and package_index_url to
+          https://dev.repo.amd.com/rocm/whl-next/ for dependencies.
+        type: string
+        default: ""
       python_version:
         required: true
         type: string
@@ -114,7 +128,8 @@ jobs:
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
     container:
-      image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
+      # Linux uses the digest-pinned image below; other platforms run without a container.
+      image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }} # zizmor: ignore[unpinned-images]
       # SYS_PTRACE is required by PyTorch's test infra, which uses gdb to
       # collect stack traces on segfaults and hangs (torch/testing/_internal).
       options: --ipc host
@@ -138,6 +153,7 @@ jobs:
       TORCH_VERSION: ${{ inputs.torch_version }}
       PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
       PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
+      PACKAGE_FIND_LINKS_URL: ${{ inputs.package_find_links_url }}
       QUARTZ_REPORTING_WORKFLOW: test_pytorch_wheels.yml
       QUARTZ_WORKFLOW_POSTFIX: "- test PyTorch wheels"
       VENV_DIR: ${{ github.workspace }}/.venv
@@ -191,39 +207,13 @@ jobs:
             --torch-version="${TORCH_VERSION}" \
             --pytorch-git-ref="${PYTORCH_GIT_REF}" \
             --index-url="${PACKAGE_INDEX_URL}" \
+            --find-links="${PACKAGE_FIND_LINKS_URL}" \
             --device-extras="${DEVICE_EXTRAS}"
 
       - name: Set git options
         run: |
           git config --global --add safe.directory $PWD
           git config --global core.longpaths true
-
-      # Here we checkout the same version of PyTorch that wheels were built from
-      # so we have the right set of test source files. We _probably_ don't need
-      # to run HIPIFY, apply patches, or fetch submodules, so we skip those
-      # steps to save time.
-      # TODO(#5110): Accept manifest_url and use checkout_from_manifest.py
-      # --no-hipify --no-submodules so tests use the exact source commit and
-      # related repository pins that produced the package under test.
-      - name: Checkout PyTorch Source Repos from nightly branch
-        if: ${{ (inputs.pytorch_git_ref == 'nightly') }}
-        timeout-minutes: 30
-        run: |
-          python external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --gitrepo-origin https://github.com/pytorch/pytorch.git \
-            --repo-hashtag nightly \
-            --no-hipify \
-            --no-submodules
-
-      - name: Checkout PyTorch Source Repos from stable branch
-        if: ${{ (inputs.pytorch_git_ref != 'nightly') }}
-        timeout-minutes: 30
-        run: |
-          python external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --gitrepo-origin https://github.com/ROCm/pytorch.git \
-            --repo-hashtag "${PYTORCH_GIT_REF}" \
-            --no-hipify \
-            --no-submodules
 
       - name: Set up virtual environment
         timeout-minutes: 15
@@ -236,7 +226,28 @@ jobs:
           python build_tools/setup_venv.py ${VENV_DIR} \
             --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION}" \
             --index-url="${PACKAGE_INDEX_URL}" \
+            --find-links="${PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
+
+      # Here we checkout the same version of PyTorch that wheels were built from
+      # so we have the right set of test source files. We _probably_ don't need
+      # to run HIPIFY, apply patches, or fetch submodules, so we skip those
+      # steps to save time.
+      - name: Checkout PyTorch Source Repos
+        timeout-minutes: 30
+        run: |
+          if [ "${PYTORCH_GIT_REF}" = "nightly" ]; then
+            ORIGIN="https://github.com/pytorch/pytorch.git"
+          else
+            ORIGIN="https://github.com/ROCm/pytorch.git"
+          fi
+          TORCH_SHA=$(python -c "import torch; print(torch.version.git_version)")
+          echo "Pinning pytorch test source to wheel commit: ${TORCH_SHA}"
+          python external-builds/pytorch/pytorch_torch_repo.py checkout \
+            --gitrepo-origin "${ORIGIN}" \
+            --repo-hashtag "${TORCH_SHA}" \
+            --no-hipify \
+            --no-submodules
 
       - name: Install test requirements
         run: |
