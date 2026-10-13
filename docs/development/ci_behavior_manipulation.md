@@ -104,14 +104,14 @@ runs tests against pre-built artifacts. Find a recent successful
 run on `main`, note its run ID, then go to **Actions** > **Test Artifacts** >
 **Run workflow**:
 
-| Input | Example |
-|---|---|
-| `artifact_run_id` | `35193881163` (from the Multi-Arch CI run URL) |
-| `artifact_group` | `multi-arch-release` |
+| Input             | Example                                                      |
+| ----------------- | ------------------------------------------------------------ |
+| `artifact_run_id` | `35193881163` (from the Multi-Arch CI run URL)               |
+| `artifact_group`  | `multi-arch-release`                                         |
 | `amdgpu_families` | `gfx94X-dcgpu`, `gfx110X-all`, `gfx120X-all`, `gfx950-dcgpu` |
-| `test_runs_on` | Runner label, e.g. `linux-gfx942-1gpu-ccs-ossci-rocm` |
-| `test_type` | `quick` / `standard` / `comprehensive` / `full` |
-| `test_labels` | `test:rocblas,test:hipblas` (comma-separated, empty = all) |
+| `test_runs_on`    | Runner label, e.g. `linux-gfx942-1gpu-ccs-ossci-rocm`        |
+| `test_type`       | `quick` / `standard` / `comprehensive` / `full`              |
+| `test_labels`     | `test:rocblas,test:hipblas` (comma-separated, empty = all)   |
 
 ## Prebuilt stages
 

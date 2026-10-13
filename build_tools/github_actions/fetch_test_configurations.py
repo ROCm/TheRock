@@ -81,7 +81,7 @@ def _parse_test_labels(raw: str) -> list[str]:
         except (ValueError, SyntaxError) as exc:
             raise ValueError(
                 f"TEST_LABELS looks like a Python list but could not be parsed: {raw!r}. "
-                f"Expected format: '[\"test:rocblas\", \"test:hipblas\"]' (Python list literal) "
+                f'Expected format: \'["test:rocblas", "test:hipblas"]\' (Python list literal) '
                 f"or 'test:rocblas,test:hipblas' (comma-separated string). "
                 f"Original error: {exc}"
             ) from exc
