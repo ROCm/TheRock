@@ -48,21 +48,19 @@ For the RPM use case, this naming convention is valid. However, for the
 Debian use case, the suffix should be -dev. Therefore, for Debian packages,
 the names are updated to use -dev.
 
-In multi-arch (kpack) mode a non-metapackage -devel package is generic unless it
-sets `Gfxarch` and `OptionalContent` and some per-arch artifact for its
-components holds files. Then it is built per GPU target (e.g.
-`amdrocm-ck-dev<version>-gfx942`). Such a package whose generic artifacts hold
-no files gets no `-host` package; its device packages carry the host's
-dependencies instead. See `nativepackage_dependency_tree.md`. Opting in
-therefore also makes the package's content optional; see OptionalContent.
+In multi-arch (kpack) mode a non-metapackage -devel package is generic. It is
+built per GPU target (e.g. `amdrocm-ck-dev<version>-gfx942`) only when:
 
-The per-arch decision checks whether a `<artifact>_<component>_gfx*` directory
-for one of the package's components has a non-empty directory listed in its
-manifest; a manifest-only or empty directory does not count. A `-devel` package
-that sets `Gfxarch` without `OptionalContent` stays generic even when such files
-exist. An opted-in package changes from generic to per-arch when per-arch files
-first appear, which moves its files into `-host` and per-target packages. Before
-opting another `-devel` package in, plan that change.
+- it sets `Gfxarch`;
+- it sets `OptionalContent`; and
+- a `<artifact>_<component>_gfx*` directory for one of its components lists a
+  non-empty directory in its manifest (a manifest-only or empty directory does
+  not count).
+
+The last condition is evaluated on every build, over every GPU target in the
+artifacts directory, so the package switches between generic and per-arch
+packaging as per-arch files appear or disappear. Package layout and
+dependencies are described in `nativepackage_dependency_tree.md`.
 
 ## RPATH Packages
 
@@ -88,7 +86,7 @@ Mandatory fields for a package entry in package.json.
 - Group: The group or category of the package.
 - Priority: The priority level of the package.
 - Section: The section under which the package falls.
-- Gfxarch: Indicates that the package is associated with a graphics architecture (for a non-meta `-devel` in kpack mode, also requires `OptionalContent`).
+- Gfxarch: Indicates that the package is associated with a graphics architecture. In kpack mode a non-metapackage `-devel` package also needs `OptionalContent` (see Development Packages).
 - DEBDepends: The list of dependency packages. Applies to Debian packages.
 - RPMRequires: The list of dependency packages. Applies to RPM packages.
 
@@ -101,16 +99,16 @@ Optional Fields
 - DisablePackaging: Disables the creation of the package.
 - Disable_Debug_Package: Disables the generation of the debug symbol package.
 - OptionalContent: Marks a non-metapackage whose content may be absent. Applies
-  in multi-arch (kpack) mode only. When its generic artifacts hold no files, no
-  `-host` package is built (a Gfxarch package's per-arch packages then carry the
-  host's dependencies themselves), a package that is not per-arch builds neither
-  its versioned package nor its non-versioned alias, and, if it is not per-arch,
-  the package is dropped from other packages' dependency lists (a per-arch
-  package stays a dependency of its targets' packages). A package with neither
-  generic nor per-arch files is reported as skipped. On a `-devel` package that
-  sets `Gfxarch`, the key also opts in to per-arch packaging (see Development
-  Packages). Without this key a package with missing content keeps its host and
-  alias, so the problem stays a visible dangling dependency.
+  in multi-arch (kpack) mode only. On a `-devel` package that sets `Gfxarch`, it
+  also enables per-arch packaging (see Development Packages). When the
+  package's generic artifacts hold no files:
+  - a per-arch package builds no `-host` package; its device packages carry the
+    host's non-gfxarch dependencies;
+  - any other package builds neither its versioned package nor its
+    non-versioned alias, and is dropped from other packages' dependency lists;
+  - a package with no per-arch files either is reported as skipped;
+  - without `OptionalContent`, the package keeps all its packages and dependency
+    edges, so the gap shows as a failed build or a dangling dependency.
 - Disable_DWZ: Skip DWZ processing. Applies to Debian packages.
 - Disable_DH_STRIP: Disables dh_strip. Applies to Debian packages.
 - Provides: Indicates that a package provides the functionality of another package.

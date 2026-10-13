@@ -1380,15 +1380,13 @@ class HostFallbackTest(BuildPackageTestCase):
 
 
 # ---------------------------------------------------------------------------
-# Generic variant handling, exercised on a synthetic package set.
-#
-# ``package.json`` is replaced by a small synthetic package list so the generic
-# packaging logic (host variants, OptionalContent, per-arch -devel packages,
-# dependency resolution) is tested without depending on any real package entry.
+# Generic packaging logic (host variants, OptionalContent, per-arch -devel
+# packages, dependency resolution), tested on a synthetic package list that
+# replaces ``package.json``.
 # ---------------------------------------------------------------------------
 class _KpackBuildTestCase(BuildPackageTestCase):
-    """Runs ``build_package_variants`` with only the native build tools mocked and
-    returns the generated DEB control / RPM spec text for every package built."""
+    """Builds packages with only the native build tools mocked; ``_build`` returns
+    the DEB control / RPM spec text of every package built."""
 
     def setUp(self) -> None:
         super().setUp()
@@ -1573,7 +1571,7 @@ def _stage_fake(
 
 
 class _FakePackagesTestCase(_KpackBuildTestCase):
-    """Runs against ``FAKE_PACKAGES`` instead of the real ``package.json``."""
+    """Reads ``FAKE_PACKAGES`` as ``package.json``."""
 
     def setUp(self) -> None:
         super().setUp()
@@ -1718,8 +1716,8 @@ class OptionalContentDependencyFilterTest(_FakePackagesTestCase):
 
 
 class HostlessVariantsTest(_FakePackagesTestCase):
-    """An OptionalContent Gfxarch package with only per-arch content builds no
-    -host variant; its device packages carry the host's dependencies."""
+    """An OptionalContent package's variants and dependency edges follow which of
+    its generic and per-arch artifacts hold files."""
 
     def _stage_opt_devel(
         self,
@@ -1867,8 +1865,8 @@ class HostlessVariantsTest(_FakePackagesTestCase):
 
 
 class NonOptionalPackagesKeepVariantsTest(_FakePackagesTestCase):
-    """Only OptionalContent opts in to skipping variants: any other package that
-    lacks content keeps its host edge and alias, so the problem stays visible."""
+    """A package keeps its variants and dependency edges unless it sets
+    OptionalContent and has no generic content."""
 
     def test_gfxarch_package_without_generic_content_keeps_host_edges(self) -> None:
         cfg = self._config(FAKE_TARGETS)
@@ -1912,10 +1910,6 @@ class NonOptionalPackagesKeepVariantsTest(_FakePackagesTestCase):
             )
 
     def test_failed_versioned_build_still_gets_alias_when_content_exists(self) -> None:
-        # A versioned build that fails despite having content must not be
-        # mistaken for "no content": the alias is still built, so its dangling
-        # dependency fails the install simulation instead of the failure being
-        # hidden.
         cfg = self._config(FAKE_TARGETS)
         _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic")
         with patch.object(build_package, "build_versioned_package", return_value=[]):
@@ -1926,7 +1920,7 @@ class NonOptionalPackagesKeepVariantsTest(_FakePackagesTestCase):
 
 class PackagesWithoutContentPartitionTest(_FakePackagesTestCase):
     """In kpack mode only an OptionalContent package with no content at all is
-    reported as skipped; every other package is kept for the build."""
+    reported as skipped."""
 
     def test_only_optional_packages_without_any_content_are_skipped(self) -> None:
         # label, package, staged (suffix, content) pairs, kpack mode, skipped

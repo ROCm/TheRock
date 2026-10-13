@@ -172,8 +172,8 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
     """Build all variants for a gfxarch package in kpack mode (multi-arch).
 
     For regular gfxarch packages (Metapackage=False), creates:
-    - Host package (e.g., amdrocm-fft-host8.2) - generic artifacts; not built
-      for an OptionalContent package that has no generic content
+    - Host package (e.g., amdrocm-fft-host8.2) - generic artifacts; skipped when
+      omits_generic_variants() holds
     - Device packages (e.g., amdrocm-fft8.2-gfx1100, amdrocm-fft8.2-gfx94x) - arch-specific artifacts
     - Meta package (e.g., amdrocm-fft8.2) - depends on host (if any) + all devices
     - Non-versioned package (e.g., amdrocm-fft) - user-facing, depends on meta
@@ -244,7 +244,7 @@ def build_simple_package_variants(pkg_name, config: PackageConfig) -> list:
     - Versioned package (e.g., amdrocm-core8.2)
     - Non-versioned package with no arch suffix (e.g., amdrocm-core)
 
-    An OptionalContent package that has no generic content builds neither.
+    Neither is built when omits_generic_variants() holds.
 
     Parameters:
         pkg_name: Name of the package to build
@@ -256,9 +256,7 @@ def build_simple_package_variants(pkg_name, config: PackageConfig) -> list:
     built_packages = []
     pkg_info = get_package_info(pkg_name)
 
-    # An OptionalContent package with no generic content has nothing to put in
-    # a versioned package, and an alias would depend on a package that does
-    # not exist. Other packages always attempt both.
+    # Without a versioned package, the alias would be a dangling dependency.
     if omits_generic_variants(pkg_info, config.artifacts_dir):
         logger.warning(
             f"Skipping versioned and non-versioned variants for {pkg_name}: "
@@ -678,11 +676,9 @@ def build_pkg(task: BuildTask) -> tuple[str, list[str], str | None]:
 def partition_packages_without_content(pkg_list, config: PackageConfig):
     """Split out packages that have no content to package in kpack mode.
 
-    In kpack mode, a package for which has_no_content() holds (an
-    OptionalContent package with neither generic nor per-arch files) builds
-    nothing, so it is reported as skipped rather than failed. Outside kpack
-    mode every package is kept. A package whose content check raises is kept,
-    so build_pkg reports it as failed.
+    A package for which has_no_content() holds builds nothing, so it is reported
+    as skipped. Outside kpack mode every package is kept. A package whose
+    content check raises is kept, so build_pkg reports it as failed.
 
     Parameters:
         pkg_list: Package names selected for the build
@@ -782,8 +778,8 @@ def run(args: argparse.Namespace):
         failed=failed_pkglist,
     )
 
-    # Print build summary; dest_dir is created here as well so the manifest is
-    # written even when every package was skipped.
+    # Print build summary; create dest_dir so the manifest is written even when
+    # every package was skipped.
     config.dest_dir.mkdir(parents=True, exist_ok=True)
     print_build_summary(config, pkglist_status)
     if had_collision:

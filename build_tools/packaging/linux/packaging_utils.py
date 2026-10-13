@@ -250,12 +250,10 @@ def _has_arch_specific_artifacts(pkg_info, artifacts_dir):
 
 def _has_arch_specific_content(pkg_info, artifacts_dir):
     """
-    Check if any per-arch artifact directory for a package holds real files.
+    Check if any per-arch artifact directory of a package holds files.
 
-    Each per-arch suffix (e.g. gfx942, gfx94X-dcgpu) found for the package's
-    components in artifacts_dir is checked with the same manifest-based test
-    as _artifactory_has_content, so a directory that holds only a manifest
-    does not count.
+    Checks every gfx suffix found for the package's components in
+    artifacts_dir with the manifest-based test of _artifactory_has_content.
 
     Args:
         pkg_info (dict): A dictionary containing package details.
@@ -298,18 +296,14 @@ def is_gfxarch_package(
     Returns:
     bool : True if Gfxarch is set, else False.
            False for a non-meta devel package when enable_kpack is True, unless
-           it sets Gfxarch, opts in with OptionalContent, and some per-arch
-           artifact directory for its components holds files
+           it sets Gfxarch and OptionalContent and some per-arch artifact
+           directory for its components holds files
            False if Gfxarch is set but no arch-specific artifacts exist (kpack mode)
            When enable_kpack is True, False if artifacts_dir is None: kpack logic
            cannot classify the package as gfx-arch-specific without an artifact path.
     """
     if enable_kpack:
-        # A non-metapackage -devel package is gfx-arch-specific only when it
-        # declares Gfxarch, opts in with OptionalContent, and per-arch artifacts
-        # for its components hold files; otherwise it stays generic.
-        # Metapackages like amdrocm-core-devel always create arch-specific
-        # variants.
+        # Non-meta -devel packages are generic unless opted in (see Returns).
         if is_devel_package(pkg_info) and not is_meta_package(pkg_info):
             return bool(
                 artifacts_dir
@@ -551,7 +545,7 @@ def expand_metapackage_to_all_archs(pkg_name, gfxarch_list, config: PackageConfi
 def expand_kpack_meta_dependencies(pkg_name, gfxarch_list, config: PackageConfig):
     """Get dependencies for kpack versioned meta package: host + all device packages.
 
-    The host package is listed only when the package has generic content.
+    The host package is omitted when omits_generic_variants() holds.
 
     For example, if pkg_name is "amdrocm-fft" and gfxarch_list is ["gfx1100", "gfx1101"],
     this returns a list: ["amdrocm-fft-host8.2", "amdrocm-fft8.2-gfx1100", "amdrocm-fft8.2-gfx1101"]
@@ -565,7 +559,7 @@ def expand_kpack_meta_dependencies(pkg_name, gfxarch_list, config: PackageConfig
     """
     packages = []
 
-    # Add host package (with -host suffix) unless the package omits generic variants
+    # Add host package (with -host suffix)
     pkg_info = get_package_info(pkg_name)
     if not omits_generic_variants(pkg_info, config.artifacts_dir):
         host_config = replace(config, versioned_pkg=True, gfx_arch=GFX_HOST)
@@ -694,11 +688,10 @@ def process_versioned_dependencies(
 def _hostless_device_dependencies(
     dep_list: list, dep_infos: dict, gfxarch_deps: list, config: PackageConfig
 ) -> str:
-    """Dependencies of a device package whose package has no host variant.
+    """Dependencies of a device package that has no host package.
 
-    The device package carries the host's non-gfxarch dependencies itself: the
-    generic list resolves as the host package would, the gfxarch list keeps the
-    device arch.
+    The device package carries the host's dependencies: generic dependencies
+    resolve as for the host package, gfxarch dependencies keep the device arch.
 
     Parameters:
     dep_list: All dependencies listed in package.json for the package
@@ -747,10 +740,9 @@ def process_main_dependencies_kpack(
     Handles:
     - Meta packages: depend on all arch-specific variants
     - Host packages: depend on non-gfxarch packages only
-    - Device packages: depend on host + arch-specific gfxarch packages (or, when
-      the package omits its generic variants (OptionalContent, no generic
-      content) and so has no host, on the host's non-gfxarch dependencies +
-      arch-specific gfxarch packages)
+    - Device packages: depend on host + arch-specific gfxarch packages; without
+      a host (see omits_generic_variants), on the host's non-gfxarch
+      dependencies + arch-specific gfxarch packages
     - GFX_META packages: depend on host + all device variants
 
     Parameters:
@@ -810,9 +802,7 @@ def process_main_dependencies_kpack(
             dep_list, config.artifacts_dir, config.gfx_arch
         )
     else:
-        # Device package: depend on host package + gfxarch dependencies with arch suffix.
-        # Without generic content there is no host package: the device package then
-        # carries the host's non-gfxarch dependencies itself.
+        # Device package: depend on host package + gfxarch dependencies with arch suffix
         dep_list = pkg_info.get(field_key, [])
         dep_infos = {
             dep: get_package_info(dep, raise_if_missing=False) or {} for dep in dep_list
@@ -1419,9 +1409,6 @@ def _artifactory_has_content(pkg_info, artifacts_dir, gfx_arch):
 def has_generic_content(pkg_info, artifacts_dir):
     """Check whether a package has files in its generic artifacts.
 
-    In kpack mode an OptionalContent package without generic content has no
-    -host variant (see omits_generic_variants).
-
     Parameters:
     pkg_info: Package details from the JSON
     artifacts_dir: Directory where artifacts are stored
@@ -1435,12 +1422,8 @@ def has_generic_content(pkg_info, artifacts_dir):
 def is_optional_content_package(pkg_info):
     """Verifies whether the OptionalContent key is enabled for a package.
 
-    In kpack mode, a package with OptionalContent omits its generic variants
-    when it has no generic content (see omits_generic_variants); if it is not
-    per-arch, it is also dropped from dependency lists in that case.
-    OptionalContent also opts a -devel package that sets Gfxarch in to per-arch
-    packaging: it gets device packages when some per-arch artifact directory
-    for its components holds files.
+    See omits_generic_variants. On a -devel package that sets Gfxarch the key
+    also enables per-arch packaging (see is_gfxarch_package).
 
     Parameters:
     pkg_info (dict): A dictionary containing package details.
@@ -1454,13 +1437,11 @@ def is_optional_content_package(pkg_info):
 def omits_generic_variants(pkg_info, artifacts_dir):
     """Check whether a package omits its generic variants.
 
-    True only for a non-meta package that opts in with OptionalContent and has
-    no generic content. As a per-arch package it builds no -host variant (its
-    device packages carry the host's dependencies instead); otherwise it builds
-    neither its versioned package nor its non-versioned alias, and it is also
-    dropped from dependency lists. Every other package always keeps its
-    variants, so missing artifacts stay visible as a failed build or a dangling
-    dependency rather than being skipped silently.
+    True for a non-meta OptionalContent package with no generic content. Such a
+    package builds no -host variant if it is per-arch; otherwise it builds
+    neither its versioned package nor its alias and is dropped from dependency
+    lists. Every other package keeps its variants, so missing artifacts surface
+    as a failed build or a dangling dependency.
 
     Parameters:
     pkg_info: Package details from the JSON
@@ -1478,11 +1459,8 @@ def omits_generic_variants(pkg_info, artifacts_dir):
 def has_no_content(pkg_info, artifacts_dir):
     """Check whether a package has neither generic nor per-arch content.
 
-    True only for a package that omits its generic variants (see
-    omits_generic_variants) and has no per-arch artifact directory holding
-    files, so in kpack mode run() reports it as skipped and builds nothing for
-    it. It checks every per-arch artifact directory in the tree, regardless of
-    the targets being built.
+    True when omits_generic_variants() holds and no per-arch artifact directory
+    in artifacts_dir holds files, whichever targets are being built.
 
     Parameters:
     pkg_info: Package details from the JSON
@@ -1607,10 +1585,8 @@ def filter_dependencies_by_artifacts(
             continue
 
         # Non-gfxarch packages: missing artifacts should fail the build,
-        # so we don't filter them out here. The exception is a package with
-        # OptionalContent and no generic content: it builds no package, so
-        # depending on it would dangle. Packages without OptionalContent (and
-        # metapackages) are always kept, leaving a dangling dependency visible.
+        # so we don't filter them out here. The exception is a package that
+        # omits its generic variants: it builds no package to depend on.
         if not is_gfxarch_package(
             dep_info, enable_kpack=True, artifacts_dir=artifacts_dir
         ):

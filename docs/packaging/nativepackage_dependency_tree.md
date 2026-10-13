@@ -207,19 +207,19 @@ amdrocm-blas (non-versioned)
 1. **Device packages depend on SAME-ARCH variants** of gfxarch dependencies (for binaries)
 1. **Non-gfxarch dependencies** go to host package only (inherited by devices)
 1. **No cross-architecture dependencies** - gfx1100 device never depends on gfx942 packages
-1. **No `-host` package without generic content for `OptionalContent` packages** - a gfxarch package marked `OptionalContent` whose generic artifacts hold no files (no existing, non-empty directory) gets no host package. Every other non-meta gfxarch package still gets a host build attempt and keeps the edges to it, so missing content stays a visible dangling dependency. See below.
+1. **No host package for an `OptionalContent` package without generic content** - see below. Every other non-meta gfxarch package always attempts a host package build and keeps the edges to it.
 
 ### Per-arch `-devel` packages and packages without a host
 
-In kpack mode a non-metapackage `-devel` package is normally generic. It becomes a GfxArch package only when it sets `Gfxarch` and `OptionalContent` and some per-arch artifact for its components holds files (e.g. `composable-kernel_dev_gfx942`). `amdrocm-ck-devel` is the one such package: each `amdrocm-ck-dev8.2-gfx<t>` carries that target's `libdevice_conv_operations_<t>.a` and its CMake export files.
+A non-metapackage `-devel` package is per-arch only when it sets `Gfxarch` and `OptionalContent` and has per-arch files (see Development Packages in `native_packaging.md`). `amdrocm-ck-devel` is such a package: each `amdrocm-ck-dev8.2-gfx<t>` carries that target's `libdevice_conv_operations_<t>.a` and its CMake export files.
 
-When the generic artifacts of such an `OptionalContent` package are empty there is no host package:
+A per-arch `OptionalContent` package whose generic artifacts hold no files has no host package:
 
-- no `-host` package is built;
-- the versioned meta (e.g. `amdrocm-ck-dev8.2`) depends on the device packages only;
-- each device package carries the host's non-gfxarch dependencies itself (`amdrocm-ck8.2`, `amdrocm-runtime-dev8.2`) next to its own-arch gfxarch dependencies;
-- a dependency marked `OptionalContent` in `package.json` (currently `amdrocm-ck-devel`) that has no generic content is dropped from dependency lists when it is not per-arch (a per-arch one stays a same-arch dependency); every other package is kept, so a missing package stays a visible dangling dependency (metapackages are always kept);
-- with no per-arch files either (e.g. before the per-target CK archives exist), an `OptionalContent` `-devel` package is non-gfxarch, builds nothing (no versioned package and no non-versioned alias), and is reported as skipped, so nothing depends on it.
+- its versioned meta (e.g. `amdrocm-ck-dev8.2`) depends on the device packages only;
+- each device package depends on the host's non-gfxarch dependencies (`amdrocm-ck8.2`, `amdrocm-runtime-dev8.2`) and on its same-arch gfxarch dependencies;
+- other gfxarch packages depend on its device package for their own target when that target has per-arch files.
+
+A non-per-arch `OptionalContent` package without generic content builds nothing, and other packages drop it from their dependency lists.
 
 ```
 amdrocm-ck-dev (non-versioned)
@@ -493,9 +493,8 @@ Example for amdrocm-blas8.2-gfx1100:
   - amdrocm-blas-host8.2 (own host)
   - amdrocm-solver8.2-gfx1100 (gfxarch → same arch)
 
-Without generic content (no host package), the host's non-gfxarch
-dependencies are listed on the device package instead:
-  - non-gfxarch deps, resolved as the host package would resolve them
+Without a host package (OptionalContent, no generic content):
+  - non-gfxarch deps, resolved as for the host package
   - gfxarch deps with SAME architecture suffix
 ```
 
@@ -506,7 +505,7 @@ Dependencies = [host + all devices]
              = [amdrocm-blas-host8.2,
                 amdrocm-blas8.2-gfx1100,
                 amdrocm-blas8.2-gfx942, ...]
-(the host is listed only when the package has generic content)
+(no host for an OptionalContent package without generic content)
 ```
 
 ### Metapackage (e.g., amdrocm-core8.2)
