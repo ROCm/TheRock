@@ -305,10 +305,10 @@ class ApplyKeepListToMetadataTest(unittest.TestCase):
         self.assertNotIn("rocm-sdk-core==7.13.0\n", result)
         Metadata.from_email(result, validate=True)
 
-    def test_dev_git_prefix_keeps_rc_rocm_pin(self):
-        # A dev build against an RC, e.g. rocm 10.0.0rc4, drops git<sha> only.
+    def test_dev_git_prefix_promotes_rc_rocm_to_final(self):
+        # A dev build against an RC, e.g. rocm 10.0.0rc4, drops git<sha> and rc.
         old = "2.12.0+git1a2b3c4d.rocm10.0.0rc4"
-        new = "2.12.0+rocm10.0.0rc4"
+        new = "2.12.0+rocm10.0.0"
         body = f"""\
 Metadata-Version: 2.2
 Name: torch
@@ -340,12 +340,12 @@ Requires-Dist: amd-torch-device-gfx942=={old}
             )
             self.assertEqual(
                 (torch_dir / "_rocm_init.py").read_text(encoding="utf-8"),
-                "check_version='10.0.0rc4')\n",
+                "check_version='10.0.*')\n",
             )
             result = (dist_info / "METADATA").read_text(encoding="utf-8")
         self.assertIn(f"Requires-Dist: amd-torch-device-gfx942=={new}", result)
-        self.assertIn("Requires-Dist: rocm-sdk-core==10.0.0rc4", result)
-        self.assertNotIn("~=", result)
+        self.assertIn("Requires-Dist: rocm-sdk-core~=10.0.0", result)
+        self.assertNotIn("rc4", result)
         self.assertNotIn("git1a2b3c4d", result)
 
     def test_stable_patch_compatible_spec_rejects_earlier_patch(self):
@@ -621,29 +621,23 @@ class ComputeNewVersionStrTest(unittest.TestCase):
             "rocm7.13.0",
         )
 
-    def test_dev_git_prefix_strips_to_rocm_suffix(self):
+    def test_dev_to_release_strips_git_and_rc(self):
         self.assertEqual(
             ptf.compute_new_version_str("git1a2b3c4d.rocm10.0.0rc4", "dev", "release"),
-            "rocm10.0.0rc4",
+            "rocm10.0.0",
         )
 
-    def test_dev_does_not_match_pep440_dev_release(self):
-        self.assertFalse(ptf._version_matches_src("7.13.0.dev0", "dev"))
-        self.assertTrue(ptf._version_matches_src("git1a2b3c4d.rocm10.0.0rc4", "dev"))
-
-    def test_dev_rejects_non_release_dest(self):
-        with self.assertRaises(ValueError):
-            ptf.compute_new_version_str("git1a2b3c4d.rocm10.0.0rc4", "dev", "rc1")
-
-    def test_embedded_rocm_version_git_local(self):
+    def test_dev_with_final_rocm_strips_git_only(self):
         self.assertEqual(
-            ptf._embedded_rocm_version(Version("2.12.0+git1a2b3c4d.rocm10.0.0rc4")),
-            "10.0.0rc4",
+            ptf.compute_new_version_str("git1a2b3c4d.rocm10.0.0", "dev", "release"),
+            "rocm10.0.0",
         )
-        self.assertEqual(
-            ptf._embedded_rocm_version(Version("2.12.0+rocm7.13.0a20260501")),
-            "7.13.0a20260501",
-        )
+
+    def test_dev_matches_git_prefix_or_rc(self):
+        self.assertTrue(ptf.has_src_version_type("git1a2b3c4d.rocm10.0.0", "dev"))
+        self.assertTrue(ptf.has_src_version_type("rocm10.0.0rc4", "dev"))
+        self.assertFalse(ptf.has_src_version_type("rocm10.0.0", "dev"))
+        self.assertFalse(ptf.has_src_version_type("7.13.0.dev0", "dev"))
 
 
 class ParseArgumentsMutexTest(unittest.TestCase):
@@ -694,6 +688,11 @@ class ParseArgumentsMutexTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             self._parse(["--input-dir", "/tmp", "--dest-version", "garbage"])
 
+    def test_dev_src_defaults_dest_to_release(self):
+        ns = self._parse(["--input-dir", "/tmp", "--src-version-type", "dev"])
+        self.assertEqual(ns.src_version_type, "dev")
+        self.assertEqual(ns.dest_version, "release")
+
     def test_dev_src_rejects_non_release_dest(self):
         with self.assertRaises(SystemExit):
             self._parse(
@@ -706,11 +705,6 @@ class ParseArgumentsMutexTest(unittest.TestCase):
                     "rc1",
                 ]
             )
-
-    def test_dev_src_defaults_dest_to_release(self):
-        ns = self._parse(["--input-dir", "/tmp", "--src-version-type", "dev"])
-        self.assertEqual(ns.src_version_type, "dev")
-        self.assertEqual(ns.dest_version, "release")
 
     def test_dest_version_a_must_be_valid_calendar_date(self):
         with self.assertRaises(SystemExit):
