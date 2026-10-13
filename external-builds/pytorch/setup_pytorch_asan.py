@@ -18,17 +18,18 @@ _ASAN_COMPANION_BUILDS = (
     ("build_pytorch_vision", "--build-pytorch-vision"),
     ("build_apex", "--build-apex"),
 )
-# Torchaudio is the first companion brought up on the shared ASAN compiler
-# environment. The others stay off until their own builds are ready.
-_ASAN_ALLOWED_COMPANIONS = frozenset({"build_pytorch_audio", "build_pytorch_vision"})
+# Triton stays off: building it rewrites the torch wheel's install requirements.
+_ASAN_ALLOWED_COMPANIONS = frozenset(
+    {"build_pytorch_audio", "build_pytorch_vision", "build_apex"}
+)
 
 
 def apply_asan_companion_policy(parser, args) -> None:
-    """Build torch, plus torchaudio and torchvision when requested.
+    """Build torch, plus torchaudio, torchvision, and apex when requested.
 
-    An explicit ``--build-triton`` or ``--build-apex`` is rejected. An unset
-    flag is forced off before the checkout-directory default can turn it on.
-    ``--no-build-*`` is left as false.
+    An explicit ``--build-triton`` is rejected. An unset flag is forced off
+    before the checkout-directory default can turn it on. ``--no-build-*`` is
+    left as false.
     """
     if not args.asan:
         return
@@ -205,6 +206,132 @@ def _asan_link_args():
         setup_path.write_text(
             probe_text.replace(_VISION_CUDA_PROBE, _VISION_CUDA_PROBE_SKIP, 1)
         )
+        print(f"  Patched {setup_path} to skip the CUDA availability probe")
+
+
+_APEX_CUDA_PROBE = "if not torch.cuda.is_available() and not IS_ROCM_PYTORCH:"
+_APEX_CUDA_PROBE_SKIP = (
+    'if os.environ.get("USE_ASAN") != "1" and not torch.cuda.is_available() '
+    "and not IS_ROCM_PYTORCH:"
+)
+_APEX_ROCM_PROBE = "elif not torch.cuda.is_available() and IS_ROCM_PYTORCH:"
+_APEX_ROCM_PROBE_SKIP = (
+    'elif os.environ.get("USE_ASAN") != "1" and not torch.cuda.is_available() '
+    "and IS_ROCM_PYTORCH:"
+)
+_APEX_JIT_COMPILE_ARGS = """\
+        nvcc_args = self.strip_empty_entries(self.nvcc_args())
+        cxx_args = self.strip_empty_entries(self.cxx_args())
+"""
+_APEX_JIT_COMPILE_ARGS_ASAN = """\
+        nvcc_args = self.strip_empty_entries(self.nvcc_args()) + _asan_flags()
+        cxx_args = self.strip_empty_entries(self.cxx_args()) + _asan_flags()
+"""
+_APEX_JIT_LINK_ARGS = "                         extra_ldflags=self.strip_empty_entries(self.extra_ldflags()),\n"
+_APEX_JIT_LINK_ARGS_ASAN = "                         extra_ldflags=self.strip_empty_entries(self.extra_ldflags()) + _asan_flags(),\n"
+_APEX_CPP_EXTENSION_ARGS = """\
+                            extra_compile_args={'cxx': self.strip_empty_entries(self.cxx_args())},
+                            extra_link_args=self.strip_empty_entries(self.extra_ldflags()))
+"""
+_APEX_CPP_EXTENSION_ARGS_ASAN = """\
+                            extra_compile_args={'cxx': self.strip_empty_entries(self.cxx_args()) + _asan_flags()},
+                            extra_link_args=self.strip_empty_entries(self.extra_ldflags()) + _asan_flags())
+"""
+_APEX_CUDA_EXTENSION_CALL = """\
+        cuda_ext = ExtensionBuilder(name=self.absolute_name(),
+                                    sources=self.strip_empty_entries(self.sources()),
+                                    include_dirs=include_dirs,
+                                    libraries=self.strip_empty_entries(self.libraries_args()),
+                                    extra_compile_args=compile_args,
+                                    extra_link_args=self.strip_empty_entries(self.extra_ldflags()))
+"""
+_APEX_CUDA_EXTENSION_CALL_ASAN = """\
+        if os.environ.get("USE_ASAN") == "1":
+            for _asan_key in compile_args:
+                compile_args[_asan_key].extend(_asan_flags())
+
+        cuda_ext = ExtensionBuilder(name=self.absolute_name(),
+                                    sources=self.strip_empty_entries(self.sources()),
+                                    include_dirs=include_dirs,
+                                    libraries=self.strip_empty_entries(self.libraries_args()),
+                                    extra_compile_args=compile_args,
+                                    extra_link_args=self.strip_empty_entries(self.extra_ldflags()) + _asan_flags())
+"""
+_APEX_ASAN_HELPER_ANCHOR = 'WARNING = f"{YELLOW} [WARNING] {END}"\n'
+_APEX_ASAN_HELPER = """\
+WARNING = f"{YELLOW} [WARNING] {END}"
+
+
+def _asan_flags():
+    if os.environ.get("USE_ASAN") == "1":
+        return ["-fsanitize=address", "-fno-omit-frame-pointer", "-shared-libasan"]
+    return []
+"""
+
+
+def enable_apex_asan(apex_dir: Path) -> None:
+    """Instrument apex's JIT builders with the shared ASan runtime.
+
+    The ROCm apex wheel ships JIT-loader shims. ``setup.py`` imports torch, so
+    the build is started with ``LD_PRELOAD`` and then removes it. The CUDA
+    availability probes run in that same process and initialize HIP on a GPU,
+    which aborts under this runtime, so they are skipped when ``USE_ASAN`` is
+    set. ``torch.utils.cpp_extension`` does not forward ``LDFLAGS``, so the
+    builder appends the shared-runtime flags when an op is compiled.
+    """
+    setup_path = apex_dir / "setup.py"
+    builder_path = apex_dir / "op_builder" / "builder.py"
+    if not setup_path.is_file():
+        raise RuntimeError(f"--asan apex build did not find {setup_path}")
+    if not builder_path.is_file():
+        raise RuntimeError(f"--asan apex build did not find {builder_path}")
+
+    builder_text = builder_path.read_text()
+    if "-shared-libasan" not in builder_text:
+        required = (
+            _APEX_ASAN_HELPER_ANCHOR,
+            _APEX_JIT_COMPILE_ARGS,
+            _APEX_JIT_LINK_ARGS,
+            _APEX_CPP_EXTENSION_ARGS,
+            _APEX_CUDA_EXTENSION_CALL,
+        )
+        if any(snippet not in builder_text for snippet in required):
+            raise RuntimeError(f"--asan apex build does not recognize {builder_path}")
+        builder_text = builder_text.replace(
+            _APEX_ASAN_HELPER_ANCHOR, _APEX_ASAN_HELPER, 1
+        )
+        builder_text = builder_text.replace(
+            _APEX_JIT_COMPILE_ARGS, _APEX_JIT_COMPILE_ARGS_ASAN, 1
+        )
+        builder_text = builder_text.replace(
+            _APEX_JIT_LINK_ARGS, _APEX_JIT_LINK_ARGS_ASAN, 1
+        )
+        builder_text = builder_text.replace(
+            _APEX_CPP_EXTENSION_ARGS, _APEX_CPP_EXTENSION_ARGS_ASAN, 1
+        )
+        builder_text = builder_text.replace(
+            _APEX_CUDA_EXTENSION_CALL, _APEX_CUDA_EXTENSION_CALL_ASAN, 1
+        )
+        builder_path.write_text(builder_text)
+        print(f"  Patched {builder_path} to build apex with ASAN")
+
+    setup_text = setup_path.read_text()
+    if 'os.environ.pop("LD_PRELOAD"' not in setup_text:
+        if _AUDIO_SETUP_IMPORT not in setup_text:
+            raise RuntimeError(f"--asan apex build does not recognize {setup_path}")
+        setup_text = setup_text.replace(
+            _AUDIO_SETUP_IMPORT, _AUDIO_SETUP_DROP_PRELOAD, 1
+        )
+        setup_path.write_text(setup_text)
+        print(f"  Patched {setup_path} to drop LD_PRELOAD after importing torch")
+
+    probe_text = setup_path.read_text()
+    if _APEX_CUDA_PROBE in probe_text or _APEX_ROCM_PROBE in probe_text:
+        if _APEX_CUDA_PROBE not in probe_text or _APEX_ROCM_PROBE not in probe_text:
+            raise RuntimeError(f"--asan apex build does not recognize {setup_path}")
+        probe_text = probe_text.replace(_APEX_CUDA_PROBE, _APEX_CUDA_PROBE_SKIP, 1)
+        probe_text = probe_text.replace(_APEX_ROCM_PROBE, _APEX_ROCM_PROBE_SKIP, 1)
+        setup_path.write_text(probe_text)
         print(f"  Patched {setup_path} to skip the CUDA availability probe")
 
 
