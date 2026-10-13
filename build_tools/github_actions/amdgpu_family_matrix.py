@@ -821,6 +821,8 @@ def get_all_families_for_trigger_types(trigger_types: list[str]) -> dict:
 
     # These sandbox pools are reserved for rocm-systems PR testing. Apply the
     # policy to both setup and component selection, including local fallbacks.
+    # TODO(#6624): Move sandbox repository/trigger restrictions into each
+    # family's dictionary so the policy is explicit and can vary by family.
     if (
         os.environ.get("GITHUB_REPOSITORY") != "ROCm/rocm-systems"
         or os.environ.get("GITHUB_EVENT_NAME") != "pull_request"
