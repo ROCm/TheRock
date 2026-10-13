@@ -98,51 +98,20 @@ stage configuration.
 
 #### Running tests against existing artifacts (`test_artifacts.yml`)
 
-The [`test_artifacts.yml`](https://github.com/ROCm/TheRock/actions/workflows/test_artifacts.yml)
-workflow runs tests against pre-built artifacts without rebuilding. This is
-useful for testing specific components on a branch, validating new runners, or
-re-running failed tests.
+[`test_artifacts.yml`](https://github.com/ROCm/TheRock/actions/workflows/test_artifacts.yml)
+runs tests against pre-built artifacts. Find a recent successful
+[Multi-Arch CI](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml)
+run on `main`, note its run ID, then go to **Actions** > **Test Artifacts** >
+**Run workflow**:
 
-##### Step 1: Find a recent build run ID
-
-Navigate to **Actions** >
-[**Multi-Arch CI**](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml)
-and find a recent successful run on `main`. The run must have built artifacts
-for the GPU family you want to test (e.g. `gfx94X-dcgpu` for MI300). Note the
-run ID from the URL.
-
-##### Step 2: Trigger the workflow
-
-Navigate to **Actions** >
-[**Test Artifacts**](https://github.com/ROCm/TheRock/actions/workflows/test_artifacts.yml)
-\> **Run workflow** and fill in:
-
-| Input | Value | Notes |
-|---|---|---|
-| `artifact_run_id` | Run ID from Step 1 | Leave empty to use latest artifacts |
-| `artifact_group` | `multi-arch-release` | |
-| `amdgpu_families` | e.g. `gfx94X-dcgpu` | See table below for common values |
-| `test_runs_on` | Runner label | e.g. `linux-gfx942-1gpu-ccs-ossci-rocm` |
-| `test_type` | `standard` | Or `quick`, `comprehensive`, `full` — see [test_filtering.md](test_filtering.md) |
-| `test_labels` | e.g. `test:rocblas,test:hipblas` | Comma-separated. Leave empty to run all |
-
-Common `amdgpu_families` values:
-
-| Family | GPU targets |
+| Input | Example |
 |---|---|
-| `gfx94X-dcgpu` | gfx942 |
-| `gfx110X-all` | gfx1100, gfx1101, gfx1102, gfx1103 |
-| `gfx120X-all` | gfx1200, gfx1201 |
-| `gfx125X-dcgpu` | gfx1250 |
-| `gfx950-dcgpu` | gfx950 |
-
-> [!TIP]
-> Some `test_labels` expand to multiple jobs automatically:
-> `test:tensilelite` runs both `tensilelite` and `tensilelite-common`,
-> `test:rocgdb` runs both `rocgdb-cpu` and `rocgdb-gpu`.
-
-See also [machine_bring_up.md](machine_bring_up.md) for validating new runners
-using this workflow.
+| `artifact_run_id` | `35193881163` (from the Multi-Arch CI run URL) |
+| `artifact_group` | `multi-arch-release` |
+| `amdgpu_families` | `gfx94X-dcgpu`, `gfx110X-all`, `gfx120X-all`, `gfx950-dcgpu` |
+| `test_runs_on` | Runner label, e.g. `linux-gfx942-1gpu-ccs-ossci-rocm` |
+| `test_type` | `quick` / `standard` / `comprehensive` / `full` |
+| `test_labels` | `test:rocblas,test:hipblas` (comma-separated, empty = all) |
 
 ## Prebuilt stages
 
