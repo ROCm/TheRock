@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 THIS_DIR = Path(__file__).resolve().parent
-PYTORCH_DIR = THIS_DIR.parents[2] / "external-builds" / "pytorch"
+PYTORCH_DIR = THIS_DIR.parent
 EXAMPLE_MANIFEST = PYTORCH_DIR / "pytorch_manifest_nightly.example.json"
 sys.path.insert(0, os.fspath(PYTORCH_DIR))
 
@@ -326,6 +326,21 @@ class PyTorchCheckoutFromManifestTest(unittest.TestCase):
             "https://example.com/manifest.json", manifest_path
         )
         self.assertEqual(len(check_call.call_args_list), 1)
+
+    def test_download_manifest_rejects_non_https(self):
+        for url in (
+            "http://example.com/manifest.json",
+            "file:///fixtures/manifest.json",
+            "https:///manifest.json",
+        ):
+            with self.subTest(url=url), mock.patch.object(
+                checkout_from_manifest.urllib.request, "urlretrieve"
+            ) as download:
+                with self.assertRaisesRegex(ValueError, "HTTPS"):
+                    checkout_from_manifest.download_manifest(
+                        manifest_url=url, output_path=Path("manifest.json")
+                    )
+                download.assert_not_called()
 
     def test_expected_ref_mismatch_errors_before_checkout(self) -> None:
         manifest = {

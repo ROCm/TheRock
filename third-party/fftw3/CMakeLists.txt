@@ -53,14 +53,16 @@ therock_cmake_subproject_activate(therock-fftw3f)
 
 add_dependencies(therock-third-party therock-fftw3f)
 
-therock_provide_artifact(fftw3
-  DESCRIPTOR artifact_fftw3.toml
-  TARGET_NEUTRAL
-  COMPONENTS
-    dbg
-    dev
-    doc
-    lib
-    run
-  SUBPROJECT_DEPS therock-fftw3 therock-fftw3f
-)
+if(THEROCK_ENABLE_FFTW3)
+  therock_provide_artifact(fftw3
+    DESCRIPTOR artifact_fftw3.toml
+    TARGET_NEUTRAL
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+    SUBPROJECT_DEPS therock-fftw3 therock-fftw3f
+  )
+endif()

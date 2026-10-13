@@ -29,11 +29,11 @@ on:
       # --- Test targets ---
       linux_test_labels:
         type: string
-        description: "Comma-separated test options. Use test:* to filter tests (e.g. test:rocprim). Use test_filter:* to set test type (e.g. test_filter:quick)."
+        description: "Comma-separated Linux test options. Use test:* to filter tests (e.g. test:rocprim). Use test_filter:* to set test type (e.g. test_filter:quick)."
         default: ""
       windows_test_labels:
         type: string
-        description: "Comma-separated test options. Use test:* to filter tests (e.g. test:rocprim). Use test_filter:* to set test type (e.g. test_filter:quick)."
+        description: "Comma-separated Windows test options. Use test:* to filter tests (e.g. test:rocprim). Use test_filter:* to set test type (e.g. test_filter:quick)."
         default: ""
       # --- Build control ---
       build_stages:

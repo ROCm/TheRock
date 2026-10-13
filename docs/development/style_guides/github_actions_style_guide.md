@@ -457,3 +457,104 @@ jobs:
     uses: ./.github/workflows/test.yml
     secrets: inherit
 ```
+
+#### Security - Limit workflow permissions
+
+Grant permissions only to jobs that need them. See
+[GitHub's permissions reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idpermissions) and zizmor's
+[excessive-permissions](https://docs.zizmor.sh/audits/#excessive-permissions)
+audit.
+
+> [!NOTE]
+> See [s3_buckets.md#authentication](../s3_buckets.md#authentication) for a
+> common authentication pattern used with
+> [`.github/actions/configure_aws_artifacts_credentials/action.yml`](/.github/actions/configure_aws_artifacts_credentials/action.yml).
+
+> [!NOTE]
+> Job-level `permissions` blocks replace any workflow defaults.
+
+> [!NOTE]
+> Include `contents: read` when the job checks out repository code so it also
+> works in private repositories. See
+> https://github.com/actions/checkout#recommended-permissions.
+
+✅ **Preferred:**
+
+Use minimal defaults and grant permissions only to jobs that need them:
+
+```yaml
+permissions:
+  contents: read
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  trigger_workflow:
+    permissions:
+      actions: write # Dispatch a downstream workflow.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: downstream.yml
+```
+
+🟡 **Acceptable with tradeoffs:**
+
+When all jobs in a workflow need the same permissions, they can be listed at
+workflow level:
+
+```yaml
+# .github/workflows/publish_docker_images.yml
+permissions:
+  contents: read
+  # Every job publishes a container image to GHCR.
+  packages: write # zizmor: ignore[excessive-permissions]
+```
+
+❌ **Avoid:**
+
+Do not grant permissions to all jobs just because one job needs them.
+
+```yaml
+permissions:
+  contents: read  # Baseline permissions used to checkout the repository
+  actions: write  # Needed by trigger_workflow to use benc-uk/workflow-dispatch
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  trigger_workflow:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: downstream.yml
+```
+
+#### Security - Limit GitHub App token permissions
+
+When creating a GitHub App token, explicitly request only the permissions its
+consumers need. Without `permission-*` inputs, `actions/create-github-app-token`
+inherits all installation permissions. See
+[zizmor's github-app audit](https://docs.zizmor.sh/audits/#github-app) and the
+[action's permission inputs](https://github.com/actions/create-github-app-token#permission-permission-name).
+
+For example, a token used only to create tags needs contents write access:
+
+```yaml
+- name: Create tagging token
+  id: tagging-token
+  uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+  with:
+    app-id: ${{ secrets.APP_ID }}
+    private-key: ${{ secrets.APP_PRIVATE_KEY }}
+    permission-contents: write # Create tags.
+```
+
+Omitting both `owner` and `repositories` scopes the token to the current
+repository. For cross-repository operations, set `owner` and `repositories` to
+limit access to the required repositories. The App installation must already
+allow every requested permission.
