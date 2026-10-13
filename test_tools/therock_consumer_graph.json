@@ -222,6 +222,9 @@
   "hipthreads": {
     "consumers": []
   },
+  "hrr": {
+    "consumers": []
+  },
   "kfdtest": {
     "consumers": []
   },
@@ -565,7 +568,6 @@
   "therock-catch2": {
     "consumers": [
       "hip-tests",
-      "hrr",
       "origami",
       "rocroller"
     ]
@@ -883,11 +885,6 @@
       "rocm-kpack",
       "rocr-runtime",
       "therock-elfutils"
-    ]
-  },
-  "hrr": {
-    "consumers": [
-      "hip-tests"
     ]
   }
 }
