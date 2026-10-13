@@ -56,6 +56,10 @@ class TestResolveAsanEnv(unittest.TestCase):
             self.assertEqual(warnings, [])
             self.assertTrue(env["ASAN_RUNTIME_PATH"].endswith("asan.so"))
             self.assertTrue(env["ASAN_SYMBOLIZER_PATH"].endswith("llvm-symbolizer"))
+            self.assertIn(
+                str(Path(env["ASAN_RUNTIME_PATH"]).parent),
+                env["LD_LIBRARY_PATH"].split(":"),
+            )
 
     def test_static_values_are_always_exported(self):
         with tempfile.TemporaryDirectory() as tmp:

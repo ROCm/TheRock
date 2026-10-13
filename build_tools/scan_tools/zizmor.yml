@@ -8,6 +8,7 @@
 
 rules:
   self-repository:
-    # TODO: Remove this suppression and migrate to $/ once actionlint supports it.
+    # TODO(https://github.com/ROCm/TheRock/issues/8760): Remove this suppression
+    # and migrate to $/ once actionlint supports it.
     # https://github.com/rhysd/actionlint/issues/711
     disable: true
