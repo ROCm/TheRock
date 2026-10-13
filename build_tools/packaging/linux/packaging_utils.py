@@ -1104,6 +1104,10 @@ def filter_components_fromartifactory(
                                     # flattener's handling of these absent roots, while
                                     # retaining validation of every existing payload.
                                     if enable_kpack and not source_path.exists():
+                                        logger.debug(
+                                            "Skipping absent split-artifact manifest "
+                                            f"root: {source_path}"
+                                        )
                                         continue
                                     sourcedir_list.append(source_path)
                     except OSError as e:
