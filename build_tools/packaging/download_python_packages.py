@@ -93,6 +93,9 @@ TYPICAL USAGE (Command Line):
   # Download only structured PyTorch whl-next packages.
   python download_python_packages.py --version=7.13.0rc1 --structured --product=pytorch --output-dir=./downloads
 
+  # Download one dev PyTorch build (built later against ROCm 10.0.0rc4) for promotion with --src-version-type=pytorch-dev.
+  python download_python_packages.py --version=10.0.0rc4 --structured --repo-stream=dev --product=pytorch --pytorch-version=2.12 --git-sha=b97872d5,34c52a67,b3d5b111,669b31ac --output-dir=./downloads
+
   # Download structured packages and normal ROCm Core tarballs.
   python download_python_packages.py --version=7.13.0rc1 --structured --include-tarballs --tarball-variant=release --output-dir=./downloads
 
@@ -141,6 +144,8 @@ import fnmatch
 import re
 import sys
 from pathlib import Path
+
+from packaging.version import InvalidVersion, Version
 
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
@@ -333,6 +338,70 @@ def filter_package_entries(
         filtered.append(entry)
 
     return filtered
+
+
+# Dev builds tag the local version with the source commit, e.g. torch-2.12.0+gitb97872d5.rocm10.0.0rc4-...
+DEV_GIT_SHA_RE = re.compile(r"\+git([0-9a-f]+)\.")
+
+
+def split_package_filename(filename: str) -> tuple[str, str]:
+    """Return (normalized package name, version) from a wheel/sdist filename."""
+    base = re.split(r"-\d", filename, maxsplit=1)[0]
+    version = filename[len(base) + 1 :].split("-")[0]
+    return base.lower().replace("-", "_"), version
+
+
+def matches_git_sha(sha: str, git_shas: list[str]) -> bool:
+    # Wheels carry an 8+ char short sha; accept shorter prefixes or full shas.
+    return any(sha.startswith(s) or s.startswith(sha) for s in git_shas)
+
+
+def matches_pytorch_version(version: str, pytorch_version: str) -> bool:
+    public = Version(version).release
+    requested = Version(pytorch_version).release
+    return public[: len(requested)] == requested
+
+
+def filter_dev_builds(
+    packages: list[PackageEntry],
+    git_shas: list[str] | None = None,
+    pytorch_version: str | None = None,
+) -> list[PackageEntry]:
+    """Narrow structured listings to one dev build.
+
+    Args:
+        packages: PackageEntry instances from a structured listing.
+        git_shas: Keep `+git<sha>.` wheels only if their sha matches one of these.
+            Wheels without a git sha (e.g. apex) are kept.
+        pytorch_version: Keep torch and torch device wheels only for this
+            PyTorch version (e.g. "2.12" or "2.12.0").
+    """
+    filtered = []
+    for entry in packages:
+        filename = entry.key.split("/")[-1]
+        name, version = split_package_filename(filename)
+        sha_match = DEV_GIT_SHA_RE.search(filename)
+        if git_shas and sha_match and not matches_git_sha(sha_match[1], git_shas):
+            print(f"  FILTERED OUT by --git-sha: {filename}")
+            continue
+        if (
+            pytorch_version
+            and (name == "torch" or name.startswith("amd_torch_device_"))
+            and not matches_pytorch_version(version, pytorch_version)
+        ):
+            print(f"  FILTERED OUT by --pytorch-version: {filename}")
+            continue
+        filtered.append(entry)
+    return filtered
+
+
+def find_dev_build_collisions(packages: list[PackageEntry]) -> dict[str, list[str]]:
+    """Group dev wheels that differ only in git sha, since promotion maps them to one filename."""
+    groups: dict[str, list[str]] = {}
+    for entry in packages:
+        filename = entry.key.split("/")[-1]
+        groups.setdefault(DEV_GIT_SHA_RE.sub("+", filename), []).append(filename)
+    return {k: v for k, v in groups.items() if len(v) > 1}
 
 
 def is_allowed_multi_arch_package(
@@ -829,6 +898,8 @@ def handle_multi_arch_downloads(
     tarball_variant="release",
     include_package_globs=None,
     exclude_package_globs=None,
+    git_shas=None,
+    pytorch_version=None,
 ):
     """Handle multi-arch package listing and downloads."""
 
@@ -863,6 +934,10 @@ def handle_multi_arch_downloads(
         include_package_globs=include_package_globs,
         exclude_package_globs=exclude_package_globs,
     )
+    if git_shas or pytorch_version:
+        packages_to_promote = filter_dev_builds(
+            packages_to_promote, git_shas, pytorch_version
+        )
 
     if not packages_to_promote:
         print("[ERROR]: No packages left after applying package filters")
@@ -878,6 +953,21 @@ def handle_multi_arch_downloads(
         print("\n" + "=" * 60)
         print(f"TOTAL SIZE: {total_size / BYTES_TO_MB:.2f} MB")
         return
+
+    collisions = (
+        find_dev_build_collisions(packages_to_promote)
+        if structured and repo_stream == "dev"
+        else {}
+    )
+    if collisions:
+        print(
+            "[ERROR]: Several dev builds would promote to the same filename; "
+            "narrow them with --git-sha or --pytorch-version:"
+        )
+        for filenames in collisions.values():
+            for filename in filenames:
+                print(f"  - {filename}")
+        sys.exit(1)
 
     if include_tarballs:
         if structured:
@@ -1235,6 +1325,25 @@ Examples:
     )
 
     parser.add_argument(
+        "--git-sha",
+        action="append",
+        default=[],
+        help=(
+            "With --structured: keep only dev wheels whose '+git<sha>.' local version "
+            "matches one of these commits (torch, torchvision, triton, ...). Wheels "
+            "without a git sha are kept. Repeatable or comma-separated."
+        ),
+    )
+
+    parser.add_argument(
+        "--pytorch-version",
+        help=(
+            "With --structured: keep only torch and torch device wheels of this "
+            "PyTorch version, e.g. 2.12 or 2.12.0."
+        ),
+    )
+
+    parser.add_argument(
         "--include-tarballs",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -1344,6 +1453,18 @@ Examples:
 
     if args.arch:
         args.arch = [arch.strip() for arch in args.arch.split(",")]
+
+    args.git_sha = [sha.lower() for sha in parse_csv_args(args.git_sha)]
+    if (args.git_sha or args.pytorch_version) and not args.structured:
+        parser.error("--git-sha and --pytorch-version require --structured")
+    bad_shas = [s for s in args.git_sha if not re.fullmatch(r"[0-9a-f]{7,40}", s)]
+    if bad_shas:
+        parser.error(f"--git-sha expects 7-40 hex characters, got: {bad_shas}")
+    if args.pytorch_version:
+        try:
+            Version(args.pytorch_version)
+        except InvalidVersion:
+            parser.error(f"Invalid --pytorch-version: {args.pytorch_version!r}")
 
     if args.structured:
         args.multi_arch = True
@@ -1535,6 +1656,8 @@ def download_prerelease_packages(
     list_packages_per_arch: bool = False,
     include_package_globs: list[str] | None = None,
     exclude_package_globs: list[str] | None = None,
+    git_shas: list[str] | None = None,
+    pytorch_version: str | None = None,
 ) -> list[str] | dict[str, dict[str, list[str]]] | tuple[int, int, list[str]]:
     """Download prerelease packages from S3 bucket for promotion to release.
 
@@ -1639,6 +1762,8 @@ def download_prerelease_packages(
             tarball_variant=tarball_variant,
             include_package_globs=include_package_globs,
             exclude_package_globs=exclude_package_globs,
+            git_shas=git_shas,
+            pytorch_version=pytorch_version,
         )
 
     # List architectures
@@ -1776,4 +1901,6 @@ if __name__ == "__main__":
         list_packages_per_arch=args.list_packages_per_arch,
         include_package_globs=args.include_package_glob,
         exclude_package_globs=args.exclude_package_glob,
+        git_shas=args.git_sha,
+        pytorch_version=args.pytorch_version,
     )
