@@ -8,6 +8,7 @@ This module provides utilities to:
 - Filter paths based on skippable patterns (docs, markdown, etc.)
 - Identify CI-related workflow files
 - Decide whether CI should run based on the modified paths
+- Map an external repo's modified paths onto the projects CI should scope to
 
 Skip-CI patterns are loaded from TOML config files:
 - skip-ci-base.toml: Universal patterns that apply to all repos
@@ -19,13 +20,13 @@ Public API:
     get_git_submodule_paths() - Get list of git submodule paths in the repository
     get_changed_files_for_external_repo() - Get changed files for external repos via API/git
     is_ci_run_required() - Check if CI run is required based on modified paths
-    is_path_skippable() - Check a single path against a list of skip patterns
-    load_base_skip_ci_patterns() - Load only the universal skip-CI patterns
     load_skip_ci_config() - Load skip-CI patterns from TOML config files
     load_skip_ci_patterns_for_external_repo() - Load skip-CI patterns for external repos
+    compute_external_repo_changed_projects() - Map changed paths to scoped projects
 """
 
 import fnmatch
+import json
 import os
 from pathlib import Path
 import re
@@ -189,14 +190,6 @@ def load_skip_ci_config(
     return patterns, ci_filenames
 
 
-def load_base_skip_ci_patterns() -> list[str]:
-    """Load only the universal skip-CI patterns from skip-ci-base.toml."""
-    base_config = _load_toml_file(_BASE_CONFIG_PATH)
-    if not base_config:
-        return []
-    return _extract_skip_patterns_from_config(base_config)
-
-
 # Cached config loaded at module import time for TheRock
 _cached_skip_patterns: Optional[list[str]] = None
 _cached_ci_workflow_filenames: Optional[set[str]] = None
@@ -230,20 +223,12 @@ def load_skip_ci_patterns_for_external_repo(config_path: str) -> list[str] | Non
 
     Args:
         config_path: Relative path to the skip-CI config file within the external
-            repo (e.g., ".github/skip-ci-config.toml"). May be empty when the
-            repo has not defined one yet, in which case only base patterns apply.
+            repo (e.g., ".github/skip-ci-config.toml")
 
     Returns:
         Combined list of skip patterns (base + extension), or None if no patterns
         could be loaded.
     """
-    if not config_path:
-        # Never fall through to TheRock's own extension patterns for an
-        # external repo: they reference TheRock-only paths (experimental/,
-        # dockerfiles/, build_tools/tests/) that mean nothing in the caller.
-        print("  No skip-CI config declared; using base skip-CI patterns only")
-        return load_base_skip_ci_patterns() or None
-
     # The external repo config is checked out to external-repo-config/
     full_path = Path(_EXTERNAL_REPO_CONFIG_DIR) / config_path
     if not full_path.exists():
@@ -259,6 +244,224 @@ def load_skip_ci_patterns_for_external_repo(config_path: str) -> list[str] | Non
     patterns, _ = load_skip_ci_config(extension_config_path=full_path)
     print(f"  Loaded {len(patterns)} total skip CI patterns (base + {config_path})")
     return patterns
+
+
+# ============================================================================
+# External repo changed-project analysis
+# ============================================================================
+# External repos (rocm-libraries, rocm-systems) call TheRock's reusable
+# workflows and pass an `external_repo` JSON blob describing the triggering
+# event. Mapping their changed files to project paths happens here rather than
+# in a per-repo script so the policy lives in one place and the caller workflow
+# stays declarative.
+
+# Repositories that scope TheRock workflow changes to their configured
+# projects. Repositories absent from this map retain full-test coverage, since
+# we cannot assume their workflow files only affect their own projects.
+_WORKFLOW_TEST_SCOPE_BY_REPO = {
+    "rocm/rocm-libraries": "configured-projects",
+}
+
+# TheRock workflow files inside the calling repository.
+_CALLER_WORKFLOW_PATTERNS = [
+    ".github/workflows/therock*",
+]
+
+# Changes to project discovery or shared test logic retain global coverage,
+# because they can alter test selection for every project at once.
+_FULL_TEST_TRIGGER_PATTERNS = [
+    ".github/scripts/therock*",
+    ".github/scripts/get_changed_projects.py",
+    ".github/scripts/ci_utils.py",
+    ".github/scripts/config_loader.py",
+    ".github/scripts/repo_config_model.py",
+    ".github/scripts/pr_detect_changed_subtrees.py",
+    ".github/repos-config.json",
+    # shared/ctest holds the CTest categorization logic consumed by every
+    # project's tests; a change there can alter selection everywhere, so treat
+    # it as a full-test trigger rather than a single surfaced component.
+    "shared/ctest/*",
+]
+
+# CI-relevant monorepo directories that are NOT subtree-synced repos and so are
+# absent from an external repo's repos-config.json. Without these, a PR confined
+# to one of these paths yields no matched subtree -> empty changed_projects ->
+# TheRock falls back to building and testing everything. Each entry MUST have a
+# corresponding mapping in TheRock (build-topology alias + the test selector's
+# _EXTERNAL_SUBTREE_ALIASES), so keep this list in lock-step when adding
+# directories.
+_CI_RELEVANT_NON_SUBTREE_PREFIXES = {
+    "dnn-providers/cmake",
+    "shared/amdgpu-windows-interop",
+    "shared/kpack",
+    "shared/machine-readable-isa",
+    "shared/primbench",
+    "emulation/mirage",
+    "emulation/rocjitsu",
+}
+
+
+def _matches_patterns(paths: Iterable[str], patterns: Iterable[str]) -> bool:
+    """Check whether any path matches any glob pattern."""
+    patterns = list(patterns)
+    return any(fnmatch.fnmatch(path, pattern) for path in paths for pattern in patterns)
+
+
+def _load_external_repo_project_prefixes(projects_config_path: str) -> set[str]:
+    """Read `category/name` subtree prefixes from an external repos-config.json.
+
+    Returns an empty set when the config is missing or unreadable; callers
+    treat that as "cannot narrow scope" and run the full suite.
+    """
+    full_path = Path(_EXTERNAL_REPO_CONFIG_DIR) / projects_config_path
+    if not full_path.exists():
+        print(f"  Projects config not found: {full_path}")
+        return set()
+
+    try:
+        config = json.loads(full_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"  Warning: failed to read projects config {full_path}: {e}")
+        return set()
+
+    return {
+        f"{entry['category']}/{entry['name']}"
+        for entry in config.get("repositories", [])
+        if entry.get("category") and entry.get("name")
+    }
+
+
+def _match_subtrees(
+    changed_files: Iterable[str], valid_prefixes: set[str]
+) -> list[str]:
+    """Attribute each changed file to the longest matching subtree prefix.
+
+    A changed file's subtree is the LONGEST registered prefix (`category/name`,
+    or a nested `category/name/subname`) that matches its path -- checked from
+    most to least specific -- not a fixed 2-segment truncation. A fixed
+    2-segment truncation would make a nested subtree registered in
+    repos-config.json (e.g. `hipblaslt/tensilelite`, nested inside `hipblaslt`)
+    indistinguishable from a change to its parent: both collapse to
+    `projects/hipblaslt`, silently losing the more specific match. Matching
+    longest-prefix-first, and attributing each changed file to exactly one
+    subtree, keeps a tensilelite-only change from also firing hipblaslt-proper's
+    (potentially different) test selection.
+    """
+    prefixes_by_specificity = sorted(
+        valid_prefixes, key=lambda p: p.count("/"), reverse=True
+    )
+    matched: set[str] = set()
+    for path in changed_files:
+        segments = path.split("/")
+        for prefix in prefixes_by_specificity:
+            prefix_segments = prefix.split("/")
+            if segments[: len(prefix_segments)] == prefix_segments:
+                matched.add(prefix)
+                break
+    return sorted(matched)
+
+
+def _unclassified_paths(
+    paths: Iterable[str], valid_prefixes: set[str], skip_patterns: list[str]
+) -> list[str]:
+    """Non-skippable changed paths that map to no known subtree.
+
+    A PR can mix a recognized path (e.g. ``projects/rdc/...``) with a path we
+    cannot classify (a top-level file, or a directory absent from both
+    repos-config.json and _CI_RELEVANT_NON_SUBTREE_PREFIXES). _match_subtrees
+    silently drops the unclassified path, which would let CI narrow the build to
+    the recognized subset and miss the impact of the unclassified change.
+    Callers treat any such path conservatively and run the full suite.
+    """
+    return [
+        path
+        for path in paths
+        if not _is_path_skippable_for_patterns(path, skip_patterns)
+        and "/".join(path.split("/", 2)[:2]) not in valid_prefixes
+    ]
+
+
+def compute_external_repo_changed_projects(
+    changed_files: list[str],
+    projects_config_path: str,
+    repo_full_name: str,
+    skip_patterns: list[str],
+) -> list[str]:
+    """Map an external repo's changed files to the projects CI should scope to.
+
+    An empty result means "cannot narrow scope" and makes every downstream
+    consumer (stage reuse, test selection) fall back to full coverage. This is
+    the conservative default whenever a change cannot be confidently attributed
+    to a known subtree.
+
+    Args:
+        changed_files: Changed file paths in the calling repository.
+        projects_config_path: Path to repos-config.json relative to that repo.
+        repo_full_name: Full repository name (e.g. "ROCm/rocm-libraries").
+        skip_patterns: Glob patterns for files that never affect build/test.
+
+    Returns:
+        Sorted project paths (e.g. ["projects/rocblas"]), or [] for full coverage.
+    """
+    if not changed_files:
+        print("  No changed files - running all tests")
+        return []
+
+    # Shared CI and test-selection changes can affect every project at once.
+    if _matches_patterns(changed_files, _FULL_TEST_TRIGGER_PATTERNS):
+        print("  Shared CI files changed - running all tests")
+        return []
+
+    configured_projects = _load_external_repo_project_prefixes(projects_config_path)
+    if not configured_projects:
+        print("  No projects config loaded - running all tests")
+        return []
+
+    # Apply the calling repository's workflow test policy.
+    if _matches_patterns(changed_files, _CALLER_WORKFLOW_PATTERNS):
+        if (
+            _WORKFLOW_TEST_SCOPE_BY_REPO.get(repo_full_name.lower())
+            != "configured-projects"
+        ):
+            print(f"  Workflow changed in {repo_full_name} - running all tests")
+            return []
+
+        # A second, unknown change must retain the conservative full run.
+        other_paths = [
+            path
+            for path in changed_files
+            if not _matches_patterns([path], _CALLER_WORKFLOW_PATTERNS)
+        ]
+        unclassified = _unclassified_paths(
+            other_paths, configured_projects, skip_patterns
+        )
+        if unclassified:
+            print(
+                f"  Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
+                " - running all tests"
+            )
+            return []
+
+        print(f"  Workflow changed in {repo_full_name} - testing configured projects")
+        return sorted(configured_projects)
+
+    valid_prefixes = configured_projects | _CI_RELEVANT_NON_SUBTREE_PREFIXES
+
+    # Conservative guard: if any non-skippable change cannot be classified to a
+    # known subtree, we cannot reason about its build/test impact. Narrowing on
+    # just the recognized subset would silently drop the unclassified change, so
+    # fall back to a full run instead.
+    unclassified = _unclassified_paths(changed_files, valid_prefixes, skip_patterns)
+    if unclassified:
+        print(
+            f"  Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
+            " - running all tests"
+        )
+        return []
+
+    matched = _match_subtrees(changed_files, valid_prefixes)
+    print(f"  Matched projects: {matched}")
+    return matched
 
 
 # ============================================================================
@@ -450,11 +653,6 @@ def is_ci_run_required(
     else:
         print(f"{label}All files skippable, CI can be skipped")
         return False
-
-
-def is_path_skippable(path: str, skip_patterns: Iterable[str]) -> bool:
-    """Check whether a single path matches any of the given skip patterns."""
-    return _is_path_skippable_for_patterns(path, list(skip_patterns))
 
 
 def get_ci_workflow_filenames() -> set[str]:
