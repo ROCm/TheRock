@@ -233,7 +233,7 @@ jobs:
           cmake -B "${BUILD_DIR}" -S . -GNinja \
             --preset=${{ inputs.build_variant_cmake_preset }} \
             -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
-            -DTHEROCK_WINDOWS_DRIVER_BUILD=ON \
+            -DTHEROCK_FLAG_WINDOWS_DRIVER_BUILD=ON \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_HIP_COMPILER_LAUNCHER=ccache \
