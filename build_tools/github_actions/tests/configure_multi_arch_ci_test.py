@@ -1832,6 +1832,33 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 build_variant_cmake_preset = result.linux.build_variant_cmake_preset
                 self.assertEqual(build_variant_cmake_preset, expected_variant)
 
+    def test_hrr_capture_variant_is_linux_only_and_keeps_presubmit_tests(self):
+        """hrr-capture: listed Linux families only, own preset and suffix, tests kept."""
+        # gfx900 does not list hrr-capture; windows has no hrr-capture config.
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x", "gfx900"],
+            windows_families=["gfx110x"],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(build_variant="hrr-capture"),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux)
+        self.assertIsNone(result.windows)
+        self.assertEqual(
+            [f["amdgpu_family"] for f in result.linux.per_family_info],
+            ["gfx94X-dcgpu"],
+        )
+        self.assertEqual(
+            result.linux.build_variant_cmake_preset, "linux-release-hrr-capture"
+        )
+        self.assertEqual(result.linux.build_variant_suffix, "hrr-capture")
+        self.assertEqual(result.linux.artifact_group, "multi-arch-hrr-capture")
+        # Unlike the sanitizer variants, presubmit GPU tests are not disabled.
+        self.assertTrue(result.linux.per_family_info[0]["test-runs-on"])
+
     def test_push_asan_excludes_families_without_host_asan_support(self):
         """Push ASAN: gfx110x only supports release, so it must be excluded.
 
