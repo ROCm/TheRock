@@ -639,6 +639,7 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       amd-hip
     BUILD_DEPS
       rocm-cmake
+      rocPRIM
       hipCUB
       rocThrust
     RUNTIME_DEPS
