@@ -54,6 +54,12 @@ Sample usage:
 
   python compute_rocm_package_version.py --release-type=nightly --build-variant=tsan
   # rocm_package_version=7.10.0a20251021+tsan
+
+  python compute_rocm_package_version.py --release-type=nightly-bkc --build-variant=asan
+  # rocm_package_version=10.1.0a20260811+bkc.20260814.asan
+
+  python compute_rocm_package_version.py --release-type=prerelease --prerelease-version=2 --build-variant=asan
+  # rocm_package_version=7.10.0rc2+asan
 """
 
 import argparse
