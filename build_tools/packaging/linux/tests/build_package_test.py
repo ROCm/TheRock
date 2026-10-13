@@ -22,7 +22,6 @@ import importlib.util
 import json
 import os
 import re
-import shutil
 import sys
 import tempfile
 import types
@@ -102,10 +101,8 @@ from packaging_utils import (  # noqa: E402
     filter_dependencies_by_artifacts,
     get_package_info,
     has_artifact_for_arch,
-    is_devel_package,
     is_gfxarch_package,
     is_key_defined,
-    is_meta_package,
     update_package_name,
     PackageCollisionError,
     validate_package_roots,
@@ -113,6 +110,7 @@ from packaging_utils import (  # noqa: E402
     process_main_dependencies_kpack,
     _artifact_dir_name_index,
     has_generic_content,
+    omits_generic_variants,
 )
 
 
@@ -204,10 +202,6 @@ def _artifact_suffix_for_staging(
     function's kpack/gfxarch rules change, update this helper in the same change;
     otherwise tests may stage the wrong layout and still pass (false positive).
     ``ArtifactStagingTest`` catches gross mismatches but not every routing edge case.
-
-    Mirrors rule #1: a non-meta ``-devel`` package is arch-specific only once
-    per-arch artifacts exist, so it stages as generic until a test stages its
-    ``_gfx*`` directories explicitly.
     """
     if enable_kpack:
         if gfx_arch == GFX_META:
@@ -216,14 +210,9 @@ def _artifact_suffix_for_staging(
             dir_suffix = "generic"
         elif is_gfxarch_package(pkg_info, enable_kpack, artifacts_dir):
             dir_suffix = gfx_arch
-        elif (
-            gfx_arch
-            and is_key_defined(pkg_info, "Gfxarch")
-            and not (is_devel_package(pkg_info) and not is_meta_package(pkg_info))
-        ):
+        elif is_key_defined(pkg_info, "Gfxarch"):
             # Staging device trees before gfx dirs exist: Gfxarch metadata still
-            # implies arch-specific suffixes for a real device arch once kpack
-            # splits are in play.
+            # implies arch-specific suffixes once kpack splits are in play.
             dir_suffix = gfx_arch
         else:
             dir_suffix = "generic"
@@ -468,7 +457,6 @@ class SharedOwnerPackagingTest(BuildPackageTestCase):
 
     def test_meta_dependency_lists_owner_once(self):
         cfg = self._stage_targets(("gfx1250", "gfx1250-strict"))
-        _stage_package_artifacts(PKG_FFT, cfg.artifacts_dir, GFX_HOST)
         self.assertEqual(
             expand_kpack_meta_dependencies(PKG_FFT, cfg.gfxarch_list, cfg),
             ["amdrocm-fft-host7.1", "amdrocm-fft7.1-gfx1250"],
@@ -1390,47 +1378,12 @@ class HostFallbackTest(BuildPackageTestCase):
 
 
 # ---------------------------------------------------------------------------
-# CK per-target dev packages: rule #1, no -host without generic content
+# Generic variant handling, exercised on a synthetic package set.
+#
+# ``package.json`` is replaced by a small synthetic package list so the generic
+# packaging logic (host variants, OptionalContent, per-arch -devel packages,
+# dependency resolution) is tested without depending on any real package entry.
 # ---------------------------------------------------------------------------
-PKG_CK_DEVEL = "amdrocm-ck-devel"
-PKG_CORE_DEVEL = "amdrocm-core-devel"
-PKG_RUNTIME_DEVEL = "amdrocm-runtime-devel"
-CK_ARTIFACT = "composable-kernel"
-CK_STAGE_SUBDIR = "math-libs/composable_kernel/stage"
-CK_ARCHIVE = "lib/libdevice_conv_operations_{target}.a"
-CK_TARGETS = ("gfx942", "gfx1100")
-CK_NO_DEVEL_TARGET = "gfx1030"
-
-
-def _stage_ck_dev_target(artifacts_dir: Path, target: str) -> None:
-    """Stage ``composable-kernel_dev_<target>`` holding one per-target conv archive."""
-    artifact_dir = artifacts_dir / f"{CK_ARTIFACT}_dev_{target}"
-    archive = artifact_dir / CK_STAGE_SUBDIR / CK_ARCHIVE.format(target=target)
-    archive.parent.mkdir(parents=True, exist_ok=True)
-    archive.write_bytes(STAGING_PAYLOAD_BYTES)
-    (artifact_dir / "artifact_manifest.txt").write_text(
-        f"{CK_STAGE_SUBDIR}\n", encoding="utf-8"
-    )
-
-
-def _stage_ck_dev_generic_like_splitter(artifacts_dir: Path) -> None:
-    """Stage ``composable-kernel_dev_generic`` as the kpack splitter leaves it when
-    every dev file is per-target: the manifest lists the stage prefix but no
-    directory exists for it."""
-    artifact_dir = artifacts_dir / f"{CK_ARTIFACT}_dev_generic"
-    artifact_dir.mkdir(parents=True)
-    (artifact_dir / "artifact_manifest.txt").write_text(
-        f"{CK_STAGE_SUBDIR}\n", encoding="utf-8"
-    )
-
-
-def _stage_ck_dev_generic_empty_dir(artifacts_dir: Path) -> None:
-    """Stage ``composable-kernel_dev_generic`` with the manifest line and an
-    existing but empty stage directory."""
-    _stage_ck_dev_generic_like_splitter(artifacts_dir)
-    (artifacts_dir / f"{CK_ARTIFACT}_dev_generic" / CK_STAGE_SUBDIR).mkdir(parents=True)
-
-
 class _KpackBuildTestCase(BuildPackageTestCase):
     """Runs ``build_package_variants`` with only the native build tools mocked and
     returns the generated DEB control / RPM spec text for every package built."""
@@ -1481,87 +1434,429 @@ class _KpackBuildTestCase(BuildPackageTestCase):
         return []
 
 
-class CkDevPackagingTest(_KpackBuildTestCase):
-    """CK conv archives live in per-arch ``amdrocm-ck-devel`` packages."""
+FAKE_TARGETS = ("gfx942", "gfx1100")
+FAKE_UNBUILT_TARGET = "gfx1030"
+FAKE_PKG_TYPES = (("deb", "dev"), ("rpm", "devel"))
 
-    def _stage_final(self, cfg: PackageConfig) -> None:
-        """Final layout: per-target dev artifacts plus splitter-style empty generic dev."""
-        for target in CK_TARGETS:
-            _stage_ck_dev_target(cfg.artifacts_dir, target)
-        _stage_ck_dev_generic_like_splitter(cfg.artifacts_dir)
-        self._stage_ck_runtime_files(cfg)
+FAKE_BASE = "amdrocm-fakebase"  # Gfxarch; generic and per-arch content
+FAKE_SUPPORT = "amdrocm-fakesupport"  # not Gfxarch; generic content
+FAKE_OPT_DEVEL = "amdrocm-fakeopt-devel"  # Gfxarch + OptionalContent -devel
+FAKE_BARE_DEVEL = "amdrocm-fakebare-devel"  # as FAKE_OPT_DEVEL, no dependencies
+FAKE_OPT_SIMPLE = "amdrocm-fakeoptsimple"  # OptionalContent, not Gfxarch
+FAKE_OPT_META = "amdrocm-fakeoptmeta-devel"  # Metapackage + OptionalContent
+FAKE_STRICT = "amdrocm-fakestrict"  # Gfxarch, no OptionalContent
+FAKE_PLAIN = "amdrocm-fakeplain"  # no Gfxarch, no OptionalContent
+FAKE_NOGFX_DEVEL = "amdrocm-fakenogfx-devel"  # -devel without Gfxarch
+FAKE_SUITE = "amdrocm-fakesuite-devel"  # Gfxarch metapackage
 
-    def _stage_interim(self, cfg: PackageConfig) -> None:
-        """Interim layout: all CK files are generic, dev is empty."""
-        _stage_ck_dev_generic_like_splitter(cfg.artifacts_dir)
-        self._stage_ck_runtime_files(cfg)
+# package -> (artifact prefix, artifact subdir name, component)
+FAKE_ARTIFACTS = {
+    FAKE_BASE: ("fakebase", "FakeBase", "lib"),
+    FAKE_SUPPORT: ("fakesupport", "FakeSupport", "lib"),
+    FAKE_OPT_DEVEL: ("fakeopt", "FakeOpt", "dev"),
+    FAKE_BARE_DEVEL: ("fakebare", "FakeBare", "dev"),
+    FAKE_OPT_SIMPLE: ("fakeoptsimple", "FakeOptSimple", "lib"),
+    FAKE_STRICT: ("fakestrict", "FakeStrict", "lib"),
+    FAKE_PLAIN: ("fakeplain", "FakePlain", "lib"),
+    FAKE_NOGFX_DEVEL: ("fakenogfx", "FakeNoGfx", "dev"),
+}
 
-    def _stage_ck_runtime_files(self, cfg: PackageConfig) -> None:
-        _stage_package_artifacts(PKG_CK, cfg.artifacts_dir, GFX_HOST)
-        _stage_package_artifacts(PKG_RUNTIME_DEVEL, cfg.artifacts_dir, GFX_HOST)
 
-    def test_final_ck_devel_variants_and_dependencies(self) -> None:
-        for pkg_type, dev in (("deb", "dev"), ("rpm", "devel")):
+def _fake_package(
+    name: str,
+    *,
+    deps: tuple[str, ...] = (),
+    gfxarch: bool = False,
+    optional: bool = False,
+    meta: bool = False,
+) -> dict:
+    """Return a synthetic ``package.json`` entry; artifacts come from FAKE_ARTIFACTS."""
+    info: dict = {
+        "Package": name,
+        "Version": "",
+        "Architecture": "amd64",
+        "BuildArch": "x86_64",
+        "DEBDepends": list(deps),
+        "RPMRequires": list(deps),
+        "Maintainer": "Test <test@example.com>",
+        "Description_Short": f"{name} synthetic test package",
+        "Description_Long": f"{name} synthetic test package",
+        "Section": "devel",
+        "Priority": "optional",
+        "Group": "unknown",
+        "License": "MIT",
+        "Vendor": "Test",
+        "Homepage": "https://example.com",
+    }
+    if name in FAKE_ARTIFACTS:
+        artifact, subdir, component = FAKE_ARTIFACTS[name]
+        info["Artifactory"] = [
+            {
+                "Artifact": artifact,
+                "Artifact_Subdir": [{"Name": subdir, "Components": [component]}],
+            }
+        ]
+    if gfxarch:
+        info["Gfxarch"] = "True"
+    if optional:
+        info["OptionalContent"] = "True"
+    if meta:
+        info["Metapackage"] = "True"
+    return info
+
+
+FAKE_PACKAGES = [
+    _fake_package(FAKE_BASE, gfxarch=True),
+    _fake_package(FAKE_SUPPORT),
+    _fake_package(
+        FAKE_OPT_DEVEL, deps=(FAKE_BASE, FAKE_SUPPORT), gfxarch=True, optional=True
+    ),
+    _fake_package(FAKE_BARE_DEVEL, gfxarch=True, optional=True),
+    _fake_package(FAKE_OPT_SIMPLE, optional=True),
+    _fake_package(FAKE_OPT_META, gfxarch=True, optional=True, meta=True),
+    _fake_package(FAKE_STRICT, deps=(FAKE_SUPPORT,), gfxarch=True),
+    _fake_package(FAKE_PLAIN),
+    _fake_package(FAKE_NOGFX_DEVEL),
+    _fake_package(
+        FAKE_SUITE,
+        deps=(FAKE_OPT_DEVEL, FAKE_OPT_SIMPLE, FAKE_PLAIN),
+        gfxarch=True,
+        meta=True,
+    ),
+]
+
+
+def _stage_fake(
+    artifacts_dir: Path, pkg_name: str, suffix: str, content: str = "files"
+) -> None:
+    """Stage ``<artifact>_<component>_<suffix>`` for a synthetic package.
+
+    ``content`` is ``"files"`` (a payload file), ``"empty_dir"`` (the manifest
+    line and an existing empty directory) or ``"manifest_only"`` (the manifest
+    line with no directory, as the kpack splitter leaves a fully split
+    generic artifact).
+    """
+    artifact, subdir, component = FAKE_ARTIFACTS[pkg_name]
+    artifact_dir = artifacts_dir / f"{artifact}_{component}_{suffix}"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    stage_path = f"{subdir}/{component}"
+    with (artifact_dir / "artifact_manifest.txt").open("a", encoding="utf-8") as f:
+        f.write(f"{stage_path}\n")
+    if content == "manifest_only":
+        return
+    (artifact_dir / stage_path).mkdir(parents=True, exist_ok=True)
+    if content == "files":
+        (artifact_dir / stage_path / STAGING_PAYLOAD_NAME).write_bytes(
+            STAGING_PAYLOAD_BYTES
+        )
+
+
+class _FakePackagesTestCase(_KpackBuildTestCase):
+    """Runs against ``FAKE_PACKAGES`` instead of the real ``package.json``."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        # Other test modules may load their own copies of the packaging modules,
+        # so patch every namespace that the code under test reads package.json from.
+        namespaces: dict[int, dict] = {}
+        for module in (
+            build_package,
+            deb_package,
+            rpm_package,
+            sys.modules["packaging_utils"],
+        ):
+            for namespace in (module.__dict__, module.get_package_info.__globals__):
+                if "read_package_json_file" in namespace:
+                    namespaces[id(namespace)] = namespace
+        for namespace in namespaces.values():
+            patcher = patch.dict(
+                namespace,
+                {"read_package_json_file": lambda: list(FAKE_PACKAGES)},
+            )
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def _stage_base_and_support(
+        self, cfg: PackageConfig, base_targets: tuple[str, ...] = FAKE_TARGETS
+    ) -> None:
+        _stage_fake(cfg.artifacts_dir, FAKE_SUPPORT, "generic")
+        _stage_fake(cfg.artifacts_dir, FAKE_BASE, "generic")
+        for target in base_targets:
+            _stage_fake(cfg.artifacts_dir, FAKE_BASE, target)
+
+
+class GenericContentTest(_FakePackagesTestCase):
+    def test_generic_content_requires_a_non_empty_directory_for_the_subdir(
+        self,
+    ) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic", "manifest_only")
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic", "empty_dir")
+        _stage_fake(cfg.artifacts_dir, FAKE_STRICT, "generic", "files")
+        # Files exist, but under a subdir the package does not own.
+        other = cfg.artifacts_dir / "fakeplain_lib_generic"
+        (other / "Other/lib").mkdir(parents=True)
+        (other / "Other/lib" / STAGING_PAYLOAD_NAME).write_bytes(STAGING_PAYLOAD_BYTES)
+        (other / "artifact_manifest.txt").write_text("Other/lib\n", encoding="utf-8")
+
+        expected = {
+            FAKE_OPT_DEVEL: False,  # manifest line without a directory
+            FAKE_OPT_SIMPLE: False,  # existing but empty directory
+            FAKE_STRICT: True,
+            FAKE_PLAIN: False,  # content under another subdir
+            FAKE_BARE_DEVEL: False,  # nothing staged
+        }
+        for pkg_name, has_content in expected.items():
+            self.assertEqual(
+                has_generic_content(get_package_info(pkg_name), cfg.artifacts_dir),
+                has_content,
+                pkg_name,
+            )
+
+    def test_omitted_only_for_optional_non_meta_package_without_content(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic", "manifest_only")
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic", "files")
+        _stage_fake(cfg.artifacts_dir, FAKE_STRICT, "generic", "manifest_only")
+        expected = {
+            FAKE_OPT_DEVEL: True,
+            FAKE_OPT_SIMPLE: False,  # has content
+            FAKE_STRICT: False,  # not OptionalContent
+            FAKE_PLAIN: False,  # not OptionalContent, nothing staged
+            FAKE_OPT_META: False,  # metapackages never omit
+        }
+        for pkg_name, omitted in expected.items():
+            self.assertEqual(
+                omits_generic_variants(get_package_info(pkg_name), cfg.artifacts_dir),
+                omitted,
+                pkg_name,
+            )
+
+
+class DevelGfxarchRuleTest(_FakePackagesTestCase):
+    """A non-meta -devel package is arch-specific only when it declares Gfxarch
+    and per-arch artifacts exist."""
+
+    def _is_gfxarch(self, cfg: PackageConfig, pkg_name: str) -> bool:
+        return is_gfxarch_package(get_package_info(pkg_name), True, cfg.artifacts_dir)
+
+    def test_devel_with_gfxarch_follows_per_arch_artifacts(self) -> None:
+        for suffix in ("gfx942", "gfx942:xnack+"):
+            with self.subTest(suffix=suffix):
+                cfg = self._config(FAKE_TARGETS, label=f"arch-{suffix}")
+                _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic")
+                self.assertFalse(self._is_gfxarch(cfg, FAKE_OPT_DEVEL))
+                _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, suffix)
+                _artifact_dir_name_index.cache_clear()
+                self.assertTrue(self._is_gfxarch(cfg, FAKE_OPT_DEVEL))
+
+    def test_devel_without_gfxarch_stays_generic_with_per_arch_artifacts(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_NOGFX_DEVEL, "generic")
+        _stage_fake(cfg.artifacts_dir, FAKE_NOGFX_DEVEL, "gfx942")
+        self.assertFalse(self._is_gfxarch(cfg, FAKE_NOGFX_DEVEL))
+
+    def test_non_devel_gfxarch_package_follows_per_arch_artifacts(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        self._stage_base_and_support(cfg)
+        self.assertTrue(self._is_gfxarch(cfg, FAKE_BASE))
+
+
+class OptionalContentDependencyFilterTest(_FakePackagesTestCase):
+    def test_only_optional_packages_without_content_are_dropped(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic", "manifest_only")
+        _stage_fake(cfg.artifacts_dir, FAKE_PLAIN, "generic", "empty_dir")
+        _stage_fake(cfg.artifacts_dir, FAKE_SUPPORT, "generic")
+        deps = [FAKE_OPT_SIMPLE, FAKE_PLAIN, FAKE_SUPPORT, FAKE_OPT_META]
+        kept, _ = filter_dependencies_by_artifacts(deps, cfg.artifacts_dir, GFX_HOST)
+        self.assertEqual(kept, [FAKE_PLAIN, FAKE_SUPPORT, FAKE_OPT_META])
+
+    def test_optional_package_with_content_is_kept(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic")
+        kept, _ = filter_dependencies_by_artifacts(
+            [FAKE_OPT_SIMPLE], cfg.artifacts_dir, GFX_HOST
+        )
+        self.assertEqual(kept, [FAKE_OPT_SIMPLE])
+
+
+class HostlessVariantsTest(_FakePackagesTestCase):
+    """An OptionalContent Gfxarch package with only per-arch content builds no
+    -host variant; its device packages carry the host's dependencies."""
+
+    def _stage_opt_devel(
+        self, cfg: PackageConfig, targets: tuple[str, ...] = FAKE_TARGETS
+    ) -> None:
+        self._stage_base_and_support(cfg)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic", "manifest_only")
+        for target in targets:
+            _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, target)
+
+    def test_per_target_content_builds_device_packages_without_host(self) -> None:
+        for pkg_type, dev in FAKE_PKG_TYPES:
             with self.subTest(pkg_type=pkg_type):
-                cfg = self._config(CK_TARGETS, pkg_type, pkg_type)
-                self._stage_final(cfg)
-                built = self._build(cfg, [PKG_CK_DEVEL])
+                cfg = self._config(FAKE_TARGETS, pkg_type, pkg_type)
+                self._stage_opt_devel(cfg)
+                built = self._build(cfg, [FAKE_OPT_DEVEL])
+                name = f"amdrocm-fakeopt-{dev}"
                 self.assertEqual(
                     set(built),
                     {
-                        f"amdrocm-ck-{dev}7.1-gfx942",
-                        f"amdrocm-ck-{dev}7.1-gfx1100",
-                        f"amdrocm-ck-{dev}7.1",
-                        f"amdrocm-ck-{dev}",
+                        f"{name}7.1-gfx942",
+                        f"{name}7.1-gfx1100",
+                        f"{name}7.1",
+                        name,
                     },
                 )
-                for target in CK_TARGETS:
-                    deps = self._depends(built, f"amdrocm-ck-{dev}7.1-{target}")
-                    self.assertIn("amdrocm-ck7.1", deps)
-                    self.assertIn(f"amdrocm-runtime-{dev}7.1", deps)
+                for target in FAKE_TARGETS:
+                    deps = self._depends(built, f"{name}7.1-{target}")
+                    self.assertIn("amdrocm-fakesupport7.1", deps)  # generic dep
+                    self.assertIn(f"amdrocm-fakebase7.1-{target}", deps)  # arch dep
+                    self.assertFalse([dep for dep in deps if dep.endswith("-host7.1")])
                 self.assertEqual(
-                    sorted(self._depends(built, f"amdrocm-ck-{dev}7.1")),
-                    [f"amdrocm-ck-{dev}7.1-gfx1100", f"amdrocm-ck-{dev}7.1-gfx942"],
-                )
-                self.assertEqual(
-                    self._depends(built, f"amdrocm-ck-{dev}"),
-                    [f"amdrocm-ck-{dev}7.1"],
+                    sorted(self._depends(built, f"{name}7.1")),
+                    [f"{name}7.1-gfx1100", f"{name}7.1-gfx942"],
                 )
 
-    def test_final_core_devel_pulls_ck_devel_only_for_targets_with_it(self) -> None:
-        cfg = self._config(CK_TARGETS + (CK_NO_DEVEL_TARGET,))
-        self._stage_final(cfg)
-        built = self._build(cfg, [PKG_CK_DEVEL, PKG_CORE_DEVEL])
-        for target in CK_TARGETS:
-            core_devel_deps = self._depends(built, f"amdrocm-core-dev7.1-{target}")
-            self.assertIn(f"amdrocm-ck-dev7.1-{target}", core_devel_deps)
-        self.assertEqual(
-            [
-                dep
-                for dep in self._depends(
-                    built, f"amdrocm-core-dev7.1-{CK_NO_DEVEL_TARGET}"
+    def test_arch_dependency_without_artifacts_for_a_target_uses_its_host(self) -> None:
+        for pkg_type, dev in FAKE_PKG_TYPES:
+            with self.subTest(pkg_type=pkg_type):
+                cfg = self._config(FAKE_TARGETS, pkg_type, pkg_type)
+                self._stage_base_and_support(cfg, base_targets=("gfx942",))
+                _stage_fake(
+                    cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic", "manifest_only"
                 )
-                if dep.startswith("amdrocm-ck-dev")
-            ],
-            [],
+                for target in FAKE_TARGETS:
+                    _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, target)
+                built = self._build(cfg, [FAKE_OPT_DEVEL])
+                name = f"amdrocm-fakeopt-{dev}"
+                with_arch = self._depends(built, f"{name}7.1-gfx942")
+                without_arch = self._depends(built, f"{name}7.1-gfx1100")
+                self.assertIn("amdrocm-fakebase7.1-gfx942", with_arch)
+                self.assertIn("amdrocm-fakebase-host7.1", without_arch)
+                self.assertNotIn("amdrocm-fakebase7.1-gfx1100", without_arch)
+                self.assertIn("amdrocm-fakesupport7.1", without_arch)
+
+    def test_package_without_dependencies_gets_no_dependency_line(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_BARE_DEVEL, "generic", "manifest_only")
+        for target in FAKE_TARGETS:
+            _stage_fake(cfg.artifacts_dir, FAKE_BARE_DEVEL, target)
+        built = self._build(cfg, [FAKE_BARE_DEVEL])
+        for target in FAKE_TARGETS:
+            deps = self._depends(built, f"amdrocm-fakebare-dev7.1-{target}")
+            self.assertFalse([dep for dep in deps if dep])
+
+    def test_target_without_content_gets_no_device_package(self) -> None:
+        targets = FAKE_TARGETS + (FAKE_UNBUILT_TARGET,)
+        cfg = self._config(targets)
+        self._stage_opt_devel(cfg)  # per-target content for FAKE_TARGETS only
+        built = self._build(cfg, [FAKE_OPT_DEVEL])
+        self.assertFalse([name for name in built if FAKE_UNBUILT_TARGET in name])
+        self.assertEqual(
+            sorted(self._depends(built, "amdrocm-fakeopt-dev7.1")),
+            ["amdrocm-fakeopt-dev7.1-gfx1100", "amdrocm-fakeopt-dev7.1-gfx942"],
         )
 
-    def test_interim_has_no_ck_devel_package_or_dependency(self) -> None:
-        cfg = self._config(CK_TARGETS)
-        self._stage_interim(cfg)
-        built = self._build(cfg, [PKG_CK_DEVEL, PKG_CORE_DEVEL])
-        self.assertEqual(
-            [name for name in built if name.startswith("amdrocm-ck-dev")], []
+    def test_generic_content_adds_a_host_that_device_packages_depend_on(self) -> None:
+        for pkg_type, dev in FAKE_PKG_TYPES:
+            with self.subTest(pkg_type=pkg_type):
+                cfg = self._config(FAKE_TARGETS, pkg_type, pkg_type)
+                self._stage_opt_devel(cfg)
+                _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic")
+                built = self._build(cfg, [FAKE_OPT_DEVEL])
+                name = f"amdrocm-fakeopt-{dev}"
+                host = f"{name}-host7.1"
+                self.assertIn(host, built)
+                self.assertIn(host, self._depends(built, f"{name}7.1"))
+                for target in FAKE_TARGETS:
+                    self.assertIn(host, self._depends(built, f"{name}7.1-{target}"))
+
+    def test_no_content_at_all_builds_nothing(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        self._stage_base_and_support(cfg)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic", "manifest_only")
+        self.assertEqual(self._build(cfg, [FAKE_OPT_DEVEL]), {})
+
+    def test_suite_depends_on_per_arch_package_only_for_targets_with_it(self) -> None:
+        targets = FAKE_TARGETS + (FAKE_UNBUILT_TARGET,)
+        cfg = self._config(targets)
+        self._stage_opt_devel(cfg)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic")
+        _stage_fake(cfg.artifacts_dir, FAKE_PLAIN, "generic")
+        built = self._build(cfg, [FAKE_OPT_DEVEL, FAKE_SUITE])
+        for target in FAKE_TARGETS:
+            deps = self._depends(built, f"amdrocm-fakesuite-dev7.1-{target}")
+            self.assertIn(f"amdrocm-fakeopt-dev7.1-{target}", deps)
+        unbuilt = self._depends(
+            built, f"amdrocm-fakesuite-dev7.1-{FAKE_UNBUILT_TARGET}"
         )
-        for target in CK_TARGETS:
-            core_devel_deps = self._depends(built, f"amdrocm-core-dev7.1-{target}")
-            self.assertTrue(core_devel_deps)
-            self.assertFalse(
-                [dep for dep in core_devel_deps if dep.startswith("amdrocm-ck-dev")]
-            )
-        for name in (f"amdrocm-core-dev7.1", "amdrocm-core-dev"):
-            self.assertFalse(
-                [dep for dep in self._depends(built, name) if "amdrocm-ck-dev" in dep]
+        self.assertFalse(
+            [dep for dep in unbuilt if dep.startswith("amdrocm-fakeopt-dev")]
+        )
+
+    def test_suite_has_no_dependency_on_package_without_content(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        self._stage_base_and_support(cfg)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic", "manifest_only")
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic", "manifest_only")
+        _stage_fake(cfg.artifacts_dir, FAKE_PLAIN, "generic")
+        built = self._build(cfg, [FAKE_OPT_DEVEL, FAKE_SUITE])
+        for target in FAKE_TARGETS:
+            deps = self._depends(built, f"amdrocm-fakesuite-dev7.1-{target}")
+            self.assertFalse([dep for dep in deps if dep.startswith("amdrocm-fakeopt")])
+            self.assertIn("amdrocm-fakeplain7.1", deps)
+
+
+class NonOptionalPackagesKeepVariantsTest(_FakePackagesTestCase):
+    """Only OptionalContent opts in to skipping variants: any other package that
+    lacks content keeps its host edge and alias, so the problem stays visible."""
+
+    def test_gfxarch_package_without_generic_content_keeps_host_edges(self) -> None:
+        for pkg_type, dev in FAKE_PKG_TYPES:
+            with self.subTest(pkg_type=pkg_type):
+                cfg = self._config(FAKE_TARGETS, pkg_type, pkg_type)
+                _stage_fake(cfg.artifacts_dir, FAKE_SUPPORT, "generic")
+                _stage_fake(cfg.artifacts_dir, FAKE_STRICT, "generic", "manifest_only")
+                for target in FAKE_TARGETS:
+                    _stage_fake(cfg.artifacts_dir, FAKE_STRICT, target)
+                built = self._build(cfg, [FAKE_STRICT])
+                host = "amdrocm-fakestrict-host7.1"
+                self.assertIn(host, self._depends(built, "amdrocm-fakestrict7.1"))
+                for target in FAKE_TARGETS:
+                    self.assertIn(
+                        host, self._depends(built, f"amdrocm-fakestrict7.1-{target}")
+                    )
+
+    def test_package_without_the_key_keeps_alias_and_edge_when_empty(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_PLAIN, "generic", "empty_dir")
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic", "manifest_only")
+        built = self._build(cfg, [FAKE_PLAIN, FAKE_OPT_SIMPLE, FAKE_SUITE])
+        self.assertEqual(
+            self._depends(built, "amdrocm-fakeplain"), ["amdrocm-fakeplain7.1"]
+        )
+        self.assertFalse(
+            [name for name in built if name.startswith("amdrocm-fakeoptsimple")]
+        )
+        for target in FAKE_TARGETS:
+            deps = self._depends(built, f"amdrocm-fakesuite-dev7.1-{target}")
+            self.assertIn("amdrocm-fakeplain7.1", deps)
+            self.assertNotIn("amdrocm-fakeoptsimple7.1", deps)
+
+    def test_optional_package_with_content_keeps_alias_and_edge(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic")
+        _stage_fake(cfg.artifacts_dir, FAKE_PLAIN, "generic")
+        built = self._build(cfg, [FAKE_OPT_SIMPLE, FAKE_SUITE])
+        self.assertEqual(
+            self._depends(built, "amdrocm-fakeoptsimple"), ["amdrocm-fakeoptsimple7.1"]
+        )
+        for target in FAKE_TARGETS:
+            self.assertIn(
+                "amdrocm-fakeoptsimple7.1",
+                self._depends(built, f"amdrocm-fakesuite-dev7.1-{target}"),
             )
 
     def test_failed_versioned_build_still_gets_alias_when_content_exists(self) -> None:
@@ -1569,173 +1864,11 @@ class CkDevPackagingTest(_KpackBuildTestCase):
         # mistaken for "no content": the alias is still built, so its dangling
         # dependency fails the install simulation instead of the failure being
         # hidden.
-        cfg = self._config(CK_TARGETS)
-        self._stage_ck_runtime_files(cfg)
-        _stage_package_artifacts(PKG_CK_DEVEL, cfg.artifacts_dir, GFX_HOST)
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic")
         with patch.object(build_package, "build_versioned_package", return_value=[]):
-            built = self._build(cfg, [PKG_CK_DEVEL])
-        self.assertEqual(set(built), {"amdrocm-ck-dev"})
-
-    def test_ck_runtime_package_is_single_generic_package_in_both_states(self) -> None:
-        for state in ("final", "interim"):
-            with self.subTest(state=state):
-                cfg = self._config(CK_TARGETS, "deb", state)
-                {"final": self._stage_final, "interim": self._stage_interim}[state](cfg)
-                built = self._build(cfg, [PKG_CK])
-                self.assertEqual(set(built), {"amdrocm-ck7.1", "amdrocm-ck"})
-                roots = {
-                    path.relative_to(cfg.artifacts_dir).parts[0]
-                    for path in filter_components_fromartifactory(
-                        PKG_CK, cfg.artifacts_dir, "", True
-                    )
-                }
-                self.assertTrue(roots)
-                for root in roots:
-                    self.assertTrue(root.endswith("_generic"), root)
-                    self.assertNotIn("_dev_", root)
-
-
-class GenericContentOptionATest(_KpackBuildTestCase):
-    """Whether a package has a -host variant depends on real generic content."""
-
-    def test_manifest_line_without_directory_is_not_generic_content(self) -> None:
-        cfg = self._config(("gfx942",))
-        _stage_ck_dev_generic_like_splitter(cfg.artifacts_dir)
-        self.assertFalse(
-            has_generic_content(get_package_info(PKG_CK_DEVEL), cfg.artifacts_dir)
-        )
-
-    def test_non_empty_directory_is_generic_content(self) -> None:
-        cfg = self._config(("gfx942",))
-        _stage_package_artifacts(PKG_CK_DEVEL, cfg.artifacts_dir, GFX_HOST)
-        self.assertTrue(
-            has_generic_content(get_package_info(PKG_CK_DEVEL), cfg.artifacts_dir)
-        )
-
-    def test_gfxarch_devel_package_with_generic_content_keeps_host(self) -> None:
-        """A per-arch devel package that also has generic content keeps its -host."""
-        cfg = self._config(CK_TARGETS)
-        for target in CK_TARGETS:
-            _stage_ck_dev_target(cfg.artifacts_dir, target)
-        _stage_package_artifacts(PKG_CK_DEVEL, cfg.artifacts_dir, GFX_HOST)
-        _stage_package_artifacts(PKG_CK, cfg.artifacts_dir, GFX_HOST)
-        _stage_package_artifacts(PKG_RUNTIME_DEVEL, cfg.artifacts_dir, GFX_HOST)
-        built = self._build(cfg, [PKG_CK_DEVEL])
-        self.assertIn("amdrocm-ck-dev-host7.1", built)
-        self.assertIn(
-            "amdrocm-ck-dev-host7.1",
-            self._depends(built, "amdrocm-ck-dev7.1-gfx942"),
-        )
-
-    def test_empty_generic_directory_is_not_generic_content(self) -> None:
-        cfg = self._config(("gfx942",))
-        _stage_ck_dev_generic_empty_dir(cfg.artifacts_dir)
-        self.assertFalse(
-            has_generic_content(get_package_info(PKG_CK_DEVEL), cfg.artifacts_dir)
-        )
-
-    def test_empty_generic_directory_builds_no_host_and_no_host_edge(self) -> None:
-        for state in ("final", "interim"):
-            with self.subTest(state=state):
-                cfg = self._config(CK_TARGETS, "deb", state)
-                if state == "final":
-                    for target in CK_TARGETS:
-                        _stage_ck_dev_target(cfg.artifacts_dir, target)
-                _stage_ck_dev_generic_empty_dir(cfg.artifacts_dir)
-                _stage_package_artifacts(PKG_CK, cfg.artifacts_dir, GFX_HOST)
-                _stage_package_artifacts(PKG_RUNTIME_DEVEL, cfg.artifacts_dir, GFX_HOST)
-                built = self._build(cfg, [PKG_CK_DEVEL, PKG_CORE_DEVEL])
-                self.assertEqual(
-                    [name for name in built if name.startswith("amdrocm-ck-dev-host")],
-                    [],
-                )
-                if state == "interim":
-                    self.assertNotIn("amdrocm-ck-dev", built)
-                    for name in built:
-                        if name.startswith("amdrocm-core-dev"):
-                            self.assertEqual(
-                                [
-                                    dep
-                                    for dep in self._depends(built, name)
-                                    if dep.startswith("amdrocm-ck-dev")
-                                ],
-                                [],
-                                name,
-                            )
-                    continue
-                for target in CK_TARGETS:
-                    deps = self._depends(built, f"amdrocm-ck-dev7.1-{target}")
-                    self.assertIn("amdrocm-ck7.1", deps)
-                    self.assertFalse([dep for dep in deps if "-host" in dep])
-
-    def test_generic_token_conv_archive_gives_ck_devel_a_host(self) -> None:
-        """A per-target-looking archive the kpack handler leaves generic (e.g.
-        ``..._gfx11_generic.a``) lands in dev_generic, so ``-host`` exists and
-        every device package depends on it."""
-        cfg = self._config(CK_TARGETS)
-        for target in CK_TARGETS:
-            _stage_ck_dev_target(cfg.artifacts_dir, target)
-        generic_archive = (
-            cfg.artifacts_dir
-            / f"{CK_ARTIFACT}_dev_generic"
-            / CK_STAGE_SUBDIR
-            / "lib/libdevice_conv_operations_gfx11_generic.a"
-        )
-        generic_archive.parent.mkdir(parents=True)
-        generic_archive.write_bytes(STAGING_PAYLOAD_BYTES)
-        (generic_archive.parents[4] / "artifact_manifest.txt").write_text(
-            f"{CK_STAGE_SUBDIR}\n", encoding="utf-8"
-        )
-        _stage_package_artifacts(PKG_CK, cfg.artifacts_dir, GFX_HOST)
-        _stage_package_artifacts(PKG_RUNTIME_DEVEL, cfg.artifacts_dir, GFX_HOST)
-        built = self._build(cfg, [PKG_CK_DEVEL])
-        self.assertIn("amdrocm-ck-dev-host7.1", built)
-        for target in CK_TARGETS:
-            self.assertIn(
-                "amdrocm-ck-dev-host7.1",
-                self._depends(built, f"amdrocm-ck-dev7.1-{target}"),
-            )
-        self.assertIn(
-            "amdrocm-ck7.1",
-            self._depends(built, "amdrocm-ck-dev-host7.1"),
-        )
-
-
-class OptionalContentTest(_KpackBuildTestCase):
-    """``OptionalContent`` is opt-in: only packages carrying the key are dropped
-    from dependency lists and lose their alias when they have no content."""
-
-    def test_packages_without_optional_content_key_keep_alias_and_edges(self) -> None:
-        cfg = self._config(CK_TARGETS)
-        _stage_package_artifacts(PKG_CK, cfg.artifacts_dir, GFX_HOST)
-        _stage_package_artifacts(PKG_RUNTIME_DEVEL, cfg.artifacts_dir, GFX_HOST)
-        _stage_ck_dev_generic_like_splitter(cfg.artifacts_dir)
-        # hipfile: no artifacts at all. rpp: artifacts present but emptied.
-        _stage_package_artifacts("amdrocm-rpp-devel", cfg.artifacts_dir, GFX_HOST)
-        for artifact in get_package_info("amdrocm-rpp-devel")["Artifactory"]:
-            for path in cfg.artifacts_dir.glob(f"{artifact['Artifact']}_dev_generic"):
-                for child in path.iterdir():
-                    if child.is_dir():
-                        shutil.rmtree(child)
-        built = self._build(
-            cfg,
-            [
-                "amdrocm-hipfile-devel",
-                "amdrocm-rpp-devel",
-                PKG_CK_DEVEL,
-                PKG_CORE_DEVEL,
-            ],
-        )
-
-        for alias in ("amdrocm-hipfile-dev", "amdrocm-rpp-dev"):
-            self.assertIn(f"{alias}7.1", self._depends(built, alias), alias)
-        for target in CK_TARGETS:
-            core_devel_deps = self._depends(built, f"amdrocm-core-dev7.1-{target}")
-            self.assertIn("amdrocm-rpp-dev7.1", core_devel_deps)
-            self.assertNotIn("amdrocm-ck-dev7.1", core_devel_deps)
-        self.assertEqual(
-            [name for name in built if name.startswith("amdrocm-ck-dev")], []
-        )
+            built = self._build(cfg, [FAKE_OPT_SIMPLE])
+        self.assertEqual(set(built), {"amdrocm-fakeoptsimple"})
 
 
 if __name__ == "__main__":

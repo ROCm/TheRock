@@ -173,7 +173,7 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
 
     For regular gfxarch packages (Metapackage=False), creates:
     - Host package (e.g., amdrocm-fft-host8.2) - generic artifacts; not built
-      when the package has no generic content
+      for an OptionalContent package that has no generic content
     - Device packages (e.g., amdrocm-fft8.2-gfx1100, amdrocm-fft8.2-gfx94x) - arch-specific artifacts
     - Meta package (e.g., amdrocm-fft8.2) - depends on host (if any) + all devices
     - Non-versioned package (e.g., amdrocm-fft) - user-facing, depends on meta
@@ -201,16 +201,16 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
 
     # Host package (contains generic artifacts)
     # Skip for metapackages - they have no artifacts, only dependencies
-    # Skip when there is no generic content: the device packages then carry the
-    # host's dependencies themselves
+    # Skip for a package that omits generic variants (OptionalContent with no
+    # generic content): the device packages then carry the host's dependencies
     if not is_meta:
-        if has_generic_content(pkg_info, config.artifacts_dir):
+        if omits_generic_variants(pkg_info, config.artifacts_dir):
+            logger.info(f"Skipping host variant for {pkg_name}: no generic content")
+        else:
             logger.info(f"Building host variant for {pkg_name}")
             pkg = build_host_package(pkg_name, config)
             if pkg:
                 built_packages.extend(pkg)
-        else:
-            logger.info(f"Skipping host variant for {pkg_name}: no generic content")
 
     # Device packages (one per owner, retaining all selected member targets)
     # For metapackages, these become arch-specific meta packages
@@ -267,9 +267,7 @@ def build_simple_package_variants(pkg_name, config: PackageConfig) -> list:
     # package, so an alias would depend on a package that does not exist. A
     # versioned build that had content but failed still gets its alias. Other
     # packages always get their alias.
-    if is_optional_content_package(pkg_info) and not has_generic_content(
-        pkg_info, config.artifacts_dir
-    ):
+    if omits_generic_variants(pkg_info, config.artifacts_dir):
         logger.info(f"Skipping non-versioned variant for {pkg_name}: no content")
         return built_packages
 

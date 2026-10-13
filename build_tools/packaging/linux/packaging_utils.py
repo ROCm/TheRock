@@ -529,9 +529,9 @@ def expand_kpack_meta_dependencies(pkg_name, gfxarch_list, config: PackageConfig
     """
     packages = []
 
-    # Add host package (with -host suffix) only when there is generic content
+    # Add host package (with -host suffix) unless the package omits generic variants
     pkg_info = get_package_info(pkg_name)
-    if has_generic_content(pkg_info, config.artifacts_dir):
+    if not omits_generic_variants(pkg_info, config.artifacts_dir):
         host_config = replace(config, versioned_pkg=True, gfx_arch=GFX_HOST)
         packages.append(update_package_name(pkg_name, host_config))
 
@@ -655,6 +655,54 @@ def process_versioned_dependencies(
         return process_main_dependencies_single_arch(pkg_info, field_key, config)
 
 
+def _hostless_device_dependencies(
+    dep_list: list, dep_infos: dict, gfxarch_deps: list, config: PackageConfig
+) -> str:
+    """Dependencies of a device package whose package has no host variant.
+
+    The device package carries the host's non-gfxarch dependencies itself: the
+    generic list resolves as the host package would, the gfxarch list keeps the
+    device arch.
+
+    Parameters:
+    dep_list: All dependencies listed in package.json for the package
+    dep_infos: Package info for each entry of dep_list
+    gfxarch_deps: Gfxarch dependencies that have artifacts for config.gfx_arch
+    config: Configuration object containing package metadata
+
+    Returns: Comma-separated string of versioned dependencies ("" if none)
+    """
+    generic_deps = [
+        dep
+        for dep in dep_list
+        if not is_gfxarch_package(
+            dep_infos[dep], config.enable_kpack, config.artifacts_dir
+        )
+    ]
+    generic_deps, _ = filter_dependencies_by_artifacts(
+        generic_deps, config.artifacts_dir, GFX_HOST
+    )
+    resolved = [
+        convert_to_versiondependency(generic_deps, config),
+        convert_to_versiondependency(gfxarch_deps, config, preserve_arch=True),
+    ]
+    return ", ".join(part for part in resolved if part)
+
+
+def _append_host_fallback_deps(
+    deps: str, host_fallback_deps: list, config: PackageConfig, is_meta: bool
+) -> str:
+    """Append the host-resolved form of ``host_fallback_deps`` to ``deps``."""
+    if host_fallback_deps:
+        host_config = replace(config, gfx_arch=GFX_HOST)
+        host_deps = resolve_versioned_dependency_list(
+            host_fallback_deps, host_config, is_meta
+        )
+        if host_deps:
+            deps = f"{deps}, {host_deps}" if deps else host_deps
+    return deps
+
+
 def process_main_dependencies_kpack(
     pkg_info: dict, field_key: str, config: PackageConfig
 ) -> str:
@@ -678,7 +726,6 @@ def process_main_dependencies_kpack(
     is_meta = is_meta_package(pkg_info)
     pkg_name = pkg_info.get("Package")
     host_fallback_deps = []  # Track deps that need host fallback
-    deps = None  # Set directly by branches that resolve their own dependency lists
 
     if is_meta:
         if config.gfx_arch == GFX_META:
@@ -749,47 +796,22 @@ def process_main_dependencies_kpack(
             config.gfx_arch,
             target_members=package_target_members(config),
         )
-        if has_generic_content(pkg_info, config.artifacts_dir):
-            dep_list = [pkg_name] + gfxarch_deps
-        else:
-            # Resolve the two lists separately: the generic list resolves as the
-            # host package would, the gfxarch list keeps the device arch.
-            generic_deps = [
-                dep
-                for dep in dep_list
-                if not is_gfxarch_package(
-                    dep_infos[dep],
-                    config.enable_kpack,
-                    config.artifacts_dir,
-                )
-            ]
-            generic_deps, _ = filter_dependencies_by_artifacts(
-                generic_deps, config.artifacts_dir, GFX_HOST
+        if omits_generic_variants(pkg_info, config.artifacts_dir):
+            return _append_host_fallback_deps(
+                _hostless_device_dependencies(
+                    dep_list, dep_infos, gfxarch_deps, config
+                ),
+                host_fallback_deps,
+                config,
+                is_meta,
             )
-            resolved = [
-                convert_to_versiondependency(generic_deps, config),
-                convert_to_versiondependency(gfxarch_deps, config, preserve_arch=True),
-            ]
-            deps = ", ".join(part for part in resolved if part)
+        dep_list = [pkg_name] + gfxarch_deps
 
     # Resolve dependencies at the end
-    if deps is None:
-        if not dep_list and not host_fallback_deps:
-            return ""
-        deps = resolve_versioned_dependency_list(dep_list, config, is_meta)
-    elif not deps and not host_fallback_deps:
+    if not dep_list and not host_fallback_deps:
         return ""
-
-    # Add host fallback deps if any
-    if host_fallback_deps:
-        host_config = replace(config, gfx_arch=GFX_HOST)
-        host_deps = resolve_versioned_dependency_list(
-            host_fallback_deps, host_config, is_meta
-        )
-        if host_deps:
-            deps = f"{deps}, {host_deps}" if deps else host_deps
-
-    return deps
+    deps = resolve_versioned_dependency_list(dep_list, config, is_meta)
+    return _append_host_fallback_deps(deps, host_fallback_deps, config, is_meta)
 
 
 def process_main_dependencies_single_arch(
@@ -1386,6 +1408,29 @@ def is_optional_content_package(pkg_info):
     return is_key_defined(pkg_info, "OptionalContent")
 
 
+def omits_generic_variants(pkg_info, artifacts_dir):
+    """Check whether a package builds no generic (host or alias) variants.
+
+    True only for a non-meta package that opts in with OptionalContent and has
+    no generic content. Such a package has no -host variant (its device packages
+    carry the host's dependencies instead), builds no non-versioned alias when it
+    has no versioned package, and is dropped from dependency lists. Every other
+    package always keeps its variants, so missing artifacts stay visible as a
+    failed build or a dangling dependency rather than being skipped silently.
+
+    Parameters:
+    pkg_info: Package details from the JSON
+    artifacts_dir: Directory where artifacts are stored
+
+    Returns: True if the package's generic variants are omitted, False otherwise
+    """
+    return (
+        is_optional_content_package(pkg_info)
+        and not is_meta_package(pkg_info)
+        and not has_generic_content(pkg_info, artifacts_dir)
+    )
+
+
 def filter_archs_with_artifacts(
     pkg_name: str, gfxarch_list, artifacts_dir: Path
 ) -> list:
@@ -1505,11 +1550,7 @@ def filter_dependencies_by_artifacts(
         if not is_gfxarch_package(
             dep_info, enable_kpack=True, artifacts_dir=artifacts_dir
         ):
-            if (
-                is_optional_content_package(dep_info)
-                and not is_meta_package(dep_info)
-                and not has_generic_content(dep_info, artifacts_dir)
-            ):
+            if omits_generic_variants(dep_info, artifacts_dir):
                 logger.info(f"Excluding {dep} (optional content, no generic content)")
                 continue
             filtered.append(dep)

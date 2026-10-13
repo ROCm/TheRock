@@ -98,9 +98,11 @@ Optional Fields
 - DisablePackaging: Disables the creation of the package.
 - Disable_Debug_Package: Disables the generation of the debug symbol package.
 - OptionalContent: Marks a non-metapackage whose content may be absent. When its
-  generic artifacts hold no files, no non-versioned alias is built and the
-  package is dropped from other packages' dependency lists. Without this key a
-  missing package stays a visible dangling dependency.
+  generic artifacts hold no files, no non-versioned alias is built, no `-host`
+  package is built (a Gfxarch package's per-arch packages then carry the host's
+  dependencies themselves), and the package is dropped from other packages'
+  dependency lists. Without this key a package with missing content keeps its
+  host and alias, so the problem stays a visible dangling dependency.
 - Disable_DWZ: Skip DWZ processing. Applies to Debian packages.
 - Disable_DH_STRIP: Disables dh_strip. Applies to Debian packages.
 - Provides: Indicates that a package provides the functionality of another package.
