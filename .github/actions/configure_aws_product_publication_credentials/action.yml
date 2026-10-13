@@ -23,10 +23,13 @@ runs:
       if: ${{ always() }}
       id: iam
       shell: bash
+      env:
+        INPUTS_RELEASE_TYPE: ${{ inputs.release_type }}
+        INPUTS_PRODUCT: ${{ inputs.product }}
       run: |
         python build_tools/github_actions/write_product_release_bucket_info.py \
-          --release-type "${{ inputs.release_type }}" \
-          --product "${{ inputs.product }}"
+          --release-type "${INPUTS_RELEASE_TYPE}" \
+          --product "${INPUTS_PRODUCT}"
 
     - name: Configure AWS Credentials
       if: ${{ always() && steps.iam.outputs.iam_role != '' }}

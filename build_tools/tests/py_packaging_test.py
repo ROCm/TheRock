@@ -1161,7 +1161,7 @@ class RestrictFamiliesTest(TmpDirTestCase):
         content = dist_info_path.read_text()
         if ns is None:
             ns = {}
-        exec(content, ns)
+        exec(content, ns)  # nosec B102
         return ns
 
     def _make_two_family_params(self) -> Parameters:
@@ -1336,7 +1336,7 @@ class RestrictFamiliesTest(TmpDirTestCase):
         params = self._make_params(artifact_dir, version="7.0.0", version_suffix="rc1")
 
         ns: dict = {}
-        exec(params.dist_info_contents, ns)
+        exec(params.dist_info_contents, ns)  # nosec B102
 
         self.assertEqual(ns["__version__"], params.dist_info.__version__)
         self.assertEqual(
@@ -1366,6 +1366,29 @@ class RestrictFamiliesTest(TmpDirTestCase):
         pkg_info = (meta.path / "src" / "rocm.egg-info" / "PKG-INFO").read_text()
         self.assertNotIn("Requires-Dist: rocm==7.0.0\n", pkg_info)
         self.assertIn("Requires-Dist: rocm-sdk-core==7.0.0\n", pkg_info)
+
+    def test_generated_metadata_runs_without_build_dependencies(self):
+        params = self._make_two_family_params()
+        meta = PopulatedDistPackage(params, logical_name="meta")
+        metadata_path = meta.path / "src" / "rocm_sdk" / "_dist_info.py"
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                "-S",
+                "-c",
+                "import runpy, sys\n"
+                "metadata = runpy.run_path(sys.argv[1])\n"
+                "assert metadata['package_owner']('gfx1250-strict') == 'gfx1250'\n"
+                "assert metadata['canonical_target']('gfx1250-strict:xnack+') == 'gfx1250-strict'\n"
+                "assert 'rocm_bootstrap' not in sys.modules\n"
+                "assert '_therock_utils' not in sys.modules\n",
+                str(metadata_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -1428,7 +1451,7 @@ class CrossPlatformFamiliesTest(TmpDirTestCase):
 
     def _exec_dist_info(self, params: Parameters) -> dict:
         ns: dict = {}
-        exec(params.dist_info_contents, ns)
+        exec(params.dist_info_contents, ns)  # nosec B102
         return ns
 
     # ----- Backward compat: no kwargs => on-disk artifact view ------------
@@ -1937,12 +1960,10 @@ class PerTargetExtrasTest(TmpDirTestCase):
 
 
 class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
-    """rocprofiler-systems' ProfilerHub.cmake vendors profiler-hub as a
-    runtime .so dependency (NEEDED libprofiler-hub.so.0). It stages into the
-    same lib/ dir as librocprof-sys*, but PROFILER_WHEEL_INCLUDES never
-    listed it, so it was silently dropped when the rocm-profiler wheel was
-    assembled from an otherwise-correct artifact - breaking every rocprof-sys
-    tool at load time.
+    """profiler-hub is a runtime .so dependency of rocprofiler-systems
+    (NEEDED libprofiler-hub.so.0). PROFILER_WHEEL_INCLUDES never listed it,
+    so it was silently dropped from the rocm-profiler wheel, breaking every
+    rocprof-sys tool at load time.
     """
 
     def _add_artifact(
@@ -1972,7 +1993,7 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
         )
 
     def test_profiler_wheel_includes_libprofiler_hub(self):
-        """libprofiler-hub.so* staged inside the rocprofiler-systems artifact
+        """libprofiler-hub.so*, staged under its own profiler-hub artifact,
         must be selected into the profiler wheel, same as librocprof-sys*.
         """
         from build_python_packages import (
@@ -1988,6 +2009,14 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
             "generic",
             {
                 "lib/librocprof-sys.so.1": "rocprof-sys runtime",
+            },
+        )
+        self._add_artifact(
+            artifact_dir,
+            "profiler-hub",
+            "lib",
+            "generic",
+            {
                 "lib/libprofiler-hub.so.0": "profiler-hub runtime dependency",
             },
         )
@@ -2009,7 +2038,8 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
 
     def test_profiler_wheel_excludes_unrelated_lib_files(self):
         """PROFILER_WHEEL_INCLUDES is a targeted allowlist, not a bare lib/**
-        catch-all - an unrelated file must not sneak into the profiler wheel.
+        catch-all - an unrelated file must not sneak into the profiler wheel,
+        even once the profiler-hub library arrives via its own artifact.
         """
         from build_python_packages import (
             PROFILER_WHEEL_INCLUDES,
@@ -2019,7 +2049,7 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
         artifact_dir = self.temp_dir / "artifacts"
         self._add_artifact(
             artifact_dir,
-            "rocprofiler-systems",
+            "profiler-hub",
             "lib",
             "generic",
             {

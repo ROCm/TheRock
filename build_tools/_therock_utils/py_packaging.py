@@ -20,7 +20,7 @@ import sys
 import tarfile
 
 from .artifacts import ArtifactCatalog, ArtifactName
-from .sdk_targets import package_owner
+from .sdk_targets import package_owner, render_dist_info
 from .exe_stub_gen import generate_exe_link_stub
 
 is_windows = platform.system() == "Windows"
@@ -34,9 +34,12 @@ BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 PYTHON_PACKAGING_DIR = BUILD_TOOLS_DIR / "packaging" / "python" / "templates"
 DIST_INFO_PATH = PYTHON_PACKAGING_DIR / "rocm" / "src" / "rocm_sdk" / "_dist_info.py"
 
-assert BUILD_TOOLS_DIR.exists()
-assert PYTHON_PACKAGING_DIR.exists()
-assert DIST_INFO_PATH.exists()
+if not BUILD_TOOLS_DIR.exists():
+    raise FileNotFoundError(f"Missing build tools directory: {BUILD_TOOLS_DIR}")
+if not PYTHON_PACKAGING_DIR.exists():
+    raise FileNotFoundError(f"Missing packaging templates: {PYTHON_PACKAGING_DIR}")
+if not DIST_INFO_PATH.exists():
+    raise FileNotFoundError(f"Missing distribution metadata template: {DIST_INFO_PATH}")
 
 ENABLED_VLOG_LEVEL: int = 5
 
@@ -63,9 +66,8 @@ class PopulatedFiles:
     def mark_populated(
         self, package: "PopulatedDistPackage", relpath: str, dest_path: Path
     ):
-        assert (
-            not relpath in self.materialized_relpaths
-        ), f"File already populated {relpath}"
+        if relpath in self.materialized_relpaths:
+            raise AssertionError(f"File already populated {relpath}")
         self.materialized_relpaths[relpath] = (package, dest_path)
 
 
@@ -135,7 +137,7 @@ class Parameters:
         # Base: version and nonce only — no family lines. Used as the starting
         # point for restrict_families packages so they can write clean family
         # content without a .clear() dance.
-        dist_info_base = DIST_INFO_PATH.read_text()
+        dist_info_base = render_dist_info(DIST_INFO_PATH)
         dist_info_base += f"__version__ = {repr(version)}\n"
         dist_info_base += f"PY_PACKAGE_SUFFIX_NONCE = {repr(version_suffix)}\n"
         self.dist_info_base_contents = dist_info_base
@@ -179,8 +181,9 @@ class Parameters:
         # regardless of where those values originated.
         spec = importlib.util.spec_from_loader("rocm_sdk_dist_info", loader=None)
         self.dist_info = importlib.util.module_from_spec(spec)
-        exec(
-            DIST_INFO_PATH.read_text(), self.dist_info.__dict__
+        # Executes the repository-owned static template below.
+        exec(  # nosec B102
+            render_dist_info(DIST_INFO_PATH), self.dist_info.__dict__
         )  # static template only, no user input
         self.dist_info.__version__ = version
         self.dist_info.PY_PACKAGE_SUFFIX_NONCE = version_suffix
