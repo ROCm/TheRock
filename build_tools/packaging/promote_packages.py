@@ -451,6 +451,7 @@ def update_metadata_rocm_requires_dist(
 
 
 def has_src_version_type(version_str: str, src_version_type: str) -> bool:
+    """Gate promotion on the same pattern `compute_new_version_str` rewrites, since 'pytorch-dev' is not a literal substring."""
     return re.search(SRC_VERSION_PATTERNS[src_version_type], version_str) is not None
 
 
