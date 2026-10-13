@@ -85,7 +85,7 @@ ON, the default, installs per-compiler, under a `<compiler>` subdirectory (for e
 OFF installs a single set for one compiler: one `.mod` tree and the `.a` under `lib/`, which works for one compiler but a second one would conflict.
 The backend axis (`amdgcn` vs `nvptx`) is separate, because the CUDA switch also produces a different `.mod`.
 `find_package(hipfort)` resolves to the subdirectory matching the consuming project's compiler and AMD backend, and a presence check reports which pieces are installed for the user's compiler, so a user can confirm the Fortran extension is available before building.
-(Under the split this becomes a per-library check with per-library targets (`find_package(rocblas)`, `roc::rocblas_fortran`), described in Building the bindings; this section is about today's hipfort.)
+(Under the split this becomes a per-library check with per-library targets (`find_package(rocblas-fortran)`, `roc::rocblas_fortran`), described in Building the bindings; this section is about today's hipfort.)
 
 There is no portable Fortran ABI across compilers, which is the root of all this: `.mod` and compiled `.a` are compiler- and version-specific, so the only stable ABI is the C one, the vendor `.so`, which the `bind(C)` layer rides on.
 That constraint drives the whole packaging design (ship source, plus a precompiled set for `amdflang`), set out in full in the appendix on `.mod`/`.a` incompatibility.
@@ -138,7 +138,7 @@ It stops entirely when there is no maintainer.
 
 Worse, the hand-written work is already duplicated.
 Several math libraries ship their own Fortran module inside their include tree.
-rocBLAS ships `rocblas_module.f90`, hipBLAS ships `hipblas_module.f90`, rocSPARSE ships `rocsparse.f90` (over 7000 lines) plus `rocsparse_enums.f90`, and hipSPARSE and hipSOLVER ship `hipsparse.f90` and `hipsolver_module.f90`.
+rocBLAS ships `rocblas_module.f90`, hipBLAS ships `hipblas_module.f90`, rocSPARSE ships `rocsparse.f90` (over 7000 lines) plus `rocsparse_enums.f90`, and hipSPARSE and hipSOLVER ship `hipsparse.f90` (plus `hipsparse_enums.f90`) and `hipsolver_module.f90`.
 rocRAND and hipRAND ship a third variant, the deprecated `rocrand_m` / `hiprand_m` wrappers with a small `hipfor` HIP module, gated by `BUILD_FORTRAN_WRAPPER`.
 Five of these define a module named exactly after the library (`module rocblas`, `hipblas`, `rocsparse`, `hipsparse`, `hipsolver`), and three of those install it as a public source file (rocBLAS, hipBLAS, rocSPARSE; hipSPARSE compiles its module only into its own samples, and hipSOLVER's install guard is never defined), so the packaged track's unprefixed modules supersede and remove them rather than coexist (see What changes for a library repository).
 Each is maintained independently of hipfort's binding for the same library.
@@ -165,7 +165,7 @@ That fixes the sync problem without adding a pipeline: the sources move next to 
 
 **P3. Keep the generator standalone.**
 It is build-time tooling, not a runtime dependency.
-It lives in its own repository (`rocm-fortran`), which is internal today and becomes public before the CI hook is enabled, since a public CI job has to run it (see Rollout); where it ultimately belongs is recorded in Open questions.
+It is internal today, in the EMU repository, and becomes public as its own repository (`rocm-fortran`) before the CI hook is enabled, since a public CI job has to run it (see Rollout); where it ultimately belongs is recorded in Open questions.
 What this RFC does commit to is that its *output* is committed, reviewable Fortran in the library repositories, so reading and building the bindings never depends on reaching the generator.
 Wherever it lives, it is owned and maintained by the Fortran-bindings team, not the compiler developers, and it is not part of the compiler build.
 Library repositories invoke it as a standalone tool.
@@ -180,7 +180,7 @@ The one manual part is the curated metadata: most changes need none, and when a 
 To keep the scope sharp, the following are explicitly out of scope for this RFC.
 
 - **Windows.** The target is Linux HPC. ROCm's existing Fortran clients are already gated off on Windows in-tree (rocBLAS, hipBLAS, hipSOLVER, and rocSPARSE all condition Fortran on `NOT WIN32` / `UNIX`), so a Windows Fortran product is not a goal.
-- **Fortran under sanitizers.** The ASAN and coverage build variants ship no Fortran, since Fortran linking is unsupported under ROCm's sanitizer configuration.
+- **Fortran under sanitizers.** The ASAN and coverage build variants ship no Fortran, since Fortran linking is unsupported under ROCm's sanitizer configuration. The projects still build the bindings under ASan and only skip their tests, so it is the shipping build that turns them off (see Packaging in TheRock).
 - **Fortran 77, and any consumer below Fortran 2003.** The bindings are modules built on `iso_c_binding`, which is F2003, so a translation unit compiled below Fortran 90 has no `use` statement and cannot consume them (see Language standard). hipfort never shipped such a path either, so nothing available today is being removed. This is a property of the standard level, not of the source form: fixed-form sources compiled by a current compiler consume the bindings normally. Out of scope here is a statement about this RFC, not a judgement on the need: Language standard records what an F77-callable path would look like and what it would cost.
 - **The generator as a runtime or shipped product.** `rocm-fortran` is build-time tooling; no Julia, Clang.jl, or generator code reaches a consumer, the compiler build, or the deliverable.
 - **Non-CMake consumer tooling as a first-class path.** CMake `find_package` is the supported integration; a `pkg-config` file or a flags script is a convenience, not a guarantee.
@@ -200,7 +200,7 @@ The packaged track modernizes both.
 It drops the prefix, matching NVIDIA's convention (`use cublas`, not `nvfort_cublas`).
 This does not clash with the vendor's own same-named modules (`rocblas_module.f90`, `rocsparse.f90`, ...): under the split those shipped modules are superseded and removed, so the generated module is the only `rocblas` in the tree.
 And it collapses each library's binding into a single Fortran module, instead of the separate interfaces / types / enums modules.
-The HIP runtime module becomes `hip` (so `use hip`, not `use hipfort`), and the cross-cutting pieces fold in rather than staying separate modules: `hipfort_check`, `hipfort_handles`, and `hipfort_auxiliary` disappear, their symbols coming from the library module you already `use` (`hipCheck` and the HIP handles from `hip`, `rocblasCheck` and `rocblas_handle` from `rocblas`).
+The HIP runtime module becomes `hip` (so `use hip`, not `use hipfort`), and the cross-cutting pieces fold in rather than staying separate modules: `hipfort_check`, `hipfort_handles`, and `hipfort_auxiliary` disappear, their symbols coming from the library module you already `use` (`hipCheck` from `hip`, `rocblasCheck` from `rocblas`; handles are `type(c_ptr)`, see Opaque handles).
 Cross-library sharing still works: a library that needs another's types simply `use`s that library's module (rocSOLVER uses rocBLAS).
 One generator emits both layouts: the packaged, collapsed, unprefixed set committed next to the headers, and the split, `hipfort_`-prefixed compatibility set emitted into `ROCm/hipfort`. The two schemes coexist at no extra cost.
 
@@ -323,6 +323,7 @@ Where a construct is ambiguous or has no Fortran equivalent, the generator falls
   This is how `hipDeviceProp_t` survives, even though it embeds the bit-field struct `hipDeviceArch_t`.
   A struct with an incomplete or zero-size layout is genuinely skipped.
 - **Opaque handles.** A pointer to an incomplete struct, such as `rocblas_handle`, becomes a distinct thin derived type, or `type(c_ptr)` when typed handles are off.
+  The packaged modules are generated with typed handles off, so every handle is a `type(c_ptr)` today, as it was in hipfort.
 - **Opaque workspace pointers.** A typed pointer that is really scratch memory is forced to `type(c_ptr)` by value, not a native array buffer.
 - **C strings.** `char*` plays three roles that the C type cannot distinguish, so each is handled separately rather than with one raw binding.
   An input string (`const char*`) is kept out of the raw `bind(C)` block and given a Fortran wrapper that null-terminates.
@@ -356,6 +357,7 @@ This is the honest counterpart to "the generator removes the hand-copying": the 
 | `<lib>.toml`           | per-library generator config (name prefix, opaque handles, own headers, check overrides) | project conventions, not header facts                                 |
 
 In the packaged track, only four of these are maintained: `argkinds`, `cptrargs`, `native`, and `toml`.
+Until the generator is public, they stay with it rather than in the library repositories: the co-location pull requests commit the generated `.F90`, its build, and its tests, and the metadata moves into each `fortran/` when the generator becomes public, together with the CI hook that reads it.
 The CUDA map files (`<lib>.txt`, `<lib>_enums_cuda.txt`, and the per-type `.cuda.finc`) belong to the compatibility track only, since the packaged track has no CUDA backend.
 
 The maintenance cost is bounded, because these files are bootstrapped and tool-validated, not written from scratch:
@@ -408,15 +410,15 @@ The full test inventory (file names, gates, and the end-to-end golden) is in the
 
 Where each piece goes:
 
-| Piece                                                                            | Repo                                                 | Why                                                  |
-| :------------------------------------------------------------------------------- | :--------------------------------------------------- | :--------------------------------------------------- |
-| HIP runtime module `hip` (absorbing HIP types, enums, check, auxiliary, handles) | `rocm-systems`                                       | HIP lives here (P1)                                  |
-| Each math library's `<lib>` module (`rocblas`, `hipfft`, ...)                    | `rocm-libraries`, by project                         | next to its C headers (P1)                           |
-| Curated metadata (`argkinds`, `cptrargs`, `native`, `.toml`)                     | with its library (`rocm-systems` / `rocm-libraries`) | manual, but moves with the header (P1)               |
-| CUDA maps (`<lib>.txt`, `<lib>_enums_cuda.txt`, `*.cuda.finc`)                   | compatibility track (`ROCm/hipfort`)                 | CUDA is not in the packaged track (see CUDA backend) |
-| The generator (`rocm-fortran`)                                                   | its own repository                                   | build-time Fortran tooling (P3)                      |
-| Build (per-library `.mod`/`lib<lib>_fortran.a`, CMake package)                   | each project's `fortran/CMakeLists.txt`              | per-library deliverable (P2)                         |
-| Packaging                                                                        | TheRock                                              | already builds and packages every project (P2)       |
+| Piece                                                                            | Repo                                           | Why                                                  |
+| :------------------------------------------------------------------------------- | :--------------------------------------------- | :--------------------------------------------------- |
+| HIP runtime module `hip` (absorbing HIP types, enums, check, auxiliary, handles) | `rocm-systems`                                 | HIP lives here (P1)                                  |
+| Each math library's `<lib>` module (`rocblas`, `hipfft`, ...)                    | `rocm-libraries`, by project                   | next to its C headers (P1)                           |
+| Curated metadata (`argkinds`, `cptrargs`, `native`, `.toml`)                     | with its library, once the generator is public | manual, but moves with the header (P1)               |
+| CUDA maps (`<lib>.txt`, `<lib>_enums_cuda.txt`, `*.cuda.finc`)                   | compatibility track (`ROCm/hipfort`)           | CUDA is not in the packaged track (see CUDA backend) |
+| The generator (`rocm-fortran`)                                                   | its own repository                             | build-time Fortran tooling (P3)                      |
+| Build (per-library `.mod`/`lib<lib>_fortran.a`, CMake package)                   | each project's `fortran/CMakeLists.txt`        | per-library deliverable (P2)                         |
+| Packaging                                                                        | TheRock                                        | already builds and packages every project (P2)       |
 
 The CI hook runs the generator on the changed headers only:
 
@@ -454,10 +456,11 @@ A binding is more than its `.F90`, and the split keeps all of it next to the lib
 - **Generated `.F90`.** Derived from the header.
   The CI hook regenerates it and suggests the diff, and no one edits it by hand (P4).
 - **Curated metadata.** The manual part, the intent the C API cannot express (see Curated metadata).
-  Co-located in the same `fortran/` directory, so a header change carries its metadata tweak in the same PR (P1).
+  Co-located in the same `fortran/` directory once the generator is public (until then it stays with the generator), so a header change carries its metadata tweak in the same PR (P1).
   Most header changes need none, and when a new function's scalar pointer argument is still unclassified the generator's checks flag it on the PR, so an unclassified argument cannot merge silently.
   This catches a missing classification rather than a stale one: an entry that still matches its function after a rename or signature change is not re-verified by this check, so correctness of the existing classifications rests on the runtime tests and CODEOWNERS review of the metadata, not on this gate.
 - **Tests.** A library's Fortran tests live in its `fortran/test/`.
+  The migration is still under way and coverage is uneven: most libraries carry a `fortran/test/` over from hipfort, while rocBLAS and hipBLAS are exercised for now only through their existing `clients/` Fortran samples. Filling those gaps is part of the rollout, not a precondition for co-location.
   The per-PR hook compile-checks them without a GPU; the packaging or validation job runs them on an AMD host.
 - **Docs and examples.** Docstrings are generated in place with each binding.
   The published doc site is assembled from every project by the documentation build, so the Fortran API keeps one doc set despite the split.
@@ -476,15 +479,15 @@ The Fortran sources live in each library's `fortran/` directory, and a dedicated
 It does `enable_language(Fortran)`, compiles the modules, and produces the `.mod` and `.a`.
 It requires a recent CMake: the `rocm-libraries` projects sit at 3.16 today (and `next-cmake` at 3.25.2), which already covers Fortran module dependency ordering and `Fortran_MODULE_DIRECTORY`; a build using the Ninja generator wants CMake >= 3.20 for reliable Fortran module dyndep.
 Every `rocm-systems` and `rocm-libraries` project exposes one uniform switch, `BUILD_FORTRAN_BINDINGS`, **ON by default on Linux but guarded**: its default is `${UNIX}` (Windows ships no Fortran compiler; see Non-goals), it builds the bindings when a Fortran compiler is present, and it silently skips them when one is not, so a C-only site with no Fortran compiler still configures and builds.
-The guard reuses the probe the monorepo root already runs (`ROCM_LIBS_HAVE_FORTRAN` in `rocm-libraries/CMakeLists.txt`, `ROCM_HAVE_FORTRAN` from `shared/cmake/ROCmFortran.cmake` in `rocm-systems`), and a standalone per-project build falls back to its own `check_language(Fortran)`, preferring the `amdflang` found beside the C/HIP compiler or under `ROCM_PATH` when neither `CMAKE_Fortran_COMPILER` nor `FC` is set.
-When the switch is ON and a compiler exists, the project calls `enable_language(Fortran)` and `add_subdirectory(fortran)`; otherwise it prints a `STATUS` line and moves on, never a fatal error.
+The guard reuses a probe already run in the same configure (`ROCM_LIBS_HAVE_FORTRAN` from the `rocm-libraries` root `CMakeLists.txt`; in `rocm-systems`, which has no root probe, `ROCM_HAVE_FORTRAN` from `shared/cmake/ROCmFortran.cmake`, added with the HIP binding and run once per configure by the first `fortran/` that includes it), and a standalone per-project build falls back to its own `check_language(Fortran)`, preferring the `amdflang` found beside the C/HIP compiler or under `ROCM_PATH` when neither `CMAKE_Fortran_COMPILER` nor `FC` is set.
+The project root adds `fortran/` unconditionally, and `fortran/CMakeLists.txt` declares the options, runs the guard, and calls `enable_language(Fortran)` only when the switch is ON and a compiler exists; otherwise it prints a `STATUS` line and moves on, never a fatal error.
 That is how ON-by-default stays compatible with P4: no C build is ever *forced* to acquire a Fortran compiler, it just builds the bindings wherever it already can, and a C developer who has a Fortran compiler but does not want them passes `-DBUILD_FORTRAN_BINDINGS=OFF`.
 The same switches exist per library, `<LIB>_BUILD_FORTRAN_BINDINGS` (for example `ROCSPARSE_BUILD_FORTRAN_BINDINGS`), which win over the global spelling so one project can differ from the rest of a monorepo build.
 
 Two more options complete the set, identical in every project:
 
-- `FORTRAN_ARRAY_INTERFACES` (`none`, `assumed-shape`, `assumed-rank`; default `assumed-shape`) selects the array tier, replacing hipfort's two booleans `HIPFORT_USE_FPOINTER_INTERFACES` and `HIPFORT_ASSUMED_RANK` (see Open questions for why assumed-rank replaces rather than adds).
-- `BUILD_FORTRAN_CLIENTS` (default `ON`, per-library `<LIB>_BUILD_FORTRAN_CLIENTS`) builds the binding's own tests in `fortran/test/`. rocBLAS, hipBLAS and rocSPARSE already used that name for the Fortran part of `clients/`, and it keeps that meaning; asking for clients with the bindings off is a `STATUS` skip, not an error.
+- `FORTRAN_ARRAY_INTERFACES` (`none`, `assumed-shape`, `assumed-rank`; default `assumed-shape`) selects the array tier, replacing hipfort's two booleans `HIPFORT_USE_FPOINTER_INTERFACES` and `HIPFORT_ASSUMED_RANK` (see Open questions for why assumed-rank replaces rather than adds). `hip.F90` does not guard its array forms yet, so for HIP `none` currently builds the same as `assumed-shape`.
+- `BUILD_FORTRAN_CLIENTS` (default `ON`, per-library `<LIB>_BUILD_FORTRAN_CLIENTS`) builds the binding's own tests in `fortran/test/`. rocBLAS, hipBLAS and rocSPARSE already used that name for the Fortran part of `clients/`, and it keeps that meaning; asking for clients with the bindings off skips them, never an error. In-tree, the binding tests also follow the project's own test switch (`BUILD_TESTING`, `ROCPROFILER_BUILD_TESTS`, the library's `BUILD_CLIENTS_*`), and hipSPARSE's Fortran samples stay under its existing `HIPSPARSE_ENABLE_FORTRAN`.
 
 Each `fortran/` is also a self-contained CMake project (`project(<lib>-fortran LANGUAGES NONE)` when top-level), so a binding builds against an installed ROCm without rebuilding the C library:
 
@@ -498,7 +501,7 @@ A build-tree result variable `<LIB>_HAVE_FORTRAN_BINDINGS` (for example `ROCSPAR
 This is deliberately distinct from the root's `ROCM_LIBS_HAVE_FORTRAN`, which only reports that a Fortran compiler exists: the compiler can be present while a given library has `BUILD_FORTRAN_BINDINGS=OFF`, so "a compiler is available" and "this binding was built" are two different facts with two different names.
 TheRock, which always has amdflang, builds every library this way.
 
-The guard is small, but it is currently repeated in each project's `fortran/CMakeLists.txt` rather than shared: `rocm-systems` has `shared/cmake/ROCmFortran.cmake` for the compiler probe, and `rocm-libraries` has no equivalent yet.
+The guard is small, but it is currently repeated in each project's `fortran/CMakeLists.txt` rather than shared: `rocm-systems` gets `shared/cmake/ROCmFortran.cmake` for the compiler probe with the HIP binding (rocm-systems#11923), and `rocm-libraries` has no equivalent yet.
 Folding the probe, the guard, and `add_subdirectory(fortran)` into one helper (in rocm-cmake or a shared module) is implementation backlog; its logic is:
 
 ```cmake
@@ -522,14 +525,15 @@ if(BUILD_FORTRAN_BINDINGS)
 endif()
 ```
 
-For discovery, the Fortran target ships as its own per-library config package, `<lib>-fortran` (following the in-tree rocRAND/hipRAND convention), so a consumer writes `find_package(rocblas-fortran)`, which `find_dependency()`s the C library.
+For discovery, the Fortran target ships as its own per-library config package, `<lib>-fortran` (reusing the `<lib>-fortran-config.cmake` filename rocRAND and hipRAND already install beside their C config, where today the C config `include()`s it rather than it being found on its own), so a consumer writes `find_package(rocblas-fortran)`, which `find_dependency()`s the C library.
 The config file sits beside the C one (`<libdir>/cmake/rocblas/rocblas-fortran-config.cmake`), with a forwarder in `<libdir>/cmake/rocblas-fortran/` so that `find_package` resolves the hyphenated name; HIP and ROCTx install theirs directly in `<libdir>/cmake/<lib>-fortran/`.
 Keeping it beside the C config is what allows the next step: once rocm-cmake grows an `include(<lib>-fortran-config.cmake OPTIONAL)` hook in the generated C config, `find_package(rocblas)` alone will expose `roc::rocblas_fortran` when the binding is installed and ignore it otherwise. Until then the `-fortran` package is the entry point, and consumer code written against it keeps working afterwards.
 Each library's Fortran target sits in its own C library's existing CMake namespace: `roc::rocblas_fortran` and `roc::hipsolver_fortran`, but `hip::hip_fortran`, `hip::hipfft_fortran`, and `hip::hiprand_fortran`. This is per-library, not a hip-versus-roc rule (hipBLAS, hipSPARSE, and hipSOLVER are `roc::`); the full table is in Migration and compatibility. There is no per-library `<lib>::` namespace and deliberately no umbrella `rocm-fortran::` one, since `rocm-fortran` is the generator, not the deliverable.
-The consumer-facing presence flag keeps the convention already in the tree, `<pkg>_FORTRAN_FOUND` (rocRAND and hipRAND already set `rocrand_FORTRAN_FOUND` / `hiprand_FORTRAN_FOUND`), which the Fortran config package defines; it is `FALSE` when the package is installed but holds nothing for the consumer's compiler.
+The consumer-facing presence flag keeps the variable name already in the tree, `<pkg>_FORTRAN_FOUND` (rocRAND and hipRAND set `rocrand_FORTRAN_FOUND` / `hiprand_FORTRAN_FOUND` today, from `find_package(<lib>)`); it is now defined by the Fortran config package, and it is `FALSE` when the package is installed but holds nothing for the consumer's compiler.
 The config requires Fortran to be enabled before `find_package`, and when no `.mod` matches the consumer's compiler it fails with a message naming the compilers that are installed and the `<LIB>_FORTRAN_COMPILER_DIR` override, so a user can tell a missing rebuild from a wrong path.
 Each per-library Fortran package is versioned with its C library (`SameMajorVersion`), so a binding resolves to the same version as the C library it was generated from; a static archive carries no soname, so this package version is the version handle.
 This generalizes what hipSOLVER already does: hipSOLVER defaults the switch to `${UNIX}` today, so the default is unchanged there; the design adds the compiler guard so it is safe everywhere, redefines the target as the generated binding (the hand-written `hipsolver_module.f90` is the superseded module removed under the split, and its shared `libhipsolver_fortran.so` becomes the static `libhipsolver_fortran.a` under the same `roc::hipsolver_fortran` name), and retires hipSOLVER's `EXPORT_FORTRAN_BINDINGS` and `BUILD_FORTRAN_MODULE` with the module they gated.
+One consequence for hipSOLVER users: `roc::hipsolver_fortran` was exported by `find_package(hipsolver)` (through `EXPORT_FORTRAN_BINDINGS`, ON by default) and no longer is; a consumer moves to `find_package(hipsolver-fortran)` until the rocm-cmake hook lands.
 The reference build of the shipped bindings is TheRock's, which builds every project, and so every `fortran/`, in dependency order.
 
 Cross-module dependencies are handled the same way the C libraries already handle them.
@@ -541,7 +545,7 @@ Because each library is a single module under the packaged track, `rocsolver` si
 ### Layout after the split
 
 **Source tree (committed).** Each library owns a `fortran/` directory next to its C headers, holding the generated module, its curated metadata, its build files, and its tests.
-The generator *code* is never vendored here (P3); only the *data* it reads (the `.toml` and the metadata) is co-located.
+The generator *code* is never vendored here (P3); only the *data* it reads (the `.toml` and the metadata) is co-located, once the generator is public (see Curated metadata). The trees below show that end state.
 
 ```
 rocm-systems/  .../hip/fortran/
@@ -549,6 +553,7 @@ rocm-systems/  .../hip/fortran/
    hip.toml, hip.argkinds        curated: generator config + metadata
    CMakeLists.txt                self-contained build → libhip_fortran.a + hip.mod
    hip-fortran-config.cmake.in   find_package export → hip::hip_fortran
+   cmake/toolchains/             example toolchain files (amdflang, gnu, cray, intel, nvhpc, ...)
    test/                         Fortran tests
 
 rocm-libraries/  projects/rocblas/fortran/
@@ -557,11 +562,15 @@ rocm-libraries/  projects/rocblas/fortran/
    rocblas.argkinds/.cptrargs/.native   curated metadata
    CMakeLists.txt                → librocblas_fortran.a + rocblas.mod
    rocblas-fortran-config.cmake.in
+   cmake/toolchains/             example toolchain files
    test/                         Fortran tests (use hip: need the HIP binding)
 ```
 
+HIP's `fortran/` sits under `projects/hip/` but is built from clr, which adds it through `HIP_COMMON_DIR`.
+hipFFT's `fortran/` holds two bindings and installs two packages from one build: `hipfft-fortran` (`hip::hipfft_fortran`, `libhipfft_fortran.a`) and `hipfftw-fortran` (`hip::hipfftw_fortran`, `libhipfftw_fortran.a`), both configs in `<libdir>/cmake/hipfft/` with forwarders in `<libdir>/cmake/hipfft-fortran/` and `<libdir>/cmake/hipfftw-fortran/`, and per-binding `HIPFFT_*` / `HIPFFTW_*` overrides.
+
 The CUDA metadata (`<lib>.txt`, `<lib>_enums_cuda.txt`, `*.cuda.finc`) does **not** live here: the packaged track has no CUDA backend, so those files stay in the compatibility track (`ROCm/hipfort`).
-The CODEOWNERS entry is not a file in `fortran/` either; it is a line in the project's own `.github/CODEOWNERS` (each project keeps one, and a merge job assembles the monorepo root file from them).
+The CODEOWNERS entry is not a file in `fortran/` either; in `rocm-libraries` it is a line in the project's own `.github/CODEOWNERS` (each project keeps one, and a merge job assembles the monorepo root file from them), and in `rocm-systems`, whose projects keep none, a line in the root `.github/CODEOWNERS`.
 
 **Install tree.** Because a `.mod` is compiler- and version-specific (see appendix), artifacts install under a per-compiler subdirectory, one archive and one module set per library:
 
@@ -596,7 +605,7 @@ Those were headers-by-convention that a user compiled into their own build; the 
 
 ### Tests and documentation
 
-**Tests.** hipfort's test suite splits across the libraries it covers: each library's Fortran tests move to its `fortran/test/`, next to the binding they exercise.
+**Tests.** hipfort's test suite splits across the libraries it covers: each library's Fortran tests move to its `fortran/test/`, next to the binding they exercise, as they are carried over (see Maintaining the bindings under the split for the libraries not there yet).
 The per-PR hook compile-checks them without a GPU (this is what catches interface drift), and the packaging or validation job runs them on an AMD host.
 A test that spans libraries (a rocSOLVER test that `use`s rocBLAS) follows the same dependency order as the bindings, resolved the same way: build order in TheRock, `find_package` for a standalone build.
 
@@ -681,9 +690,11 @@ Routine names, argument lists, and calling styles are unchanged, so this is find
 | `use hipfort_rocblas` (+ `_enums`, `_types`)       | `use rocblas` |
 | `use hipfort_<lib>` (+ `_enums`, `_types`)         | `use <lib>`   |
 
-The HIP memory helpers (`hipfort_hipmalloc`, `hipfort_hipmemcpy`, `hipfort_hiphostregister`) fold into `hip`, and the cross-cutting modules (`hipfort_check`, `hipfort_handles`, `hipfort_auxiliary`) fold into the library module the caller already `use`s: `hipCheck` comes from `hip`, `rocblasCheck` and `rocblas_handle` from `rocblas`.
+The library's own enum modules fold in the same way: `use rocsparse_enums`, `use hipsparse_enums`, and `use rocblas_enums` become `use <lib>`.
 
-**2. Link target.** One `libhipfort-*.a` for everything becomes one archive and one CMake target per library, in the C library's own namespace, so `find_package(<lib>)` yields both halves:
+The HIP memory helpers (`hipfort_hipmalloc`, `hipfort_hipmemcpy`, `hipfort_hiphostregister`) fold into `hip`, and the cross-cutting modules (`hipfort_check`, `hipfort_handles`, `hipfort_auxiliary`) fold into the library module the caller already `use`s: `hipCheck` comes from `hip`, `rocblasCheck` from `rocblas`, and handles stay `type(c_ptr)`.
+
+**2. Link target.** One `libhipfort-*.a` for everything becomes one archive and one CMake target per library, in the C library's own namespace, found through `find_package(<lib>-fortran)`, which also brings in the C library (and through `find_package(<lib>)` alone once rocm-cmake has the optional include; see Building the bindings):
 
 ```cmake
 # before
@@ -736,7 +747,7 @@ The co-location step is in review, one pull request per library:
 | rocRAND         | [rocm-libraries#12505](https://github.com/ROCm/rocm-libraries/pull/12505) |
 | hipRAND         | [rocm-libraries#12506](https://github.com/ROCm/rocm-libraries/pull/12506) |
 
-The `rocm-libraries` tests `use hip`, so they depend on the HIP binding (rocm-systems#11923) being installed; until it is, they configure as skipped.
+Most `rocm-libraries` binding tests `use hip`, so they depend on the HIP binding (rocm-systems#11923) being installed; until it is, they configure as skipped.
 
 ### Packaging in TheRock
 
@@ -748,20 +759,21 @@ It needs a short list of changes in TheRock itself, none of which changes the de
    But the toolchain file TheRock generates for each subproject (`cmake/therock_subproject.cmake`) sets `CMAKE_C_COMPILER`, `CMAKE_CXX_COMPILER` and, for `amd-hip`, `CMAKE_HIP_COMPILER`, and no `CMAKE_Fortran_COMPILER`.
    Each project's probe then decides on its own: the `fortran/` probe looks for `amdflang` beside the C compiler first, but a project root that probes earlier with a plain `check_language(Fortran)` takes whatever is on `PATH`, which on a TheRock builder is `gfortran` (the environment check requires it).
    The change is to emit `CMAKE_Fortran_COMPILER` (the toolchain's `amdflang`) in that generated file for the `amd-llvm` and `amd-hip` toolchains, so that every subproject compiles its binding with the compiler that ships, and the shipped `.mod` files match the shipped `amdflang` exactly, version included.
-   It also keeps the dependent bindings consistent: rocSOLVER's top-level `CMakeLists.txt` defaults `CMAKE_Fortran_COMPILER` to `gfortran` when none is given, so without this change TheRock would build `rocsolver.mod` with gfortran against an `amdflang` `rocblas.mod` it cannot read, and the rocSOLVER binding would be skipped. That default already yields to a compiler set by the toolchain.
+   It also keeps the dependent bindings consistent. On `develop`, rocSOLVER and hipSOLVER default `CMAKE_Fortran_COMPILER` to `gfortran` before `project()` (hipBLAS in its clients project); the co-location pull requests narrow that default to builds of the test and benchmark clients and prefer `amdflang` otherwise, but TheRock builds those clients when testing is on, so without this change it would build `rocsolver.mod` with gfortran against an `amdflang` `rocblas.mod` it cannot read, and the rocSOLVER binding would be skipped. That default yields to a compiler set by the toolchain.
+   The projects keep gfortran for their clients on purpose: the clients link a host LAPACK, and a gfortran-built LAPACK needs the gfortran runtime. Forcing `amdflang` must therefore go with checking that the LAPACK the clients link in TheRock is not gfortran-built, or with linking its runtime explicitly.
 1. **Artifact descriptors.**
    The default `dev` component already collects `**/*.a`, `**/include/**` and `**/cmake/**`, so the `.mod` files, the archives and the config packages land in `dev` with no change.
    Two edits remain:
-   - Add `share/<lib>/fortran/**` to the `dev` component of each library (ROCTx with rocprofiler-sdk), since `share/` is not a default `dev` path and the installed `.F90` is what users of other compilers build from.
-   - Fix the existing Fortran entries in `math-libs/BLAS`: hipSOLVER's `lib/libhipsolver_fortran.so*` (in `artifact-solver.toml`) no longer exists, because the binding is a static archive, and the `-DEXPORT_FORTRAN_BINDINGS=OFF` passed to hipSOLVER retires with that option. hipBLAS's `lib/libhipblas_fortran.so` (in `artifact-blas.toml`) is the clients' test helper, and follows whatever name the clients library ends up with.
+   - Add `share/<lib>/fortran/**` to the `dev` component of each library (ROCTx with rocprofiler-sdk), since `share/` is not a default `dev` path and the installed `.F90` is what users of other compilers build from. Two existing rules need care: HIP's `share/hip/**` sits in the `lib` component of `core/artifact-core-hip.toml`, so `share/hip/fortran/` needs carving out of it, and ROCTx's `share/roctx/fortran/` is not covered by the `share/rocprofiler-sdk-roctx/**` rule.
+   - Fix the existing Fortran entries in `math-libs/BLAS`: hipSOLVER's `lib/libhipsolver_fortran.so*` (in `artifact-solver.toml`) no longer exists, because the binding is a static archive, and the `-DEXPORT_FORTRAN_BINDINGS=OFF` passed to hipSOLVER retires with that option. hipBLAS's `lib/libhipblas_fortran.so` entries (in `artifact-blas.toml`) already match nothing, since the clients' Fortran helper is a static library that is not installed, and are removed; `libhipblas_fortran.a` is now the binding, under `lib/fortran/<compiler>/`.
 1. **Dependency order.**
    Already expressed: rocSOLVER depends on rocBLAS, and every library depends on `hip-clr`, so the Fortran build order follows the C one. The `rocm-libraries` binding tests `use hip`, so they need the HIP binding from `hip-clr` installed first, which is also already the case.
 1. **Tests.**
-   The bindings' tests (`fortran/test/`, under `BUILD_FORTRAN_CLIENTS`) are CTest tests labelled `gpu`, so they join each library's existing `test` component and test runner.
+   Where a library has binding tests (`fortran/test/`, under `BUILD_FORTRAN_CLIENTS`), they are CTest tests labelled `gpu`, and join each library's existing `test` component and test runner once the project installs them; not every co-location pull request does yet (rocRAND, hipRAND), and the tests only reach TheRock's test artifacts after it does.
 1. **Fortran runtime.**
    An `amdflang`-built test executable links flang's runtime (`flang-rt`) rather than `libgfortran`; the test artifacts depend on the `amd-llvm` runtime libraries, as the HIP ones already do. A user's application gets the runtime from the compiler that links it.
 
-Windows builds keep `BUILD_FORTRAN_BINDINGS` off (see Non-goals), and the ASAN and coverage variants build no Fortran.
+Windows builds keep `BUILD_FORTRAN_BINDINGS` off (see Non-goals), and the ASAN and coverage variants pass `-DBUILD_FORTRAN_BINDINGS=OFF`: the projects build the bindings under ASan and only skip their tests, so it is TheRock that keeps Fortran out of those variants.
 Once these land, TheRock's nightly builds are the first place a user gets the bindings precompiled, ahead of a ROCm release; until then, a user tries a binding by building its `fortran/` from the pull request against a nightly install.
 
 ## Open questions and risks
@@ -793,7 +805,8 @@ Several points are still open.
   This needs the ROCm documentation team.
 - **A second error model (owned error objects).** rocSPARSE now ships, alongside the status code, an owned error object: several entry points take a `rocsparse_error*` out-parameter producing an opaque descriptor the caller must release with `rocsparse_destroy_error`, whose message is a borrowed `const char*` tied to the descriptor's lifetime.
   The inherited status-code model has no vocabulary for an owned object, a destroy obligation, or a borrowed string.
-  Open: how the descriptor is represented in Fortran, who owns the destroy, and the lifetime of the borrowed message pointer.
+  Today the generated `rocsparse.F90` binds it at the raw level: the descriptor is a `type(c_ptr)` passed as an optional out-argument, the caller releases it explicitly with `rocsparse_destroy_error`, and the message comes back as a raw `c_ptr`.
+  Open: whether to add an idiomatic layer on top (a derived type with a finalizer, the message copied into a Fortran string), and how it states the lifetime of the borrowed message pointer.
 - **Deprecation and removal policy.** A C `deprecated` attribute is a compiler diagnostic, not a docstring, so a Fortran caller of a deprecated entry point currently gets silence where a C caller gets a warning; and because the generated surface tracks the header exactly, removing a C function would reach the Fortran module in the same merge, with no release in which the Fortran user was warned.
   Plan: capture the attribute as a generated docstring marker (Fortran has no deprecation attribute below F2023), and forbid an entry point from leaving the generated surface in the same release it leaves the C header (the in-sync gate fails a regeneration that drops a public Fortran name unless the PR acknowledges it).
 - **Are dummy-argument names public API?** A Fortran keyword actual argument makes every dummy name part of the module's public contract, yet those names come from C parameter names, which are not API in C: renaming a C prototype parameter (invisible to C callers) would break a Fortran caller using that keyword.
