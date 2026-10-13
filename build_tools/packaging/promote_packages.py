@@ -13,7 +13,7 @@ It optionally also restricts which gfx target architectures are referenced by th
 package metadata.
 
 Promotion is parameterised by:
-  --src-version-type   marker to look for in source: 'rc', 'a', or 'dev'
+  --src-version-type   marker to look for in source: 'rc', 'a', or 'pytorch-dev'
   --dest-version       form to apply: 'release' (strip prerelease),
                        'rc<N>' (e.g. 'rc1'), or 'a<YYYYMMDD>' (e.g. 'a20260501')
 
@@ -21,7 +21,7 @@ Common workflows:
   - rc -> release (default)  e.g. 7.10.0rc1       -> 7.10.0
   - a  -> release            e.g. 7.13.0a20260501 -> 7.13.0
   - a  -> rc                 e.g. 7.13.0a20260501 -> 7.13.0rc1
-  - dev -> release           e.g. 10.0.0rc4       -> 10.0.0 (also drops git<sha> on torch wheels)
+  - pytorch-dev -> release   e.g. 2.12.0+git1a2b3c4d.rocm10.0.0rc4 -> 2.12.0+rocm10.0.0
 Other combinations are mechanically possible but not typical.
 
 When promoting torch-family wheels to a stable release, ROCm package
@@ -71,8 +71,8 @@ TYPICAL USAGE:
   # Promote alpha to release candidate (e.g. 7.13.0a20260430 -> 7.13.0rc1)
   python ./build_tools/packaging/promote_packages.py --input-dir=./release_candidates/ --src-version-type=a --dest-version=rc1
 
-  # Promote a dev build to release (e.g. 10.0.0rc4 -> 10.0.0):
-  python ./build_tools/packaging/promote_packages.py --input-dir=./dev_packages/ --src-version-type=dev
+  # Promote a dev PyTorch build to release (e.g. 2.12.0+git1a2b3c4d.rocm10.0.0rc4 -> 2.12.0+rocm10.0.0):
+  python ./build_tools/packaging/promote_packages.py --input-dir=./dev_packages/ --src-version-type=pytorch-dev
 
   # Restrict to a positive arch list (no version change); per-gfx wheels for
   # other archs are skipped/deleted, multi-arch aggregator wheels are rewritten:
@@ -126,7 +126,7 @@ SRC_VERSION_PATTERNS = {
     "rc": r"rc\d*",
     "a": r"a\d*",
     # dev PyTorch wheels prefix the local version with git<sha>. (build_prod_wheels.py).
-    "dev": r"^git[0-9a-f]+\.|rc\d*",
+    "pytorch-dev": r"^git[0-9a-f]+\.|rc\d*",
 }
 
 
@@ -164,7 +164,7 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
         "--src-version-type",
         help=(
             "Source prerelease type to look for in package versions (e.g. 'a', 'rc'). "
-            "'dev' matches dev PyTorch builds and strips their git<sha> local prefix "
+            "'pytorch-dev' matches dev PyTorch builds and strips their git<sha> local prefix "
             "and any rc (only with --dest-version=release). Defaults to 'rc'."
         ),
         # Sentinel default: lets us distinguish "user did not pass --src-version-type"
@@ -262,8 +262,10 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
     if args.delete_old_on_success is None:
         args.delete_old_on_success = False
 
-    if args.src_version_type == "dev" and args.dest_version != "release":
-        parser.error("--src-version-type=dev only supports --dest-version=release")
+    if args.src_version_type == "pytorch-dev" and args.dest_version != "release":
+        parser.error(
+            "--src-version-type=pytorch-dev only supports --dest-version=release"
+        )
 
     return args
 
@@ -464,7 +466,7 @@ def compute_new_version_str(
       - otherwise: replace it with `dest_version`
         (`7.13.0a20260430` -> `7.13.0rc1` when called with src='a', dest='rc1').
 
-    `src_version_type == "dev"` strips both the `git<sha>.` prefix and any rc
+    `src_version_type == "pytorch-dev"` strips both the `git<sha>.` prefix and any rc
     (`git1a2b3c4d.rocm10.0.0rc4` -> `rocm10.0.0`).
     """
     replacement = "" if dest_version == "release" else dest_version
