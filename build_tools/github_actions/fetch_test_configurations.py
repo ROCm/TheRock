@@ -5,10 +5,9 @@
 This script determines what test configurations to run.
 
 Outputs (written to $GITHUB_OUTPUT):
-  - sanity_component: JSON object for the sanity component, always present as a
-    prerequisite that must pass before other components are run. The
-    ``test_runner`` field within this object is non-empty only on GPU runners,
-    so callers can gate GPU-only steps on that field.
+  - sanity_component: JSON object for sanity, or null when excluded. When
+    selected, sanity must pass before other components run. Its ``test_runner``
+    field is non-empty only on GPU runners.
   - components: JSON array of component configs for the regular test matrix
     (excludes sanity, which is output separately above).
   - platform: lowercase OS name derived from RUNNER_OS.
@@ -205,11 +204,16 @@ _rocgdb_common = {
 # not in the list; omit the field to run on every tier (the default). For example, a
 # component whose suite is too slow for the quick sanity tier opts out of it with:
 #   "test_types": ["standard", "comprehensive", "full"]
+#
+# A component's "skip_stages" lists build stages whose absence excludes the test.
+# If any listed stage is in SKIP_STAGES, the component is skipped. Reused stages
+# still supply artifacts and do not exclude tests. Omit the field for no stage gate.
 
 test_matrix = {
-    # Sanity tests - always run first as a prerequisite for other component tests
+    # Sanity runs first when compiler-runtime artifacts are available.
     "sanity": {
         "job_name": "sanity",
+        "skip_stages": ["compiler-runtime"],
         "fetch_artifact_args": "--sanity",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_sanity.py')}",
@@ -1229,6 +1233,7 @@ def run():
     test_type = os.getenv("TEST_TYPE", "standard")
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     build_variant = os.getenv("BUILD_VARIANT", "release")
+    skip_stages = os.getenv("SKIP_STAGES", "").split(",")
 
     # Check for ci:run-multi-gpu label to force multi-GPU tests
     enable_multi_gpu_by_label = "ci:run-multi-gpu" in test_labels
@@ -1314,6 +1319,15 @@ def run():
     all_components = []
     for key in test_matrix:
         job_name = test_matrix[key]["job_name"]
+
+        excluded_stages = set(skip_stages).intersection(
+            test_matrix[key].get("skip_stages", [])
+        )
+        if excluded_stages:
+            logging.info(
+                f"Excluding {job_name}: stages {sorted(excluded_stages)} are skipped"
+            )
+            continue
 
         # Resolve the individual gfx targets for the current family once, so both
         # include_family and exclude_family can match either the family group
@@ -1558,7 +1572,7 @@ def run():
         _build_container_options(c, platform) for c in components_with_runners
     ]
 
-    # Separate sanity (always a prerequisite) from the regular component matrix.
+    # Separate sanity from the regular component matrix.
     sanity_component = next(
         (c for c in all_components if c.get("job_name") == "sanity"), None
     )
