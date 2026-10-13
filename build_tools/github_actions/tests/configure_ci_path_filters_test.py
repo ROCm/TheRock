@@ -294,6 +294,7 @@ class TestComputeExternalRepoChangedProjects(unittest.TestCase):
         repo="ROCm/rocm-libraries",
         entries=_LIBRARY_ENTRIES,
         config_exists=True,
+        skip_patterns=_SKIP_PATTERNS,
     ):
         with tempfile.TemporaryDirectory() as directory:
             if config_exists:
@@ -315,7 +316,7 @@ class TestComputeExternalRepoChangedProjects(unittest.TestCase):
                     changed_files=list(changed_files),
                     projects_config_path=".github/repos-config.json",
                     repo_full_name=repo,
-                    skip_patterns=_SKIP_PATTERNS,
+                    skip_patterns=skip_patterns,
                 )
 
     # -- Ordinary source changes --------------------------------------------
@@ -408,6 +409,40 @@ class TestComputeExternalRepoChangedProjects(unittest.TestCase):
         self.assertEqual(
             self.compute([_CALLER_WORKFLOW], repo="rocm/ROCm-Libraries"),
             _LIBRARY_PROJECTS,
+        )
+
+    def test_skippable_workflow_path_does_not_widen_scope(self):
+        """A repo that skips its own workflows scopes to the real change.
+
+        Pairing the workflow edit with a source change must classify on the
+        source change, not expand to every configured project.
+        """
+        self.assertEqual(
+            self.compute(
+                [_CALLER_WORKFLOW, "projects/rocblas/src/rocblas.cpp"],
+                skip_patterns=_SKIP_PATTERNS + [".github/workflows/*"],
+            ),
+            ["projects/rocblas"],
+        )
+
+    def test_all_skippable_paths_still_run_all_tests(self):
+        """An entirely skippable diff must not narrow to an empty-ish scope."""
+        self.assertEqual(
+            self.compute(
+                [_CALLER_WORKFLOW],
+                skip_patterns=_SKIP_PATTERNS + [".github/workflows/*"],
+            ),
+            _LIBRARY_PROJECTS,
+        )
+
+    def test_skippable_workflow_with_unclassified_path_runs_all_tests(self):
+        """Dropping the workflow must not disarm the unclassified-path guard."""
+        self.assertEqual(
+            self.compute(
+                [_CALLER_WORKFLOW, "unexpected/config.py"],
+                skip_patterns=_SKIP_PATTERNS + [".github/workflows/*"],
+            ),
+            [],
         )
 
     def test_configured_scope_map_entry_applies(self):

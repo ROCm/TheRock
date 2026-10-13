@@ -407,6 +407,25 @@ def compute_external_repo_changed_projects(
         print("  No changed files - running all tests")
         return []
 
+    # A skippable path cannot affect build or test outcomes, so it must not
+    # widen scope either. Without this, a PR pairing a skippable file with a
+    # real project change is classified by the skippable path: a
+    # `.github/workflows/therock*` edit hits _CALLER_WORKFLOW_PATTERNS below
+    # and expands to every configured project even when the only substantive
+    # change is one subtree. Guarded on `significant` being non-empty so an
+    # all-skippable diff still reaches the `return []` full-coverage default
+    # rather than silently narrowing; in practice is_ci_run_required has
+    # already skipped CI entirely in that case.
+    significant = [
+        path
+        for path in changed_files
+        if not _is_path_skippable_for_patterns(path, skip_patterns)
+    ]
+    if significant and len(significant) != len(changed_files):
+        skipped = len(changed_files) - len(significant)
+        print(f"  Ignoring {skipped} skippable path(s) for scoping")
+        changed_files = significant
+
     # Shared CI and test-selection changes can affect every project at once.
     if _matches_patterns(changed_files, _FULL_TEST_TRIGGER_PATTERNS):
         print("  Shared CI files changed - running all tests")
