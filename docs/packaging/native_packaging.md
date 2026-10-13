@@ -48,20 +48,21 @@ For the RPM use case, this naming convention is valid. However, for the
 Debian use case, the suffix should be -dev. Therefore, for Debian packages,
 the names are updated to use -dev.
 
-In multi-arch (kpack) mode a -devel package is generic unless it sets `Gfxarch`
-and `OptionalContent` and some per-arch artifact for its components holds files.
-Then it is built per GPU target (e.g. `amdrocm-ck-dev<version>-gfx942`). Such a
-package whose generic artifacts hold no files gets no `-host` package; its device
-packages carry the host's dependencies instead. See
-`nativepackage_dependency_tree.md`.
+In multi-arch (kpack) mode a non-metapackage -devel package is generic unless it
+sets `Gfxarch` and `OptionalContent` and some per-arch artifact for its
+components holds files. Then it is built per GPU target (e.g.
+`amdrocm-ck-dev<version>-gfx942`). Such a package whose generic artifacts hold
+no files gets no `-host` package; its device packages carry the host's
+dependencies instead. See `nativepackage_dependency_tree.md`. Opting in
+therefore also makes the package's content optional; see OptionalContent.
 
 The per-arch decision checks whether a `<artifact>_<component>_gfx*` directory
-for one of the package's components holds files listed in its manifest; a
-directory without files does not count. A `-devel` package that sets `Gfxarch`
-without `OptionalContent` stays generic even when such files exist. An opted-in
-package changes from generic to per-arch when per-arch files first appear, which
-moves its files into `-host` and per-target packages. Before opting another
-`-devel` package in, plan that change.
+for one of the package's components has a non-empty directory listed in its
+manifest; a manifest-only or empty directory does not count. A `-devel` package
+that sets `Gfxarch` without `OptionalContent` stays generic even when such files
+exist. An opted-in package changes from generic to per-arch when per-arch files
+first appear, which moves its files into `-host` and per-target packages. Before
+opting another `-devel` package in, plan that change.
 
 ## RPATH Packages
 
@@ -87,7 +88,7 @@ Mandatory fields for a package entry in package.json.
 - Group: The group or category of the package.
 - Priority: The priority level of the package.
 - Section: The section under which the package falls.
-- Gfxarch: Indicates that the package is associated with a graphics architecture.
+- Gfxarch: Indicates that the package is associated with a graphics architecture (for a non-meta `-devel` in kpack mode, also requires `OptionalContent`).
 - DEBDepends: The list of dependency packages. Applies to Debian packages.
 - RPMRequires: The list of dependency packages. Applies to RPM packages.
 
@@ -103,10 +104,11 @@ Optional Fields
   in multi-arch (kpack) mode only. When its generic artifacts hold no files, no
   `-host` package is built (a Gfxarch package's per-arch packages then carry the
   host's dependencies themselves), a package that is not per-arch builds neither
-  its versioned package nor its non-versioned alias, and the package is dropped
-  from other packages' dependency lists. A package with neither generic nor
-  per-arch files is reported as skipped. On a `-devel` package that sets
-  `Gfxarch`, the key also opts in to per-arch packaging (see Development
+  its versioned package nor its non-versioned alias, and, if it is not per-arch,
+  the package is dropped from other packages' dependency lists (a per-arch
+  package stays a dependency of its targets' packages). A package with neither
+  generic nor per-arch files is reported as skipped. On a `-devel` package that
+  sets `Gfxarch`, the key also opts in to per-arch packaging (see Development
   Packages). Without this key a package with missing content keeps its host and
   alias, so the problem stays a visible dangling dependency.
 - Disable_DWZ: Skip DWZ processing. Applies to Debian packages.

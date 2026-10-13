@@ -1461,7 +1461,7 @@ FAKE_OPT_SIMPLE = "amdrocm-fakeoptsimple"  # OptionalContent, not Gfxarch
 FAKE_OPT_META = "amdrocm-fakeoptmeta-devel"  # Metapackage + OptionalContent
 FAKE_STRICT = "amdrocm-fakestrict"  # Gfxarch, no OptionalContent
 FAKE_PLAIN = "amdrocm-fakeplain"  # no Gfxarch, no OptionalContent
-FAKE_NOGFX_DEVEL = "amdrocm-fakenogfx-devel"  # -devel without Gfxarch
+FAKE_NOGFX_DEVEL = "amdrocm-fakenogfx-devel"  # -devel with OptionalContent, no Gfxarch
 FAKE_GFX_DEVEL = "amdrocm-fakegfx-devel"  # -devel with Gfxarch, no OptionalContent
 FAKE_SUITE = "amdrocm-fakesuite-devel"  # Gfxarch metapackage
 
@@ -1961,6 +1961,38 @@ class PackagesWithoutContentPartitionTest(_FakePackagesTestCase):
                     expected,
                 )
 
+    def test_package_whose_content_check_raises_is_kept(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        broken = _fake_package(FAKE_OPT_DEVEL, gfxarch=True, optional=True)
+        del broken["Artifactory"][0]["Artifact_Subdir"]
+        with patch.object(build_package, "get_package_info", return_value=broken):
+            self.assertEqual(
+                build_package.partition_packages_without_content([FAKE_OPT_DEVEL], cfg),
+                ([FAKE_OPT_DEVEL], []),
+            )
+
+
+class RunReportsPackagesWithoutContentTest(_FakePackagesTestCase):
+    def test_package_without_content_is_reported_as_skipped(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic", "manifest_only")
+        self.assertFalse(cfg.dest_dir.exists())
+        args = _args(
+            self.temp_dir, runpath_pkg=True, pkg_names=[FAKE_OPT_DEVEL], parallel=1
+        )
+        # Exercise the real worker and orchestration without external package builds.
+        with (
+            patch.object(build_package, "create_package_config", return_value=cfg),
+            patch.object(build_package, "cleanup_packaging_environment"),
+            patch.object(build_package, "ProcessPoolExecutor", ThreadPoolExecutor),
+        ):
+            build_package.run(args)
+        manifest_file = cfg.dest_dir / "built_packages.txt"
+        self.assertTrue(manifest_file.exists())
+        manifest = manifest_file.read_text("utf-8")
+        self.assertIn("# Skipped base packages: 1\n", manifest)
+        self.assertIn("# Failed to build: 0\n", manifest)
+
 
 class PackageJsonConsistencyTest(unittest.TestCase):
     """Generic consistency rules for the real ``package.json``."""
@@ -1970,22 +2002,22 @@ class PackageJsonConsistencyTest(unittest.TestCase):
     def setUp(self) -> None:
         self.packages = read_package_json_file()
 
-    def test_dependency_names_resolve_to_packages(self) -> None:
+    def test_amdrocm_dependency_entries_are_exact_package_names(self) -> None:
         names = {pkg["Package"] for pkg in self.packages}
+        misses = []
         for pkg in self.packages:
             for field, value in pkg.items():
                 if not field.endswith(self.DEPENDENCY_FIELD_SUFFIXES):
                     continue
-                for entry in value if isinstance(value, list) else [value]:
-                    for alternative in re.split(r"[,|]", entry):
-                        dep = re.split(r"[\s(]", alternative.strip())[0]
-                        if dep.startswith("amdrocm"):
-                            self.assertIn(
-                                dep,
-                                names,
-                                f"{pkg['Package']}: {field} names unknown "
-                                f"package {dep}",
+                for element in value if isinstance(value, list) else [value]:
+                    for entry in element.split(","):
+                        entry = entry.strip()
+                        if "amdrocm" in entry and entry not in names:
+                            misses.append(
+                                f"{pkg['Package']}: {field} entry {entry!r} is "
+                                "not an exact package name"
                             )
+        self.assertEqual([], misses)
 
     def test_optional_content_only_on_non_meta_packages_with_artifacts(self) -> None:
         for pkg in self.packages:

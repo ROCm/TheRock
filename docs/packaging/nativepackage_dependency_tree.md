@@ -207,7 +207,7 @@ amdrocm-blas (non-versioned)
 1. **Device packages depend on SAME-ARCH variants** of gfxarch dependencies (for binaries)
 1. **Non-gfxarch dependencies** go to host package only (inherited by devices)
 1. **No cross-architecture dependencies** - gfx1100 device never depends on gfx942 packages
-1. **No `-host` package without generic content for `OptionalContent` packages** - a gfxarch package marked `OptionalContent` whose generic artifacts hold no files (an existing, non-empty directory) gets no host package. Every other gfxarch package keeps its host package and the edges to it. See below.
+1. **No `-host` package without generic content for `OptionalContent` packages** - a gfxarch package marked `OptionalContent` whose generic artifacts hold no files (no existing, non-empty directory) gets no host package. Every other non-meta gfxarch package still gets a host build attempt and keeps the edges to it, so missing content stays a visible dangling dependency. See below.
 
 ### Per-arch `-devel` packages and packages without a host
 
@@ -218,8 +218,8 @@ When the generic artifacts of such an `OptionalContent` package are empty there 
 - no `-host` package is built;
 - the versioned meta (e.g. `amdrocm-ck-dev8.2`) depends on the device packages only;
 - each device package carries the host's non-gfxarch dependencies itself (`amdrocm-ck8.2`, `amdrocm-runtime-dev8.2`) next to its own-arch gfxarch dependencies;
-- a dependency marked `OptionalContent` in `package.json` (currently `amdrocm-ck-devel`) that has no generic content is dropped from dependency lists; every other package is kept, so a missing package stays a visible dangling dependency (metapackages are always kept);
-- with no per-arch files either (e.g. before the per-target CK archives exist), an `OptionalContent` package is non-gfxarch, builds nothing (no versioned package and no non-versioned alias), and is reported as skipped, so nothing depends on it.
+- a dependency marked `OptionalContent` in `package.json` (currently `amdrocm-ck-devel`) that has no generic content is dropped from dependency lists when it is not per-arch (a per-arch one stays a same-arch dependency); every other package is kept, so a missing package stays a visible dangling dependency (metapackages are always kept);
+- with no per-arch files either (e.g. before the per-target CK archives exist), an `OptionalContent` `-devel` package is non-gfxarch, builds nothing (no versioned package and no non-versioned alias), and is reported as skipped, so nothing depends on it.
 
 ```
 amdrocm-ck-dev (non-versioned)

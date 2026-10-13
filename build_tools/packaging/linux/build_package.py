@@ -258,11 +258,11 @@ def build_simple_package_variants(pkg_name, config: PackageConfig) -> list:
 
     # An OptionalContent package with no generic content has nothing to put in
     # a versioned package, and an alias would depend on a package that does
-    # not exist. Other packages always build both.
+    # not exist. Other packages always attempt both.
     if omits_generic_variants(pkg_info, config.artifacts_dir):
         logger.warning(
             f"Skipping versioned and non-versioned variants for {pkg_name}: "
-            "no content"
+            "no generic content"
         )
         return built_packages
 
@@ -681,7 +681,8 @@ def partition_packages_without_content(pkg_list, config: PackageConfig):
     In kpack mode, a package for which has_no_content() holds (an
     OptionalContent package with neither generic nor per-arch files) builds
     nothing, so it is reported as skipped rather than failed. Outside kpack
-    mode every package is kept.
+    mode every package is kept. A package whose content check raises is kept,
+    so build_pkg reports it as failed.
 
     Parameters:
         pkg_list: Package names selected for the build
@@ -695,7 +696,14 @@ def partition_packages_without_content(pkg_list, config: PackageConfig):
     kept = []
     skipped = []
     for pkg_name in pkg_list:
-        if has_no_content(get_package_info(pkg_name), config.artifacts_dir):
+        try:
+            no_content = has_no_content(
+                get_package_info(pkg_name), config.artifacts_dir
+            )
+        except Exception:
+            kept.append(pkg_name)
+            continue
+        if no_content:
             logger.warning(f"Skipping {pkg_name}: optional content, no content found")
             skipped.append(pkg_name)
         else:
