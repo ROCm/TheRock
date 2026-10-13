@@ -46,6 +46,11 @@ if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR)
   set(_hiptensor_available ON)
 endif()
 
+set(_miopen_available OFF)
+if(_miopen_enabled AND THEROCK_ENABLE_MIOPEN)
+  set(_miopen_available ON)
+endif()
+
 # Examples are configured against the installed ROCm prefix. The
 # cpp-sdk-user project requires HIP (LANGUAGES CXX HIP), so skip when
 # HIP is not enabled (e.g. in early multi-arch CI stages) or when
@@ -64,7 +69,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND "${THEROCK_SANITIZER}" STREQUAL "")
           "-DTHEROCK_ENABLE_HIP=${THEROCK_ENABLE_HIP_RUNTIME}"
           "-DTHEROCK_ENABLE_HIPDNN=${THEROCK_ENABLE_HIPDNN}"
           "-DTHEROCK_ENABLE_LIBHIPCXX=${THEROCK_ENABLE_LIBHIPCXX}"
-          "-DTHEROCK_ENABLE_MIOPEN=${THEROCK_ENABLE_MIOPEN}"
+          "-DTHEROCK_ENABLE_MIOPEN=${_miopen_available}"
           "-DTHEROCK_ENABLE_HIPTENSOR=${_hiptensor_available}"
           "-DTHEROCK_ENABLE_PRIM=${THEROCK_ENABLE_PRIM}"
           "-DTHEROCK_ENABLE_RAND=${THEROCK_ENABLE_RAND}"
