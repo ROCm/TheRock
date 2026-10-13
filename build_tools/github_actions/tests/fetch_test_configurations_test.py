@@ -33,6 +33,10 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_TYPE"] = "full"
         os.environ["TEST_LABELS"] = "[]"
         os.environ["PROJECTS_TO_TEST"] = "*"
+        # Default to on_demand so existing tests aren't affected by
+        # FAMILY_TRIGGER_ALLOWLIST restrictions. Tests for trigger_modes
+        # and FAMILY_TRIGGER_ALLOWLIST override this explicitly.
+        os.environ["TRIGGER_CONTEXT"] = "on_demand"
 
         # Default to linux platform
         sys.argv = ["fetch_test_configurations.py", "--platform=linux"]
@@ -1084,6 +1088,77 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         hipblaslt = next(j for j in components if j["job_name"] == "hipblaslt")
         self.assertEqual(hipblaslt["test_type"], "quick")
         self.assertEqual(hipblaslt["total_shards"], 1)  # quick uses single shard
+
+
+    # -----------------------
+    # trigger_modes tests
+    # -----------------------
+
+    def test_trigger_modes_excludes_component_on_mismatch(self):
+        """A component with trigger_modes is skipped when TRIGGER_CONTEXT doesn't match."""
+        os.environ["TRIGGER_CONTEXT"] = "presubmit"
+        os.environ["PROJECTS_TO_TEST"] = "*"
+        fetch_test_configurations.run()
+        names = self._selected_names()
+        # rocgdb-corefile has trigger_modes=["label", "submodule_bump"]
+        self.assertNotIn("rocgdb-corefile", names)
+
+    def test_trigger_modes_includes_component_on_match(self):
+        """A component with trigger_modes runs when TRIGGER_CONTEXT matches."""
+        os.environ["TRIGGER_CONTEXT"] = "label"
+        os.environ["PROJECTS_TO_TEST"] = "*"
+        os.environ["AMDGPU_FAMILIES"] = "gfx94X-dcgpu"
+        fetch_test_configurations.run()
+        names = self._selected_names()
+        self.assertIn("rocgdb-corefile", names)
+
+    def test_trigger_modes_supports_comma_separated_contexts(self):
+        """Multiple active trigger contexts are comma-separated; any match suffices."""
+        os.environ["TRIGGER_CONTEXT"] = "presubmit,submodule_bump"
+        os.environ["PROJECTS_TO_TEST"] = "*"
+        os.environ["AMDGPU_FAMILIES"] = "gfx94X-dcgpu"
+        fetch_test_configurations.run()
+        names = self._selected_names()
+        self.assertIn("rocgdb-corefile", names)
+
+    # -----------------------
+    # FAMILY_TRIGGER_ALLOWLIST tests
+    # -----------------------
+
+    def test_family_allowlist_restricts_presubmit_components(self):
+        """gfx90a presubmit only runs components listed in FAMILY_TRIGGER_ALLOWLIST."""
+        os.environ["TRIGGER_CONTEXT"] = "presubmit"
+        os.environ["AMDGPU_FAMILIES"] = "gfx90a"
+        os.environ["PROJECTS_TO_TEST"] = "*"
+        fetch_test_configurations.run()
+        names = self._selected_names()
+        # sanity is always included (separate output), hip-tests and rocrtst
+        # are in the allowlist
+        self.assertIn("hip-tests", names)
+        self.assertIn("rocrtst", names)
+        # Other components should be excluded
+        self.assertNotIn("rocblas", names)
+        self.assertNotIn("rocfft", names)
+
+    def test_family_allowlist_unrestricted_on_label(self):
+        """gfx90a with label trigger has no allowlist restriction."""
+        os.environ["TRIGGER_CONTEXT"] = "label"
+        os.environ["AMDGPU_FAMILIES"] = "gfx90a"
+        os.environ["PROJECTS_TO_TEST"] = "*"
+        fetch_test_configurations.run()
+        names = self._selected_names()
+        self.assertIn("hip-tests", names)
+        self.assertIn("rocblas", names)
+
+    def test_family_allowlist_unrestricted_for_other_families(self):
+        """Families not in FAMILY_TRIGGER_ALLOWLIST have no restrictions."""
+        os.environ["TRIGGER_CONTEXT"] = "presubmit"
+        os.environ["AMDGPU_FAMILIES"] = "gfx94X-dcgpu"
+        os.environ["PROJECTS_TO_TEST"] = "*"
+        fetch_test_configurations.run()
+        names = self._selected_names()
+        self.assertIn("rocblas", names)
+        self.assertIn("hip-tests", names)
 
 
 if __name__ == "__main__":

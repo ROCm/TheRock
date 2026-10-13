@@ -41,6 +41,10 @@ on:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
         default: ""
+      trigger_context:
+        description: "Comma-separated trigger contexts (presubmit, postsubmit, submodule_bump, nightly, label, on_demand). Controls which components run via trigger_modes and FAMILY_TRIGGER_ALLOWLIST."
+        type: string
+        default: "presubmit"
       skip_stages:
         description: "Build stages excluded from the build and artifact reuse (comma-separated)"
         type: string
@@ -108,6 +112,10 @@ on:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
         default: ""
+      trigger_context:
+        description: "Comma-separated trigger contexts for component filtering."
+        type: string
+        default: "presubmit"
       skip_stages:
         description: "Build stages excluded from the build and artifact reuse (comma-separated)"
         type: string
@@ -203,6 +211,7 @@ jobs:
           TEST_LABELS: ${{ inputs.test_labels }}
           PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
           SKIP_STAGES: ${{ inputs.skip_stages }}
+          TRIGGER_CONTEXT: ${{ inputs.trigger_context }}
           CI_CONFIG_PATH: ci-config
           BUILD_VARIANT: ${{ inputs.build_variant }}
           # Pass the policy-gated GPU runner label. When empty, GPU tests are gated

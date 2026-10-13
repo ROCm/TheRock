@@ -158,6 +158,7 @@ jobs:
       # Per-family test_labels override global test_labels when specified
       # Convert array to JSON string for workflow input compatibility
       test_labels: ${{ matrix.family_info.test_labels_for_family && toJSON(matrix.family_info.test_labels_for_family) || inputs.test_labels }}
+      trigger_context: ${{ matrix.family_info.trigger_context || 'presubmit' }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
       skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
       changed_projects: ${{ inputs.changed_projects }}

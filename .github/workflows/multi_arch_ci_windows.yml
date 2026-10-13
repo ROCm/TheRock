@@ -157,6 +157,7 @@ jobs:
       tests_enabled: ${{ matrix.family_info.tests_enabled }}
       test_type: ${{ matrix.family_info.test_type || inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
+      trigger_context: ${{ matrix.family_info.trigger_context || 'presubmit' }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
       skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
       changed_projects: ${{ inputs.changed_projects }}

@@ -1516,6 +1516,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "test-runs-on-multi-gpu",
             "test-runs-on-multi-gpu-labels",
             "test_type",
+            "trigger_context",
         }
         for config in [result.linux, result.windows]:
             self.assertIsNotNone(config)

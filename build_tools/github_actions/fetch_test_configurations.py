@@ -60,6 +60,40 @@ TEST_LABEL_GROUPS: dict[str, list[str]] = {
 }
 
 
+# Trigger-mode gating for components
+# ====================================
+# TRIGGER_CONTEXT (set by configure_multi_arch_ci.py, passed as an env var)
+# tells this script *why* CI is running. Valid values:
+#
+#   presubmit      — regular pull-request CI
+#   postsubmit     — push to main
+#   submodule_bump — submodule bump PR (stacks with presubmit)
+#   nightly        — scheduled run
+#   label          — test:* label explicitly applied to a PR
+#   on_demand      — workflow_dispatch
+#
+# A component may set "trigger_modes" to restrict itself to specific
+# contexts. If TRIGGER_CONTEXT matches none of the listed modes, the
+# component is skipped. Omit the field to run in all contexts (default).
+#
+# FAMILY_TRIGGER_ALLOWLIST restricts which components can run for a given
+# family in a given trigger context. When a family+context pair is listed,
+# ONLY the named components are eligible — everything else is skipped for
+# that family in that context. Families or contexts not listed here have no
+# restriction (all eligible components run).
+#
+# This makes it transparent when a family (e.g. gfx90a) is in the presubmit
+# matrix but only a subset of tests actually run: engineers can look at this
+# table and see exactly what is expected.
+FAMILY_TRIGGER_ALLOWLIST: dict[str, dict[str, list[str]]] = {
+    # gfx90a is enabled for presubmit but only these components run.
+    # In other contexts (label, submodule_bump, etc.) all eligible components run.
+    "gfx90a": {
+        "presubmit": ["sanity", "hip-tests", "rocrtst"],
+    },
+}
+
+
 # Base container options applied to all Linux containers
 # --ipc host - Allows shared memory between host and container
 # --user 0:0 - Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
@@ -204,6 +238,16 @@ _rocgdb_common = {
 # not in the list; omit the field to run on every tier (the default). For example, a
 # component whose suite is too slow for the quick sanity tier opts out of it with:
 #   "test_types": ["standard", "comprehensive", "full"]
+#
+# A component may restrict which CI contexts it runs in via "trigger_modes", a list
+# of allowed TRIGGER_CONTEXT values (any of "presubmit", "postsubmit",
+# "submodule_bump", "nightly", "label", "on_demand"). When set, the component is
+# skipped for any context not in the list. Omit the field to run in all contexts
+# (the default). Example — a component that only runs when explicitly requested:
+#   "trigger_modes": ["label", "submodule_bump"]
+#
+# For family-scoped trigger restrictions (e.g. "gfx90a in presubmit only runs
+# hip-tests and rocrtst"), see FAMILY_TRIGGER_ALLOWLIST above.
 #
 # A component's "skip_stages" lists build stages whose absence excludes the test.
 # If any listed stage is in SKIP_STAGES, the component is skipped. Reused stages
@@ -503,6 +547,7 @@ test_matrix = {
         "job_name": "rocgdb-corefile",
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --gpu-corefile-tests",
         "test_runner": "linux-gfx942-gpu-rocm-mathlib",
+        "trigger_modes": ["label", "submodule_bump"],
         "include_family": {
             "linux": ["gfx942"],
         },
@@ -1248,6 +1293,16 @@ def run():
     build_variant = os.getenv("BUILD_VARIANT", "release")
     skip_stages = os.getenv("SKIP_STAGES", "").split(",")
 
+    # Trigger context — set by configure_multi_arch_ci.py and passed through
+    # the workflow chain. Comma-separated when multiple triggers are active
+    # (e.g. "presubmit,submodule_bump" for a submodule bump PR).
+    # Falls back to "presubmit" when unset for backward compatibility.
+    trigger_context_raw = os.getenv("TRIGGER_CONTEXT", "presubmit")
+    trigger_contexts = {
+        t.strip() for t in trigger_context_raw.split(",") if t.strip()
+    }
+    logging.info(f"Active trigger contexts: {sorted(trigger_contexts)}")
+
     # Check for ci:run-multi-gpu label to force multi-GPU tests
     enable_multi_gpu_by_label = "ci:run-multi-gpu" in test_labels
     if enable_multi_gpu_by_label:
@@ -1340,6 +1395,36 @@ def run():
             logging.info(
                 f"Excluding {job_name}: stages {sorted(excluded_stages)} are skipped"
             )
+            continue
+
+        # Trigger-mode gate: skip components whose trigger_modes don't match
+        # the current CI context. Sanity is exempt (always runs).
+        allowed_modes = test_matrix[key].get("trigger_modes")
+        if key != "sanity" and allowed_modes:
+            if not trigger_contexts.intersection(allowed_modes):
+                logging.info(
+                    f"Excluding {job_name}: trigger contexts {sorted(trigger_contexts)} "
+                    f"not in trigger_modes {allowed_modes}"
+                )
+                continue
+
+        # Family trigger allowlist: when a family+context pair is listed in
+        # FAMILY_TRIGGER_ALLOWLIST, only the named components run. Sanity is
+        # exempt (always runs).
+        _blocked_by_allowlist = False
+        if key != "sanity" and amdgpu_families:
+            _family_short = amdgpu_families.split("-")[0].lower()
+            _family_allowlist = FAMILY_TRIGGER_ALLOWLIST.get(_family_short, {})
+            for ctx in trigger_contexts:
+                _ctx_allowlist = _family_allowlist.get(ctx)
+                if _ctx_allowlist is not None and key not in _ctx_allowlist:
+                    logging.info(
+                        f"Excluding {job_name}: not in FAMILY_TRIGGER_ALLOWLIST "
+                        f"for {_family_short}/{ctx} (allowed: {_ctx_allowlist})"
+                    )
+                    _blocked_by_allowlist = True
+                    break
+        if _blocked_by_allowlist:
             continue
 
         # Resolve the individual gfx targets for the current family once, so both

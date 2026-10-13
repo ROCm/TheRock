@@ -1645,12 +1645,24 @@ def _expand_build_config_for_platform(
         # This provides a single flag for workflows to gate test jobs.
         tests_enabled = bool(test_runs_on or test_runs_on_cpu)
 
+        # Compute trigger context for downstream component filtering.
+        # This tells fetch_test_configurations.py *why* CI is running so it
+        # can gate components via trigger_modes and FAMILY_TRIGGER_ALLOWLIST.
+        current_triggers = _get_current_triggers(ci_inputs, git_context)
+        # "label" is active when test:* labels are explicitly set for this run
+        if ci_inputs.linux_test_labels or ci_inputs.windows_test_labels:
+            current_triggers.add("label")
+        if ci_inputs.is_workflow_dispatch:
+            current_triggers.add("on_demand")
+        trigger_context = ",".join(sorted(current_triggers)) if current_triggers else "presubmit"
+
         family_info = {
             "amdgpu_family": platform_info["family"],
             "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
             "test-runs-on": test_runs_on,
             "test-runs-on-cpu": test_runs_on_cpu,
             "tests_enabled": tests_enabled,
+            "trigger_context": trigger_context,
             "sanity_check_only_for_family": platform_info.get(
                 "sanity_check_only_for_family", False
             ),
