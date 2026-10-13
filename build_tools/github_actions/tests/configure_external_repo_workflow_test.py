@@ -12,7 +12,7 @@ from build_tools.github_actions import configure_external_repo_ci as ci
 
 WORKFLOW = ".github/workflows/therock-multi-arch-ci-nightly.yml"
 
-# Files changed by rocm-libraries TheRock ref bump PR #13408.
+# Files a rocm-libraries TheRock ref bump PR edits.
 THEROCK_REF_BUMP = {
     ".github/actions/ci-env/action.yml",
     ".github/workflows/clang-tidy.yml",
