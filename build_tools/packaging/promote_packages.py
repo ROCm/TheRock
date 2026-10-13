@@ -405,7 +405,7 @@ def update_metadata_rocm_requires_dist(
     old_rocm_version: str,
     new_rocm_version: str,
     *,
-    strip_git_local: bool = False,
+    new_version: Version | str | None = None,
     float_rocm_dependency_patch: bool = False,
 ) -> None:
     """Update ROCm references in METADATA Summary and Requires-Dist fields."""
@@ -420,9 +420,9 @@ def update_metadata_rocm_requires_dist(
             inplace=True,
         ) as f:
             for line in f:
-                # Sibling pins (device wheels, triton) carry their own git<sha>, e.g. `triton==3.8.0+git669b31ac.rocm10.0.0rc4`.
-                if strip_git_local and line.startswith("Requires-Dist"):
-                    line = GIT_LOCAL_PREFIX_RE.sub("+", line)
+                # Full-version pins (e.g. device wheels) carry pytorch-dev git<sha> outside the ROCm part.
+                if new_version is not None:
+                    line = line.replace(str(old_version), str(new_version))
                 lower_line = line.casefold()
                 if line.startswith("Summary:") and (
                     "therock" in lower_line or "rocm" in lower_line
@@ -448,13 +448,6 @@ def update_metadata_rocm_requires_dist(
                     )
                 else:
                     print(line, end="")
-
-
-GIT_LOCAL_PREFIX_RE = re.compile(r"\+git[0-9a-f]+\.")
-
-
-def has_git_local(version: Version | str) -> bool:
-    return GIT_LOCAL_PREFIX_RE.search(str(version)) is not None
 
 
 def has_src_version_type(version_str: str, src_version_type: str) -> bool:
@@ -1027,7 +1020,7 @@ def wheel_change_extra_files(
         old_version,
         old_rocm_version,
         new_rocm_version,
-        strip_git_local=has_git_local(old_version) and not has_git_local(new_version),
+        new_version=new_version,
         float_rocm_dependency_patch=float_rocm_dependency_patch,
     )
     # Per-arch device wheels (amd_torch_device_gfx, amd_torchvision_device_gfx,
