@@ -994,7 +994,7 @@ def wheel_change_extra_files(
             if len(file.name) == len(package_name_no_version):
                 package_name_no_version = file.name
 
-    # "rocm" rather than "+rocm": dev builds use `+git<sha>.rocm<ver>`.
+    # "rocm" rather than "+rocm": pytorch-dev builds use `+git<sha>.rocm<ver>`.
     old_rocm_version = (
         str(old_version)
         if "rocm" not in str(old_version)

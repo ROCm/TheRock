@@ -184,9 +184,9 @@ python build_tools/packaging/promote_packages.py \
 `a<YYYYMMDD>` (e.g. `a20260501`). The downstream RC -> release flow above is
 unchanged.
 
-### Promoting dev (`git<sha>`) PyTorch builds
+### Promoting pytorch-dev (`git<sha>`) builds
 
-`dev` PyTorch builds record the source commit in the local
+pytorch-dev builds record the source commit in the local
 version (`2.12.0+git1a2b3c4d.rocm10.0.0rc4`). `--src-version-type=pytorch-dev` strips
 that `git<sha>.` prefix and any rc, so the wheel goes straight to the final
 version. Wheels without the prefix (for example apex) still have their rc stripped.
