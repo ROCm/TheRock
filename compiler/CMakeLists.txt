@@ -146,7 +146,10 @@ if(THEROCK_ENABLE_COMPILER)
       -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DOPENMP_ENABLE_LIBOMPTARGET=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DLIBOMPTARGET_BUILD_DEVICE_FORTRT=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DFLANG_RUNTIME_F128_MATH_LIB=libquadmath
+      # FLANG_RUNTIME_F128_MATH_LIB is host-architecture dependent and is
+      # selected in pre_hook_amd-llvm.cmake. Do not pass it as a CMAKE_ARGS -D
+      # here: a -D value is written to the cache before the pre-hook runs and
+      # would shadow the per-host selection made there.
       -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=${THEROCK_CONDITION_IS_NON_WINDOWS}
       # ASAN features.
       # Note that building AMDGPU ASAN extensions depends on various runtime headers
@@ -217,6 +220,12 @@ if(THEROCK_ENABLE_COMPILER)
     list(APPEND _comgr_dll_name_cmake_args "-DCOMGR_DLL_NAME=${THEROCK_COMGR_DLL_NAME}")
   endif()
 
+  # Lets comgr honor CMAKE_MSVC_DEBUG_INFORMATION_FORMAT from its pre-hook.
+  set(_comgr_debug_info_cmake_args)
+  if(WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+    list(APPEND _comgr_debug_info_cmake_args -DCMAKE_POLICY_DEFAULT_CMP0141=NEW)
+  endif()
+
   therock_cmake_subproject_declare(amd-comgr
     USE_DIST_AMDGPU_TARGETS
     NO_INSTALL_RPATH  # See manual handling in the pre_hook.
@@ -233,6 +242,7 @@ if(THEROCK_ENABLE_COMPILER)
       "-DLLVM_VERSION_SUFFIX=-rocm${ROCM_MAJOR_VERSION}"
       -DLLVM_ENABLE_SYMBOL_VERSIONING=ON
       ${_comgr_dll_name_cmake_args}
+      ${_comgr_debug_info_cmake_args}
     BUILD_DEPS
       rocm-cmake
       ${_comgr_gtest_deps}

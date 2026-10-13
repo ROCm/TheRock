@@ -4,7 +4,11 @@
 
 """Configure CI for external repos (rocm-systems, rocm-libraries).
 
-This script determines which projects changed and whether to run/skip tests.
+This script determines which projects changed based on git diff.
+
+Note: Skip-CI logic (for docs-only changes) has been moved to
+configure_multi_arch_ci.py, which uses TOML config files for skip patterns.
+This allows external repos to define their own skip patterns.
 
 Stage Reuse:
     TheRock's stage_reuse_decision.py handles stage impact analysis and
@@ -27,7 +31,7 @@ Outputs (to $GITHUB_OUTPUT):
     run_all_tests: "true" for schedule/dispatch, shared CI changes,
                 workflow changes without a configured project scope, or when
                 changed projects cannot be determined safely
-    skip_tests: "true" if only docs/skippable files changed
+    test_type: "quick" when run_all_tests is true, "standard" otherwise
 """
 
 import argparse
@@ -116,7 +120,7 @@ class ConfigureResult:
 
     changed_projects: str  # Comma-separated list
     run_all_tests: bool
-    skip_tests: bool
+    test_type: str  # "quick" when run_all_tests=True, otherwise "standard"
 
 
 @dataclass
@@ -307,13 +311,18 @@ def configure(
     head_sha: Optional[str],
     config_path: str,
 ) -> ConfigureResult:
-    """Main configuration logic."""
+    """Main configuration logic.
+
+    Note: Skip-CI logic (for docs-only changes) is now handled by
+    configure_multi_arch_ci.py using TOML config files. This function
+    focuses on determining changed_projects and run_all_tests.
+    """
 
     # Schedule/workflow_dispatch events run all tests
     if event_name in ("schedule", "workflow_dispatch"):
         logger.info(f"{event_name} event - running all tests")
         return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
+            changed_projects="", run_all_tests=True, test_type="quick"
         )
 
     # Get modified paths via GitHub API
@@ -328,20 +337,20 @@ def configure(
     else:
         logger.warning("No SHAs provided - running all tests")
         return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
+            changed_projects="", run_all_tests=True, test_type="quick"
         )
 
     # If API returned None (truncated results), fall back to run-all
     if modified_paths is None:
         logger.info("Truncated API response - running all tests")
         return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
+            changed_projects="", run_all_tests=True, test_type="quick"
         )
 
     if not modified_paths:
-        logger.info("No modified paths - skipping tests")
+        logger.info("No modified paths - no projects changed")
         return ConfigureResult(
-            changed_projects="", run_all_tests=False, skip_tests=True
+            changed_projects="", run_all_tests=False, test_type="standard"
         )
 
     logger.info(f"Modified paths: {len(modified_paths)} files")
@@ -350,7 +359,7 @@ def configure(
     if matches_patterns(modified_paths, FULL_TEST_TRIGGER_PATTERNS):
         logger.info("Shared CI files changed - running all tests")
         return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
+            changed_projects="", run_all_tests=True, test_type="quick"
         )
 
     # Apply the calling repository's workflow test policy.
@@ -362,14 +371,14 @@ def configure(
                 github_repo,
             )
             return ConfigureResult(
-                changed_projects="", run_all_tests=True, skip_tests=False
+                changed_projects="", run_all_tests=True, test_type="quick"
             )
 
         config = load_repo_config(config_path)
         if not config:
             logger.warning("No config loaded - running all tests")
             return ConfigureResult(
-                changed_projects="", run_all_tests=True, skip_tests=False
+                changed_projects="", run_all_tests=True, test_type="quick"
             )
 
         own_projects = get_valid_prefixes(config)
@@ -387,7 +396,7 @@ def configure(
                 " - running all tests"
             )
             return ConfigureResult(
-                changed_projects="", run_all_tests=True, skip_tests=False
+                changed_projects="", run_all_tests=True, test_type="quick"
             )
 
         logger.info(
@@ -397,14 +406,7 @@ def configure(
         return ConfigureResult(
             changed_projects=",".join(sorted(own_projects)),
             run_all_tests=False,
-            skip_tests=False,
-        )
-
-    # Check if only skippable files changed
-    if not has_non_skippable(modified_paths):
-        logger.info("Only skippable files changed - skipping tests")
-        return ConfigureResult(
-            changed_projects="", run_all_tests=False, skip_tests=True
+            test_type="standard",
         )
 
     # Find changed projects from config
@@ -412,7 +414,7 @@ def configure(
     if not config:
         logger.warning("No config loaded - running all tests")
         return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
+            changed_projects="", run_all_tests=True, test_type="quick"
         )
 
     valid_prefixes = get_valid_prefixes(config) | CI_RELEVANT_NON_SUBTREE_PREFIXES
@@ -428,7 +430,7 @@ def configure(
             " - running all tests"
         )
         return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
+            changed_projects="", run_all_tests=True, test_type="quick"
         )
 
     matched = find_matched_subtrees(modified_paths, valid_prefixes)
@@ -437,7 +439,7 @@ def configure(
     return ConfigureResult(
         changed_projects=",".join(matched),
         run_all_tests=False,
-        skip_tests=False,
+        test_type="standard",
     )
 
 
@@ -494,7 +496,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         {
             "changed_projects": result.changed_projects,
             "run_all_tests": str(result.run_all_tests).lower(),
-            "skip_tests": str(result.skip_tests).lower(),
+            "test_type": result.test_type,
         }
     )
 

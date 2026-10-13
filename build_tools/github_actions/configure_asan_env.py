@@ -114,9 +114,28 @@ def _resolve_symbolizer(artifacts_dir: Path) -> tuple[Optional[Path], Optional[s
     return symbolizer.resolve(), None
 
 
-def _resolve_library_path(artifacts_dir: Path) -> str:
+def get_asan_runtime_path(artifacts_dir: Path) -> Path:
+    """Returns the configured runtime, or discovers it for standalone launchers."""
+    configured = os.environ.get("ASAN_RUNTIME_PATH")
+    if configured:
+        runtime = Path(configured)
+        if not runtime.is_file():
+            raise FileNotFoundError(f"ASAN_RUNTIME_PATH does not exist: {runtime}")
+        return runtime.resolve()
+
+    runtime, warning = _resolve_asan_runtime(artifacts_dir)
+    if runtime is None:
+        raise FileNotFoundError(warning)
+    return runtime
+
+
+def _resolve_library_path(artifacts_dir: Path, runtime: Path | None = None) -> str:
     lib_dir = (artifacts_dir / "lib").resolve()
     parts = [str(lib_dir), str(lib_dir / "rocm_sysdeps" / "lib")]
+    # -shared-libsan binaries and Python extensions need the clang resource
+    # directory as well as ROCm/lib, even when they do not preload ASan.
+    if runtime:
+        parts.append(str(runtime.parent))
     existing = os.environ.get("LD_LIBRARY_PATH")
     if existing:
         parts.append(existing)
@@ -140,7 +159,7 @@ def resolve_asan_env(artifacts_dir: Path) -> tuple[dict[str, str], list[str]]:
     if warning:
         warnings.append(warning)
 
-    env["LD_LIBRARY_PATH"] = _resolve_library_path(artifacts_dir)
+    env["LD_LIBRARY_PATH"] = _resolve_library_path(artifacts_dir, runtime)
 
     return env, warnings
 

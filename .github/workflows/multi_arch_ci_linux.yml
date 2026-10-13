@@ -152,6 +152,8 @@ jobs:
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
       test_runs_on: ${{ matrix.family_info.test-runs-on }}
+      test_runs_on_cpu: ${{ matrix.family_info.test-runs-on-cpu }}
+      tests_enabled: ${{ matrix.family_info.tests_enabled }}
       test_type: ${{ matrix.family_info.test_type || inputs.test_type }}
       # Per-family test_labels override global test_labels when specified
       # Convert array to JSON string for workflow input compatibility
@@ -374,6 +376,8 @@ jobs:
       jax_repository: ${{ matrix.jax_repository }}
       gfx_arch: ${{ matrix.gfx_arch }}
       jax_ref: ${{ matrix.jax_ref }}
+      rocm_jax_ref: ${{ matrix.rocm_jax_ref }}
+      wheel_type: ${{ matrix.wheel_type }}
       rocm_version: ${{ inputs.rocm_package_version }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       # One representative family, so a PR pays for the JAX tests once rather

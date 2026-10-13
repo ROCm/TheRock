@@ -1,5 +1,7 @@
 # hiptests
-[components.lib."core/hip-tests/stage"]
+#
+# This artifact provides only the 'test' component. 'lib' is left unassigned
+# because its **/*.so default would otherwise claim the libraries used for testing.
 [components.dbg."core/hip-tests/stage"]
 [components.dev."core/hip-tests/stage"]
 [components.doc."core/hip-tests/stage"]
