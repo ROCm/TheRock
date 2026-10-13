@@ -674,9 +674,18 @@ def build_pkg(task: BuildTask) -> tuple[str, list[str], str | None]:
 
 
 def partition_packages_without_content(pkg_list, config: PackageConfig):
-    """Return (kept, skipped) package names. In kpack mode a package is skipped
-    when has_no_content() holds, and kept when that check raises (build_pkg
-    then reports the failure)."""
+    """Split out packages that have no content in kpack mode.
+
+    A package is skipped when has_no_content() holds and kept when that check
+    raises, so build_pkg reports the failure. Outside kpack mode all are kept.
+
+    Parameters:
+        pkg_list: Package names selected for the build
+        config: Configuration object
+
+    Returns:
+        (kept, skipped): package names to build, and package names skipped
+    """
     if not config.enable_kpack:
         return list(pkg_list), []
     kept = []

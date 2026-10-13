@@ -1371,17 +1371,38 @@ def _artifactory_has_content(pkg_info, artifacts_dir, gfx_arch):
 
 
 def has_generic_content(pkg_info, artifacts_dir):
-    """True if some generic artifact directory of the package holds files."""
+    """Check whether a package has files in its generic artifacts.
+
+    Parameters:
+    pkg_info: Package details from the JSON
+    artifacts_dir: Directory where artifacts are stored
+
+    Returns: True if a generic artifact directory of the package holds files
+    """
     return _artifactory_has_content(pkg_info, artifacts_dir, GFX_HOST)
 
 
 def is_optional_content_package(pkg_info):
-    """True if the package sets OptionalContent."""
+    """Verifies whether the OptionalContent key is enabled for a package.
+
+    Parameters:
+    pkg_info (dict): A dictionary containing package details.
+
+    Returns:
+    bool: True if OptionalContent is defined, False otherwise.
+    """
     return is_key_defined(pkg_info, "OptionalContent")
 
 
 def omits_generic_variants(pkg_info, artifacts_dir):
-    """True for a non-meta OptionalContent package without generic content."""
+    """Check whether a package omits its generic variants.
+
+    Parameters:
+    pkg_info: Package details from the JSON
+    artifacts_dir: Directory where artifacts are stored
+
+    Returns: True for a non-meta OptionalContent package without generic content
+    """
     return (
         is_optional_content_package(pkg_info)
         and not is_meta_package(pkg_info)
@@ -1390,8 +1411,15 @@ def omits_generic_variants(pkg_info, artifacts_dir):
 
 
 def has_no_content(pkg_info, artifacts_dir):
-    """True if omits_generic_variants() holds and no per-arch artifact directory,
-    for any target in artifacts_dir, holds files."""
+    """Check whether a package has neither generic nor per-arch content.
+
+    Parameters:
+    pkg_info: Package details from the JSON
+    artifacts_dir: Directory where artifacts are stored
+
+    Returns: True if omits_generic_variants() holds and no per-arch artifact
+             directory, for any target in artifacts_dir, holds files
+    """
     return omits_generic_variants(
         pkg_info, artifacts_dir
     ) and not _has_arch_specific_content(pkg_info, artifacts_dir)

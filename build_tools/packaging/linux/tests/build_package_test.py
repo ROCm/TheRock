@@ -1557,6 +1557,8 @@ def _stage_fake(
 
 
 class _FakePackagesTestCase(_KpackBuildTestCase):
+    """Runs with ``FAKE_PACKAGES`` as ``package.json``."""
+
     def setUp(self) -> None:
         super().setUp()
         # Patch package.json in every module namespace; other tests may load copies.
@@ -1590,6 +1592,8 @@ class _FakePackagesTestCase(_KpackBuildTestCase):
 
 
 class GenericContentTest(_FakePackagesTestCase):
+    """has_generic_content() and omits_generic_variants() predicates."""
+
     def test_generic_content_requires_a_non_empty_directory_for_the_subdir(
         self,
     ) -> None:
@@ -1637,6 +1641,9 @@ class GenericContentTest(_FakePackagesTestCase):
 
 
 class DevelGfxarchRuleTest(_FakePackagesTestCase):
+    """A non-meta -devel package is per-arch only with Gfxarch, OptionalContent and
+    per-arch files."""
+
     def _is_gfxarch(self, cfg: PackageConfig, pkg_name: str) -> bool:
         return is_gfxarch_package(get_package_info(pkg_name), True, cfg.artifacts_dir)
 
@@ -1684,6 +1691,8 @@ class DevelGfxarchRuleTest(_FakePackagesTestCase):
 
 
 class OptionalContentDependencyFilterTest(_FakePackagesTestCase):
+    """Only OptionalContent packages without generic content are dropped from deps."""
+
     def test_only_optional_packages_without_content_are_dropped(self) -> None:
         cfg = self._config(FAKE_TARGETS)
         _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic", "manifest_only")
@@ -1695,6 +1704,8 @@ class OptionalContentDependencyFilterTest(_FakePackagesTestCase):
 
 
 class HostlessVariantsTest(_FakePackagesTestCase):
+    """Variants and dependency edges of a per-arch OptionalContent package."""
+
     def _stage_opt_devel(
         self,
         cfg: PackageConfig,
@@ -1839,6 +1850,8 @@ class HostlessVariantsTest(_FakePackagesTestCase):
 
 
 class NonOptionalPackagesKeepVariantsTest(_FakePackagesTestCase):
+    """Packages without OptionalContent keep their variants and edges when empty."""
+
     def test_gfxarch_package_without_generic_content_keeps_host_edges(self) -> None:
         cfg = self._config(FAKE_TARGETS)
         _stage_fake(cfg.artifacts_dir, FAKE_SUPPORT, "generic")
@@ -1890,6 +1903,8 @@ class NonOptionalPackagesKeepVariantsTest(_FakePackagesTestCase):
 
 
 class PackagesWithoutContentPartitionTest(_FakePackagesTestCase):
+    """In kpack mode only OptionalContent packages with no content are skipped."""
+
     def test_only_optional_packages_without_any_content_are_skipped(self) -> None:
         # label, package, staged (suffix, content) pairs, kpack mode, skipped
         rows = (
@@ -1935,6 +1950,8 @@ class PackagesWithoutContentPartitionTest(_FakePackagesTestCase):
 
 
 class RunReportsPackagesWithoutContentTest(_FakePackagesTestCase):
+    """run() reports a package with no content as skipped, not failed."""
+
     def test_package_without_content_is_reported_as_skipped(self) -> None:
         cfg = self._config(FAKE_TARGETS)
         _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic", "manifest_only")
@@ -1957,6 +1974,8 @@ class RunReportsPackagesWithoutContentTest(_FakePackagesTestCase):
 
 
 class PackageJsonConsistencyTest(unittest.TestCase):
+    """Consistency rules for the real ``package.json``."""
+
     DEPENDENCY_FIELD_SUFFIXES = ("Depends", "Requires", "Recommends", "Suggests")
 
     def setUp(self) -> None:
