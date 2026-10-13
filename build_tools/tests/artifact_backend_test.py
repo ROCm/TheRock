@@ -19,9 +19,33 @@ from _therock_utils.artifact_backend import (
     ArtifactBackend,
     LocalDirectoryBackend,
     S3Backend,
+    ShimS3Backend,
     create_backend_from_env,
+    s3_backend_from_env,
 )
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
+
+
+class _FakeHTTPResponse:
+    """Minimal urlopen() stand-in: context manager + headers.get + chunked read."""
+
+    def __init__(self, data: bytes, content_length=None):
+        self._data = data
+        self._served = False
+        cl = len(data) if content_length is None else content_length
+        self.headers = {"Content-Length": str(cl)}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self, _size):
+        if self._served:
+            return b""
+        self._served = True
+        return self._data
 
 
 def _make_local_root(run_id="test-run-123", platform="linux"):
@@ -714,6 +738,104 @@ class TestCreateBackendFromEnv(unittest.TestCase):
             self.assertEqual(backend.bucket, "therock-ci-artifacts")
             # ROCm/TheRock has no external_repo prefix
             self.assertNotIn("SomeUser", backend.s3_prefix)
+
+
+class TestShimS3Backend(unittest.TestCase):
+    """Tests for ShimS3Backend HTTP-shim download + S3 fallback."""
+
+    def setUp(self):
+        self.output_root = _make_s3_root()
+        self.backend = ShimS3Backend(
+            output_root=self.output_root, shim_base="http://10.0.0.1:4011/"
+        )
+
+    def test_shim_base_trailing_slash_stripped(self):
+        self.assertEqual(self.backend._shim_base, "http://10.0.0.1:4011")
+
+    @mock.patch("urllib.request.urlopen")
+    def test_download_success(self, mock_urlopen):
+        """Shim GET writes the file atomically and does NOT touch S3."""
+        mock_urlopen.return_value = _FakeHTTPResponse(b"artifact-bytes")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dest = Path(temp_dir) / "out.tar.zst"
+            with mock.patch.object(S3Backend, "download_artifact") as mock_super:
+                self.backend.download_artifact("test.tar.zst", dest)
+            mock_super.assert_not_called()
+            self.assertEqual(dest.read_bytes(), b"artifact-bytes")
+            self.assertFalse(dest.with_name(dest.name + ".part").exists())
+
+    @mock.patch("urllib.request.urlopen")
+    def test_download_404_raises_and_never_falls_back(self, mock_urlopen):
+        """A genuine 404 is a missing artifact -> FileNotFoundError, no S3 read."""
+        import urllib.error
+
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            "http://x", 404, "Not Found", None, None
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dest = Path(temp_dir) / "missing.tar.zst"
+            with mock.patch.object(S3Backend, "download_artifact") as mock_super:
+                with self.assertRaises(FileNotFoundError):
+                    self.backend.download_artifact("missing.tar.zst", dest)
+            mock_super.assert_not_called()
+            self.assertFalse(dest.exists())
+            self.assertFalse(dest.with_name(dest.name + ".part").exists())
+
+    @mock.patch("urllib.request.urlopen")
+    def test_download_403_falls_back_to_s3(self, mock_urlopen):
+        """A non-404 HTTP error (e.g. proxy-rule 403) falls back to boto3 S3."""
+        import urllib.error
+
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            "http://x", 403, "Forbidden", None, None
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dest = Path(temp_dir) / "out.tar.zst"
+            with mock.patch.object(S3Backend, "download_artifact") as mock_super:
+                self.backend.download_artifact("test.tar.zst", dest)
+            mock_super.assert_called_once_with("test.tar.zst", dest)
+
+    @mock.patch("urllib.request.urlopen")
+    def test_download_network_error_falls_back_to_s3(self, mock_urlopen):
+        """A shim outage / connection error falls back to boto3 S3."""
+        import urllib.error
+
+        mock_urlopen.side_effect = urllib.error.URLError("connection refused")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dest = Path(temp_dir) / "out.tar.zst"
+            with mock.patch.object(S3Backend, "download_artifact") as mock_super:
+                self.backend.download_artifact("test.tar.zst", dest)
+            mock_super.assert_called_once_with("test.tar.zst", dest)
+
+    @mock.patch("urllib.request.urlopen")
+    def test_download_short_read_falls_back_and_cleans_part(self, mock_urlopen):
+        """A truncated body (Content-Length mismatch) must not poison the cache."""
+        mock_urlopen.return_value = _FakeHTTPResponse(b"short", content_length=100)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dest = Path(temp_dir) / "out.tar.zst"
+            with mock.patch.object(S3Backend, "download_artifact") as mock_super:
+                self.backend.download_artifact("test.tar.zst", dest)
+            mock_super.assert_called_once_with("test.tar.zst", dest)
+            self.assertFalse(dest.with_name(dest.name + ".part").exists())
+
+
+class TestS3BackendFromEnv(unittest.TestCase):
+    """Tests for the s3_backend_from_env shim selector."""
+
+    def test_returns_shim_when_http_base_set(self):
+        with mock.patch.dict(
+            os.environ, {"THEROCK_ARTIFACT_HTTP_BASE": "http://10.0.0.1:4011"}
+        ):
+            backend = s3_backend_from_env(_make_s3_root())
+        self.assertIsInstance(backend, ShimS3Backend)
+        self.assertEqual(backend._shim_base, "http://10.0.0.1:4011")
+
+    def test_returns_plain_s3_when_unset(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("THEROCK_ARTIFACT_HTTP_BASE", None)
+            backend = s3_backend_from_env(_make_s3_root())
+        self.assertIsInstance(backend, S3Backend)
+        self.assertNotIsInstance(backend, ShimS3Backend)
 
 
 if __name__ == "__main__":

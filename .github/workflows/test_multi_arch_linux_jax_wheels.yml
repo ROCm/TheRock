@@ -248,6 +248,7 @@ jobs:
         --group-add video
         --user root
         --env-file /etc/podinfo/gha-gpu-isolation-settings
+        -e THEROCK_PIP_INDEX_URL
         -e KUBE_CPU_REQUEST
         -e KUBE_MEMORY_REQUEST
 
