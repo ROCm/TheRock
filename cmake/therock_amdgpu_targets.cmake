@@ -291,6 +291,7 @@ therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpu-generi
     rocprofiler-sdk # https://github.com/ROCm/TheRock/issues/6918
     rocrtst # https://github.com/ROCm/TheRock/issues/6918
     rocshmem  # https://github.com/ROCm/TheRock/issues/6918
+    rocprofiler-systems-examples  # https://github.com/ROCm/TheRock/issues/6918
 )
 
 # Optional extension targets (used for out of tree target development).
