@@ -153,6 +153,10 @@ class TestArtifactTree(unittest.TestCase):
             self.assertEqual(warnings, [])
             self.assertTrue(env["ASAN_RUNTIME_PATH"].endswith("asan.so"))
             self.assertTrue(env["ASAN_SYMBOLIZER_PATH"].endswith("llvm-symbolizer"))
+            self.assertIn(
+                str(Path(env["ASAN_RUNTIME_PATH"]).parent),
+                env["LD_LIBRARY_PATH"].split(":"),
+            )
 
     @requires_posix
     def test_falls_back_to_the_arch_suffixed_runtime_name(self):

@@ -30,3 +30,23 @@ jobs:
       gitleaks_config_path: build_tools/scan_tools/gitleaks.toml
       trivy_config_path: build_tools/scan_tools/trivy.yml
       zizmor_config_path: build_tools/scan_tools/zizmor.yml
+
+  security_scan_summary:
+    name: Security Scan Summary
+    if: always()
+    needs:
+      - security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+      - name: Evaluate workflow results
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          python build_tools/github_actions/workflow_summary.py \
+            --needs-json "${NEEDS_JSON}"
