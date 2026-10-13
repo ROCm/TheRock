@@ -11,16 +11,32 @@ on:
   workflow_dispatch:
     inputs:
       artifact_group:
+        description: >-
+          Artifact group name used to fetch build artifacts
+          (e.g., "multi-arch-release").
         type: string
       artifact_run_id:
+        description: >-
+          Previous workflow run ID to retrieve artifacts from. Leave empty to
+          use the latest artifacts.
         type: string
         default: ""
       amdgpu_families:
+        description: >-
+          GPU family group to test (e.g., "gfx94X-dcgpu", "gfx110X-all",
+          "gfx950-dcgpu", "gfx120X-all", "gfx125X-dcgpu"). This selects
+          which GPU family the tests target.
         type: string
       amdgpu_targets:
+        description: >-
+          Specific GPU targets within a family (e.g., "gfx942", "gfx1100").
+          Leave empty to use the default targets for the selected family.
         type: string
         default: ""
       test_runs_on:
+        description: >-
+          GitHub Actions runner label for GPU tests. When empty, GPU tests
+          are skipped.
         type: string
       test_runs_on_cpu:
         description: "CPU test runner label (for components that don't need GPU)"
@@ -31,14 +47,33 @@ on:
         type: boolean
         default: true
       sanity_check_only_for_family:
+        description: >-
+          When true, only run sanity check tests and skip all component tests.
         type: boolean
         default: false
       test_type:
-        type: string
+        description: >-
+          Test tier controlling depth and duration of testing.
+        type: choice
+        options:
+          - quick
+          - standard
+          - comprehensive
+          - full
+        default: standard
       test_labels:
+        description: >-
+          Python list of test labels to select specific components, e.g.,
+          ["test:rocblas", "test:hipblas"]. Use "test:<name>" to select
+          components. Leave empty to run all tests matching other filters.
+          Label groups: "test:rocgdb" expands to rocgdb-cpu + rocgdb-gpu,
+          "test:tensilelite" expands to tensilelite + tensilelite-common.
         type: string
       changed_projects:
-        description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
+        description: >-
+          Comma-separated list of changed projects to scope testing via the
+          consumer graph (e.g., "rocblas,hipblas" or "projects/rocblas").
+          Leave empty to run all tests.
         type: string
         default: ""
       skip_stages:
@@ -78,16 +113,21 @@ on:
   workflow_call:
     inputs:
       artifact_group:
+        description: "Artifact group name for fetching build artifacts."
         type: string
       artifact_run_id:
+        description: "Previous workflow run ID to retrieve artifacts from."
         type: string
         default: ""
       amdgpu_families:
+        description: "GPU family group to test (e.g., gfx94X-dcgpu, gfx110X-all)."
         type: string
       amdgpu_targets:
+        description: "Specific GPU targets within a family (e.g., gfx942)."
         type: string
         default: ""
       test_runs_on:
+        description: "GitHub Actions runner label for GPU tests."
         type: string
       test_runs_on_cpu:
         description: "CPU test runner label (for components that don't need GPU)"
@@ -98,11 +138,17 @@ on:
         type: boolean
         default: true
       sanity_check_only_for_family:
+        description: "When true, only run sanity check tests."
         type: boolean
         default: false
       test_type:
+        description: "Test tier: quick, standard, comprehensive, or full."
         type: string
       test_labels:
+        description: >-
+          Test labels to select components. Python list literal
+          (e.g., '["test:rocblas"]') or comma-separated string
+          (e.g., 'test:rocblas,test:hipblas').
         type: string
       changed_projects:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
