@@ -21,7 +21,7 @@ Common workflows:
   - rc -> release (default)  e.g. 7.10.0rc1       -> 7.10.0
   - a  -> release            e.g. 7.13.0a20260501 -> 7.13.0
   - a  -> rc                 e.g. 7.13.0a20260501 -> 7.13.0rc1
-  - dev -> release           e.g. 2.12.0+git1a2b3c4d.rocm10.0.0rc4 -> 2.12.0+rocm10.0.0
+  - dev -> release           e.g. 10.0.0rc4       -> 10.0.0 (also drops git<sha> on torch wheels)
 Other combinations are mechanically possible but not typical.
 
 When promoting torch-family wheels to a stable release, ROCm package
@@ -71,7 +71,7 @@ TYPICAL USAGE:
   # Promote alpha to release candidate (e.g. 7.13.0a20260430 -> 7.13.0rc1)
   python ./build_tools/packaging/promote_packages.py --input-dir=./release_candidates/ --src-version-type=a --dest-version=rc1
 
-  # Promote a dev PyTorch build to release (e.g. 2.12.0+git1a2b3c4d.rocm10.0.0rc4 -> 2.12.0+rocm10.0.0)
+  # Promote a dev build to release (e.g. 10.0.0rc4 -> 10.0.0):
   python ./build_tools/packaging/promote_packages.py --input-dir=./dev_packages/ --src-version-type=dev
 
   # Restrict to a positive arch list (no version change); per-gfx wheels for
