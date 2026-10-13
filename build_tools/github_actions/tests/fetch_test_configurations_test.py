@@ -99,6 +99,57 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(len(components), 1)
         self.assertEqual(components[0]["job_name"], "hipblas")
 
+    def test_sanity_follows_skipped_stages(self):
+        # The same stage allowlist must apply to sanity even when project and
+        # label filters select unrelated component tests.
+        for platform, family in [("linux", "gfx94X-dcgpu"), ("windows", "gfx110X-all")]:
+            for skipped, expected in [
+                ("", True),
+                ("emulation", True),
+                ("compiler-runtime", False),
+                ("compiler-runtime,math-libs", False),
+            ]:
+                with self.subTest(platform=platform, skipped=skipped):
+                    sys.argv = [
+                        "fetch_test_configurations.py",
+                        f"--platform={platform}",
+                    ]
+                    os.environ.update(
+                        AMDGPU_FAMILIES=family,
+                        SKIP_STAGES=skipped,
+                        PROJECTS_TO_TEST="hipblas",
+                        TEST_LABELS='["test:hipblas"]',
+                    )
+                    fetch_test_configurations.run()
+                    sanity = json.loads(self.gha_output["sanity_component"])
+                    self.assertEqual(sanity is not None, expected)
+                    if expected:
+                        self.assertEqual(sanity["job_name"], "sanity")
+                        self.assertTrue(sanity["test_runner"])
+                    self.assertEqual(
+                        [c["job_name"] for c in self._get_components()], ["hipblas"]
+                    )
+
+    def test_component_follows_configured_skipped_stages(self):
+        os.environ["PROJECTS_TO_TEST"] = "hipblas,rocblas"
+        with patch.dict(
+            fetch_test_configurations.test_matrix["hipblas"],
+            {"skip_stages": ["math-libs", "primitives"]},
+        ):
+            for skipped, expected in [
+                ("", {"hipblas", "rocblas"}),
+                ("emulation", {"hipblas", "rocblas"}),
+                ("math-libs", {"rocblas"}),
+                ("primitives", {"rocblas"}),
+                ("emulation,primitives", {"rocblas"}),
+            ]:
+                with self.subTest(skipped=skipped):
+                    os.environ["SKIP_STAGES"] = skipped
+                    fetch_test_configurations.run()
+                    self.assertEqual(
+                        {c["job_name"] for c in self._get_components()}, expected
+                    )
+
     def test_test_labels_filter(self):
         os.environ["TEST_LABELS"] = json.dumps(["rocblas", "hipblas"])
 
@@ -380,16 +431,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             exclude_family={"linux": ["gfx1100"]},
         )
         self.assertIn("inc-noexc", self._selected_names())
-
-    def test_corefile_included_on_gfx942(self):
-        # Default AMDGPU_FAMILIES is gfx94X-dcgpu, whose gfx target is gfx942.
-        os.environ["PROJECTS_TO_TEST"] = "rocgdb-corefile"
-        self.assertIn("rocgdb-corefile", self._selected_names())
-
-    def test_corefile_excluded_on_other_family(self):
-        os.environ["PROJECTS_TO_TEST"] = "rocgdb-corefile"
-        os.environ["AMDGPU_FAMILIES"] = "gfx1150"
-        self.assertNotIn("rocgdb-corefile", self._selected_names())
 
     # -----------------------
     # test_types tier gating
@@ -845,8 +886,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     # TEST_LABEL_GROUPS expansion
     # -----------------------
 
-    def test_all_rocgdb_label_selects_cpu_gpu_and_corefile_jobs(self):
-        """test:rocgdb should expand to rocgdb-cpu, rocgdb-gpu, and rocgdb-corefile."""
+    def test_all_rocgdb_label_selects_cpu_and_gpu_jobs(self):
+        """test:rocgdb should expand to rocgdb-cpu and rocgdb-gpu."""
         with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocgdb"])}):
             fetch_test_configurations.run()
             components = self._get_components()
@@ -854,7 +895,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertIn("rocgdb-cpu", names)
         self.assertIn("rocgdb-gpu", names)
-        self.assertIn("rocgdb-corefile", names)
 
     def test_all_rocgdb_label_excludes_unrelated_jobs(self):
         """test:rocgdb should not include jobs outside the rocgdb group."""
@@ -878,7 +918,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertIn("rocgdb-cpu", names)
         self.assertIn("rocgdb-gpu", names)
-        self.assertIn("rocgdb-corefile", names)
         self.assertIn("rocblas", names)
 
     def test_unknown_group_label_is_treated_as_literal(self):
@@ -902,7 +941,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                         "test:rocgdb",
                         "test:rocgdb-cpu",
                         "test:rocgdb-gpu",
-                        "test:rocgdb-corefile",
                     ]
                 )
             },
@@ -913,7 +951,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         job_names = [job["job_name"] for job in components]
         self.assertEqual(job_names.count("rocgdb-cpu"), 1)
         self.assertEqual(job_names.count("rocgdb-gpu"), 1)
-        self.assertEqual(job_names.count("rocgdb-corefile"), 1)
 
     # -----------------------
     # mesa-fork labels
