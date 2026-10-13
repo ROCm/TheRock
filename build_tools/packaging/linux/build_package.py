@@ -172,8 +172,8 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
     """Build all variants for a gfxarch package in kpack mode (multi-arch).
 
     For regular gfxarch packages (Metapackage=False), creates:
-    - Host package (e.g., amdrocm-fft-host8.2) - generic artifacts; not built
-      for an OptionalContent package that has no generic content
+    - Host package (e.g., amdrocm-fft-host8.2) - generic artifacts; empty
+      packages are skipped
     - Device packages (e.g., amdrocm-fft8.2-gfx1100, amdrocm-fft8.2-gfx94x) - arch-specific artifacts
     - Meta package (e.g., amdrocm-fft8.2) - depends on host (if any) + all devices
     - Non-versioned package (e.g., amdrocm-fft) - user-facing, depends on meta
@@ -201,16 +201,11 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
 
     # Host package (contains generic artifacts)
     # Skip for metapackages - they have no artifacts, only dependencies
-    # Skip for a package that omits generic variants (OptionalContent with no
-    # generic content): the device packages then carry the host's dependencies
     if not is_meta:
-        if omits_generic_variants(pkg_info, config.artifacts_dir):
-            logger.info(f"Skipping host variant for {pkg_name}: no generic content")
-        else:
-            logger.info(f"Building host variant for {pkg_name}")
-            pkg = build_host_package(pkg_name, config)
-            if pkg:
-                built_packages.extend(pkg)
+        logger.info(f"Building host variant for {pkg_name}")
+        pkg = build_host_package(pkg_name, config)
+        if pkg:
+            built_packages.extend(pkg)
 
     # Device packages (one per owner, retaining all selected member targets)
     # For metapackages, these become arch-specific meta packages

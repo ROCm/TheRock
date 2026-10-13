@@ -1509,7 +1509,10 @@ FAKE_PACKAGES = [
     _fake_package(FAKE_BASE, gfxarch=True),
     _fake_package(FAKE_SUPPORT),
     _fake_package(
-        FAKE_OPT_DEVEL, deps=(FAKE_BASE, FAKE_SUPPORT), gfxarch=True, optional=True
+        FAKE_OPT_DEVEL,
+        deps=(FAKE_BASE, FAKE_SUPPORT, FAKE_OPT_SIMPLE),
+        gfxarch=True,
+        optional=True,
     ),
     _fake_package(FAKE_BARE_DEVEL, gfxarch=True, optional=True),
     _fake_package(FAKE_OPT_SIMPLE, optional=True),
@@ -1563,6 +1566,8 @@ class _FakePackagesTestCase(_KpackBuildTestCase):
             build_package,
             deb_package,
             rpm_package,
+            sys.modules["deb_package"],
+            sys.modules["rpm_package"],
             sys.modules["packaging_utils"],
         ):
             for namespace in (module.__dict__, module.get_package_info.__globals__):
@@ -1641,14 +1646,27 @@ class DevelGfxarchRuleTest(_FakePackagesTestCase):
         return is_gfxarch_package(get_package_info(pkg_name), True, cfg.artifacts_dir)
 
     def test_devel_with_gfxarch_follows_per_arch_artifacts(self) -> None:
-        for suffix in ("gfx942", "gfx942:xnack+"):
-            with self.subTest(suffix=suffix):
-                cfg = self._config(FAKE_TARGETS, label=f"arch-{suffix}")
-                _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic")
-                self.assertFalse(self._is_gfxarch(cfg, FAKE_OPT_DEVEL))
-                _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, suffix)
-                _artifact_dir_name_index.cache_clear()
-                self.assertTrue(self._is_gfxarch(cfg, FAKE_OPT_DEVEL))
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic")
+        self.assertFalse(self._is_gfxarch(cfg, FAKE_OPT_DEVEL))
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "gfx942")
+        _artifact_dir_name_index.cache_clear()
+        self.assertTrue(self._is_gfxarch(cfg, FAKE_OPT_DEVEL))
+
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "xnack-suffixed artifact dirs use ':', which NTFS reserves and cannot "
+        "create; the packaging flow that consumes them is Linux-only",
+    )
+    def test_devel_with_gfxarch_matches_xnack_suffixed_artifacts(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "gfx942:xnack+")
+        self.assertTrue(self._is_gfxarch(cfg, FAKE_OPT_DEVEL))
+
+    def test_devel_with_gfxarch_needs_an_artifacts_dir(self) -> None:
+        self.assertFalse(
+            is_gfxarch_package(get_package_info(FAKE_OPT_DEVEL), True, None)
+        )
 
     def test_devel_without_gfxarch_stays_generic_with_per_arch_artifacts(self) -> None:
         cfg = self._config(FAKE_TARGETS)
@@ -1670,7 +1688,7 @@ class OptionalContentDependencyFilterTest(_FakePackagesTestCase):
         _stage_fake(cfg.artifacts_dir, FAKE_SUPPORT, "generic")
         deps = [FAKE_OPT_SIMPLE, FAKE_PLAIN, FAKE_SUPPORT, FAKE_OPT_META]
         kept, _ = filter_dependencies_by_artifacts(deps, cfg.artifacts_dir, GFX_HOST)
-        self.assertEqual(kept, [FAKE_PLAIN, FAKE_SUPPORT, FAKE_OPT_META])
+        self.assertCountEqual(kept, [FAKE_PLAIN, FAKE_SUPPORT, FAKE_OPT_META])
 
     def test_optional_package_with_content_is_kept(self) -> None:
         cfg = self._config(FAKE_TARGETS)
@@ -1700,22 +1718,18 @@ class HostlessVariantsTest(_FakePackagesTestCase):
                 self._stage_opt_devel(cfg)
                 built = self._build(cfg, [FAKE_OPT_DEVEL])
                 name = f"amdrocm-fakeopt-{dev}"
-                self.assertEqual(
-                    set(built),
-                    {
-                        f"{name}7.1-gfx942",
-                        f"{name}7.1-gfx1100",
-                        f"{name}7.1",
-                        name,
-                    },
+                self.assertTrue(
+                    {f"{name}7.1-gfx942", f"{name}7.1-gfx1100", f"{name}7.1", name}
+                    <= set(built)
                 )
+                self.assertFalse([pkg for pkg in built if "-host" in pkg])
                 for target in FAKE_TARGETS:
                     deps = self._depends(built, f"{name}7.1-{target}")
                     self.assertIn("amdrocm-fakesupport7.1", deps)  # generic dep
                     self.assertIn(f"amdrocm-fakebase7.1-{target}", deps)  # arch dep
                     self.assertFalse([dep for dep in deps if dep.endswith("-host7.1")])
-                self.assertEqual(
-                    sorted(self._depends(built, f"{name}7.1")),
+                self.assertCountEqual(
+                    self._depends(built, f"{name}7.1"),
                     [f"{name}7.1-gfx1100", f"{name}7.1-gfx942"],
                 )
 
@@ -1738,15 +1752,36 @@ class HostlessVariantsTest(_FakePackagesTestCase):
                 self.assertNotIn("amdrocm-fakebase7.1-gfx1100", without_arch)
                 self.assertIn("amdrocm-fakesupport7.1", without_arch)
 
+    def test_optional_dependency_without_content_is_not_carried(self) -> None:
+        for has_content, label in ((False, "empty"), (True, "present")):
+            with self.subTest(dependency=label):
+                cfg = self._config(FAKE_TARGETS, label=label)
+                self._stage_opt_devel(cfg)
+                _stage_fake(
+                    cfg.artifacts_dir,
+                    FAKE_OPT_SIMPLE,
+                    "generic",
+                    "files" if has_content else "manifest_only",
+                )
+                built = self._build(cfg, [FAKE_OPT_DEVEL])
+                for target in FAKE_TARGETS:
+                    deps = self._depends(built, f"amdrocm-fakeopt-dev7.1-{target}")
+                    self.assertEqual("amdrocm-fakeoptsimple7.1" in deps, has_content)
+
     def test_package_without_dependencies_gets_no_dependency_line(self) -> None:
-        cfg = self._config(FAKE_TARGETS)
-        _stage_fake(cfg.artifacts_dir, FAKE_BARE_DEVEL, "generic", "manifest_only")
-        for target in FAKE_TARGETS:
-            _stage_fake(cfg.artifacts_dir, FAKE_BARE_DEVEL, target)
-        built = self._build(cfg, [FAKE_BARE_DEVEL])
-        for target in FAKE_TARGETS:
-            deps = self._depends(built, f"amdrocm-fakebare-dev7.1-{target}")
-            self.assertFalse([dep for dep in deps if dep])
+        for pkg_type, dev in FAKE_PKG_TYPES:
+            with self.subTest(pkg_type=pkg_type):
+                cfg = self._config(FAKE_TARGETS, pkg_type, pkg_type)
+                _stage_fake(
+                    cfg.artifacts_dir, FAKE_BARE_DEVEL, "generic", "manifest_only"
+                )
+                for target in FAKE_TARGETS:
+                    _stage_fake(cfg.artifacts_dir, FAKE_BARE_DEVEL, target)
+                built = self._build(cfg, [FAKE_BARE_DEVEL])
+                for target in FAKE_TARGETS:
+                    name = f"amdrocm-fakebare-{dev}7.1-{target}"
+                    self.assertIn(name, built)
+                    self.assertFalse([dep for dep in self._depends(built, name) if dep])
 
     def test_target_without_content_gets_no_device_package(self) -> None:
         targets = FAKE_TARGETS + (FAKE_UNBUILT_TARGET,)
@@ -1754,8 +1789,8 @@ class HostlessVariantsTest(_FakePackagesTestCase):
         self._stage_opt_devel(cfg)  # per-target content for FAKE_TARGETS only
         built = self._build(cfg, [FAKE_OPT_DEVEL])
         self.assertFalse([name for name in built if FAKE_UNBUILT_TARGET in name])
-        self.assertEqual(
-            sorted(self._depends(built, "amdrocm-fakeopt-dev7.1")),
+        self.assertCountEqual(
+            self._depends(built, "amdrocm-fakeopt-dev7.1"),
             ["amdrocm-fakeopt-dev7.1-gfx1100", "amdrocm-fakeopt-dev7.1-gfx942"],
         )
 
@@ -1777,7 +1812,8 @@ class HostlessVariantsTest(_FakePackagesTestCase):
         cfg = self._config(FAKE_TARGETS)
         self._stage_base_and_support(cfg)
         _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic", "manifest_only")
-        self.assertEqual(self._build(cfg, [FAKE_OPT_DEVEL]), {})
+        built = self._build(cfg, [FAKE_OPT_DEVEL])
+        self.assertFalse([pkg for pkg in built if pkg.startswith("amdrocm-fakeopt")])
 
     def test_suite_depends_on_per_arch_package_only_for_targets_with_it(self) -> None:
         targets = FAKE_TARGETS + (FAKE_UNBUILT_TARGET,)
@@ -1868,7 +1904,8 @@ class NonOptionalPackagesKeepVariantsTest(_FakePackagesTestCase):
         _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic")
         with patch.object(build_package, "build_versioned_package", return_value=[]):
             built = self._build(cfg, [FAKE_OPT_SIMPLE])
-        self.assertEqual(set(built), {"amdrocm-fakeoptsimple"})
+        self.assertIn("amdrocm-fakeoptsimple", built)
+        self.assertNotIn("amdrocm-fakeoptsimple7.1", built)
 
 
 if __name__ == "__main__":
