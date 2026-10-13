@@ -1,0 +1,25 @@
+outs:
+- path: MIOpen.tensor0.bin
+  md5: 80f566dcb05a7e45af058946be9b76e5
+  size: 96
+  hash: md5
+- path: MIOpen.tensor1.bin
+  md5: 7fee7c31f67d3f6721ebd889ecc9ca42
+  size: 8
+  hash: md5
+- path: MIOpen.tensor2.bin
+  md5: 2cc5127eb1ba0ee97f40bee45b6402d2
+  size: 8
+  hash: md5
+- path: MIOpen.tensor3.bin
+  md5: 543085c641f4cab69341c870c5ed1b50
+  size: 8
+  hash: md5
+- path: MIOpen.tensor4.bin
+  md5: de16dfad5fa564ed1cbcf74f4c3dcf0a
+  size: 8
+  hash: md5
+- path: MIOpen.tensor5.bin
+  md5: 86fe05c9d3a1e25dd3d3cb171d7beeeb
+  size: 96
+  hash: md5

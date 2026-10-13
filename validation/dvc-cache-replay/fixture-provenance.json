@@ -1,0 +1,143 @@
+[
+  {
+    "fixture": "oct06-batchnorm",
+    "repository": "ROCm/rocm-libraries",
+    "revision": "716a1275de5da9b49198a61934f939daa97cb8d8",
+    "files": [
+      {
+        "path": ".dvc/config",
+        "sha256": "396dc890675558847f1930d95e23f94feab0a14d75214235633cbf444bed714e"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/Inference/golden/large_fp32_nchw/tensors.dvc",
+        "sha256": "d6c734640c69c6780f58f51fb0f87e9c98bda0bc9e359c2c568bb63352d19d42"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/Inference/golden/small_bfp16_nchw/tensors.dvc",
+        "sha256": "b1e0d0e770ab5bbefe8a2b9bdc0787044fd400042b96c4d0dce64509b121a21b"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/Inference/golden/small_fp16_nchw/tensors.dvc",
+        "sha256": "d54e6c5a504d827f06f174073ba113039736e2ccedcd5b77b85b0f57d38c5d70"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/Inference/golden/small_fp32_ncdhw/tensors.dvc",
+        "sha256": "3e39b356a5750398c48861bdee18460738bb28ae81bef77bc4f6141a0368bec4"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/Inference/golden/small_fp32_nchw/tensors.dvc",
+        "sha256": "cfc114d5054573637a2404f7da6333eb0fddacb6c01da092642f82d7fe2cfb99"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/Inference/golden/tiny_fp32_nchw/tensors.dvc",
+        "sha256": "2c7b93ed8824e51655d89f3952ca5193689b8a4ba3d39ae07155db44202a7146"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/ncdhw/fp32/Small/Small.tensors.dvc",
+        "sha256": "82127609b146126873457deefe310442643abc674e0ca8e44ceb55c0a8549589"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/nchw/bfp16/Small/Small.tensors.dvc",
+        "sha256": "fbd791d4dfb65a65465cd4b45baaf45b0c431f8dac87febac6cf67557c67e7aa"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/nchw/fp16/Small/Small.tensors.dvc",
+        "sha256": "adcbea8d6b5ee9b2e864eabe53696ddb03bcbcc7299da315766d1408c2ff70ff"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/nchw/fp32/Large/Large.tensors.dvc",
+        "sha256": "d2cd44b57b5d13c9a0f1546e616532f4e55da45e1dcdf31a1127edcaf89cde25"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/nchw/fp32/MIOpen/MIOpen.tensors.dvc",
+        "sha256": "bcb3059b49b01c490edd7a6d4bcaa80d2f29ce01b173a7a04f4d8793b8298a29"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/nchw/fp32/Small/Small.tensors.dvc",
+        "sha256": "0a24e9f57f54062428c5e2e181e76f3ed6b349f422e830339efa6d8836123d17"
+      }
+    ]
+  },
+  {
+    "fixture": "oct06-sdpa",
+    "repository": "ROCm/rocm-libraries",
+    "revision": "cb2d09dad2e98093a17106195f18f89f09d43ee0",
+    "files": [
+      {
+        "path": ".dvc/config",
+        "sha256": "396dc890675558847f1930d95e23f94feab0a14d75214235633cbf444bed714e"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/SdpaFwd/bhsd/bf16/hd128_causal_group/Small/Small.tensors.dvc",
+        "sha256": "a10f8988826b434c0540bc15e89ad288262075007601903efacd04b8deb02159"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/SdpaFwd/bhsd/bf16/hd128_nomask_group/Small/Small.tensors.dvc",
+        "sha256": "57c0d54953bd3a2877b41d08c00e62b6575a91fc279c77995433135960ab1ba2"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/SdpaFwd/bhsd/fp8/hd128_causal_group/Small/Small.tensors.dvc",
+        "sha256": "7a16ef7afa54114eff4b1e27b7029d5386bfbe64ab12f4400a373b12fd393392"
+      }
+    ]
+  },
+  {
+    "fixture": "oct12-batchnorm",
+    "repository": "ROCm/rocm-libraries",
+    "revision": "1d5f09453d612234e6e55318d8a137c46a053f98",
+    "files": [
+      {
+        "path": ".dvc/config",
+        "sha256": "396dc890675558847f1930d95e23f94feab0a14d75214235633cbf444bed714e"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/Inference/golden/large_fp32_nchw/tensors.dvc",
+        "sha256": "d6c734640c69c6780f58f51fb0f87e9c98bda0bc9e359c2c568bb63352d19d42"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/Inference/golden/small_bfp16_nchw/tensors.dvc",
+        "sha256": "b1e0d0e770ab5bbefe8a2b9bdc0787044fd400042b96c4d0dce64509b121a21b"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/Inference/golden/small_fp16_nchw/tensors.dvc",
+        "sha256": "d54e6c5a504d827f06f174073ba113039736e2ccedcd5b77b85b0f57d38c5d70"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/Inference/golden/small_fp32_ncdhw/tensors.dvc",
+        "sha256": "3e39b356a5750398c48861bdee18460738bb28ae81bef77bc4f6141a0368bec4"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/Inference/golden/small_fp32_nchw/tensors.dvc",
+        "sha256": "cfc114d5054573637a2404f7da6333eb0fddacb6c01da092642f82d7fe2cfb99"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/Inference/golden/tiny_fp32_nchw/tensors.dvc",
+        "sha256": "2c7b93ed8824e51655d89f3952ca5193689b8a4ba3d39ae07155db44202a7146"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/ncdhw/fp32/Small/Small.tensors.dvc",
+        "sha256": "82127609b146126873457deefe310442643abc674e0ca8e44ceb55c0a8549589"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/nchw/bfp16/Small/Small.tensors.dvc",
+        "sha256": "fbd791d4dfb65a65465cd4b45baaf45b0c431f8dac87febac6cf67557c67e7aa"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/nchw/fp16/Small/Small.tensors.dvc",
+        "sha256": "adcbea8d6b5ee9b2e864eabe53696ddb03bcbcc7299da315766d1408c2ff70ff"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/nchw/fp32/Large/Large.tensors.dvc",
+        "sha256": "d2cd44b57b5d13c9a0f1546e616532f4e55da45e1dcdf31a1127edcaf89cde25"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/nchw/fp32/MIOpen/MIOpen.tensors.dvc",
+        "sha256": "bcb3059b49b01c490edd7a6d4bcaa80d2f29ce01b173a7a04f4d8793b8298a29"
+      },
+      {
+        "path": "dnn-providers/integration-tests/integration-test-bundles/quick/BatchnormFwdInference/nchw/fp32/Small/Small.tensors.dvc",
+        "sha256": "0a24e9f57f54062428c5e2e181e76f3ed6b349f422e830339efa6d8836123d17"
+      }
+    ]
+  }
+]
