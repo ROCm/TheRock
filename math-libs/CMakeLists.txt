@@ -445,7 +445,22 @@ if(THEROCK_ENABLE_ROCWMMA)
   )
 endif(THEROCK_ENABLE_ROCWMMA)
 
+set(_rocalution_enabled OFF)
 if(THEROCK_ENABLE_ROCALUTION)
+  set(_rocalution_enabled ON)
+  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_rocalution_targets rocALUTION ${THEROCK_AMDGPU_TARGETS})
+    if(NOT _rocalution_targets)
+      message(STATUS
+        "rocALUTION: no supported gfx targets remain after filtering "
+        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
+      set(_rocalution_enabled OFF)
+    endif()
+  endif()
+endif()
+set(_rocalution_enabled ${_rocalution_enabled} PARENT_SCOPE)
+
+if(THEROCK_ENABLE_ROCALUTION AND _rocalution_enabled)
   ##############################################################################
   # rocALUTION
   ##############################################################################
@@ -495,7 +510,7 @@ if(THEROCK_ENABLE_ROCALUTION)
     SUBPROJECT_DEPS
       rocALUTION
   )
-endif(THEROCK_ENABLE_ROCALUTION)
+endif(THEROCK_ENABLE_ROCALUTION AND _rocalution_enabled)
 
 if(THEROCK_ENABLE_LIBHIPCXX)
   ##############################################################################
