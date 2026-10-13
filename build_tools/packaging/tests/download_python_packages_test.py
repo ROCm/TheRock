@@ -20,8 +20,8 @@ from download_python_packages import (
     PackageEntry,
     categorize_package,
     core_tarball_prefix,
-    filter_dev_builds,
-    find_dev_build_collisions,
+    filter_by_git_sha,
+    filter_by_pytorch_version,
     is_allowed_multi_arch_package,
     list_packages_structured,
     list_tarball_for_package,
@@ -501,9 +501,8 @@ def entry_names(entries):
 
 class DevBuildFilterTest(unittest.TestCase):
     def test_git_sha_keeps_matching_and_untagged_wheels(self):
-        kept = filter_dev_builds(
-            dev_entries(DEV_PYTORCH_FILES),
-            git_shas=["b97872d5", "b3d5b111", "669b31ac"],
+        kept = filter_by_git_sha(
+            dev_entries(DEV_PYTORCH_FILES), ["b97872d5", "b3d5b111", "669b31ac"]
         )
         self.assertEqual(
             entry_names(kept),
@@ -517,36 +516,40 @@ class DevBuildFilterTest(unittest.TestCase):
         )
 
     def test_git_sha_accepts_full_sha(self):
-        kept = filter_dev_builds(
+        kept = filter_by_git_sha(
             dev_entries(DEV_PYTORCH_FILES[:2]),
-            git_shas=["b97872d55cf78ed4a8dd9f71ce7767e35b39f2fc"],
+            ["b97872d55cf78ed4a8dd9f71ce7767e35b39f2fc"],
         )
         self.assertEqual(entry_names(kept), [DEV_PYTORCH_FILES[1]])
 
-    def test_pytorch_version_only_filters_torch_wheels(self):
-        kept = filter_dev_builds(dev_entries(DEV_PYTORCH_FILES), pytorch_version="2.12")
-        names = entry_names(kept)
+    def test_pytorch_version_alone_keeps_every_build_of_that_version(self):
+        names = entry_names(
+            filter_by_pytorch_version(dev_entries(DEV_PYTORCH_FILES), "2.12")
+        )
+        self.assertIn(DEV_PYTORCH_FILES[0], names)
+        self.assertIn(DEV_PYTORCH_FILES[1], names)
         self.assertNotIn(DEV_PYTORCH_FILES[2], names)
         self.assertNotIn(DEV_PYTORCH_FILES[4], names)
-        self.assertIn(DEV_PYTORCH_FILES[0], names)
         self.assertIn(DEV_PYTORCH_FILES[5], names)
 
-    def test_collisions_group_builds_differing_only_in_sha(self):
-        collisions = find_dev_build_collisions(dev_entries(DEV_PYTORCH_FILES))
+    def test_git_sha_and_pytorch_version_combine(self):
+        kept = filter_by_pytorch_version(
+            filter_by_git_sha(
+                dev_entries(DEV_PYTORCH_FILES),
+                ["b97872d5", "c0691f32", "b3d5b111", "669b31ac"],
+            ),
+            "2.12",
+        )
         self.assertEqual(
-            sorted(collisions.values()),
+            entry_names(kept),
             [
-                DEV_PYTORCH_FILES[0:2],
-                DEV_PYTORCH_FILES[6:8],
+                "torch-2.12.0+gitb97872d5.rocm10.0.0rc4-cp312-cp312-linux_x86_64.whl",
+                "amd_torch_device_gfx1100-2.12.0+gitb97872d5.rocm10.0.0rc4-cp312-cp312-linux_x86_64.whl",
+                "torchvision-0.27.0+gitb3d5b111.rocm10.0.0rc4-cp312-cp312-linux_x86_64.whl",
+                "triton-3.8.0+git669b31ac.rocm10.0.0rc4-cp312-cp312-linux_x86_64.whl",
+                "apex-1.12.0+rocm10.0.0rc4-cp312-cp312-linux_x86_64.whl",
             ],
         )
-
-    def test_no_collisions_after_selecting_one_build(self):
-        kept = filter_dev_builds(
-            dev_entries(DEV_PYTORCH_FILES),
-            git_shas=["b97872d5", "b3d5b111", "669b31ac"],
-        )
-        self.assertEqual(find_dev_build_collisions(kept), {})
 
     def test_dev_filters_require_structured(self):
         with self.assertRaises(SystemExit):
@@ -572,6 +575,15 @@ class DevBuildFilterTest(unittest.TestCase):
                     "--structured",
                     "--list-multi-arch-packages",
                     "--git-sha=not-a-sha",
+                ]
+            )
+        with self.assertRaises(SystemExit):
+            parse_arguments(
+                [
+                    "--version=10.0.0rc4",
+                    "--structured",
+                    "--list-multi-arch-packages",
+                    "--git-sha=b97872d",
                 ]
             )
 
