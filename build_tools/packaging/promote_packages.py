@@ -1115,7 +1115,8 @@ def promote_wheel(
 
     print(f"  Detected version: {original_version}")
 
-    # Triton's setup.py stamps git<sha> on rc and nightly builds too, so it is part of the release version.
+    # pytorch-dev's `^git[0-9a-f]+\.` pattern would also strip triton's git<sha>, this is to prevent that
+    # triton-3.8.0+git669b31ac.rocm10.0.0rc4 -> triton-3.8.0+git669b31ac.rocm10.0.0
     if (
         src_version_type == "pytorch-dev"
         and canonicalize_name(original_wheel.name) == "triton"
