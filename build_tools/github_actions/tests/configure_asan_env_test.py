@@ -20,6 +20,7 @@ from configure_asan_env import (
     LSAN_SUPPRESSIONS,
     STATIC_ASAN_ENV,
     AsanEnvironmentError,
+    get_asan_runtime_path,
     main,
     resolve_asan_env,
 )
@@ -366,6 +367,56 @@ class TestMain(unittest.TestCase):
 
             self.assertIn("ASAN_RUNTIME_PATH", written)
             self.assertNotIn("LD_LIBRARY_PATH", written)
+
+
+class TestGetAsanRuntimePath(unittest.TestCase):
+    """The entry point standalone launchers like test_hiptests.py call."""
+
+    def setUp(self):
+        self._previous = os.environ.pop("ASAN_RUNTIME_PATH", None)
+
+    def tearDown(self):
+        if self._previous is None:
+            os.environ.pop("ASAN_RUNTIME_PATH", None)
+        else:
+            os.environ["ASAN_RUNTIME_PATH"] = self._previous
+
+    def test_configured_path_is_reused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = Path(tmp) / "libclang_rt.asan.so"
+            runtime.write_text("")
+            os.environ["ASAN_RUNTIME_PATH"] = str(runtime)
+
+            self.assertEqual(get_asan_runtime_path(Path(tmp)), runtime.resolve())
+
+    def test_configured_path_must_exist(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["ASAN_RUNTIME_PATH"] = str(Path(tmp) / "absent.so")
+
+            with self.assertRaises(FileNotFoundError):
+                get_asan_runtime_path(Path(tmp))
+
+    @requires_posix
+    def test_discovers_from_artifact_tree_without_path(self):
+        """Library callers do not put the artifact tree's llvm/bin on PATH."""
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = _make_artifacts(Path(tmp))
+            empty = Path(tmp) / "empty"
+            empty.mkdir()
+            with _IsolatedPath(empty):
+                runtime = get_asan_runtime_path(artifacts)
+
+            self.assertTrue(runtime.is_file())
+
+    @requires_posix
+    def test_raises_file_not_found_when_nothing_resolves(self):
+        """Callers catch FileNotFoundError, not AsanEnvironmentError."""
+        with tempfile.TemporaryDirectory() as tmp:
+            empty = Path(tmp) / "empty"
+            empty.mkdir()
+            with _IsolatedPath(empty):
+                with self.assertRaises(FileNotFoundError):
+                    get_asan_runtime_path(Path(tmp) / "absent")
 
 
 if __name__ == "__main__":
