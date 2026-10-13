@@ -249,18 +249,6 @@
         ]
       },
       {
-        "Artifact": "core-hrr",
-        "Artifact_Subdir": [
-          {
-            "Name": "hrr",
-            "Components": [
-              "doc",
-              "run"
-            ]
-          }
-        ]
-      },
-      {
         "Artifact": "amd-llvm",
         "Artifact_Subdir": [
           {
@@ -332,18 +320,6 @@
             "Name": "clr",
             "Components": [
               "dev"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "core-hrr",
-        "Artifact_Subdir": [
-          {
-            "Name": "hrr",
-            "Components": [
-              "dev",
-              "doc"
             ]
           }
         ]
@@ -421,18 +397,6 @@
               "dev",
               "doc",
               "lib"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "core-hrr",
-        "Artifact_Subdir": [
-          {
-            "Name": "hrr",
-            "Components": [
-              "lib",
-              "test"
             ]
           }
         ]
@@ -3823,6 +3787,43 @@
     "Gfxarch": "False"
   },
   {
+    "Package": "amdrocm-hrr",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-runtime"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "HIP Record and Replay playback tool",
+    "Description_Long": "hrr-playback replays HIP captures produced by the HRR capture runtime in amdhip64. Provides archive inspection, replay, and device-to-host validation for debugging GPU workloads. Installs the playback binary and HRR headers.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "core-hrr",
+        "Artifact_Subdir": [
+          {
+            "Name": "hrr",
+            "Components": [
+              "run",
+              "dev",
+              "doc"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+  {
     "Package": "amdrocm-developer-tools",
     "Version": "",
     "Architecture": "amd64",
@@ -3833,7 +3834,8 @@
       "amdrocm-profiler-base",
       "amdrocm-profiler",
       "amdrocm-emulation",
-      "amdrocm-debugger"
+      "amdrocm-debugger",
+      "amdrocm-hrr"
     ],
     "RPMRequires": [
       "amdrocm-base",
@@ -3841,7 +3843,8 @@
       "amdrocm-profiler-base",
       "amdrocm-profiler",
       "amdrocm-emulation",
-      "amdrocm-debugger"
+      "amdrocm-debugger",
+      "amdrocm-hrr"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm development tools metapackage with profiling and debugging",
