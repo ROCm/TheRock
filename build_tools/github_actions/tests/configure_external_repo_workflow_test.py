@@ -12,6 +12,17 @@ from build_tools.github_actions import configure_external_repo_ci as ci
 
 WORKFLOW = ".github/workflows/therock-multi-arch-ci-nightly.yml"
 
+# Files changed by rocm-libraries TheRock ref bump PR #13408.
+THEROCK_REF_BUMP = {
+    ".github/actions/ci-env/action.yml",
+    ".github/workflows/clang-tidy.yml",
+    ".github/workflows/therock-ci-nightly.yml",
+    ".github/workflows/therock-multi-arch-ci-asan-nightly.yml",
+    ".github/workflows/therock-multi-arch-ci-asan.yml",
+    ".github/workflows/therock-multi-arch-ci-nightly.yml",
+    ".github/workflows/therock-multi-arch-ci.yml",
+}
+
 LIBRARY_ENTRIES = [
     ("projects", "rocblas"),
     ("projects", "hipblas"),
@@ -85,15 +96,42 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
         self.assertFalse(result.run_all_tests)
         self.assertEqual(set(result.changed_projects.split(",")), LIBRARY_PROJECTS)
 
-    def test_systems_workflow_preserves_full_test_run(self):
-        result = self.configure(
-            {WORKFLOW},
-            repo="ROCm/rocm-systems",
-            entries=SYSTEM_ENTRIES,
-        )
+    def test_libraries_therock_ref_bump_selects_library_projects(self):
+        result = self.configure(THEROCK_REF_BUMP)
+
+        self.assertFalse(result.run_all_tests)
+        self.assertEqual(set(result.changed_projects.split(",")), LIBRARY_PROJECTS)
+
+    def test_libraries_ci_plumbing_alone_selects_library_projects(self):
+        for path in (
+            ".github/actions/ci-env/action.yml",
+            ".github/workflows/clang-tidy.yml",
+        ):
+            with self.subTest(path=path):
+                result = self.configure({path})
+
+                self.assertFalse(result.run_all_tests)
+                self.assertEqual(
+                    set(result.changed_projects.split(",")), LIBRARY_PROJECTS
+                )
+
+    def test_libraries_unlisted_workflow_preserves_full_test_run(self):
+        result = self.configure({".github/workflows/other.yml"})
 
         self.assertTrue(result.run_all_tests)
         self.assertEqual(result.changed_projects, "")
+
+    def test_systems_workflow_preserves_full_test_run(self):
+        for paths in ({WORKFLOW}, THEROCK_REF_BUMP):
+            with self.subTest(paths=sorted(paths)):
+                result = self.configure(
+                    paths,
+                    repo="ROCm/rocm-systems",
+                    entries=SYSTEM_ENTRIES,
+                )
+
+                self.assertTrue(result.run_all_tests)
+                self.assertEqual(result.changed_projects, "")
 
     def test_shared_ci_changes_preserve_full_test_run(self):
         for path in (
@@ -145,8 +183,8 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
         self.assertFalse(result.run_all_tests)
         self.assertEqual(result.changed_projects, "projects/rocblas")
 
-    def test_libraries_workflow_does_not_select_rccl_downstream(self):
-        result = self.configure({WORKFLOW})
+    def test_libraries_therock_ref_bump_does_not_select_rccl_downstream(self):
+        result = self.configure(THEROCK_REF_BUMP)
         therock_root = Path(ci.__file__).resolve().parents[2]
         selector = therock_root / "test_tools/determine_rocm_test_dependencies.py"
 

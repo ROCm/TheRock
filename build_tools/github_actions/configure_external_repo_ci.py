@@ -76,9 +76,14 @@ WORKFLOW_TEST_SCOPE_BY_REPO = {
     "rocm/rocm-libraries": "configured-projects",
 }
 
-# Patterns for TheRock workflow changes in the calling repository.
+# Patterns for TheRock workflow changes in the calling repository. TheRock ref
+# bump PRs also update the pinned ref in the shared CI constants action and in
+# clang-tidy's TheRock checkout, so those must scope the same way or every bump
+# falls back to a full run.
 CALLER_WORKFLOW_TRIGGER_PATTERNS = [
     ".github/workflows/therock*",
+    ".github/workflows/clang-tidy.yml",
+    ".github/actions/ci-env/*",
 ]
 
 # Changes to project discovery or shared test logic retain global coverage.
