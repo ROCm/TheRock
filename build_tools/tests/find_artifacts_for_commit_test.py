@@ -19,71 +19,103 @@ from find_artifacts_for_commit import (
     find_artifacts_for_run,
 )
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
-from github_actions.github_actions_api import (
-    GitHubAPIError,
-    is_authenticated_github_api_available,
-)
-
-
-def _skip_unless_authenticated_github_api_is_available(test_func):
-    """Decorator to skip tests unless GitHub API is available."""
-    return unittest.skipUnless(
-        is_authenticated_github_api_available(),
-        "No authenticated GitHub API available (need GITHUB_TOKEN or authenticated gh CLI)",
-    )(test_func)
+from github_actions.github_actions_api import GitHubAPIError
 
 
 # --- Mocking strategy ---
 #
-# These tests make real GitHub API calls to query workflow run metadata, but
-# mock S3Backend and check_if_artifacts_exist(). This avoids dependence on
-# retained S3 artifacts while allowing the tests to control whether an
-# artifact group is considered available.
+# All tests mock both GitHub API calls and S3Backend/check_if_artifacts_exist().
+# This ensures tests are deterministic and do not fail due to external service
+# outages (GitHub API downtime, rate limits, etc.).
 #
-# 1. S3 retention: Artifacts will be subject to a retention policy, so older
-#    runs' artifacts may be deleted. Mocking S3Backend avoids false failures
-#    when artifacts are cleaned up.
+# 1. GitHub API: Mocked with representative workflow run metadata. The mock
+#    data reflects real workflow run structures but does not depend on the
+#    GitHub API being available or historical runs still existing.
 #
-# 2. Workflow run stability: The GitHub API workflow run history for these
-#    pinned commits is unlikely to change (runs probably won't be re-triggered
-#    or deleted for old commits). If tests become brittle we can re-evaluate.
+# 2. S3 retention: S3Backend is mocked to avoid dependence on retained
+#    S3 artifacts and to control whether an artifact group is considered
+#    available.
 
-# Known commits with CI workflow runs in ROCm/TheRock:
-#   https://github.com/ROCm/TheRock/commit/77f0cb2112d1d0aaae0de6088a6e4337f2488233
-#   CI run: https://github.com/ROCm/TheRock/actions/runs/20083647898
+# Test constants representing realistic workflow run metadata.
+# These are based on actual workflow runs but the tests do not query GitHub.
 TEST_THEROCK_MAIN_COMMIT = "77f0cb2112d1d0aaae0de6088a6e4337f2488233"
 TEST_THEROCK_MAIN_RUN_ID = "20083647898"
 
-#   https://github.com/ROCm/TheRock/commit/62bc1eaa02e6ad1b49a718eed111cf4c9f03593a
-#   CI run: https://github.com/ROCm/TheRock/actions/runs/20384488184
-#   (PR from fork: ScottTodd/TheRock)
-#   (attribution is fuzzy here, since branches from forks are often deleted,
-#    we really just want to test that therock-ci-artifacts-external is used)
 TEST_THEROCK_FORK_COMMIT = "62bc1eaa02e6ad1b49a718eed111cf4c9f03593a"
 TEST_THEROCK_FORK_RUN_ID = "20384488184"
 
-# Known commit with multi_arch_ci.yml workflow run in ROCm/TheRock:
-#   https://github.com/ROCm/TheRock/commit/903ee444eb935adf456bf5df724e1b6f5c2ce962
-#   multi_arch_ci run: https://github.com/ROCm/TheRock/actions/runs/25267756727
 TEST_THEROCK_MULTI_ARCH_COMMIT = "903ee444eb935adf456bf5df724e1b6f5c2ce962"
 TEST_THEROCK_MULTI_ARCH_RUN_ID = "25267756727"
 
-# Known commit with CI workflow run in ROCm/rocm-libraries:
-#   https://github.com/ROCm/rocm-libraries/commit/ab692342ac4d00268ac8a5a4efbc144c194cb45a
-#   CI run: https://github.com/ROCm/rocm-libraries/actions/runs/21365647639
 TEST_ROCM_LIBRARIES_COMMIT = "ab692342ac4d00268ac8a5a4efbc144c194cb45a"
 TEST_ROCM_LIBRARIES_RUN_ID = "21365647639"
 
 
-class FindArtifactsForCommitTest(unittest.TestCase):
-    """Tests for find_artifacts_for_commit() with real GitHub API calls."""
+def _make_workflow_run(
+    run_id: str,
+    *,
+    status: str = "completed",
+    conclusion: str = "success",
+    head_branch: str = "main",
+    repository_full_name: str = "ROCm/TheRock",
+) -> dict:
+    """Create a mock workflow run dict matching GitHub API structure."""
+    return {
+        "id": int(run_id),
+        "status": status,
+        "conclusion": conclusion,
+        "html_url": f"https://github.com/{repository_full_name}/actions/runs/{run_id}",
+        "head_branch": head_branch,
+        "repository": {"full_name": repository_full_name},
+    }
 
-    @_skip_unless_authenticated_github_api_is_available
+
+# Pre-built mock workflow runs for common test scenarios.
+MOCK_THEROCK_MAIN_RUN = _make_workflow_run(
+    TEST_THEROCK_MAIN_RUN_ID,
+    head_branch="main",
+    repository_full_name="ROCm/TheRock",
+)
+
+MOCK_THEROCK_FORK_RUN = _make_workflow_run(
+    TEST_THEROCK_FORK_RUN_ID,
+    head_branch="feature-branch",
+    repository_full_name="ScottTodd/TheRock",
+)
+
+MOCK_THEROCK_MULTI_ARCH_RUN = _make_workflow_run(
+    TEST_THEROCK_MULTI_ARCH_RUN_ID,
+    head_branch="main",
+    repository_full_name="ROCm/TheRock",
+)
+
+MOCK_ROCM_LIBRARIES_RUN = _make_workflow_run(
+    TEST_ROCM_LIBRARIES_RUN_ID,
+    head_branch="main",
+    repository_full_name="ROCm/rocm-libraries",
+)
+
+
+class FindArtifactsForCommitTest(unittest.TestCase):
+    """Tests for find_artifacts_for_commit() with mocked GitHub API."""
+
+    @mock.patch("find_artifacts_for_commit.gha_query_workflow_runs_for_commit")
+    @mock.patch("find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run")
     @mock.patch("find_artifacts_for_commit.S3Backend")
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
-    def test_therock_main_commit(self, mock_check, mock_s3_backend):
-        """Known main commit returns ArtifactRunInfo with correct metadata."""
+    def test_therock_main_commit(
+        self, mock_check, mock_s3_backend, mock_from_wfr, mock_query_runs
+    ):
+        """Main commit returns ArtifactRunInfo with correct metadata."""
+        mock_query_runs.return_value = [MOCK_THEROCK_MAIN_RUN]
+        mock_from_wfr.return_value = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts",
+            external_repo="",
+            run_id=TEST_THEROCK_MAIN_RUN_ID,
+            platform="linux",
+        )
         mock_s3_backend.return_value.list_artifacts.return_value = []
+
         results = find_artifacts_for_commit(
             commit=TEST_THEROCK_MAIN_COMMIT,
             artifact_groups=["gfx110X-all"],
@@ -106,12 +138,23 @@ class FindArtifactsForCommitTest(unittest.TestCase):
 
         mock_check.assert_called()
 
-    @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.gha_query_workflow_runs_for_commit")
+    @mock.patch("find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run")
     @mock.patch("find_artifacts_for_commit.S3Backend")
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
-    def test_therock_fork_commit(self, mock_check, mock_s3_backend):
+    def test_therock_fork_commit(
+        self, mock_check, mock_s3_backend, mock_from_wfr, mock_query_runs
+    ):
         """Fork commit returns ArtifactRunInfo with external bucket."""
+        mock_query_runs.return_value = [MOCK_THEROCK_FORK_RUN]
+        mock_from_wfr.return_value = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts-external",
+            external_repo="ROCm-TheRock/",
+            run_id=TEST_THEROCK_FORK_RUN_ID,
+            platform="linux",
+        )
         mock_s3_backend.return_value.list_artifacts.return_value = []
+
         results = find_artifacts_for_commit(
             commit=TEST_THEROCK_FORK_COMMIT,
             artifact_groups=["gfx110X-all"],
@@ -126,14 +169,25 @@ class FindArtifactsForCommitTest(unittest.TestCase):
         self.assertEqual(info.s3_bucket, "therock-ci-artifacts-external")
         self.assertEqual(info.external_repo, "ROCm-TheRock/")
 
-    @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.gha_query_workflow_runs_for_commit")
+    @mock.patch("find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run")
     @mock.patch("find_artifacts_for_commit.S3Backend")
     @mock.patch(
         "find_artifacts_for_commit.check_if_artifacts_exist", return_value=False
     )
-    def test_commit_with_runs_but_no_artifacts(self, mock_check, mock_s3_backend):
+    def test_commit_with_runs_but_no_artifacts(
+        self, mock_check, mock_s3_backend, mock_from_wfr, mock_query_runs
+    ):
         """Commit with workflow runs but no S3 artifacts returns empty list."""
+        mock_query_runs.return_value = [MOCK_THEROCK_MAIN_RUN]
+        mock_from_wfr.return_value = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts",
+            external_repo="",
+            run_id=TEST_THEROCK_MAIN_RUN_ID,
+            platform="linux",
+        )
         mock_s3_backend.return_value.list_artifacts.return_value = []
+
         results = find_artifacts_for_commit(
             commit=TEST_THEROCK_MAIN_COMMIT,
             artifact_groups=["gfx110X-all"],
@@ -145,12 +199,23 @@ class FindArtifactsForCommitTest(unittest.TestCase):
         self.assertEqual(results, [])
         mock_check.assert_called()
 
-    @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.gha_query_workflow_runs_for_commit")
+    @mock.patch("find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run")
     @mock.patch("find_artifacts_for_commit.S3Backend")
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
-    def test_platform_windows(self, mock_check, mock_s3_backend):
+    def test_platform_windows(
+        self, mock_check, mock_s3_backend, mock_from_wfr, mock_query_runs
+    ):
         """Check that we can find artifacts for Windows as well as Linux."""
+        mock_query_runs.return_value = [MOCK_THEROCK_MAIN_RUN]
+        mock_from_wfr.return_value = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts",
+            external_repo="",
+            run_id=TEST_THEROCK_MAIN_RUN_ID,
+            platform="windows",
+        )
         mock_s3_backend.return_value.list_artifacts.return_value = []
+
         results = find_artifacts_for_commit(
             commit=TEST_THEROCK_MAIN_COMMIT,
             artifact_groups=["gfx110X-all"],
@@ -164,12 +229,23 @@ class FindArtifactsForCommitTest(unittest.TestCase):
         self.assertEqual(info.platform, "windows")
         self.assertIn("windows", info.s3_path)
 
-    @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.gha_query_workflow_runs_for_commit")
+    @mock.patch("find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run")
     @mock.patch("find_artifacts_for_commit.S3Backend")
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
-    def test_rocm_libraries_commit(self, mock_check, mock_s3_backend):
+    def test_rocm_libraries_commit(
+        self, mock_check, mock_s3_backend, mock_from_wfr, mock_query_runs
+    ):
         """rocm-libraries commit uses therock-ci.yml and external bucket."""
+        mock_query_runs.return_value = [MOCK_ROCM_LIBRARIES_RUN]
+        mock_from_wfr.return_value = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts-external",
+            external_repo="ROCm-rocm-libraries/",
+            run_id=TEST_ROCM_LIBRARIES_RUN_ID,
+            platform="linux",
+        )
         mock_s3_backend.return_value.list_artifacts.return_value = []
+
         results = find_artifacts_for_commit(
             commit=TEST_ROCM_LIBRARIES_COMMIT,
             artifact_groups=["gfx94X-dcgpu"],
@@ -192,12 +268,23 @@ class FindArtifactsForCommitTest(unittest.TestCase):
 
         mock_check.assert_called()
 
-    @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.gha_query_workflow_runs_for_commit")
+    @mock.patch("find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run")
     @mock.patch("find_artifacts_for_commit.S3Backend")
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
-    def test_multi_arch_ci_commit(self, mock_check, mock_s3_backend):
+    def test_multi_arch_ci_commit(
+        self, mock_check, mock_s3_backend, mock_from_wfr, mock_query_runs
+    ):
         """multi_arch_ci.yml commit returns ArtifactRunInfo with correct metadata."""
+        mock_query_runs.return_value = [MOCK_THEROCK_MULTI_ARCH_RUN]
+        mock_from_wfr.return_value = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts",
+            external_repo="",
+            run_id=TEST_THEROCK_MULTI_ARCH_RUN_ID,
+            platform="linux",
+        )
         mock_s3_backend.return_value.list_artifacts.return_value = []
+
         results = find_artifacts_for_commit(
             commit=TEST_THEROCK_MULTI_ARCH_COMMIT,
             artifact_groups=["gfx110X-all"],
@@ -220,12 +307,23 @@ class FindArtifactsForCommitTest(unittest.TestCase):
 
         mock_check.assert_called()
 
-    @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.gha_query_workflow_runs_for_commit")
+    @mock.patch("find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run")
     @mock.patch("find_artifacts_for_commit.S3Backend")
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
-    def test_multi_arch_ci_default_workflow(self, mock_check, mock_s3_backend):
+    def test_multi_arch_ci_default_workflow(
+        self, mock_check, mock_s3_backend, mock_from_wfr, mock_query_runs
+    ):
         """multi_arch_ci.yml is the default workflow_file_name."""
+        mock_query_runs.return_value = [MOCK_THEROCK_MULTI_ARCH_RUN]
+        mock_from_wfr.return_value = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts",
+            external_repo="",
+            run_id=TEST_THEROCK_MULTI_ARCH_RUN_ID,
+            platform="linux",
+        )
         mock_s3_backend.return_value.list_artifacts.return_value = []
+
         results = find_artifacts_for_commit(
             commit=TEST_THEROCK_MULTI_ARCH_COMMIT,
             artifact_groups=["gfx110X-all"],
@@ -262,12 +360,23 @@ class FindArtifactsForCommitTest(unittest.TestCase):
 class FindArtifactsForCommitMultiGroupTest(unittest.TestCase):
     """Tests for multi-group behavior of find_artifacts_for_commit()."""
 
-    @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.gha_query_workflow_runs_for_commit")
+    @mock.patch("find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run")
     @mock.patch("find_artifacts_for_commit.S3Backend")
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
-    def test_multiple_groups_all_found(self, mock_check, mock_s3_backend):
+    def test_multiple_groups_all_found(
+        self, mock_check, mock_s3_backend, mock_from_wfr, mock_query_runs
+    ):
         """All requested groups are returned when all have artifacts."""
+        mock_query_runs.return_value = [MOCK_THEROCK_MAIN_RUN]
+        mock_from_wfr.return_value = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts",
+            external_repo="",
+            run_id=TEST_THEROCK_MAIN_RUN_ID,
+            platform="linux",
+        )
         mock_s3_backend.return_value.list_artifacts.return_value = []
+
         results = find_artifacts_for_commit(
             commit=TEST_THEROCK_MAIN_COMMIT,
             artifact_groups=["gfx110X-all", "gfx120X-all"],
@@ -282,15 +391,25 @@ class FindArtifactsForCommitMultiGroupTest(unittest.TestCase):
         # Both should come from the same workflow run
         self.assertEqual(results[0].workflow_run_id, results[1].workflow_run_id)
 
-    @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.gha_query_workflow_runs_for_commit")
+    @mock.patch("find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run")
     @mock.patch("find_artifacts_for_commit.S3Backend")
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist")
-    def test_multiple_groups_partial(self, mock_check, mock_s3_backend):
+    def test_multiple_groups_partial(
+        self, mock_check, mock_s3_backend, mock_from_wfr, mock_query_runs
+    ):
         """Only groups with artifacts are returned (partial result)."""
 
         def only_gfx110x(info, _available_filenames):
             return info.artifact_group == "gfx110X-all"
 
+        mock_query_runs.return_value = [MOCK_THEROCK_MAIN_RUN]
+        mock_from_wfr.return_value = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts",
+            external_repo="",
+            run_id=TEST_THEROCK_MAIN_RUN_ID,
+            platform="linux",
+        )
         mock_s3_backend.return_value.list_artifacts.return_value = []
         mock_check.side_effect = only_gfx110x
 
@@ -305,14 +424,23 @@ class FindArtifactsForCommitMultiGroupTest(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].artifact_group, "gfx110X-all")
 
-    @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.gha_query_workflow_runs_for_commit")
+    @mock.patch("find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run")
     @mock.patch("find_artifacts_for_commit.S3Backend")
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
     def test_multiple_groups_preserves_requested_order(
-        self, mock_check, mock_s3_backend
+        self, mock_check, mock_s3_backend, mock_from_wfr, mock_query_runs
     ):
         """Results are returned in the same order as requested."""
+        mock_query_runs.return_value = [MOCK_THEROCK_MAIN_RUN]
+        mock_from_wfr.return_value = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts",
+            external_repo="",
+            run_id=TEST_THEROCK_MAIN_RUN_ID,
+            platform="linux",
+        )
         mock_s3_backend.return_value.list_artifacts.return_value = []
+
         results = find_artifacts_for_commit(
             commit=TEST_THEROCK_MAIN_COMMIT,
             artifact_groups=["gfx120X-all", "gfx110X-all"],

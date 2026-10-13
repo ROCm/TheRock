@@ -395,15 +395,16 @@ class TestShouldSkipCI(unittest.TestCase):
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
     @patch("configure_multi_arch_ci.is_ci_run_required")
-    def test_external_repo_skips_path_filter(self, mock_filter):
-        """External repo builds skip path filtering and always run CI."""
+    def test_external_repo_without_skip_config_runs_ci(self, mock_filter):
+        """External repo without skip_ci_config runs CI (uses stage reuse)."""
+        mock_filter.return_value = True  # CI required
         inputs = self._inputs(
-            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123","event_name":"pull_request"}'
         )
         git = cm.GitContext(changed_files=["rocm-libraries"])
         self.assertFalse(cm.should_skip_ci(inputs, git))
-        # Path filter should not be called for external repos
-        mock_filter.assert_not_called()
+        # is_ci_run_required is called with None patterns (no skip config)
+        mock_filter.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -1911,26 +1912,31 @@ class TestExpandBuildConfigs(unittest.TestCase):
 
     # TODO(#3433): Remove sandbox tests once ASAN tests are passing
     def test_asan_runner_selection(self):
-        """ASAN uses a sandbox runner on both nightly and PR triggers.
-
-        A PR remaps asan to host-asan, which tests on presubmit per
-        https://github.com/ROCm/TheRock/issues/7202. The build runs either way.
-        """
+        """Sandbox runners stay disabled for TheRock nightly and PR builds."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
-        for event in ["schedule", "pull_request"]:
-            with self.subTest(event=event):
-                result = cm.expand_build_configs(
-                    ci_inputs=self._inputs(event_name=event, build_variant="asan"),
-                    git_context=cm.GitContext(),
-                    targets=targets,
-                    jobs=_jobs(),
-                )
-                entry = result.linux.per_family_info[0]
-                self.assertIn("sandbox", entry["test-runs-on"])
+        # Schedule: sandbox pools are reserved for rocm-systems PRs.
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(event_name="schedule", build_variant="asan"),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        entry = result.linux.per_family_info[0]
+        self.assertEqual(entry["test-runs-on"], "")
 
-    def test_asan_debug_uses_sandbox_runner(self):
-        """asan-debug variant uses sandbox runner like asan."""
+        # PR: disables tests (empty runner)
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(event_name="pull_request", build_variant="asan"),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        entry = result.linux.per_family_info[0]
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_asan_debug_nightly_has_no_sandbox_runner(self):
+        """asan-debug nightly cannot use the rocm-systems PR sandbox pools."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])
         result = cm.expand_build_configs(
             ci_inputs=self._inputs(event_name="schedule", build_variant="asan-debug"),
@@ -1939,10 +1945,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
             jobs=_jobs(),
         )
         entry = result.linux.per_family_info[0]
-        self.assertIn("sandbox", entry["test-runs-on"])
+        self.assertEqual(entry["test-runs-on"], "")
 
-    def test_host_asan_debug_uses_sandbox_runner(self):
-        """host-asan-debug variant uses sandbox runner like host-asan."""
+    def test_host_asan_debug_nightly_has_no_sandbox_runner(self):
+        """host-asan-debug nightly cannot use the rocm-systems PR sandbox pools."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])
         result = cm.expand_build_configs(
             ci_inputs=self._inputs(
@@ -1953,15 +1959,25 @@ class TestExpandBuildConfigs(unittest.TestCase):
             jobs=_jobs(),
         )
         entry = result.linux.per_family_info[0]
-        self.assertIn("sandbox", entry["test-runs-on"])
+        self.assertEqual(entry["test-runs-on"], "")
 
-    def _host_asan_entry(self, **kwargs):
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(build_variant="host-asan", **kwargs),
-            git_context=cm.GitContext(),
-            targets=cm.TargetSelection(linux_families=["gfx94x"]),
-            jobs=_jobs(),
-        )
+    def _host_asan_entry(self, event_name, repository="ROCm/rocm-systems", **kwargs):
+        """Resolves one family entry for a host-asan build.
+
+        #8978 reserves the sandbox pools for ROCm/rocm-systems pull requests and
+        reads the repository and event from the environment, so these have to be
+        set to see a runner at all. They default to the case this PR enables.
+        """
+        env = {"GITHUB_REPOSITORY": repository, "GITHUB_EVENT_NAME": event_name}
+        with patch.dict(os.environ, env, clear=False):
+            result = cm.expand_build_configs(
+                ci_inputs=self._inputs(
+                    build_variant="host-asan", event_name=event_name, **kwargs
+                ),
+                git_context=cm.GitContext(),
+                targets=cm.TargetSelection(linux_families=["gfx94x"]),
+                jobs=_jobs(),
+            )
         return result.linux.per_family_info[0]
 
     def test_host_asan_presubmit_runs_without_any_label(self):
@@ -1975,11 +1991,20 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = self._host_asan_entry(event_name="push")
         self.assertEqual(entry["test-runs-on"], "")
 
-    def test_host_asan_workflow_dispatch_runs(self):
-        """workflow_dispatch is not a named trigger, so it is allowed here the
-        same way _should_run_tests_for_family allows it per family."""
+    def test_host_asan_presubmit_is_scoped_to_rocm_systems(self):
+        """#8978 reserves the pools, so TheRock's own labelled PRs build
+        host-asan but still get no runner."""
+        entry = self._host_asan_entry(
+            event_name="pull_request", repository="ROCm/TheRock", pr_labels=[]
+        )
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_host_asan_workflow_dispatch_has_no_runner(self):
+        """The trigger policy allows workflow_dispatch, but #8978 clears the
+        sandbox fields for every trigger other than a rocm-systems pull
+        request, so there is nothing to schedule onto."""
         entry = self._host_asan_entry(event_name="workflow_dispatch")
-        self.assertIn("sandbox", entry["test-runs-on"])
+        self.assertEqual(entry["test-runs-on"], "")
 
     def test_explicit_strict_linux_dev_build(self):
         """Explicit selection creates a build config without GPU tests."""
@@ -2223,7 +2248,7 @@ class TestWriteOutputs(unittest.TestCase):
 
             return (
                 github_output.read_text(),
-                step_summary.read_text(),
+                step_summary.read_text(encoding="utf-8"),
             )
 
     def test_running_ci(self):
@@ -2245,6 +2270,54 @@ class TestWriteOutputs(unittest.TestCase):
         # workflow steps can use them.
         self.assertIn("enable_build_jobs=false", github_output)
         self.assertTrue(step_summary.startswith("## Multi-Arch CI Configuration"))
+
+    def test_platform_outputs_follow_selected_stages(self):
+        """Linux-only stages must not launch Windows artifact consumers.
+
+        Prebuilt stages count as work, but only inside the build allowlist.
+        Exercise the full setup pipeline and the outputs used by workflow gates.
+        """
+        cases = [
+            (["emulation"], "", False),
+            (["emulation"], "emulation", False),
+            (["emulation"], "compiler-runtime", False),
+            (["compiler-runtime"], "", True),
+            (["compiler-runtime"], "compiler-runtime", True),
+            ([], "", True),
+            ([], "all", True),
+        ]
+        for stages, prebuilt, expect_windows in cases:
+            with (
+                self.subTest(stages=stages, prebuilt=prebuilt),
+                patch.dict(os.environ, {"STAGE_REUSE_MODE": "dry-run"}),
+            ):
+                inputs = cm.CIInputs(
+                    run_id="12345",
+                    event_name="pull_request",
+                    commit_ref="feature",
+                    base_ref="HEAD^",
+                    build_variant="release",
+                    linux_amdgpu_families=["gfx94x"],
+                    windows_amdgpu_families=["gfx110x"],
+                    build_stages=stages,
+                    prebuilt_stages=prebuilt,
+                    baseline_run_id="123" if prebuilt else "",
+                )
+                outputs = cm.configure(inputs, cm.GitContext.empty())
+                github_output, _ = self._write_outputs(outputs)
+                values = dict(line.split("=", 1) for line in github_output.splitlines())
+                linux = json.loads(values["linux_build_config"])
+                self.assertEqual(linux["dist_amdgpu_families"], "gfx94X-dcgpu")
+                if expect_windows:
+                    windows = json.loads(values["windows_build_config"])
+                    self.assertEqual(windows["dist_amdgpu_families"], "gfx110X-all")
+                    self.assertEqual(linux["windows_amdgpu_families"], "gfx110X-all")
+                    if prebuilt:
+                        self.assertIn("compiler-runtime", windows["prebuilt_stages"])
+                        self.assertEqual(windows["baseline_run_id"], "123")
+                else:
+                    self.assertEqual(values["windows_build_config"], "")
+                    self.assertEqual(linux["windows_amdgpu_families"], "")
 
 
 # ---------------------------------------------------------------------------
@@ -2468,7 +2541,7 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
 
     Key scenarios:
     - PR (presubmit): presubmit families build, presubmit tests run
-    - PR + ci:run-all-archs: ALL families build, only presubmit tests run
+    - PR + ci:run-all-archs: ALL families build AND test
     - PR + submodule changes: submodule_bump tests enabled
     - Push (postsubmit): presubmit+postsubmit families build/test
     - Schedule (nightly): ALL families build, nightly tests run
@@ -2650,8 +2723,8 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
                             f, tested, f"{f} should not be tested on {event}"
                         )
 
-    def test_pr_with_ci_run_all_archs_builds_all_but_filters_tests(self):
-        """ci:run-all-archs builds ALL families but still filters tests by trigger."""
+    def test_pr_with_ci_run_all_archs_builds_and_tests_all(self):
+        """ci:run-all-archs builds AND tests ALL families with test runners."""
         with patch(
             "configure_multi_arch_ci.get_all_families_for_trigger_types",
             side_effect=self._mock_get_all_families,
@@ -2669,12 +2742,21 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
             tested = self._get_tested_families(outputs)
 
             # All families should be built
-            for f in ["mock-primary", "mock-postsubmit-only", "mock-nightly-only"]:
-                self.assertIn(f, built)
-            # But only presubmit tests run
-            self.assertIn("mock-primary", tested)
-            self.assertNotIn("mock-nightly-only", tested)
-            self.assertNotIn("mock-postsubmit-only", tested)
+            for f in [
+                "mock-primary",
+                "mock-postsubmit-only",
+                "mock-nightly-only",
+                "mock-submodule-test",
+            ]:
+                self.assertIn(f, built, f"{f} should be built with ci:run-all-archs")
+            # All families with test runners should also be tested
+            for f in [
+                "mock-primary",
+                "mock-nightly-only",
+                "mock-postsubmit-only",
+                "mock-submodule-test",
+            ]:
+                self.assertIn(f, tested, f"{f} should be tested with ci:run-all-archs")
 
     def test_submodule_changes_enable_submodule_tests(self):
         """Submodule changes activate submodule_bump trigger for tests."""
@@ -2748,8 +2830,9 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
         """Verify trigger-based test gating for real families."""
         test_cases = [
             # (name, family_name, event, has_submodule, expect_tests)
+            # gfx125x tests only on nightly, not on submodule_bump
             ("gfx125x_pr_no_submodule", "gfx125X-dcgpu", "pull_request", False, False),
-            ("gfx125x_pr_with_submodule", "gfx125X-dcgpu", "pull_request", True, True),
+            ("gfx125x_pr_with_submodule", "gfx125X-dcgpu", "pull_request", True, False),
             ("gfx950_push_no_submodule", "gfx950-dcgpu", "push", False, False),
             ("gfx950_push_with_submodule", "gfx950-dcgpu", "push", True, True),
             (
@@ -2808,20 +2891,44 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
                         family_info["test-runs-on"], "", f"Expected no tests for {name}"
                     )
 
-    def test_test_type_for_family_override(self):
-        """test_type_for_family forces quick test type despite global full."""
+    def test_multi_gpu_runners_gated_when_tests_disabled(self):
+        """Multi-GPU runners excluded when tests are trigger-gated."""
+        # gfx950 tests only on submodule_bump; PR without submodule should gate both
         ci_inputs = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
             commit_ref="feature",
             base_ref="main",
             build_variant="release",
+            linux_amdgpu_families=["gfx950"],
+        )
+        outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+        family_info = self._find_family_info(outputs, "gfx950-dcgpu")
+
+        self.assertEqual(family_info["test-runs-on"], "")
+        self.assertNotIn("test-runs-on-multi-gpu", family_info)
+        self.assertNotIn("test-runs-on-multi-gpu-labels", family_info)
+
+        # With submodule change, multi-GPU info should be present
+        git_ctx = cm.GitContext(changed_files=["sub"], submodule_paths=["sub"])
+        outputs_enabled = cm.configure(ci_inputs, git_ctx)
+        family_enabled = self._find_family_info(outputs_enabled, "gfx950-dcgpu")
+
+        self.assertNotEqual(family_enabled["test-runs-on"], "")
+        self.assertIn("test-runs-on-multi-gpu", family_enabled)
+
+    def test_test_type_for_family_override(self):
+        """test_type_for_family forces quick test type despite global full."""
+        # gfx125x only tests on nightly, so use schedule event
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="schedule",
+            commit_ref="main",
+            base_ref=None,
+            build_variant="release",
             linux_amdgpu_families=["gfx125x"],
         )
-        git_context = cm.GitContext(
-            changed_files=["some-submodule"],
-            submodule_paths=["some-submodule"],
-        )
+        git_context = cm.GitContext.empty()
         outputs = cm.configure(ci_inputs, git_context)
         family_info = self._find_family_info(outputs, "gfx125X-dcgpu")
 
@@ -2874,6 +2981,25 @@ class TestTriggerHelpers(unittest.TestCase):
         triggers = cm._get_current_triggers(ci_inputs, git_context)
         self.assertEqual(triggers, {"presubmit", "submodule_bump"})
 
+    def test_get_current_triggers_external_repo_no_submodule_bump(self):
+        """submodule_bump only applies to TheRock, not external repos."""
+        for event, expected in [
+            ("pull_request", {"presubmit"}),
+            ("push", {"postsubmit"}),
+        ]:
+            with self.subTest(event=event):
+                ci_inputs = cm.CIInputs(
+                    run_id="12345",
+                    event_name=event,
+                    commit_ref="main",
+                    base_ref="HEAD^",
+                    build_variant="release",
+                    external_repo='{"repository":"ROCm/rocm-libraries","ref":"main"}',
+                )
+                git_context = cm.GitContext.from_external_repo("rocm-libraries")
+                triggers = cm._get_current_triggers(ci_inputs, git_context)
+                self.assertEqual(triggers, expected)
+
     def test_should_run_tests_trigger_matching(self):
         """Verify test gating based on trigger match."""
         test_cases = [
@@ -2898,6 +3024,26 @@ class TestTriggerHelpers(unittest.TestCase):
                     cm.GitContext.empty(),
                 )
                 self.assertEqual(should_run, expected_run)
+
+    def test_should_run_tests_ci_run_all_archs_bypasses_trigger(self):
+        """ci:run-all-archs label bypasses trigger-based test gating."""
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="main",
+            build_variant="release",
+            pr_labels=["ci:run-all-archs"],
+        )
+        for triggers in [["nightly"], [], ["submodule_bump"]]:
+            with self.subTest(tests_on_trigger=triggers):
+                should_run, reason = cm._should_run_tests_for_family(
+                    {"tests_on_trigger": triggers},
+                    ci_inputs,
+                    cm.GitContext.empty(),
+                )
+                self.assertTrue(should_run)
+                self.assertIn("ci:run-all-archs", reason)
 
 
 # ---------------------------------------------------------------------------
@@ -3021,6 +3167,56 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
                 gfx103x_info = builds.linux.per_family_info[0]
                 # Should always use the primary label
                 self.assertEqual(gfx103x_info["test-runs-on"], "linux-gfx1030-gpu-rocm")
+
+
+# ---------------------------------------------------------------------------
+class TestCpuTestOnlyLabel(unittest.TestCase):
+    """ci:cpu-test-only label: disable GPU tests, keep CPU-only tests."""
+
+    def _expand(self, pr_labels=None, platform="linux", family="gfx94x"):
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^1",
+            build_variant="release",
+            pr_labels=pr_labels or [],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=ci_inputs,
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(**{f"{platform}_families": [family]}),
+            jobs=_jobs(),
+        )
+        return getattr(result, platform).per_family_info[0]
+
+    def test_label_disables_gpu_keeps_cpu(self):
+        """Label disables GPU tests but keeps CPU runner and tests_enabled."""
+        entry = self._expand(pr_labels=["ci:cpu-test-only"])
+        self.assertEqual(entry["test-runs-on"], "")
+        self.assertNotEqual(entry["test-runs-on-cpu"], "")
+        self.assertTrue(entry["tests_enabled"])
+
+    def test_without_label_gpu_tests_run(self):
+        """Without label, GPU tests run normally."""
+        self.assertNotEqual(self._expand()["test-runs-on"], "")
+
+    def test_works_on_windows(self):
+        """Label works on Windows."""
+        entry = self._expand(["ci:cpu-test-only"], platform="windows", family="gfx110x")
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_label_disables_multi_gpu(self):
+        """Label also disables multi-GPU tests."""
+        entry = self._expand(pr_labels=["ci:cpu-test-only"])
+        self.assertNotIn("test-runs-on-multi-gpu", entry)
+        self.assertNotIn("test-runs-on-multi-gpu-labels", entry)
+
+    def test_without_label_multi_gpu_present(self):
+        """Without label, multi-GPU info is present (when platform supports it)."""
+        entry = self._expand()
+        # gfx94x has multi-GPU support
+        self.assertIn("test-runs-on-multi-gpu-labels", entry)
 
 
 if __name__ == "__main__":
