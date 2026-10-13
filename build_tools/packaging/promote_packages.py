@@ -13,7 +13,7 @@ It optionally also restricts which gfx target architectures are referenced by th
 package metadata.
 
 Promotion is parameterised by:
-  --src-version-type   marker to look for in source: 'rc', 'a', or 'pytorch-dev'
+  --src-version-type   marker to look for in source: 'rc', 'a', or 'dev'
   --dest-version       form to apply: 'release' (strip prerelease),
                        'rc<N>' (e.g. 'rc1'), or 'a<YYYYMMDD>' (e.g. 'a20260501')
 
@@ -21,7 +21,9 @@ Common workflows:
   - rc -> release (default)  e.g. 7.10.0rc1       -> 7.10.0
   - a  -> release            e.g. 7.13.0a20260501 -> 7.13.0
   - a  -> rc                 e.g. 7.13.0a20260501 -> 7.13.0rc1
-  - pytorch-dev -> release   e.g. 2.12.0+git1a2b3c4d.rocm10.0.0rc4 -> 2.12.0+rocm10.0.0
+  - dev -> release           e.g. 2.12.0+git1a2b3c4d.rocm10.0.0rc4 -> 2.12.0+rocm10.0.0
+                                  2.12.0+git1a2b3c4d.devrocm10.2.0.dev0.<sha> -> 2.12.0+rocm10.2.0
+                                  10.2.0.dev0+<sha> -> 10.2.0
 Other combinations are mechanically possible but not typical.
 
 When promoting torch-family wheels to a stable release, ROCm package
@@ -71,8 +73,8 @@ TYPICAL USAGE:
   # Promote alpha to release candidate (e.g. 7.13.0a20260430 -> 7.13.0rc1)
   python ./build_tools/packaging/promote_packages.py --input-dir=./release_candidates/ --src-version-type=a --dest-version=rc1
 
-  # Promote a pytorch-dev build to release (e.g. 2.12.0+git1a2b3c4d.rocm10.0.0rc4 -> 2.12.0+rocm10.0.0):
-  python ./build_tools/packaging/promote_packages.py --input-dir=./dev_packages/ --src-version-type=pytorch-dev
+  # Promote dev builds (dev PyTorch on an rc/final ROCm, or dev PyTorch on a dev ROCm) to release:
+  python ./build_tools/packaging/promote_packages.py --input-dir=./dev_packages/ --src-version-type=dev
 
   # Restrict to a positive arch list (no version change); per-gfx wheels for
   # other archs are skipped/deleted, multi-arch aggregator wheels are rewritten:
@@ -122,12 +124,23 @@ if not hasattr(change_wheel_version, "change_wheel_version"):
     )
 
 
+# Dev torch-family wheels prefix the local version with git<sha>. (build_prod_wheels.py).
+GIT_LOCAL_PATTERN = r"(?<=\+)git[0-9a-f]+\."
+# Dev ROCm is spelled `10.2.0.dev0+<sha>`, `devrocm10.2.0.dev0.<sha>` (local) or `.dev0-<sha>` (version.py).
+DEV_ROCM_PATTERN = r"(?<![0-9a-z])dev(?=rocm)|\.dev\d+[.+-][0-9a-f]{7,40}"
+DEV_ROCM_RE = re.compile(DEV_ROCM_PATTERN)
+
 SRC_VERSION_PATTERNS = {
     "rc": r"rc\d*",
     "a": r"a\d*",
-    # pytorch-dev wheels prefix the local version with git<sha>. (build_prod_wheels.py).
-    "pytorch-dev": r"^git[0-9a-f]+\.|rc\d*",
+    "dev": rf"{GIT_LOCAL_PATTERN}|{DEV_ROCM_PATTERN}|rc\d*",
 }
+
+
+def src_version_pattern(src_version_type: str, keep_git: bool = False) -> str:
+    if src_version_type == "dev" and keep_git:
+        return rf"{DEV_ROCM_PATTERN}|rc\d*"
+    return SRC_VERSION_PATTERNS[src_version_type]
 
 
 def parse_arguments(argv: list[str]) -> argparse.Namespace:
@@ -164,8 +177,9 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
         "--src-version-type",
         help=(
             "Source prerelease type to look for in package versions (e.g. 'a', 'rc'). "
-            "'pytorch-dev' matches pytorch-dev builds and strips their git<sha> local prefix "
-            "and any rc (only with --dest-version=release). Defaults to 'rc'."
+            "'dev' matches dev builds and strips the torch-family git<sha> local prefix, "
+            "dev ROCm markers (devrocm, .dev0<sha>) and any rc (only with "
+            "--dest-version=release). Defaults to 'rc'."
         ),
         # Sentinel default: lets us distinguish "user did not pass --src-version-type"
         # from "user explicitly passed --src-version-type=rc" (needed for the
@@ -262,10 +276,8 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
     if args.delete_old_on_success is None:
         args.delete_old_on_success = False
 
-    if args.src_version_type == "pytorch-dev" and args.dest_version != "release":
-        parser.error(
-            "--src-version-type=pytorch-dev only supports --dest-version=release"
-        )
+    if args.src_version_type == "dev" and args.dest_version != "release":
+        parser.error("--src-version-type=dev only supports --dest-version=release")
 
     return args
 
@@ -406,6 +418,7 @@ def update_metadata_rocm_requires_dist(
     new_rocm_version: str,
     *,
     new_version: Version | str | None = None,
+    strip_dev_rocm: bool = False,
     float_rocm_dependency_patch: bool = False,
 ) -> None:
     """Update ROCm references in METADATA Summary and Requires-Dist fields."""
@@ -420,9 +433,12 @@ def update_metadata_rocm_requires_dist(
             inplace=True,
         ) as f:
             for line in f:
-                # Full-version pins (e.g. device wheels) carry pytorch-dev git<sha> outside the ROCm part.
+                # Full-version pins (e.g. device wheels) carry the dev git<sha> outside the ROCm part.
                 if new_version is not None:
                     line = line.replace(str(old_version), str(new_version))
+                # Other pins (rocm, triton) still carry dev ROCm, e.g. `rocm[libraries]==10.2.0.dev0+<sha>`.
+                if strip_dev_rocm:
+                    line = DEV_ROCM_RE.sub("", line)
                 lower_line = line.casefold()
                 if line.startswith("Summary:") and (
                     "therock" in lower_line or "rocm" in lower_line
@@ -450,13 +466,18 @@ def update_metadata_rocm_requires_dist(
                     print(line, end="")
 
 
-def has_src_version_type(version_str: str, src_version_type: str) -> bool:
-    """Gate promotion on the same pattern `compute_new_version_str` rewrites, since 'pytorch-dev' is not a literal substring."""
-    return re.search(SRC_VERSION_PATTERNS[src_version_type], version_str) is not None
+def has_src_version_type(
+    version_str: str, src_version_type: str, keep_git: bool = False
+) -> bool:
+    """Gate promotion on the same pattern `compute_new_version_str` rewrites, since 'dev' is not a literal substring."""
+    return (
+        re.search(src_version_pattern(src_version_type, keep_git), version_str)
+        is not None
+    )
 
 
 def compute_new_version_str(
-    version_str: str, src_version_type: str, dest_version: str
+    version_str: str, src_version_type: str, dest_version: str, keep_git: bool = False
 ) -> str:
     """Return the new version string after applying `dest_version` to `version_str`.
 
@@ -467,11 +488,15 @@ def compute_new_version_str(
       - otherwise: replace it with `dest_version`
         (`7.13.0a20260430` -> `7.13.0rc1` when called with src='a', dest='rc1').
 
-    `src_version_type == "pytorch-dev"` strips both the `git<sha>.` prefix and any rc
-    (`git1a2b3c4d.rocm10.0.0rc4` -> `rocm10.0.0`).
+    `src_version_type == "dev"` is applied to the full version and strips the
+    `+git<sha>.` prefix (unless `keep_git`), dev ROCm markers and any rc
+    (`2.12.0+git1a2b3c4d.devrocm10.2.0.dev0.<sha>` -> `2.12.0+rocm10.2.0`,
+    `10.2.0.dev0+<sha>` -> `10.2.0`).
     """
     replacement = "" if dest_version == "release" else dest_version
-    return re.sub(SRC_VERSION_PATTERNS[src_version_type], replacement, version_str)
+    return re.sub(
+        src_version_pattern(src_version_type, keep_git), replacement, version_str
+    )
 
 
 # Arch token shape used in wheel filenames, extras names, and dep names. Covers
@@ -969,6 +994,7 @@ def wheel_change_extra_files(
     new_version: Version,
     dest_version: str,
     multi_arch_targets: list[str] | None = None,
+    strip_git: bool = False,
 ) -> None:
     # Always run the keep-list pass when archs are requested; do this *before*
     # version rewrites so the version replacement sees a consistent file
@@ -995,12 +1021,16 @@ def wheel_change_extra_files(
             if len(file.name) == len(package_name_no_version):
                 package_name_no_version = file.name
 
-    # "rocm" rather than "+rocm": pytorch-dev builds use `+git<sha>.rocm<ver>`.
+    # "rocm" rather than "+rocm": dev builds use `+git<sha>.rocm<ver>`.
     old_rocm_version = (
         str(old_version)
         if "rocm" not in str(old_version)
         else str(old_version).split("rocm")[-1]
     )
+    # Lines get dev ROCm stripped first, so later ROCm replaces must look for the stripped form.
+    strip_dev_rocm = DEV_ROCM_RE.search(str(old_version)) is not None
+    if strip_dev_rocm:
+        old_rocm_version = DEV_ROCM_RE.sub("", old_rocm_version)
     new_rocm_version = (
         str(new_version)
         if "rocm" not in str(new_version)
@@ -1021,6 +1051,7 @@ def wheel_change_extra_files(
         old_rocm_version,
         new_rocm_version,
         new_version=new_version,
+        strip_dev_rocm=strip_dev_rocm,
         float_rocm_dependency_patch=float_rocm_dependency_patch,
     )
     # Per-arch device wheels (amd_torch_device_gfx, amd_torchvision_device_gfx,
@@ -1074,12 +1105,20 @@ def wheel_change_extra_files(
             # currently applying to: triton
             return
 
+    def strip_dev(line: str) -> str:
+        # version.py keeps the unnormalized dev form, e.g. `2.12.0+git9ccf2fd0.devrocm10.2.0.dev0-<sha>`.
+        if strip_git:
+            line = re.sub(GIT_LOCAL_PATTERN, "", line)
+        return DEV_ROCM_RE.sub("", line) if strip_dev_rocm else line
+
     def rewrite_exact(line: str) -> str:
-        line = line.replace(str(old_version), str(new_version))
+        line = strip_dev(line.replace(str(old_version), str(new_version)))
         return line.replace(old_rocm_version, new_rocm_version)
 
     def rewrite_float_version(line: str) -> str:
-        return rewrite_rocm_init_check_version(line, old_rocm_version, new_rocm_version)
+        return rewrite_rocm_init_check_version(
+            strip_dev(line), old_rocm_version, new_rocm_version
+        )
 
     if not float_rocm_dependency_patch:
         files_to_change.extend(files_to_float)
@@ -1115,13 +1154,9 @@ def promote_wheel(
 
     print(f"  Detected version: {original_version}")
 
-    # pytorch-dev's `^git[0-9a-f]+\.` pattern would also strip triton's git<sha>, this is to prevent that
-    # triton-3.8.0+git669b31ac.rocm10.0.0rc4 -> triton-3.8.0+git669b31ac.rocm10.0.0
-    if (
-        src_version_type == "pytorch-dev"
-        and canonicalize_name(original_wheel.name) == "triton"
-    ):
-        src_version_type = "rc"
+    # dev's `(?<=\+)git[0-9a-f]+\.` pattern would also strip triton's git<sha>, this is to prevent that
+    # triton-3.8.0+git669b31ac.devrocm10.2.0.dev0.<sha> -> triton-3.8.0+git669b31ac.rocm10.2.0
+    keep_git = canonicalize_name(original_wheel.name) == "triton"
 
     # Bound callback matching change_wheel_version's expected signature:
     #   callback(new_dir_path: Path, old_version: Version, new_version: Version) -> None
@@ -1129,6 +1164,7 @@ def promote_wheel(
         wheel_change_extra_files,
         multi_arch_targets=multi_arch_targets,
         dest_version=dest_version,
+        strip_git=src_version_type == "dev" and not keep_git,
     )
 
     if skip_version_promotion:
@@ -1148,7 +1184,21 @@ def promote_wheel(
         print(f"Repacked wheel at {new_wheel_path}")
         return True
 
-    if original_version.local:  # torch packages
+    if src_version_type == "dev":
+        # Dev ROCm wheels carry their sha in the local part (`10.2.0.dev0+<sha>`), so rewrite the full version.
+        if not has_src_version_type(str(original_version), src_version_type, keep_git):
+            print(
+                f"  [ERROR] Only prerelease versions of type '{src_version_type}' can be promoted! Skipping!"
+            )
+            return False
+        promoted = Version(
+            compute_new_version_str(
+                str(original_version), src_version_type, dest_version, keep_git
+            )
+        )
+        new_base_version = promoted.public
+        new_local_version = promoted.local
+    elif original_version.local:  # torch packages
         if not has_src_version_type(original_version.local, src_version_type):
             print(
                 f"  [ERROR] Only prerelease versions of type '{src_version_type}' can be promoted! Skipping!"

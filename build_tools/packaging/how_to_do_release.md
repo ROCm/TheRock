@@ -184,20 +184,29 @@ python build_tools/packaging/promote_packages.py \
 `a<YYYYMMDD>` (e.g. `a20260501`). The downstream RC -> release flow above is
 unchanged.
 
-### Promoting pytorch-dev (`git<sha>`) builds
+### Promoting dev builds
 
-pytorch-dev builds record the source commit in the local
-version (`2.12.0+git1a2b3c4d.rocm10.0.0rc4`). `--src-version-type=pytorch-dev` strips
-that `git<sha>.` prefix and any rc, so the wheel goes straight to the final
-version. Wheels without the prefix (for example apex) still have their rc stripped.
-Triton keeps its `git<sha>` (its own build adds it to rc and nightly builds too)
-and only has its rc stripped, so torch's pin on it still resolves.
+`dev` builds record the source commit in torch, torchaudio and torchvision
+local versions (`2.12.0+git1a2b3c4d.rocm10.0.0rc4`). When ROCm itself is a dev
+build, its version is `10.2.0.dev0+<sha>` and torch-family wheels built on it
+carry `devrocm10.2.0.dev0.<sha>`. `--src-version-type=dev` strips the
+`git<sha>.` prefix, the dev ROCm markers and any rc, in file names and inside
+`METADATA`, `version.py`, `_rocm_init.py` and `_dist_info.py`, so everything goes
+straight to the final version. Triton keeps its `git<sha>` (its own build adds
+it to rc and nightly builds too), so torch's pin on it still resolves.
+
+| Dev version                                         | Release version                |
+| --------------------------------------------------- | ------------------------------ |
+| `torch-2.12.0+git1a2b3c4d.rocm10.0.0rc4`            | `torch-2.12.0+rocm10.0.0`      |
+| `torch-2.12.0+git1a2b3c4d.devrocm10.2.0.dev0.<sha>` | `torch-2.12.0+rocm10.2.0`      |
+| `triton-3.8.0+git669b31ac.devrocm10.2.0.dev0.<sha>` | `triton-3.8.0+git669b31ac.rocm10.2.0` |
+| `apex-1.12.0+devrocm10.2.0.dev0.<sha>`              | `apex-1.12.0+rocm10.2.0`       |
+| `rocm_sdk_core-10.2.0.dev0+<sha>`                   | `rocm_sdk_core-10.2.0`         |
 
 ```bash
-# 2.12.0+git1a2b3c4d.rocm10.0.0rc4 -> 2.12.0+rocm10.0.0
 python build_tools/packaging/promote_packages.py \
    --input-dir=./promotion/download/<arch> \
-   --src-version-type=pytorch-dev \
+   --src-version-type=dev \
    --delete-old-on-success
 ```
 
