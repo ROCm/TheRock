@@ -441,9 +441,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             }
         }
         fetch_test_configurations.run()
-        jobs = [
-            j for j in self._get_components() if j["job_name"] == "miopen-dbsync"
-        ]
+        jobs = [j for j in self._get_components() if j["job_name"] == "miopen-dbsync"]
         return jobs[0] if jobs else None
 
     def test_miopen_dbsync_include_family_covers_gfx942_and_gfx950(self):
@@ -474,9 +472,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
         os.environ["TEST_RUNS_ON"] = ""
         fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
-            "gfx950": {
-                "linux": {"test-runs-on": "", "fetch-gfx-targets": ["gfx950"]}
-            }
+            "gfx950": {"linux": {"test-runs-on": "", "fetch-gfx-targets": ["gfx950"]}}
         }
         names = self._selected_names()
         self.assertIn("miopen-dbsync", names)
