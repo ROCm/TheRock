@@ -71,7 +71,7 @@ TYPICAL USAGE:
   # Promote alpha to release candidate (e.g. 7.13.0a20260430 -> 7.13.0rc1)
   python ./build_tools/packaging/promote_packages.py --input-dir=./release_candidates/ --src-version-type=a --dest-version=rc1
 
-  # Promote a dev PyTorch build to release (e.g. 2.12.0+git1a2b3c4d.rocm10.0.0rc4 -> 2.12.0+rocm10.0.0):
+  # Promote a pytorch-dev build to release (e.g. 2.12.0+git1a2b3c4d.rocm10.0.0rc4 -> 2.12.0+rocm10.0.0):
   python ./build_tools/packaging/promote_packages.py --input-dir=./dev_packages/ --src-version-type=pytorch-dev
 
   # Restrict to a positive arch list (no version change); per-gfx wheels for
@@ -125,7 +125,7 @@ if not hasattr(change_wheel_version, "change_wheel_version"):
 SRC_VERSION_PATTERNS = {
     "rc": r"rc\d*",
     "a": r"a\d*",
-    # dev PyTorch wheels prefix the local version with git<sha>. (build_prod_wheels.py).
+    # pytorch-dev wheels prefix the local version with git<sha>. (build_prod_wheels.py).
     "pytorch-dev": r"^git[0-9a-f]+\.|rc\d*",
 }
 
@@ -164,7 +164,7 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
         "--src-version-type",
         help=(
             "Source prerelease type to look for in package versions (e.g. 'a', 'rc'). "
-            "'pytorch-dev' matches dev PyTorch builds and strips their git<sha> local prefix "
+            "'pytorch-dev' matches pytorch-dev builds and strips their git<sha> local prefix "
             "and any rc (only with --dest-version=release). Defaults to 'rc'."
         ),
         # Sentinel default: lets us distinguish "user did not pass --src-version-type"
@@ -420,7 +420,7 @@ def update_metadata_rocm_requires_dist(
             inplace=True,
         ) as f:
             for line in f:
-                # Full-version pins (e.g. device wheels) carry dev git<sha> outside the ROCm part.
+                # Full-version pins (e.g. device wheels) carry pytorch-dev git<sha> outside the ROCm part.
                 if new_version is not None:
                     line = line.replace(str(old_version), str(new_version))
                 lower_line = line.casefold()
