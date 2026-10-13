@@ -44,15 +44,11 @@ repository serves x86_64 (`amd64`) packages only.
 | `rc`      | `https://rc.repo.amd.com/rocm/core/packages`      | yes    | `amdrocm-stablerc.{sources,repo}` |
 | `nightly` | `https://nightly.repo.amd.com/rocm/core/packages` | no     | `amdrocm-nightly.{sources,repo}`  |
 
-`rc` is the release-candidate stream for the next GA release. On deb its package
-version carries a `~pre` marker (`10.1.0~pre-1~ubuntu2404`), matching the `~preN`
-the rc repository's own deb packages use. On rpm the version is unchanged and the
-stream is in the release field (`10.1.0-1.rc.el8`). Either way the rc package
-sorts below the stable package at the same ROCm version, but it targets the
-*next* release, so moving from `rc` back to `stable` is a downgrade — see
-[Switching streams](#switching-streams). The version carries no candidate
-number, because it names the stream rather than one candidate — the repository
-serves several at once.
+`rc` is the release-candidate stream for the next GA release. Its package carries
+the prerelease version of the ROCm packages it serves (`10.1.0~pre3` on deb,
+`10.1.0~rc3` on rpm), so it sorts below the stable package at the same ROCm
+version. It targets the *next* release, though, so moving from `rc` back to
+`stable` is usually a downgrade — see [Switching streams](#switching-streams).
 
 Note that `rc`'s installed file is `amdrocm-stablerc`, not `amdrocm-rc`. The
 stream names the subdomain, while `stablerc` is the spelling RFC0012 uses for
@@ -210,7 +206,7 @@ python3 build_tools/packaging/linux/build_repo_package.py \
     --stream nightly \
     --repo-base-url https://nightly.repo.amd.com/rocm/core/packages \
     --repo-sub-folder 20260722-123456789 \
-    --rocm-version 10.0.0 \
+    --rocm-version 10.0.0~20260722 \
     --dest-dir ./repo-package-out
 ```
 
@@ -239,29 +235,31 @@ repository URL. The profile is therefore part of the package name, so that two
 of them can never be mistaken for each other. Each format does this its own way:
 deb carries the profile in the version, rpm in the release field.
 
-| `--os-profile` | `--stream` | Resulting file                                         |
-| -------------- | ---------- | ------------------------------------------------------ |
-| `ubuntu2404`   | `stable`   | `amdrocm-repo_10.0.0-1~ubuntu2404_all.deb`             |
-| `ubuntu2404`   | `rc`       | `amdrocm-repo_10.0.0~pre-1~ubuntu2404_all.deb`         |
-| `ubuntu2404`   | `nightly`  | `amdrocm-repo_20260716.12345-1~ubuntu2404_all.deb`     |
-| `rhel8`        | `stable`   | `amdrocm-repo-10.0.0-1.stable.el8.noarch.rpm`          |
-| `rhel8`        | `rc`       | `amdrocm-repo-10.0.0-1.rc.el8.noarch.rpm`              |
-| `rhel8`        | `nightly`  | `amdrocm-repo-20260716-12345.1.nightly.el8.noarch.rpm` |
-| `rhel10`       | `stable`   | `amdrocm-repo-10.0.0-1.stable.el10.noarch.rpm`         |
-| `sles16`       | `stable`   | `amdrocm-repo-10.0.0-1.stable.sles16.noarch.rpm`       |
+`--rocm-version` is used as given, for every stream. Pass the version of the
+ROCm packages in the repository the package configures: the
+`rocm_deb_package_version` or `rocm_rpm_package_version` that
+`build_tools/compute_rocm_package_version.py` prints for the stream's release
+type. CI passes exactly that, so the package sorts the way those ROCm packages
+do — below stable at the same ROCm version. The rc versions differ between deb
+and rpm.
 
-All rows use `--rocm-version 10.0.0`; the nightly rows add
-`--repo-sub-folder 20260716-12345`.
+| `--os-profile` | `--stream` | `--rocm-version`  | Resulting file                                          |
+| -------------- | ---------- | ----------------- | ------------------------------------------------------- |
+| `ubuntu2404`   | `stable`   | `10.0.0`          | `amdrocm-repo_10.0.0-1~ubuntu2404_all.deb`              |
+| `ubuntu2404`   | `rc`       | `10.0.0~pre1`     | `amdrocm-repo_10.0.0~pre1-1~ubuntu2404_all.deb`         |
+| `ubuntu2404`   | `nightly`  | `10.0.0~20260716` | `amdrocm-repo_10.0.0~20260716-1~ubuntu2404_all.deb`     |
+| `rhel8`        | `stable`   | `10.0.0`          | `amdrocm-repo-10.0.0-1.stable.el8.noarch.rpm`           |
+| `rhel8`        | `rc`       | `10.0.0~rc1`      | `amdrocm-repo-10.0.0~rc1-1.rc.el8.noarch.rpm`           |
+| `rhel8`        | `nightly`  | `10.0.0~20260716` | `amdrocm-repo-10.0.0~20260716-1.nightly.el8.noarch.rpm` |
+| `rhel10`       | `stable`   | `10.0.0`          | `amdrocm-repo-10.0.0-1.stable.el10.noarch.rpm`          |
+| `sles16`       | `stable`   | `10.0.0`          | `amdrocm-repo-10.0.0-1.stable.sles16.noarch.rpm`        |
+
+The nightly rows add `--repo-sub-folder 20260716-12345`.
 
 The `-1` is `--version-suffix`, this package's own build number (default `1`).
 Bump it to re-ship the repository configuration at an unchanged ROCm version —
 without it there would be no higher version for the package manager to accept,
 and installing the corrected package would silently do nothing.
-
-`--rocm-version` may carry a prerelease marker, which stays in the upstream part
-of the version and sorts below the matching GA release — for example
-`--rocm-version 7.14.0~dev20260811` on `ubuntu2404` yields
-`amdrocm-repo_7.14.0~dev20260811-1~ubuntu2404_all.deb`.
 
 The deb token is the `--os-profile` name rather than a Debian codename, because
 codenames are not alphabetically ordered: `bullseye` sorts *above* `bookworm`,
