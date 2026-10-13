@@ -14,7 +14,11 @@ from build_prod_wheels import (
     add_env_compiler_flags,
     validate_build_args,
 )
-from setup_pytorch_asan import append_env_text, enable_torchaudio_asan
+from setup_pytorch_asan import (
+    append_env_text,
+    enable_torchaudio_asan,
+    enable_torchvision_asan,
+)
 
 
 class AsanFlagSpacingTest(unittest.TestCase):
@@ -171,6 +175,54 @@ def get_ext_modules():
         self.assertIn("extra_link_args=extra_link_args", patched)
         self.assertEqual(patched.count("extra_link_args=extra_link_args"), 1)
         self.assertIn('os.environ.pop("LD_PRELOAD", None)', setup_patched)
+
+    def test_asan_allows_an_explicit_vision_build(self):
+        parser = argparse.ArgumentParser()
+        args = self._args(asan=True, build_pytorch_vision=True)
+
+        validate_build_args(parser, args)
+
+        self.assertTrue(args.build_pytorch_vision)
+        self.assertFalse(args.build_triton)
+        self.assertFalse(args.build_pytorch_audio)
+        self.assertFalse(args.build_apex)
+
+    def test_asan_patches_torchvision_extensions_once(self):
+        import tempfile
+
+        setup = """\
+import os
+import torch
+BUILD_CUDA_SOURCES = (torch.cuda.is_available() and ((CUDA_HOME is not None) or IS_ROCM)) or FORCE_CUDA
+
+def get_macros_and_flags():
+    extra_compile_args = {"cxx": []}
+    return define_macros, extra_compile_args
+
+def make_extension():
+    return Extension(
+        extra_compile_args=extra_compile_args,
+    )
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            setup_path = root / "setup.py"
+            setup_path.write_text(setup)
+
+            enable_torchvision_asan(root)
+            patched = setup_path.read_text()
+            enable_torchvision_asan(root)
+            self.assertEqual(patched, setup_path.read_text())
+
+        self.assertIn("-shared-libasan", patched)
+        self.assertIn("extra_link_args=_asan_link_args()", patched)
+        self.assertEqual(patched.count("return define_macros, extra_compile_args"), 1)
+        self.assertIn('os.environ.pop("LD_PRELOAD", None)', patched)
+        self.assertIn("BUILD_CUDA_SOURCES = FORCE_CUDA or", patched)
+        self.assertNotIn(
+            "is_available() and ((CUDA_HOME is not None) or IS_ROCM)) or FORCE_CUDA",
+            patched,
+        )
 
     def test_asan_rejects_an_explicit_non_audio_companion(self):
         parser = argparse.ArgumentParser()

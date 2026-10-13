@@ -20,16 +20,15 @@ _ASAN_COMPANION_BUILDS = (
 )
 # Torchaudio is the first companion brought up on the shared ASAN compiler
 # environment. The others stay off until their own builds are ready.
-_ASAN_ALLOWED_COMPANIONS = frozenset({"build_pytorch_audio"})
+_ASAN_ALLOWED_COMPANIONS = frozenset({"build_pytorch_audio", "build_pytorch_vision"})
 
 
 def apply_asan_companion_policy(parser, args) -> None:
-    """Build torch, and torchaudio when ``--build-pytorch-audio`` is set.
+    """Build torch, plus torchaudio and torchvision when requested.
 
-    An explicit ``--build-triton``, ``--build-pytorch-vision``, or
-    ``--build-apex`` is rejected. An unset flag is forced off before the
-    checkout-directory default can turn it on. ``--no-build-*`` is left as
-    false, including ``--no-build-pytorch-audio``.
+    An explicit ``--build-triton`` or ``--build-apex`` is rejected. An unset
+    flag is forced off before the checkout-directory default can turn it on.
+    ``--no-build-*`` is left as false.
     """
     if not args.asan:
         return
@@ -122,6 +121,91 @@ def enable_torchaudio_asan(pytorch_audio_dir: Path) -> None:
             setup_text.replace(_AUDIO_SETUP_IMPORT, _AUDIO_SETUP_DROP_PRELOAD, 1)
         )
         print(f"  Patched {setup_path} to drop LD_PRELOAD after importing torch")
+
+
+_VISION_CUDA_PROBE = (
+    "BUILD_CUDA_SOURCES = (torch.cuda.is_available() and "
+    "((CUDA_HOME is not None) or IS_ROCM)) or FORCE_CUDA"
+)
+_VISION_CUDA_PROBE_SKIP = (
+    "BUILD_CUDA_SOURCES = FORCE_CUDA or (torch.cuda.is_available() and "
+    "((CUDA_HOME is not None) or IS_ROCM))"
+)
+_VISION_MACROS_RETURN = "    return define_macros, extra_compile_args\n"
+_VISION_COMPILE_ARGS = "        extra_compile_args=extra_compile_args,\n"
+_VISION_ASAN_FLAGS = """\
+    if os.environ.get("USE_ASAN") == "1":
+        _asan_flags = [
+            "-fsanitize=address",
+            "-fno-omit-frame-pointer",
+            "-shared-libasan",
+        ]
+        extra_compile_args["cxx"].extend(_asan_flags)
+        extra_compile_args.setdefault("nvcc", []).extend(_asan_flags)
+
+"""
+
+
+def enable_torchvision_asan(pytorch_vision_dir: Path) -> None:
+    """Instrument torchvision's extensions with the shared ASan runtime.
+
+    ``torch.utils.cpp_extension`` honors ``CXX`` but does not forward
+    ``CFLAGS``, ``CXXFLAGS``, or ``LDFLAGS`` into its ninja build.
+    ``setup.py`` imports torch, so the build process is started with
+    ``LD_PRELOAD`` and then removes it before the compiler runs.
+    """
+    setup_path = pytorch_vision_dir / "setup.py"
+    if not setup_path.is_file():
+        raise RuntimeError(f"--asan torchvision build did not find {setup_path}")
+    text = setup_path.read_text()
+    if "-shared-libasan" not in text:
+        if _VISION_MACROS_RETURN not in text or _VISION_COMPILE_ARGS not in text:
+            raise RuntimeError(
+                f"--asan torchvision build does not recognize {setup_path}"
+            )
+        text = text.replace(
+            _VISION_MACROS_RETURN,
+            _VISION_ASAN_FLAGS + _VISION_MACROS_RETURN,
+            1,
+        )
+        text = text.replace(
+            _VISION_COMPILE_ARGS,
+            _VISION_COMPILE_ARGS + "        extra_link_args=_asan_link_args(),\n",
+        )
+        helper = """
+def _asan_link_args():
+    if os.environ.get("USE_ASAN") == "1":
+        return ["-fsanitize=address", "-fno-omit-frame-pointer", "-shared-libasan"]
+    return []
+
+
+"""
+        text = text.replace(
+            "def get_macros_and_flags():\n", helper + "def get_macros_and_flags():\n", 1
+        )
+        setup_path.write_text(text)
+        print(f"  Patched {setup_path} to build torchvision with ASAN")
+
+    setup_text = setup_path.read_text()
+    if 'os.environ.pop("LD_PRELOAD"' not in setup_text:
+        if _AUDIO_SETUP_IMPORT not in setup_text:
+            raise RuntimeError(
+                f"--asan torchvision build does not recognize {setup_path}"
+            )
+        setup_path.write_text(
+            setup_text.replace(_AUDIO_SETUP_IMPORT, _AUDIO_SETUP_DROP_PRELOAD, 1)
+        )
+        print(f"  Patched {setup_path} to drop LD_PRELOAD after importing torch")
+
+    # setup.py calls torch.cuda.is_available() while deciding whether to build
+    # HIP sources. FORCE_CUDA is already set, so skip that probe: on a GPU it
+    # initializes HIP and aborts under this ASan runtime.
+    probe_text = setup_path.read_text()
+    if _VISION_CUDA_PROBE in probe_text:
+        setup_path.write_text(
+            probe_text.replace(_VISION_CUDA_PROBE, _VISION_CUDA_PROBE_SKIP, 1)
+        )
+        print(f"  Patched {setup_path} to skip the CUDA availability probe")
 
 
 def import_sanity_env(env: dict[str, str]) -> dict[str, str]:
