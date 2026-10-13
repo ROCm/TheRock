@@ -1,8 +1,10 @@
 Subject: [PATCH] Update ELFIO note parsing
 
 Backport the upstream note accessor updates to ELFIO 3.12. Share record
-decoding between scanning and lookup, preserve nameless notes, and keep
-output parameters unchanged when a record cannot be read.
+decoding between scanning and lookup, preserve nameless notes and notes
+whose owner name lacks a terminator, keep output parameters unchanged when
+a record cannot be read, and keep notes added with add_note() aligned and
+consistently indexed.
 
 Upstream: https://github.com/serge1/ELFIO/pull/173
 JIRA: SWSPLAT-24318
@@ -10,17 +12,17 @@ JIRA: SWSPLAT-24318
 Remove this backport when updating to a release that includes these changes.
 
 diff --git a/elfio/elfio_note.hpp b/elfio/elfio_note.hpp
-index 63ef102..bd5189d 100644
+index 63ef102..6c1adc4 100644
 --- a/elfio/elfio_note.hpp
 +++ b/elfio/elfio_note.hpp
 @@ -23,6 +23,8 @@ THE SOFTWARE.
  #ifndef ELFIO_NOTE_HPP
  #define ELFIO_NOTE_HPP
-
+ 
 +#include <cstring>
 +
  namespace ELFIO {
-
+ 
  //------------------------------------------------------------------------------
 @@ -62,34 +64,23 @@ class note_section_accessor_template
                     char*&       desc,
@@ -30,7 +32,7 @@ index 63ef102..bd5189d 100644
 +        if ( index >= note_start_positions.size() ) {
              return false;
          }
-
+ 
 -        const char* pData = notes->get_data() + note_start_positions[index];
 -        int         align = sizeof( Elf_Word );
 -
@@ -60,17 +62,53 @@ index 63ef102..bd5189d 100644
 -                                      ( ( namesz + align - 1 ) / align ) *
 -                                          (size_t)align );
 -        }
-
+ 
 +        name.assign( record.name, record.name_size );
 +        type     = record.type;
 +        descSize = record.descriptor_size;
 +        desc     = const_cast<char*>( record.descriptor );
          return true;
      }
-
-@@ -128,38 +119,75 @@ class note_section_accessor_template
+ 
+@@ -101,6 +92,11 @@ class note_section_accessor_template
+     {
+         const endianess_convertor& convertor = elf_file.get_convertor();
+ 
++        // A record without descriptor data must not claim a descriptor
++        if ( desc == nullptr ) {
++            descSize = 0;
++        }
++
+         int         align       = sizeof( Elf_Word );
+         Elf_Word    nameLen     = (Elf_Word)name.size() + 1;
+         Elf_Word    nameLenConv = convertor( nameLen );
+@@ -123,44 +119,99 @@ class note_section_accessor_template
+             }
+         }
+ 
+-        note_start_positions.emplace_back( ( notes->*F_get_size )() );
+-        notes->append_data( buffer );
++        // Records start on a 4-byte boundary, even when the existing data
++        // does not end on one
++        constexpr Elf_Xword word_size    = sizeof( Elf_Word );
++        const Elf_Xword     current_size = ( notes->*F_get_size )();
++        const Elf_Xword     padding =
++            ( word_size - current_size % word_size ) % word_size;
++        notes->append_data(
++            std::string( static_cast<size_t>( padding ), '\0' ) + buffer );
++        if ( current_size == scanned_size ) {
++            // The existing data decoded completely, so the new record simply
++            // follows it
++            note_start_positions.emplace_back( current_size );
++            scanned_size = current_size + buffer.size();
++        }
++        else {
++            // The appended bytes may complete a record the scan stopped at, so
++            // rescan to keep indices consistent with a fresh accessor
++            process_section();
++        }
      }
-
+ 
    private:
 -    //------------------------------------------------------------------------------
 -    void process_section()
@@ -94,7 +132,7 @@ index 63ef102..bd5189d 100644
 +        return ( static_cast<Elf_Xword>( size ) + alignment - 1 ) / alignment *
 +               alignment;
 +    }
-
+ 
 -        note_start_positions.clear();
 +    // Decode one complete record. Scanning and lookup share these checks.
 +    bool read_note( const char*  data,
@@ -107,7 +145,7 @@ index 63ef102..bd5189d 100644
 +             header_size > data_size - position ) {
 +            return false;
 +        }
-
+ 
 -        // Is it empty?
 -        if ( nullptr == data || 0 == size ) {
 -            return;
@@ -123,7 +161,7 @@ index 63ef102..bd5189d 100644
 +             padded_desc > remaining - padded_name ) {
 +            return false;
          }
-
+ 
 -        Elf_Word align = sizeof( Elf_Word );
 -        while ( current + (Elf_Xword)3 * align <= size ) {
 -            Elf_Word namesz = convertor( *(const Elf_Word*)( data + current ) );
@@ -140,23 +178,23 @@ index 63ef102..bd5189d 100644
 -                break;
 -            }
 +        const char* name = data + position + header_size;
-+        if ( namesz != 0 && name[namesz - 1] != '\0' ) {
-+            return false;
-+        }
++        // Some producers omit the owner's terminator; keep the full name then
++        const bool terminated  = namesz != 0 && name[namesz - 1] == '\0';
 +        record.type            = convertor( header[2] );
 +        record.name            = name;
-+        record.name_size       = namesz == 0 ? 0 : namesz - 1;
++        record.name_size       = terminated ? namesz - 1 : namesz;
 +        record.descriptor      = descsz == 0 ? nullptr : name + padded_name;
 +        record.descriptor_size = descsz;
 +        record.total_size      = header_size + padded_name + padded_desc;
 +        return true;
 +    }
-
+ 
 -            current += advance;
 +    //------------------------------------------------------------------------------
 +    void process_section()
 +    {
 +        note_start_positions.clear();
++        scanned_size = 0;
 +        if ( notes == nullptr ) {
 +            return;
 +        }
@@ -168,6 +206,15 @@ index 63ef102..bd5189d 100644
 +            note_start_positions.emplace_back( current );
 +            current += record.total_size;
          }
++        scanned_size = current;
      }
-
---
+ 
+     //------------------------------------------------------------------------------
+@@ -168,6 +219,7 @@ class note_section_accessor_template
+     const elfio&           elf_file;
+     S*                     notes;
+     std::vector<Elf_Xword> note_start_positions;
++    Elf_Xword scanned_size = 0; // End of the records decoded by the last scan
+ };
+ 
+ using note_section_accessor =
