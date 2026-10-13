@@ -190,6 +190,8 @@ pytorch-dev builds record the source commit in the local
 version (`2.12.0+git1a2b3c4d.rocm10.0.0rc4`). `--src-version-type=pytorch-dev` strips
 that `git<sha>.` prefix and any rc, so the wheel goes straight to the final
 version. Wheels without the prefix (for example apex) still have their rc stripped.
+Triton keeps its `git<sha>` (its own build adds it to rc and nightly builds too)
+and only has its rc stripped, so torch's pin on it still resolves.
 
 ```bash
 # 2.12.0+git1a2b3c4d.rocm10.0.0rc4 -> 2.12.0+rocm10.0.0

@@ -1115,6 +1115,13 @@ def promote_wheel(
 
     print(f"  Detected version: {original_version}")
 
+    # Triton's setup.py stamps git<sha> on rc and nightly builds too, so it is part of the release version.
+    if (
+        src_version_type == "pytorch-dev"
+        and canonicalize_name(original_wheel.name) == "triton"
+    ):
+        src_version_type = "rc"
+
     # Bound callback matching change_wheel_version's expected signature:
     #   callback(new_dir_path: Path, old_version: Version, new_version: Version) -> None
     callback = functools.partial(
