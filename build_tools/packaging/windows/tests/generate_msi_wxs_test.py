@@ -545,7 +545,7 @@ class TestBuildWxs(unittest.TestCase):
 
     def test_legacy_cleanup_feature_is_mutually_exclusive_with_install(self):
         # LegacyCleanup is on by default (Level 1) and dropped to Level 0 when
-        # LEGACY_INSTALL=1, the mirror of LegacyInstall — so a single install
+        # LEGACY_SYSTEM32_INSTALL=1, the mirror of LegacyInstall — so a single install
         # never both places and removes the same DLL.
         with tempfile.TemporaryDirectory() as tmp:
             root = self._run(tmp, self._minimal_specs("runtime"))
@@ -555,7 +555,7 @@ class TestBuildWxs(unittest.TestCase):
             self.assertEqual(cleanup.get("Level"), "1")
             override = cleanup.find(_ns("Level"))
             self.assertEqual(override.get("Value"), "0")
-            self.assertEqual(override.get("Condition"), 'LEGACY_INSTALL = "1"')
+            self.assertEqual(override.get("Condition"), 'LEGACY_SYSTEM32_INSTALL = "1"')
 
     def test_single_system64_directory_shared(self):
         # Both the install and cleanup features target System64Folder; WiX
@@ -896,7 +896,7 @@ class TestBuildWxsHelpers(unittest.TestCase):
         self.assertIsInstance(doc, WixDocument)
         prop_ids = {el.get("Id") for el in doc.package.findall(_ns("Property"))}
         self.assertEqual(
-            prop_ids, {"ENABLE_LONG_PATHS", "INSTALLFOLDER", "LEGACY_INSTALL"}
+            prop_ids, {"ENABLE_LONG_PATHS", "INSTALLFOLDER", "LEGACY_SYSTEM32_INSTALL"}
         )
 
     def test_add_install_directory_tree_standard_vs_custom(self):
@@ -929,14 +929,14 @@ class TestBuildWxsHelpers(unittest.TestCase):
 
     def test_legacy_system32_feature_is_opt_in(self):
         # The System32 copies are opt-in: the feature defaults to Level 0 (not
-        # installed) and is raised to Level 1 only when LEGACY_INSTALL=1. The
-        # LEGACY_INSTALL property defaults to "0". Guards against regressing to
+        # installed) and is raised to Level 1 only when LEGACY_SYSTEM32_INSTALL=1. The
+        # LEGACY_SYSTEM32_INSTALL property defaults to "0". Guards against regressing to
         # the old install-by-default behavior.
         doc = create_wix_document(PACKAGES["runtime"], "1.2.3")
         prop = next(
             p
             for p in doc.package.iter(_ns("Property"))
-            if p.get("Id") == "LEGACY_INSTALL"
+            if p.get("Id") == "LEGACY_SYSTEM32_INSTALL"
         )
         self.assertEqual(prop.get("Value"), "0")
 
@@ -949,7 +949,9 @@ class TestBuildWxsHelpers(unittest.TestCase):
         self.assertEqual(feature.get("Level"), "0")
         level_override = feature.find(_ns("Level"))
         self.assertEqual(level_override.get("Value"), "1")
-        self.assertEqual(level_override.get("Condition"), 'LEGACY_INSTALL = "1"')
+        self.assertEqual(
+            level_override.get("Condition"), 'LEGACY_SYSTEM32_INSTALL = "1"'
+        )
 
 
 if __name__ == "__main__":

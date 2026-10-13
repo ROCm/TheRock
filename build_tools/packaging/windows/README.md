@@ -41,7 +41,7 @@ msiexec /i amdrocm-runtime.msi /qn ENABLE_LONG_PATHS=0
 **Silent install with legacy System32 DLLs enabled:**
 
 ```bat
-msiexec /i amdrocm-runtime.msi /qn LEGACY_INSTALL=1
+msiexec /i amdrocm-runtime.msi /qn LEGACY_SYSTEM32_INSTALL=1
 ```
 
 ## What Gets Installed
@@ -80,21 +80,21 @@ By default the installer places the ROCm DLLs only under the install dir's
 `bin\` (reachable via the machine `PATH`), and **removes** the package's legacy
 DLL names from `C:\Windows\System32\` — on both install and uninstall — so a
 stale copy left by an AMD driver, an older ROCm installer, or a prior
-`LEGACY_INSTALL=1` install cannot shadow the runtime shipped under `bin\`. For
+`LEGACY_SYSTEM32_INSTALL=1` install cannot shadow the runtime shipped under `bin\`. For
 the `runtime` package these five names are cleaned up: `amdhip64_6.dll`,
 `amdhip64_7.dll`, `amd_comgr.dll`, `amd_comgr_2.dll`, and `rocm_kpack.dll`.
 
 To instead install those DLLs **into** `System32` (for applications that load
-ROCm DLLs from `System32` rather than from `PATH`), pass `LEGACY_INSTALL=1`:
+ROCm DLLs from `System32` rather than from `PATH`), pass `LEGACY_SYSTEM32_INSTALL=1`:
 
 ```bat
-msiexec /i amdrocm-runtime.msi /qn LEGACY_INSTALL=1
+msiexec /i amdrocm-runtime.msi /qn LEGACY_SYSTEM32_INSTALL=1
 ```
 
 This copies the same five DLLs into `System32` and skips the cleanup. The two
 behaviors are mutually exclusive — a given install either scrubs the System32
-names (default) or populates them (`LEGACY_INSTALL=1`), never both. The System32
-copies written by `LEGACY_INSTALL=1` are shared, reference-counted components and
+names (default) or populates them (`LEGACY_SYSTEM32_INSTALL=1`), never both. The System32
+copies written by `LEGACY_SYSTEM32_INSTALL=1` are shared, reference-counted components and
 are **not** removed when that install is later uninstalled.
 
 ## Upgrade
@@ -181,7 +181,7 @@ msiexec /fvomus amdrocm-runtime.msi /qn
 ```
 
 A System32 copy only persists intentionally when it was placed by
-`LEGACY_INSTALL=1` (those are left in place on uninstall). To confirm what is
+`LEGACY_SYSTEM32_INSTALL=1` (those are left in place on uninstall). To confirm what is
 present:
 
 ```bat

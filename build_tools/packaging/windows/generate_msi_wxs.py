@@ -763,11 +763,13 @@ def create_wix_document(package: PackageDef, version: str) -> WixDocument:
         pkg, _tag("Property"), Id="ENABLE_LONG_PATHS", Value="1", Secure="yes"
     )
     ET.SubElement(pkg, _tag("Property"), Id="INSTALLFOLDER", Secure="yes")
-    # Legacy System32 install is off by default; set LEGACY_INSTALL=1 to enable.
+    # Legacy System32 install is off by default; set LEGACY_SYSTEM32_INSTALL=1 to enable.
     # The current runtime DLLs are already installed under the install dir's bin/
     # and reachable via PATH, so copying them into System32 is opt-in for apps
     # that load ROCm DLLs from System32 rather than PATH.
-    ET.SubElement(pkg, _tag("Property"), Id="LEGACY_INSTALL", Value="0", Secure="yes")
+    ET.SubElement(
+        pkg, _tag("Property"), Id="LEGACY_SYSTEM32_INSTALL", Value="0", Secure="yes"
+    )
     # When INSTALLFOLDER is set on the command line, redirect InstallDir to it.
     # Runs in both UI and execute sequences so repair/modify picks it up too.
     ET.SubElement(
@@ -1000,18 +1002,18 @@ def add_legacy_system32_feature(
 ) -> None:
     """Add the opt-in legacy System32 DLL feature plus its cleanup counterpart.
 
-    The two features are mutually exclusive, keyed off LEGACY_INSTALL (default
+    The two features are mutually exclusive, keyed off LEGACY_SYSTEM32_INSTALL (default
     "0"):
-      - LegacyInstall (Level 0 by default; raised to 1 when LEGACY_INSTALL=1)
+      - LegacyInstall (Level 0 by default; raised to 1 when LEGACY_SYSTEM32_INSTALL=1)
         copies the DLLs into System32.
-      - LegacyCleanup (Level 1 by default; dropped to 0 when LEGACY_INSTALL=1)
+      - LegacyCleanup (Level 1 by default; dropped to 0 when LEGACY_SYSTEM32_INSTALL=1)
         removes those same DLL names from System32 on both install and
         uninstall, so a default (non-legacy) install scrubs stale copies left by
-        an AMD driver, an older ROCm installer, or a prior LEGACY_INSTALL=1
+        an AMD driver, an older ROCm installer, or a prior LEGACY_SYSTEM32_INSTALL=1
         install that would otherwise shadow the runtime shipped under bin/.
 
     No file is both installed and removed by a single install because exactly one
-    of the two features is active for any given LEGACY_INSTALL value.
+    of the two features is active for any given LEGACY_SYSTEM32_INSTALL value.
 
     No-op when the package declares no legacy DLLs.
     """
@@ -1026,10 +1028,12 @@ def add_legacy_system32_feature(
         Title="Legacy System32 DLLs",
         Level="0",
     )
-    # Turn the feature on when LEGACY_INSTALL=1. Default feature Level is 0
+    # Turn the feature on when LEGACY_SYSTEM32_INSTALL=1. Default feature Level is 0
     # (not installed) and the default property value is "0", so System32 copies
     # are opt-in and installed only when explicitly requested.
-    ET.SubElement(feature, _tag("Level"), Value="1", Condition='LEGACY_INSTALL = "1"')
+    ET.SubElement(
+        feature, _tag("Level"), Value="1", Condition='LEGACY_SYSTEM32_INSTALL = "1"'
+    )
     for dll_name, source in legacy_dlls:
         install_rel = Path("System32") / dll_name
         comp_id = make_id(install_rel, "c")
@@ -1063,7 +1067,7 @@ def add_legacy_system32_cleanup_feature(
     uninstall) rather than a shell CustomAction. The removals live in one
     component whose keypath is an HKLM registry marker (System32 is not under the
     install tree, so a file keypath there would be wrong); the component is
-    gated by the LegacyCleanup feature, which is off when LEGACY_INSTALL=1.
+    gated by the LegacyCleanup feature, which is off when LEGACY_SYSTEM32_INSTALL=1.
     """
     feature = ET.SubElement(
         doc.package,
@@ -1075,7 +1079,9 @@ def add_legacy_system32_cleanup_feature(
     # Mirror image of LegacyInstall: drop this feature to Level 0 when the user
     # opted into the System32 install, so the same install never both places and
     # removes a DLL.
-    ET.SubElement(feature, _tag("Level"), Value="0", Condition='LEGACY_INSTALL = "1"')
+    ET.SubElement(
+        feature, _tag("Level"), Value="0", Condition='LEGACY_SYSTEM32_INSTALL = "1"'
+    )
 
     component = ET.SubElement(
         system_dir,
