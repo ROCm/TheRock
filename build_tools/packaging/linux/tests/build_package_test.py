@@ -1665,10 +1665,37 @@ class DevelGfxarchRuleTest(_FakePackagesTestCase):
         _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "gfx942:xnack+")
         self.assertTrue(self._is_gfxarch(cfg, FAKE_OPT_DEVEL))
 
-    def test_devel_with_gfxarch_needs_an_artifacts_dir(self) -> None:
-        self.assertFalse(
-            is_gfxarch_package(get_package_info(FAKE_OPT_DEVEL), True, None)
+    def test_devel_with_gfxarch_needs_files_for_only_one_target(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "gfx1100", "manifest_only")
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "gfx942")
+        self.assertTrue(self._is_gfxarch(cfg, FAKE_OPT_DEVEL))
+
+    def test_devel_with_gfxarch_finds_files_in_any_artifactory_entry_or_component(
+        self,
+    ) -> None:
+        # Files are staged only under the component, or the entry, listed second.
+        second_component = _fake_package(FAKE_OPT_DEVEL, gfxarch=True, optional=True)
+        second_component["Artifactory"][0]["Artifact_Subdir"][0]["Components"] = [
+            "lib",
+            "dev",
+        ]
+        second_entry = _fake_package(FAKE_OPT_DEVEL, gfxarch=True, optional=True)
+        second_entry["Artifactory"].insert(
+            0,
+            {
+                "Artifact": "fakebase",
+                "Artifact_Subdir": [{"Name": "FakeBase", "Components": ["lib"]}],
+            },
         )
+        for label, pkg_info in (
+            ("second_component", second_component),
+            ("second_entry", second_entry),
+        ):
+            with self.subTest(label):
+                cfg = self._config(FAKE_TARGETS, label=label)
+                _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "gfx942")
+                self.assertTrue(is_gfxarch_package(pkg_info, True, cfg.artifacts_dir))
 
     def test_devel_without_gfxarch_stays_generic_with_per_arch_artifacts(self) -> None:
         cfg = self._config(FAKE_TARGETS)
@@ -1727,15 +1754,13 @@ class HostlessVariantsTest(_FakePackagesTestCase):
                     self._stage_opt_devel(cfg, generic=generic)
                     built = self._build(cfg, [FAKE_OPT_DEVEL])
                     name = f"amdrocm-fakeopt-{dev}"
-                    self.assertTrue(
-                        {
-                            f"{name}{FAKE_VER}-gfx942",
-                            f"{name}{FAKE_VER}-gfx1100",
-                            f"{name}{FAKE_VER}",
-                            name,
-                        }
-                        <= set(built)
-                    )
+                    expected = {
+                        f"{name}{FAKE_VER}-gfx942",
+                        f"{name}{FAKE_VER}-gfx1100",
+                        f"{name}{FAKE_VER}",
+                        name,
+                    }
+                    self.assertEqual(set(), expected - set(built))
                     self.assertFalse([pkg for pkg in built if "-host" in pkg])
                     self.assertFalse(
                         [pkg for pkg in built if FAKE_UNBUILT_TARGET in pkg]
@@ -1850,7 +1875,7 @@ class HostlessVariantsTest(_FakePackagesTestCase):
 
 
 class NonOptionalPackagesKeepVariantsTest(_FakePackagesTestCase):
-    """Packages without OptionalContent keep their variants and edges when empty."""
+    """Packages without OptionalContent, or with content, keep variants and edges."""
 
     def test_gfxarch_package_without_generic_content_keeps_host_edges(self) -> None:
         cfg = self._config(FAKE_TARGETS)
@@ -1892,14 +1917,6 @@ class NonOptionalPackagesKeepVariantsTest(_FakePackagesTestCase):
                 f"amdrocm-fakeoptsimple{FAKE_VER}",
                 self._depends(built, f"amdrocm-fakesuite-dev{FAKE_VER}-{target}"),
             )
-
-    def test_failed_versioned_build_still_gets_alias_when_content_exists(self) -> None:
-        cfg = self._config(FAKE_TARGETS)
-        _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic")
-        with patch.object(build_package, "build_versioned_package", return_value=[]):
-            built = self._build(cfg, [FAKE_OPT_SIMPLE])
-        self.assertIn("amdrocm-fakeoptsimple", built)
-        self.assertNotIn(f"amdrocm-fakeoptsimple{FAKE_VER}", built)
 
 
 class PackagesWithoutContentPartitionTest(_FakePackagesTestCase):

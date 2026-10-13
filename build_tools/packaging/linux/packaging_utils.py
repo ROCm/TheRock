@@ -1248,8 +1248,8 @@ def _artifact_dir_name_index(artifacts_dir: str) -> dict[str, list[str]]:
     name with any ":xnack..." suffix stripped.
 
     has_artifact_for_arch() calls this once per (package, arch, component)
-    combination across a full packaging run; caching the listing
-    avoids re-scanning a potentially large artifacts_dir on every call.
+    combination across a full packaging run; caching the listing avoids
+    re-scanning a potentially large artifacts_dir on every call.
     """
     index: dict[str, list[str]] = {}
     try:
