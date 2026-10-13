@@ -195,19 +195,25 @@ def _append_build_rocm(
             "-- | -- | -- | --",
         ]
     )
-    linux_output_root = None
-    for platform_name in ["linux", "windows"]:
+    for platform_name, config in [
+        ("linux", outputs.builds.linux),
+        ("windows", outputs.builds.windows),
+    ]:
+        if config is None:
+            continue
         output_root = WorkflowOutputRoot.from_workflow_run(
             run_id=ci_inputs.run_id, platform=platform_name
         )
-        if platform_name == "linux":
-            linux_output_root = output_root
         log_url = output_root.log_root_index().https_url
         artifact_url = output_root.artifact_index().https_url
         manifest_url = output_root.manifests_index().https_url
         lines.append(
             f"{platform_name.capitalize()} | {log_url} | {artifact_url} | {manifest_url}"
         )
+    # The workflow-level manifest diff uses Linux storage even without a Linux build.
+    linux_output_root = WorkflowOutputRoot.from_workflow_run(
+        run_id=ci_inputs.run_id, platform="linux"
+    )
     manifest_diff_url = linux_output_root.log_file(
         "manifest-diff", "index.html"
     ).https_url
