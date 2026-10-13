@@ -169,6 +169,12 @@ _CI_TEST_SELECTOR_ALIASES = {
     # tensilelite key lands in the result, not only when tensilelite itself
     # is the changed project.
     "tensilelite": ["tensilelite", "tensilelite-common"],
+    # Test jobs with no graph key of their own ride on the component they
+    # exercise; without an entry here they only run on full ("*") selections.
+    "hipdnn": ["hipdnn", "hipdnn_install", "hipdnn-cudnn-samples"],
+    "hipthreads": ["hipthreads", "hipthreads_examples"],
+    "libhipcxx": ["libhipcxx_amdclang", "libhipcxx_hiprtc"],
+    "miopen": ["miopen", "miopen-dbsync"],
 }
 
 
