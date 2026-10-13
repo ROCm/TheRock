@@ -68,5 +68,25 @@ class DuplicatedExpansionConsistency(unittest.TestCase):
             )
 
 
+class SelectionReachability(unittest.TestCase):
+    # fetch_test_configurations schedules sanity regardless of selection.
+    _ALWAYS_SCHEDULED = {"sanity"}
+
+    def test_every_test_matrix_job_is_selectable(self):
+        # A job no component's selection reaches only runs on full ("*") runs,
+        # so any scoped run (a PR, or a repo-scoped nightly) silently skips it.
+        graph = drtd._load_consumer_graph()
+        selectable = drtd._to_ci_test_selectors(
+            drtd.get_subprojects_to_test(sorted(graph))
+        )
+        unreachable = sorted(set(ftc.test_matrix) - selectable - self._ALWAYS_SCHEDULED)
+        self.assertEqual(
+            unreachable,
+            [],
+            "test_matrix job(s) no component selection can reach; add a "
+            f"_CI_TEST_SELECTOR_ALIASES or test_include entry: {unreachable}",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
