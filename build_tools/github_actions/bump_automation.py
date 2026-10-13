@@ -20,7 +20,32 @@ THEROCK_MAIN_BRANCH = "main"
 BOT_NAME = "therockbot"
 BOT_EMAIL = "therockbot@amd.com"
 
-COMMON_CI_LABELS = ["ci:run-all-archs"]
+COMMON_CI_BUILD_LABELS = [
+    "ci:build:gfx900",
+    "ci:build:gfx906",
+    "ci:build:gfx908",
+    "ci:build:gfx90a",
+    "ci:build:gfx90c",
+    "ci:build:gfx94X",
+    "ci:build:gfx950",
+    "ci:build:gfx101X",
+    "ci:build:gfx103X",
+    "ci:build:gfx110X",
+    "ci:build:gfx1150",
+    "ci:build:gfx1151",
+    "ci:build:gfx1152",
+    "ci:build:gfx1153",
+    "ci:build:gfx120X",
+    "ci:build:gfx125X",
+]
+
+COMMON_CI_TEST_LABELS = [
+    "ci:test:gfx950-dcgpu",
+    "ci:test:gfx94X-dcgpu",
+    "ci:test:gfx110X-all",
+]
+
+COMMON_CI_LABELS = [*COMMON_CI_BUILD_LABELS, *COMMON_CI_TEST_LABELS]
 
 ROCM_LIBRARIES_CI_ENV_FILE = ".github/actions/ci-env/action.yml"
 
