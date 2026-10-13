@@ -916,7 +916,7 @@ disable_platforms = ["windows"]
 [artifacts.rocjitsu]
 artifact_group = "rocjitsu"
 type = "target-neutral"
-artifact_deps = ["base", "sysdeps"]
+artifact_deps = []
 feature_group = "EMULATION"
 disable_platforms = ["windows"]
 source_paths = ["rocjitsu", "machine-readable-isa"]
@@ -931,6 +931,6 @@ disable_platforms = ["windows"]
 [artifacts.mirage]
 artifact_group = "rocjitsu"
 type = "target-neutral"
-artifact_deps = ["base", "sysdeps"]
+artifact_deps = []
 feature_group = "EMULATION"
 disable_platforms = ["windows"]
