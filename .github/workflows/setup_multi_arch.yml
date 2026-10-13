@@ -116,6 +116,9 @@ on:
           (e.g., 'projects/rocprim'). These project directory names are mapped
           to artifact names via BUILD_TOPOLOGY.toml source_paths for granular
           artifact-level reuse (e.g., 'rocprim' -> 'prim' artifact).
+          Optional: when empty and external_repo declares 'projects_config',
+          this is computed from the calling repo's diff and re-exported as the
+          'changed_projects' output.
         type: string
         default: ""
       quartz_tracking_id:
@@ -162,6 +165,11 @@ on:
       external_repo_config:
         description: "JSON config for external repo checkout (generated from external_repo_name)"
         value: ${{ jobs.setup.outputs.external_repo_config }}
+      changed_projects:
+        description: >-
+          Comma-separated project paths to scope tests to, computed from the
+          calling external repo's diff. Empty means run the full test suite.
+        value: ${{ jobs.setup.outputs.changed_projects }}
 
 permissions:
   contents: read
@@ -177,6 +185,7 @@ jobs:
       test_type: ${{ steps.configure.outputs.test_type }}
       linux_test_labels: ${{ steps.configure.outputs.linux_test_labels }}
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
+      changed_projects: ${{ steps.configure.outputs.changed_projects }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
       rocm_deb_package_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}

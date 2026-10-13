@@ -15,7 +15,10 @@ from pathlib import Path
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 
 from _therock_utils.build_topology import BuildTopology
-from github_actions.stage_impact import analyze_stage_impact
+from github_actions.stage_impact import (
+    analyze_stage_impact,
+    resolve_stages_for_projects,
+)
 
 
 class StageImpactTest(unittest.TestCase):
@@ -671,6 +674,85 @@ class ArtifactLevelAnalysisTest(unittest.TestCase):
         self.assertFalse(result.full_rebuild_required)
         # No artifact-level analysis for non-rocm-libraries
         self.assertFalse(result.artifact_level_analysis)
+
+
+class ResolveStagesForProjectsTest(unittest.TestCase):
+    """Map external-repo project paths onto the stages that build them."""
+
+    def setUp(self):
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".toml", delete=False
+        ) as temp_file:
+            temp_file.write(
+                textwrap.dedent(
+                    """
+                    [source_sets.rocm-libraries]
+                    description = "ROCm libraries"
+                    submodules = ["rocm-libraries"]
+
+                    [artifact_groups.math-libs]
+                    description = "Math libs"
+                    type = "per-arch"
+                    source_sets = ["rocm-libraries"]
+
+                    [artifact_groups.cv-libs]
+                    description = "CV libs"
+                    type = "per-arch"
+                    source_sets = ["rocm-libraries"]
+
+                    [build_stages.math-libs]
+                    description = "Math libs stage"
+                    artifact_groups = ["math-libs"]
+                    type = "per-arch"
+
+                    [build_stages.cv-libs]
+                    description = "CV libs stage"
+                    artifact_groups = ["cv-libs"]
+                    type = "per-arch"
+
+                    [artifacts.blas]
+                    artifact_group = "math-libs"
+                    type = "target-specific"
+                    source_paths = ["rocblas", "hipblas"]
+
+                    [artifacts.rpp]
+                    artifact_group = "cv-libs"
+                    type = "target-specific"
+                    source_paths = ["rpp"]
+                    """
+                )
+            )
+            self.topology_path = temp_file.name
+        self.topology = BuildTopology(self.topology_path)
+
+    def tearDown(self):
+        if os.path.exists(self.topology_path):
+            os.unlink(self.topology_path)
+
+    def test_project_resolves_to_its_stage(self):
+        self.assertEqual(
+            resolve_stages_for_projects(["projects/rpp"], self.topology), ["cv-libs"]
+        )
+
+    def test_projects_across_stages_resolve_to_both(self):
+        self.assertEqual(
+            resolve_stages_for_projects(
+                ["projects/rpp", "projects/rocblas"], self.topology
+            ),
+            ["cv-libs", "math-libs"],
+        )
+
+    def test_unmapped_project_resolves_to_nothing(self):
+        """Nested subtrees build as part of their parent and have no alias."""
+        self.assertEqual(
+            resolve_stages_for_projects(
+                ["projects/hipblaslt/tensilelite"], self.topology
+            ),
+            [],
+        )
+
+    def test_no_projects_resolves_to_nothing(self):
+        self.assertEqual(resolve_stages_for_projects([], self.topology), [])
 
 
 class SharedSourcePathsAnalysisTest(unittest.TestCase):

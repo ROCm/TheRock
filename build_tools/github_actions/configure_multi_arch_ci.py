@@ -43,15 +43,19 @@ Outputs (written to GITHUB_OUTPUT):
     windows_build_config  : JSON object with build config, or "" if skipped
     enable_build_jobs     : "true" or "false"
     test_type             : "quick", "standard", "comprehensive", or "full"
+    changed_projects      : Comma-separated project paths to scope tests to,
+                            or "" for full coverage
 """
 
 import enum
+import fnmatch
 import json
 import logging
 import os
 import sys
 from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
+from typing import Iterable
 
 # Add parent directory to path for _therock_utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -69,6 +73,7 @@ from configure_ci_path_filters import (
     get_git_modified_paths,
     get_git_submodule_paths,
     is_ci_run_required,
+    is_path_skippable,
     load_skip_ci_patterns_for_external_repo,
 )
 from configure_jax_release_matrix import generate_jax_matrix_for_release_type
@@ -79,7 +84,10 @@ from github_actions_api import (
     gha_load_github_event,
     gha_set_output,
 )
-from stage_impact import analyze_artifact_impact_from_projects
+from stage_impact import (
+    analyze_artifact_impact_from_projects,
+    resolve_stages_for_projects,
+)
 from stage_reuse_decision import (
     AutoStageReuse,
     StageReuseMode,
@@ -88,6 +96,228 @@ from stage_reuse_decision import (
 )
 
 _NULL_GIT_SHA = "0" * 40
+
+
+# ---------------------------------------------------------------------------
+# External repo changed-project analysis
+# ---------------------------------------------------------------------------
+# External repos (rocm-libraries, rocm-systems) call TheRock's reusable
+# workflows and pass an `external_repo` JSON blob describing the triggering
+# event. Mapping their changed files to project paths happens here rather than
+# in a per-repo script so the policy lives in one place and the caller workflow
+# stays declarative.
+
+# Directory where setup_multi_arch.yml sparse-checks-out the calling repo's
+# .github/ directory.
+_EXTERNAL_REPO_CONFIG_DIR = "external-repo-config"
+
+# Repositories that scope TheRock workflow changes to their configured
+# projects. Repositories absent from this map retain full-test coverage, since
+# we cannot assume their workflow files only affect their own projects.
+_WORKFLOW_TEST_SCOPE_BY_REPO = {
+    "rocm/rocm-libraries": "configured-projects",
+}
+
+# TheRock workflow files inside the calling repository.
+_CALLER_WORKFLOW_PATTERNS = [
+    ".github/workflows/therock*",
+]
+
+# Changes to project discovery or shared test logic retain global coverage,
+# because they can alter test selection for every project at once.
+_FULL_TEST_TRIGGER_PATTERNS = [
+    ".github/scripts/therock*",
+    ".github/scripts/get_changed_projects.py",
+    ".github/scripts/ci_utils.py",
+    ".github/scripts/config_loader.py",
+    ".github/scripts/repo_config_model.py",
+    ".github/scripts/pr_detect_changed_subtrees.py",
+    ".github/repos-config.json",
+    # shared/ctest holds the CTest categorization logic consumed by every
+    # project's tests; a change there can alter selection everywhere, so treat
+    # it as a full-test trigger rather than a single surfaced component.
+    "shared/ctest/*",
+]
+
+# CI-relevant monorepo directories that are NOT subtree-synced repos and so are
+# absent from an external repo's repos-config.json. Without these, a PR confined
+# to one of these paths yields no matched subtree -> empty changed_projects ->
+# TheRock falls back to building and testing everything. Each entry MUST have a
+# corresponding mapping in TheRock (build-topology alias + the test selector's
+# _EXTERNAL_SUBTREE_ALIASES), so keep this list in lock-step when adding
+# directories.
+_CI_RELEVANT_NON_SUBTREE_PREFIXES = {
+    "dnn-providers/cmake",
+    "shared/amdgpu-windows-interop",
+    "shared/kpack",
+    "shared/machine-readable-isa",
+    "shared/primbench",
+    "emulation/mirage",
+    "emulation/rocjitsu",
+}
+
+
+def _matches_patterns(paths: Iterable[str], patterns: Iterable[str]) -> bool:
+    """Check whether any path matches any glob pattern."""
+    patterns = list(patterns)
+    return any(fnmatch.fnmatch(path, pattern) for path in paths for pattern in patterns)
+
+
+def _load_external_repo_project_prefixes(projects_config_path: str) -> set[str]:
+    """Read `category/name` subtree prefixes from an external repos-config.json.
+
+    Returns an empty set when the config is missing or unreadable; callers
+    treat that as "cannot narrow scope" and run the full suite.
+    """
+    full_path = Path(_EXTERNAL_REPO_CONFIG_DIR) / projects_config_path
+    if not full_path.exists():
+        print(f"  Projects config not found: {full_path}")
+        return set()
+
+    try:
+        config = json.loads(full_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"  Warning: failed to read projects config {full_path}: {e}")
+        return set()
+
+    return {
+        f"{entry['category']}/{entry['name']}"
+        for entry in config.get("repositories", [])
+        if entry.get("category") and entry.get("name")
+    }
+
+
+def _match_subtrees(
+    changed_files: Iterable[str], valid_prefixes: set[str]
+) -> list[str]:
+    """Attribute each changed file to the longest matching subtree prefix.
+
+    A changed file's subtree is the LONGEST registered prefix (`category/name`,
+    or a nested `category/name/subname`) that matches its path -- checked from
+    most to least specific -- not a fixed 2-segment truncation. A fixed
+    2-segment truncation would make a nested subtree registered in
+    repos-config.json (e.g. `hipblaslt/tensilelite`, nested inside `hipblaslt`)
+    indistinguishable from a change to its parent: both collapse to
+    `projects/hipblaslt`, silently losing the more specific match. Matching
+    longest-prefix-first, and attributing each changed file to exactly one
+    subtree, keeps a tensilelite-only change from also firing hipblaslt-proper's
+    (potentially different) test selection.
+    """
+    prefixes_by_specificity = sorted(
+        valid_prefixes, key=lambda p: p.count("/"), reverse=True
+    )
+    matched: set[str] = set()
+    for path in changed_files:
+        segments = path.split("/")
+        for prefix in prefixes_by_specificity:
+            prefix_segments = prefix.split("/")
+            if segments[: len(prefix_segments)] == prefix_segments:
+                matched.add(prefix)
+                break
+    return sorted(matched)
+
+
+def _unclassified_paths(
+    paths: Iterable[str], valid_prefixes: set[str], skip_patterns: list[str]
+) -> list[str]:
+    """Non-skippable changed paths that map to no known subtree.
+
+    A PR can mix a recognized path (e.g. ``projects/rdc/...``) with a path we
+    cannot classify (a top-level file, or a directory absent from both
+    repos-config.json and _CI_RELEVANT_NON_SUBTREE_PREFIXES). _match_subtrees
+    silently drops the unclassified path, which would let CI narrow the build to
+    the recognized subset and miss the impact of the unclassified change.
+    Callers treat any such path conservatively and run the full suite.
+    """
+    return [
+        path
+        for path in paths
+        if not is_path_skippable(path, skip_patterns)
+        and "/".join(path.split("/", 2)[:2]) not in valid_prefixes
+    ]
+
+
+def compute_external_repo_changed_projects(
+    changed_files: list[str],
+    projects_config_path: str,
+    repo_full_name: str,
+    skip_patterns: list[str],
+) -> list[str]:
+    """Map an external repo's changed files to the projects CI should scope to.
+
+    An empty result means "cannot narrow scope" and makes every downstream
+    consumer (stage reuse, test selection) fall back to full coverage. This is
+    the conservative default whenever a change cannot be confidently attributed
+    to a known subtree.
+
+    Args:
+        changed_files: Changed file paths in the calling repository.
+        projects_config_path: Path to repos-config.json relative to that repo.
+        repo_full_name: Full repository name (e.g. "ROCm/rocm-libraries").
+        skip_patterns: Glob patterns for files that never affect build/test.
+
+    Returns:
+        Sorted project paths (e.g. ["projects/rocblas"]), or [] for full coverage.
+    """
+    if not changed_files:
+        print("  No changed files - running all tests")
+        return []
+
+    # Shared CI and test-selection changes can affect every project at once.
+    if _matches_patterns(changed_files, _FULL_TEST_TRIGGER_PATTERNS):
+        print("  Shared CI files changed - running all tests")
+        return []
+
+    configured_projects = _load_external_repo_project_prefixes(projects_config_path)
+    if not configured_projects:
+        print("  No projects config loaded - running all tests")
+        return []
+
+    # Apply the calling repository's workflow test policy.
+    if _matches_patterns(changed_files, _CALLER_WORKFLOW_PATTERNS):
+        if (
+            _WORKFLOW_TEST_SCOPE_BY_REPO.get(repo_full_name.lower())
+            != "configured-projects"
+        ):
+            print(f"  Workflow changed in {repo_full_name} - running all tests")
+            return []
+
+        # A second, unknown change must retain the conservative full run.
+        other_paths = [
+            path
+            for path in changed_files
+            if not _matches_patterns([path], _CALLER_WORKFLOW_PATTERNS)
+        ]
+        unclassified = _unclassified_paths(
+            other_paths, configured_projects, skip_patterns
+        )
+        if unclassified:
+            print(
+                f"  Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
+                " - running all tests"
+            )
+            return []
+
+        print(f"  Workflow changed in {repo_full_name} - testing configured projects")
+        return sorted(configured_projects)
+
+    valid_prefixes = configured_projects | _CI_RELEVANT_NON_SUBTREE_PREFIXES
+
+    # Conservative guard: if any non-skippable change cannot be classified to a
+    # known subtree, we cannot reason about its build/test impact. Narrowing on
+    # just the recognized subset would silently drop the unclassified change, so
+    # fall back to a full run instead.
+    unclassified = _unclassified_paths(changed_files, valid_prefixes, skip_patterns)
+    if unclassified:
+        print(
+            f"  Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
+            " - running all tests"
+        )
+        return []
+
+    matched = _match_subtrees(changed_files, valid_prefixes)
+    print(f"  Matched projects: {matched}")
+    return matched
 
 
 # ---------------------------------------------------------------------------
@@ -455,6 +685,12 @@ class GitContext:
     # List of paths of all git submodules in the repo
     submodule_paths: list[str] | None = None
 
+    # Files changed in the calling external repository, when this run was
+    # triggered by one. Distinct from changed_files, which holds the external
+    # repo's name so that stage reuse sees it as a changed submodule. None
+    # means the diff could not be determined and CI must run conservatively.
+    external_changed_files: list[str] | None = None
+
     @staticmethod
     def from_repo(base_ref: str) -> "GitContext":
         """Compute from the actual repo. Only called from main()."""
@@ -482,12 +718,16 @@ class GitContext:
         return GitContext()
 
     @staticmethod
-    def from_external_repo(external_repo_name: str) -> "GitContext":
+    def from_external_repo(
+        external_repo_name: str,
+        external_changed_files: list[str] | None = None,
+    ) -> "GitContext":
         """Create context for external repo builds (e.g., rocm-libraries).
 
         For external repos, we treat the repo name as both a changed file and
         a submodule path so that stage reuse analysis can determine which
-        TheRock stages are affected.
+        TheRock stages are affected. The calling repo's own file-level diff is
+        kept separately in external_changed_files.
 
         Note: has_submodule_changes will be True, but _get_current_triggers()
         ignores this for external repos since submodule_bump only applies to
@@ -497,6 +737,7 @@ class GitContext:
         return GitContext(
             changed_files=[external_repo_name],
             submodule_paths=[external_repo_name],
+            external_changed_files=external_changed_files,
         )
 
     @property
@@ -836,14 +1077,15 @@ def should_skip_ci(
 
         repo_name = external_repo.get("repository", "").split("/")[-1]
 
-        # Get changed files via helper function (uses API or git diff)
-        changed_files = get_changed_files_for_external_repo(external_repo)
+        # The diff is fetched once in main() and carried on GitContext so the
+        # skip decision and the changed-project analysis share one API call.
+        changed_files = git_context.external_changed_files
 
-        # Get skip patterns from TOML config file
-        skip_ci_config = external_repo.get("skip_ci_config")
-        skip_ci_patterns = None
-        if skip_ci_config:
-            skip_ci_patterns = load_skip_ci_patterns_for_external_repo(skip_ci_config)
+        # Get skip patterns from the external repo's TOML config file. An
+        # absent config falls back to base patterns only, never TheRock's.
+        skip_ci_patterns = load_skip_ci_patterns_for_external_repo(
+            external_repo.get("skip_ci_config") or ""
+        )
 
         # Evaluate skip logic
         if not is_ci_run_required(changed_files, skip_ci_patterns, repo_name):
@@ -1259,6 +1501,26 @@ def decide_jobs(
         explicit_prebuilt_stages: list[str] = []
         if ci_inputs.prebuilt_stages:
             explicit_prebuilt_stages = _parse_prebuilt_stages(ci_inputs.prebuilt_stages)
+
+            # A caller cannot know which stage owns a given project, so it
+            # passes the same prebuilt list on every run. Drop any stage that
+            # actually builds one of the changed projects, otherwise the change
+            # would be copied over from the baseline and never built or tested.
+            impacted_stages = set(
+                resolve_stages_for_projects(ci_inputs.changed_projects)
+            )
+            rebuilt = [s for s in explicit_prebuilt_stages if s in impacted_stages]
+            if rebuilt:
+                logging.info(
+                    "[STAGE-REUSE] dropping %s from prebuilt_stages: it builds "
+                    "at least one of the %d changed project(s)",
+                    ", ".join(sorted(rebuilt)),
+                    len(ci_inputs.changed_projects),
+                )
+                explicit_prebuilt_stages = [
+                    s for s in explicit_prebuilt_stages if s not in impacted_stages
+                ]
+
             for stage in explicit_prebuilt_stages:
                 stage_decisions[stage] = JobAction.PREBUILT
 
@@ -1971,6 +2233,10 @@ def write_outputs(
         "test_type": test_type,
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,
+        # Projects to scope tests to. Empty means full coverage.
+        "changed_projects": (
+            ",".join(ci_inputs.changed_projects) if outputs.is_ci_enabled else ""
+        ),
     }
     gha_set_output(output_vars)
 
@@ -2069,7 +2335,36 @@ def main():
                 f"EXTERNAL_REPO missing 'repository' field: {ci_inputs.external_repo!r}"
             )
         external_repo_name = repo_full_name.split("/")[-1]
-        git_context = GitContext.from_external_repo(external_repo_name)
+
+        # Fetch the calling repo's diff once; both the skip decision and the
+        # changed-project analysis below read it off GitContext.
+        external_changed_files = get_changed_files_for_external_repo(external_repo)
+        git_context = GitContext.from_external_repo(
+            external_repo_name, external_changed_files
+        )
+
+        # Scope CI to the projects the external repo actually touched. The
+        # caller may also pass CHANGED_PROJECTS explicitly, which wins.
+        projects_config = external_repo.get("projects_config")
+        if (
+            not ci_inputs.changed_projects
+            and projects_config
+            and external_changed_files
+        ):
+            print(f"\n=== Computing changed projects for {repo_full_name} ===")
+            ci_inputs = replace(
+                ci_inputs,
+                changed_projects=compute_external_repo_changed_projects(
+                    changed_files=external_changed_files,
+                    projects_config_path=projects_config,
+                    repo_full_name=repo_full_name,
+                    skip_patterns=load_skip_ci_patterns_for_external_repo(
+                        external_repo.get("skip_ci_config") or ""
+                    )
+                    or [],
+                ),
+            )
+            print()
     elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.

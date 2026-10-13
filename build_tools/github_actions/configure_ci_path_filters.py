@@ -19,6 +19,8 @@ Public API:
     get_git_submodule_paths() - Get list of git submodule paths in the repository
     get_changed_files_for_external_repo() - Get changed files for external repos via API/git
     is_ci_run_required() - Check if CI run is required based on modified paths
+    is_path_skippable() - Check a single path against a list of skip patterns
+    load_base_skip_ci_patterns() - Load only the universal skip-CI patterns
     load_skip_ci_config() - Load skip-CI patterns from TOML config files
     load_skip_ci_patterns_for_external_repo() - Load skip-CI patterns for external repos
 """
@@ -187,6 +189,14 @@ def load_skip_ci_config(
     return patterns, ci_filenames
 
 
+def load_base_skip_ci_patterns() -> list[str]:
+    """Load only the universal skip-CI patterns from skip-ci-base.toml."""
+    base_config = _load_toml_file(_BASE_CONFIG_PATH)
+    if not base_config:
+        return []
+    return _extract_skip_patterns_from_config(base_config)
+
+
 # Cached config loaded at module import time for TheRock
 _cached_skip_patterns: Optional[list[str]] = None
 _cached_ci_workflow_filenames: Optional[set[str]] = None
@@ -220,12 +230,20 @@ def load_skip_ci_patterns_for_external_repo(config_path: str) -> list[str] | Non
 
     Args:
         config_path: Relative path to the skip-CI config file within the external
-            repo (e.g., ".github/skip-ci-config.toml")
+            repo (e.g., ".github/skip-ci-config.toml"). May be empty when the
+            repo has not defined one yet, in which case only base patterns apply.
 
     Returns:
         Combined list of skip patterns (base + extension), or None if no patterns
         could be loaded.
     """
+    if not config_path:
+        # Never fall through to TheRock's own extension patterns for an
+        # external repo: they reference TheRock-only paths (experimental/,
+        # dockerfiles/, build_tools/tests/) that mean nothing in the caller.
+        print("  No skip-CI config declared; using base skip-CI patterns only")
+        return load_base_skip_ci_patterns() or None
+
     # The external repo config is checked out to external-repo-config/
     full_path = Path(_EXTERNAL_REPO_CONFIG_DIR) / config_path
     if not full_path.exists():
@@ -432,6 +450,11 @@ def is_ci_run_required(
     else:
         print(f"{label}All files skippable, CI can be skipped")
         return False
+
+
+def is_path_skippable(path: str, skip_patterns: Iterable[str]) -> bool:
+    """Check whether a single path matches any of the given skip patterns."""
+    return _is_path_skippable_for_patterns(path, list(skip_patterns))
 
 
 def get_ci_workflow_filenames() -> set[str]:

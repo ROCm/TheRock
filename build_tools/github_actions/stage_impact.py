@@ -400,6 +400,55 @@ def analyze_stage_impact(
     return analyzer.analyze(changed_inputs=changed_inputs, platform=platform)
 
 
+def resolve_stages_for_projects(
+    changed_projects: Sequence[str],
+    topology: Optional[BuildTopology] = None,
+) -> List[str]:
+    """Map external-repo project paths to the build stages that produce them.
+
+    Callers use this to keep a stage out of the prebuilt/reuse set when one of
+    the changed projects is built by that stage. For example "projects/rpp"
+    resolves to the "rpp" artifact, which lives in the "cv-libs" artifact
+    group, which is produced by the "cv-libs" stage.
+
+    Projects with no artifact mapping (e.g. nested subtrees that are built as
+    part of their parent) resolve to no stages; the caller keeps its existing
+    prebuilt decision for them.
+
+    Args:
+        changed_projects: Changed project paths from an external repo
+            (e.g., ["projects/rpp", "projects/rocblas"]).
+        topology: BuildTopology instance (loaded from BUILD_TOPOLOGY.toml if None).
+
+    Returns:
+        Sorted list of build stage names that produce the changed projects.
+    """
+    if topology is None:
+        from _therock_utils.build_topology import get_topology
+
+        topology = get_topology()
+
+    alias_map = topology.get_alias_to_artifact_map()
+    artifacts = {
+        alias_map[project.split("/")[-1].lower()]
+        for project in changed_projects
+        if project.split("/")[-1].lower() in alias_map
+    }
+    if not artifacts:
+        return []
+
+    stages_by_group = topology.get_artifact_group_to_build_stages()
+    stages: Set[str] = set()
+    for group_name in topology.artifact_groups:
+        group_artifacts = {
+            artifact.name for artifact in topology.get_artifacts_in_group(group_name)
+        }
+        if group_artifacts & artifacts:
+            stages.update(stages_by_group.get(group_name, []))
+
+    return sorted(stages)
+
+
 def analyze_artifact_impact_from_projects(
     changed_projects: Sequence[str],
     topology: Optional[BuildTopology] = None,

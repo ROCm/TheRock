@@ -303,6 +303,211 @@ class TestGitContext(unittest.TestCase):
         self.assertEqual(git.changed_files, [""])
         self.assertEqual(git.submodule_paths, [""])
 
+    def test_from_external_repo_keeps_caller_diff_separate(self):
+        """The caller's file diff does not pollute the submodule-level changed_files."""
+        git = cm.GitContext.from_external_repo(
+            "rocm-libraries", ["projects/rocblas/src/a.cpp"]
+        )
+        self.assertEqual(git.changed_files, ["rocm-libraries"])
+        self.assertEqual(git.external_changed_files, ["projects/rocblas/src/a.cpp"])
+
+
+# ---------------------------------------------------------------------------
+# External repo changed-project analysis
+# ---------------------------------------------------------------------------
+
+# A TheRock workflow file inside the calling repository.
+_CALLER_WORKFLOW = ".github/workflows/therock-multi-arch-ci-nightly.yml"
+
+_LIBRARY_ENTRIES = [
+    ("projects", "rocblas"),
+    ("projects", "hipblas"),
+    ("projects", "hipblaslt"),
+    ("projects", "hipblaslt/tensilelite"),
+    ("projects", "rpp"),
+    ("shared", "stinkytofu"),
+]
+_LIBRARY_PROJECTS = [
+    "projects/hipblas",
+    "projects/hipblaslt",
+    "projects/hipblaslt/tensilelite",
+    "projects/rocblas",
+    "projects/rpp",
+    "shared/stinkytofu",
+]
+_SYSTEM_ENTRIES = [("projects", "rccl"), ("projects", "hip")]
+
+# Mirrors skip-ci-base.toml; the real patterns are exercised in
+# configure_ci_path_filters_test.py.
+_SKIP_PATTERNS = ["*.md", "*CODEOWNERS", "docs/*"]
+
+
+class TestComputeExternalRepoChangedProjects(unittest.TestCase):
+    """Test mapping an external repo's diff onto the projects CI should scope to.
+
+    An empty result means "cannot narrow scope" and makes downstream consumers
+    fall back to full coverage.
+    """
+
+    def compute(
+        self,
+        changed_files,
+        *,
+        repo="ROCm/rocm-libraries",
+        entries=_LIBRARY_ENTRIES,
+        config_exists=True,
+    ):
+        with tempfile.TemporaryDirectory() as directory:
+            if config_exists:
+                config_dir = Path(directory) / ".github"
+                config_dir.mkdir()
+                (config_dir / "repos-config.json").write_text(
+                    json.dumps(
+                        {
+                            "repositories": [
+                                {"category": category, "name": name}
+                                for category, name in entries
+                            ]
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+            with patch.object(cm, "_EXTERNAL_REPO_CONFIG_DIR", directory):
+                return cm.compute_external_repo_changed_projects(
+                    changed_files=list(changed_files),
+                    projects_config_path=".github/repos-config.json",
+                    repo_full_name=repo,
+                    skip_patterns=_SKIP_PATTERNS,
+                )
+
+    # -- Ordinary source changes --------------------------------------------
+
+    def test_source_change_narrows_to_its_project(self):
+        self.assertEqual(
+            self.compute(["projects/rocblas/src/rocblas.cpp"]), ["projects/rocblas"]
+        )
+
+    def test_nested_subtree_wins_over_parent(self):
+        """A tensilelite-only change must not also fire hipblaslt-proper."""
+        self.assertEqual(
+            self.compute(["projects/hipblaslt/tensilelite/foo.py"]),
+            ["projects/hipblaslt/tensilelite"],
+        )
+
+    def test_parent_change_does_not_match_nested_subtree(self):
+        self.assertEqual(
+            self.compute(["projects/hipblaslt/src/foo.cpp"]), ["projects/hipblaslt"]
+        )
+
+    def test_skippable_paths_do_not_widen_scope(self):
+        self.assertEqual(
+            self.compute(["projects/rocblas/src/rocblas.cpp", "README.md"]),
+            ["projects/rocblas"],
+        )
+
+    def test_non_subtree_ci_relevant_prefix_is_surfaced(self):
+        """Monorepo dirs absent from repos-config.json still classify."""
+        self.assertEqual(self.compute(["shared/kpack/kpack.cpp"]), ["shared/kpack"])
+
+    def test_no_changed_files_runs_all_tests(self):
+        self.assertEqual(self.compute([]), [])
+
+    # -- Conservative guards -------------------------------------------------
+
+    def test_unclassified_path_runs_all_tests(self):
+        self.assertEqual(self.compute(["unexpected/config.py"]), [])
+
+    def test_mixed_recognized_and_unclassified_runs_all_tests(self):
+        """Narrowing to the recognized subset would drop the unknown change."""
+        self.assertEqual(
+            self.compute(["projects/rocblas/src/rocblas.cpp", "unexpected/config.py"]),
+            [],
+        )
+
+    def test_shared_ctest_change_runs_all_tests(self):
+        self.assertEqual(self.compute(["shared/ctest/categories.yaml"]), [])
+
+    def test_repos_config_change_runs_all_tests(self):
+        self.assertEqual(self.compute([".github/repos-config.json"]), [])
+
+    def test_missing_config_runs_all_tests(self):
+        self.assertEqual(
+            self.compute(["projects/rocblas/src/a.cpp"], config_exists=False), []
+        )
+
+    # -- Workflow test scoping ----------------------------------------------
+
+    def test_libraries_workflow_change_scopes_to_configured_projects(self):
+        self.assertEqual(self.compute([_CALLER_WORKFLOW]), _LIBRARY_PROJECTS)
+
+    def test_libraries_workflow_with_known_source_scopes_to_configured_projects(self):
+        self.assertEqual(
+            self.compute([_CALLER_WORKFLOW, "projects/rocblas/src/rocblas.cpp"]),
+            _LIBRARY_PROJECTS,
+        )
+
+    def test_libraries_workflow_with_unclassified_path_runs_all_tests(self):
+        self.assertEqual(self.compute([_CALLER_WORKFLOW, "unexpected/config.py"]), [])
+
+    def test_libraries_workflow_with_shared_ci_change_runs_all_tests(self):
+        self.assertEqual(
+            self.compute([_CALLER_WORKFLOW, "shared/ctest/categories.yaml"]), []
+        )
+
+    def test_unscoped_repo_workflow_change_runs_all_tests(self):
+        """rocm-systems is not in the scope map, so it keeps full coverage."""
+        self.assertEqual(
+            self.compute(
+                [_CALLER_WORKFLOW], repo="ROCm/rocm-systems", entries=_SYSTEM_ENTRIES
+            ),
+            [],
+        )
+
+    def test_unknown_repo_workflow_change_runs_all_tests(self):
+        self.assertEqual(self.compute([_CALLER_WORKFLOW], repo="ROCm/unknown"), [])
+
+    def test_scope_map_lookup_is_case_insensitive(self):
+        self.assertEqual(
+            self.compute([_CALLER_WORKFLOW], repo="rocm/ROCm-Libraries"),
+            _LIBRARY_PROJECTS,
+        )
+
+    def test_configured_scope_map_entry_applies(self):
+        with patch.dict(
+            cm._WORKFLOW_TEST_SCOPE_BY_REPO, {"rocm/example": "configured-projects"}
+        ):
+            result = self.compute(
+                [_CALLER_WORKFLOW],
+                repo="ROCm/example",
+                entries=[("projects", "example")],
+            )
+        self.assertEqual(result, ["projects/example"])
+
+
+class TestNonSubtreePrefixContract(unittest.TestCase):
+    """The non-subtree prefix list must stay usable by the test selector."""
+
+    def test_declared_prefixes_are_wellformed(self):
+        for prefix in cm._CI_RELEVANT_NON_SUBTREE_PREFIXES:
+            with self.subTest(prefix=prefix):
+                self.assertEqual(prefix.count("/"), 1, "expect 'category/name'")
+                self.assertFalse(prefix.startswith("/"))
+                self.assertFalse(prefix.endswith("/"))
+
+    def test_declared_prefixes_resolve_to_tests(self):
+        """Surfacing a prefix the test selector cannot map just fails the job.
+
+        These directories are absent from every repos-config.json, so TheRock
+        is the only place the mapping exists. Keep the two lists in lock-step.
+        """
+        therock_root = Path(cm.__file__).resolve().parents[2]
+        sys.path.insert(0, os.fspath(therock_root / "test_tools"))
+        from determine_rocm_test_dependencies import _EXTERNAL_SUBTREE_ALIASES
+
+        for prefix in cm._CI_RELEVANT_NON_SUBTREE_PREFIXES:
+            with self.subTest(prefix=prefix):
+                self.assertIn(prefix, _EXTERNAL_SUBTREE_ALIASES)
+
 
 # ---------------------------------------------------------------------------
 # Step 2: Check Skip CI
@@ -580,6 +785,39 @@ class TestDecideJobs(unittest.TestCase):
             ["compiler-runtime", "runtime-tests"],
         )
         self.assertEqual(result.build_rocm.rebuild_stages, [])
+
+    def test_changed_project_removes_its_stage_from_prebuilt(self):
+        """A changed project's own stage must build, not be copied from baseline.
+
+        Callers pass a static prebuilt list because they cannot know which
+        stage owns a project. projects/rpp is built by cv-libs, so cv-libs has
+        to drop out while the unrelated stages stay prebuilt.
+        """
+        result = cm.decide_jobs(
+            self._inputs(
+                event_name="workflow_dispatch",
+                prebuilt_stages="cv-libs,comm-libs",
+                changed_projects=["projects/rpp"],
+            ),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.build_rocm.prebuilt_stages, ["comm-libs"])
+
+    def test_unrelated_changed_project_keeps_prebuilt_stages(self):
+        """projects/rocblas is built by math-libs, which is not in the list."""
+        result = cm.decide_jobs(
+            self._inputs(
+                event_name="workflow_dispatch",
+                prebuilt_stages="cv-libs,comm-libs",
+                changed_projects=["projects/rocblas"],
+            ),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(
+            sorted(result.build_rocm.prebuilt_stages), ["comm-libs", "cv-libs"]
+        )
 
     def test_off_ignores_manual_reuse_and_skips_auto_analysis(self):
         with (
@@ -2175,13 +2413,14 @@ class TestFormatSummary(unittest.TestCase):
 class TestWriteOutputs(unittest.TestCase):
     """Test writing CI configuration to GitHub Actions output files."""
 
-    def _write_outputs(self, outputs: cm.CIOutputs) -> tuple[str, str]:
+    def _write_outputs(self, outputs: cm.CIOutputs, **input_kwargs) -> tuple[str, str]:
         ci_inputs = cm.CIInputs(
             run_id="12345",
             event_name="push",
             commit_ref="main",
             base_ref="HEAD^1",
             build_variant="release",
+            **input_kwargs,
         )
 
         # Redirect GitHub Actions outputs to temporary files so these unit tests
@@ -2225,6 +2464,21 @@ class TestWriteOutputs(unittest.TestCase):
         # workflow steps can use them.
         self.assertIn("enable_build_jobs=false", github_output)
         self.assertTrue(step_summary.startswith("## Multi-Arch CI Configuration"))
+
+    def test_changed_projects_are_exported(self):
+        """Downstream test workflows read changed_projects off setup's outputs."""
+        github_output, _ = self._write_outputs(
+            cm.CIOutputs(is_ci_enabled=True, jobs=_jobs(test_type="quick")),
+            changed_projects=["projects/rocblas", "projects/rpp"],
+        )
+        self.assertIn("changed_projects=projects/rocblas,projects/rpp", github_output)
+
+    def test_changed_projects_empty_when_ci_skipped(self):
+        """A skipped run must not advertise a narrowed test scope."""
+        github_output, _ = self._write_outputs(
+            cm.CIOutputs.skipped(), changed_projects=["projects/rocblas"]
+        )
+        self.assertIn("changed_projects=\n", github_output)
 
     def test_platform_outputs_follow_selected_stages(self):
         """Linux-only stages must not launch Windows artifact consumers.
