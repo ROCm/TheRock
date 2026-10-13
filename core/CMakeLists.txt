@@ -359,11 +359,9 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     # hrr
     ##############################################################################
 
-    set(HRR_BUILD_DEPS rocm-cmake)
-    if(THEROCK_BUILD_TESTING)
-      list(APPEND HRR_BUILD_DEPS therock-catch2)
-    endif()
-
+    # hrr-playback replays archives that the HRR capture code in amdhip64
+    # writes. The HRR test suites are not built here: they are not installable
+    # yet, and the integration suite needs an amdhip64 with capture compiled in.
     therock_cmake_subproject_declare(hrr
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hrr"
@@ -375,11 +373,10 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
         amd-hip
       CMAKE_ARGS
         "-DHRR_BUILD_PLAYBACK=ON"
-        "-DHRR_BUILD_TESTS=${THEROCK_BUILD_TESTING}"
-        "-DHRR_BUILD_INTEGRATION_TESTS=${THEROCK_BUILD_TESTING}"
+        "-DHRR_BUILD_TESTS=OFF"
         "-DHIP_PLATFORM=amd"
       BUILD_DEPS
-        ${HRR_BUILD_DEPS}
+        rocm-cmake
       RUNTIME_DEPS
         hip-clr
       INTERFACE_LINK_DIRS
@@ -397,9 +394,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
         dbg
         dev
         doc
-        lib
         run
-        test
       SUBPROJECT_DEPS
         hrr
     )
