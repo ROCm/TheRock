@@ -618,6 +618,51 @@ class TestDecideJobs(unittest.TestCase):
         self.assertEqual(result.build_rocm.baseline_repository, "")
         self.assertIsNone(result.auto_stage_reuse)
 
+    def test_release_branch_pr_disables_reuse(self):
+        # A PR targeting a release branch must rebuild, even when its component
+        # workflow requests reuse-stage with a baseline and prebuilt stages.
+        inputs = _run_from_environ(
+            "pull_request",
+            {
+                "pull_request": {
+                    "base": {"ref": "release/bkc/therock-10.2-20261013"},
+                    "labels": [],
+                }
+            },
+            commit_ref="123/merge",
+            extra_env={
+                "THEROCK_CHECKOUT_REF": "main",
+                "PREBUILT_STAGES": "compiler-runtime,runtime-tests",
+                "BASELINE_RUN_ID": "12345",
+                "BASELINE_REPOSITORY": "ROCm/TheRock",
+                "CHANGED_PROJECTS": "projects/rocblas",
+                "EXTERNAL_REPO": '{"repository":"ROCm/rocm-libraries","ref":"abc123"}',
+            },
+        )
+        with (
+            patch.dict(os.environ, {"STAGE_REUSE_MODE": "reuse-stage"}),
+            patch.object(cm, "compute_auto_stage_reuse") as auto_reuse,
+            patch.object(
+                cm,
+                "analyze_artifact_impact_from_projects",
+                return_value=(["blas"], ["fft"]),
+            ) as artifact_impact,
+        ):
+            result = cm.decide_jobs(
+                inputs,
+                git_context=cm.GitContext.from_external_repo("rocm-libraries"),
+                targets=cm.TargetSelection(linux_families=["gfx110X-all"]),
+            )
+
+        auto_reuse.assert_not_called()
+        artifact_impact.assert_not_called()
+        self.assertEqual(result.build_rocm.stage_decisions, {})
+        self.assertEqual(result.build_rocm.baseline_run_id, "")
+        self.assertEqual(result.build_rocm.baseline_repository, "")
+        self.assertEqual(result.build_rocm.rebuild_artifacts, [])
+        self.assertEqual(result.build_rocm.reusable_artifacts, [])
+        self.assertIsNone(result.auto_stage_reuse)
+
     def test_reuse_scoped_to_selected_targets(self):
         """decide_jobs threads the resolved targets into automatic reuse.
         With no families selected there are no build platforms, so automatic

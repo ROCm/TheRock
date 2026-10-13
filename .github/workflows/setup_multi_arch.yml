@@ -65,7 +65,8 @@ on:
           and baseline_run_id, and performs no reuse analysis or baseline lookup;
           "dry-run" (default) reports what automatic reuse could do while still
           honoring explicit prebuilt_stages; "reuse-stage" applies automatic
-          reuse and also honors explicit prebuilt_stages.
+          reuse and also honors explicit prebuilt_stages. Release branches
+          always use "off", regardless of this input.
         type: string
         default: "dry-run"
       stage_reuse_max_age_hours:
@@ -254,6 +255,8 @@ jobs:
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
           LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
           WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
+          THEROCK_REPOSITORY: ${{ inputs.repository || github.repository }}
+          THEROCK_CHECKOUT_REF: ${{ inputs.ref }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BUILD_STAGES: ${{ inputs.build_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
@@ -264,9 +267,6 @@ jobs:
           STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
           STAGE_REUSE_MAX_AGE_HOURS: ${{ inputs.stage_reuse_max_age_hours }}
           STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
-          # For baseline run selection, use repository input (defaults to GITHUB_REPOSITORY).
-          # External repos set repository to "ROCm/TheRock" to fetch TheRock baseline runs.
-          THEROCK_REPOSITORY: ${{ inputs.repository || github.repository }}
           # Token for GitHub API calls (branch history, baseline workflow runs)
           GITHUB_TOKEN: ${{ github.token }}
           # External repo JSON (e.g., {"repository":"ROCm/rocm-libraries","ref":"..."})
