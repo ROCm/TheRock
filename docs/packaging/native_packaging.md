@@ -49,17 +49,19 @@ Debian use case, the suffix should be -dev. Therefore, for Debian packages,
 the names are updated to use -dev.
 
 In multi-arch (kpack) mode a -devel package is generic unless it sets `Gfxarch`
-and per-arch artifacts exist for its components. Then it is built per GPU target
-(e.g. `amdrocm-ck-dev<version>-gfx942`). A package whose generic artifacts hold
-no files gets no `-host` package; its device packages carry the host's
-dependencies instead. See `nativepackage_dependency_tree.md`.
+and `OptionalContent` and some per-arch artifact for its components holds files.
+Then it is built per GPU target (e.g. `amdrocm-ck-dev<version>-gfx942`). Such a
+package whose generic artifacts hold no files gets no `-host` package; its device
+packages carry the host's dependencies instead. See
+`nativepackage_dependency_tree.md`.
 
-The per-arch decision looks only at whether a `<artifact>_<component>_gfx*`
-directory exists for one of the package's components. A package that sets
-`Gfxarch` therefore changes from generic to per-arch when such an artifact first
-appears, which moves its files into `-host` and per-target packages. Before
-giving another `-devel` package per-arch `dev` or `run` artifacts, plan that
-change.
+The per-arch decision checks whether a `<artifact>_<component>_gfx*` directory
+for one of the package's components holds files listed in its manifest; a
+directory without files does not count. A `-devel` package that sets `Gfxarch`
+without `OptionalContent` stays generic even when such files exist. An opted-in
+package changes from generic to per-arch when per-arch files first appear, which
+moves its files into `-host` and per-target packages. Before opting another
+`-devel` package in, plan that change.
 
 ## RPATH Packages
 
@@ -97,12 +99,16 @@ Optional Fields
   field is specified, the Components field will be used instead.
 - DisablePackaging: Disables the creation of the package.
 - Disable_Debug_Package: Disables the generation of the debug symbol package.
-- OptionalContent: Marks a non-metapackage whose content may be absent. When its
-  generic artifacts hold no files, no non-versioned alias is built, no `-host`
-  package is built (a Gfxarch package's per-arch packages then carry the host's
-  dependencies themselves), and the package is dropped from other packages'
-  dependency lists. Without this key a package with missing content keeps its
-  host and alias, so the problem stays a visible dangling dependency.
+- OptionalContent: Marks a non-metapackage whose content may be absent. Applies
+  in multi-arch (kpack) mode only. When its generic artifacts hold no files, no
+  `-host` package is built (a Gfxarch package's per-arch packages then carry the
+  host's dependencies themselves), a package that is not per-arch builds neither
+  its versioned package nor its non-versioned alias, and the package is dropped
+  from other packages' dependency lists. A package with neither generic nor
+  per-arch files is reported as skipped. On a `-devel` package that sets
+  `Gfxarch`, the key also opts in to per-arch packaging (see Development
+  Packages). Without this key a package with missing content keeps its host and
+  alias, so the problem stays a visible dangling dependency.
 - Disable_DWZ: Skip DWZ processing. Applies to Debian packages.
 - Disable_DH_STRIP: Disables dh_strip. Applies to Debian packages.
 - Provides: Indicates that a package provides the functionality of another package.
