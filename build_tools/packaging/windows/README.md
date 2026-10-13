@@ -40,12 +40,20 @@ msiexec /i amdrocm-runtime.msi /qn ENABLE_LONG_PATHS=0
 
 ## What Gets Installed
 
-| Item                         | Default location                                         |
-| ---------------------------- | -------------------------------------------------------- |
-| Runtime DLLs and executables | `C:\Program Files\AMD\ROCm\runtime-<version>\bin\`       |
-| Import libraries (`.lib`)    | `C:\Program Files\AMD\ROCm\runtime-<version>\lib\`       |
-| System PATH entry            | `...\bin` appended to the machine-wide PATH              |
-| SDK-discovery registry key   | `HKLM\Software\AMD\ROCm\<X.Y>` (`InstallDir`, `Version`) |
+| Item                         | Default location                                                               |
+| ---------------------------- | ------------------------------------------------------------------------------ |
+| Runtime DLLs and executables | `C:\Program Files\AMD\ROCm\runtime-<version>\bin\`                             |
+| Import libraries (`.lib`)    | `C:\Program Files\AMD\ROCm\runtime-<version>\lib\`                             |
+| System PATH entry            | `...\bin` appended to the machine-wide PATH (default install only — see below) |
+| SDK-discovery registry key   | `HKLM\Software\AMD\ROCm\<X.Y>` (`InstallDir`, `Version`)                       |
+
+The machine PATH entry is added **only when installing to the default location**
+(`C:\Program Files\AMD\ROCm\...`), which is admin-write-only. Installing to a
+custom location (via `--install-root` at generation time, or a different
+`INSTALLFOLDER` / `TARGETDIR` at install time) **skips** the PATH entry, because
+putting a potentially user-writable directory on the machine-wide PATH is a
+binary-planting risk. In that case, locate ROCm via the SDK-discovery registry
+key below instead of relying on PATH.
 
 The SDK-discovery key is **shared** across all ROCm packages installed at the
 same `<X.Y>` version (per

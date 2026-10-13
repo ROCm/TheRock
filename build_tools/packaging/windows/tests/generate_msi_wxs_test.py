@@ -474,6 +474,35 @@ class TestBuildWxs(unittest.TestCase):
             comp_ids = [c.get("Id") for c in root.iter(_ns("Component"))]
             self.assertNotIn("EnvPath", comp_ids)
 
+    def test_path_component_absent_for_custom_install_root(self):
+        # The machine PATH entry is only safe when the install root is the
+        # default admin-protected location. A custom absolute --install-root has
+        # an unknown ACL, so the PATH entry is skipped even though bin/ exists.
+        with tempfile.TemporaryDirectory() as tmp:
+            specs = {
+                "core-hip": {"lib": ["bin/amdhip64_7.dll"]},
+                "core-kpack": {"lib": []},
+                "core-hipinfo": {"lib": []},
+            }
+            root = self._run(tmp, specs, extra_args={"install_root": "C:\\AMD"})
+            comp_ids = [c.get("Id") for c in root.iter(_ns("Component"))]
+            self.assertNotIn("EnvPath", comp_ids)
+
+    def test_path_component_absent_for_user_writable_root(self):
+        # A user-writable standard token (e.g. LocalAppDataFolder) is also not
+        # safe for a machine PATH entry, so it is skipped.
+        with tempfile.TemporaryDirectory() as tmp:
+            specs = {
+                "core-hip": {"lib": ["bin/amdhip64_7.dll"]},
+                "core-kpack": {"lib": []},
+                "core-hipinfo": {"lib": []},
+            }
+            root = self._run(
+                tmp, specs, extra_args={"install_root": "LocalAppDataFolder"}
+            )
+            comp_ids = [c.get("Id") for c in root.iter(_ns("Component"))]
+            self.assertNotIn("EnvPath", comp_ids)
+
     def _discovery_values(self, root):
         """Return {value_name: (key, value, type)} for the RocmDiscovery component."""
         comp = next(

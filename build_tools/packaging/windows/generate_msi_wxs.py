@@ -172,6 +172,16 @@ STANDARD_DIR_TOKENS: set[str] = {
     "CommonAppDataFolder",
 }
 
+# The only install root whose protection (admin-write-only ACL) we can vouch for
+# at generate time. Adding a directory to the machine PATH is only safe when that
+# directory is not writable by a lower-privileged user — otherwise the entry
+# becomes a DLL/exe planting slot (CWE-427). ProgramFiles64Folder is the default
+# and is admin-only by default ACL; custom --install-root values (absolute paths,
+# or user-writable tokens like TempFolder/LocalAppDataFolder) have an unknown or
+# user-writable ACL, so the PATH entry is skipped for them. See
+# add_path_registration.
+PROTECTED_DEFAULT_ROOT = "ProgramFiles64Folder"
+
 
 # ---------------------------------------------------------------------------
 # Artifact download, extraction, and file collection
@@ -887,9 +897,25 @@ def add_path_registration(
     package owns its own PATH modification), so the component GUID is derived
     from the package feature id. The SDK-discovery registry key is written
     separately by add_discovery_registry (shared across packages).
+
+    The machine PATH entry is only emitted when installing to the default,
+    admin-protected root (PROTECTED_DEFAULT_ROOT). A custom --install-root may be
+    a user-writable location, and putting a user-writable directory on the machine
+    PATH is a DLL/exe planting risk (CWE-427), so the PATH entry is skipped there;
+    discovery should use the SDK-discovery registry key instead.
     """
     installs_to_bin = any(install_rel.parts[0] == "bin" for install_rel, _ in files)
     if not installs_to_bin:
+        return
+
+    if layout.install_root != PROTECTED_DEFAULT_ROOT:
+        print(
+            f"Note: install root {layout.install_root!r} is not the default "
+            f"protected root ({PROTECTED_DEFAULT_ROOT}); skipping the machine PATH "
+            "entry (its ACL is unknown/user-writable). Consumers should locate "
+            "ROCm via the SDK-discovery registry key instead.",
+            file=sys.stderr,
+        )
         return
 
     component = ET.SubElement(
