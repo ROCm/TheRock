@@ -14,7 +14,7 @@ from build_prod_wheels import (
     add_env_compiler_flags,
     validate_build_args,
 )
-from setup_pytorch_asan import append_env_text
+from setup_pytorch_asan import append_env_text, enable_torchaudio_asan
 
 
 class AsanFlagSpacingTest(unittest.TestCase):
@@ -117,9 +117,64 @@ class AsanBuildSelectionTest(unittest.TestCase):
         self.assertFalse(args.build_pytorch_vision)
         self.assertFalse(args.build_apex)
 
-    def test_asan_rejects_an_explicit_companion_build(self):
+    def test_asan_allows_an_explicit_audio_build(self):
         parser = argparse.ArgumentParser()
         args = self._args(asan=True, build_pytorch_audio=True)
+
+        validate_build_args(parser, args)
+
+        self.assertTrue(args.build_pytorch_audio)
+        self.assertFalse(args.build_triton)
+        self.assertFalse(args.build_pytorch_vision)
+        self.assertFalse(args.build_apex)
+
+    def test_asan_keeps_an_explicit_audio_opt_out(self):
+        parser = argparse.ArgumentParser()
+        args = self._args(asan=True, build_pytorch_audio=False)
+
+        validate_build_args(parser, args)
+
+        self.assertFalse(args.build_pytorch_audio)
+
+    def test_asan_patches_torchaudio_extensions_once(self):
+        import tempfile
+
+        helper = """\
+import os
+
+def get_ext_modules():
+    extra_compile_args = {"cxx": []}
+    modules = [
+        extension(
+            extra_compile_args=extra_compile_args,
+        ),
+    ]
+    return modules
+"""
+        setup = "import os\nimport torch\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "tools" / "setup_helpers" / "extension.py"
+            path.parent.mkdir(parents=True)
+            path.write_text(helper)
+            setup_path = root / "setup.py"
+            setup_path.write_text(setup)
+
+            enable_torchaudio_asan(root)
+            patched = path.read_text()
+            setup_patched = setup_path.read_text()
+            enable_torchaudio_asan(root)
+            self.assertEqual(patched, path.read_text())
+            self.assertEqual(setup_patched, setup_path.read_text())
+
+        self.assertIn("-shared-libasan", patched)
+        self.assertIn("extra_link_args=extra_link_args", patched)
+        self.assertEqual(patched.count("extra_link_args=extra_link_args"), 1)
+        self.assertIn('os.environ.pop("LD_PRELOAD", None)', setup_patched)
+
+    def test_asan_rejects_an_explicit_non_audio_companion(self):
+        parser = argparse.ArgumentParser()
+        args = self._args(asan=True, build_triton=True, build_pytorch_audio=True)
 
         with self.assertRaises(SystemExit):
             validate_build_args(parser, args)

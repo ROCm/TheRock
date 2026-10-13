@@ -1400,6 +1400,18 @@ def do_build_pytorch_audio(
             }
         )
 
+    if args.asan:
+        setup_pytorch_asan.enable_torchaudio_asan(pytorch_audio_dir)
+        # setup.py imports torch. The preload is removed again inside setup.py
+        # before ninja and hipcc are spawned.
+        runtime = env.get("ASAN_RUNTIME_PATH", "")
+        if not runtime:
+            raise RuntimeError(
+                "--asan torchaudio build requires ASAN_RUNTIME_PATH from "
+                "apply_asan_build_env"
+            )
+        env["LD_PRELOAD"] = runtime
+
     remove_dir_if_exists(pytorch_audio_dir / "dist")
     if args.clean:
         remove_dir_if_exists(pytorch_audio_dir / "build")
@@ -1410,6 +1422,29 @@ def do_build_pytorch_audio(
     built_wheel = find_built_wheel(pytorch_audio_dir / "dist", "torchaudio")
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
+
+    if args.asan:
+        print("+++ Installing built torchaudio:")
+        run_command(
+            [sys.executable, "-m", "pip", "install", built_wheel],
+            cwd=tempfile.gettempdir(),
+        )
+        print("+++ Sanity checking installed torchaudio:")
+        sanity_env = setup_pytorch_asan.import_sanity_env(env)
+        sanity_check_output = capture(
+            [
+                sys.executable,
+                "-c",
+                "import torchaudio; print(torchaudio.__version__)",
+            ],
+            cwd=tempfile.gettempdir(),
+            env=sanity_env,
+        )
+        if not sanity_check_output:
+            raise RuntimeError(
+                "torchaudio package sanity check failed (see output above)"
+            )
+        print(f"Sanity check output:\n{sanity_check_output}")
 
 
 def do_build_pytorch_vision(
@@ -1616,8 +1651,8 @@ def main(argv: list[str]):
         "--asan",
         action="store_true",
         default=False,
-        help="Build the torch wheel with AddressSanitizer. "
-        "Triton, torchaudio, torchvision, and apex are not built.",
+        help="Build with AddressSanitizer. Triton, torchvision, and apex are "
+        "not built. Torchaudio is built only when --build-pytorch-audio is set.",
     )
     build_p.add_argument(
         "--pytorch-rocm-arch",
