@@ -1,6 +1,23 @@
 #!/bin/bash
 
-binaries=( rocgdb rocprofv3 rocprofv3-avail rocpd rocminfo amd-smi rocm_agent_enumerator )
+binaries=(
+    rocgdb
+    rocprofv3
+    rocprofv3-avail
+    rocprof-attach
+    rocprof-compute
+    rocprof-sys-attach
+    rocprof-sys-avail
+    rocprof-sys-causal
+    rocprof-sys-instrument
+    rocprof-sys-python
+    rocprof-sys-run
+    rocprof-sys-sample
+    rocpd
+    rocminfo
+    amd-smi
+    rocm_agent_enumerator
+)
 
 is_debian_like() {
     local id_like="$1"

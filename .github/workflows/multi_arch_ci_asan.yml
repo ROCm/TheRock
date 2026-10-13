@@ -1,6 +1,12 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# Notes on security:
+#   * As this runs on lower trust `pull_request` events it forwards
+#     no github secrets to child workflows.
+#   * Some child workflows are shared by releases where `secrets: inherit` is
+#     used to forward credentials for Quartz notifications.
+
 name: Multi-Arch CI ASAN
 
 on:
@@ -60,7 +66,6 @@ jobs:
       build_python_packages: false
       build_pytorch: false
       build_jax: false
-    secrets: inherit
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
@@ -71,7 +76,6 @@ jobs:
         needs.setup.outputs.enable_build_jobs == 'true'
       }}
     uses: ./.github/workflows/multi_arch_ci_linux.yml
-    secrets: inherit
     with:
       build_config: ${{ needs.setup.outputs.linux_build_config }}
       test_labels: ${{ needs.setup.outputs.linux_test_labels }}
@@ -83,8 +87,8 @@ jobs:
       contents: read
       id-token: write
 
-  ci_summary:
-    name: CI Summary
+  ci_asan_summary:
+    name: CI ASAN Summary
     if: always()
     needs:
       - setup
@@ -92,9 +96,14 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+
       - name: Evaluate workflow results
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
           python build_tools/github_actions/workflow_summary.py \
-            --needs-json '${{ toJSON(needs) }}'
+            --needs-json "${NEEDS_JSON}"

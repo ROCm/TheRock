@@ -15,16 +15,14 @@ import base64
 import binascii
 from enum import Enum, auto
 import json
-import logging
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
 from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from urllib.request import urlopen, Request
 
 
@@ -190,10 +188,11 @@ class GitHubAPI:
         Raises:
             GitHubAPIError: If the request fails for any reason.
         """
-        assert self._gh_cli_path is not None, (
-            "_send_request_via_gh_cli called without gh CLI path set. "
-            "Call get_auth_method() first."
-        )
+        if self._gh_cli_path is None:
+            raise AssertionError(
+                "_send_request_via_gh_cli called without gh CLI path set. "
+                "Call get_auth_method() first."
+            )
 
         # Strip the base URL to get the API path
         api_path = url.removeprefix("https://api.github.com")
@@ -251,6 +250,8 @@ class GitHubAPI:
         Raises:
             GitHubAPIError: If the request fails for any reason.
         """
+        if urlsplit(url).scheme != "https" or not urlsplit(url).netloc:
+            raise GitHubAPIError(f"Expected an HTTPS API URL: {url}")
         headers = self._get_request_headers()
         data: bytes | None = None
         if body is not None:
@@ -259,14 +260,18 @@ class GitHubAPI:
         request = Request(url, data=data, headers=headers, method=method)
 
         try:
-            with urlopen(request, timeout=timeout_seconds) as response:
+            with urlopen(
+                request,
+                timeout=timeout_seconds,
+                # HTTPS URL checked above.
+            ) as response:  # nosec B310
                 response_body = response.read().decode("utf-8")
         except HTTPError as e:
             # Try to read the error response body for more context
             error_body = ""
             try:
                 error_body = e.read().decode("utf-8")
-            except Exception:
+            except (OSError, UnicodeError):
                 pass  # If we can't read it, continue with generic message
 
             if e.code == 403:
@@ -479,7 +484,7 @@ def gha_append_step_summary(summary: str, mirror_to_job_file: bool = True):
     # Use double newlines to split sections in markdown.
     block = summary + "\n\n"
 
-    with open(step_summary_file, "a") as f:
+    with open(step_summary_file, "a", encoding="utf-8") as f:
         # Use double newlines to split sections in markdown.
         f.write(block)
 
@@ -1005,49 +1010,3 @@ def str2bool(value: str | None) -> bool:
     ):
         return False
     raise ValueError(f"Invalid string value for boolean conversion: {value}")
-
-
-# TODO: Move get_visible_gpu_count and get_first_gpu_architecture to a
-# GPU/rocminfo utils module. They are not specific to GitHub Actions.
-# TODO(#3489): Refactor get_visible_gpu_count and get_first_gpu_architecture to share a
-# common helper that runs rocminfo and returns matching lines; both functions duplicate the first ~12 lines.
-def get_visible_gpu_count(env=None, therock_bin_dir: str | None = None) -> int:
-    rocminfo = Path(therock_bin_dir) / "rocminfo"
-    rocminfo_cmd = str(rocminfo) if rocminfo.exists() else "rocminfo"
-
-    result = subprocess.run(
-        [rocminfo_cmd],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env=env,
-        check=False,
-    )
-
-    pattern = re.compile(r"^\s*Name:\s+gfx[0-9a-z]+$", re.IGNORECASE)
-
-    return sum(1 for line in result.stdout.splitlines() if pattern.match(line.strip()))
-
-
-def get_first_gpu_architecture(env=None, therock_bin_dir: str | None = None) -> str:
-    """Return the first visible GPU architecture (e.g. 'gfx942') from rocminfo."""
-    rocminfo = Path(therock_bin_dir) / "rocminfo"
-    rocminfo_cmd = str(rocminfo) if rocminfo.exists() else "rocminfo"
-
-    result = subprocess.run(
-        [rocminfo_cmd],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env=env,
-        check=True,
-    )
-
-    pattern = re.compile(r"^\s*Name:\s+(gfx[0-9a-z]+)$", re.IGNORECASE)
-    for line in result.stdout.splitlines():
-        m = pattern.match(line.strip())
-        if m:
-            gpu_arch = m.group(1).lower()
-            logging.info(f"Detected GPU architecture: {gpu_arch}")
-            return gpu_arch
-    raise RuntimeError("No GPU architecture found in rocminfo output")

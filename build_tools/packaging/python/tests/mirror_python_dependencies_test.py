@@ -159,10 +159,13 @@ def _mock_s3_client(
 class FakeS3Client:
     def __init__(self) -> None:
         self.objects: dict[str, dict[str, object]] = {}
+        self.head_bucket_calls: list[dict[str, object]] = []
+        self.head_object_calls: list[dict[str, object]] = []
         self.get_calls: list[dict[str, object]] = []
         self.put_calls: list[dict[str, object]] = []
         self.copy_calls: list[dict[str, object]] = []
         self.now = datetime(2026, 8, 25, tzinfo=timezone.utc)
+        self.fail_head_bucket = False
         self.fail_copy_precondition = False
         self.corrupt_copy_checksum = False
         self.corrupt_put_checksum = False
@@ -178,6 +181,15 @@ class FakeS3Client:
         if not include_checksum:
             del self.objects[key]["ChecksumSHA256"]
 
+    def head_bucket(self, **kwargs: object) -> dict[str, object]:
+        self.head_bucket_calls.append(kwargs)
+        if self.fail_head_bucket:
+            raise ClientError(
+                {"Error": {"Code": "404", "Message": "Not Found"}},
+                "HeadBucket",
+            )
+        return {}
+
     def _object(self, body: bytes) -> dict[str, object]:
         return {
             "body": body,
@@ -192,6 +204,7 @@ class FakeS3Client:
         }
 
     def head_object(self, **kwargs: object) -> dict[str, object]:
+        self.head_object_calls.append(kwargs)
         key = str(kwargs["Key"])
         if key not in self.objects:
             raise ClientError(
@@ -631,6 +644,32 @@ def test_publish_dry_run_does_not_write(tmp_path: Path) -> None:
         s3_client=client,
     )
     assert summary.uploaded == 1
+    assert client.head_bucket_calls == [{"Bucket": "test-bucket"}]
+    assert not client.put_calls
+    assert not client.copy_calls
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_publish_rejects_inaccessible_bucket(tmp_path: Path, dry_run: bool) -> None:
+    _write_snapshot(tmp_path)
+    client = FakeS3Client()
+    client.fail_head_bucket = True
+
+    with pytest.raises(
+        RuntimeError,
+        match="Destination bucket is missing or inaccessible: s3://misspelled-bucket",
+    ) as exc_info:
+        mirror.publish_snapshot(
+            snapshot_dir=tmp_path,
+            bucket="misspelled-bucket",
+            refresh_existing=False,
+            dry_run=dry_run,
+            s3_client=client,
+        )
+
+    assert isinstance(exc_info.value.__cause__, ClientError)
+    assert client.head_bucket_calls == [{"Bucket": "misspelled-bucket"}]
+    assert not client.head_object_calls
     assert not client.put_calls
     assert not client.copy_calls
 
@@ -727,3 +766,29 @@ def test_mirror_command_resolves_and_uploads_snapshot(
     assert "`test-bucket`: published; uploaded 1, refreshed 0, skipped 0" in (
         summary_text
     )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://example.com/wheel.whl",
+        "file:///fixtures/wheel.whl",
+        "https:///wheel.whl",
+    ],
+)
+def test_download_wheel_rejects_non_https(url, tmp_path, monkeypatch):
+    wheel = PypiWheel(
+        filename=_WHEEL_FILENAME,
+        url=url,
+        sha256=_WHEEL_SHA256,
+        size=len(_WHEEL_BYTES),
+        version=mirror.Version("2.0.0"),
+    )
+
+    def unexpected_download(*args, **kwargs):
+        pytest.fail("Non-HTTPS input reached the downloader")
+
+    monkeypatch.setattr(mirror, "urlopen", unexpected_download)
+    with pytest.raises(ValueError, match="HTTPS"):
+        mirror.download_wheel(wheel, tmp_path / _WHEEL_FILENAME)
+    assert not (tmp_path / _WHEEL_FILENAME).exists()

@@ -300,7 +300,9 @@ def _untar_files(output_dir: Path, destination: Path):
     """
     log(f"Extracting {destination.name} to {str(output_dir)}")
     with tarfile.open(destination) as extracted_tar_file:
-        extracted_tar_file.extractall(output_dir, filter="tar")
+        # Preserve packaged modes and ownership; the data filter changes them.
+        # Only extract trusted ROCm artifacts: tar permits external link targets.
+        extracted_tar_file.extractall(output_dir, filter="tar")  # nosec B202
     destination.unlink()
 
 
@@ -398,6 +400,7 @@ def retrieve_artifacts_by_run_id(args):
         argv.extend(base_artifact_patterns)
     elif any(
         [
+            args.sanity,
             args.aqlprofile,
             args.blas,
             args.debug_tools,
@@ -425,6 +428,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_systems,
             args.rocprofiler_systems_examples,
             args.rocrtst,
+            args.hip_tests,
             args.rocalution,
             args.kfdtest,
             args.rocwmma,
@@ -438,6 +442,9 @@ def retrieve_artifacts_by_run_id(args):
         argv.extend(base_artifact_patterns)
 
         extra_artifacts = []
+        if args.sanity:
+            argv.append("core-ocl_run")  # clinfo for the OpenCL sanity test
+            argv.append("hipify_run")  # hipify-clang for the HIPIFY sanity test
         if args.aqlprofile:
             extra_artifacts.append("aqlprofile")
         if args.blas:
@@ -547,12 +554,21 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rocprofiler-systems")
             # Contains executables (rocprof-sys-run, rocprof-sys-instrument, etc.)
             argv.append("rocprofiler-systems_run")
+            # rocprofiler-systems links libprofiler-hub.so.0 at runtime.
+            argv.append("profiler-hub_lib")
             if args.tests:
                 # Tests need version.h for rocprofiler-sdk version detection.
                 argv.append("rocprofiler-sdk_dev")
+            # librocprof-sys.so dlopens libhipfile.so.0 on the first hipFile
+            # telemetry sample.
+            extra_artifacts.append("hipfile")
+            extra_artifacts.append("sysdeps-util-linux")
         if args.rocprofiler_systems_examples:
             # Only a _test artifact is produced
             argv.append("rocprofiler-systems-examples_test")
+            # The hipFile examples link libhipfile.so.0 directly.
+            extra_artifacts.append("hipfile")
+            extra_artifacts.append("sysdeps-util-linux")
         if args.rocrtst:
             extra_artifacts.append("rocrtst")
             # rocrtst depends on sysdeps-hwloc (which depends on sysdeps-libpciaccess)
@@ -561,6 +577,9 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocalution:
             extra_artifacts.append("rocalution")
             argv.append("rocalution_dev")
+        if args.hip_tests:
+            # Only a _test artifact is produced; it carries share/hip/catch_tests.
+            argv.append("core-hiptests_test")
         if args.kfdtest:
             extra_artifacts.append("kfdtest")
             # kfdtest depends on llvm-dev
@@ -1021,6 +1040,13 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--hip-tests",
+        default=False,
+        help="Include artifacts needed to build and run 'hip-tests'",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--rocwmma",
         default=False,
         help="Include 'rocwmma' artifacts",
@@ -1055,6 +1081,12 @@ def main(argv):
         action=argparse.BooleanOptionalAction,
     )
 
+    artifacts_group.add_argument(
+        "--sanity",
+        default=False,
+        help="Include base artifacts, clinfo, and hipify-clang for sanity tests",
+        action=argparse.BooleanOptionalAction,
+    )
     artifacts_group.add_argument(
         "--base-only", help="Include only base artifacts", action="store_true"
     )

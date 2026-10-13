@@ -45,8 +45,8 @@ test_include = ["amd-dbgapi", "ocl-icd", "rocgdb"]
 # Backs the "amd-hip" toolchain most of the tree builds with.
 level = 3
 # Only the couplings the walk does not already reach: hipinfo is a hip-clr tool
-# target (not a graph key); rocrtst has no graph path from hip-clr.
-test_include = ["hipinfo", "rocrtst"]
+# target (not a graph key); rocrtst and rocgdb have no graph path from hip-clr.
+test_include = ["hipinfo", "rocrtst", "rocgdb"]
 
 [component.amd-llvm]
 # The compiler builds ~everything; its consumers come from the graph via
@@ -72,14 +72,14 @@ test_include = ["rocprofiler-systems-examples"]
 [component.roctracer]
 test_include = ["hip-clr", "rocprofiler-sdk"]
 
-# rocgdb-cpu / rocgdb-gpu / rocgdb-corefile are ctest targets of rocgdb, not
+# rocgdb-cpu / rocgdb-gpu are ctest targets of rocgdb, not
 # subprojects, so they are named here rather than derived from the graph.
 
 [component.amd-dbgapi]
-test_include = ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"]
+test_include = ["rocgdb-cpu", "rocgdb-gpu"]
 
 [component.rocgdb]
-test_include = ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"]
+test_include = ["rocgdb-cpu", "rocgdb-gpu"]
 
 # --- Math / ML library couplings ----------------------------------------------
 

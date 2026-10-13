@@ -44,7 +44,8 @@ warns and runs nothing until `ROCm/jax-lab` is public.
 
 The smallest set of JAX tests that covers 100% of the LLM-weighted module
 graph on ROCm GPU: greedy weighted max-coverage over the 110-test ROCm
-candidate pool saturates at these 42.
+candidate pool saturates at 42 files, plus `logging_test.py` for subprocess
+stderr checks that catch stray rocprofiler-sdk output on XLA shutdown.
 
 Regenerate it whenever JAX is bumped to a new major version, with the
 `jax-test-selector` tool in its recommended `w+p` configuration:

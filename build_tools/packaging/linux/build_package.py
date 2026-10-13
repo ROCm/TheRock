@@ -206,9 +206,9 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
         if pkg:
             built_packages.extend(pkg)
 
-    # Device packages (one per architecture)
+    # Device packages (one per owner, retaining all selected member targets)
     # For metapackages, these become arch-specific meta packages
-    for device_arch in config.gfxarch_list:
+    for device_arch in group_package_targets(config.gfxarch_list):
         logger.info(f"Building device variant for {pkg_name} ({device_arch})")
         pkg = build_device_package(pkg_name, config, device_arch)
         if pkg:
@@ -360,6 +360,8 @@ def build_device_package(pkg_name, config: PackageConfig, device_arch: str) -> l
             return create_versioned_rpm_package(pkg_name, device_config)
         else:
             return create_versioned_deb_package(pkg_name, device_config)
+    except PackageCollisionError:
+        raise
     except Exception as e:
         logger.error(
             f"Failed to build device package for {pkg_name} ({device_arch}): {e}"
@@ -648,6 +650,8 @@ def build_pkg(task: BuildTask) -> tuple[str, list[str], str | None]:
                     shutil.move(str(src), str(dst))
                     result.append(f)
             return (task.pkg_name, result, None)
+        except PackageCollisionError:
+            raise
         except SystemExit as e:
             return (task.pkg_name, [], f"SystemExit: exited with code {e.code}")
         except Exception as e:
@@ -679,6 +683,7 @@ def run(args: argparse.Namespace):
 
     built_pkglist = []
     failed_pkglist = []
+    had_collision = False
 
     with ProcessPoolExecutor(max_workers=args.parallel) as executor:
         futures = {
@@ -692,6 +697,8 @@ def run(args: argparse.Namespace):
             except Exception as e:
                 logger.error(f"Package {pkg_name} failed: {e}")
                 failed_pkglist.append(pkg_name)
+                if isinstance(e, PackageCollisionError):
+                    had_collision = True
                 continue
 
             if error:
@@ -721,6 +728,8 @@ def run(args: argparse.Namespace):
 
     # Print build summary
     print_build_summary(config, pkglist_status)
+    if had_collision:
+        sys.exit(1)
 
 
 def main(argv: list[str]):

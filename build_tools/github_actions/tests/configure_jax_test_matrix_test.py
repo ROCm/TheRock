@@ -121,6 +121,16 @@ class BuildTestMatrixTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.matrix(target="gfx-not-a-family")
 
+    def test_family_with_jax_disabled_returns_empty_matrix(self):
+        """Families with jax in disabled_framework_tests return empty matrix."""
+        with mock.patch.object(
+            matrix_script,
+            "is_framework_test_disabled_for_family",
+            return_value=True,
+        ):
+            matrix = self.matrix(target="gfx94X-dcgpu", size="large")
+        self.assertEqual(matrix, {"include": []})
+
     def test_only_small_narrows_the_single_gpu_job(self):
         small = job_for(self.matrix(size="small"), "all")
         medium = job_for(self.matrix(size="medium"), "all")
@@ -230,6 +240,15 @@ class OutputsTest(unittest.TestCase):
         ]:
             with self.subTest(argv=argv), self.assertRaises(SystemExit):
                 self.outputs(argv)
+
+
+class SmallTestSelectionTest(unittest.TestCase):
+    def test_pr_small_selection_includes_rocprofiler_smoke(self):
+        repo_root = Path(__file__).resolve().parents[3]
+        listed = (repo_root / matrix_script.SMALL_TEST_LIST).read_text().splitlines()
+        paths = {line.partition("#")[0].strip() for line in listed if line.strip()}
+        self.assertIn("tests/logging_test.py", paths)
+        self.assertIn("tests/profiler_test.py", paths)
 
 
 if __name__ == "__main__":
