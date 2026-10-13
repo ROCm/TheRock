@@ -137,12 +137,6 @@ SRC_VERSION_PATTERNS = {
 }
 
 
-def src_version_pattern(src_version_type: str, keep_git: bool = False) -> str:
-    if src_version_type == "dev" and keep_git:
-        return rf"{DEV_ROCM_PATTERN}|rc\d*"
-    return SRC_VERSION_PATTERNS[src_version_type]
-
-
 def parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="""Promotes packages from release candidate to final release (e.g. 7.10.0rc1 --> 7.10.0).
@@ -466,20 +460,11 @@ def update_metadata_rocm_requires_dist(
                     print(line, end="")
 
 
-def has_src_version_type(
-    version_str: str, src_version_type: str, keep_git: bool = False
-) -> bool:
-    """Gate promotion on the same pattern `compute_new_version_str` rewrites, since 'dev' is not a literal substring."""
-    return (
-        re.search(src_version_pattern(src_version_type, keep_git), version_str)
-        is not None
-    )
-
-
 def compute_new_version_str(
     version_str: str, src_version_type: str, dest_version: str, keep_git: bool = False
-) -> str:
-    """Return the new version string after applying `dest_version` to `version_str`.
+) -> str | None:
+    """Return the new version string after applying `dest_version` to `version_str`,
+    or None when `version_str` has no `src_version_type` marker to promote.
 
     The source prerelease segment (`src_version_type` plus any trailing digits) is
     either stripped or replaced:
@@ -493,10 +478,13 @@ def compute_new_version_str(
     (`2.12.0+git1a2b3c4d.devrocm10.2.0.dev0.<sha>` -> `2.12.0+rocm10.2.0`,
     `10.2.0.dev0+<sha>` -> `10.2.0`).
     """
+    if src_version_type == "dev" and keep_git:
+        pattern = rf"{DEV_ROCM_PATTERN}|rc\d*"
+    else:
+        pattern = SRC_VERSION_PATTERNS[src_version_type]
     replacement = "" if dest_version == "release" else dest_version
-    return re.sub(
-        src_version_pattern(src_version_type, keep_git), replacement, version_str
-    )
+    new_version_str, count = re.subn(pattern, replacement, version_str)
+    return new_version_str if count else None
 
 
 # Arch token shape used in wheel filenames, extras names, and dep names. Covers
@@ -1186,39 +1174,37 @@ def promote_wheel(
 
     if src_version_type == "dev":
         # Dev ROCm wheels carry their sha in the local part (`10.2.0.dev0+<sha>`), so rewrite the full version.
-        if not has_src_version_type(str(original_version), src_version_type, keep_git):
-            print(
-                f"  [ERROR] Only prerelease versions of type '{src_version_type}' can be promoted! Skipping!"
-            )
-            return False
-        promoted = Version(
-            compute_new_version_str(
-                str(original_version), src_version_type, dest_version, keep_git
-            )
+        promoted = compute_new_version_str(
+            str(original_version), src_version_type, dest_version, keep_git
         )
-        new_base_version = promoted.public
-        new_local_version = promoted.local
-    elif original_version.local:  # torch packages
-        if not has_src_version_type(original_version.local, src_version_type):
+        if promoted is None:
             print(
                 f"  [ERROR] Only prerelease versions of type '{src_version_type}' can be promoted! Skipping!"
             )
             return False
+        new_base_version = Version(promoted).public
+        new_local_version = Version(promoted).local
+    elif original_version.local:  # torch packages
         new_local_version = compute_new_version_str(
             str(original_version.local), src_version_type, dest_version
         )
-        new_base_version = str(original_version.public)
-    else:  # rocm packages
-        if not has_src_version_type(str(original_version), src_version_type):
+        if new_local_version is None:
             print(
                 f"  [ERROR] Only prerelease versions of type '{src_version_type}' can be promoted! Skipping!"
             )
             return False
+        new_base_version = str(original_version.public)
+    else:  # rocm packages
         new_local_version = None
         # For non-local versions, transform the public version directly.
         new_base_version = compute_new_version_str(
             str(original_version), src_version_type, dest_version
         )
+        if new_base_version is None:
+            print(
+                f"  [ERROR] Only prerelease versions of type '{src_version_type}' can be promoted! Skipping!"
+            )
+            return False
 
     print(f"  New base version: {new_base_version}")
     print(f"  New local version: {new_local_version}")
@@ -1277,14 +1263,14 @@ def promote_targz_sdist(
             # `multi_arch_targets` presence is enforced at the main() boundary.
             new_version_str = str(version)
         else:
-            if not has_src_version_type(str(version), src_version_type):
+            new_version_str = compute_new_version_str(
+                str(version), src_version_type, dest_version
+            )
+            if new_version_str is None:
                 print(
                     f"  [ERROR] Only prerelease versions of type '{src_version_type}' can be promoted! Skipping!"
                 )
                 return False
-            new_version_str = compute_new_version_str(
-                str(version), src_version_type, dest_version
-            )
 
         if multi_arch_targets:
             wheel_apply_gfx_keep_list(tmp_path / package_name, multi_arch_targets)
@@ -1341,15 +1327,14 @@ def promote_targz_tarball(
     print(f"Promoting tarball from rc to final: {filename.name}")
     print(f"  Detected version: {old_version}")
 
-    if not has_src_version_type(str(old_version), src_version_type):
+    new_version_str = compute_new_version_str(
+        str(old_version), src_version_type, dest_version
+    )
+    if new_version_str is None:
         print(
             f"  [ERROR] Only prerelease versions of type '{src_version_type}' can be promoted! Skipping!"
         )
         return False
-
-    new_version_str = compute_new_version_str(
-        str(old_version), src_version_type, dest_version
-    )
     new_name = old_name.replace(str(old_version), new_version_str) + ".tar.gz"
 
     print(f"  New version: {new_version_str}")
