@@ -5,6 +5,7 @@
 """Tests for data invariants in amdgpu_family_matrix.py."""
 
 import os
+import copy
 import sys
 import unittest
 from pathlib import Path
@@ -534,6 +535,77 @@ class TestDisabledFrameworkTests(unittest.TestCase):
                 platform="linux",
                 framework="invalid",
             )
+
+
+class TestSandboxRunnerScope(unittest.TestCase):
+    def test_sandbox_pools_are_only_available_to_rocm_systems_prs(self):
+        local = copy.deepcopy(amdgpu_family_matrix.amdgpu_family_info_matrix)
+        external = {
+            "runner_labels": {
+                family: {
+                    "linux": {
+                        "test-runs-on-sandbox": f"linux-{gfx}-8gpu-asan-sandbox-rocm",
+                        "test-runs-on-sandbox-labels": [
+                            {"label": f"linux-{gfx}-8gpu-asan-sandbox-rocm", "count": 4}
+                        ],
+                    }
+                }
+                for family, gfx in [("gfx94x", "gfx942"), ("gfx950", "gfx950")]
+            }
+        }
+        for config in [None, external]:
+            for repository in [
+                "ROCm/rocm-systems",
+                "ROCm/TheRock",
+                "ROCm/rocm-libraries",
+                "",
+            ]:
+                for event in [
+                    "pull_request",
+                    "pull_request_target",
+                    "workflow_dispatch",
+                    "schedule",
+                    "push",
+                    "workflow_call",
+                    "",
+                ]:
+                    with self.subTest(
+                        external=config is not None, repository=repository, event=event
+                    ):
+                        with patch.dict(
+                            os.environ,
+                            {
+                                "GITHUB_REPOSITORY": repository,
+                                "GITHUB_EVENT_NAME": event,
+                            },
+                        ), patch.object(
+                            amdgpu_family_matrix,
+                            "load_external_runner_config",
+                            return_value=config,
+                        ):
+                            result = (
+                                amdgpu_family_matrix.get_all_families_for_trigger_types(
+                                    []
+                                )
+                            )
+                        for family in ["gfx94x", "gfx950"]:
+                            expected = copy.deepcopy(local[family]["linux"])
+                            if config is not None:
+                                expected.update(
+                                    config["runner_labels"][family]["linux"]
+                                )
+                            if (
+                                repository != "ROCm/rocm-systems"
+                                or event != "pull_request"
+                            ):
+                                expected["test-runs-on-sandbox"] = ""
+                                expected["test-runs-on-sandbox-labels"] = []
+                            self.assertEqual(result[family]["linux"], expected)
+                        self.assertEqual(
+                            amdgpu_family_matrix.amdgpu_family_info_matrix, local
+                        )
+                        # Mutating one result must not affect later calls or the external config.
+                        result["gfx94x"]["linux"]["test-runs-on-sandbox"] = "mutated"
 
 
 if __name__ == "__main__":
