@@ -1,7 +1,10 @@
 Subject: [PATCH] Update ELFIO symbol hash lookup
 
-Backport the SysV and GNU symbol lookup updates to ELFIO 3.12, including
-endian-aware reads and the existing linear lookup fallback.
+Backport the SysV and GNU symbol lookup updates to ELFIO 3.12: bounds-
+checked, endian-aware and alignment-safe hash table reads, bounded chain
+traversal, authoritative misses on well-formed tables (local and unhashed
+symbols are still searched linearly), output parameters written only on a
+match, and alignment-safe symbol record access.
 
 Upstream: https://github.com/serge1/ELFIO/pull/174
 JIRA: SWSPLAT-24296
@@ -9,7 +12,7 @@ JIRA: SWSPLAT-24296
 Remove this backport when updating to a release that includes these changes.
 
 diff --git a/elfio/elfio_symbols.hpp b/elfio/elfio_symbols.hpp
-index d868500..7593df2 100644
+index d868500..92db3b3 100644
 --- a/elfio/elfio_symbols.hpp
 +++ b/elfio/elfio_symbols.hpp
 @@ -23,6 +23,8 @@ THE SOFTWARE.
@@ -21,45 +24,143 @@ index d868500..7593df2 100644
  namespace ELFIO {
  
  //------------------------------------------------------------------------------
-@@ -286,6 +288,26 @@ template <class S> class symbol_section_accessor_template
+@@ -96,39 +98,72 @@ template <class S> class symbol_section_accessor_template
+                      Elf_Half&          section_index,
+                      unsigned char&     other ) const
+     {
+-        bool ret = false;
+-
+-        if ( 0 != get_hash_table_index() ) {
++        Elf64_Addr    found_value         = 0;
++        Elf_Xword     found_size          = 0;
++        unsigned char found_bind          = 0;
++        unsigned char found_type          = 0;
++        Elf_Half      found_section_index = 0;
++        unsigned char found_other         = 0;
++
++        const Elf_Xword symbol_count = get_symbols_num();
++        hash_result     result       = hash_result::invalid;
++        // Non-local symbols in [covered_begin, covered_end) are ruled out by
++        // a miss
++        Elf_Xword covered_begin = 0;
++        Elf_Xword covered_end   = 0;
++        // Unnamed symbols are never reachable through a hash table
++        if ( 0 != get_hash_table_index() && !name.empty() ) {
+             if ( hash_section->get_type() == SHT_HASH ) {
+-                ret = hash_lookup( name, value, size, bind, type, section_index,
+-                                   other );
++                result =
++                    hash_lookup( name, found_value, found_size, found_bind,
++                                 found_type, found_section_index, found_other );
++                covered_end = symbol_count;
+             }
+-            if ( hash_section->get_type() == SHT_GNU_HASH ||
+-                 hash_section->get_type() == DT_GNU_HASH ) {
++            if ( hash_section->get_type() == SHT_GNU_HASH ) {
+                 if ( elf_file.get_class() == ELFCLASS32 ) {
+-                    ret = gnu_hash_lookup<uint32_t>(
+-                        name, value, size, bind, type, section_index, other );
++                    result = gnu_hash_lookup<uint32_t>(
++                        name, found_value, found_size, found_bind, found_type,
++                        found_section_index, found_other, covered_begin,
++                        covered_end );
+                 }
+                 else {
+-                    ret = gnu_hash_lookup<uint64_t>(
+-                        name, value, size, bind, type, section_index, other );
++                    result = gnu_hash_lookup<uint64_t>(
++                        name, found_value, found_size, found_bind, found_type,
++                        found_section_index, found_other, covered_begin,
++                        covered_end );
+                 }
+             }
+         }
+ 
+-        if ( !ret ) {
+-            for ( Elf_Xword i = 0; !ret && i < get_symbols_num(); i++ ) {
+-                std::string symbol_name;
+-                if ( get_symbol( i, symbol_name, value, size, bind, type,
+-                                 section_index, other ) ) {
+-                    if ( symbol_name == name ) {
+-                        ret = true;
+-                    }
+-                }
++        bool found = result == hash_result::found;
++        if ( result == hash_result::invalid ) {
++            covered_begin = 0;
++            covered_end   = 0;
++        }
++        for ( Elf_Xword i = 0; !found && i < symbol_count; i++ ) {
++            // Linkers may place local symbols in a hashed symbol table without
++            // adding them to a chain, so a miss does not rule them out
++            if ( i >= covered_begin && i < covered_end &&
++                 !is_local_symbol( i ) ) {
++                continue;
+             }
++            std::string symbol_name;
++            found =
++                get_symbol( i, symbol_name, found_value, found_size, found_bind,
++                            found_type, found_section_index, found_other ) &&
++                symbol_name == name;
++        }
++        if ( !found ) {
++            return false;
+         }
+ 
+-        return ret;
++        value         = found_value;
++        size          = found_size;
++        bind          = found_bind;
++        type          = found_type;
++        section_index = found_section_index;
++        other         = found_other;
++        return true;
+     }
+ 
+     //------------------------------------------------------------------------------
+@@ -268,8 +303,7 @@ template <class S> class symbol_section_accessor_template
+             const section* sec = elf_file.sections[i];
+             if ( sec->get_link() == symbol_section->get_index() &&
+                  ( sec->get_type() == SHT_HASH ||
+-                   sec->get_type() == SHT_GNU_HASH ||
+-                   sec->get_type() == DT_GNU_HASH ) ) {
++                   sec->get_type() == SHT_GNU_HASH ) ) {
+                 hash_section       = sec;
+                 hash_section_index = i;
+                 break;
+@@ -278,117 +312,270 @@ template <class S> class symbol_section_accessor_template
+     }
+ 
+     //------------------------------------------------------------------------------
+-    Elf_Half get_string_table_index() const
++    Elf_Word get_string_table_index() const
+     {
+-        return (Elf_Half)symbol_section->get_link();
++        return symbol_section->get_link();
+     }
+ 
      //------------------------------------------------------------------------------
      Elf_Half get_hash_table_index() const { return hash_section_index; }
  
-+    //------------------------------------------------------------------------------
-+    template <class T>
-+    bool read_hash_value( Elf_Xword byte_offset, T& value ) const
-+    {
-+        if ( hash_section == nullptr ) {
-+            return false;
-+        }
-+        const char*     data      = hash_section->get_data();
-+        const Elf_Xword data_size = hash_section->get_size();
-+        if ( data == nullptr || byte_offset > data_size ||
-+             sizeof( T ) > data_size - byte_offset ) {
-+            return false;
-+        }
-+
-+        T raw_value;
-+        std::memcpy( &raw_value, data + byte_offset, sizeof( raw_value ) );
-+        value = elf_file.get_convertor()( raw_value );
-+        return true;
-+    }
-+
      //------------------------------------------------------------------------------
-     bool hash_lookup( const std::string& name,
-                       Elf64_Addr&        value,
-@@ -295,33 +317,54 @@ template <class S> class symbol_section_accessor_template
-                       Elf_Half&          section_index,
-                       unsigned char&     other ) const
+-    bool hash_lookup( const std::string& name,
+-                      Elf64_Addr&        value,
+-                      Elf_Xword&         size,
+-                      unsigned char&     bind,
+-                      unsigned char&     type,
+-                      Elf_Half&          section_index,
+-                      unsigned char&     other ) const
++    // Result of a hash table lookup. A miss in a well-formed table rules out
++    // the symbols the table covers; an unusable table rules out none.
++    //------------------------------------------------------------------------------
++    enum class hash_result
      {
 -        bool                       ret       = false;
 -        const endianess_convertor& convertor = elf_file.get_convertor();
-+        Elf_Word nbucket = 0;
-+        Elf_Word nchain  = 0;
-+        if ( !read_hash_value( 0, nbucket ) ||
-+             !read_hash_value( sizeof( Elf_Word ), nchain ) || nbucket == 0 ) {
-+            return false;
-+        }
++        found,
++        not_found,
++        invalid
++    };
  
 -        Elf_Word nbucket = *(const Elf_Word*)hash_section->get_data();
 -        nbucket          = convertor( nbucket );
@@ -82,14 +183,68 @@ index d868500..7593df2 100644
 -
 -        if ( str == name ) {
 -            ret = true;
-+        const Elf_Xword word_count =
-+            hash_section->get_size() / sizeof( Elf_Word );
-+        if ( word_count < 2 || nbucket > word_count - 2 ||
-+             nchain > word_count - 2 - nbucket || nchain > get_symbols_num() ) {
++    //------------------------------------------------------------------------------
++    // @brief Read and convert a value from the hash section
++    // @param byte_offset Byte offset of the value in the hash section
++    // @param value Converted value
++    // @return True if the complete value is inside the section, false otherwise
++    //------------------------------------------------------------------------------
++    template <class T>
++    bool read_hash_value( Elf_Xword byte_offset, T& value ) const
++    {
++        if ( hash_section == nullptr ) {
++            return false;
++        }
++        const char*     data      = hash_section->get_data();
++        const Elf_Xword data_size = hash_section->get_size();
++        if ( data == nullptr || byte_offset > data_size ||
++             sizeof( T ) > data_size - byte_offset ) {
 +            return false;
          }
  
 -        return ret;
++        T raw_value;
++        std::memcpy( &raw_value, data + byte_offset, sizeof( raw_value ) );
++        value = elf_file.get_convertor()( raw_value );
++        return true;
++    }
++
++    //------------------------------------------------------------------------------
++    // @brief Lookup a symbol in the SysV hash table
++    // @param name Name of the symbol
++    // @param value Value of the symbol
++    // @param size Size of the symbol
++    // @param bind Binding of the symbol
++    // @param type Type of the symbol
++    // @param section_index Section index of the symbol
++    // @param other Other attributes of the symbol
++    // @return Whether the symbol was found, is absent, or the table is unusable
++    //------------------------------------------------------------------------------
++    hash_result hash_lookup( const std::string& name,
++                             Elf64_Addr&        value,
++                             Elf_Xword&         size,
++                             unsigned char&     bind,
++                             unsigned char&     type,
++                             Elf_Half&          section_index,
++                             unsigned char&     other ) const
++    {
++        Elf_Word nbucket = 0;
++        Elf_Word nchain  = 0;
++        if ( !read_hash_value( 0, nbucket ) ||
++             !read_hash_value( sizeof( Elf_Word ), nchain ) || nbucket == 0 ) {
++            return hash_result::invalid;
++        }
++
++        // The table has one chain entry per symbol, so a miss only rules
++        // symbols out when it covers the whole symbol table
++        const Elf_Xword word_count =
++            hash_section->get_size() / sizeof( Elf_Word );
++        if ( word_count < 2 || nbucket > word_count - 2 ||
++             nchain > word_count - 2 - nbucket ||
++             nchain != get_symbols_num() ) {
++            return hash_result::invalid;
++        }
++
 +        const Elf_Word hash =
 +            elf_hash( reinterpret_cast<const unsigned char*>( name.c_str() ) );
 +        Elf_Word symbol;
@@ -97,39 +252,57 @@ index d868500..7593df2 100644
 +                 ( 2 + static_cast<Elf_Xword>( hash % nbucket ) ) *
 +                     sizeof( Elf_Word ),
 +                 symbol ) ) {
-+            return false;
++            return hash_result::invalid;
 +        }
 +
-+        for ( Elf_Word steps = 0; symbol != STN_UNDEF && steps < nchain;
-+              ++steps ) {
++        // A well-formed chain ends at STN_UNDEF within nchain steps
++        for ( Elf_Word steps = 0; steps < nchain; ++steps ) {
++            if ( symbol == STN_UNDEF ) {
++                return hash_result::not_found;
++            }
 +            if ( symbol >= nchain ) {
-+                return false;
++                return hash_result::invalid;
 +            }
 +
 +            std::string symbol_name;
 +            if ( !get_symbol( symbol, symbol_name, value, size, bind, type,
 +                              section_index, other ) ) {
-+                return false;
++                return hash_result::invalid;
 +            }
 +            if ( symbol_name == name ) {
-+                return true;
++                return hash_result::found;
 +            }
 +
 +            if ( !read_hash_value(
 +                     ( 2 + static_cast<Elf_Xword>( nbucket ) + symbol ) *
 +                         sizeof( Elf_Word ),
 +                     symbol ) ) {
-+                return false;
++                return hash_result::invalid;
 +            }
 +        }
 +
-+        return false;
++        return symbol == STN_UNDEF ? hash_result::not_found
++                                   : hash_result::invalid;
      }
  
      //------------------------------------------------------------------------------
-@@ -334,61 +377,97 @@ template <class S> class symbol_section_accessor_template
-                           Elf_Half&          section_index,
-                           unsigned char&     other ) const
+     template <class T>
+-    bool gnu_hash_lookup( const std::string& name,
+-                          Elf64_Addr&        value,
+-                          Elf_Xword&         size,
+-                          unsigned char&     bind,
+-                          unsigned char&     type,
+-                          Elf_Half&          section_index,
+-                          unsigned char&     other ) const
++    hash_result gnu_hash_lookup( const std::string& name,
++                                 Elf64_Addr&        value,
++                                 Elf_Xword&         size,
++                                 unsigned char&     bind,
++                                 unsigned char&     type,
++                                 Elf_Half&          section_index,
++                                 unsigned char&     other,
++                                 Elf_Xword&         covered_begin,
++                                 Elf_Xword&         covered_end ) const
      {
 -        bool                       ret       = false;
 -        const endianess_convertor& convertor = elf_file.get_convertor();
@@ -142,8 +315,11 @@ index d868500..7593df2 100644
 +             !read_hash_value( 2 * sizeof( uint32_t ), bloom_size ) ||
 +             !read_hash_value( 3 * sizeof( uint32_t ), bloom_shift ) ||
 +             nbuckets == 0 || bloom_size == 0 ||
++             // glibc indexes the bloom filter with a mask, so its size must be
++             // a power of two
++             ( bloom_size & ( bloom_size - 1 ) ) != 0 ||
 +             bloom_shift >= 8 * sizeof( uint32_t ) ) {
-+            return false;
++            return hash_result::invalid;
 +        }
  
 -        uint32_t nbuckets    = *( (uint32_t*)hash_section->get_data() + 0 );
@@ -194,16 +370,13 @@ index d868500..7593df2 100644
 +        constexpr Elf_Xword header_size = 4 * sizeof( uint32_t );
 +        if ( hash_size < header_size ||
 +             bloom_size > ( hash_size - header_size ) / sizeof( T ) ) {
-+            return false;
++            return hash_result::invalid;
 +        }
-
--                if ( chain_hash & 1 )
--                    break;
--                chain_hash = convertor( chains[++chain_index] );
++
 +        const Elf_Xword buckets_offset =
 +            header_size + static_cast<Elf_Xword>( bloom_size ) * sizeof( T );
 +        if ( nbuckets > ( hash_size - buckets_offset ) / sizeof( uint32_t ) ) {
-+            return false;
++            return hash_result::invalid;
 +        }
 +
 +        const Elf_Xword chains_offset =
@@ -213,8 +386,13 @@ index d868500..7593df2 100644
 +            ( hash_size - chains_offset ) / sizeof( uint32_t );
 +        const Elf_Xword symbol_count = get_symbols_num();
 +        if ( symoffset > symbol_count ) {
-+            return false;
++            return hash_result::invalid;
 +        }
++        // Symbols below symoffset are not hashed, and a table may have fewer
++        // chain entries than the remaining symbols
++        covered_begin = symoffset;
++        covered_end =
++            symoffset + std::min( chain_count, symbol_count - symoffset );
 +
 +        const uint32_t hash = elf_gnu_hash(
 +            reinterpret_cast<const unsigned char*>( name.c_str() ) );
@@ -227,9 +405,11 @@ index d868500..7593df2 100644
 +        if ( !read_hash_value( header_size +
 +                                   static_cast<Elf_Xword>( bloom_index ) *
 +                                       sizeof( T ),
-+                               bloom_value ) ||
-+             ( bloom_value & bloom_bits ) != bloom_bits ) {
-+            return false;
++                               bloom_value ) ) {
++            return hash_result::invalid;
++        }
++        if ( ( bloom_value & bloom_bits ) != bloom_bits ) {
++            return hash_result::not_found;
 +        }
 +
 +        const uint32_t bucket = hash % nbuckets;
@@ -237,41 +417,204 @@ index d868500..7593df2 100644
 +        if ( !read_hash_value( buckets_offset +
 +                                   static_cast<Elf_Xword>( bucket ) *
 +                                       sizeof( uint32_t ),
-+                               symbol ) ||
-+             symbol < symoffset ) {
-+            return false;
++                               symbol ) ) {
++            return hash_result::invalid;
++        }
++        // Bucket value 0 marks an empty bucket
++        if ( symbol == 0 ) {
++            return hash_result::not_found;
++        }
++        if ( symbol < symoffset ) {
++            return hash_result::invalid;
 +        }
 +
 +        Elf_Xword chain_index = symbol - symoffset;
 +        while ( chain_index < chain_count ) {
 +            if ( chain_index >= symbol_count - symoffset ) {
-+                return false;
-             }
++                return hash_result::invalid;
++            }
 +
 +            uint32_t chain_hash = 0;
 +            if ( !read_hash_value( chains_offset +
 +                                       chain_index * sizeof( uint32_t ),
 +                                   chain_hash ) ) {
-+                return false;
++                return hash_result::invalid;
 +            }
-+
+ 
+-                if ( chain_hash & 1 )
+-                    break;
+-                chain_hash = convertor( chains[++chain_index] );
 +            std::string symbol_name;
 +            if ( ( chain_hash >> 1 ) == ( hash >> 1 ) &&
 +                 get_symbol( static_cast<Elf_Xword>( symoffset ) + chain_index,
 +                             symbol_name, value, size, bind, type,
 +                             section_index, other ) &&
 +                 name == symbol_name ) {
-+                return true;
-+            }
++                return hash_result::found;
+             }
 +
 +            if ( chain_hash & 1 ) {
-+                return false;
++                return hash_result::not_found;
 +            }
 +            ++chain_index;
          }
  
 -        return ret;
-+        return false;
++        return hash_result::invalid;
++    }
++
++    //------------------------------------------------------------------------------
++    // @brief Check whether the symbol at the specified index is local
++    // @param index Index of the symbol
++    // @return True if the symbol exists and has STB_LOCAL binding
++    //------------------------------------------------------------------------------
++    bool is_local_symbol( Elf_Xword index ) const
++    {
++        if ( elf_file.get_class() == ELFCLASS32 ) {
++            return generic_is_local_symbol<Elf32_Sym>( index );
++        }
++        return generic_is_local_symbol<Elf64_Sym>( index );
++    }
++
++    //------------------------------------------------------------------------------
++    template <class T> bool generic_is_local_symbol( Elf_Xword index ) const
++    {
++        const T* record = generic_get_symbol_ptr<T>( index );
++        if ( record == nullptr ) {
++            return false;
++        }
++        T symbol;
++        std::memcpy( &symbol, record, sizeof( symbol ) );
++        return ELF_ST_BIND( symbol.st_info ) == STB_LOCAL;
      }
  
      //------------------------------------------------------------------------------
+@@ -416,7 +603,10 @@ template <class S> class symbol_section_accessor_template
+             if ( symPtr == nullptr )
+                 return false;
+ 
+-            if ( match( symPtr ) ) {
++            // Symbol records may be unaligned in the section data
++            T symbol;
++            std::memcpy( &symbol, symPtr, sizeof( symbol ) );
++            if ( match( &symbol ) ) {
+                 idx = i;
+                 return true;
+             }
+@@ -440,26 +630,32 @@ template <class S> class symbol_section_accessor_template
+ 
+         if ( nullptr != symbol_section->get_data() &&
+              index < get_symbols_num() ) {
+-            const T* pSym = reinterpret_cast<const T*>(
+-                symbol_section->get_data() +
+-                index * symbol_section->get_entry_size() );
++            // Symbol records may be unaligned in the section data
++            T symbol;
++            std::memcpy( &symbol,
++                         symbol_section->get_data() +
++                             index * symbol_section->get_entry_size(),
++                         sizeof( symbol ) );
+ 
+             const endianess_convertor& convertor = elf_file.get_convertor();
+ 
+-            section* string_section =
++            // An unresolvable name yields an empty string rather than
++            // leaving the caller's previous value in place
++            const section* string_section =
+                 elf_file.sections[get_string_table_index()];
+-            string_section_accessor str_reader( string_section );
+-            const char*             pStr =
+-                str_reader.get_string( convertor( pSym->st_name ) );
+-            if ( nullptr != pStr ) {
+-                name = pStr;
++            const char* pStr = nullptr;
++            if ( string_section != nullptr &&
++                 string_section->get_type() == SHT_STRTAB ) {
++                const_string_section_accessor str_reader( string_section );
++                pStr = str_reader.get_string( convertor( symbol.st_name ) );
+             }
+-            value         = convertor( pSym->st_value );
+-            size          = convertor( pSym->st_size );
+-            bind          = ELF_ST_BIND( pSym->st_info );
+-            type          = ELF_ST_TYPE( pSym->st_info );
+-            section_index = convertor( pSym->st_shndx );
+-            other         = pSym->st_other;
++            name          = pStr != nullptr ? pStr : "";
++            value         = convertor( symbol.st_value );
++            size          = convertor( symbol.st_size );
++            bind          = ELF_ST_BIND( symbol.st_info );
++            type          = ELF_ST_TYPE( symbol.st_info );
++            section_index = convertor( symbol.st_shndx );
++            other         = symbol.st_other;
+ 
+             ret = true;
+         }
+@@ -504,28 +700,32 @@ template <class S> class symbol_section_accessor_template
+     {
+         const endianess_convertor& convertor = elf_file.get_convertor();
+ 
+-        Elf_Word first_not_local =
++        Elf_Xword first_not_local =
+             1; // Skip the first entry. It is always NOTYPE
+         Elf_Xword current = 0;
+-        Elf_Xword count   = get_symbols_num();
++        // Without data there are no records to rearrange
++        Elf_Xword count =
++            symbol_section->get_data() != nullptr ? get_symbols_num() : 0;
++
++        // Symbol records may be unaligned in the section data, so they are
++        // copied in and out instead of being accessed in place
++        auto record = [this]( Elf_Xword index ) {
++            return const_cast<char*>( reinterpret_cast<const char*>(
++                generic_get_symbol_ptr<T>( index ) ) );
++        };
++        auto is_local = [&]( Elf_Xword index ) {
++            T symbol;
++            std::memcpy( &symbol, record( index ), sizeof( symbol ) );
++            return ELF_ST_BIND( convertor( symbol.st_info ) ) == STB_LOCAL;
++        };
+ 
+         while ( true ) {
+-            T* p1 = nullptr;
+-            T* p2 = nullptr;
+-
+-            while ( first_not_local < count ) {
+-                p1 = const_cast<T*>(
+-                    generic_get_symbol_ptr<T>( first_not_local ) );
+-                if ( ELF_ST_BIND( convertor( p1->st_info ) ) != STB_LOCAL )
+-                    break;
++            while ( first_not_local < count && is_local( first_not_local ) ) {
+                 ++first_not_local;
+             }
+ 
+             current = first_not_local + 1;
+-            while ( current < count ) {
+-                p2 = const_cast<T*>( generic_get_symbol_ptr<T>( current ) );
+-                if ( ELF_ST_BIND( convertor( p2->st_info ) ) == STB_LOCAL )
+-                    break;
++            while ( current < count && !is_local( current ) ) {
+                 ++current;
+             }
+ 
+@@ -533,11 +733,19 @@ template <class S> class symbol_section_accessor_template
+                 if ( func )
+                     func( first_not_local, current );
+ 
+-                std::swap( *p1, *p2 );
++                T first;
++                T second;
++                std::memcpy( &first, record( first_not_local ),
++                             sizeof( first ) );
++                std::memcpy( &second, record( current ), sizeof( second ) );
++                std::memcpy( record( first_not_local ), &second,
++                             sizeof( second ) );
++                std::memcpy( record( current ), &first, sizeof( first ) );
+             }
+             else {
+                 // Update 'info' field of the section
+-                symbol_section->set_info( first_not_local );
++                symbol_section->set_info(
++                    static_cast<Elf_Word>( first_not_local ) );
+                 break;
+             }
+         }
