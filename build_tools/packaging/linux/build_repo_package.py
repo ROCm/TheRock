@@ -27,33 +27,31 @@ distro token the ecosystem already defines where there is one, and the
 ``-1`` is ``--version-suffix``, this package's own build number (default 1),
 bumped to re-ship the repository configuration at an unchanged ROCm version.
 
-Worked examples, all at ``--rocm-version 10.0.0`` with the default
-``--version-suffix``. A build_id stream additionally takes
-``--repo-sub-folder``; a flat stream rejects it:
+``--rocm-version`` is used as given, for every stream. Pass the version of the
+ROCm packages in the repository the package configures, as
+compute_rocm_package_version.py computes it for the stream's release type; CI
+passes exactly that. The package then sorts the way those ROCm packages do:
+below stable at the same ROCm version. rc is spelled differently per format
+(``~preN`` on deb, ``~rcN`` on rpm).
 
-    --os-profile  --stream  --repo-sub-folder  resulting package file
-    ------------  --------  -----------------  -------------------------------------------
-    ubuntu2404    stable    -                  amdrocm-repo_10.0.0-1~ubuntu2404_all.deb
-    ubuntu2404    rc        -                  amdrocm-repo_10.0.0~pre-1~ubuntu2404_all.deb
-    ubuntu2404    nightly   20260716-12345     amdrocm-repo_20260716.12345-1~ubuntu2404_all.deb
-    rhel8         stable    -                  amdrocm-repo-10.0.0-1.stable.el8.noarch.rpm
-    rhel8         rc        -                  amdrocm-repo-10.0.0-1.rc.el8.noarch.rpm
-    rhel8         nightly   20260716-12345     amdrocm-repo-20260716-12345.1.nightly.el8.noarch.rpm
-    rhel10        stable    -                  amdrocm-repo-10.0.0-1.stable.el10.noarch.rpm
-    sles16        stable    -                  amdrocm-repo-10.0.0-1.stable.sles16.noarch.rpm
+Worked examples with the default ``--version-suffix``. A build_id stream
+additionally takes ``--repo-sub-folder`` (nightly here uses 20260716-12345); a
+flat stream rejects it:
 
-``rc`` configures the release-candidate repository for the next GA. Its deb
-version carries a ``~pre`` marker and its rpm Release carries the stream, both
-of which sort below stable at the same ROCm version. Across versions the higher
-ROCm version wins, so moving from an rc for the next GA back to stable is a
-downgrade. ``rc`` does not spell itself the same way everywhere -- its repo file
-is ``amdrocm-stablerc`` and its deb marker is ``~pre`` -- see STREAM_IDS.
+    --os-profile  --stream  --rocm-version   resulting package file
+    ------------  --------  ---------------  ---------------------------------------------------
+    ubuntu2404    stable    10.0.0           amdrocm-repo_10.0.0-1~ubuntu2404_all.deb
+    ubuntu2404    rc        10.0.0~pre1      amdrocm-repo_10.0.0~pre1-1~ubuntu2404_all.deb
+    ubuntu2404    nightly   10.0.0~20260716  amdrocm-repo_10.0.0~20260716-1~ubuntu2404_all.deb
+    rhel8         stable    10.0.0           amdrocm-repo-10.0.0-1.stable.el8.noarch.rpm
+    rhel8         rc        10.0.0~rc1       amdrocm-repo-10.0.0~rc1-1.rc.el8.noarch.rpm
+    rhel8         nightly   10.0.0~20260716  amdrocm-repo-10.0.0~20260716-1.nightly.el8.noarch.rpm
+    rhel10        stable    10.0.0           amdrocm-repo-10.0.0-1.stable.el10.noarch.rpm
+    sles16        stable    10.0.0           amdrocm-repo-10.0.0-1.stable.sles16.noarch.rpm
 
-``--rocm-version`` may carry a prerelease marker, which stays in the upstream
-part of the version and sorts below the matching GA release:
-
-    --rocm-version 7.14.0~dev20260811, --os-profile ubuntu2404
-        -> amdrocm-repo_7.14.0~dev20260811-1~ubuntu2404_all.deb
+``rc`` configures the release-candidate repository for the next GA, and nightly
+builds a later ROCm version still, so moving from either back to stable is
+usually a downgrade. rc's repo file is ``amdrocm-stablerc`` -- see STREAM_IDS.
 
 ```
 python build_repo_package.py \
@@ -73,7 +71,7 @@ python build_repo_package.py \
     --stream nightly \
     --repo-base-url https://nightly.repo.amd.com/rocm/core/packages \
     --repo-sub-folder 20260716-12345 \
-    --rocm-version 10.0.0 \
+    --rocm-version 10.0.0~20260716 \
     --dest-dir ./output
 ```
 """
@@ -188,22 +186,19 @@ RETRYABLE_HTTP_STATUS = frozenset({408, 429})
 # signing key requires updating this value.
 EXPECTED_KEY_FINGERPRINT = "D0F004A0025A1145C7807FCD0701EAC4D5E02107"
 
-# Accepted input shapes. rocm_version and repo_sub_folder are rendered into the
-# generated repo files, package version fields, and (for the deb version string)
-# other metadata, so they are constrained to characters that cannot alter the
-# surrounding syntax. repo_base_url is concatenated into the repo files as well.
-# Use \Z (not $) so a trailing newline is not accepted.
+# Accepted input shapes. rocm_version is rendered into the package version
+# fields and changelog, and repo_sub_folder into the repository URL, so they are
+# constrained to characters that cannot alter the surrounding syntax.
+# repo_base_url is concatenated into the repo files as well. Use \Z (not $) so a
+# trailing newline is not accepted.
 #
 # No "-": an rpm Version cannot contain one, since rpm uses it to separate the
 # version from the release (see rpm_version_release). A pre-release marker
 # belongs in the "~rc1" form, which both rpm and dpkg sort before the plain
 # version.
 #
-# The same rule applies to the sub-folder's identifier: rpm_version_release
-# splits on the first "-" and the identifier becomes the rpm Release, which
-# cannot contain one either. Only the single "-" separating the date is
-# allowed, so a further "-" is rejected here rather than failing later in
-# rpmbuild -- where the deb would still have built, silently diverging.
+# The sub-folder must have the shape of a published build folder,
+# <YYYYMMDD>-<run id>; anything else names a folder that does not exist.
 _VERSION_RE = re.compile(r"^[0-9][0-9A-Za-z.+~]*\Z")
 _SUB_FOLDER_RE = re.compile(r"^[0-9]{8}-[0-9A-Za-z._]+\Z")
 
@@ -239,15 +234,11 @@ STREAM_SHAPES = {
 }
 STREAMS = tuple(STREAM_SHAPES)
 
-# Adding a *flat* stream is an entry here, any alternate names it carries (see
-# STREAM_IDS), and its golden tests.
-#
-# Adding a second *build_id* stream needs more than that: deb_version() derives
-# a build_id version from the sub-folder alone, so two build_id streams sharing
-# a sub-folder would produce one deb version for two different packages. The rpm
-# side already carries the stream in its Release. test_streams_never_share_a_
-# package_version fails loudly if this is ever reached, but the fix is to give
-# deb_version a stream token, not to relax the test.
+# Adding a stream is an entry here, any alternate names it carries (see
+# STREAM_IDS), and its golden tests. A build_id stream that publishes several
+# builds a day, as the dev repository does, would also need the run ID as
+# --version-suffix: its version carries only the date, so two of its packages
+# would otherwise share one.
 
 # Alternate names a stream is known by, where they differ from the stream id.
 # Streams absent here, or missing a key, use the stream id unchanged.
@@ -256,16 +247,8 @@ STREAMS = tuple(STREAM_SHAPES)
 #                 amdrocm-repo-stablerc, so the file is amdrocm-stablerc while
 #                 the subdomain stays rc. Matching it now keeps the eventual
 #                 per-tier split from also having to rename an installed file.
-#   "deb_marker"  the prerelease marker. docs/packaging/versioning.md gives deb
-#                 "~preN" against rpm's "~rcN", and the published packages
-#                 agree, so this package follows suit alongside them. No
-#                 candidate number: that would name one candidate, and this
-#                 names the stream.
-#
-# rpm needs no marker: its Release carries the stream verbatim, and cannot
-# contain a "-" anyway (see rpm_version_release).
 STREAM_IDS = {
-    "rc": {"file_id": "stablerc", "deb_marker": "pre"},
+    "rc": {"file_id": "stablerc"},
 }
 
 
@@ -500,38 +483,23 @@ def _valid_repo_base_url(url: str) -> bool:
 def rpm_version_release(
     stream: str,
     rocm_version: str,
-    repo_sub_folder: str,
     version_suffix: str,
     dist_tag: str,
 ) -> tuple[str, str]:
     """Return (Version, Release) for the rpm package.
 
-    Flat streams track the (rolling) ROCm version. A build_id stream is pinned
-    to its build: an rpm Version cannot contain ``-``, so the date becomes the
-    Version and the id leads the Release.
-
-    Release is ``[<id>.]<version_suffix>.<stream><dist_tag>``, e.g.
-    ``1.stable.el8`` or ``12345.1.nightly.el8``. Each part exists to keep two
-    packages from sharing a name:
+    Version is ``--rocm-version`` as given (see deb_version). Release is
+    ``<version_suffix>.<stream><dist_tag>``, e.g. ``1.stable.el8``. Each part
+    exists to keep two packages from sharing a name:
 
     - ``stream`` -- without it, installing one stream's package over another at
-      the same ROCm version is a silent no-op: the package manager reports
-      success and leaves the old repository configured.
+      the same version is a silent no-op: the package manager reports success
+      and leaves the old repository configured.
     - ``dist_tag`` -- one package is built per OS profile and their contents
       differ, so the profile must reach the name too (see OS_PROFILES).
     - ``version_suffix`` -- this package's own build number, so the repository
       configuration can be re-shipped at an unchanged ROCm version.
-
-    Note that Version is compared before Release, and a build_id Version is a
-    date (``20260827``) while a flat one is a semantic version (``10.0.0``), so
-    a build_id package always outranks a flat one. Switching from nightly to
-    stable is therefore a downgrade rather than an upgrade. That predates the
-    streams and resolves itself if the streams ever become separate packages.
     """
-    if stream_shape(stream) == _BUILD_ID:
-        date, _, ident = repo_sub_folder.partition("-")
-        lead = f"{ident}." if ident else ""
-        return date, f"{lead}{version_suffix}.{stream}{dist_tag}"
     return rocm_version, f"{version_suffix}.{stream}{dist_tag}"
 
 
@@ -566,27 +534,15 @@ def rpm_changelog_date(when: datetime) -> str:
     )
 
 
-def deb_version(
-    stream: str,
-    rocm_version: str,
-    repo_sub_folder: str,
-    version_suffix: str,
-    os_profile: str,
-) -> str:
+def deb_version(rocm_version: str, version_suffix: str, os_profile: str) -> str:
     """Return the deb package version, e.g. ``10.0.0-1~ubuntu2404``.
 
-    The value is ``<upstream>-<debian revision>``. The upstream part names what
-    the repository points at: the ROCm version for a flat stream, or the build
-    folder for a build_id one. That folder's ``-`` becomes a ``.`` so that the
-    only ``-`` in the version is the one that introduces the revision. A flat
-    stream other than
-    ``stable`` also carries a ``~<marker>``, which sorts below the plain
-    version so that stable upgrades over it.
-
-    The marker is the deb spelling of the stream rather than the stream name:
-    rc becomes ``~pre``, matching the ``~preN`` that the ROCm content packages
-    in that same repository carry on deb (they use ``~rcN`` on rpm). It carries
-    no candidate number -- see STREAM_IDS.
+    The value is ``<upstream>-<debian revision>``. The upstream part is
+    ``--rocm-version`` as given, for every stream. CI passes the version that
+    compute_rocm_package_version.py computes for the stream's release type,
+    which is also the version of the ROCm packages in that stream's repository
+    (``10.1.0``, ``10.1.0~pre3``, ``10.2.0~20261013``), so this package sorts
+    the way they do.
 
     The revision carries ``<version_suffix>~<os_profile>``:
 
@@ -608,13 +564,7 @@ def deb_version(
     built here carries a profile, so that comparison never arises between two of
     ours -- but it is why the separator must stay ``~`` and not become ``.``.
     """
-    if stream_shape(stream) == _BUILD_ID:
-        upstream = repo_sub_folder.replace("-", ".")
-    elif stream == "stable":
-        upstream = rocm_version
-    else:
-        upstream = f"{rocm_version}~{_stream_id(stream, 'deb_marker')}"
-    return f"{upstream}-{version_suffix}~{os_profile}"
+    return f"{rocm_version}-{version_suffix}~{os_profile}"
 
 
 # --- signing key -------------------------------------------------------------
@@ -884,7 +834,6 @@ def build_rpm_package(
     version, release = rpm_version_release(
         args.stream,
         args.rocm_version,
-        args.repo_sub_folder,
         args.version_suffix,
         context["dist_tag"],
     )
@@ -929,9 +878,7 @@ def build_deb_package(
     deb_context = {
         **context,
         "deb_version": deb_version(
-            args.stream,
             args.rocm_version,
-            args.repo_sub_folder,
             args.version_suffix,
             args.os_profile,
         ),
@@ -1051,10 +998,10 @@ def parse_args(argv=None) -> argparse.Namespace:
         "--rocm-version",
         required=True,
         help=(
-            "ROCm version (e.g. 10.0.0). Required for every stream, but a "
-            "per-build stream takes both of its version fields from "
-            "--repo-sub-folder, so there this value reaches only the "
-            "changelog entry"
+            "Package version, used as given: the version of the ROCm packages "
+            "in the repository, as compute_rocm_package_version.py computes it "
+            "for the stream's release type (e.g. 10.0.0; 10.1.0~pre3 on deb "
+            "or 10.1.0~rc3 on rpm; 10.2.0~20261013)"
         ),
     )
     p.add_argument(

@@ -15,6 +15,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
+from unittest import mock
 
 import pytest
 
@@ -22,6 +23,7 @@ _LINUX_DIR = Path(__file__).resolve().parents[1] / "packaging" / "linux"
 sys.path.insert(0, str(_LINUX_DIR))
 
 import build_repo_package as brp  # noqa: E402
+import compute_rocm_package_version as crpv  # noqa: E402
 
 STABLE_BASE = "https://stable.repo.amd.com/rocm/core/packages"
 RC_BASE = "https://rc.repo.amd.com/rocm/core/packages"
@@ -675,33 +677,87 @@ def test_fetch_signing_key_gives_up_after_attempts(monkeypatch):
 
 
 # --- versioning ---------------------------------------------------------------
+#
+# Every stream takes --rocm-version as given. CI passes the version that
+# compute_rocm_package_version.py computes for the stream's release type, which
+# is also the version of the ROCm packages in that stream's repository, so the
+# stream-level tests below feed it exactly that rather than a hand-typed one.
+
+CI_ROCM_VERSION = "10.1.0"
+CI_DATE = "20261013"
+
+# The release type whose packages each stream's repository serves, and so the
+# one CI computes --rocm-version for. A new stream needs an entry here.
+_RELEASE_TYPES = {"stable": "release", "rc": "prerelease", "nightly": "nightly"}
 
 
-def _deb(stream, sub="", rocm="10.0.0", suffix="1", profile="ubuntu2404"):
-    return brp.deb_version(stream, rocm, sub, suffix, profile)
+def _ci_version(stream, pkg_type, base=CI_ROCM_VERSION, date=CI_DATE, candidate="3"):
+    """Return the --rocm-version CI passes when it builds ``stream``."""
+    release_type = _RELEASE_TYPES[stream]
+    with mock.patch.object(crpv, "get_current_date", return_value=date):
+        return crpv.compute_version(
+            package_type=pkg_type,
+            release_type=release_type,
+            prerelease_version=candidate if release_type == "prerelease" else None,
+            version_data={"rocm-version": base},
+        )
 
 
-def _rpm(stream, sub="", rocm="10.0.0", suffix="1", dist=".el8"):
-    return brp.rpm_version_release(stream, rocm, sub, suffix, dist)
+def _deb(rocm="10.0.0", suffix="1", profile="ubuntu2404"):
+    return brp.deb_version(rocm, suffix, profile)
 
 
-def test_rpm_version_rolling_for_a_flat_stream():
-    assert _rpm("stable") == ("10.0.0", "1.stable.el8")
+def _rpm(stream, rocm="10.0.0", suffix="1", dist=".el8"):
+    return brp.rpm_version_release(stream, rocm, suffix, dist)
+
+
+def _ci_deb(stream, **kwargs):
+    """Return the deb version CI builds for ``stream``."""
+    return _deb(_ci_version(stream, "deb", **kwargs))
+
+
+def _ci_rpm(stream, **kwargs):
+    """Return the rpm Version-Release CI builds for ``stream``."""
+    return "-".join(_rpm(stream, _ci_version(stream, "rpm", **kwargs)))
+
+
+def test_ci_passes_the_version_of_the_rocm_packages():
+    # The inputs the rest of this section relies on, in the shapes
+    # docs/packaging/versioning.md documents. If these change, the repo package
+    # follows them, and the ordering tests below say whether it still sorts the
+    # way the ROCm packages do.
+    assert _ci_version("stable", "deb") == "10.1.0"
+    assert _ci_version("rc", "deb") == "10.1.0~pre3"
+    assert _ci_version("rc", "rpm") == "10.1.0~rc3"
+    assert _ci_version("nightly", "deb") == "10.1.0~20261013"
+    assert _ci_version("nightly", "rpm") == "10.1.0~20261013"
+
+
+@pytest.mark.parametrize(
+    "stream,deb,rpm",
+    [
+        ("stable", "10.1.0-1~ubuntu2404", "10.1.0-1.stable.el8"),
+        ("rc", "10.1.0~pre3-1~ubuntu2404", "10.1.0~rc3-1.rc.el8"),
+        ("nightly", "10.1.0~20261013-1~ubuntu2404", "10.1.0~20261013-1.nightly.el8"),
+    ],
+)
+def test_every_stream_carries_the_version_it_is_given(stream, deb, rpm):
+    # No marker of its own, and nightly's build folder reaches only the URL.
+    assert _ci_deb(stream) == deb
+    assert _ci_rpm(stream) == rpm
 
 
 def test_streams_never_share_a_package_version():
-    # Two streams at the same ROCm version must not produce the same package:
-    # installing one over the other would otherwise report success and silently
-    # leave the original repository configured.
-    version = "10.0.0"
-    seen_rpm = set()
-    seen_deb = set()
-    for stream in brp.STREAMS:
-        sub = NIGHTLY_SUB if brp.stream_shape(stream) == brp._BUILD_ID else ""
-        seen_rpm.add(_rpm(stream, sub, rocm=version))
-        seen_deb.add(_deb(stream, sub, rocm=version))
-    assert len(seen_rpm) == len(brp.STREAMS)
-    assert len(seen_deb) == len(brp.STREAMS)
+    # Installing one stream's package over another's at the same version would
+    # report success and leave the old repository configured. rpm rules that out
+    # by carrying the stream in its Release; deb relies on the versions CI
+    # passes, which differ per release type.
+    assert len({_ci_deb(s) for s in brp.STREAMS}) == len(brp.STREAMS)
+    assert len({_ci_rpm(s) for s in brp.STREAMS}) == len(brp.STREAMS)
+
+
+def test_rpm_release_carries_the_stream_whatever_the_version():
+    assert len({_rpm(s) for s in brp.STREAMS}) == len(brp.STREAMS)
 
 
 # The profile has to reach the package version, because one package is built per
@@ -718,12 +774,12 @@ def test_streams_never_share_a_package_version():
     "profile", ["ubuntu2404", "ubuntu2604", "debian12", "debian13"]
 )
 def test_deb_version_carries_the_os_profile(profile):
-    assert _deb("stable", profile=profile).endswith(f"~{profile}")
+    assert _deb(profile=profile).endswith(f"~{profile}")
 
 
 def test_deb_profiles_never_share_a_package_version():
     profiles = ["ubuntu2404", "ubuntu2604", "debian12", "debian13"]
-    assert len({_deb("stable", profile=p) for p in profiles}) == len(profiles)
+    assert len({_deb(profile=p) for p in profiles}) == len(profiles)
 
 
 def test_every_rpm_profile_has_a_dist_tag():
@@ -751,148 +807,137 @@ def test_rpm_profiles_never_share_a_package_version():
     assert len({_rpm("stable", dist=t) for t in all_tags}) == len(all_tags)
 
 
-def test_stable_carries_the_plain_version_and_the_stream_in_the_rpm_release():
-    # stable is the GA stream, so the upstream part of its deb version is the
-    # bare ROCm version; any other flat stream carries a "~<marker>" there
-    # (rc: "~pre"), which sorts before it.
-    assert _deb("stable") == "10.0.0-1~ubuntu2404"
-    assert _rpm("stable")[1] == "1.stable.el8"
-
-
-def test_a_build_id_stream_outranks_a_flat_one():
-    # Documents a known consequence rather than asserting a fix. rpm compares
-    # Version before Release, and a build_id Version is a date (20260716) while
-    # a flat one is a semantic version (10.0.0), so nightly always sorts above
-    # stable and switching nightly -> stable is a downgrade. This predates the
-    # streams and resolves itself if the streams ever become separate packages.
-    nightly_v, _ = _rpm("nightly", NIGHTLY_SUB)
-    stable_v, _ = _rpm("stable")
-    assert nightly_v == "20260716"
-    assert stable_v == "10.0.0"
-    # Compare the way rpm does -- leading numeric segments, numerically.
-    assert int(nightly_v.split(".")[0]) > int(stable_v.split(".")[0])
-
-
-def test_rpm_version_nightly_splits_date_and_id():
-    version, release = _rpm("nightly", NIGHTLY_SUB)
-    assert version == "20260716"
-    assert release == "12345.1.nightly.el8"
-    assert "-" not in version  # rpm Version cannot contain a hyphen
-
-
-def test_deb_version_nightly_pins_the_build_folder():
-    # The sub-folder's "-" becomes a "." so it cannot be mistaken for the one
-    # that separates the debian revision, which is appended after it.
-    assert _deb("nightly", NIGHTLY_SUB) == "20260716.12345-1~ubuntu2404"
-
-
-def test_deb_version_rolling():
-    assert _deb("stable") == "10.0.0-1~ubuntu2404"
-
-
 def test_version_suffix_reaches_both_package_types():
     # The build number exists so the repository configuration can be re-shipped
     # at an unchanged ROCm version. A flag that silently no-opped on one format
     # would produce a duplicate package name there.
-    assert _deb("stable", suffix="2") == "10.0.0-2~ubuntu2404"
-    assert _rpm("stable", suffix="2")[1] == "2.stable.el8"
-    assert _deb("nightly", NIGHTLY_SUB, suffix="2") == "20260716.12345-2~ubuntu2404"
-    assert _rpm("nightly", NIGHTLY_SUB, suffix="2")[1] == "12345.2.nightly.el8"
-
-
-def test_rc_sorts_below_stable_at_the_same_rocm_version():
-    # rc is flat like stable, so its upstream version would otherwise be
-    # identical. The prerelease marker is what keeps the GA package an upgrade
-    # over the candidate rather than the two colliding.
-    assert _deb("rc") == "10.0.0~pre-1~ubuntu2404"
-    assert _rpm("rc")[1] == "1.rc.el8"
-    assert _rpm("rc")[0] == "10.0.0"
-
-
-def test_rc_deb_marker_is_pre_and_rpm_keeps_rc():
-    # The ROCm content packages in the rc repository are published as
-    # 10.1.0~pre1 on deb and 10.1.0~rc1 on rpm -- docs/packaging/versioning.md
-    # specifies that split. This package sits alongside them, so it follows the
-    # same per-ecosystem spelling instead of using the stream name on both.
-    assert "~pre" in _deb("rc")
-    assert "~rc" not in _deb("rc")
-    assert ".rc." in _rpm("rc")[1]
-    assert "pre" not in _rpm("rc")[1]
-
-
-def test_rc_markers_carry_no_candidate_number():
-    # "pre1"/"rc1" count successive candidates for one release. This names the
-    # stream, and the rc repository serves several candidates at once, so there
-    # is no single number this package could honestly claim.
-    assert "~pre-" in _deb("rc")  # not "~pre0-" / "~pre1-"
-    assert _rpm("rc")[1] == "1.rc.el8"  # not "1.rc1.el8"
+    assert _deb(suffix="2") == "10.0.0-2~ubuntu2404"
+    for stream in brp.STREAMS:
+        assert _rpm(stream, suffix="2")[1] == f"2.{stream}.el8"
 
 
 def test_rc_version_uses_the_stream_not_the_file_id():
     # The repo file stem is amdrocm-stablerc (see STREAM_IDS); neither version
     # may carry it.
-    assert "stablerc" not in _deb("rc")
-    assert "stablerc" not in _rpm("rc")[1]
+    assert "stablerc" not in _ci_deb("rc")
+    assert "stablerc" not in _ci_rpm("rc")
     assert brp.repo_id("rc") == "amdrocm-stablerc"
 
 
-def test_rc_file_id_and_deb_marker_are_both_recorded():
-    assert brp.STREAM_IDS["rc"]["file_id"] == "stablerc"
-    assert brp.STREAM_IDS["rc"]["deb_marker"] == "pre"
+def test_rc_alternate_names_are_only_the_file_id():
+    # The version comes from CI, so rc needs no marker of its own.
+    assert brp.STREAM_IDS["rc"] == {"file_id": "stablerc"}
 
 
 def test_a_tilde_bearing_rocm_version_composes():
-    # --rocm-version may itself contain "~" (_VERSION_RE allows it, and the
-    # prerelease lines use shapes like 7.14.0~dev20260811). The revision is
-    # appended after it, so the result carries two "~" and must still parse.
-    assert _deb("stable", rocm="7.14.0~dev20260811") == (
-        "7.14.0~dev20260811-1~ubuntu2404"
-    )
+    # CI passes versions such as 10.1.0~pre3 and 7.14.0~dev20260811. The revision
+    # is appended after them, so the result carries two "~" and must still
+    # parse.
+    assert _deb("7.14.0~dev20260811") == "7.14.0~dev20260811-1~ubuntu2404"
 
 
-# Ordering is asserted against dpkg itself rather than a hand-rolled comparison:
-# the rules for "~" and for mixed alphanumeric segments are exactly what a
-# reimplementation would get wrong, and getting them wrong is what turns an
-# upgrade into a silent downgrade.
+# Ordering is asserted against dpkg and rpm themselves rather than a hand-rolled
+# comparison: the rules for "~" and for mixed alphanumeric segments are exactly
+# what a reimplementation would get wrong, and getting them wrong is what turns
+# an upgrade into a silent downgrade.
 _DPKG = shutil.which("dpkg")
+_RPM = shutil.which("rpm")
 
 
-@pytest.mark.skipif(_DPKG is None, reason="dpkg is not available on this host")
+def _deb_cmp(a: str, b: str) -> int:
+    """Compare two deb versions with dpkg: -1, 0 or 1."""
+    # Three-argument form. "dpkg --compare-versions a b" is a usage error, not a
+    # comparison, and reports failure for every pair.
+    for op, result in (("lt", -1), ("eq", 0)):
+        cmd = [_DPKG, "--compare-versions", a, op, b]
+        if subprocess.run(cmd, capture_output=True).returncode == 0:
+            return result
+    return 1
+
+
+def _rpm_cmp(a: str, b: str) -> int:
+    """Compare two rpm Version-Release strings with rpm: -1, 0 or 1."""
+    expr = f"%{{lua: print(rpm.vercmp('{a}', '{b}'))}}"
+    out = subprocess.run(
+        [_RPM, "--eval", expr], capture_output=True, text=True, check=True
+    )
+    return int(out.stdout)
+
+
+def _rpm_has_vercmp() -> bool:
+    try:
+        return _RPM is not None and _rpm_cmp("1", "2") == -1
+    except (subprocess.CalledProcessError, ValueError):
+        return False
+
+
+_needs_dpkg = pytest.mark.skipif(_DPKG is None, reason="dpkg is not available")
+_needs_rpm = pytest.mark.skipif(
+    not _rpm_has_vercmp(), reason="rpm with rpm.vercmp is not available"
+)
+
+# Pairs of builds, each (stream, overrides for _ci_version): every two streams at
+# one ROCm version, and the steps a user upgrades through. None is a tie, so
+# each pair has an order to compare.
+_CI_PAIRS = [
+    pytest.param(("stable", {}), ("rc", {}), id="stable-rc"),
+    pytest.param(("stable", {}), ("nightly", {}), id="stable-nightly"),
+    pytest.param(("rc", {}), ("nightly", {}), id="rc-nightly"),
+    pytest.param(("rc", {}), ("rc", {"candidate": "4"}), id="next-candidate"),
+    pytest.param(("nightly", {}), ("nightly", {"date": "20261014"}), id="next-nightly"),
+    pytest.param(("stable", {}), ("nightly", {"base": "10.2.0"}), id="next-release"),
+]
+
+
+@_needs_dpkg
+@pytest.mark.parametrize("a,b", _CI_PAIRS)
+def test_deb_repo_packages_sort_like_their_rocm_packages(a, b):
+    (stream_a, over_a), (stream_b, over_b) = a, b
+    rocm = _deb_cmp(
+        _ci_version(stream_a, "deb", **over_a), _ci_version(stream_b, "deb", **over_b)
+    )
+    assert rocm != 0
+    assert _deb_cmp(_ci_deb(stream_a, **over_a), _ci_deb(stream_b, **over_b)) == rocm
+
+
+@_needs_rpm
+@pytest.mark.parametrize("a,b", _CI_PAIRS)
+def test_rpm_repo_packages_sort_like_their_rocm_packages(a, b):
+    (stream_a, over_a), (stream_b, over_b) = a, b
+    rocm = _rpm_cmp(
+        _ci_version(stream_a, "rpm", **over_a), _ci_version(stream_b, "rpm", **over_b)
+    )
+    assert rocm != 0
+    assert _rpm_cmp(_ci_rpm(stream_a, **over_a), _ci_rpm(stream_b, **over_b)) == rocm
+
+
+@_needs_dpkg
+@pytest.mark.parametrize("stream", ["rc", "nightly"])
+def test_deb_stable_outranks_the_other_streams_at_its_rocm_version(stream):
+    assert _deb_cmp(_ci_deb(stream), _ci_deb("stable")) == -1
+
+
+@_needs_rpm
+@pytest.mark.parametrize("stream", ["rc", "nightly"])
+def test_rpm_stable_outranks_the_other_streams_at_its_rocm_version(stream):
+    assert _rpm_cmp(_ci_rpm(stream), _ci_rpm("stable")) == -1
+
+
+@_needs_dpkg
 @pytest.mark.parametrize(
     "lower,higher,why",
     [
-        ("10.0.0-1~ubuntu2404", "10.0.0-2~ubuntu2404", "respin bump"),
-        ("10.0.0-1~ubuntu2404", "10.0.1-1~ubuntu2404", "ROCm version bump"),
-        ("10.0.0-1~ubuntu2204", "10.0.0-1~ubuntu2404", "newer Ubuntu outranks older"),
+        ({"suffix": "1"}, {"suffix": "2"}, "respin bump"),
+        ({"rocm": "10.0.0"}, {"rocm": "10.0.1"}, "ROCm version bump"),
+        ({"profile": "ubuntu2204"}, {"profile": "ubuntu2404"}, "newer Ubuntu"),
         # The reason profile names are used instead of Debian codenames: as
         # codenames this pair inverts, because "bullseye" > "bookworm"
         # alphabetically while Debian 11 < Debian 12.
-        ("10.0.0-1~debian11", "10.0.0-1~debian12", "newer Debian outranks older"),
-        (
-            "7.14.0~dev20260811-1~ubuntu2404",
-            "7.14.0-1~ubuntu2404",
-            "prerelease sorts below its GA",
-        ),
-        (
-            "10.0.0~pre-1~ubuntu2404",
-            "10.0.0-1~ubuntu2404",
-            "rc sorts below the GA it is a candidate for",
-        ),
-        (
-            "10.0.0~pre-1~ubuntu2404",
-            "10.0.0~pre-2~ubuntu2404",
-            "rc respin bump",
-        ),
+        ({"profile": "debian11"}, {"profile": "debian12"}, "newer Debian"),
     ],
 )
 def test_deb_versions_sort_in_release_order(lower, higher, why):
-    # Three-argument form. "dpkg --compare-versions a b" is a usage error, not a
-    # comparison, and reports failure for every pair.
-    result = subprocess.run(
-        [_DPKG, "--compare-versions", lower, "lt", higher],
-        capture_output=True,
-    )
-    assert result.returncode == 0, f"{why}: {lower} did not sort below {higher}"
+    assert _deb_cmp(_deb(**lower), _deb(**higher)) == -1, why
 
 
 # The rpm %changelog date must stay English on any build machine. strftime and
@@ -1069,11 +1114,8 @@ def test_repo_sub_folder_rejects_bad_format():
 
 @pytest.mark.parametrize("sub", ["20260722-99-1", "20260722-run-42"])
 def test_repo_sub_folder_rejects_a_second_hyphen(sub):
-    # rpm_version_release splits on the first "-" and the remainder becomes the
-    # rpm Release, which cannot contain a "-" either: rpmbuild rejects the spec
-    # with "Illegal char '-' (0x2d) in: Release". The deb path replaces every
-    # "-" and would still build, so without this guard one input yields a
-    # package on one format and a build failure on the other.
+    # Published build folders are <YYYYMMDD>-<run id>; anything else names a
+    # folder that does not exist.
     with pytest.raises(SystemExit):
         _args(
             "--stream",
@@ -1086,10 +1128,11 @@ def test_repo_sub_folder_rejects_a_second_hyphen(sub):
 
 
 def test_rpm_release_never_contains_a_hyphen():
-    # The invariant the sub-folder pattern exists to protect: anything that
-    # passes validation must produce a Release rpmbuild will accept.
-    _, release = _rpm("nightly", NIGHTLY_SUB)
-    assert "-" not in release
+    # rpmbuild rejects a "-" in Release ("Illegal char '-' (0x2d)"), and
+    # --version-suffix is validated against one, so every stream must produce a
+    # Release it accepts.
+    for stream in brp.STREAMS:
+        assert "-" not in _rpm(stream)[1]
     # The dist tags must not reintroduce one.
     for profile in brp.OS_PROFILES.values():
         assert "-" not in profile.get("dist_tag", "")
@@ -1208,7 +1251,7 @@ def _spec(stream: str, base: str, sub: str = "") -> str:
     args = _args(*extra)
     ctx = brp.build_context(args, brp.OS_PROFILES["rhel10"])
     version, release = brp.rpm_version_release(
-        stream, args.rocm_version, sub, args.version_suffix, ctx["dist_tag"]
+        stream, args.rocm_version, args.version_suffix, ctx["dist_tag"]
     )
     return _render(
         "template/repo/rpm/amdrocm-repo.spec.j2",
@@ -1232,7 +1275,7 @@ def test_spec_name_and_repo_install():
     "stream,sub,expected",
     [
         ("stable", "", "Release: 1.stable.el10"),
-        ("nightly", NIGHTLY_SUB, "Release: 12345.1.nightly.el10"),
+        ("nightly", NIGHTLY_SUB, "Release: 1.nightly.el10"),
     ],
 )
 def test_spec_release_line_is_exact(stream, sub, expected):
