@@ -706,6 +706,66 @@ class TestPullEndToEnd(unittest.TestCase):
             with self.assertRaisesRegex(fda.FetchError, "no .dvc/config"):
                 fda.pull(Path(t), log=lambda _: None)
 
+    def test_pull_preserves_cache_failure_tracebacks(self):
+        # CI's single cache-path error previously lost the operation that
+        # failed. Exercise a real cache hit through the worker and aggregate
+        # two failures, including the cause of an exception from a helper.
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            project = tmp / "proj"
+            (project / ".dvc").mkdir(parents=True)
+            (project / ".dvc" / "config").write_text(
+                "[core]\n    remote = storage\n"
+                "['remote \"storage\"']\n    url = s3://b/pfx\n"
+                "    allow_anonymous_login = true\n"
+            )
+            data = b"cached content"
+            md5 = _md5_hex(data)
+            for name in ("a", "b"):
+                (project / f"{name}.dvc").write_text(
+                    f"outs:\n- md5: {md5}\n  size: {len(data)}\n"
+                    f"  hash: md5\n  path: {name}.bin\n"
+                )
+            cache_dir = tmp / "cache"
+            cache_file = fda._cache_path(cache_dir, md5)
+            cache_file.parent.mkdir(parents=True)
+            cache_file.write_bytes(data)
+            real_open = Path.open
+
+            def denied_cache_open(path, *args, **kwargs):
+                if path == cache_file:
+                    try:
+                        raise OSError("underlying filesystem failure")
+                    except OSError as cause:
+                        raise PermissionError(
+                            13, "Permission denied", str(path)
+                        ) from cause
+                return real_open(path, *args, **kwargs)
+
+            messages = []
+            with (
+                mock.patch.object(fda, "_make_s3_client", return_value=_FakeS3({})),
+                mock.patch.object(Path, "open", denied_cache_open),
+            ):
+                with self.assertRaisesRegex(fda.FetchError, "2 file\\(s\\)"):
+                    fda.pull(project, jobs=2, cache_dir=cache_dir, log=messages.append)
+
+            for name in ("a", "b"):
+                self.assertTrue(
+                    any(f"ERROR     {project / f'{name}.dvc'}:" in m for m in messages)
+                )
+            stacks = [m for m in messages if "Traceback (most recent call last)" in m]
+            self.assertEqual(len(stacks), 2)
+            for stack in stacks:
+                self.assertIn("in _process_pointer", stack)
+                self.assertIn("in _materialize_file", stack)
+                self.assertIn("in _md5_of", stack)
+                self.assertIn("in denied_cache_open", stack)
+                self.assertIn("underlying filesystem failure", stack)
+                self.assertIn("direct cause", stack)
+                self.assertIn("PermissionError: [Errno 13] Permission denied", stack)
+                self.assertIn(repr(str(cache_file)), stack)
+
 
 class TestParsePerOutputRemote(unittest.TestCase):
     """Pointer entries may carry a per-output `remote:` key (dvc routing)."""
