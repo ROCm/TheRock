@@ -109,10 +109,6 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     sourcedir_list = []
     rpm_scripts = []
 
-    alternatives_binaries = load_alternatives_binaries()
-    package_name = pkg_info.get("Package")
-    json_pkg_config = alternatives_binaries.get(package_name)
-
     # amdrocm-debugger: Exclude libpython requires only (provides are not an issue).
     # Multiple Python-version-specific binaries are included; the wrapper script
     # automatically selects the binary matching the system's Python version.
@@ -159,8 +155,8 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
         # amdrocm-alternatives.json defines the RPM maintainer scripts
         # and binaries for packages that use the shared templates.
-        if json_pkg_config is not None:
-            rpm_scripts = generate_rpm_postscripts(pkg_info, config, json_pkg_config)
+        if is_postinstallscripts_available(pkg_info):
+            rpm_scripts = generate_rpm_postscripts(pkg_info, config)
 
     else:
         # Get -> Transform -> Join (no transform needed for RPM)
@@ -211,13 +207,12 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     return True
 
 
-def generate_rpm_postscripts(pkg_info, config: PackageConfig, json_pkg_config: dict):
+def generate_rpm_postscripts(pkg_info, config: PackageConfig):
     """Generate RPM %post and %preun sections.
 
     Parameters:
     pkg_info: Package details parsed from a JSON file
     config: Configuration object containing package metadata
-    json_pkg_config: Package alternatives configuration loaded from JSON
 
     Returns: Dictionary containing rendered RPM script sections.
     """
@@ -225,6 +220,14 @@ def generate_rpm_postscripts(pkg_info, config: PackageConfig, json_pkg_config: d
     pkg_name = pkg_info.get("Package")
     if not pkg_name:
         raise ValueError("Package metadata does not contain a valid 'Package' name")
+
+    alternatives_binaries = load_alternatives_binaries()
+    json_pkg_config = alternatives_binaries.get(pkg_name)
+
+    if json_pkg_config is None:
+        raise ValueError(
+            f"No alternatives configuration found for RPM package " f"{pkg_name!r}"
+        )
 
     parts = config.rocm_version.split(".")
 
@@ -265,11 +268,6 @@ def generate_rpm_postscripts(pkg_info, config: PackageConfig, json_pkg_config: d
 
     scripts = json_pkg_config["scripts"]
     binaries = json_pkg_config["binaries"]
-
-    logger.info(
-        f"RPM script configuration: package={pkg_name!r}, "
-        f"scripts={scripts}, binaries={binaries}"
-    )
 
     unsupported_scripts = set(scripts) - set(rpm_sections)
     if unsupported_scripts:
