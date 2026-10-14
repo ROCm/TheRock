@@ -343,11 +343,7 @@ class TestCheckPayload:
 
 
 class TestLocateBuiltPackage:
-    """One build produces one package, so anything else must fail loudly.
-
-    This replaces a shell glob in the workflow, which expanded to a
-    newline-joined string on several matches and passed it on as one filename.
-    """
+    """One build produces one package, so anything else must fail loudly."""
 
     def test_exactly_one_match_is_returned(self, tmp_path):
         pkg = tmp_path / "amdrocm-repo_10.0.0_all.deb"
@@ -370,11 +366,3 @@ class TestLocateBuiltPackage:
         deb.write_text("")
         (tmp_path / "amdrocm-repo-10.0.0.noarch.rpm").write_text("")
         assert irp.locate_built_package(tmp_path, "deb") == deb
-
-    def test_locate_subcommand_prints_the_path(self, tmp_path, capsys):
-        pkg = tmp_path / "amdrocm-repo-10.0.0.noarch.rpm"
-        pkg.write_text("")
-        assert (
-            irp.main(["locate", "--dest-dir", str(tmp_path), "--pkg-type", "rpm"]) == 0
-        )
-        assert capsys.readouterr().out.strip() == str(pkg)

@@ -62,7 +62,7 @@ on:
         type: boolean
         default: true
       enable_repo_package:
-        description: "Build, verify and publish the amdrocm-repo package"
+        description: "Build, verify and upload the amdrocm-repo package"
         type: boolean
         required: false
         default: true
@@ -77,21 +77,21 @@ permissions:
 run-name: Build ${{ inputs.native_package_type }} packages (${{ inputs.rocm_version }}, ${{ inputs.dist_amdgpu_families }}${{ inputs.release_type && format(', {0}', inputs.release_type) || '' }})
 
 jobs:
-  # Resolve the parameters used to build and publish the amdrocm-repo package:
+  # Resolve the parameters used to build and upload the amdrocm-repo package:
   # the OS-profile build matrix for this package type, each profile's container
   # image, and the repo.amd.com stream the build line configures, with its
-  # packages base URL, signing-key URL and build sub-folder.
+  # tier, packages base URL, signing-key URL and build sub-folder.
   #
   # The build line and the stream are different vocabularies: prerelease
   # configures rc. release_type stays the workflow input because it also selects
   # the artifact bucket; the stream is derived from it.
   setup_repo_params:
     name: Resolve amdrocm-repo parameters
-    # nightly and prerelease are the lines that publish the package. release
-    # configures a stream too, but has no artifacts bucket to publish into.
-    # ASAN variants are promoted under packages-asan, which the resolved
-    # repository URL does not point at, so they skip.
-    if: inputs.enable_repo_package && contains(fromJSON('["nightly", "prerelease"]'), inputs.release_type) && !contains(inputs.build_variant, 'asan')
+    # nightly and prerelease are the lines that upload the package. release
+    # configures a stream too, but has no artifacts bucket to upload into.
+    # Sanitizer variants skip: the resolved repository URL serves neither ASAN
+    # packages (promoted under packages-asan) nor TSAN ones (not promoted).
+    if: inputs.enable_repo_package && contains(fromJSON('["nightly", "prerelease"]'), inputs.release_type) && !contains(inputs.build_variant, 'asan') && !contains(inputs.build_variant, 'tsan')
     runs-on: ubuntu-24.04
     # Resolves parameters only; it needs no cloud credentials.
     permissions:
@@ -104,6 +104,7 @@ jobs:
       os_profiles: ${{ steps.derive.outputs.os_profiles }}
       images: ${{ steps.derive.outputs.images }}
       stream: ${{ steps.derive.outputs.stream }}
+      tier: ${{ steps.derive.outputs.tier }}
       repo_base_url: ${{ steps.derive.outputs.repo_base_url }}
       gpg_key_url: ${{ steps.derive.outputs.gpg_key_url }}
       repo_sub_folder: ${{ steps.derive.outputs.repo_sub_folder }}
@@ -299,8 +300,8 @@ jobs:
           gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
 
   # Build the amdrocm-repo package for each OS profile of this package type and
-  # publish it to this run's artifacts bucket, from which release promotion
-  # copies it with the rest of the packages.
+  # upload it to this run's artifacts bucket, under amdrepos/<os_profile>/.
+  # Release promotion does not copy it; publishing it is a separate step.
   stage_repo_package:
     name: Stage amdrocm-repo (${{ matrix.os_profile }})
     needs: [setup_repo_params]
@@ -308,14 +309,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # setup_repo_params does not run on the lines that do not publish, and a
+        # setup_repo_params does not run on the lines that do not upload, and a
         # skipped job's outputs are empty strings, which fromJSON cannot parse.
         # Fall back to an empty matrix so this job skips cleanly.
         os_profile: ${{ fromJSON(needs.setup_repo_params.outputs.os_profiles || '[]') }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
     permissions:
       contents: read
-      id-token: write # Authenticate to AWS to publish the amdrocm-repo package.
+      id-token: write # Authenticate to AWS to upload the amdrocm-repo package.
     container:
       # get_url_repo_params.py manages image references for each OS profile.
       # zizmor cannot inspect the dynamically selected image.
@@ -327,6 +328,7 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       OS_PROFILE: ${{ matrix.os_profile }}
       STREAM: ${{ needs.setup_repo_params.outputs.stream }}
+      TIER: ${{ needs.setup_repo_params.outputs.tier }}
       REPO_BASE_URL: ${{ needs.setup_repo_params.outputs.repo_base_url }}
       GPG_KEY_URL: ${{ needs.setup_repo_params.outputs.gpg_key_url }}
       REPO_SUB_FOLDER: ${{ needs.setup_repo_params.outputs.repo_sub_folder }}
@@ -360,7 +362,7 @@ jobs:
           # configure_aws_artifacts_credentials runs bare `python`, which these
           # per-distro images do not provide. A venv always does, so putting its
           # bin/ on PATH lets the credentials action run here and the package
-          # publish from the job that built it.
+          # upload from the job that built it.
           echo "/tmp/repo-venv/bin" >> "$GITHUB_PATH"
 
       - name: Build amdrocm-repo
@@ -385,12 +387,11 @@ jobs:
         with:
           release_type: ${{ inputs.release_type }}
 
-      - name: Publish amdrocm-repo
+      - name: Upload amdrocm-repo
         run: |
-          pkg="$($PYTHON_CMD build_tools/packaging/linux/inspect_repo_package.py locate \
-            --dest-dir repo-package-out --pkg-type "${NATIVE_PACKAGE_TYPE}")"
-          $PYTHON_CMD build_tools/packaging/linux/publish_repo_package.py \
-            --file "$pkg" \
+          $PYTHON_CMD build_tools/packaging/linux/upload_amdrepos_package.py \
+            --dest-dir repo-package-out \
+            --tier "${TIER}" \
             --run-id "${ARTIFACT_RUN_ID}" \
             --os-profile "${OS_PROFILE}" \
             --pkg-type "${NATIVE_PACKAGE_TYPE}"

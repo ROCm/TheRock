@@ -266,9 +266,7 @@ def locate_built_package(dest_dir: Path, pkg_type: str) -> Path:
     """Return the single built package in ``dest_dir``.
 
     One build produces one package, so anything other than exactly one match is
-    an error worth failing on rather than guessing about. A shell glob captured
-    into a string in its place would join several matches into one filename,
-    and pass the unexpanded pattern on none.
+    an error worth failing on rather than guessing about.
     """
     built = sorted(dest_dir.glob(f"*.{pkg_type}"))
     if len(built) != 1:
@@ -362,22 +360,6 @@ def inspect_profile(
     )
 
 
-def run_locate(argv: list[str]) -> None:
-    """Print the path of the single built package in a directory.
-
-    This exists so a workflow step can hand the built package to another script
-    without a shell glob. See ``locate_built_package`` for why that matters.
-    """
-    p = argparse.ArgumentParser(
-        prog="inspect_repo_package.py locate",
-        description="Print the path of the single built package in a directory.",
-    )
-    p.add_argument("--dest-dir", required=True, type=Path)
-    p.add_argument("--pkg-type", required=True, choices=["deb", "rpm"])
-    ns = p.parse_args(argv)
-    print(locate_built_package(ns.dest_dir, ns.pkg_type))
-
-
 def parse_args(argv=None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Build and verify the payload of the amdrocm-repo packages.",
@@ -407,11 +389,6 @@ def parse_args(argv=None) -> argparse.Namespace:
 
 
 def main(argv=None) -> int:
-    if argv is None:
-        argv = sys.argv[1:]
-    if argv and argv[0] == "locate":
-        run_locate(argv[1:])
-        return 0
     args = parse_args(argv)
     profiles = list_profiles(args.pkg_type)
     if not profiles:
