@@ -32,6 +32,20 @@ on:
         type: string
         default: ""
         description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
+  workflow_call:
+    inputs:
+      linux_amdgpu_families:
+        type: string
+        default: ""
+      pr_labels:
+        type: string
+        default: ""
+      prebuilt_stages:
+        type: string
+        default: ""
+      baseline_run_id:
+        type: string
+        default: ""
   pull_request:
     types:
       - labeled

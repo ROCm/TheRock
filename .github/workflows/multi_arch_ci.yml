@@ -95,10 +95,7 @@ on:
       windows_amdgpu_families:
         type: string
         default: ""
-      linux_test_labels:
-        type: string
-        default: ""
-      windows_test_labels:
+      pr_labels:
         type: string
         default: ""
       build_stages:
