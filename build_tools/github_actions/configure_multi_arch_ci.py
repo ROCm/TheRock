@@ -201,13 +201,39 @@ def _get_allowed_test_labels_for_stages(build_stages: list[str]) -> list[str] | 
     return sorted(allowed) if allowed else []
 
 
-def _test_label_component(label: str) -> str:
-    """Component a test:* label needs artifacts for.
+# Control label that adds "<job> (WSL)" test entries (see fetch_test_configurations.py).
+# Those entries also need the wsl-rocdxg stage's artifact (the WSL libhsakmt).
+WSL_RUN_LABEL = "ci:run-wsl"
+WSL_REQUIRED_STAGE = "wsl-rocdxg"
 
-    A "test:<component>-wsl" label runs the same component on a WSL runner, so it
-    needs the same build stages as "test:<component>".
+
+def _apply_stage_test_labels(
+    platform: str,
+    labels: list[str],
+    build_stages: list[str],
+    allowed_labels: list[str],
+) -> list[str]:
+    """Validate or auto-select test labels for a partial build (build_stages set).
+
+    Selection is decided by component labels (test:*) only. ci:* control labels
+    (ci:run-wsl, ci:run-multi-gpu, ...) are kept but never count as a selection:
+    with only control labels, the stage-compatible test labels are auto-selected,
+    so a partial build never schedules tests for components it did not build.
     """
-    return label.replace("test:", "").removesuffix("-wsl")
+    component_labels = [lbl for lbl in labels if not lbl.startswith("ci:")]
+    if not component_labels:
+        return [f"test:{lbl}" for lbl in allowed_labels] + labels
+    invalid = [
+        lbl
+        for lbl in component_labels
+        if lbl.replace("test:", "") not in allowed_labels
+    ]
+    if invalid:
+        raise ValueError(
+            f"{platform} test labels {invalid} require stages not in "
+            f"build_stages {build_stages}. Allowed: {allowed_labels}"
+        )
+    return labels
 
 
 # ---------------------------------------------------------------------------
@@ -270,7 +296,8 @@ class CIInputs:
     def validate(self) -> None:
         """Validate inputs for consistency (fail-fast behavior).
 
-        Raises ValueError if test labels require stages not in build_stages.
+        Raises ValueError if test labels require stages not in build_stages, or if
+        ci:run-wsl is set for a partial build without the wsl-rocdxg stage.
         """
         allowed_labels = _get_allowed_test_labels_for_stages(self.build_stages)
         if allowed_labels is not None:
@@ -278,18 +305,18 @@ class CIInputs:
                 ("Linux", self.linux_test_labels),
                 ("Windows", self.windows_test_labels),
             ]:
-                # ci: labels are control labels, not test component labels; skip validation
-                invalid = [
-                    lbl
-                    for lbl in labels
-                    if not lbl.startswith("ci:")
-                    and _test_label_component(lbl) not in allowed_labels
-                ]
-                if invalid:
-                    raise ValueError(
-                        f"{platform} test labels {invalid} require stages not in "
-                        f"build_stages {self.build_stages}. Allowed: {allowed_labels}"
-                    )
+                _apply_stage_test_labels(
+                    platform, labels, self.build_stages, allowed_labels
+                )
+            if (
+                WSL_RUN_LABEL in self.linux_test_labels
+                and WSL_REQUIRED_STAGE not in self.build_stages
+            ):
+                raise ValueError(
+                    f"{WSL_RUN_LABEL} needs the {WSL_REQUIRED_STAGE} stage (the WSL "
+                    f"libhsakmt), which is not in build_stages {self.build_stages}. "
+                    f"Add {WSL_REQUIRED_STAGE} to build_stages."
+                )
 
     @property
     def is_pull_request(self) -> bool:
@@ -365,41 +392,17 @@ class CIInputs:
         windows_test_labels = pr_test_labels + pr_ci_labels
 
         # When build_stages limits the build, validate or auto-select test labels.
-        # - If labels provided: fail-fast if they require stages not in build_stages
-        # - If no labels provided: auto-select compatible labels for the stages
+        # - If test:* labels provided: fail-fast if they require stages not in build_stages
+        # - If none (only ci:* control labels, or nothing): auto-select compatible labels
         build_stages = _parse_comma_list(os.environ.get("BUILD_STAGES", ""))
         allowed_labels = _get_allowed_test_labels_for_stages(build_stages)
         if allowed_labels is not None:
-            # ci: labels are control labels, not test component labels; skip validation
-            if linux_test_labels:
-                invalid = [
-                    lbl
-                    for lbl in linux_test_labels
-                    if not lbl.startswith("ci:")
-                    and _test_label_component(lbl) not in allowed_labels
-                ]
-                if invalid:
-                    raise ValueError(
-                        f"Linux test labels {invalid} require stages not in "
-                        f"build_stages {build_stages}. Allowed: {allowed_labels}"
-                    )
-            else:
-                linux_test_labels = [f"test:{lbl}" for lbl in allowed_labels]
-
-            if windows_test_labels:
-                invalid = [
-                    lbl
-                    for lbl in windows_test_labels
-                    if not lbl.startswith("ci:")
-                    and _test_label_component(lbl) not in allowed_labels
-                ]
-                if invalid:
-                    raise ValueError(
-                        f"Windows test labels {invalid} require stages not in "
-                        f"build_stages {build_stages}. Allowed: {allowed_labels}"
-                    )
-            else:
-                windows_test_labels = [f"test:{lbl}" for lbl in allowed_labels]
+            linux_test_labels = _apply_stage_test_labels(
+                "Linux", linux_test_labels, build_stages, allowed_labels
+            )
+            windows_test_labels = _apply_stage_test_labels(
+                "Windows", windows_test_labels, build_stages, allowed_labels
+            )
 
         inputs = CIInputs(
             run_id=run_id,

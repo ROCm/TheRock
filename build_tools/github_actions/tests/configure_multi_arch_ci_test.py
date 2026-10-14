@@ -762,33 +762,6 @@ class TestDecideJobs(unittest.TestCase):
         # Both labels are compatible with the stages
         self.assertEqual(outputs.linux_test_labels, ["test:hip-tests", "test:kfdtest"])
 
-    def test_build_stages_allows_wsl_variant_of_compatible_test_label(self):
-        """test:<component>-wsl needs the same stages as test:<component>."""
-        inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="pull_request",
-            commit_ref="feature",
-            base_ref="HEAD^",
-            build_variant="release",
-            build_stages=["compiler-runtime", "runtime-tests"],
-            linux_test_labels=["test:hip-tests-wsl", "test:rocrtst-wsl"],
-        )
-        inputs.validate()
-
-    def test_build_stages_rejects_wsl_variant_of_incompatible_test_label(self):
-        inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="pull_request",
-            commit_ref="feature",
-            base_ref="HEAD^",
-            build_variant="release",
-            build_stages=["compiler-runtime", "runtime-tests"],
-            linux_test_labels=["test:rocblas-wsl"],
-        )
-        with self.assertRaises(ValueError) as ctx:
-            inputs.validate()
-        self.assertIn("rocblas-wsl", str(ctx.exception))
-
     def test_build_stages_allows_ci_control_labels(self):
         """ci: control labels like ci:run-multi-gpu are not rejected by build_stages validation."""
         inputs = cm.CIInputs(
@@ -806,6 +779,66 @@ class TestDecideJobs(unittest.TestCase):
         # Both labels are preserved in output
         self.assertIn("test:hip-tests", outputs.linux_test_labels)
         self.assertIn("ci:run-multi-gpu", outputs.linux_test_labels)
+
+    def test_build_stages_with_only_control_labels_auto_selects_tests(self):
+        """Regression: a partial build with only ci:* labels (e.g. ci:run-wsl) must not
+        drop the stage-compatible test list. Otherwise fetch_test_configurations sees
+        no test:* label and schedules every native test, including components that
+        were not built."""
+        inputs = _run_from_environ(
+            event_name="workflow_dispatch",
+            event_payload={},
+            extra_env={
+                "LINUX_AMDGPU_FAMILIES": "gfx110X",
+                "PR_LABELS": "ci:run-wsl",
+                "BUILD_STAGES": "compiler-runtime,runtime-tests,wsl-rocdxg",
+            },
+        )
+        self.assertIn("ci:run-wsl", inputs.linux_test_labels)
+        component_labels = {
+            lbl for lbl in inputs.linux_test_labels if lbl.startswith("test:")
+        }
+        self.assertEqual(
+            component_labels,
+            {
+                f"test:{lbl}"
+                for lbl in cm._get_allowed_test_labels_for_stages(
+                    ["compiler-runtime", "runtime-tests", "wsl-rocdxg"]
+                )
+            },
+        )
+        self.assertIn("test:hip-tests", component_labels)
+        self.assertNotIn("test:rocblas", component_labels)
+
+    def test_run_wsl_partial_build_requires_wsl_rocdxg_stage(self):
+        """WSL tests need the wsl-rocdxg artifact (the WSL libhsakmt)."""
+        with self.assertRaisesRegex(ValueError, "wsl-rocdxg"):
+            _run_from_environ(
+                event_name="workflow_dispatch",
+                event_payload={},
+                extra_env={
+                    "LINUX_AMDGPU_FAMILIES": "gfx110X",
+                    "PR_LABELS": "ci:run-wsl,test:hip-tests",
+                    "BUILD_STAGES": "compiler-runtime,runtime-tests",
+                },
+            )
+
+    def test_run_wsl_full_build_needs_no_stage_check(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            linux_test_labels=["test:hip-tests", "ci:run-wsl"],
+        )
+        inputs.validate()
+
+    def test_gfx110x_linux_has_wsl_runner(self):
+        """WSL is a Linux runner: test-runs-on-wsl sits under gfx110x "linux"."""
+        linux = cm.get_all_families_for_trigger_types(["nightly"])["gfx110x"]["linux"]
+        self.assertEqual(linux["test-runs-on-wsl"], "wsl-gfx1101-gpu-rocm")
+        self.assertEqual(linux["test-runs-on"], "linux-gfx110X-gpu-rocm")
 
     def test_debug_tools_stage_allows_all_debugger_tests(self):
         self.assertEqual(
@@ -1957,23 +1990,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
-
-    def test_wsl_platform_entry_does_not_change_linux_runner(self):
-        """gfx110x's "wsl" entry is runner labels only; Linux tests keep the native runner."""
-        targets = cm.TargetSelection(
-            linux_families=["gfx110x"],
-            linux_test_only_families=["gfx110x"],
-        )
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(event_name="pull_request"),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        self.assertIsNotNone(result.linux)
-        self.assertEqual(len(result.linux.per_family_info), 1)
-        entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "linux-gfx110X-gpu-rocm")
 
     def test_test_runner_kernel_clears_unsupported_family(self):
         """test_runner:oem label clears runner for families without kernel support."""

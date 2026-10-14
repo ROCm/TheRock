@@ -10,7 +10,7 @@ On Linux:
   - run "rocminfo"
   - report the KFD IOCTL version and warn if outside the range required by rocdbgapi (>= 1.13 and < 2.0)
 
-On Linux inside WSL:
+On Linux inside WSL (TEST_PLATFORM=wsl):
   - as above, except the KFD IOCTL check is skipped: WSL has no amdgpu kernel
     driver and no /dev/kfd. amd-smi and rocminfo do work, provided the
     wsl-rocdxg artifact is installed.
@@ -36,7 +36,7 @@ import sys
 from typing import List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _therock_utils.os_util import DXG_DEVICE as _DXG_DEVICE, is_wsl_gpu as _is_wsl
+from _therock_utils.os_util import DXG_DEVICE as _DXG_DEVICE, is_wsl_test_platform
 
 
 # AMDKFD_IOC_GET_VERSION = _IOR('K', 0x01, struct { u32 major; u32 minor; })
@@ -191,7 +191,7 @@ def run_sanity(os_name: str) -> int:
             extra_command_search_paths=[bin_dir],
         )
 
-        if _is_wsl():
+        if is_wsl_test_platform():
             # WSL has no amdgpu kernel driver, so the KFD ioctl cannot be
             # answered - /dev/kfd does not exist. Report the GPU-PV interface
             # instead of printing an empty "skipped" section: the equivalent

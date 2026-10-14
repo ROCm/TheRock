@@ -21,20 +21,15 @@ SHARD_INDEX = int(os.getenv("SHARD_INDEX", 1)) - 1
 TOTAL_SHARDS = int(os.getenv("TOTAL_SHARDS", 1))
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 TEST_TYPE = os.getenv("TEST_TYPE", "standard")
-os_type = platform.system().lower()
+# TEST_PLATFORM is set by the CI job: "linux", "windows", or "wsl" (a Linux job on
+# a WSL-hosted runner, which has its own TEST_TO_IGNORE entries).
+os_type = os.getenv("TEST_PLATFORM") or platform.system().lower()
 CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_tests")
 
 # Importing is_asan from amdgpu_family_matrix.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from amdgpu_family_matrix import is_asan
 from configure_asan_env import get_asan_runtime_path
-
-sys.path.append(str(THEROCK_DIR / "build_tools"))
-from _therock_utils.os_util import is_wsl_gpu
-
-# WSL reports as Linux. Its extra exclusions live under a separate "wsl" key and
-# are applied on top of the "linux" ones.
-IS_WSL = os_type == "linux" and is_wsl_gpu()
 
 env = os.environ.copy()
 
@@ -203,10 +198,8 @@ def execute_tests(env):
         cmd.extend(["-L", "smoke"])
 
     ignored_tests = list(GENERIC_TEST_TO_IGNORE)
-    family_ignores = TEST_TO_IGNORE.get(AMDGPU_FAMILIES, {})
-    ignored_tests += family_ignores.get(os_type, [])
-    if IS_WSL:
-        ignored_tests += family_ignores.get("wsl", [])
+    if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
+        ignored_tests += TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
     if ignored_tests:
         cmd.extend(["--exclude-regex", "|".join(ignored_tests)])
 

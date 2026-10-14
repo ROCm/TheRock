@@ -18,29 +18,24 @@ RMTREE_MAX_ATTEMPTS: int = 10
 # Base delay between retry attempts in seconds (multiplied by attempt + 2).
 RMTREE_RETRY_DELAY_SECONDS: float = 0.5
 
-# GPU paravirtualization device presented to a WSL2 guest. See is_wsl_gpu().
+# GPU paravirtualization device presented to a WSL2 guest.
 DXG_DEVICE: str = "/dev/dxg"
 
+# Set by test_component.yml (from fetch_test_configurations.py) to "linux",
+# "windows" or "wsl".
+TEST_PLATFORM_ENV: str = "TEST_PLATFORM"
 
-def is_wsl_gpu() -> bool:
-    """True when running inside a WSL2 guest with a paravirtualized GPU.
 
-    WSL reports platform.system() == "Linux", so callers that branch on the OS
-    alone will treat a WSL runner as bare-metal Linux. That is wrong for
-    anything touching the GPU: WSL exposes it through GPU-PV as /dev/dxg, with
-    no amdgpu kernel driver, no /dev/kfd and no /dev/dri.
+def is_wsl_test_platform() -> bool:
+    """True when the CI job says it runs on a WSL-hosted runner (TEST_PLATFORM=wsl).
 
-    Both signals are required. A /proc/version check alone would also match a
-    WSL instance with no GPU passed through, where GPU checks should still fail
-    loudly rather than be silently skipped.
+    WSL reports platform.system() == "Linux", but its GPU is paravirtualized as
+    /dev/dxg with no amdgpu kernel driver, no /dev/kfd and no /dev/dri. The job
+    configuration knows which runner it targets, so it is passed in explicitly
+    rather than inferred from the kernel. Set TEST_PLATFORM=wsl to get the same
+    behavior when running these scripts by hand inside WSL.
     """
-    if not os.path.exists(DXG_DEVICE):
-        return False
-    try:
-        with open("/proc/version") as f:
-            return "microsoft" in f.read().lower()
-    except OSError:
-        return False
+    return os.environ.get(TEST_PLATFORM_ENV, "").lower() == "wsl"
 
 
 def rmtree_with_retry(

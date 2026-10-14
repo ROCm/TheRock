@@ -91,6 +91,9 @@ jobs:
       AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
       ARTIFACT_GROUP: ${{ inputs.artifact_group }}
       BUILD_VARIANT: ${{ inputs.build_variant }}
+      # Where the job runs: "linux", "windows", or "wsl" (a Linux job on a WSL-hosted
+      # runner). Set by fetch_test_configurations.py so scripts never have to guess.
+      TEST_PLATFORM: ${{ fromJSON(inputs.component).test_platform }}
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
@@ -208,9 +211,7 @@ jobs:
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
-          # Variant entries such as "hip-tests (WSL)" keep the original component
-          # name in test_component; the test scripts key on it.
-          TEST_COMPONENT: ${{ fromJSON(inputs.component).test_component || fromJSON(inputs.component).job_name }}
+          TEST_COMPONENT: ${{ fromJSON(inputs.component).test_component }}
           # General CI debug mode. runner.debug == '1' when a job is re-run with
           # GitHub's "Enable debug logging" checkbox. Used to force turning debug
           # options on.
