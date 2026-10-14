@@ -101,15 +101,19 @@ class ExternalRepoToSelectorChainTest(unittest.TestCase):
             ["shared/amdgpu-windows-interop/interop.cpp"], prefixes
         )
         self.assertEqual(matched, ["shared/amdgpu-windows-interop"])
-        self.assertEqual(drtd._normalize_changed_project(matched[0]), ["hip-clr"])
+        alias_map = drtd._load_subtree_alias_map()
+        self.assertEqual(
+            drtd._normalize_changed_project(matched[0], alias_map), ["hip-clr"]
+        )
 
     def test_every_ci_relevant_prefix_resolves_in_selector(self):
         # The comment on CI_RELEVANT_NON_SUBTREE_PREFIXES promises each entry maps
         # in TheRock; the selector hard-fails on an unmapped shared/dnn-providers/
         # emulation path. This keeps the two modules in lock-step.
+        alias_map = drtd._load_subtree_alias_map()
         for prefix in sorted(cerc.CI_RELEVANT_NON_SUBTREE_PREFIXES):
             with self.subTest(prefix=prefix):
-                keys = drtd._normalize_changed_project(prefix)
+                keys = drtd._normalize_changed_project(prefix, alias_map)
                 self.assertTrue(keys, f"{prefix} resolved to nothing")
 
 
