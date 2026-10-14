@@ -215,19 +215,6 @@ def python_upload_targets(
     return groups
 
 
-def tarball_dir(
-    input_dir: Path,
-    multi_arch: bool = False,
-    structured: bool = False,
-    tarball_variant: str = "release",
-) -> Path:
-    if structured:
-        return input_dir / core_tarball_dir_name(tarball_variant)
-    if multi_arch:
-        return input_dir / "tarball-multi-arch"
-    return input_dir / "tarball"
-
-
 def tarball_upload_targets(
     input_dir: Path,
     bucket_name: str,
@@ -237,9 +224,12 @@ def tarball_upload_targets(
     tarball_variant: str = "release",
 ) -> list[UploadTarget]:
     """Return `(file, bucket, key)` for each tarball to upload."""
-    directory = tarball_dir(input_dir, multi_arch, structured, tarball_variant)
-    if not directory.is_dir():
-        return []
+    if structured:
+        directory = input_dir / core_tarball_dir_name(tarball_variant)
+    elif multi_arch:
+        directory = input_dir / "tarball-multi-arch"
+    else:
+        directory = input_dir / "tarball"
     return [
         (path, bucket_name, f"{bucket_prefix}{path.name}")
         for path in sorted(directory.glob("*.tar.gz"))
@@ -255,6 +245,11 @@ def find_existing_uploads(s3_client, targets: list[UploadTarget]) -> list[str]:
         except ClientError as e:
             if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
                 continue
+            # Without s3:ListBucket a missing key is a 403 too, so it can't be treated as missing.
+            print(
+                f"\n[ERROR]: Could not check s3://{bucket}/{key} "
+                "(needs s3:GetObject and s3:ListBucket)"
+            )
             raise
         existing.append(f"s3://{bucket}/{key}")
     return existing
@@ -366,21 +361,15 @@ def upload_tarball_files(
         print("DRY-RUN MODE: No actual uploads will be performed")
         print("=" * 80)
 
-    directory = tarball_dir(input_dir, multi_arch, structured, tarball_variant)
-    if not directory.is_dir():
-        print(f"  No tarball directory found at {directory}")
+    targets = tarball_upload_targets(
+        input_dir, bucket_name, bucket_prefix, multi_arch, structured, tarball_variant
+    )
+    if not targets:
+        print("  No tarball files found")
         return 0
 
     s3_client = boto3.client("s3") if execute else None
     upload_count = 0
-
-    targets = tarball_upload_targets(
-        input_dir, bucket_name, bucket_prefix, multi_arch, structured, tarball_variant
-    )
-
-    if not targets:
-        print(f"  No tarball files found")
-        return 0
 
     print(f"  Found {len(targets)} tarball file(s) to upload:")
 

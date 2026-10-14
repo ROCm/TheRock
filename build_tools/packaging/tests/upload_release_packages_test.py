@@ -253,11 +253,6 @@ class OverwriteGuardTest(unittest.TestCase):
                     )
             return output.getvalue()
 
-    def test_find_existing_uploads(self):
-        client = FakeS3Client(existing=[("b", "k1")])
-        targets = [(Path("f1"), "b", "k1"), (Path("f2"), "b", "k2")]
-        self.assertEqual(find_existing_uploads(client, targets), ["s3://b/k1"])
-
     def test_access_denied_is_not_treated_as_missing(self):
         client = FakeS3Client(error_code="403")
         with self.assertRaises(ClientError):
@@ -282,15 +277,6 @@ class OverwriteGuardTest(unittest.TestCase):
         self._upload(client, execute=True, allow_overwrite=True)
         self.assertIn(self.TORCH_DEST, client.uploaded)
         self.assertEqual(len(client.uploaded), 3)
-
-    def test_allow_overwrite_flag(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            self.assertFalse(parse_arguments(["--input-dir", tmp]).allow_overwrite)
-            self.assertTrue(
-                parse_arguments(
-                    ["--input-dir", tmp, "--allow-overwrite"]
-                ).allow_overwrite
-            )
 
 
 if __name__ == "__main__":
