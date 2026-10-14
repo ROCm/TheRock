@@ -184,6 +184,28 @@ jobs:
       contents: read
       id-token: write
 
+  # Build the native Windows MSI installer(s) from this run's artifacts. In CI
+  # the MSI is produced and uploaded to the run's artifacts bucket (a build
+  # artifact) to exercise the packaging path; it is not published to a release
+  # bucket here (that happens only in the release workflow).
+  build_native_msi_packages:
+    needs: [build_multi_arch_stages]
+    name: Build Native MSI Packages
+    if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') }}
+    uses: ./.github/workflows/multi_arch_build_native_windows_packages.yml
+    with:
+      artifact_run_id: ${{ github.run_id }}
+      rocm_version: ${{ inputs.rocm_package_version }}
+      # Only the runtime package is published in nightly artifacts today; core's
+      # Windows artifacts (core-amdsmi, core-runtime) are not yet available.
+      packages: runtime
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+    permissions:
+      contents: read
+      id-token: write
+
   test_python_packages_per_family:
     needs: [build_python_packages]
     name: Test Python
