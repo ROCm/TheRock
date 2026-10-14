@@ -810,10 +810,9 @@ def should_skip_ci(
         return True
 
     # PRs require an explicit label to opt in to expensive sanitizer builds.
-    has_asan_label = (
-        "ci:asan-debug" in ci_inputs.pr_labels
-        or "ci:asan" in ci_inputs.pr_labels
-        or "ci:host-asan" in ci_inputs.pr_labels
+    has_asan_label = any(
+        label in ci_inputs.pr_labels
+        for label in ["ci:asan-debug", "ci:asan", "ci:host-asan-debug", "ci:host-asan"]
     )
     if (
         ci_inputs.is_pull_request
@@ -821,7 +820,7 @@ def should_skip_ci(
         and not has_asan_label
     ):
         print(
-            "  Skipping: ASAN PR without enabling label (add 'ci:asan-debug', 'ci:asan' or 'ci:host-asan' to enable)"
+            "  Skipping: ASAN PR without enabling label (add 'ci:asan-debug', 'ci:asan', 'ci:host-asan-debug' or 'ci:host-asan' to enable)"
         )
         return True
 
@@ -1818,15 +1817,19 @@ def expand_build_configs(
     # ASAN variant selection:
     # 1. ci:asan-debug label -> asan-debug (full ASAN with debug info)
     # 2. ci:asan label -> asan (explicit full ASAN)
-    # 3. ci:host-asan label -> host-asan (explicit)
-    # 4. push/pull_request events -> host-asan (default for pre/postsubmit)
-    # 5. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
+    # 3. ci:host-asan-debug label -> host-asan-debug (host-only ASAN with debug info)
+    # 4. ci:host-asan label -> host-asan (explicit)
+    # 5. push/pull_request events -> host-asan (default for pre/postsubmit)
+    # 6. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
     if build_variant == "asan":
         if "ci:asan-debug" in ci_inputs.pr_labels:
             build_variant = "asan-debug"
             print("  Using full asan-debug variant (ci:asan-debug label)")
         elif "ci:asan" in ci_inputs.pr_labels:
             print("  Using full asan variant (ci:asan label)")
+        elif "ci:host-asan-debug" in ci_inputs.pr_labels:
+            build_variant = "host-asan-debug"
+            print("  Using host-asan-debug variant (ci:host-asan-debug label)")
         elif "ci:host-asan" in ci_inputs.pr_labels:
             build_variant = "host-asan"
             print("  Using host-asan variant (ci:host-asan label)")

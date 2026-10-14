@@ -2,20 +2,6 @@
 
 **Multi-Arch CI** ([`multi_arch_ci.yml`](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml)) is configured by [`configure_multi_arch_ci.py`](../../build_tools/github_actions/configure_multi_arch_ci.py) and reads GPU family definitions from [`amdgpu_family_matrix.py`](../../build_tools/github_actions/amdgpu_family_matrix.py).
 
-Library and system submodule bump PRs automatically receive `ci:host-asan`
-and run host-ASan builds. Add `ci:asan-debug` to LLVM promotion PRs to run
-`asan-debug` (`linux-release-asan-debug`) builds and exercise device
-instrumentation and debug-info generation with the new compiler. Submodule
-changes alone do not enable sanitizer CI.
-
-Sanitizer bump CI is build-only: GPU sanity checks and component tests remain
-limited to scheduled and manually dispatched runs. The `ci:host-asan` label
-selects host-ASan; `ci:asan` selects full ASan; `ci:asan-debug` selects full ASan
-with debug information. When multiple labels are present, `ci:asan-debug` takes
-precedence over `ci:asan`, which takes precedence over `ci:host-asan`.
-The `ci:skip` label still skips CI. The separate Compiler Daily Bump workflow
-is unchanged.
-
 ## Trigger behavior
 
 The CI pipelines test a growing set of GPU targets depending on trigger type/frequency:
@@ -37,8 +23,9 @@ The following labels may be added to a pull request to modify CI behavior:
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ci:skip`                  | Skip all builds and tests                                                                                                                                                                         |
 | `ci:run-all-archs`         | Build and test all possible architectures                                                                                                                                                         |
-| `ci:asan-debug`            | Select full ASan builds with debug information. GPU tests remain limited to nightly/manual runs. Takes precedence over `ci:asan` and `ci:host-asan`.                                              |
-| `ci:asan`                  | Select full ASan builds. GPU tests remain limited to nightly/manual runs. Takes precedence over `ci:host-asan`.                                                                                   |
+| `ci:asan-debug`            | Select full ASan builds with debug information. GPU tests remain limited to nightly/manual runs. Takes precedence over all other sanitizer labels.                                                |
+| `ci:asan`                  | Select full ASan builds. GPU tests remain limited to nightly/manual runs. Takes precedence over host-ASan labels.                                                                                 |
+| `ci:host-asan-debug`       | Select host-ASan builds with debug information. GPU tests remain limited to nightly/manual runs. Takes precedence over `ci:host-asan`.                                                            |
 | `ci:host-asan`             | Select host-ASan builds. GPU tests remain limited to nightly/manual runs.                                                                                                                         |
 | `ci:run-multi-gpu`         | Opt-in to running multi-GPU tests.                                                                                                                                                                |
 | `ci:platform:linux`        | Run CI only on Linux (skip Windows builds/tests)                                                                                                                                                  |
@@ -89,6 +76,24 @@ standard `ci:gfx...` labels.
 > The `ci:test:gfx...` label will only enable tests if test hardware is available
 > for that architecture. If no test runner exists for the family, the label is
 > ignored with a warning.
+
+#### Automated submodule update pull requests
+
+The [submodule bump automation](../../build_tools/github_actions/bump_automation.py)
+adds `ci:run-all-archs` to its pull requests to cover all GPU families.
+`rocm-systems` and `rocm-libraries` updates also receive `ci:host-asan` for
+host-ASan build coverage, plus `gfx950-dcgpu` and `gfx125X-dcgpu` to enable
+label-gated tests on limited hardware. `rocgdb` updates receive `test:rocgdb`;
+`mesa-fork` updates receive `test:rocdecode` and `test:rocjpeg` to restrict tests
+to the affected projects.
+
+Other pull requests can use the same sanitizer labels to opt in, or remove all
+sanitizer labels to opt out. Submodule changes alone do not enable sanitizer CI.
+For LLVM promotion pull requests, optionally add `ci:asan-debug` to exercise
+device instrumentation and debug-info generation with the new compiler.
+
+Sanitizer pull request CI is build-only: GPU sanity checks and component tests
+run only on scheduled or manually dispatched runs. `ci:skip` still skips CI.
 
 ### Push
 

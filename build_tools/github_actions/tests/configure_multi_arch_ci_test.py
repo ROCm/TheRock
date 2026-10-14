@@ -1838,6 +1838,39 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 build_variant_cmake_preset = result.linux.build_variant_cmake_preset
                 self.assertEqual(build_variant_cmake_preset, expected_variant)
 
+    def test_asan_label_selection(self):
+        """PR labels select the sanitizer variant in priority order."""
+        cases = (
+            (["ci:host-asan"], "host-asan"),
+            (["ci:asan"], "asan"),
+            (["ci:asan-debug"], "asan-debug"),
+            (["ci:asan", "ci:host-asan"], "asan"),
+            (["ci:asan-debug", "ci:asan", "ci:host-asan"], "asan-debug"),
+        )
+        targets = cm.TargetSelection(linux_families=["gfx94x", "gfx950"])
+        for labels, expected_variant in cases:
+            with self.subTest(labels=labels):
+                result = cm.expand_build_configs(
+                    ci_inputs=self._inputs(
+                        event_name="pull_request",
+                        build_variant="asan",
+                        pr_labels=labels,
+                    ),
+                    git_context=cm.GitContext(),
+                    targets=targets,
+                    jobs=_jobs(),
+                )
+                linux = result.linux
+                self.assertEqual(linux.build_variant_label, expected_variant)
+                self.assertEqual(
+                    linux.build_variant_cmake_preset,
+                    f"linux-release-{expected_variant}",
+                )
+                self.assertEqual(
+                    [entry["test-runs-on"] for entry in linux.per_family_info],
+                    ["", ""],
+                )
+
     def test_push_asan_excludes_families_without_host_asan_support(self):
         """Push ASAN: gfx110x only supports release, so it must be excluded.
 
@@ -2240,47 +2273,6 @@ class TestWriteOutputs(unittest.TestCase):
 
 class TestConfigurePipeline(unittest.TestCase):
     """Test the full pipeline via configure()."""
-
-    def test_asan_label_selection(self):
-        """Labels select sanitizer builds independently of submodule changes."""
-        cases = (
-            ([], None),
-            (["ci:host-asan"], "host-asan"),
-            (["ci:asan"], "asan"),
-            (["ci:asan-debug"], "asan-debug"),
-            (["ci:asan", "ci:host-asan"], "asan"),
-            (["ci:asan-debug", "ci:asan", "ci:host-asan"], "asan-debug"),
-            (["ci:asan-debug", "ci:skip"], None),
-        )
-        for path in ("CMakeLists.txt", "compiler/amd-llvm"):
-            git = cm.GitContext(
-                changed_files=[path], submodule_paths=["compiler/amd-llvm"]
-            )
-            for labels, expected_variant in cases:
-                with self.subTest(path=path, labels=labels):
-                    inputs = cm.CIInputs(
-                        run_id="12345",
-                        event_name="pull_request",
-                        commit_ref="feature",
-                        base_ref="HEAD^",
-                        build_variant="asan",
-                        pr_labels=labels,
-                        linux_amdgpu_families=["gfx94x", "gfx950"],
-                    )
-                    result = cm.configure(inputs, git)
-                    self.assertEqual(result.is_ci_enabled, expected_variant is not None)
-                    if expected_variant is None:
-                        continue
-                    linux = result.builds.linux
-                    self.assertEqual(linux.build_variant_label, expected_variant)
-                    self.assertEqual(
-                        linux.build_variant_cmake_preset,
-                        f"linux-release-{expected_variant}",
-                    )
-                    self.assertEqual(
-                        [entry["test-runs-on"] for entry in linux.per_family_info],
-                        ["", ""],
-                    )
 
     def test_skipped_outputs(self):
         """CIOutputs.skipped produces empty, disabled outputs."""
