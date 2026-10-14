@@ -527,11 +527,8 @@ class DevBuildFilterTest(unittest.TestCase):
         names = entry_names(
             filter_by_pytorch_version(dev_entries(DEV_PYTORCH_FILES), "2.12")
         )
-        self.assertIn(DEV_PYTORCH_FILES[0], names)
-        self.assertIn(DEV_PYTORCH_FILES[1], names)
-        self.assertNotIn(DEV_PYTORCH_FILES[2], names)
-        self.assertNotIn(DEV_PYTORCH_FILES[4], names)
-        self.assertIn(DEV_PYTORCH_FILES[5], names)
+        # Only the 2.13 torch and device wheels (2, 4) go; non-torch packages are kept.
+        self.assertEqual(names, [DEV_PYTORCH_FILES[i] for i in (0, 1, 3, 5, 6, 7, 8)])
         self.assertNotIn(
             DEV_PYTORCH_FILES[0],
             entry_names(
