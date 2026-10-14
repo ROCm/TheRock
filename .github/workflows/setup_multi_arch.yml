@@ -108,11 +108,12 @@ on:
         default: ""
       changed_projects:
         description: >-
-          Comma-separated list of project paths to scope tests to (e.g.
-          'projects/rocprim'). Normally left empty: external repo runs derive
-          this from their own diff via external_repo's 'projects_config'. Set
-          it only to override that, for callers that compute the list
-          themselves. Echoed back on the 'changed_projects' output.
+          Comma-separated list of changed project paths (e.g.
+          'projects/rocprim'), used to scope test selection and artifact-level
+          reuse. Normally left empty: external repo runs derive this from their
+          own diff via external_repo's 'projects_config'. Set it only to
+          override that, for callers that compute the list themselves. Echoed
+          back on the 'changed_projects' output.
         type: string
         default: ""
       quartz_tracking_id:
@@ -161,8 +162,8 @@ on:
         value: ${{ jobs.setup.outputs.external_repo_config }}
       changed_projects:
         description: >-
-          Comma-separated project paths to scope tests to; empty means run all
-          tests. Pass this to multi_arch_ci_linux/windows.
+          Comma-separated changed project paths; empty means run all tests.
+          Pass this to multi_arch_ci_linux/windows.
         value: ${{ jobs.setup.outputs.changed_projects }}
 
 permissions:
@@ -276,7 +277,7 @@ jobs:
           # External repo family overrides allow callers to add/modify GPU family configs
           # (e.g., adding test runners for architectures not enabled in TheRock's default config)
           EXTERNAL_FAMILY_OVERRIDES: ${{ inputs.external_repo != '' && toJSON(fromJSON(inputs.external_repo).family_overrides) || '' }}
-          # Optional override for the computed test scope; see the input docs.
+          # Optional override for the computed project scope; see the input docs.
           CHANGED_PROJECTS: ${{ inputs.changed_projects }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 

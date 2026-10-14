@@ -43,7 +43,7 @@ Outputs (written to GITHUB_OUTPUT):
     windows_build_config  : JSON object with build config, or "" if skipped
     enable_build_jobs     : "true" or "false"
     test_type             : "quick", "standard", "comprehensive", or "full"
-    changed_projects      : Comma-separated projects to test, "" for all
+    changed_projects      : Comma-separated projects in scope, "" for all
 """
 
 import enum
@@ -81,6 +81,7 @@ from github_actions_api import (
     gha_load_github_event,
     gha_set_output,
 )
+from stage_impact import analyze_artifact_impact_from_projects
 from stage_reuse_decision import (
     AutoStageReuse,
     StageReuseMode,
@@ -260,7 +261,7 @@ class CIInputs:
     build_stages: list[str] = field(default_factory=list)
     # Repository to query for baseline runs (for cross-repo artifact reuse)
     baseline_repository: str = ""
-    # Caller-supplied test scope override (e.g. "projects/rocprim,projects/hipcub").
+    # Caller-supplied scope override (e.g. "projects/rocprim,projects/hipcub").
     # Normally left empty: external repo runs derive this from their diff. When
     # set, it wins, for callers that still compute the list themselves.
     changed_projects: list[str] = field(default_factory=list)
@@ -807,7 +808,7 @@ class CIOutputs:
     # and PR test:* labels.
     linux_test_labels: list[str] = field(default_factory=list)
     windows_test_labels: list[str] = field(default_factory=list)
-    # Projects whose tests should run. Empty means test everything.
+    # Projects this run is scoped to. Empty means no narrowing.
     changed_projects: list[str] = field(default_factory=list)
 
     @staticmethod
@@ -898,11 +899,11 @@ def determine_changed_projects(
     ci_inputs: CIInputs,
     git_context: GitContext,
 ) -> list[str]:
-    """Determine which projects' tests should run. Empty means test everything.
+    """Determine which projects a run is scoped to. Empty means no narrowing.
 
-    This narrows TESTS only. An external repo still builds every in-scope stage
-    in full, so a rocPRIM change rebuilds all of math-libs but only runs
-    rocPRIM's tests.
+    Scopes test selection, and feeds artifact-level reuse in decide_jobs(). It
+    does not narrow the build graph: an external repo still builds every
+    in-scope stage, so a rocPRIM change rebuilds all of math-libs.
 
     TheRock's own runs return [] and rely on its changed-file analysis
     elsewhere; only external repos (rocm-libraries, rocm-systems) map a diff
@@ -1275,13 +1276,16 @@ def decide_jobs(
     ci_inputs: CIInputs,
     git_context: GitContext,
     targets: TargetSelection,
+    changed_projects: list[str] | None = None,
 ) -> JobDecisions:
     """Determine which job groups to run, skip, or satisfy with prebuilt files.
     ``targets`` (the per-platform family selection from ``select_targets()``)
     scopes automatic stage reuse to the platforms and families actually being
     built, so a stage is only reused when its artifacts exist for every one of
-    those platforms.
+    those platforms. ``changed_projects`` (from ``determine_changed_projects()``)
+    drives artifact-level reuse for external repos; empty means no narrowing.
     """
+    changed_projects = changed_projects or []
 
     # Build ROCm.
     stage_reuse_mode = StageReuseMode.from_environ()
@@ -1360,15 +1364,19 @@ def decide_jobs(
         for stage in skipped_stages:
             stage_decisions[stage] = JobAction.SKIP
 
-    # Changed projects scope tests only: an external repo always builds every
-    # in-scope stage in full, so artifact-level reuse comes solely from stage
-    # reuse analysis of TheRock's own diff.
+    # For external repos, use changed_projects to determine artifact-level reuse.
+    # TheRock's own diff is not visible to stage reuse in that case (changed_files
+    # holds just the repo name), so the project list is the only signal available.
     rebuild_artifacts: list[str] = (
         list(auto_stage_reuse.rebuild_artifacts) if auto_stage_reuse else []
     )
     reusable_artifacts: list[str] = (
         list(auto_stage_reuse.reusable_artifacts) if auto_stage_reuse else []
     )
+    if changed_projects and not rebuild_artifacts:
+        rebuild_artifacts, reusable_artifacts = analyze_artifact_impact_from_projects(
+            changed_projects
+        )
 
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
@@ -2074,7 +2082,12 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     print("\n=== Deciding job configuration ===")
     # Target selection runs first so automatic stage reuse can scope its
     # prebuilt artifact checks to those targets.
-    jobs = decide_jobs(ci_inputs=ci_inputs, git_context=git_context, targets=targets)
+    jobs = decide_jobs(
+        ci_inputs=ci_inputs,
+        git_context=git_context,
+        targets=targets,
+        changed_projects=changed_projects,
+    )
     jobs.log()
 
     print("\n=== Building per-platform configs ===")

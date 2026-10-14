@@ -266,7 +266,7 @@ _SYSTEM_ENTRIES = [("projects", "rccl"), ("projects", "hip")]
 
 
 class ExternalRepoChangedProjectsTest(unittest.TestCase):
-    """compute_external_repo_changed_projects: [] means 'test everything'."""
+    """compute_external_repo_changed_projects: [] means 'no narrowing'."""
 
     def compute(
         self,

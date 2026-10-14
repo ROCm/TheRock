@@ -355,7 +355,7 @@ class TestGitContext(unittest.TestCase):
 
 
 class TestDetermineChangedProjects(unittest.TestCase):
-    """determine_changed_projects: [] means 'test everything'."""
+    """determine_changed_projects: [] means 'no project narrowing'."""
 
     def _inputs(self, **overrides) -> cm.CIInputs:
         defaults = dict(
@@ -373,8 +373,8 @@ class TestDetermineChangedProjects(unittest.TestCase):
         payload.update(extra)
         return json.dumps(payload)
 
-    def test_therock_run_tests_everything(self):
-        """TheRock's own runs do not narrow test scope by project."""
+    def test_therock_run_does_not_narrow(self):
+        """TheRock's own runs do not narrow scope by project."""
         git = cm.GitContext(changed_files=["core/foo.cpp"])
         self.assertEqual(cm.determine_changed_projects(self._inputs(), git), [])
 
@@ -392,7 +392,7 @@ class TestDetermineChangedProjects(unittest.TestCase):
             cm.determine_changed_projects(inputs, git), ["projects/rocblas"]
         )
 
-    def test_external_repo_without_projects_config_tests_everything(self):
+    def test_external_repo_without_projects_config_does_not_narrow(self):
         inputs = self._inputs(external_repo=self._external_repo())
         git = cm.GitContext.from_external_repo(
             "rocm-libraries", external_changed_files=["projects/rocprim/foo.hpp"]
@@ -424,6 +424,30 @@ class TestDetermineChangedProjects(unittest.TestCase):
             repo_full_name="ROCm/rocm-libraries",
             skip_patterns=["*.md"],
         )
+
+    def test_computed_projects_drive_artifact_reuse(self):
+        """The computed scope reaches decide_jobs, not just the test selector."""
+        inputs = self._inputs(external_repo=self._external_repo())
+        git = cm.GitContext.from_external_repo("rocm-libraries")
+
+        with (
+            patch.object(
+                cm,
+                "analyze_artifact_impact_from_projects",
+                return_value=(["prim"], ["blas"]),
+            ) as analyze,
+            patch.dict(os.environ, {"STAGE_REUSE_MODE": "off"}, clear=False),
+        ):
+            jobs = cm.decide_jobs(
+                ci_inputs=inputs,
+                git_context=git,
+                targets=cm.TargetSelection(linux_families=["gfx94x"]),
+                changed_projects=["projects/rocprim"],
+            )
+
+        analyze.assert_called_once_with(["projects/rocprim"])
+        self.assertEqual(jobs.build_rocm.rebuild_artifacts, ["prim"])
+        self.assertEqual(jobs.build_rocm.reusable_artifacts, ["blas"])
 
 
 # ---------------------------------------------------------------------------

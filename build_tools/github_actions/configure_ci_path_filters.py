@@ -733,10 +733,10 @@ def get_changed_files_for_external_repo(
 # project. Doing that mapping here keeps one engine responsible for path
 # classification instead of a separate per-repo script.
 #
-# The result scopes TESTS only. An external repo always builds every in-scope
-# stage in full, so a rocPRIM change still rebuilds all of math-libs; only the
-# test selection narrows to rocPRIM. An empty result means "could not narrow
-# safely" and makes the test selector fall back to full coverage.
+# The result scopes test selection and artifact-level reuse. It does not narrow
+# the build graph: an external repo always builds every in-scope stage, so a
+# rocPRIM change still rebuilds all of math-libs. An empty result means "could
+# not narrow safely" and falls back to full coverage.
 
 # Repos where a change to TheRock workflow files is contained to the projects
 # the repo declares. Narrowing to those projects keeps a sibling monorepo's
@@ -863,7 +863,7 @@ def compute_external_repo_changed_projects(
     repo_full_name: str,
     skip_patterns: Optional[list[str]] = None,
 ) -> list[str]:
-    """Map an external repo's changed files to the projects its tests should cover.
+    """Map an external repo's changed files to the projects its run is scoped to.
 
     Args:
         changed_files: Changed paths in the calling repo, or None if unavailable.
@@ -877,13 +877,13 @@ def compute_external_repo_changed_projects(
     effective_skip_patterns = skip_patterns or []
 
     def full_coverage(reason: str) -> list[str]:
-        print(f"  {reason} - testing all projects")
+        print(f"  {reason} - no project narrowing")
         return []
 
     if not changed_files:
         return full_coverage("No changed files available")
 
-    # A skippable path cannot affect test outcomes, so it must not widen scope
+    # A skippable path cannot affect build or test outcomes, so it must not widen scope
     # either. Without this, a PR pairing a docs edit under a TheRock workflow
     # path with a real project change would be classified by the docs path.
     # When *everything* is skippable we still fall back to full coverage rather
@@ -925,7 +925,7 @@ def compute_external_repo_changed_projects(
 
         print(
             f"  TheRock workflow changed in {repo_full_name}"
-            " - testing its configured projects"
+            " - scoping to its configured projects"
         )
         return sorted(configured_projects)
 
