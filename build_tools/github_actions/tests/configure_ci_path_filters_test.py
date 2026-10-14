@@ -283,8 +283,10 @@ _SKIP_PATTERNS = ["*.md", "*CODEOWNERS", "docs/*"]
 class TestComputeExternalRepoChangedProjects(unittest.TestCase):
     """Test mapping an external repo's diff onto the projects CI should scope to.
 
-    An empty result means "cannot narrow scope" and makes downstream consumers
-    fall back to full coverage.
+    When scope cannot be narrowed, the result widens to the calling repo's
+    fallback scope: its configured projects for repos in
+    _FULL_SCOPE_FALLBACK_BY_REPO (rocm-libraries), otherwise [], which makes
+    downstream consumers fall back to full coverage.
     """
 
     def compute(
@@ -348,30 +350,44 @@ class TestComputeExternalRepoChangedProjects(unittest.TestCase):
         """Monorepo dirs absent from repos-config.json still classify."""
         self.assertEqual(self.compute(["shared/kpack/kpack.cpp"]), ["shared/kpack"])
 
-    def test_no_changed_files_runs_all_tests(self):
-        self.assertEqual(self.compute([]), [])
+    def test_no_changed_files_falls_back_to_configured_projects(self):
+        self.assertEqual(self.compute([]), _LIBRARY_PROJECTS)
 
     # -- Conservative guards -------------------------------------------------
 
-    def test_unclassified_path_runs_all_tests(self):
-        self.assertEqual(self.compute(["unexpected/config.py"]), [])
+    def test_unclassified_path_falls_back_to_configured_projects(self):
+        self.assertEqual(self.compute(["unexpected/config.py"]), _LIBRARY_PROJECTS)
 
-    def test_mixed_recognized_and_unclassified_runs_all_tests(self):
+    def test_mixed_recognized_and_unclassified_falls_back(self):
         """Narrowing to the recognized subset would drop the unknown change."""
         self.assertEqual(
             self.compute(["projects/rocblas/src/rocblas.cpp", "unexpected/config.py"]),
-            [],
+            _LIBRARY_PROJECTS,
         )
 
-    def test_shared_ctest_change_runs_all_tests(self):
-        self.assertEqual(self.compute(["shared/ctest/categories.yaml"]), [])
+    def test_shared_ctest_change_falls_back_to_configured_projects(self):
+        self.assertEqual(
+            self.compute(["shared/ctest/categories.yaml"]), _LIBRARY_PROJECTS
+        )
 
-    def test_repos_config_change_runs_all_tests(self):
-        self.assertEqual(self.compute([".github/repos-config.json"]), [])
+    def test_repos_config_change_falls_back_to_configured_projects(self):
+        self.assertEqual(self.compute([".github/repos-config.json"]), _LIBRARY_PROJECTS)
 
     def test_missing_config_runs_all_tests(self):
+        """Without a project list there is no narrower scope to fall back to."""
         self.assertEqual(
             self.compute(["projects/rocblas/src/a.cpp"], config_exists=False), []
+        )
+
+    def test_unscoped_repo_unclassified_path_runs_all_tests(self):
+        """rocm-systems is not in the map, so it keeps true full coverage."""
+        self.assertEqual(
+            self.compute(
+                ["unexpected/config.py"],
+                repo="ROCm/rocm-systems",
+                entries=_SYSTEM_ENTRIES,
+            ),
+            [],
         )
 
     # -- Workflow test scoping ----------------------------------------------
@@ -385,12 +401,15 @@ class TestComputeExternalRepoChangedProjects(unittest.TestCase):
             _LIBRARY_PROJECTS,
         )
 
-    def test_libraries_workflow_with_unclassified_path_runs_all_tests(self):
-        self.assertEqual(self.compute([_CALLER_WORKFLOW, "unexpected/config.py"]), [])
-
-    def test_libraries_workflow_with_shared_ci_change_runs_all_tests(self):
+    def test_libraries_workflow_with_unclassified_path_falls_back(self):
         self.assertEqual(
-            self.compute([_CALLER_WORKFLOW, "shared/ctest/categories.yaml"]), []
+            self.compute([_CALLER_WORKFLOW, "unexpected/config.py"]), _LIBRARY_PROJECTS
+        )
+
+    def test_libraries_workflow_with_shared_ci_change_falls_back(self):
+        self.assertEqual(
+            self.compute([_CALLER_WORKFLOW, "shared/ctest/categories.yaml"]),
+            _LIBRARY_PROJECTS,
         )
 
     def test_unscoped_repo_workflow_change_runs_all_tests(self):
@@ -435,19 +454,19 @@ class TestComputeExternalRepoChangedProjects(unittest.TestCase):
             _LIBRARY_PROJECTS,
         )
 
-    def test_skippable_workflow_with_unclassified_path_runs_all_tests(self):
+    def test_skippable_workflow_with_unclassified_path_falls_back(self):
         """Dropping the workflow must not disarm the unclassified-path guard."""
         self.assertEqual(
             self.compute(
                 [_CALLER_WORKFLOW, "unexpected/config.py"],
                 skip_patterns=_SKIP_PATTERNS + [".github/workflows/*"],
             ),
-            [],
+            _LIBRARY_PROJECTS,
         )
 
     def test_configured_scope_map_entry_applies(self):
         with patch.dict(
-            pf._WORKFLOW_TEST_SCOPE_BY_REPO, {"rocm/example": "configured-projects"}
+            pf._FULL_SCOPE_FALLBACK_BY_REPO, {"rocm/example": "configured-projects"}
         ):
             result = self.compute(
                 [_CALLER_WORKFLOW],

@@ -1345,16 +1345,28 @@ def decide_jobs(
         for stage in skipped_stages:
             stage_decisions[stage] = JobAction.SKIP
 
-    # For external repos, use changed_projects to determine artifact-level reuse.
-    # This handles the case where SKIP_PATH_FILTERS=true disables the normal
-    # changed-file analysis.
+    # Use changed_projects to determine artifact-level reuse. This handles the
+    # case where SKIP_PATH_FILTERS=true disables the normal changed-file
+    # analysis.
+    #
+    # Not applied to external repos: there changed_projects scopes tests, and
+    # narrowing the build on it leaves the rest of the stage to be copied from
+    # the baseline. That broke a rocm-libraries rocPRIM PR, which built only the
+    # `prim` artifact of math-libs while rocFFT came from a baseline linked
+    # against an fftw3 soname the freshly built compiler-runtime no longer
+    # shipped. External repo runs build each in-scope stage in full; stage-level
+    # reuse via prebuilt_stages still applies.
     rebuild_artifacts: list[str] = (
         list(auto_stage_reuse.rebuild_artifacts) if auto_stage_reuse else []
     )
     reusable_artifacts: list[str] = (
         list(auto_stage_reuse.reusable_artifacts) if auto_stage_reuse else []
     )
-    if ci_inputs.changed_projects and not rebuild_artifacts:
+    if (
+        ci_inputs.changed_projects
+        and not rebuild_artifacts
+        and not ci_inputs.external_repo
+    ):
         rebuild_artifacts, reusable_artifacts = analyze_artifact_impact_from_projects(
             ci_inputs.changed_projects
         )

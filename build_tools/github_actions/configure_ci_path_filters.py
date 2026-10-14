@@ -255,10 +255,18 @@ def load_skip_ci_patterns_for_external_repo(config_path: str) -> list[str] | Non
 # in a per-repo script so the policy lives in one place and the caller workflow
 # stays declarative.
 
-# Repositories that scope TheRock workflow changes to their configured
-# projects. Repositories absent from this map retain full-test coverage, since
-# we cannot assume their workflow files only affect their own projects.
-_WORKFLOW_TEST_SCOPE_BY_REPO = {
+# Repositories whose build and test impact is contained to the projects they
+# declare in repos-config.json. When a change in one of these repos cannot be
+# attributed to specific subtrees, CI falls back to that repo's full project
+# list instead of true full coverage. That keeps a sibling monorepo's
+# components out of the run: without it a rocm-libraries PR schedules
+# rocm-systems tests (rccl, hip-tests, rocshmem, ...) that no rocm-libraries
+# change can affect. Consumers in other repos are still picked up, because the
+# test selector walks the consumer graph from whatever projects it is given.
+#
+# Repositories absent from this map fall back to [] -- full coverage -- since
+# we cannot assume the same containment holds for them.
+_FULL_SCOPE_FALLBACK_BY_REPO = {
     "rocm/rocm-libraries": "configured-projects",
 }
 
@@ -267,8 +275,8 @@ _CALLER_WORKFLOW_PATTERNS = [
     ".github/workflows/therock*",
 ]
 
-# Changes to project discovery or shared test logic retain global coverage,
-# because they can alter test selection for every project at once.
+# Changes to project discovery or shared test logic widen to the fallback
+# scope, because they can alter test selection for every project at once.
 _FULL_TEST_TRIGGER_PATTERNS = [
     ".github/scripts/therock*",
     ".github/scripts/get_changed_projects.py",
@@ -285,8 +293,8 @@ _FULL_TEST_TRIGGER_PATTERNS = [
 
 # CI-relevant monorepo directories that are NOT subtree-synced repos and so are
 # absent from an external repo's repos-config.json. Without these, a PR confined
-# to one of these paths yields no matched subtree -> empty changed_projects ->
-# TheRock falls back to building and testing everything. Each entry MUST have a
+# to one of these paths is unclassifiable and widens the run to the calling
+# repo's fallback scope instead of the one subtree. Each entry MUST have a
 # corresponding mapping in TheRock (build-topology alias + the test selector's
 # _EXTERNAL_SUBTREE_ALIASES), so keep this list in lock-step when adding
 # directories.
@@ -371,7 +379,7 @@ def _unclassified_paths(
     repos-config.json and _CI_RELEVANT_NON_SUBTREE_PREFIXES). _match_subtrees
     silently drops the unclassified path, which would let CI narrow the build to
     the recognized subset and miss the impact of the unclassified change.
-    Callers treat any such path conservatively and run the full suite.
+    Callers treat any such path conservatively and widen to the fallback scope.
     """
     return [
         path
@@ -389,10 +397,11 @@ def compute_external_repo_changed_projects(
 ) -> list[str]:
     """Map an external repo's changed files to the projects CI should scope to.
 
-    An empty result means "cannot narrow scope" and makes every downstream
-    consumer (stage reuse, test selection) fall back to full coverage. This is
-    the conservative default whenever a change cannot be confidently attributed
-    to a known subtree.
+    Whenever a change cannot be confidently attributed to a known subtree, the
+    result widens to the calling repo's fallback scope: its configured projects
+    for repos in _FULL_SCOPE_FALLBACK_BY_REPO, otherwise []. An empty result
+    means "cannot narrow scope" and makes every downstream consumer (stage
+    reuse, test selection) fall back to full coverage.
 
     Args:
         changed_files: Changed file paths in the calling repository.
@@ -403,9 +412,23 @@ def compute_external_repo_changed_projects(
     Returns:
         Sorted project paths (e.g. ["projects/rocblas"]), or [] for full coverage.
     """
+    configured_projects = _load_external_repo_project_prefixes(projects_config_path)
+
+    if (
+        _FULL_SCOPE_FALLBACK_BY_REPO.get(repo_full_name.lower())
+        == "configured-projects"
+    ):
+        fallback_scope = sorted(configured_projects)
+    else:
+        fallback_scope = []
+
+    def fall_back(reason: str) -> list[str]:
+        scope = "configured projects" if fallback_scope else "all tests"
+        print(f"  {reason} - running {scope}")
+        return fallback_scope
+
     if not changed_files:
-        print("  No changed files - running all tests")
-        return []
+        return fall_back("No changed files")
 
     # A skippable path cannot affect build or test outcomes, so it must not
     # widen scope either. Without this, a PR pairing a skippable file with a
@@ -413,9 +436,9 @@ def compute_external_repo_changed_projects(
     # `.github/workflows/therock*` edit hits _CALLER_WORKFLOW_PATTERNS below
     # and expands to every configured project even when the only substantive
     # change is one subtree. Guarded on `significant` being non-empty so an
-    # all-skippable diff still reaches the `return []` full-coverage default
-    # rather than silently narrowing; in practice is_ci_run_required has
-    # already skipped CI entirely in that case.
+    # all-skippable diff still reaches the fallback scope rather than silently
+    # narrowing; in practice is_ci_run_required has already skipped CI entirely
+    # in that case.
     significant = [
         path
         for path in changed_files
@@ -428,22 +451,18 @@ def compute_external_repo_changed_projects(
 
     # Shared CI and test-selection changes can affect every project at once.
     if _matches_patterns(changed_files, _FULL_TEST_TRIGGER_PATTERNS):
-        print("  Shared CI files changed - running all tests")
-        return []
+        return fall_back("Shared CI files changed")
 
-    configured_projects = _load_external_repo_project_prefixes(projects_config_path)
     if not configured_projects:
-        print("  No projects config loaded - running all tests")
-        return []
+        return fall_back("No projects config loaded")
 
     # Apply the calling repository's workflow test policy.
     if _matches_patterns(changed_files, _CALLER_WORKFLOW_PATTERNS):
         if (
-            _WORKFLOW_TEST_SCOPE_BY_REPO.get(repo_full_name.lower())
+            _FULL_SCOPE_FALLBACK_BY_REPO.get(repo_full_name.lower())
             != "configured-projects"
         ):
-            print(f"  Workflow changed in {repo_full_name} - running all tests")
-            return []
+            return fall_back(f"Workflow changed in {repo_full_name}")
 
         # A second, unknown change must retain the conservative full run.
         other_paths = [
@@ -455,11 +474,9 @@ def compute_external_repo_changed_projects(
             other_paths, configured_projects, skip_patterns
         )
         if unclassified:
-            print(
-                f"  Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
-                " - running all tests"
+            return fall_back(
+                f"Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
             )
-            return []
 
         print(f"  Workflow changed in {repo_full_name} - testing configured projects")
         return sorted(configured_projects)
@@ -469,14 +486,12 @@ def compute_external_repo_changed_projects(
     # Conservative guard: if any non-skippable change cannot be classified to a
     # known subtree, we cannot reason about its build/test impact. Narrowing on
     # just the recognized subset would silently drop the unclassified change, so
-    # fall back to a full run instead.
+    # widen to the fallback scope instead.
     unclassified = _unclassified_paths(changed_files, valid_prefixes, skip_patterns)
     if unclassified:
-        print(
-            f"  Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
-            " - running all tests"
+        return fall_back(
+            f"Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
         )
-        return []
 
     matched = _match_subtrees(changed_files, valid_prefixes)
     print(f"  Matched projects: {matched}")

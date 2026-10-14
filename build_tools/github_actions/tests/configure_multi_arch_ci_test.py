@@ -622,6 +622,37 @@ class TestDecideJobs(unittest.TestCase):
             sorted(result.build_rocm.prebuilt_stages), ["comm-libs", "cv-libs"]
         )
 
+    def test_changed_projects_narrow_artifacts_without_external_repo(self):
+        """projects/rocprim maps to the `prim` artifact of math-libs."""
+        result = cm.decide_jobs(
+            self._inputs(
+                event_name="workflow_dispatch",
+                changed_projects=["projects/rocprim"],
+            ),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.build_rocm.rebuild_artifacts, ["prim"])
+
+    def test_external_repo_changed_projects_do_not_narrow_artifacts(self):
+        """An external repo's changed_projects scopes tests, not the build.
+
+        Narrowing here would leave the rest of the stage to be copied from the
+        baseline, which breaks whenever the baseline and the freshly built
+        stages disagree.
+        """
+        result = cm.decide_jobs(
+            self._inputs(
+                event_name="workflow_dispatch",
+                changed_projects=["projects/rocprim"],
+                external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}',
+            ),
+            git_context=cm.GitContext.from_external_repo("rocm-libraries"),
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.build_rocm.rebuild_artifacts, [])
+        self.assertEqual(result.build_rocm.reusable_artifacts, [])
+
     def test_off_ignores_manual_reuse_and_skips_auto_analysis(self):
         with (
             patch.dict(
