@@ -3,17 +3,21 @@
 # SPDX-License-Identifier: MIT
 
 """
-Generate an index.html listing files in an S3 bucket.
+Generate an index.html page listing the contents of an S3 bucket prefix.
 
-Usable as both a CLI tool (for local inspection) and an importable library.
-Shared page-rendering/publishing logic lives in `_S3IndexGenerator`, with
-`ArtifactIndexGenerator` (flat artifact listings) and `DirectoryIndexGenerator`
-(direct child directory listings) building on it. `generate_tarball_index_s3()`
-and `generate_windows_installer_index_s3()` are the explicit, artifact-type-specific
-entry points built on `ArtifactIndexGenerator`; `generate_directory_index_s3()`
-is built on `DirectoryIndexGenerator`. A new artifact type gets its own thin
-wrapper function around `ArtifactIndexGenerator` rather than a generic
-catch-all entry point.
+This script can be used in two ways:
+ * As a CLI tool, to generate (and optionally upload) an index.html for local
+   inspection or for publishing to S3.
+ * As an importable library, for callers such as CI jobs that need to
+   (re)generate an index after uploading or deleting artifacts.
+
+Two kinds of index pages are supported:
+ * Artifact indexes list the files directly under a prefix, such as
+   `.tar.gz` tarballs or `.msi` Windows installers, with sorting and,
+   optionally, a GPU-family filter.
+ * Directory indexes list the direct child "directories" under a prefix
+   (S3 has no real directories, so objects are grouped by common prefix).
+   This is useful for browsing between different builds or versions.
 
 Requirements:
  * `boto3` Python package must be installed, e.g.: pip install boto3
@@ -38,18 +42,47 @@ import json
 import logging
 import os
 import re
+import sys
+import urllib.parse
+
+from collections.abc import Iterator
 
 import boto3
+import botocore.client
 from botocore.exceptions import NoCredentialsError, ClientError
 
 log = logging.getLogger(__name__)
 
 
-def _paginate_list_objects_v2(s3_client, bucket_name, **paginate_kwargs):
-    """Return a list_objects_v2 page iterator, mapping common S3 errors."""
+def _map_client_error(
+    e: ClientError, *, denied_message: str, not_found_message: str
+) -> Exception | None:
+    """Map a ClientError's code to a standard exception, or None if unrecognized.
+
+    Centralizes the AccessDenied/UnauthorizedOperation -> PermissionError and
+    NoSuchBucket -> FileNotFoundError mapping shared by every S3 call site.
+    """
+    code = e.response.get("Error", {}).get("Code")
+    message = e.response.get("Error", {}).get("Message")
+    if code in {"AccessDenied", "UnauthorizedOperation"}:
+        return PermissionError(f"{denied_message}: {message}")
+    if code == "NoSuchBucket":
+        return FileNotFoundError(f"{not_found_message}: {message}")
+    return None
+
+
+def _paginate_list_objects_v2(
+    s3_client: botocore.client.BaseClient, bucket_name: str, **paginate_kwargs
+) -> Iterator[dict]:
+    """Yield list_objects_v2 pages, mapping common S3 errors.
+
+    A generator so that the paginator's lazy, per-page S3 calls happen inside
+    this function's try/except, rather than in the caller's for loop.
+    """
     try:
         paginator = s3_client.get_paginator("list_objects_v2")
-        return paginator.paginate(Bucket=bucket_name, **paginate_kwargs)
+        for page in paginator.paginate(Bucket=bucket_name, **paginate_kwargs):
+            yield page
     except NoCredentialsError:
         # Preserve specific exception type for callers to handle
         log.exception(
@@ -57,17 +90,24 @@ def _paginate_list_objects_v2(s3_client, bucket_name, **paginate_kwargs):
         )
         raise
     except ClientError as e:
-        # Map common S3 errors to standard exceptions with chaining; otherwise re-raise
-        code = e.response.get("Error", {}).get("Code")
-        if code in {"AccessDenied", "UnauthorizedOperation"}:
-            raise PermissionError(f"Access denied to bucket '{bucket_name}'") from e
-        if code in {"NoSuchBucket", "404"}:
-            raise FileNotFoundError(f"Bucket '{bucket_name}' not found") from e
-        log.exception("ClientError while accessing bucket '%s'", bucket_name)
+        mapped = _map_client_error(
+            e,
+            denied_message=f"Access denied to bucket '{bucket_name}'",
+            not_found_message=f"Bucket '{bucket_name}' not found",
+        )
+        if mapped is not None:
+            raise mapped from e
+        log.exception("ClientError while accessing bucket '%s': %s", bucket_name, e)
         raise
 
 
-def _publish_html(s3_client, bucket_name, upload_key, html_content, upload) -> str:
+def _publish_html(
+    s3_client: botocore.client.BaseClient,
+    bucket_name: str,
+    upload_key: str,
+    html_content: str,
+    upload: bool,
+) -> str:
     """Upload html_content to s3://bucket_name/upload_key, or write it locally.
 
     With upload=True the HTML is PUT to s3://bucket_name/upload_key and the
@@ -85,28 +125,25 @@ def _publish_html(s3_client, bucket_name, upload_key, html_content, upload) -> s
                 ContentType="text/html",
             )
         except ClientError as e:
-            code = e.response.get("Error", {}).get("Code")
-            if code in {"AccessDenied", "UnauthorizedOperation"}:
-                raise PermissionError(
-                    f"Access denied uploading to bucket '{bucket_name}'"
-                ) from e
-            if code in {"NoSuchBucket", "404"}:
-                raise FileNotFoundError(
-                    f"Bucket '{bucket_name}' not found during upload"
-                ) from e
-            log.error("Failed to upload index.html to bucket '%s': %s", bucket_name, e)
+            mapped = _map_client_error(
+                e,
+                denied_message=f"Access denied uploading to bucket '{bucket_name}'",
+                not_found_message=f"Bucket '{bucket_name}' not found during upload",
+            )
+            if mapped is not None:
+                raise mapped from e
+            log.exception(
+                "Failed to upload index.html to bucket '%s': %s", bucket_name, e
+            )
             raise
 
-        region = s3_client.meta.region_name or "us-east-2"
-        if region == "us-east-2":
-            bucket_url = f"https://{bucket_name}.s3.amazonaws.com/{upload_key}"
-        else:
-            bucket_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{upload_key}"
+        region = s3_client.meta.region_name
+        bucket_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{upload_key}"
         log.info("index.html successfully uploaded. URL: %s", bucket_url)
         return bucket_url
 
     # Local-only mode: write next to the caller's working directory.
-    local_path = "index.html"
+    local_path = os.path.abspath("index.html")
     with open(local_path, "w", encoding="utf-8") as f:
         f.write(html_content)
     log.info(
@@ -117,22 +154,6 @@ def _publish_html(s3_client, bucket_name, upload_key, html_content, upload) -> s
     return local_path
 
 
-def extract_gpu_details(files):
-
-    # Regex: r"gfx(?:\d+[A-Za-z]*|\w+)"
-    # Matches "gfx" + digits with optional letters (e.g., gfx90a/gfx103) or a word token (e.g., gfx_ip).
-    # Tweaks: require letter -> [A-Za-z]+; uppercase-only -> [A-Z]* or [A-Z]+; digit-led only -> remove |\w+.
-    # Case-insensitive ("gfx"/"GFX"): add re.IGNORECASE.
-    # Examples: gfx90a, gfx1150, gfx_ip, gfxX.
-    gpu_family_pattern = re.compile(r"gfx(?:\d+[A-Za-z]*|\w+)", re.IGNORECASE)
-    gpu_families = set()
-    for file_name, _ in files:
-        match = gpu_family_pattern.search(file_name)
-        if match:
-            gpu_families.add(match.group(0))
-    return sorted(list(gpu_families))
-
-
 class _S3IndexGenerator:
     """Shared plumbing for building and publishing an S3 index.html page.
 
@@ -141,7 +162,7 @@ class _S3IndexGenerator:
     upload the resulting index.html.
     """
 
-    def __init__(self, s3_client, bucket_name):
+    def __init__(self, s3_client: botocore.client.BaseClient, bucket_name: str) -> None:
         self.s3_client = s3_client
         self.bucket_name = bucket_name
 
@@ -185,17 +206,50 @@ class _S3IndexGenerator:
 
 
 class ArtifactIndexGenerator(_S3IndexGenerator):
-    """Flat index of direct-child artifact files sharing a common suffix.
+    """Builds an index.html listing the files (not subfolders) under a prefix.
 
-    Used for tarballs, Windows installers, and other flat artifact listings
-    that differ only in suffix, page title, and whether the GPU-family
-    filter is shown.
+    For example, it lists every .tar.gz tarball or every .msi Windows
+    installer directly under a prefix. The file suffix to match, the page
+    title, and whether to show the GPU-family filter are all configurable,
+    so the same class is reused for different artifact types.
     """
 
-    def __init__(self, s3_client, bucket_name, artifact_suffix: str, show_filter: bool):
+    def __init__(
+        self,
+        s3_client: botocore.client.BaseClient,
+        bucket_name: str,
+        artifact_suffix: str,
+        show_filter: bool,
+    ) -> None:
+        """
+        Args:
+            s3_client: boto3 S3 client used to list and upload objects.
+            bucket_name: Name of the S3 bucket to read from and write to.
+            artifact_suffix: File ending that marks a file as a match, e.g.
+                ".tar.gz" or ".msi". Only files ending in this suffix are
+                listed; everything else under the prefix is ignored.
+            show_filter: Whether to show the GPU-family dropdown filter on
+                the page. Set to False for artifact types (like Windows
+                installers) that aren't split by GPU family.
+        """
         super().__init__(s3_client, bucket_name)
         self.artifact_suffix = artifact_suffix
         self.show_filter = show_filter
+
+    @staticmethod
+    def _extract_gpu_families(files) -> list[str]:
+        """Find the GPU family name (e.g. "gfx90a") in each file name, if any.
+
+        Only matches "gfx" followed by digits and optional trailing letters,
+        so a name like "gfxsomething" is not picked up as a family.
+        """
+        gpu_family_pattern = re.compile(r"gfx\d+[A-Za-z]*", re.IGNORECASE)
+        gpu_families = set()
+        for file_name, _ in files:
+            match = gpu_family_pattern.search(file_name)
+            if match:
+                gpu_families.add(match.group(0))
+        return sorted(gpu_families)
 
     def generate(
         self,
@@ -215,23 +269,24 @@ class ArtifactIndexGenerator(_S3IndexGenerator):
         allow_empty=True. Empty indexes are useful for event-driven regeneration
         after the final artifact under a product-local prefix is deleted.
         """
-        # Strip any leading or trailing slash from the prefix to standardize the directory path used to filter object.
-        prefix = prefix.lstrip("/").rstrip("/")
-        # List all objects and select matching direct-child files.
-        page_iterator = self._paginate(Prefix=prefix)
+        # Strip any leading or trailing slash from the prefix, so it matches
+        # the directory path used to build the S3 prefix below.
+        prefix = prefix.strip("/")
+        list_prefix = f"{prefix}/" if prefix else ""
+        # Delimiter="/" asks S3 to only return direct children, instead of
+        # the whole subtree, so there's no need to filter out nested keys
+        # ourselves.
+        page_iterator = self._paginate(Prefix=list_prefix, Delimiter="/")
 
         files = []
         for page in page_iterator:
             for obj in page.get("Contents", []):
                 key = obj["Key"]
-                if (
-                    key.endswith(self.artifact_suffix)
-                    and os.path.dirname(key) == prefix
-                ):
+                if key.endswith(self.artifact_suffix):
                     # Only append the filename without the full path.
                     files.append(
                         (
-                            key.removeprefix(f"{prefix}/"),
+                            key.removeprefix(list_prefix),
                             obj["LastModified"].timestamp(),
                         )
                     )
@@ -243,7 +298,7 @@ class ArtifactIndexGenerator(_S3IndexGenerator):
             )
 
         # Prepare filter options and files array for JS.
-        gpu_families = extract_gpu_details(files) if self.show_filter else []
+        gpu_families = self._extract_gpu_families(files) if self.show_filter else []
         if self.show_filter:
             log.info(
                 "Detected GPU families (%d): %s",
@@ -251,9 +306,15 @@ class ArtifactIndexGenerator(_S3IndexGenerator):
                 ", ".join(gpu_families) if gpu_families else "none",
             )
         gpu_families_options = "".join(
-            [f'<option value="{family}">{family}</option>' for family in gpu_families]
+            [
+                f'<option value="{html.escape(family)}">{html.escape(family)}</option>'
+                for family in gpu_families
+            ]
         )
-        files_js_array = json.dumps([{"name": f[0], "mtime": f[1]} for f in files])
+        files_js_array = json.dumps(
+            [{"name": f[0], "mtime": f[1]} for f in files]
+        ).replace("</", "<\\/")
+        empty_message_js = json.dumps(empty_message).replace("</", "<\\/")
         log.info(
             "Found %d %s files in bucket '%s'.",
             len(files),
@@ -266,7 +327,7 @@ class ArtifactIndexGenerator(_S3IndexGenerator):
             <label for="filter">Filter by:</label>
             <select id="filter">
                 <option value="all">All</option>
-                <option value="multiarch">Multiarch</option>
+                <option value="multiarch">Combined (all GFX)</option>
                 {gpu_families_options}
             </select>
             """
@@ -292,7 +353,7 @@ class ArtifactIndexGenerator(_S3IndexGenerator):
 
                 if (fileList.length === 0) {{
                     const li = document.createElement('li');
-                    li.textContent = {json.dumps(empty_message)};
+                    li.textContent = {empty_message_js};
                     ul.appendChild(li);
                     return;
                 }}
@@ -300,7 +361,12 @@ class ArtifactIndexGenerator(_S3IndexGenerator):
                 fileList.forEach(file => {{
                     const li = document.createElement('li');
                     const href = encodeURIComponent(file.name).replace(/%2F/g, '/');
-                    li.innerHTML = `<a href="${{href}}" target="_blank" rel="noopener noreferrer">${{file.name}}</a>`;
+                    const a = document.createElement('a');
+                    a.href = href;
+                    a.target = '_blank';
+                    a.rel = 'noopener noreferrer';
+                    a.textContent = file.name;
+                    li.appendChild(a);
                     ul.appendChild(li);
                 }});
             }}
@@ -339,15 +405,23 @@ class ArtifactIndexGenerator(_S3IndexGenerator):
 
         html_content = self._render_page(page_title, body, style=style, script=script)
 
-        # Generate a prefix for the case that the index file should go to a subdirectory. Empty otherwise.
-        upload_prefix = f"{prefix}/" if prefix else ""
-        upload_key = f"{upload_prefix}index.html"
+        upload_key = f"{list_prefix}index.html"
 
         return self._publish(upload_key, html_content, upload)
 
 
 class DirectoryIndexGenerator(_S3IndexGenerator):
-    """Index of direct child directories under a prefix."""
+    """Builds an index.html listing the "directories" immediately under a prefix.
+
+    S3 has no real directories: a key like "v5/rocm/extras/rvs/foo.tar.gz" is
+    just one object whose name happens to contain "/". This class groups
+    objects by the next path segment after the prefix, so that, for example,
+    under prefix "v5/rocm" with objects at "v5/rocm/extras/rvs/foo.tar.gz"
+    and "v5/rocm/other/bar.tar.gz", the listed "directories" are "extras/"
+    and "other/" — not "extras/rvs/", which is one level deeper (a
+    grandchild, not a direct child). Each entry links to a deeper index page
+    one level down, letting users navigate the tree one segment at a time.
+    """
 
     def generate(
         self,
@@ -363,7 +437,7 @@ class DirectoryIndexGenerator(_S3IndexGenerator):
         allow_empty=True.
         """
 
-        prefix = prefix.lstrip("/").rstrip("/")
+        prefix = prefix.strip("/")
         list_prefix = f"{prefix}/" if prefix else ""
 
         page_iterator = self._paginate(Prefix=list_prefix, Delimiter="/")
@@ -391,7 +465,8 @@ class DirectoryIndexGenerator(_S3IndexGenerator):
         )
 
         directories_html = "".join(
-            f'<li><a href="{directory}">{directory}</a></li>\n'
+            f'<li><a href="{html.escape(urllib.parse.quote(directory))}">'
+            f"{html.escape(directory)}</a></li>\n"
             for directory in directories
         )
 
@@ -406,15 +481,14 @@ class DirectoryIndexGenerator(_S3IndexGenerator):
 
         html_content = self._render_page(page_title, body)
 
-        upload_prefix = f"{prefix}/" if prefix else ""
-        upload_key = f"{upload_prefix}index.html"
+        upload_key = f"{list_prefix}index.html"
 
         return self._publish(upload_key, html_content, upload)
 
 
 def generate_tarball_index_s3(
-    s3_client,
-    bucket_name,
+    s3_client: botocore.client.BaseClient,
+    bucket_name: str,
     prefix: str,
     upload: bool = False,
     allow_empty: bool = False,
@@ -434,8 +508,8 @@ def generate_tarball_index_s3(
 
 
 def generate_windows_installer_index_s3(
-    s3_client,
-    bucket_name,
+    s3_client: botocore.client.BaseClient,
+    bucket_name: str,
     prefix: str,
     upload: bool = False,
     allow_empty: bool = False,
@@ -455,8 +529,8 @@ def generate_windows_installer_index_s3(
 
 
 def generate_directory_index_s3(
-    s3_client,
-    bucket_name,
+    s3_client: botocore.client.BaseClient,
+    bucket_name: str,
     prefix: str,
     upload: bool = False,
     allow_empty: bool = False,
@@ -477,17 +551,35 @@ def generate_directory_index_s3(
     )
 
 
-if __name__ == "__main__":
+def main(argv: list[str]) -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(
-        description="Generate index.html for an S3 bucket prefix"
+        description="Generate index.html for an S3 bucket prefix",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+examples:
+  Generate index.html for all tarballs in a bucket to test locally:
+    ./index_generation_s3.py --bucket therock-dev-tarball
+
+  Generate index.html for all tarballs in a bucket and upload:
+    ./index_generation_s3.py --bucket therock-dev-tarball --upload
+
+  Generate index.html for direct child directories under a prefix:
+    ./index_generation_s3.py --bucket therock-dev-tarball \\
+        --directory v5/rocm/extras/rocoptiq/windows-installers \\
+        --directory-index --upload
+""",
     )
     parser.add_argument(
         "--bucket",
         default="therock-dev-tarball",
         help="S3 bucket name (default: therock-dev-tarball)",
     )
-    parser.add_argument("--region", default="us-east-2", help="AWS region name")
+    parser.add_argument(
+        "--region",
+        default="us-east-2",
+        help="AWS region name (default: us-east-2, matching therock-dev-tarball)",
+    )
     parser.add_argument(
         "--upload",
         action="store_true",
@@ -506,7 +598,7 @@ if __name__ == "__main__":
             "artifact files (default: list files)."
         ),
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     s3 = boto3.client("s3", region_name=args.region)
     if args.directory_index:
         generate_directory_index_s3(
@@ -522,3 +614,7 @@ if __name__ == "__main__":
             prefix=args.directory,
             upload=args.upload,
         )
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

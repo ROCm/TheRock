@@ -70,9 +70,14 @@ class IndexGenerationS3Test(unittest.TestCase):
         )
         html = self._uploaded_html()
         self.assertIn('<option value="all">All</option>', html)
-        self.assertIn('<option value="multiarch">Multiarch</option>', html)
+        self.assertIn('<option value="multiarch">Combined (all GFX)</option>', html)
         self.assertIn('<option value="gfx90a">gfx90a</option>', html)
         self.assertIn('<option value="gfx1100">gfx1100</option>', html)
+        self.paginator.paginate.assert_called_once_with(
+            Bucket=self.bucket_name,
+            Prefix=f"{self.prefix}/",
+            Delimiter="/",
+        )
 
     def test_deleting_last_tarball_uploads_empty_index_when_allowed(self) -> None:
         """Removing the last tarball must replace the stale index."""
@@ -114,7 +119,10 @@ class IndexGenerationS3Test(unittest.TestCase):
 
         self.assertEqual(
             result,
-            (f"https://{self.bucket_name}.s3.amazonaws.com/" f"{self.index_key}"),
+            (
+                f"https://{self.bucket_name}.s3.us-east-2.amazonaws.com/"
+                f"{self.index_key}"
+            ),
         )
         self.assertEqual(self.s3_client.put_object.call_count, 2)
         empty_upload = self.s3_client.put_object.call_args_list[-1]
@@ -159,7 +167,7 @@ class IndexGenerationS3Test(unittest.TestCase):
         self.assertIn("roc-optiq-1.1.0.0-win64.msi", html)
         self.assertNotIn("ignored.tar.gz", html)
         self.assertNotIn('id="filter"', html)
-        self.assertNotIn("Multiarch", html)
+        self.assertNotIn("Combined (all GFX)", html)
 
     def test_index_supports_custom_empty_message(self) -> None:
         """The Windows installer helper accepts a caller-supplied empty_message."""
@@ -203,7 +211,7 @@ class IndexGenerationS3Test(unittest.TestCase):
         self.assertEqual(
             result,
             (
-                f"https://{self.bucket_name}.s3.amazonaws.com/"
+                f"https://{self.bucket_name}.s3.us-east-2.amazonaws.com/"
                 f"{windows_prefix}/index.html"
             ),
         )
@@ -274,6 +282,37 @@ class IndexGenerationS3Test(unittest.TestCase):
         )
 
         self.assertIn("No directories available.", self._uploaded_html())
+
+    def test_directory_names_are_escaped_and_url_encoded(self) -> None:
+        """A bucket-derived directory name must not inject HTML or break its href."""
+        windows_prefix = "v5/rocm/extras/rocoptiq/windows-installers"
+        malicious_name = '<img onerror=alert(1) src=x> "quoted"/'
+
+        self.paginator.paginate.return_value = [
+            {
+                "CommonPrefixes": [
+                    {"Prefix": f"{windows_prefix}/{malicious_name}"},
+                ]
+            }
+        ]
+
+        index_generation_s3.generate_directory_index_s3(
+            s3_client=self.s3_client,
+            bucket_name=self.bucket_name,
+            prefix=windows_prefix,
+            upload=True,
+        )
+
+        html = self._uploaded_html()
+        self.assertNotIn("<img onerror=alert(1) src=x>", html)
+        self.assertIn(
+            "&lt;img onerror=alert(1) src=x&gt; &quot;quoted&quot;/",
+            html,
+        )
+        self.assertIn(
+            'href="%3Cimg%20onerror%3Dalert%281%29%20src%3Dx%3E%20%22quoted%22/"',
+            html,
+        )
 
     def test_page_title_and_empty_message_are_escaped(self) -> None:
         """Apostrophes in caller-supplied text must not break HTML/JS output."""
