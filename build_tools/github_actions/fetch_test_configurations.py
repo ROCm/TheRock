@@ -1286,8 +1286,10 @@ def run():
                     "test-runs-on-multi-gpu", ""
                 )
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
-            if build_variant.startswith("host-asan") and shortened_family == "gfx94x":
-                # Host-ASan uses the default gfx942 CI labels without load distribution.
+            if build_variant.startswith("host-asan") and platform_info.get(
+                "host-asan-use-ci-runners", False
+            ):
+                # Opted-in families use default CI labels without load distribution.
                 host_asan_ci_runners = True
                 test_runs_on_labels = None
                 test_runs_on_multi_gpu_labels = None
@@ -1484,7 +1486,7 @@ def run():
 
     # Per-component runner selection for better load distribution
     # Each component gets its own independent random draw based on configured weights
-    # ASan variants use sandbox runners where configured, except host-ASan on gfx942.
+    # ASan variants use sandbox runners unless the family opts into host-ASan CI runners.
     logging.info("")
     logging.info("Assigning runners to requested jobs...")
     is_asan_build = "asan" in build_variant
@@ -1507,7 +1509,7 @@ def run():
                 continue
         elif "test_runner" not in component or host_asan_ci_runners:
             # Regular components use standard runner labels.
-            # Preserve pre-pinned runners except for gfx942 host-ASan CI.
+            # Preserve pre-pinned runners unless the family opts into host-ASan CI runners.
             is_cpu_only = component.get("linux_cpu_runner", False)
             if is_cpu_only:
                 if test_runs_on_cpu:
