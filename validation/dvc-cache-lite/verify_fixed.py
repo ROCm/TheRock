@@ -52,12 +52,14 @@ def main():
     def traced_cache_lock(cache_dir, md5):
         path = fda._cache_path(cache_dir, md5) if cache_dir is not None else None
         lock = real_cache_lock(cache_dir, md5)
-        lock_observations.append({
-            "path": str(path),
-            "resolved": os.path.normcase(str(path.resolve())) if path else None,
-            "lock": id(lock),
-            "thread": threading.get_ident(),
-        })
+        lock_observations.append(
+            {
+                "path": str(path),
+                "resolved": os.path.normcase(str(path.resolve())) if path else None,
+                "lock": id(lock),
+                "thread": threading.get_ident(),
+            }
+        )
         return lock
 
     fda._cache_lock = traced_cache_lock
@@ -139,13 +141,15 @@ def main():
             passed &= not list(root.rglob("*.tmp"))
             metadata["synthetic_rounds"] += 1
             if not passed:
-                metadata["synthetic_failures"].append({
-                    "iteration": iteration,
-                    "downloads": fake.calls,
-                    "results": [vars(r) for r in results],
-                    "messages": messages,
-                    "locks": lock_observations.copy(),
-                })
+                metadata["synthetic_failures"].append(
+                    {
+                        "iteration": iteration,
+                        "downloads": fake.calls,
+                        "results": [vars(r) for r in results],
+                        "messages": messages,
+                        "locks": lock_observations.copy(),
+                    }
+                )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(metadata, indent=2) + "\n")
     print(json.dumps(metadata, indent=2))
