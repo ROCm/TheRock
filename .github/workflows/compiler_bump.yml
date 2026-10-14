@@ -699,12 +699,13 @@ jobs:
           BUILD_CONFIG: ${{ needs.setup-linux.outputs.linux_build_config }}
         run: |
           FAMILY_INFO=$(echo "$BUILD_CONFIG" | jq -r '.per_family_info[] | select(.amdgpu_family == "gfx950-dcgpu")')
-          echo "test_runs_on=$(echo "$FAMILY_INFO" | jq -r '.["test-runs-on"] // ""')" >> "$GITHUB_OUTPUT"
           echo "amdgpu_targets=$(echo "$FAMILY_INFO" | jq -r '.amdgpu_targets // ""')" >> "$GITHUB_OUTPUT"
 
+      # Hard-code test_runs_on: the setup config clears it for scheduled runs
+      # because gfx950's tests_on_trigger only includes "submodule_bump", not
+      # "nightly". Compiler bump always wants to test gfx950.
       - name: Trigger test_artifacts for gfx950-dcgpu
         id: trigger-tests
-        if: ${{ steps.family-info.outputs.test_runs_on != '' }}
         uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
           workflow: test_artifacts.yml
@@ -714,7 +715,7 @@ jobs:
               "artifact_run_id": "${{ github.run_id }}",
               "amdgpu_families": "gfx950-dcgpu",
               "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
-              "test_runs_on": "${{ steps.family-info.outputs.test_runs_on }}",
+              "test_runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
               "test_type": "quick",
               "release_type": "dev",
               "repository": "${{ github.repository }}",

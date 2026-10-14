@@ -83,9 +83,6 @@ class PackageDef:
     feature_id: str
     feature_title: str
 
-    # Registry key written under HKLM to record the install location.
-    registry_key: str
-
     # One-line description for --list output.
     description: str
 
@@ -126,7 +123,6 @@ PACKAGES: dict[str, PackageDef] = {
         upgrade_code="C3D4E5F6-A7B8-9012-CDEF-123456789012",
         feature_id="ROCmRuntime",
         feature_title="AMD ROCm Runtime",
-        registry_key="Software\\AMD\\ROCm\\runtime\\{major}.{minor}",
         per_artifact_includes={
             "amd-llvm": ["bin/amd_comgr.dll"],
         },
@@ -154,7 +150,6 @@ PACKAGES: dict[str, PackageDef] = {
         upgrade_code="A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
         feature_id="ROCmCore",
         feature_title="AMD ROCm Core Runtime",
-        registry_key="Software\\AMD\\ROCm\\core\\{major}.{minor}",
     ),
 }
 
@@ -178,6 +173,16 @@ STANDARD_DIR_TOKENS: set[str] = {
     "LocalAppDataFolder",
     "CommonAppDataFolder",
 }
+
+# The only install root whose protection (admin-write-only ACL) we can vouch for
+# at generate time. Adding a directory to the machine PATH is only safe when that
+# directory is not writable by a lower-privileged user — otherwise the entry
+# becomes a DLL/exe planting slot (CWE-427). ProgramFiles64Folder is the default
+# and is admin-only by default ACL; custom --install-root values (absolute paths,
+# or user-writable tokens like TempFolder/LocalAppDataFolder) have an unknown or
+# user-writable ACL, so the PATH entry is skipped for them. See
+# add_path_registration.
+PROTECTED_DEFAULT_ROOT = "ProgramFiles64Folder"
 
 
 # ---------------------------------------------------------------------------
@@ -600,6 +605,17 @@ def _stable_guid(*parts: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, "/".join(parts))).upper()
 
 
+def discovery_registry_key(major: str, minor: str) -> str:
+    """Return the shared SDK-discovery registry subkey for a ROCm major.minor.
+
+    The single source of truth for the per-version, package-agnostic key
+    ``Software\\AMD\\ROCm\\{major}.{minor}`` written by add_discovery_registry
+    (RFC0014). Consumers that need to locate ROCm (e.g. the install test) import
+    this so the written and read key cannot drift apart.
+    """
+    return f"Software\\AMD\\ROCm\\{major}.{minor}"
+
+
 @dataclass
 class PackageInputs:
     """Everything gathered from disk before any WiX XML is emitted.
@@ -881,13 +897,32 @@ def add_path_registration(
     layout: InstallLayout,
     files: list[tuple[Path, Path]],
 ) -> None:
-    """Add the machine PATH entry and install-dir registry marker.
+    """Add the machine PATH entry for the package's bin directory.
 
     No-op when the package installs nothing under bin/, since there would be
-    nothing worth adding to PATH.
+    nothing worth adding to PATH. The PATH entry is package-specific (each
+    package owns its own PATH modification), so the component GUID is derived
+    from the package feature id. The SDK-discovery registry key is written
+    separately by add_discovery_registry (shared across packages).
+
+    The machine PATH entry is only emitted when installing to the default,
+    admin-protected root (PROTECTED_DEFAULT_ROOT). A custom --install-root may be
+    a user-writable location, and putting a user-writable directory on the machine
+    PATH is a DLL/exe planting risk (CWE-427), so the PATH entry is skipped there;
+    discovery should use the SDK-discovery registry key instead.
     """
     installs_to_bin = any(install_rel.parts[0] == "bin" for install_rel, _ in files)
     if not installs_to_bin:
+        return
+
+    if layout.install_root != PROTECTED_DEFAULT_ROOT:
+        print(
+            f"Note: install root {layout.install_root!r} is not the default "
+            f"protected root ({PROTECTED_DEFAULT_ROOT}); skipping the machine PATH "
+            "entry (its ACL is unknown/user-writable). Consumers should locate "
+            "ROCm via the SDK-discovery registry key instead.",
+            file=sys.stderr,
+        )
         return
 
     component = ET.SubElement(
@@ -907,20 +942,62 @@ def add_path_registration(
         Action="set",
         System="yes",
     )
-    registry_key = package.registry_key.format(
-        version=layout.version, major=layout.major, minor=layout.minor
+    ET.SubElement(feature, _tag("ComponentRef"), Id="EnvPath")
+
+
+def add_discovery_registry(
+    doc: WixDocument, feature: ET.Element, layout: InstallLayout
+) -> None:
+    """Add the shared SDK-discovery registry key: Software\\AMD\\ROCm\\{X.Y}.
+
+    Writes ``InstallDir`` and ``Version`` under a per-version, package-agnostic
+    key so tools and build systems can locate ROCm without knowing which MSI
+    packages are installed. This follows RFC0014 (Windows Packaging
+    Requirements), which specifies a shared per-version discovery key.
+
+    ROCm ships multiple MSI packages (runtime, core, ...) that coexist under one
+    ``{major}.{minor}`` install directory, so every package writes this same key
+    with identical values. The component GUID is therefore derived only from the
+    version (not the package), so Windows Installer ref-counts it across
+    packages: it is created once and removed only when the last package at that
+    version uninstalls. The per-package ProductCode is intentionally NOT written
+    here — each MSI already registers its own ProductCode in the standard
+    ``HKLM\\...\\Uninstall\\{ProductCode}`` hive (used by Add/Remove Programs),
+    so duplicating it here would be redundant and reintroduce the multi-package
+    collision this shared key avoids.
+
+    ``Bitness="always64"`` keeps the key in the native 64-bit registry view
+    (an x64 package would otherwise land it under WOW6432Node), where x64
+    consumers expect it.
+    """
+    discovery_key = discovery_registry_key(layout.major, layout.minor)
+    component = ET.SubElement(
+        doc.install_dir,
+        _tag("Component"),
+        Id="RocmDiscovery",
+        Guid=_stable_guid("ROCm_discovery", f"{layout.major}.{layout.minor}"),
+        Bitness="always64",
     )
     ET.SubElement(
         component,
         _tag("RegistryValue"),
         Root="HKLM",
-        Key=registry_key,
+        Key=discovery_key,
         Name="InstallDir",
         Value="[InstallDir]",
         Type="string",
         KeyPath="yes",
     )
-    ET.SubElement(feature, _tag("ComponentRef"), Id="EnvPath")
+    ET.SubElement(
+        component,
+        _tag("RegistryValue"),
+        Root="HKLM",
+        Key=discovery_key,
+        Name="Version",
+        Value=layout.version,
+        Type="string",
+    )
+    ET.SubElement(feature, _tag("ComponentRef"), Id="RocmDiscovery")
 
 
 def add_long_paths_feature(doc: WixDocument, package: PackageDef) -> None:
@@ -1141,6 +1218,7 @@ def build_wxs(args: argparse.Namespace, artifact_dir: Path | None = None) -> Non
     feature = add_primary_feature(doc, inputs.package)
     add_payload_components(doc, feature, inputs.files)
     add_path_registration(doc, feature, inputs.package, layout, inputs.files)
+    add_discovery_registry(doc, feature, layout)
     add_long_paths_feature(doc, inputs.package)
     add_legacy_system32_feature(doc, inputs.legacy_dlls)
 
