@@ -6,6 +6,7 @@ import os
 import shlex
 import subprocess
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -35,10 +36,13 @@ else:
         "0.02",
     ]
 
-cmd = [f"{THEROCK_BIN_DIR}/rocfft-test"] + test_filter
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(
-    cmd,
-    cwd=THEROCK_DIR,
-    check=True,
-)
+with TemporaryDirectory() as tmpdir:
+    precompile_db = Path(tmpdir) / 'rocfft_precompile.db'
+
+    cmd = [f"{THEROCK_BIN_DIR}/rocfft-test", f'--precompile={precompile_db}', '--seed=971162385'] + test_filter
+    logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
+    subprocess.run(
+        cmd,
+        cwd=THEROCK_DIR,
+        check=True,
+    )
