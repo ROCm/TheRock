@@ -104,14 +104,19 @@ runs tests against pre-built artifacts. Find a recent successful
 run on `main`, note its run ID, then go to **Actions** > **Test Artifacts** >
 **Run workflow**:
 
-| Input             | Example                                                      |
-| ----------------- | ------------------------------------------------------------ |
-| `artifact_run_id` | `35193881163` (from the Multi-Arch CI run URL)               |
-| `artifact_group`  | `multi-arch-release`                                         |
-| `amdgpu_families` | `gfx94X-dcgpu`, `gfx110X-all`, `gfx120X-all`, `gfx950-dcgpu` |
-| `test_runs_on`    | Runner label, e.g. `linux-gfx942-1gpu-ccs-ossci-rocm`        |
-| `test_type`       | `quick` / `standard` / `comprehensive` / `full`              |
-| `test_labels`     | `test:rocblas,test:hipblas` (comma-separated, empty = all)   |
+| Input              | Example                                                                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `artifact_run_id`  | `35193881163` (from the Multi-Arch CI run URL). **Required** — this workflow only runs tests and needs artifacts from a previous build run. |
+| `artifact_group`   | `multi-arch-release`                                                                                                                        |
+| `amdgpu_families`  | `gfx94X-dcgpu`, `gfx110X-all`, `gfx120X-all`, `gfx950-dcgpu`                                                                                |
+| `test_runs_on`     | Runner label, e.g. `linux-gfx942-1gpu-ccs-ossci-rocm`                                                                                       |
+| `test_type`        | `quick` / `standard` / `comprehensive` / `full`                                                                                             |
+| `test_labels`      | `test:rocblas,test:hipblas` (comma-separated, empty = all). Directly selects which test components to run by name.                          |
+| `changed_projects` | `rocblas,hipblas` (comma-separated, empty = all). Selects projects and their downstream consumers via the dependency graph.                 |
+
+When both `test_labels` and `changed_projects` are set, the effective test set
+is the **intersection** of both filters — only components that match both a
+`test_labels` entry and a `changed_projects` dependency are run.
 
 ## Prebuilt stages
 

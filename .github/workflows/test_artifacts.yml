@@ -17,10 +17,11 @@ on:
         type: string
       artifact_run_id:
         description: >-
-          Previous workflow run ID to retrieve artifacts from. Leave empty to
-          use the latest artifacts.
+          Workflow run ID to retrieve build artifacts from (e.g., from a
+          Multi-Arch CI run). Required for manual dispatch since this workflow
+          only runs tests and has no build artifacts of its own.
         type: string
-        default: ""
+        required: true
       amdgpu_families:
         description: >-
           GPU family group to test (e.g., "gfx94X-dcgpu", "gfx110X-all",
@@ -63,13 +64,19 @@ on:
         default: standard
       test_labels:
         description: >-
-          Select test components, e.g. "test:rocblas,test:hipblas" or
-          '["test:rocblas"]'. Leave empty to run all.
+          Directly select which test components to run by name, e.g.
+          "test:rocblas,test:hipblas" or '["test:rocblas"]'. Only the listed
+          components are tested. Leave empty to run all. When combined with
+          changed_projects, the effective test set is the intersection of
+          both filters.
         type: string
       changed_projects:
         description: >-
-          Comma-separated changed projects for consumer-graph scoping
-          (e.g., "rocblas,hipblas"). Leave empty to run all.
+          Comma-separated list of changed projects used for dependency-graph
+          scoping (e.g., "rocblas,hipblas"). Tests run for the listed projects
+          AND their downstream consumers. Leave empty to run all. When combined
+          with test_labels, the effective test set is the intersection of both
+          filters.
         type: string
         default: ""
       skip_stages:
