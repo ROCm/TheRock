@@ -133,6 +133,23 @@ python build_tools/packaging/download_python_packages.py \
   --output-dir=./promotion/download/
 ```
 
+Select a single dev PyTorch build. The `dev` stream keeps several PyTorch builds
+per ROCm version, so pass the torch, torchaudio, torchvision and triton shas from
+the build's "Write PyTorch package version outputs" step; packages from any sha
+not listed are dropped. Packages without a sha (e.g. apex) are kept, so narrow
+them with `--include-package-glob` if needed:
+
+```bash
+python build_tools/packaging/download_python_packages.py \
+  --version=10.0.0rc4 \
+  --structured \
+  --repo-stream=dev \
+  --product=pytorch \
+  --pytorch-version=2.12 \
+  --git-sha=b97872d5,34c52a67,b3d5b111,669b31ac \
+  --output-dir=./promotion/download/
+```
+
 ## 2. Promote prerelease candidates to release
 
 Need:

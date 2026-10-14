@@ -28,12 +28,11 @@ ROCm 10 onward; earlier releases only exist in the flat prerelease bucket.
 
 Structured PyTorch downloads can be narrowed with --git-sha (source commits in the
 '+git<sha>.' local versions of torch, torchaudio, torchvision and triton) and/or
---pytorch-version. This matters for the dev
-stream (--repo-stream=dev), which keeps every PyTorch build made against a ROCm
-version, e.g. two torch-2.12.0 builds (+gita924f282 and +gitb97872d5) against
-10.0.0rc4. A build's shas are the torch_version, torchaudio_version,
-torchvision_version and triton_version outputs of its "Write PyTorch package
-version outputs" step.
+--pytorch-version. This matters for the dev stream (--repo-stream=dev), which
+keeps every PyTorch build made against a ROCm version, e.g. two torch-2.12.0
+builds (+gita924f282 and +gitb97872d5) against 10.0.0rc4. A build's shas are the
+torch_version, torchaudio_version, torchvision_version and triton_version outputs
+of its "Write PyTorch package version outputs" step.
 
 PREREQUISITES:
   - pip install -r ./build_tools/packaging/requirements.txt
@@ -1445,12 +1444,16 @@ Examples:
     if args.arch:
         args.arch = [arch.strip() for arch in args.arch.split(",")]
 
+    # Wheel filenames carry lowercase shas, so B97872D5 must still match +gitb97872d5.
     args.git_sha = [sha.lower() for sha in parse_csv_args(args.git_sha)]
+    # Both filters only run on the structured listing (handle_multi_arch_downloads).
     if (args.git_sha or args.pytorch_version) and not args.structured:
         parser.error("--git-sha and --pytorch-version require --structured")
+    # 8 is the short sha PyTorch wheels carry, so a 7-char `git log --oneline` sha is rejected.
     bad_shas = [s for s in args.git_sha if not re.fullmatch(r"[0-9a-f]{8,40}", s)]
     if bad_shas:
         parser.error(f"--git-sha expects 8-40 hex characters, got: {bad_shas}")
+    # Reject a typo here instead of after the slow S3 listing.
     if args.pytorch_version:
         try:
             Version(args.pytorch_version)
