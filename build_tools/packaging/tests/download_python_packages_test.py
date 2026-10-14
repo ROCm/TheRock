@@ -531,6 +531,12 @@ class DevBuildFilterTest(unittest.TestCase):
         self.assertNotIn(DEV_PYTORCH_FILES[2], names)
         self.assertNotIn(DEV_PYTORCH_FILES[4], names)
         self.assertIn(DEV_PYTORCH_FILES[5], names)
+        self.assertNotIn(
+            DEV_PYTORCH_FILES[0],
+            entry_names(
+                filter_by_pytorch_version(dev_entries(DEV_PYTORCH_FILES), "2.1")
+            ),
+        )
 
     def test_git_sha_and_pytorch_version_combine(self):
         kept = filter_by_pytorch_version(

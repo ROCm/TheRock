@@ -26,11 +26,14 @@ each product's packages are discovered independently, per-product, rather than
 scanned out of one shared bucket/prefix. The structured layout is only used from
 ROCm 10 onward; earlier releases only exist in the flat prerelease bucket.
 
-Structured PyTorch downloads can be narrowed with --git-sha (source commits in
-'+git<sha>.' local versions) and/or --pytorch-version. This matters for the dev
+Structured PyTorch downloads can be narrowed with --git-sha (source commits in the
+'+git<sha>.' local versions of torch, torchaudio, torchvision and triton) and/or
+--pytorch-version. This matters for the dev
 stream (--repo-stream=dev), which keeps every PyTorch build made against a ROCm
 version, e.g. two torch-2.12.0 builds (+gita924f282 and +gitb97872d5) against
-10.0.0rc4.
+10.0.0rc4. A build's shas are the torch_version, torchaudio_version,
+torchvision_version and triton_version outputs of its "Write PyTorch package
+version outputs" step.
 
 PREREQUISITES:
   - pip install -r ./build_tools/packaging/requirements.txt
@@ -102,9 +105,6 @@ TYPICAL USAGE (Command Line):
   # Download one dev PyTorch build (built later against ROCm 10.0.0rc4)
   python download_python_packages.py --version=10.0.0rc4 --structured --repo-stream=dev --product=pytorch --pytorch-version=2.12 --git-sha=b97872d5,34c52a67,b3d5b111,669b31ac --output-dir=./downloads
 
-  # Download only the PyTorch 2.12 torch wheels (any build)
-  python download_python_packages.py --version=10.0.0rc4 --structured --repo-stream=dev --product=pytorch --pytorch-version=2.12 --output-dir=./downloads
-
   # Download structured packages and normal ROCm Core tarballs.
   python download_python_packages.py --version=7.13.0rc1 --structured --include-tarballs --tarball-variant=release --output-dir=./downloads
 
@@ -148,12 +148,14 @@ PACKAGE CATEGORIES:
 """
 
 import argparse
+import collections
 import dataclasses
 import fnmatch
 import re
 import sys
 from pathlib import Path
 
+from packaging.utils import parse_wheel_filename
 from packaging.version import InvalidVersion, Version
 
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
@@ -349,15 +351,8 @@ def filter_package_entries(
     return filtered
 
 
-# PyTorch builds tag the local version with an 8-char short sha, e.g. torch-2.12.0+gitb97872d5.rocm10.0.0rc4-...
+# PyTorch builds tag the local version with an 8-char short sha (full 40-char accepted), e.g. torch-2.12.0+gitb97872d5.rocm10.0.0rc4-...
 GIT_SHA_RE = re.compile(r"\+git([0-9a-f]{8,40})\.")
-
-
-def split_package_filename(filename: str) -> tuple[str, str]:
-    """Return (normalized package name, version) from a wheel/sdist filename."""
-    base = re.split(r"-\d", filename, maxsplit=1)[0]
-    version = filename[len(base) + 1 :].split("-")[0]
-    return base.lower().replace("-", "_"), version
 
 
 def filter_by_git_sha(
@@ -368,19 +363,19 @@ def filter_by_git_sha(
     Packages without a `+git<sha>.` local version (e.g. apex) are kept.
     """
     filtered = []
-    filtered_out_shas: dict[str, int] = {}
+    filtered_out_shas = collections.Counter()
     for entry in packages:
-        filename = entry.key.split("/")[-1]
-        match = GIT_SHA_RE.search(filename)
+        match = GIT_SHA_RE.search(entry.key.split("/")[-1])
+        # Either side may be the short sha, e.g. a full --git-sha against an 8-char wheel sha.
         if match and not any(
             s.startswith(match[1]) or match[1].startswith(s) for s in git_shas
         ):
-            filtered_out_shas[match[1]] = filtered_out_shas.get(match[1], 0) + 1
+            filtered_out_shas[match[1]] += 1
             continue
         filtered.append(entry)
     if filtered_out_shas:
         print(
-            f"  FILTERED OUT by --git-sha: {sum(filtered_out_shas.values())} packages "
+            f"  FILTERED OUT by --git-sha: {filtered_out_shas.total()} packages "
             f"from other commits ({', '.join(sorted(filtered_out_shas))})"
         )
     return filtered
@@ -392,18 +387,18 @@ def filter_by_pytorch_version(
     """Keep torch and amd_torch_device_* packages of `pytorch_version` (e.g. "2.12"); others are kept."""
     requested = Version(pytorch_version).release
     filtered = []
-    filtered_out_versions: dict[str, int] = {}
+    filtered_out_versions = collections.Counter()
     for entry in packages:
-        name, version = split_package_filename(entry.key.split("/")[-1])
-        is_torch = name == "torch" or name.startswith("amd_torch_device_")
-        if is_torch and Version(version).release[: len(requested)] != requested:
-            public = version.split("+")[0]
-            filtered_out_versions[public] = filtered_out_versions.get(public, 0) + 1
-            continue
+        filename = entry.key.split("/")[-1]
+        if filename.startswith(("torch-", "amd_torch_device_")):
+            _, version, _, _ = parse_wheel_filename(filename)
+            if version.release[: len(requested)] != requested:
+                filtered_out_versions[version.public] += 1
+                continue
         filtered.append(entry)
     if filtered_out_versions:
         print(
-            f"  FILTERED OUT by --pytorch-version: {sum(filtered_out_versions.values())} "
+            f"  FILTERED OUT by --pytorch-version: {filtered_out_versions.total()} "
             f"torch packages of other versions ({', '.join(sorted(filtered_out_versions))})"
         )
     return filtered
@@ -1324,13 +1319,9 @@ Examples:
         action="append",
         default=[],
         help=(
-            "With --structured: comma-separated list of source commits, each 8 "
-            "(short) to 40 (full) hex characters, e.g. --git-sha=b97872d5,669b31ac. "
-            "Keeps only packages whose local version carries one of them as "
-            "'+git<sha>.' (torch, torchaudio, torchvision, triton); packages "
-            "without '+git<sha>.' (e.g. apex) are kept. This only filters what "
-            "is listed; the bucket is still chosen by --repo-stream (builds "
-            "tagged with a sha are in --repo-stream=dev)."
+            "With --structured: comma-separated source commits (8 to 40 hex chars), "
+            "e.g. --git-sha=b97872d5,669b31ac. Keeps only packages tagged "
+            "'+git<sha>.' with one of them; packages without a sha (e.g. apex) are kept."
         ),
     )
 
