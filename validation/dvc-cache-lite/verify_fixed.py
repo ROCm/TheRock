@@ -55,7 +55,9 @@ def main():
         lock_observations.append(
             {
                 "path": str(path),
-                "resolved": os.path.normcase(str(path.resolve())) if path else None,
+                "resolved": (
+                    os.path.normcase(str(cache_dir.resolve())) if path else None
+                ),
                 "lock": id(lock),
                 "thread": threading.get_ident(),
             }
