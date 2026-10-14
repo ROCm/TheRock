@@ -154,7 +154,7 @@ import re
 import sys
 from pathlib import Path
 
-from packaging.utils import parse_wheel_filename
+from packaging.utils import parse_sdist_filename, parse_wheel_filename
 from packaging.version import InvalidVersion, Version
 
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
@@ -390,7 +390,10 @@ def filter_by_pytorch_version(
     for entry in packages:
         filename = entry.key.split("/")[-1]
         if filename.startswith(("torch-", "amd_torch_device_")):
-            _, version, _, _ = parse_wheel_filename(filename)
+            if filename.endswith(".whl"):
+                _, version, _, _ = parse_wheel_filename(filename)
+            else:
+                _, version = parse_sdist_filename(filename)
             if version.release[: len(requested)] != requested:
                 filtered_out_versions[version.public] += 1
                 continue

@@ -539,6 +539,13 @@ class DevBuildFilterTest(unittest.TestCase):
             ),
         )
 
+    def test_pytorch_version_parses_sdists(self):
+        sdists = ["torch-2.12.0.tar.gz", "torch-2.13.0+gitc0691f32.rocm10.0.0rc4.zip"]
+        self.assertEqual(
+            entry_names(filter_by_pytorch_version(dev_entries(sdists), "2.12")),
+            ["torch-2.12.0.tar.gz"],
+        )
+
     def test_git_sha_and_pytorch_version_combine(self):
         kept = filter_by_pytorch_version(
             filter_by_git_sha(
@@ -550,15 +557,18 @@ class DevBuildFilterTest(unittest.TestCase):
         self.assertEqual(entry_names(kept), B97872D5_BUILD)
 
     def test_dev_filters_require_structured(self):
-        with self.assertRaises(SystemExit):
-            parse_arguments(
-                ["--version=10.0.0rc4", "--git-sha=b97872d5", "--list-archs"]
-            )
+        for flag in ("--git-sha=b97872d5", "--pytorch-version=2.12"):
+            with self.subTest(flag=flag), self.assertRaises(SystemExit):
+                parse_arguments(["--version=10.0.0rc4", flag, "--list-archs"])
 
-    def test_git_sha_is_validated_and_split(self):
+    def test_dev_filter_args_are_validated(self):
         args = parse_structured("--git-sha=B97872D5,b3d5b111", "--git-sha=669b31ac")
         self.assertEqual(args.git_sha, ["b97872d5", "b3d5b111", "669b31ac"])
-        for bad in ("--git-sha=not-a-sha", "--git-sha=b97872d"):
+        for bad in (
+            "--git-sha=not-a-sha",
+            "--git-sha=b97872d",
+            "--pytorch-version=2.12x",
+        ):
             with self.subTest(bad=bad), self.assertRaises(SystemExit):
                 parse_structured(bad)
 
