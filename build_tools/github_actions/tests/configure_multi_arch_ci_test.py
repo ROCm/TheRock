@@ -337,6 +337,94 @@ class TestGitContext(unittest.TestCase):
         self.assertEqual(git.changed_files, [""])
         self.assertEqual(git.submodule_paths, [""])
 
+    def test_from_external_repo_keeps_caller_diff_separate(self):
+        """The caller's own diff does not leak into stage-reuse changed_files."""
+        git = cm.GitContext.from_external_repo(
+            "rocm-libraries",
+            external_changed_files=["projects/rocprim/foo.hpp"],
+            external_skip_patterns=["*.md"],
+        )
+        self.assertEqual(git.changed_files, ["rocm-libraries"])
+        self.assertEqual(git.external_changed_files, ["projects/rocprim/foo.hpp"])
+        self.assertEqual(git.external_skip_patterns, ["*.md"])
+
+
+# ---------------------------------------------------------------------------
+# Step 2b: Determine Changed Projects
+# ---------------------------------------------------------------------------
+
+
+class TestDetermineChangedProjects(unittest.TestCase):
+    """determine_changed_projects: [] means 'test everything'."""
+
+    def _inputs(self, **overrides) -> cm.CIInputs:
+        defaults = dict(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        defaults.update(overrides)
+        return cm.CIInputs(**defaults)
+
+    def _external_repo(self, **extra) -> str:
+        payload = {"repository": "ROCm/rocm-libraries"}
+        payload.update(extra)
+        return json.dumps(payload)
+
+    def test_therock_run_tests_everything(self):
+        """TheRock's own runs do not narrow test scope by project."""
+        git = cm.GitContext(changed_files=["core/foo.cpp"])
+        self.assertEqual(cm.determine_changed_projects(self._inputs(), git), [])
+
+    def test_caller_supplied_input_wins(self):
+        inputs = self._inputs(
+            changed_projects=["projects/rocblas"],
+            external_repo=self._external_repo(
+                projects_config=".github/repos-config.json"
+            ),
+        )
+        git = cm.GitContext.from_external_repo(
+            "rocm-libraries", external_changed_files=["projects/rocprim/foo.hpp"]
+        )
+        self.assertEqual(
+            cm.determine_changed_projects(inputs, git), ["projects/rocblas"]
+        )
+
+    def test_external_repo_without_projects_config_tests_everything(self):
+        inputs = self._inputs(external_repo=self._external_repo())
+        git = cm.GitContext.from_external_repo(
+            "rocm-libraries", external_changed_files=["projects/rocprim/foo.hpp"]
+        )
+        self.assertEqual(cm.determine_changed_projects(inputs, git), [])
+
+    def test_external_repo_maps_its_diff_to_projects(self):
+        inputs = self._inputs(
+            external_repo=self._external_repo(
+                projects_config=".github/repos-config.json"
+            )
+        )
+        git = cm.GitContext.from_external_repo(
+            "rocm-libraries",
+            external_changed_files=["projects/rocprim/foo.hpp"],
+            external_skip_patterns=["*.md"],
+        )
+        with patch.object(
+            cm,
+            "compute_external_repo_changed_projects",
+            return_value=["projects/rocprim"],
+        ) as compute:
+            result = cm.determine_changed_projects(inputs, git)
+
+        self.assertEqual(result, ["projects/rocprim"])
+        compute.assert_called_once_with(
+            changed_files=["projects/rocprim/foo.hpp"],
+            projects_config_path=".github/repos-config.json",
+            repo_full_name="ROCm/rocm-libraries",
+            skip_patterns=["*.md"],
+        )
+
 
 # ---------------------------------------------------------------------------
 # Step 2: Check Skip CI

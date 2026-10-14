@@ -2,15 +2,19 @@
 # SPDX-License-Identifier: MIT
 
 from pathlib import Path
+import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
+import configure_ci_path_filters
 from configure_ci_path_filters import (
+    compute_external_repo_changed_projects,
     get_ci_workflow_filenames,
     get_git_commit_hash,
     get_git_modified_paths,
@@ -245,6 +249,175 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
             )
         if errors:
             self.fail("\n".join(errors))
+
+
+# A TheRock workflow file inside the calling repository.
+_CALLER_WORKFLOW = ".github/workflows/therock-multi-arch-ci-nightly.yml"
+_PROJECTS_CONFIG = ".github/repos-config.json"
+_SKIP_PATTERNS = ["*.md", "docs/*", "*CODEOWNERS"]
+
+_LIBRARY_ENTRIES = [
+    ("projects", "rocblas"),
+    ("projects", "hipblas"),
+    ("shared", "stinkytofu"),
+]
+_LIBRARY_PROJECTS = ["projects/hipblas", "projects/rocblas", "shared/stinkytofu"]
+_SYSTEM_ENTRIES = [("projects", "rccl"), ("projects", "hip")]
+
+
+class ExternalRepoChangedProjectsTest(unittest.TestCase):
+    """compute_external_repo_changed_projects: [] means 'test everything'."""
+
+    def compute(
+        self,
+        changed_files,
+        *,
+        repo="ROCm/rocm-libraries",
+        entries=_LIBRARY_ENTRIES,
+        config_exists=True,
+        skip_patterns=_SKIP_PATTERNS,
+    ):
+        with tempfile.TemporaryDirectory() as directory:
+            if config_exists:
+                config_path = Path(directory) / _PROJECTS_CONFIG
+                config_path.parent.mkdir(parents=True, exist_ok=True)
+                config_path.write_text(
+                    json.dumps(
+                        {
+                            "repositories": [
+                                {
+                                    "category": category,
+                                    "name": name,
+                                    "url": f"ROCm/{name}",
+                                    "branch": "develop",
+                                }
+                                for category, name in entries
+                            ]
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+
+            with patch.object(
+                configure_ci_path_filters, "_EXTERNAL_REPO_CONFIG_DIR", directory
+            ):
+                return compute_external_repo_changed_projects(
+                    changed_files=list(changed_files),
+                    projects_config_path=_PROJECTS_CONFIG,
+                    repo_full_name=repo,
+                    skip_patterns=skip_patterns,
+                )
+
+    def test_source_change_selects_only_that_project(self):
+        self.assertEqual(
+            self.compute(["projects/rocblas/src/rocblas.cpp"]), ["projects/rocblas"]
+        )
+
+    def test_nested_project_wins_over_parent(self):
+        self.assertEqual(
+            self.compute(
+                ["projects/hipblaslt/tensilelite/foo.py"],
+                entries=[
+                    ("projects", "hipblaslt"),
+                    ("projects", "hipblaslt/tensilelite"),
+                ],
+            ),
+            ["projects/hipblaslt/tensilelite"],
+        )
+
+    def test_non_subtree_directory_is_classified(self):
+        self.assertEqual(self.compute(["shared/kpack/kpack.cpp"]), ["shared/kpack"])
+
+    def test_libraries_workflow_selects_its_configured_projects(self):
+        """A rocm-libraries workflow edit must not schedule rocm-systems tests."""
+        projects = self.compute([_CALLER_WORKFLOW])
+        self.assertEqual(projects, _LIBRARY_PROJECTS)
+        self.assertNotIn("projects/rccl", projects)
+
+    def test_libraries_workflow_with_known_source_selects_all_libraries(self):
+        self.assertEqual(
+            self.compute([_CALLER_WORKFLOW, "projects/rocblas/src/rocblas.cpp"]),
+            _LIBRARY_PROJECTS,
+        )
+
+    def test_systems_workflow_keeps_full_coverage(self):
+        self.assertEqual(
+            self.compute(
+                [_CALLER_WORKFLOW], repo="ROCm/rocm-systems", entries=_SYSTEM_ENTRIES
+            ),
+            [],
+        )
+
+    def test_unknown_repo_workflow_keeps_full_coverage(self):
+        self.assertEqual(self.compute([_CALLER_WORKFLOW], repo="ROCm/unknown"), [])
+
+    def test_workflow_with_unclassifiable_path_keeps_full_coverage(self):
+        self.assertEqual(self.compute([_CALLER_WORKFLOW, "unexpected/config.py"]), [])
+
+    def test_shared_ci_changes_keep_full_coverage(self):
+        for path in (
+            ".github/repos-config.json",
+            ".github/scripts/get_changed_projects.py",
+            "shared/ctest/categories.yaml",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.compute([_CALLER_WORKFLOW, path]), [])
+
+    def test_unclassifiable_path_keeps_full_coverage(self):
+        self.assertEqual(
+            self.compute(["projects/rocblas/src/rocblas.cpp", "unexpected/config.py"]),
+            [],
+        )
+
+    def test_missing_projects_config_keeps_full_coverage(self):
+        self.assertEqual(
+            self.compute(["projects/rocblas/src/rocblas.cpp"], config_exists=False), []
+        )
+
+    def test_no_changed_files_keeps_full_coverage(self):
+        self.assertEqual(self.compute([]), [])
+        self.assertEqual(
+            compute_external_repo_changed_projects(
+                changed_files=None,
+                projects_config_path=_PROJECTS_CONFIG,
+                repo_full_name="ROCm/rocm-libraries",
+            ),
+            [],
+        )
+
+    def test_skippable_path_does_not_widen_scope(self):
+        """A docs file alongside a project change must not force full coverage."""
+        self.assertEqual(
+            self.compute(["docs/guide.md", "projects/rocblas/src/rocblas.cpp"]),
+            ["projects/rocblas"],
+        )
+
+    def test_only_skippable_paths_keep_full_coverage(self):
+        self.assertEqual(self.compute(["docs/guide.md", "README.md"]), [])
+
+    def test_libraries_workflow_does_not_select_rccl_downstream(self):
+        """End-to-end: the selected projects must not pull in rocm-systems tests."""
+        therock_root = Path(configure_ci_path_filters.__file__).resolve().parents[2]
+        selector = therock_root / "test_tools/determine_rocm_test_dependencies.py"
+
+        selection = subprocess.run(
+            [
+                sys.executable,
+                str(selector),
+                "--changed-projects",
+                ",".join(self.compute([_CALLER_WORKFLOW])),
+                "--format",
+                "list",
+            ],
+            cwd=therock_root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        selected_tests = set(selection.stdout.splitlines())
+        self.assertIn("rocblas", selected_tests)
+        self.assertNotIn("rccl", selected_tests)
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ This module provides utilities to:
 - Filter paths based on skippable patterns (docs, markdown, etc.)
 - Identify CI-related workflow files
 - Decide whether CI should run based on the modified paths
+- Map an external repo's modified paths onto the projects its tests should cover
 
 Skip-CI patterns are loaded from TOML config files:
 - skip-ci-base.toml: Universal patterns that apply to all repos
@@ -21,9 +22,11 @@ Public API:
     is_ci_run_required() - Check if CI run is required based on modified paths
     load_skip_ci_config() - Load skip-CI patterns from TOML config files
     load_skip_ci_patterns_for_external_repo() - Load skip-CI patterns for external repos
+    compute_external_repo_changed_projects() - Map changed paths to test scope
 """
 
 import fnmatch
+import json
 import os
 from pathlib import Path
 import re
@@ -717,3 +720,224 @@ def get_changed_files_for_external_repo(
 
     print(f"  External repo {repo_name}: no SHAs provided and checkout not found")
     return None
+
+
+# ============================================================================
+# External repo changed-project analysis
+# ============================================================================
+#
+# External repos (rocm-libraries, rocm-systems) are monorepos whose
+# subdirectories are subtree-synced from individual component repos. They call
+# TheRock's reusable workflows and declare their components in a
+# repos-config.json, which is what lets a changed file be attributed to a
+# project. Doing that mapping here keeps one engine responsible for path
+# classification instead of a separate per-repo script.
+#
+# The result scopes TESTS only. An external repo always builds every in-scope
+# stage in full, so a rocPRIM change still rebuilds all of math-libs; only the
+# test selection narrows to rocPRIM. An empty result means "could not narrow
+# safely" and makes the test selector fall back to full coverage.
+
+# Repos where a change to TheRock workflow files is contained to the projects
+# the repo declares. Narrowing to those projects keeps a sibling monorepo's
+# components out of the run: otherwise a rocm-libraries workflow edit widens to
+# full coverage and schedules rocm-systems tests (rccl, hip-tests, rocshmem,
+# ...) that no rocm-libraries change can affect. Repos absent from this set
+# keep full coverage, since we cannot assume the same containment holds.
+_WORKFLOW_CHANGE_SCOPED_REPOS = {"rocm/rocm-libraries"}
+
+# TheRock workflow files inside the calling repository.
+_CALLER_WORKFLOW_PATTERNS = [
+    ".github/workflows/therock*",
+]
+
+# Project discovery and shared test logic can alter test selection for every
+# project at once, so a change here always widens to full coverage.
+_GLOBAL_SCOPE_PATTERNS = [
+    ".github/scripts/therock*",
+    ".github/scripts/get_changed_projects.py",
+    ".github/scripts/ci_utils.py",
+    ".github/scripts/config_loader.py",
+    ".github/scripts/repo_config_model.py",
+    ".github/scripts/pr_detect_changed_subtrees.py",
+    ".github/repos-config.json",
+    # shared/ctest holds the CTest categorization logic consumed by every
+    # project's tests; a change there can alter selection everywhere, so treat
+    # it as a full-coverage trigger rather than a single surfaced component.
+    "shared/ctest/*",
+]
+
+# CI-relevant monorepo directories that are NOT subtree-synced components, and
+# so are absent from repos-config.json. Without these, a PR confined to one of
+# them is unclassifiable and widens to full coverage instead of the one
+# subtree. Each entry MUST have a corresponding mapping in TheRock (a
+# build-topology alias plus the test selector's _EXTERNAL_SUBTREE_ALIASES), so
+# keep this list in lock-step when adding directories.
+_NON_SUBTREE_PROJECT_PREFIXES = {
+    "dnn-providers/cmake",
+    "shared/amdgpu-windows-interop",
+    "shared/kpack",
+    "shared/machine-readable-isa",
+    "shared/primbench",
+    "emulation/mirage",
+    "emulation/rocjitsu",
+}
+
+
+def _matches_any(paths: Iterable[str], patterns: Iterable[str]) -> bool:
+    """Check whether any path matches any glob pattern."""
+    patterns = list(patterns)
+    return any(fnmatch.fnmatch(path, pattern) for path in paths for pattern in patterns)
+
+
+def _load_external_repo_projects(projects_config_path: str) -> set[str]:
+    """Read `category/name` project prefixes from an external repos-config.json.
+
+    Returns an empty set when the config is missing or unreadable; callers treat
+    that as "cannot narrow scope" and fall back to full coverage.
+    """
+    full_path = Path(_EXTERNAL_REPO_CONFIG_DIR) / projects_config_path
+    if not full_path.exists():
+        print(f"  Projects config not found: {full_path}")
+        return set()
+
+    try:
+        config = json.loads(full_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"  Warning: failed to read projects config {full_path}: {e}")
+        return set()
+
+    return {
+        f"{entry['category']}/{entry['name']}"
+        for entry in config.get("repositories", [])
+        if entry.get("category") and entry.get("name")
+    }
+
+
+def _match_projects(paths: Iterable[str], known_prefixes: set[str]) -> list[str]:
+    """Attribute each path to the longest project prefix that matches it.
+
+    A path's project is the LONGEST registered prefix (`category/name`, or a
+    nested `category/name/subname`) matching it -- checked from most to least
+    specific -- not a fixed 2-segment truncation. A fixed truncation would make
+    a nested project registered in repos-config.json (e.g.
+    `projects/hipblaslt/tensilelite`, nested inside `projects/hipblaslt`)
+    indistinguishable from a change to its parent: both collapse to
+    `projects/hipblaslt`, silently losing the more specific match. Matching
+    longest-prefix-first, and attributing each path to exactly one project,
+    keeps a tensilelite-only change from also firing hipblaslt-proper's
+    (potentially different) test selection.
+    """
+    prefixes_by_specificity = sorted(
+        known_prefixes, key=lambda p: p.count("/"), reverse=True
+    )
+    matched: set[str] = set()
+    for path in paths:
+        segments = path.split("/")
+        for prefix in prefixes_by_specificity:
+            prefix_segments = prefix.split("/")
+            if segments[: len(prefix_segments)] == prefix_segments:
+                matched.add(prefix)
+                break
+    return sorted(matched)
+
+
+def _unclassifiable_paths(paths: Iterable[str], known_prefixes: set[str]) -> list[str]:
+    """Paths that map to no known project.
+
+    A PR can mix a recognized path (e.g. ``projects/rdc/...``) with one we
+    cannot classify (a top-level file, or a directory absent from both
+    repos-config.json and _NON_SUBTREE_PROJECT_PREFIXES). _match_projects
+    silently drops the unclassified path, which would narrow tests to the
+    recognized subset and miss the impact of the unclassified change. Callers
+    treat any such path conservatively and fall back to full coverage.
+    """
+    return [
+        path for path in paths if "/".join(path.split("/", 2)[:2]) not in known_prefixes
+    ]
+
+
+def compute_external_repo_changed_projects(
+    changed_files: Optional[list[str]],
+    projects_config_path: str,
+    repo_full_name: str,
+    skip_patterns: Optional[list[str]] = None,
+) -> list[str]:
+    """Map an external repo's changed files to the projects its tests should cover.
+
+    Args:
+        changed_files: Changed paths in the calling repo, or None if unavailable.
+        projects_config_path: repos-config.json path relative to that repo.
+        repo_full_name: Full repository name (e.g. "ROCm/rocm-libraries").
+        skip_patterns: Globs for files that cannot affect build or test results.
+
+    Returns:
+        Sorted project paths (e.g. ["projects/rocprim"]), or [] for full coverage.
+    """
+    effective_skip_patterns = skip_patterns or []
+
+    def full_coverage(reason: str) -> list[str]:
+        print(f"  {reason} - testing all projects")
+        return []
+
+    if not changed_files:
+        return full_coverage("No changed files available")
+
+    # A skippable path cannot affect test outcomes, so it must not widen scope
+    # either. Without this, a PR pairing a docs edit under a TheRock workflow
+    # path with a real project change would be classified by the docs path.
+    # When *everything* is skippable we still fall back to full coverage rather
+    # than silently narrowing; in practice is_ci_run_required has already
+    # skipped CI entirely in that case.
+    significant = [
+        path
+        for path in changed_files
+        if not _is_path_skippable_for_patterns(path, effective_skip_patterns)
+    ]
+    if not significant:
+        return full_coverage("All changed files are skippable")
+    if len(significant) != len(changed_files):
+        skipped = len(changed_files) - len(significant)
+        print(f"  Ignoring {skipped} skippable path(s) when scoping tests")
+
+    if _matches_any(significant, _GLOBAL_SCOPE_PATTERNS):
+        return full_coverage("Shared CI or test-selection files changed")
+
+    configured_projects = _load_external_repo_projects(projects_config_path)
+    if not configured_projects:
+        return full_coverage("No projects config loaded")
+
+    if _matches_any(significant, _CALLER_WORKFLOW_PATTERNS):
+        if repo_full_name.lower() not in _WORKFLOW_CHANGE_SCOPED_REPOS:
+            return full_coverage(f"TheRock workflow changed in {repo_full_name}")
+
+        # Any other unclassifiable change must retain full coverage.
+        other_paths = [
+            path
+            for path in significant
+            if not _matches_any([path], _CALLER_WORKFLOW_PATTERNS)
+        ]
+        unclassifiable = _unclassifiable_paths(other_paths, configured_projects)
+        if unclassifiable:
+            return full_coverage(
+                f"Unclassifiable change(s) {sorted(unclassifiable)[:5]}"
+            )
+
+        print(
+            f"  TheRock workflow changed in {repo_full_name}"
+            " - testing its configured projects"
+        )
+        return sorted(configured_projects)
+
+    known_prefixes = configured_projects | _NON_SUBTREE_PROJECT_PREFIXES
+
+    # If any change cannot be attributed to a known project, we cannot reason
+    # about its test impact. Narrowing to just the recognized subset would
+    # silently drop it, so fall back to full coverage instead.
+    unclassifiable = _unclassifiable_paths(significant, known_prefixes)
+    if unclassifiable:
+        return full_coverage(f"Unclassifiable change(s) {sorted(unclassifiable)[:5]}")
+
+    matched = _match_projects(significant, known_prefixes)
+    print(f"  Changed projects: {matched}")
+    return matched

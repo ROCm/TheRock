@@ -43,6 +43,7 @@ Outputs (written to GITHUB_OUTPUT):
     windows_build_config  : JSON object with build config, or "" if skipped
     enable_build_jobs     : "true" or "false"
     test_type             : "quick", "standard", "comprehensive", or "full"
+    changed_projects      : Comma-separated projects to test, "" for all
 """
 
 import enum
@@ -64,6 +65,7 @@ from amdgpu_family_matrix import (
     select_build_runner,
 )
 from configure_ci_path_filters import (
+    compute_external_repo_changed_projects,
     get_changed_files_for_external_repo,
     get_git_commit_hash,
     get_git_modified_paths,
@@ -79,7 +81,6 @@ from github_actions_api import (
     gha_load_github_event,
     gha_set_output,
 )
-from stage_impact import analyze_artifact_impact_from_projects
 from stage_reuse_decision import (
     AutoStageReuse,
     StageReuseMode,
@@ -103,6 +104,20 @@ def _get_all_build_stages() -> list[str]:
     """
     topology = get_topology()
     return list(topology.build_stages.keys())
+
+
+def parse_external_repo(raw: str) -> dict:
+    """Parse the external_repo JSON blob a calling repo passes to TheRock."""
+    try:
+        external_repo = json.loads(raw)
+    except (json.JSONDecodeError, TypeError) as e:
+        raise ValueError(f"Invalid external_repo JSON: {raw!r}") from e
+
+    if not isinstance(external_repo, dict):
+        raise ValueError(
+            f"external_repo must be a JSON object, got: {type(external_repo).__name__}"
+        )
+    return external_repo
 
 
 def _parse_comma_list(raw: str) -> list[str]:
@@ -245,7 +260,9 @@ class CIInputs:
     build_stages: list[str] = field(default_factory=list)
     # Repository to query for baseline runs (for cross-repo artifact reuse)
     baseline_repository: str = ""
-    # Changed projects from external repos (e.g., "projects/rocprim,projects/hipcub")
+    # Caller-supplied test scope override (e.g. "projects/rocprim,projects/hipcub").
+    # Normally left empty: external repo runs derive this from their diff. When
+    # set, it wins, for callers that still compute the list themselves.
     changed_projects: list[str] = field(default_factory=list)
 
     # External repo JSON (e.g., '{"repository":"ROCm/rocm-libraries","ref":"..."}')
@@ -446,6 +463,15 @@ class GitContext:
     # List of paths of all git submodules in the repo
     submodule_paths: list[str] | None = None
 
+    # Paths changed in the *calling* repository, for external repo runs. Kept
+    # separate from changed_files, which for those runs holds the repo name so
+    # stage reuse can treat the whole repo as one unit. None means the diff
+    # could not be determined.
+    external_changed_files: list[str] | None = None
+
+    # Skip-CI globs for the calling repository, loaded from its TOML config.
+    external_skip_patterns: list[str] | None = None
+
     @staticmethod
     def from_repo(base_ref: str) -> "GitContext":
         """Compute from the actual repo. Only called from main()."""
@@ -473,12 +499,18 @@ class GitContext:
         return GitContext()
 
     @staticmethod
-    def from_external_repo(external_repo_name: str) -> "GitContext":
+    def from_external_repo(
+        external_repo_name: str,
+        external_changed_files: list[str] | None = None,
+        external_skip_patterns: list[str] | None = None,
+    ) -> "GitContext":
         """Create context for external repo builds (e.g., rocm-libraries).
 
         For external repos, we treat the repo name as both a changed file and
         a submodule path so that stage reuse analysis can determine which
-        TheRock stages are affected.
+        TheRock stages are affected. The calling repo's own diff is carried
+        separately, in external_changed_files, and drives skip-CI and test
+        scoping.
 
         Note: has_submodule_changes will be True, but _get_current_triggers()
         ignores this for external repos since submodule_bump only applies to
@@ -488,6 +520,8 @@ class GitContext:
         return GitContext(
             changed_files=[external_repo_name],
             submodule_paths=[external_repo_name],
+            external_changed_files=external_changed_files,
+            external_skip_patterns=external_skip_patterns,
         )
 
     @property
@@ -773,6 +807,8 @@ class CIOutputs:
     # and PR test:* labels.
     linux_test_labels: list[str] = field(default_factory=list)
     windows_test_labels: list[str] = field(default_factory=list)
+    # Projects whose tests should run. Empty means test everything.
+    changed_projects: list[str] = field(default_factory=list)
 
     @staticmethod
     def skipped() -> "CIOutputs":
@@ -809,35 +845,20 @@ def should_skip_ci(
     # 2. Path filter skipping - check before ASAN label logic so we don't print
     #    "Running: ASAN CI triggered by PR label" when CI will be skipped anyway.
 
-    # 2a. External repo builds: get changed files and evaluate against skip patterns
-    # from the TOML config. This allows external repos to skip TheRock CI when only
-    # docs/metadata files are changed.
+    # 2a. External repo builds: evaluate the calling repo's diff (fetched in
+    # main()) against the skip patterns from its TOML config. This allows
+    # external repos to skip TheRock CI when only docs/metadata changed.
     if ci_inputs.external_repo:
-        try:
-            external_repo = json.loads(ci_inputs.external_repo)
-        except (json.JSONDecodeError, TypeError) as e:
-            raise ValueError(
-                f"Invalid external_repo JSON: {ci_inputs.external_repo!r}"
-            ) from e
-
-        if not isinstance(external_repo, dict):
-            raise ValueError(
-                f"external_repo must be a JSON object, got: {type(external_repo).__name__}"
-            )
-
-        repo_name = external_repo.get("repository", "").split("/")[-1]
-
-        # Get changed files via helper function (uses API or git diff)
-        changed_files = get_changed_files_for_external_repo(external_repo)
-
-        # Get skip patterns from TOML config file
-        skip_ci_config = external_repo.get("skip_ci_config")
-        skip_ci_patterns = None
-        if skip_ci_config:
-            skip_ci_patterns = load_skip_ci_patterns_for_external_repo(skip_ci_config)
-
-        # Evaluate skip logic
-        if not is_ci_run_required(changed_files, skip_ci_patterns, repo_name):
+        repo_name = (
+            parse_external_repo(ci_inputs.external_repo)
+            .get("repository", "")
+            .split("/")[-1]
+        )
+        if not is_ci_run_required(
+            git_context.external_changed_files,
+            git_context.external_skip_patterns,
+            repo_name,
+        ):
             print("  External repo build: CI can be skipped")
             return True
 
@@ -866,6 +887,48 @@ def should_skip_ci(
         print("  Running: ASAN CI triggered by PR label")
 
     return False
+
+
+# ---------------------------------------------------------------------------
+# Step 2b: Determine Changed Projects
+# ---------------------------------------------------------------------------
+
+
+def determine_changed_projects(
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+) -> list[str]:
+    """Determine which projects' tests should run. Empty means test everything.
+
+    This narrows TESTS only. An external repo still builds every in-scope stage
+    in full, so a rocPRIM change rebuilds all of math-libs but only runs
+    rocPRIM's tests.
+
+    TheRock's own runs return [] and rely on its changed-file analysis
+    elsewhere; only external repos (rocm-libraries, rocm-systems) map a diff
+    onto project paths, using the repos-config.json they point at via the
+    external_repo JSON's "projects_config" key.
+    """
+    # An explicit input wins, for callers that compute the list themselves.
+    if ci_inputs.changed_projects:
+        print(f"  Caller-supplied changed projects: {ci_inputs.changed_projects}")
+        return list(ci_inputs.changed_projects)
+
+    if not ci_inputs.external_repo:
+        return []
+
+    external_repo = parse_external_repo(ci_inputs.external_repo)
+    projects_config = external_repo.get("projects_config")
+    if not projects_config:
+        print("  No 'projects_config' in external_repo - testing all projects")
+        return []
+
+    return compute_external_repo_changed_projects(
+        changed_files=git_context.external_changed_files,
+        projects_config_path=projects_config,
+        repo_full_name=external_repo.get("repository", ""),
+        skip_patterns=git_context.external_skip_patterns,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1297,19 +1360,15 @@ def decide_jobs(
         for stage in skipped_stages:
             stage_decisions[stage] = JobAction.SKIP
 
-    # For external repos, use changed_projects to determine artifact-level reuse.
-    # This handles the case where SKIP_PATH_FILTERS=true disables the normal
-    # changed-file analysis.
+    # Changed projects scope tests only: an external repo always builds every
+    # in-scope stage in full, so artifact-level reuse comes solely from stage
+    # reuse analysis of TheRock's own diff.
     rebuild_artifacts: list[str] = (
         list(auto_stage_reuse.rebuild_artifacts) if auto_stage_reuse else []
     )
     reusable_artifacts: list[str] = (
         list(auto_stage_reuse.reusable_artifacts) if auto_stage_reuse else []
     )
-    if ci_inputs.changed_projects and not rebuild_artifacts:
-        rebuild_artifacts, reusable_artifacts = analyze_artifact_impact_from_projects(
-            ci_inputs.changed_projects
-        )
 
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
@@ -1961,6 +2020,7 @@ def write_outputs(
         "test_type": test_type,
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,
+        "changed_projects": ",".join(outputs.changed_projects),
     }
     gha_set_output(output_vars)
 
@@ -2002,6 +2062,11 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         return CIOutputs.skipped()
     print("Result: CI will run")
 
+    print("\n=== Determining changed projects ===")
+    changed_projects = determine_changed_projects(
+        ci_inputs=ci_inputs, git_context=git_context
+    )
+
     print("\n=== Selecting GPU target families ===")
     targets = select_targets(ci_inputs)
     targets.log()
@@ -2027,6 +2092,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         jobs=jobs,
         linux_test_labels=ci_inputs.linux_test_labels,
         windows_test_labels=ci_inputs.windows_test_labels,
+        changed_projects=changed_projects,
     )
 
 
@@ -2046,20 +2112,26 @@ def main():
     if ci_inputs.external_repo:
         # External repo: use repo name for stage reuse analysis.
         # external_repo is JSON like {"repository":"ROCm/rocm-libraries","ref":"..."}
-        try:
-            external_repo = json.loads(ci_inputs.external_repo)
-        except (json.JSONDecodeError, TypeError) as exc:
-            raise ValueError(
-                f"EXTERNAL_REPO contains invalid JSON: {ci_inputs.external_repo!r}"
-            ) from exc
+        external_repo = parse_external_repo(ci_inputs.external_repo)
 
         repo_full_name = external_repo.get("repository", "")
         if not repo_full_name:
             raise ValueError(
                 f"EXTERNAL_REPO missing 'repository' field: {ci_inputs.external_repo!r}"
             )
-        external_repo_name = repo_full_name.split("/")[-1]
-        git_context = GitContext.from_external_repo(external_repo_name)
+
+        # Fetch the calling repo's diff and skip patterns once; both skip-CI
+        # and test scoping read them off the context.
+        skip_ci_config = external_repo.get("skip_ci_config")
+        git_context = GitContext.from_external_repo(
+            repo_full_name.split("/")[-1],
+            external_changed_files=get_changed_files_for_external_repo(external_repo),
+            external_skip_patterns=(
+                load_skip_ci_patterns_for_external_repo(skip_ci_config)
+                if skip_ci_config
+                else None
+            ),
+        )
     elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.
