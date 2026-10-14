@@ -64,10 +64,12 @@ from amdgpu_family_matrix import (
     select_build_runner,
 )
 from configure_ci_path_filters import (
+    get_changed_files_for_external_repo,
     get_git_commit_hash,
     get_git_modified_paths,
     get_git_submodule_paths,
     is_ci_run_required,
+    load_skip_ci_patterns_for_external_repo,
 )
 from configure_jax_release_matrix import generate_jax_matrix_for_release_type
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
@@ -86,6 +88,7 @@ from stage_reuse_decision import (
 )
 
 _NULL_GIT_SHA = "0" * 40
+
 
 # ---------------------------------------------------------------------------
 # Input parsing helpers
@@ -224,7 +227,7 @@ class CIInputs:
     build_native_linux: bool = True
     python_versions: list[str] = field(default_factory=list)
 
-    # PR labels (from event payload for pull_request events)
+    # Labels from the PR event payload or workflow_dispatch pr_labels input.
     pr_labels: list[str] = field(default_factory=list)
 
     # Per-platform GPU family selections parsed from reusable workflow inputs.
@@ -331,6 +334,8 @@ class CIInputs:
 
             # The merge commit's first parent is the PR base.
             base_ref = "HEAD^"
+        elif event_name == "workflow_dispatch":
+            pr_labels = _parse_comma_list(os.environ.get("PR_LABELS", ""))
         elif event_name == "push":
             before_ref = event.get("before")
             # GitHub uses the null SHA when a push creates a new ref. That
@@ -344,22 +349,11 @@ class CIInputs:
                 # against its parent, missing earlier commits in the push.
                 base_ref = None
 
-        # Test labels come from two sources:
-        # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
-        # 2. PR test:* labels (apply to both platforms)
-        # Additionally, ci:* labels are passed through for downstream processing
+        # Derive component and CI control labels from the PR or dispatch labels.
         pr_test_labels = [label for label in pr_labels if label.startswith("test:")]
         pr_ci_labels = [label for label in pr_labels if label.startswith("ci:")]
-        linux_test_labels = (
-            _parse_comma_list(os.environ.get("LINUX_TEST_LABELS", ""))
-            + pr_test_labels
-            + pr_ci_labels
-        )
-        windows_test_labels = (
-            _parse_comma_list(os.environ.get("WINDOWS_TEST_LABELS", ""))
-            + pr_test_labels
-            + pr_ci_labels
-        )
+        linux_test_labels = pr_test_labels + pr_ci_labels
+        windows_test_labels = pr_test_labels + pr_ci_labels
 
         # When build_stages limits the build, validate or auto-select test labels.
         # - If labels provided: fail-fast if they require stages not in build_stages
@@ -801,18 +795,60 @@ def should_skip_ci(
     - 'ci:skip' PR label
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
+    - ASAN builds on PRs without ci:asan or ci:host-asan labels
 
-    For external repo builds, path filtering is skipped since the external repo
-    name is used for stage reuse analysis, not for CI skip decisions.
+    For external repo builds, path filtering uses changed_files and
+    skip_ci_patterns from the external_repo JSON (both must be provided).
+    Schedule and workflow_dispatch runs always run CI.
     """
+    # 1. Common skip behavior
     if "ci:skip" in ci_inputs.pr_labels:
         print("  Skipping: 'ci:skip' PR label")
         return True
 
-    # Skip ASAN on PRs unless an enabling label is present.
-    # This avoids running expensive ASAN builds on every PR.
-    # Labels that enable ASAN CI:
-    #   - ci:asan / ci:host-asan: explicit opt-in for ASAN testing
+    # 2. Path filter skipping - check before ASAN label logic so we don't print
+    #    "Running: ASAN CI triggered by PR label" when CI will be skipped anyway.
+
+    # 2a. External repo builds: get changed files and evaluate against skip patterns
+    # from the TOML config. This allows external repos to skip TheRock CI when only
+    # docs/metadata files are changed.
+    if ci_inputs.external_repo:
+        try:
+            external_repo = json.loads(ci_inputs.external_repo)
+        except (json.JSONDecodeError, TypeError) as e:
+            raise ValueError(
+                f"Invalid external_repo JSON: {ci_inputs.external_repo!r}"
+            ) from e
+
+        if not isinstance(external_repo, dict):
+            raise ValueError(
+                f"external_repo must be a JSON object, got: {type(external_repo).__name__}"
+            )
+
+        repo_name = external_repo.get("repository", "").split("/")[-1]
+
+        # Get changed files via helper function (uses API or git diff)
+        changed_files = get_changed_files_for_external_repo(external_repo)
+
+        # Get skip patterns from TOML config file
+        skip_ci_config = external_repo.get("skip_ci_config")
+        skip_ci_patterns = None
+        if skip_ci_config:
+            skip_ci_patterns = load_skip_ci_patterns_for_external_repo(skip_ci_config)
+
+        # Evaluate skip logic
+        if not is_ci_run_required(changed_files, skip_ci_patterns, repo_name):
+            print("  External repo build: CI can be skipped")
+            return True
+
+    # 2b. Local repo (TheRock): check changed files against built-in skip patterns.
+    if not ci_inputs.external_repo and git_context.changed_files is not None:
+        print(f"  Checking {len(git_context.changed_files)} changed file(s)...")
+        if not is_ci_run_required(git_context.changed_files):
+            print("  TheRock: CI can be skipped")
+            return True
+
+    # 3. ASAN skip - only evaluated if path filtering didn't skip CI
     has_asan_label = (
         "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
     )
@@ -828,28 +864,6 @@ def should_skip_ci(
 
     if has_asan_label and ci_inputs.build_variant == "asan":
         print("  Running: ASAN CI triggered by PR label")
-
-    # External repo builds skip path filtering - they always run CI and use
-    # stage reuse to determine which stages to rebuild.
-    # TODO(#3343): Reuse skip path filters from external repos to short-circuit
-    # CI for docs-only changes, experimental projects, etc.
-    if ci_inputs.external_repo:
-        print("  External repo build: skipping path filter checks, using stage reuse")
-        return False
-
-    # If we have a list of changed files (push/pull_request events), check if
-    # CI should run for that set of changed files. For example: if only .md
-    # files are changed, skip CI.
-    if git_context.changed_files is not None:
-        print(
-            f"  Checking {len(git_context.changed_files)} changed file(s) "
-            f"against path filters..."
-        )
-        if not is_ci_run_required(git_context.changed_files):
-            print("  Skipping: no CI-relevant files changed")
-            return True
-        else:
-            print("  CI-relevant files changed, running CI")
 
     return False
 
@@ -996,7 +1010,7 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     else:
         raise ValueError(f"Unsupported event type: {ci_inputs.event_name!r}")
 
-    # PR labels can extend the family set (both platforms).
+    # Labels can extend the trigger/input-selected family set (both platforms).
     # We support three types of arch labels:
     #   - ci:gfx* - opt-in to both build AND test (existing behavior)
     #   - ci:build:gfx* - opt-in to build only (no tests)
@@ -1016,57 +1030,56 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     linux_test_only: list[str] = []
     windows_test_only: list[str] = []
 
-    if ci_inputs.is_pull_request:
-        for label in ci_inputs.pr_labels:
-            if label == "ci:run-all-archs":
-                # Override to all families.
-                linux_names = list(all_families.keys())
-                windows_names = list(all_families.keys())
-                print("  Label 'ci:run-all-archs' -> all families")
-                break
-            if label.lower().startswith("ci:build:gfx"):
-                # Build-only label: ci:build:gfx94x -> gfx94x
-                target = label.lower().removeprefix("ci:build:").split("-")[0]
-                linux_names.append(target)
-                windows_names.append(target)
-                linux_build_only.append(target)
-                windows_build_only.append(target)
-                print(f"  Label '{label}' -> adding build-only target {target}")
-            elif label.lower().startswith("ci:test:gfx"):
-                # Test-only label: ci:test:gfx94x -> gfx94x
-                # Note: we don't add to linux_names/windows_names here because
-                # test requires build. Validation below will check that a
-                # corresponding build label exists.
-                target = label.lower().removeprefix("ci:test:").split("-")[0]
-                linux_test_only.append(target)
-                windows_test_only.append(target)
-                print(f"  Label '{label}' -> adding test-only target {target}")
-            elif label.lower().startswith("ci:gfx"):
-                # Trim suffixes from labels since amdgpu_family_matrix.py
-                # specifies families with no suffix (e.g. `gfx94x`) but
-                # we have some labels like `ci:gfx94X-dcgpu` or `ci:gfx103X-linux`.
-                # Family keys are lowercase, so normalize the target.
-                # Strip ci: prefix, then split on dash to get the base family.
-                target = label.lower().removeprefix("ci:").split("-")[0]
-                linux_names.append(target)
-                windows_names.append(target)
-                print(f"  Label '{label}' -> adding target {target}")
+    for label in ci_inputs.pr_labels:
+        if label == "ci:run-all-archs":
+            # Override to all families.
+            linux_names = list(all_families.keys())
+            windows_names = list(all_families.keys())
+            print("  Label 'ci:run-all-archs' -> all families")
+            break
+        if label.lower().startswith("ci:build:gfx"):
+            # Build-only label: ci:build:gfx94x -> gfx94x
+            target = label.lower().removeprefix("ci:build:").split("-")[0]
+            linux_names.append(target)
+            windows_names.append(target)
+            linux_build_only.append(target)
+            windows_build_only.append(target)
+            print(f"  Label '{label}' -> adding build-only target {target}")
+        elif label.lower().startswith("ci:test:gfx"):
+            # Test-only label: ci:test:gfx94x -> gfx94x
+            # Note: we don't add to linux_names/windows_names here because
+            # test requires build. Validation below will check that a
+            # corresponding build label exists.
+            target = label.lower().removeprefix("ci:test:").split("-")[0]
+            linux_test_only.append(target)
+            windows_test_only.append(target)
+            print(f"  Label '{label}' -> adding test-only target {target}")
+        elif label.lower().startswith("ci:gfx"):
+            # Trim suffixes from labels since amdgpu_family_matrix.py
+            # specifies families with no suffix (e.g. `gfx94x`) but
+            # we have some labels like `ci:gfx94X-dcgpu` or `ci:gfx103X-linux`.
+            # Family keys are lowercase, so normalize the target.
+            # Strip ci: prefix, then split on dash to get the base family.
+            target = label.lower().removeprefix("ci:").split("-")[0]
+            linux_names.append(target)
+            windows_names.append(target)
+            print(f"  Label '{label}' -> adding target {target}")
 
-        # Platform-specific labels use additive logic: if any ci:platform label is
-        # set, start with empty lists and add back only the requested platforms.
-        has_platform_linux = "ci:platform:linux" in ci_inputs.pr_labels
-        has_platform_windows = "ci:platform:windows" in ci_inputs.pr_labels
-        if has_platform_linux or has_platform_windows:
-            saved_linux = linux_names
-            saved_windows = windows_names
-            linux_names = []
-            windows_names = []
-            if has_platform_linux:
-                linux_names = saved_linux
-                print("  Label 'ci:platform:linux' -> including Linux builds/tests")
-            if has_platform_windows:
-                windows_names = saved_windows
-                print("  Label 'ci:platform:windows' -> including Windows builds/tests")
+    # Platform-specific labels use additive logic: if any ci:platform label is
+    # set, start with empty lists and add back only the requested platforms.
+    has_platform_linux = "ci:platform:linux" in ci_inputs.pr_labels
+    has_platform_windows = "ci:platform:windows" in ci_inputs.pr_labels
+    if has_platform_linux or has_platform_windows:
+        saved_linux = linux_names
+        saved_windows = windows_names
+        linux_names = []
+        windows_names = []
+        if has_platform_linux:
+            linux_names = saved_linux
+            print("  Label 'ci:platform:linux' -> including Linux builds/tests")
+        if has_platform_windows:
+            windows_names = saved_windows
+            print("  Label 'ci:platform:windows' -> including Windows builds/tests")
 
     # De-dup, validate, then filter by platform availability.
     linux_names = list(dict.fromkeys(linux_names))
@@ -1406,8 +1419,9 @@ def _should_run_tests_for_family(
     submodule_bump_tests_only, trigger_test_label_only) with a unified trigger-based
     approach.
 
-    workflow_dispatch (on_demand) implicitly allows all families to run tests,
-    since it's a manual trigger where users explicitly choose what to run.
+    workflow_dispatch (on_demand) and ci:run-all-archs label implicitly allow
+    all families to run tests, since both represent explicit user intent to
+    run the full matrix.
 
     Returns:
         Tuple of (should_run, reason_string) for logging.
@@ -1415,6 +1429,10 @@ def _should_run_tests_for_family(
     # workflow_dispatch implicitly allows all families
     if ci_inputs.is_workflow_dispatch:
         return True, "workflow_dispatch (on_demand)"
+
+    # ci:run-all-archs label means build AND test all families
+    if "ci:run-all-archs" in ci_inputs.pr_labels:
+        return True, "ci:run-all-archs label"
 
     tests_on_trigger = set(platform_info.get("tests_on_trigger", []))
 

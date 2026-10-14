@@ -153,9 +153,7 @@ jobs:
           choco source disable -n=chocolatey
           choco source add -n=internal -s http://nexus-service.nexus-ns.svc.cluster.local:8081/repository/choco-group/ --priority=1
           choco install --no-progress -y ccache
-          # ninja pinned due to a bug in the 1.13.0 release:
-          # https://github.com/ninja-build/ninja/issues/2616
-          choco install --no-progress -y ninja --version 1.12.1
+          choco install --no-progress -y ninja --version 1.13.2
           choco install --no-progress -y strawberryperl
           # win_flex/win_bison are required by the amd-mesa (libva/d3d12) build.
           if [[ "${STAGE_NAME}" == "media-libs" ]]; then
