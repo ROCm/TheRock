@@ -342,9 +342,9 @@ if [[ ${#KILLABLE_PIDS[@]} -gt 0 ]]; then
 fi
 
 if [[ "$CLEANUP_GPU_RESET" == "true" && ${#STUCK_PIDS[@]} -gt 0 ]]; then
-    echo "[*] Attempting GPU reset via rocm-smi..."
-    if command -v rocm-smi &>/dev/null; then
-        if rocm-smi --gpureset 2>&1; then
+    echo "[*] Attempting GPU reset via amd-smi..."
+    if command -v amd-smi &>/dev/null; then
+        if amd-smi reset -G 2>&1; then
             echo "[+] GPU reset completed"
             sleep 2
             for pid in "${STUCK_PIDS[@]}"; do
@@ -356,7 +356,7 @@ if [[ "$CLEANUP_GPU_RESET" == "true" && ${#STUCK_PIDS[@]} -gt 0 ]]; then
             echo "[-] GPU reset failed (may require elevated permissions)"
         fi
     else
-        echo "[-] rocm-smi not found, cannot perform GPU reset"
+        echo "[-] amd-smi not found, cannot perform GPU reset"
     fi
 fi
 

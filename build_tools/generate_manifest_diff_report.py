@@ -51,6 +51,7 @@ sys.path.insert(0, str(THIS_SCRIPT_DIR))
 # Local imports
 from generate_therock_manifest import build_manifest_schema
 from github_actions.github_actions_api import (
+    GitHubAPI,
     gha_append_step_summary,
     gha_query_last_workflow_run,
     gha_query_workflow_run_by_id,
@@ -332,7 +333,12 @@ def get_api_base_from_url(url: str, fallback_name: str) -> str:
     return f"{GITHUB_API_BASE}/{ROCM_ORG}/{fallback_name}"
 
 
-def is_revert(old_sha: str, new_sha: str, api_base: str) -> bool:
+def is_revert(
+    old_sha: str,
+    new_sha: str,
+    api_base: str,
+    github_api: "GitHubAPI | None" = None,
+) -> bool:
     """Check if updating from old_sha to new_sha is a revert (going backwards).
 
     Uses GitHub compare API: compare/{new_sha}...{old_sha}
@@ -340,10 +346,16 @@ def is_revert(old_sha: str, new_sha: str, api_base: str) -> bool:
     - If old_sha is "behind" new_sha → normal forward progress → return False
     - If "diverged" → different branches, not a revert → return False
     - If 404 → commits deleted from repo → return False (can't determine)
+
+    By default uses the module-level singleton client (gha_send_request).
+    Pass an explicit `github_api` (e.g. an App-token-bound instance) to route
+    this request through that client instead -- required for cross-repo
+    callers that can't rely on the ambient GITHUB_TOKEN/gh-CLI singleton.
     """
+    send_request = github_api.send_request if github_api else gha_send_request
     try:
         # If old_sha is "ahead" of new_sha, we're moving backwards (revert)
-        compare = gha_send_request(f"{api_base}/compare/{new_sha}...{old_sha}")
+        compare = send_request(f"{api_base}/compare/{new_sha}...{old_sha}")
         status = compare.get("status", "")
         return status == "ahead"
     except HTTPError as e:
@@ -362,8 +374,16 @@ def fetch_commits_in_range(
     start_sha: str,
     end_sha: str,
     api_base: str,
+    github_api: "GitHubAPI | None" = None,
 ) -> list[dict]:
-    """Fetch commits between two SHAs."""
+    """Fetch commits between two SHAs.
+
+    By default uses the module-level singleton client (gha_send_request).
+    Pass an explicit `github_api` (e.g. an App-token-bound instance) to route
+    these requests through that client instead -- required for cross-repo
+    callers that can't rely on the ambient GITHUB_TOKEN/gh-CLI singleton.
+    """
+    send_request = github_api.send_request if github_api else gha_send_request
     commits: list[dict] = []
     found_start = False
     page = 1
@@ -374,7 +394,7 @@ def fetch_commits_in_range(
         params = {"sha": end_sha, "per_page": PER_PAGE, "page": page}
         url = f"{api_base}/commits?{urllib.parse.urlencode(params)}"
         try:
-            data = gha_send_request(url)
+            data = send_request(url)
             if not data:
                 break
             for commit in data:
@@ -396,7 +416,7 @@ def fetch_commits_in_range(
     if not found_start:
         try:
             compare_url = f"{api_base}/compare/{start_sha}...{end_sha}"
-            compare_data = gha_send_request(compare_url)
+            compare_data = send_request(compare_url)
             if compare_data.get("status") == "diverged":
                 print("    (Commits are off-branch/diverged - using compare API)")
                 diverged_commits = compare_data.get("commits", [])

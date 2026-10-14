@@ -11,7 +11,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from configure_ci_path_filters import (
-    _GITHUB_WORKFLOWS_CI_FILENAMES,
+    get_ci_workflow_filenames,
     get_git_commit_hash,
     get_git_modified_paths,
     is_ci_run_required,
@@ -36,7 +36,12 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         self.assertFalse(run_ci)
 
     def test_dont_run_ci_if_only_skipped_files_edited(self):
-        paths = ["gitleaks.toml", "build_tools/scan_tools/script.py"]
+        paths = [
+            "build_tools/scan_tools/gitleaks.toml",
+            "build_tools/scan_tools/bandit.yaml",
+            "build_tools/scan_tools/trivy.yaml",
+            "build_tools/scan_tools/zizmor.yaml",
+        ]
         run_ci = is_ci_run_required(paths)
         self.assertFalse(run_ci)
 
@@ -58,14 +63,57 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         run_ci = is_ci_run_required(paths)
         self.assertFalse(run_ci)
 
-        paths = [".github/workflows/test_jax_dockerfile.yml"]
-        run_ci = is_ci_run_required(paths)
-        self.assertFalse(run_ci)
-
     def test_run_ci_if_source_file_and_unrelated_workflow_file_edited(self):
         paths = ["source_file.h", ".github/workflows/pre-commit.yml"]
         run_ci = is_ci_run_required(paths)
         self.assertTrue(run_ci)
+
+    def test_dont_run_ci_for_unit_test_only_changes(self):
+        # These directories are exercised separately by unit_tests.yml.
+        unit_test_paths = [
+            "build_tools/tests/example_test.py",
+            "build_tools/github_actions/tests/example_test.py",
+            "build_tools/packaging/tests/example_test.py",
+            "build_tools/packaging/archives/tests/example_test.py",
+            "build_tools/packaging/linux/tests/example_test.py",
+            "build_tools/packaging/python/tests/example_test.py",
+            "build_tools/packaging/windows/tests/example_test.py",
+            "build_tools/third_party/s3_management/tests/example_test.py",
+            "external-builds/pytorch/tests/example_test.py",
+            "test_tools/tests/example_test.py",
+        ]
+
+        for path in unit_test_paths:
+            with self.subTest(path=path):
+                self.assertFalse(is_ci_run_required([path]))
+
+    def test_dont_run_ci_for_path_filter_only_changes(self):
+        paths = ["build_tools/github_actions/configure_ci_path_filters.py"]
+        self.assertFalse(is_ci_run_required(paths))
+
+    def test_run_ci_for_tests_exercising_built_packages(self):
+        integration_test_paths = [
+            # Tests for ROCm subprojects.
+            "build_tools/github_actions/test_executable_scripts/test_example.py",
+            # Install tests for packages (run on CI after building packages)
+            "build_tools/packaging/python/templates/example_test.py",
+            "build_tools/packaging/linux/example_test.py",
+            # Integration tests for ROCm (run on CI after building artifacts)
+            "tests/test_rocm_sanity.py",
+        ]
+
+        for path in integration_test_paths:
+            with self.subTest(path=path):
+                self.assertTrue(is_ci_run_required([path]))
+
+    def test_run_ci_for_source_and_unit_test_changes(self):
+        # Exclusions for skipping unit tests do not take priority over
+        # inclusions for modifying script files.
+        paths = [
+            "build_tools/packaging/archives/build_tarballs.py",
+            "build_tools/packaging/archives/tests/build_tarballs_test.py",
+        ]
+        self.assertTrue(is_ci_run_required(paths))
 
     @patch("configure_ci_path_filters.subprocess.run")
     def test_missing_base_sha_is_fetched_before_diffing(self, mock_run):
@@ -169,28 +217,30 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         self.assertEqual(get_git_commit_hash(base_sha), base_sha)
 
     def test_ci_workflow_filenames_cover_all_transitive_uses(self):
-        """_GITHUB_WORKFLOWS_CI_FILENAMES must exactly match the set of
-        workflows transitively called by multi_arch_ci.yml.
+        """CI workflow filenames in skip-ci-config.toml must exactly match
+        the set of workflows transitively called by multi_arch_ci.yml.
 
         This is a change-detector test that can be removed if
-        _GITHUB_WORKFLOWS_CI_FILENAMES is computed dynamically instead of
+        ci_workflows.filenames is computed dynamically instead of
         maintained by hand.
 
-        If this test fails, update _GITHUB_WORKFLOWS_CI_FILENAMES in
-        configure_ci_path_filters.py to match the actual workflow tree.
+        If this test fails, update ci_workflows.filenames in
+        build_tools/github_actions/skip-ci-config.toml to match the actual
+        workflow tree.
         """
+        ci_workflow_filenames = get_ci_workflow_filenames()
         all_used = get_transitive_workflow_uses(["multi_arch_ci.yml"])
-        missing = all_used - _GITHUB_WORKFLOWS_CI_FILENAMES
-        stale = _GITHUB_WORKFLOWS_CI_FILENAMES - all_used
+        missing = all_used - ci_workflow_filenames
+        stale = ci_workflow_filenames - all_used
         errors = []
         if missing:
             errors.append(
-                "Missing (add to _GITHUB_WORKFLOWS_CI_FILENAMES):\n"
+                "Missing (add to ci_workflows.filenames in skip-ci-config.toml):\n"
                 + "\n".join(f"  - {f}" for f in sorted(missing))
             )
         if stale:
             errors.append(
-                "Stale (remove from _GITHUB_WORKFLOWS_CI_FILENAMES):\n"
+                "Stale (remove from ci_workflows.filenames in skip-ci-config.toml):\n"
                 + "\n".join(f"  - {f}" for f in sorted(stale))
             )
         if errors:

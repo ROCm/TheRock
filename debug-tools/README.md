@@ -422,9 +422,22 @@ Common TSAN_OPTIONS:
 
 ### Testing Debug-Tools
 
-TheRock provides test scripts for ROCgdb and ROCr Debug Agent. Both scripts work with locally-built ROCm trees or downloaded nightly tarballs from https://rocm.nightlies.amd.com/.
+Test scripts for ROCgdb and ROCr Debug Agent are owned by their respective
+upstream repositories and installed into the ROCm tree as part of the build:
 
-**Scripts location:** `build_tools/github_actions/test_executable_scripts/`
+- ROCgdb: source of truth is
+  [ROCm/ROCgdb `.github/scripts/test_rocgdb.py`](https://github.com/ROCm/ROCgdb/blob/amd-staging/.github/scripts/test_rocgdb.py),
+  installed to `tests/rocgdb/test_rocgdb.py`. Its emulation support module
+  [`rocjitsu_emulator.py`](https://github.com/ROCm/ROCgdb/blob/amd-staging/.github/scripts/rocjitsu_emulator.py)
+  is installed next to it as `tests/rocgdb/rocjitsu_emulator.py`.
+- ROCr Debug Agent: source of truth is
+  [ROCm/rocm-systems `projects/rocr-debug-agent/.github/scripts/test_rocr-debug-agent.py`](https://github.com/ROCm/rocm-systems/blob/develop/projects/rocr-debug-agent/.github/scripts/test_rocr-debug-agent.py),
+  installed to `tests/rocm-debug-agent/test_rocr-debug-agent.py`
+
+Both scripts work with locally-built ROCm trees or downloaded nightly tarballs from
+
+- https://nightly.repo.amd.com/rocm/core/tarball/ or
+- https://rocm.nightlies.amd.com/.
 
 #### Setup
 
@@ -447,7 +460,7 @@ For container testing, use the testing container described in [Container Environ
 **ROCgdb:**
 
 ```bash
-python3 build_tools/github_actions/test_executable_scripts/test_rocgdb.py
+python3 ${OUTPUT_ARTIFACTS_DIR}/tests/rocgdb/test_rocgdb.py
 ```
 
 The script runs the GDB test suite against ROCgdb using both GCC and LLVM compilers. By default it will run the gdb.rocm and gdb.dwarf2 test categories.
@@ -455,7 +468,7 @@ The script runs the GDB test suite against ROCgdb using both GCC and LLVM compil
 **ROCr Debug Agent:**
 
 ```bash
-python3 build_tools/github_actions/test_executable_scripts/test_rocr-debug-agent.py
+python3 ${OUTPUT_ARTIFACTS_DIR}/tests/rocm-debug-agent/test_rocr-debug-agent.py
 ```
 
 The script includes automatic retry logic for flaky GPU-dependent tests.
@@ -519,13 +532,15 @@ Usage: `-DTHEROCK_ROCGDB_UPSTREAM_BUILD=ON`
 
 ### THEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT
 
-- **Default**: `OFF` - Require `.github/scripts/test_rocgdb.py` to exist in the rocgdb source tree; configure fails if it is missing.
-- **Non-default**: `ON` - If `test_rocgdb.py` is missing from the source tree, download it from `ROCm/ROCgdb` `amd-staging` at configure time (with retries) and install it into `tests/rocgdb`.
+- **Default**: `OFF` - Require `.github/scripts/test_rocgdb.py` and `.github/scripts/rocjitsu_emulator.py` to exist in the rocgdb source tree; configure fails if either is missing.
+- **Non-default**: `ON` - If `test_rocgdb.py` or `rocjitsu_emulator.py` is missing from the source tree, download them from `ROCm/ROCgdb` `amd-staging` at configure time (with retries) and install them into `tests/rocgdb`.
 
 Use this when building a rocgdb source tree (e.g. upstream master) that is not part of the branches exercised by TheRock CI.
 
 Usage: `-DTHEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT=ON`
 
-**Note:** `curl` must be available on the system when this option is enabled, as
-it is used to download `test_rocgdb.py` at configure time. Most environments
-provide `curl` by default, but it may need to be installed otherwise.
+**Note:** `git` and `curl` must be available on the system when this option is
+enabled: `git` resolves `amd-staging` to a commit and `curl` downloads
+`test_rocgdb.py` and `rocjitsu_emulator.py` from that commit at configure time.
+Most environments provide both by default, but they may need to be installed
+otherwise.

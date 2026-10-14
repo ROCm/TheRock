@@ -200,10 +200,10 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "setuptools_scm",
     "wheel",
     # ---- JAX ----
+    # Note: jax_rocm<major>_plugin / jax_rocm<major>_pjrt embed the ROCm major
+    # version in the package name and are allowed by prefix below.
     "jax",
     "jaxlib",
-    "jax_rocm7_plugin",
-    "jax_rocm7_pjrt",
 ]}
 
 S3IndexType = TypeVar('S3IndexType', bound='S3Index')
@@ -288,6 +288,7 @@ class S3Index:
                 or pkg.startswith("rocm_sdk_libraries_")
                 or pkg.startswith("amd_torch_device")
                 or pkg.startswith("amd_torchvision_device")
+                or pkg.startswith("jax_rocm")
             ):
                 packages[package_name] += 1
             else:

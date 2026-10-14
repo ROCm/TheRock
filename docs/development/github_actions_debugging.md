@@ -31,8 +31,9 @@ which
 1. Uploads the built packages to a release index
 1. Runs tests on the packages
 
-This should be performed using a "dev" release using the `therock-dev-python` S3
-bucket and the package index https://rocm.devreleases.amd.com/.
+This should be performed using a "dev" release. Intermediate artifacts use the
+`therock-dev-artifacts` S3 bucket and published packages use the aggregate
+index https://dev.repo.amd.com/rocm/whl-next/.
 
 Follow these steps:
 
@@ -186,7 +187,7 @@ pipeline can take several hours sharded across multiple types of build and test
 machines.
 
 The [`.github/workflows/build_windows_python_packages.yml`](/.github/workflows/build_windows_python_packages.yml)
-and [`.github/workflows/build_portable_linux_python_packages.yml`](.github/workflows/build_portable_linux_python_packages.yml)
+and [`.github/workflows/build_portable_linux_python_packages.yml`](/.github/workflows/build_portable_linux_python_packages.yml)
 workflows are both runnable from personal repository forks. By default they
 download artifacts from a recent workflow run in the https://github.com/ROCm/TheRock
 repository. You can customize where artifacts are downloaded from by setting

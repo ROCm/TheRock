@@ -74,6 +74,12 @@ def _do_test(args: argparse.Namespace):
     if importlib.util.find_spec("rocm_sdk_devel") is not None:
         ALL_TEST_MODULES.append("rocm_sdk.tests.devel_test")
 
+    # The profiler package (rocm[profiler]) is optional and not built on Windows.
+    if di.ALL_PACKAGES["profiler"].has_py_package():
+        ALL_TEST_MODULES.append("rocm_sdk.tests.profiler_test")
+    else:
+        print("NOTE: Skipping profiler tests (not installed)")
+
     # Load all tests.
     for test_module_name in ALL_TEST_MODULES:
         suite.addTests(loader.loadTestsFromName(test_module_name))

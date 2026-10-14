@@ -14,19 +14,26 @@ Instead of Jenkins and Groovy pipelines, TheRock uses **GitHub Actions** workflo
 
 ## CI Architecture
 
-TheRock uses a multi-stage CI pipeline that splits the build into stages (compiler-runtime → runtime-tests/math-libs, etc.) with dependency chaining. Below is a general diagram of the CI flow
+TheRock uses a multi-stage CI pipeline that splits the build into stages with
+dependency chaining. The Linux pipeline builds emulation separately from the
+compiler and runtime, while communication libraries wait for emulation because
+RCCL consumes rocjitsu-generated artifacts.
 
 ```mermaid
 graph TD
-    A[generic build] --> B1[arch build - gfx94X-dcgpu]
-    A[generic build] --> B2[arch build - gfx110X-dgpu]
-    B1 --> C[test - gfx94X-dcgpu]
-    B2 --> D[test - gfx110X-dgpu]
+    compilerRuntime[Compiler and runtime] --> emulation[Emulation]
+    compilerRuntime --> mathGfx94X[Math libraries - gfx94X]
+    compilerRuntime --> mathGfx110X[Math libraries - gfx110X]
+    compilerRuntime --> runtimeTests[Runtime tests]
+    emulation --> commLibraries[Communication libraries]
+    mathGfx94X --> testGfx94X[Tests - gfx94X]
+    mathGfx110X --> testGfx110X[Tests - gfx110X]
 ```
 
 Each stage runs as a separate job, uploads its artifacts and logs to S3, then downstream stages download and build on top of them. This allows for:
 
-- **Parallelization:** Multiple GPU families can build math-libs simultaneously once compiler-runtime completes
+- **Parallelization:** Emulation, runtime tests, and multiple GPU-family math
+  library builds can run as separate jobs once compiler-runtime completes
 - **Incremental builds:** Test-only runs can skip build stages by downloading pre-built artifacts
 - **Flexibility:** Different stages can run on different runner types (e.g., CPU-only for build, GPU for tests)
 
@@ -53,7 +60,7 @@ graph LR
     B --> D[Upload to S3]
 ```
 
-**What gets built:** Compiler (LLVM, etc.), core runtime (HIP, ROCr, etc.), math libraries (rocBLAS, rocFFT, etc.), ML libraries (MIOpen, etc.), media libraries (rocDecode, rocJPEG), and more.
+**What gets built:** Compiler (LLVM, etc.), core runtime (HIP, ROCr, etc.), math libraries (rocBLAS, rocFFT, etc.), ML libraries (MIOpen, etc.), media libraries (rocDecode, rocJPEG), computer vision libraries (RPP), and more.
 
 **Artifact organization:** Each component is packaged into separate archives by sub-components (lib, run, dev, doc, test). See [artifacts.md](artifacts.md) for complete details on artifact structure and naming conventions.
 
@@ -167,6 +174,7 @@ See [workflow_outputs.md](workflow_outputs.md) for the S3 layout structure and [
 - [workflow_outputs.md](workflow_outputs.md) - CI output directory structure
 - [github_actions_debugging.md](github_actions_debugging.md) - Debugging GitHub Actions
 - [ci_behavior_manipulation.md](ci_behavior_manipulation.md) - Controlling CI behavior with labels and inputs
+- [stage_reuse.md](stage_reuse.md) - Reusing unaffected build stages from a baseline run
 - [manifest_diff.md](manifest_diff.md) - Manifest diff report (submodule SHA changes between two commits)
 
 ## Getting Help

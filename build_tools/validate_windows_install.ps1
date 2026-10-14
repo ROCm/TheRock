@@ -544,6 +544,16 @@ if ($pkgConfigCmd) {
         -Detail "Install: winget install bloodrock.pkg-config-lite"
 }
 
+# winflexbison3 (required for amd-mesa / VA-API sysdep build)
+$winflexCmd = Get-Command win_flex -ErrorAction SilentlyContinue
+$winbisonCmd = Get-Command win_bison -ErrorAction SilentlyContinue
+if ($winflexCmd -and $winbisonCmd) {
+    Write-Pass "win_flex / win_bison found (required for amd-mesa build)"
+} else {
+    Write-Warn "win_flex / win_bison not found (winflexbison3)" `
+        -Detail "Required for the amd-mesa / VA-API sysdep (THEROCK_ENABLE_SYSDEPS_AMD_MESA=ON). Install: choco install winflexbison3"
+}
+
 # ============================================================================
 Write-Section "8. Git Configuration"
 

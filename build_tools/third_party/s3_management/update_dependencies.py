@@ -66,8 +66,6 @@ _ALLOWED_CPYTHON_TAGS: frozenset[str] = frozenset(
 )
 
 PACKAGES_PER_PROJECT = {
-    "dbus_python": {"versions": ["latest"], "project": "jax"},
-    "flatbuffers": {"versions": ["latest"], "project": "jax"},
     "ml_dtypes": {"versions": ["latest"], "project": "jax"},
     "opt_einsum": {"versions": ["latest"], "project": "jax"},
     "tomli": {"versions": ["latest"], "project": "jax"},
@@ -107,7 +105,7 @@ def structured_dependency_key(index: str, pkg_name: str, filename: str) -> str:
 
     Example:
         structured_dependency_key("whl", "ml_dtypes", "ml_dtypes-0.5.0-...whl")
-        -> "core/whl/ml-dtypes/ml_dtypes-0.5.0-...whl"
+        -> "v5/rocm/core/whl/ml-dtypes/ml_dtypes-0.5.0-...whl"
     """
     if index not in _STRUCTURED_INDEX_NAMES:
         raise ValueError(
@@ -115,7 +113,7 @@ def structured_dependency_key(index: str, pkg_name: str, filename: str) -> str:
             f"expected one of {sorted(_STRUCTURED_INDEX_NAMES)}"
         )
     package_dir = normalize_package_name(pkg_name)
-    return f"{_STRUCTURED_PRODUCT}/{index}/{package_dir}/{filename}"
+    return f"v5/rocm/{_STRUCTURED_PRODUCT}/{index}/{package_dir}/{filename}"
 
 
 def get_selected_packages(

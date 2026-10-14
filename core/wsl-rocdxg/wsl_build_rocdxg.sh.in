@@ -30,6 +30,7 @@ mkdir -p "$build_root" "$install_root" "$stage_root"
 cmake -B "$build_root" -S "$rocdxg_source_dir" -G Ninja \
   -DCMAKE_BUILD_TYPE="@CMAKE_BUILD_TYPE@" \
   -DCMAKE_INSTALL_PREFIX="$install_root" \
+  -DCMAKE_INSTALL_LIBDIR="@CMAKE_INSTALL_LIBDIR@" \
   -DWIN_SDK="$win_sdk"
 cmake --build "$build_root" --target rocdxg -- -k 0
 cmake --install "$build_root"

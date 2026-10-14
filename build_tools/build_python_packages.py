@@ -23,12 +23,14 @@ Example
 import argparse
 import functools
 import json
+import subprocess
 from pathlib import Path
 import sys
 
 from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, build_packages
+from _therock_utils.sdk_targets import group_package_targets, package_owner
 
 
 def _amdgpu_families_arg(value: str) -> list[str] | None:
@@ -67,15 +69,52 @@ def load_therock_manifest(artifact_dir: Path) -> dict:
 
 
 def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
-    """Recreate unversioned profiler library symlinks expected by dlopen()."""
+    """Recreate unversioned library symlinks for profiler runtime dependencies."""
     profiler_lib_dir = profiler.platform_dir / "lib"
 
-    for target in profiler_lib_dir.glob("librocprof-sys*.so.*"):
-        if target.is_symlink():
+    for pattern in ("librocprof-sys*.so.*", "libprofiler-hub*.so.*"):
+        for target in profiler_lib_dir.glob(pattern):
+            if target.is_symlink():
+                continue
+            link = target.with_suffix("")
+            if not link.exists():
+                link.symlink_to(target.name)
+
+
+def discover_llvm_host_triple(artifacts: ArtifactCatalog) -> str | None:
+    """Discover the LLVM host triple for libomp's per-target runtime dir.
+
+    With LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON, libomp.so is installed under
+    lib/llvm/lib/<host-triple>/ instead of lib/llvm/lib/.
+    """
+    for an, basedir in artifacts.artifact_basedirs:
+        if an.name != "amd-llvm" or an.component != "lib":
             continue
-        link = target.with_suffix("")
-        if not link.exists():
-            link.symlink_to(target.name)
+
+        llvm_lib = basedir / "lib" / "llvm" / "lib"
+        for libomp in sorted(llvm_lib.glob("*/libomp.so")):
+            return libomp.parent.name
+
+        for clang_name in ("amdclang", "clang"):
+            clang = basedir / "lib" / "llvm" / "bin" / clang_name
+            if not clang.is_file():
+                clang = basedir / "bin" / clang_name
+            if not clang.is_file():
+                continue
+            try:
+                triple = subprocess.run(
+                    [str(clang), "--print-target-triple"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=True,
+                ).stdout.strip()
+            except (subprocess.SubprocessError, OSError):
+                continue
+            if triple and (llvm_lib / triple / "libomp.so").is_file():
+                return triple
+
+    return None
 
 
 def _platform_targets(
@@ -164,7 +203,7 @@ def validate_required_dist_packages(
         windows_targets=windows_targets,
         platform_name=platform_name,
     )
-    for target in expected_targets or []:
+    for target in group_package_targets(expected_targets or []):
         required_patterns.append(f"rocm_sdk_device_{target}-{version}-*.whl")
 
     if _has_devel_artifacts(artifacts):
@@ -232,9 +271,13 @@ def run(args: argparse.Namespace):
         windows_target_families=windows_targets,
     )
 
+    host_triple = discover_llvm_host_triple(artifacts)
+
     # Populate each target neutral library package.
     core = PopulatedDistPackage(params, logical_name="core")
     core.rpath_dep(core, "lib/llvm/lib")
+    if host_triple:
+        core.rpath_dep(core, f"lib/llvm/lib/{host_triple}")
     core.rpath_dep(core, "lib/rocm_sysdeps/lib")
     core.populate_runtime_files(
         params.filter_artifacts(
@@ -248,6 +291,7 @@ def run(args: argparse.Namespace):
                 "include/rocprofiler-systems/**",
                 "lib/librocprof-sys*",
                 "lib/python/site-packages/rocprofsys/**",
+                "lib/python*/site-packages/rocprof_trace_decoder/**",
                 "lib/rocprofiler-systems/**",
                 "libexec/rocprofiler-systems/**",
                 "share/**/rocprofiler-systems/**",
@@ -257,27 +301,15 @@ def run(args: argparse.Namespace):
 
     profiler_artifacts = params.filter_artifacts(
         profiler_artifact_filter,
-        includes=[
-            # rocprofiler-systems
-            "bin/rocprof-sys-*",
-            "include/rocprofiler-systems/**",
-            "lib/librocprof-sys*",
-            "lib/python/site-packages/rocprofsys/**",
-            "lib/rocprofiler-systems/**",
-            "libexec/rocprofiler-systems/**",
-            "share/**/rocprofiler-systems/**",
-            # rocprofiler-compute
-            "bin/rocprof-*",
-            "libexec/rocprofiler-compute/**",
-            "lib/rocprofiler-compute/**",
-            "share/**/rocprofiler-compute/**",
-        ],
+        includes=PROFILER_WHEEL_INCLUDES,
     )
 
-    if profiler_artifacts.artifact_names:
+    if _artifact_catalog_has_matches(profiler_artifacts):
         profiler = PopulatedDistPackage(params, logical_name="profiler")
         profiler.rpath_dep(core, "lib")
         profiler.rpath_dep(core, "lib/llvm/lib")
+        if host_triple:
+            profiler.rpath_dep(core, f"lib/llvm/lib/{host_triple}")
         profiler.rpath_dep(core, "lib/rocm_sysdeps/lib")
         profiler.populate_runtime_files(profiler_artifacts)
         ensure_profiler_library_symlinks(profiler)
@@ -308,9 +340,9 @@ def run(args: argparse.Namespace):
         )
 
     if kpack_split:
-        _run_kpack_split(args, params, core)
+        _run_kpack_split(args, params, core, host_triple)
     else:
-        _run_legacy(args, params, core)
+        _run_legacy(args, params, core, host_triple)
 
     if args.build_packages:
         validate_required_dist_packages(
@@ -327,8 +359,16 @@ def run(args: argparse.Namespace):
     )
 
 
+def _artifact_catalog_has_matches(artifacts: ArtifactCatalog) -> bool:
+    """Return whether an artifact catalog has at least one included file."""
+    return any(True for _ in artifacts.pm.matches())
+
+
 def _run_kpack_split(
-    args: argparse.Namespace, params: Parameters, core: PopulatedDistPackage
+    args: argparse.Namespace,
+    params: Parameters,
+    core: PopulatedDistPackage,
+    host_triple: str | None,
 ):
     """Kpack-split mode: arch-neutral host libraries + per-ISA device wheels."""
 
@@ -337,6 +377,10 @@ def _run_kpack_split(
     lib.rpath_dep(core, "lib")
     lib.rpath_dep(core, "lib/rocm_sysdeps/lib")
     lib.rpath_dep(core, "lib/host-math/lib")
+    # rpp needs libomp, which ships in core under lib/llvm/lib[/<host-triple>].
+    lib.rpath_dep(core, "lib/llvm/lib")
+    if host_triple:
+        lib.rpath_dep(core, f"lib/llvm/lib/{host_triple}")
     lib.populate_runtime_files(
         params.filter_artifacts(
             filter=functools.partial(libraries_artifact_filter, "generic"),
@@ -352,14 +396,16 @@ def _run_kpack_split(
     # Per-ISA device wheels. Device artifacts overlay into
     # _rocm_sdk_libraries/lib/ and may include ELF .so files (per-arch
     # MIOpen CK kernels) with dynamic deps on core.
-    all_targets = sorted(params.all_target_families)
-    for target in all_targets:
+    # Group supplied members before construction, preserving artifact identities.
+    owner_groups = group_package_targets(sorted(params.all_target_families))
+    for target, members in owner_groups.items():
         dev = PopulatedDistPackage(params, logical_name="device", target_family=target)
         dev.rpath_dep(core, "lib")
         dev.rpath_dep(core, "lib/rocm_sysdeps/lib")
         dev.populate_device_files(
             params.filter_artifacts(
-                filter=functools.partial(device_artifact_filter, target),
+                filter=lambda an: an.target_family in members
+                and device_artifact_filter(target, an),
             )
         )
         if args.build_packages:
@@ -393,6 +439,8 @@ def _run_kpack_split(
             "nlohmann-json",
             # rocshmem only provides a static library.
             "rocshmem",
+            # hipthreads only provides a static library.
+            "hipthreads",
             # rocjitsu emulation suite.
             "rocjitsu",
             "mirage",
@@ -409,7 +457,10 @@ def _run_kpack_split(
 
 
 def _run_legacy(
-    args: argparse.Namespace, params: Parameters, core: PopulatedDistPackage
+    args: argparse.Namespace,
+    params: Parameters,
+    core: PopulatedDistPackage,
+    host_triple: str | None,
 ):
     """Legacy mode: per-family libraries wheels with embedded device code."""
 
@@ -421,6 +472,10 @@ def _run_legacy(
         lib.rpath_dep(core, "lib")
         lib.rpath_dep(core, "lib/rocm_sysdeps/lib")
         lib.rpath_dep(core, "lib/host-math/lib")
+        # rpp needs libomp, which ships in core under lib/llvm/lib[/<host-triple>].
+        lib.rpath_dep(core, "lib/llvm/lib")
+        if host_triple:
+            lib.rpath_dep(core, f"lib/llvm/lib/{host_triple}")
         lib.populate_runtime_files(
             params.filter_artifacts(
                 filter=functools.partial(libraries_artifact_filter, target_family),
@@ -533,12 +588,13 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "lib",
         "run",
     ]
+    hotswap = an.name == "rocjitsu-hotswap" and an.component == "lib"
     # hiprtc needs to be able to find HIP headers in its same tree.
     hip_dev = an.name in [
         "core-hip",
         "core-ocl",
     ] and an.component in ["dev"]
-    return core or hip_dev
+    return core or hotswap or hip_dev
 
 
 def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
@@ -546,6 +602,8 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
         an.name
         in [
             "blas",
+            "solver",
+            "sparse",
             "fft",
             "hipdnn",
             "miopen",
@@ -554,6 +612,7 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
             "hipkernelprovider",
             "rand",
             "rccl",
+            "rpp",
         ]
         and an.component
         in [
@@ -565,22 +624,50 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
 
 
 def profiler_artifact_filter(an: ArtifactName) -> bool:
-    return an.name in [
+    profiler_tools = an.name in [
+        "profiler-hub",
         "rocprofiler-compute",
         "rocprofiler-systems",
     ] and an.component in ["lib", "run"]
+    trace_decoder_python = an.name == "rocprofiler-sdk" and an.component == "lib"
+    return profiler_tools or trace_decoder_python
+
+
+# File-path allowlist for the rocm-profiler wheel, applied on top of
+# profiler_artifact_filter(); profiler-hub must pass both gates or
+# libprofiler-hub.so.0 is silently dropped despite librocprof-sys* needing it.
+PROFILER_WHEEL_INCLUDES = [
+    # rocprofiler-systems
+    "bin/rocprof-sys-*",
+    "include/rocprofiler-systems/**",
+    "lib/librocprof-sys*",
+    "lib/libprofiler-hub.so*",
+    "lib/python/site-packages/rocprofsys/**",
+    "lib/rocprofiler-systems/**",
+    "libexec/rocprofiler-systems/**",
+    "share/**/rocprofiler-systems/**",
+    # rocprofiler-compute
+    "bin/rocprof-*",
+    "libexec/rocprofiler-compute/**",
+    "lib/rocprofiler-compute/**",
+    "share/**/rocprofiler-compute/**",
+    # rocprof-trace-decoder Python API
+    "lib/python*/site-packages/rocprof_trace_decoder/**",
+]
 
 
 def device_artifact_filter(target: str, an: ArtifactName) -> bool:
-    """Selects per-ISA library artifacts for a specific GFX target.
+    """Select supplied device artifacts belonging to a package owner.
 
-    Unlike libraries_artifact_filter, this only matches the specific ISA target
-    (no generic). Used in kpack-split mode for device wheel population.
+    Does not select generic artifacts or expand requested build targets.
     """
+    artifact_base_target = package_owner(an.target_family)
     return (
         an.name
         in [
             "blas",
+            "solver",
+            "sparse",
             "fft",
             "hipdnn",
             "miopen",
@@ -591,7 +678,7 @@ def device_artifact_filter(target: str, an: ArtifactName) -> bool:
             "rccl",
         ]
         and an.component == "lib"
-        and an.target_family == target
+        and artifact_base_target == package_owner(target)
     )
 
 

@@ -1,0 +1,32 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
+#ifndef THEROCK_AUX_OVERLAY_BUILD_FLAGS_H_
+#define THEROCK_AUX_OVERLAY_BUILD_FLAGS_H_
+
+#ifndef ROCM_BUILD_FLAG
+#define ROCM_BUILD_FLAG_CAT_IMPL(a, b) a##b
+#define ROCM_BUILD_FLAG_CAT(a, b) ROCM_BUILD_FLAG_CAT_IMPL(a, b)
+#define ROCM_BUILD_FLAG(name) \
+  (ROCM_BUILD_FLAG_CAT(ROCM_BUILD_FLAG_INTERNAL_, name)())
+#endif
+
+#ifdef ROCM_BUILD_FLAG_INTERNAL_ROCM_BUILD_FLAGS_CANARY_BOOL_FALSE
+#error "ROCM build flag macro already defined"
+#endif
+#define ROCM_BUILD_FLAG_INTERNAL_ROCM_BUILD_FLAGS_CANARY_BOOL_FALSE() \
+  @_canary_bool_false@
+
+#ifdef ROCM_BUILD_FLAG_INTERNAL_ROCM_BUILD_FLAGS_CANARY_BOOL_TRUE
+#error "ROCM build flag macro already defined"
+#endif
+#define ROCM_BUILD_FLAG_INTERNAL_ROCM_BUILD_FLAGS_CANARY_BOOL_TRUE() \
+  @_canary_bool_true@
+
+#ifdef ROCM_BUILD_FLAG_INTERNAL_ROCM_BUILD_FLAGS_CANARY_INTEGER_NEGATIVE
+#error "ROCM build flag macro already defined"
+#endif
+#define ROCM_BUILD_FLAG_INTERNAL_ROCM_BUILD_FLAGS_CANARY_INTEGER_NEGATIVE() \
+  @_canary_integer_negative@
+
+#endif  // THEROCK_AUX_OVERLAY_BUILD_FLAGS_H_

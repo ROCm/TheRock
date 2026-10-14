@@ -67,7 +67,7 @@ class BranchConfigTest(unittest.TestCase):
     def test_loads_flags_and_source_sets(self):
         self.write_branch_config(
             {
-                "flags": {"FOO": "ON", "BAR": False},
+                "flags": {"FOO": "ON", "BAR": False, "COUNT": -17},
                 "source_sets": ["optional-hrx"],
                 "artifact_groups": {"hip-runtime": {"source_sets": ["optional-hrx"]}},
             }
@@ -75,7 +75,7 @@ class BranchConfigTest(unittest.TestCase):
         topology = BuildTopology(str(self.topology_path))
         config = load_branch_config(self.branch_config_path, topology)
 
-        self.assertEqual(config.flags, {"FOO": "ON", "BAR": "OFF"})
+        self.assertEqual(config.flags, {"FOO": "ON", "BAR": "OFF", "COUNT": "-17"})
         self.assertEqual(config.source_sets, ["optional-hrx"])
         self.assertEqual(
             get_source_sets_for_artifact_groups(config, ["hip-runtime"]),

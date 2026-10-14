@@ -14,12 +14,15 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pathlib import Path
 
 from packaging_utils import *
+from _therock_utils.log_utils import TheRockLogger
+
+logger = TheRockLogger(__name__)
 
 # Setup paths
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
-def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
+def create_nonversioned_rpm_package(pkg_name, config: PackageConfig) -> list[str]:
     """Create a non-versioned RPM meta package (.rpm).
 
     Builds a minimal RPM binary package whose payload is empty and whose primary
@@ -30,9 +33,9 @@ def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
     config: Configuration object containing package metadata
 
     Returns:
-    output_list: List of packages created
+    list[str]: List of created package filenames, empty if package was skipped
     """
-    print_function_name()
+    logger.debug("create_nonversioned_rpm_package")
     # Create immutable config copy with versioned_pkg=False
     build_config = replace(config, versioned_pkg=False)
 
@@ -40,7 +43,8 @@ def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
     updated_pkg_name = update_package_name(pkg_name, build_config)
     package_dir = Path(build_config.dest_dir) / build_config.pkg_type / updated_pkg_name
     specfile = package_dir / "specfile"
-    generate_spec_file(pkg_name, specfile, build_config)
+    if not generate_spec_file(pkg_name, specfile, build_config):
+        return []
     package_with_rpmbuild(specfile)
 
     # Move packages to destination
@@ -48,7 +52,7 @@ def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
     return output_list
 
 
-def create_versioned_rpm_package(pkg_name, config: PackageConfig):
+def create_versioned_rpm_package(pkg_name, config: PackageConfig) -> list[str]:
     """Create a versioned RPM package (.rpm).
 
     This function automates the process of building a RPM package by:
@@ -61,9 +65,10 @@ def create_versioned_rpm_package(pkg_name, config: PackageConfig):
     config: Configuration object containing package metadata
 
     Returns:
-    output_list: List of packages created
+    list[str]: List of created package filenames, empty if package was skipped
+               (e.g., when no artifacts exist for the target architecture)
     """
-    print_function_name()
+    logger.debug("create_versioned_rpm_package")
     # Explicitly ensure versioned_pkg=True
     build_config = replace(config, versioned_pkg=True)
 
@@ -72,7 +77,8 @@ def create_versioned_rpm_package(pkg_name, config: PackageConfig):
     updated_pkg_name = update_package_name(pkg_name, build_config)
     package_dir = Path(build_config.dest_dir) / build_config.pkg_type / updated_pkg_name
     specfile = package_dir / "specfile"
-    generate_spec_file(pkg_name, specfile, build_config)
+    if not generate_spec_file(pkg_name, specfile, build_config):
+        return []
     package_with_rpmbuild(specfile)
 
     # Move packages to destination
@@ -88,9 +94,9 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     specfile: Path where the generated spec file should be saved
     config: Configuration object containing package metadata
 
-    Returns: None
+    Returns: True if spec file was generated, False if package should be skipped
     """
-    print_function_name()
+    logger.debug("generate_spec_file")
     os.makedirs(os.path.dirname(specfile), exist_ok=True)
 
     pkg_info = get_package_info(pkg_name)  # Raises ValueError if not found
@@ -102,9 +108,9 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     rpmrecommends = rpmsuggests = ""
     sourcedir_list = []
     rpm_scripts = []
-    # amdrocm-debugger: Exclude libpython requirements
+    # amdrocm-debugger: Exclude libpython requires only (provides are not an issue).
     # Multiple Python-version-specific binaries are included; the wrapper script
-    # automatically selects the binary matching the system's Python version
+    # automatically selects the binary matching the system's Python version.
     exclude_libpython_requires = pkg_name == "amdrocm-debugger"
 
     if config.versioned_pkg:
@@ -113,25 +119,34 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
             pkg_info, "RPMRecommends", config
         )
         rpmsuggests = process_secondary_dependencies(pkg_info, "RPMSuggests", config)
-        requires = process_main_dependencies(pkg_info, "RPMRequires", config)
+        requires = process_versioned_dependencies(pkg_info, "RPMRequires", config)
 
         dir_list = filter_components_fromartifactory(
-            pkg_name, config.artifacts_dir, config.gfx_arch, config.enable_kpack
+            pkg_name,
+            config.artifacts_dir,
+            config.gfx_arch,
+            config.enable_kpack,
+            target_members=package_target_members(config),
         )
         sourcedir_list.extend(dir_list)
 
-        # Filter out non-existing directories
-        sourcedir_list = [path for path in sourcedir_list if os.path.isdir(path)]
+        # Filter out non-existing directories (log filtered paths to aid debugging
+        # build configuration issues where expected directories weren't created)
+        filtered_out = [path for path in sourcedir_list if not path.is_dir()]
+        if filtered_out:
+            logger.debug(f"Filtered out non-existent directories: {filtered_out}")
+        sourcedir_list = [path for path in sourcedir_list if path.is_dir()]
 
         # GFX_META is a versioned meta package (empty content, just dependencies)
         is_gfx_meta = config.enable_kpack and config.gfx_arch == GFX_META
 
-        # Warn if we have no artifacts for non-meta packages
+        # Skip if we have no artifacts for non-meta packages
         if not sourcedir_list and not is_meta and not is_gfx_meta:
             if config.enable_kpack:
-                print(
-                    f"WARNING: {pkg_name}: Empty sourcedir_list and not a meta package, creating empty RPM"
+                logger.info(
+                    f"{pkg_name}: Empty sourcedir_list and not a meta package, skipping"
                 )
+                return False
             else:
                 sys.exit(
                     f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting"
@@ -140,16 +155,13 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         if is_postinstallscripts_available(pkg_info):
             rpm_scripts = generate_rpm_postscripts(pkg_info, config)
 
-        if config.enable_rpath:
-            for path in sourcedir_list:
-                convert_runpath_to_rpath(path)
     else:
         # Get -> Transform -> Join (no transform needed for RPM)
         provides = process_name_field(pkg_info, "Provides")
         obsoletes = process_name_field(pkg_info, "Obsoletes")
         conflicts = process_name_field(pkg_info, "Conflicts")
         # Non-versioned package requires versioned package itself
-        requires = resolve_versioned_dependencies([pkg_name], config, is_meta)
+        requires = process_nonversioned_dependencies(pkg_info, config)
 
     pkg_name = update_package_name(pkg_name, config)
 
@@ -188,6 +200,8 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
     with open(specfile, "w", encoding="utf-8") as f:
         f.write(template.render(context))
+
+    return True
 
 
 def generate_rpm_postscripts(pkg_info, config: PackageConfig):
@@ -251,7 +265,7 @@ def package_with_rpmbuild(spec_file):
 
     Returns: None
     """
-    print_function_name()
+    logger.debug("package_with_rpmbuild")
     # Build the command
     cmd = [
         "rpmbuild",
@@ -264,7 +278,7 @@ def package_with_rpmbuild(spec_file):
     # Execute the command
     try:
         subprocess.run(cmd, check=True)
-        print(f"RPM Package built successfully: {spec_file.name}")
+        logger.info(f"RPM Package built successfully: {spec_file.parent.name}\n")
     except subprocess.CalledProcessError as e:
-        print(f"Error building RPM package: {spec_file.name}: {e}")
+        logger.error(f"Error building RPM package: {spec_file.parent.name}: {e}")
         sys.exit(e.returncode)
