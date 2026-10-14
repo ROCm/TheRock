@@ -254,10 +254,13 @@ class OverwriteGuardTest(unittest.TestCase):
                     )
             return output.getvalue()
 
-    def test_access_denied_is_not_treated_as_missing(self):
-        client = FakeS3Client(error_code="403")
-        with self.assertRaises(ClientError):
-            object_exists(client, "b", "k")
+    def test_errors_are_not_treated_as_missing(self):
+        for code, hint in (("403", True), ("NoSuchBucket", False)):
+            with self.subTest(code=code):
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output), self.assertRaises(ClientError):
+                    object_exists(FakeS3Client(error_code=code), "b", "k")
+                self.assertEqual("s3:ListBucket" in output.getvalue(), hint)
 
     def test_existing_files_are_skipped(self):
         for execute in (True, False):

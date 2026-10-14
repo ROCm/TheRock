@@ -157,13 +157,15 @@ def object_exists(s3_client, bucket: str, key: str) -> bool:
         s3_client.head_object(Bucket=bucket, Key=key)
         return True
     except ClientError as e:
-        if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
+        code = e.response.get("Error", {}).get("Code")
+        if code in ("404", "NoSuchKey"):
             return False
-        # Without s3:ListBucket a missing key is a 403 too, so it can't be treated as missing.
-        print(
-            f"\n[ERROR]: Could not check s3://{bucket}/{key} "
-            "(needs s3:GetObject and s3:ListBucket)"
-        )
+        if code in ("403", "AccessDenied"):
+            # Without s3:ListBucket a missing key is a 403 too, so it can't be treated as missing.
+            print(
+                f"\n[ERROR]: Could not check s3://{bucket}/{key} "
+                "(needs s3:GetObject and s3:ListBucket)"
+            )
         raise
 
 
