@@ -10,7 +10,7 @@
 # setup is required here.
 #
 # The one exception is ASAN builds: the test binaries are built with
-# -shared-libsan and dynamically depend on libclang_rt.asan-<arch>.so, which
+# -shared-libsan and dynamically depend on the ASan runtime, which
 # lives in the clang resource dir outside the relocatable tree. Preload it so
 # the loader can satisfy that dependency.
 #
@@ -48,20 +48,19 @@ if not HIPFILE_TEST_DIR.is_dir():
     raise SystemExit(1)
 
 
-def get_asan_lib_path():
+def get_asan_lib_path() -> str:
     arch = platform.machine()
     clang_path = str(Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "clang++")
-    asan_lib = f"libclang_rt.asan-{arch}.so"
-    cmd = [clang_path, f"-print-file-name={asan_lib}"]
-    logging.info(f"++ Exec [{clang_path}]$ {shlex.join(cmd)}")
-    result = subprocess.run(cmd, check=True, text=True, capture_output=True)
-    resolved = result.stdout.strip()
-    if not resolved or resolved == asan_lib or not Path(resolved).is_file():
-        raise FileNotFoundError(
-            f"Could not locate ASan runtime '{asan_lib}' via {clang_path} "
-            f"(got: '{resolved}')"
-        )
-    return str(Path(resolved).resolve())
+    # Per-target runtime directories use the unqualified filename; older
+    # toolchains include the architecture in the filename instead.
+    for asan_lib in ("libclang_rt.asan.so", f"libclang_rt.asan-{arch}.so"):
+        cmd = [clang_path, f"-print-file-name={asan_lib}"]
+        logging.info(f"++ Exec [{clang_path}]$ {shlex.join(cmd)}")
+        result = subprocess.run(cmd, check=True, text=True, capture_output=True)
+        resolved = result.stdout.strip()
+        if resolved and resolved != asan_lib and Path(resolved).is_file():
+            return str(Path(resolved).resolve())
+    raise FileNotFoundError(f"Could not locate an ASan runtime via {clang_path}")
 
 
 env = os.environ.copy()

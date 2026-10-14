@@ -395,15 +395,16 @@ class TestShouldSkipCI(unittest.TestCase):
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
     @patch("configure_multi_arch_ci.is_ci_run_required")
-    def test_external_repo_skips_path_filter(self, mock_filter):
-        """External repo builds skip path filtering and always run CI."""
+    def test_external_repo_without_skip_config_runs_ci(self, mock_filter):
+        """External repo without skip_ci_config runs CI (uses stage reuse)."""
+        mock_filter.return_value = True  # CI required
         inputs = self._inputs(
-            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123","event_name":"pull_request"}'
         )
         git = cm.GitContext(changed_files=["rocm-libraries"])
         self.assertFalse(cm.should_skip_ci(inputs, git))
-        # Path filter should not be called for external repos
-        mock_filter.assert_not_called()
+        # is_ci_run_required is called with None patterns (no skip config)
+        mock_filter.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -1911,10 +1912,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
 
     # TODO(#3433): Remove sandbox tests once ASAN tests are passing
     def test_asan_runner_selection(self):
-        """ASAN uses sandbox on nightly, disables tests on PR/push."""
+        """Sandbox runners stay disabled for TheRock nightly and PR builds."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
-        # Schedule: uses sandbox runner
+        # Schedule: sandbox pools are reserved for rocm-systems PRs.
         result = cm.expand_build_configs(
             ci_inputs=self._inputs(event_name="schedule", build_variant="asan"),
             git_context=cm.GitContext(),
@@ -1922,7 +1923,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             jobs=_jobs(),
         )
         entry = result.linux.per_family_info[0]
-        self.assertIn("sandbox", entry["test-runs-on"])
+        self.assertEqual(entry["test-runs-on"], "")
 
         # PR: disables tests (empty runner)
         result = cm.expand_build_configs(
@@ -1934,8 +1935,8 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
 
-    def test_asan_debug_uses_sandbox_runner(self):
-        """asan-debug variant uses sandbox runner like asan."""
+    def test_asan_debug_nightly_has_no_sandbox_runner(self):
+        """asan-debug nightly cannot use the rocm-systems PR sandbox pools."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])
         result = cm.expand_build_configs(
             ci_inputs=self._inputs(event_name="schedule", build_variant="asan-debug"),
@@ -1944,10 +1945,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
             jobs=_jobs(),
         )
         entry = result.linux.per_family_info[0]
-        self.assertIn("sandbox", entry["test-runs-on"])
+        self.assertEqual(entry["test-runs-on"], "")
 
-    def test_host_asan_debug_uses_sandbox_runner(self):
-        """host-asan-debug variant uses sandbox runner like host-asan."""
+    def test_host_asan_debug_nightly_has_no_sandbox_runner(self):
+        """host-asan-debug nightly cannot use the rocm-systems PR sandbox pools."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])
         result = cm.expand_build_configs(
             ci_inputs=self._inputs(
@@ -1958,7 +1959,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             jobs=_jobs(),
         )
         entry = result.linux.per_family_info[0]
-        self.assertIn("sandbox", entry["test-runs-on"])
+        self.assertEqual(entry["test-runs-on"], "")
 
     def test_explicit_strict_linux_dev_build(self):
         """Explicit selection creates a build config without GPU tests."""
@@ -2202,7 +2203,7 @@ class TestWriteOutputs(unittest.TestCase):
 
             return (
                 github_output.read_text(),
-                step_summary.read_text(),
+                step_summary.read_text(encoding="utf-8"),
             )
 
     def test_running_ci(self):
@@ -2224,6 +2225,54 @@ class TestWriteOutputs(unittest.TestCase):
         # workflow steps can use them.
         self.assertIn("enable_build_jobs=false", github_output)
         self.assertTrue(step_summary.startswith("## Multi-Arch CI Configuration"))
+
+    def test_platform_outputs_follow_selected_stages(self):
+        """Linux-only stages must not launch Windows artifact consumers.
+
+        Prebuilt stages count as work, but only inside the build allowlist.
+        Exercise the full setup pipeline and the outputs used by workflow gates.
+        """
+        cases = [
+            (["emulation"], "", False),
+            (["emulation"], "emulation", False),
+            (["emulation"], "compiler-runtime", False),
+            (["compiler-runtime"], "", True),
+            (["compiler-runtime"], "compiler-runtime", True),
+            ([], "", True),
+            ([], "all", True),
+        ]
+        for stages, prebuilt, expect_windows in cases:
+            with (
+                self.subTest(stages=stages, prebuilt=prebuilt),
+                patch.dict(os.environ, {"STAGE_REUSE_MODE": "dry-run"}),
+            ):
+                inputs = cm.CIInputs(
+                    run_id="12345",
+                    event_name="pull_request",
+                    commit_ref="feature",
+                    base_ref="HEAD^",
+                    build_variant="release",
+                    linux_amdgpu_families=["gfx94x"],
+                    windows_amdgpu_families=["gfx110x"],
+                    build_stages=stages,
+                    prebuilt_stages=prebuilt,
+                    baseline_run_id="123" if prebuilt else "",
+                )
+                outputs = cm.configure(inputs, cm.GitContext.empty())
+                github_output, _ = self._write_outputs(outputs)
+                values = dict(line.split("=", 1) for line in github_output.splitlines())
+                linux = json.loads(values["linux_build_config"])
+                self.assertEqual(linux["dist_amdgpu_families"], "gfx94X-dcgpu")
+                if expect_windows:
+                    windows = json.loads(values["windows_build_config"])
+                    self.assertEqual(windows["dist_amdgpu_families"], "gfx110X-all")
+                    self.assertEqual(linux["windows_amdgpu_families"], "gfx110X-all")
+                    if prebuilt:
+                        self.assertIn("compiler-runtime", windows["prebuilt_stages"])
+                        self.assertEqual(windows["baseline_run_id"], "123")
+                else:
+                    self.assertEqual(values["windows_build_config"], "")
+                    self.assertEqual(linux["windows_amdgpu_families"], "")
 
 
 # ---------------------------------------------------------------------------
@@ -2447,7 +2496,7 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
 
     Key scenarios:
     - PR (presubmit): presubmit families build, presubmit tests run
-    - PR + ci:run-all-archs: ALL families build, only presubmit tests run
+    - PR + ci:run-all-archs: ALL families build AND test
     - PR + submodule changes: submodule_bump tests enabled
     - Push (postsubmit): presubmit+postsubmit families build/test
     - Schedule (nightly): ALL families build, nightly tests run
@@ -2629,8 +2678,8 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
                             f, tested, f"{f} should not be tested on {event}"
                         )
 
-    def test_pr_with_ci_run_all_archs_builds_all_but_filters_tests(self):
-        """ci:run-all-archs builds ALL families but still filters tests by trigger."""
+    def test_pr_with_ci_run_all_archs_builds_and_tests_all(self):
+        """ci:run-all-archs builds AND tests ALL families with test runners."""
         with patch(
             "configure_multi_arch_ci.get_all_families_for_trigger_types",
             side_effect=self._mock_get_all_families,
@@ -2648,12 +2697,21 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
             tested = self._get_tested_families(outputs)
 
             # All families should be built
-            for f in ["mock-primary", "mock-postsubmit-only", "mock-nightly-only"]:
-                self.assertIn(f, built)
-            # But only presubmit tests run
-            self.assertIn("mock-primary", tested)
-            self.assertNotIn("mock-nightly-only", tested)
-            self.assertNotIn("mock-postsubmit-only", tested)
+            for f in [
+                "mock-primary",
+                "mock-postsubmit-only",
+                "mock-nightly-only",
+                "mock-submodule-test",
+            ]:
+                self.assertIn(f, built, f"{f} should be built with ci:run-all-archs")
+            # All families with test runners should also be tested
+            for f in [
+                "mock-primary",
+                "mock-nightly-only",
+                "mock-postsubmit-only",
+                "mock-submodule-test",
+            ]:
+                self.assertIn(f, tested, f"{f} should be tested with ci:run-all-archs")
 
     def test_submodule_changes_enable_submodule_tests(self):
         """Submodule changes activate submodule_bump trigger for tests."""
@@ -2921,6 +2979,26 @@ class TestTriggerHelpers(unittest.TestCase):
                     cm.GitContext.empty(),
                 )
                 self.assertEqual(should_run, expected_run)
+
+    def test_should_run_tests_ci_run_all_archs_bypasses_trigger(self):
+        """ci:run-all-archs label bypasses trigger-based test gating."""
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="main",
+            build_variant="release",
+            pr_labels=["ci:run-all-archs"],
+        )
+        for triggers in [["nightly"], [], ["submodule_bump"]]:
+            with self.subTest(tests_on_trigger=triggers):
+                should_run, reason = cm._should_run_tests_for_family(
+                    {"tests_on_trigger": triggers},
+                    ci_inputs,
+                    cm.GitContext.empty(),
+                )
+                self.assertTrue(should_run)
+                self.assertIn("ci:run-all-archs", reason)
 
 
 # ---------------------------------------------------------------------------
