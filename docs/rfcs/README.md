@@ -30,6 +30,7 @@ benefit from further discussion.
 - [RFC0012: Repo Structure](./RFC0012-Repo-Structure.md)
 - [RFC0013: Consumer-Based Test Selection](./RFC0013-Consumer-Based-Test-Selection.md)
 - [RFC0014: Code Coverage Infrastructure for TheRock](./RFC0014-Code-Coverage-Infrastructure.md)
+- [RFC0015: Component Unified ID (CUID)](./RFC0015-Component-Unified-ID-CUID.md)
 
 ## Adding an RFC
 
