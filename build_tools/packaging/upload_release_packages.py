@@ -12,6 +12,9 @@ SAFETY FEATURES:
   - DRY-RUN by default: Shows what would be uploaded without actually uploading
   - Requires --execute flag to perform actual S3 uploads
   - Testing buckets by default (you can use --use-release-buckets for production)
+  - Refuses to replace existing files: if any destination already exists, nothing is
+    uploaded and the existing files are listed (dry-run too, so AWS credentials are
+    needed); --allow-overwrite skips this check
 
 PREREQUISITES:
   - pip install -r ./build_tools/packaging/requirements.txt
@@ -150,6 +153,113 @@ STRUCTURED_INDEXES = INDEX_NAMES
 STRUCTURED_DEFAULT_INDEX = DEFAULT_INDEX
 
 
+UploadTarget = tuple[Path, str, str]
+
+
+def python_upload_targets(
+    input_dir: Path,
+    bucket_name: str,
+    bucket_prefix: str,
+    multi_arch: bool = False,
+    structured: bool = False,
+    python_index: str = STRUCTURED_DEFAULT_INDEX,
+    repo_stream: str = "rc",
+) -> list[tuple[str | None, list[UploadTarget]]]:
+    """Return `(arch, [(file, bucket, key), ...])` groups for the Python packages to upload.
+
+    `arch` is None for the structured and multi-arch layouts, which have a single
+    `wheels/` directory.
+    """
+    if structured or multi_arch:
+        wheels_dir = input_dir / "wheels"
+        if not wheels_dir.exists():
+            return []
+        # Structured layout also accepts sdists/zips (e.g. ROCm Core tarballs);
+        # multi-arch's flat layout is wheels/tarballs only.
+        extensions = (
+            tuple(f"*{ext}" for ext in ACCEPTED_FILE_EXTENSIONS)
+            if structured
+            else ("*.whl", "*.tar.gz")
+        )
+        upload_dirs = [
+            (None, [path for ext in extensions for path in wheels_dir.glob(ext)])
+        ]
+    else:
+        upload_dirs = [
+            (arch_dir.name, [*arch_dir.glob("*.whl"), *arch_dir.glob("*.tar.gz")])
+            for arch_dir in input_dir.iterdir()
+            if arch_dir.is_dir()
+            and arch_dir.name not in ["tarball", "tarball-multi-arch", "wheels"]
+        ]
+
+    groups = []
+    for arch, files_to_upload in upload_dirs:
+        targets = []
+        for file_path in sorted(files_to_upload):
+            if structured:
+                try:
+                    product = infer_structured_product(file_path.name)
+                except ValueError as e:
+                    print(f"    [ERROR]: {e}")
+                    sys.exit(1)
+                upload_bucket = repo_product_bucket(repo_stream, product)
+                s3_key = structured_key(product, python_index, file_path.name)
+            elif multi_arch:
+                upload_bucket = bucket_name
+                s3_key = f"{bucket_prefix}{file_path.name}"
+            else:
+                upload_bucket = bucket_name
+                s3_key = f"{bucket_prefix}{arch}/{file_path.name}"
+            targets.append((file_path, upload_bucket, s3_key))
+        groups.append((arch, targets))
+    return groups
+
+
+def tarball_dir(
+    input_dir: Path,
+    multi_arch: bool = False,
+    structured: bool = False,
+    tarball_variant: str = "release",
+) -> Path:
+    if structured:
+        return input_dir / core_tarball_dir_name(tarball_variant)
+    if multi_arch:
+        return input_dir / "tarball-multi-arch"
+    return input_dir / "tarball"
+
+
+def tarball_upload_targets(
+    input_dir: Path,
+    bucket_name: str,
+    bucket_prefix: str,
+    multi_arch: bool = False,
+    structured: bool = False,
+    tarball_variant: str = "release",
+) -> list[UploadTarget]:
+    """Return `(file, bucket, key)` for each tarball to upload."""
+    directory = tarball_dir(input_dir, multi_arch, structured, tarball_variant)
+    if not directory.is_dir():
+        return []
+    return [
+        (path, bucket_name, f"{bucket_prefix}{path.name}")
+        for path in sorted(directory.glob("*.tar.gz"))
+    ]
+
+
+def find_existing_uploads(s3_client, targets: list[UploadTarget]) -> list[str]:
+    """Return the `s3://` URIs in `targets` that already exist in their bucket."""
+    existing = []
+    for _, bucket, key in targets:
+        try:
+            s3_client.head_object(Bucket=bucket, Key=key)
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
+                continue
+            raise
+        existing.append(f"s3://{bucket}/{key}")
+    return existing
+
+
 def upload_python_files(
     input_dir: Path,
     bucket_name: str,
@@ -191,63 +301,25 @@ def upload_python_files(
 
         print(f"\n{label} wheels")
 
-        # Structured layout also accepts sdists/zips (e.g. ROCm Core tarballs);
-        # multi-arch's flat layout is wheels/tarballs only.
-        extensions = (
-            tuple(f"*{ext}" for ext in ACCEPTED_FILE_EXTENSIONS)
-            if structured
-            else ("*.whl", "*.tar.gz")
-        )
-        files_to_upload = [
-            path for extension in extensions for path in wheels_dir.glob(extension)
-        ]
-
-        upload_dirs = [(None, files_to_upload)]
-
-    else:
-        upload_dirs = []
-
-        for arch_dir in input_dir.iterdir():
-            if not arch_dir.is_dir():
-                continue
-
-            if arch_dir.name in ["tarball", "tarball-multi-arch", "wheels"]:
-                continue
-
-            arch = arch_dir.name
-
-            files_to_upload = []
-            files_to_upload.extend(arch_dir.glob("*.whl"))
-            files_to_upload.extend(arch_dir.glob("*.tar.gz"))
-
-            upload_dirs.append((arch, files_to_upload))
-
-    for arch, files_to_upload in upload_dirs:
+    for arch, targets in python_upload_targets(
+        input_dir,
+        bucket_name,
+        bucket_prefix,
+        multi_arch=multi_arch,
+        structured=structured,
+        python_index=python_index,
+        repo_stream=repo_stream,
+    ):
         if arch:
             print(f"\nArchitecture: {arch}")
 
-        if not files_to_upload:
+        if not targets:
             print("  No files to upload")
             continue
 
-        print(f"  Found {len(files_to_upload)} file(s) to upload:")
+        print(f"  Found {len(targets)} file(s) to upload:")
 
-        for file_path in sorted(files_to_upload):
-            if structured:
-                try:
-                    product = infer_structured_product(file_path.name)
-                except ValueError as e:
-                    print(f"    [ERROR]: {e}")
-                    sys.exit(1)
-                upload_bucket = repo_product_bucket(repo_stream, product)
-                s3_key = structured_key(product, python_index, file_path.name)
-            elif multi_arch:
-                upload_bucket = bucket_name
-                s3_key = f"{bucket_prefix}{file_path.name}"
-            else:
-                upload_bucket = bucket_name
-                s3_key = f"{bucket_prefix}{arch}/{file_path.name}"
-
+        for file_path, upload_bucket, s3_key in targets:
             if execute:
                 try:
                     print(f"    Uploading {file_path.name} ...", end="", flush=True)
@@ -294,32 +366,25 @@ def upload_tarball_files(
         print("DRY-RUN MODE: No actual uploads will be performed")
         print("=" * 80)
 
-    if structured:
-        tarball_dir = input_dir / core_tarball_dir_name(tarball_variant)
-    elif multi_arch:
-        tarball_dir = input_dir / "tarball-multi-arch"
-    else:
-        tarball_dir = input_dir / "tarball"
-
-    if not tarball_dir.exists() or not tarball_dir.is_dir():
-        print(f"  No tarball directory found at {tarball_dir}")
+    directory = tarball_dir(input_dir, multi_arch, structured, tarball_variant)
+    if not directory.is_dir():
+        print(f"  No tarball directory found at {directory}")
         return 0
 
     s3_client = boto3.client("s3") if execute else None
     upload_count = 0
 
-    # Find all tar.gz files
-    tarball_files = list(tarball_dir.glob("*.tar.gz"))
+    targets = tarball_upload_targets(
+        input_dir, bucket_name, bucket_prefix, multi_arch, structured, tarball_variant
+    )
 
-    if not tarball_files:
+    if not targets:
         print(f"  No tarball files found")
         return 0
 
-    print(f"  Found {len(tarball_files)} tarball file(s) to upload:")
+    print(f"  Found {len(targets)} tarball file(s) to upload:")
 
-    for file_path in sorted(tarball_files):
-        s3_key = f"{bucket_prefix}{file_path.name}"
-
+    for file_path, _, s3_key in targets:
         if execute:
             try:
                 print(f"    Uploading {file_path.name} ...", end="", flush=True)
@@ -471,6 +536,16 @@ Safety Features:
     )
 
     parser.add_argument(
+        "--allow-overwrite",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Upload even if some destination files already exist, replacing them "
+            "(default: stop before uploading anything and list the existing files)"
+        ),
+    )
+
+    parser.add_argument(
         "--use-release-buckets",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -550,6 +625,7 @@ def upload_release_packages(
     python_index: str = STRUCTURED_DEFAULT_INDEX,
     repo_stream: str = "rc",
     tarball_variant: str = "release",
+    allow_overwrite: bool = False,
 ) -> tuple[int, int]:
     """Upload promoted packages to S3 release bucket.
 
@@ -562,6 +638,8 @@ def upload_release_packages(
         tarball_bucket_name: S3 bucket name for tarball packages (default: therock-testing-bucket)
         tarball_bucket_prefix: S3 bucket prefix for tarball packages (default: release-upload-testing/tarball/)
         execute: If True, perform actual uploads; if False, dry-run mode (default: False)
+        allow_overwrite: If False, exit before uploading anything when a destination
+            file already exists, in dry-run too (default: False)
 
     Returns:
         Tuple of (python_packages_uploaded, tarballs_uploaded)
@@ -625,6 +703,41 @@ def upload_release_packages(
     tarballs_uploaded = 0
 
     try:
+        if not allow_overwrite:
+            targets = []
+            if upload_python:
+                for _, group in python_upload_targets(
+                    input_dir,
+                    bucket_name,
+                    bucket_prefix,
+                    multi_arch=multi_arch,
+                    structured=structured,
+                    python_index=python_index,
+                    repo_stream=repo_stream,
+                ):
+                    targets.extend(group)
+            if upload_tarballs:
+                targets.extend(
+                    tarball_upload_targets(
+                        input_dir,
+                        tarball_bucket_name,
+                        tarball_bucket_prefix,
+                        multi_arch,
+                        structured,
+                        tarball_variant,
+                    )
+                )
+            print(f"\nChecking {len(targets)} destination(s) for existing files...")
+            existing = find_existing_uploads(boto3.client("s3"), targets)
+            if existing:
+                print(
+                    f"\n[ERROR]: {len(existing)} file(s) already exist, nothing was uploaded. "
+                    "Use --allow-overwrite to replace them:"
+                )
+                for uri in existing:
+                    print(f"  {uri}")
+                sys.exit(1)
+
         if upload_python:
             wheels_uploaded = upload_python_files(
                 input_dir,
@@ -715,4 +828,5 @@ if __name__ == "__main__":
         python_index=args.python_index,
         repo_stream=args.repo_stream,
         tarball_variant=args.tarball_variant,
+        allow_overwrite=args.allow_overwrite,
     )

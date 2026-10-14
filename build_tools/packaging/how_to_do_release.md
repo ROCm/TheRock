@@ -282,6 +282,15 @@ python build_tools/packaging/upload_release_packages.py --input-dir ./promotion/
 python build_tools/packaging/upload_release_packages.py --input-dir ./promotion/download/ --no-upload-python --upload-tarballs --execute --use-release-buckets
 ```
 
+### Existing files
+
+The script never replaces a file that is already in the bucket. Before uploading,
+it checks every destination, and if any already exist it lists them and uploads
+nothing. This also runs in dry-run mode, so the dry run needs AWS credentials with
+read access (`s3:GetObject`, plus `s3:ListBucket` so missing files are reported as
+missing rather than access denied). To deliberately replace files, for example to
+finish an upload that failed partway, pass `--allow-overwrite`.
+
 ### Structured repo.amd.com upload
 
 After promoting the flat local `wheels/`, `tarball/`, or `tarball-asan/`
