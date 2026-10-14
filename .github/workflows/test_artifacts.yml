@@ -26,6 +26,10 @@ on:
         description: "CPU test runner label (for components that don't need GPU)"
         type: string
         default: ""
+      test_runs_on_wsl:
+        description: "WSL GPU runner label for '<job> (WSL)' test jobs (empty = none)"
+        type: string
+        default: ""
       tests_enabled:
         description: "Whether tests should run (true when any runner is available)"
         type: boolean
@@ -91,6 +95,10 @@ on:
         type: string
       test_runs_on_cpu:
         description: "CPU test runner label (for components that don't need GPU)"
+        type: string
+        default: ""
+      test_runs_on_wsl:
+        description: "WSL GPU runner label for '<job> (WSL)' test jobs (empty = none)"
         type: string
         default: ""
       tests_enabled:
@@ -209,6 +217,7 @@ jobs:
           # but CPU-only tests (linux_cpu_runner: True) can still run.
           TEST_RUNS_ON: ${{ inputs.test_runs_on }}
           TEST_RUNS_ON_CPU: ${{ inputs.test_runs_on_cpu }}
+          TEST_RUNS_ON_WSL: ${{ inputs.test_runs_on_wsl }}
         run: |
           python ./build_tools/github_actions/fetch_test_configurations.py \
             --platform=${{ (contains(inputs.test_runs_on, 'windows') || contains(inputs.test_runs_on_cpu, 'windows')) && 'windows' || 'linux' }}

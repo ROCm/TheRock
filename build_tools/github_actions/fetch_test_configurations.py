@@ -100,10 +100,9 @@ _WSL_GPU_CONTAINER_OPTIONS = [
     "-e LD_LIBRARY_PATH=/usr/lib/wsl/lib",
 ]
 
-# WSL is a runner for the Linux tests, like the multi-GPU runner: a family sets
-# "test-runs-on-wsl" under "linux", a component lists "wsl" in its "platform", and
-# the ci:run-wsl label adds a "<job_name> (WSL)" entry for it next to the native one.
-WSL_RUN_LABEL = "ci:run-wsl"
+# WSL is a runner for the Linux tests: when the workflow passes a WSL runner
+# (TEST_RUNS_ON_WSL, chosen by configure_multi_arch_ci.py for ci:run-wsl), each
+# component that lists "wsl" in its "platform" also gets a "<job_name> (WSL)" entry.
 WSL_TEST_PLATFORM = "wsl"
 
 
@@ -1286,10 +1285,6 @@ def run():
     enable_multi_gpu_by_label = "ci:run-multi-gpu" in test_labels
     if enable_multi_gpu_by_label:
         logging.info("Multi-GPU tests forced via ci:run-multi-gpu label")
-    # ci:run-wsl adds "<job> (WSL)" entries for WSL-capable components (see WSL_RUN_LABEL)
-    enable_wsl_by_label = WSL_RUN_LABEL in test_labels
-    if enable_wsl_by_label:
-        logging.info(f"WSL test entries requested via {WSL_RUN_LABEL} label")
 
     # Get runner config for per-component runner selection
     # This enables better load distribution across runner pools
@@ -1300,7 +1295,7 @@ def run():
     # For ASAN builds, use the sandbox runner if available
     test_runs_on_sandbox = None
     # WSL-hosted GPU runner for "<job> (WSL)" entries (empty = none)
-    test_runs_on_wsl = ""
+    test_runs_on_wsl = os.getenv("TEST_RUNS_ON_WSL", "") if platform == "linux" else ""
 
     # Check if GPU runner was passed from configure_multi_arch_ci.py via workflow.
     # This carries the policy decision (e.g., trigger gating). When set to empty,
@@ -1350,14 +1345,6 @@ def run():
                     "test-runs-on-multi-gpu", ""
                 )
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
-            if (
-                enable_wsl_by_label
-                and not gpu_tests_gated
-                and "asan" not in build_variant
-                and platform == "linux"
-            ):
-                test_runs_on_wsl = platform_info.get("test-runs-on-wsl", "")
-
             # Enforce test_type_for_family if set in the family matrix.
             # This is a strict override - families with limited hardware (e.g., MI455)
             # should always run quick tests regardless of what's passed in TEST_TYPE.
