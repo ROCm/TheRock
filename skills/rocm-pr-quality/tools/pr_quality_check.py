@@ -468,16 +468,30 @@ def check_tests(data: dict, prof: dict, findings: list[Finding]) -> None:
         )
 
 
+def _parse_ci_timestamp(ts: str | None) -> datetime | None:
+    """Parse a check timestamp, or None if unset or unparseable.
+
+    gh reports an unset time (for example `completedAt` of a queued or running check) as
+    the zero date `0001-01-01T00:00:00Z`, which is not a real completion time.
+    """
+    if not ts:
+        return None
+    try:
+        parsed = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.year > 2000 else None
+
+
 def check_ci_currency(data: dict, findings: list[Finding]) -> None:
     rollup = data.get("statusCheckRollup") or []
     times = []
     for c in rollup:
-        ts = c.get("completedAt") or c.get("startedAt")
+        ts = _parse_ci_timestamp(c.get("completedAt")) or _parse_ci_timestamp(
+            c.get("startedAt")
+        )
         if ts:
-            try:
-                times.append(datetime.fromisoformat(ts.replace("Z", "+00:00")))
-            except ValueError:
-                pass
+            times.append(ts)
     if not times:
         findings.append(
             Finding(
@@ -486,7 +500,8 @@ def check_ci_currency(data: dict, findings: list[Finding]) -> None:
         )
         return
     newest = max(times)
-    age_days = (datetime.now(timezone.utc) - newest).total_seconds() / 86400.0
+    # Clamp: clock skew can put a just-started check slightly in the future.
+    age_days = max(0.0, (datetime.now(timezone.utc) - newest).total_seconds() / 86400.0)
     if age_days > CI_STALE_DAYS:
         findings.append(
             Finding(

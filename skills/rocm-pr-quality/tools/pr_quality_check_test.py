@@ -12,6 +12,7 @@ Run locally:
 import hashlib
 import sys
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # Make `pr_quality_check` importable regardless of the working directory.
@@ -251,6 +252,42 @@ class CommitsSinceTest(unittest.TestCase):
         self.assertIsNone(pq.commits_since(self.COMMITS, None))
         self.assertIsNone(pq.commits_since(None, "aaa1111"))
         self.assertIsNone(pq.commits_since([], "aaa1111"))
+
+
+ZERO_DATE = "0001-01-01T00:00:00Z"  # how gh reports an unset time
+
+
+def _ci_findings(rollup):
+    findings = []
+    pq.check_ci_currency({"statusCheckRollup": rollup}, findings)
+    return findings
+
+
+class CiCurrencyTest(unittest.TestCase):
+    def test_queued_check_with_zero_completed_at_is_not_stale(self):
+        # Regression: the zero date used to be read as a ~2000-year-old CI result.
+        now = datetime.now(timezone.utc).isoformat()
+        (f,) = _ci_findings([{"startedAt": now, "completedAt": ZERO_DATE}])
+        self.assertEqual(f.severity, "INFO")
+
+    def test_only_zero_dates_means_no_timestamps(self):
+        (f,) = _ci_findings([{"startedAt": ZERO_DATE, "completedAt": ZERO_DATE}])
+        self.assertEqual(f.severity, "INFO")
+        self.assertIn("No CI completion timestamps", f.message)
+
+    def test_genuinely_old_result_is_flagged(self):
+        old = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        (f,) = _ci_findings([{"completedAt": old}])
+        self.assertEqual(f.severity, "IMPORTANT")
+
+    def test_recent_result_is_fine(self):
+        recent = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        (f,) = _ci_findings([{"completedAt": recent}])
+        self.assertEqual(f.severity, "INFO")
+
+    def test_no_checks(self):
+        (f,) = _ci_findings([])
+        self.assertEqual(f.severity, "INFO")
 
 
 if __name__ == "__main__":
