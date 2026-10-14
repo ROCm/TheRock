@@ -55,6 +55,7 @@ import os
 import shutil
 import sys
 import tempfile
+import traceback
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -616,6 +617,9 @@ def pull(
     if errors:
         for pointer, err in errors:
             log(f"  ERROR     {pointer}: {err}")
+            # Preserve the worker stack: a cache-path PermissionError alone
+            # does not distinguish hashing, eviction, copying, or publication.
+            log("".join(traceback.format_exception(err)).rstrip())
         raise FetchError(f"{len(errors)} file(s) failed to fetch (see log above)")
 
     return result
