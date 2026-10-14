@@ -56,6 +56,12 @@ on:
         type: boolean
         default: true
         description: "Build native Linux packages and run install tests"
+      build_flags:
+        type: string
+        default: ""
+        description: >-
+          Comma-separated FLAGS.cmake overrides as NAME=VALUE. Applied as
+          -DTHEROCK_FLAG_<NAME>=<VALUE>. See docs/development/flags.md.
       # --- Artifact reuse ---
       prebuilt_stages:
         type: string
@@ -132,6 +138,7 @@ jobs:
       build_jax: ${{ github.event_name != 'workflow_dispatch' || inputs.build_jax }}
       build_native_linux: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_linux }}
       build_stages: ${{ inputs.build_stages || '' }}
+      build_flags: ${{ inputs.build_flags || '' }}
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
