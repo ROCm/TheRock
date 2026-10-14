@@ -1,19 +1,20 @@
 ---
 name: rocm-pr-quality
 description: Help an engineer author, review, or pre-merge-gate a pull request to a ROCm library so it is traceable, tested, and safe to merge. Use when preparing a PR, reviewing a PR, or deciding whether an approved PR is safe to merge right now, or when the user provides a GitHub PR URL or branch and asks for help with PR quality, description, testing, review, or merge-readiness. Library-agnostic base; component overlays extend it.
-argument-hint: '[author | review | pre-merge] [PR URL | branch:<name> | local] [base:<branch>]'
+argument-hint: '[author | review | pre-merge | check-attestation] [PR URL | branch:<name> | local] [base:<branch>]'
 allowed-tools: Bash, Read, Grep, Glob, Task, WebFetch
 ---
 
 # ROCm PR Quality (base)
 
-This is the library-agnostic base skill for PR quality across ROCm. It exposes three
+This is the library-agnostic base skill for PR quality across ROCm. It exposes four
 actions the user invokes with a single sentence; the skill does the legwork through the
 tools already on the desk (`gh`, the repo, and Jira/GitHub MCPs when available).
 
 - **Author assist** — "help me write a PR worth reviewing."
 - **Review assist** — "help me review this PR well."
 - **Pre-merge gate** — "is it actually safe to press merge right now?"
+- **Check attestation** — "has this PR been reviewed by the skill?"
 
 Pick the action from the user's request. If it is ambiguous, ask which one they want.
 
@@ -67,7 +68,7 @@ on top.
 
 ______________________________________________________________________
 
-## Shared concepts (used by all three actions)
+## Shared concepts (used by all four actions)
 
 ### Change classification (extensible; multiple tags allowed)
 
@@ -295,6 +296,29 @@ the human.
 
 ______________________________________________________________________
 
+## Action 4 — Check attestation
+
+Read-only. Answers "has this PR been reviewed by the skill?" by looking for a review
+attestation (see "Review attestation") in the PR's conversation comments and review bodies.
+It never posts anything. Run it before relying on a claimed skill review, or from the pre-merge
+gate (Action 3) as one more input.
+
+Run `tools/pr_quality_check.py --pr <number|url> --check-attestation` (add `--json` for
+machine-readable output). The exit status is the answer: `0` verified, `4` no attestation found,
+`5` an attestation is present but invalid. A block is **valid** when it records an `APPROVED`
+result and its digest matches this PR's own digest (see `reference.md`). A block copied from
+another PR, a template with a placeholder digest, or a non-approval block is reported as invalid,
+with the reason.
+
+**Report it plainly:** the status, who posted the block (author and their association with the
+repo), when, and the reviewed commit with how many commits were pushed since. Later commits are
+allowed and are not a failure; mention them so a human can judge how much changed after the
+review. State the limit when it matters: the digest is a checksum, not a secret, so it shows the
+block was generated for this PR, not who ran the skill or that a review really happened. A
+verified attestation does not replace a human approval.
+
+______________________________________________________________________
+
 ## Operational notes
 
 - Use `gh` for PR data, diffs, files, and CI status. Use the Jira/GitHub MCPs to look up and
@@ -303,4 +327,5 @@ ______________________________________________________________________
 - The optional shared checker `tools/pr_quality_check.py` performs the deterministic subset of
   the MUST checks (description sections, work-tracking presence, link resolution, test-file-touched
   heuristic, CI currency, adjacent-file overlap). It is advisory; semantic judgments (test
-  substance, M3) stay with the agent and the human.
+  substance, M3) stay with the agent and the human. It also generates and verifies the review
+  attestation digest (`--check-attestation`, Action 4).

@@ -329,6 +329,14 @@ mismatch means the block was not generated for this PR. The reviewed commit is n
 PR's current head. This is a checksum, not a secret: it stops pasted templates and cross-PR copies,
 not a deliberate forgery.
 
+**Checking an attestation (Action 4).** `tools/pr_quality_check.py --pr <number|url> --check-attestation` scans the PR's conversation comments and review bodies for the marker and
+applies the rule above to each block it finds. A block is valid when it records an `APPROVED`
+result and its digest equals the PR's own digest. Overall status is `VERIFIED` if any block is
+valid, `INVALID` if blocks exist but none is valid (copied from another PR, placeholder digest,
+non-approval result), and `NONE` if there is no block. Exit codes are `0`, `5`, and `4`
+respectively. The report also lists each block's author, association, and time, and how many
+commits were pushed after the reviewed commit (informational only).
+
 The full head SHA is `gh pr view --json headRefOid -q .headRefOid` (or `git rev-parse HEAD`).
 
 One-line paste fallback (same marker, for when an approval was already posted without a block):

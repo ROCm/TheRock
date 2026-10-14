@@ -12,9 +12,13 @@ green CI) -- stay with the agent and the human reviewer; they are intentionally 
 
 Advisory by default (always exits 0). Pass --enforce to exit non-zero on blockers.
 
+With --check-attestation it instead reports whether the PR carries a valid review attestation
+(see reference.md); there the exit status is the answer (0 verified, 4 none, 5 invalid).
+
 Usage:
     python pr_quality_check.py --pr <number|url> [--repo owner/name] [--profile hipblaslt]
                                [--repo-path .] [--check-links] [--enforce] [--json]
+                               [--check-attestation]
 
 Requires: gh (authenticated). The stale-base check uses local git when --repo-path is given
 (exact), otherwise falls back to the GitHub compare API (no clone needed; the API caps the file
@@ -79,6 +83,181 @@ def attestation_digest(pr_url: str) -> str | None:
         return None
     key = f"{m.group(1)}/{m.group(2)}#{m.group(3)}".lower()
     return hashlib.sha256(key.encode("utf-8")).hexdigest()[:8]
+
+
+# --- Attestation verification ---------------------------------------------------------------
+
+ATTESTATION_MARKER = "<!-- rocm-pr-quality:attestation v1 -->"
+# How much text after the marker belongs to one block (a full block is ~600 chars).
+_ATTESTATION_SPAN = 1000
+_ATT_DIGEST_RE = re.compile(r"\battestation\b[:\s`*]*([0-9a-f]{8})\b", re.IGNORECASE)
+_ATT_COMMIT_RE = re.compile(r"\bcommit\b[:\s`*]*([0-9a-f]{7,40})\b", re.IGNORECASE)
+# Full block: "Result: **APPROVED**"; one-line form: "rocm-pr-quality review APPROVED".
+_ATT_APPROVED_RE = re.compile(r"(?:\bResult:?|\breview)\s*[`*]*APPROVED\b")
+
+# Exit codes for --check-attestation (the exit status is the answer in that mode).
+EXIT_ATTESTATION_VERIFIED = 0
+EXIT_ATTESTATION_NONE = 4
+EXIT_ATTESTATION_INVALID = 5
+
+
+def parse_attestations(body: str) -> list[dict]:
+    """Parse every attestation block (full or one-line form) in a comment/review body."""
+    found = []
+    for part in (body or "").split(ATTESTATION_MARKER)[1:]:
+        part = part[:_ATTESTATION_SPAN]
+        digest = _ATT_DIGEST_RE.search(part)
+        commit = _ATT_COMMIT_RE.search(part)
+        found.append(
+            {
+                "digest": digest.group(1).lower() if digest else None,
+                "commit": commit.group(1).lower() if commit else None,
+                "approved": bool(_ATT_APPROVED_RE.search(part)),
+            }
+        )
+    return found
+
+
+def verify_attestations(pr_url: str, sources: list[dict]) -> dict:
+    """Check the comments/reviews of a PR for a skill attestation generated for *this* PR.
+
+    `sources` are dicts with kind, author, association, created_at, url, and body. A block is
+    valid when it records an APPROVED result and its digest matches the PR's own digest.
+    The reviewed commit is informational and is never compared to the PR's head.
+    """
+    expected = attestation_digest(pr_url)
+    found = []
+    for src in sources:
+        for blk in parse_attestations(src.get("body", "")):
+            if not blk["approved"]:
+                problem = "not an APPROVED result"
+            elif not blk["digest"]:
+                problem = "missing digest"
+            elif blk["digest"] != expected:
+                problem = "digest does not match this PR"
+            else:
+                problem = None
+            found.append(
+                {
+                    **blk,
+                    "valid": problem is None,
+                    "problem": problem,
+                    "kind": src.get("kind"),
+                    "author": src.get("author"),
+                    "association": src.get("association"),
+                    "created_at": src.get("created_at"),
+                    "updated_at": src.get("updated_at"),
+                    "url": src.get("url"),
+                }
+            )
+    if any(f["valid"] for f in found):
+        status = "VERIFIED"
+    elif found:
+        status = "INVALID"
+    else:
+        status = "NONE"
+    return {"status": status, "expected_digest": expected, "attestations": found}
+
+
+def commits_since(commits: list[dict] | None, sha: str | None) -> int | None:
+    """Commits pushed after `sha` in the PR's commit list, or None if it is not in the list
+    (for example after a rebase or force-push)."""
+    if not sha:
+        return None
+    oids = [c.get("oid", "") for c in commits or []]
+    for i, oid in enumerate(oids):
+        if oid.startswith(sha):
+            return len(oids) - i - 1
+    return None
+
+
+def gh_api_pages(path: str) -> list:
+    """Fetch every page of a list endpoint via gh (100 per page)."""
+    items: list = []
+    page = 1
+    sep = "&" if "?" in path else "?"
+    while True:
+        data = gh_api_json(f"{path}{sep}per_page=100&page={page}")
+        if not isinstance(data, list) or not data:
+            break
+        items.extend(data)
+        if len(data) < 100:
+            break
+        page += 1
+    return items
+
+
+def fetch_attestation_sources(pr_url: str) -> list[dict]:
+    """Collect PR conversation comments and review bodies, the places a block may be posted."""
+    m = PR_URL_RE.match(pr_url or "")
+    if not m:
+        return []
+    owner, repo, number = m.groups()
+    sources = []
+    for c in gh_api_pages(f"repos/{owner}/{repo}/issues/{number}/comments"):
+        sources.append(
+            {
+                "kind": "comment",
+                "author": (c.get("user") or {}).get("login"),
+                "association": c.get("author_association"),
+                "created_at": c.get("created_at"),
+                "updated_at": c.get("updated_at"),
+                "url": c.get("html_url"),
+                "body": c.get("body") or "",
+            }
+        )
+    for r in gh_api_pages(f"repos/{owner}/{repo}/pulls/{number}/reviews"):
+        sources.append(
+            {
+                "kind": "review",
+                "author": (r.get("user") or {}).get("login"),
+                "association": r.get("author_association"),
+                "created_at": r.get("submitted_at"),
+                "url": r.get("html_url"),
+                "body": r.get("body") or "",
+            }
+        )
+    return sources
+
+
+def run_attestation_check(data: dict, as_json: bool) -> int:
+    """Report whether the PR carries a valid skill attestation; return the exit code."""
+    url = data.get("url", "")
+    result = verify_attestations(url, fetch_attestation_sources(url))
+    for a in result["attestations"]:
+        a["commits_since"] = commits_since(data.get("commits"), a["commit"])
+    result = {"pr": data.get("number"), "url": url, **result}
+    if as_json:
+        print(json.dumps(result, indent=2))
+    else:
+        print(f"PR #{data.get('number')} - skill attestation: {result['status']}")
+        for a in result["attestations"]:
+            who = f"{a['author']} ({a['association']})"
+            tag = "valid" if a["valid"] else f"invalid: {a['problem']}"
+            when = a["created_at"]
+            if a.get("updated_at") and a["updated_at"] != a["created_at"]:
+                when += f", edited {a['updated_at']}"
+            line = f"  [{tag}] {who} {a['kind']} {when} {a['url']}"
+            if a["commit"]:
+                since = a["commits_since"]
+                note = (
+                    "not in current history"
+                    if since is None
+                    else f"{since} commit(s) pushed since"
+                )
+                line += f"\n      reviewed commit {a['commit'][:9]} ({note}; allowed)"
+            print(line)
+        if result["status"] == "NONE":
+            print("  No attestation block found in comments or review bodies.")
+        print(
+            "Note: the digest is a checksum, not a secret. It shows the block was "
+            "generated for this PR, not who ran the skill."
+        )
+    return {
+        "VERIFIED": EXIT_ATTESTATION_VERIFIED,
+        "NONE": EXIT_ATTESTATION_NONE,
+        "INVALID": EXIT_ATTESTATION_INVALID,
+    }[result["status"]]
 
 
 class Finding:
@@ -466,10 +645,18 @@ def main() -> None:
         "--enforce", action="store_true", help="exit non-zero on BLOCKING findings"
     )
     ap.add_argument("--json", action="store_true", help="emit JSON")
+    ap.add_argument(
+        "--check-attestation",
+        action="store_true",
+        help="only report whether the PR carries a valid skill attestation (skips the "
+        "quality checks); exit 0 if verified, 4 if none found, 5 if invalid",
+    )
     args = ap.parse_args()
 
     prof = PROFILES[args.profile]
     data = gh_pr_json(args.pr, args.repo)
+    if args.check_attestation:
+        sys.exit(run_attestation_check(data, args.json))
     cross_refs = cross_reference_numbers(args.pr, args.repo)
     findings: list[Finding] = []
 
