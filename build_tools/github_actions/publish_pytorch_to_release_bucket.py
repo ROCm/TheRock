@@ -32,7 +32,7 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 from _therock_utils.s3_buckets import (
     get_product_release_bucket_config,
     get_release_bucket_config,
-    get_release_package_index_url,
+    get_release_stream,
 )
 from _therock_utils.python_package_paths import plan_local_uploads
 from _therock_utils.storage_backend import create_storage_backend
@@ -126,7 +126,8 @@ def main(argv: list[str]) -> None:
     if args.structured:
         bucket = get_product_release_bucket_config(args.release_type, "pytorch")
         _publish_structured(args.source_dir, bucket.name, python_index, backend)
-        package_index_url = get_release_package_index_url(args.release_type)
+        stream = get_release_stream(args.release_type)
+        package_index_url = f"https://{stream}.repo.amd.com/rocm/{python_index}/"
     else:
         bucket = get_release_bucket_config(args.release_type, "python")
         dest = StorageLocation(bucket.name, "v4/whl")
