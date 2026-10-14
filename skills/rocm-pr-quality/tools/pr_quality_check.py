@@ -26,6 +26,7 @@ incidental cross-reference or timeline mention, which it surfaces as a soft note
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -61,6 +62,23 @@ PROFILES = {
 REQUIRED_SECTIONS = ["Summary", "Risk", "Related", "Testing"]
 WAIVER_RE = re.compile(r"\bW-[A-Z\-]+\b")
 CI_STALE_DAYS = 3
+
+
+PR_URL_RE = re.compile(r"https?://[^/]+/([^/]+)/([^/]+)/pull/(\d+)")
+
+
+def attestation_digest(pr_url: str) -> str | None:
+    """Review-attestation digest: first 8 hex of sha256("<owner>/<repo>#<number>", lowercased).
+
+    Deliberately keyed on the PR identity only (not the head SHA), so later pushes do not
+    invalidate it. It is a checksum, not a secret: it stops a pasted template or a block copied
+    from another PR, not a deliberate forgery. Keep in sync with reference.md.
+    """
+    m = PR_URL_RE.match(pr_url or "")
+    if not m:
+        return None
+    key = f"{m.group(1)}/{m.group(2)}#{m.group(3)}".lower()
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:8]
 
 
 class Finding:
@@ -472,6 +490,7 @@ def main() -> None:
                     "pr": data.get("number"),
                     "url": data.get("url"),
                     "profile": args.profile,
+                    "attestation": attestation_digest(data.get("url", "")),
                     "blockers": len(blockers),
                     "warnings": len(warns),
                     "findings": [f.as_dict() for f in findings],
@@ -487,6 +506,9 @@ def main() -> None:
         print(
             f"Summary: {len(blockers)} blocking, {len(warns)} important. "
             "Substance/M3 judged separately by the agent + human reviewer."
+        )
+        print(
+            f"Attestation digest (for an APPROVED review): {attestation_digest(data.get('url', ''))}"
         )
 
     sys.exit(2 if (args.enforce and blockers) else 0)

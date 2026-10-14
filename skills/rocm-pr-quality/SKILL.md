@@ -149,9 +149,11 @@ related PRs) is a SHOULD.
 When Action 2 concludes `APPROVED`, append the machine-checkable attestation block (see
 `reference.md`) to the drafted approval comment. Never attach it to `CHANGES REQUESTED` / `REJECTED`,
 and never to a PR description. It is part of the text the human posts; the skill still never posts
-on its own (operating principle 2). Explain the block in plain language when you add it: what it is,
-that pushing new commits invalidates it, and that a pre-review gate can key on it. If an approval was
-already posted without a block, hand the user the one-line paste form instead of the full block.
+on its own (operating principle 2). Take the `Attestation` digest from `tools/pr_quality_check.py`
+output; never compute or type it by hand. Explain the block in plain language when you add it: what
+it is, that it is tied to this PR (not to a commit, so later pushes are fine), and that a pre-review
+gate can key on it. If an approval was already posted without a block, hand the user the one-line
+paste form instead of the full block.
 
 ______________________________________________________________________
 

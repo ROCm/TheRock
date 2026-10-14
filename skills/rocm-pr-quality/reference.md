@@ -294,8 +294,9 @@ ______________________________________________________________________
 When a review concludes `APPROVED`, the skill appends this block to the drafted approval comment
 (never to `CHANGES REQUESTED` / `REJECTED`, and never to a PR description). The human posts it; the
 skill never posts on its own. The `<!-- rocm-pr-quality:attestation v1 -->` marker is what a
-consumer (e.g. a pre-review gate) keys on, and the full head SHA binds the attestation to the exact
-tree so a stale or copied block can be detected.
+consumer (e.g. a pre-review gate) keys on, and the `Attestation` digest ties the block to this
+specific PR so a pasted template or a block copied from another PR can be detected. The digest is
+deliberately loose: commits pushed after the review are allowed and do not invalidate it.
 
 Block (leaned-into default):
 
@@ -305,17 +306,33 @@ Block (leaned-into default):
 > - Skill: `rocm-pr-quality` (base) - overlays: `<applied overlays, or "none">`
 > - Action: `review` - Result: **APPROVED** (`<n>` BLOCKING; `<n>` IMPORTANT)
 > - Risk: `<1-5>`
-> - Commit: `<full 40-char head SHA>`
+> - Reviewed commit: `<full 40-char head SHA>`
+> - Attestation: `<8-hex digest>`
 >
-> <sub>Machine-checkable attestation. The head SHA binds this review to the exact tree; pushing new
-> commits invalidates it, at which point the skill should be re-run.</sub>
+> <sub>Machine-checkable attestation. The digest ties this review to this PR; later commits are
+> allowed. The reviewed commit is informational (what the review looked at).</sub>
 ```
 
-The full head SHA is `gh pr view --json headRefOid -q .headRefOid` (or `git rev-parse HEAD`). A
-consumer confirms an attestation by comparing this SHA to the PR's current head.
+**Digest.** The first 8 hex characters of the sha256 of the UTF-8 string `<owner>/<repo>#<number>`,
+lowercased, with no trailing newline (for example, `rocm/therock#6653`). The repo is part of the
+input because PR numbers collide across repositories. Do not compute it by hand: take it from the
+`Attestation digest` line (or the `attestation` JSON field) printed by
+`tools/pr_quality_check.py`. If that tool is unavailable, this works in any shell (including
+PowerShell):
+
+```text
+python -c "import hashlib,sys; print(hashlib.sha256(sys.argv[1].lower().encode()).hexdigest()[:8])" "<owner>/<repo>#<number>"
+```
+
+A consumer recomputes the digest from the repo and number of the PR the comment is posted on; a
+mismatch means the block was not generated for this PR. The reviewed commit is not compared to the
+PR's current head. This is a checksum, not a secret: it stops pasted templates and cross-PR copies,
+not a deliberate forgery.
+
+The full head SHA is `gh pr view --json headRefOid -q .headRefOid` (or `git rev-parse HEAD`).
 
 One-line paste fallback (same marker, for when an approval was already posted without a block):
 
 ```text
-<!-- rocm-pr-quality:attestation v1 --> rocm-pr-quality review APPROVED - commit <full-sha>
+<!-- rocm-pr-quality:attestation v1 --> rocm-pr-quality review APPROVED - commit <full-sha> - attestation <8-hex digest>
 ```
