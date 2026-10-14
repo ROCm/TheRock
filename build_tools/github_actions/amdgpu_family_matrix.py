@@ -106,7 +106,7 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
     # Use count if available, otherwise weight
     weight_key = "count" if "count" in labels_config[0] else "weight"
     weights = [config[weight_key] for config in labels_config]
-    selected = random.choices(labels_config, weights=weights, k=1)[0]
+    selected = random.SystemRandom().choices(labels_config, weights=weights, k=1)[0]
     print(
         f"  {context_name}: selected runner ({weight_key}={selected[weight_key]}): "
         f"{selected['label']}"
@@ -246,6 +246,8 @@ amdgpu_family_info_matrix dictionary fields:
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
 - test_type_for_family (optional): forces the test type for this family (e.g., "quick"), overriding the global test_type. Useful for families with limited hardware that should always run quick tests.
 - test_labels_for_family (optional): list of test labels to filter which tests run for this family
+- disabled_framework_tests (optional): list of ML framework tests to skip on architecture
+    Valid values: "pytorch", "jax"
 """
 # Unified family matrix with explicit trigger-based build/test configuration.
 # Each family specifies exactly when it should build and test via trigger lists.
@@ -323,12 +325,8 @@ amdgpu_family_info_matrix = {
                 "submodule_bump",
                 "nightly",
             ],
-            # TEMPORARY (ROCm/TheRock#8688): gfx110X Windows presubmit testing
-            # removed for test-queue remediation. Builds still run on presubmit;
-            # tests are on-demand via the `ci:test:gfx110x` PR label (emergency
-            # lever in configure_multi_arch_ci.py). Superseded by the permanent
-            # build/test label system in #8692. To revert, re-add "presubmit".
             "tests_on_trigger": [
+                "presubmit",
                 "postsubmit",
                 "submodule_bump",
                 "nightly",
@@ -425,6 +423,8 @@ amdgpu_family_info_matrix = {
             "tests_on_trigger": ["nightly"],
             # Force quick tests for MI455 hardware
             "test_type_for_family": "quick",
+            # PyTorch tests have known failures on MI455 - skip until resolved
+            "disabled_framework_tests": ["pytorch"],
         },
     },
     # Postsubmit family - builds on postsubmit, tests on postsubmit and nightly
@@ -812,12 +812,26 @@ def get_all_families_for_trigger_types(trigger_types: list[str]) -> dict:
     workflow_dispatch where all families are implicitly allowed).
     """
     # Always start with local definitions - source of truth for build support
-    result = _get_local_families_for_trigger_types(trigger_types)
+    result = copy.deepcopy(_get_local_families_for_trigger_types(trigger_types))
 
     # Overlay external runner config if available
     external_config = load_external_runner_config()
     if external_config is not None:
         result = _overlay_runner_config(result, external_config)
+
+    # These sandbox pools are reserved for rocm-systems PR testing. Apply the
+    # policy to both setup and component selection, including local fallbacks.
+    # TODO(#6624): Move sandbox repository/trigger restrictions into each
+    # family's dictionary so the policy is explicit and can vary by family.
+    if (
+        os.environ.get("GITHUB_REPOSITORY") != "ROCm/rocm-systems"
+        or os.environ.get("GITHUB_EVENT_NAME") != "pull_request"
+    ):
+        for family in ("gfx94x", "gfx950"):
+            runners = result.get(family, {}).get("linux", {})
+            if "test-runs-on-sandbox" in runners:
+                runners["test-runs-on-sandbox"] = ""
+                runners["test-runs-on-sandbox-labels"] = []
 
     return result
 
@@ -867,3 +881,32 @@ def get_cpu_test_runner(platform: str) -> str:
             return default_runners[0]["label"]
 
     return ""
+
+
+# Valid ML framework tests that can be disabled per-family
+VALID_DISABLED_FRAMEWORK_TESTS = frozenset(["pytorch", "jax"])
+
+
+def is_framework_test_disabled_for_family(
+    *, amdgpu_family: str, platform: str, framework: str
+) -> bool:
+    """Return True if framework is in disabled_framework_tests for the family."""
+    if framework not in VALID_DISABLED_FRAMEWORK_TESTS:
+        raise ValueError(
+            f"Invalid framework {framework!r}. "
+            f"Valid values: {sorted(VALID_DISABLED_FRAMEWORK_TESTS)}"
+        )
+
+    # Empty list returns all families
+    matrix = get_all_families_for_trigger_types([])
+    for info_for_key in matrix.values():
+        platform_info = info_for_key.get(platform)
+        if not platform_info:
+            continue
+
+        family = platform_info.get("family", "")
+        if amdgpu_family.lower() == family.lower():
+            disabled = platform_info.get("disabled_framework_tests", [])
+            return framework in disabled
+
+    return False

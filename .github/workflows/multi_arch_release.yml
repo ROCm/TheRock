@@ -161,7 +161,7 @@ jobs:
       windows_amdgpu_families: ${{ inputs.windows_amdgpu_families }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
-      quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
+      quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1};{2}', github.run_id, inputs.release_type, 'release') || '' }}
     secrets: inherit # zizmor: ignore[secrets-inherit]
 
   linux_release:
@@ -183,7 +183,7 @@ jobs:
       build_pytorch: ${{ inputs.build_pytorch }}
       build_jax: ${{ inputs.build_jax }}
       python_version: ${{ inputs.python_version }}
-      quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
+      quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1};{2}', github.run_id, inputs.release_type, 'release') || '' }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows
@@ -204,7 +204,7 @@ jobs:
       ref: ${{ needs.setup.outputs.ref }}
       build_pytorch: ${{ inputs.build_pytorch }}
       python_version: ${{ inputs.python_version }}
-      quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
+      quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1};{2}', github.run_id, inputs.release_type, 'release') || '' }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows
