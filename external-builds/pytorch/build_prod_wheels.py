@@ -998,6 +998,9 @@ def build_triton_linux(
     """Build triton wheel for Linux using ROCm/triton repository."""
     print("Building Triton for Linux (using ROCm/triton repository)")
 
+    if args.asan:
+        setup_pytorch_asan.configure_triton_asan(env)
+
     version_suffix = env.get("TRITON_WHEEL_VERSION_SUFFIX", "")
 
     # Triton's setup.py constructs the final version string by using
@@ -1072,6 +1075,22 @@ def build_triton_linux(
     )
 
     installed_triton_version = get_installed_package_version(triton_wheel_name)
+    if args.asan:
+        print("+++ Sanity checking installed triton:")
+        sanity_env = setup_pytorch_asan.import_sanity_env(env)
+        sanity_check_output = capture(
+            [
+                sys.executable,
+                "-c",
+                "import triton; print(triton.__version__)",
+            ],
+            cwd=tempfile.gettempdir(),
+            env=sanity_env,
+        )
+        if not sanity_check_output:
+            raise RuntimeError("triton package sanity check failed (see output above)")
+        print(f"Sanity check output:\n{sanity_check_output}")
+
     return f"{triton_wheel_name}=={installed_triton_version}"
 
 
@@ -1719,9 +1738,8 @@ def main(argv: list[str]):
         "--asan",
         action="store_true",
         default=False,
-        help="Build with AddressSanitizer. Triton is not built. "
-        "Torchaudio, torchvision, and apex are built only when their "
-        "--build-* flags are set.",
+        help="Build with AddressSanitizer. Companion wheels are built only "
+        "when their --build-* flags are set.",
     )
     build_p.add_argument(
         "--pytorch-rocm-arch",
