@@ -55,6 +55,9 @@ import os
 import shutil
 import sys
 import tempfile
+import threading
+import weakref
+from contextlib import nullcontext
 import traceback
 import uuid
 from dataclasses import dataclass
@@ -289,6 +292,25 @@ def _cache_path(cache_dir: Path, md5: str) -> Path:
     return cache_dir / bare[:2] / (bare[2:] + suffix)
 
 
+# Share locks across simultaneous pull() calls in this process. Weak values
+# retain only locks currently held or awaited, avoiding a permanent entry for
+# every content hash. Other processes/external file locks remain independent.
+_cache_locks_guard = threading.Lock()
+_cache_locks = weakref.WeakValueDictionary()
+
+
+def _cache_lock(cache_dir: Path | None, md5: str):
+    if cache_dir is None:
+        return nullcontext()
+    key = os.path.normcase(str(_cache_path(cache_dir, md5).resolve()))
+    with _cache_locks_guard:
+        lock = _cache_locks.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _cache_locks[key] = lock
+        return lock
+
+
 def _md5_of(path: Path) -> str:
     # Match DVC's content-addressed cache; this does not authenticate artifacts.
     h = hashlib.md5(usedforsecurity=False)
@@ -313,29 +335,54 @@ def _store_in_cache(src: Path, cache_file: Path) -> None:
     cache_file.parent.mkdir(parents=True, exist_ok=True)
     if cache_file.exists():
         return
-    # Unique temp name: distinct pointer files referencing the same content hash
-    # are materialized by separate workers, which would otherwise race on a
-    # shared `<cache_file>.tmp` path.
+
+    def winner_matches() -> bool:
+        return (
+            cache_file.exists()
+            and src.stat().st_size == cache_file.stat().st_size
+            and _md5_of(src) == _md5_of(cache_file)
+        )
+
+    # Publishing a hardlink directly avoids the Windows rename window in
+    # which the new cache pathname exists but readers are denied access.
+    # Creating a link refuses to overwrite a competing winner on all platforms.
+    try:
+        os.link(src, cache_file)
+        return
+    except FileExistsError:
+        if winner_matches():
+            return
+        raise
+    except OSError:
+        if cache_file.exists():
+            if winner_matches():
+                return
+            raise
+        # Cross-filesystem source, or a cache volume without hardlinks.
+
     tmp = cache_file.with_suffix(f"{cache_file.suffix}.{uuid.uuid4().hex}.tmp")
     try:
+        shutil.copy2(src, tmp)
         try:
-            os.link(src, tmp)
-        except OSError:
-            shutil.copy2(src, tmp)
-        try:
-            if sys.platform == "win32":
-                # Windows rename refuses to overwrite an existing entry. Even a
-                # successful replace can briefly deny readers access to the old
-                # file while it is being deleted, so leave the winner in place.
-                os.rename(tmp, cache_file)
-            else:
-                os.replace(tmp, cache_file)
+            # The staging copy is now on the cache filesystem. Prefer linking
+            # it into place even when src lives on a different volume.
+            os.link(tmp, cache_file)
         except (FileExistsError, PermissionError):
-            # If the winner already wrote the correct content, treat as success.
-            if cache_file.exists() and src.stat().st_size == cache_file.stat().st_size:
-                if _md5_of(src) == _md5_of(cache_file):
-                    return
+            if winner_matches():
+                return
             raise
+        except OSError:
+            # Retain support for filesystems without hardlinks. In-process
+            # readers/publishers are serialized by _cache_lock in this path.
+            try:
+                if sys.platform == "win32":
+                    os.rename(tmp, cache_file)
+                else:
+                    os.replace(tmp, cache_file)
+            except (FileExistsError, PermissionError):
+                if winner_matches():
+                    return
+                raise
     finally:
         if tmp.exists():
             try:
@@ -361,9 +408,8 @@ def _download_blob(
     """
     key = _s3_key(remote, md5)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_suffix(dest.suffix + ".tmp")
-    if tmp.exists():
-        tmp.unlink()
+    # Independent downloads must never remove another worker's staging file.
+    tmp = dest.with_suffix(f"{dest.suffix}.{uuid.uuid4().hex}.tmp")
     try:
         with tmp.open("wb") as f:
             s3.download_fileobj(remote.bucket, key, f)
@@ -415,32 +461,33 @@ def _materialize_file(
     md5 only). In that case the size check is skipped; md5 verification still
     happens.
     """
-    label = f"{dest.name}" if size is None else f"{dest.name} ({_human(size)})"
+    with _cache_lock(cache_dir, md5):
+        label = f"{dest.name}" if size is None else f"{dest.name} ({_human(size)})"
 
-    # Fast path 1: destination already correct.
-    if dest.exists():
-        if size is None or dest.stat().st_size == size:
-            if _md5_of(dest) == md5:
-                log(f"  ok        {label} [present]")
-                return PullResult(skipped=1)
+        # Fast path 1: destination already correct.
+        if dest.exists():
+            if size is None or dest.stat().st_size == size:
+                if _md5_of(dest) == md5:
+                    log(f"  ok        {label} [present]")
+                    return PullResult(skipped=1)
 
-    # Fast path 2: content-addressed cache hit.
-    if cache_dir is not None:
-        cache_file = _cache_path(cache_dir, md5)
-        if cache_file.exists():
-            if size is None or cache_file.stat().st_size == size:
-                if _md5_of(cache_file) == md5:
-                    _materialize_from_cache(cache_file, dest)
-                    log(f"  cached    {label}")
-                    return PullResult(cached=1)
-            log(f"  warn      cache entry corrupt for {md5[:8]}..., discarding")
-            cache_file.unlink()
+        # Fast path 2: content-addressed cache hit.
+        if cache_dir is not None:
+            cache_file = _cache_path(cache_dir, md5)
+            if cache_file.exists():
+                if size is None or cache_file.stat().st_size == size:
+                    if _md5_of(cache_file) == md5:
+                        _materialize_from_cache(cache_file, dest)
+                        log(f"  cached    {label}")
+                        return PullResult(cached=1)
+                log(f"  warn      cache entry corrupt for {md5[:8]}..., discarding")
+                cache_file.unlink()
 
-    log(f"  fetching  {label}")
-    _download_blob(s3, remote, md5, dest, expected_size=size)
-    if cache_dir is not None:
-        _store_in_cache(dest, _cache_path(cache_dir, md5))
-    return PullResult(fetched=1)
+        log(f"  fetching  {label}")
+        _download_blob(s3, remote, md5, dest, expected_size=size)
+        if cache_dir is not None:
+            _store_in_cache(dest, _cache_path(cache_dir, md5))
+        return PullResult(fetched=1)
 
 
 def _materialize_dir(
@@ -454,24 +501,28 @@ def _materialize_dir(
     """Handle a `.dir` directory hash: fetch JSON manifest, materialize each entry."""
     log(f"  manifest  {dest}/ ({out.md5[:8]}...)")
 
-    # Try cache for the manifest first.
-    manifest_bytes: bytes | None = None
-    cache_file = _cache_path(cache_dir, out.md5) if cache_dir is not None else None
-    if cache_file is not None and cache_file.exists():
-        if _md5_of(cache_file) == out.bare_md5:
-            manifest_bytes = cache_file.read_bytes()
+    # Release the manifest lock before acquiring any child-content lock.
+    with _cache_lock(cache_dir, out.md5):
+        # Try cache for the manifest first.
+        manifest_bytes: bytes | None = None
+        cache_file = _cache_path(cache_dir, out.md5) if cache_dir is not None else None
+        if cache_file is not None and cache_file.exists():
+            if _md5_of(cache_file) == out.bare_md5:
+                manifest_bytes = cache_file.read_bytes()
 
-    if manifest_bytes is None:
-        # Download manifest. If we have a cache, write it there directly (it's
-        # an immutable content-addressed blob). Otherwise, use a tempfile.
-        if cache_file is not None:
-            _download_blob(s3, remote, out.md5, cache_file, expected_size=None)
-            manifest_bytes = cache_file.read_bytes()
-        else:
-            with tempfile.TemporaryDirectory(prefix="therock-dvc-") as tmp_dir:
-                manifest_path = Path(tmp_dir) / "manifest"
-                _download_blob(s3, remote, out.md5, manifest_path, expected_size=None)
-                manifest_bytes = manifest_path.read_bytes()
+        if manifest_bytes is None:
+            # Download manifest. If we have a cache, write it there directly (it's
+            # an immutable content-addressed blob). Otherwise, use a tempfile.
+            if cache_file is not None:
+                _download_blob(s3, remote, out.md5, cache_file, expected_size=None)
+                manifest_bytes = cache_file.read_bytes()
+            else:
+                with tempfile.TemporaryDirectory(prefix="therock-dvc-") as tmp_dir:
+                    manifest_path = Path(tmp_dir) / "manifest"
+                    _download_blob(
+                        s3, remote, out.md5, manifest_path, expected_size=None
+                    )
+                    manifest_bytes = manifest_path.read_bytes()
 
     try:
         entries = json.loads(manifest_bytes)
