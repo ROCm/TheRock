@@ -47,6 +47,10 @@ from importlib.util import find_spec
 from pathlib import Path
 import yaml
 
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+from amdgpu_family_matrix import is_asan
+from configure_asan_env import get_asan_runtime_path
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 # Map job name -> install location, relative to the ROCm prefix (THEROCK_BIN_DIR
@@ -241,6 +245,16 @@ def build_environment(rocm_path, component_name):
     """
     env = os.environ.copy()
     component_root = resolve_component_path(component_name, rocm_path)
+
+    # Initialize ASan before Python allocates objects that instrumented imports
+    # may later free. Merely exposing the runtime on LD_LIBRARY_PATH loads it
+    # too late when rocisa imports instrumented ROCm libraries.
+    if is_asan():
+        runtime = str(get_asan_runtime_path(rocm_path))
+        existing_preload = env.get("LD_PRELOAD", "")
+        env["LD_PRELOAD"] = (
+            f"{runtime}:{existing_preload}" if existing_preload else runtime
+        )
 
     existing_pythonpath = env.get("PYTHONPATH")
     env["PYTHONPATH"] = (

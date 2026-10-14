@@ -28,6 +28,7 @@ The following labels may be added to a pull request to modify CI behavior:
 | `ci:host-asan-debug`       | Select host-ASan builds with debug information. GPU tests remain limited to nightly/manual runs. Takes precedence over `ci:host-asan`.                                                            |
 | `ci:host-asan`             | Select host-ASan builds. GPU tests remain limited to nightly/manual runs.                                                                                                                         |
 | `ci:run-multi-gpu`         | Opt-in to running multi-GPU tests.                                                                                                                                                                |
+| `ci:cpu-test-only`         | Run only CPU tests (skip GPU tests). Useful for changes that don't require GPU testing.                                                                                                           |
 | `ci:platform:linux`        | Run CI only on Linux (skip Windows builds/tests)                                                                                                                                                  |
 | `ci:platform:windows`      | Run CI only on Windows (skip Linux builds/tests)                                                                                                                                                  |
 | `ci:gfx...`                | Opt-in to building and testing the specified gfx family (e.g. `ci:gfx120X-all`, `ci:gfx950-dcgpu`)                                                                                                |
@@ -92,8 +93,9 @@ sanitizer labels to opt out. Submodule changes alone do not enable sanitizer CI.
 For LLVM promotion pull requests, optionally add `ci:asan-debug` to exercise
 device instrumentation and debug-info generation with the new compiler.
 
-Sanitizer pull request CI is build-only: GPU sanity checks and component tests
-run only on scheduled or manually dispatched runs. `ci:skip` still skips CI.
+Sanitizer labels do not override GPU test gating. GPU sanity checks and
+component tests remain subject to trigger and runner restrictions. CPU tests
+may still run. `ci:skip` still skips CI.
 
 ### Push
 
