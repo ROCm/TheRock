@@ -1141,14 +1141,18 @@ class TestFetchExtractionCache(ArtifactManagerTestBase):
         self.assertEqual(second_result, second_output)
 
         cached_stage = extraction_cache_dir / archive_path.name / "component" / "stage"
+        # Cached extraction must preserve direct extraction's mode.
+        direct_executable_mode = stat.S_IMODE(
+            (direct_output / "executable").stat().st_mode
+        )
         for output_dir in (direct_output, first_output, second_output):
             self.assertEqual(
                 (output_dir / "regular.txt").read_text(), "artifact contents"
             )
-            if not is_windows():
-                self.assertEqual(
-                    stat.S_IMODE((output_dir / "executable").stat().st_mode), 0o755
-                )
+            self.assertEqual(
+                stat.S_IMODE((output_dir / "executable").stat().st_mode),
+                direct_executable_mode,
+            )
             self.assertTrue(
                 os.path.samefile(
                     output_dir / "regular.txt",
@@ -1619,6 +1623,74 @@ class ParseTargetFamiliesTest(unittest.TestCase):
         self.assertIn("gfx110X-all", result)
         self.assertIn("gfx1100", result)
         self.assertIn("gfx1101", result)
+
+
+class FamilyArtifactSelectionTest(unittest.TestCase):
+    """Exercise the family-expansion path used by packaging workflows."""
+
+    def setUp(self):
+        self.available = {
+            "rand_lib_generic.tar.zst",
+            "rand_lib_gfx1250.tar.zst",
+            "rand_lib_gfx1250-strict.tar.zst",
+            "rand_lib_gfx125X-all.tar.zst",
+            "rand_lib_gfx942.tar.zst",
+        }
+
+    def _select(self, families: str) -> set[str]:
+        args = argparse.Namespace(
+            amdgpu_families=families,
+            amdgpu_targets="",
+            generic_only=False,
+            expand_family_to_targets=True,
+        )
+        targets = artifact_manager.parse_target_families(args)
+        return set(
+            artifact_manager.find_available_artifacts({"rand"}, targets, self.available)
+        )
+
+    def test_gfx1250_does_not_select_gfx1250_strict(self):
+        self.assertEqual(
+            self._select("gfx1250"),
+            {"rand_lib_generic.tar.zst", "rand_lib_gfx1250.tar.zst"},
+        )
+
+    def test_gfx1250_strict_does_not_select_gfx1250(self):
+        self.assertEqual(
+            self._select("gfx1250-strict"),
+            {"rand_lib_generic.tar.zst", "rand_lib_gfx1250-strict.tar.zst"},
+        )
+
+    def test_combined_selection_preserves_both_targets(self):
+        self.assertEqual(
+            self._select("gfx1250;gfx1250-strict"),
+            {
+                "rand_lib_generic.tar.zst",
+                "rand_lib_gfx1250.tar.zst",
+                "rand_lib_gfx1250-strict.tar.zst",
+            },
+        )
+
+    def test_broad_family_selects_family_and_enabled_target_artifacts(self):
+        self.assertEqual(
+            self._select("gfx125X-all"),
+            {
+                "rand_lib_generic.tar.zst",
+                "rand_lib_gfx125X-all.tar.zst",
+                "rand_lib_gfx1250.tar.zst",
+            },
+        )
+
+    def test_explicit_target_can_supplement_broad_family(self):
+        self.assertEqual(
+            self._select("gfx125X-all;gfx1250-strict"),
+            {
+                "rand_lib_generic.tar.zst",
+                "rand_lib_gfx125X-all.tar.zst",
+                "rand_lib_gfx1250.tar.zst",
+                "rand_lib_gfx1250-strict.tar.zst",
+            },
+        )
 
 
 class BootstrapMarkerTest(unittest.TestCase):

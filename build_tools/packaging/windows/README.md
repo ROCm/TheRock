@@ -38,14 +38,41 @@ msiexec /i amdrocm-runtime.msi /qn TARGETDIR="D:\ROCm\"
 msiexec /i amdrocm-runtime.msi /qn ENABLE_LONG_PATHS=0
 ```
 
+**Silent install with legacy System32 DLLs enabled:**
+
+```bat
+msiexec /i amdrocm-runtime.msi /qn LEGACY_SYSTEM32_INSTALL=1
+```
+
 ## What Gets Installed
 
-| Item                         | Default location                                   |
-| ---------------------------- | -------------------------------------------------- |
-| Runtime DLLs and executables | `C:\Program Files\AMD\ROCm\runtime-<version>\bin\` |
-| Import libraries (`.lib`)    | `C:\Program Files\AMD\ROCm\runtime-<version>\lib\` |
-| System PATH entry            | `...\bin` appended to the machine-wide PATH        |
-| Install-dir registry key     | `HKLM\Software\AMD\ROCm\<version>\InstallDir`      |
+| Item                         | Default location                                                               |
+| ---------------------------- | ------------------------------------------------------------------------------ |
+| Runtime DLLs and executables | `C:\Program Files\AMD\ROCm\runtime-<version>\bin\`                             |
+| Import libraries (`.lib`)    | `C:\Program Files\AMD\ROCm\runtime-<version>\lib\`                             |
+| System PATH entry            | `...\bin` appended to the machine-wide PATH (default install only — see below) |
+| SDK-discovery registry key   | `HKLM\Software\AMD\ROCm\<X.Y>` (`InstallDir`, `Version`)                       |
+
+The machine PATH entry is added **only when installing to the default location**
+(`C:\Program Files\AMD\ROCm\...`), which is admin-write-only. Installing to a
+custom location (via `--install-root` at generation time, or a different
+`INSTALLFOLDER` / `TARGETDIR` at install time) **skips** the PATH entry, because
+putting a potentially user-writable directory on the machine-wide PATH is a
+binary-planting risk. In that case, locate ROCm via the SDK-discovery registry
+key below instead of relying on PATH.
+
+The SDK-discovery key is **shared** across all ROCm packages installed at the
+same `<X.Y>` version (per
+[RFC0014](/docs/rfcs/RFC0014-Windows-Packaging-Requirements.md)): tools locate
+ROCm via `InstallDir` / `Version` without needing to know which packages are
+present. It is written in the native 64-bit registry view and removed when the
+last package at that version is uninstalled. The package's `ProductCode` is not
+stored here — each MSI registers its own under the standard Add/Remove Programs
+(`HKLM\...\Uninstall\{ProductCode}`) hive.
+
+A default install also removes the legacy ROCm DLL names from
+`C:\Windows\System32\` so they cannot shadow the copies under `bin\`; see
+[Legacy System32 DLLs](#legacy-system32-dlls).
 
 ### Optional: Long Path Support
 
@@ -63,6 +90,29 @@ The installer checks whether `LongPathsEnabled` was already set to `1` before
 installing. If it was already enabled (by the user or another installer), the
 key is left untouched on uninstall. If the ROCm installer set it, it is removed
 on uninstall.
+
+### Legacy System32 DLLs
+
+By default the installer places the ROCm DLLs only under the install dir's
+`bin\` (reachable via the machine `PATH`), and **removes** the package's legacy
+DLL names from `C:\Windows\System32\` — on both install and uninstall — so a
+stale copy left by an AMD driver, an older ROCm installer, or a prior
+`LEGACY_SYSTEM32_INSTALL=1` install cannot shadow the runtime shipped under `bin\`. For
+the `runtime` package these five names are cleaned up: `amdhip64_6.dll`,
+`amdhip64_7.dll`, `amd_comgr.dll`, `amd_comgr_2.dll`, and `rocm_kpack.dll`.
+
+To instead install those DLLs **into** `System32` (for applications that load
+ROCm DLLs from `System32` rather than from `PATH`), pass `LEGACY_SYSTEM32_INSTALL=1`:
+
+```bat
+msiexec /i amdrocm-runtime.msi /qn LEGACY_SYSTEM32_INSTALL=1
+```
+
+This copies the same five DLLs into `System32` and skips the cleanup. The two
+behaviors are mutually exclusive — a given install either scrubs the System32
+names (default) or populates them (`LEGACY_SYSTEM32_INSTALL=1`), never both. The System32
+copies written by `LEGACY_SYSTEM32_INSTALL=1` are shared, reference-counted components and
+are **not** removed when that install is later uninstalled.
 
 ## Upgrade
 
@@ -137,20 +187,23 @@ reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /
 
 ### Legacy DLL conflicts
 
-Older ROCm installers placed DLLs such as `amdhip64_6.dll` directly into
-`C:\Windows\System32\`, where they take precedence over the copies in Program
-Files. The installer removes them automatically. If problems persist, check
-manually:
+DLLs such as `amdhip64_6.dll` in `C:\Windows\System32\` take precedence over the
+copies in Program Files and can shadow the installed runtime. A default install
+removes these names from `System32` automatically (see
+[Legacy System32 DLLs](#legacy-system32-dlls)), so a plain reinstall or repair
+clears a stale copy:
+
+```bat
+msiexec /fvomus amdrocm-runtime.msi /qn
+```
+
+A System32 copy only persists intentionally when it was placed by
+`LEGACY_SYSTEM32_INSTALL=1` (those are left in place on uninstall). To confirm what is
+present:
 
 ```bat
 dir C:\Windows\System32\amdhip64_*.dll
 dir C:\Windows\System32\amd_comgr_*.dll
-```
-
-Delete any files found, then repair the installation:
-
-```bat
-msiexec /fvomus amdrocm-runtime.msi /qn
 ```
 
 ## See Also

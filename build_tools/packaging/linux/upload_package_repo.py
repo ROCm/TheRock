@@ -7,8 +7,11 @@
 Upload native Linux package repositories to S3.
 
 Expects ``--package-dir`` to already contain repo metadata from
-``build_package_repo.py`` (``dists/`` or ``repodata/``). Uploads packages
-with optional dedupe and always re-uploads metadata (Issue #6540).
+``build_package_repo.py`` (``dists/`` or ``repodata/``). CI uploads always
+overwrite ``.deb`` / ``.rpm`` objects (dedupe off) so a workflow re-run on the
+same ``run_id`` cannot leave stale packages next to fresh ``repodata`` /
+``Packages``. ``upload_to_s3(..., dedupe=True)`` remains available for callers
+that explicitly want skip-if-exists.
 
 CI flow (``multi_arch_build_native_linux_packages.yml``)::
 
@@ -212,9 +215,10 @@ def _resolve_upload_target(
 ) -> tuple[str, str, str, bool]:
     """Resolve S3 destination and install URL for a native package upload.
 
-    Dedupe is always enabled for CI uploads: re-runs share the same S3 prefix
-    under ``WorkflowOutputRoot``. Only ``.deb`` / ``.rpm`` objects are skipped
-    when already present; metadata is rebuilt locally and re-uploaded each run.
+    Re-runs share the same S3 prefix under ``WorkflowOutputRoot``. Dedupe is
+    **off** for CI so rebuilt ``.deb`` / ``.rpm`` files overwrite objects from
+    an earlier attempt (same ``run_id``). Leaving skip-if-exists on caused
+    ``dnf``/``apt`` size mismatches: new ``repodata`` with old package bytes.
 
     Args:
         args: Parsed CLI namespace (must include ``run_id``).
@@ -222,12 +226,12 @@ def _resolve_upload_target(
 
     Returns:
         ``(bucket, prefix, install_url, dedupe)`` where ``dedupe`` is always
-        ``True`` for workflow-driven uploads.
+        ``False`` for workflow-driven uploads.
     """
     root = WorkflowOutputRoot.from_workflow_run(run_id=args.run_id, platform="linux")
     loc = root.native_linux_packages(pkg_type)
     install_url = _package_install_url(loc.bucket, loc.relative_path, pkg_type)
-    return loc.bucket, loc.relative_path, install_url, True
+    return loc.bucket, loc.relative_path, install_url, False
 
 
 def main() -> None:
