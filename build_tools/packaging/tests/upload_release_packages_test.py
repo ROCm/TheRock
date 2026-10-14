@@ -226,6 +226,7 @@ class OverwriteGuardTest(unittest.TestCase):
         "therock-repo-amd-rc-pytorch",
         f"v5/rocm/pytorch/whl-next/torch/{TORCH}",
     )
+    TARBALL_DEST = ("therock-repo-amd-rc-core", f"v5/rocm/core/tarball/{TARBALL}")
 
     def _upload(self, client, execute, allow_overwrite=False):
         with tempfile.TemporaryDirectory() as tmp:
@@ -261,16 +262,17 @@ class OverwriteGuardTest(unittest.TestCase):
     def test_existing_files_are_skipped(self):
         for execute in (True, False):
             with self.subTest(execute=execute):
-                client = FakeS3Client(existing=[self.TORCH_DEST])
+                client = FakeS3Client(existing=[self.TORCH_DEST, self.TARBALL_DEST])
                 output = self._upload(client, execute=execute)
-                self.assertIn(
-                    f"[SKIP] Already exists: s3://{'/'.join(self.TORCH_DEST)}", output
-                )
-                self.assertNotIn(self.TORCH_DEST, client.uploaded)
+                for dest in (self.TORCH_DEST, self.TARBALL_DEST):
+                    self.assertIn(
+                        f"[SKIP] Already exists: s3://{'/'.join(dest)}", output
+                    )
+                    self.assertNotIn(dest, client.uploaded)
                 if execute:
-                    self.assertEqual(len(client.uploaded), 2)
+                    self.assertEqual(len(client.uploaded), 1)
                 else:
-                    self.assertEqual(output.count("[DRY-RUN] Would upload"), 2)
+                    self.assertEqual(output.count("[DRY-RUN] Would upload"), 1)
 
     def test_allow_overwrite_skips_the_check(self):
         client = FakeS3Client(existing=[self.TORCH_DEST], error_code="403")

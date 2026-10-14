@@ -185,7 +185,6 @@ def upload_python_files(
         bucket_name: S3 bucket name
         bucket_prefix: S3 bucket prefix (e.g., 'v3/whl/')
         execute: If False, only show what would be uploaded (dry-run)
-        skip_existing: If True, leave files already in the bucket untouched (dry-run too)
 
     Returns:
         Number of files uploaded (or would be uploaded)
@@ -307,7 +306,6 @@ def upload_tarball_files(
         bucket_name: S3 bucket name
         bucket_prefix: S3 bucket prefix (e.g., 'v3/tarball/')
         execute: If False, only show what would be uploaded (dry-run)
-        skip_existing: If True, leave files already in the bucket untouched (dry-run too)
 
     Returns:
         Number of tarball files uploaded (or would be uploaded)
