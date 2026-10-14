@@ -8,6 +8,8 @@ import concurrent.futures
 import hashlib
 import importlib.util
 import json
+import os
+import traceback
 from pathlib import Path
 import platform
 import sys
@@ -26,6 +28,39 @@ def main():
     args = parser.parse_args()
     fda = load_fetcher("fixed")
     sys.modules["fetch_dvc_artifacts"] = fda
+    real_pull = fda.pull
+
+    def traced_pull(*args, **kwargs):
+        messages = []
+        original_log = kwargs.get("log", print)
+
+        def log(message):
+            messages.append(message)
+            original_log(message)
+
+        kwargs["log"] = log
+        try:
+            return real_pull(*args, **kwargs)
+        except Exception:
+            print("\n".join(messages))
+            raise
+
+    fda.pull = traced_pull
+    real_cache_lock = fda._cache_lock
+    lock_observations = []
+
+    def traced_cache_lock(cache_dir, md5):
+        path = fda._cache_path(cache_dir, md5) if cache_dir is not None else None
+        lock = real_cache_lock(cache_dir, md5)
+        lock_observations.append({
+            "path": str(path),
+            "resolved": os.path.normcase(str(path.resolve())) if path else None,
+            "lock": id(lock),
+            "thread": threading.get_ident(),
+        })
+        return lock
+
+    fda._cache_lock = traced_cache_lock
     spec = importlib.util.spec_from_file_location(
         "fixed_tests", ROOT / "fixed/fetch_dvc_artifacts_test.py"
     )
@@ -49,6 +84,7 @@ def main():
     payload = b"tiny deterministic tensor payload"
     md5 = hashlib.md5(payload, usedforsecurity=False).hexdigest()
     for iteration in range(100):
+        lock_observations.clear()
         with tempfile.TemporaryDirectory(
             prefix="toga-7-fixed-pull-", dir=args.directory
         ) as tmp:
@@ -79,6 +115,7 @@ def main():
                     file.write(payload)
 
             fake = S3()
+            messages = []
             with mock.patch.object(fda, "_make_s3_client", return_value=fake):
                 with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
                     futures = [
@@ -87,7 +124,7 @@ def main():
                             project,
                             jobs=12,
                             cache_dir=cache,
-                            log=lambda _: None,
+                            log=messages.append,
                         )
                         for project in projects
                     ]
@@ -102,7 +139,13 @@ def main():
             passed &= not list(root.rglob("*.tmp"))
             metadata["synthetic_rounds"] += 1
             if not passed:
-                metadata["synthetic_failures"].append(iteration)
+                metadata["synthetic_failures"].append({
+                    "iteration": iteration,
+                    "downloads": fake.calls,
+                    "results": [vars(r) for r in results],
+                    "messages": messages,
+                    "locks": lock_observations.copy(),
+                })
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(metadata, indent=2) + "\n")
     print(json.dumps(metadata, indent=2))
