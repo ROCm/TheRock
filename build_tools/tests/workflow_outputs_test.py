@@ -170,14 +170,14 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
         loc = self.root.native_linux_packages("deb")
         self._assert_relative_path(loc, "99999-linux/packages/deb")
 
-    def test_native_linux_repo_package(self):
-        loc = self.root.native_linux_repo_package("deb", "ubuntu2404")
+    def test_amdrepos_package(self):
+        loc = self.root.amdrepos_package("ubuntu2404", "nightly", "deb")
         self._assert_relative_path(
             loc,
-            "99999-linux/packages/deb/repo/ubuntu2404/amdrocm-repo.deb",
+            "99999-linux/amdrepos/ubuntu2404/amdrocm-repo-nightly.deb",
         )
 
-    def test_native_linux_repo_package_all_profiles(self):
+    def test_amdrepos_package_all_profiles_and_tiers(self):
         cases = [
             ("deb", "ubuntu2404"),
             ("rpm", "rhel8"),
@@ -185,32 +185,25 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
             ("rpm", "sles16"),
         ]
         for pkg_type, os_profile in cases:
-            with self.subTest(pkg_type=pkg_type, os_profile=os_profile):
-                loc = self.root.native_linux_repo_package(pkg_type, os_profile)
-                self._assert_relative_path(
-                    loc,
-                    f"99999-linux/packages/{pkg_type}/repo/{os_profile}"
-                    f"/amdrocm-repo.{pkg_type}",
-                )
+            for tier in ("stable", "stablerc", "nightly"):
+                with self.subTest(pkg_type=pkg_type, os_profile=os_profile, tier=tier):
+                    loc = self.root.amdrepos_package(os_profile, tier, pkg_type)
+                    self._assert_relative_path(
+                        loc,
+                        f"99999-linux/amdrepos/{os_profile}"
+                        f"/amdrocm-repo-{tier}.{pkg_type}",
+                    )
 
-    def test_repo_package_sits_outside_the_package_index(self):
-        # deb indexes dists/ + pool/ and rpm indexes x86_64/. Every profile's
-        # package has the same package name, so none may land in an index.
-        for pkg_type, index_dirs in [
-            ("deb", ("dists", "pool")),
-            ("rpm", ("x86_64",)),
-        ]:
+    def test_amdrepos_package_is_outside_the_package_repositories(self):
+        # Release promotion copies packages/<pkg_type>/ recursively. The
+        # bootstrap package must not ride along, so it is published separately.
+        for pkg_type in ("deb", "rpm"):
             with self.subTest(pkg_type=pkg_type):
                 packages = self.root.native_linux_packages(pkg_type)
-                repo_pkg = self.root.native_linux_repo_package(pkg_type, "ubuntu2404")
-                # Shares the per-run package prefix ...
-                self.assertTrue(
+                repo_pkg = self.root.amdrepos_package("ubuntu2404", "nightly", pkg_type)
+                self.assertFalse(
                     repo_pkg.relative_path.startswith(packages.relative_path + "/")
                 )
-                # ... but never sits under an index directory.
-                tail = repo_pkg.relative_path[len(packages.relative_path) + 1 :]
-                for index_dir in index_dirs:
-                    self.assertFalse(tail.startswith(index_dir + "/"))
 
     # -- Python packages --
 
@@ -270,7 +263,7 @@ class TestWorkflowOutputRootLocationsExternalRepo(unittest.TestCase):
             "Fork-TheRock/12345-linux/logs/gfx94X-dcgpu",
         )
 
-    def test_native_linux_repo_package_with_external_repo(self):
+    def test_amdrepos_package_with_external_repo(self):
         # external_repo is non-empty only for 'ci' from a fork or a repository
         # other than ROCm/TheRock (therock-ci-artifacts-external). prerelease and
         # nightly have their own buckets with an empty external_repo; release
@@ -281,10 +274,10 @@ class TestWorkflowOutputRootLocationsExternalRepo(unittest.TestCase):
             run_id="12345",
             platform="linux",
         )
-        loc = root.native_linux_repo_package("rpm", "rhel10")
+        loc = root.amdrepos_package("rhel10", "stablerc", "rpm")
         self.assertEqual(
             loc.relative_path,
-            "Fork-TheRock/12345-linux/packages/rpm/repo/rhel10/amdrocm-repo.rpm",
+            "Fork-TheRock/12345-linux/amdrepos/rhel10/amdrocm-repo-stablerc.rpm",
         )
 
 

@@ -2,20 +2,24 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-r"""Publish a built amdrocm-repo package to the per-run outputs.
+r"""Upload a built amdrocm-repo package to the per-run outputs.
 
-The destination is ``WorkflowOutputRoot.native_linux_repo_package()``, beside
-the package index (see that method for the layout). Release promotion
-(``publish_rocm_to_release_buckets.py``) copies it with the rest of the per-run
-``packages/<format>/`` tree.
+Not to be confused with ``upload_package_repo.py``, which uploads the package
+repository itself (the content packages and their index).
+
+The destination is ``WorkflowOutputRoot.amdrepos_package()`` (see that method
+for the layout). It sits outside ``packages/<format>/``, so release promotion
+(``publish_rocm_to_release_buckets.py``) does not copy it. Publishing it to
+repo.amd.com is a separate step.
 
 The bucket and prefix come from the CI environment: ``GITHUB_REPOSITORY``,
 ``RELEASE_TYPE`` and the event payload used for fork detection. The ``release``
-line has no artifacts bucket and raises; the publishing job does not run for it.
+line has no artifacts bucket and raises; the upload job does not run for it.
 
 Usage:
-  python build_tools/packaging/linux/publish_repo_package.py \
-      --file repo-package-out/amdrocm-repo-10.0.0-1.stable.el10.noarch.rpm \
+  python build_tools/packaging/linux/upload_amdrepos_package.py \
+      --dest-dir repo-package-out \
+      --tier stablerc \
       --run-id 12345678901 \
       --os-profile rhel10 \
       --pkg-type rpm
@@ -48,12 +52,26 @@ _OS_PROFILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 # staging directory. \Z (not $) so a trailing newline is not accepted.
 _RUN_ID_RE = re.compile(r"^[0-9]+\Z")
 
+# The tier becomes part of the object's file name (stable, stablerc, nightly).
+# Lowercase letters and digits only, so it cannot add a path segment.
+_TIER_RE = re.compile(r"^[a-z][a-z0-9]*\Z")
+
 
 def parse_args(argv=None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Publish an amdrocm-repo package to the per-run outputs.",
+        description="Upload an amdrocm-repo package to the per-run outputs.",
     )
-    p.add_argument("--file", required=True, type=Path, help="Built package to upload")
+    p.add_argument(
+        "--dest-dir",
+        required=True,
+        type=Path,
+        help="Builder output directory holding exactly one built package",
+    )
+    p.add_argument(
+        "--tier",
+        required=True,
+        help="Repository tier, used in the uploaded file name (e.g. 'nightly')",
+    )
     p.add_argument(
         "--run-id",
         required=True,
@@ -66,7 +84,7 @@ def parse_args(argv=None) -> argparse.Namespace:
         "--pkg-type",
         required=True,
         choices=["deb", "rpm"],
-        help="Package type, used as the published file extension",
+        help="Package type, used to find the package and as the file extension",
     )
     p.add_argument(
         "--output-dir",
@@ -84,31 +102,48 @@ def parse_args(argv=None) -> argparse.Namespace:
         p.error(f"--run-id must be numeric: {args.run_id!r}")
     if not _OS_PROFILE_RE.match(args.os_profile):
         p.error(f"--os-profile has an unexpected format: {args.os_profile!r}")
-    if not args.file.is_file():
-        p.error(f"--file is not a file: {args.file}")
+    if not _TIER_RE.match(args.tier):
+        p.error(f"--tier has an unexpected format: {args.tier!r}")
+    if not args.dest_dir.is_dir():
+        p.error(f"--dest-dir is not a directory: {args.dest_dir}")
     return args
 
 
-def publish(args: argparse.Namespace) -> str:
-    """Upload the file to its per-run location. Returns the object key."""
+def find_package(dest_dir: Path, pkg_type: str) -> Path:
+    """Return the single built package in ``dest_dir``.
+
+    One build produces one package, so anything other than exactly one match is
+    an error rather than a guess about which file to upload.
+    """
+    built = sorted(dest_dir.glob(f"*.{pkg_type}"))
+    if len(built) != 1:
+        raise ValueError(
+            f"expected exactly one .{pkg_type} in {dest_dir}, found {len(built)}"
+        )
+    return built[0]
+
+
+def upload(args: argparse.Namespace) -> str:
+    """Upload the built package to its per-run location. Returns the object key."""
+    package = find_package(args.dest_dir, args.pkg_type)
     root = WorkflowOutputRoot.from_workflow_run(run_id=args.run_id, platform="linux")
-    dest = root.native_linux_repo_package(args.pkg_type, args.os_profile)
+    dest = root.amdrepos_package(args.os_profile, args.tier, args.pkg_type)
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
     # Log where the file actually goes: with --output-dir that is a local path,
     # and an s3:// URI would describe an upload that did not happen.
     target = (
         dest.local_path(args.output_dir) if args.output_dir is not None else dest.s3_uri
     )
-    action = "[DRY RUN] Would publish" if args.dry_run else "Uploading"
-    print(f"{action} {args.file} -> {target}")
-    backend.upload_file(args.file, dest)
+    action = "[DRY RUN] Would upload" if args.dry_run else "Uploading"
+    print(f"{action} {package} -> {target}")
+    backend.upload_file(package, dest)
     if not args.dry_run:
-        print(f"Published: {target}")
+        print(f"Uploaded: {target}")
     return dest.relative_path
 
 
 def main(argv=None) -> None:
-    publish(parse_args(argv))
+    upload(parse_args(argv))
 
 
 if __name__ == "__main__":

@@ -268,27 +268,28 @@ class WorkflowOutputRoot:
             self.bucket, f"{self.prefix}/logs/packaging/{pkg_type}/index.html"
         )
 
-    def native_linux_repo_package(
-        self, pkg_type: str, os_profile: str
+    def amdrepos_package(
+        self, os_profile: str, tier: str, pkg_type: str
     ) -> StorageLocation:
         """Location for the ``amdrocm-repo`` bootstrap package.
 
-        ``{run_id}-linux/packages/{pkg_type}/repo/{os_profile}/amdrocm-repo.{pkg_type}``
-        (e.g. ``12345678901-linux/packages/deb/repo/ubuntu2404/amdrocm-repo.deb``).
+        ``{run_id}-linux/amdrepos/{os_profile}/amdrocm-repo-{tier}.{pkg_type}``
+        (e.g. ``12345678901-linux/amdrepos/ubuntu2404/amdrocm-repo-nightly.deb``).
 
-        The package is fetched by URL, so it sits beside the repository index
-        rather than in it: every profile's package has the same package name, so
-        indexing them together would collide. The object name is fixed so the
-        download URL does not change with the package version.
+        Mirrors the ``amdrepos/<distro>/`` folder on repo.amd.com, which holds
+        the package for every tier side by side, so the tier is part of the file
+        name. The name is fixed per tier so the download URL does not change
+        with the package version. It sits outside ``packages/``, so promoting
+        the package repositories to the release buckets does not carry it.
 
         Args:
-            pkg_type: Package type ('deb' or 'rpm').
             os_profile: Target distro profile (e.g. 'ubuntu2404', 'rhel10').
+            tier: Repository tier (e.g. 'stable', 'stablerc', 'nightly').
+            pkg_type: Package type ('deb' or 'rpm').
         """
         return StorageLocation(
             self.bucket,
-            f"{self.prefix}/packages/{pkg_type}/repo/{os_profile}"
-            f"/amdrocm-repo.{pkg_type}",
+            f"{self.prefix}/amdrepos/{os_profile}/amdrocm-repo-{tier}.{pkg_type}",
         )
 
     # -- Python packages --------------------------------------------------------

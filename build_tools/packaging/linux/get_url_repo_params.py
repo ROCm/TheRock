@@ -617,21 +617,28 @@ def cmd_repo_params(args: argparse.Namespace) -> int:
     """Emit every parameter the amdrocm-repo build matrix needs, in one output.
 
     Outputs: ``os_profiles`` and ``images`` (JSON, the matrix), then the stream
-    the build line configures and what follows from it -- ``stream``,
+    the build line configures and what follows from it -- ``stream``, ``tier``,
     ``repo_base_url``, ``gpg_key_url``, ``repo_sub_folder``. A line with no
-    public stream gets all four empty, which callers read as "no package for
+    public stream gets all five empty, which callers read as "no package for
     this line"; the matrix is still emitted.
     """
     # Deferred: build_repo_package imports jinja2 at module level, and this
     # script's other subcommands run in a workflow job that installs no Python
     # packages. Only this subcommand needs the builder.
-    from build_repo_package import is_signed, list_profiles, stream_shape
+    from build_repo_package import (
+        REPO_ID_PREFIX,
+        is_signed,
+        list_profiles,
+        repo_id,
+        stream_shape,
+    )
 
     profiles = list_profiles(args.pkg_type)
     outputs = {
         "os_profiles": json.dumps(profiles),
         "images": json.dumps(get_container_image_map(profiles)),
         "stream": "",
+        "tier": "",
         "repo_base_url": "",
         "gpg_key_url": "",
         "repo_sub_folder": "",
@@ -645,6 +652,10 @@ def cmd_repo_params(args: argparse.Namespace) -> int:
             )
             return 1
         outputs["stream"] = stream
+        # Names the stream's package in the upload folder, which holds every
+        # stream side by side: the repo file stem without its prefix, so rc
+        # is "stablerc".
+        outputs["tier"] = repo_id(stream).removeprefix(f"{REPO_ID_PREFIX}-")
         outputs["repo_base_url"] = get_public_repo_base_url(args.release_type)
         outputs["gpg_key_url"] = get_public_repo_gpg_key_url(
             args.release_type, signed=is_signed(stream)
@@ -944,9 +955,9 @@ def main(argv: list[str] | None = None) -> int:
     p_rp = subparsers.add_parser(
         "get-repo-params",
         help=(
-            "Print os_profiles=, images=, stream=, repo_base_url=, gpg_key_url= and "
-            "repo_sub_folder= for an amdrocm-repo build. The last four are empty for "
-            "a line with no public repository (e.g. ci/dev)."
+            "Print os_profiles=, images=, stream=, tier=, repo_base_url=, "
+            "gpg_key_url= and repo_sub_folder= for an amdrocm-repo build. The last "
+            "five are empty for a line with no public repository (e.g. ci/dev)."
         ),
     )
     p_rp.add_argument(

@@ -598,6 +598,7 @@ _REPO_PARAMS_KEYS = {
     "os_profiles",
     "images",
     "stream",
+    "tier",
     "repo_base_url",
     "gpg_key_url",
     "repo_sub_folder",
@@ -631,6 +632,7 @@ class GetRepoParamsTest(unittest.TestCase):
             get_url_repo_params.get_container_image_map(["rhel8", "rhel10", "sles16"]),
         )
         self.assertEqual(out["stream"], "nightly")
+        self.assertEqual(out["tier"], "nightly")
         self.assertEqual(
             out["repo_base_url"], "https://nightly.repo.amd.com/rocm/core/packages"
         )
@@ -640,10 +642,10 @@ class GetRepoParamsTest(unittest.TestCase):
 
     def test_flat_streams_are_signed_with_no_build_folder(self):
         cases = {
-            "release": ("stable", "https://stable.repo.amd.com/rocm"),
-            "prerelease": ("rc", "https://rc.repo.amd.com/rocm"),
+            "release": ("stable", "stable", "https://stable.repo.amd.com/rocm"),
+            "prerelease": ("rc", "stablerc", "https://rc.repo.amd.com/rocm"),
         }
-        for release_type, (stream, root) in cases.items():
+        for release_type, (stream, tier, root) in cases.items():
             with self.subTest(release_type=release_type):
                 code, output = self._run("deb", release_type)
                 self.assertEqual(code, 0)
@@ -651,6 +653,7 @@ class GetRepoParamsTest(unittest.TestCase):
                 self.assertEqual(set(out), _REPO_PARAMS_KEYS)
                 self.assertEqual(json.loads(out["os_profiles"]), ["ubuntu2404"])
                 self.assertEqual(out["stream"], stream)
+                self.assertEqual(out["tier"], tier)
                 self.assertEqual(out["repo_base_url"], f"{root}/core/packages")
                 self.assertEqual(out["gpg_key_url"], f"{root}/gpg/packages.gpg")
                 self.assertEqual(out["repo_sub_folder"], "")
@@ -661,8 +664,30 @@ class GetRepoParamsTest(unittest.TestCase):
         out = _outputs(output)
         self.assertEqual(set(out), _REPO_PARAMS_KEYS)
         self.assertEqual(json.loads(out["os_profiles"]), ["ubuntu2404"])
-        for key in ("stream", "repo_base_url", "gpg_key_url", "repo_sub_folder"):
+        for key in (
+            "stream",
+            "tier",
+            "repo_base_url",
+            "gpg_key_url",
+            "repo_sub_folder",
+        ):
             self.assertEqual(out[key], "", key)
+
+    def test_tier_names_each_line_explicitly(self):
+        # The tier becomes the uploaded file name (amdrocm-repo-<tier>.<fmt>),
+        # so pin it per line rather than deriving the expectation the same way
+        # the code does. rc's tier is "stablerc", not its stream name.
+        cases = {
+            "release": "stable",
+            "prerelease": "stablerc",
+            "nightly": "nightly",
+            "ci": "",
+        }
+        for release_type, tier in cases.items():
+            with self.subTest(release_type=release_type):
+                code, output = self._run("rpm", release_type)
+                self.assertEqual(code, 0)
+                self.assertEqual(_outputs(output)["tier"], tier)
 
     def test_hostile_run_id_on_a_build_id_stream_writes_nothing(self):
         code, output = self._run("deb", "nightly", run_id="1\nEOF_mag1c\ninjected=yes")
@@ -688,6 +713,7 @@ class GetRepoParamsTest(unittest.TestCase):
         self.assertEqual(code, 0)
         out = _outputs(output)
         self.assertEqual(out["stream"], "weekly")
+        self.assertEqual(out["tier"], "weekly")
         self.assertRegex(out["repo_sub_folder"], r"^\d{8}-12345$")
         self.assertEqual(out["gpg_key_url"], "")
 
