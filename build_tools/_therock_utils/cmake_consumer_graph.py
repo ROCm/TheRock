@@ -111,9 +111,9 @@ _DECLARATION_KEYWORDS = (
     _DECLARATION_FLAGS | _DECLARATION_ONE_VALUE_ARGS | _DECLARATION_MULTI_VALUE_ARGS
 )
 
-# Keyword vocabulary of therock_provide_artifact(slice_name ...); mirrors the
-# cmake_parse_arguments in cmake/therock_artifacts.cmake. Used to split out the
-# SUBPROJECT_DEPS list for the source-dir map.
+# Keyword vocabulary of therock_provide_artifact(); mirrors the
+# cmake_parse_arguments signature in cmake/therock_artifacts.cmake. Used to
+# split out the SUBPROJECT_DEPS list for the source-dir map.
 _PROVIDE_ARTIFACT_KEYWORDS = frozenset(
     {"TARGET_NEUTRAL", "DESCRIPTOR", "DISTRIBUTION", "COMPONENTS", "SUBPROJECT_DEPS"}
 )

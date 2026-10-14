@@ -10,6 +10,8 @@ from pathlib import Path
 import pytest
 
 from _therock_utils.cmake_consumer_graph import (
+    _DECLARATION_KEYWORDS,
+    _PROVIDE_ARTIFACT_KEYWORDS,
     AnalysisError,
     RepositoryAnalyzer,
     compare_graphs,
@@ -629,3 +631,47 @@ def test_git_ls_files_failure_raises(tmp_path: Path) -> None:
 
     with pytest.raises(AnalysisError, match="git ls-files failed"):
         RepositoryAnalyzer(tmp_path).analyze()
+
+
+def _parse_argv_keywords(cmake_text: str, function_name: str) -> set[str]:
+    """Union the quoted keyword lists of a function's cmake_parse_arguments call."""
+    func = re.search(r"function\(\s*" + re.escape(function_name) + r"\b", cmake_text)
+    assert func is not None, f"function({function_name} ...) not found"
+    call = re.search(
+        r"cmake_parse_arguments\((.*?)\)", cmake_text[func.end() :], re.DOTALL
+    )
+    assert (
+        call is not None
+    ), f"cmake_parse_arguments(...) not found after function({function_name})"
+    keywords: set[str] = set()
+    for quoted in re.findall(r'"([^"]*)"', call.group(1)):
+        keywords.update(token for token in quoted.split(";") if token)
+    return keywords
+
+
+@pytest.mark.parametrize(
+    "cmake_relpath, function_name, expected",
+    [
+        (
+            "cmake/therock_artifacts.cmake",
+            "therock_provide_artifact",
+            _PROVIDE_ARTIFACT_KEYWORDS,
+        ),
+        (
+            "cmake/therock_subproject.cmake",
+            "therock_cmake_subproject_declare",
+            _DECLARATION_KEYWORDS,
+        ),
+    ],
+)
+def test_keyword_sets_match_cmake_parse_arguments(
+    cmake_relpath: str, function_name: str, expected: set[str]
+) -> None:
+    # Skips outside a git checkout.
+    repo_root = Path(__file__).resolve().parents[2]
+    cmake_file = repo_root / cmake_relpath
+    if not cmake_file.exists():
+        pytest.skip(f"not a TheRock checkout with {cmake_relpath}")
+
+    parsed = _parse_argv_keywords(cmake_file.read_text(encoding="utf-8"), function_name)
+    assert parsed == set(expected)

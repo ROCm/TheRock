@@ -40,7 +40,6 @@ $ python test_tools/determine_rocm_test_dependencies.py --changed-projects rocSP
 """
 
 import argparse
-import functools
 import json
 import sys
 import tomllib
@@ -126,20 +125,17 @@ _SUBTREE_ALIAS_OVERRIDES = {
 _EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
 
 
-@functools.lru_cache(maxsize=1)
-def _load_subtree_alias_map() -> dict[str, list[str]]:
+def _load_subtree_alias_map(therock_dir: Path | None = None) -> dict[str, list[str]]:
     """Subtree -> graph-key(s), from the generated map plus hand overrides.
 
     The generated map (test_tools/therock_subtree_map.json) covers every subtree
     the parser derives from EXTERNAL_SOURCE_DIR; _SUBTREE_ALIAS_OVERRIDES supplies
-    what the parser can't derive, and wins on any shared key. Keys are lowercased to match
-    the lookup in _normalize_changed_project. Read script-relative so selection
-    works from a clean checkout.
-
-    Loaded lazily (and cached) rather than at import so `--help` and the other
-    subcommands still work if the committed map is temporarily missing.
+    what the parser can't derive, and wins on any shared key. Keys are lowercased
+    to match the lookup in _normalize_changed_project. `therock_dir` selects which
+    checkout's test_tools/ copy is read (None = the copy next to this tool), so
+    --therock-dir governs subtree resolution the same way it governs the graph.
     """
-    map_path = _TEST_TOOLS_DIR / _SUBTREE_MAP_NAME
+    map_path = _test_tools_file(_SUBTREE_MAP_NAME, therock_dir)
     if not map_path.exists():
         raise FileNotFoundError(
             f"Subtree map not found at {map_path}.\n"
@@ -578,9 +574,11 @@ def list_subprojects(therock_dir: Path | None = None, show_deps: bool = False):
     return sorted(graph.keys())
 
 
-def _normalize_changed_project(project: str) -> list[str]:
+def _normalize_changed_project(
+    project: str, therock_dir: Path | None = None
+) -> list[str]:
     """Normalize CI subtree identifiers to consumer-graph keys for the CLI."""
-    subtree_alias_map = _load_subtree_alias_map()
+    subtree_alias_map = _load_subtree_alias_map(therock_dir)
     project_lower = project.lower()
     if project_lower in subtree_alias_map:
         return list(subtree_alias_map[project_lower])
@@ -696,7 +694,7 @@ def main():
         normalized = []
         for project in changed:
             try:
-                normalized.extend(_normalize_changed_project(project))
+                normalized.extend(_normalize_changed_project(project, therock_dir))
             except ValueError as e:
                 raise SystemExit(str(e)) from e
         changed = normalized

@@ -99,8 +99,18 @@ test_include = ["rocgdb-cpu"]
 """
 
 
-def _write_fixture(root: Path, graph: dict | None = None, policies: str | None = None):
-    """Populate ``root/test_tools/`` with a graph + policy file."""
+def _write_fixture(
+    root: Path,
+    graph: dict | None = None,
+    policies: str | None = None,
+    subtree_map: dict | None = None,
+):
+    """Populate ``root/test_tools/`` with a graph, policy, and subtree map.
+
+    The subtree map (subtree path -> graph key(s)) is always written so subtree
+    resolution reads it from ``--therock-dir`` rather than the committed copy;
+    it defaults to empty, in which case only _SUBTREE_ALIAS_OVERRIDES applies.
+    """
     test_tools = root / "test_tools"
     test_tools.mkdir(parents=True, exist_ok=True)
     (test_tools / "therock_consumer_graph.json").write_text(
@@ -109,12 +119,20 @@ def _write_fixture(root: Path, graph: dict | None = None, policies: str | None =
     (test_tools / "test_policies.toml").write_text(
         _POLICIES if policies is None else policies
     )
+    (test_tools / "therock_subtree_map.json").write_text(
+        json.dumps({} if subtree_map is None else subtree_map, indent=2, sort_keys=True)
+        + "\n"
+    )
 
 
-def _make_fixture(graph: dict | None = None, policies: str | None = None) -> Path:
+def _make_fixture(
+    graph: dict | None = None,
+    policies: str | None = None,
+    subtree_map: dict | None = None,
+) -> Path:
     """Create a hermetic --therock-dir fixture; return its path."""
     root = Path(tempfile.mkdtemp())
-    _write_fixture(root, graph, policies)
+    _write_fixture(root, graph, policies, subtree_map)
     return root
 
 
@@ -340,11 +358,31 @@ class TestCliInputParsing(_FixtureTestCase):
             shutil.rmtree(root, ignore_errors=True)
 
     def test_shared_rocroller_prefix_mapped(self) -> None:
-        proc = self._run("--changed-projects", "shared/rocroller", "--level", "4")
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        projects = json.loads(proc.stdout.strip())
-        self.assertIn("rocroller", projects)
-        self.assertIn("hipblaslt", projects)
+        # shared/rocroller is derived by the parser from EXTERNAL_SOURCE_DIR, so
+        # it lives in the generated subtree map rather than the overrides; the
+        # fixture supplies it to keep resolution hermetic.
+        root = _make_fixture(subtree_map={"shared/rocroller": ["rocroller"]})
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--therock-dir",
+                    str(root),
+                    "--changed-projects",
+                    "shared/rocroller",
+                    "--level",
+                    "4",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            projects = json.loads(proc.stdout.strip())
+            self.assertIn("rocroller", projects)
+            self.assertIn("hipblaslt", projects)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
 
     def test_shared_blas_prefixes_mapped(self) -> None:
         # tensilelite has no node in `graph` itself -- it is declared as a
@@ -416,7 +454,13 @@ class TestCliInputParsing(_FixtureTestCase):
             "hipkernelprovider": {"consumers": []},
             "miopenprovider": {"consumers": []},
         }
-        root = _make_fixture(graph=graph, policies="")
+        subtree_map = {
+            "dnn-providers/hipblaslt-provider": ["hipblasltprovider"],
+            "dnn-providers/hip-kernel-provider": ["hipkernelprovider"],
+            "dnn-providers/miopen-provider": ["miopenprovider"],
+            "dnn-providers/integration-tests": ["hipdnn_integration_tests"],
+        }
+        root = _make_fixture(graph=graph, policies="", subtree_map=subtree_map)
         try:
             cases = {
                 "dnn-providers/hipblaslt-provider": ["hipblasltprovider"],
@@ -511,7 +555,11 @@ class TestCliInputParsing(_FixtureTestCase):
 
     def test_composablekernel_prefix_mapped(self) -> None:
         graph = {"composable_kernel": {"consumers": []}}
-        root = _make_fixture(graph=graph, policies="")
+        root = _make_fixture(
+            graph=graph,
+            policies="",
+            subtree_map={"projects/composablekernel": ["composable_kernel"]},
+        )
         try:
             proc = subprocess.run(
                 [
@@ -538,13 +586,23 @@ class TestCliInputParsing(_FixtureTestCase):
             "amd-dbgapi": {"consumers": []},
             "hip-clr": {"consumers": []},
             "mirage": {"consumers": []},
+            "ocl-clr": {"consumers": []},
             "rdc": {"consumers": []},
             "rocjitsu": {"consumers": []},
             "rocm-kpack": {"consumers": []},
             "rocm_smi_lib": {"consumers": []},
             "rocprofiler-sdk": {"consumers": []},
         }
-        root = _make_fixture(graph=graph, policies="")
+        # Parser-derived subtree paths (the override-only paths such as
+        # projects/hip resolve through _SUBTREE_ALIAS_OVERRIDES and are omitted).
+        subtree_map = {
+            "emulation/mirage": ["mirage"],
+            "emulation/rocjitsu": ["rocjitsu"],
+            "projects/clr": ["hip-clr", "ocl-clr"],
+            "projects/rocm-smi-lib": ["rocm_smi_lib"],
+            "shared/kpack": ["rocm-kpack"],
+        }
+        root = _make_fixture(graph=graph, policies="", subtree_map=subtree_map)
         try:
             cases = {
                 "emulation/mirage": ["mirage"],
@@ -1301,6 +1359,18 @@ class TestGeneratedSubtreeMapResolution(unittest.TestCase):
         merged = _load_subtree_alias_map()
         for key, values in _SUBTREE_ALIAS_OVERRIDES.items():
             self.assertEqual(merged[key.lower()], list(values), key)
+
+    def test_therock_dir_governs_subtree_resolution(self) -> None:
+        # projects/clr has no override, so the generated map under --therock-dir
+        # decides its resolution: a fixture-only value proves the committed map is
+        # not consulted when therock_dir is passed.
+        root = _make_fixture(subtree_map={"projects/clr": ["fixture-only-key"]})
+        try:
+            self.assertEqual(
+                _normalize_changed_project("projects/clr", root), ["fixture-only-key"]
+            )
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
 
 
 if __name__ == "__main__":
