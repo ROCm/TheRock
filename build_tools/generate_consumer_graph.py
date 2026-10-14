@@ -11,9 +11,13 @@ three committed files:
 * ``test_tools/therock_subtree_map.json`` — each external source subtree mapped to the
   graph key(s) built from it.
 * ``test_tools/therock_source_dir_map.json`` — each artifact mapped to the source
-  subtree(s) its therock_provide_artifact() SUBPROJECT_DEPS build from. Informational
-  metadata; it does not replace BUILD_TOPOLOGY.toml source_paths, which are
-  hand-curated and only partly overlap.
+  subtree(s) its therock_provide_artifact() SUBPROJECT_DEPS build from. No code reads
+  this file yet; it is committed so its parser-derived artifact→subtree mapping can be
+  checked against the hand-curated BUILD_TOPOLOGY.toml source_paths, which only partly
+  overlap (see SourceDirMapVsBuildTopologyTest in build_topology_test.py). Its intended
+  consumer is BuildTopology.get_alias_to_artifact_map
+  (build_tools/_therock_utils/build_topology.py): repointing it onto this map retires
+  the derivable source_paths while keeping the non-derivable ones as hand overrides.
 
 This parser generates all three files. See cmake_consumer_graph.py for the full
 description and limitations.
@@ -39,6 +43,8 @@ THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
 CONSUMER_GRAPH_PATH = THEROCK_DIR / "test_tools" / "therock_consumer_graph.json"
 SUBTREE_MAP_PATH = THEROCK_DIR / "test_tools" / "therock_subtree_map.json"
+# Informational artifact→source-subtree map; committed and drift-gated but not yet
+# consumed by selection (see module docstring).
 SOURCE_DIR_MAP_PATH = THEROCK_DIR / "test_tools" / "therock_source_dir_map.json"
 
 

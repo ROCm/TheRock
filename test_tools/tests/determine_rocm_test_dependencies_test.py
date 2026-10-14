@@ -357,6 +357,29 @@ class TestCliInputParsing(_FixtureTestCase):
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
+    def test_missing_subtree_map_exits_cleanly(self) -> None:
+        # A missing subtree map must surface as a clean SystemExit with the
+        # loader's guidance, not an uncaught FileNotFoundError traceback.
+        root = _make_fixture()
+        (root / "test_tools" / "therock_subtree_map.json").unlink()
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--therock-dir",
+                    str(root),
+                    "--changed-projects",
+                    "projects/clr",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertIn("Subtree map not found", proc.stderr)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
     def test_shared_rocroller_prefix_mapped(self) -> None:
         # shared/rocroller is derived by the parser from EXTERNAL_SOURCE_DIR, so
         # it lives in the generated subtree map rather than the overrides; the
@@ -1289,8 +1312,9 @@ class TestGeneratedSubtreeMapResolution(unittest.TestCase):
     with _SUBTREE_ALIAS_OVERRIDES."""
 
     def test_resolution_keeps_all_old_aliases(self) -> None:
+        alias_map = _load_subtree_alias_map()
         for key, old in _PREVIOUS_ALIASES.items():
-            new = set(_normalize_changed_project(key))
+            new = set(_normalize_changed_project(key, alias_map))
             self.assertTrue(
                 set(old) <= new,
                 f"{key}: new resolution {sorted(new)} drops "
@@ -1308,8 +1332,11 @@ class TestGeneratedSubtreeMapResolution(unittest.TestCase):
             "dnn-providers/miopen-provider": {"miopenprovider"},  # generated
             "emulation/mirage": {"mirage"},  # generated
         }
+        alias_map = _load_subtree_alias_map()
         for key, expected in cases.items():
-            self.assertEqual(set(_normalize_changed_project(key)), expected, key)
+            self.assertEqual(
+                set(_normalize_changed_project(key, alias_map)), expected, key
+            )
 
     def test_overrides_not_in_generated_map(self) -> None:
         # Each override must be genuinely non-derivable: the generated map either
@@ -1367,7 +1394,10 @@ class TestGeneratedSubtreeMapResolution(unittest.TestCase):
         root = _make_fixture(subtree_map={"projects/clr": ["fixture-only-key"]})
         try:
             self.assertEqual(
-                _normalize_changed_project("projects/clr", root), ["fixture-only-key"]
+                _normalize_changed_project(
+                    "projects/clr", _load_subtree_alias_map(root)
+                ),
+                ["fixture-only-key"],
             )
         finally:
             shutil.rmtree(root, ignore_errors=True)

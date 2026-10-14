@@ -575,10 +575,14 @@ def list_subprojects(therock_dir: Path | None = None, show_deps: bool = False):
 
 
 def _normalize_changed_project(
-    project: str, therock_dir: Path | None = None
+    project: str, subtree_alias_map: dict[str, list[str]]
 ) -> list[str]:
-    """Normalize CI subtree identifiers to consumer-graph keys for the CLI."""
-    subtree_alias_map = _load_subtree_alias_map(therock_dir)
+    """Normalize CI subtree identifiers to consumer-graph keys for the CLI.
+
+    The subtree alias map is passed in (loaded once by the caller) rather than
+    read here, so a multi-project selection parses the committed map a single
+    time instead of once per changed project.
+    """
     project_lower = project.lower()
     if project_lower in subtree_alias_map:
         return list(subtree_alias_map[project_lower])
@@ -691,10 +695,16 @@ def main():
         changed = flattened
 
     if changed:
+        try:
+            subtree_alias_map = _load_subtree_alias_map(therock_dir)
+        except (FileNotFoundError, ValueError) as e:
+            raise SystemExit(str(e)) from e
         normalized = []
         for project in changed:
             try:
-                normalized.extend(_normalize_changed_project(project, therock_dir))
+                normalized.extend(
+                    _normalize_changed_project(project, subtree_alias_map)
+                )
             except ValueError as e:
                 raise SystemExit(str(e)) from e
         changed = normalized
