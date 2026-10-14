@@ -372,9 +372,13 @@ def configure_triton_asan(env: dict[str, str]) -> None:
     Triton's setup.py supplies the compile sanitizer flag but not the shared
     runtime or frame pointers. Append CMake overrides after its defaults so
     the extension and build tools consistently use the ROCm Clang runtime.
+    The C++ unit tests are not part of the wheel, and CMake executes them
+    during the build to discover GoogleTest cases. Triton's prebuilt LLVM
+    poisons allocator memory, so that discovery aborts under ASan.
     """
     env["TRITON_BUILD_WITH_ASAN"] = "1"
     for cmake_arg in (
+        "-DTRITON_BUILD_UT=OFF",
         '-DCMAKE_C_FLAGS="-fsanitize=address -fno-omit-frame-pointer"',
         '-DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer"',
         "-DCMAKE_EXE_LINKER_FLAGS=-shared-libasan",

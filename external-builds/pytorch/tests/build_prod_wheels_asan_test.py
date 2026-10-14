@@ -169,6 +169,7 @@ class AsanBuildSelectionTest(unittest.TestCase):
         self.assertEqual(configured, env)
         self.assertEqual(env["TRITON_BUILD_WITH_ASAN"], "1")
         cmake_args = shlex.split(env["TRITON_APPEND_CMAKE_ARGS"])
+        self.assertIn("-DTRITON_BUILD_UT=OFF", cmake_args)
         self.assertIn(
             "-DCMAKE_C_FLAGS=-fsanitize=address -fno-omit-frame-pointer",
             cmake_args,
