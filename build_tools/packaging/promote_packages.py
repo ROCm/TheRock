@@ -13,7 +13,7 @@ It optionally also restricts which gfx target architectures are referenced by th
 package metadata.
 
 Promotion is parameterised by:
-  --src-version-type   marker to look for in source: 'rc', 'a', or 'dev'
+  --src-version-type   release type to look for in source: 'rc', 'a', or 'dev'
   --dest-version       form to apply: 'release' (strip prerelease),
                        'rc<N>' (e.g. 'rc1'), or 'a<YYYYMMDD>' (e.g. 'a20260501')
 
@@ -142,7 +142,15 @@ SRC_VERSION_PATTERNS = {
 
 
 def strip_dev_markers(text: str, keep_git: bool = False) -> str:
-    """Remove `DEV_VERSION_RE` markers from `text`, keeping the `+git<sha>.` prefix when `keep_git`."""
+    """Strip dev build markers (`DEV_VERSION_RE`) from a version string or file line.
+
+    e.g. `2.12.0+git1a2b3c4d.devrocm10.2.0.dev0.<sha>` -> `2.12.0+rocm10.2.0`,
+         `rocm[libraries]==10.2.0.dev0+<sha>` -> `rocm[libraries]==10.2.0`
+
+    `keep_git` keeps `+git<sha>.` for triton, whose released versions carry the sha
+    (`triton-3.8.0+git669b31ac.rocm10.1.0`). `rc` is stripped separately by
+    `compute_new_version_str`, because `rc\\d*` is unsafe on raw file lines.
+    """
     return DEV_VERSION_RE.sub(lambda m: (m["git"] or "") if keep_git else "", text)
 
 
@@ -415,11 +423,11 @@ def update_metadata_rocm_requires_dist(
     old_rocm_version: str,
     new_rocm_version: str,
     *,
-    new_version: Version | str | None = None,
+    new_version: Version,
     float_rocm_dependency_patch: bool = False,
 ) -> None:
     """Update ROCm references in METADATA Summary and Requires-Dist fields."""
-    strip_dev = new_version is not None and str(new_version) != str(old_version)
+    strip_dev = str(new_version) != str(old_version)
     metadata_path = (
         new_dir_path / f"{package_name_no_version}-{old_version}.dist-info" / "METADATA"
     )
@@ -432,9 +440,10 @@ def update_metadata_rocm_requires_dist(
         ) as f:
             for line in f:
                 if line.startswith("Requires-Dist:"):
-                    # Full-version pins (e.g. device wheels) carry the dev git<sha> outside the ROCm part.
-                    if new_version is not None:
-                        line = line.replace(str(old_version), str(new_version))
+                    # Pins on this wheel's own version also carry its git<sha>, which the ROCm-only replace below leaves in, e.g.:
+                    # amd-torch-device-gfx1100 == 2.14.0+git83ff71c1.rocm10.0.0rc4 -> amd-torch-device-gfx1100 == 2.14.0+rocm10.0.0
+                    # amd-torch-device-gfx942 == 2.12.0+git9ccf2fd0.devrocm10.2.0.dev0.<sha> -> amd-torch-device-gfx942 == 2.12.0+rocm10.2.0
+                    line = line.replace(str(old_version), str(new_version))
                     # Other pins still carry dev ROCm, e.g. `rocm[libraries]==10.2.0.dev0+<sha>`; triton keeps its git<sha>.
                     if strip_dev:
                         line = strip_dev_markers(
@@ -470,8 +479,12 @@ def update_metadata_rocm_requires_dist(
 def compute_new_version_str(
     version_str: str, src_version_type: str, dest_version: str, keep_git: bool = False
 ) -> str | None:
-    """Return the new version string after applying `dest_version` to `version_str`,
-    or None when `version_str` has no `src_version_type` marker to promote.
+    """Return the new version string after applying `dest_version` to `version_str`.
+
+    Returns None when nothing in `version_str` matches `src_version_type`, so there is
+    nothing to promote, e.g. `7.13.0` with `"rc"`, or `apex-1.12.0+rocm10.0.0` and
+    triton's `3.8.0+git669b31ac.rocm10.0.0` with `"dev"`. Callers then skip the
+    package and leave it as is rather than raising an error.
 
     The source prerelease segment (`src_version_type` plus any trailing digits) is
     either stripped or replaced:
@@ -1023,9 +1036,7 @@ def wheel_change_extra_files(
         else str(old_version).split("rocm")[-1]
     )
     # Lines get dev markers stripped first, so later ROCm replaces must look for the stripped form.
-    strip_dev = old_version != new_version
-    if strip_dev:
-        old_rocm_version = strip_dev_markers(old_rocm_version)
+    old_rocm_version = strip_dev_markers(old_rocm_version)
     keep_git = "+git" in str(new_version)
     new_rocm_version = (
         str(new_version)
@@ -1101,8 +1112,10 @@ def wheel_change_extra_files(
             return
 
     def strip_dev_line(line: str) -> str:
-        # version.py keeps the unnormalized dev form, e.g. `2.12.0+git9ccf2fd0.devrocm10.2.0.dev0-<sha>`.
-        return strip_dev_markers(line, keep_git) if strip_dev else line
+        # Strips dev markers off the raw line, since the old_version / old_rocm_version replaces miss these forms, e.g.:
+        # version.py:    2.12.0+git9ccf2fd0.devrocm10.2.0.dev0-<sha> -> 2.12.0+rocm10.2.0  (str(Version) is .dev0.<sha>)
+        # _rocm_init.py: check_version='10.2.0.dev0+<sha>' -> '10.2.0'  (old_rocm_version is already stripped)
+        return strip_dev_markers(line, keep_git)
 
     def rewrite_exact(line: str) -> str:
         line = strip_dev_line(line.replace(str(old_version), str(new_version)))
@@ -1147,10 +1160,6 @@ def promote_wheel(
 
     print(f"  Detected version: {original_version}")
 
-    # dev's `(?<=\+)git[0-9a-f]+\.` pattern would also strip triton's git<sha>, this is to prevent that
-    # triton-3.8.0+git669b31ac.devrocm10.2.0.dev0.<sha> -> triton-3.8.0+git669b31ac.rocm10.2.0
-    keep_git = canonicalize_name(original_wheel.name) == "triton"
-
     # Bound callback matching change_wheel_version's expected signature:
     #   callback(new_dir_path: Path, old_version: Version, new_version: Version) -> None
     callback = functools.partial(
@@ -1188,6 +1197,9 @@ def promote_wheel(
             return False
         new_base_version = str(original_version.public)
     else:  # rocm packages, and every dev wheel
+        # dev's `(?<=\+)git[0-9a-f]+\.` pattern would also strip triton's git<sha>, this is to prevent that
+        # triton-3.8.0+git669b31ac.devrocm10.2.0.dev0.<sha> -> triton-3.8.0+git669b31ac.rocm10.2.0
+        keep_git = canonicalize_name(original_wheel.name) == "triton"
         promoted = compute_new_version_str(
             str(original_version), src_version_type, dest_version, keep_git
         )

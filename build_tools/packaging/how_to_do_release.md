@@ -195,13 +195,14 @@ carry `devrocm10.2.0.dev0.<sha>`. `--src-version-type=dev` strips the
 straight to the final version. Triton keeps its `git<sha>` (its own build adds
 it to rc and nightly builds too), so torch's pin on it still resolves.
 
-| Dev version                                         | Release version                |
-| --------------------------------------------------- | ------------------------------ |
-| `torch-2.12.0+git1a2b3c4d.rocm10.0.0rc4`            | `torch-2.12.0+rocm10.0.0`      |
-| `torch-2.12.0+git1a2b3c4d.devrocm10.2.0.dev0.<sha>` | `torch-2.12.0+rocm10.2.0`      |
+| Dev version                                         | Release version                       |
+| --------------------------------------------------- | ------------------------------------- |
+| `torch-2.12.0+git1a2b3c4d.rocm10.0.0rc4`            | `torch-2.12.0+rocm10.0.0`             |
+| `torch-2.12.0+git1a2b3c4d.rocm10.0.0`               | `torch-2.12.0+rocm10.0.0`             |
+| `torch-2.12.0+git1a2b3c4d.devrocm10.2.0.dev0.<sha>` | `torch-2.12.0+rocm10.2.0`             |
 | `triton-3.8.0+git669b31ac.devrocm10.2.0.dev0.<sha>` | `triton-3.8.0+git669b31ac.rocm10.2.0` |
-| `apex-1.12.0+devrocm10.2.0.dev0.<sha>`              | `apex-1.12.0+rocm10.2.0`       |
-| `rocm_sdk_core-10.2.0.dev0+<sha>`                   | `rocm_sdk_core-10.2.0`         |
+| `apex-1.12.0+devrocm10.2.0.dev0.<sha>`              | `apex-1.12.0+rocm10.2.0`              |
+| `rocm_sdk_core-10.2.0.dev0+<sha>`                   | `rocm_sdk_core-10.2.0`                |
 
 ```bash
 python build_tools/packaging/promote_packages.py \
