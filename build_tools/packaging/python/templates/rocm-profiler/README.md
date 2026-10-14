@@ -39,6 +39,8 @@ invoking a console script will result in a `FileNotFoundError`.
   `pip install --extra-index-url <rocm_index> rocm-profiler[compute-analyze]`.
   The extra's dependencies come from PyPI; only `rocm-profiler` comes from the
   ROCm index.
+- `pyelftools` is declared when the wheel contains the `rocprof_trace_decoder`
+  Python API.
 - Versioning is centrally managed via `rocm_sdk._dist_info`.
 
 When integrated into the full ROCm packaging pipeline, this package will be
