@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 # Temporary manual branch: locally generated files, no DVC/S3 transfers.
-name: DVC cache repair comparison (manual)
+name: DVC cache fixed implementation validation (manual)
 on:
   workflow_dispatch:
 permissions:
@@ -47,9 +47,14 @@ jobs:
           validation/dvc-cache-lite/publication_stress.py
           --directory "$env:USERPROFILE/.cache/therock-dvc"
           --output results/publication-stress.json --iterations 500 --workers 12
+      - name: Verify exact fixed implementation
+        run: >-
+          python validation/dvc-cache-lite/verify_fixed.py
+          --directory "$env:USERPROFILE/.cache/therock-dvc"
+          --output results/fixed-verification.json
       - name: Upload small JSON results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: dvc-cache-repair-${{ matrix.runner }}
+          name: dvc-cache-fixed-${{ matrix.runner }}
           path: results/*.json

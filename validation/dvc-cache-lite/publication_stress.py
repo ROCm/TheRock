@@ -30,7 +30,7 @@ ROOT = Path(__file__).resolve().parent
 
 
 def load_fetcher(variant):
-    snapshot = "baseline" if variant == "baseline" else "candidate"
+    snapshot = variant if variant in ("baseline", "fixed") else "candidate"
     path = ROOT / snapshot / "build_tools/fetch_dvc_artifacts.py"
     name = "publication_" + variant
     spec = importlib.util.spec_from_file_location(name, path)
@@ -88,7 +88,7 @@ def main():
     records = []
     workers = args.workers
     payload = b"same verified tensor contents" * 100
-    for variant in ("baseline", "candidate", "direct-link", "locked-candidate"):
+    for variant in ("baseline", "candidate", "fixed"):
         fda = load_fetcher(variant)
         for iteration in range(args.iterations):
             with tempfile.TemporaryDirectory(
@@ -113,7 +113,11 @@ def main():
                     "fetcher_sha256": hashlib.sha256(
                         (
                             ROOT
-                            / ("baseline" if variant == "baseline" else "candidate")
+                            / (
+                                variant
+                                if variant in ("baseline", "fixed")
+                                else "candidate"
+                            )
                             / "build_tools/fetch_dvc_artifacts.py"
                         ).read_bytes()
                     ).hexdigest(),
