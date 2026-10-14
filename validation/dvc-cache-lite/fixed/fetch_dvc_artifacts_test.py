@@ -19,6 +19,7 @@ import os
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -713,6 +714,83 @@ class TestDirectCachePublication(unittest.TestCase):
             ):
                 fda._store_in_cache(source, cache)
             self.assertTrue(source.samefile(cache))
+
+    def test_concurrent_publication_keeps_cache_readable(self):
+        # #8505: real Windows rename/replace publication can expose a cache
+        # pathname that ordinary Python readers temporarily cannot open.
+        # Force simultaneous misses, but do not inject filesystem errors.
+        # The small payload and bounded rounds keep this in routine CI.
+        workers = 12
+        data = b"same verified tensor contents" * 100
+        real_exists = Path.exists
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            sources = [root / f"source-{i}" for i in range(workers)]
+            for source in sources:
+                source.write_bytes(data)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+                for iteration in range(100):
+                    with self.subTest(iteration=iteration):
+                        cache_file = root / f"cache-{iteration}" / "entry"
+                        gate = threading.Barrier(workers)
+                        state = threading.local()
+                        done = threading.Event()
+                        observed = threading.Event()
+                        reader_errors = []
+
+                        def synchronized_miss(path):
+                            if path == cache_file and not getattr(
+                                state, "checked", False
+                            ):
+                                present = real_exists(path)
+                                state.checked = True
+                                gate.wait(timeout=5)
+                                return present
+                            return real_exists(path)
+
+                        def read_cache():
+                            try:
+                                while not done.is_set():
+                                    if real_exists(cache_file):
+                                        contents = cache_file.read_bytes()
+                                        if contents != data:
+                                            raise AssertionError(
+                                                "incorrect published contents"
+                                            )
+                                        observed.set()
+                                    else:
+                                        time.sleep(0)
+                            except Exception as error:
+                                reader_errors.append(error)
+                                observed.set()
+
+                        reader = threading.Thread(target=read_cache, daemon=True)
+                        reader.start()
+                        try:
+                            with mock.patch.object(Path, "exists", synchronized_miss):
+                                futures = [
+                                    executor.submit(
+                                        fda._store_in_cache, source, cache_file
+                                    )
+                                    for source in sources
+                                ]
+                                # Wait for all publishers before reporting an error, so
+                                # no worker outlives the patched miss gate or temp files.
+                                concurrent.futures.wait(futures)
+                                for future in futures:
+                                    future.result()
+                            self.assertTrue(
+                                observed.wait(5), "reader did not open the cache"
+                            )
+                        finally:
+                            done.set()
+                            reader.join(timeout=5)
+                        self.assertFalse(reader.is_alive(), "cache reader did not stop")
+                        self.assertEqual(
+                            reader_errors, [], "publication denied a cache reader"
+                        )
+                        self.assertEqual(cache_file.read_bytes(), data)
+                        self.assertEqual(list(cache_file.parent.glob("*.tmp")), [])
 
     def test_cross_volume_source_uses_cache_local_link(self):
         with tempfile.TemporaryDirectory() as t:

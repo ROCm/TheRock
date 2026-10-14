@@ -52,6 +52,11 @@ jobs:
           python validation/dvc-cache-lite/verify_fixed.py
           --directory "$env:USERPROFILE/.cache/therock-dvc"
           --output results/fixed-verification.json
+      - name: Check permanent regression against older publication implementations
+        if: always()
+        run: >-
+          python validation/dvc-cache-lite/verify_publication_regression.py
+          --output results/publication-regression.json
       - name: Upload small JSON results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
