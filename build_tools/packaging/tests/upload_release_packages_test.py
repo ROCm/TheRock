@@ -18,8 +18,8 @@ from botocore.exceptions import ClientError
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from upload_release_packages import (
-    find_existing_uploads,
     infer_structured_product,
+    object_exists,
     parse_arguments,
     upload_python_files,
     upload_release_packages,
@@ -256,21 +256,21 @@ class OverwriteGuardTest(unittest.TestCase):
     def test_access_denied_is_not_treated_as_missing(self):
         client = FakeS3Client(error_code="403")
         with self.assertRaises(ClientError):
-            find_existing_uploads(client, [(Path("f"), "b", "k")])
+            object_exists(client, "b", "k")
 
-    def test_existing_file_aborts_before_any_upload(self):
+    def test_existing_files_are_skipped(self):
         for execute in (True, False):
             with self.subTest(execute=execute):
                 client = FakeS3Client(existing=[self.TORCH_DEST])
-                with self.assertRaises(SystemExit) as ctx:
-                    self._upload(client, execute=execute)
-                self.assertEqual(ctx.exception.code, 1)
-                self.assertEqual(client.uploaded, [])
-
-    def test_uploads_when_nothing_exists(self):
-        client = FakeS3Client()
-        self._upload(client, execute=True)
-        self.assertEqual(len(client.uploaded), 3)
+                output = self._upload(client, execute=execute)
+                self.assertIn(
+                    f"[SKIP] Already exists: s3://{'/'.join(self.TORCH_DEST)}", output
+                )
+                self.assertNotIn(self.TORCH_DEST, client.uploaded)
+                if execute:
+                    self.assertEqual(len(client.uploaded), 2)
+                else:
+                    self.assertEqual(output.count("[DRY-RUN] Would upload"), 2)
 
     def test_allow_overwrite_skips_the_check(self):
         client = FakeS3Client(existing=[self.TORCH_DEST], error_code="403")

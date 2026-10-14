@@ -284,12 +284,15 @@ python build_tools/packaging/upload_release_packages.py --input-dir ./promotion/
 
 ### Existing files
 
-The script never replaces a file that is already in the bucket. Before uploading,
-it checks every destination, and if any already exist it lists them and uploads
-nothing. This also runs in dry-run mode, so the dry run needs AWS credentials with
-read access (`s3:GetObject`, plus `s3:ListBucket` so missing files are reported as
-missing rather than access denied). To deliberately replace files, for example to
-finish an upload that failed partway, pass `--allow-overwrite`.
+The script never replaces a file that is already in the bucket: it prints
+`[SKIP] Already exists: s3://...` and uploads the rest. This matters when PyTorch
+is built and promoted after its ROCm release, since promoted names such as
+`torch-2.12.0+rocm10.0.0` or `apex-1.12.0+rocm10.0.0` may already be published. It
+also makes re-running an upload that failed partway safe. The check also runs in
+dry-run mode, so the dry run needs AWS credentials with read access
+(`s3:GetObject`, plus `s3:ListBucket` so missing files are reported as missing
+rather than access denied). To deliberately replace files, pass
+`--allow-overwrite`.
 
 ### Structured repo.amd.com upload
 
