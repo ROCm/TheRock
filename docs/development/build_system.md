@@ -132,8 +132,15 @@ Each sub-project, by default, uses a standard directory layout for its build:
   via the
   [`CMAKE_PROJECT_TOP_LEVEL_INCLUDES`](https://cmake.org/cmake/help/latest/variable/CMAKE_PROJECT_TOP_LEVEL_INCLUDES.html)
   facility and serves some other ancillary functions as well:
-  - Loads sub-project specific `pre` and `post` CMake file for further
-    sub-project customization needed as part of the integrated whole.
+  - Loads the sub-project-specific pre hook before language initialization and
+    schedules the post hook for the end of the top-level directory.
+  - When a declaration has `CMAKE_INCLUDES`, installs a generated
+    `CMAKE_PROJECT_INCLUDE` dispatcher. At the end of the first `project()`
+    call, after language initialization, the dispatcher applies TheRock's
+    additional includes once and then invokes an existing project-include
+    hook. That hook continues to run for every `project()` call. The dispatcher
+    and its additional includes are configure dependencies, so changes to them
+    reconfigure retained sub-project build directories.
   - Installs a [CMake dependency provider](https://cmake.org/cmake/help/latest/command/cmake_language.html#dependency-providers)
     which rewrites `find_package` calls for any packages provided as part
     of super-project deps appropriately.
