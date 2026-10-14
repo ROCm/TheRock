@@ -561,10 +561,17 @@ class TestCacheSynchronization(unittest.TestCase):
                         ("b", f"pfx/files/md5/{manifest_md5[:2]}/{manifest_md5[2:]}")
                     ] = manifest
                 fake = _FakeS3(payloads)
+                messages = []
                 with mock.patch.object(fda, "_make_s3_client", return_value=fake):
-                    result = fda.pull(
-                        project, jobs=12, cache_dir=tmp / "cache", log=lambda _: None
-                    )
+                    try:
+                        result = fda.pull(
+                            project,
+                            jobs=12,
+                            cache_dir=tmp / "cache",
+                            log=messages.append,
+                        )
+                    except fda.FetchError:
+                        self.fail("\n".join(messages))
                 self.assertEqual(result.fetched, 1)
                 self.assertEqual(result.cached, 11)
                 self.assertEqual(len(fake.calls), 2 if directory else 1)
@@ -622,6 +629,34 @@ class TestCacheSynchronization(unittest.TestCase):
             lock.release()
             del lock
             self.assertFalse(fda._cache_locks)
+
+    def test_cache_lock_is_stable_across_entry_creation_and_eviction(self):
+        with tempfile.TemporaryDirectory() as t:
+            cache_dir = Path(t) / "cache"
+            md5 = _md5_hex(b"tiny")
+            cache_file = fda._cache_path(cache_dir, md5)
+            real_resolve = Path.resolve
+
+            def resolve_directory_only(path, *args, **kwargs):
+                if path == cache_file:
+                    raise AssertionError(
+                        "cache entry resolution is unstable on Windows"
+                    )
+                return real_resolve(path, *args, **kwargs)
+
+            with mock.patch.object(Path, "resolve", resolve_directory_only):
+                lock = fda._cache_lock(cache_dir, md5)
+                cache_file.parent.mkdir(parents=True, exist_ok=True)
+                cache_file.write_bytes(b"corrupt")
+                with lock:
+                    self.assertIs(lock, fda._cache_lock(cache_dir, md5))
+                    cache_file.unlink()
+                    self.assertIs(lock, fda._cache_lock(cache_dir, md5))
+                    source = Path(t) / "source"
+                    source.write_bytes(b"tiny")
+                    os.link(source, cache_file)
+                    self.assertIs(lock, fda._cache_lock(cache_dir, md5))
+                self.assertEqual(cache_file.read_bytes(), b"tiny")
 
     def test_downloads_do_not_share_staging_file(self):
         with tempfile.TemporaryDirectory() as t:
@@ -937,7 +972,10 @@ class TestPullEndToEnd(unittest.TestCase):
 
             for name in ("a", "b"):
                 self.assertTrue(
-                    any(f"ERROR     {project / f'{name}.dvc'}:" in m for m in messages)
+                    any(
+                        f"ERROR     {project.resolve() / f'{name}.dvc'}:" in m
+                        for m in messages
+                    )
                 )
             stacks = [m for m in messages if "Traceback (most recent call last)" in m]
             self.assertEqual(len(stacks), 2)
