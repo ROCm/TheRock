@@ -96,13 +96,9 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
     generate_rules_file(pkg_info, deb_dir, build_config)
     generate_control_file(pkg_info, deb_dir, build_config)
 
-    alternatives_binaries = load_alternatives_binaries()
-    package_name = pkg_info.get("Package")
-    json_pkg_config = alternatives_binaries.get(package_name)
-
     # amdrocm-alternatives.json defines each package's maintainer scripts and controls whether they are generated.
-    if json_pkg_config is not None:
-        generate_debian_postscripts(pkg_info, deb_dir, build_config, json_pkg_config)
+    if is_postinstallscripts_available(pkg_info):
+        generate_debian_postscripts(pkg_info, deb_dir, build_config)
 
     sourcedir_list = []
     dir_list = filter_components_fromartifactory(
@@ -374,16 +370,13 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
         f.write("\n")  # Adds a blank line. For fixing missing final newline
 
 
-def generate_debian_postscripts(
-    pkg_info, deb_dir, config: PackageConfig, json_pkg_config: dict
-):
+def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
     """Generate Debian postinst/prerm maintainer scripts.
 
     Parameters:
     pkg_info: Package details parsed from a JSON file
     deb_dir: Directory where the `debian/control` file will be created
     config: Configuration object containing package metadata
-    json_pkg_config: Package alternatives configuration loaded from JSON
 
     Returns: None
     """
@@ -393,6 +386,14 @@ def generate_debian_postscripts(
     pkg_name = pkg_info.get("Package")
     if not pkg_name:
         raise ValueError("Package metadata does not contain a valid 'Package' name")
+
+    alternatives_binaries = load_alternatives_binaries()
+    json_pkg_config = alternatives_binaries.get(pkg_name)
+
+    if json_pkg_config is None:
+        raise ValueError(
+            f"No alternatives configuration found for Debian package " f"{pkg_name!r}"
+        )
 
     parts = config.rocm_version.split(".")
     if len(parts) < 3:
