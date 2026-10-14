@@ -78,17 +78,12 @@ def setup_env(env):
         env["LIBVA_DRIVERS_PATH"] = str(ROCM_SYSDEPS_LIB_PATH)
     elif platform.system() == "Windows":
         # Windows uses the vaon12 (VA-API-on-D3D12) backend. The patched libva
-        # locates vaon12_drv_video.dll relative to ROCM_PATH
-        # (<ROCM_PATH>/lib/rocm_sysdeps/bin), so no LIBVA_DRIVERS_PATH is needed.
-        # DLLs are resolved via PATH: rocdecode.dll lives in bin/, and the Mesa
-        # VA-API DLLs (rocm_sysdeps_va*.dll, vaon12_drv_video.dll) in
-        # lib/rocm_sysdeps/bin.
+        # locates vaon12_drv_video.dll relative to ROCM_PATH, so no
+        # LIBVA_DRIVERS_PATH is needed. DLLs are resolved via PATH: rocdecode.dll
+        # lives in bin/.
         BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
-        SYSDEPS_BIN_PATH = ROCM_PATH / "lib" / "rocm_sysdeps" / "bin"
-        new_path = os.pathsep.join(
-            [str(BIN_PATH), str(SYSDEPS_BIN_PATH), env.get("PATH", "")]
-        )
-        logging.info(f"++ rocdecode prepending to PATH: {BIN_PATH};{SYSDEPS_BIN_PATH}")
+        new_path = os.pathsep.join([str(BIN_PATH), env.get("PATH", "")])
+        logging.info(f"++ rocdecode prepending to PATH: {BIN_PATH}")
         env["PATH"] = new_path
     else:
         logging.info(f"++ rocdecode tests only supported on Linux and Windows")
