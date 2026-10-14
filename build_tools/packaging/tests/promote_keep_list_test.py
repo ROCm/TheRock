@@ -617,11 +617,19 @@ class DevVersionTest(unittest.TestCase):
                 "3.8.0+git669b31ac.rocm10.2.0",
             ),
             ("1.12.0+rocm10.0.0rc4", False, "1.12.0+rocm10.0.0"),
+            # Nightly ROCm: only the a<N> after rocm<ver> goes, not package alphas or shas.
+            ("2.12.0+git9ccf2fd0.rocm10.2.0a20261006", False, "2.12.0+rocm10.2.0"),
+            ("0.29.0a0+gitb7d540b2.rocm10.2.0a20260929", False, "0.29.0a0+rocm10.2.0"),
+            (
+                "3.8.0+git669b31ac.rocm10.2.0a20260929",
+                True,
+                "3.8.0+git669b31ac.rocm10.2.0",
+            ),
+            ("2.10.0+rocm7.13.0a20260430", False, "2.10.0+rocm7.13.0"),
             (f"10.2.0.dev0+{DEV_SHA}", False, "10.2.0"),
             # Nothing to strip: skipped, not an error.
             ("1.12.0+rocm10.0.0", False, None),
             ("3.8.0+git669b31ac.rocm10.0.0", True, None),
-            ("2.10.0+rocm7.13.0a20260430", False, None),
         ]
         for version, keep_git, expected in cases:
             with self.subTest(version=version):

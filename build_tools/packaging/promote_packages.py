@@ -130,6 +130,7 @@ DEV_VERSION_RE = re.compile(
     (?P<git>(?<=\+)git[0-9a-f]+\.)  # torch-family: 2.12.0+git1a2b3c4d.rocm10.0.0 (build_prod_wheels.py)
     | (?<=[+.])dev(?=rocm)          # torch-family local: +devrocm10.2.0...
     | \.dev\d+[.+-][0-9a-f]{7,40}   # ROCm: 10.2.0.dev0+<sha>, .dev0.<sha> (local), .dev0-<sha> (version.py)
+    | (?P<rocm>rocm\d+\.\d+\.\d+)a\d+  # nightly ROCm: +rocm10.2.0a20261006 (keeps package alphas like 0.29.0a0)
     """,
     re.VERBOSE,
 )
@@ -151,7 +152,9 @@ def strip_dev_markers(text: str, keep_git: bool = False) -> str:
     (`triton-3.8.0+git669b31ac.rocm10.1.0`). `rc` is stripped separately by
     `compute_new_version_str`, because `rc\\d*` is unsafe on raw file lines.
     """
-    return DEV_VERSION_RE.sub(lambda m: (m["git"] or "") if keep_git else "", text)
+    return DEV_VERSION_RE.sub(
+        lambda m: m["rocm"] or ((m["git"] or "") if keep_git else ""), text
+    )
 
 
 def parse_arguments(argv: list[str]) -> argparse.Namespace:
@@ -1192,7 +1195,7 @@ def promote_wheel(
         )
         if new_local_version is None:
             print(
-                f"  [ERROR] Only prerelease versions of type '{src_version_type}' can be promoted! Skipping!"
+                f"  [WARNING] {original_version} has no '{src_version_type}' prerelease marker, nothing to promote. Skipping!"
             )
             return False
         new_base_version = str(original_version.public)
@@ -1205,7 +1208,7 @@ def promote_wheel(
         )
         if promoted is None:
             print(
-                f"  [ERROR] Only prerelease versions of type '{src_version_type}' can be promoted! Skipping!"
+                f"  [WARNING] {original_version} has no '{src_version_type}' prerelease marker, nothing to promote. Skipping!"
             )
             return False
         new_base_version = Version(promoted).public
@@ -1273,7 +1276,7 @@ def promote_targz_sdist(
             )
             if new_version_str is None:
                 print(
-                    f"  [ERROR] Only prerelease versions of type '{src_version_type}' can be promoted! Skipping!"
+                    f"  [WARNING] {version} has no '{src_version_type}' prerelease marker, nothing to promote. Skipping!"
                 )
                 return False
 
@@ -1337,7 +1340,7 @@ def promote_targz_tarball(
     )
     if new_version_str is None:
         print(
-            f"  [ERROR] Only prerelease versions of type '{src_version_type}' can be promoted! Skipping!"
+            f"  [WARNING] {old_version} has no '{src_version_type}' prerelease marker, nothing to promote. Skipping!"
         )
         return False
     new_name = old_name.replace(str(old_version), new_version_str) + ".tar.gz"
