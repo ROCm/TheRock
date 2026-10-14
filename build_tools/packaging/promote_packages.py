@@ -130,7 +130,7 @@ DEV_VERSION_RE = re.compile(
     (?P<git>(?<=\+)git[0-9a-f]+\.)  # torch-family: 2.12.0+git1a2b3c4d.rocm10.0.0 (build_prod_wheels.py)
     | (?<=[+.])dev(?=rocm)          # torch-family local: +devrocm10.2.0...
     | \.dev\d+[.+-][0-9a-f]{7,40}   # ROCm: 10.2.0.dev0+<sha>, .dev0.<sha> (local), .dev0-<sha> (version.py)
-    | (?P<rocm>rocm\d+\.\d+\.\d+)a\d+  # nightly ROCm: +rocm10.2.0a20261006 (keeps package alphas like 0.29.0a0)
+    | (?P<rocm>rocm\d+\.\d+\.\d+)a\d+  # nightly ROCm: +rocm10.2.0a20261006 -> +rocm10.2.0
     """,
     re.VERBOSE,
 )

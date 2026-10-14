@@ -617,7 +617,7 @@ class DevVersionTest(unittest.TestCase):
                 "3.8.0+git669b31ac.rocm10.2.0",
             ),
             ("1.12.0+rocm10.0.0rc4", False, "1.12.0+rocm10.0.0"),
-            # Nightly ROCm: only the a<N> after rocm<ver> goes, not package alphas or shas.
+            # Nightly ROCm marker on the ROCm version.
             ("2.12.0+git9ccf2fd0.rocm10.2.0a20261006", False, "2.12.0+rocm10.2.0"),
             ("0.29.0a0+gitb7d540b2.rocm10.2.0a20260929", False, "0.29.0a0+rocm10.2.0"),
             (
