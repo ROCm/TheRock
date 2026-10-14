@@ -152,6 +152,31 @@ Build logs are uploaded to S3 and organized by stage and GPU family.
 
 See [workflow_outputs.md](workflow_outputs.md) for the S3 layout structure and [github_actions_debugging.md](github_actions_debugging.md) for debugging techniques.
 
+## Framework dependency reuse
+
+Multi-arch CI normally builds ROCm and its Python packages before building
+framework wheels. `BuildConfig.rocm_package_find_links_url` supplies pip's
+`--find-links` URL for the run's Python package folder, derived during configuration using
+`WorkflowOutputRoot`. The upload job also reports this URL for its other callers.
+
+With `ci:skip-rocm`, framework builds instead install unpinned ROCm packages from
+<https://stable.repo.amd.com/rocm/whl-next/> via
+`BuildConfig.rocm_package_index_url` as pip's `--index-url`. ROCm build, artifact-copy, package, and
+test jobs are skipped. Framework jobs can run with their ROCm packaging dependency
+skipped because their inputs come from `BuildConfig`, not that job's outputs.
+Currently this mode supports PyTorch; JAX support will follow.
+The installed ROCm packages determine the PyTorch wheel's ROCm version suffix.
+Both package URLs are empty when ROCm Python, PyTorch, and JAX package builds
+are all disabled.
+
+> [!IMPORTANT]
+> Stable ROCm dependencies give CI wheels release-looking versions, such as
+> `2.12.0+rocm10.1.0`, rather than a `+devrocm...` suffix. These wheels are CI
+> outputs, not release packages. The PyTorch CI workflows upload only to the
+> run-specific folder in `therock-ci-artifacts`; they do not publish to release
+> indexes. Published ROCm dependencies remain in their original index and are
+> not copied to that folder.
+
 ## Further Reading
 
 ### Build System

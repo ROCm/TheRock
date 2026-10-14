@@ -39,10 +39,25 @@ The following labels may be added to a pull request to modify CI behavior:
 | `ci:skip-native-linux`     | Skip native Linux package builds.                                                                                                                                                                 |
 | `ci:build-python-packages` | Opt-in to building Python packages.                                                                                                                                                               |
 | `ci:skip-python-packages`  | Skip Python package builds.                                                                                                                                                                       |
+| `ci:skip-rocm`             | Skip ROCm builds and tests; use published ROCm packages for frameworks. See [Building frameworks with published ROCm](#building-frameworks-with-published-rocm).                                  |
 | `ci:build-pytorch`         | Opt-in to building PyTorch packages.                                                                                                                                                              |
 | `ci:skip-pytorch`          | Skip PyTorch package builds.                                                                                                                                                                      |
 | `ci:build-jax`             | Opt-in to building JAX packages.                                                                                                                                                                  |
 | `ci:skip-jax`              | Skip JAX package builds.                                                                                                                                                                          |
+
+#### Building frameworks with published ROCm
+
+Use `ci:build-pytorch`, `ci:skip-rocm`, and `ci:skip-jax` to build PyTorch on
+Linux and Windows using the latest stable ROCm packages. Normal path filtering, GPU family, and
+platform selection still apply.
+
+Published-package mode supports only the `release` build variant. It rejects
+JAX builds, explicit ROCm Python/native package build labels, and manual stage
+or baseline selections. Missing or incompatible published packages fail the
+framework build; there is no fallback to building ROCm from source.
+
+See [Framework dependency reuse](ci_overview.md#framework-dependency-reuse) for
+package selection, versioning, and upload behavior.
 
 #### Build/Test-specific architecture labels
 
