@@ -302,7 +302,11 @@ _cache_locks = weakref.WeakValueDictionary()
 def _cache_lock(cache_dir: Path | None, md5: str):
     if cache_dir is None:
         return nullcontext()
-    key = os.path.normcase(str(_cache_path(cache_dir, md5).resolve()))
+    # Resolve the stable directory, never the entry being published/evicted.
+    # Windows can resolve an open deleted entry to an NTFS $Deleted path or
+    # preserve a different extended-path prefix during concurrent operations.
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    key = (os.path.normcase(str(cache_dir.resolve())), md5)
     with _cache_locks_guard:
         lock = _cache_locks.get(key)
         if lock is None:
