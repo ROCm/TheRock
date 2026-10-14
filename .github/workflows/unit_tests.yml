@@ -1,76 +1,55 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
-
-name: Unit Tests
-
+# Temporary manual branch: locally generated files, no DVC/S3 transfers.
+name: DVC cache Windows file-sharing probes (manual)
 on:
-  push:
-    branches:
-      - main
-      - release/therock-*
-  pull_request:
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
-  unit_tests:
-    name: "Unit Tests :: ${{ matrix.runs-on}}"
+  probes:
     strategy:
       fail-fast: false
       matrix:
-        runs-on: [ubuntu-24.04, windows-2022]
-    runs-on: ${{ matrix.runs-on }}
+        runner: [windows-2022, aws-windows-scale-rocm-prod-mix]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
     defaults:
       run:
-        shell: bash
-    env:
-        GITHUB_TOKEN: ${{ github.token }}
-
-    steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      timeout-minutes: 5
-      with:
-        persist-credentials: false
-    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-      with:
-        python-version: 3.12
-
-    - name: Install python deps
-      run: pip install -r requirements-test.txt
-
-    # The root pyproject.toml selects the unit-test suites.
-    - name: Run unit tests
-      run: |
-        python -m pytest -vv --durations=20 \
-          --cov --cov-report=term-missing --cov-report=html
-
-    # TODO: upload to AWS S3 instead (so reports are hosted and don't require
-    #       a download step to view).
-    #       We could also use https://about.codecov.io/ instead of custom infra.
-    - name: Upload coverage report
-      if: always()
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: coverage-report-${{ matrix.runs-on }}
-        path: build/coverage-html/
-
-  unit_tests_summary:
-    name: Unit Tests Summary
-    if: always()
-    needs:
-      - unit_tests
-    runs-on: ubuntu-24.04
+        shell: pwsh
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 5
         with:
           persist-credentials: false
-      - name: Evaluate workflow results
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          NEEDS_JSON: ${{ toJSON(needs) }}
-        run: |
-          python build_tools/github_actions/workflow_summary.py \
-            --needs-json "${NEEDS_JSON}"
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            validation/dvc-cache-lite
+            .github/workflows/unit_tests.yml
+      - name: Check preinstalled native Python
+        run: >-
+          python -c "import sys; print(sys.version); assert sys.platform == 'win32' and sys.version_info >= (3, 10), 'Preinstalled native Python 3.10+ is required; no interpreter will be downloaded'"
+      - name: Probe native file sharing
+        continue-on-error: true
+        run: >-
+          python
+          validation/dvc-cache-lite/windows_sharing_probe.py
+          --output results/sharing-temp.json
+      - name: Probe cache-volume file sharing
+        continue-on-error: true
+        run: >-
+          python
+          validation/dvc-cache-lite/windows_sharing_probe.py
+          --directory "$env:USERPROFILE/.cache/therock-dvc"
+          --output results/sharing-cache.json
+      - name: Stress publication with small generated files
+        run: >-
+          python
+          validation/dvc-cache-lite/publication_stress.py
+          --directory "$env:USERPROFILE/.cache/therock-dvc"
+          --output results/publication-stress.json --iterations 500 --workers 12
+      - name: Upload small JSON results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dvc-cache-lite-${{ matrix.runner }}
+          path: results/*.json
