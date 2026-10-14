@@ -1105,6 +1105,36 @@ class TestSelectTargets(unittest.TestCase):
         # Should include nightly-only families
         self.assertIn("gfx906", result.linux_families)
 
+    def test_run_all_archs_with_gfx_label_order_independent(self):
+        """ci:run-all-archs + ci:gfx* produces the same result regardless of label order.
+
+        Regression test: previously, labels were processed in iteration order
+        with a `break` on ci:run-all-archs, so ci:gfx1151 placed before
+        ci:run-all-archs would add it to test_only (bypassing trigger gating),
+        but the reverse order would not.
+        """
+        base = dict(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        result_gfx_first = cm.select_targets(
+            cm.CIInputs(**base, pr_labels=["ci:gfx906", "ci:run-all-archs"])
+        )
+        result_all_first = cm.select_targets(
+            cm.CIInputs(**base, pr_labels=["ci:run-all-archs", "ci:gfx906"])
+        )
+        self.assertEqual(
+            sorted(result_gfx_first.linux_families),
+            sorted(result_all_first.linux_families),
+        )
+        self.assertEqual(
+            sorted(result_gfx_first.linux_test_only_families),
+            sorted(result_all_first.linux_test_only_families),
+        )
+
     def test_pull_request_unknown_gfx_label_raises(self):
         """PR with an unknown ci:gfx label fails fast."""
         inputs = cm.CIInputs(
