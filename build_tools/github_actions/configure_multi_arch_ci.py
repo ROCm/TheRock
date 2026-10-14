@@ -261,8 +261,15 @@ class CIInputs:
     def validate(self) -> None:
         """Validate inputs for consistency (fail-fast behavior).
 
-        Raises ValueError if test labels require stages not in build_stages.
+        Raises ValueError for conflicting build selections or test labels
+        requiring stages not in build_stages.
         """
+        for job in ("native-linux", "python-packages", "pytorch", "jax"):
+            build_label = f"ci:build-{job}"
+            skip_label = f"ci:skip-{job}"
+            if build_label in self.pr_labels and skip_label in self.pr_labels:
+                raise ValueError(f"{build_label} conflicts with {skip_label}")
+
         allowed_labels = _get_allowed_test_labels_for_stages(self.build_stages)
         if allowed_labels is not None:
             for platform, labels in [
