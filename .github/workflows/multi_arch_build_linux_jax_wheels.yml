@@ -51,7 +51,7 @@ on:
         type: string
         default: "release"
       publish:
-        description: "Upload the wheels to the release bucket and test them from there. False builds only."
+        description: "Upload the wheels to the release bucket and test them from there. False uploads them to the run's CI artifacts instead and tests from there."
         type: boolean
         default: true
       rocm_version:
@@ -136,7 +136,7 @@ on:
           - nightly
         default: release
       publish:
-        description: "Upload the wheels to the release bucket and test them from there. False builds only."
+        description: "Upload the wheels to the release bucket and test them from there. False uploads them to the run's CI artifacts instead and tests from there."
         type: boolean
         default: true
       rocm_version:
@@ -192,6 +192,7 @@ jobs:
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     outputs:
       package_index_url: ${{ steps.publish_jax_wheels.outputs.package_index_url }}
+      package_find_links_url: ${{ steps.upload_ci_jax_wheels.outputs.package_find_links_url }}
       jax_version: ${{ steps.write_jax_versions.outputs.jax_version }}
       jaxlib_version: ${{ steps.write_jax_versions.outputs.jaxlib_version }}
       jax_plugin_version: ${{ steps.write_jax_versions.outputs.jax_plugin_version }}
@@ -346,6 +347,23 @@ jobs:
             --release-type="${BUILD_RELEASE_TYPE}" \
             --structured
 
+      # Unpublished wheels go to the run's own CI artifacts, which the tests
+      # install from with --find-links; nothing reaches a release index.
+      - name: Configure AWS Credentials for CI artifacts
+        if: ${{ !inputs.publish }}
+        uses: ./.github/actions/configure_aws_artifacts_credentials
+        with:
+          release_type: ci
+
+      - name: Upload JAX wheels to CI artifacts
+        id: upload_ci_jax_wheels
+        if: ${{ !inputs.publish }}
+        run: |
+          python build_tools/github_actions/upload_python_packages.py \
+            --input-packages-dir="${PACKAGE_DIST_DIR}" \
+            --run-id="${GITHUB_RUN_ID}" \
+            --multiarch
+
 
       - name: Capture job summary
         id: summary
@@ -354,8 +372,7 @@ jobs:
 
   configure_jax_tests:
     name: Configure JAX Tests
-    # The tests install from the release index, so unpublished wheels go untested.
-    if: ${{ inputs.publish && inputs.test_amdgpu_family != '' }}
+    if: ${{ inputs.test_amdgpu_family != '' }}
     runs-on: ubuntu-24.04
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}
@@ -413,6 +430,7 @@ jobs:
     with:
       test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
       package_index_url: ${{ needs.build_jax_wheels.outputs.package_index_url }}
+      wheel_find_links_url: ${{ needs.build_jax_wheels.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_version }}
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
       release_type: ${{ inputs.release_type }}
