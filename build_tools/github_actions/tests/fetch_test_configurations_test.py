@@ -489,6 +489,11 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         config = fetch_test_configurations.test_matrix["miopen-dbsync"]
         self.assertEqual(config["include_family"]["linux"], ["gfx942", "gfx950"])
 
+    def test_miopen_dbsync_declares_gfx950_advisory(self):
+        # The matrix entry itself says gfx950 is advisory -- no conditional elsewhere.
+        config = fetch_test_configurations.test_matrix["miopen-dbsync"]
+        self.assertEqual(config["expect_failure_family"]["linux"], ["gfx950"])
+
     def test_miopen_dbsync_gfx950_scheduled_on_cpu_runner_when_gpu_gated(self):
         job = self._dbsync_job("gfx950-dcgpu", True, "gfx950")
         self.assertIsNotNone(job)
@@ -518,6 +523,59 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = self._selected_names()
         self.assertIn("miopen-dbsync", names)
         self.assertNotIn("rocblas", names)
+
+    # -----------------------
+    # expect_failure_family (per-family advisory jobs)
+    # -----------------------
+
+    def _job_by_name(self, name):
+        """Run selection and return the emitted job dict for `name`, or None."""
+        fetch_test_configurations.run()
+        jobs = [j for j in self._get_components() if j["job_name"] == name]
+        return jobs[0] if jobs else None
+
+    def test_expect_failure_family_matches_by_gfx_target(self):
+        # Default AMDGPU_FAMILIES is the gfx94X-dcgpu group; "gfx942" is one of its
+        # fetch-gfx-targets, so the target form matches -- same as include_family.
+        self._inject_job("xf-target", expect_failure_family={"linux": ["gfx942"]})
+        self.assertTrue(self._job_by_name("xf-target")["expect_failure"])
+
+    def test_expect_failure_family_matches_by_group_string(self):
+        self._inject_job("xf-group", expect_failure_family={"linux": ["gfx94X-dcgpu"]})
+        self.assertTrue(self._job_by_name("xf-group")["expect_failure"])
+
+    def test_expect_failure_family_does_not_match_other_family(self):
+        # The job is still scheduled; it is just blocking rather than advisory.
+        self._inject_job("xf-other", expect_failure_family={"linux": ["gfx1100"]})
+        job = self._job_by_name("xf-other")
+        self.assertIsNotNone(job)
+        self.assertNotIn("expect_failure", job)
+
+    def test_expect_failure_family_is_scoped_per_platform(self):
+        # A windows-only declaration does not make the linux job advisory.
+        self._inject_job("xf-otherplat", expect_failure_family={"windows": ["gfx942"]})
+        self.assertNotIn("expect_failure", self._job_by_name("xf-otherplat"))
+
+    def test_expect_failure_family_omitted_leaves_job_blocking(self):
+        self._inject_job("xf-absent")
+        self.assertNotIn("expect_failure", self._job_by_name("xf-absent"))
+
+    def test_expect_failure_family_key_not_emitted(self):
+        # Control-only key: the workflows read "expect_failure", so the declaration
+        # itself must not leak into the component JSON.
+        self._inject_job("xf-strip", expect_failure_family={"linux": ["gfx942"]})
+        self.assertNotIn("expect_failure_family", self._job_by_name("xf-strip"))
+
+    def test_expect_failure_family_does_not_mutate_test_matrix(self):
+        # The plumbing pops from the merged copy, so repeated runs stay consistent.
+        self._inject_job("xf-repeat", expect_failure_family={"linux": ["gfx942"]})
+        self.assertTrue(self._job_by_name("xf-repeat")["expect_failure"])
+        self.assertTrue(self._job_by_name("xf-repeat")["expect_failure"])
+
+    def test_miopen_dbsync_does_not_emit_expect_failure_family(self):
+        self.assertNotIn(
+            "expect_failure_family", self._dbsync_job("gfx950-dcgpu", True, "gfx950")
+        )
 
     # -----------------------
     # Multi-GPU logic (RCCL)
