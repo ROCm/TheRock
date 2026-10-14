@@ -11,6 +11,8 @@ from publisher errors; zero errors do not rule out a rare interleaving.
 
 import argparse
 import concurrent.futures
+from contextlib import nullcontext
+import os
 import importlib.util
 import hashlib
 import json
@@ -28,7 +30,8 @@ ROOT = Path(__file__).resolve().parent
 
 
 def load_fetcher(variant):
-    path = ROOT / variant / "build_tools/fetch_dvc_artifacts.py"
+    snapshot = "baseline" if variant == "baseline" else "candidate"
+    path = ROOT / snapshot / "build_tools/fetch_dvc_artifacts.py"
     name = "publication_" + variant
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
@@ -50,6 +53,24 @@ def load_fetcher(variant):
         sys.modules, {"boto3": boto, "botocore": core, "botocore.client": client}
     ):
         spec.loader.exec_module(module)
+    if variant == "direct-link":
+
+        def store(src, cache_file):
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            if cache_file.exists():
+                return
+            try:
+                os.link(src, cache_file)
+            except (FileExistsError, PermissionError):
+                if (
+                    cache_file.exists()
+                    and src.stat().st_size == cache_file.stat().st_size
+                ):
+                    if module._md5_of(src) == module._md5_of(cache_file):
+                        return
+                raise
+
+        module._store_in_cache = store
     return module
 
 
@@ -67,7 +88,7 @@ def main():
     records = []
     workers = args.workers
     payload = b"same verified tensor contents" * 100
-    for variant in ("baseline", "candidate"):
+    for variant in ("baseline", "candidate", "direct-link", "locked-candidate"):
         fda = load_fetcher(variant)
         for iteration in range(args.iterations):
             with tempfile.TemporaryDirectory(
@@ -81,6 +102,7 @@ def main():
                 barrier = threading.Barrier(workers)
                 state = threading.local()
                 done = threading.Event()
+                cache_lock = threading.Lock() if variant == "locked-candidate" else None
                 record = {
                     "variant": variant,
                     "iteration": iteration,
@@ -90,13 +112,19 @@ def main():
                     "publisher_failures": [],
                     "fetcher_sha256": hashlib.sha256(
                         (
-                            ROOT / variant / "build_tools/fetch_dvc_artifacts.py"
+                            ROOT
+                            / ("baseline" if variant == "baseline" else "candidate")
+                            / "build_tools/fetch_dvc_artifacts.py"
                         ).read_bytes()
                     ).hexdigest(),
                 }
 
                 def exists(path):
-                    if path == cache and not getattr(state, "checked", False):
+                    if (
+                        cache_lock is None
+                        and path == cache
+                        and not getattr(state, "checked", False)
+                    ):
                         present = real_exists(path)
                         state.checked = True
                         barrier.wait(timeout=10)
@@ -105,19 +133,28 @@ def main():
 
                 def reader():
                     while not done.is_set():
-                        if real_exists(cache):
-                            record["reader_attempts"] += 1
-                            try:
-                                if cache.read_bytes() != payload:
-                                    raise RuntimeError("incorrect cache contents")
-                            except Exception:
-                                record["reader_failures"] += 1
-                                if len(record["reader_examples"]) < 5:
-                                    record["reader_examples"].append(
-                                        traceback.format_exc()
-                                    )
-                        else:
-                            time.sleep(0)
+                        with cache_lock if cache_lock is not None else nullcontext():
+                            if real_exists(cache):
+                                record["reader_attempts"] += 1
+                                try:
+                                    if cache.read_bytes() != payload:
+                                        raise RuntimeError("incorrect cache contents")
+                                except Exception:
+                                    record["reader_failures"] += 1
+                                    if len(record["reader_examples"]) < 5:
+                                        record["reader_examples"].append(
+                                            traceback.format_exc()
+                                        )
+                            else:
+                                time.sleep(0)
+
+                def publish(src):
+                    if cache_lock is not None:
+                        barrier.wait(timeout=10)
+                        with cache_lock:
+                            fda._store_in_cache(src, cache)
+                    else:
+                        fda._store_in_cache(src, cache)
 
                 thread = threading.Thread(target=reader)
                 thread.start()
@@ -126,10 +163,7 @@ def main():
                         with concurrent.futures.ThreadPoolExecutor(
                             max_workers=workers
                         ) as ex:
-                            futures = [
-                                ex.submit(fda._store_in_cache, src, cache)
-                                for src in sources
-                            ]
+                            futures = [ex.submit(publish, src) for src in sources]
                             for future in futures:
                                 try:
                                     future.result(timeout=15)
@@ -173,7 +207,7 @@ def main():
         "python": platform.python_version(),
         "directory": str(args.directory),
         "records": records,
-        "note": "Real rename/replace calls; synchronized misses, no injected errors.",
+        "note": "Baseline/PR versus experimental direct-link and shared reader/publisher lock; no injected errors.",
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n")
