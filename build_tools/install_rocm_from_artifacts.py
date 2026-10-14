@@ -129,8 +129,8 @@ from botocore.config import Config
 from datetime import datetime
 from fetch_artifacts import main as fetch_artifacts_main
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
-from _therock_utils.os_util import is_wsl_test_platform
 from _therock_utils.s3_buckets import get_release_bucket_config
+import os
 from pathlib import Path
 import platform
 import re
@@ -397,12 +397,9 @@ def retrieve_artifacts_by_run_id(args):
         "host-suite-sparse_lib",
     ]
 
-    # Under WSL (TEST_PLATFORM=wsl) the GPU is paravirtualized as /dev/dxg and
-    # there is no amdgpu kernel driver, so the bare-metal libhsakmt in
-    # core-runtime cannot reach it (rocminfo exits non-zero with no output). The
-    # wsl-rocdxg stage builds the upstream libhsakmt WSL path as a normal generic
-    # artifact; pull it in so the ROCr runtime can talk to the GPU through /dev/dxg.
-    if is_wsl_test_platform():
+    # WSL has no amdgpu kernel driver: the runtime reaches the GPU (/dev/dxg)
+    # through the WSL libhsakmt that the wsl-rocdxg stage builds.
+    if os.environ.get("TEST_PLATFORM") == "wsl":
         base_artifact_patterns.append("wsl-rocdxg_lib")
 
     if args.base_only:

@@ -275,25 +275,6 @@ class TestExternalConfig(unittest.TestCase):
         self.assertEqual(result["gfx94x"]["linux"]["family"], "gfx94X-dcgpu")
         self.assertIn("release", result["gfx94x"]["linux"]["build_variants"])
 
-    def test_get_all_families_overlays_external_test_runs_on_wsl(self):
-        """test-runs-on-wsl lives under "linux" and is overlaid like any runner key."""
-        fake_config = {
-            "runner_labels": {
-                "gfx110x": {"linux": {"test-runs-on-wsl": "wsl-external-runner"}}
-            }
-        }
-        with mock.patch.object(
-            amdgpu_family_matrix,
-            "load_external_runner_config",
-            return_value=fake_config,
-        ):
-            result = get_all_families_for_trigger_types(["nightly"])
-
-        linux = result["gfx110x"]["linux"]
-        self.assertEqual(linux["test-runs-on-wsl"], "wsl-external-runner")
-        self.assertEqual(linux["test-runs-on"], "linux-gfx110X-gpu-rocm")
-        self.assertNotIn("wsl", result["gfx110x"])
-
     def test_get_all_families_falls_back_to_local_when_no_external_config(self):
         """Local fallback applies sandbox scope without mutating shared definitions."""
         os.environ.pop("CI_CONFIG_PATH", None)

@@ -93,58 +93,20 @@ _GPU_CONTAINER_OPTIONS = [
     "-e KUBE_CPU_REQUEST",
 ]
 
-# GPU container options for runners where the GitHub runner lives inside a WSL2
-# distro on a Windows GPU host (see the wsl-* pools in TheRock-Infra).
-#
-# WSL exposes the GPU through GPU paravirtualization as a single /dev/dxg node.
-# There is NO /dev/kfd and NO /dev/dri, so the standard options above cannot be
-# reused - Docker fails to create the container at all when asked to pass through
-# a device node that does not exist. The host groups (video, 993, 992, 110) and
-# the OSSCI podinfo env-file are likewise absent inside WSL.
-#
-# --device /dev/dxg - the paravirtualized GPU device
-# -v /usr/lib/wsl:/usr/lib/wsl - WSL driver libraries and drivers, which the ROCm
-#   runtime dlopen()s to reach the GPU; they exist only on the WSL host
-# -e LD_LIBRARY_PATH - so the mounted WSL libraries are actually searched. Test
-#   scripts prepend to this rather than replace it, so it composes.
-#
-# This mirrors the recipe documented in TheRock-Infra's build_golden_image.ps1
-# for the w11-wsl-* images.
+# GPU container options for WSL entries. WSL exposes the GPU only as /dev/dxg
+# (no /dev/kfd or /dev/dri, so the options above would fail container creation),
+# with its driver libraries in /usr/lib/wsl on the host.
 _WSL_GPU_CONTAINER_OPTIONS = [
     "--device /dev/dxg",
     "-v /usr/lib/wsl:/usr/lib/wsl",
     "-e LD_LIBRARY_PATH=/usr/lib/wsl/lib",
 ]
 
-# Substring identifying a runner label whose GitHub runner process runs inside WSL.
-# TheRock-Infra names these pools wsl-<arch>-gpu-rocm (plus a -test twin).
-_WSL_RUNNER_LABEL_MARKER = "wsl-"
-
-# WSL is a Linux test runner, not a separate platform: it runs the Linux build's
-# artifacts in the Linux container on a Windows GPU host whose GitHub runner lives
-# inside WSL2. A family opts in with "test-runs-on-wsl" under its "linux" entry
-# (like "test-runs-on-multi-gpu"), and a component opts in by listing "wsl" in its
-# "platform". The ci:run-wsl label (like ci:run-multi-gpu) then adds one extra
-# "<job_name> (WSL)" entry per selected WSL-capable component, next to the native
-# Linux one. Being a ci: label it never narrows the native test selection.
+# WSL is a runner for the Linux tests, like the multi-GPU runner: a family sets
+# "test-runs-on-wsl" under "linux", a component lists "wsl" in its "platform", and
+# the ci:run-wsl label adds a "<job_name> (WSL)" entry for it next to the native one.
 WSL_RUN_LABEL = "ci:run-wsl"
 WSL_TEST_PLATFORM = "wsl"
-
-
-def _is_wsl_runner(job_config: dict) -> bool:
-    """Return True if this job is scheduled onto a WSL-hosted runner.
-
-    The runner label is resolved before container options are built, so the
-    selected label is available on the job config. WSL entries also carry
-    test_platform == "wsl" explicitly.
-    """
-    if job_config.get("test_platform") == WSL_TEST_PLATFORM:
-        return True
-    for key in ("test_runner", "multi_gpu_runner"):
-        label = job_config.get(key)
-        if isinstance(label, str) and label.startswith(_WSL_RUNNER_LABEL_MARKER):
-            return True
-    return False
 
 
 def _build_container_options(job_config: dict, platform: str) -> dict:
@@ -169,14 +131,9 @@ def _build_container_options(job_config: dict, platform: str) -> dict:
     # Start with base options (always applied on Linux)
     options_parts = _BASE_CONTAINER_OPTIONS.copy()
 
-    # Add GPU-specific options unless this is a CPU-only runner.
-    # WSL-hosted runners get a different device set: the GPU arrives as /dev/dxg
-    # via GPU paravirtualization, and /dev/kfd + /dev/dri do not exist there.
+    # Add GPU-specific options unless this is a CPU-only runner
     if not job_config.get("linux_cpu_runner", False):
-        if _is_wsl_runner(job_config):
-            # Tell the test scripts explicitly (TEST_PLATFORM, see test_component.yml)
-            # rather than having them sniff the kernel.
-            job_config["test_platform"] = WSL_TEST_PLATFORM
+        if job_config.get("test_platform") == WSL_TEST_PLATFORM:
             options_parts.extend(_WSL_GPU_CONTAINER_OPTIONS)
         else:
             options_parts.extend(_GPU_CONTAINER_OPTIONS)
@@ -1393,10 +1350,6 @@ def run():
                     "test-runs-on-multi-gpu", ""
                 )
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
-            # A dispatch onto a WSL runner (test_runs_on=wsl-...) must place every GPU
-            # job there, so weighted native labels must not replace it.
-            if (test_runs_on_default or "").startswith(_WSL_RUNNER_LABEL_MARKER):
-                test_runs_on_labels = None
             if (
                 enable_wsl_by_label
                 and not gpu_tests_gated
@@ -1404,10 +1357,6 @@ def run():
                 and platform == "linux"
             ):
                 test_runs_on_wsl = platform_info.get("test-runs-on-wsl", "")
-                # A dispatch that already targets the WSL runner (test_runs_on=wsl-...)
-                # runs every component there, so a second WSL copy would duplicate it.
-                if test_runs_on_wsl and test_runs_on_default == test_runs_on_wsl:
-                    test_runs_on_wsl = ""
 
             # Enforce test_type_for_family if set in the family matrix.
             # This is a strict override - families with limited hardware (e.g., MI455)
@@ -1690,12 +1639,10 @@ def run():
     all_components = [
         _build_container_options(c, platform) for c in components_with_runners
     ]
-    # test_component (-> TEST_COMPONENT) is what the test scripts key on. It equals
-    # job_name except for entries whose display name differs, e.g. "hip-tests (WSL)".
+    # test_component.yml passes these to the test scripts as TEST_COMPONENT and
+    # TEST_PLATFORM. Only "<job_name> (WSL)" entries set them differently.
     for c in all_components:
         c.setdefault("test_component", c["job_name"])
-        # test_platform (-> TEST_PLATFORM) tells the scripts where they run: the
-        # matrix platform, or "wsl" for WSL-hosted runners (set above).
         c.setdefault("test_platform", platform)
 
     # Separate sanity from the regular component matrix.

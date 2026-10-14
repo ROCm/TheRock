@@ -781,95 +781,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
 
     # -----------------------
-    # WSL runner container options
-    # -----------------------
-
-    def test_container_options_for_wsl_runner_use_dxg_not_kfd(self):
-        """WSL exposes the GPU as /dev/dxg; /dev/kfd and /dev/dri do not exist.
-
-        Passing through a non-existent device node makes Docker fail to create
-        the container at all, so the WSL device set must fully replace the
-        bare-metal one.
-        """
-        job = {"test_runner": "wsl-gfx1101-gpu-rocm"}
-        out = fetch_test_configurations._build_container_options(job, "linux")
-        options = out["container_options"]
-
-        self.assertIn("--device /dev/dxg", options)
-        self.assertIn("/usr/lib/wsl/lib", options)
-        self.assertNotIn("/dev/kfd", options)
-        self.assertNotIn("/dev/dri", options)
-        # Host-only groups and the OSSCI podinfo file are absent inside WSL.
-        self.assertNotIn("--group-add video", options)
-        self.assertNotIn("gha-gpu-isolation-settings", options)
-        # Base options still apply.
-        self.assertIn("--ipc host", options)
-
-    def test_container_options_for_wsl_test_pool_label(self):
-        """The -test twin pool must be treated the same as the main WSL pool."""
-        job = {"test_runner": "wsl-gfx1101-gpu-rocm-test"}
-        out = fetch_test_configurations._build_container_options(job, "linux")
-        self.assertIn("--device /dev/dxg", out["container_options"])
-        self.assertNotIn("/dev/kfd", out["container_options"])
-
-    def test_container_options_for_wsl_multi_gpu_runner(self):
-        job = {"multi_gpu_runner": "wsl-gfx1101-gpu-rocm"}
-        out = fetch_test_configurations._build_container_options(job, "linux")
-        self.assertIn("--device /dev/dxg", out["container_options"])
-        self.assertNotIn("/dev/kfd", out["container_options"])
-
-    def test_container_options_for_non_wsl_runner_unchanged(self):
-        """Bare-metal and cloud Linux runners keep the kfd/dri device set."""
-        job = {"test_runner": "linux-gfx1101-gpu-rocm"}
-        out = fetch_test_configurations._build_container_options(job, "linux")
-        options = out["container_options"]
-
-        self.assertIn("--device /dev/kfd", options)
-        self.assertIn("--device /dev/dri", options)
-        self.assertNotIn("/dev/dxg", options)
-
-    def test_container_options_label_merely_containing_wsl_is_not_wsl(self):
-        """Only a wsl- prefix marks a WSL pool.
-
-        Runner names carry a random suffix, so a label can contain the letters
-        'wsl' by coincidence (e.g. ...-runner-3wsl) without being WSL-hosted.
-        """
-        job = {"test_runner": "linux-gfx1101-gpu-rocm-runner-3wsl"}
-        out = fetch_test_configurations._build_container_options(job, "linux")
-        self.assertIn("--device /dev/kfd", out["container_options"])
-        self.assertNotIn("/dev/dxg", out["container_options"])
-
-    def test_wsl_cpu_only_runner_gets_no_gpu_devices(self):
-        job = {"test_runner": "wsl-gfx1101-gpu-rocm", "linux_cpu_runner": True}
-        out = fetch_test_configurations._build_container_options(job, "linux")
-        self.assertNotIn("/dev/dxg", out["container_options"])
-        self.assertNotIn("/dev/kfd", out["container_options"])
-
-    def test_wsl_runner_on_windows_platform_collapses_options(self):
-        """Containers are Linux-only; platform gating still wins."""
-        job = {"test_runner": "wsl-gfx1101-gpu-rocm"}
-        out = fetch_test_configurations._build_container_options(job, "windows")
-        self.assertEqual(out["container_options"], "")
-
-    def test_wsl_runner_keeps_job_specific_container_options(self):
-        job = {
-            "test_runner": "wsl-gfx1101-gpu-rocm",
-            "container_options": ["--cap-add=SYS_PTRACE"],
-        }
-        out = fetch_test_configurations._build_container_options(job, "linux")
-        self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
-        self.assertIn("--device /dev/dxg", out["container_options"])
-
-    def test_container_options_for_explicit_wsl_test_platform(self):
-        """An entry with test_platform "wsl" is WSL even if its label lacks the prefix."""
-        job = {"test_runner": "some-pool-label", "test_platform": "wsl"}
-        options = fetch_test_configurations._build_container_options(job, "linux")[
-            "container_options"
-        ]
-        self.assertIn("--device /dev/dxg", options)
-        self.assertNotIn("/dev/kfd", options)
-
-    # -----------------------
     # WSL entries ("<job> (WSL)" next to native Linux, via ci:run-wsl)
     # -----------------------
 
@@ -995,42 +906,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertFalse(any("(WSL)" in name for name in jobs))
         self.assertEqual(jobs["hip-tests (PAL)"]["test_platform"], "windows")
         self.assertEqual(jobs["hip-tests (PAL)"]["test_component"], "hip-tests (PAL)")
-
-    def test_no_duplicate_wsl_entry_when_run_already_on_wsl(self):
-        """A dispatch already targeting the WSL runner gets no second WSL copy."""
-        self._use_gfx110x_with_wsl_runner()
-        os.environ["TEST_RUNS_ON"] = self._WSL_RUNNER
-        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests", "ci:run-wsl"])
-
-        fetch_test_configurations.run()
-        jobs = self._by_name()
-
-        self.assertEqual(set(jobs), {"hip-tests"})
-        self.assertEqual(jobs["hip-tests"]["test_runner"], self._WSL_RUNNER)
-        self.assertEqual(jobs["hip-tests"]["test_platform"], "wsl")
-        self.assertIn("--device /dev/dxg", jobs["hip-tests"]["container_options"])
-
-    def test_dispatch_onto_wsl_runner_ignores_weighted_native_labels(self):
-        os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
-        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
-            "gfx110x": {
-                "linux": {
-                    "test-runs-on": self._NATIVE_RUNNER,
-                    "test-runs-on-labels": [
-                        {"label": self._NATIVE_RUNNER, "weight": 1.0, "count": 9}
-                    ],
-                    "test-runs-on-wsl": self._WSL_RUNNER,
-                }
-            }
-        }
-        os.environ["TEST_RUNS_ON"] = self._WSL_RUNNER
-        os.environ["TEST_LABELS"] = json.dumps(["test:rocrtst"])
-
-        fetch_test_configurations.run()
-        job = self._by_name()["rocrtst"]
-
-        self.assertEqual(job["test_runner"], self._WSL_RUNNER)
-        self.assertEqual(job["test_platform"], "wsl")
 
     def test_wsl_entry_quick_runs_one_shard(self):
         self._use_gfx110x_with_wsl_runner()

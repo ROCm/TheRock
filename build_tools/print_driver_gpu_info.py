@@ -11,9 +11,8 @@ On Linux:
   - report the KFD IOCTL version and warn if outside the range required by rocdbgapi (>= 1.13 and < 2.0)
 
 On Linux inside WSL (TEST_PLATFORM=wsl):
-  - as above, except the KFD IOCTL check is skipped: WSL has no amdgpu kernel
-    driver and no /dev/kfd. amd-smi and rocminfo do work, provided the
-    wsl-rocdxg artifact is installed.
+  - as above, except the KFD IOCTL check: WSL has no amdgpu kernel driver and
+    no /dev/kfd. The GPU is /dev/dxg, and amd-smi reports the WDDM driver version.
 
 On Windows:
   - run "hipInfo.exe"
@@ -35,32 +34,17 @@ import subprocess
 import sys
 from typing import List, Optional, Tuple
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _therock_utils.os_util import DXG_DEVICE as _DXG_DEVICE, is_wsl_test_platform
-
 
 # AMDKFD_IOC_GET_VERSION = _IOR('K', 0x01, struct { u32 major; u32 minor; })
 # _IOR: direction=0x80, size=8, type='K'=0x4b, nr=0x01 -> 0x80084b01
 _AMDKFD_IOC_GET_VERSION = 0x80084B01
 _KFD_DEVICE = "/dev/kfd"
+_DXG_DEVICE = "/dev/dxg"
 _KFD_VERSION_MIN = (1, 13)
 _KFD_VERSION_MAX = (2, 0)  # exclusive
 
 # TODO(#7659): Re-enable once rocminfo is fixed for gfx125X-dcgpu
 _ROCMINFO_EXCLUDED_FAMILIES = ["gfx125X-dcgpu"]
-
-
-def _get_wsl_kernel() -> Optional[str]:
-    """Kernel string from /proc/version, or None if unreadable.
-
-    Under WSL this carries the microsoft-standard-WSL2 build, which is the
-    closest equivalent to the KFD version as a "what am I talking to" signal.
-    """
-    try:
-        with open("/proc/version") as f:
-            return f.read().strip()
-    except OSError:
-        return None
 
 
 def _get_kfd_version() -> Tuple[int, int]:
@@ -191,47 +175,42 @@ def run_sanity(os_name: str) -> int:
             extra_command_search_paths=[bin_dir],
         )
 
-        if is_wsl_test_platform():
-            # WSL has no amdgpu kernel driver, so the KFD ioctl cannot be
-            # answered - /dev/kfd does not exist. Report the GPU-PV interface
-            # instead of printing an empty "skipped" section: the equivalent
-            # driver version is the WDDM one, which amd-smi reports above as
-            # DRIVER.VERSION (e.g. 25.10.17.02-...-Microsoft).
-            log("\n=== GPU-PV (WSL) interface ===")
-            log(f"{_DXG_DEVICE}: present (GPU paravirtualized; no amdgpu driver)")
-            log(f"WSL kernel: {_get_wsl_kernel() or 'unknown'}")
-            log(
-                "KFD IOCTL check skipped: not applicable under WSL. "
-                "See DRIVER.VERSION in the amd-smi output above for the "
-                "GPU-PV (WDDM) driver version."
-            )
-        elif not os.path.exists(_KFD_DEVICE):
-            log("\n=== KFD IOCTL version ===")
+        if os.environ.get("TEST_PLATFORM") == "wsl":
+            log("\n=== GPU-PV (WSL) ===")
+            if not os.path.exists(_DXG_DEVICE):
+                log(
+                    f"error: {_DXG_DEVICE} not found - is the GPU passed through to WSL?"
+                )
+                return 1
+            log(f"{_DXG_DEVICE} present; KFD IOCTL check does not apply under WSL")
+            log("\n=== End of sanity check ===")
+            return 0
+
+        log("\n=== KFD IOCTL version ===")
+        if not os.path.exists(_KFD_DEVICE):
             log(f"error: {_KFD_DEVICE} not found — is the AMDGPU driver loaded?")
             return 1
-        else:
-            log("\n=== KFD IOCTL version ===")
-            try:
-                major, minor = _get_kfd_version()
-                too_old = (major, minor) < _KFD_VERSION_MIN
-                too_new = (major, minor) >= _KFD_VERSION_MAX
-                if too_old:
-                    status = "NOT supported (too old)"
-                elif too_new:
-                    status = "NOT supported (warning: newer than tested range)"
-                else:
-                    status = "supported"
-                log(f"KFD IOCTL version: {major}.{minor} ({status})")
-                log(
-                    f"Required range for rocdbgapi: "
-                    f">= {_KFD_VERSION_MIN[0]}.{_KFD_VERSION_MIN[1]}"
-                    f" and < {_KFD_VERSION_MAX[0]}.{_KFD_VERSION_MAX[1]}"
-                )
-                if too_old:
-                    return 1
-            except OSError as e:
-                log(f"error: failed to query KFD version: {e}")
+        try:
+            major, minor = _get_kfd_version()
+            too_old = (major, minor) < _KFD_VERSION_MIN
+            too_new = (major, minor) >= _KFD_VERSION_MAX
+            if too_old:
+                status = "NOT supported (too old)"
+            elif too_new:
+                status = "NOT supported (warning: newer than tested range)"
+            else:
+                status = "supported"
+            log(f"KFD IOCTL version: {major}.{minor} ({status})")
+            log(
+                f"Required range for rocdbgapi: "
+                f">= {_KFD_VERSION_MIN[0]}.{_KFD_VERSION_MIN[1]}"
+                f" and < {_KFD_VERSION_MAX[0]}.{_KFD_VERSION_MAX[1]}"
+            )
+            if too_old:
                 return 1
+        except OSError as e:
+            log(f"error: failed to query KFD version: {e}")
+            return 1
 
     log("\n=== End of sanity check ===")
     return 0
