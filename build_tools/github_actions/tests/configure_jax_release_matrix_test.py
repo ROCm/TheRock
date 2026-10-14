@@ -104,8 +104,8 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertEqual(matrix[0]["wheel_type"], "nightly")
 
     def test_tip_builds_without_publishing(self):
-        # whl-next does not route jax/jaxlib yet and the tests install from
-        # there, so tip is a build-only signal while every pinned ref publishes.
+        # whl-next does not route jax/jaxlib yet, so tip is tested from the
+        # run's own artifacts while every pinned ref publishes.
         matrix = m.generate_jax_matrix_for_release_type(
             release_type="nightly", platform="linux"
         )

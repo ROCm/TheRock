@@ -72,8 +72,8 @@ JAX_REF_CONFIGS = {
         # main has no release on PyPI, so jax and jaxlib are built from the same
         # checkout and dated from its HEAD commit (see resolve_jax_version.py).
         "wheel_type": "nightly",
-        # Built nightly for the signal, but not published or tested until
-        # whl-next routes jax and jaxlib, which the tests install from.
+        # Not published until whl-next routes jax and jaxlib; the tests install
+        # from the run's own CI artifacts instead.
         "publish": False,
         # JAX dropped Python 3.11 support in 0.11.0.
         "exclude_python_versions": ["3.11"],
@@ -166,8 +166,8 @@ def generate_jax_matrix(
                     # "release" builds the plugin for a ref on PyPI; "nightly"
                     # also builds jax and jaxlib, for refs with no release.
                     "wheel_type": ref_cfg.get("wheel_type", "release"),
-                    # Whether the release build uploads and then tests the
-                    # wheels; CI uploads to run-scoped artifacts either way.
+                    # Whether the release build publishes the wheels; either
+                    # way they are tested, unpublished ones from CI artifacts.
                     "publish": ref_cfg.get("publish", True),
                 }
             )
