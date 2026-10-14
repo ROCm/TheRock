@@ -116,17 +116,23 @@ function(therock_sanitizer_configure
     # --offload-compress only to those targets. -Oz is host-only (-Xarch_host);
     # device -Oz fails rocPRIM isel. No global -flto: it OOMs
     # rocprofiler-systems and drops rocRoller symbols.
+    #
+    # -fsanitize-address-outline-instrumentation is only meaningful with
+    # -fsanitize=address. That sanitizer flag is injected on C/CXX, not HIP.
+    # libhipcxx header tests compile as HIP with -Wall -Werror and no
+    # -fsanitize=address, so the modifier is unused and fails the build.
     set(_asan_compact "${THEROCK_ASAN_COMPACT}")
     if(DEFINED "${subproject_name}_ASAN_COMPACT")
       set(_asan_compact "${${subproject_name}_ASAN_COMPACT}")
     endif()
     if(_asan_compact AND (_sanitizer STREQUAL "ASAN" OR _sanitizer STREQUAL "HOST_ASAN"))
-      set(_compact_compile_flags "-fsanitize-address-outline-instrumentation -gz -gline-tables-only -fdata-sections -ffunction-sections")
+      set(_compact_compile_flags "-gz -gline-tables-only -fdata-sections -ffunction-sections")
+      set(_compact_asan_flags "-fsanitize-address-outline-instrumentation ${_compact_compile_flags}")
       # Subproject pre-hooks key off this. It is set only when compact flags
       # are actually injected, so {subproject}_ASAN_COMPACT=OFF stays off.
       string(APPEND _stanza "set(THEROCK_ASAN_COMPACT ON)\n")
-      string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" ${_compact_compile_flags}\")\n")
-      string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_compact_compile_flags}\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" ${_compact_asan_flags}\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_compact_asan_flags}\")\n")
       string(APPEND _stanza "string(APPEND CMAKE_HIP_FLAGS_INIT \" ${_compact_compile_flags} --offload-compress\")\n")
       string(APPEND _stanza "set(CMAKE_C_FLAGS_RELEASE \"-O3 -Xarch_host -Oz -DNDEBUG\" CACHE STRING \"\" FORCE)\n")
       string(APPEND _stanza "set(CMAKE_CXX_FLAGS_RELEASE \"-O3 -Xarch_host -Oz -DNDEBUG\" CACHE STRING \"\" FORCE)\n")
