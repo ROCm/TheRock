@@ -149,6 +149,25 @@ class TestCIInputsFromEnviron(unittest.TestCase):
     See: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-environment-variables#default-environment-variables
     """
 
+    def test_workflow_dispatch_default_inputs(self):
+        """Absent optional inputs use defaults; the helper supplies GitHub context."""
+        with patch.dict(os.environ, {}, clear=True):
+            inputs = _run_from_environ(event_name="workflow_dispatch", event_payload={})
+        self.assertEqual(inputs.pr_labels, [])
+        self.assertEqual(inputs.linux_test_labels, [])
+        self.assertEqual(inputs.windows_test_labels, [])
+        self.assertEqual(inputs.linux_amdgpu_families, [])
+        self.assertEqual(inputs.windows_amdgpu_families, [])
+        self.assertEqual(inputs.python_versions, [])
+        self.assertEqual(inputs.build_stages, [])
+        self.assertEqual(inputs.prebuilt_stages, "")
+        self.assertEqual(inputs.baseline_run_id, "")
+        self.assertEqual(inputs.release_type, "ci")
+        self.assertTrue(inputs.build_python_packages)
+        self.assertTrue(inputs.build_pytorch)
+        self.assertTrue(inputs.build_native_linux)
+        self.assertFalse(inputs.build_jax)
+
     def test_workflow_dispatch_reads_inputs_from_env(self):
         """Workflow inputs (families, labels, prebuilt config) come from env vars."""
         inputs = _run_from_environ(
@@ -156,9 +175,8 @@ class TestCIInputsFromEnviron(unittest.TestCase):
             event_payload={},
             extra_env={
                 "LINUX_AMDGPU_FAMILIES": "gfx94X, gfx120X",
-                "LINUX_TEST_LABELS": "test:rocprim",
+                "PR_LABELS": " ci:skip-pytorch, test:rocprim, ,test_filter:comprehensive,some-other-label ",
                 "WINDOWS_AMDGPU_FAMILIES": "",
-                "WINDOWS_TEST_LABELS": "",
                 "PREBUILT_STAGES": "compiler-runtime,runtime-tests",
                 "BASELINE_RUN_ID": "12345",
                 "BUILD_PYTORCH": "false",
@@ -167,7 +185,23 @@ class TestCIInputsFromEnviron(unittest.TestCase):
             },
         )
         self.assertEqual(inputs.linux_amdgpu_families, ["gfx94x", "gfx120x"])
-        self.assertEqual(inputs.linux_test_labels, ["test:rocprim"])
+
+        # pr_labels is parsed but unfiltered
+        self.assertEqual(
+            inputs.pr_labels,
+            [
+                "ci:skip-pytorch",
+                "test:rocprim",
+                "test_filter:comprehensive",
+                "some-other-label",
+            ],
+        )
+        # linux_test_labels and windows_test_labels filter to just `test:` and `ci:`
+        self.assertEqual(inputs.linux_test_labels, ["test:rocprim", "ci:skip-pytorch"])
+        self.assertEqual(
+            inputs.windows_test_labels, ["test:rocprim", "ci:skip-pytorch"]
+        )
+
         self.assertEqual(inputs.prebuilt_stages, "compiler-runtime,runtime-tests")
         self.assertEqual(inputs.baseline_run_id, "12345")
         self.assertFalse(inputs.build_pytorch)
@@ -552,12 +586,12 @@ class TestDecideJobs(unittest.TestCase):
             )
 
     def test_workflow_dispatch_test_filter_label_overrides(self):
-        """test_filter in workflow_dispatch test_labels overrides test_type."""
+        """test_filter in workflow_dispatch pr_labels overrides test_type."""
         # workflow_dispatch with test_filter:comprehensive should use comprehensive
         result = cm.decide_jobs(
             self._inputs(
                 event_name="workflow_dispatch",
-                linux_test_labels=["test_filter:comprehensive"],
+                pr_labels=["test_filter:comprehensive"],
             ),
             git_context=cm.GitContext(),
             targets=cm.TargetSelection(),
@@ -1248,6 +1282,22 @@ class TestSelectTargets(unittest.TestCase):
         self.assertIn("gfx94x", [f.split("-")[0] for f in result.linux_families])
         # Should NOT include all families — explicit list takes precedence
         self.assertLessEqual(len(result.linux_families), 2)
+
+    def test_workflow_dispatch_applies_pr_labels(self):
+        """Label filtering also applies when the event is workflow_dispatch."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            linux_amdgpu_families=["gfx94x"],
+            windows_amdgpu_families=["gfx110x"],
+            pr_labels=["ci:platform:windows"],
+        )
+        targets = cm.select_targets(inputs)
+        self.assertEqual(targets.linux_families, [])
+        self.assertEqual(targets.windows_families, ["gfx110x"])
 
     def test_unsupported_event_type_raises(self):
         """Unknown event type raises ValueError."""

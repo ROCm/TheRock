@@ -28,13 +28,9 @@ on:
         description: 'Comma-separated Windows GPU families. "all" = all, "none" or empty = skip.'
         type: string
         default: ""
-      linux_test_labels:
-        description: "Comma-separated list of test labels for Linux."
+      pr_labels:
         type: string
-        default: ""
-      windows_test_labels:
-        description: "Comma-separated list of test labels for Windows."
-        type: string
+        description: "Comma-separated PR labels (e.g. ci:skip-pytorch,test:rocprim,test_filter:quick)."
         default: ""
       prebuilt_stages:
         description: "Comma-separated build stages to skip (artifacts copied from baseline_run_id instead)."
@@ -252,8 +248,7 @@ jobs:
           PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
-          LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
-          WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
+          PR_LABELS: ${{ inputs.pr_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BUILD_STAGES: ${{ inputs.build_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}

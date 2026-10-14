@@ -227,7 +227,7 @@ class CIInputs:
     build_native_linux: bool = True
     python_versions: list[str] = field(default_factory=list)
 
-    # PR labels (from event payload for pull_request events)
+    # Labels from the PR event payload or workflow_dispatch pr_labels input.
     pr_labels: list[str] = field(default_factory=list)
 
     # Per-platform GPU family selections parsed from reusable workflow inputs.
@@ -334,6 +334,8 @@ class CIInputs:
 
             # The merge commit's first parent is the PR base.
             base_ref = "HEAD^"
+        elif event_name == "workflow_dispatch":
+            pr_labels = _parse_comma_list(os.environ.get("PR_LABELS", ""))
         elif event_name == "push":
             before_ref = event.get("before")
             # GitHub uses the null SHA when a push creates a new ref. That
@@ -347,22 +349,11 @@ class CIInputs:
                 # against its parent, missing earlier commits in the push.
                 base_ref = None
 
-        # Test labels come from two sources:
-        # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
-        # 2. PR test:* labels (apply to both platforms)
-        # Additionally, ci:* labels are passed through for downstream processing
+        # Derive component and CI control labels from the PR or dispatch labels.
         pr_test_labels = [label for label in pr_labels if label.startswith("test:")]
         pr_ci_labels = [label for label in pr_labels if label.startswith("ci:")]
-        linux_test_labels = (
-            _parse_comma_list(os.environ.get("LINUX_TEST_LABELS", ""))
-            + pr_test_labels
-            + pr_ci_labels
-        )
-        windows_test_labels = (
-            _parse_comma_list(os.environ.get("WINDOWS_TEST_LABELS", ""))
-            + pr_test_labels
-            + pr_ci_labels
-        )
+        linux_test_labels = pr_test_labels + pr_ci_labels
+        windows_test_labels = pr_test_labels + pr_ci_labels
 
         # When build_stages limits the build, validate or auto-select test labels.
         # - If labels provided: fail-fast if they require stages not in build_stages
@@ -1019,7 +1010,7 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     else:
         raise ValueError(f"Unsupported event type: {ci_inputs.event_name!r}")
 
-    # PR labels can extend the family set (both platforms).
+    # Labels can extend the trigger/input-selected family set (both platforms).
     # We support three types of arch labels:
     #   - ci:gfx* - opt-in to both build AND test (existing behavior)
     #   - ci:build:gfx* - opt-in to build only (no tests)
@@ -1039,57 +1030,56 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     linux_test_only: list[str] = []
     windows_test_only: list[str] = []
 
-    if ci_inputs.is_pull_request:
-        for label in ci_inputs.pr_labels:
-            if label == "ci:run-all-archs":
-                # Override to all families.
-                linux_names = list(all_families.keys())
-                windows_names = list(all_families.keys())
-                print("  Label 'ci:run-all-archs' -> all families")
-                break
-            if label.lower().startswith("ci:build:gfx"):
-                # Build-only label: ci:build:gfx94x -> gfx94x
-                target = label.lower().removeprefix("ci:build:").split("-")[0]
-                linux_names.append(target)
-                windows_names.append(target)
-                linux_build_only.append(target)
-                windows_build_only.append(target)
-                print(f"  Label '{label}' -> adding build-only target {target}")
-            elif label.lower().startswith("ci:test:gfx"):
-                # Test-only label: ci:test:gfx94x -> gfx94x
-                # Note: we don't add to linux_names/windows_names here because
-                # test requires build. Validation below will check that a
-                # corresponding build label exists.
-                target = label.lower().removeprefix("ci:test:").split("-")[0]
-                linux_test_only.append(target)
-                windows_test_only.append(target)
-                print(f"  Label '{label}' -> adding test-only target {target}")
-            elif label.lower().startswith("ci:gfx"):
-                # Trim suffixes from labels since amdgpu_family_matrix.py
-                # specifies families with no suffix (e.g. `gfx94x`) but
-                # we have some labels like `ci:gfx94X-dcgpu` or `ci:gfx103X-linux`.
-                # Family keys are lowercase, so normalize the target.
-                # Strip ci: prefix, then split on dash to get the base family.
-                target = label.lower().removeprefix("ci:").split("-")[0]
-                linux_names.append(target)
-                windows_names.append(target)
-                print(f"  Label '{label}' -> adding target {target}")
+    for label in ci_inputs.pr_labels:
+        if label == "ci:run-all-archs":
+            # Override to all families.
+            linux_names = list(all_families.keys())
+            windows_names = list(all_families.keys())
+            print("  Label 'ci:run-all-archs' -> all families")
+            break
+        if label.lower().startswith("ci:build:gfx"):
+            # Build-only label: ci:build:gfx94x -> gfx94x
+            target = label.lower().removeprefix("ci:build:").split("-")[0]
+            linux_names.append(target)
+            windows_names.append(target)
+            linux_build_only.append(target)
+            windows_build_only.append(target)
+            print(f"  Label '{label}' -> adding build-only target {target}")
+        elif label.lower().startswith("ci:test:gfx"):
+            # Test-only label: ci:test:gfx94x -> gfx94x
+            # Note: we don't add to linux_names/windows_names here because
+            # test requires build. Validation below will check that a
+            # corresponding build label exists.
+            target = label.lower().removeprefix("ci:test:").split("-")[0]
+            linux_test_only.append(target)
+            windows_test_only.append(target)
+            print(f"  Label '{label}' -> adding test-only target {target}")
+        elif label.lower().startswith("ci:gfx"):
+            # Trim suffixes from labels since amdgpu_family_matrix.py
+            # specifies families with no suffix (e.g. `gfx94x`) but
+            # we have some labels like `ci:gfx94X-dcgpu` or `ci:gfx103X-linux`.
+            # Family keys are lowercase, so normalize the target.
+            # Strip ci: prefix, then split on dash to get the base family.
+            target = label.lower().removeprefix("ci:").split("-")[0]
+            linux_names.append(target)
+            windows_names.append(target)
+            print(f"  Label '{label}' -> adding target {target}")
 
-        # Platform-specific labels use additive logic: if any ci:platform label is
-        # set, start with empty lists and add back only the requested platforms.
-        has_platform_linux = "ci:platform:linux" in ci_inputs.pr_labels
-        has_platform_windows = "ci:platform:windows" in ci_inputs.pr_labels
-        if has_platform_linux or has_platform_windows:
-            saved_linux = linux_names
-            saved_windows = windows_names
-            linux_names = []
-            windows_names = []
-            if has_platform_linux:
-                linux_names = saved_linux
-                print("  Label 'ci:platform:linux' -> including Linux builds/tests")
-            if has_platform_windows:
-                windows_names = saved_windows
-                print("  Label 'ci:platform:windows' -> including Windows builds/tests")
+    # Platform-specific labels use additive logic: if any ci:platform label is
+    # set, start with empty lists and add back only the requested platforms.
+    has_platform_linux = "ci:platform:linux" in ci_inputs.pr_labels
+    has_platform_windows = "ci:platform:windows" in ci_inputs.pr_labels
+    if has_platform_linux or has_platform_windows:
+        saved_linux = linux_names
+        saved_windows = windows_names
+        linux_names = []
+        windows_names = []
+        if has_platform_linux:
+            linux_names = saved_linux
+            print("  Label 'ci:platform:linux' -> including Linux builds/tests")
+        if has_platform_windows:
+            windows_names = saved_windows
+            print("  Label 'ci:platform:windows' -> including Windows builds/tests")
 
     # De-dup, validate, then filter by platform availability.
     linux_names = list(dict.fromkeys(linux_names))
