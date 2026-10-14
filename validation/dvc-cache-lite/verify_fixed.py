@@ -8,8 +8,7 @@ import concurrent.futures
 import hashlib
 import importlib.util
 import json
-import os
-import traceback
+import errno
 from pathlib import Path
 import platform
 import sys
@@ -46,25 +45,6 @@ def main():
             raise
 
     fda.pull = traced_pull
-    real_cache_lock = fda._cache_lock
-    lock_observations = []
-
-    def traced_cache_lock(cache_dir, md5):
-        path = fda._cache_path(cache_dir, md5) if cache_dir is not None else None
-        lock = real_cache_lock(cache_dir, md5)
-        lock_observations.append(
-            {
-                "path": str(path),
-                "resolved": (
-                    os.path.normcase(str(cache_dir.resolve())) if path else None
-                ),
-                "lock": id(lock),
-                "thread": threading.get_ident(),
-            }
-        )
-        return lock
-
-    fda._cache_lock = traced_cache_lock
     spec = importlib.util.spec_from_file_location(
         "fixed_tests", ROOT / "fixed/fetch_dvc_artifacts_test.py"
     )
@@ -87,71 +67,100 @@ def main():
     args.directory.mkdir(parents=True, exist_ok=True)
     payload = b"tiny deterministic tensor payload"
     md5 = hashlib.md5(payload, usedforsecurity=False).hexdigest()
-    for iteration in range(100):
-        lock_observations.clear()
-        with tempfile.TemporaryDirectory(
-            prefix="toga-7-fixed-pull-", dir=args.directory
-        ) as tmp:
-            root = Path(tmp)
-            projects = [root / "project-a", root / "project-b"]
-            for project in projects:
-                (project / ".dvc").mkdir(parents=True)
-                (project / ".dvc/config").write_text(
-                    "[core]\n remote = storage\n['remote \"storage\"']\n url = s3://b/pfx\n allow_anonymous_login = true\n"
-                )
-                for i in range(12):
-                    (project / f"{i}.dvc").write_text(
-                        f"outs:\n- md5: {md5}\n  size: {len(payload)}\n  path: out-{i}\n"
+    manifest = json.dumps([{"md5": md5, "relpath": "child.bin"}]).encode()
+    manifest_md5 = hashlib.md5(manifest, usedforsecurity=False).hexdigest() + ".dir"
+    real_link = fda.os.link
+    for mode in ("native", "manifest", "no-hardlinks", "source-cross-volume"):
+        for iteration in range(100):
+            with tempfile.TemporaryDirectory(
+                prefix="toga-7-fixed-pull-", dir=args.directory
+            ) as tmp:
+                root = Path(tmp)
+                projects = [root / "project-a", root / "project-b"]
+                directory = mode == "manifest"
+                out_md5 = manifest_md5 if directory else md5
+                for project in projects:
+                    (project / ".dvc").mkdir(parents=True)
+                    (project / ".dvc/config").write_text(
+                        "[core]\n remote = storage\n['remote \"storage\"']\n url = s3://b/pfx\n allow_anonymous_login = true\n"
                     )
-            cache = root / "cache"
-            cache_file = fda._cache_path(cache, md5)
-            if iteration % 2:
-                cache_file.parent.mkdir(parents=True)
-                cache_file.write_bytes(b"X" * len(payload))
-
-            class S3:
-                calls = 0
-                guard = threading.Lock()
-
-                def download_fileobj(self, bucket, key, file):
-                    with self.guard:
-                        self.calls += 1
-                    file.write(payload)
-
-            fake = S3()
-            messages = []
-            with mock.patch.object(fda, "_make_s3_client", return_value=fake):
-                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
-                    futures = [
-                        ex.submit(
-                            fda.pull,
-                            project,
-                            jobs=12,
-                            cache_dir=cache,
-                            log=messages.append,
+                    for i in range(12):
+                        (project / f"{i}.dvc").write_text(
+                            f"outs:\n- md5: {out_md5}\n  size: {len(payload)}\n  path: out-{i}\n"
                         )
-                        for project in projects
-                    ]
-                    results = [future.result(timeout=15) for future in futures]
-            passed = fake.calls == 1 and sum(r.fetched for r in results) == 1
-            passed &= sum(r.cached for r in results) == 23
-            passed &= all(
-                (project / f"out-{i}").read_bytes() == payload
-                for project in projects
-                for i in range(12)
-            )
-            passed &= not list(root.rglob("*.tmp"))
-            metadata["synthetic_rounds"] += 1
-            if not passed:
-                metadata["synthetic_failures"].append(
-                    {
-                        "iteration": iteration,
-                        "downloads": fake.calls,
-                        "results": [vars(r) for r in results],
-                        "messages": messages,
-                        "locks": lock_observations.copy(),
-                    }
+                cache = root / "cache"
+                if iteration % 2:
+                    for hash_value, data in ((md5, payload), (manifest_md5, manifest)):
+                        if hash_value == manifest_md5 and not directory:
+                            continue
+                        cache_file = fda._cache_path(cache, hash_value)
+                        cache_file.parent.mkdir(parents=True, exist_ok=True)
+                        cache_file.write_bytes(b"X" * len(data))
+
+                class S3:
+                    calls = []
+                    guard = threading.Lock()
+
+                    def download_fileobj(self, bucket, key, file):
+                        with self.guard:
+                            self.calls.append(key)
+                        file.write(manifest if key.endswith(".dir") else payload)
+
+                def link(source, target, *args, **kwargs):
+                    if mode == "no-hardlinks":
+                        raise OSError(errno.ENOTSUP, "simulated unsupported hardlinks")
+                    if mode == "source-cross-volume" and Path(target).is_relative_to(
+                        cache
+                    ):
+                        if not Path(source).is_relative_to(cache):
+                            raise OSError(
+                                errno.EXDEV, "simulated different source volume"
+                            )
+                    return real_link(source, target, *args, **kwargs)
+
+                fake = S3()
+                messages = []
+                with (
+                    mock.patch.object(fda, "_make_s3_client", return_value=fake),
+                    mock.patch.object(fda.os, "link", side_effect=link),
+                ):
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+                        futures = [
+                            ex.submit(
+                                fda.pull,
+                                project,
+                                jobs=12,
+                                cache_dir=cache,
+                                log=messages.append,
+                            )
+                            for project in projects
+                        ]
+                        results = [future.result(timeout=15) for future in futures]
+                passed = len(fake.calls) == (2 if directory else 1)
+                passed &= sum(r.fetched for r in results) == 1
+                passed &= sum(r.cached for r in results) == 23
+                passed &= all(
+                    (
+                        project / f"out-{i}" / "child.bin"
+                        if directory
+                        else project / f"out-{i}"
+                    ).read_bytes()
+                    == payload
+                    for project in projects
+                    for i in range(12)
                 )
+                passed &= not list(root.rglob("*.tmp"))
+                metadata["synthetic_rounds"] += 1
+                if not passed:
+                    metadata["synthetic_failures"].append(
+                        {
+                            "mode": mode,
+                            "iteration": iteration,
+                            "downloads": fake.calls,
+                            "results": [vars(r) for r in results],
+                            "messages": messages,
+                        }
+                    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(metadata, indent=2) + "\n")
     print(json.dumps(metadata, indent=2))

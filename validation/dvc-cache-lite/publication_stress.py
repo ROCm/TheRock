@@ -211,11 +211,20 @@ def main():
         "python": platform.python_version(),
         "directory": str(args.directory),
         "records": records,
-        "note": "Baseline/PR versus experimental direct-link and shared reader/publisher lock; no injected errors.",
+        "note": "Baseline and original PR versus exact fixed source; no injected errors.",
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n")
-    return 0
+    fixed = [r for r in records if r["variant"] == "fixed"]
+    return int(
+        any(
+            r["reader_failures"]
+            or r["publisher_failures"]
+            or not r["final_correct"]
+            or r["staging_files"]
+            for r in fixed
+        )
+    )
 
 
 if __name__ == "__main__":
