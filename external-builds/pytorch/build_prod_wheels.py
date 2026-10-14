@@ -655,6 +655,7 @@ def find_dir_containing(file_name: str, *possible_paths: Path) -> Path:
 
 
 def _setup_common_build_env(
+    cmake_prefix: Path,
     bin_dir: Path,
     rocm_dir: Path,
     pytorch_rocm_arch: str,
@@ -664,6 +665,9 @@ def _setup_common_build_env(
     """Construct the common environment dict shared by all wheel builds."""
     env: dict[str, str] = {
         "PYTHONUTF8": "1",  # Some build files use utf8 characters, force IO encoding
+        "CMAKE_PREFIX_PATH": str(cmake_prefix),
+        "ROCM_HOME": str(rocm_dir),
+        "ROCM_PATH": str(rocm_dir),
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
         "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
         # Make ROCm tools discoverable on all platforms and ROCm DLLs
@@ -805,13 +809,15 @@ def do_build(args: argparse.Namespace):
     apex_dir: Path | None = args.apex_dir
 
     rocm_sdk_version = get_rocm_sdk_version()
+    cmake_prefix = get_rocm_path("cmake")
     bin_dir = get_rocm_path("bin")
     rocm_dir = get_rocm_path("root")
 
     print(f"rocm version {rocm_sdk_version}:")
     print(f"  PYTHON VERSION: {sys.version}")
+    print(f"  CMAKE_PREFIX_PATH = {cmake_prefix}")
     print(f"  BIN = {bin_dir}")
-    print(f"  ROCm root = {rocm_dir}")
+    print(f"  ROCM_HOME = {rocm_dir}")
 
     # Priority: --pytorch-rocm-arch > PYTORCH_ROCM_ARCH env > `rocm-sdk targets`
     # fallback (legacy; see TODO on get_rocm_sdk_targets()).
@@ -837,7 +843,7 @@ def do_build(args: argparse.Namespace):
     pytorch_rocm_arch = pytorch_rocm_arch.replace(",", ";")
 
     env = _setup_common_build_env(
-        bin_dir, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
+        cmake_prefix, bin_dir, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
     )
     print(f"  PATH = {env['PATH']}")
 
