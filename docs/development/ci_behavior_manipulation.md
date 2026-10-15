@@ -45,20 +45,6 @@ The following labels may be added to a pull request to modify CI behavior:
 | `ci:build-jax`             | Opt-in to building JAX packages.                                                                                                                                                                  |
 | `ci:skip-jax`              | Skip JAX package builds.                                                                                                                                                                          |
 
-#### Building frameworks with published ROCm
-
-Use `ci:build-pytorch`, `ci:skip-rocm`, and `ci:skip-jax` to build PyTorch on
-Linux and Windows using the latest stable ROCm packages. Normal path filtering, GPU family, and
-platform selection still apply.
-
-Published-package mode supports only the `release` build variant. It rejects
-JAX builds, explicit ROCm Python/native package build labels, and manual stage
-or baseline selections. Missing or incompatible published packages fail the
-framework build; there is no fallback to building ROCm from source.
-
-See [Framework dependency reuse](ci_overview.md#framework-dependency-reuse) for
-package selection, versioning, and upload behavior.
-
 #### Build/Test-specific architecture labels
 
 For fine-grained control over which architectures build vs. test, you can use
@@ -90,6 +76,22 @@ standard `ci:gfx...` labels.
 > The `ci:test:gfx...` label will only enable tests if test hardware is available
 > for that architecture. If no test runner exists for the family, the label is
 > ignored with a warning.
+
+#### Building frameworks with published ROCm
+
+- Use `ci:skip-rocm` with `ci:build-pytorch` or `ci:build-jax` (or both) to
+  build frameworks using the latest stable ROCm packages.
+- Use `ci:skip-pytorch` or `ci:skip-jax` to disable a framework that the
+  workflow enables by default.
+
+> [!NOTE]
+> Published-package mode supports only the `release` build variant, until
+> ROCm releases include Python packages for other build variants
+> (see https://github.com/ROCm/TheRock/issues/3161 for example).
+
+See
+[ci_overview.md - "Skipping ROCm builds for Framework-only CI runs"](ci_overview.md#skipping-rocm-builds-for-framework-only-ci-runs)
+for more details.
 
 ### Push
 

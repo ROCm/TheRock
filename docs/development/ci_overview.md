@@ -152,30 +152,22 @@ Build logs are uploaded to S3 and organized by stage and GPU family.
 
 See [workflow_outputs.md](workflow_outputs.md) for the S3 layout structure and [github_actions_debugging.md](github_actions_debugging.md) for debugging techniques.
 
-## Framework dependency reuse
+## Skipping ROCm builds for Framework-only CI runs
 
-Multi-arch CI normally builds ROCm and its Python packages before building
-framework wheels. `BuildConfig.rocm_package_find_links_url` supplies pip's
-`--find-links` URL for the run's Python package folder, derived during configuration using
-`WorkflowOutputRoot`. The upload job also reports this URL for its other callers.
+The CI workflows normally build ROCm and its Python packages before building
+framework packages such as PyTorch and JAX. These python packages are uploaded
+to a run-scoped folder usable with `pip install --find-links`.
 
-With `ci:skip-rocm`, framework builds instead install unpinned ROCm packages from
-<https://stable.repo.amd.com/rocm/whl-next/> via
-`BuildConfig.rocm_package_index_url` as pip's `--index-url`. ROCm build, artifact-copy, package, and
-test jobs are skipped. Framework jobs can run with their ROCm packaging dependency
-skipped because their inputs come from `BuildConfig`, not that job's outputs.
-Currently this mode supports PyTorch; JAX support will follow.
-The installed ROCm packages determine the PyTorch wheel's ROCm version suffix.
-Both package URLs are empty when ROCm Python, PyTorch, and JAX package builds
-are all disabled.
+When only framework-specific code is modified or an explicit `ci:skip-rocm`
+label is added to a pull request, ROCm builds can be skipped and framework
+CI jobs can instead install unpinned ROCm packages with
+`pip install --index-url https://stable.repo.amd.com/rocm/whl-next/`.
 
 > [!IMPORTANT]
-> Stable ROCm dependencies give CI wheels release-looking versions, such as
-> `2.12.0+rocm10.1.0`, rather than a `+devrocm...` suffix. These wheels are CI
-> outputs, not release packages. The PyTorch CI workflows upload only to the
-> run-specific folder in `therock-ci-artifacts`; they do not publish to release
-> indexes. Published ROCm dependencies remain in their original index and are
-> not copied to that folder.
+> Stable ROCm dependencies give packages release-looking versions, such as
+> `2.12.0+rocm10.1.0`, rather than a `+devrocm...` suffix. These packages should
+> not be published outside of their workflow run-scoped folders to release
+> indexes.
 
 ## Further Reading
 
