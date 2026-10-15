@@ -664,6 +664,27 @@ class TestDecideJobs(unittest.TestCase):
         self.assertEqual(result.test_rocm.test_type, "comprehensive")
         self.assertIn("test_filter", result.test_rocm.test_type_reason)
 
+    def test_dnn_benchmarking_is_selectable_only_by_test_filter(self):
+        """dnn_benchmarking is an opt-in test_filter value, never chosen automatically."""
+        result = cm.decide_jobs(
+            self._inputs(
+                event_name="workflow_dispatch",
+                pr_labels=["test_filter:dnn_benchmarking"],
+            ),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.test_rocm.test_type, "dnn_benchmarking")
+
+        for event_name in ("schedule", "workflow_dispatch", "pull_request"):
+            with self.subTest(event_name=event_name):
+                automatic = cm.decide_jobs(
+                    self._inputs(event_name=event_name),
+                    git_context=cm.GitContext(),
+                    targets=cm.TargetSelection(),
+                )
+                self.assertNotEqual(automatic.test_rocm.test_type, "dnn_benchmarking")
+
     def test_explicit_prebuilt_stages(self):
         """workflow_dispatch prebuilt_stages input → stage_decisions on BuildRocmDecision."""
         result = cm.decide_jobs(
