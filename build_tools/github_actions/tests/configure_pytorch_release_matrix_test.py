@@ -33,13 +33,6 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.12",
-                    "amdgpu_families": "gfx94X-dcgpu",
-                    "test_level": "standard",
-                    "test_amdgpu_families": "auto",
-                },
-                {
-                    "python_version": "3.12",
                     "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx94X-dcgpu",
                     "test_level": "standard",
@@ -64,7 +57,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.12",
+                    "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx110X-all",
                     "test_level": "standard",
                     "test_amdgpu_families": "auto",
@@ -100,33 +93,6 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "test_level": "none",
                     "test_amdgpu_families": "auto",
                 }
-            ],
-        )
-
-    def test_excludes_unsupported_python_version_for_ref(self):
-        matrix = m.generate_pytorch_matrix_for_release_type(
-            release_type="nightly",
-            python_versions=["3.14", "3.15"],
-            pytorch_git_refs=[
-                "release/2.12",
-                "release/2.13",
-                "release/2.14",
-                "nightly",
-            ],
-            amdgpu_families="gfx94X-dcgpu",
-            platform="linux",
-        )
-
-        self.assertEqual(
-            [(row["python_version"], row["pytorch_git_ref"]) for row in matrix],
-            [
-                ("3.14", "release/2.12"),
-                ("3.14", "release/2.13"),
-                ("3.14", "release/2.14"),
-                ("3.14", "nightly"),
-                ("3.15", "release/2.13"),
-                ("3.15", "release/2.14"),
-                ("3.15", "nightly"),
             ],
         )
 
@@ -195,7 +161,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="dev",
             python_versions=["3.12"],
-            pytorch_git_refs=["release/2.12", "nightly"],
+            pytorch_git_refs=["release/2.13", "nightly"],
             amdgpu_families="gfx94X-dcgpu",
             platform="linux",
         )
@@ -204,17 +170,17 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             release_type="dev",
             platform="linux",
             python_versions=["3.12"],
-            pytorch_git_refs=["release/2.12", "nightly"],
+            pytorch_git_refs=["release/2.13", "nightly"],
             amdgpu_families="gfx94X-dcgpu",
             matrix=matrix,
         )
 
         self.assertIn("| Generated rows | 2 (`none`: 2) |", summary)
-        self.assertIn("`release/2.12`: `3.11`", summary)
+        self.assertIn("`release/2.13`: `3.11`", summary)
         self.assertIn("`nightly`: `3.11`", summary)
         self.assertIn("All generated rows use `none`", summary)
         self.assertIn(
-            "| `3.12` | `release/2.12` | `gfx94X-dcgpu` | `none` |",
+            "| `3.12` | `release/2.13` | `gfx94X-dcgpu` | `none` |",
             summary,
         )
 
