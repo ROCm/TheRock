@@ -277,7 +277,7 @@ jobs:
       # The reusable workflow expands this to gfx targets via
       # cmake/therock_amdgpu_targets.cmake.
       amdgpu_families: ${{ matrix.amdgpu_families }}
-      # Multi-arch CI and stable whl-next packages both use the split layout.
+      # Multi-arch CI and nightly whl-next packages both use the split layout.
       kpack_split: ${{ 'true' }}
       rocm_package_find_links_url: ${{ fromJSON(inputs.build_config).rocm_package_find_links_url }}
       rocm_package_index_url: ${{ fromJSON(inputs.build_config).rocm_package_index_url }}

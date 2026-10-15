@@ -1302,7 +1302,7 @@ def decide_jobs(
     if "ci:skip-rocm" in pr_labels:
         if ci_inputs.build_variant != "release":
             raise ValueError(
-                "ci:skip-rocm requires build_variant='release'; stable ROCm "
+                "ci:skip-rocm requires build_variant='release'; nightly ROCm "
                 "packages are not published for other variants"
             )
         # Published packages satisfy the framework dependency. No ROCm stages
@@ -1895,7 +1895,7 @@ def _expand_build_config_for_platform(
         ).python_packages()
         rocm_package_find_links_url = f"{packages_loc.https_url}/index.html"
     elif use_published_packages and (build_pytorch or build_jax):
-        rocm_package_index_url = "https://stable.repo.amd.com/rocm/whl-next/"
+        rocm_package_index_url = "https://nightly.repo.amd.com/rocm/whl-next/"
 
     if build_pytorch or build_jax:
         framework_rocm_version = (

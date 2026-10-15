@@ -1582,6 +1582,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
     test updates here.
     """
 
+    def setUp(self):
+        cm._get_published_rocm_version.cache_clear()
+        self.addCleanup(cm._get_published_rocm_version.cache_clear)
+
     def _inputs(self, **kwargs):
         defaults = dict(
             built_rocm_version="10.2.0.dev0+abcdef",
@@ -1614,7 +1618,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         expected_keys = {f.name for f in fields(cm.BuildConfig)}
         self.assertEqual(set(d.keys()), expected_keys)
 
-    @patch("configure_multi_arch_ci._get_published_rocm_version", return_value="10.1.0")
+    @patch("configure_multi_arch_ci.get_latest_package_version", return_value="10.1.0")
     def test_published_packages_replace_source_package_dependency(self, lookup):
         jobs = replace(
             _jobs(build_jax=True),
@@ -1639,16 +1643,19 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 self.assertTrue(config.pytorch_build_matrix)
                 self.assertEqual(
                     config.rocm_package_index_url,
-                    "https://stable.repo.amd.com/rocm/whl-next/",
+                    "https://nightly.repo.amd.com/rocm/whl-next/",
                 )
                 self.assertEqual(config.rocm_package_find_links_url, "")
+                self.assertEqual(config.framework_rocm_version, "10.1.0")
 
+        lookup.assert_called_once_with("rocm", configs.linux.rocm_package_index_url)
         self.assertTrue(configs.linux.build_jax)
         self.assertTrue(configs.linux.jax_build_matrix)
         self.assertFalse(configs.windows.build_jax)
         self.assertEqual(configs.windows.jax_build_matrix, [])
 
-    def test_no_package_urls_when_package_builds_are_disabled(self):
+    @patch("configure_multi_arch_ci.get_latest_package_version")
+    def test_no_package_inputs_when_package_builds_are_disabled(self, lookup):
         for package_action in (cm.JobAction.RUN, cm.JobAction.PREBUILT):
             with self.subTest(package_action=package_action):
                 jobs = replace(
@@ -1656,7 +1663,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     build_rocm_python=cm.JobGroupDecision(action=package_action),
                 )
                 configs = cm.expand_build_configs(
-                    self._inputs(build_python_packages=False),
+                    self._inputs(build_python_packages=False, built_rocm_version=""),
                     cm.GitContext(),
                     cm.TargetSelection(
                         linux_families=["gfx94x"], windows_families=["gfx110x"]
@@ -1669,9 +1676,12 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     self.assertFalse(config.build_jax)
                     self.assertEqual(config.rocm_package_find_links_url, "")
                     self.assertEqual(config.rocm_package_index_url, "")
+                    self.assertEqual(config.framework_rocm_version, "")
+        lookup.assert_not_called()
 
+    @patch("configure_multi_arch_ci.get_latest_package_version")
     @patch("configure_multi_arch_ci.WorkflowOutputRoot.from_workflow_run")
-    def test_source_builds_resolve_run_package_urls(self, output_root):
+    def test_source_builds_resolve_run_package_urls(self, output_root, lookup):
         output_root.return_value.python_packages.return_value.https_url = (
             "https://packages.example/run/python"
         )
@@ -1694,6 +1704,37 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 "https://packages.example/run/python/index.html",
             )
             self.assertEqual(config.rocm_package_index_url, "")
+            self.assertEqual(config.framework_rocm_version, "10.2.0.dev0+abcdef")
+        lookup.assert_not_called()
+
+    def test_missing_built_framework_dependency_version_fails(self):
+        with self.assertRaisesRegex(ValueError, "No ROCm package version"):
+            cm.expand_build_configs(
+                self._inputs(built_rocm_version=""),
+                cm.GitContext.empty(),
+                cm.TargetSelection(linux_families=["gfx94x"]),
+                _jobs(),
+            )
+
+    @patch(
+        "configure_multi_arch_ci.get_latest_package_version",
+        side_effect=RuntimeError("Index unavailable"),
+    )
+    def test_published_version_failure_does_not_fall_back_to_built_version(
+        self, lookup
+    ):
+        jobs = replace(
+            _jobs(),
+            build_rocm=cm.BuildRocmDecision(action=cm.JobAction.SKIP),
+            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.PREBUILT),
+        )
+        with self.assertRaisesRegex(RuntimeError, "Index unavailable"):
+            cm.expand_build_configs(
+                self._inputs(),
+                cm.GitContext.empty(),
+                cm.TargetSelection(linux_families=["gfx94x"]),
+                jobs,
+            )
 
     def test_empty_targets_both_none(self):
         """Empty targets on both platforms → both None."""
@@ -2374,76 +2415,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertTrue(result.linux.build_jax)
 
 
-class TestExpandFrameworkRocmVersions(unittest.TestCase):
-    def setUp(self):
-        cm._get_published_rocm_version.cache_clear()
-        self.addCleanup(cm._get_published_rocm_version.cache_clear)
-
-    def _expand(
-        self,
-        *,
-        published=False,
-        build_pytorch=True,
-        build_jax=False,
-        built_rocm_version="10.2.0.dev0+abcdef",
-    ):
-        inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="push",
-            commit_ref="main",
-            base_ref="HEAD^1",
-            build_variant="release",
-            built_rocm_version=built_rocm_version,
-        )
-        jobs = _jobs(build_pytorch=build_pytorch, build_jax=build_jax)
-        if published:
-            jobs = replace(
-                jobs,
-                build_rocm=cm.BuildRocmDecision(action=cm.JobAction.SKIP),
-                build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.PREBUILT),
-            )
-        return cm.expand_build_configs(
-            inputs,
-            cm.GitContext.empty(),
-            cm.TargetSelection(linux_families=["gfx94x"], windows_families=["gfx110x"]),
-            jobs,
-        )
-
-    @patch("configure_multi_arch_ci.get_latest_package_version")
-    def test_built_packages_use_this_runs_version(self, lookup):
-        builds = self._expand()
-        self.assertEqual(builds.linux.framework_rocm_version, "10.2.0.dev0+abcdef")
-        lookup.assert_not_called()
-
-    @patch("configure_multi_arch_ci.get_latest_package_version", return_value="10.1.0")
-    def test_shared_index_is_resolved_once_for_both_frameworks_and_platforms(
-        self, lookup
-    ):
-        builds = self._expand(published=True, build_jax=True)
-        self.assertEqual(builds.linux.framework_rocm_version, "10.1.0")
-        self.assertEqual(builds.windows.framework_rocm_version, "10.1.0")
-        lookup.assert_called_once_with("rocm", builds.linux.rocm_package_index_url)
-
-    @patch("configure_multi_arch_ci.get_latest_package_version")
-    def test_no_framework_builds_need_no_version_or_index_lookup(self, lookup):
-        builds = self._expand(build_pytorch=False, built_rocm_version="")
-        self.assertEqual(builds.linux.framework_rocm_version, "")
-        self.assertEqual(builds.windows.framework_rocm_version, "")
-        lookup.assert_not_called()
-
-    def test_missing_built_version_fails(self):
-        with self.assertRaisesRegex(ValueError, "No ROCm package version"):
-            self._expand(built_rocm_version="")
-
-    @patch(
-        "configure_multi_arch_ci.get_latest_package_version",
-        side_effect=RuntimeError("Index unavailable"),
-    )
-    def test_index_failure_does_not_fall_back_to_built_version(self, lookup):
-        with self.assertRaisesRegex(RuntimeError, "Index unavailable"):
-            self._expand(published=True)
-
-
 # ---------------------------------------------------------------------------
 # Step 6: Format Outputs
 # ---------------------------------------------------------------------------
@@ -2674,7 +2645,7 @@ class TestConfigurePipeline(unittest.TestCase):
                     self.assertEqual(payload["baseline_run_id"], "")
                     self.assertEqual(payload["rocm_package_find_links_url"], "")
                     expected_index = (
-                        "https://stable.repo.amd.com/rocm/whl-next/"
+                        "https://nightly.repo.amd.com/rocm/whl-next/"
                         if payload["build_pytorch"] or payload["build_jax"]
                         else ""
                     )
@@ -2684,7 +2655,7 @@ class TestConfigurePipeline(unittest.TestCase):
                         "10.1.0" if expected_index else "",
                     )
         lookup.assert_called_once_with(
-            "rocm", "https://stable.repo.amd.com/rocm/whl-next/"
+            "rocm", "https://nightly.repo.amd.com/rocm/whl-next/"
         )
 
     def test_skip_rocm_does_not_fail_inactive_asan_workflow(self):

@@ -80,7 +80,7 @@ standard `ci:gfx...` labels.
 #### Building frameworks with published ROCm
 
 - Use `ci:skip-rocm` with `ci:build-pytorch` or `ci:build-jax` (or both) to
-  build frameworks using the latest stable ROCm packages.
+  build frameworks using the latest nightly ROCm packages.
 - Use `ci:skip-pytorch` or `ci:skip-jax` to disable a framework that the
   workflow enables by default.
 

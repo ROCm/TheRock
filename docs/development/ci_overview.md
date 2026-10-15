@@ -161,12 +161,12 @@ to a run-scoped folder usable with `pip install --find-links`.
 When only framework-specific code is modified or an explicit `ci:skip-rocm`
 label is added to a pull request, ROCm builds can be skipped. CI setup resolves
 a ROCm package version from
-`https://stable.repo.amd.com/rocm/whl-next/`. Framework builds and tests then
+`https://nightly.repo.amd.com/rocm/whl-next/`. Framework builds and tests then
 install that version from the index.
 
 > [!IMPORTANT]
-> Stable ROCm dependencies give packages release-looking versions, such as
-> `2.12.0+rocm10.1.0`, rather than a `+devrocm...` suffix. These packages should
+> Published ROCm dependencies give framework packages a `+rocm...` suffix
+> rather than a `+devrocm...` suffix. These packages should
 > not be published outside of their workflow run-scoped folders to release
 > indexes.
 
