@@ -87,6 +87,50 @@ on:
           Comma-separated list of changed project paths (e.g., 'projects/rocprim').
           Mapped to artifacts via BUILD_TOPOLOGY.toml source_paths for granular
           reuse and test filtering (empty = run all tests).
+  workflow_call:
+    inputs:
+      linux_amdgpu_families:
+        type: string
+        default: ""
+      windows_amdgpu_families:
+        type: string
+        default: ""
+      pr_labels:
+        type: string
+        default: ""
+      build_stages:
+        type: string
+        default: ""
+      build_python_packages:
+        type: boolean
+        default: true
+      build_pytorch:
+        type: boolean
+        default: true
+      build_jax:
+        type: boolean
+        default: true
+      build_native_linux:
+        type: boolean
+        default: true
+      prebuilt_stages:
+        type: string
+        default: ""
+      baseline_run_id:
+        type: string
+        default: ""
+      stage_reuse_mode:
+        type: string
+        default: "dry-run"
+      stage_reuse_max_age_hours:
+        type: string
+        default: "72"
+      stage_reuse_commit_history:
+        type: string
+        default: "50"
+      changed_projects:
+        type: string
+        default: ""
   pull_request:
     types:
       - labeled
