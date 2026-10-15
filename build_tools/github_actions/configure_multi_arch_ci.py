@@ -71,6 +71,7 @@ from configure_ci_path_filters import (
     get_git_modified_paths,
     get_git_submodule_paths,
     is_ci_run_required,
+    is_external_ci_only_change,
     load_skip_ci_patterns_for_external_repo,
 )
 from configure_jax_release_matrix import generate_jax_matrix_for_release_type
@@ -1261,7 +1262,22 @@ def _determine_test_type(
     if ci_inputs.is_schedule:
         return "comprehensive", "scheduled run"
 
-    # Priority 4: a submodule change means actual library code changed
+    # Priority 4: an external repo whose diff is confined to its own TheRock CI
+    # plumbing changed no library code, so the deeper suite buys nothing.
+    #
+    # This must precede the submodule check below. GitContext.from_external_repo()
+    # synthesizes changed_files=[repo_name] and submodule_paths=[repo_name] so
+    # stage reuse can treat the repo as a single unit, which makes
+    # has_submodule_changes unconditionally True for every external repo run.
+    # Without this branch there is no path to "quick" for rocm-libraries or
+    # rocm-systems short of an explicit test_filter:quick label.
+    if is_external_ci_only_change(
+        git_context.external_changed_files,
+        git_context.external_skip_patterns,
+    ):
+        return "quick", "external repo change confined to TheRock CI plumbing"
+
+    # Priority 5: a submodule change means actual library code changed
     # (e.g. rocBLAS, MIOpen). These need standard testing since the change
     # could affect any downstream consumer.
     if git_context.has_submodule_changes is True:

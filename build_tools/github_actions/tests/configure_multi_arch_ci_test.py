@@ -644,6 +644,57 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.test_rocm.test_type, "quick")
 
+    def test_external_ci_only_change_is_quick(self):
+        """External repo CI plumbing edits must beat the synthetic submodule hit.
+
+        from_external_repo() always reports a submodule change, so without the
+        CI-only branch every rocm-libraries run would be "standard".
+        """
+        for ci_path in (
+            ".github/workflows/therock-multi-arch-ci.yml",
+            ".github/actions/ci-env/action.yml",
+        ):
+            with self.subTest(ci_path=ci_path):
+                git = cm.GitContext.from_external_repo(
+                    "rocm-libraries",
+                    external_changed_files=[ci_path],
+                    external_skip_patterns=["*.md"],
+                )
+                result = cm.decide_jobs(
+                    self._inputs(), git_context=git, targets=cm.TargetSelection()
+                )
+                self.assertEqual(result.test_rocm.test_type, "quick")
+                self.assertIn("CI plumbing", result.test_rocm.test_type_reason)
+
+    def test_external_source_change_is_standard(self):
+        """Real library changes in an external repo still get standard depth."""
+        git = cm.GitContext.from_external_repo(
+            "rocm-libraries",
+            external_changed_files=[
+                ".github/workflows/therock-multi-arch-ci.yml",
+                "projects/rocblas/src/rocblas.cpp",
+            ],
+            external_skip_patterns=["*.md"],
+        )
+        result = cm.decide_jobs(
+            self._inputs(), git_context=git, targets=cm.TargetSelection()
+        )
+        self.assertEqual(result.test_rocm.test_type, "standard")
+
+    def test_external_ci_only_change_yields_to_test_filter_label(self):
+        """The explicit override still outranks the CI-only downgrade."""
+        git = cm.GitContext.from_external_repo(
+            "rocm-libraries",
+            external_changed_files=[".github/actions/ci-env/action.yml"],
+            external_skip_patterns=["*.md"],
+        )
+        result = cm.decide_jobs(
+            self._inputs(pr_labels=["test_filter:comprehensive"]),
+            git_context=git,
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.test_rocm.test_type, "comprehensive")
+
     def test_nightly_release_is_comprehensive(self):
         """Nightly release → comprehensive tests."""
         result = cm.decide_jobs(

@@ -23,6 +23,7 @@ Public API:
     load_skip_ci_config() - Load skip-CI patterns from TOML config files
     load_skip_ci_patterns_for_external_repo() - Load skip-CI patterns for external repos
     compute_external_repo_changed_projects() - Map changed paths to test scope
+    is_external_ci_only_change() - Detect a diff confined to TheRock CI plumbing
 """
 
 import fnmatch
@@ -746,9 +747,17 @@ def get_changed_files_for_external_repo(
 # keep full coverage, since we cannot assume the same containment holds.
 _WORKFLOW_CHANGE_SCOPED_REPOS = {"rocm/rocm-libraries"}
 
-# TheRock workflow files inside the calling repository.
+# TheRock CI plumbing inside the calling repository: the workflows that call
+# into TheRock, plus the ci-env action they read their pinned TheRock ref,
+# baseline run ID, container image and runner labels from. These files
+# configure a run; they cannot change what any library does. Keeping ci-env
+# here matters because it is edited on exactly the same occasions as the
+# workflows -- every TheRock ref bump touches both -- and leaving it out made
+# such a change unclassifiable, which silently widened the run to full
+# coverage.
 _CALLER_WORKFLOW_PATTERNS = [
     ".github/workflows/therock*",
+    ".github/actions/ci-env/*",
 ]
 
 # Project discovery and shared test logic can alter test selection for every
@@ -855,6 +864,44 @@ def _unclassifiable_paths(paths: Iterable[str], known_prefixes: set[str]) -> lis
     return [
         path for path in paths if "/".join(path.split("/", 2)[:2]) not in known_prefixes
     ]
+
+
+def is_external_ci_only_change(
+    changed_files: Optional[list[str]],
+    skip_patterns: Optional[list[str]] = None,
+) -> bool:
+    """Whether an external repo's diff touches only its own TheRock CI plumbing.
+
+    Callers use this to pick a test depth: such a change reconfigures how a run
+    is wired without altering any library's behavior, so the deeper suite has
+    nothing extra to catch.
+
+    Skippable paths are stripped first, matching
+    compute_external_repo_changed_projects(), so a docs edit riding along with a
+    workflow change does not disqualify the run. An empty or fully skippable
+    diff returns False: that is "nothing to judge", not "CI-only", and the
+    caller should fall through to its own default rather than quietly
+    downgrading.
+
+    Args:
+        changed_files: Changed paths in the calling repo, or None if unavailable.
+        skip_patterns: Globs for files that cannot affect build or test results.
+
+    Returns:
+        True only when every significant path is TheRock CI plumbing.
+    """
+    if not changed_files:
+        return False
+
+    significant = [
+        path
+        for path in changed_files
+        if not _is_path_skippable_for_patterns(path, skip_patterns or [])
+    ]
+    if not significant:
+        return False
+
+    return all(_matches_any([path], _CALLER_WORKFLOW_PATTERNS) for path in significant)
 
 
 def compute_external_repo_changed_projects(

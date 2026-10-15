@@ -19,6 +19,7 @@ from configure_ci_path_filters import (
     get_git_commit_hash,
     get_git_modified_paths,
     is_ci_run_required,
+    is_external_ci_only_change,
 )
 from workflow_utils import get_transitive_workflow_uses
 
@@ -253,6 +254,9 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
 
 # A TheRock workflow file inside the calling repository.
 _CALLER_WORKFLOW = ".github/workflows/therock-multi-arch-ci-nightly.yml"
+# The calling repository's ci-env action, holding its pinned TheRock ref and
+# baseline run ID. Edited on the same occasions as the workflows above.
+_CI_ENV_ACTION = ".github/actions/ci-env/action.yml"
 _PROJECTS_CONFIG = ".github/repos-config.json"
 _SKIP_PATTERNS = ["*.md", "docs/*", "*CODEOWNERS"]
 
@@ -418,6 +422,59 @@ class ExternalRepoChangedProjectsTest(unittest.TestCase):
         selected_tests = set(selection.stdout.splitlines())
         self.assertIn("rocblas", selected_tests)
         self.assertNotIn("rccl", selected_tests)
+
+    def test_ci_env_action_selects_its_configured_projects(self):
+        """ci-env is CI plumbing, not an unclassifiable path (#13645)."""
+        projects = self.compute([_CI_ENV_ACTION])
+        self.assertEqual(projects, _LIBRARY_PROJECTS)
+        self.assertNotIn("projects/rccl", projects)
+
+    def test_ci_env_action_with_workflow_selects_its_configured_projects(self):
+        """A TheRock ref bump touches both files and must stay narrowed."""
+        self.assertEqual(
+            self.compute([_CALLER_WORKFLOW, _CI_ENV_ACTION]), _LIBRARY_PROJECTS
+        )
+
+
+class ExternalCiOnlyChangeTest(unittest.TestCase):
+    """is_external_ci_only_change: True only for pure CI-plumbing diffs."""
+
+    def check(self, changed_files, skip_patterns=_SKIP_PATTERNS):
+        return is_external_ci_only_change(changed_files, skip_patterns)
+
+    def test_workflow_only_is_ci_only(self):
+        self.assertTrue(self.check([_CALLER_WORKFLOW]))
+
+    def test_ci_env_action_only_is_ci_only(self):
+        self.assertTrue(self.check([_CI_ENV_ACTION]))
+
+    def test_workflow_plus_ci_env_is_ci_only(self):
+        self.assertTrue(self.check([_CALLER_WORKFLOW, _CI_ENV_ACTION]))
+
+    def test_skippable_path_does_not_disqualify(self):
+        self.assertTrue(self.check(["docs/guide.md", _CALLER_WORKFLOW]))
+
+    def test_source_change_is_not_ci_only(self):
+        self.assertFalse(self.check(["projects/rocblas/src/rocblas.cpp"]))
+
+    def test_source_change_alongside_workflow_is_not_ci_only(self):
+        self.assertFalse(
+            self.check([_CALLER_WORKFLOW, "projects/rocblas/src/rocblas.cpp"])
+        )
+
+    def test_unrelated_workflow_is_not_ci_only(self):
+        """Only the therock* workflows are TheRock CI plumbing."""
+        self.assertFalse(self.check([".github/workflows/close-stale-prs.yml"]))
+
+    def test_shared_ci_script_is_not_ci_only(self):
+        """Selection logic can change coverage everywhere; stay conservative."""
+        self.assertFalse(self.check([".github/scripts/get_changed_projects.py"]))
+
+    def test_empty_and_unknown_diffs_are_not_ci_only(self):
+        """'Nothing to judge' must fall through to the caller's default."""
+        self.assertFalse(self.check([]))
+        self.assertFalse(self.check(None))
+        self.assertFalse(self.check(["docs/guide.md", "README.md"]))
 
 
 if __name__ == "__main__":
