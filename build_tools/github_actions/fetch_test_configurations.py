@@ -60,6 +60,36 @@ TEST_LABEL_GROUPS: dict[str, list[str]] = {
 }
 
 
+def _parse_test_labels(raw: str) -> list[str]:
+    """Parse the TEST_LABELS environment variable into a list of strings.
+
+    Accepts either Python list literal syntax (e.g. '["test:rocblas"]') or a
+    plain comma-separated string (e.g. 'test:rocblas,test:hipblas').  The
+    latter is friendlier for manual workflow_dispatch runs where users are
+    unlikely to type valid Python list syntax.
+    """
+    raw = raw.strip()
+    if not raw or raw == "[]":
+        return []
+
+    # If it looks like a Python list literal, try ast.literal_eval first.
+    if raw.startswith("["):
+        try:
+            result = ast.literal_eval(raw)
+            if isinstance(result, list):
+                return [str(item) for item in result]
+        except (ValueError, SyntaxError) as exc:
+            raise ValueError(
+                f"TEST_LABELS looks like a Python list but could not be parsed: {raw!r}. "
+                f'Expected format: \'["test:rocblas", "test:hipblas"]\' (Python list literal) '
+                f"or 'test:rocblas,test:hipblas' (comma-separated string). "
+                f"Original error: {exc}"
+            ) from exc
+
+    # Fall back to comma-separated string parsing.
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 # Base container options applied to all Linux containers
 # --user 0:0 - Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
 # --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
@@ -1231,7 +1261,7 @@ def run():
     projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     test_type = os.getenv("TEST_TYPE", "standard")
-    test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
+    test_labels = _parse_test_labels(os.getenv("TEST_LABELS") or "[]")
     build_variant = os.getenv("BUILD_VARIANT", "release")
     skip_stages = os.getenv("SKIP_STAGES", "").split(",")
 

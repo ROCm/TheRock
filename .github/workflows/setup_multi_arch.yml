@@ -61,7 +61,8 @@ on:
           and baseline_run_id, and performs no reuse analysis or baseline lookup;
           "dry-run" (default) reports what automatic reuse could do while still
           honoring explicit prebuilt_stages; "reuse-stage" applies automatic
-          reuse and also honors explicit prebuilt_stages.
+          reuse and also honors explicit prebuilt_stages. Release branches
+          always use "off", regardless of this input.
         type: string
         default: "dry-run"
       stage_reuse_max_age_hours:
@@ -262,6 +263,7 @@ jobs:
           # For baseline run selection, use repository input (defaults to GITHUB_REPOSITORY).
           # External repos set repository to "ROCm/TheRock" to fetch TheRock baseline runs.
           THEROCK_REPOSITORY: ${{ inputs.repository || github.repository }}
+          THEROCK_CHECKOUT_REF: ${{ inputs.ref }}
           # Token for GitHub API calls (branch history, baseline workflow runs)
           GITHUB_TOKEN: ${{ github.token }}
           # External repo JSON (e.g., {"repository":"ROCm/rocm-libraries","ref":"..."})
