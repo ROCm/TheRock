@@ -268,17 +268,17 @@ class WorkflowOutputRoot:
             self.bucket, f"{self.prefix}/logs/packaging/{pkg_type}/index.html"
         )
 
-    def amdrepos_package(
+    def repo_setup_package(
         self, os_profile: str, tier: str, pkg_type: str
     ) -> StorageLocation:
         """Location for the ``amdrocm-repo`` bootstrap package.
 
-        ``{run_id}-linux/amdrepos/{os_profile}/amdrocm-repo-{tier}.{pkg_type}``
-        (e.g. ``12345678901-linux/amdrepos/ubuntu2404/amdrocm-repo-nightly.deb``).
+        ``{run_id}-linux/amd-repo-setup/{os_profile}/amdrocm-repo-{tier}.{pkg_type}``
+        (e.g. ``12345678901-linux/amd-repo-setup/ubuntu2404/amdrocm-repo-nightly.deb``).
 
-        Mirrors the ``amdrepos/<distro>/`` folder on repo.amd.com, which holds
-        the package for every tier side by side, so the tier is part of the file
-        name. The name is fixed per tier so the download URL does not change
+        Mirrors the ``amd-repo-setup/<distro>/`` folder on repo.amd.com, which
+        holds the package for every tier side by side, so the tier is part of the
+        file name. The name is fixed per tier so the download URL does not change
         with the package version. It sits outside ``packages/``, so promoting
         the package repositories to the release buckets does not carry it.
 
@@ -289,7 +289,8 @@ class WorkflowOutputRoot:
         """
         return StorageLocation(
             self.bucket,
-            f"{self.prefix}/amdrepos/{os_profile}/amdrocm-repo-{tier}.{pkg_type}",
+            f"{self.prefix}/amd-repo-setup/{os_profile}"
+            f"/amdrocm-repo-{tier}.{pkg_type}",
         )
 
     # -- Python packages --------------------------------------------------------

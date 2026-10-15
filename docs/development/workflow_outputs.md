@@ -139,7 +139,7 @@ families in parallel, producing identically-named log files (e.g.,
     packages/msi/                               (Windows MSI installers)
         *.msi                                   (one per package, e.g. amdrocm-runtime.msi)
 
-    amdrepos/{os_profile}/                      (amdrocm-repo bootstrap packages)
+    amd-repo-setup/{os_profile}/                (amdrocm-repo bootstrap packages)
         amdrocm-repo-{tier}.deb                 (or .rpm; one per tier)
 
     python/
@@ -304,17 +304,17 @@ To add a new output type:
 
 ### Upload scripts
 
-| File                                                                                       | Uses                                                                          |
-| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| [`post_build_upload.py`](/build_tools/github_actions/post_build_upload.py)                 | `WorkflowOutputRoot` + `StorageBackend` for artifacts, logs, manifests        |
-| [`upload_package_repo.py`](/build_tools/packaging/linux/upload_package_repo.py)            | `WorkflowOutputRoot.native_linux_packages()` for deb/rpm package repositories |
-| [`upload_amdrepos_package.py`](/build_tools/packaging/linux/upload_amdrepos_package.py)    | `WorkflowOutputRoot.amdrepos_package()` for the amdrocm-repo package          |
-| [`upload_package_repo.py`](/build_tools/packaging/windows/upload_package_repo.py)          | `WorkflowOutputRoot.native_windows_packages()` for msi installers             |
-| [`post_stage_upload.py`](/build_tools/github_actions/post_stage_upload.py)                 | `WorkflowOutputRoot` + `StorageBackend` for multi-arch stage logs             |
-| [`upload_tarballs.py`](/build_tools/github_actions/upload_tarballs.py)                     | `WorkflowOutputRoot` + `StorageBackend` for tarballs                          |
-| [`upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)       | `WorkflowOutputRoot` + `StorageBackend` for Python wheels and index           |
-| [`upload_pytorch_manifest.py`](/build_tools/github_actions/upload_pytorch_manifest.py)     | `WorkflowOutputRoot` + `StorageBackend` for PyTorch manifests                 |
-| [`upload_test_report_script.py`](/build_tools/github_actions/upload_test_report_script.py) | `WorkflowOutputRoot` for S3 base URI (upload not yet migrated to backend)     |
+| File                                                                                        | Uses                                                                          |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`post_build_upload.py`](/build_tools/github_actions/post_build_upload.py)                  | `WorkflowOutputRoot` + `StorageBackend` for artifacts, logs, manifests        |
+| [`upload_package_repo.py`](/build_tools/packaging/linux/upload_package_repo.py)             | `WorkflowOutputRoot.native_linux_packages()` for deb/rpm package repositories |
+| [`upload_repo_setup_package.py`](/build_tools/packaging/linux/upload_repo_setup_package.py) | `WorkflowOutputRoot.repo_setup_package()` for the amdrocm-repo package        |
+| [`upload_package_repo.py`](/build_tools/packaging/windows/upload_package_repo.py)           | `WorkflowOutputRoot.native_windows_packages()` for msi installers             |
+| [`post_stage_upload.py`](/build_tools/github_actions/post_stage_upload.py)                  | `WorkflowOutputRoot` + `StorageBackend` for multi-arch stage logs             |
+| [`upload_tarballs.py`](/build_tools/github_actions/upload_tarballs.py)                      | `WorkflowOutputRoot` + `StorageBackend` for tarballs                          |
+| [`upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)        | `WorkflowOutputRoot` + `StorageBackend` for Python wheels and index           |
+| [`upload_pytorch_manifest.py`](/build_tools/github_actions/upload_pytorch_manifest.py)      | `WorkflowOutputRoot` + `StorageBackend` for PyTorch manifests                 |
+| [`upload_test_report_script.py`](/build_tools/github_actions/upload_test_report_script.py)  | `WorkflowOutputRoot` for S3 base URI (upload not yet migrated to backend)     |
 
 ### Download scripts
 
