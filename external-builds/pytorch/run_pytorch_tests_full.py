@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Runs the full PyTorch test suite on AMD GPUs via PyTorch's run_test.py,
-with TheRock ROCm-specific skip-test integration and sharding support.
+"""Runs the PyTorch suite on AMD GPUs via run_test.py and related test steps.
+
+Adds TheRock skip integration, sharding, pinned distributed dependencies, and
+the custom operator/backend C++ tests that upstream test.sh runs around it.
 
 For the "default" and "distributed" configs, mirrors how PyTorch CI's
 test.sh invokes test_python_shard():
@@ -62,6 +64,11 @@ from pathlib import Path
 
 from skip_tests.create_skip_tests import get_tests
 
+from pytorch_test_support import (
+    install_distributed_test_dependencies,
+    run_custom_tests,
+    should_run_custom_tests,
+)
 from pytorch_utils import (
     check_pytorch_source_version,
     configure_gpu_visibility,
@@ -570,6 +577,9 @@ def main(argv: list[str]) -> int:
 
     print_env()
 
+    if args.test_config == "distributed":
+        install_distributed_test_dependencies(args.pytorch_dir)
+
     if args.test_config == "inductor":
         return_code = _run_inductor(args, tests_to_skip, passthrough_args)
     else:
@@ -578,6 +588,14 @@ def main(argv: list[str]) -> int:
         result = subprocess.run(cmd, cwd=str(args.pytorch_dir))
         return_code = result.returncode
         print(f"run_test.py finished with return code: {return_code}")
+
+    if return_code == 0 and should_run_custom_tests(
+        test_config=args.test_config,
+        shard=args.shard,
+        num_shards=args.num_shards,
+        included_tests=args.include,
+    ):
+        run_custom_tests(args.pytorch_dir)
 
     # Force-exit immediately.  PyTorch's run_test.py is known to hang after
     # all test files complete due to leaked daemon threads or orphan child
