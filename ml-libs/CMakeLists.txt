@@ -290,6 +290,19 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
 endif(THEROCK_ENABLE_HIPBLASLTPROVIDER)
 
 if(THEROCK_ENABLE_HIPKERNELPROVIDER)
+  set(_hipkernelprovider_enabled ON)
+  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_hipkernelprovider_targets hipkernelprovider ${THEROCK_AMDGPU_TARGETS})
+    if(NOT _hipkernelprovider_targets)
+      message(STATUS
+        "hipkernelprovider: no supported gfx targets remain after filtering "
+        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
+      set(_hipkernelprovider_enabled OFF)
+    endif()
+  endif()
+endif()
+
+if(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
   ##############################################################################
   # hipDNN hip kernel provider
   ##############################################################################
@@ -335,9 +348,22 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
     SUBPROJECT_DEPS
       hipkernelprovider
   )
-endif(THEROCK_ENABLE_HIPKERNELPROVIDER)
+endif(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
 
 if(THEROCK_ENABLE_HIPDNN_SAMPLES)
+  set(_hipdnn_samples_enabled ON)
+  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_hipdnn_samples_targets hipDNN_samples ${THEROCK_AMDGPU_TARGETS})
+    if(NOT _hipdnn_samples_targets)
+      message(STATUS
+        "hipDNN_samples: no supported gfx targets remain after filtering "
+        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
+      set(_hipdnn_samples_enabled OFF)
+    endif()
+  endif()
+endif()
+
+if(THEROCK_ENABLE_HIPDNN_SAMPLES AND _hipdnn_samples_enabled)
   ##############################################################################
   # hipDNN samples
   ##############################################################################
@@ -376,4 +402,4 @@ if(THEROCK_ENABLE_HIPDNN_SAMPLES)
     SUBPROJECT_DEPS
       hipDNN_samples
   )
-endif(THEROCK_ENABLE_HIPDNN_SAMPLES)
+endif(THEROCK_ENABLE_HIPDNN_SAMPLES AND _hipdnn_samples_enabled)
