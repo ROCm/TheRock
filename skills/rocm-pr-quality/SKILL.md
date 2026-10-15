@@ -156,6 +156,14 @@ it is, that it is tied to this PR (not to a commit, so later pushes are fine), a
 gate can key on it. If an approval was already posted without a block, hand the user the one-line
 paste form instead of the full block.
 
+**Never for your own PR.** An attestation records an independent review, so the skill does not
+produce one for a PR the user authored. That covers Action 1 (never add one to the PR description or
+a comment on the user's own PR) and Action 2 when the user reviews their own PR. A self-review is
+still useful feedback; end it without the block and say why. Decide by comparing the PR's author
+(`gh pr view <pr> --json author -q .author.login`) with the user (`gh api user -q .login`). A person
+with more than one GitHub account is still the same person, so if the logins differ but the user
+says the PR is theirs, treat it as theirs; if you cannot tell, ask.
+
 ______________________________________________________________________
 
 ## Action 1 — Author assist
@@ -191,7 +199,9 @@ not render empty `N/A` fields in the body.
 
 **Output:** a suggested PR title + body (Markdown), a per-step checklist (pass / warn / fail),
 CI labels to consider, and open questions for the author — all before the push. Do not create
-or edit the PR on GitHub unless the user explicitly approves the exact text.
+or edit the PR on GitHub unless the user explicitly approves the exact text. Never include a
+review attestation in the description or a comment on the author's own PR (see "Review
+attestation").
 
 ______________________________________________________________________
 
@@ -250,11 +260,13 @@ and add cross-cutting testing/reuse passes; otherwise do a single-pass review.
 
 **Output:** the overall assessment + the four answers + a severity-ordered findings list + a
 `BLOCKING`-items list. Only on request, and only after the user approves the wording, produce a
-draft request-changes comment. Never post it yourself. When the assessment is `APPROVED`, also
-produce the attestation block (see "Review attestation"). Drafting the approval comment itself is
-on request, like the request-changes comment above; when you draft it, include the block as its
-trailer, otherwise hand the block to the user directly. Briefly explain it; if the user already
-approved without it, give them the one-line paste form. Never post either yourself.
+draft request-changes comment. Never post it yourself. When the assessment is `APPROVED` and the
+PR is not the user's own, also produce the attestation block (see "Review attestation"). If the
+user is reviewing their own PR, give the review but no block, and say that the skill does not
+attest to a person's own PRs. Drafting the approval comment itself is on request, like the
+request-changes comment above; when you draft it, include the block as its trailer, otherwise hand
+the block to the user directly. Briefly explain it; if the user already approved without it, give
+them the one-line paste form. Never post either yourself.
 
 ______________________________________________________________________
 
@@ -313,9 +325,11 @@ with the reason.
 **Report it plainly:** the status, who posted the block (author and their association with the
 repo), when, and the reviewed commit with how many commits were pushed since. Later commits are
 allowed and are not a failure; mention them so a human can judge how much changed after the
-review. State the limit when it matters: the digest is a checksum, not a secret, so it shows the
-block was generated for this PR, not who ran the skill or that a review really happened. A
-verified attestation does not replace a human approval.
+review. Flag a block that was posted by the PR's own author: the skill does not attest to a
+person's own PRs, so treat it as unreliable and say so. State the limit when it matters: the
+digest is a checksum, not a secret, so it shows the block was generated for this PR, not who ran
+the skill or that a review really happened. A verified attestation does not replace a human
+approval.
 
 ______________________________________________________________________
 

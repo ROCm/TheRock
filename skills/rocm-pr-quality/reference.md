@@ -298,6 +298,11 @@ consumer (e.g. a pre-review gate) keys on, and the `Attestation` digest ties the
 specific PR so a pasted template or a block copied from another PR can be detected. The digest is
 deliberately loose: commits pushed after the review are allowed and do not invalidate it.
 
+An attestation records an independent review, so the skill never produces one for the user's own PR,
+whether they are authoring it or reviewing it themselves. A self-review still gives feedback, just
+without the block. Compare the PR's author with the user's GitHub login; one person with several
+accounts counts as one author, and if you cannot tell, ask.
+
 Block (leaned-into default):
 
 ```markdown
