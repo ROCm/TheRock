@@ -77,13 +77,13 @@ if(THEROCK_ENABLE_RCCL)
     therock_cmake_subproject_dist_dir(_rocjitsu_dist_dir rocjitsu)
     therock_cmake_subproject_dist_dir(_rocjitsu_hotswap_dist_dir rocjitsu-hotswap)
 
-    # Skip unbundle+pretranslate unless gfx1250 is in THEROCK_AMDGPU_TARGETS (hotswap stays on via RCCL deps).
+    # RCCL compiles filtered test targets; the generic comm-libs stage has no per-arch list.
+    get_target_property(_rccl_declared_targets rccl THEROCK_AMDGPU_TARGETS)
+    therock_filter_amdgpu_targets(_rccl_gpu_targets rccl ${_rccl_declared_targets})
     set(_rccl_run_pretranslate OFF)
-    foreach(_arch IN LISTS THEROCK_AMDGPU_TARGETS)
-      if(_arch MATCHES "^gfx1250")
-        set(_rccl_run_pretranslate ON)
-      endif()
-    endforeach()
+    if("gfx1250" IN_LIST _rccl_gpu_targets)
+      set(_rccl_run_pretranslate ON)
+    endif()
 
     # Generate the install-owned translation tier from RCCL before KPACK splits
     # its fat binary. The splitter then assigns this tree only to gfx1250.
