@@ -14,10 +14,12 @@ This script is a pipeline of data transformations:
     5. Build Configs   — families × variant → per-platform build configs
     6. Write Outputs   — JSON → GITHUB_OUTPUT + GITHUB_STEP_SUMMARY
 
-Version resolution queries the package index only when published packages are
-needed. Each pipeline step is independently testable with typed inputs.
+Most steps are pure functions operating on typed dataclasses, independently
+testable without environment variables or filesystem access. Some exceptions are
+where version resolution queries remote package indexes when published packages
+are needed.
 
-The CI pipeline is a DAG of job groups:
+The usual source-build dependencies form a DAG of job groups:
 
     build-rocm → test-rocm
                → build-rocm-python → build-pytorch → test-pytorch
@@ -25,10 +27,15 @@ The CI pipeline is a DAG of job groups:
                → build-native-linux   → test-native-linux
                → build-native-windows → test-native-windows (future)
 
-Step 4 determines which job groups to run, skip, or satisfy with prebuilt
-artifacts. Within build-rocm, per-stage rebuild/prebuilt granularity is
-available. Test details (which tests to run, quick vs full) are decided
-per test job group.
+The "decide jobs" step determines which of the available job groups to run,
+skip, or satisfy with prebuilt outputs.
+
+    * Existing outputs can remove the need for upstream producers. For example,
+      when frameworks use published ROCm Python packages, build-rocm is SKIP and
+      build-rocm-python is PREBUILT.
+    * Within build-rocm, per-stage rebuild/prebuilt granularity is available.
+    * Test details (which tests to run, test filter level) are decided per test
+      job group.
 
 Inputs:
     GITHUB_EVENT_NAME   : push, pull_request, schedule, workflow_dispatch
@@ -595,14 +602,18 @@ class TargetSelection:
 #
 # Each node gets a JobAction: RUN, PREBUILT, or SKIP.
 #   - RUN:      Build from source (or run tests).
-#   - PREBUILT: Use artifacts from a prior successful run or published packages.
+#   - PREBUILT: Satisfy consumers with existing outputs instead of running the
+#               producer. For example, prior-run artifacts for build-rocm, or
+#               published packages for build-rocm-python.
 #               Only valid for build job groups (build-rocm, build-rocm-python).
-#   - SKIP:     Don't run at all. Used when no downstream job needs this
-#               node's outputs.
+#   - SKIP:     Omit this group, including copying/reusing its outputs.
+#               Consumers may have their dependencies satisfied by a different
+#               PREBUILT node.
 #
-# Note: this is aspirational and not fully implemented yet.
+# The following examples are aspirational; selection and reuse
+# for these cases may not be fully implemented yet.
 #
-# Example: a commit that only changes ROCm python packaging code:
+# Example 1: a commit that only changes ROCm python packaging code:
 #
 #   [PREBUILT] build-rocm          (ROCm itself unchanged, reuse artifacts)
 #       │
@@ -610,6 +621,16 @@ class TargetSelection:
 #       │
 #       └──> [RUN] build-rocm-python ──> [RUN] build-pytorch
 #              (packaging changed)            │
+#                                             └──> [RUN] test-pytorch
+#
+# Example 2: a commit that only changes PyTorch related code:
+#
+#   [SKIP] build-rocm              (ROCm itself unaffected, skip entirely)
+#       │
+#       ├──> [SKIP] test-rocm      (ROCm unaffected, no need to re-test)
+#       │
+#       └──> [PREBUILT] build-rocm-python ──> [RUN] build-pytorch
+#              (use from index)               │
 #                                             └──> [RUN] test-pytorch
 #
 # Subclasses of JobGroupDecision add group-specific details:
