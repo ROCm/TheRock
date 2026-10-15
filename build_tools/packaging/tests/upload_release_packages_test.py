@@ -30,14 +30,20 @@ from upload_release_packages import (
 class FakeS3Client:
     """`head_object` finds only `existing` keys; `upload_file` records uploads."""
 
-    def __init__(self, existing=(), error_code="404"):
+    def __init__(self, existing=(), status=404):
         self.existing = set(existing)
-        self.error_code = error_code
+        self.status = status
         self.uploaded = []
 
     def head_object(self, Bucket, Key):
         if (Bucket, Key) not in self.existing:
-            raise ClientError({"Error": {"Code": self.error_code}}, "HeadObject")
+            raise ClientError(
+                {
+                    "Error": {"Code": str(self.status)},
+                    "ResponseMetadata": {"HTTPStatusCode": self.status},
+                },
+                "HeadObject",
+            )
         return {}
 
     def upload_file(self, filename, bucket, key):
@@ -45,6 +51,13 @@ class FakeS3Client:
 
 
 class StructuredUploadTest(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch(
+            "upload_release_packages.boto3.client", return_value=FakeS3Client()
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_infer_structured_product_routes_torch_prefixes_to_pytorch(self):
         filenames = [
             "torch-2.10.0+rocm7.13.0-cp312-cp312-linux_x86_64.whl",
@@ -255,11 +268,11 @@ class OverwriteGuardTest(unittest.TestCase):
             return output.getvalue()
 
     def test_errors_are_not_treated_as_missing(self):
-        for code, hint in (("403", True), ("NoSuchBucket", False)):
-            with self.subTest(code=code):
+        for status, hint in ((403, True), (500, False)):
+            with self.subTest(status=status):
                 output = io.StringIO()
                 with contextlib.redirect_stdout(output), self.assertRaises(ClientError):
-                    object_exists(FakeS3Client(error_code=code), "b", "k")
+                    object_exists(FakeS3Client(status=status), "b", "k")
                 self.assertEqual("s3:ListBucket" in output.getvalue(), hint)
 
     def test_existing_files_are_skipped(self):
@@ -277,11 +290,19 @@ class OverwriteGuardTest(unittest.TestCase):
                 else:
                     self.assertEqual(output.count("[DRY-RUN] Would upload"), 1)
 
-    def test_allow_overwrite_skips_the_check(self):
-        client = FakeS3Client(existing=[self.TORCH_DEST], error_code="403")
-        self._upload(client, execute=True, allow_overwrite=True)
-        self.assertIn(self.TORCH_DEST, client.uploaded)
-        self.assertEqual(len(client.uploaded), 3)
+    def test_allow_overwrite_replaces_existing_files(self):
+        for execute in (True, False):
+            with self.subTest(execute=execute):
+                client = FakeS3Client(existing=[self.TORCH_DEST])
+                output = self._upload(client, execute=execute, allow_overwrite=True)
+                if execute:
+                    self.assertIn(f"Overwriting {self.TORCH} ...", output)
+                    self.assertIn(self.TORCH_DEST, client.uploaded)
+                    self.assertEqual(len(client.uploaded), 3)
+                else:
+                    self.assertIn(f"[DRY-RUN] Would overwrite: {self.TORCH}", output)
+                    self.assertEqual(output.count("[DRY-RUN] Would upload"), 2)
+                    self.assertEqual(client.uploaded, [])
 
 
 if __name__ == "__main__":
