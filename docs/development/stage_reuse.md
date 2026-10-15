@@ -84,6 +84,8 @@ A baseline run is only used when it is:
 
 - on the configured baseline branch (default `main`) of the configured workflow
   (default `multi_arch_ci.yml`),
+- triggered by a `push`. Manually dispatched runs are skipped, because their
+  inputs (for example `extra_cmake_args`) can change what gets built,
 - recent enough (`stage_reuse_max_age_hours`),
 - commit-compatible — its commit is the same as, or an ancestor of, the current
   commit (established from the last `stage_reuse_commit_history` commits), and

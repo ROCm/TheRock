@@ -51,6 +51,40 @@ Actions workflow page:
 Inputs allow per-platform family selection, test label filtering, and prebuilt
 stage configuration.
 
+#### Extra CMake arguments
+
+The `extra_cmake_args` input adds CMake cache options to the `cmake -B` command
+of every stage build (Linux, Windows, and WSL). Use it to try a
+[feature flag](flags.md) or any other cache option without committing
+anything:
+
+```
+-DTHEROCK_FLAG_HIPDNN_ENABLE_SDPA=ON -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF
+```
+
+The setup job checks the value before any build starts and fails with a clear
+message if it breaks these rules:
+
+- Separate options with spaces. Each one must be `-DNAME=VALUE` or
+  `-DNAME:TYPE=VALUE`, where `TYPE` is `BOOL`, `STRING`, `PATH`, `FILEPATH`,
+  or `INTERNAL`. Other CMake options, such as `-C` or `-G`, are rejected.
+- Values may only contain letters, digits, and `_ . , ; : / + = @ % -`.
+- Names that the CI pipeline sets itself are rejected: `THEROCK_ENABLE_*`,
+  `THEROCK_*_SOURCE_DIR`, `THEROCK_AMDGPU_FAMILIES`,
+  `THEROCK_DIST_AMDGPU_FAMILIES`, `THEROCK_PACKAGE_VERSION`, the Python
+  executable lists, and the compiler launchers.
+- The input only works on manual (`workflow_dispatch`) runs.
+
+The options appear in the CI configuration step summary.
+
+> [!WARNING]
+> Stages copied from another run (`prebuilt_stages` or automatic
+> [stage reuse](stage_reuse.md)) were built without your extra options. Only the
+> stages that are rebuilt in this run use them.
+
+Manual runs are never picked as automatic stage-reuse baselines, so these
+options can't leak into other runs.
+
 ## Prebuilt stages
 
 > [!NOTE]

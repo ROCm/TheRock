@@ -60,6 +60,18 @@ def format_summary(
             lines.append(f"> - {callout}")
         lines.append("")
 
+    build_rocm = outputs.jobs.build_rocm
+    if ci_inputs.extra_cmake_args and (
+        build_rocm.prebuilt_stages or build_rocm.reusable_artifacts
+    ):
+        lines.append("> [!WARNING]")
+        lines.append(
+            "> Extra CMake args apply only to rebuilt stages and artifacts. "
+            "Prebuilt stages and reused artifacts are copied from the baseline "
+            "run, which was built without them."
+        )
+        lines.append("")
+
     lines.append("### build-rocm")
     lines.append("")
     _append_build_rocm(lines, ci_inputs, outputs)
@@ -139,6 +151,10 @@ def _non_default_highlights(ci_inputs: CIInputs) -> list[str]:
         if ci_inputs.windows_test_labels:
             highlights.append(
                 f"Explicit Windows test labels: `{ci_inputs.windows_test_labels}`"
+            )
+        if ci_inputs.extra_cmake_args:
+            highlights.append(
+                f"Extra CMake args: `{' '.join(ci_inputs.extra_cmake_args)}`"
             )
 
     return highlights

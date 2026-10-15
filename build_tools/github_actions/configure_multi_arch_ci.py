@@ -49,6 +49,7 @@ import enum
 import json
 import logging
 import os
+import re
 import sys
 from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
@@ -145,6 +146,68 @@ def _resolve_skipped_stages(build_stages: list[str]) -> list[str]:
             f"Unknown build stages: {unknown}. Known stages: {sorted(all_stages)}"
         )
     return [stage for stage in all_stages if stage not in build_stages]
+
+
+# Matches only -DNAME=VALUE and -DNAME:TYPE=VALUE. Other CMake options either
+# run scripts (-C, -P) or clash with options the build workflows already pass
+# (-G, -B, -S, --preset). VALUE is limited to characters a shell won't
+# interpret, even if it is ever expanded unquoted.
+_EXTRA_CMAKE_ARG_PATTERN = re.compile(
+    r"-D(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+    r"(?::(?:BOOL|STRING|PATH|FILEPATH|INTERNAL))?"
+    r"=[A-Za-z0-9_.,;:/+=@%-]*"
+)
+
+# Set by the CI pipeline for each stage build. Overriding them would build the
+# wrong targets or produce artifacts that don't match the rest of the run.
+_RESERVED_CMAKE_VARS = frozenset(
+    {
+        "CMAKE_CXX_COMPILER_LAUNCHER",
+        "CMAKE_C_COMPILER_LAUNCHER",
+        "THEROCK_AMDGPU_FAMILIES",
+        "THEROCK_DIST_AMDGPU_FAMILIES",
+        "THEROCK_DIST_PYTHON_EXECUTABLES",
+        "THEROCK_PACKAGE_VERSION",
+        "THEROCK_SHARED_PYTHON_EXECUTABLES",
+        "THEROCK_WSL_WIN_SDK",
+    }
+)
+
+
+def _is_reserved_cmake_var(name: str) -> bool:
+    return (
+        name in _RESERVED_CMAKE_VARS
+        or name.startswith("THEROCK_ENABLE_")
+        or (name.startswith("THEROCK_") and name.endswith("_SOURCE_DIR"))
+    )
+
+
+def parse_extra_cmake_args(raw: str) -> list[str]:
+    """Split the extra_cmake_args workflow input and validate each option.
+
+    Example: "-DTHEROCK_FLAG_FOO=ON  -DBAR:STRING=a;b" →
+        ["-DTHEROCK_FLAG_FOO=ON", "-DBAR:STRING=a;b"]
+
+    Raises:
+        ValueError: if an option is not an allowed -D definition or sets a
+            variable reserved by the CI pipeline.
+    """
+    args = raw.split()
+    for arg in args:
+        match = _EXTRA_CMAKE_ARG_PATTERN.fullmatch(arg)
+        if not match:
+            raise ValueError(
+                f"Invalid extra_cmake_args entry {arg!r}: expected "
+                "-DNAME=VALUE or -DNAME:TYPE=VALUE, where VALUE uses only "
+                "letters, digits, and the characters _.,;:/+=@%-"
+            )
+        name = match.group("name")
+        if _is_reserved_cmake_var(name):
+            raise ValueError(
+                f"Invalid extra_cmake_args entry {arg!r}: {name} is set by the "
+                "CI pipeline and cannot be overridden"
+            )
+    return args
 
 
 # Maps build stages to the test labels that can run with artifacts from those
@@ -248,6 +311,9 @@ class CIInputs:
     # Non-empty when an external repo calls TheRock workflows
     external_repo: str = ""
 
+    # Validated -D options for every stage's CMake configure (workflow_dispatch only)
+    extra_cmake_args: list[str] = field(default_factory=list)
+
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
         print("CIInputs:")
@@ -277,6 +343,14 @@ class CIInputs:
                         f"{platform} test labels {invalid} require stages not in "
                         f"build_stages {self.build_stages}. Allowed: {allowed_labels}"
                     )
+
+        # The dispatch form is the only place this input can be set today, but
+        # setup_multi_arch.yml has other callers. Enforce the rule here too.
+        if self.extra_cmake_args and not self.is_workflow_dispatch:
+            raise ValueError(
+                "extra_cmake_args is only supported for workflow_dispatch "
+                f"runs, not {self.event_name!r}"
+            )
 
     @property
     def is_pull_request(self) -> bool:
@@ -426,6 +500,9 @@ class CIInputs:
             or os.environ.get("THEROCK_REPOSITORY", ""),
             changed_projects=_parse_comma_list(os.environ.get("CHANGED_PROJECTS", "")),
             external_repo=os.environ.get("EXTERNAL_REPO", ""),
+            extra_cmake_args=parse_extra_cmake_args(
+                os.environ.get("EXTRA_CMAKE_ARGS", "")
+            ),
         )
         inputs.validate()
         return inputs
@@ -712,6 +789,7 @@ class BuildConfig:
     # Cross-platform pair, populated identically in linux and windows configs.
     linux_amdgpu_families: str = ""  # Semicolon-separated
     windows_amdgpu_families: str = ""  # Semicolon-separated
+    extra_cmake_args: str = ""  # Space-separated, from parse_extra_cmake_args
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -1550,6 +1628,7 @@ def _expand_build_config_for_platform(
         baseline_repository=jobs.build_rocm.baseline_repository,
         rebuild_artifacts=jobs.build_rocm.rebuild_artifacts,
         reusable_artifacts=jobs.build_rocm.reusable_artifacts,
+        extra_cmake_args=" ".join(ci_inputs.extra_cmake_args),
     )
 
 

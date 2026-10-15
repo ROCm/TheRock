@@ -38,6 +38,10 @@ on:
         type: string
       build_variant_cmake_preset:
         type: string
+      extra_cmake_args:
+        type: string
+        default: ""
+        description: "Space-separated -D options appended to each stage's CMake configure (sanitized by configure_multi_arch_ci.py)"
       build_variant_suffix:
         type: string
       prebuilt_stages:
@@ -121,6 +125,7 @@ jobs:
       timeout_minutes: 480  # 8 hours (compiler is big)
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      extra_cmake_args: ${{ inputs.extra_cmake_args }}
       build_runs_on_large: ${{ inputs.build_runs_on_large }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
@@ -152,6 +157,7 @@ jobs:
       timeout_minutes: 120  # 2 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      extra_cmake_args: ${{ inputs.extra_cmake_args }}
       build_runs_on_large: ${{ inputs.build_runs_on_large }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
@@ -193,6 +199,7 @@ jobs:
       amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      extra_cmake_args: ${{ inputs.extra_cmake_args }}
       build_runs_on_large: ${{ inputs.build_runs_on_large }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
@@ -226,6 +233,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      extra_cmake_args: ${{ inputs.extra_cmake_args }}
       build_runs_on_large: ${{ inputs.build_runs_on_large }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
@@ -259,6 +267,7 @@ jobs:
       timeout_minutes: 180  # 3 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      extra_cmake_args: ${{ inputs.extra_cmake_args }}
       build_runs_on_large: ${{ inputs.build_runs_on_large }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}

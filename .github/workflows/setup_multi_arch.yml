@@ -48,6 +48,13 @@ on:
           default) builds every stage.
         type: string
         default: ""
+      extra_cmake_args:
+        description: >-
+          Space-separated -DNAME=VALUE options added to every ROCm stage's
+          CMake configure. Only allowed for workflow_dispatch runs; validated
+          by configure_multi_arch_ci.py.
+        type: string
+        default: ""
       baseline_run_id:
         description: "Workflow run ID to copy prebuilt stage artifacts from."
         type: string
@@ -241,6 +248,7 @@ jobs:
           WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BUILD_STAGES: ${{ inputs.build_stages }}
+          EXTRA_CMAKE_ARGS: ${{ inputs.extra_cmake_args }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           # Which repo to query for baseline_run_id. Defaults to THEROCK_REPOSITORY.
           BASELINE_REPOSITORY: ${{ inputs.baseline_repository }}

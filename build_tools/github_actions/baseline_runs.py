@@ -286,7 +286,11 @@ def query_completed_workflow_runs(
     branch: str = "main",
     max_runs: int = 20,
 ) -> list[dict]:
-    """Query recent completed workflow runs for a workflow and branch."""
+    """Query recent completed push workflow runs for a workflow and branch.
+
+    Manual runs are skipped: inputs such as extra_cmake_args can change what
+    they build, so their artifacts are not safe to reuse.
+    """
     if max_runs < 1:
         raise ValueError("max_runs must be at least 1")
 
@@ -296,6 +300,7 @@ def query_completed_workflow_runs(
         {
             "status": "completed",
             "branch": branch,
+            "event": "push",
             "per_page": per_page,
             "sort": "created",
             "direction": "desc",
@@ -317,7 +322,10 @@ def query_successful_workflow_runs(
     branch: str = "main",
     max_runs: int = 20,
 ) -> list[dict]:
-    """Query recent successful workflow runs for a workflow and branch."""
+    """Query recent successful push workflow runs for a workflow and branch.
+
+    See query_completed_workflow_runs for why only push runs are returned.
+    """
     if max_runs < 1:
         raise ValueError("max_runs must be at least 1")
 
@@ -327,6 +335,7 @@ def query_successful_workflow_runs(
         {
             "status": "success",
             "branch": branch,
+            "event": "push",
             "per_page": per_page,
             "sort": "created",
             "direction": "desc",

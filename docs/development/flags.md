@@ -233,6 +233,11 @@ macro that calls `therock_override_flag_default()` for each entry in `flags`.
 Flag values may be strings, JSON booleans, or JSON integers. Explicit `-D`
 flags on the CMake command line always take precedence over branch defaults.
 
+To try a non-default flag value in CI without committing a `BRANCH_CONFIG.json`,
+start a manual Multi-Arch CI run and set its `extra_cmake_args` input, for
+example `-DTHEROCK_FLAG_INCLUDE_HRX=ON`. See
+[Extra CMake arguments](ci_behavior_manipulation.md#extra-cmake-arguments).
+
 ### Optional Source Sets
 
 `BRANCH_CONFIG.json` also controls optional source fetching:

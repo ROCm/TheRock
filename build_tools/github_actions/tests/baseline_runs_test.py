@@ -128,6 +128,7 @@ class BaselineRunsTest(unittest.TestCase):
         )
         self.assertIn("status=completed", url)
         self.assertIn("branch=main", url)
+        self.assertIn("event=push", url)
         self.assertIn("per_page=2", url)
 
     def test_query_successful_workflow_runs(self):
@@ -156,6 +157,7 @@ class BaselineRunsTest(unittest.TestCase):
         )
         self.assertIn("status=success", url)
         self.assertIn("branch=main", url)
+        self.assertIn("event=push", url)
         self.assertIn("per_page=2", url)
 
     def test_query_workflow_run_jobs_uses_run_attempt_when_provided(self):

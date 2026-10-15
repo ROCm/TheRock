@@ -283,6 +283,128 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertEqual(inputs.external_repo, "")
 
 
+class TestParseExtraCmakeArgs(unittest.TestCase):
+    """Test parse_extra_cmake_args validation."""
+
+    def test_empty_input(self):
+        self.assertEqual(cm.parse_extra_cmake_args(""), [])
+        self.assertEqual(cm.parse_extra_cmake_args("   "), [])
+
+    def test_single_flag(self):
+        self.assertEqual(
+            cm.parse_extra_cmake_args("-DTHEROCK_FLAG_FOO=ON"),
+            ["-DTHEROCK_FLAG_FOO=ON"],
+        )
+
+    def test_multiple_args_and_extra_whitespace(self):
+        self.assertEqual(
+            cm.parse_extra_cmake_args("  -DA=ON \t-DB=17\n -DC=OFF "),
+            ["-DA=ON", "-DB=17", "-DC=OFF"],
+        )
+
+    def test_typed_definition(self):
+        self.assertEqual(
+            cm.parse_extra_cmake_args("-DFOO:BOOL=OFF -DBAR:FILEPATH=/opt/x.txt"),
+            ["-DFOO:BOOL=OFF", "-DBAR:FILEPATH=/opt/x.txt"],
+        )
+
+    def test_list_and_empty_values(self):
+        self.assertEqual(
+            cm.parse_extra_cmake_args("-DLIST=a;b;c -DEMPTY= -DNEG=-1"),
+            ["-DLIST=a;b;c", "-DEMPTY=", "-DNEG=-1"],
+        )
+
+    def test_rejects_non_definition_options(self):
+        for arg in [
+            "-C/tmp/x.cmake",
+            "-P",
+            "-GNinja",
+            "--preset=foo",
+            "-UFOO",
+            "FOO=ON",
+        ]:
+            with self.subTest(arg=arg):
+                with self.assertRaisesRegex(ValueError, "expected -DNAME=VALUE"):
+                    cm.parse_extra_cmake_args(arg)
+
+    def test_rejects_malformed_definitions(self):
+        for arg in ["-D", "-DFOO", "-D1FOO=ON", "-DFOO-BAR=ON", "-DFOO:WEIRD=ON"]:
+            with self.subTest(arg=arg):
+                with self.assertRaisesRegex(ValueError, "expected -DNAME=VALUE"):
+                    cm.parse_extra_cmake_args(arg)
+
+    def test_rejects_shell_characters_in_values(self):
+        for value in ["$(id)", "`id`", "'x'", '"x"', "a\\b", "*", "a&b", "a|b", "a>b"]:
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "expected -DNAME=VALUE"):
+                    cm.parse_extra_cmake_args(f"-DFOO={value}")
+
+    def test_rejects_reserved_names(self):
+        for name in [
+            "THEROCK_PACKAGE_VERSION",
+            "THEROCK_AMDGPU_FAMILIES",
+            "THEROCK_DIST_AMDGPU_FAMILIES",
+            "CMAKE_C_COMPILER_LAUNCHER",
+            "THEROCK_ENABLE_ALL",
+            "THEROCK_ENABLE_BLAS",
+            "THEROCK_ROCGDB_SOURCE_DIR",
+            "THEROCK_WSL_WIN_SDK",
+        ]:
+            with self.subTest(name=name):
+                with self.assertRaisesRegex(ValueError, "set by the CI pipeline"):
+                    cm.parse_extra_cmake_args(f"-D{name}=x")
+                with self.assertRaisesRegex(ValueError, "set by the CI pipeline"):
+                    cm.parse_extra_cmake_args(f"-D{name}:STRING=x")
+
+    def test_reports_first_bad_entry(self):
+        with self.assertRaisesRegex(ValueError, "'-C/tmp/x'"):
+            cm.parse_extra_cmake_args("-DGOOD=ON -C/tmp/x")
+
+
+class TestExtraCmakeArgsFromEnviron(unittest.TestCase):
+    """Test that EXTRA_CMAKE_ARGS is parsed and gated on the trigger event."""
+
+    def test_workflow_dispatch_reads_extra_cmake_args(self):
+        inputs = _run_from_environ(
+            event_name="workflow_dispatch",
+            event_payload={},
+            extra_env={"EXTRA_CMAKE_ARGS": "-DTHEROCK_FLAG_FOO=ON -DBAR=1"},
+        )
+        self.assertEqual(inputs.extra_cmake_args, ["-DTHEROCK_FLAG_FOO=ON", "-DBAR=1"])
+
+    def test_defaults_to_empty(self):
+        inputs = _run_from_environ(
+            event_name="workflow_dispatch",
+            event_payload={},
+            extra_env={"EXTRA_CMAKE_ARGS": ""},
+        )
+        self.assertEqual(inputs.extra_cmake_args, [])
+
+    def test_invalid_value_fails(self):
+        with self.assertRaisesRegex(ValueError, "extra_cmake_args"):
+            _run_from_environ(
+                event_name="workflow_dispatch",
+                event_payload={},
+                extra_env={"EXTRA_CMAKE_ARGS": "-DFOO=$(id)"},
+            )
+
+    def test_rejected_outside_workflow_dispatch(self):
+        for event_name, payload in [
+            ("pull_request", {"pull_request": {"labels": []}}),
+            ("push", {"before": "abc123"}),
+            ("schedule", {}),
+        ]:
+            with self.subTest(event_name=event_name):
+                with self.assertRaisesRegex(
+                    ValueError, "only supported for workflow_dispatch"
+                ):
+                    _run_from_environ(
+                        event_name=event_name,
+                        event_payload=payload,
+                        extra_env={"EXTRA_CMAKE_ARGS": "-DTHEROCK_FLAG_FOO=ON"},
+                    )
+
+
 class TestGitContext(unittest.TestCase):
     """Test GitContext methods."""
 
@@ -1350,6 +1472,31 @@ class TestExpandBuildConfigs(unittest.TestCase):
         none_serialized = json.dumps(None.to_dict()) if None else ""
         self.assertEqual(none_serialized, "")
 
+    def test_extra_cmake_args_carried_into_build_configs(self):
+        inputs = self._inputs(extra_cmake_args=["-DTHEROCK_FLAG_FOO=ON", "-DBAR=1"])
+        result = cm.expand_build_configs(
+            ci_inputs=inputs,
+            git_context=cm.GitContext(),
+            targets=cm.select_targets(inputs),
+            jobs=_jobs(),
+        )
+        for config in [result.linux, result.windows]:
+            self.assertIsNotNone(config)
+            self.assertEqual(config.extra_cmake_args, "-DTHEROCK_FLAG_FOO=ON -DBAR=1")
+            self.assertEqual(
+                config.to_dict()["extra_cmake_args"], "-DTHEROCK_FLAG_FOO=ON -DBAR=1"
+            )
+
+    def test_extra_cmake_args_default_empty(self):
+        inputs = self._inputs()
+        result = cm.expand_build_configs(
+            ci_inputs=inputs,
+            git_context=cm.GitContext(),
+            targets=cm.select_targets(inputs),
+            jobs=_jobs(),
+        )
+        self.assertEqual(result.linux.extra_cmake_args, "")
+
     def test_release_produces_configs_for_both_platforms(self):
         """Release variant with families on both platforms produces both configs
         with correctly structured per-family info."""
@@ -1891,6 +2038,47 @@ class TestFormatSummary(unittest.TestCase):
         # The summary should also mention that CI was skipped with some
         # explanation for why.
         self.assertIn("skipped", result)
+
+    def _linux_outputs(self, jobs: cm.JobDecisions) -> cm.CIOutputs:
+        config = cm.BuildConfig(
+            per_family_info=[{"amdgpu_family": "gfx94x", "test-runs-on": ""}],
+            dist_amdgpu_families="gfx94x",
+            artifact_group="multi-arch-release",
+            build_variant_label="release",
+            build_variant_suffix="",
+            build_variant_cmake_preset="",
+            build_pytorch=False,
+            build_jax=False,
+            build_native_linux=False,
+            build_python_packages=False,
+        )
+        return cm.CIOutputs(
+            is_ci_enabled=True, builds=cm.BuildConfigs(linux=config), jobs=jobs
+        )
+
+    def test_extra_cmake_args_highlighted(self):
+        inputs = self._inputs(
+            event_name="workflow_dispatch",
+            extra_cmake_args=["-DTHEROCK_FLAG_FOO=ON"],
+        )
+        result = format_summary(inputs, self._linux_outputs(_jobs()))
+        self.assertIn("-DTHEROCK_FLAG_FOO=ON", result)
+        self.assertNotIn("[!WARNING]", result)
+
+    def test_extra_cmake_args_with_prebuilt_stages_warns(self):
+        inputs = self._inputs(
+            event_name="workflow_dispatch",
+            extra_cmake_args=["-DTHEROCK_FLAG_FOO=ON"],
+        )
+        jobs = _jobs(prebuilt_stages=["compiler-runtime"], baseline_run_id="999")
+        result = format_summary(inputs, self._linux_outputs(jobs))
+        self.assertIn("[!WARNING]", result)
+
+    def test_prebuilt_stages_without_extra_cmake_args_does_not_warn(self):
+        inputs = self._inputs(event_name="workflow_dispatch")
+        jobs = _jobs(prebuilt_stages=["compiler-runtime"], baseline_run_id="999")
+        result = format_summary(inputs, self._linux_outputs(jobs))
+        self.assertNotIn("[!WARNING]", result)
 
 
 class TestWriteOutputs(unittest.TestCase):
