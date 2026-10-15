@@ -131,6 +131,7 @@ DEV_VERSION_RE = re.compile(
     | (?<=[+.])dev(?=rocm)          # torch-family local: +devrocm10.2.0...
     | \.dev\d+[.+-][0-9a-f]{7,40}   # ROCm: 10.2.0.dev0+<sha>, .dev0.<sha> (local), .dev0-<sha> (version.py)
     | (?P<rocm>rocm\d+\.\d+\.\d+)a\d+  # nightly ROCm: +rocm10.2.0a20261006 -> +rocm10.2.0
+    | (?<=\d)a\d+(?=\+)             # base-version alpha: 1.2.3a0+... -> 1.2.3+...
     """,
     re.VERBOSE,
 )

@@ -609,7 +609,7 @@ class DevVersionTest(unittest.TestCase):
             (
                 f"0.29.0a0+gitb7d540b2.devrocm10.2.0.dev0.{DEV_SHA}",
                 False,
-                "0.29.0a0+rocm10.2.0",
+                "0.29.0+rocm10.2.0",
             ),
             (
                 f"3.8.0+git669b31ac.devrocm10.2.0.dev0.{DEV_SHA}",
@@ -619,7 +619,7 @@ class DevVersionTest(unittest.TestCase):
             ("1.12.0+rocm10.0.0rc4", False, "1.12.0+rocm10.0.0"),
             # Nightly ROCm marker on the ROCm version.
             ("2.12.0+git9ccf2fd0.rocm10.2.0a20261006", False, "2.12.0+rocm10.2.0"),
-            ("0.29.0a0+gitb7d540b2.rocm10.2.0a20260929", False, "0.29.0a0+rocm10.2.0"),
+            ("0.29.0a0+gitb7d540b2.rocm10.2.0a20260929", False, "0.29.0+rocm10.2.0"),
             (
                 "3.8.0+git669b31ac.rocm10.2.0a20260929",
                 True,
