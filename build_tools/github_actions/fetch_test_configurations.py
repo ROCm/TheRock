@@ -183,7 +183,7 @@ _rocgdb_common = {
     "timeout_minutes": 30,
     "platform": ["linux"],
     "total_shards": 1,
-    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:aa3f8966fcdefca04d4c04fb10ae7f8b654d1bb1cc6a894ea7089e5a01953197",  # 2026-07-22T15:21:18.527038581Z
+    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:7615107f2f16969fe47e297028c10482968d4a4821bc947ad4fec79ef69e3761",  # 2026-10-01T09:35:28.00411791Z
     "container_options": ["--cap-add=SYS_PTRACE"],
 }
 
