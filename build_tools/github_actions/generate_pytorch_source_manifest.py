@@ -42,6 +42,7 @@ DEFAULT_PYTORCH_GIT_REFS = [
     "release/2.12",
     "release/2.13",
     "release/2.14",
+    "release/2.15",
     "nightly",
 ]
 SCHEMA_VERSION = 1
