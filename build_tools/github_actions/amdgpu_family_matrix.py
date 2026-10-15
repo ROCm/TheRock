@@ -812,12 +812,26 @@ def get_all_families_for_trigger_types(trigger_types: list[str]) -> dict:
     workflow_dispatch where all families are implicitly allowed).
     """
     # Always start with local definitions - source of truth for build support
-    result = _get_local_families_for_trigger_types(trigger_types)
+    result = copy.deepcopy(_get_local_families_for_trigger_types(trigger_types))
 
     # Overlay external runner config if available
     external_config = load_external_runner_config()
     if external_config is not None:
         result = _overlay_runner_config(result, external_config)
+
+    # These sandbox pools are reserved for rocm-systems PR testing. Apply the
+    # policy to both setup and component selection, including local fallbacks.
+    # TODO(#6624): Move sandbox repository/trigger restrictions into each
+    # family's dictionary so the policy is explicit and can vary by family.
+    if (
+        os.environ.get("GITHUB_REPOSITORY") != "ROCm/rocm-systems"
+        or os.environ.get("GITHUB_EVENT_NAME") != "pull_request"
+    ):
+        for family in ("gfx94x", "gfx950"):
+            runners = result.get(family, {}).get("linux", {})
+            if "test-runs-on-sandbox" in runners:
+                runners["test-runs-on-sandbox"] = ""
+                runners["test-runs-on-sandbox-labels"] = []
 
     return result
 

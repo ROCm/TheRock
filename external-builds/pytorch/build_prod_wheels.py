@@ -412,7 +412,11 @@ def download_llvm_for_triton_windows(triton_dir: Path) -> Path:
 
         print("  Downloading (this may take a few minutes, ~500MB)...")
         try:
-            urllib.request.urlretrieve(download_url, download_path)
+            urllib.request.urlretrieve(
+                download_url,
+                download_path,
+                # Fixed HTTPS LLVM endpoint.
+            )  # nosec B310
         except Exception as e:
             raise RuntimeError(
                 f"Failed to download LLVM from {download_url}: {e}\n"
@@ -1218,7 +1222,8 @@ def do_build_pytorch(
         # libdrm/drm.h.
         rocm_dir = get_rocm_path("root")
         sysdeps_dir = rocm_dir / "lib" / "rocm_sysdeps"
-        assert sysdeps_dir.exists(), f"No sysdeps directory found: {sysdeps_dir}"
+        if not sysdeps_dir.exists():
+            raise FileNotFoundError(f"No sysdeps directory found: {sysdeps_dir}")
         add_env_compiler_flags(env, "CXXFLAGS", f"-I{sysdeps_dir / 'include'}")
         # Add correct include path for roctracer.h (for Kineto)
         add_env_compiler_flags(
@@ -1296,20 +1301,15 @@ def do_build_pytorch(
                 )
 
     if is_windows:
-        # The PyPI `ninja` package is unusable on Windows: 1.11.1 loops without
+        # PyPI `ninja` before 1.13.2 is unusable on Windows: 1.11.1 loops without
         # making progress and 1.13.0 has an MSVC link.exe RSP-file regression
-        # (LNK1104/LNK1181), and no fixed version has been published
-        # (scikit-build/ninja-python-distributions#308). requirements-build.txt
-        # just pulled it in, so remove it; the runner provides a good system
-        # ninja (>=1.13.1) on PATH that CMake uses instead.
+        # (ninja-build/ninja#2616). Some PyTorch branches still pin
+        # ninja==1.13.0 in requirements-build.txt, so upgrade past it.
         run_command(
-            [sys.executable, "-m", "pip", "uninstall", "ninja", "-y"],
+            [sys.executable, "-m", "pip", "install", "ninja>=1.13.2"]
+            + pip_install_args,
             cwd=pytorch_dir,
         )
-        # With the PyPI ninja gone, `python -m build`'s PEP 517 dependency check
-        # would abort with "Missing dependencies: ninja". Skip that check: the
-        # backend drives CMake, which finds the system ninja on PATH.
-        build_command.append("--skip-dependency-check")
 
     print("+++ Building pytorch:")
     remove_dir_if_exists(pytorch_dir / "dist")

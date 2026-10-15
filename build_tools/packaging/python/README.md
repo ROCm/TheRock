@@ -13,7 +13,8 @@ This workflow spans public source changes and internal deployment:
 - An infrastructure maintainer completes steps 3 and 4. They need permission to
   publish product content, access the internal infrastructure repository, deploy
   CloudFront functions, and upload the aggregate root index.
-- Preparing a content snapshot from S3 additionally requires read access to the
+- The HTTPS snapshot helper does not require AWS access. Preparing an
+  authoritative snapshot directly from S3 requires read access to the
   corresponding product buckets.
 
 Contributors without the deployment permissions should coordinate the handoff
@@ -85,24 +86,15 @@ Skipping strict completeness never adds ownership or routes.
 Skip this section for manifest-only generation.
 
 1. Download the product index HTML for the stream being validated into a new
-   local snapshot directory. For example, these commands download the nightly
-   product indexes from S3 without writing to the buckets:
+   local snapshot directory. The helper downloads from a public HTTPS origin,
+   so it does not require AWS credentials. The output directory must not already
+   exist:
 
 ```bash
-# Copy core index HTML, excluding wheels and other artifacts.
-aws s3 sync s3://therock-repo-amd-nightly-core/v5/rocm/core/whl-next/ \
-  /tmp/rocm-whl-next-nightly-snapshot/rocm/core/whl-next/ \
-  --exclude '*' --include 'index.html' --include '*/index.html'
-
-# Copy the matching nightly PyTorch index HTML.
-aws s3 sync s3://therock-repo-amd-nightly-pytorch/v5/rocm/pytorch/whl-next/ \
-  /tmp/rocm-whl-next-nightly-snapshot/rocm/pytorch/whl-next/ \
-  --exclude '*' --include 'index.html' --include '*/index.html'
-
-# Copy the matching nightly JAX index HTML.
-aws s3 sync s3://therock-repo-amd-nightly-jax/v5/rocm/jax/whl-next/ \
-  /tmp/rocm-whl-next-nightly-snapshot/rocm/jax/whl-next/ \
-  --exclude '*' --include 'index.html' --include '*/index.html'
+python build_tools/packaging/python/download_rocm_python_index_snapshot.py \
+  --stream nightly \
+  --origin https://nightly.repo.amd.com \
+  --output-dir /tmp/rocm-whl-next-nightly-snapshot
 ```
 
 2. Pass the snapshot directory to the infrastructure generator with the matching
@@ -119,18 +111,19 @@ python tools/cloudfront_functions/generate_rocm_python_index_and_router.py \
 ##### Snapshot layout and requirements
 
 - `--content-root` is a local directory, not a bucket name or URL.
-- Use the product indexes for the selected stream, such as
-  `/rocm/core/whl-next/`, `/rocm/pytorch/whl-next/`, and
-  `/rocm/jax/whl-next/`. Do not use the aggregate `/rocm/whl-next/` index.
-- Include each product's root `index.html` and every linked package `index.html`.
-  Wheel files are not needed or checked.
-- Preserve the public paths below `/rocm/`. When downloading from S3, omit the
-  storage prefix `v5/` from local paths.
-- Keep root HTML unmodified, including links to unowned packages, so strict
-  completeness validation can detect ownership gaps.
-- Include every product root referenced by active ownership for the stream.
-  Strict completeness also checks existing roots referenced only by inactive
-  ownership entries.
+- The helper downloads product indexes such as `/rocm/core/whl-next/`,
+  `/rocm/pytorch/whl-next/`, and `/rocm/jax/whl-next/`. It does not download the
+  aggregate `/rocm/whl-next/` index.
+- A product root referenced by active ownership for the stream is required. A
+  root referenced only by inactive ownership is included when present and
+  skipped when it returns 404.
+- The helper downloads each product's root `index.html` and every linked package
+  `index.html`, including pages for unowned packages. Wheel files are not needed
+  or checked.
+- The helper preserves the public paths below `/rocm/` and publishes the output
+  directory only after the complete snapshot has downloaded and parsed.
+- Keeping unowned package links allows strict completeness validation to detect
+  ownership gaps.
 - Missing roots, missing owned package links, and empty owned package pages fail
   content validation.
 
@@ -146,9 +139,11 @@ The snapshot used in the example has this layout:
   rocm/jax/whl-next/<package>/index.html
 ```
 
-For other streams, adjust the source buckets, `--stream`, and local directory.
-Product roots may change while downloading; if validation exposes inconsistent
-pages, prepare a fresh snapshot after publication has completed.
+For other streams, use that stream's public HTTPS origin and a new local
+directory. The HTTPS view may be cached, and product roots may change while
+downloading. If validation exposes inconsistent pages, prepare a fresh snapshot
+after publication has completed. Future deployment automation may prepare the
+same layout directly from S3 when authoritative bucket access is available.
 
 #### Deploy generated artifacts
 

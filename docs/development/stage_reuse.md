@@ -44,23 +44,49 @@ selected.
 
 `stage_reuse_mode` controls the automatic layer:
 
+- `off` — disable all artifact reuse and baseline lookup. Ignore manual
+  `prebuilt_stages` and `baseline_run_id` inputs and rebuild all in-scope stages.
 - `dry-run` (default) — compute the analysis and **report** which stages would
-  be reused (console log + job step summary), but change nothing. Every stage
-  still builds. Use this to observe decisions.
+  be reused (console log + job step summary), without applying automatic reuse.
+  Explicit manual reuse inputs are still honored.
 - `reuse-stage` — actually reuse the eligible stages: they are merged into
   `prebuilt_stages`, so the orchestrator copies their artifacts and skips the
   build.
 
 Automatic reuse is **disabled** when no build platform is selected.
 
+> [!NOTE]
+> CI on `release/` branches forces `stage_reuse_mode` to `off`, so release
+> cherry-picks are validated with fresh builds:
+>
+> - **Pull requests targeting a release branch:** use the PR's base branch to
+>   determine the policy.
+> - **Push events after merging those pull requests:** use the branch receiving
+>   the push to determine the policy.
+>
+> For example, the following configuration still builds fresh on release
+> branches; the requested reuse mode and baseline are ignored:
+>
+> ```yaml
+> jobs:
+>   therock:
+>     uses: ROCm/TheRock/.github/workflows/setup_multi_arch.yml@release/bkc/therock-10.2-20261013
+>     with:
+>       repository: ROCm/TheRock
+>       ref: release/bkc/therock-10.2-20261013
+>       stage_reuse_mode: reuse-stage
+>       prebuilt_stages: compiler-runtime
+>       baseline_run_id: "38325106112"
+> ```
+
 ### Inputs
 
 | Input                        | Default   | Purpose                                                                                                |
 | ---------------------------- | --------- | ------------------------------------------------------------------------------------------------------ |
-| `stage_reuse_mode`           | `dry-run` | `dry-run` (report only) or `reuse-stage` (auto-reuse unaffected stages).                               |
+| `stage_reuse_mode`           | `dry-run` | `off`, `dry-run` (report only), or `reuse-stage` (auto-reuse unaffected stages).                       |
 | `stage_reuse_max_age_hours`  | `72`      | Reject baseline runs older than this many hours (recency window).                                      |
 | `stage_reuse_commit_history` | `50`      | Number of recent branch commits to fetch when establishing ancestry for the commit-compatibility rule. |
-| `prebuilt_stages`            | `""`      | Manual, comma-separated stages to reuse (or `all`). Always honored, independent of `stage_reuse_mode`. |
+| `prebuilt_stages`            | `""`      | Manual, comma-separated stages to reuse (or `all`). Ignored when the effective mode is `off`.          |
 | `baseline_run_id`            | `""`      | Run ID to copy manually-listed `prebuilt_stages` artifacts from.                                       |
 
 Example `workflow_call` from a component CI:

@@ -413,7 +413,8 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
             template = env.get_template(file.relative_to(SCRIPT_DIR).as_posix())
             with script_file.open("w", encoding="utf-8") as f:
                 f.write(template.render(context))
-            os.chmod(script_file, 0o755)
+            # Package maintainer scripts must be executable.
+            os.chmod(script_file, 0o755)  # nosec B103
 
 
 def copy_package_contents(source_dir, destination_dir):

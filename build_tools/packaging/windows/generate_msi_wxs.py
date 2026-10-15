@@ -40,7 +40,9 @@ import subprocess
 import sys
 import urllib.request
 import uuid
-import xml.etree.ElementTree as ET
+
+# Only constructs XML; does not parse input.
+import xml.etree.ElementTree as ET  # nosec B405
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -80,9 +82,6 @@ class PackageDef:
     # WiX Feature Id and Title for the primary feature.
     feature_id: str
     feature_title: str
-
-    # Registry key written under HKLM to record the install location.
-    registry_key: str
 
     # One-line description for --list output.
     description: str
@@ -124,7 +123,6 @@ PACKAGES: dict[str, PackageDef] = {
         upgrade_code="C3D4E5F6-A7B8-9012-CDEF-123456789012",
         feature_id="ROCmRuntime",
         feature_title="AMD ROCm Runtime",
-        registry_key="Software\\AMD\\ROCm\\runtime\\{major}.{minor}",
         per_artifact_includes={
             "amd-llvm": ["bin/amd_comgr.dll"],
         },
@@ -152,7 +150,6 @@ PACKAGES: dict[str, PackageDef] = {
         upgrade_code="A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
         feature_id="ROCmCore",
         feature_title="AMD ROCm Core Runtime",
-        registry_key="Software\\AMD\\ROCm\\core\\{major}.{minor}",
     ),
 }
 
@@ -176,6 +173,16 @@ STANDARD_DIR_TOKENS: set[str] = {
     "LocalAppDataFolder",
     "CommonAppDataFolder",
 }
+
+# The only install root whose protection (admin-write-only ACL) we can vouch for
+# at generate time. Adding a directory to the machine PATH is only safe when that
+# directory is not writable by a lower-privileged user — otherwise the entry
+# becomes a DLL/exe planting slot (CWE-427). ProgramFiles64Folder is the default
+# and is admin-only by default ACL; custom --install-root values (absolute paths,
+# or user-writable tokens like TempFolder/LocalAppDataFolder) have an unknown or
+# user-writable ACL, so the PATH entry is skipped for them. See
+# add_path_registration.
+PROTECTED_DEFAULT_ROOT = "ProgramFiles64Folder"
 
 
 # ---------------------------------------------------------------------------
@@ -598,6 +605,17 @@ def _stable_guid(*parts: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, "/".join(parts))).upper()
 
 
+def discovery_registry_key(major: str, minor: str) -> str:
+    """Return the shared SDK-discovery registry subkey for a ROCm major.minor.
+
+    The single source of truth for the per-version, package-agnostic key
+    ``Software\\AMD\\ROCm\\{major}.{minor}`` written by add_discovery_registry
+    (RFC0014). Consumers that need to locate ROCm (e.g. the install test) import
+    this so the written and read key cannot drift apart.
+    """
+    return f"Software\\AMD\\ROCm\\{major}.{minor}"
+
+
 @dataclass
 class PackageInputs:
     """Everything gathered from disk before any WiX XML is emitted.
@@ -763,8 +781,13 @@ def create_wix_document(package: PackageDef, version: str) -> WixDocument:
         pkg, _tag("Property"), Id="ENABLE_LONG_PATHS", Value="1", Secure="yes"
     )
     ET.SubElement(pkg, _tag("Property"), Id="INSTALLFOLDER", Secure="yes")
-    # Legacy System32 install is on by default; set LEGACY_INSTALL=0 to disable.
-    ET.SubElement(pkg, _tag("Property"), Id="LEGACY_INSTALL", Value="1", Secure="yes")
+    # Legacy System32 install is off by default; set LEGACY_SYSTEM32_INSTALL=1 to enable.
+    # The current runtime DLLs are already installed under the install dir's bin/
+    # and reachable via PATH, so copying them into System32 is opt-in for apps
+    # that load ROCm DLLs from System32 rather than PATH.
+    ET.SubElement(
+        pkg, _tag("Property"), Id="LEGACY_SYSTEM32_INSTALL", Value="0", Secure="yes"
+    )
     # When INSTALLFOLDER is set on the command line, redirect InstallDir to it.
     # Runs in both UI and execute sequences so repair/modify picks it up too.
     ET.SubElement(
@@ -874,13 +897,32 @@ def add_path_registration(
     layout: InstallLayout,
     files: list[tuple[Path, Path]],
 ) -> None:
-    """Add the machine PATH entry and install-dir registry marker.
+    """Add the machine PATH entry for the package's bin directory.
 
     No-op when the package installs nothing under bin/, since there would be
-    nothing worth adding to PATH.
+    nothing worth adding to PATH. The PATH entry is package-specific (each
+    package owns its own PATH modification), so the component GUID is derived
+    from the package feature id. The SDK-discovery registry key is written
+    separately by add_discovery_registry (shared across packages).
+
+    The machine PATH entry is only emitted when installing to the default,
+    admin-protected root (PROTECTED_DEFAULT_ROOT). A custom --install-root may be
+    a user-writable location, and putting a user-writable directory on the machine
+    PATH is a DLL/exe planting risk (CWE-427), so the PATH entry is skipped there;
+    discovery should use the SDK-discovery registry key instead.
     """
     installs_to_bin = any(install_rel.parts[0] == "bin" for install_rel, _ in files)
     if not installs_to_bin:
+        return
+
+    if layout.install_root != PROTECTED_DEFAULT_ROOT:
+        print(
+            f"Note: install root {layout.install_root!r} is not the default "
+            f"protected root ({PROTECTED_DEFAULT_ROOT}); skipping the machine PATH "
+            "entry (its ACL is unknown/user-writable). Consumers should locate "
+            "ROCm via the SDK-discovery registry key instead.",
+            file=sys.stderr,
+        )
         return
 
     component = ET.SubElement(
@@ -900,20 +942,62 @@ def add_path_registration(
         Action="set",
         System="yes",
     )
-    registry_key = package.registry_key.format(
-        version=layout.version, major=layout.major, minor=layout.minor
+    ET.SubElement(feature, _tag("ComponentRef"), Id="EnvPath")
+
+
+def add_discovery_registry(
+    doc: WixDocument, feature: ET.Element, layout: InstallLayout
+) -> None:
+    """Add the shared SDK-discovery registry key: Software\\AMD\\ROCm\\{X.Y}.
+
+    Writes ``InstallDir`` and ``Version`` under a per-version, package-agnostic
+    key so tools and build systems can locate ROCm without knowing which MSI
+    packages are installed. This follows RFC0014 (Windows Packaging
+    Requirements), which specifies a shared per-version discovery key.
+
+    ROCm ships multiple MSI packages (runtime, core, ...) that coexist under one
+    ``{major}.{minor}`` install directory, so every package writes this same key
+    with identical values. The component GUID is therefore derived only from the
+    version (not the package), so Windows Installer ref-counts it across
+    packages: it is created once and removed only when the last package at that
+    version uninstalls. The per-package ProductCode is intentionally NOT written
+    here — each MSI already registers its own ProductCode in the standard
+    ``HKLM\\...\\Uninstall\\{ProductCode}`` hive (used by Add/Remove Programs),
+    so duplicating it here would be redundant and reintroduce the multi-package
+    collision this shared key avoids.
+
+    ``Bitness="always64"`` keeps the key in the native 64-bit registry view
+    (an x64 package would otherwise land it under WOW6432Node), where x64
+    consumers expect it.
+    """
+    discovery_key = discovery_registry_key(layout.major, layout.minor)
+    component = ET.SubElement(
+        doc.install_dir,
+        _tag("Component"),
+        Id="RocmDiscovery",
+        Guid=_stable_guid("ROCm_discovery", f"{layout.major}.{layout.minor}"),
+        Bitness="always64",
     )
     ET.SubElement(
         component,
         _tag("RegistryValue"),
         Root="HKLM",
-        Key=registry_key,
+        Key=discovery_key,
         Name="InstallDir",
         Value="[InstallDir]",
         Type="string",
         KeyPath="yes",
     )
-    ET.SubElement(feature, _tag("ComponentRef"), Id="EnvPath")
+    ET.SubElement(
+        component,
+        _tag("RegistryValue"),
+        Root="HKLM",
+        Key=discovery_key,
+        Name="Version",
+        Value=layout.version,
+        Type="string",
+    )
+    ET.SubElement(feature, _tag("ComponentRef"), Id="RocmDiscovery")
 
 
 def add_long_paths_feature(doc: WixDocument, package: PackageDef) -> None:
@@ -974,32 +1058,61 @@ def add_long_paths_feature(doc: WixDocument, package: PackageDef) -> None:
     ET.SubElement(feature, _tag("ComponentRef"), Id="LongPathsEnable")
 
 
+def _get_or_create_system64_dir(doc: WixDocument) -> ET.Element:
+    """Return the shared System64Folder <StandardDirectory>, creating it once.
+
+    System64Folder is the real C:\\Windows\\System32 in an x64 package;
+    SystemFolder resolves to the WOW64-redirected SysWOW64 regardless of package
+    architecture, which is not what we want for 64-bit DLLs. Both the legacy
+    install feature and the cleanup feature target it, and WiX rejects a second
+    StandardDirectory with the same Id, so it is cached on the document.
+    """
+    cached = doc.directory_cache.get("System64Folder")
+    if cached is None:
+        cached = ET.SubElement(
+            doc.package, _tag("StandardDirectory"), Id="System64Folder"
+        )
+        doc.directory_cache["System64Folder"] = cached
+    return cached
+
+
 def add_legacy_system32_feature(
     doc: WixDocument, legacy_dlls: list[tuple[str, Path]]
 ) -> None:
-    """Add the legacy System32 DLL feature (on unless LEGACY_INSTALL=0).
+    """Add the opt-in legacy System32 DLL feature plus its cleanup counterpart.
 
-    No-op when the package has no legacy DLLs to install.
+    The two features are mutually exclusive, keyed off LEGACY_SYSTEM32_INSTALL (default
+    "0"):
+      - LegacyInstall (Level 0 by default; raised to 1 when LEGACY_SYSTEM32_INSTALL=1)
+        copies the DLLs into System32.
+      - LegacyCleanup (Level 1 by default; dropped to 0 when LEGACY_SYSTEM32_INSTALL=1)
+        removes those same DLL names from System32 on both install and
+        uninstall, so a default (non-legacy) install scrubs stale copies left by
+        an AMD driver, an older ROCm installer, or a prior LEGACY_SYSTEM32_INSTALL=1
+        install that would otherwise shadow the runtime shipped under bin/.
+
+    No file is both installed and removed by a single install because exactly one
+    of the two features is active for any given LEGACY_SYSTEM32_INSTALL value.
+
+    No-op when the package declares no legacy DLLs.
     """
     if not legacy_dlls:
         return
 
-    # System64Folder is the real C:\Windows\System32 in an x64 package;
-    # SystemFolder resolves to the WOW64-redirected SysWOW64 regardless of
-    # package architecture, which is not what we want for 64-bit DLLs.
-    system_dir = ET.SubElement(
-        doc.package, _tag("StandardDirectory"), Id="System64Folder"
-    )
+    system_dir = _get_or_create_system64_dir(doc)
     feature = ET.SubElement(
         doc.package,
         _tag("Feature"),
         Id="LegacyInstall",
         Title="Legacy System32 DLLs",
-        Level="1",
+        Level="0",
     )
-    # Turn the feature off when LEGACY_INSTALL=0. Default property value
-    # is "1", so the feature is enabled unless explicitly disabled.
-    ET.SubElement(feature, _tag("Level"), Value="0", Condition='LEGACY_INSTALL = "0"')
+    # Turn the feature on when LEGACY_SYSTEM32_INSTALL=1. Default feature Level is 0
+    # (not installed) and the default property value is "0", so System32 copies
+    # are opt-in and installed only when explicitly requested.
+    ET.SubElement(
+        feature, _tag("Level"), Value="1", Condition='LEGACY_SYSTEM32_INSTALL = "1"'
+    )
     for dll_name, source in legacy_dlls:
         install_rel = Path("System32") / dll_name
         comp_id = make_id(install_rel, "c")
@@ -1018,6 +1131,65 @@ def add_legacy_system32_feature(
             KeyPath="yes",
         )
         ET.SubElement(feature, _tag("ComponentRef"), Id=comp_id)
+
+    add_legacy_system32_cleanup_feature(doc, system_dir, legacy_dlls)
+
+
+def add_legacy_system32_cleanup_feature(
+    doc: WixDocument,
+    system_dir: ET.Element,
+    legacy_dlls: list[tuple[str, Path]],
+) -> None:
+    """Remove the declared legacy DLL names from System32 on a non-legacy install.
+
+    Uses declarative WiX <RemoveFile On="both"> (delete on install and
+    uninstall) rather than a shell CustomAction. The removals live in one
+    component whose keypath is an HKLM registry marker (System32 is not under the
+    install tree, so a file keypath there would be wrong); the component is
+    gated by the LegacyCleanup feature, which is off when LEGACY_SYSTEM32_INSTALL=1.
+    """
+    feature = ET.SubElement(
+        doc.package,
+        _tag("Feature"),
+        Id="LegacyCleanup",
+        Title="Remove Legacy System32 DLLs",
+        Level="1",
+    )
+    # Mirror image of LegacyInstall: drop this feature to Level 0 when the user
+    # opted into the System32 install, so the same install never both places and
+    # removes a DLL.
+    ET.SubElement(
+        feature, _tag("Level"), Value="0", Condition='LEGACY_SYSTEM32_INSTALL = "1"'
+    )
+
+    component = ET.SubElement(
+        system_dir,
+        _tag("Component"),
+        Id="LegacyCleanup",
+        Guid=_stable_guid("System32", "LegacyCleanup"),
+    )
+    # System32 holds no install-owned file to anchor the keypath, so use an
+    # HKLM registry marker (the EnvPath/LongPaths convention for non-file
+    # components).
+    ET.SubElement(
+        component,
+        _tag("RegistryValue"),
+        Root="HKLM",
+        Key="Software\\AMD\\ROCm\\LegacyCleanup",
+        Name="Performed",
+        Value="1",
+        Type="integer",
+        KeyPath="yes",
+    )
+    for dll_name, _ in legacy_dlls:
+        ET.SubElement(
+            component,
+            _tag("RemoveFile"),
+            Id=make_id(Path("System32Cleanup") / dll_name, "rf"),
+            Name=dll_name,
+            On="both",
+        )
+    ET.SubElement(feature, _tag("ComponentRef"), Id="LegacyCleanup")
 
 
 def write_wxs(root: ET.Element, output_path: Path) -> None:
@@ -1046,6 +1218,7 @@ def build_wxs(args: argparse.Namespace, artifact_dir: Path | None = None) -> Non
     feature = add_primary_feature(doc, inputs.package)
     add_payload_components(doc, feature, inputs.files)
     add_path_registration(doc, feature, inputs.package, layout, inputs.files)
+    add_discovery_registry(doc, feature, layout)
     add_long_paths_feature(doc, inputs.package)
     add_legacy_system32_feature(doc, inputs.legacy_dlls)
 
