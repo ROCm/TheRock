@@ -643,25 +643,6 @@ amdgpu_family_info_matrix = {
             "tests_on_trigger": [],
         },
     },
-    # Nightly-only build, no tests (no hardware available)
-    "gfx117x": {
-        "linux": {
-            "test-runs-on": "",
-            "family": "gfx117X-all",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-            "builds_on_trigger": ["nightly"],
-            "tests_on_trigger": [],
-        },
-        "windows": {
-            "test-runs-on": "",
-            "family": "gfx117X-all",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-            "builds_on_trigger": ["nightly"],
-            "tests_on_trigger": [],
-        },
-    },
     # Nightly-only family, tests only on nightly
     "gfx1153": {
         "linux": {
@@ -696,6 +677,26 @@ amdgpu_family_info_matrix_explicit_only = {
             "build_variants": ["release"],
             "bypass_tests_for_releases": True,
             "builds_on_trigger": [],  # Never auto-included, explicit only
+            "tests_on_trigger": [],
+        },
+    },
+    # To be moved to nightly once upstreaming is complete and R-S , R-L is bumped
+    "gfx117x": {
+        "linux": {
+            "test-runs-on": "",
+            "family": "gfx117X-all",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "bypass_tests_for_releases": True,
+            "builds_on_trigger": [""], # Never auto-included, explicit only, add nightly once moved to nightly
+            "tests_on_trigger": [],
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx117X-all",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "builds_on_trigger": [""], # Never auto-included, explicit only, add nightly once moved to nightly
             "tests_on_trigger": [],
         },
     },
