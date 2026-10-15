@@ -23,7 +23,11 @@ on:
         required: true
         type: string
       rocm_package_find_links_url:
-        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        description: "URL for pip --find-links to install ROCm packages for testing."
+        type: string
+        default: ""
+      rocm_package_index_url:
+        description: "URL for pip --index-url to install ROCm packages for testing."
         type: string
         default: ""
       release_type:
@@ -130,7 +134,11 @@ on:
         type: string
         default: "7.14.0.dev0"
       rocm_package_find_links_url:
-        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        description: "URL for pip --find-links to install ROCm packages for testing."
+        type: string
+        default: ""
+      rocm_package_index_url:
+        description: "URL for pip --index-url to install ROCm packages for testing."
         type: string
         default: ""
       release_type:
@@ -270,6 +278,7 @@ jobs:
       WHEEL_INDEX_URL: ${{ inputs.package_index_url }}
       WHEEL_FIND_LINKS_URL: ${{ inputs.wheel_find_links_url }}
       ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
+      ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url }}
       VIRTUAL_ENV: ${{ github.workspace }}/.venv
 
     steps:
@@ -362,9 +371,16 @@ jobs:
         env:
           ROCM_PACKAGES: rocm[libraries${{ steps.expand.outputs.device_extras && format(',{0}', steps.expand.outputs.device_extras) || '' }}]==${{ inputs.rocm_version }}
         run: |
+          # An empty --index-url means --no-index to setup_venv.py. Omit it
+          # for find-links installs so dependencies can still come from PyPI.
+          package_source_args=()
+          if [ -n "${ROCM_PACKAGE_INDEX_URL}" ]; then
+            package_source_args+=(--index-url "${ROCM_PACKAGE_INDEX_URL}")
+          fi
           python build_tools/setup_venv.py "${VIRTUAL_ENV}" \
             --packages "${ROCM_PACKAGES}" \
-            --find-links "${ROCM_PACKAGE_FIND_LINKS_URL}"
+            --find-links "${ROCM_PACKAGE_FIND_LINKS_URL}" \
+            "${package_source_args[@]}"
 
       # Package names, versions and where to get them arrive as env vars above.
       - name: Install JAX wheels

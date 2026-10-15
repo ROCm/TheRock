@@ -422,10 +422,7 @@ jobs:
       kpack_split: ${{ 'true' }}
       rocm_package_find_links_url: ${{ fromJSON(inputs.build_config).rocm_package_find_links_url }}
       rocm_package_index_url: ${{ fromJSON(inputs.build_config).rocm_package_index_url }}
-      # Published packages are intentionally unpinned. Let build_prod_wheels.py
-      # derive the version suffix from the installed ROCm instead of this run's
-      # generated development version.
-      rocm_version: ${{ fromJSON(inputs.build_config).build_python_packages && inputs.rocm_package_version || '' }}
+      rocm_version: ${{ fromJSON(inputs.build_config).framework_rocm_version }}
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_large }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -456,8 +453,10 @@ jobs:
       jax_ref: ${{ matrix.jax_ref }}
       rocm_jax_ref: ${{ matrix.rocm_jax_ref }}
       wheel_type: ${{ matrix.wheel_type }}
-      rocm_version: ${{ inputs.rocm_package_version }}
+      # CI setup selects this run's built version or resolves a published version.
+      rocm_version: ${{ fromJSON(inputs.build_config).framework_rocm_version }}
       rocm_package_find_links_url: ${{ fromJSON(inputs.build_config).rocm_package_find_links_url }}
+      rocm_package_index_url: ${{ fromJSON(inputs.build_config).rocm_package_index_url }}
       # One representative family, so a PR pays for the JAX tests once rather
       # than once per family it builds. An empty value builds without testing.
       test_amdgpu_family: ${{ contains(fromJSON(inputs.build_config).dist_amdgpu_families, 'gfx94X-dcgpu') && 'gfx94X-dcgpu' || '' }}

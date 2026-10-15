@@ -14,8 +14,8 @@ This script is a pipeline of data transformations:
     5. Build Configs   — families × variant → per-platform build configs
     6. Write Outputs   — JSON → GITHUB_OUTPUT + GITHUB_STEP_SUMMARY
 
-Each step (except 1 and 6) is a pure function of typed dataclasses,
-independently testable without environment variables or filesystem access.
+Version resolution queries the package index only when published packages are
+needed. Each pipeline step is independently testable with typed inputs.
 
 The CI pipeline is a DAG of job groups:
 
@@ -51,6 +51,7 @@ import logging
 import os
 import sys
 from dataclasses import asdict, dataclass, field, fields, replace
+from functools import cache
 from pathlib import Path
 
 # Add parent directory to path for _therock_utils imports
@@ -80,6 +81,7 @@ from github_actions_api import (
     gha_load_github_event,
     gha_set_output,
 )
+from get_latest_package_version import get_latest_package_version
 from stage_impact import analyze_artifact_impact_from_projects
 from stage_reuse_decision import (
     AutoStageReuse,
@@ -222,6 +224,7 @@ class CIInputs:
     base_ref: str | None  # Git ref used for diffing, or None to skip path filters
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
     release_type: str = "ci"  # "ci", or one of the supported release types
+    built_rocm_version: str = ""  # ROCM_PACKAGE_VERSION computed during setup
     build_python_packages: bool = True
     build_pytorch: bool = True
     build_jax: bool = False
@@ -430,6 +433,7 @@ class CIInputs:
             base_ref=base_ref,
             build_variant=build_variant,
             release_type=release_type,
+            built_rocm_version=os.environ.get("ROCM_PACKAGE_VERSION", ""),
             build_python_packages=build_python_packages,
             build_pytorch=build_pytorch,
             build_jax=build_jax,
@@ -747,9 +751,11 @@ class BuildConfig:
     # ROCm Python packages used by Python framework builds: use --find-links
     # for packages built by this run, or --index-url for published packages when
     # skipping package builds in this workflow run.
-    # Both URLs may be empty when if Python builds are all disabled.
+    # Both URLs are empty when Python builds are all disabled.
     rocm_package_find_links_url: str = ""
     rocm_package_index_url: str = ""
+    # Selected during CI setup and pinned for framework builds and tests.
+    framework_rocm_version: str = ""
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
     pytorch_build_matrix: list[dict[str, str]] = field(default_factory=list)
     jax_build_matrix: list[dict[str, str]] = field(default_factory=list)
@@ -1278,11 +1284,6 @@ def decide_jobs(
                 "ci:skip-rocm requires build_variant='release'; stable ROCm "
                 "packages are not published for other variants"
             )
-        if build_jax_action == JobAction.RUN:
-            raise ValueError(
-                "ci:skip-rocm does not yet support JAX; use ci:skip-jax "
-                "or build_jax=false"
-            )
         # Published packages satisfy the framework dependency. No ROCm stages
         # are built or copied, and there is no need to look up baseline runs.
         return JobDecisions(
@@ -1534,6 +1535,12 @@ def _should_run_tests_for_family(
         False,
         f"no trigger match (current={current_triggers}, allowed={tests_on_trigger})",
     )
+
+
+@cache
+def _get_published_rocm_version(index_url: str) -> str:
+    """Resolve once per index so all framework builds use the same version."""
+    return get_latest_package_version("rocm", index_url)
 
 
 def _expand_build_config_for_platform(
@@ -1858,6 +1865,7 @@ def _expand_build_config_for_platform(
     # framework consumer. Leave both URLs empty when no package builds remain.
     rocm_package_find_links_url = ""
     rocm_package_index_url = ""
+    framework_rocm_version = ""
     if build_python_packages:
         packages_loc = WorkflowOutputRoot.from_workflow_run(
             run_id=ci_inputs.run_id,
@@ -1867,6 +1875,18 @@ def _expand_build_config_for_platform(
         rocm_package_find_links_url = f"{packages_loc.https_url}/index.html"
     elif use_published_packages and (build_pytorch or build_jax):
         rocm_package_index_url = "https://stable.repo.amd.com/rocm/whl-next/"
+
+    if build_pytorch or build_jax:
+        framework_rocm_version = (
+            _get_published_rocm_version(rocm_package_index_url)
+            if rocm_package_index_url
+            else ci_inputs.built_rocm_version
+        )
+        if not framework_rocm_version:
+            raise ValueError(
+                f"No ROCm package version selected for {platform} frameworks"
+            )
+        print(f"  {platform} framework ROCm package version: {framework_rocm_version}")
 
     return BuildConfig(
         per_family_info=per_family_info,
@@ -1882,6 +1902,7 @@ def _expand_build_config_for_platform(
         build_jax=build_jax,
         rocm_package_find_links_url=rocm_package_find_links_url,
         rocm_package_index_url=rocm_package_index_url,
+        framework_rocm_version=framework_rocm_version,
         pytorch_build_matrix=pytorch_build_matrix,
         jax_build_matrix=jax_build_matrix,
         build_runs_on_large=build_runs_on_large,
@@ -2109,7 +2130,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 
     This function is the primary entry point for testing — construct
     CIInputs and GitContext directly and assert on the returned CIOutputs.
-    No git operations or environment access needed.
+    Published-package tests mock the index lookup.
     """
     print("=== Inputs ===")
     ci_inputs.log()
