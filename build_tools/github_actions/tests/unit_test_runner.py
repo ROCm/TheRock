@@ -305,6 +305,36 @@ class PrivilegeTierTest(unittest.TestCase):
         finally:
             test_runner.test_component_job_name = original
 
+    def test_python_tests_disabled_adds_exclude_label(self):
+        original = test_runner.test_component_job_name
+        previous = os.environ.get("AMDSMI_PYTHON_TESTS")
+        try:
+            test_runner.test_component_job_name = "amdsmi"
+            os.environ["AMDSMI_PYTHON_TESTS"] = "0"
+            cmd = test_runner.build_ctest_command("comprehensive", "gfx942", {"gfx94X"}, set())
+            le_values = [cmd[i + 1] for i, v in enumerate(cmd) if v == "-LE"]
+            self.assertTrue(any("^amdsmi_python$" in v.split("|") for v in le_values))
+        finally:
+            test_runner.test_component_job_name = original
+            if previous is None:
+                os.environ.pop("AMDSMI_PYTHON_TESTS", None)
+            else:
+                os.environ["AMDSMI_PYTHON_TESTS"] = previous
+
+    def test_python_tests_enabled_by_default(self):
+        original = test_runner.test_component_job_name
+        previous = os.environ.get("AMDSMI_PYTHON_TESTS")
+        try:
+            test_runner.test_component_job_name = "amdsmi"
+            os.environ.pop("AMDSMI_PYTHON_TESTS", None)
+            cmd = test_runner.build_ctest_command("comprehensive", "gfx942", {"gfx94X"}, set())
+            le_values = [cmd[i + 1] for i, v in enumerate(cmd) if v == "-LE"]
+            self.assertFalse(any("amdsmi_python" in v for v in le_values))
+        finally:
+            test_runner.test_component_job_name = original
+            if previous is not None:
+                os.environ["AMDSMI_PYTHON_TESTS"] = previous
+
     def test_other_components_are_unchanged(self):
         original = test_runner.test_component_job_name
         try:

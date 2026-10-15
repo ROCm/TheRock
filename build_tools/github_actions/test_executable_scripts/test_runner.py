@@ -587,6 +587,21 @@ def generate_resource_spec():
     return resource_spec_file
 
 
+def amdsmi_python_tests_enabled():
+    """Return whether the amdsmi Python ctest entries should run.
+
+    AMDSMI_PYTHON_TESTS is the run-time switch. Unset or empty means enabled.
+    0, false, off, and no disable the entries (test_runner adds
+    -LE ^amdsmi_python$). Other components ignore the variable.
+    """
+    if test_component_job_name != "amdsmi":
+        return True
+    raw = os.environ.get("AMDSMI_PYTHON_TESTS")
+    if raw is None or not raw.strip():
+        return True
+    return raw.strip().lower() not in {"0", "false", "off", "no"}
+
+
 def build_ctest_command(
     category,
     gpu_arch,
@@ -630,6 +645,10 @@ def build_ctest_command(
         else:
             le_patterns.append("ex_gpu")
             print(f"# No GPU suite found for {gpu_arch}, excluding all ex_gpu tests")
+
+    if not amdsmi_python_tests_enabled():
+        le_patterns.append("^amdsmi_python$")
+        print("# AMDSMI_PYTHON_TESTS disables the Python ctest entries")
 
     # Add label options together for readability: -L ... -LE ...
     # Anchor each include label with ^...$ so ctest matches it exactly. ctest's
