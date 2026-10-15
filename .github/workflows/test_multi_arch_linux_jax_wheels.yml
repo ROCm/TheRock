@@ -371,16 +371,10 @@ jobs:
         env:
           ROCM_PACKAGES: rocm[libraries${{ steps.expand.outputs.device_extras && format(',{0}', steps.expand.outputs.device_extras) || '' }}]==${{ inputs.rocm_version }}
         run: |
-          # An empty --index-url means --no-index to setup_venv.py. Omit it
-          # for find-links installs so dependencies can still come from PyPI.
-          package_source_args=()
-          if [ -n "${ROCM_PACKAGE_INDEX_URL}" ]; then
-            package_source_args+=(--index-url "${ROCM_PACKAGE_INDEX_URL}")
-          fi
           python build_tools/setup_venv.py "${VIRTUAL_ENV}" \
             --packages "${ROCM_PACKAGES}" \
-            --find-links "${ROCM_PACKAGE_FIND_LINKS_URL}" \
-            "${package_source_args[@]}"
+            --index-url="${ROCM_PACKAGE_INDEX_URL}" \
+            --find-links="${ROCM_PACKAGE_FIND_LINKS_URL}"
 
       # Package names, versions and where to get them arrive as env vars above.
       - name: Install JAX wheels
