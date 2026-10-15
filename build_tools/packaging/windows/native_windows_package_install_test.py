@@ -448,16 +448,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def parse_cli_arguments(
-    argv: list[str] | None = None, *, raise_instead_of_exit: bool = False
-) -> argparse.Namespace:
+def parse_cli_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = build_arg_parser()
-    if raise_instead_of_exit:
-
-        def _raise(message: str):
-            raise ValueError(message)
-
-        parser.error = _raise  # type: ignore[assignment]
     args = parser.parse_args(argv)
     args.packages = _split_packages(args.packages)
     if not args.packages:
@@ -503,7 +495,7 @@ def test_native_windows_package_install() -> None:
                 "Missing required environment variables (MSI_DIR, ROCM_VERSION)."
             )
         pytest.skip("Set MSI_DIR / ROCM_VERSION to run this test.")
-    args = parse_cli_arguments(argv, raise_instead_of_exit=True)
+    args = parse_cli_arguments(argv)
     rc = _runner_from_args(args).run()
     assert rc == 0, f"install test exited with code {rc}"
 

@@ -25,6 +25,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from generate_msi_wxs import PACKAGES, expected_msi_filename  # noqa: E402
@@ -61,10 +62,16 @@ def download_msis(prefix_url: str, packages: list[str], dest_dir: Path) -> list[
     for package in packages:
         filename = expected_msi_filename(package)
         url = f"{prefix_url.rstrip('/')}/{filename}"
+        # Only allow HTTPS. urlretrieve would otherwise happily open file:// or
+        # other schemes, which here could read a local path instead of the
+        # intended public artifacts URL (CWE-22 / bandit B310).
+        split = urlsplit(url)
+        if split.scheme != "https" or not split.netloc:
+            raise ValueError(f"expected an HTTPS URL, got: {url}")
         dest = dest_dir / filename
         print(f"Downloading {url} -> {dest}")
         try:
-            urllib.request.urlretrieve(url, dest)
+            urllib.request.urlretrieve(url, dest)  # nosec B310  # HTTPS checked above
         except urllib.error.URLError as e:
             raise FileNotFoundError(
                 f"could not download MSI for package {package!r} from {url}: {e}. "
