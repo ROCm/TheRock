@@ -30,7 +30,7 @@ RELEASE_TYPES = [
 
 # Release matrices start with this shared version range, then omit unsupported
 # ref/version combinations below.
-RELEASE_PYTHON_VERSIONS = ["3.11", "3.12", "3.13", "3.14"]
+RELEASE_PYTHON_VERSIONS = ["3.11", "3.12", "3.13", "3.14", "3.15"]
 CI_PYTHON_VERSIONS = {
     "linux": ["3.12"],
     "windows": ["3.12"],
@@ -203,7 +203,7 @@ def generate_pytorch_matrix_for_release_type(
     #   },
     #   ...
     #   {
-    #     "python_version": "3.14",
+    #     "python_version": "3.15",
     #     "pytorch_git_ref": "nightly",
     #     "amdgpu_families": "gfx94X-dcgpu",
     #     "test_level": "none"

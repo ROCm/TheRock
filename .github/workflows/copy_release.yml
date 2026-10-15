@@ -17,6 +17,7 @@ on:
           - "3.12"
           - "3.13"
           - "3.14"
+          - "3.15"
         default: "3.12"
       include_torch:
         description: Copy 'torch' packages in addition to 'rocm' packages?
