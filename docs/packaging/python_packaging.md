@@ -33,9 +33,16 @@ We generate the following types of packages:
   only the device wheels for their GPU target(s).
 - Devel package: The `rocm-sdk-devel` package is the catch-all for everything.
   For any file already populated in a runtime package, it will include it as
-  a relative symlink in the tarball. During extraction, file symlinks are
-  converted to hardlinks to improve compatibility, while directory symlinks
-  remain as symlinks. Shared library soname links are also rewritten as needed.
+  a relative symlink in the tarball. During extraction, a file symlink whose
+  target already exists becomes a hardlink. Directory symlinks, and links
+  whose targets are not on disk, are created with `os.symlink` directly.
+  Symlink members are not passed to `tarfile.extract`: when `os.symlink`
+  fails, tarfile scans the archive to EOF and the rest of the tree would be
+  dropped. If the process cannot create symlinks (on Windows, Developer Mode
+  is off and the process is not elevated), expansion raises and leaves
+  `_devel.tar` in place so `rocm-sdk init` can retry. The tarball is deleted
+  only after every member has been applied. Shared library soname links are
+  also rewritten as needed.
   Since symlinks/hardlinks and non-standard attributes cannot be included in a
   wheel file, the platform contents are stored in a `_devel.tar` or `_devel.tar.xz`
   file. The installed package is extended in response to requesting a path to it

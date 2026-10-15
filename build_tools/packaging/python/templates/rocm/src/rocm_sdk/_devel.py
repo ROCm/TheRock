@@ -13,7 +13,10 @@ The devel package is special in some key ways:
   python package named like `_rocm_sdk_devel_linux_x86_64` that is a sibling
   to other packages like `_rocm_sdk_core_linux_x86_64`.
 * For any files already contained in one of the runtime packages, a relative
-  symlink to the correct sibling will be stored.
+  symlink to the correct sibling will be stored. On expand, a file symlink
+  whose target exists becomes a hardlink. Directory symlinks stay symlinks.
+  A symlink that cannot be created fails the expand and leaves the tarball
+  in place.
 * Any files not in one of the runtime packages will be included verbatim in the
   tarball.
 * RPATH setup relies on this sibling behavior and is already encoded properly
@@ -188,6 +191,130 @@ def _find_tarfile(rocm_sdk_devel_path: Path):
     return tarfile_path, tarfile_mode
 
 
+# Windows ERROR_PRIVILEGE_NOT_HELD. os.symlink raises this when the process
+# lacks SeCreateSymbolicLinkPrivilege (Developer Mode off, and not elevated).
+_ERROR_PRIVILEGE_NOT_HELD = 1314
+
+# Compiler drivers whose identity is the symlink. Hardlinking them would make
+# readlink(/proc/self/exe) report the target instead of the driver name.
+_PRESERVE_BIN_SYMLINKS = frozenset(
+    {
+        "amdclang",
+        "amdclang++",
+        "amdclang-cl",
+        "amdclang-cpp",
+        "amdflang",
+        "amdlld",
+        "amdllvm",
+    }
+)
+
+
+class DevelExpandError(RuntimeError):
+    """Raised when devel expansion cannot finish and the tarball is kept."""
+
+
+def _symlink_privilege_denied(exc: OSError) -> bool:
+    """True when os.symlink failed because the process cannot create symlinks.
+
+    A Windows WinError 1314 sets ``winerror`` and usually errno EACCES. Some
+    callers raise ``OSError(1314)`` instead, so the errno is accepted too.
+    """
+    if getattr(exc, "winerror", None) == _ERROR_PRIVILEGE_NOT_HELD:
+        return True
+    return exc.errno == _ERROR_PRIVILEGE_NOT_HELD
+
+
+def _reraise_symlink_error(
+    dest_path: Path, symlink_target: str, exc: OSError
+) -> None:
+    """Fail the expand on a symlink privilege error. Other OSErrors propagate."""
+    if not _symlink_privilege_denied(exc):
+        raise exc
+    raise DevelExpandError(
+        f"Cannot create symlink {dest_path} -> {symlink_target}. "
+        "On Windows, turn on Developer Mode or grant the "
+        "'Create symbolic links' user right, then run `rocm-sdk init` again. "
+        "The devel tarball was kept so expansion can be retried."
+    ) from exc
+
+
+def _require_materialized(dest_path: Path) -> None:
+    """Raise if a member was not left on disk as a file, directory, or link."""
+    if dest_path.is_symlink() or dest_path.exists():
+        return
+    raise DevelExpandError(
+        f"Devel expand did not create {dest_path}. "
+        "The tarball was kept so expansion can be retried."
+    )
+
+
+def _replace_existing(dest_path: Path) -> None:
+    if dest_path.is_symlink() or dest_path.exists():
+        dest_path.unlink()
+
+
+def _create_symlink(
+    dest_path: Path, symlink_target: str, *, target_is_directory: bool
+) -> None:
+    _replace_existing(dest_path)
+    dest_path.symlink_to(symlink_target, target_is_directory=target_is_directory)
+    _require_materialized(dest_path)
+
+
+def _create_hardlink(dest_path: Path, hardlink_target: Path) -> None:
+    _replace_existing(dest_path)
+    dest_path.hardlink_to(hardlink_target)
+    if dest_path.is_symlink() or not dest_path.is_file():
+        raise DevelExpandError(
+            f"Devel expand did not hardlink {dest_path} -> {hardlink_target}. "
+            "The tarball was kept so expansion can be retried."
+        )
+
+
+def _preserve_as_symlink(dest_path: Path) -> bool:
+    """True for Linux top-level devel bin/ compiler-driver symlinks."""
+    return (
+        not _is_windows()
+        and dest_path.name in _PRESERVE_BIN_SYMLINKS
+        and dest_path.parent.name == "bin"
+        and dest_path.parent.parent.name.startswith("_rocm_sdk_devel")
+    )
+
+
+def _materialize_symlink(
+    *,
+    dest_path: Path,
+    parent_path: Path,
+    symlink_target: str,
+) -> None:
+    """Materialize one tar symlink without calling tarfile.extract.
+
+    tarfile.extract follows a failed os.symlink by scanning the archive for
+    the link target. That scan reads to EOF, so the caller's next() loop would
+    stop and drop every later member. File symlinks with an existing target
+    become hardlinks. Every other symlink is created with os.symlink. A
+    privilege failure raises DevelExpandError so the caller leaves the
+    tarball in place.
+    """
+    parent_path.mkdir(parents=True, exist_ok=True)
+    hardlink_target = _resolve_link_target(parent_path, symlink_target)
+    if _preserve_as_symlink(dest_path):
+        _create_symlink(dest_path, symlink_target, target_is_directory=False)
+        return
+    if hardlink_target.is_file():
+        _create_hardlink(dest_path, hardlink_target)
+        return
+    try:
+        _create_symlink(
+            dest_path,
+            symlink_target,
+            target_is_directory=hardlink_target.is_dir(),
+        )
+    except OSError as exc:
+        _reraise_symlink_error(dest_path, symlink_target, exc)
+
+
 def _resolve_link_target(parent: Path, target: str) -> Path:
     """Resolves a relative link target against parent, collapsing any '..'.
 
@@ -198,7 +325,7 @@ def _resolve_link_target(parent: Path, target: str) -> Path:
     under the limit.
 
     resolve() collapses '..' by walking the path rather than lexically, which
-    matters because _lock_and_expand extracts directory symlinks as-is: a
+    matters because _lock_and_expand creates directory symlinks as-is: a
     lexical collapse through a symlinked ancestor names a different file than
     the OS reaches.
     """
@@ -420,7 +547,13 @@ def _lock_and_expand(
     tarfile_mode: str,
     record_path: Path,
     dist_file_path_names: set[str],
-):
+) -> None:
+    """Expand the devel tarball into ``site_lib_path`` and delete it on success.
+
+    The tarball is removed only after every member has been applied. A symlink
+    that cannot be created raises ``DevelExpandError`` first, which leaves the
+    tarball in place for a later ``rocm-sdk init``.
+    """
     # When extracting, we note the directory paths of each entry and on the first
     # access, clean it up if it is already present. This works around package manager
     # races where in certain uninstall situations, some amount of the directory tree
@@ -436,67 +569,44 @@ def _lock_and_expand(
     with open(record_path, "at") as record_file:
         file_lock = FileLock(record_file)
         try:
+            visited = 0
             with tarfile.open(tarfile_path, tarfile_mode) as tf:
                 while ti := tf.next():
+                    visited += 1
                     dest_path = site_lib_path / ti.name
                     if ti.isfile() or ti.issym():
                         parent_path = dest_path.parent
                         if parent_path not in clean_dir_paths:
                             _clean_dir(parent_path)
+                        if ti.issym():
+                            _materialize_symlink(
+                                dest_path=dest_path,
+                                parent_path=parent_path,
+                                symlink_target=ti.linkname,
+                            )
+                        else:
+                            tf.extract(ti, path=site_lib_path, filter="data")
+                            _require_materialized(dest_path)
                         if ti.name not in dist_file_path_names:
                             # CSV record:
                             #   path
                             #   hash (empty)
                             #   size (empty)
                             record_file.write(f"{ti.name},,\n")
-                        if ti.issym():
-                            # Convert file symlinks into hardlinks on all platforms.
-                            # This saves disk space while improving compatibility.
-                            # On Windows: symlinks require admin privileges.
-                            # On Linux: native binaries that use readlink(/proc/self/exe)
-                            #   to determine their location will resolve symlinks and
-                            #   report the wrong path (e.g., _rocm_sdk_core instead of
-                            #   _rocm_sdk_devel). Hardlinks avoid this issue.
-                            # As needed, we could also generate tarfiles with
-                            # copies instead of symlinks, at the cost of disk space.
-                            parent_path.mkdir(parents=True, exist_ok=True)
-                            symlink_target = ti.linkname
-                            hardlink_target = _resolve_link_target(
-                                parent_path, symlink_target
-                            )
-                            # On Linux, preserve symlinks in top-level bin/ directory
-                            PRESERVE_SYMLINKS = [
-                                "amdclang",
-                                "amdclang++",
-                                "amdclang-cl",
-                                "amdclang-cpp",
-                                "amdflang",
-                                "amdlld",
-                                "amdllvm",
-                            ]
-                            if (
-                                not _is_windows()
-                                and dest_path.name in PRESERVE_SYMLINKS
-                                and dest_path.parent.name == "bin"
-                                and dest_path.parent.parent.name.startswith(
-                                    "_rocm_sdk_devel"
-                                )
-                            ):
-                                dest_path.symlink_to(symlink_target)
-                            # Only create hardlinks for files, not directories
-                            elif hardlink_target.is_file():
-                                dest_path.hardlink_to(hardlink_target)
-                            else:
-                                # For directory symlinks, extract as normal
-                                tf.extract(ti, path=site_lib_path)
-                        else:
-                            tf.extract(ti, path=site_lib_path)
                     elif ti.isdir():
                         # We don't generally have directory entries, but handle
                         # them if we do.
                         if dest_path not in clean_dir_paths:
                             _clean_dir(dest_path)
-                        tf.extract(ti, path=site_lib_path)
+                        tf.extract(ti, path=site_lib_path, filter="data")
+                # getmembers() is safe only after the walk: calling it mid-loop
+                # would itself read the archive to EOF.
+                archived = len(tf.getmembers())
+            if visited != archived:
+                raise DevelExpandError(
+                    f"Devel expand read {visited} of {archived} archive members. "
+                    "The tarball was left in place so `rocm-sdk init` can retry."
+                )
             tarfile_path.unlink()
         finally:
             file_lock.unlock()
