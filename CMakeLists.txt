@@ -29,6 +29,7 @@ include(therock_external_source)
 include(therock_features)
 include(therock_sanitizers)
 include(therock_subproject)
+include(therock_python_wheel)
 include(therock_job_pools)
 include(therock_testing)
 
