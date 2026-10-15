@@ -167,9 +167,9 @@ def test_checked_in_manifest_bkc_contains_only_gfx1250_targets() -> None:
     }
     expected_bkc_packages = {
         package_name
-        for package_name in index.packages
+        for package_name, package in index.packages.items()
         if target_package_marker not in package_name
-        and not package_name.startswith("jax-")
+        and package.owner_path != "jax/whl-next"
     } | expected_bkc_target_packages
 
     assert set(index.active_packages("bkc")) == expected_bkc_packages

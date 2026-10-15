@@ -185,14 +185,27 @@ python_indexes:
       fsspec:
         owner_path: core/whl-next
         stream_group: all
+      jax:
+        owner_path: jax/whl-next
+        streams:
+          - dev
+          - nightly
       jax-rocm10-pjrt:
         owner_path: jax/whl-next
       jax-rocm10-plugin:
         owner_path: jax/whl-next
+      jaxlib:
+        owner_path: jax/whl-next
+        streams:
+          - dev
+          - nightly
       jinja2:
         owner_path: core/whl-next
         stream_group: all
       markupsafe:
+        owner_path: core/whl-next
+        stream_group: all
+      ml-dtypes:
         owner_path: core/whl-next
         stream_group: all
       mpmath:
@@ -202,6 +215,9 @@ python_indexes:
         owner_path: core/whl-next
         stream_group: all
       numpy:
+        owner_path: core/whl-next
+        stream_group: all
+      opt-einsum:
         owner_path: core/whl-next
         stream_group: all
       pillow:
