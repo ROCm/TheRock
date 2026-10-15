@@ -542,7 +542,6 @@ jobs:
             ${torch_only_flag}
 
       - name: Configure AWS Credentials
-        if: ${{ !startsWith(inputs.build_variant, 'asan') }}
         uses: ./.github/actions/configure_aws_product_publication_credentials
         with:
           release_type: ${{ inputs.release_type }}
@@ -550,11 +549,11 @@ jobs:
 
       - name: Upload PyTorch wheels to release bucket
         id: publish-pytorch-wheels
-        if: ${{ !startsWith(inputs.build_variant, 'asan') }}
         run: |
           python build_tools/github_actions/publish_pytorch_to_release_bucket.py \
             --source-dir="${PACKAGE_DIST_DIR}" \
             --release-type="${BUILD_RELEASE_TYPE}" \
+            --build-variant="${{ inputs.build_variant }}" \
             --structured
 
       - name: Upload ASAN torch wheel artifact
