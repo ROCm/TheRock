@@ -228,6 +228,10 @@ jobs:
         build_instrumented_math_libs,
       ]
     # Also guard the empty matrix: fromJSON('') would hard-error.
+    # TODO: failure() is true if any build leg failed, so with several
+    # amdgpu_families one family's failed build skips the reports of every
+    # family, including those that built. Gate each leg on its own family's
+    # build when multi-arch coverage lands.
     if: >-
       ${{
         !failure() && !cancelled() &&

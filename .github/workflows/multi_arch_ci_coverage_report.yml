@@ -174,6 +174,7 @@ jobs:
       ${{
         !cancelled() &&
         needs.configure_test_matrix.result == 'success' &&
+        needs.configure_test_matrix.outputs.components != '' &&
         needs.configure_test_matrix.outputs.components != '[]'
       }}
     runs-on: ubuntu-24.04
@@ -298,13 +299,25 @@ jobs:
           if-no-files-found: warn
 
       # Skip (not fail) when there's no Codecov token, so forks and first-time
-      # setups still get the lcov artifact above.
+      # setups still get the lcov artifact above, but say so on the run page.
+      - name: Note the skipped Codecov upload
+        if: ${{ env.HAS_CODECOV_TOKEN != 'true' }}
+        run: echo "::warning::CODECOV_TOKEN is not set, so the report was not uploaded to Codecov."
+
+      # An upload error (e.g. a token Codecov rejects) doesn't fail the job,
+      # whose report artifact is already published, but the next step flags it.
       - name: Upload report to Codecov
+        id: codecov
         if: ${{ env.HAS_CODECOV_TOKEN == 'true' }}
+        continue-on-error: true
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.REPORT_DIR }}/coverage.info
           flags: ${{ inputs.codecov_flag || inputs.project_name }}
           name: ${{ inputs.project_name }}-${{ inputs.amdgpu_families }}
-          fail_ci_if_error: false
+          fail_ci_if_error: true
+
+      - name: Flag the failed Codecov upload
+        if: ${{ steps.codecov.outcome == 'failure' }}
+        run: echo "::warning::Uploading the report to Codecov failed; see the 'Upload report to Codecov' step."

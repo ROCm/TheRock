@@ -139,7 +139,9 @@ whose stage has no build job fail immediately.
 inbound artifacts from it. It is a regular, non-instrumented build: no
 compiler-runtime project has a supported coverage option.
 `build_instrumented_math_libs` fans out over GPU families and is skipped when
-`needs_math_libs` is false; 17 of the 19 measurable projects live there.
+`needs_math_libs` is false; 17 of the 19 measurable projects live there. Report
+jobs wait for the whole fan-out, so with several families one failed build skips
+every family's report; the default is a single family until multi-arch lands.
 
 `coverage_cmake_options` is appended to the math-libs configure line only. A
 selection covering a whole group collapses to that group's option (the default
@@ -226,7 +228,8 @@ The `coverage-report-<project>-<family>` artifact:
 Totals are also written to the job summary page. The HTML step runs
 `fetch_sources.py` and remaps paths with `--path-equivalence`; it is
 `continue-on-error` (losing it costs only the annotated view). Codecov is
-skipped, not failed, when `CODECOV_TOKEN` is absent.
+skipped, not failed, when `CODECOV_TOKEN` is absent, and an upload error doesn't
+fail the job either; both leave a warning on the run.
 
 ## Selecting projects to run
 
