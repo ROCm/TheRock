@@ -41,9 +41,9 @@ done
 # Add/update device IDs in amdgpu.ids. Upstream libdrm releases periodically
 # add their own entries for devices we've already listed here (sometimes with
 # a stale or differently-cased name), so each entry is applied by device/
-# revision key: replace the existing line in place if the key is already
-# present upstream, otherwise append a new line. This keeps the table correct
-# across libdrm version bumps without silently accumulating duplicate or
+# revision key: any existing line for that key is deleted (a no-op if there
+# isn't one), then the entry is appended. This keeps the table correct across
+# libdrm version bumps without silently accumulating duplicate or
 # conflicting entries for the same device/revision.
 AMDGPU_IDS="$SOURCE_DIR/data/amdgpu.ids"
 AMDGPU_ID_ENTRIES=(
@@ -57,9 +57,6 @@ AMDGPU_ID_ENTRIES=(
 for entry in "${AMDGPU_ID_ENTRIES[@]}"; do
   device_id="$(cut -d',' -f1 <<< "$entry" | xargs)"
   revision_id="$(cut -d',' -f2 <<< "$entry" | xargs)"
-  if grep -qE "^${device_id},[[:space:]]*${revision_id}," "$AMDGPU_IDS"; then
-    sed -i -E "s|^${device_id},[[:space:]]*${revision_id},.*|${entry}|" "$AMDGPU_IDS"
-  else
-    echo "$entry" >> "$AMDGPU_IDS"
-  fi
+  sed -i -E "/^${device_id},[[:space:]]*${revision_id},/d" "$AMDGPU_IDS"
+  printf '%s\n' "$entry" >> "$AMDGPU_IDS"
 done
