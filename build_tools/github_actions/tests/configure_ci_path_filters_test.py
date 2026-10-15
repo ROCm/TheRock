@@ -15,6 +15,7 @@ from configure_ci_path_filters import (
     get_git_commit_hash,
     get_git_modified_paths,
     is_ci_run_required,
+    is_external_repo_ci_change,
 )
 from workflow_utils import get_transitive_workflow_uses
 
@@ -245,6 +246,49 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
             )
         if errors:
             self.fail("\n".join(errors))
+
+
+class IsExternalRepoCIChangeTest(unittest.TestCase):
+    def test_caller_workflow_is_a_ci_change(self):
+        self.assertTrue(
+            is_external_repo_ci_change([".github/workflows/therock-multi-arch-ci.yml"])
+        )
+
+    def test_project_discovery_scripts_are_ci_changes(self):
+        for path in (
+            ".github/scripts/get_changed_projects.py",
+            ".github/scripts/therock_ref.py",
+            ".github/repos-config.json",
+            "shared/ctest/TestCategories.cmake",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(is_external_repo_ci_change([path]))
+
+    def test_library_source_is_not_a_ci_change(self):
+        self.assertFalse(
+            is_external_repo_ci_change(["projects/rocblas/src/rocblas.cpp"])
+        )
+
+    def test_unrelated_workflow_is_not_a_ci_change(self):
+        """Only the workflows calling into TheRock count."""
+        self.assertFalse(
+            is_external_repo_ci_change([".github/workflows/close-stale-prs.yml"])
+        )
+
+    def test_ci_change_mixed_with_source_still_counts(self):
+        """The CI edit alone already widens the run to every project."""
+        self.assertTrue(
+            is_external_repo_ci_change(
+                [
+                    "projects/rocblas/src/rocblas.cpp",
+                    ".github/workflows/therock-ci.yml",
+                ]
+            )
+        )
+
+    def test_missing_or_empty_diff_is_not_a_ci_change(self):
+        self.assertFalse(is_external_repo_ci_change(None))
+        self.assertFalse(is_external_repo_ci_change([]))
 
 
 if __name__ == "__main__":

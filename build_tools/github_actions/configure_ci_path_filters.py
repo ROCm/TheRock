@@ -8,6 +8,7 @@ This module provides utilities to:
 - Filter paths based on skippable patterns (docs, markdown, etc.)
 - Identify CI-related workflow files
 - Decide whether CI should run based on the modified paths
+- Identify changes confined to an external repo's TheRock CI plumbing
 
 Skip-CI patterns are loaded from TOML config files:
 - skip-ci-base.toml: Universal patterns that apply to all repos
@@ -19,6 +20,7 @@ Public API:
     get_git_submodule_paths() - Get list of git submodule paths in the repository
     get_changed_files_for_external_repo() - Get changed files for external repos via API/git
     is_ci_run_required() - Check if CI run is required based on modified paths
+    is_external_repo_ci_change() - Check if an external repo touched TheRock CI plumbing
     load_skip_ci_config() - Load skip-CI patterns from TOML config files
     load_skip_ci_patterns_for_external_repo() - Load skip-CI patterns for external repos
 """
@@ -717,3 +719,57 @@ def get_changed_files_for_external_repo(
 
     print(f"  External repo {repo_name}: no SHAs provided and checkout not found")
     return None
+
+
+# ============================================================================
+# External repo CI-plumbing detection
+# ============================================================================
+
+# TheRock CI plumbing inside a calling repository (rocm-libraries,
+# rocm-systems). These paths configure *how* a run happens -- which workflow
+# calls into TheRock, how a diff is attributed to projects, how CTest
+# categorizes tests -- rather than changing any library source.
+#
+# A change here can alter test selection for every project at once, so the run
+# cannot be narrowed to a subset of projects and instead covers all of them.
+# Running the full project set at standard depth would be prohibitively
+# expensive for a change that builds no new code, so these runs stay at "quick"
+# depth. That mirrors how TheRock treats a change to its own CI workflows:
+# no submodule moved, so _determine_test_type() falls through to "quick".
+EXTERNAL_REPO_CI_PATTERNS = [
+    # Workflows in the calling repo that invoke TheRock's reusable workflows.
+    ".github/workflows/therock*",
+    # Project discovery and shared CI helper scripts.
+    ".github/scripts/therock*",
+    ".github/scripts/get_changed_projects.py",
+    ".github/scripts/ci_utils.py",
+    ".github/scripts/config_loader.py",
+    ".github/scripts/repo_config_model.py",
+    ".github/scripts/pr_detect_changed_subtrees.py",
+    ".github/repos-config.json",
+    # shared/ctest holds the CTest categorization logic that every project's
+    # tests consume, so a change there can alter selection everywhere.
+    "shared/ctest/*",
+]
+
+
+def is_external_repo_ci_change(changed_files: Optional[Iterable[str]]) -> bool:
+    """Whether an external repo's diff touches TheRock CI plumbing.
+
+    Args:
+        changed_files: Paths changed in the calling repository, or None when
+            the diff could not be determined.
+
+    Returns:
+        True if at least one changed path matches EXTERNAL_REPO_CI_PATTERNS.
+        A diff that mixes CI plumbing with library source still counts: the CI
+        change alone already widens the run to every project, so the breadth
+        (and therefore the cost tradeoff that selects "quick") is the same.
+    """
+    if not changed_files:
+        return False
+    return any(
+        fnmatch.fnmatch(path, pattern)
+        for path in changed_files
+        for pattern in EXTERNAL_REPO_CI_PATTERNS
+    )
