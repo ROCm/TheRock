@@ -28,15 +28,12 @@ RELEASE_TYPES = [
 # TODO: add opt-ins for CI runs to use python versions and pytorch refs normally
 #       only included in release runs
 
-# Release matrices start with this shared version range, then omit unsupported
-# ref/version combinations below.
+# Release matrices use this shared Python version range.
 RELEASE_PYTHON_VERSIONS = ["3.11", "3.12", "3.13", "3.14"]
 CI_PYTHON_VERSIONS = {
     "linux": ["3.12"],
     "windows": ["3.12"],
 }
-
-UNSUPPORTED_PYTHON_VERSIONS: dict[str, set[str]] = {}
 
 # Refs for the "prerelease" release type. The "nightly" release type extends
 # this set with additional refs (see RELEASE_PYTORCH_REFS).
@@ -205,8 +202,6 @@ def generate_pytorch_matrix_for_release_type(
     matrix: list[dict[str, str]] = []
     for py in versions:
         for ref in refs:
-            if py in UNSUPPORTED_PYTHON_VERSIONS.get(ref, set()):
-                continue
             exclude = UNSUPPORTED_AMDGPU_FAMILIES[platform].get(ref, set())
             families = _filter_families(amdgpu_families, exclude)
             if not families:
