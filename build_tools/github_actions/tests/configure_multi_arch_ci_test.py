@@ -564,6 +564,28 @@ class TestDecideJobs(unittest.TestCase):
         self.assertEqual(result.test_rocm.test_type, "comprehensive")
         self.assertIn("test_filter", result.test_rocm.test_type_reason)
 
+    def test_test_type_label_overrides_external_repo_standard(self):
+        """test_type: PR label (rocm-libraries convention) overrides the
+        standard level an external repo otherwise gets."""
+        git = cm.GitContext.from_external_repo("rocm-libraries")
+        for level in ("comprehensive", "full"):
+            with self.subTest(level=level):
+                result = cm.decide_jobs(
+                    self._inputs(pr_labels=[f"test_type:{level}"]),
+                    git_context=git,
+                    targets=cm.TargetSelection(),
+                )
+                self.assertEqual(result.test_rocm.test_type, level)
+
+    def test_test_type_invalid_raises(self):
+        """Unrecognized test_type value raises ValueError."""
+        with self.assertRaises(ValueError):
+            cm.decide_jobs(
+                self._inputs(pr_labels=["test_type:bogus"]),
+                git_context=cm.GitContext(changed_files=["CMakeLists.txt"]),
+                targets=cm.TargetSelection(),
+            )
+
     def test_explicit_prebuilt_stages(self):
         """workflow_dispatch prebuilt_stages input → stage_decisions on BuildRocmDecision."""
         result = cm.decide_jobs(
