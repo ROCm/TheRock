@@ -70,7 +70,17 @@ def clinfo_output() -> str:
             clinfo = Path(directory) / "clinfo.exe"
             shutil.copy2(THEROCK_BIN_DIR / "clinfo.exe", clinfo)
             shutil.copy2(vendor, Path(directory) / "OpenCL.dll")
-            return run_command([str(clinfo)], cwd=directory, env=env).stdout
+            # Keep Comgr beside the vendor so CLR cannot pick up an older
+            # driver-installed DLL from System32 before searching PATH.
+            shutil.copy2(
+                THEROCK_BIN_DIR / "amd_comgr.dll",
+                Path(directory) / "amd_comgr.dll",
+            )
+            process = run_command([str(clinfo)], cwd=directory, env=env)
+            # clinfo can exit successfully even when device initialization fails.
+            if process.stderr:
+                logger.info("clinfo stderr:\n%s", process.stderr)
+            return process.stdout
 
     lib_dir = THEROCK_BIN_DIR.parent / "lib"
     vendor = lib_dir / "opencl" / "libamdocl64.so"

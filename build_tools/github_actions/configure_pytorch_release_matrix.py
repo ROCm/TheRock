@@ -28,28 +28,21 @@ RELEASE_TYPES = [
 # TODO: add opt-ins for CI runs to use python versions and pytorch refs normally
 #       only included in release runs
 
-# Release matrices start with this shared version range, then omit unsupported
-# ref/version combinations below.
+# Release matrices use this shared Python version range.
 RELEASE_PYTHON_VERSIONS = ["3.11", "3.12", "3.13", "3.14"]
 CI_PYTHON_VERSIONS = {
     "linux": ["3.12"],
     "windows": ["3.12"],
 }
 
-UNSUPPORTED_PYTHON_VERSIONS = {
-    "release/2.12": {"3.15"},
-}
-
 # Refs for the "prerelease" release type. The "nightly" release type extends
 # this set with additional refs (see RELEASE_PYTORCH_REFS).
 RELEASE_STABLE_PYTORCH_REFS = {
     "linux": [
-        "release/2.12",
         "release/2.13",
         "release/2.14",
     ],
     "windows": [
-        "release/2.12",
         "release/2.13",
         "release/2.14",
     ],
@@ -62,21 +55,19 @@ RELEASE_PYTORCH_REFS = {
 }
 
 CI_PYTORCH_REFS = {
-    "linux": ["release/2.12", "release/2.13"],
-    "windows": ["release/2.12"],
+    "linux": ["release/2.13"],
+    "windows": ["release/2.13"],
 }
 
 # Unknown explicit refs are left unfiltered so bring-up branches can opt into
 # new GPU families before the default PyTorch refs support them.
 UNSUPPORTED_AMDGPU_FAMILIES = {
     "linux": {
-        "release/2.12": {},
         "release/2.13": {"gfx90c"},
         "release/2.14": {"gfx90c"},
         "nightly": {},
     },
     "windows": {
-        "release/2.12": {"gfx90c"},
         "release/2.13": {"gfx90c"},
         "release/2.14": {"gfx90c"},
     },
@@ -97,7 +88,6 @@ PYTORCH_TEST_LEVELS = ["none", "standard"]
 # https://github.com/pytorch/pytorch/blob/main/.github/workflows/trunk.yml
 # https://github.com/pytorch/pytorch/blob/main/RELEASE.md#python
 PYTORCH_PRIMARY_TEST_PYTHON_VERSIONS = {
-    "release/2.12": "3.11",
     "release/2.13": "3.11",
     "release/2.14": "3.11",
     "nightly": "3.11",
@@ -197,7 +187,7 @@ def generate_pytorch_matrix_for_release_type(
     # [
     #   {
     #     "python_version": "3.11",
-    #     "pytorch_git_ref": "release/2.12",
+    #     "pytorch_git_ref": "release/2.13",
     #     "amdgpu_families": "gfx94X-dcgpu",
     #     "test_level": "standard"
     #   },
@@ -212,8 +202,6 @@ def generate_pytorch_matrix_for_release_type(
     matrix: list[dict[str, str]] = []
     for py in versions:
         for ref in refs:
-            if py in UNSUPPORTED_PYTHON_VERSIONS.get(ref, set()):
-                continue
             exclude = UNSUPPORTED_AMDGPU_FAMILIES[platform].get(ref, set())
             families = _filter_families(amdgpu_families, exclude)
             if not families:
