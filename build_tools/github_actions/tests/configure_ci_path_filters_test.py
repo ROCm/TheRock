@@ -437,7 +437,7 @@ class ExternalRepoChangedProjectsTest(unittest.TestCase):
 
 
 class ExternalCiOnlyChangeTest(unittest.TestCase):
-    """is_external_ci_only_change: True only for pure CI-plumbing diffs."""
+    """is_external_ci_only_change: True when no library source changed."""
 
     def check(self, changed_files, skip_patterns=_SKIP_PATTERNS):
         return is_external_ci_only_change(changed_files, skip_patterns)
@@ -462,15 +462,26 @@ class ExternalCiOnlyChangeTest(unittest.TestCase):
             self.check([_CALLER_WORKFLOW, "projects/rocblas/src/rocblas.cpp"])
         )
 
-    def test_unrelated_workflow_is_not_ci_only(self):
-        """Only the therock* workflows are TheRock CI plumbing."""
-        self.assertFalse(self.check([".github/workflows/close-stale-prs.yml"]))
+    def test_shared_ci_script_is_ci_only(self):
+        """Shared selection logic widens the build but changes no library."""
+        self.assertTrue(self.check([".github/scripts/get_changed_projects.py"]))
+        self.assertTrue(self.check(["shared/ctest/categories.yaml"]))
 
-    def test_shared_ci_script_is_not_ci_only(self):
-        """Selection logic can change coverage everywhere; stay conservative."""
-        self.assertFalse(self.check([".github/scripts/get_changed_projects.py"]))
+    def test_non_project_paths_are_ci_only(self):
+        """Anything outside the project directories is repo/CI tooling."""
+        for path in (
+            ".github/workflows/close-stale-prs.yml",
+            "unexpected/config.py",
+            "CMakeLists.txt",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(self.check([path]))
 
-    def test_empty_and_unknown_diffs_are_not_ci_only(self):
+    def test_non_subtree_project_is_not_ci_only(self):
+        """shared/ holds real components, so only its CI paths downgrade."""
+        self.assertFalse(self.check(["shared/kpack/kpack.cpp"]))
+
+    def test_empty_diffs_are_not_ci_only(self):
         """'Nothing to judge' must fall through to the caller's default."""
         self.assertFalse(self.check([]))
         self.assertFalse(self.check(None))
