@@ -300,7 +300,7 @@ jobs:
           gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
 
   # Build the amdrocm-repo package for each OS profile of this package type and
-  # upload it to this run's artifacts bucket, under amdrepos/<os_profile>/.
+  # upload it to this run's artifacts bucket, under amd-repo-setup/<os_profile>/.
   # Release promotion does not copy it; publishing it is a separate step.
   stage_repo_package:
     name: Stage amdrocm-repo (${{ matrix.os_profile }})
@@ -389,7 +389,7 @@ jobs:
 
       - name: Upload amdrocm-repo
         run: |
-          $PYTHON_CMD build_tools/packaging/linux/upload_amdrepos_package.py \
+          $PYTHON_CMD build_tools/packaging/linux/upload_repo_setup_package.py \
             --dest-dir repo-package-out \
             --tier "${TIER}" \
             --run-id "${ARTIFACT_RUN_ID}" \
