@@ -38,6 +38,9 @@ VALID_TEST_CATEGORIES = {
     "ffm-standard",
     "ffm-comprehensive",
     "ffm-full",
+    # dnn-benchmarking workload suites (rocm-libraries dnn-providers; label
+    # dnn_benchmarking). Opt-in: see fetch_test_configurations.py.
+    "dnn_benchmarking",
     # emulation categories (AM/rocjitsu)
     "emu-fast",
     "emu-full",

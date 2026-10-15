@@ -282,6 +282,7 @@ class ValidTestCategoriesTest(unittest.TestCase):
                 "standard",
                 "comprehensive",
                 "full",
+                "dnn_benchmarking",
                 "ffm-quick",
                 "ffm-standard",
                 "ffm-comprehensive",
