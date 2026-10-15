@@ -28,13 +28,9 @@ on:
         description: 'Comma-separated Windows GPU families. "all" = all, "none" or empty = skip.'
         type: string
         default: ""
-      linux_test_labels:
-        description: "Comma-separated list of test labels for Linux."
+      pr_labels:
         type: string
-        default: ""
-      windows_test_labels:
-        description: "Comma-separated list of test labels for Windows."
-        type: string
+        description: "Comma-separated PR labels (e.g. ci:skip-pytorch,test:rocprim,test_filter:quick)."
         default: ""
       prebuilt_stages:
         description: "Comma-separated build stages to skip (artifacts copied from baseline_run_id instead)."
@@ -65,7 +61,8 @@ on:
           and baseline_run_id, and performs no reuse analysis or baseline lookup;
           "dry-run" (default) reports what automatic reuse could do while still
           honoring explicit prebuilt_stages; "reuse-stage" applies automatic
-          reuse and also honors explicit prebuilt_stages.
+          reuse and also honors explicit prebuilt_stages. Release branches
+          always use "off", regardless of this input.
         type: string
         default: "dry-run"
       stage_reuse_max_age_hours:
@@ -221,6 +218,21 @@ jobs:
           path: ci-config
         continue-on-error: true
 
+      # Checkout external repo config (skip-ci-config.toml) for path-based CI skip.
+      # This sparse checkout fetches only the .github directory to minimize checkout time.
+      - name: Checkout external repo config
+        if: inputs.external_repo != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          repository: ${{ fromJSON(inputs.external_repo).repository }}
+          ref: ${{ fromJSON(inputs.external_repo).ref }}
+          path: external-repo-config
+          sparse-checkout: .github
+          sparse-checkout-cone-mode: false
+        continue-on-error: true
+
       # Note: the script reads PR labels, the base ref, etc. from the event
       # payload (GITHUB_EVENT_PATH). That is the original event that started
       # the workflow run, which may not directly map to the "inputs" on
@@ -237,8 +249,7 @@ jobs:
           PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
-          LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
-          WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
+          PR_LABELS: ${{ inputs.pr_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BUILD_STAGES: ${{ inputs.build_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
@@ -252,6 +263,7 @@ jobs:
           # For baseline run selection, use repository input (defaults to GITHUB_REPOSITORY).
           # External repos set repository to "ROCm/TheRock" to fetch TheRock baseline runs.
           THEROCK_REPOSITORY: ${{ inputs.repository || github.repository }}
+          THEROCK_CHECKOUT_REF: ${{ inputs.ref }}
           # Token for GitHub API calls (branch history, baseline workflow runs)
           GITHUB_TOKEN: ${{ github.token }}
           # External repo JSON (e.g., {"repository":"ROCm/rocm-libraries","ref":"..."})

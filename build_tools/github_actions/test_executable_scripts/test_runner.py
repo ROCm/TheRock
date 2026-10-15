@@ -117,7 +117,7 @@ TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
 # ctest entries and gtest splits the cases -- which yields complete, disjoint
 # coverage for any number of (gtest-binary) entries. Single-entry components are
 # unaffected either way, so this is safe to keep narrowly scoped.
-GTEST_ONLY_SHARDING_COMPONENTS = {"rocsparse", "hipsparse"}
+GTEST_ONLY_SHARDING_COMPONENTS = {"rocsparse", "hipsparse", "hipkernelprovider"}
 
 # Per-component, per-GPU-family ctest exclusions (ctest --exclude-regex patterns).
 # Structure: { "component": { "gpu_family": ["test_pattern1", "test_pattern2"] } }
@@ -148,6 +148,11 @@ ctest_parallel_count = 1
 ctest_timeout_seconds = 7200
 
 environ_vars = os.environ.copy()
+
+# When THEROCK_CI_DEBUG is on, force enable individual debug options
+if environ_vars.get("THEROCK_CI_DEBUG") == "1":
+    environ_vars["ROCM_KPACK_DEBUG"] = "1"
+
 # Set the GTEST env vars for Gtest based tests
 # Set ROCM_PATH for tests that rely on it
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
