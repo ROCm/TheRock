@@ -7,7 +7,7 @@ r"""Upload a built amdrocm-repo package to the per-run outputs.
 Not to be confused with ``upload_package_repo.py``, which uploads the package
 repository itself (the content packages and their index).
 
-The destination is ``WorkflowOutputRoot.amdrepos_package()`` (see that method
+The destination is ``WorkflowOutputRoot.repo_setup_package()`` (see that method
 for the layout). It sits outside ``packages/<format>/``, so release promotion
 (``publish_rocm_to_release_buckets.py``) does not copy it. Publishing it to
 repo.amd.com is a separate step.
@@ -17,7 +17,7 @@ The bucket and prefix come from the CI environment: ``GITHUB_REPOSITORY``,
 line has no artifacts bucket and raises; the upload job does not run for it.
 
 Usage:
-  python build_tools/packaging/linux/upload_amdrepos_package.py \
+  python build_tools/packaging/linux/upload_repo_setup_package.py \
       --dest-dir repo-package-out \
       --tier stablerc \
       --run-id 12345678901 \
@@ -127,7 +127,7 @@ def upload(args: argparse.Namespace) -> str:
     """Upload the built package to its per-run location. Returns the object key."""
     package = find_package(args.dest_dir, args.pkg_type)
     root = WorkflowOutputRoot.from_workflow_run(run_id=args.run_id, platform="linux")
-    dest = root.amdrepos_package(args.os_profile, args.tier, args.pkg_type)
+    dest = root.repo_setup_package(args.os_profile, args.tier, args.pkg_type)
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
     # Log where the file actually goes: with --output-dir that is a local path,
     # and an s3:// URI would describe an upload that did not happen.

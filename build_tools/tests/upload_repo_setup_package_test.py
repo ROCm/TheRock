@@ -1,9 +1,9 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Unit tests for upload_amdrepos_package.py.
+"""Unit tests for upload_repo_setup_package.py.
 
-upload_amdrepos_package.py lives in build_tools/packaging/linux/, which is not
+upload_repo_setup_package.py lives in build_tools/packaging/linux/, which is not
 on the path that conftest.py sets up (it only adds build_tools/). Add it
 explicitly.
 
@@ -21,14 +21,14 @@ import pytest
 _LINUX_DIR = Path(__file__).resolve().parents[1] / "packaging" / "linux"
 sys.path.insert(0, str(_LINUX_DIR))
 
-import upload_amdrepos_package as uap  # noqa: E402
+import upload_repo_setup_package as ursp  # noqa: E402
 
 RUN_ID = "12345"
 BUCKET = "therock-prerelease-artifacts"
 
 # The key the destination method is expected to produce, spelled out here so a
 # change to the uploaded layout has to be made deliberately in two places.
-EXPECTED_RPM_KEY = "12345-linux/amdrepos/rhel10/amdrocm-repo-stablerc.rpm"
+EXPECTED_RPM_KEY = "12345-linux/amd-repo-setup/rhel10/amdrocm-repo-stablerc.rpm"
 
 
 def _built_dir(tmp_path, pkg_type="rpm"):
@@ -75,7 +75,7 @@ def _stub_bucket(monkeypatch, external_repo=""):
 
 
 def test_parse_args_ok(tmp_path):
-    args = uap.parse_args(_argv(tmp_path))
+    args = ursp.parse_args(_argv(tmp_path))
     assert args.run_id == RUN_ID
     assert args.tier == "stablerc"
     assert args.pkg_type == "rpm"
@@ -85,12 +85,12 @@ def test_parse_args_ok(tmp_path):
 
 def test_parse_args_rejects_missing_dest_dir(tmp_path):
     with pytest.raises(SystemExit):
-        uap.parse_args(_argv(tmp_path, dest_dir=tmp_path / "nope"))
+        ursp.parse_args(_argv(tmp_path, dest_dir=tmp_path / "nope"))
 
 
 def test_parse_args_rejects_bad_pkg_type(tmp_path):
     with pytest.raises(SystemExit):
-        uap.parse_args(_argv(tmp_path, pkg_type="tar"))
+        ursp.parse_args(_argv(tmp_path, pkg_type="tar"))
 
 
 @pytest.mark.parametrize(
@@ -114,13 +114,13 @@ def test_parse_args_rejects_bad_os_profile(tmp_path, bad):
     # os_profile becomes an object-key path segment; reject slashes, whitespace
     # and anything that is not anchored on an alphanumeric.
     with pytest.raises(SystemExit):
-        uap.parse_args(_argv(tmp_path, os_profile=bad))
+        ursp.parse_args(_argv(tmp_path, os_profile=bad))
 
 
 @pytest.mark.parametrize("good", ["ubuntu2404", "rhel8", "rhel10", "sles16"])
 def test_parse_args_accepts_real_os_profiles(tmp_path, good):
     # Guards the tightened pattern against over-rejection.
-    assert uap.parse_args(_argv(tmp_path, os_profile=good)).os_profile == good
+    assert ursp.parse_args(_argv(tmp_path, os_profile=good)).os_profile == good
 
 
 @pytest.mark.parametrize(
@@ -138,11 +138,13 @@ def test_parse_args_accepts_real_os_profiles(tmp_path, good):
 )
 def test_parse_args_rejects_non_numeric_run_id(tmp_path, bad):
     with pytest.raises(SystemExit):
-        uap.parse_args(_argv(tmp_path, run_id=bad))
+        ursp.parse_args(_argv(tmp_path, run_id=bad))
 
 
 def test_parse_args_accepts_a_numeric_run_id(tmp_path):
-    assert uap.parse_args(_argv(tmp_path, run_id="12345678901")).run_id == "12345678901"
+    assert (
+        ursp.parse_args(_argv(tmp_path, run_id="12345678901")).run_id == "12345678901"
+    )
 
 
 @pytest.mark.parametrize(
@@ -153,12 +155,12 @@ def test_parse_args_accepts_a_numeric_run_id(tmp_path):
 )
 def test_parse_args_rejects_bad_tier(tmp_path, bad):
     with pytest.raises(SystemExit):
-        uap.parse_args(_argv(tmp_path, tier=bad))
+        ursp.parse_args(_argv(tmp_path, tier=bad))
 
 
 @pytest.mark.parametrize("good", ["stable", "stablerc", "nightly"])
 def test_parse_args_accepts_real_tiers(tmp_path, good):
-    assert uap.parse_args(_argv(tmp_path, tier=good)).tier == good
+    assert ursp.parse_args(_argv(tmp_path, tier=good)).tier == good
 
 
 # --- finding the built package ------------------------------------------------
@@ -166,7 +168,7 @@ def test_parse_args_accepts_real_tiers(tmp_path, good):
 
 def test_find_package_returns_the_single_package(tmp_path):
     dest = _built_dir(tmp_path)
-    assert uap.find_package(dest, "rpm") == next(dest.glob("*.rpm"))
+    assert ursp.find_package(dest, "rpm") == next(dest.glob("*.rpm"))
 
 
 def test_find_package_ignores_the_builders_work_tree(tmp_path):
@@ -177,25 +179,25 @@ def test_find_package_ignores_the_builders_work_tree(tmp_path):
     nested.mkdir(parents=True)
     (nested / "amdrocm-repo-7.14.0-1.stablerc.el10.noarch.rpm").write_bytes(b"X")
 
-    assert uap.find_package(dest, "rpm").parent == dest
+    assert ursp.find_package(dest, "rpm").parent == dest
 
 
 def test_find_package_rejects_an_empty_dir(tmp_path):
     with pytest.raises(ValueError, match="found 0"):
-        uap.find_package(tmp_path, "rpm")
+        ursp.find_package(tmp_path, "rpm")
 
 
 def test_find_package_rejects_two_packages(tmp_path):
     dest = _built_dir(tmp_path)
     (dest / "amdrocm-repo-7.14.0-2.stablerc.el10.noarch.rpm").write_bytes(b"X")
     with pytest.raises(ValueError, match="found 2"):
-        uap.find_package(dest, "rpm")
+        ursp.find_package(dest, "rpm")
 
 
 def test_find_package_ignores_the_other_format(tmp_path):
     dest = _built_dir(tmp_path, pkg_type="deb")
     with pytest.raises(ValueError, match="found 0"):
-        uap.find_package(dest, "rpm")
+        ursp.find_package(dest, "rpm")
 
 
 def test_upload_fails_without_a_package(tmp_path, monkeypatch):
@@ -203,10 +205,10 @@ def test_upload_fails_without_a_package(tmp_path, monkeypatch):
     staging = tmp_path / "staging"
     empty = tmp_path / "empty"
     empty.mkdir()
-    args = uap.parse_args(_argv(tmp_path, dest_dir=empty, output_dir=staging))
+    args = ursp.parse_args(_argv(tmp_path, dest_dir=empty, output_dir=staging))
 
     with pytest.raises(ValueError, match="expected exactly one .rpm"):
-        uap.upload(args)
+        ursp.upload(args)
     assert not staging.exists()
 
 
@@ -216,9 +218,9 @@ def test_upload_fails_without_a_package(tmp_path, monkeypatch):
 def test_upload_writes_file_at_expected_key(tmp_path, monkeypatch):
     _stub_bucket(monkeypatch)
     staging = tmp_path / "staging"
-    args = uap.parse_args(_argv(tmp_path, output_dir=staging))
+    args = ursp.parse_args(_argv(tmp_path, output_dir=staging))
 
-    key = uap.upload(args)
+    key = ursp.upload(args)
 
     assert key == EXPECTED_RPM_KEY
     # Build the expected path from the key string, not by joining Path
@@ -238,7 +240,7 @@ def test_upload_key_per_profile_and_tier(
 ):
     _stub_bucket(monkeypatch)
     staging = tmp_path / "staging"
-    args = uap.parse_args(
+    args = ursp.parse_args(
         _argv(
             tmp_path,
             output_dir=staging,
@@ -248,9 +250,11 @@ def test_upload_key_per_profile_and_tier(
         )
     )
 
-    key = uap.upload(args)
+    key = ursp.upload(args)
 
-    expected = f"{RUN_ID}-linux/amdrepos/{os_profile}/amdrocm-repo-{tier}.{pkg_type}"
+    expected = (
+        f"{RUN_ID}-linux/amd-repo-setup/{os_profile}/amdrocm-repo-{tier}.{pkg_type}"
+    )
     assert key == expected
     assert (staging / expected).is_file()
 
@@ -261,9 +265,9 @@ def test_upload_carries_external_repo_prefix(tmp_path, monkeypatch):
     # per-run prefix.
     _stub_bucket(monkeypatch, external_repo="Fork-TheRock/")
     staging = tmp_path / "staging"
-    args = uap.parse_args(_argv(tmp_path, output_dir=staging))
+    args = ursp.parse_args(_argv(tmp_path, output_dir=staging))
 
-    key = uap.upload(args)
+    key = ursp.upload(args)
 
     assert key == f"Fork-TheRock/{EXPECTED_RPM_KEY}"
     assert (staging / key).is_file()
@@ -272,9 +276,9 @@ def test_upload_carries_external_repo_prefix(tmp_path, monkeypatch):
 def test_upload_dry_run_writes_nothing(tmp_path, monkeypatch):
     _stub_bucket(monkeypatch)
     staging = tmp_path / "staging"
-    args = uap.parse_args(_argv(tmp_path, output_dir=staging, dry_run=True))
+    args = ursp.parse_args(_argv(tmp_path, output_dir=staging, dry_run=True))
 
-    key = uap.upload(args)
+    key = ursp.upload(args)
 
     assert key == EXPECTED_RPM_KEY
     assert not (staging / EXPECTED_RPM_KEY).exists()
@@ -283,11 +287,11 @@ def test_upload_dry_run_writes_nothing(tmp_path, monkeypatch):
 def test_upload_dry_run_does_not_claim_to_have_uploaded(tmp_path, monkeypatch, capsys):
     # A dry run that prints "Uploaded:" reports an upload that never happened.
     _stub_bucket(monkeypatch)
-    args = uap.parse_args(
+    args = ursp.parse_args(
         _argv(tmp_path, output_dir=tmp_path / "staging", dry_run=True)
     )
 
-    uap.upload(args)
+    ursp.upload(args)
 
     out = capsys.readouterr().out
     assert "Uploaded:" not in out
@@ -299,9 +303,9 @@ def test_upload_reports_the_local_path_when_staging(tmp_path, monkeypatch, capsy
     # describe an upload that did not occur.
     _stub_bucket(monkeypatch)
     staging = tmp_path / "staging"
-    args = uap.parse_args(_argv(tmp_path, output_dir=staging))
+    args = ursp.parse_args(_argv(tmp_path, output_dir=staging))
 
-    uap.upload(args)
+    ursp.upload(args)
 
     out = capsys.readouterr().out
     assert "s3://" not in out
@@ -310,10 +314,10 @@ def test_upload_reports_the_local_path_when_staging(tmp_path, monkeypatch, capsy
 
 def test_upload_reports_the_s3_uri_when_uploading(tmp_path, monkeypatch, capsys):
     _stub_bucket(monkeypatch)
-    args = uap.parse_args(_argv(tmp_path, dry_run=True))
+    args = ursp.parse_args(_argv(tmp_path, dry_run=True))
 
-    with mock.patch("upload_amdrepos_package.create_storage_backend"):
-        uap.upload(args)
+    with mock.patch("upload_repo_setup_package.create_storage_backend"):
+        ursp.upload(args)
 
     assert f"s3://{BUCKET}/{EXPECTED_RPM_KEY}" in capsys.readouterr().out
 
@@ -322,11 +326,11 @@ def test_upload_without_output_dir_selects_s3_backend(tmp_path, monkeypatch):
     # Omitting --output-dir means a real S3 upload. Pin that, so a test that
     # forgets the flag fails loudly here rather than reaching the network.
     _stub_bucket(monkeypatch)
-    args = uap.parse_args(_argv(tmp_path, dry_run=True))
+    args = ursp.parse_args(_argv(tmp_path, dry_run=True))
     assert args.output_dir is None
 
-    with mock.patch("upload_amdrepos_package.create_storage_backend") as factory:
-        uap.upload(args)
+    with mock.patch("upload_repo_setup_package.create_storage_backend") as factory:
+        ursp.upload(args)
 
     factory.assert_called_once()
     assert factory.call_args.kwargs["staging_dir"] is None
@@ -340,7 +344,7 @@ def test_upload_rejects_the_release_line(tmp_path, monkeypatch):
     # backstop.
     monkeypatch.setenv("RELEASE_TYPE", "release")
     monkeypatch.setenv("GITHUB_REPOSITORY", "ROCm/TheRock")
-    args = uap.parse_args(_argv(tmp_path, output_dir=tmp_path / "staging"))
+    args = ursp.parse_args(_argv(tmp_path, output_dir=tmp_path / "staging"))
 
     with pytest.raises(ValueError, match="release_type='release' is invalid"):
-        uap.upload(args)
+        ursp.upload(args)

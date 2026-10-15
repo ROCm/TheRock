@@ -442,7 +442,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
 class TestRepoPackageIsNotPromoted(unittest.TestCase):
     """Promotion leaves the amdrocm-repo bootstrap package behind.
 
-    ``amdrepos_package()`` puts it under ``{run_id}-linux/amdrepos/``, outside
+    ``repo_setup_package()`` puts it under ``{run_id}-linux/amd-repo-setup/``, outside
     every prefix promotion copies (``tarballs/``, ``python/`` and
     ``packages/{pkg_type}/``), so promoting a build does not publish it.
     Nothing declares that relationship, so these tests check it.
@@ -493,7 +493,7 @@ class TestRepoPackageIsNotPromoted(unittest.TestCase):
                 self._write(staging / f"{base}/{rel}")
             for profile in ("ubuntu2404", "rhel10"):
                 for tier in ("stablerc", "nightly"):
-                    location = root.amdrepos_package(profile, tier, pkg_type)
+                    location = root.repo_setup_package(profile, tier, pkg_type)
                     self._write(location.local_path(staging))
 
         backend = LocalStorageBackend(staging_dir=staging)
@@ -529,7 +529,7 @@ class TestRepoPackageIsNotPromoted(unittest.TestCase):
                 carried = [
                     p
                     for p in written
-                    if "amdrepos/" in p
+                    if "amd-repo-setup/" in p
                     or p.rsplit("/", 1)[-1].startswith("amdrocm-repo")
                 ]
                 self.assertEqual(carried, [])
