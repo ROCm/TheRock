@@ -1,6 +1,14 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# The script that copies a sub-project's DLLs to the stage's top-level bin/.
+# A recipe that runs it after installing names it in its FPRINT_FILE_GLOBS and
+# EXTRA_DEPENDS too, so that editing it changes the sub-project's identity and
+# re-runs its build, which the fingerprint alone would not do.  Set here, so it
+# is empty when Linux adds the same common/ recipes.
+set(THEROCK_INSTALL_WINDOWS_DLLS_SCRIPT
+  "${THEROCK_SOURCE_DIR}/cmake/therock_install_windows_dlls.cmake")
+
 # All system deps (alpha unless if different dependency order needed).
 if(THEROCK_ENABLE_SYSDEPS)
   add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/bzip2" "${CMAKE_CURRENT_BINARY_DIR}/bzip2")
