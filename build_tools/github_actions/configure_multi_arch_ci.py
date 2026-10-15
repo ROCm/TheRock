@@ -663,6 +663,7 @@ class TestRocmDecision(JobGroupDecision):
     - "standard"      — via test_filter:standard PR label
     - "comprehensive" — schedule/nightly
     - "full"          — submodule changes, test:* labels, or test_filter:full
+    - "dnn_benchmarking" — only via test_filter:dnn_benchmarking (hours-long opt-in suites)
     """
 
     test_type: str = "quick"
@@ -1228,7 +1229,15 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 # ---------------------------------------------------------------------------
 
 
-_VALID_TEST_FILTER_TYPES = {"quick", "standard", "comprehensive", "full"}
+_VALID_TEST_FILTER_TYPES = {
+    "quick",
+    "standard",
+    "comprehensive",
+    "full",
+    # Opt-in suites for components that declare "dnn_benchmarking_timeout_minutes"
+    # in fetch_test_configurations.py; only selectable via test_filter:.
+    "dnn_benchmarking",
+}
 
 
 def _determine_test_type(
