@@ -56,19 +56,16 @@ Environment variables (all overridable via CLI flags or workflow YAML):
 import argparse
 import os
 import platform
+import shutil
+import site
 import subprocess
-import sysconfig
 import sys
+import sysconfig
 import tempfile
 from pathlib import Path
 
 from skip_tests.create_skip_tests import get_tests
 
-from pytorch_test_support import (
-    install_distributed_test_dependencies,
-    run_custom_tests,
-    should_run_custom_tests,
-)
 from pytorch_utils import (
     check_pytorch_source_version,
     configure_gpu_visibility,
@@ -149,6 +146,42 @@ INDUCTOR_UNIT_TESTS = [
     "inductor/test_aot_inductor",
 ]
 
+PIN_DIRECTORIES = (
+    Path(".github/ci_commit_pins"),
+    Path(".ci/docker/ci_commit_pins"),
+)
+PINNED_DISTRIBUTED_PACKAGES = {
+    "spmd_types": (
+        "https://github.com/meta-pytorch/spmd_types.git",
+        {},
+    ),
+    "torchcomms": (
+        "https://github.com/meta-pytorch/torchcomms.git",
+        {
+            "USE_GLOO": "1",
+            "USE_NCCL": "0",
+            "USE_NCCLX": "0",
+            "USE_TRANSPORT": "0",
+        },
+    ),
+}
+CUSTOM_TESTS = (
+    (
+        "custom_operator",
+        "test_custom_ops.py",
+        "model.py",
+        "--export-script-module-to=model.pt",
+        "test_custom_ops",
+    ),
+    (
+        "custom_backend",
+        "test_custom_backend.py",
+        "backend.py",
+        "--export-module-to=model.pt",
+        "test_custom_backend",
+    ),
+)
+
 
 def config_libpython_ld_path() -> None:
     libpython_dir = sysconfig.get_config_var("LIBDIR") or os.path.join(
@@ -217,6 +250,124 @@ def print_env() -> None:
         print(f"  {var}={val}")
     print(bar)
     sys.stdout.flush()
+
+
+def _read_pinned_commit(pytorch_dir: Path, package: str) -> str | None:
+    for relative_directory in PIN_DIRECTORIES:
+        pin_path = pytorch_dir / relative_directory / f"{package}.txt"
+        if pin_path.is_file():
+            return pin_path.read_text(encoding="utf-8").strip()
+    return None
+
+
+def install_distributed_test_dependencies(pytorch_dir: Path) -> None:
+    """Install the pinned packages used by upstream distributed tests."""
+    for package, (repository, build_env) in PINNED_DISTRIBUTED_PACKAGES.items():
+        commit = _read_pinned_commit(pytorch_dir, package)
+        if commit is None:
+            print(f"Skipping {package}: this PyTorch ref does not pin it")
+            continue
+
+        with tempfile.TemporaryDirectory(prefix=f"{package}-wheel-") as wheel_dir:
+            subprocess.check_call(
+                [
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "wheel",
+                    "--no-build-isolation",
+                    "--no-deps",
+                    "--wheel-dir",
+                    wheel_dir,
+                    f"git+{repository}@{commit}",
+                ],
+                env={**os.environ, **build_env},
+            )
+            wheels = list(Path(wheel_dir).glob("*.whl"))
+            if len(wheels) != 1:
+                raise RuntimeError(f"Expected one {package} wheel, found {len(wheels)}")
+            subprocess.check_call(
+                [
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "install",
+                    "--no-index",
+                    "--no-deps",
+                    os.fspath(wheels[0]),
+                ]
+            )
+
+
+def _should_run_custom_tests(args: argparse.Namespace) -> bool:
+    if args.test_config != "default" or args.include:
+        return False
+    if args.num_shards <= 1:
+        return True
+    return args.shard == 2
+
+
+def _cmake_configure_command(
+    pytorch_dir: Path, source_dir: Path, build_dir: Path
+) -> list[str]:
+    site_packages = site.getsitepackages()
+    prefix_paths = site_packages + [f"{path}/torch" for path in site_packages]
+    return [
+        "cmake",
+        "-S",
+        os.fspath(source_dir),
+        "-B",
+        os.fspath(build_dir),
+        "-G",
+        "Ninja",
+        f"-DCMAKE_PREFIX_PATH={';'.join(prefix_paths)}",
+        f"-DPython_EXECUTABLE={sys.executable}",
+        f"-DCMAKE_MODULE_PATH={pytorch_dir / 'cmake' / 'public'}",
+        "-DUSE_ROCM=ON",
+    ]
+
+
+def _run_custom_test(
+    pytorch_dir: Path,
+    source_directory: str,
+    python_test: str,
+    export_script: str,
+    export_argument: str,
+    executable_name: str,
+) -> None:
+    source_dir = pytorch_dir / "test" / source_directory
+    checkout_build_dir = source_dir / "build"
+    model_path = source_dir / "model.pt"
+
+    with tempfile.TemporaryDirectory(prefix=f"{source_directory}-") as tmp:
+        build_dir = Path(tmp) / "build"
+        subprocess.check_call(
+            _cmake_configure_command(pytorch_dir, source_dir, build_dir)
+        )
+        subprocess.check_call(["cmake", "--build", os.fspath(build_dir), "--verbose"])
+
+        shutil.rmtree(checkout_build_dir, ignore_errors=True)
+        shutil.copytree(build_dir, checkout_build_dir)
+        executable = checkout_build_dir / executable_name
+        if IS_WINDOWS:
+            executable = executable.with_suffix(".exe")
+
+        try:
+            subprocess.check_call([sys.executable, python_test, "-v"], cwd=source_dir)
+            subprocess.check_call(
+                [sys.executable, export_script, export_argument],
+                cwd=source_dir,
+            )
+            subprocess.check_call([os.fspath(executable), "./model.pt"], cwd=source_dir)
+        finally:
+            model_path.unlink(missing_ok=True)
+            shutil.rmtree(checkout_build_dir, ignore_errors=True)
+
+
+def run_custom_tests(pytorch_dir: Path) -> None:
+    """Build and run upstream's custom operator and backend tests."""
+    for test in CUSTOM_TESTS:
+        _run_custom_test(pytorch_dir, *test)
 
 
 def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
@@ -589,12 +740,7 @@ def main(argv: list[str]) -> int:
         return_code = result.returncode
         print(f"run_test.py finished with return code: {return_code}")
 
-    if return_code == 0 and should_run_custom_tests(
-        test_config=args.test_config,
-        shard=args.shard,
-        num_shards=args.num_shards,
-        included_tests=args.include,
-    ):
+    if return_code == 0 and _should_run_custom_tests(args):
         run_custom_tests(args.pytorch_dir)
 
     # Force-exit immediately.  PyTorch's run_test.py is known to hang after
