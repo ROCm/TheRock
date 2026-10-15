@@ -106,12 +106,14 @@ def write_project_include(path: Path, marker: str) -> None:
     )
 
 
-def write_preserved_project_include(path: Path, subproject_source_dir: Path) -> None:
+def write_preserved_project_include(path: Path) -> None:
     write_file(
         path,
-        f"""
-        # Exclude compiler-check projects where the helper is unavailable.
-        if(CMAKE_SOURCE_DIR STREQUAL "{subproject_source_dir.as_posix()}")
+        """
+        # Record caller hooks for the main and nested fixture projects.
+        # Compiler checks run separately without the fixture's recording helper.
+        get_property(_in_try_compile GLOBAL PROPERTY IN_TRY_COMPILE)
+        if(NOT _in_try_compile)
           therock_test_record_preserved_include()
         endif()
         """,
@@ -130,9 +132,7 @@ class ProjectIncludeTest(unittest.TestCase):
         self.preserved_include = self.source_dir / "preserved-include.cmake"
 
         write_subproject(self.source_dir)
-        write_preserved_project_include(
-            self.preserved_include, self.source_dir / "main"
-        )
+        write_preserved_project_include(self.preserved_include)
 
     def configure(self, project_include: Path) -> None:
         write_harness(
