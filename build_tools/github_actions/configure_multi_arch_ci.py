@@ -229,6 +229,8 @@ class CIInputs:
 
     # Labels from the PR event payload or workflow_dispatch pr_labels input.
     pr_labels: list[str] = field(default_factory=list)
+    pr_base_ref: str = ""  # PR target branch, distinct from the git diff base_ref
+    checkout_ref: str = ""  # Source ref used for TheRock (CI code and scripts)
 
     # Per-platform GPU family selections parsed from reusable workflow inputs.
     linux_amdgpu_families: list[str] = field(default_factory=list)
@@ -261,8 +263,15 @@ class CIInputs:
     def validate(self) -> None:
         """Validate inputs for consistency (fail-fast behavior).
 
-        Raises ValueError if test labels require stages not in build_stages.
+        Raises ValueError for conflicting build selections or test labels
+        requiring stages not in build_stages.
         """
+        for job in ("native-linux", "python-packages", "pytorch", "jax"):
+            build_label = f"ci:build-{job}"
+            skip_label = f"ci:skip-{job}"
+            if build_label in self.pr_labels and skip_label in self.pr_labels:
+                raise ValueError(f"{build_label} conflicts with {skip_label}")
+
         allowed_labels = _get_allowed_test_labels_for_stages(self.build_stages)
         if allowed_labels is not None:
             for platform, labels in [
@@ -324,6 +333,7 @@ class CIInputs:
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
+        pr_base_ref = ""
         base_ref: str | None = "HEAD^1"
         if event_name == "pull_request":
             # Extract label name strings from the event payload's label objects:
@@ -331,6 +341,7 @@ class CIInputs:
             #   Sample output: ["ci:skip", ...]
             pr_obj = event.get("pull_request", {})
             pr_labels = [label["name"] for label in pr_obj.get("labels", [])]
+            pr_base_ref = pr_obj.get("base", {}).get("ref", "")
 
             # The merge commit's first parent is the PR base.
             base_ref = "HEAD^"
@@ -405,6 +416,8 @@ class CIInputs:
             build_native_linux=build_native_linux,
             python_versions=[python_version] if python_version else [],
             pr_labels=pr_labels,
+            pr_base_ref=pr_base_ref,
+            checkout_ref=os.environ.get("THEROCK_CHECKOUT_REF", ""),
             linux_amdgpu_families=_parse_comma_list(
                 os.environ.get("LINUX_AMDGPU_FAMILIES", "")
             ),
@@ -1223,6 +1236,25 @@ def decide_jobs(
     # Build ROCm.
     stage_reuse_mode = StageReuseMode.from_environ()
 
+    # Force stage reuse off when running on a release branch.
+    # Release branches may use floating repository references instead of exact
+    # pins and the impact of building with stale artifacts is too high to risk.
+    target_branch = (
+        ci_inputs.pr_base_ref if ci_inputs.is_pull_request else ci_inputs.commit_ref
+    )
+    if any(
+        ref.removeprefix("refs/heads/").startswith("release/")
+        for ref in (target_branch, ci_inputs.checkout_ref)
+    ):
+        logging.info(
+            "[STAGE-REUSE] requested=%s effective=off: release branch "
+            "(target=%s, checkout=%s)",
+            stage_reuse_mode.value,
+            target_branch,
+            ci_inputs.checkout_ref,
+        )
+        stage_reuse_mode = StageReuseMode.OFF
+
     if stage_reuse_mode is StageReuseMode.OFF:
         # Strong off is authoritative: do not parse or honor explicit
         # prebuilt_stages, do not retain a baseline, and do not invoke automatic
@@ -1306,7 +1338,11 @@ def decide_jobs(
     reusable_artifacts: list[str] = (
         list(auto_stage_reuse.reusable_artifacts) if auto_stage_reuse else []
     )
-    if ci_inputs.changed_projects and not rebuild_artifacts:
+    if (
+        stage_reuse_mode is not StageReuseMode.OFF
+        and ci_inputs.changed_projects
+        and not rebuild_artifacts
+    ):
         rebuild_artifacts, reusable_artifacts = analyze_artifact_impact_from_projects(
             ci_inputs.changed_projects
         )
