@@ -226,40 +226,41 @@ def validate_required_dist_packages(
     )
 
 
-def collect_rocshmem4py_wheels(*, artifact_dir: Path, dest_dir: Path) -> list[Path]:
-    """Copy wheels from the optional rocshmem4py artifact into dist/."""
-    rocshmem4py_artifact_dir = artifact_dir / "rocshmem4py_lib_generic"
-    if not rocshmem4py_artifact_dir.exists():
-        print(
-            "::warning::rocshmem4py artifact not found; skipping rocshmem4py wheels. "
-            "This is expected when rocSHMEM is disabled or when packaging "
-            "artifacts from an older build."
-        )
-        return []
+def collect_python_wheels(
+    *,
+    artifact_dir: Path,
+    dest_dir: Path,
+    names: list[str],
+) -> list[Path]:
+    """Copy wheels from optional prebuilt-wheel artifacts into dist/.
 
-    wheel_dir = (
-        rocshmem4py_artifact_dir
-        / "comm-libs"
-        / "rocshmem4py"
-        / "stage"
-        / "share"
-        / "rocshmem4py"
-        / "wheels"
-    )
-    wheels = sorted(wheel_dir.glob("*.whl"))
-    if not wheels:
-        raise RuntimeError(
-            f"rocshmem4py artifact exists at {rocshmem4py_artifact_dir}, but "
-            f"contains no wheels in {wheel_dir}"
-        )
-
-    dist_dir = dest_dir / "dist"
-    dist_dir.mkdir(parents=True, exist_ok=True)
+    Each name is an artifact declared with therock_python_wheel_subproject(),
+    which installs wheels to share/<name>/wheels in its lib component.
+    """
     copied_wheels = []
-    for wheel in wheels:
-        destination = shutil.copy2(wheel, dist_dir)
-        copied_wheels.append(Path(destination))
-        print(f"::: Copied rocshmem4py wheel to {destination}")
+    for name in names:
+        wheel_artifact_dir = artifact_dir / f"{name}_lib_generic"
+        if not wheel_artifact_dir.exists():
+            print(
+                f"::warning::{name} artifact not found; skipping {name} wheels. "
+                "This is expected when the project is disabled or when packaging "
+                "artifacts from an older build."
+            )
+            continue
+
+        wheels = sorted(wheel_artifact_dir.glob(f"**/stage/share/{name}/wheels/*.whl"))
+        if not wheels:
+            raise RuntimeError(
+                f"{name} artifact exists at {wheel_artifact_dir}, but contains "
+                f"no wheels under stage/share/{name}/wheels"
+            )
+
+        dist_dir = dest_dir / "dist"
+        dist_dir.mkdir(parents=True, exist_ok=True)
+        for wheel in wheels:
+            destination = shutil.copy2(wheel, dist_dir)
+            copied_wheels.append(Path(destination))
+            print(f"::: Copied {name} wheel to {destination}")
     return copied_wheels
 
 
@@ -384,9 +385,10 @@ def run(args: argparse.Namespace):
 
     if args.build_packages:
         if sys.platform.startswith("linux"):
-            collect_rocshmem4py_wheels(
+            collect_python_wheels(
                 artifact_dir=args.artifact_dir,
                 dest_dir=args.dest_dir,
+                names=["rocshmem4py"],
             )
         validate_required_dist_packages(
             dest_dir=args.dest_dir,

@@ -2,7 +2,14 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Apply TheRock-specific metadata to rocshmem4py wheels."""
+"""Apply TheRock-specific metadata to rocshmem4py wheels.
+
+Temporary compatibility bridge, opted into via FINALIZE_SCRIPT of
+therock_python_wheel_subproject(). After upstream rocshmem4py builds the wheel,
+this rewrites its version, its rocm-sdk-core requirement, and the extension
+RPATH. Remove this script, its test, and the FINALIZE_SCRIPT argument once
+rocshmem4py accepts those three values as build inputs from TheRock.
+"""
 
 import argparse
 import email.parser
@@ -32,6 +39,18 @@ ROCSHMEM4PY_RPATH = ":".join(
         "$ORIGIN/_rocm_sdk_core/lib/llvm/lib",
     ]
 )
+
+
+def resolve_rocm_version(rocm_version: str) -> str:
+    """Map TheRock's local-build default version to a valid wheel version."""
+    # "git" is the THEROCK_PACKAGE_VERSION default for builds that do not set a
+    # version. Use build_python_packages.py's default so local wheels pin the
+    # rocm-sdk-core version that a local packaging run produces.
+    if rocm_version != "git":
+        return rocm_version
+    import compute_rocm_package_version
+
+    return compute_rocm_package_version.compute_version(custom_version_suffix=".dev0")
 
 
 def compute_version(built_version: str, rocm_version: str) -> str:
@@ -124,6 +143,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--rocm-version", required=True)
     parser.add_argument("--patchelf", default="patchelf")
     args = parser.parse_args(argv)
+    rocm_version = resolve_rocm_version(args.rocm_version)
 
     input_wheels = sorted(args.input_dir.glob("rocshmem4py-*.whl"))
     if not input_wheels:
@@ -138,7 +158,7 @@ def main(argv: list[str] | None = None) -> None:
             finalize_wheel(
                 wheel,
                 output_dir=staging_dir,
-                rocm_version=args.rocm_version,
+                rocm_version=rocm_version,
                 patchelf=args.patchelf,
             )
             for wheel in input_wheels

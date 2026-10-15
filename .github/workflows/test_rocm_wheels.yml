@@ -133,7 +133,6 @@ jobs:
       PROFILER_VENV_DIR: ${{ github.workspace }}/.venv-profiler
       COMPUTE_ANALYZE_VENV_DIR: ${{ github.workspace }}/.venv-compute-analyze
       ROCSHMEM4PY_VENV_DIR: ${{ github.workspace }}/.venv-rocshmem4py
-      ROCSHMEM4PY_VALIDATION_SCRIPT: ${{ github.workspace }}/.rocshmem4py-validation/build_tools/github_actions/validate_rocshmem4py_install.py
 
     steps:
       - name: Checkout
@@ -142,22 +141,6 @@ jobs:
           persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
-
-      # Use the workflow revision instead of the caller-selected repository/ref.
-      - name: Checkout rocshmem4py validation helper
-        if: ${{ runner.os == 'Linux' && inputs.package_find_links_url != '' }}
-        timeout-minutes: 15
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ github.repository }}
-          ref: ${{ github.sha }}
-          path: .rocshmem4py-validation
-          persist-credentials: false
-          sparse-checkout: |
-            build_tools/github_actions/determine_version.py
-            build_tools/github_actions/github_actions_api.py
-            build_tools/github_actions/validate_rocshmem4py_install.py
-          sparse-checkout-cone-mode: false
 
       # actions/setup-python only has prebuilt binaries for Ubuntu
       - name: Set up Python
@@ -210,15 +193,12 @@ jobs:
             && steps.install_libraries.outcome == 'success'
             && inputs.package_find_links_url != ''
           }}
-        env:
-          PACKAGE_FIND_LINKS_URL: ${{ inputs.package_find_links_url }}
-          PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
-          ROCM_VERSION: ${{ inputs.rocm_version }}
         run: |
-          python "${ROCSHMEM4PY_VALIDATION_SCRIPT}" \
-            install \
-            --venv-dir="${ROCSHMEM4PY_VENV_DIR}" \
-            --rocm-version="${ROCM_VERSION}" \
+          python build_tools/setup_venv.py "${ROCSHMEM4PY_VENV_DIR}" \
+            --clean \
+            --pre \
+            --disable-cache \
+            --packages "rocshmem4py rocm-sdk-core==${ROCM_VERSION}" \
             --index-url="${PACKAGE_INDEX_URL}" \
             --find-links="${PACKAGE_FIND_LINKS_URL}"
 
@@ -226,13 +206,12 @@ jobs:
         if: ${{ !cancelled() && steps.install_rocshmem4py.outcome == 'success' }}
         timeout-minutes: 5
         env:
-          ROCSHMEM_HEAP_SIZE: 268435456
-          ROCM_VERSION: ${{ inputs.rocm_version }}
+          # rocSHMEM reserves its symmetric heap in GPU memory at init (1 GiB by
+          # default). The smoke test allocates 4 KiB, so keep the reservation
+          # small for runners with less GPU memory.
+          ROCSHMEM_HEAP_SIZE: 16777216 # 16 MiB
         run: |
-          python "${ROCSHMEM4PY_VALIDATION_SCRIPT}" \
-            validate \
-            --venv-dir="${ROCSHMEM4PY_VENV_DIR}" \
-            --rocm-version="${ROCM_VERSION}"
+          "${ROCSHMEM4PY_VENV_DIR}/bin/python" build_tools/github_actions/rocshmem4py_smoke.py
 
       - name: Install rocm[libraries,devel]
         id: install_devel
