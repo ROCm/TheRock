@@ -218,6 +218,91 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             summary,
         )
 
+    def test_resolve_cli_pytorch_git_refs_all_and_empty_use_defaults(self):
+        for raw in ("", "all", "ALL", "release/2.12, all"):
+            with self.subTest(raw=raw):
+                self.assertIsNone(
+                    m._resolve_cli_pytorch_git_refs(
+                        raw, release_type="nightly", platform="linux"
+                    )
+                )
+
+    def test_resolve_cli_pytorch_git_refs_subset_passthrough(self):
+        self.assertEqual(
+            m._resolve_cli_pytorch_git_refs(
+                "release/2.12, release/2.13",
+                release_type="nightly",
+                platform="linux",
+            ),
+            ["release/2.12", "release/2.13"],
+        )
+
+    def test_single_ref_covers_all_release_python_versions(self):
+        # Selecting one PyTorch ref builds it against every release Python
+        # version (1 ref x all Python).
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="nightly",
+            pytorch_git_refs=["release/2.12"],
+            amdgpu_families="gfx94X-dcgpu",
+            platform="linux",
+        )
+
+        self.assertEqual({row["pytorch_git_ref"] for row in matrix}, {"release/2.12"})
+        self.assertEqual(
+            [row["python_version"] for row in matrix],
+            m.RELEASE_PYTHON_VERSIONS,
+        )
+
+    def test_resolve_cli_pytorch_git_refs_rejects_unknown_ref_for_non_dev(self):
+        # Non-dev release types reject refs outside the available set.
+        with self.assertRaises(ValueError):
+            m._resolve_cli_pytorch_git_refs(
+                "release/9.99", release_type="nightly", platform="linux"
+            )
+
+    def test_resolve_cli_pytorch_git_refs_dev_passes_through_custom_branch(self):
+        # dev is the developer bring-up path: arbitrary refs flow through so a
+        # custom branch/tag/SHA can opt into new GPU families early.
+        self.assertEqual(
+            m._resolve_cli_pytorch_git_refs(
+                "users/alice/gfx125x-bringup",
+                release_type="dev",
+                platform="linux",
+            ),
+            ["users/alice/gfx125x-bringup"],
+        )
+        self.assertEqual(
+            m._resolve_cli_pytorch_git_refs(
+                "release/2.12, users/alice/gfx125x-bringup",
+                release_type="dev",
+                platform="linux",
+            ),
+            ["release/2.12", "users/alice/gfx125x-bringup"],
+        )
+
+    def test_resolve_cli_pytorch_git_refs_non_dev_rejects_custom_branch(self):
+        # Outside dev, a custom branch is not a known release ref and is
+        # rejected so production releases only build supported refs.
+        with self.assertRaises(ValueError):
+            m._resolve_cli_pytorch_git_refs(
+                "users/alice/gfx125x-bringup",
+                release_type="nightly",
+                platform="linux",
+            )
+
+    def test_resolve_cli_pytorch_git_refs_is_release_type_aware(self):
+        # "nightly" is a valid ref for nightly releases but not for prerelease.
+        self.assertEqual(
+            m._resolve_cli_pytorch_git_refs(
+                "nightly", release_type="nightly", platform="linux"
+            ),
+            ["nightly"],
+        )
+        with self.assertRaises(ValueError):
+            m._resolve_cli_pytorch_git_refs(
+                "nightly", release_type="prerelease", platform="linux"
+            )
+
     def test_generated_rows_cover_workflow_matrix_inputs(self):
         # The generate_pytorch_matrix_for_release_type script produces matrix
         # JSON for use in workflow files like:
