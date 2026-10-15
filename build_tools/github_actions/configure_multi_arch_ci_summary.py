@@ -6,6 +6,7 @@ Produces human-readable markdown explaining what CI will do and why.
 from configure_multi_arch_ci import (
     CIInputs,
     CIOutputs,
+    TEST_LEVEL_LABEL_PREFIXES,
 )
 from pathlib import Path
 import sys
@@ -115,7 +116,7 @@ def _non_default_highlights(ci_inputs: CIInputs) -> list[str]:
                 f"Label `{label}`: added family `{label}` "
                 f"(not in default presubmit set)"
             )
-        elif label.startswith("test_filter:"):
+        elif label.startswith(TEST_LEVEL_LABEL_PREFIXES):
             filter_type = label.split(":")[1]
             highlights.append(
                 f"Label `{label}`: overrode test level to `{filter_type}`"

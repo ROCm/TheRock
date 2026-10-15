@@ -660,9 +660,10 @@ class TestRocmDecision(JobGroupDecision):
 
     test_type levels (from least to most testing):
     - "quick"         — default for PRs and push
-    - "standard"      — via test_filter:standard PR label
+    - "standard"      — via test_filter:standard / test_type:standard PR label
     - "comprehensive" — schedule/nightly
-    - "full"          — submodule changes, test:* labels, or test_filter:full
+    - "full"          — submodule changes, test:* labels, or test_filter:full /
+                        test_type:full
     """
 
     test_type: str = "quick"
@@ -1156,6 +1157,11 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 
 _VALID_TEST_FILTER_TYPES = {"quick", "standard", "comprehensive", "full"}
 
+# Label prefixes that override the test level. `test_type:` is accepted as an
+# alias of `test_filter:` because external repos (rocm-libraries) label PRs with
+# `test_type:*`.
+TEST_LEVEL_LABEL_PREFIXES = ("test_filter:", "test_type:")
+
 
 def _determine_test_type(
     ci_inputs: CIInputs,
@@ -1168,14 +1174,14 @@ def _determine_test_type(
 
     * Available filter types: ["quick", "standard", "comprehensive", "full"]
     * Workflow runs choose a filter type automatically but PRs can override
-      with labels like `test_filter:comprehensive`
+      with labels like `test_filter:comprehensive` or `test_type:comprehensive`
 
     Returns (test_type, reason).
     """
 
     # Check in priority order - highest priority returns early.
 
-    # Priority 1: test_filter: label is an explicit manual override.
+    # Priority 1: test_filter:/test_type: label is an explicit manual override.
     # This is the escape hatch: run comprehensive on a PR before merge,
     # or downgrade to quick if you know the change is safe.
     # Check both PR labels and workflow_dispatch test labels.
@@ -1185,15 +1191,15 @@ def _determine_test_type(
         + ci_inputs.windows_test_labels
     )
     for label in all_labels:
-        if not label.startswith("test_filter:"):
+        if not label.startswith(TEST_LEVEL_LABEL_PREFIXES):
             continue
         filter_type = label.split(":")[1]
         if filter_type not in _VALID_TEST_FILTER_TYPES:
             raise ValueError(
-                f"Unrecognized test_filter value: {filter_type!r}. "
+                f"Unrecognized test level in label {label!r}. "
                 f"Valid values: {sorted(_VALID_TEST_FILTER_TYPES)}"
             )
-        return filter_type, f"test_filter label: {label}"
+        return filter_type, f"test level label: {label}"
 
     # Priority 2: release builds run deeper test suites than regular CI.
     # * 'nightly' and 'nightly-bkc' get comprehensive (deeper than standard,
