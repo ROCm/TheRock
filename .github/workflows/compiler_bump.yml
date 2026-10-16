@@ -731,6 +731,102 @@ jobs:
           echo "## Linux Tests Triggered (gfx950-dcgpu)" >> "$GITHUB_STEP_SUMMARY"
           echo "**Test Run:** ${TEST_RUN_URL}" >> "$GITHUB_STEP_SUMMARY"
 
+  trigger-rccl-tests-gfx950:
+    permissions:
+      actions: write # Dispatch downstream workflows.
+    name: Trigger RCCL Tests (gfx950-dcgpu)
+    needs: [create-branch, setup-linux, build-linux]
+    if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' && ((inputs.linux_amdgpu_families || 'all') == 'all' || contains(inputs.linux_amdgpu_families, 'gfx950-dcgpu')) }}
+    runs-on: ubuntu-24.04
+    outputs:
+      test_run_url: ${{ steps.trigger-tests.outputs.runUrlHtml }}
+    steps:
+      - name: Get gfx950-dcgpu family info
+        id: family-info
+        env:
+          BUILD_CONFIG: ${{ needs.setup-linux.outputs.linux_build_config }}
+        run: |
+          FAMILY_INFO=$(echo "$BUILD_CONFIG" | jq -r '.per_family_info[] | select(.amdgpu_family == "gfx950-dcgpu")')
+          echo "amdgpu_targets=$(echo "$FAMILY_INFO" | jq -r '.amdgpu_targets // ""')" >> "$GITHUB_OUTPUT"
+
+      # RCCL needs a multi-GPU host, so this runs separately from the regular
+      # gfx950 test job and targets the Slurm scale runner pool.
+      - name: Trigger test_artifacts for rccl on gfx950-dcgpu
+        id: trigger-tests
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: test_artifacts.yml
+          inputs: |
+            {
+              "artifact_group": "gfx950-dcgpu",
+              "artifact_run_id": "${{ github.run_id }}",
+              "amdgpu_families": "gfx950-dcgpu",
+              "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
+              "test_runs_on": "ruby-linux-slurm-scale-runner",
+              "test_labels": "test:rccl",
+              "test_type": "standard",
+              "release_type": "dev",
+              "repository": "${{ github.repository }}",
+              "ref": "${{ needs.create-branch.outputs.branch_name }}",
+              "build_variant": "release"
+            }
+
+      - name: Output test run URL
+        if: ${{ steps.trigger-tests.outputs.runUrlHtml != '' }}
+        env:
+          TEST_RUN_URL: ${{ steps.trigger-tests.outputs.runUrlHtml }}
+        run: |
+          echo "## RCCL Tests Triggered (gfx950-dcgpu)" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Test Run:** ${TEST_RUN_URL}" >> "$GITHUB_STEP_SUMMARY"
+
+  trigger-rccl-tests-gfx942:
+    permissions:
+      actions: write # Dispatch downstream workflows.
+    name: Trigger RCCL Tests (gfx94X-dcgpu)
+    needs: [create-branch, setup-linux, build-linux]
+    if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' && ((inputs.linux_amdgpu_families || 'all') == 'all' || contains(inputs.linux_amdgpu_families, 'gfx94X-dcgpu')) }}
+    runs-on: ubuntu-24.04
+    outputs:
+      test_run_url: ${{ steps.trigger-tests.outputs.runUrlHtml }}
+    steps:
+      - name: Get gfx94X-dcgpu family info
+        id: family-info
+        env:
+          BUILD_CONFIG: ${{ needs.setup-linux.outputs.linux_build_config }}
+        run: |
+          FAMILY_INFO=$(echo "$BUILD_CONFIG" | jq -r '.per_family_info[] | select(.amdgpu_family == "gfx94X-dcgpu")')
+          echo "amdgpu_targets=$(echo "$FAMILY_INFO" | jq -r '.amdgpu_targets // ""')" >> "$GITHUB_OUTPUT"
+
+      # RCCL needs a multi-GPU host, so this runs separately from the regular
+      # gfx94X test job and targets the Slurm scale runner pool.
+      - name: Trigger test_artifacts for rccl on gfx94X-dcgpu
+        id: trigger-tests
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: test_artifacts.yml
+          inputs: |
+            {
+              "artifact_group": "gfx94X-dcgpu",
+              "artifact_run_id": "${{ github.run_id }}",
+              "amdgpu_families": "gfx94X-dcgpu",
+              "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
+              "test_runs_on": "oci-linux-slurm-scale-runner",
+              "test_labels": "test:rccl",
+              "test_type": "standard",
+              "release_type": "dev",
+              "repository": "${{ github.repository }}",
+              "ref": "${{ needs.create-branch.outputs.branch_name }}",
+              "build_variant": "release"
+            }
+
+      - name: Output test run URL
+        if: ${{ steps.trigger-tests.outputs.runUrlHtml != '' }}
+        env:
+          TEST_RUN_URL: ${{ steps.trigger-tests.outputs.runUrlHtml }}
+        run: |
+          echo "## RCCL Tests Triggered (gfx94X-dcgpu)" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Test Run:** ${TEST_RUN_URL}" >> "$GITHUB_STEP_SUMMARY"
+
   trigger-windows-tests:
     permissions:
       actions: write # Dispatch downstream workflows.
@@ -804,6 +900,8 @@ jobs:
       - trigger-linux-tests
       - trigger-linux-tests-gfx1151
       - trigger-gfx950-tests
+      - trigger-rccl-tests-gfx950
+      - trigger-rccl-tests-gfx942
       - trigger-windows-tests
     if: always()
     runs-on: ubuntu-24.04
@@ -855,6 +953,8 @@ jobs:
           LINUX_TEST_RUN_URL: ${{ needs.trigger-linux-tests.outputs.test_run_url }}
           LINUX_TEST_GFX1151_RUN_URL: ${{ needs.trigger-linux-tests-gfx1151.outputs.test_run_url }}
           LINUX_TEST_GFX950_RUN_URL: ${{ needs.trigger-gfx950-tests.outputs.test_run_url }}
+          RCCL_TEST_GFX950_RUN_URL: ${{ needs.trigger-rccl-tests-gfx950.outputs.test_run_url }}
+          RCCL_TEST_GFX942_RUN_URL: ${{ needs.trigger-rccl-tests-gfx942.outputs.test_run_url }}
           WINDOWS_TEST_RUN_URL: ${{ needs.trigger-windows-tests.outputs.test_run_url }}
           LINUX_ARTIFACT_URL: ${{ steps.artifact-urls.outputs.linux_artifact_url }}
           LINUX_LOG_URL: ${{ steps.artifact-urls.outputs.linux_log_url }}
@@ -946,6 +1046,28 @@ jobs:
             fi
           elif [ "${{ needs.trigger-gfx950-tests.result }}" == "failure" ]; then
             echo "- :x: Test trigger failed (gfx950-dcgpu)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # RCCL tests (gfx950-dcgpu)
+          if [ "${{ needs.trigger-rccl-tests-gfx950.result }}" == "success" ]; then
+            if [ -n "${RCCL_TEST_GFX950_RUN_URL}" ]; then
+              echo "- :white_check_mark: RCCL tests triggered (gfx950-dcgpu): [View Run](${RCCL_TEST_GFX950_RUN_URL})" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- :white_check_mark: RCCL tests triggered (gfx950-dcgpu)" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          elif [ "${{ needs.trigger-rccl-tests-gfx950.result }}" == "failure" ]; then
+            echo "- :x: RCCL test trigger failed (gfx950-dcgpu)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # RCCL tests (gfx94X-dcgpu)
+          if [ "${{ needs.trigger-rccl-tests-gfx942.result }}" == "success" ]; then
+            if [ -n "${RCCL_TEST_GFX942_RUN_URL}" ]; then
+              echo "- :white_check_mark: RCCL tests triggered (gfx94X-dcgpu): [View Run](${RCCL_TEST_GFX942_RUN_URL})" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- :white_check_mark: RCCL tests triggered (gfx94X-dcgpu)" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          elif [ "${{ needs.trigger-rccl-tests-gfx942.result }}" == "failure" ]; then
+            echo "- :x: RCCL test trigger failed (gfx94X-dcgpu)" >> "$GITHUB_STEP_SUMMARY"
           fi
 
           echo "" >> "$GITHUB_STEP_SUMMARY"
