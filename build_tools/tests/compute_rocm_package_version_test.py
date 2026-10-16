@@ -684,6 +684,59 @@ class MainFunctionTest(unittest.TestCase):
             }
         )
 
+    def test_build_variant_suffix_varies_by_local_version(self):
+        """Build variant suffix uses + (no local) or . (has local version)."""
+        test_cases = [
+            # (release_type, git_sha, variant, expected_pattern, description)
+            ("nightly", None, "asan", r"^7\.99\.0a[0-9]{8}\+asan$", "nightly +asan"),
+            ("release", None, "asan", r"^7\.99\.0\+asan$", "release +asan"),
+            (
+                "dev",
+                "abcdef1234567890",
+                "asan",
+                r"^7\.99\.0\.dev0\+abcdef1234567890\.asan$",
+                "dev .asan",
+            ),
+            # Dashes are removed from variant names
+            (
+                "nightly",
+                None,
+                "host-asan",
+                r"^7\.99\.0a[0-9]{8}\+hostasan$",
+                "host-asan -> hostasan",
+            ),
+            (
+                "nightly",
+                None,
+                "asan-debug",
+                r"^7\.99\.0a[0-9]{8}\+asandebug$",
+                "asan-debug -> asandebug",
+            ),
+            # Other sanitizers work too
+            ("nightly", None, "tsan", r"^7\.99\.0a[0-9]{8}\+tsan$", "tsan supported"),
+        ]
+        for release_type, git_sha, variant, pattern, desc in test_cases:
+            with self.subTest(desc=desc):
+                version = compute_rocm_package_version.compute_version(
+                    release_type=release_type,
+                    build_variant=variant,
+                    override_base_version="7.99.0",
+                    override_git_sha=git_sha,
+                )
+                self.assertRegex(version, pattern)
+
+    def test_release_variant_no_suffix(self):
+        """Empty or 'release' build variant does not add suffix."""
+        for variant in ("release", ""):
+            with self.subTest(variant=variant or "(empty)"):
+                version = compute_rocm_package_version.compute_version(
+                    release_type="nightly",
+                    build_variant=variant,
+                    override_base_version="7.99.0",
+                )
+                # Should just be base version + nightly suffix, no variant
+                self.assertRegex(version, r"^7\.99\.0a[0-9]{8}$")
+
 
 if __name__ == "__main__":
     unittest.main()
