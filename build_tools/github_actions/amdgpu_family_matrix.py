@@ -367,7 +367,7 @@ amdgpu_family_info_matrix = {
             "tests_on_trigger": ["nightly"],
         },
     },
-    # Builds on presubmit, tests only on nightly
+    # Linux tests on nightly. Windows tests on PR, push, bump, and nightly.
     "gfx120x": {
         "linux": {
             "test-runs-on": "linux-gfx120X-gpu-rocm",
@@ -395,7 +395,12 @@ amdgpu_family_info_matrix = {
                 "submodule_bump",
                 "nightly",
             ],
-            "tests_on_trigger": ["nightly"],
+            "tests_on_trigger": [
+                "presubmit",
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
         },
     },
     # Limited hardware - builds on presubmit, tests only on nightly
