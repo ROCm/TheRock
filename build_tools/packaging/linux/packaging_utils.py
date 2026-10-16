@@ -1444,7 +1444,7 @@ def filter_dependencies_by_artifacts(
                 f"WORKAROUND: Excluding {dep} (no artifacts for {gfx_arch} or host)"
             )
 
-    return filtered
+    return filtered, host_fallback
 
 
 def load_alternatives_binaries() -> dict[str, dict[str, list[str]]]:
