@@ -303,6 +303,34 @@ class TestGitContext(unittest.TestCase):
         self.assertEqual(git.changed_files, [""])
         self.assertEqual(git.submodule_paths, [""])
 
+    def test_from_external_repo_prefixes_and_drops_skippable(self):
+        """A real file list is prefixed and workflow/docs paths are dropped."""
+        git = cm.GitContext.from_external_repo(
+            external_repo_name="rocm-systems",
+            changed_files=[
+                "projects/hrr/playback/foo.cpp",
+                ".github/workflows/hrr-ci.yml",
+                ".github/workflows/hrr-gpu.yml",
+                "README.md",
+            ],
+            skip_patterns=["*.md"],
+        )
+        self.assertEqual(
+            git.changed_files,
+            ["rocm-systems/projects/hrr/playback/foo.cpp"],
+        )
+        self.assertEqual(git.submodule_paths, ["rocm-systems"])
+        self.assertFalse(git.has_submodule_changes)
+
+    def test_from_external_repo_none_list_keeps_repo_name(self):
+        """No usable diff keeps the repo-name fallback."""
+        git = cm.GitContext.from_external_repo(
+            external_repo_name="rocm-systems",
+            changed_files=None,
+        )
+        self.assertEqual(git.changed_files, ["rocm-systems"])
+        self.assertTrue(git.has_submodule_changes)
+
 
 # ---------------------------------------------------------------------------
 # Step 2: Check Skip CI

@@ -81,6 +81,13 @@ CALLER_WORKFLOW_TRIGGER_PATTERNS = [
     ".github/workflows/therock*",
 ]
 
+# Project-owned workflows. Classified as that project so get_unclassified_paths
+# does not turn them into a full run. They are not TheRock caller workflows.
+PROJECT_SCOPED_WORKFLOW_ALIASES = {
+    ".github/workflows/hrr-ci.yml": "projects/hrr",
+    ".github/workflows/hrr-gpu.yml": "projects/hrr",
+}
+
 # Changes to project discovery or shared test logic retain global coverage.
 FULL_TEST_TRIGGER_PATTERNS = [
     ".github/scripts/therock*",
@@ -233,6 +240,11 @@ def load_repo_config(config_path: str) -> List[RepoEntry]:
         return []
 
 
+def rewrite_project_workflow_paths(paths: Iterable[str]) -> Set[str]:
+    """Replace project-owned workflow paths with the project they configure."""
+    return {PROJECT_SCOPED_WORKFLOW_ALIASES.get(path, path) for path in paths}
+
+
 def get_valid_prefixes(config: List[RepoEntry]) -> Set[str]:
     """Extract valid subtree prefixes from config."""
     return {f"{entry.category}/{entry.name}" for entry in config}
@@ -353,6 +365,7 @@ def configure(
             changed_projects="", run_all_tests=False, test_type="standard"
         )
 
+    modified_paths = rewrite_project_workflow_paths(modified_paths)
     logger.info(f"Modified paths: {len(modified_paths)} files")
 
     # Shared CI and test-selection changes can affect other repositories.

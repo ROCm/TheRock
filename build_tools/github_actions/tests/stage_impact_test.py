@@ -14,7 +14,7 @@ from pathlib import Path
 # build_tools/github_actions/tests -> build_tools
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 
-from _therock_utils.build_topology import BuildTopology
+from _therock_utils.build_topology import BuildTopology, get_topology
 from github_actions.stage_impact import analyze_stage_impact
 
 
@@ -671,6 +671,83 @@ class ArtifactLevelAnalysisTest(unittest.TestCase):
         self.assertFalse(result.full_rebuild_required)
         # No artifact-level analysis for non-rocm-libraries
         self.assertFalse(result.artifact_level_analysis)
+
+
+class ImpactedArtifactStageNarrowingTest(unittest.TestCase):
+    """Artifact-level hits narrow rebuild_stages so other stages can be copied."""
+
+    def test_hrr_path_leaves_unrelated_stage_copyable(self):
+        topology_text = textwrap.dedent(
+            """
+            [source_sets.rocm-systems]
+            description = "ROCm systems"
+            submodules = ["rocm-systems"]
+
+            [artifact_groups.hip-runtime]
+            description = "HIP runtime"
+            type = "generic"
+            source_sets = ["rocm-systems"]
+
+            [artifact_groups.math-libs]
+            description = "Math libs"
+            type = "per-arch"
+            source_sets = ["rocm-systems"]
+
+            [build_stages.compiler-runtime]
+            description = "Compiler runtime"
+            artifact_groups = ["hip-runtime"]
+
+            [build_stages.math-libs]
+            description = "Math libs stage"
+            artifact_groups = ["math-libs"]
+
+            [artifacts.core-hip]
+            artifact_group = "hip-runtime"
+            type = "target-neutral"
+            source_paths = ["clr", "hip"]
+
+            [artifacts.core-hrr]
+            artifact_group = "hip-runtime"
+            type = "target-neutral"
+            artifact_deps = ["core-hip"]
+            source_paths = ["hrr"]
+
+            [artifacts.blas]
+            artifact_group = "math-libs"
+            type = "target-specific"
+            artifact_deps = ["core-hip"]
+            source_paths = ["rocblas"]
+            """
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".toml", delete=False) as handle:
+            handle.write(topology_text)
+            path = handle.name
+        try:
+            topology = BuildTopology(path)
+            result = analyze_stage_impact(
+                ["rocm-systems/projects/hrr/playback/foo.cpp"],
+                topology=topology,
+            )
+        finally:
+            os.unlink(path)
+
+        self.assertFalse(result.full_rebuild_required)
+        self.assertTrue(result.artifact_level_analysis)
+        self.assertEqual(result.impacted_artifacts, ("core-hrr",))
+        self.assertEqual(result.rebuild_stages, ("compiler-runtime",))
+        self.assertEqual(result.copy_stages, ("math-libs",))
+
+    def test_real_topology_hrr_path_copies_math_libs(self):
+        result = analyze_stage_impact(
+            ["rocm-systems/projects/hrr/playback/foo.cpp"],
+            topology=get_topology(),
+        )
+        self.assertFalse(result.full_rebuild_required)
+        self.assertTrue(result.artifact_level_analysis)
+        self.assertIn("core-hrr", result.impacted_artifacts)
+        self.assertIn("compiler-runtime", result.rebuild_stages)
+        self.assertIn("math-libs", result.copy_stages)
+        self.assertTrue(result.copy_stages)
 
 
 class SharedSourcePathsAnalysisTest(unittest.TestCase):
