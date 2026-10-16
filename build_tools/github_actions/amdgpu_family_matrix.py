@@ -231,6 +231,7 @@ amdgpu_family_info_matrix dictionary fields:
 - test-runs-on-multi-gpu-labels: (optional) List of runner label configs for multi-GPU load balancing.
     Same format as test-runs-on-labels.
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
+- host-asan-use-ci-runners: (optional) use default CI labels for host-ASan, bypassing sandbox, weighted, and component-pinned GPU runners.
 - family: (required) AMD GPU family name, used for test selection and artifact fetching
 - fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])
 - build_variants: (optional) list of build variants to build for this architecture (e.g. ["release", "asan"])
@@ -258,6 +259,8 @@ amdgpu_family_info_matrix = {
             # TODO: Remove multi-label config once we get dedicated set of machines
             # As we are bringing up mi325, we are using a multi-label configuration to distribute load
             "test-runs-on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
+            # TODO(#3433): Remove this bypass after therock-ci-config migrates ASan runners.
+            "host-asan-use-ci-runners": True,
             "test-runs-on-labels": [
                 {"label": "linux-gfx942-1gpu-ccs-ossci-rocm", "count": 5},  # ccs
                 {
