@@ -124,10 +124,6 @@ jobs:
       contents: read
       id-token: write
 
-  # Build the native Windows MSI installer(s) and upload them to this run's
-  # artifacts-bucket prefix. publish_to_release_buckets (below) depends on this
-  # job so the MSIs exist before the release-bucket publish copies them — without
-  # that dependency the publish would run against an empty prefix (see #8617).
   build_native_msi_packages:
     needs: [build_artifacts]
     name: Build Native MSI Packages
@@ -218,10 +214,6 @@ jobs:
               "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
-  # Install and verify the MSI(s) this run built, by dispatching the install-test
-  # workflow against this run's artifacts prefix. Dispatched asynchronously (like
-  # the artifact tests above) so it does not block the release on test-runner
-  # availability; the install test downloads the MSIs from the public prefix.
   trigger_test_native_windows_install:
     needs: [build_native_msi_packages]
     name: Trigger Test Native Windows Packages Install
