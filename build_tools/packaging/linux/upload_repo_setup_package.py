@@ -8,9 +8,9 @@ Not to be confused with ``upload_package_repo.py``, which uploads the package
 repository itself (the content packages and their index).
 
 The destination is ``WorkflowOutputRoot.repo_setup_package()`` (see that method
-for the layout). It sits outside ``packages/<format>/``, so release promotion
-(``publish_rocm_to_release_buckets.py``) does not copy it. Publishing it to
-repo.amd.com is a separate step.
+for the layout). ``publish_rocm_to_release_buckets.py`` then publishes it to
+``v5/amd-repo-setup/`` in the release bucket, separately from the package
+repositories.
 
 The bucket and prefix come from the CI environment: ``GITHUB_REPOSITORY``,
 ``RELEASE_TYPE`` and the event payload used for fork detection. The ``release``

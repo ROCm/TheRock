@@ -263,6 +263,10 @@ root.native_linux_packages(
 root.native_windows_packages(
     pkg_type="msi"
 )  # {run_id}-windows/packages/msi — loose .msi installers
+root.repo_setup_packages()  # {run_id}-linux/amd-repo-setup — published as a whole
+root.repo_setup_package(
+    os_profile="ubuntu2404", tier="nightly", pkg_type="deb"
+)  # {run_id}-linux/amd-repo-setup/ubuntu2404/amdrocm-repo-nightly.deb
 root.python_packages(artifact_group="gfx110X-all")
 root.tarballs()
 ```

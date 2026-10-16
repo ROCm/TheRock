@@ -194,9 +194,20 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
                         f"/amdrocm-repo-{tier}.{pkg_type}",
                     )
 
+    def test_repo_setup_packages(self):
+        loc = self.root.repo_setup_packages()
+        self._assert_relative_path(loc, "99999-linux/amd-repo-setup")
+
+    def test_repo_setup_package_is_in_the_published_folder(self):
+        # Publishing copies repo_setup_packages() as a whole.
+        folder = self.root.repo_setup_packages().relative_path
+        loc = self.root.repo_setup_package("ubuntu2404", "nightly", "deb")
+        self.assertTrue(loc.relative_path.startswith(folder + "/"))
+
     def test_repo_setup_package_is_outside_the_package_repositories(self):
-        # Release promotion copies packages/<pkg_type>/ recursively. The
-        # bootstrap package must not ride along, so it is published separately.
+        # Publishing copies packages/<pkg_type>/ recursively into the package
+        # repositories. The bootstrap package is published to its own folder,
+        # so it must not ride along.
         for pkg_type in ("deb", "rpm"):
             with self.subTest(pkg_type=pkg_type):
                 packages = self.root.native_linux_packages(pkg_type)

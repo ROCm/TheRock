@@ -652,9 +652,8 @@ def cmd_repo_params(args: argparse.Namespace) -> int:
             )
             return 1
         outputs["stream"] = stream
-        # Names the stream's package in the upload folder, which holds every
-        # stream side by side: the repo file stem without its prefix, so rc
-        # is "stablerc".
+        # Names the stream's package file (amdrocm-repo-<tier>.<fmt>): the repo
+        # file stem without its prefix, so rc is "stablerc".
         outputs["tier"] = repo_id(stream).removeprefix(f"{REPO_ID_PREFIX}-")
         outputs["repo_base_url"] = get_public_repo_base_url(args.release_type)
         outputs["gpg_key_url"] = get_public_repo_gpg_key_url(
