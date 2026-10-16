@@ -31,7 +31,7 @@ do_remove_alternatives() {
         || true
 {% endfor %}
 
-{% if package_name == "amdrocm-base" %}
+{% if core_symlinks %}
     # Remove /opt/rocm/core and /opt/rocm/core-<major>.
     update-alternatives --remove \
         "core" \
@@ -60,7 +60,7 @@ do_remove_alternatives() {
         || true
 {% endif %}
 
-{% if package_name == "amdrocm-llvm" %}
+{% if llvm_symlinks %}
     # Remove /opt/rocm/llvm, /opt/rocm/amdgcn,
     # /opt/rocm/libexec, and /opt/rocm/share.
     update-alternatives --remove \

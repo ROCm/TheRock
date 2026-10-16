@@ -96,7 +96,6 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
     generate_rules_file(pkg_info, deb_dir, build_config)
     generate_control_file(pkg_info, deb_dir, build_config)
 
-    # amdrocm-alternatives.json defines each package's maintainer scripts and controls whether they are generated.
     if is_postinstallscripts_available(pkg_info):
         generate_debian_postscripts(pkg_info, deb_dir, build_config)
 
@@ -417,6 +416,8 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
 
     scripts = json_pkg_config["scripts"]
     binaries = json_pkg_config["binaries"]
+    core_symlinks = json_pkg_config.get("core_symlinks", False)
+    llvm_symlinks = json_pkg_config.get("llvm_symlinks", False)
 
     unsupported_scripts = set(scripts) - EXEC_SCRIPTS
     if unsupported_scripts:
@@ -436,12 +437,14 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
 
     context = {
         "install_prefix": config.install_prefix,
-        "version_major": int(re.match(r"^\d+", parts[0]).group()),
-        "version_minor": int(re.match(r"^\d+", parts[1]).group()),
-        "version_patch": int(re.match(r"^\d+", parts[2]).group()),
+        "version_major": int(version_major_match.group()),
+        "version_minor": int(version_minor_match.group()),
+        "version_patch": int(version_patch_match.group()),
         "target": "deb",
         "package_name": pkg_name,
         "binaries": binaries,
+        "core_symlinks": core_symlinks,
+        "llvm_symlinks": llvm_symlinks,
     }
 
     deb_dir = Path(deb_dir)

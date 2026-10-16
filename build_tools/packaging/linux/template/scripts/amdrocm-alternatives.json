@@ -46,7 +46,8 @@
     "binaries": [
       "rocm_agent_enumerator",
       "rocminfo"
-    ]
+    ],
+    "core_symlinks": true
   },
   "amdrocm-llvm": {
     "scripts": [
@@ -64,6 +65,7 @@
       "amdlld",
       "amdllvm",
       "offload-arch"
-    ]
+    ],
+    "llvm_symlinks": true
   }
 }
