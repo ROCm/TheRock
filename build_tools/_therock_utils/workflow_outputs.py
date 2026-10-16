@@ -268,6 +268,16 @@ class WorkflowOutputRoot:
             self.bucket, f"{self.prefix}/logs/packaging/{pkg_type}/index.html"
         )
 
+    def repo_setup_packages(self) -> StorageLocation:
+        """Location for the ``amdrocm-repo`` bootstrap packages directory.
+
+        Returns ``StorageLocation`` at ``{run_id}-linux/amd-repo-setup``, which
+        holds one folder per distro (see ``repo_setup_package()``).
+        ``publish_rocm_to_release_buckets.py`` publishes it as is to
+        ``v5/amd-repo-setup/`` in the release bucket.
+        """
+        return StorageLocation(self.bucket, f"{self.prefix}/amd-repo-setup")
+
     def repo_setup_package(
         self, os_profile: str, tier: str, pkg_type: str
     ) -> StorageLocation:
@@ -276,11 +286,10 @@ class WorkflowOutputRoot:
         ``{run_id}-linux/amd-repo-setup/{os_profile}/amdrocm-repo-{tier}.{pkg_type}``
         (e.g. ``12345678901-linux/amd-repo-setup/ubuntu2404/amdrocm-repo-nightly.deb``).
 
-        Mirrors the ``amd-repo-setup/<distro>/`` folder on repo.amd.com, which
-        holds the package for every tier side by side, so the tier is part of the
-        file name. The name is fixed per tier so the download URL does not change
-        with the package version. It sits outside ``packages/``, so promoting
-        the package repositories to the release buckets does not carry it.
+        The tier is part of the file name, and the name is fixed per tier so
+        the download URL does not change with the package version. The folder
+        sits outside ``packages/``, so the package is published to its own
+        folder rather than into the package repositories.
 
         Args:
             os_profile: Target distro profile (e.g. 'ubuntu2404', 'rhel10').
@@ -289,7 +298,7 @@ class WorkflowOutputRoot:
         """
         return StorageLocation(
             self.bucket,
-            f"{self.prefix}/amd-repo-setup/{os_profile}"
+            f"{self.repo_setup_packages().relative_path}/{os_profile}"
             f"/amdrocm-repo-{tier}.{pkg_type}",
         )
 

@@ -121,11 +121,11 @@ Internal release types map to public streams as follows:
 
 `<stream>` is one of `dev`, `nightly`, `rc`, or `bkc`.
 
-| Bucket pattern                      | Contents                                                 | Object prefixes                                                        |
-| ----------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `therock-repo-amd-<stream>-core`    | ROCm Core Python packages, tarballs, and native packages | `v5/rocm/core/{whl-next,tarball,tarball-asan,packages,packages-asan}/` |
-| `therock-repo-amd-<stream>-pytorch` | PyTorch Python packages                                  | `v5/rocm/pytorch/whl-next/`                                            |
-| `therock-repo-amd-<stream>-jax`     | JAX Python packages                                      | `v5/rocm/jax/whl-next/`                                                |
+| Bucket pattern                      | Contents                                                                        | Object prefixes                                                                              |
+| ----------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `therock-repo-amd-<stream>-core`    | ROCm Core Python packages, tarballs, native packages, and amdrocm-repo packages | `v5/rocm/core/{whl-next,tarball,tarball-asan,packages,packages-asan}/`, `v5/amd-repo-setup/` |
+| `therock-repo-amd-<stream>-pytorch` | PyTorch Python packages                                                         | `v5/rocm/pytorch/whl-next/`                                                                  |
+| `therock-repo-amd-<stream>-jax`     | JAX Python packages                                                             | `v5/rocm/jax/whl-next/`                                                                      |
 
 Public downloads use the matching stream hostname and omit the internal `v5`
 prefix. For example, nightly Core tarballs are at
