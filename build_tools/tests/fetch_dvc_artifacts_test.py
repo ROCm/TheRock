@@ -416,8 +416,8 @@ class TestStoreInCacheConcurrency(unittest.TestCase):
     Multiple .dvc pointer files can reference files with the same content hash
     (e.g. identical small tensors in different subdirectories). When fetched
     concurrently, all workers call _store_in_cache with the same cache_file
-    path. Windows publication must leave a competing winner in place and
-    verify its contents before accepting a collision as success.
+    path. Publication must leave a competing winner in place while preserving
+    the caller's verified output. Cache consumers validate entries before use.
     """
 
     def test_concurrent_calls_with_same_cache_file_do_not_raise(self):
@@ -431,7 +431,7 @@ class TestStoreInCacheConcurrency(unittest.TestCase):
             # writes cache_file; caller 2 then gets PermissionError, as on
             # Windows when publication collides with a competing publisher.
             # We model this with a two-phase barrier:
-            # both workers reach the gate, then caller 1 does the real replace
+            # both workers reach the gate, then caller 1 creates the real link
             # and only after that does caller 2 raise PermissionError, so
             # cache_file already exists when the exception handler checks it.
             original_link = os.link
@@ -499,6 +499,12 @@ class TestStoreInCacheConcurrency(unittest.TestCase):
                 cache_file = fda._cache_path(tmp / "cache", _md5_hex(data))
                 original_link = os.link
                 original_rename = os.rename
+                original_open = Path.open
+
+                def unreadable_winner(path, *args, **kwargs):
+                    if path == cache_file:
+                        raise PermissionError("another process holds the cache open")
+                    return original_open(path, *args, **kwargs)
 
                 def link_and_publish_winner(source: Path, target: Path) -> None:
                     # Another worker publishes after our cache-miss check,
@@ -521,17 +527,15 @@ class TestStoreInCacheConcurrency(unittest.TestCase):
                         fda.os, "link", side_effect=link_and_publish_winner
                     ),
                     mock.patch.object(fda.os, "rename", side_effect=windows_rename),
+                    mock.patch.object(Path, "open", unreadable_winner),
                 ):
-                    if winner_data == data:
-                        fda._store_in_cache(src, cache_file)
-                    else:
-                        with self.assertRaises(FileExistsError):
-                            fda._store_in_cache(src, cache_file)
+                    fda._store_in_cache(src, cache_file)
 
                 # Replacing the winner creates a Windows delete/rename window
                 # during which readers can get PermissionError opening it.
                 self.assertTrue(cache_file.samefile(winner))
                 self.assertEqual(cache_file.read_bytes(), winner_data)
+                self.assertEqual(src.read_bytes(), data)
                 self.assertEqual(list(cache_file.parent.glob("*.tmp")), [])
 
 
