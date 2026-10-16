@@ -2,6 +2,8 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# CI path-selection smoke test: build both frameworks using published ROCm.
+
 """Installs a JAX ROCm stack: the plugin and PJRT wheels plus a matching jax.
 
 The plugin and PJRT wheels come from wherever the build that made them put

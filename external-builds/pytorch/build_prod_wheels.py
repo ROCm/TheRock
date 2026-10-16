@@ -2,6 +2,8 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# CI path-selection smoke test: build both frameworks using published ROCm.
+
 r"""Builds production PyTorch wheels based on the rocm wheels.
 
 This script is designed to be used from CI but should be serviceable for real
