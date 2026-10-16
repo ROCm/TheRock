@@ -253,7 +253,11 @@ endfunction()
 #   sub-project installs. Defaults to empty, meaning that it installs at the top
 #   of the namespace.
 # CMAKE_ARGS: Additional CMake configure arguments.
-# CMAKE_INCLUDES: Additional CMake files to include at the top level.
+# CMAKE_INCLUDES: Additional CMake files to include once at the end of the
+#   first project() call, after language initialization. These run through
+#   CMAKE_PROJECT_INCLUDE. Any value passed for CMAKE_PROJECT_INCLUDE in
+#   CMAKE_ARGS runs afterward and retains its normal per-project() behavior.
+#   Changes to these files retrigger the sub-project configure step.
 # BUILD_DEPS: Projects which must build and provide their packages prior to this
 #   one.
 # RUNTIME_DEPS: Projects which must build prior to this one and whose install
@@ -882,13 +886,55 @@ function(therock_cmake_subproject_activate target_name)
   endif()
   set(_global_post_include "${THEROCK_SOURCE_DIR}/cmake/therock_global_post_subproject.cmake")
   string(APPEND _init_contents "cmake_language(DEFER CALL include \"@_global_post_include@\")\n")
+
+  # CMAKE_INCLUDES may create imported shared targets, so dispatch them at
+  # the end of the first project() call, after language initialization.
+  # Apply them once before invoking caller-provided hooks so those hooks
+  # can use definitions supplied by CMAKE_INCLUDES.
+  set(_project_include_contents)
+  set(_cmake_project_include_file)
+  set(_resolved_cmake_includes)
   foreach(_addl_cmake_include ${_cmake_includes})
-    if(NOT IS_ABSOLUTE)
-      find_path(_addl_cmake_include_path "${addl_cmake_include}" NO_CACHE NO_DEFAULT_PATH PATHS ${CMAKE_MODULE_PATH} REQUIRED)
+    if(NOT IS_ABSOLUTE "${_addl_cmake_include}")
+      find_path(_addl_cmake_include_path "${_addl_cmake_include}"
+        NO_CACHE NO_DEFAULT_PATH PATHS ${CMAKE_MODULE_PATH} REQUIRED
+      )
       cmake_path(ABSOLUTE_PATH _addl_cmake_include BASE_DIRECTORY "${_addl_cmake_include_path}")
+      unset(_addl_cmake_include_path)
     endif()
-    string(APPEND _init_contents "include(\"${_addl_cmake_include}\")\n")
+    string(APPEND _project_include_contents
+      "include(\"${_addl_cmake_include}\")\n"
+    )
+    list(APPEND _resolved_cmake_includes "${_addl_cmake_include}")
+    list(APPEND _fprint_files "${_addl_cmake_include}")
   endforeach()
+  if(_project_include_contents)
+    string(PREPEND _project_include_contents
+      "get_property(_therock_project_includes_applied GLOBAL PROPERTY THEROCK_PROJECT_INCLUDES_APPLIED)\n"
+      "if(NOT _therock_project_includes_applied)\n"
+      "  set_property(GLOBAL PROPERTY THEROCK_PROJECT_INCLUDES_APPLIED TRUE)\n"
+    )
+    string(APPEND _project_include_contents
+      "endif()\n"
+      "foreach(_therock_chained_project_include IN LISTS _therock_chained_project_includes)\n"
+      "  include(\"\${_therock_chained_project_include}\")\n"
+      "endforeach()\n"
+    )
+    set(_cmake_project_include_file
+      "${_cmake_project_init_file}.project-include.cmake"
+    )
+    file(CONFIGURE
+      OUTPUT "${_cmake_project_include_file}"
+      CONTENT "${_project_include_contents}"
+      @ONLY
+      ESCAPE_QUOTES
+    )
+    string(APPEND _init_contents
+      "set(_therock_chained_project_includes \"\${CMAKE_PROJECT_INCLUDE}\")\n"
+      "set(CMAKE_PROJECT_INCLUDE \"@_cmake_project_include_file@\")\n"
+    )
+    list(APPEND _fprint_files "${_cmake_project_include_file}")
+  endif()
 
   # Flag system: inject flag-controlled variables and defines.
   _therock_get_flag_init_contents(_flag_init_contents "${target_name}")
@@ -1037,6 +1083,8 @@ function(therock_cmake_subproject_activate target_name)
         "${_cmake_source_dir}/CMakeLists.txt"
         "${_cmake_project_toolchain_file}"
         "${_cmake_project_init_file}"
+        ${_cmake_project_include_file}
+        ${_resolved_cmake_includes}
         "${_global_post_include}"
         "${ROCM_BUILD_FLAGS_STATE_FILE}"
         ${_extra_depends}
