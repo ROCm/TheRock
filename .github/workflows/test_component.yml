@@ -63,7 +63,7 @@ jobs:
       # Otherwise use the default image.
       # Callers must supply digest-pinned images; fetch_test_configurations.py pins overrides.
       image: >- # zizmor: ignore[unpinned-images]
-        ${{ inputs.platform == 'linux' &&
+        ${{ inputs.platform != 'windows' &&
             (fromJSON(inputs.component).container_image || inputs.default_container_image)
             || null
         }}

@@ -231,6 +231,8 @@ amdgpu_family_info_matrix dictionary fields:
 - test-runs-on-multi-gpu-labels: (optional) List of runner label configs for multi-GPU load balancing.
     Same format as test-runs-on-labels.
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
+- test-runs-on-wsl: (optional, linux only) GitHub runner label for WSL-hosted GPU runners. With the
+    ci:run-wsl label, the Linux build is also tested there, for components listing "wsl" in their platform.
 - family: (required) AMD GPU family name, used for test selection and artifact fetching
 - fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])
 - build_variants: (optional) list of build variants to build for this architecture (e.g. ["release", "asan"])
@@ -301,6 +303,9 @@ amdgpu_family_info_matrix = {
     "gfx110x": {
         "linux": {
             "test-runs-on": "linux-gfx110X-gpu-rocm",
+            # WSL-hosted V710 runners (TheRock-Infra wsl-* pools): Linux jobs on a
+            # Windows host whose runner lives in WSL2. Used by ci:run-wsl.
+            "test-runs-on-wsl": "wsl-gfx1101-gpu-rocm",
             "family": "gfx110X-all",
             "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
             "bypass_tests_for_releases": True,
@@ -737,6 +742,7 @@ def _extract_runner_labels_from_v1(external_config: dict) -> dict:
         "test-runs-on-multi-gpu",
         "test-runs-on-multi-gpu-labels",
         "test-runs-on-kernel",
+        "test-runs-on-wsl",
     }
 
     for _trigger, families in gpu_families.items():

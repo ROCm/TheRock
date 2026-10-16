@@ -64,6 +64,7 @@ CI_LABELS: list[Label] = [
     Label("ci:asan", COLOR_CI_GENERAL, "Opt-in to building ASAN"),
     Label("ci:host-asan", COLOR_CI_GENERAL, "Opt-in to running multi-arch host-asan CI on a pull request"),
     Label("ci:run-multi-gpu", COLOR_CI_GENERAL, "Opt-in to running multi-GPU tests"),
+    Label("ci:run-wsl", COLOR_CI_GENERAL, "Opt-in to also running WSL-capable Linux tests on WSL GPU runners (non-blocking)"),
     Label("ci:cpu-test-only", COLOR_CI_GENERAL, "Run only CPU tests (skip GPU tests)"),
     # ci:platform: labels (platform selection)
     Label("ci:platform:linux", COLOR_CI_PLATFORM, "Run CI only on Linux (skip Windows builds/tests)"),

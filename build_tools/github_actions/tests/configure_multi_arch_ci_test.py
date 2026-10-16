@@ -201,6 +201,47 @@ class TestCIInputs(unittest.TestCase):
         # Validation should pass without raising - ci:run-multi-gpu is a control label
         inputs.validate()
 
+    def test_build_stages_with_only_control_labels_auto_selects_tests(self):
+        """A partial build with only ci:* labels still gets the stage-compatible
+        test labels, so tests for components that were not built are not scheduled."""
+        inputs = _run_from_environ(
+            event_name="workflow_dispatch",
+            event_payload={},
+            extra_env={
+                "LINUX_AMDGPU_FAMILIES": "gfx110X",
+                "PR_LABELS": "ci:run-wsl",
+                "BUILD_STAGES": "compiler-runtime,runtime-tests,wsl-rocdxg",
+            },
+        )
+        self.assertEqual(
+            sorted(inputs.linux_test_labels),
+            ["ci:run-wsl", "test:hip-tests", "test:kfdtest", "test:rocrtst"],
+        )
+
+    def test_run_wsl_partial_build_requires_wsl_rocdxg_stage(self):
+        """WSL tests need the wsl-rocdxg artifact (the WSL libhsakmt)."""
+        with self.assertRaisesRegex(ValueError, "wsl-rocdxg"):
+            _run_from_environ(
+                event_name="workflow_dispatch",
+                event_payload={},
+                extra_env={
+                    "LINUX_AMDGPU_FAMILIES": "gfx110X",
+                    "PR_LABELS": "ci:run-wsl,test:hip-tests",
+                    "BUILD_STAGES": "compiler-runtime,runtime-tests",
+                },
+            )
+
+    def test_run_wsl_full_build_needs_no_stage_check(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            linux_test_labels=["test:hip-tests", "ci:run-wsl"],
+        )
+        inputs.validate()
+
 
 class TestCIInputsFromEnviron(unittest.TestCase):
     """Test CIInputs.from_environ() with event payload fixtures.
@@ -1786,6 +1827,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "test-runs-on-labels",
             "test-runs-on-multi-gpu",
             "test-runs-on-multi-gpu-labels",
+            "test-runs-on-wsl",
             "test_type",
         }
         for config in [result.linux, result.windows]:
@@ -2284,6 +2326,36 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertEqual(entry["amdgpu_family"], "gfx950-dcgpu")
         # Tests are force-enabled despite presubmit trigger not in tests_on_trigger
         self.assertNotEqual(entry["test-runs-on"], "")
+
+    def _gfx110x_linux_entry(self, pr_labels, test_only=True, **kwargs):
+        targets = cm.TargetSelection(
+            linux_families=["gfx110x"],
+            linux_test_only_families=["gfx110x"] if test_only else [],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="pull_request", pr_labels=pr_labels, **kwargs
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        return result.linux.per_family_info[0]
+
+    def test_run_wsl_selects_wsl_runner(self):
+        entry = self._gfx110x_linux_entry(["ci:test:gfx110x", "ci:run-wsl"])
+        self.assertEqual(entry["test-runs-on-wsl"], "wsl-gfx1101-gpu-rocm")
+        self.assertEqual(entry["test-runs-on"], "linux-gfx110X-gpu-rocm")
+
+    def test_no_wsl_runner_without_run_wsl_label(self):
+        entry = self._gfx110x_linux_entry(["ci:test:gfx110x"])
+        self.assertNotIn("test-runs-on-wsl", entry)
+
+    def test_no_wsl_runner_when_family_gpu_tests_are_gated(self):
+        """gfx110x Linux tests only run nightly; ci:run-wsl alone does not enable them."""
+        entry = self._gfx110x_linux_entry(["ci:run-wsl"], test_only=False)
+        self.assertEqual(entry["test-runs-on"], "")
+        self.assertNotIn("test-runs-on-wsl", entry)
 
     def test_test_only_overrides_build_only(self):
         """When family is in both build_only and test_only, test_only wins."""

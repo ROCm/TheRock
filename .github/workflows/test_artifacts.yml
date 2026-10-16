@@ -37,7 +37,8 @@ on:
       test_runs_on:
         description: >-
           GitHub Actions runner label for GPU tests. When empty, GPU tests
-          are skipped.
+          are skipped. A WSL runner (label containing "wsl") tests the Linux
+          build under WSL.
         type: string
       test_runs_on_cpu:
         description: "CPU test runner label (for components that don't need GPU)"
@@ -244,9 +245,11 @@ jobs:
           # but CPU-only tests (linux_cpu_runner: True) can still run.
           TEST_RUNS_ON: ${{ inputs.test_runs_on }}
           TEST_RUNS_ON_CPU: ${{ inputs.test_runs_on_cpu }}
+        # The platform follows the runner: Windows, WSL (the Linux build on a
+        # WSL-hosted runner), or Linux.
         run: |
           python ./build_tools/github_actions/fetch_test_configurations.py \
-            --platform=${{ (contains(inputs.test_runs_on, 'windows') || contains(inputs.test_runs_on_cpu, 'windows')) && 'windows' || 'linux' }}
+            --platform=${{ (contains(inputs.test_runs_on, 'windows') || contains(inputs.test_runs_on_cpu, 'windows')) && 'windows' || contains(inputs.test_runs_on, 'wsl') && 'wsl' || 'linux' }}
 
   test_sanity_check:
     name: 'Test Sanity Check'
