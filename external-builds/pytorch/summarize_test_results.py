@@ -157,7 +157,7 @@ def write_shard_summary(
 # Combined summary (called from the post-matrix summary job)
 # ---------------------------------------------------------------------------
 
-_ARTIFACT_RE = re.compile(r"test-reports-(?P<config>[^-]+)-(?P<shard>\d+)-(?P<num>\d+)")
+_ARTIFACT_RE = re.compile(r"test-reports-(?P<config>.+)-(?P<shard>\d+)-(?P<num>\d+)")
 
 
 def _build_report_header(
@@ -202,11 +202,13 @@ def write_combined_summary(
     combined_dir: Path,
     amdgpu_family: str,
     summary_file: str,
+    expected_report_count: int | None = None,
+    github_output: str = "",
     torch_version: str = "",
     python_version: str = "",
     package_index_url: str = "",
     pytorch_git_ref: str = "",
-) -> None:
+) -> dict[str, int | bool]:
     """Scan all artifact directories and write one combined table."""
     lines: list[str] = []
 
@@ -222,21 +224,23 @@ def write_combined_summary(
         )
 
     rows: list[tuple[str, int, str]] = []
-    shard_dirs = sorted(combined_dir.iterdir())
+    observed_report_count = 0
+    seen: set[tuple[str, str, str, str, str]] = set()
+    shard_dirs = sorted(combined_dir.iterdir()) if combined_dir.is_dir() else []
 
     for artifact_dir in shard_dirs:
         if not artifact_dir.is_dir():
             continue
-        m = _ARTIFACT_RE.match(artifact_dir.name)
+        m = _ARTIFACT_RE.fullmatch(artifact_dir.name)
         if not m:
             continue
+        observed_report_count += 1
         config = m.group("config")
         shard = m.group("shard")
         num = m.group("num")
         shard_label = f"{shard}/{num}"
 
         failures = collect_results(artifact_dir)
-        seen = set()
         for f in failures:
             test_file = derive_test_file(f["report_file"])
             key = (config, shard_label, test_file, f["class"], f["test"])
@@ -253,8 +257,29 @@ def write_combined_summary(
                 )
             )
 
-    if not rows:
+    results_complete = (
+        expected_report_count is not None
+        and expected_report_count > 0
+        and observed_report_count == expected_report_count
+    )
+    expected_display = (
+        str(expected_report_count) if expected_report_count is not None else "unknown"
+    )
+    completeness = "complete" if results_complete else "incomplete"
+    lines.append(
+        f"**Reports:** {observed_report_count} observed / "
+        f"{expected_display} expected ({completeness})"
+    )
+    lines.append("")
+
+    if not rows and results_complete:
         lines.append(f"### All tests passed — {amdgpu_family} :white_check_mark:")
+        lines.append("")
+    elif not rows:
+        lines.append(
+            f"### No failed tests found in available reports — {amdgpu_family} "
+            ":warning:"
+        )
         lines.append("")
     else:
         rows.sort(key=lambda r: (r[0], r[1]))
@@ -271,6 +296,14 @@ def write_combined_summary(
         lines.append("")
 
     _emit(lines, summary_file)
+    outputs: dict[str, int | bool] = {
+        "failed_test_count": len(rows),
+        "observed_report_count": observed_report_count,
+        "expected_report_count": expected_report_count or 0,
+        "results_complete": results_complete,
+    }
+    _write_github_outputs(outputs, github_output)
+    return outputs
 
 
 # ---------------------------------------------------------------------------
@@ -284,6 +317,15 @@ def _emit(lines: list[str], summary_file: str) -> None:
         with open(summary_file, "a") as fh:
             fh.write(summary)
     print(summary)
+
+
+def _write_github_outputs(outputs: dict[str, int | bool], output_file: str) -> None:
+    if not output_file:
+        return
+    with open(output_file, "a") as fh:
+        for key, value in outputs.items():
+            rendered = str(value).lower() if isinstance(value, bool) else value
+            fh.write(f"{key}={rendered}\n")
 
 
 def main() -> int:
@@ -325,18 +367,24 @@ def main() -> int:
         "--pytorch-git-ref",
         default=os.getenv("PYTORCH_GIT_REF", ""),
     )
+    parser.add_argument(
+        "--expected-report-count",
+        type=int,
+        default=None,
+        help="Number of report artifacts expected from the prepared test matrix",
+    )
     args = parser.parse_args()
 
     summary_file = os.getenv("GITHUB_STEP_SUMMARY", "")
+    github_output = os.getenv("GITHUB_OUTPUT", "")
 
     if args.combined_dir:
-        if not args.combined_dir.is_dir():
-            print(f"Combined directory not found: {args.combined_dir}")
-            return 0
         write_combined_summary(
             args.combined_dir,
             args.amdgpu_family,
             summary_file,
+            expected_report_count=args.expected_report_count,
+            github_output=github_output,
             torch_version=args.torch_version,
             python_version=args.python_version,
             package_index_url=args.package_index_url,
