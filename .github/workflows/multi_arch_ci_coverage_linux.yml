@@ -7,11 +7,12 @@
 # builds one instrumented Linux stack for every coverage-enabled project, then
 # fans out to multi_arch_ci_coverage_report.yml once per project.
 #
-# The rocm-libraries nightly invokes this via a cross-repo reusable `uses:` call.
-# A future Windows mirror copies this file, swapping the build reusable and
-# runners; multi_arch_ci_coverage_report.yml is reused unchanged.
+# The rocm-libraries nightly invokes this via a cross-repo reusable `uses:` call,
+# and multi_arch_ci_coverage_pr.yml calls it for pull requests with the projects
+# a change touches. A future Windows mirror copies this file, swapping the build
+# reusable and runners; multi_arch_ci_coverage_report.yml is reused unchanged.
 #
-# Currently targets gfx94X-dcgpu; change-based selection and multi-arch come later.
+# Currently targets gfx94X-dcgpu; multi-arch comes later.
 
 name: Multi-Arch CI Coverage - Linux
 
@@ -102,6 +103,18 @@ on:
         type: string
         description: "Ref/SHA of this workflow's scripts. Cross-repo callers pass the ref they pinned in uses:."
         default: ""
+      rebuild_artifacts:
+        type: string
+        description: "Comma-separated artifacts (e.g. rand) the instrumented math-libs build is limited to. Empty builds the whole stage. Narrow only when baseline_run_id supplies everything else the tests install."
+        default: ""
+      prebuilt_compiler_runtime:
+        type: boolean
+        description: "Copy compiler-runtime from baseline_run_id instead of building it. The baseline must come from the calling repository: artifacts embed the build workspace path."
+        default: false
+      external_repo_config:
+        type: string
+        description: "Build config for an external repo's sources, from detect_external_repo_config.py."
+        default: ""
 
 permissions:
   contents: read
@@ -156,12 +169,62 @@ jobs:
             --release-type=ci \
             --override-git-sha=${{ steps.checkout.outputs.commit }}
 
-  # Built first so later stages have a compiler-runtime to link against and
-  # fetch as an inbound artifact.
+  # Copied (prebuilt_compiler_runtime) or built first, so later stages have a
+  # compiler-runtime to link against and fetch as an inbound artifact.
+  copy_compiler_runtime:
+    name: Copy Compiler Runtime
+    needs: setup_coverage_matrix
+    if: >-
+      ${{
+        inputs.prebuilt_compiler_runtime && inputs.baseline_run_id != '' &&
+        needs.setup_coverage_matrix.outputs.coverage_matrix != '[]'
+      }}
+    runs-on: aws-linux-scale-rocm-small
+    permissions:
+      contents: read
+      id-token: write
+    container:
+      image: python:3.12-slim
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Install artifact manager dependencies
+        run: pip install boto3
+
+      - name: Configure AWS credentials for artifact uploads
+        uses: ./.github/actions/configure_aws_artifacts_credentials
+        with:
+          release_type: ci
+
+      - name: Copy compiler-runtime artifacts from the baseline
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TYPE: ci
+          BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+          BASELINE_REPOSITORY: ${{ inputs.baseline_repository || github.repository }}
+          DIST_AMDGPU_FAMILIES: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
+        run: |
+          python build_tools/artifact_manager.py copy \
+            --source-run-id="${BASELINE_RUN_ID}" \
+            --source-repository="${BASELINE_REPOSITORY}" \
+            --stage=compiler-runtime \
+            --amdgpu-families="${DIST_AMDGPU_FAMILIES}" \
+            --expand-family-to-targets
+
   build_compiler_runtime:
     name: Build Compiler Runtime
     needs: setup_coverage_matrix
-    if: ${{ needs.setup_coverage_matrix.outputs.coverage_matrix != '[]' }}
+    if: >-
+      ${{
+        !(inputs.prebuilt_compiler_runtime && inputs.baseline_run_id != '') &&
+        needs.setup_coverage_matrix.outputs.coverage_matrix != '[]'
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -175,17 +238,20 @@ jobs:
       # TheRock scripts for the instrumented build; cross-repo callers pass ROCm/TheRock + ref.
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
     permissions:
       contents: read
       id-token: write
 
   # Build the whole stage: test jobs need the full dependency set, and
-  # instrumenting as a unit keeps the per-project build cost flat.
+  # instrumenting as a unit keeps the per-project build cost flat. A caller with
+  # a baseline can narrow it to the selected projects' artifacts
+  # (rebuild_artifacts), since the tests install everything else from there.
   # coverage_cmake_options is the THEROCK_COVERAGE_*_ALL group option for a whole
   # group, else individual project flags; unselected projects build normally.
   build_instrumented_math_libs:
     name: Build Instrumented Math Libs
-    needs: [setup_coverage_matrix, build_compiler_runtime]
+    needs: [setup_coverage_matrix, copy_compiler_runtime, build_compiler_runtime]
     if: >-
       ${{
         !failure() && !cancelled() &&
@@ -204,12 +270,14 @@ jobs:
       amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
       dist_amdgpu_families: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
       extra_cmake_options: ${{ needs.setup_coverage_matrix.outputs.coverage_cmake_options }}
+      rebuild_artifacts: ${{ inputs.rebuild_artifacts }}
       rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
       release_type: ci
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       # TheRock scripts for the instrumented build; cross-repo callers pass ROCm/TheRock + ref.
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
     permissions:
       contents: read
       id-token: write
@@ -224,6 +292,7 @@ jobs:
     needs:
       [
         setup_coverage_matrix,
+        copy_compiler_runtime,
         build_compiler_runtime,
         build_instrumented_math_libs,
       ]
@@ -268,6 +337,7 @@ jobs:
     if: always()
     needs:
       - setup_coverage_matrix
+      - copy_compiler_runtime
       - build_compiler_runtime
       - build_instrumented_math_libs
       - coverage_report
