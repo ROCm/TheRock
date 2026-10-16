@@ -292,7 +292,8 @@ def _cache_path(cache_dir: Path, md5: str) -> Path:
     return cache_dir / bare[:2] / (bare[2:] + suffix)
 
 
-# Share locks across simultaneous pull() calls in this process. Weak values
+# Share locks across simultaneous pull() calls to avoid duplicate downloads.
+# Cache I/O recovery does not need these locks for a fetch to succeed. Weak values
 # retain only locks currently held or awaited, avoiding a permanent entry for
 # every content hash. Other processes/external file locks remain independent.
 _cache_locks_guard = threading.Lock()
@@ -351,16 +352,10 @@ def _materialize_from_cache(cache_file: Path, dest: Path) -> None:
 
 
 def _store_in_cache(src: Path, cache_file: Path) -> None:
+    """Publish verified src, leaving existing entries for readers to validate."""
     cache_file.parent.mkdir(parents=True, exist_ok=True)
     if cache_file.exists():
         return
-
-    def winner_matches() -> bool:
-        return (
-            cache_file.exists()
-            and src.stat().st_size == cache_file.stat().st_size
-            and _md5_of(src) == _md5_of(cache_file)
-        )
 
     # Publishing a hardlink directly avoids the Windows rename window in
     # which the new cache pathname exists but readers are denied access.
@@ -369,14 +364,10 @@ def _store_in_cache(src: Path, cache_file: Path) -> None:
         os.link(src, cache_file)
         return
     except FileExistsError:
-        if winner_matches():
-            return
-        raise
+        return
     except OSError:
         if cache_file.exists():
-            if winner_matches():
-                return
-            raise
+            return
         # Cross-filesystem source, or a cache volume without hardlinks.
 
     tmp = cache_file.with_suffix(f"{cache_file.suffix}.{uuid.uuid4().hex}.tmp")
@@ -387,14 +378,10 @@ def _store_in_cache(src: Path, cache_file: Path) -> None:
             # it into place even when src lives on a different volume.
             os.link(tmp, cache_file)
         except FileExistsError:
-            if winner_matches():
-                return
-            raise
+            return
         except OSError:
             if cache_file.exists():
-                if winner_matches():
-                    return
-                raise
+                return
             # Retain support for filesystems without hardlinks. In-process
             # readers/publishers are serialized by _cache_lock in this path.
             try:
@@ -402,10 +389,8 @@ def _store_in_cache(src: Path, cache_file: Path) -> None:
                     os.rename(tmp, cache_file)
                 else:
                     os.replace(tmp, cache_file)
-            except (FileExistsError, PermissionError):
-                if winner_matches():
-                    return
-                raise
+            except FileExistsError:
+                return
     finally:
         if tmp.exists():
             try:
