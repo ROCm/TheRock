@@ -166,7 +166,7 @@ permissions:
 
 jobs:
   setup:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       enable_build_jobs: ${{ steps.configure.outputs.enable_build_jobs }}
       linux_build_config: ${{ steps.configure.outputs.linux_build_config }}
