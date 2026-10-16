@@ -46,10 +46,10 @@ SUBMODULE_CONFIG = {
         "bot_author": "systems-assistant[bot]",
         # Changes to rocm-systems should run the full matrix of CI jobs:
         #   * Build for all gfx archs
-        #   * Build for all variants (asan)
+        #   * Build release and host-ASan variants
         #   * All builds and tests (including downstream rocm-libraries jobs)
         #   * gfx950-dcgpu/gfx125X-dcgpu tests (limited hardware, label-gated)
-        "labels": [*COMMON_CI_LABELS, "ci:asan", "gfx950-dcgpu", "gfx125X-dcgpu"],
+        "labels": [*COMMON_CI_LABELS, "ci:host-asan", "gfx950-dcgpu", "gfx125X-dcgpu"],
     },
     "rocm-libraries": {
         "repo": "ROCm/rocm-libraries",
@@ -65,10 +65,10 @@ SUBMODULE_CONFIG = {
         "bot_author": "assistant-librarian[bot]",
         # Changes to rocm-libraries should run the full matrix of CI jobs:
         #   * Build for all gfx archs
-        #   * Build for all variants (asan)
+        #   * Build release and host-ASan variants
         #   * All rocm-libraries tests
         #   * gfx950-dcgpu/gfx125X-dcgpu tests (limited hardware, label-gated)
-        "labels": [*COMMON_CI_LABELS, "ci:asan", "gfx950-dcgpu", "gfx125X-dcgpu"],
+        "labels": [*COMMON_CI_LABELS, "ci:host-asan", "gfx950-dcgpu", "gfx125X-dcgpu"],
     },
     "debug-tools/rocgdb/source": {
         "repo": "ROCm/rocgdb",
@@ -755,7 +755,7 @@ def create_therock_bump(submodule: str, token: str) -> None:
         )
 
         try:
-            # Add CI labels to the PR (run-all-archs + asan for full coverage)
+            # Add the submodule-specific CI labels to the PR
             gh_api(
                 token,
                 f"repos/{THEROCK_REPO}/issues/{pr['number']}/labels",
