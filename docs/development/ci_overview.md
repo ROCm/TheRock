@@ -152,6 +152,24 @@ Build logs are uploaded to S3 and organized by stage and GPU family.
 
 See [workflow_outputs.md](workflow_outputs.md) for the S3 layout structure and [github_actions_debugging.md](github_actions_debugging.md) for debugging techniques.
 
+## Skipping ROCm builds for Framework-only CI runs
+
+The CI workflows normally build ROCm and its Python packages before building
+framework packages such as PyTorch and JAX. These python packages are uploaded
+to a run-scoped folder usable with `pip install --find-links`.
+
+When only framework-specific code is modified or an explicit `ci:skip-rocm`
+label is added to a pull request, ROCm builds can be skipped. CI setup resolves
+a ROCm package version from
+`https://nightly.repo.amd.com/rocm/whl-next/`. Framework builds and tests then
+install that version from the index.
+
+> [!IMPORTANT]
+> Published ROCm dependencies give framework packages a `+rocm...` suffix
+> rather than a `+devrocm...` suffix. These packages should
+> not be published outside of their workflow run-scoped folders to release
+> indexes.
+
 ## Further Reading
 
 ### Build System

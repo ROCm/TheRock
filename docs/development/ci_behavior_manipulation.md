@@ -39,6 +39,7 @@ The following labels may be added to a pull request to modify CI behavior:
 | `ci:skip-native-linux`     | Skip native Linux package builds.                                                                                                                                                                 |
 | `ci:build-python-packages` | Opt-in to building Python packages.                                                                                                                                                               |
 | `ci:skip-python-packages`  | Skip Python package builds.                                                                                                                                                                       |
+| `ci:skip-rocm`             | Skip ROCm builds and tests; use published ROCm packages for frameworks. See [Building frameworks with published ROCm](#building-frameworks-with-published-rocm).                                  |
 | `ci:build-pytorch`         | Opt-in to building PyTorch packages.                                                                                                                                                              |
 | `ci:skip-pytorch`          | Skip PyTorch package builds.                                                                                                                                                                      |
 | `ci:build-jax`             | Opt-in to building JAX packages.                                                                                                                                                                  |
@@ -75,6 +76,22 @@ standard `ci:gfx...` labels.
 > The `ci:test:gfx...` label will only enable tests if test hardware is available
 > for that architecture. If no test runner exists for the family, the label is
 > ignored with a warning.
+
+#### Building frameworks with published ROCm
+
+- Use `ci:skip-rocm` with `ci:build-pytorch` or `ci:build-jax` (or both) to
+  build frameworks using the latest nightly ROCm packages.
+- Use `ci:skip-pytorch` or `ci:skip-jax` to disable a framework that the
+  workflow enables by default.
+
+> [!NOTE]
+> Published-package mode supports only the `release` build variant, until
+> ROCm releases include Python packages for other build variants
+> (see https://github.com/ROCm/TheRock/issues/3161 for example).
+
+See
+[ci_overview.md - "Skipping ROCm builds for Framework-only CI runs"](ci_overview.md#skipping-rocm-builds-for-framework-only-ci-runs)
+for more details.
 
 ### Push
 
