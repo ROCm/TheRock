@@ -89,14 +89,16 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         exits non-zero with no output, because there is no amdgpu driver in the
         guest. Observed on actions/runs/36035911215.
         """
-        with mock.patch.dict(os.environ, {"TEST_PLATFORM": "wsl"}):
+        with mock.patch(
+            "platform.release", return_value="6.6.87.2-microsoft-standard-WSL2"
+        ):
             argv = self._run_main(["--base-only"])
         self.assertIn("wsl-rocdxg_lib", argv)
         # The ordinary base set must still be requested.
         self.assertIn("core-runtime_lib", argv)
 
     def test_base_only_off_wsl_excludes_wsl_rocdxg(self):
-        with mock.patch.dict(os.environ, {"TEST_PLATFORM": "linux"}):
+        with mock.patch("platform.release", return_value="6.8.0-45-generic"):
             argv = self._run_main(["--base-only"])
         self.assertNotIn("wsl-rocdxg_lib", argv)
 

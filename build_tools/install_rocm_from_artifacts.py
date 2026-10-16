@@ -130,7 +130,6 @@ from datetime import datetime
 from fetch_artifacts import main as fetch_artifacts_main
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
 from _therock_utils.s3_buckets import get_release_bucket_config
-import os
 from pathlib import Path
 import platform
 import re
@@ -398,8 +397,9 @@ def retrieve_artifacts_by_run_id(args):
     ]
 
     # WSL has no amdgpu kernel driver: the runtime reaches the GPU (/dev/dxg)
-    # through the WSL libhsakmt that the wsl-rocdxg stage builds.
-    if os.environ.get("TEST_PLATFORM") == "wsl":
+    # through the WSL libhsakmt that the wsl-rocdxg stage builds. The WSL kernel
+    # release ("...-microsoft-standard-WSL2") identifies it, also in containers.
+    if "microsoft" in platform.release().lower():
         base_artifact_patterns.append("wsl-rocdxg_lib")
 
     if args.base_only:

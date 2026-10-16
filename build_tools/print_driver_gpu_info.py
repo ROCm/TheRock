@@ -10,7 +10,7 @@ On Linux:
   - run "rocminfo"
   - report the KFD IOCTL version and warn if outside the range required by rocdbgapi (>= 1.13 and < 2.0)
 
-On Linux inside WSL (TEST_PLATFORM=wsl):
+On Linux inside WSL (kernel release contains "microsoft"):
   - as above, except the KFD IOCTL check: WSL has no amdgpu kernel driver and
     no /dev/kfd. The GPU is /dev/dxg, and amd-smi reports the WDDM driver version.
 
@@ -175,7 +175,9 @@ def run_sanity(os_name: str) -> int:
             extra_command_search_paths=[bin_dir],
         )
 
-        if os.environ.get("TEST_PLATFORM") == "wsl":
+        # WSL kernel releases look like "6.6.87.2-microsoft-standard-WSL2"
+        # (containers share the host kernel).
+        if "microsoft" in platform.release().lower():
             log("\n=== GPU-PV (WSL) ===")
             if not os.path.exists(_DXG_DEVICE):
                 log(

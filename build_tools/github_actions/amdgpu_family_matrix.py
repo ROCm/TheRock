@@ -232,7 +232,7 @@ amdgpu_family_info_matrix dictionary fields:
     Same format as test-runs-on-labels.
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
 - test-runs-on-wsl: (optional, linux only) GitHub runner label for WSL-hosted GPU runners. With the
-    ci:run-wsl label, components listing "wsl" in their platform also run there as "<job> (WSL)".
+    ci:run-wsl label, the Linux build is also tested there, for components listing "wsl" in their platform.
 - family: (required) AMD GPU family name, used for test selection and artifact fetching
 - fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])
 - build_variants: (optional) list of build variants to build for this architecture (e.g. ["release", "asan"])

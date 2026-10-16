@@ -21,9 +21,11 @@ SHARD_INDEX = int(os.getenv("SHARD_INDEX", 1)) - 1
 TOTAL_SHARDS = int(os.getenv("TOTAL_SHARDS", 1))
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 TEST_TYPE = os.getenv("TEST_TYPE", "standard")
-# TEST_PLATFORM is set by the CI job: "linux", "windows", or "wsl" (a Linux job on
-# a WSL-hosted runner, which has its own TEST_TO_IGNORE entries).
-os_type = os.getenv("TEST_PLATFORM") or platform.system().lower()
+os_type = platform.system().lower()
+# WSL (kernel release "...-microsoft-standard-WSL2", also seen in containers)
+# runs the Linux build and has its own TEST_TO_IGNORE entries.
+if os_type == "linux" and "microsoft" in platform.release().lower():
+    os_type = "wsl"
 CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_tests")
 
 # Importing is_asan from amdgpu_family_matrix.py

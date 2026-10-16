@@ -201,8 +201,8 @@ def _get_allowed_test_labels_for_stages(build_stages: list[str]) -> list[str] | 
     return sorted(allowed) if allowed else []
 
 
-# Opt-in label for "<job> (WSL)" test jobs on a family's test-runs-on-wsl runner.
-# Those jobs also need the wsl-rocdxg stage's artifact (the WSL libhsakmt).
+# Opt-in label for testing a family's Linux build on its test-runs-on-wsl runner.
+# Those tests also need the wsl-rocdxg stage's artifact (the WSL libhsakmt).
 WSL_RUN_LABEL = "ci:run-wsl"
 WSL_REQUIRED_STAGE = "wsl-rocdxg"
 
@@ -214,9 +214,9 @@ def _get_wsl_test_runner(
     build_variant: str,
     pr_labels: list[str],
 ) -> str:
-    """Runner for a family's "<job> (WSL)" test jobs, or "" for none.
+    """WSL runner that tests a family's Linux build, or "" for none.
 
-    WSL jobs reuse the Linux artifacts, so they follow the family's Linux GPU test
+    WSL tests reuse the Linux artifacts, so they follow the family's Linux GPU test
     decision (trigger gating, build/test-only labels, ...) and need ci:run-wsl.
     """
     if (
@@ -1618,7 +1618,7 @@ def _expand_build_config_for_platform(
     - amdgpu_family: family name for THEROCK_AMDGPU_FAMILIES
     - amdgpu_targets: comma-separated gfx targets for split artifact fetching
     - test-runs-on: runner label for testing (empty = no test runner available)
-    - test-runs-on-wsl: (optional) runner label for "<job> (WSL)" test jobs
+    - test-runs-on-wsl: (optional) WSL runner that also tests the Linux build
     - sanity_check_only_for_family: whether to limit test scope
 
     Args:

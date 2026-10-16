@@ -780,114 +780,61 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIsInstance(out["container_options"], str)
         self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
 
+    def test_container_options_on_wsl_use_dxg(self):
+        out = fetch_test_configurations._build_container_options({}, "wsl")
+        self.assertIn("--device /dev/dxg", out["container_options"])
+        self.assertNotIn("/dev/kfd", out["container_options"])
+
     # -----------------------
-    # WSL entries ("<job> (WSL)" next to native Linux, when TEST_RUNS_ON_WSL is set)
+    # WSL platform (the Linux build on a WSL-hosted runner, passed as TEST_RUNS_ON)
     # -----------------------
 
     _WSL_RUNNER = "wsl-gfx1101-gpu-rocm"
-    _NATIVE_RUNNER = "linux-gfx110X-gpu-rocm"
 
-    def _use_gfx110x(self):
+    def _run_wsl(self, labels):
+        sys.argv = ["fetch_test_configurations.py", "--platform=wsl"]
         os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
+        os.environ["TEST_RUNS_ON"] = self._WSL_RUNNER
+        os.environ["TEST_LABELS"] = json.dumps(labels)
         fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
-            "gfx110x": {"linux": {"test-runs-on": self._NATIVE_RUNNER}}
+            "gfx110x": {
+                "linux": {
+                    "test-runs-on": "linux-gfx110X-gpu-rocm",
+                    "test-runs-on-labels": [
+                        {"label": "linux-gfx110X-gpu-rocm", "weight": 1}
+                    ],
+                    "test-runs-on-wsl": self._WSL_RUNNER,
+                }
+            }
         }
-
-    def _by_name(self):
+        fetch_test_configurations.run()
         return {job["job_name"]: job for job in self._get_components()}
 
-    def test_wsl_runner_adds_wsl_entry_next_to_native(self):
-        self._use_gfx110x()
-        os.environ["TEST_RUNS_ON_WSL"] = self._WSL_RUNNER
-        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests", "test:rocrtst"])
-
-        fetch_test_configurations.run()
-        jobs = self._by_name()
-
-        self.assertEqual(
-            set(jobs), {"hip-tests", "rocrtst", "hip-tests (WSL)", "rocrtst (WSL)"}
-        )
-        native = jobs["hip-tests"]
-        self.assertEqual(native["test_runner"], self._NATIVE_RUNNER)
-        self.assertEqual(native["test_platform"], "linux")
-        self.assertEqual(native["test_component"], "hip-tests")
-        self.assertIn("/dev/kfd", native["container_options"])
-        self.assertNotIn("expect_failure", native)
-
-        wsl = jobs["hip-tests (WSL)"]
-        self.assertEqual(wsl["test_runner"], self._WSL_RUNNER)
-        self.assertEqual(wsl["test_platform"], "wsl")
-        self.assertEqual(wsl["test_component"], "hip-tests")
-        self.assertTrue(wsl["expect_failure"])
-        self.assertIn("--device /dev/dxg", wsl["container_options"])
-        self.assertNotIn("/dev/kfd", wsl["container_options"])
-        self.assertEqual(wsl["shard_arr"], [1, 2, 3, 4])
-        self.assertEqual(wsl["test_script"], native["test_script"])
-
-    def test_wsl_entries_follow_native_label_filter(self):
-        self._use_gfx110x()
-        os.environ["TEST_RUNS_ON_WSL"] = self._WSL_RUNNER
-        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests"])
-
-        fetch_test_configurations.run()
-
-        self.assertEqual(set(self._by_name()), {"hip-tests", "hip-tests (WSL)"})
-
-    def test_no_wsl_entry_without_wsl_runner(self):
-        self._use_gfx110x()
-        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests", "test:rocrtst"])
-
-        fetch_test_configurations.run()
-        jobs = self._by_name()
+    def test_wsl_selects_components_listing_wsl(self):
+        jobs = self._run_wsl(["test:hip-tests", "test:rocrtst", "test:rocblas"])
 
         self.assertEqual(set(jobs), {"hip-tests", "rocrtst"})
-        self.assertEqual(jobs["rocrtst"]["test_platform"], "linux")
+        self.assertEqual(self.gha_output["platform"], "wsl")
+        self.assertIsNone(json.loads(self.gha_output["sanity_component"]))
 
-    def test_no_wsl_entry_for_component_without_wsl_platform(self):
-        self._use_gfx110x()
-        os.environ["TEST_RUNS_ON_WSL"] = self._WSL_RUNNER
-        os.environ["TEST_LABELS"] = json.dumps(["test:rocblas"])
+        hip = jobs["hip-tests"]
+        self.assertEqual(hip["test_runner"], self._WSL_RUNNER)
+        self.assertTrue(hip["expect_failure"])
+        self.assertIn("--device /dev/dxg", hip["container_options"])
+        self.assertNotIn("/dev/kfd", hip["container_options"])
+        self.assertEqual(hip["shard_arr"], [1, 2, 3, 4])
 
-        fetch_test_configurations.run()
-
-        self.assertEqual(set(self._by_name()), {"rocblas"})
-
-    def test_no_wsl_entry_on_windows(self):
-        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
-        os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
-        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
-            "gfx110x": {"windows": {"test-runs-on": "windows-gfx110X-gpu-rocm"}}
-        }
-        os.environ["TEST_RUNS_ON_WSL"] = self._WSL_RUNNER
-        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests"])
-
-        fetch_test_configurations.run()
-        jobs = self._by_name()
-
-        self.assertFalse(any("(WSL)" in name for name in jobs))
-        self.assertEqual(jobs["hip-tests (PAL)"]["test_platform"], "windows")
-        self.assertEqual(jobs["hip-tests (PAL)"]["test_component"], "hip-tests (PAL)")
-
-    def test_wsl_entry_quick_runs_one_shard(self):
-        self._use_gfx110x()
-        os.environ["TEST_RUNS_ON_WSL"] = self._WSL_RUNNER
+    def test_wsl_quick_runs_one_shard(self):
         os.environ["TEST_TYPE"] = "quick"
-        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests"])
+        hip = self._run_wsl(["test:hip-tests"])["hip-tests"]
 
+        self.assertEqual(hip["shard_arr"], [1])
+        self.assertEqual(hip["test_type"], "quick")
+
+    def test_linux_jobs_are_not_expect_failure(self):
         fetch_test_configurations.run()
-        wsl = self._by_name()["hip-tests (WSL)"]
-
-        self.assertEqual(wsl["total_shards"], 1)
-        self.assertEqual(wsl["shard_arr"], [1])
-        self.assertEqual(wsl["test_type"], "quick")
-
-    def test_every_entry_has_test_component_and_platform(self):
-        """test_component.yml reads both fields directly, with no fallback."""
-        fetch_test_configurations.run()
-        sanity = json.loads(self.gha_output["sanity_component"])
-        for job in self._get_components() + [sanity]:
-            self.assertTrue(job["test_component"], job["job_name"])
-            self.assertEqual(job["test_platform"], "linux", job["job_name"])
+        for job in self._get_components():
+            self.assertNotIn("expect_failure", job, job["job_name"])
 
     # -----------------------
     # ASAN sandbox runner selection

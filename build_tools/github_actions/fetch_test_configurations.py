@@ -100,40 +100,36 @@ _BASE_CONTAINER_OPTIONS = [
     "--ulimit nofile=1048576:1048576",
 ]
 
-# GPU-specific container options (only applied when linux_cpu_runner != True)
-# --security-opt seccomp=unconfined - enables memory mapping and device ioctls needed by ROCm/HPC GPU workloads
-# --group-add video - Grants access to GPU video group
-# --device /dev/kfd - AMD KFD device for GPU compute
-# --device /dev/dri - Direct Rendering Infrastructure devices
-# --group-add 993,992,110 - Additional GPU-related groups
-# --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
-# -e ROCR_VISIBLE_DEVICES - Pass host's GPU isolation env var to container (used on ARC runners)
-_GPU_CONTAINER_OPTIONS = [
-    "--security-opt seccomp=unconfined",
-    "--group-add video",
-    "--device /dev/kfd",
-    "--device /dev/dri",
-    "--group-add 993",
-    "--group-add 992",
-    "--group-add 110",
-    "--env-file /etc/podinfo/gha-gpu-isolation-settings",
-    "-e ROCR_VISIBLE_DEVICES",
-    "-e KUBE_CPU_REQUEST",
-]
-
-# GPU container options for WSL entries. WSL exposes the GPU only as /dev/dxg
-# (no /dev/kfd or /dev/dri, so the options above would fail container creation),
-# with its driver libraries in /usr/lib/wsl on the host.
-_WSL_GPU_CONTAINER_OPTIONS = [
-    "--device /dev/dxg",
-    "-v /usr/lib/wsl:/usr/lib/wsl",
-    "-e LD_LIBRARY_PATH=/usr/lib/wsl/lib",
-]
-
-# WSL is a runner for the Linux tests: when the workflow passes a WSL runner
-# (TEST_RUNS_ON_WSL, chosen by configure_multi_arch_ci.py for ci:run-wsl), each
-# component that lists "wsl" in its "platform" also gets a "<job_name> (WSL)" entry.
-WSL_TEST_PLATFORM = "wsl"
+# GPU-specific container options per platform (only applied when linux_cpu_runner != True)
+# linux:
+#   --security-opt seccomp=unconfined - enables memory mapping and device ioctls needed by ROCm/HPC GPU workloads
+#   --group-add video - Grants access to GPU video group
+#   --device /dev/kfd - AMD KFD device for GPU compute
+#   --device /dev/dri - Direct Rendering Infrastructure devices
+#   --group-add 993,992,110 - Additional GPU-related groups
+#   --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
+#   -e ROCR_VISIBLE_DEVICES - Pass host's GPU isolation env var to container (used on ARC runners)
+# wsl: the GPU is only /dev/dxg (no /dev/kfd or /dev/dri), with its driver
+#   libraries in /usr/lib/wsl on the host.
+_GPU_CONTAINER_OPTIONS = {
+    "linux": [
+        "--security-opt seccomp=unconfined",
+        "--group-add video",
+        "--device /dev/kfd",
+        "--device /dev/dri",
+        "--group-add 993",
+        "--group-add 992",
+        "--group-add 110",
+        "--env-file /etc/podinfo/gha-gpu-isolation-settings",
+        "-e ROCR_VISIBLE_DEVICES",
+        "-e KUBE_CPU_REQUEST",
+    ],
+    "wsl": [
+        "--device /dev/dxg",
+        "-v /usr/lib/wsl:/usr/lib/wsl",
+        "-e LD_LIBRARY_PATH=/usr/lib/wsl/lib",
+    ],
+}
 
 
 def _build_container_options(job_config: dict, platform: str) -> dict:
@@ -142,16 +138,17 @@ def _build_container_options(job_config: dict, platform: str) -> dict:
 
     Args:
         job_config: The job configuration dictionary
-        platform: The platform (e.g., "linux", "windows")
+        platform: The platform (e.g., "linux", "windows", "wsl")
 
     Returns:
         The modified job_config with updated container_options
     """
-    # Containers are Linux-only (test_component.yml gates container.image on
-    # platform == 'linux'). On other platforms, collapse container_options to an
-    # empty string so `options: ${{ fromJSON(...).container_options }}` doesn't
-    # evaluate to a YAML sequence and fail template parsing.
-    if platform != "linux":
+    # Containers are Linux-only, including WSL (test_component.yml gates
+    # container.image on platform != 'windows'). On Windows, collapse
+    # container_options to an empty string so
+    # `options: ${{ fromJSON(...).container_options }}` doesn't evaluate to a
+    # YAML sequence and fail template parsing.
+    if platform not in _GPU_CONTAINER_OPTIONS:
         job_config["container_options"] = ""
         return job_config
 
@@ -160,10 +157,7 @@ def _build_container_options(job_config: dict, platform: str) -> dict:
 
     # Add GPU-specific options unless this is a CPU-only runner
     if not job_config.get("linux_cpu_runner", False):
-        if job_config.get("test_platform") == WSL_TEST_PLATFORM:
-            options_parts.extend(_WSL_GPU_CONTAINER_OPTIONS)
-        else:
-            options_parts.extend(_GPU_CONTAINER_OPTIONS)
+        options_parts.extend(_GPU_CONTAINER_OPTIONS[platform])
 
     # Add any job-specific container options
     if "container_options" in job_config:
@@ -193,34 +187,6 @@ def _family_matches(
 _common_settings = {
     "additional_requirements_files": [],
 }
-
-
-def _make_wsl_entry(base: dict, test_type: str, wsl_runner: str) -> dict:
-    """Build the "<job_name> (WSL)" entry for a component that lists "wsl".
-
-    Same test script and Linux shard count as the native entry, pinned to the
-    family's test-runs-on-wsl runner. It is expect_failure (non-blocking) until
-    WSL results are stable. job_name only changes what is displayed; the scripts
-    key on test_component (TEST_COMPONENT), which stays the native name.
-    """
-    total_shards = (
-        1 if test_type == "quick" else base.get("total_shards_dict", {}).get("linux", 1)
-    )
-    entry = {**_common_settings, **base}
-    entry.update(
-        {
-            "job_name": f"{base['job_name']} (WSL)",
-            "test_component": base["job_name"],
-            "test_runner": wsl_runner,
-            "test_platform": WSL_TEST_PLATFORM,
-            "expect_failure": True,
-            "test_type": test_type,
-            "total_shards": total_shards,
-            "shard_arr": list(range(1, total_shards + 1)),
-        }
-    )
-    return entry
-
 
 # Common settings for rocgdb jobs
 _rocgdb_common = {
@@ -307,11 +273,12 @@ test_matrix = {
         "fetch_artifact_args": "--hip-tests --tests",
         "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_hiptests.py')}",
-        # "wsl": also runs on the WSL runner under ci:run-wsl (Linux artifacts).
+        # "wsl": the Linux build on a WSL-hosted runner (ci:run-wsl).
         "platform": ["linux", "windows", "wsl"],
         "total_shards_dict": {
             "linux": 4,
             "windows": 4,
+            "wsl": 4,
         },
     },
     # hipFile (storage-libs) unit tests. CPU-only (mocked), so they run quickly
@@ -1256,6 +1223,7 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+            "wsl": 1,
         },
     },
     # hipTensor tests
@@ -1303,7 +1271,10 @@ def run():
         "--platform",
         type=str,
         default=platform_module.system().lower(),
-        help="Platform to configure tests for (linux or windows)",
+        help=(
+            "Platform to configure tests for: linux, windows, or wsl (the Linux"
+            " build on a WSL-hosted runner, passed as TEST_RUNS_ON)"
+        ),
     )
     args, _ = parser.parse_known_args()
     platform = args.platform
@@ -1327,8 +1298,6 @@ def run():
     test_runs_on_multi_gpu_default = None
     # For ASAN builds, use the sandbox runner if available
     test_runs_on_sandbox = None
-    # WSL-hosted GPU runner for "<job> (WSL)" entries (empty = none)
-    test_runs_on_wsl = os.getenv("TEST_RUNS_ON_WSL", "") if platform == "linux" else ""
 
     # Check if GPU runner was passed from configure_multi_arch_ci.py via workflow.
     # This carries the policy decision (e.g., trigger gating). When set to empty,
@@ -1348,6 +1317,7 @@ def run():
             ["presubmit", "postsubmit", "nightly"]
         )
         if shortened_family in all_families:
+            # wsl has no entry of its own here; its runner is TEST_RUNS_ON.
             platform_info = all_families[shortened_family].get(platform, {})
             # Use policy-gated value from workflow if available, otherwise use static matrix
             if gpu_tests_gated:
@@ -1378,6 +1348,7 @@ def run():
                     "test-runs-on-multi-gpu", ""
                 )
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
+
             # Enforce test_type_for_family if set in the family matrix.
             # This is a strict override - families with limited hardware (e.g., MI455)
             # should always run quick tests regardless of what's passed in TEST_TYPE.
@@ -1477,14 +1448,6 @@ def run():
         ):
             logging.info(f"Requesting job {job_name} with test_type {test_type}")
 
-            if test_runs_on_wsl and WSL_TEST_PLATFORM in test_matrix[key]["platform"]:
-                all_components.append(
-                    _make_wsl_entry(test_matrix[key], test_type, test_runs_on_wsl)
-                )
-                logging.info(
-                    f"Including job {job_name} (WSL) on runner: {test_runs_on_wsl}"
-                )
-
             # Hip-tests on Windows run with both PAL and ROCR backends.
             # See: https://github.com/ROCm/TheRock/issues/3587
             if key == "hip-tests" and platform == "windows":
@@ -1526,6 +1489,9 @@ def run():
 
             job_config_data = {**_common_settings, **test_matrix[key]}
             job_config_data["test_type"] = test_type
+            # WSL jobs are non-blocking until their results are stable.
+            if platform == "wsl":
+                job_config_data["expect_failure"] = True
 
             # tensilelite: append the tensilelite/tests C++ gtest suite (run via
             # ctest -L <test_type>, driven by the shared test_runner.py) after
@@ -1659,11 +1625,6 @@ def run():
     all_components = [
         _build_container_options(c, platform) for c in components_with_runners
     ]
-    # test_component.yml passes these to the test scripts as TEST_COMPONENT and
-    # TEST_PLATFORM. Only "<job_name> (WSL)" entries set them differently.
-    for c in all_components:
-        c.setdefault("test_component", c["job_name"])
-        c.setdefault("test_platform", platform)
 
     # Separate sanity from the regular component matrix.
     sanity_component = next(
