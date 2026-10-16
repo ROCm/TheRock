@@ -18,3 +18,5 @@ absl-py==2.3.1
 flatbuffers==25.9.23
 hypothesis==6.148.2
 ml_dtypes==0.5.4
+# jax needs it, and whl-next, where tip installs jax from, does not route it.
+opt_einsum==3.4.0
