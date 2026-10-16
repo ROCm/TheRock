@@ -1,19 +1,20 @@
 ---
 name: rocm-pr-quality
 description: Help an engineer author, review, or pre-merge-gate a pull request to a ROCm library so it is traceable, tested, and safe to merge. Use when preparing a PR, reviewing a PR, or deciding whether an approved PR is safe to merge right now, or when the user provides a GitHub PR URL or branch and asks for help with PR quality, description, testing, review, or merge-readiness. Library-agnostic base; component overlays extend it.
-argument-hint: '[author | review | pre-merge] [PR URL | branch:<name> | local] [base:<branch>]'
+argument-hint: '[author | review | pre-merge | check-attestation] [PR URL | branch:<name> | local] [base:<branch>]'
 allowed-tools: Bash, Read, Grep, Glob, Task, WebFetch
 ---
 
 # ROCm PR Quality (base)
 
-This is the library-agnostic base skill for PR quality across ROCm. It exposes three
+This is the library-agnostic base skill for PR quality across ROCm. It exposes four
 actions the user invokes with a single sentence; the skill does the legwork through the
 tools already on the desk (`gh`, the repo, and Jira/GitHub MCPs when available).
 
 - **Author assist** — "help me write a PR worth reviewing."
 - **Review assist** — "help me review this PR well."
 - **Pre-merge gate** — "is it actually safe to press merge right now?"
+- **Check attestation** — "has this PR been reviewed by the skill?"
 
 Pick the action from the user's request. If it is ambiguous, ask which one they want.
 
@@ -67,7 +68,7 @@ on top.
 
 ______________________________________________________________________
 
-## Shared concepts (used by all three actions)
+## Shared concepts (used by all four actions)
 
 ### Change classification (extensible; multiple tags allowed)
 
@@ -144,6 +145,25 @@ reverse edges (GitHub back-references; Jira dev-panel auto-linking when the issu
 branch/PR title). M5 makes the core links mandatory; broader context (design docs, loosely
 related PRs) is a SHOULD.
 
+### Review attestation (approvals only)
+
+When Action 2 concludes `APPROVED`, append the machine-checkable attestation block (see
+`reference.md`) to the drafted approval comment. Never attach it to `CHANGES REQUESTED` / `REJECTED`,
+and never to a PR description. It is part of the text the human posts; the skill still never posts
+on its own (operating principle 2). Take the `Attestation` digest from `tools/pr_quality_check.py`
+output; never compute or type it by hand. Explain the block in plain language when you add it: what
+it is, that it is tied to this PR (not to a commit, so later pushes are fine), and that a pre-review
+gate can key on it. If an approval was already posted without a block, hand the user the one-line
+paste form instead of the full block.
+
+**Never for your own PR.** An attestation records an independent review, so the skill does not
+produce one for a PR the user authored. That covers Action 1 (never add one to the PR description or
+a comment on the user's own PR) and Action 2 when the user reviews their own PR. A self-review is
+still useful feedback; end it without the block and say why. Decide by comparing the PR's author
+(`gh pr view <pr> --json author -q .author.login`) with the user (`gh api user -q .login`). A person
+with more than one GitHub account is still the same person, so if the logins differ but the user
+says the PR is theirs, treat it as theirs; if you cannot tell, ask.
+
 ______________________________________________________________________
 
 ## Action 1 — Author assist
@@ -179,7 +199,9 @@ not render empty `N/A` fields in the body.
 
 **Output:** a suggested PR title + body (Markdown), a per-step checklist (pass / warn / fail),
 CI labels to consider, and open questions for the author — all before the push. Do not create
-or edit the PR on GitHub unless the user explicitly approves the exact text.
+or edit the PR on GitHub unless the user explicitly approves the exact text. Never include a
+review attestation in the description or a comment on the author's own PR (see "Review
+attestation").
 
 ______________________________________________________________________
 
@@ -238,7 +260,13 @@ and add cross-cutting testing/reuse passes; otherwise do a single-pass review.
 
 **Output:** the overall assessment + the four answers + a severity-ordered findings list + a
 `BLOCKING`-items list. Only on request, and only after the user approves the wording, produce a
-draft request-changes comment. Never post it yourself.
+draft request-changes comment. Never post it yourself. When the assessment is `APPROVED` and the
+PR is not the user's own, also produce the attestation block (see "Review attestation"). If the
+user is reviewing their own PR, give the review but no block, and say that the skill does not
+attest to a person's own PRs. Drafting the approval comment itself is on request, like the
+request-changes comment above; when you draft it, include the block as its trailer, otherwise hand
+the block to the user directly. Briefly explain it; if the user already approved without it, give
+them the one-line paste form. Never post either yourself.
 
 ______________________________________________________________________
 
@@ -280,6 +308,31 @@ the human.
 
 ______________________________________________________________________
 
+## Action 4 — Check attestation
+
+Read-only. Answers "has this PR been reviewed by the skill?" by looking for a review
+attestation (see "Review attestation") in the PR's conversation comments and review bodies.
+It never posts anything. Run it before relying on a claimed skill review, or from the pre-merge
+gate (Action 3) as one more input.
+
+Run `tools/pr_quality_check.py --pr <number|url> --check-attestation` (add `--json` for
+machine-readable output). The exit status is the answer: `0` verified, `4` no attestation found,
+`5` an attestation is present but invalid. A block is **valid** when it records an `APPROVED`
+result and its digest matches this PR's own digest (see `reference.md`). A block copied from
+another PR, a template with a placeholder digest, or a non-approval block is reported as invalid,
+with the reason.
+
+**Report it plainly:** the status, who posted the block (author and their association with the
+repo), when, and the reviewed commit with how many commits were pushed since. Later commits are
+allowed and are not a failure; mention them so a human can judge how much changed after the
+review. Flag a block that was posted by the PR's own author: the skill does not attest to a
+person's own PRs, so treat it as unreliable and say so. State the limit when it matters: the
+digest is a checksum, not a secret, so it shows the block was generated for this PR, not who ran
+the skill or that a review really happened. A verified attestation does not replace a human
+approval.
+
+______________________________________________________________________
+
 ## Operational notes
 
 - Use `gh` for PR data, diffs, files, and CI status. Use the Jira/GitHub MCPs to look up and
@@ -288,4 +341,5 @@ ______________________________________________________________________
 - The optional shared checker `tools/pr_quality_check.py` performs the deterministic subset of
   the MUST checks (description sections, work-tracking presence, link resolution, test-file-touched
   heuristic, CI currency, adjacent-file overlap). It is advisory; semantic judgments (test
-  substance, M3) stay with the agent and the human.
+  substance, M3) stay with the agent and the human. It also generates and verifies the review
+  attestation digest (`--check-attestation`, Action 4).

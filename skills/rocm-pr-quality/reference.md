@@ -286,3 +286,66 @@ When a defect is known but the fix is not ready, M1 may be met by a tracked two-
 
 The quarantine must be tracked, time-boxed, and removed by the fix — not left in place. Overlays
 define the concrete mechanism (e.g. a `known_bugs` data file).
+
+______________________________________________________________________
+
+## Review attestation (Action 2, approvals only)
+
+When a review concludes `APPROVED`, the skill appends this block to the drafted approval comment
+(never to `CHANGES REQUESTED` / `REJECTED`, and never to a PR description). The human posts it; the
+skill never posts on its own. The `<!-- rocm-pr-quality:attestation v1 -->` marker is what a
+consumer (e.g. a pre-review gate) keys on, and the `Attestation` digest ties the block to this
+specific PR so a pasted template or a block copied from another PR can be detected. The digest is
+deliberately loose: commits pushed after the review are allowed and do not invalidate it.
+
+An attestation records an independent review, so the skill never produces one for the user's own PR,
+whether they are authoring it or reviewing it themselves. A self-review still gives feedback, just
+without the block. Compare the PR's author with the user's GitHub login; one person with several
+accounts counts as one author, and if you cannot tell, ask.
+
+Block (leaned-into default):
+
+```markdown
+<!-- rocm-pr-quality:attestation v1 -->
+> **Reviewed with the ROCm PR-quality skill.**
+> - Skill: `rocm-pr-quality` (base) - overlays: `<applied overlays, or "none">`
+> - Action: `review` - Result: **APPROVED** (`<n>` BLOCKING; `<n>` IMPORTANT)
+> - Risk: `<1-5>`
+> - Reviewed commit: `<full 40-char head SHA>`
+> - Attestation: `<8-hex digest>`
+>
+> <sub>Machine-checkable attestation. The digest ties this review to this PR; later commits are
+> allowed. The reviewed commit is informational (what the review looked at).</sub>
+```
+
+**Digest.** The first 8 hex characters of the sha256 of the UTF-8 string `<owner>/<repo>#<number>`,
+lowercased, with no trailing newline (for example, `rocm/therock#6653`). The repo is part of the
+input because PR numbers collide across repositories. Do not compute it by hand: take it from the
+`Attestation digest` line (or the `attestation` JSON field) printed by
+`tools/pr_quality_check.py`. If that tool is unavailable, this works in any shell (including
+PowerShell):
+
+```text
+python -c "import hashlib,sys; print(hashlib.sha256(sys.argv[1].lower().encode()).hexdigest()[:8])" "<owner>/<repo>#<number>"
+```
+
+A consumer recomputes the digest from the repo and number of the PR the comment is posted on; a
+mismatch means the block was not generated for this PR. The reviewed commit is not compared to the
+PR's current head. This is a checksum, not a secret: it stops pasted templates and cross-PR copies,
+not a deliberate forgery.
+
+**Checking an attestation (Action 4).** `tools/pr_quality_check.py --pr <number|url> --check-attestation` scans the PR's conversation comments and review bodies for the marker and
+applies the rule above to each block it finds. A block is valid when it records an `APPROVED`
+result and its digest equals the PR's own digest. Overall status is `VERIFIED` if any block is
+valid, `INVALID` if blocks exist but none is valid (copied from another PR, placeholder digest,
+non-approval result), and `NONE` if there is no block. Exit codes are `0`, `5`, and `4`
+respectively. The report also lists each block's author, association, and time, and how many
+commits were pushed after the reviewed commit (informational only).
+
+The full head SHA is `gh pr view --json headRefOid -q .headRefOid` (or `git rev-parse HEAD`).
+
+One-line paste fallback (same marker, for when an approval was already posted without a block):
+
+```text
+<!-- rocm-pr-quality:attestation v1 --> rocm-pr-quality review APPROVED - commit <full-sha> - attestation <8-hex digest>
+```
