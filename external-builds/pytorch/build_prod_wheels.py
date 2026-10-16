@@ -1534,6 +1534,18 @@ def do_build_apex(args: argparse.Namespace, apex_dir: Path, env: dict[str, str])
     env["BUILD_VERSION"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
 
+    if args.asan:
+        setup_pytorch_asan.enable_apex_asan(apex_dir)
+        # setup.py imports torch. The preload is removed again inside setup.py
+        # before hipcc and ninja are spawned.
+        runtime = env.get("ASAN_RUNTIME_PATH", "")
+        if not runtime:
+            raise RuntimeError(
+                "--asan apex build requires ASAN_RUNTIME_PATH from "
+                "apply_asan_build_env"
+            )
+        env["LD_PRELOAD"] = runtime
+
     remove_dir_if_exists(apex_dir / "dist")
     if args.clean:
         remove_dir_if_exists(apex_dir / "build")
@@ -1554,6 +1566,27 @@ def do_build_apex(args: argparse.Namespace, apex_dir: Path, env: dict[str, str])
     built_wheel = find_built_wheel(apex_dir / "dist", "apex")
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
+
+    if args.asan:
+        print("+++ Installing built apex:")
+        run_command(
+            [sys.executable, "-m", "pip", "install", built_wheel],
+            cwd=tempfile.gettempdir(),
+        )
+        print("+++ Sanity checking installed apex:")
+        sanity_env = setup_pytorch_asan.import_sanity_env(env)
+        sanity_check_output = capture(
+            [
+                sys.executable,
+                "-c",
+                "import apex; from apex.git_version_info_installed import version; print(version)",
+            ],
+            cwd=tempfile.gettempdir(),
+            env=sanity_env,
+        )
+        if not sanity_check_output:
+            raise RuntimeError("apex package sanity check failed (see output above)")
+        print(f"Sanity check output:\n{sanity_check_output}")
 
 
 def main(argv: list[str]):
@@ -1686,9 +1719,9 @@ def main(argv: list[str]):
         "--asan",
         action="store_true",
         default=False,
-        help="Build with AddressSanitizer. Triton and apex are not built. "
-        "Torchaudio and torchvision are built only when their --build-* flags "
-        "are set.",
+        help="Build with AddressSanitizer. Triton is not built. "
+        "Torchaudio, torchvision, and apex are built only when their "
+        "--build-* flags are set.",
     )
     build_p.add_argument(
         "--pytorch-rocm-arch",
