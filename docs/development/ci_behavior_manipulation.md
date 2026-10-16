@@ -91,9 +91,16 @@ Explicit labels override automatic selection:
   workflow enables by default.
 
 > [!NOTE]
-> Published-package mode supports only the `release` build variant, until
-> ROCm releases include Python packages for other build variants
-> (see https://github.com/ROCm/TheRock/issues/3161 for example).
+> Automatic use of published packages is disabled by:
+>
+> - Build variants other than `release`, until ROCm releases include Python
+>   packages for other build variants (see
+>   https://github.com/ROCm/TheRock/issues/3161 for example).
+> - `ci:build-python-packages` or `ci:build-native-linux` labels, which request
+>   ROCm packaging jobs.
+> - Nonempty `build_stages`, `prebuilt_stages`, or `baseline_run_id` inputs,
+>   which request specific stage builds or artifact reuse.
+> - An `external_repo` input, whose changes are treated as ROCm changes.
 
 See
 [ci_overview.md - "Skipping ROCm builds for Framework-only CI runs"](ci_overview.md#skipping-rocm-builds-for-framework-only-ci-runs)
