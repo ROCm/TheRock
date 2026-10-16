@@ -2225,6 +2225,51 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
 
+    def _host_asan_entry(self, event_name, repository="ROCm/rocm-systems", **kwargs):
+        """Resolves one family entry for a host-asan build.
+
+        #8978 reserves the sandbox pools for ROCm/rocm-systems pull requests and
+        reads the repository and event from the environment, so these have to be
+        set to see a runner at all. They default to the case this PR enables.
+        """
+        env = {"GITHUB_REPOSITORY": repository, "GITHUB_EVENT_NAME": event_name}
+        with patch.dict(os.environ, env, clear=False):
+            result = cm.expand_build_configs(
+                ci_inputs=self._inputs(
+                    build_variant="host-asan", event_name=event_name, **kwargs
+                ),
+                git_context=cm.GitContext(),
+                targets=cm.TargetSelection(linux_families=["gfx94x"]),
+                jobs=_jobs(),
+            )
+        return result.linux.per_family_info[0]
+
+    def test_host_asan_presubmit_runs_without_any_label(self):
+        """https://github.com/ROCm/TheRock/issues/7202 requires an unlabelled
+        PR to get a sandbox runner."""
+        entry = self._host_asan_entry(event_name="pull_request", pr_labels=[])
+        self.assertIn("sandbox", entry["test-runs-on"])
+
+    def test_host_asan_postsubmit_stays_off(self):
+        """Unchanged from before this variant declared its triggers."""
+        entry = self._host_asan_entry(event_name="push")
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_host_asan_presubmit_is_scoped_to_rocm_systems(self):
+        """#8978 reserves the pools, so TheRock's own labelled PRs build
+        host-asan but still get no runner."""
+        entry = self._host_asan_entry(
+            event_name="pull_request", repository="ROCm/TheRock", pr_labels=[]
+        )
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_host_asan_workflow_dispatch_has_no_runner(self):
+        """The trigger policy allows workflow_dispatch, but #8978 clears the
+        sandbox fields for every trigger other than a rocm-systems pull
+        request, so there is nothing to schedule onto."""
+        entry = self._host_asan_entry(event_name="workflow_dispatch")
+        self.assertEqual(entry["test-runs-on"], "")
+
     def test_explicit_strict_linux_dev_build(self):
         """Explicit selection creates a build config without GPU tests."""
         result = cm.expand_build_configs(
