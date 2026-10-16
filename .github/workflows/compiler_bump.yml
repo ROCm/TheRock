@@ -735,20 +735,12 @@ jobs:
     permissions:
       actions: write # Dispatch downstream workflows.
     name: Trigger RCCL Tests (gfx950-dcgpu)
-    needs: [create-branch, setup-linux, build-linux]
+    needs: [create-branch, build-linux]
     if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' && ((inputs.linux_amdgpu_families || 'all') == 'all' || contains(inputs.linux_amdgpu_families, 'gfx950-dcgpu')) }}
     runs-on: ubuntu-24.04
     outputs:
       test_run_url: ${{ steps.trigger-tests.outputs.runUrlHtml }}
     steps:
-      - name: Get gfx950-dcgpu family info
-        id: family-info
-        env:
-          BUILD_CONFIG: ${{ needs.setup-linux.outputs.linux_build_config }}
-        run: |
-          FAMILY_INFO=$(echo "$BUILD_CONFIG" | jq -r '.per_family_info[] | select(.amdgpu_family == "gfx950-dcgpu")')
-          echo "amdgpu_targets=$(echo "$FAMILY_INFO" | jq -r '.amdgpu_targets // ""')" >> "$GITHUB_OUTPUT"
-
       # RCCL needs a multi-GPU host, so this runs separately from the regular
       # gfx950 test job and targets the Slurm scale runner pool.
       - name: Trigger test_artifacts for rccl on gfx950-dcgpu
@@ -761,7 +753,6 @@ jobs:
               "artifact_group": "gfx950-dcgpu",
               "artifact_run_id": "${{ github.run_id }}",
               "amdgpu_families": "gfx950-dcgpu",
-              "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
               "test_runs_on": "ruby-linux-slurm-scale-runner",
               "test_labels": "test:rccl",
               "test_type": "standard",
@@ -783,20 +774,12 @@ jobs:
     permissions:
       actions: write # Dispatch downstream workflows.
     name: Trigger RCCL Tests (gfx94X-dcgpu)
-    needs: [create-branch, setup-linux, build-linux]
+    needs: [create-branch, build-linux]
     if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' && ((inputs.linux_amdgpu_families || 'all') == 'all' || contains(inputs.linux_amdgpu_families, 'gfx94X-dcgpu')) }}
     runs-on: ubuntu-24.04
     outputs:
       test_run_url: ${{ steps.trigger-tests.outputs.runUrlHtml }}
     steps:
-      - name: Get gfx94X-dcgpu family info
-        id: family-info
-        env:
-          BUILD_CONFIG: ${{ needs.setup-linux.outputs.linux_build_config }}
-        run: |
-          FAMILY_INFO=$(echo "$BUILD_CONFIG" | jq -r '.per_family_info[] | select(.amdgpu_family == "gfx94X-dcgpu")')
-          echo "amdgpu_targets=$(echo "$FAMILY_INFO" | jq -r '.amdgpu_targets // ""')" >> "$GITHUB_OUTPUT"
-
       # RCCL needs a multi-GPU host, so this runs separately from the regular
       # gfx94X test job and targets the Slurm scale runner pool.
       - name: Trigger test_artifacts for rccl on gfx94X-dcgpu
@@ -809,7 +792,6 @@ jobs:
               "artifact_group": "gfx94X-dcgpu",
               "artifact_run_id": "${{ github.run_id }}",
               "amdgpu_families": "gfx94X-dcgpu",
-              "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
               "test_runs_on": "oci-linux-slurm-scale-runner",
               "test_labels": "test:rccl",
               "test_type": "standard",
