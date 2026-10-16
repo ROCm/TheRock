@@ -56,10 +56,10 @@ import shutil
 import sys
 import tempfile
 import threading
-import weakref
-from contextlib import nullcontext
 import traceback
 import uuid
+import weakref
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -299,14 +299,29 @@ _cache_locks_guard = threading.Lock()
 _cache_locks = weakref.WeakValueDictionary()
 
 
-def _cache_lock(cache_dir: Path | None, md5: str):
+def _prepare_cache_dir(
+    cache_dir: Path | None, log: Callable[[str], None]
+) -> Path | None:
     if cache_dir is None:
-        return nullcontext()
+        return None
     # Resolve the stable directory, never the entry being published/evicted.
     # Windows can resolve an open deleted entry to an NTFS $Deleted path or
     # preserve a different extended-path prefix during concurrent operations.
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    key = (os.path.normcase(str(cache_dir.resolve())), md5)
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        return cache_dir.resolve()
+    except OSError as e:
+        log(
+            f"  warn      cannot use cache directory {cache_dir}: {e}; caching disabled"
+        )
+        return None
+
+
+def _cache_lock(cache_dir: Path | None, md5: str):
+    """Lock a content hash in a directory canonicalized by _prepare_cache_dir."""
+    if cache_dir is None:
+        return nullcontext()
+    key = (os.path.normcase(str(cache_dir)), md5)
     with _cache_locks_guard:
         lock = _cache_locks.get(key)
         if lock is None:
@@ -371,11 +386,15 @@ def _store_in_cache(src: Path, cache_file: Path) -> None:
             # The staging copy is now on the cache filesystem. Prefer linking
             # it into place even when src lives on a different volume.
             os.link(tmp, cache_file)
-        except (FileExistsError, PermissionError):
+        except FileExistsError:
             if winner_matches():
                 return
             raise
         except OSError:
+            if cache_file.exists():
+                if winner_matches():
+                    return
+                raise
             # Retain support for filesystems without hardlinks. In-process
             # readers/publishers are serialized by _cache_lock in this path.
             try:
@@ -393,6 +412,16 @@ def _store_in_cache(src: Path, cache_file: Path) -> None:
                 tmp.unlink()
             except OSError:
                 pass
+
+
+def _try_store_in_cache(
+    src: Path, cache_file: Path, log: Callable[[str], None]
+) -> None:
+    """Cache verified content without making publication a fetch requirement."""
+    try:
+        _store_in_cache(src, cache_file)
+    except OSError as e:
+        log(f"  warn      cannot store cache entry {cache_file}: {e}")
 
 
 # --------------------------------------------------------------------------
@@ -478,19 +507,24 @@ def _materialize_file(
         # Fast path 2: content-addressed cache hit.
         if cache_dir is not None:
             cache_file = _cache_path(cache_dir, md5)
-            if cache_file.exists():
-                if size is None or cache_file.stat().st_size == size:
-                    if _md5_of(cache_file) == md5:
-                        _materialize_from_cache(cache_file, dest)
-                        log(f"  cached    {label}")
-                        return PullResult(cached=1)
-                log(f"  warn      cache entry corrupt for {md5[:8]}..., discarding")
-                cache_file.unlink()
+            try:
+                if cache_file.exists():
+                    if size is None or cache_file.stat().st_size == size:
+                        if _md5_of(cache_file) == md5:
+                            _materialize_from_cache(cache_file, dest)
+                            log(f"  cached    {label}")
+                            return PullResult(cached=1)
+                    log(f"  warn      cache entry corrupt for {md5[:8]}..., discarding")
+                    cache_file.unlink()
+            except OSError as e:
+                log(
+                    f"  warn      cannot use cache entry {cache_file}: {e}; downloading"
+                )
 
         log(f"  fetching  {label}")
         _download_blob(s3, remote, md5, dest, expected_size=size)
         if cache_dir is not None:
-            _store_in_cache(dest, _cache_path(cache_dir, md5))
+            _try_store_in_cache(dest, _cache_path(cache_dir, md5), log)
         return PullResult(fetched=1)
 
 
@@ -510,23 +544,40 @@ def _materialize_dir(
         # Try cache for the manifest first.
         manifest_bytes: bytes | None = None
         cache_file = _cache_path(cache_dir, out.md5) if cache_dir is not None else None
-        if cache_file is not None and cache_file.exists():
-            if _md5_of(cache_file) == out.bare_md5:
-                manifest_bytes = cache_file.read_bytes()
+        if cache_file is not None:
+            try:
+                if cache_file.exists():
+                    candidate = cache_file.read_bytes()
+                    # Verify the bytes we parse, even if an independent process
+                    # replaces the cache entry while we read it.
+                    if (
+                        hashlib.md5(candidate, usedforsecurity=False).hexdigest()
+                        == out.bare_md5
+                    ):
+                        manifest_bytes = candidate
+                    else:
+                        log(
+                            f"  warn      cache entry corrupt for {out.md5[:8]}..., discarding"
+                        )
+                        cache_file.unlink()
+            except OSError as e:
+                log(
+                    f"  warn      cannot use cache entry {cache_file}: {e}; downloading"
+                )
 
         if manifest_bytes is None:
-            # Download manifest. If we have a cache, write it there directly (it's
-            # an immutable content-addressed blob). Otherwise, use a tempfile.
-            if cache_file is not None:
-                _download_blob(s3, remote, out.md5, cache_file, expected_size=None)
-                manifest_bytes = cache_file.read_bytes()
-            else:
-                with tempfile.TemporaryDirectory(prefix="therock-dvc-") as tmp_dir:
-                    manifest_path = Path(tmp_dir) / "manifest"
-                    _download_blob(
-                        s3, remote, out.md5, manifest_path, expected_size=None
-                    )
-                    manifest_bytes = manifest_path.read_bytes()
+            # Keep a private verified copy so cache publication failures cannot
+            # prevent us from reading the manifest and fetching its children.
+            # An external Windows reader may hold the published hardlink open
+            # during cleanup of our temporary name. Cleanup is best-effort too.
+            with tempfile.TemporaryDirectory(
+                prefix="therock-dvc-", ignore_cleanup_errors=True
+            ) as tmp_dir:
+                manifest_path = Path(tmp_dir) / "manifest"
+                _download_blob(s3, remote, out.md5, manifest_path, expected_size=None)
+                manifest_bytes = manifest_path.read_bytes()
+                if cache_file is not None:
+                    _try_store_in_cache(manifest_path, cache_file, log)
 
     try:
         entries = json.loads(manifest_bytes)
@@ -625,6 +676,7 @@ def pull(
     """Materialize every .dvc-tracked file under project_dir from its S3 remote.
 
     Raises FetchError if .dvc/config is missing or any download fails.
+    Cache I/O failures are logged and fall back to verified remote downloads.
     """
     project_dir = Path(project_dir).resolve()
     config_file = project_dir / ".dvc" / "config"
@@ -636,6 +688,8 @@ def pull(
     if not pointers:
         log(f"no .dvc pointer files found under {project_dir}")
         return PullResult()
+
+    cache_dir = _prepare_cache_dir(cache_dir, log)
 
     # One S3 client per configured remote, built up front (before any worker
     # starts) so the dict is read-only during the parallel phase - no locking
@@ -672,9 +726,10 @@ def pull(
     if errors:
         for pointer, err in errors:
             log(f"  ERROR     {pointer}: {err}")
-            # Preserve the worker stack: a cache-path PermissionError alone
-            # does not distinguish hashing, eviction, copying, or publication.
-            log("".join(traceback.format_exception(err)).rstrip())
+            # Expected validation failures have an actionable message already.
+            # Unexpected exceptions need the worker stack to identify the operation.
+            if not isinstance(err, FetchError):
+                log("".join(traceback.format_exception(err)).rstrip())
         raise FetchError(f"{len(errors)} file(s) failed to fetch (see log above)")
 
     return result
