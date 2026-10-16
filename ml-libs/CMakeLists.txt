@@ -10,16 +10,7 @@ endif()
 
 set(_miopen_enabled OFF)
 if(THEROCK_ENABLE_MIOPEN)
-  set(_miopen_enabled ON)
-  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_miopen_targets MIOpen ${THEROCK_AMDGPU_TARGETS})
-    if(NOT _miopen_targets)
-      message(STATUS
-        "MIOpen: no supported gfx targets remain after filtering "
-        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
-      set(_miopen_enabled OFF)
-    endif()
-  endif()
+  therock_check_subproject_targets(_miopen_enabled MIOpen)
 endif()
 set(_miopen_enabled ${_miopen_enabled} PARENT_SCOPE)
 

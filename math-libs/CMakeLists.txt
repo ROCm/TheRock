@@ -250,16 +250,7 @@ endif(THEROCK_ENABLE_PRIM)
 
 set(_fft_enabled OFF)
 if(THEROCK_ENABLE_FFT)
-  set(_fft_enabled ON)
-  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_fft_targets rocFFT ${THEROCK_AMDGPU_TARGETS})
-    if(NOT _fft_targets)
-      message(STATUS
-        "rocFFT/hipFFT: no supported gfx targets remain after filtering "
-        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subprojects.")
-      set(_fft_enabled OFF)
-    endif()
-  endif()
+  therock_check_subproject_targets(_fft_enabled rocFFT)
 endif()
 set(_fft_enabled ${_fft_enabled} PARENT_SCOPE)
 
@@ -448,15 +439,7 @@ endif(THEROCK_ENABLE_ROCWMMA)
 set(_rocalution_enabled OFF)
 if(THEROCK_ENABLE_ROCALUTION)
   set(_rocalution_enabled ON)
-  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_rocalution_targets rocALUTION ${THEROCK_AMDGPU_TARGETS})
-    if(NOT _rocalution_targets)
-      message(STATUS
-        "rocALUTION: no supported gfx targets remain after filtering "
-        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
-      set(_rocalution_enabled OFF)
-    endif()
-  endif()
+  therock_check_subproject_targets(_rocalution_enabled rocALUTION)
 endif()
 set(_rocalution_enabled ${_rocalution_enabled} PARENT_SCOPE)
 
