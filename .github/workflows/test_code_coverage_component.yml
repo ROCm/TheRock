@@ -9,6 +9,20 @@ on:
       generic_run_id:
         type: string
         default: ""
+      baseline_repository:
+        description: >-
+          Repository owning generic_run_id (owner/repo), passed as
+          --run-github-repo. Empty defaults to the current repository. The
+          instrumented replacement always resolves against this coverage run's
+          own repository.
+        type: string
+        default: ""
+      code_coverage_run_id:
+        description: >-
+          Run id the instrumented stack was pushed under, passed as
+          --code-coverage-run-id. Empty uses github.run_id.
+        type: string
+        default: ""
       artifact_group:
         type: string
       amdgpu_families:
@@ -37,18 +51,23 @@ on:
         default: "release"
       coverage_enabled:
         description: >-
-          Collect llvm profraw files from the test run and upload them as a
-          workflow artifact. Only meaningful against a coverage instrumented
-          build.
+          Collect llvm profraw files from the test run and upload them.
+          Only meaningful against a coverage-instrumented build.
         type: boolean
         default: false
       coverage_artifact_prefix:
         description: >-
-          Prefix for the uploaded profraw artifact name. A coverage run tests
-          several projects in one workflow run, so the caller sets this to
-          something project-specific to keep each project profiles apart.
+          Prefix for the uploaded profraw artifact name. Set per-project so one
+          coverage run's projects keep their profiles apart.
         type: string
         default: "coverage-profraw"
+      device_coverage:
+        description: >-
+          The project's kernels are instrumented too. Swaps its instrumented
+          code objects into the installed kpack archives and keeps the
+          device-side profiles instead of dropping them.
+        type: boolean
+        default: false
       default_container_image:
         type: string
         default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98"
@@ -78,15 +97,14 @@ jobs:
             (fromJSON(inputs.component).container_image || inputs.default_container_image)
             || null
         }}
-      # Container options are configured in build_tools/github_actions/fetch_test_configurations.py
-      # and include base options (ipc, user, ulimit, seccomp), GPU options (devices, groups),
-      # and any job-specific options
+      # Container options come from fetch_test_configurations.py: base (ipc,
+      # user, ulimit, seccomp), GPU (devices, groups), and job-specific options.
       options: ${{ fromJSON(inputs.component).container_options }}
     strategy:
       fail-fast: false
       matrix:
-        # The shard array is based on "total_shards" from "fetch_test_configurations.py"
-        # The test executable will shard based on the array. (ex: [1, 2, 3, 4] = four test shards)
+        # Shard array from fetch_test_configurations.py's total_shards.
+        # The test executable shards on it (e.g. [1,2,3,4] = four shards).
         shard: ${{ fromJSON(inputs.component).shard_arr }}
     defaults:
       run:
@@ -94,7 +112,7 @@ jobs:
     env:
       GENERIC_RUN_ID: ${{ inputs.generic_run_id }}
       TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
-      CODE_COVERAGE_RUN_ID: ${{ github.run_id }}
+      CODE_COVERAGE_RUN_ID: ${{ inputs.code_coverage_run_id || github.run_id }}
       OUTPUT_ARTIFACTS_DIR: "./build"
       THEROCK_BIN_DIR: "./build/bin"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
@@ -131,22 +149,50 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
+      - name: Setting up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: 3.12
+
       - name: Install TheRock Code Coverage Build
         timeout-minutes: 15
         env:
           RELEASE_TYPE: ${{ inputs.release_type }}
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
+          BASELINE_REPOSITORY: ${{ inputs.baseline_repository }}
+          DEVICE_COVERAGE: ${{ inputs.device_coverage }}
         run: |
           pip3 install -r requirements-test.txt
+          device_code_arg=()
+          if [[ "${DEVICE_COVERAGE}" == "true" ]]; then
+            device_code_arg=(--replace-device-code)
+          fi
+          # Baseline tree comes from generic_run_id. When empty (self-contained
+          # dispatch), fall back to this run's own instrumented artifacts;
+          # --replace then re-extracts them, leaving the whole stack instrumented.
+          generic_run_id="${GENERIC_RUN_ID}"
+          if [[ -z "${generic_run_id}" ]]; then
+            generic_run_id="${CODE_COVERAGE_RUN_ID}"
+          fi
+          # Pass --run-github-repo only when set, so empty defaults to the
+          # current repository. The generic baseline lives in a different repo
+          # than this coverage run (rockrel for the PR check, rocm-libraries for
+          # the nightly); the S3 bucket lookup 404s if that repo is not named.
+          run_github_repo_arg=()
+          if [[ -n "${BASELINE_REPOSITORY}" ]]; then
+            run_github_repo_arg=(--run-github-repo="${BASELINE_REPOSITORY}")
+          fi
           # FETCH_ARTIFACT_ARGS intentionally splits arguments supplied by fetch_test_configurations.py.
           python3 build_tools/install_rocm_code_coverage_build.py \
             --code-coverage-run-id="${CODE_COVERAGE_RUN_ID}" \
-            --run-id="${GENERIC_RUN_ID}" \
+            --run-id="${generic_run_id}" \
+            "${run_github_repo_arg[@]}" \
             --artifact-group="${AMDGPU_FAMILIES}" \
             --amdgpu-targets="${AMDGPU_TARGETS}" \
             --tests \
             --output-dir="${OUTPUT_ARTIFACTS_DIR}" \
             "--replace-${TEST_COMPONENT}" \
+            "${device_code_arg[@]}" \
             ${FETCH_ARTIFACT_ARGS}
 
       # safe.directory must be set before Runner Health Status
@@ -166,10 +212,16 @@ jobs:
           python ./build_tools/print_driver_gpu_info.py
 
       - name: Setup Additional Requirements
-        if: ${{ fromJSON(inputs.component).additional_requirements_files != '' }}
+        # First-element check skips cleanly when the list is empty ([]) or the
+        # key is absent, without depending on how an empty list coerces to ''.
+        if: ${{ fromJSON(inputs.component).additional_requirements_files[0] != '' }}
         env:
           REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
+          # The script installs with uv, which otherwise wants a virtual
+          # environment; this job installs into the setup-python interpreter.
+          UV_SYSTEM_PYTHON: "1"
         run: |
+          pip3 install uv
           python ./build_tools/install_additional_requirements.py \
             --requirements-files "${REQUIREMENTS_FILES}"
 
@@ -182,8 +234,8 @@ jobs:
           echo "ASAN_SYMBOLIZER_PATH=${OUTPUT_ARTIFACTS_DIR}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
 
       # Instrumented binaries write one profraw per process. %p (pid) and %m
-      # (binary signature) keep the files distinct so a shard that forks or
-      # loads several instrumented libraries does not overwrite itself.
+      # (binary signature) keep files distinct so a forking/multi-lib shard
+      # doesn't overwrite itself.
       - name: Prepare coverage profile directory
         if: ${{ inputs.coverage_enabled }}
         env:
@@ -192,8 +244,8 @@ jobs:
           mkdir -p "${GITHUB_WORKSPACE}/coverage-report/profraw"
           echo "LLVM_PROFILE_FILE=${GITHUB_WORKSPACE}/coverage-report/profraw/${TEST_COMPONENT}-shard${SHARD_INDEX}-%p-%m.profraw" >> "${GITHUB_ENV}"
 
-      # Set thread limits from KUBE_CPU_REQUEST (Kubernetes-injected) to avoid oversubscription.
-      # Must be done at runtime since container env vars aren't in GitHub's env context.
+      # Limit threads from KUBE_CPU_REQUEST (Kubernetes-injected) to avoid
+      # oversubscription. Done at runtime; container env isn't in GitHub's context.
       - name: Set thread limits
         run: |
           if [[ -n "${KUBE_CPU_REQUEST:-}" ]]; then
@@ -243,8 +295,37 @@ jobs:
         run: | # zizmor: ignore[template-injection]
           ${{ fromJSON(inputs.component).test_script }}
 
-      # Uploaded even when the test step failed: partial coverage from a failing
-      # shard is still useful, and the aggregation job tolerates missing shards.
+      # A device-side profile is named after its GPU target
+      # (gfx942:sramecc+:xnack-.0.<name>.profraw). upload-artifact rejects the
+      # colons and with them every other file in the upload. Under device
+      # coverage the profiles are the point, so the colons go and the files
+      # stay. Otherwise llvm-cov has no device objects to use them against, and
+      # their presence means kernels were instrumented, which the build is
+      # meant to prevent, so say so.
+      - name: Rename or drop device-side profiles
+        if: ${{ always() && inputs.coverage_enabled }}
+        env:
+          DEVICE_COVERAGE: ${{ inputs.device_coverage }}
+        run: |
+          shopt -s nullglob
+          device_profiles=("${GITHUB_WORKSPACE}"/coverage-report/profraw/*:*.profraw)
+          if [[ "${DEVICE_COVERAGE}" == "true" ]]; then
+            for profile in "${device_profiles[@]}"; do
+              name="${profile##*/}"
+              mv -- "${profile}" "${profile%/*}/${name//:/_}"
+            done
+            if (( ${#device_profiles[@]} )); then
+              echo "Kept ${#device_profiles[@]} device-side profile(s)"
+            else
+              echo "::warning::Device coverage is on but this shard wrote no device-side profile"
+            fi
+          elif (( ${#device_profiles[@]} )); then
+            echo "::warning::Kernels were instrumented; dropping ${#device_profiles[@]} device-side profile(s): ${device_profiles[*]##*/}"
+            rm -f -- "${device_profiles[@]}"
+          fi
+
+      # Upload even on test failure: partial coverage is useful and the
+      # aggregation job tolerates missing shards.
       - name: Upload coverage profraw files
         if: ${{ always() && inputs.coverage_enabled }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
