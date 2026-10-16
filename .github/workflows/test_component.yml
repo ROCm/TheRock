@@ -238,6 +238,7 @@ jobs:
         # including command chains and per-command environment assignments. Callers
         # must be trusted to select code, just as they select repository/ref above.
         run: | # zizmor: ignore[template-injection]
+          if [[ "$RUNNER_OS" == Linux && "$TEST_COMPONENT" == hipkernelprovider ]]; then export PATH="$GITHUB_WORKSPACE/build/bin:$GITHUB_WORKSPACE/build/lib/llvm/bin:$PATH" HIP_DEVICE_LIB_PATH="$GITHUB_WORKSPACE/build/lib/llvm/amdgcn/bitcode"; fi
           ${{ fromJSON(inputs.component).test_script }}
 
       - name: Print test reproduction command
