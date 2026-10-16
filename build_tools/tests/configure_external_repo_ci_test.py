@@ -381,6 +381,45 @@ class ConfigureNonSubtreeTest(unittest.TestCase):
         self.assertFalse(r.run_all_tests)
         self.assertEqual(r.changed_projects, "projects/rocm-core")
 
+    def _hrr_config(self):
+        return [RepoEntry(name="hrr", url="", branch="", category="projects")]
+
+    def test_hrr_workflow_and_source_classify_as_hrr(self):
+        r = self._configure(
+            [
+                ".github/workflows/hrr-ci.yml",
+                "projects/hrr/playback/foo.cpp",
+            ],
+            config=self._hrr_config(),
+        )
+        self.assertEqual(r.changed_projects, "projects/hrr")
+        self.assertFalse(r.run_all_tests)
+
+    def test_hrr_ci_workflow_alone_classifies_as_hrr(self):
+        r = self._configure(
+            [".github/workflows/hrr-ci.yml"],
+            config=self._hrr_config(),
+        )
+        self.assertEqual(r.changed_projects, "projects/hrr")
+        self.assertFalse(r.run_all_tests)
+
+    def test_hrr_gpu_workflow_alone_classifies_as_hrr(self):
+        r = self._configure(
+            [".github/workflows/hrr-gpu.yml"],
+            config=self._hrr_config(),
+        )
+        self.assertEqual(r.changed_projects, "projects/hrr")
+        self.assertFalse(r.run_all_tests)
+
+    def test_therock_workflow_on_rocm_systems_runs_all(self):
+        r = self._configure(
+            [".github/workflows/therock-ci.yml"],
+            config=self._hrr_config(),
+            repo="ROCm/rocm-systems",
+        )
+        self.assertTrue(r.run_all_tests)
+        self.assertEqual(r.changed_projects, "")
+
     def test_declared_prefixes_are_wellformed(self):
         for prefix in CI_RELEVANT_NON_SUBTREE_PREFIXES:
             self.assertEqual(len(prefix.split("/")), 2, prefix)

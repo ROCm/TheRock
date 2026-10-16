@@ -211,6 +211,14 @@ all_build_variants = {
             "build_variant_suffix": "tsan",
             "build_variant_cmake_preset": "linux-release-tsan",
         },
+        # Release plus HIP Record and Replay capture compiled into amdhip64,
+        # for HRR GPU tests only. The name must not contain "san":
+        # select_build_runner sends those variants to sanitizer runners.
+        "hrr-capture": {
+            "build_variant_label": "hrr-capture",
+            "build_variant_suffix": "hrr-capture",
+            "build_variant_cmake_preset": "linux-release-hrr-capture",
+        },
     },
     "windows": {
         "release": {
@@ -282,6 +290,7 @@ amdgpu_family_info_matrix = {
                 "host-asan",
                 "host-asan-debug",
                 "tsan",
+                "hrr-capture",
             ],
             "builds_on_trigger": [
                 "presubmit",
@@ -304,7 +313,7 @@ amdgpu_family_info_matrix = {
             "family": "gfx110X-all",
             "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
             "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
+            "build_variants": ["release", "hrr-capture"],
             "builds_on_trigger": [
                 "presubmit",
                 "postsubmit",
@@ -343,7 +352,7 @@ amdgpu_family_info_matrix = {
             "family": "gfx1151",
             "fetch-gfx-targets": ["gfx1151"],
             "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
+            "build_variants": ["release", "hrr-capture"],
             "builds_on_trigger": [
                 "presubmit",
                 "postsubmit",
@@ -374,7 +383,7 @@ amdgpu_family_info_matrix = {
             "family": "gfx120X-all",
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
+            "build_variants": ["release", "hrr-capture"],
             "builds_on_trigger": [
                 "presubmit",
                 "postsubmit",
@@ -412,6 +421,7 @@ amdgpu_family_info_matrix = {
                 "release",
                 "host-asan",
                 "host-asan-debug",
+                "hrr-capture",
             ],
             "builds_on_trigger": [
                 "presubmit",
@@ -433,7 +443,7 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "linux-gfx90a-1gpu-ossci-rocm",
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
-            "build_variants": ["release", "asan-debug"],
+            "build_variants": ["release", "asan-debug", "hrr-capture"],
             "builds_on_trigger": [
                 "postsubmit",
                 "submodule_bump",
@@ -471,6 +481,7 @@ amdgpu_family_info_matrix = {
                 "host-asan",
                 "host-asan-debug",
                 "tsan",
+                "hrr-capture",
             ],
             "builds_on_trigger": [
                 "postsubmit",
@@ -592,7 +603,7 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "linux-gfx1030-gpu-rocm",
             "family": "gfx103X-all",
             "fetch-gfx-targets": ["gfx1030"],
-            "build_variants": ["release"],
+            "build_variants": ["release", "hrr-capture"],
             "builds_on_trigger": ["nightly"],
             "tests_on_trigger": ["nightly"],
         },
@@ -611,7 +622,7 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "linux-gfx1150-gpu-rocm",
             "family": "gfx1150",
             "fetch-gfx-targets": [],
-            "build_variants": ["release"],
+            "build_variants": ["release", "hrr-capture"],
             "builds_on_trigger": ["nightly"],
             "tests_on_trigger": ["nightly"],
         },
@@ -649,7 +660,7 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "linux-gfx1153-gpu-rocm",
             "family": "gfx1153",
             "fetch-gfx-targets": [],
-            "build_variants": ["release"],
+            "build_variants": ["release", "hrr-capture"],
             "builds_on_trigger": ["nightly"],
             "tests_on_trigger": ["nightly"],
         },
