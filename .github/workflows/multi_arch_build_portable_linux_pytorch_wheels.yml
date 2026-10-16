@@ -102,7 +102,7 @@ on:
         type: boolean
         default: false
       build_variant:
-        description: "Build variant (release, asan, asan-debug). ASAN variants build torch and torchaudio."
+        description: "Build variant (release, asan, asan-debug). ASAN variants build torch, torchaudio, and torchvision."
         type: string
         default: "release"
       quartz_tracking_id:
@@ -207,7 +207,7 @@ on:
         type: boolean
         default: false
       build_variant:
-        description: "Build variant (release, asan, asan-debug). ASAN variants build torch and torchaudio."
+        description: "Build variant (release, asan, asan-debug). ASAN variants build torch, torchaudio, and torchvision."
         type: string
         default: "release"
       quartz_tracking_id:
@@ -319,11 +319,11 @@ jobs:
           ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --repo-hashtag nightly \
             --no-commit-hipify
-          # ASAN variants skip torchvision, triton, and apex.
+          ./external-builds/pytorch/pytorch_vision_repo.py checkout \
+            --repo-hashtag nightly \
+            --no-commit-hipify
+          # ASAN variants skip triton and apex.
           if [[ "${BUILD_VARIANT}" != asan* ]]; then
-            ./external-builds/pytorch/pytorch_vision_repo.py checkout \
-              --repo-hashtag nightly \
-              --no-commit-hipify
             ./external-builds/pytorch/pytorch_triton_repo.py checkout \
               --no-commit-hipify
             ./external-builds/pytorch/pytorch_apex_repo.py checkout \
@@ -346,11 +346,11 @@ jobs:
           ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --require-related-commit \
             --no-commit-hipify
-          # ASAN variants skip torchvision, triton, and apex.
+          ./external-builds/pytorch/pytorch_vision_repo.py checkout \
+            --require-related-commit \
+            --no-commit-hipify
+          # ASAN variants skip triton and apex.
           if [[ "${BUILD_VARIANT}" != asan* ]]; then
-            ./external-builds/pytorch/pytorch_vision_repo.py checkout \
-              --require-related-commit \
-              --no-commit-hipify
             ./external-builds/pytorch/pytorch_triton_repo.py checkout \
               --no-commit-hipify
             ./external-builds/pytorch/pytorch_apex_repo.py checkout \
@@ -416,10 +416,10 @@ jobs:
           elif [ "${CACHE_TYPE}" = "ccache" ]; then
             cache_flag="--use-ccache"
           fi
-          # ASAN variants build torch and torchaudio. The other companions stay off.
+          # ASAN variants build torch, torchaudio, and torchvision.
           asan_flag=""
           if [[ "${BUILD_VARIANT}" == asan* ]]; then
-            asan_flag="--asan --build-pytorch-audio --no-build-triton --no-build-pytorch-vision --no-build-apex"
+            asan_flag="--asan --build-pytorch-audio --build-pytorch-vision --no-build-triton --no-build-apex"
           fi
 
           # build_prod_wheels.py forwards --index-url and --find-links to pip
@@ -509,18 +509,15 @@ jobs:
             -j "$(nproc)"
           rm -f "${FAT_STAGE}"/torch-*.whl
 
-          # ASAN variants do not build torchvision, so there is no wheel to split.
-          if [[ "${BUILD_VARIANT}" != asan* ]]; then
-            mv "${PACKAGE_DIST_DIR}"/torchvision-*.whl "${FAT_STAGE}/"
-            python -m rocm_kpack.tools.split_python_wheels \
-              --input "${FAT_STAGE}"/torchvision-*.whl \
-              --output-dir "${PACKAGE_DIST_DIR}" \
-              --device-package-prefix amd-torchvision-device \
-              --overlay-root torchvision/ \
-              --device-requires-dist "rocm-sdk-device-@GFXARCH@ == ${ROCM_SDK_VERSION}" \
-              --compression zstd \
-              -j "$(nproc)"
-          fi
+          mv "${PACKAGE_DIST_DIR}"/torchvision-*.whl "${FAT_STAGE}/"
+          python -m rocm_kpack.tools.split_python_wheels \
+            --input "${FAT_STAGE}"/torchvision-*.whl \
+            --output-dir "${PACKAGE_DIST_DIR}" \
+            --device-package-prefix amd-torchvision-device \
+            --overlay-root torchvision/ \
+            --device-requires-dist "rocm-sdk-device-@GFXARCH@ == ${ROCM_SDK_VERSION}" \
+            --compression zstd \
+            -j "$(nproc)"
 
           rm -rf "${FAT_STAGE}"
           echo "Post-split contents of ${PACKAGE_DIST_DIR}:"
