@@ -58,6 +58,7 @@ if(THEROCK_ENABLE_RCCL)
       rocprofiler-register
       ${_rccl_optional_runtime_deps}
       ${optional_profiler_deps}
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(rccl
     SUBDIRS
