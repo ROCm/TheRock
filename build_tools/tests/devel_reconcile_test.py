@@ -14,6 +14,7 @@ discovers them via `distributions(path=[site])`, alongside a libraries overlay
 holding the real device files and the manifests.
 """
 
+import errno
 import json
 import os
 import sys
@@ -437,6 +438,23 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
         if worker_errors:
             raise worker_errors[0]
         self.assertTrue(acquired.is_set())
+
+    @unittest.skipUnless(os.name == "nt", "Windows file locking behavior")
+    def test_file_lock_retries_beyond_native_limit(self):
+        import msvcrt
+
+        native_timeout = OSError(errno.EDEADLOCK, "file is locked")
+        with (
+            (self.site / "test.lock").open("a") as lock_file,
+            unittest.mock.patch.object(
+                msvcrt,
+                "locking",
+                side_effect=[native_timeout, native_timeout, None],
+            ) as locking,
+        ):
+            _devel.FileLock(lock_file)
+
+        self.assertEqual(locking.call_count, 3)
 
     def test_existing_duplicate_record_entry_is_removed(self):
         # A duplicate RECORD row (e.g. from a botched prior write) must be

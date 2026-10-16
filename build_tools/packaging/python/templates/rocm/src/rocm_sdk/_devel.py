@@ -29,6 +29,7 @@ it, as the alternative is to increase the package size by 2-5x and break
 symlink relationships.
 """
 
+import errno
 import importlib
 import importlib.metadata as md
 import io
@@ -553,6 +554,8 @@ def _lock_and_expand(
 class FileLock:
     """Small portability shim between fcntl.lockf and msvcrt.locking for our uses."""
 
+    _MAX_RETRY_ATTEMPTS = 2
+
     def __init__(self, file: io.TextIOWrapper):
         self.file = file
         # Lock at least one byte. On Windows, msvcrt.locking treats a zero-length
@@ -572,9 +575,19 @@ class FileLock:
 
             original_position = self.file.tell()
             self.file.seek(0)
-            # Match the blocking Unix behavior for ordinary contention. LK_LOCK
-            # retries once per second, for up to ten attempts.
-            msvcrt.locking(self.file.fileno(), msvcrt.LK_LOCK, self.lock_size)
+            # Linux LOCK_EX waits indefinitely. On Windows, each LK_LOCK call
+            # waits about nine seconds before raising EDEADLOCK. Retry twice to
+            # allow roughly 27 seconds of contention while retaining a bound.
+            for attempt in range(self._MAX_RETRY_ATTEMPTS + 1):
+                try:
+                    msvcrt.locking(self.file.fileno(), msvcrt.LK_LOCK, self.lock_size)
+                    break
+                except OSError as exc:
+                    if (
+                        exc.errno != errno.EDEADLOCK
+                        or attempt >= self._MAX_RETRY_ATTEMPTS
+                    ):
+                        raise
             self.file.seek(original_position)
         else:
             # The Unix APIs for file locking apply to the entire file descriptor.
