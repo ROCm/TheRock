@@ -103,9 +103,12 @@ hand-maintained list is required.
 
 Test selection is split across two files:
 
-1. **`therock_consumer_graph.json` — generated.** The full reverse-dependency
-   graph, emitted from the build system. Never hand-edited; a CI drift check
-   regenerates it and fails on any difference (see CI integration).
+1. **Generated artifacts.** A static parser
+   (`build_tools/_therock_utils/cmake_consumer_graph.py`, driven by
+   `build_tools/generate_consumer_graph.py`) reads the super-project CMake and
+   writes the reverse-dependency `therock_consumer_graph.json`, the subtree map
+   (subtree path -> graph key), and the source-dir map. All are committed under
+   `test_tools/`; a CI drift gate fails on any difference (see CI integration).
 1. **`test_policies.toml` — hand-maintained.** What the graph cannot derive: each
    component's gating level (how far to walk the graph) and any
    `test_include` / `test_exclude`.
@@ -117,16 +120,17 @@ graph — is handled by the drift check and validation below.
 
 ### Overview
 
-1. **Register consumers at declare time.** Every
-   `therock_cmake_subproject_declare()` appends the subproject to a global
-   registry and records a reverse edge (`consumer`) for each of its
-   `BUILD_DEPS` / `RUNTIME_DEPS`.
-1. **Emit and commit the consumer graph.** At the end of the top-level configure,
-   `therock_emit_consumer_graph()` serializes the registry to
-   `therock_consumer_graph.json`, which is **committed to the repo**. A CI check
-   regenerates it and fails if the committed copy is stale, so the change-detection
-   path reads a checked-in file with no configure on the hot path (see CI
-   integration).
+1. **Parse the dependency edges from CMake source.** The parser reads each
+   `therock_cmake_subproject_declare()` statically — no configure, no submodule
+   checkout — and records a reverse edge (`consumer`) for every `BUILD_DEPS` /
+   `RUNTIME_DEPS` and the compiler consumed via `COMPILER_TOOLCHAIN`. It unions
+   both sides of every `if()`, so the graph is a conservative *may-depend*
+   superset of any single configure's edges.
+1. **Commit the generated graph.** The parser writes
+   `therock_consumer_graph.json` (plus the subtree and source-dir maps),
+   **committed to the repo**, so the change-detection path reads a checked-in file
+   with no configure on the hot path. A CI drift gate regenerates them and fails
+   if the committed copies differ (see CI integration).
 1. **Derive test subprojects in Python.** `determine_rocm_test_dependencies.py`
    loads the graph and, for each changed subproject, walks its consumer edges to
    the depth set by that component's level — one hop for the level-4 default
@@ -148,25 +152,14 @@ The graph carries only consumer (reverse-dependency) edges:
 }
 ```
 
-CMake populates it during declaration:
-
-```cmake
-set_property(GLOBAL APPEND PROPERTY THEROCK_ALL_SUBPROJECTS "${target_name}")
-# BUILD_DEPS / RUNTIME_DEPS plus the compiler consumed via COMPILER_TOOLCHAIN
-# (amd-hip -> hip-clr, amd-llvm -> amd-llvm) are all recorded as direct edges.
-foreach(_dep IN LISTS _consumer_deps)
-  set_property(GLOBAL APPEND PROPERTY "THEROCK_DIRECT_CONSUMERS_OF_${_dep}" "${target_name}")
-endforeach()
-```
-
-Edges are recorded as **direct** consumers (`THEROCK_DIRECT_CONSUMERS_OF_*`); the
-full consumer set is obtained by walking the emitted graph. The compiler is
-consumed via `COMPILER_TOOLCHAIN` rather than `BUILD_DEPS` / `RUNTIME_DEPS`, so it
-is mapped to its backing subproject and recorded too — otherwise a compiler change
-would register only its short direct-dep list instead of the whole tree it
-compiles. Nothing else about a subproject (build stage, artifact) is duplicated
-into the graph, so it stays minimal and each other fact keeps its single source of
-truth.
+The parser records **direct** consumer edges from each declaration's
+`BUILD_DEPS` / `RUNTIME_DEPS`; the full consumer set is obtained by walking those
+edges in the committed graph. The compiler is consumed via `COMPILER_TOOLCHAIN`
+rather than `BUILD_DEPS` / `RUNTIME_DEPS`, so it is mapped to its backing
+subproject (amd-hip -> hip-clr, amd-llvm -> amd-llvm) and recorded too —
+otherwise a compiler change would reach only its short direct-dep list instead of
+the whole tree it compiles. Nothing else about a subproject (build stage,
+artifact) enters the graph, so it stays minimal.
 
 ### Selection: walk the graph by hop-distance
 
@@ -241,42 +234,38 @@ it by hand.
 
 ### CI integration
 
-The graph is emitted by a configure (`cmake -DTHEROCK_ENABLE_ALL=ON`), which
-requires all subproject sources present. Doing that configure *inside the
-per-PR change-detection job* costs ~6 minutes on a GitHub-hosted runner (~4m40s
-checkout + ~1m40s configure) — too expensive to pay before every PR can even
-shard its test jobs. An early draft that regenerated the graph dynamically on
-every run was rejected for exactly this reason.
+A static parser generates the graph: `build_tools/generate_consumer_graph.py`
+(built on `build_tools/_therock_utils/cmake_consumer_graph.py`) reads the
+super-project CMake directly — no submodules, no configure (~0.3 s) — so it runs
+cross-platform in `unit_tests.yml`. It unions both sides of every `if()`, so the
+graph is a conservative *may-depend* superset: it may carry an edge no single
+configure activates, but never omits one a real configure produces.
 
-Instead, the emitted `therock_consumer_graph.json` is **committed to the repo**,
-and the per-PR change-detection job reads the checked-in file directly — no
-`cmake`, no source fetch on the hot path. A **drift check** keeps the committed
-copy honest: a CI job (triggered only when files that affect the graph change —
-`CMakeLists.txt`, the emit/registration cmake, the committed graph) regenerates
-the graph from a configure and fails if it differs from the committed copy,
-prompting the contributor to regenerate and re-commit. This confines the ~6-minute
-configure cost to the low-frequency drift job instead of every PR, and makes the
-graph reviewable in-repo. `BUILD_TOPOLOGY.toml` is committed under the same
-contract, so this follows existing precedent.
+The generated `therock_consumer_graph.json` (plus the subtree and source-dir maps)
+is **committed to the repo**, so the per-PR change-detection job reads the
+checked-in files directly — no `cmake`, no source fetch on the hot path. A **drift
+gate** keeps them honest: `generate_consumer_graph.py --check` (exercised by the
+real-tree pytest tests) regenerates the artifacts and fails if the committed copies
+differ, prompting the contributor to regenerate and re-commit. `BUILD_TOPOLOGY.toml`
+is committed under the same contract, so this follows existing precedent.
 
 A second, cheap check validates `test_policies.toml` against the graph: every
-component key and every `test_include` / `test_exclude` value must name a component
-that exists in the current graph, so a renamed or removed component cannot leave a
-stale policy entry behind. This runs on every PR (it needs only the committed graph,
-no configure).
+component key, and every `[synthetic.<name>]` consumer, must name a component that
+exists in the current graph, so a renamed or removed component cannot leave a
+stale policy entry behind. This runs on every PR (it needs only the committed
+files, no configure).
 
 Committing the graph also helps **external-repo CI**. Repos that run on multi-arch
-CI (rocm-libraries, rocm-systems) can consume TheRock's committed graph directly
-rather than each regenerating its own — they do not have the full source tree
-present at configure time anyway, so a checked-in graph is strictly better for
-them.
+CI (rocm-libraries, rocm-systems) consume TheRock's committed graph directly rather
+than each regenerating its own — they do not have the full source tree present at
+configure time anyway.
 
-A later refinement drops the drift job's `ENABLE_ALL` configure: a Python parser
-reads the super-project CMake directly — no submodules, no configure (~0.3 s
-versus ~6 min) — and runs cross-platform in `unit_tests.yml`. It unions both
-`if()` branches, so its conservative *may-depend* graph is a superset of any real
-configure's graph. Only the generator changes; the committed-graph and drift
-contract stays intact.
+Reading the CMake source rather than running a configure means there is no longer a
+cross-check that the parser's edges agree with CMake's own configure-time
+evaluation. This is accepted because the parser is conservative and fails loud — it
+raises on an unresolved variable or an unknown toolchain rather than dropping an
+edge — and the nightly full-matrix runs exercise every consumer, so any missed edge
+surfaces there.
 
 ## Generalizing to the full level ladder
 

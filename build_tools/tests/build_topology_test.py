@@ -6,6 +6,7 @@
 Unit tests for build_topology module.
 """
 
+import json
 import os
 import re
 import sys
@@ -1344,6 +1345,97 @@ class RealTopologyTest(unittest.TestCase):
         hkp = topology.artifacts["hipkernelprovider"]
         self.assertEqual(hkp.type, "target-specific")
         self.assertIn("hipkernelprovider", hkp.split_databases)
+
+
+class SourceDirMapVsBuildTopologyTest(unittest.TestCase):
+    """Check the generated source_dir_map against the hand BUILD_TOPOLOGY.toml
+    source_paths as invariants rather than exact set membership: derived subtrees
+    must stay within the hand-curated source_paths, and the non-derivable set must
+    not grow. This tolerates routine SUBPROJECT_DEPS churn while still catching a
+    new name divergence or a parser regression.
+    """
+
+    # core-hiptests is a genuine name divergence (hand "hip-tests" vs derived
+    # "catch"), so its derived subtrees are not a subset of the hand source_paths.
+    # Any other artifact whose derivation leaves the hand set must be added here
+    # deliberately rather than slipping through.
+    _KNOWN_NAME_DIVERGENCES = {"core-hiptests"}
+    # Variable EXTERNAL_SOURCE_DIR (THEROCK_AMD_DBGAPI_SOURCE_DIR) -> no static
+    # derivation. Frozen so the non-derivable set cannot grow unnoticed.
+    _NO_DERIVATION = {"amd-dbgapi"}
+
+    def _load(self):
+        sdm_path = REPO_ROOT / "test_tools" / "therock_source_dir_map.json"
+        toml_path = REPO_ROOT / "BUILD_TOPOLOGY.toml"
+        if not (
+            (REPO_ROOT / ".git").exists() and sdm_path.exists() and toml_path.exists()
+        ):
+            self.skipTest("not a TheRock git checkout with a committed source-dir map")
+        source_dir_map = json.loads(sdm_path.read_text(encoding="utf-8"))
+        return source_dir_map, BuildTopology(str(toml_path))
+
+    def _derived_and_hand(self):
+        """Return (derived, hand): artifact -> lowercased subtree basename set.
+
+        ``derived`` comes from the generated source_dir_map; ``hand`` from the
+        BUILD_TOPOLOGY.toml source_paths, excluding the implicit default
+        source_paths == [artifact_name].
+        """
+        source_dir_map, topology = self._load()
+        derived = {
+            artifact: {path.split("/")[-1].lower() for path in paths}
+            for artifact, paths in source_dir_map.items()
+        }
+        hand = {}
+        for artifact in topology.artifacts.values():
+            source_paths = getattr(artifact, "source_paths", None) or []
+            if source_paths and source_paths != [artifact.name]:
+                hand[artifact.name] = {name.lower() for name in source_paths}
+        return derived, hand
+
+    def test_derived_stays_within_hand_source_paths(self):
+        # Invariant, not exact membership: a derived artifact's subtrees must be a
+        # subset of its hand-curated source_paths, so routine SUBPROJECT_DEPS edits
+        # that shift which subtrees agree do not redden this test. A derived subtree
+        # outside the hand set is a new name divergence to resolve or acknowledge.
+        derived, hand = self._derived_and_hand()
+        for artifact, hand_set in hand.items():
+            if artifact in self._KNOWN_NAME_DIVERGENCES:
+                continue
+            extra = derived.get(artifact, set()) - hand_set
+            self.assertFalse(
+                extra,
+                f"{artifact}: derived subtrees {sorted(extra)} are not in the "
+                "hand-curated source_paths; add them to BUILD_TOPOLOGY.toml or "
+                "list the artifact in _KNOWN_NAME_DIVERGENCES",
+            )
+
+    def test_non_derivable_set_does_not_grow(self):
+        # The set of artifacts the parser cannot statically derive may shrink but
+        # not grow: a newly non-derivable artifact is a parser regression (e.g. a
+        # SUBPROJECT_DEP moved to a variable EXTERNAL_SOURCE_DIR) to catch here.
+        derived, hand = self._derived_and_hand()
+        no_derivation = {
+            artifact for artifact, hand_set in hand.items() if not derived.get(artifact)
+        }
+        new = no_derivation - self._NO_DERIVATION
+        self.assertFalse(
+            new,
+            f"artifacts newly without a static derivation: {sorted(new)}; map their "
+            "SUBPROJECT_DEPS to a source subtree or add them to _NO_DERIVATION",
+        )
+
+    def test_every_derived_subtree_is_real(self):
+        source_dir_map, _ = self._load()
+        subtree_path = REPO_ROOT / "test_tools" / "therock_subtree_map.json"
+        subtrees = set(json.loads(subtree_path.read_text(encoding="utf-8")))
+        for artifact, paths in source_dir_map.items():
+            for path in paths:
+                self.assertIn(
+                    path,
+                    subtrees,
+                    f"{artifact} source dir {path!r} is not a known subtree",
+                )
 
 
 if __name__ == "__main__":
