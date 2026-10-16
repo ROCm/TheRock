@@ -10,6 +10,7 @@ Table of contents:
 
 - [Support status](#support-status)
 - [Build instructions](#build-instructions)
+- [Bazel remote cache](#bazel-remote-cache)
 - [Test instructions](#test-instructions)
 - [Nightly releases](#nightly-releases)
 
@@ -146,6 +147,44 @@ from the TheRock multi-arch Python package index (the manylinux flow).
 
 For more detailed build options, see the `ROCm/jax` repository and the
 `.github/workflows/multi_arch_build_linux_jax_wheels.yml` workflow in TheRock.
+
+## Bazel remote cache
+
+The Linux JAX wheel job compiles with Bazel inside a fresh manylinux container,
+so it cannot use the ccache setup that covers TheRock's CMake stages (see
+[CCache Troubleshooting](/docs/development/ccache_troubleshooting.md)). PyTorch
+wheels use sccache and S3 instead ([cache buckets](/docs/development/s3_buckets.md#cache-buckets)).
+
+Only the CI wheel build uses the cache. Release builds stay uncached until they
+have a cache of their own, the way nightly has its own ccache server.
+
+JAX points Bazel at EngFlow (`grpcs://wardite.cluster.engflow.com`) as a
+**cache only**. The build keeps `--config=rocm_release_wheel` and never enables
+`rocm_rbe`, so it does not pick up `--remote_executor` and every action still
+runs on the runner.
+
+Credentials are the runner-local files at `/data/ci-cert.crt` and
+`/data/ci-cert.key` — the same path XLA and JAX CI already mount, not GitHub
+Actions secrets. Fork pull requests see those files, so they can **read** the
+cache. `write_jax_bazel_cache_credentials.py` copies them into `$RUNNER_TEMP`
+(the workspace is published as artifacts) and the wheel job mounts that copy
+read-only at `/data`. Set the repository variable
+`JAX_BAZEL_CACHE_CREDENTIALS_DIR` if the runner keeps the files somewhere else.
+
+`configure_jax_bazel_cache.py` runs inside the build container and prints no
+Bazel options when the files are missing or the release type is not `ci`; the
+build command is then unchanged. Credentials that are present but empty or
+rejected, or a cache that does not answer, fail the job rather than build
+uncached.
+
+Only pushes to `main` upload. Pull requests and manual dispatches pass
+`--remote_upload_local_results=false`. That gate runs on the client, so what a
+pull request could write is decided by the certificate's scope on EngFlow. Set
+`JAX_BAZEL_REMOTE_CACHE_URL` to point the build at a different cache.
+
+EngFlow entries from `ROCm/jax` CI do not help TheRock: that CI compiles with
+`--config=rocm_rbe`, so the action keys differ. TheRock has to populate the
+cache itself on postsubmit.
 
 ## Test instructions
 
