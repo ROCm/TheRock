@@ -31,12 +31,14 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
-def parse_junit_xml(xml_path: Path) -> list[dict]:
+def parse_junit_xml(xml_path: Path, *, strict: bool = False) -> list[dict]:
     """Extract failed/errored test cases from a JUnit XML file."""
     results = []
     try:
         tree = ET.parse(xml_path)
     except ET.ParseError:
+        if strict:
+            raise
         return results
 
     root = tree.getroot()
@@ -83,13 +85,24 @@ def parse_junit_xml(xml_path: Path) -> list[dict]:
 
 def collect_results(reports_dir: Path) -> list[dict]:
     """Walk a single test-reports directory and collect all failures."""
+    return _collect_results_with_health(reports_dir)[0]
+
+
+def _collect_results_with_health(reports_dir: Path) -> tuple[list[dict], bool]:
+    """Collect failures and report whether the artifact has valid JUnit XML."""
     all_failures = []
-    for xml_file in sorted(reports_dir.rglob("*.xml")):
-        failures = parse_junit_xml(xml_file)
+    xml_files = sorted(reports_dir.rglob("*.xml"))
+    valid = bool(xml_files)
+    for xml_file in xml_files:
+        try:
+            failures = parse_junit_xml(xml_file, strict=True)
+        except ET.ParseError:
+            valid = False
+            continue
         for f in failures:
             f["report_file"] = str(xml_file.relative_to(reports_dir))
         all_failures.extend(failures)
-    return all_failures
+    return all_failures, valid
 
 
 def derive_test_file(report_path: str) -> str:
@@ -225,6 +238,7 @@ def write_combined_summary(
 
     rows: list[tuple[str, int, str]] = []
     observed_report_count = 0
+    valid_report_artifact_count = 0
     seen: set[tuple[str, str, str, str, str]] = set()
     shard_dirs = sorted(combined_dir.iterdir()) if combined_dir.is_dir() else []
 
@@ -240,7 +254,9 @@ def write_combined_summary(
         num = m.group("num")
         shard_label = f"{shard}/{num}"
 
-        failures = collect_results(artifact_dir)
+        failures, artifact_is_valid = _collect_results_with_health(artifact_dir)
+        if artifact_is_valid:
+            valid_report_artifact_count += 1
         for f in failures:
             test_file = derive_test_file(f["report_file"])
             key = (config, shard_label, test_file, f["class"], f["test"])
@@ -261,6 +277,7 @@ def write_combined_summary(
         expected_report_count is not None
         and expected_report_count > 0
         and observed_report_count == expected_report_count
+        and valid_report_artifact_count == observed_report_count
     )
     expected_display = (
         str(expected_report_count) if expected_report_count is not None else "unknown"
@@ -268,7 +285,8 @@ def write_combined_summary(
     completeness = "complete" if results_complete else "incomplete"
     lines.append(
         f"**Reports:** {observed_report_count} observed / "
-        f"{expected_display} expected ({completeness})"
+        f"{expected_display} expected; {valid_report_artifact_count} valid "
+        f"({completeness})"
     )
     lines.append("")
 

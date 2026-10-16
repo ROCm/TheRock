@@ -105,7 +105,7 @@ class SummarizeTestResultsTest(unittest.TestCase):
         result, summary, outputs = self._summarize(expected_report_count=2)
 
         self.assertFalse(result["results_complete"])
-        self.assertIn("1 observed / 2 expected (incomplete)", summary)
+        self.assertIn("1 observed / 2 expected; 1 valid (incomplete)", summary)
         self.assertIn("No failed tests found in available reports", summary)
         self.assertNotIn("All tests passed", summary)
         self.assertEqual(outputs["results_complete"], "false")
@@ -115,8 +115,28 @@ class SummarizeTestResultsTest(unittest.TestCase):
 
         self.assertEqual(result["observed_report_count"], 0)
         self.assertFalse(result["results_complete"])
-        self.assertIn("0 observed / 1 expected (incomplete)", summary)
+        self.assertIn("0 observed / 1 expected; 0 valid (incomplete)", summary)
         self.assertEqual(outputs["failed_test_count"], "0")
+        self.assertEqual(outputs["results_complete"], "false")
+
+    def test_empty_artifact_is_incomplete(self):
+        (self.artifacts / "test-reports-default-1-1").mkdir(parents=True)
+
+        result, summary, outputs = self._summarize(expected_report_count=1)
+
+        self.assertEqual(result["observed_report_count"], 1)
+        self.assertFalse(result["results_complete"])
+        self.assertIn("1 observed / 1 expected; 0 valid (incomplete)", summary)
+        self.assertEqual(outputs["results_complete"], "false")
+
+    def test_malformed_junit_is_incomplete(self):
+        self._write_report("test-reports-default-1-1", "<testcase>")
+
+        result, summary, outputs = self._summarize(expected_report_count=1)
+
+        self.assertEqual(result["observed_report_count"], 1)
+        self.assertFalse(result["results_complete"])
+        self.assertIn("1 observed / 1 expected; 0 valid (incomplete)", summary)
         self.assertEqual(outputs["results_complete"], "false")
 
 
