@@ -59,6 +59,7 @@ from _therock_utils.build_topology import get_topology
 
 from amdgpu_family_matrix import (
     all_build_variants,
+    amdgpu_family_info_matrix_explicit_only,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
     select_build_runner,
@@ -1054,9 +1055,19 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     all_families = get_all_families_for_trigger_types([])
     # Default families excludes explicit_only targets (used for "all" keyword)
     default_family_names = list(all_families)
-    # For workflow_dispatch, also include explicit_only families for lookup
+    # For workflow_dispatch, also include explicit_only families for lookup.
+    # For PR events with ci:gfx* labels, add only the matching explicit_only
+    # family entry so label-requested targets pass validation.
     if ci_inputs.is_workflow_dispatch:
         all_families.update(get_all_families_for_trigger_types(["explicit_only"]))
+    elif ci_inputs.is_pull_request and ci_inputs.pr_labels:
+        for label in ci_inputs.pr_labels:
+            if label.lower().startswith("ci:gfx"):
+                target = label.lower().removeprefix("ci:").split("-")[0]
+                if target in amdgpu_family_info_matrix_explicit_only:
+                    all_families[target] = amdgpu_family_info_matrix_explicit_only[
+                        target
+                    ]
 
     # Select family names per platform based on trigger type.
     # Ordered from most-specific (workflow_dispatch) to broadest (schedule).
