@@ -151,7 +151,7 @@ run-name: Test - Native Linux packages Install (${{ inputs.os_profile }})
 jobs:
   prepare_install_context:
     name: Prepare install context (package type, GPU arch, container image, container_gpu_options)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       pkg_type: ${{ steps.derive.outputs.pkg_type }}
       gfx_arch: ${{ steps.derive.outputs.gfx_arch }}
@@ -325,7 +325,7 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [prepare_install_context, test_native_linux_packages_install]
     name: "Quartz - completed - test rpm/deb install"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:

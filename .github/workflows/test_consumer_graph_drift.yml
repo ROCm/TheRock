@@ -23,7 +23,7 @@ permissions:
 jobs:
   consumer_graph_drift:
     name: "Consumer graph drift check"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Checking out repository
         timeout-minutes: 10

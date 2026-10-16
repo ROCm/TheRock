@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   build-and-push-image:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ROCm/${{ inputs.DOCKER_IMAGE_NAME }}

@@ -307,7 +307,7 @@ jobs:
   configure_jax_tests:
     name: Configure JAX Tests
     if: ${{ inputs.test_amdgpu_family != '' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
