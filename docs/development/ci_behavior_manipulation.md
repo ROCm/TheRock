@@ -79,15 +79,28 @@ standard `ci:gfx...` labels.
 
 #### Building frameworks with published ROCm
 
+When CI-relevant changes are confined to PyTorch or JAX files, CI can skip ROCm
+builds and use published ROCm packages. Ownership is listed under `[job_paths]`
+in [`skip-ci-config.toml`](../../build_tools/github_actions/skip-ci-config.toml).
+
+Explicit labels override automatic selection:
+
 - Use `ci:skip-rocm` with `ci:build-pytorch` or `ci:build-jax` (or both) to
   build frameworks using the latest nightly ROCm packages.
 - Use `ci:skip-pytorch` or `ci:skip-jax` to disable a framework that the
   workflow enables by default.
 
 > [!NOTE]
-> Published-package mode supports only the `release` build variant, until
-> ROCm releases include Python packages for other build variants
-> (see https://github.com/ROCm/TheRock/issues/3161 for example).
+> Automatic use of published packages is disabled by:
+>
+> - Build variants other than `release`, until ROCm releases include Python
+>   packages for other build variants (see
+>   https://github.com/ROCm/TheRock/issues/3161 for example).
+> - `ci:build-python-packages` or `ci:build-native-linux` labels, which request
+>   ROCm packaging jobs.
+> - Nonempty `build_stages`, `prebuilt_stages`, or `baseline_run_id` inputs,
+>   which request specific stage builds or artifact reuse.
+> - An `external_repo` input, whose changes are treated as ROCm changes.
 
 See
 [ci_overview.md - "Skipping ROCm builds for Framework-only CI runs"](ci_overview.md#skipping-rocm-builds-for-framework-only-ci-runs)
