@@ -7,11 +7,12 @@ inspect_repo_package.py lives in build_tools/packaging/linux/, which is not on
 the path that conftest.py sets up (it only adds build_tools/). Add it explicitly.
 Importing the module is side-effect-free thanks to its ``__main__`` guard.
 
-Only the pure functions are covered here: path derivation, listing parsers, and
-the payload check. Building a package needs dpkg, rpm and gpg, none of which are
-available on every leg this suite runs on; the workflow's "Build and inspect
-amdrocm-repo packages" step builds them for real. The listings below follow the
-real output format of each tool.
+Covered here: path derivation, listing parsers, the payload check and the
+command line. No package is built or listed: that needs dpkg-deb or rpm, which
+are not available on every leg this suite runs on. The listings below follow
+the real output format of each tool, and main() is driven with them in place of
+the tool. The workflow's stage job runs the check on each real package before
+uploading it.
 """
 
 import sys
@@ -153,7 +154,7 @@ class TestStreamShapes:
 
     def test_unhandled_shape_raises_and_names_the_stream(self, monkeypatch):
         monkeypatch.setattr(irp, "stream_shape", lambda _: "some_new_shape")
-        with pytest.raises(RuntimeError, match="does not know how to build"):
+        with pytest.raises(RuntimeError, match="does not know how to check"):
             irp.shape_of("weekly")
 
     def test_flat_streams_are_signed_and_build_id_are_not(self):
@@ -366,3 +367,109 @@ class TestLocateBuiltPackage:
         deb.write_text("")
         (tmp_path / "amdrocm-repo-10.0.0.noarch.rpm").write_text("")
         assert irp.locate_built_package(tmp_path, "deb") == deb
+
+
+DEB_FILE = "amdrocm-repo_10.0.0_all.deb"
+RPM_FILE = "amdrocm-repo-10.0.0.noarch.rpm"
+
+
+class TestMain:
+    """main() checks the one package in a directory against its profile and stream.
+
+    read_payload is replaced with the listing fixtures, so no package tool is
+    needed; what it was asked to read is recorded.
+    """
+
+    @pytest.fixture
+    def run_main(self, monkeypatch, tmp_path):
+        reads = []
+
+        def run(files, listing, os_profile, stream, parser=irp.parse_deb_contents):
+            for name in files:
+                (tmp_path / name).write_text("")
+
+            def fake_read_payload(package, pkg_type):
+                reads.append((package, pkg_type))
+                return parser(listing)
+
+            monkeypatch.setattr(irp, "read_payload", fake_read_payload)
+            argv = ["--package-dir", str(tmp_path), "--os-profile", os_profile]
+            return irp.main(argv + ["--stream", stream])
+
+        run.reads = reads
+        run.dir = tmp_path
+        return run
+
+    def test_matching_deb_passes(self, run_main, capsys):
+        rc = run_main([DEB_FILE], DEB_UNSIGNED_LISTING, "ubuntu2404", "nightly")
+        assert rc == 0
+        assert run_main.reads == [(run_main.dir / DEB_FILE, "deb")]
+        assert capsys.readouterr().out.startswith("ok")
+
+    def test_matching_signed_rpm_passes(self, run_main):
+        rc = run_main(
+            [RPM_FILE], RPM_SIGNED_LISTING, "sles16", "stable", irp.parse_rpm_contents
+        )
+        assert rc == 0
+        assert run_main.reads == [(run_main.dir / RPM_FILE, "rpm")]
+
+    def test_package_for_another_stream_fails(self, run_main, capsys):
+        """A nightly package checked as stable lacks stable's repo file and key."""
+        rc = run_main([DEB_FILE], DEB_UNSIGNED_LISTING, "ubuntu2404", "stable")
+        out = capsys.readouterr().out
+        assert rc == 1
+        assert "FAIL" in out
+        assert "/etc/apt/sources.list.d/amdrocm-stable.sources" in out
+        assert "/usr/share/keyrings/amdrocm.gpg" in out
+        assert not any(line.startswith("ok") for line in out.splitlines())
+
+    def test_wrong_owner_fails(self, run_main, capsys):
+        listing = DEB_UNSIGNED_LISTING.replace(
+            "root/root       150", "tester/tester   150"
+        )
+        rc = run_main([DEB_FILE], listing, "ubuntu2404", "nightly")
+        assert rc == 1
+        assert "owned by tester/tester" in capsys.readouterr().out
+
+    def test_the_profile_selects_the_package_type(self, run_main):
+        """An rpm profile looks for an .rpm, so a lone .deb is not picked up."""
+        with pytest.raises(RuntimeError, match=r"expected exactly one \.rpm.*found 0"):
+            run_main([DEB_FILE], DEB_UNSIGNED_LISTING, "rhel10", "nightly")
+        assert run_main.reads == []
+
+    def test_two_packages_fail_before_reading_either(self, run_main):
+        files = [DEB_FILE, "amdrocm-repo_10.0.1_all.deb"]
+        with pytest.raises(RuntimeError, match="found 2"):
+            run_main(files, DEB_UNSIGNED_LISTING, "ubuntu2404", "nightly")
+        assert run_main.reads == []
+
+
+class TestParseArgs:
+    VALID = [
+        "--package-dir",
+        "out",
+        "--os-profile",
+        "ubuntu2404",
+        "--stream",
+        "nightly",
+    ]
+
+    def test_valid_arguments(self):
+        args = irp.parse_args(self.VALID)
+        assert args.package_dir == Path("out")
+        assert (args.os_profile, args.stream) == ("ubuntu2404", "nightly")
+
+    @pytest.mark.parametrize("option", ["--package-dir", "--os-profile", "--stream"])
+    def test_every_argument_is_required(self, option):
+        i = self.VALID.index(option)
+        with pytest.raises(SystemExit):
+            irp.parse_args(self.VALID[:i] + self.VALID[i + 2 :])
+
+    @pytest.mark.parametrize(
+        "option,value", [("--os-profile", "ubuntu2204"), ("--stream", "weekly")]
+    )
+    def test_unknown_profile_or_stream_is_rejected(self, option, value):
+        argv = list(self.VALID)
+        argv[argv.index(option) + 1] = value
+        with pytest.raises(SystemExit):
+            irp.parse_args(argv)
