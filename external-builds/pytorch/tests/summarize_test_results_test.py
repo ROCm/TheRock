@@ -139,6 +139,18 @@ class SummarizeTestResultsTest(unittest.TestCase):
         self.assertIn("1 observed / 1 expected; 0 valid (incomplete)", summary)
         self.assertEqual(outputs["results_complete"], "false")
 
+    def test_non_junit_xml_is_incomplete(self):
+        report_dir = self.artifacts / "test-reports-default-1-1" / "python-pytest"
+        report_dir.mkdir(parents=True)
+        (report_dir / "results.xml").write_text("<metadata/>")
+
+        result, summary, outputs = self._summarize(expected_report_count=1)
+
+        self.assertEqual(result["observed_report_count"], 1)
+        self.assertFalse(result["results_complete"])
+        self.assertIn("1 observed / 1 expected; 0 valid (incomplete)", summary)
+        self.assertEqual(outputs["results_complete"], "false")
+
 
 if __name__ == "__main__":
     unittest.main()

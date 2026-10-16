@@ -48,6 +48,10 @@ def parse_junit_xml(xml_path: Path, *, strict: bool = False) -> list[dict]:
         testsuites = [root]
     elif root.tag == "testsuites":
         testsuites = root.findall("testsuite")
+    if not testsuites:
+        if strict:
+            raise ValueError(f"Not a JUnit report: {xml_path}")
+        return results
 
     for suite in testsuites:
         for testcase in suite.findall("testcase"):
@@ -96,7 +100,7 @@ def _collect_results_with_health(reports_dir: Path) -> tuple[list[dict], bool]:
     for xml_file in xml_files:
         try:
             failures = parse_junit_xml(xml_file, strict=True)
-        except ET.ParseError:
+        except (ET.ParseError, ValueError):
             valid = False
             continue
         for f in failures:
