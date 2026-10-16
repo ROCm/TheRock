@@ -54,21 +54,31 @@ from botocore.exceptions import NoCredentialsError, ClientError
 log = logging.getLogger(__name__)
 
 
-def _map_client_error(
-    e: ClientError, *, denied_message: str, not_found_message: str
-) -> Exception | None:
-    """Map a ClientError's code to a standard exception, or None if unrecognized.
+def _map_client_error(e: ClientError, *, bucket_name: str, context: str) -> None:
+    """Raise a standard exception for a ClientError based on its AWS error code.
 
-    Centralizes the AccessDenied/UnauthorizedOperation -> PermissionError and
-    NoSuchBucket -> FileNotFoundError mapping shared by every S3 call site.
+    context is "access" (listing objects) or "upload" (uploading index.html),
+    used to build S3-operation-specific messages. Maps AccessDenied/
+    UnauthorizedOperation -> PermissionError and NoSuchBucket ->
+    FileNotFoundError; any other ClientError is logged and re-raised as-is.
     """
     code = e.response.get("Error", {}).get("Code")
     message = e.response.get("Error", {}).get("Message")
+    if context == "upload":
+        denied_message = f"Access denied uploading to bucket '{bucket_name}'"
+        not_found_message = f"Bucket '{bucket_name}' not found during upload"
+    else:
+        denied_message = f"Access denied to bucket '{bucket_name}'"
+        not_found_message = f"Bucket '{bucket_name}' not found"
     if code in {"AccessDenied", "UnauthorizedOperation"}:
-        return PermissionError(f"{denied_message}: {message}")
+        raise PermissionError(f"{denied_message}: {message}") from e
     if code == "NoSuchBucket":
-        return FileNotFoundError(f"{not_found_message}: {message}")
-    return None
+        raise FileNotFoundError(f"{not_found_message}: {message}") from e
+    if context == "upload":
+        log.exception("Failed to upload index.html to bucket '%s': %s", bucket_name, e)
+    else:
+        log.exception("ClientError while accessing bucket '%s': %s", bucket_name, e)
+    raise e
 
 
 def _paginate_list_objects_v2(
@@ -90,15 +100,7 @@ def _paginate_list_objects_v2(
         )
         raise
     except ClientError as e:
-        mapped = _map_client_error(
-            e,
-            denied_message=f"Access denied to bucket '{bucket_name}'",
-            not_found_message=f"Bucket '{bucket_name}' not found",
-        )
-        if mapped is not None:
-            raise mapped from e
-        log.exception("ClientError while accessing bucket '%s': %s", bucket_name, e)
-        raise
+        _map_client_error(e, bucket_name=bucket_name, context="access")
 
 
 def _publish_html(
@@ -125,17 +127,7 @@ def _publish_html(
                 ContentType="text/html",
             )
         except ClientError as e:
-            mapped = _map_client_error(
-                e,
-                denied_message=f"Access denied uploading to bucket '{bucket_name}'",
-                not_found_message=f"Bucket '{bucket_name}' not found during upload",
-            )
-            if mapped is not None:
-                raise mapped from e
-            log.exception(
-                "Failed to upload index.html to bucket '%s': %s", bucket_name, e
-            )
-            raise
+            _map_client_error(e, bucket_name=bucket_name, context="upload")
 
         region = s3_client.meta.region_name
         bucket_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{upload_key}"
@@ -166,7 +158,7 @@ class _S3IndexGenerator:
         self.s3_client = s3_client
         self.bucket_name = bucket_name
 
-    def _paginate(self, **paginate_kwargs):
+    def _paginate(self, **paginate_kwargs) -> Iterator[dict]:
         return _paginate_list_objects_v2(
             self.s3_client, self.bucket_name, **paginate_kwargs
         )
@@ -237,7 +229,7 @@ class ArtifactIndexGenerator(_S3IndexGenerator):
         self.show_filter = show_filter
 
     @staticmethod
-    def _extract_gpu_families(files) -> list[str]:
+    def _extract_gpu_families(files: list[tuple[str, float]]) -> list[str]:
         """Find the GPU family name (e.g. "gfx90a") in each file name, if any.
 
         Only matches "gfx" followed by digits and optional trailing letters,
