@@ -36,7 +36,7 @@ Generate index.html for direct child directories (not files) under a prefix:
  ./index_generation_s3.py --bucket therock-dev-tarball --directory v5/rocm/extras/rocoptiq/windows-installers --directory-index --upload
 
 Generate index.html for Windows installers (.msi) under a prefix:
- ./index_generation_s3.py --bucket therock-dev-tarball --directory v5/rocm/extras/rocoptiq/windows-installers/win11 --windows-installer-index --upload
+ ./index_generation_s3.py --bucket therock-repo-amd-stable-staging-extras-rocoptiq --directory v5/rocm/extras/rocoptiq/windows-installers/win11 --windows-installer-index --upload
 """
 
 import argparse
@@ -565,7 +565,7 @@ examples:
         --directory-index --upload
 
   Generate index.html for Windows installers (.msi) under a prefix:
-    ./index_generation_s3.py --bucket therock-dev-tarball \\
+    ./index_generation_s3.py --bucket therock-repo-amd-stable-staging-extras-rocoptiq \\
         --directory v5/rocm/extras/rocoptiq/windows-installers/win11 \\
         --windows-installer-index --upload
 """,
