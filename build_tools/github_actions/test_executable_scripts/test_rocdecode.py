@@ -76,8 +76,22 @@ def setup_env(env):
         env["LD_PRELOAD"] = LD_PRELOAD_VALUE
         logging.info(f"++ rocdecode setting LIBVA_DRIVERS_PATH={ROCM_SYSDEPS_LIB_PATH}")
         env["LIBVA_DRIVERS_PATH"] = str(ROCM_SYSDEPS_LIB_PATH)
+    elif platform.system() == "Windows":
+        # Windows uses the vaon12 (VA-API-on-D3D12) backend. The patched libva
+        # locates vaon12_drv_video.dll relative to ROCM_PATH
+        # (<ROCM_PATH>/lib/rocm_sysdeps/bin), so no LIBVA_DRIVERS_PATH is needed.
+        # DLLs are resolved via PATH: rocdecode.dll lives in bin/, and the Mesa
+        # VA-API DLLs (rocm_sysdeps_va*.dll, vaon12_drv_video.dll) in
+        # lib/rocm_sysdeps/bin.
+        BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
+        SYSDEPS_BIN_PATH = ROCM_PATH / "lib" / "rocm_sysdeps" / "bin"
+        new_path = os.pathsep.join(
+            [str(BIN_PATH), str(SYSDEPS_BIN_PATH), env.get("PATH", "")]
+        )
+        logging.info(f"++ rocdecode prepending to PATH: {BIN_PATH};{SYSDEPS_BIN_PATH}")
+        env["PATH"] = new_path
     else:
-        logging.info(f"++ rocdecode tests only supported on Linux")
+        logging.info(f"++ rocdecode tests only supported on Linux and Windows")
         sys.exit(0)
 
 
@@ -91,16 +105,35 @@ def execute_tests(env):
     # 1. Verifies that the installed rocdecode headers and libraries are functional.
     # 2. Some test dependencies (e.g. video codec libraries) are not bundled in the
     #    TheRock artifacts and must be linked from the system at build time.
+    # Extended tests require FFmpeg dev libraries, provided on Linux via the
+    # specialized media container image. Windows CI has no such image, so it runs
+    # only the always-on tests (raw decode, caps, negative API) which need no
+    # FFmpeg.
+    enable_extended = "OFF" if platform.system() == "Windows" else "ON"
     cmd = [
         "cmake",
         "-GNinja",
-        "-DENABLE_EXTENDED_TESTS=ON",
+        f"-DENABLE_EXTENDED_TESTS={enable_extended}",
         ROCDECODE_TEST_PATH,
     ]
     logging.info(f"++ Exec [{ROCDECODE_TEST_DIR}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, cwd=ROCDECODE_TEST_DIR, check=True, env=env)
 
     filter_args = test_filter_args()
+    # On Windows, rocdec_Decode-HEVC decodes correctly but the sample returns a
+    # non-zero exit code during process teardown under CTest's launch context (the
+    # decoded output and frame counts are correct; only the shutdown path is
+    # affected). This is adjacent to the vaTerminate teardown crash fixed upstream
+    # in ROCm/rocm-systems#12309 and is tracked there. Exclude it on Windows until
+    # the teardown exit-code issue is resolved.
+    # TODO(ROCm/rocm-systems#12309): re-enable rocdec_Decode-HEVC on Windows.
+    if platform.system() == "Windows":
+        excluded = "rocdec_Decode-HEVC"
+        if "-E" in filter_args:
+            i = filter_args.index("-E")
+            filter_args[i + 1] = f"({filter_args[i + 1]})|({excluded})"
+        else:
+            filter_args += ["-E", excluded]
     logging.info(f"++ rocdecode test category TEST_TYPE={TEST_TYPE}")
 
     cmd = [
