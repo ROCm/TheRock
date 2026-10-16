@@ -102,7 +102,7 @@ on:
         type: boolean
         default: false
       build_variant:
-        description: "Build variant (release, asan, asan-debug). ASAN variants build torch only."
+        description: "Build variant (release, asan, asan-debug). ASAN variants build torch and torchaudio."
         type: string
         default: "release"
       quartz_tracking_id:
@@ -207,7 +207,7 @@ on:
         type: boolean
         default: false
       build_variant:
-        description: "Build variant (release, asan, asan-debug). ASAN variants build torch only."
+        description: "Build variant (release, asan, asan-debug). ASAN variants build torch and torchaudio."
         type: string
         default: "release"
       quartz_tracking_id:
@@ -316,11 +316,11 @@ jobs:
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --repo-hashtag nightly \
             --no-commit-hipify
-          # ASAN variants build torch only, so skip torchaudio, torchvision, triton, and apex.
+          ./external-builds/pytorch/pytorch_audio_repo.py checkout \
+            --repo-hashtag nightly \
+            --no-commit-hipify
+          # ASAN variants skip torchvision, triton, and apex.
           if [[ "${BUILD_VARIANT}" != asan* ]]; then
-            ./external-builds/pytorch/pytorch_audio_repo.py checkout \
-              --repo-hashtag nightly \
-              --no-commit-hipify
             ./external-builds/pytorch/pytorch_vision_repo.py checkout \
               --repo-hashtag nightly \
               --no-commit-hipify
@@ -343,11 +343,11 @@ jobs:
             --gitrepo-origin "${pytorch_origin}" \
             --repo-hashtag "${PYTORCH_GIT_REF}" \
             --no-commit-hipify
-          # ASAN variants build torch only, so skip torchaudio, torchvision, triton, and apex.
+          ./external-builds/pytorch/pytorch_audio_repo.py checkout \
+            --require-related-commit \
+            --no-commit-hipify
+          # ASAN variants skip torchvision, triton, and apex.
           if [[ "${BUILD_VARIANT}" != asan* ]]; then
-            ./external-builds/pytorch/pytorch_audio_repo.py checkout \
-              --require-related-commit \
-              --no-commit-hipify
             ./external-builds/pytorch/pytorch_vision_repo.py checkout \
               --require-related-commit \
               --no-commit-hipify
@@ -416,10 +416,10 @@ jobs:
           elif [ "${CACHE_TYPE}" = "ccache" ]; then
             cache_flag="--use-ccache"
           fi
-          # ASAN variants build torch only. --no-build-* keeps companion projects off.
+          # ASAN variants build torch and torchaudio. The other companions stay off.
           asan_flag=""
           if [[ "${BUILD_VARIANT}" == asan* ]]; then
-            asan_flag="--asan --no-build-triton --no-build-pytorch-audio --no-build-pytorch-vision --no-build-apex"
+            asan_flag="--asan --build-pytorch-audio --no-build-triton --no-build-pytorch-vision --no-build-apex"
           fi
 
           # build_prod_wheels.py forwards --index-url and --find-links to pip
