@@ -10,11 +10,11 @@ here. The mocked-boto3 cases verify only that our orchestration glue around
 download_fileobj preserves atomic-write and MD5-verification invariants.
 """
 
-import hashlib
 import concurrent.futures
 import errno
-import json
+import hashlib
 import io
+import json
 import os
 import sys
 import tempfile
@@ -621,9 +621,13 @@ class TestCacheSynchronization(unittest.TestCase):
     def test_cache_locks_share_canonical_path_and_are_released(self):
         with tempfile.TemporaryDirectory() as t:
             tmp = Path(t)
-            lock = fda._cache_lock(tmp / "cache", "a" * 32)
-            self.assertIs(lock, fda._cache_lock(tmp / "sub/../cache", "a" * 32))
-            self.assertIsNot(lock, fda._cache_lock(tmp / "cache", "b" * 32))
+            cache_dir = fda._prepare_cache_dir(tmp / "cache", lambda _: None)
+            alias = fda._prepare_cache_dir(tmp / "sub/../cache", lambda _: None)
+            self.assertIsNotNone(cache_dir)
+            self.assertIsNotNone(alias)
+            lock = fda._cache_lock(cache_dir, "a" * 32)
+            self.assertIs(lock, fda._cache_lock(alias, "a" * 32))
+            self.assertIsNot(lock, fda._cache_lock(cache_dir, "b" * 32))
             with lock:
                 self.assertFalse(lock.acquire(blocking=False))
             self.assertTrue(lock.acquire(blocking=False))
@@ -815,16 +819,55 @@ class TestDirectCachePublication(unittest.TestCase):
             self.assertEqual(list(cache.parent.glob("*.tmp")), [])
 
     def test_no_hardlink_filesystem_retains_copy_fallback(self):
-        with tempfile.TemporaryDirectory() as t:
-            tmp = Path(t)
-            source, cache = tmp / "source", tmp / "cache/key"
-            source.write_bytes(b"tiny")
-            with mock.patch.object(
-                fda.os, "link", side_effect=OSError(errno.ENOTSUP, "no hardlinks")
-            ):
-                fda._store_in_cache(source, cache)
-            self.assertEqual(cache.read_bytes(), b"tiny")
-            self.assertEqual(list(cache.parent.glob("*.tmp")), [])
+        # EPERM is a PermissionError, unlike ENOTSUP. Both can mean that the
+        # filesystem does not support hardlinks, rather than a competing writer.
+        for error in (errno.ENOTSUP, errno.EPERM):
+            with self.subTest(error=error), tempfile.TemporaryDirectory() as t:
+                tmp = Path(t)
+                source, cache = tmp / "source", tmp / "cache/key"
+                source.write_bytes(b"tiny")
+                with mock.patch.object(
+                    fda.os, "link", side_effect=OSError(error, "no hardlinks")
+                ):
+                    fda._store_in_cache(source, cache)
+                self.assertEqual(cache.read_bytes(), b"tiny")
+                self.assertEqual(source.read_bytes(), b"tiny")
+                self.assertEqual(list(cache.parent.glob("*.tmp")), [])
+
+    def test_manifest_publication_does_not_rename_cache_path(self):
+        for corrupt in (False, True):
+            with self.subTest(corrupt=corrupt), tempfile.TemporaryDirectory() as t:
+                tmp = Path(t)
+                manifest = b"[]"
+                md5 = _md5_hex(manifest) + ".dir"
+                remote = fda._Remote("storage", "b", "pfx", True)
+                s3 = _FakeS3({("b", fda._s3_key(remote, md5)): manifest})
+                cache_file = fda._cache_path(tmp / "cache", md5)
+                if corrupt:
+                    cache_file.parent.mkdir(parents=True)
+                    cache_file.write_bytes(b"bad manifest")
+                real_replace = os.replace
+
+                def replace(src, dest):
+                    if dest == cache_file:
+                        raise AssertionError("manifest cache rename window")
+                    return real_replace(src, dest)
+
+                messages = []
+                with mock.patch.object(fda.os, "replace", side_effect=replace):
+                    fda._materialize_dir(
+                        s3,
+                        remote,
+                        fda._Out(md5, 0, "out"),
+                        tmp / "out",
+                        tmp / "cache",
+                        messages.append,
+                    )
+                self.assertEqual(cache_file.read_bytes(), manifest)
+                self.assertEqual(len(s3.calls), 1)
+                self.assertEqual(list(tmp.rglob("*.tmp")), [])
+                if corrupt:
+                    self.assertTrue(any("discarding" in m for m in messages))
 
 
 class TestMaterializeFile(unittest.TestCase):
@@ -933,6 +976,142 @@ class TestMaterializeFile(unittest.TestCase):
             self.assertEqual(cache_file.read_bytes(), data)
 
 
+class TestCacheFailureRecovery(unittest.TestCase):
+    def test_manifest_cleanup_failure_preserves_successful_fetch(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            manifest = b"[]"
+            md5 = _md5_hex(manifest) + ".dir"
+            remote = fda._Remote("storage", "b", "pfx", True)
+            s3 = _FakeS3({("b", fda._s3_key(remote, md5)): manifest})
+            real_tempdir, real_unlink = tempfile.TemporaryDirectory, os.unlink
+            blocked_deletes = []
+
+            def private_tempdir(**kwargs):
+                # Keep deliberately undeletable staging files inside our fixture
+                # so the outer cleanup removes them after the fault is released.
+                return real_tempdir(dir=tmp, **kwargs)
+
+            def unlink(path, *args, **kwargs):
+                if Path(path).name == "manifest":
+                    blocked_deletes.append(path)
+                    raise PermissionError(errno.EACCES, "cache reader holds file open")
+                return real_unlink(path, *args, **kwargs)
+
+            with (
+                mock.patch.object(fda.tempfile, "TemporaryDirectory", private_tempdir),
+                mock.patch.object(fda.os, "unlink", unlink),
+            ):
+                fda._materialize_dir(
+                    s3,
+                    remote,
+                    fda._Out(md5, 0, "out"),
+                    tmp / "out",
+                    tmp / "cache",
+                    lambda _: None,
+                )
+            self.assertTrue(blocked_deletes)
+            self.assertEqual(fda._cache_path(tmp / "cache", md5).read_bytes(), manifest)
+            self.assertEqual(len(s3.calls), 1)
+
+    def test_pull_recovers_from_cache_errors(self):
+        for directory in (False, True):
+            for fault in ("root", "read", "evict", "store", "copy"):
+                with self.subTest(directory=directory, fault=fault):
+                    self._check_cache_failure(directory, fault)
+
+    def test_cache_fallback_rejects_corrupt_downloads(self):
+        for directory in (False, True):
+            with self.subTest(directory=directory):
+                self._check_cache_failure(directory, "read", corrupt_download=True)
+
+    def _check_cache_failure(self, directory, fault, corrupt_download=False):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t).resolve()
+            project = tmp / "project"
+            (project / ".dvc").mkdir(parents=True)
+            (project / ".dvc/config").write_text(
+                "[core]\n remote = storage\n['remote \"storage\"']\n"
+                " url = s3://b/pfx\n allow_anonymous_login = true\n"
+            )
+            data = b"verified content"
+            md5 = _md5_hex(data)
+            manifest = json.dumps([{"md5": md5, "relpath": "child.bin"}]).encode()
+            out_md5 = _md5_hex(manifest) + ".dir" if directory else md5
+            (project / "out.dvc").write_text(
+                f"outs:\n- md5: {out_md5}\n  size: {len(data)}\n  path: out\n"
+            )
+            dest = project / "out/child.bin" if directory else project / "out"
+            cache_dir = tmp / "cache"
+            # A copy failure concerns the child payload; the other directory
+            # cases exercise the manifest's own cache handling.
+            cache_file = fda._cache_path(cache_dir, md5 if fault == "copy" else out_md5)
+            cached_data = manifest if directory and fault != "copy" else data
+            if fault == "root":
+                cache_dir.write_bytes(b"not a directory")
+            elif fault in ("read", "evict", "copy"):
+                cache_file.parent.mkdir(parents=True)
+                cache_file.write_bytes(b"corrupt" if fault == "evict" else cached_data)
+
+            remote = fda._Remote("storage", "b", "pfx", True)
+            payloads = {("b", fda._s3_key(remote, md5)): data}
+            if directory:
+                payloads[("b", fda._s3_key(remote, out_md5))] = manifest
+            if corrupt_download:
+                payloads[("b", fda._s3_key(remote, out_md5))] = b"X" * len(cached_data)
+            s3 = _FakeS3(payloads)
+            real_open, real_unlink = Path.open, Path.unlink
+            real_link, real_copy = os.link, fda.shutil.copy2
+
+            def denied(path):
+                return PermissionError(errno.EACCES, "cache unavailable", str(path))
+
+            def open_file(path, *args, **kwargs):
+                if fault == "read" and path == cache_file:
+                    raise denied(path)
+                return real_open(path, *args, **kwargs)
+
+            def unlink(path, *args, **kwargs):
+                if fault == "evict" and path == cache_file:
+                    raise denied(path)
+                return real_unlink(path, *args, **kwargs)
+
+            def link(src, dst):
+                if (fault == "store" and dst == cache_file) or (
+                    fault == "copy" and src == cache_file
+                ):
+                    raise denied(dst)
+                return real_link(src, dst)
+
+            def copy(src, dst):
+                if (fault == "store" and dst.parent == cache_file.parent) or (
+                    fault == "copy" and src == cache_file
+                ):
+                    raise denied(dst)
+                return real_copy(src, dst)
+
+            messages = []
+            with (
+                mock.patch.object(fda, "_make_s3_client", return_value=s3),
+                mock.patch.object(Path, "open", open_file),
+                mock.patch.object(Path, "unlink", unlink),
+                mock.patch.object(fda.os, "link", link),
+                mock.patch.object(fda.shutil, "copy2", copy),
+            ):
+                if corrupt_download:
+                    with self.assertRaisesRegex(fda.FetchError, "1 file"):
+                        fda.pull(project, cache_dir=cache_dir, log=messages.append)
+                else:
+                    result = fda.pull(project, cache_dir=cache_dir, log=messages.append)
+                    self.assertEqual(result.fetched, 1)
+                    self.assertEqual(dest.read_bytes(), data)
+            self.assertTrue(any("warn" in m and "cache" in m for m in messages))
+            if corrupt_download:
+                self.assertFalse(dest.exists())
+                self.assertTrue(any("md5 mismatch" in m for m in messages))
+            self.assertEqual(list(tmp.rglob("*.tmp")), [])
+
+
 class TestPullEndToEnd(unittest.TestCase):
     """End-to-end pull() with mocked boto3."""
 
@@ -994,19 +1173,22 @@ class TestPullEndToEnd(unittest.TestCase):
             )
             fake_s3 = _FakeS3({("b", f"pfx/files/md5/{md5[:2]}/{md5[2:]}"): b"hello"})
 
+            messages = []
             with mock.patch.object(fda, "_make_s3_client", return_value=fake_s3):
                 with self.assertRaisesRegex(fda.FetchError, "1 file"):
-                    fda.pull(project, cache_dir=None, log=lambda _: None)
+                    fda.pull(project, cache_dir=None, log=messages.append)
             self.assertFalse((project / "x.bin").exists())
+            self.assertTrue(any("md5 mismatch" in m for m in messages))
+            self.assertFalse(any("Traceback" in m for m in messages))
 
     def test_pull_no_dvc_config_raises(self):
         with tempfile.TemporaryDirectory() as t:
             with self.assertRaisesRegex(fda.FetchError, "no .dvc/config"):
                 fda.pull(Path(t), log=lambda _: None)
 
-    def test_pull_preserves_cache_failure_tracebacks(self):
-        # CI's single cache-path error previously lost the operation that
-        # failed. Exercise a real cache hit through the worker and aggregate
+    def test_pull_preserves_destination_failure_tracebacks(self):
+        # Unexpected failures still need the worker stack. Cache I/O errors
+        # are recoverable, but denied destinations are fatal. Aggregate
         # two failures, including the cause of an exception from a helper.
         with tempfile.TemporaryDirectory() as t:
             tmp = Path(t)
@@ -1017,21 +1199,18 @@ class TestPullEndToEnd(unittest.TestCase):
                 "['remote \"storage\"']\n    url = s3://b/pfx\n"
                 "    allow_anonymous_login = true\n"
             )
-            data = b"cached content"
+            data = b"present content"
             md5 = _md5_hex(data)
             for name in ("a", "b"):
                 (project / f"{name}.dvc").write_text(
                     f"outs:\n- md5: {md5}\n  size: {len(data)}\n"
                     f"  hash: md5\n  path: {name}.bin\n"
                 )
-            cache_dir = tmp / "cache"
-            cache_file = fda._cache_path(cache_dir, md5)
-            cache_file.parent.mkdir(parents=True)
-            cache_file.write_bytes(data)
+                (project / f"{name}.bin").write_bytes(data)
             real_open = Path.open
 
-            def denied_cache_open(path, *args, **kwargs):
-                if path == cache_file:
+            def denied_destination_open(path, *args, **kwargs):
+                if path.suffix == ".bin":
                     try:
                         raise OSError("underlying filesystem failure")
                     except OSError as cause:
@@ -1043,10 +1222,10 @@ class TestPullEndToEnd(unittest.TestCase):
             messages = []
             with (
                 mock.patch.object(fda, "_make_s3_client", return_value=_FakeS3({})),
-                mock.patch.object(Path, "open", denied_cache_open),
+                mock.patch.object(Path, "open", denied_destination_open),
             ):
                 with self.assertRaisesRegex(fda.FetchError, "2 file\\(s\\)"):
-                    fda.pull(project, jobs=2, cache_dir=cache_dir, log=messages.append)
+                    fda.pull(project, jobs=2, cache_dir=None, log=messages.append)
 
             for name in ("a", "b"):
                 self.assertTrue(
@@ -1061,11 +1240,16 @@ class TestPullEndToEnd(unittest.TestCase):
                 self.assertIn("in _process_pointer", stack)
                 self.assertIn("in _materialize_file", stack)
                 self.assertIn("in _md5_of", stack)
-                self.assertIn("in denied_cache_open", stack)
+                self.assertIn("in denied_destination_open", stack)
                 self.assertIn("underlying filesystem failure", stack)
                 self.assertIn("direct cause", stack)
                 self.assertIn("PermissionError: [Errno 13] Permission denied", stack)
-                self.assertIn(repr(str(cache_file)), stack)
+                self.assertTrue(
+                    any(
+                        repr(str(project.resolve() / f"{name}.bin")) in stack
+                        for name in ("a", "b")
+                    )
+                )
 
 
 class TestParsePerOutputRemote(unittest.TestCase):
