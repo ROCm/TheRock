@@ -164,6 +164,60 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
             "99999-linux/manifests/gfx94X-dcgpu/therock_manifest.json",
         )
 
+    # -- Native packages --
+
+    def test_native_linux_packages(self):
+        loc = self.root.native_linux_packages("deb")
+        self._assert_relative_path(loc, "99999-linux/packages/deb")
+
+    def test_repo_setup_package(self):
+        loc = self.root.repo_setup_package("ubuntu2404", "nightly", "deb")
+        self._assert_relative_path(
+            loc,
+            "99999-linux/amd-repo-setup/ubuntu2404/amdrocm-repo-nightly.deb",
+        )
+
+    def test_repo_setup_package_all_profiles_and_tiers(self):
+        cases = [
+            ("deb", "ubuntu2404"),
+            ("rpm", "rhel8"),
+            ("rpm", "rhel10"),
+            ("rpm", "sles16"),
+        ]
+        for pkg_type, os_profile in cases:
+            for tier in ("stable", "stablerc", "nightly"):
+                with self.subTest(pkg_type=pkg_type, os_profile=os_profile, tier=tier):
+                    loc = self.root.repo_setup_package(os_profile, tier, pkg_type)
+                    self._assert_relative_path(
+                        loc,
+                        f"99999-linux/amd-repo-setup/{os_profile}"
+                        f"/amdrocm-repo-{tier}.{pkg_type}",
+                    )
+
+    def test_repo_setup_packages(self):
+        loc = self.root.repo_setup_packages()
+        self._assert_relative_path(loc, "99999-linux/amd-repo-setup")
+
+    def test_repo_setup_package_is_in_the_published_folder(self):
+        # Publishing copies repo_setup_packages() as a whole.
+        folder = self.root.repo_setup_packages().relative_path
+        loc = self.root.repo_setup_package("ubuntu2404", "nightly", "deb")
+        self.assertTrue(loc.relative_path.startswith(folder + "/"))
+
+    def test_repo_setup_package_is_outside_the_package_repositories(self):
+        # Publishing copies packages/<pkg_type>/ recursively into the package
+        # repositories. The bootstrap package is published to its own folder,
+        # so it must not ride along.
+        for pkg_type in ("deb", "rpm"):
+            with self.subTest(pkg_type=pkg_type):
+                packages = self.root.native_linux_packages(pkg_type)
+                repo_pkg = self.root.repo_setup_package(
+                    "ubuntu2404", "nightly", pkg_type
+                )
+                self.assertFalse(
+                    repo_pkg.relative_path.startswith(packages.relative_path + "/")
+                )
+
     # -- Python packages --
 
     def test_python_packages(self):
@@ -220,6 +274,23 @@ class TestWorkflowOutputRootLocationsExternalRepo(unittest.TestCase):
         self.assertEqual(
             loc.relative_path,
             "Fork-TheRock/12345-linux/logs/gfx94X-dcgpu",
+        )
+
+    def test_repo_setup_package_with_external_repo(self):
+        # external_repo is non-empty only for 'ci' from a fork or a repository
+        # other than ROCm/TheRock (therock-ci-artifacts-external). prerelease and
+        # nightly have their own buckets with an empty external_repo; release
+        # has no artifacts bucket at all.
+        root = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts-external",
+            external_repo="Fork-TheRock/",
+            run_id="12345",
+            platform="linux",
+        )
+        loc = root.repo_setup_package("rhel10", "stablerc", "rpm")
+        self.assertEqual(
+            loc.relative_path,
+            "Fork-TheRock/12345-linux/amd-repo-setup/rhel10/amdrocm-repo-stablerc.rpm",
         )
 
 

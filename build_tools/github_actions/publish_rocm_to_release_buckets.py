@@ -9,6 +9,7 @@ These release file types are supported:
 - [x] tarballs
 - [x] python packages
 - [x] native linux packages
+- [x] amdrocm-repo packages (linux, when the build uploaded them)
 - [ ] native windows packages
 
 Example with ``--run-id 12345 --platform linux --release-type dev``:
@@ -43,10 +44,15 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
     s3://therock-prerelease-artifacts/12345-linux/packages/rpm/
       -> s3://therock-repo-amd-rc-core/v5/rocm/core/packages/rpm/
 
+    amdrocm-repo packages (prerelease):
+
+    s3://therock-prerelease-artifacts/12345-linux/amd-repo-setup/rhel10/amdrocm-repo-stablerc.rpm
+      -> s3://therock-repo-amd-rc-core/v5/amd-repo-setup/rhel10/amdrocm-repo-stablerc.rpm
+
 ASAN build variant:
 
-    For ASAN builds (--build-variant asan), python packages are skipped and
-    tarballs/native packages are published to separate paths:
+    For ASAN builds (--build-variant asan), python and amdrocm-repo packages
+    are skipped and tarballs/native packages are published to separate paths:
 
     s3://therock-dev-artifacts/12345-linux/tarballs/
       -> s3://therock-repo-amd-dev-core/v5/rocm/core/tarball-asan/
@@ -278,6 +284,30 @@ def publish_native_linux_packages(
             raise FileNotFoundError(f"No {pkg_type} packages found at {source.s3_uri}")
 
 
+def publish_repo_setup_packages(
+    artifacts_root: WorkflowOutputRoot,
+    release_type: str,
+    backend: StorageBackend,
+) -> None:
+    """Copy the amdrocm-repo packages from the artifacts bucket to the release bucket.
+
+    The packages were uploaded by upload_repo_setup_package.py, one per distro
+    with a fixed file name per tier, so each run replaces the previous run's
+    package:
+
+        s3://therock-nightly-artifacts/12345-linux/amd-repo-setup/ubuntu2404/amdrocm-repo-nightly.deb
+          -> s3://therock-repo-amd-nightly-core/v5/amd-repo-setup/ubuntu2404/amdrocm-repo-nightly.deb
+
+    Not every build uploads them, so finding none is not an error.
+    """
+    source = artifacts_root.repo_setup_packages()
+    dest_bucket = get_product_release_bucket_config(release_type, "core")
+    dest = StorageLocation(dest_bucket.name, "v5/amd-repo-setup")
+    logger.info("amdrocm-repo packages: %s -> %s", source.s3_uri, dest.s3_uri)
+    count = backend.copy_directory(source, dest)
+    logger.info("Copied %d amdrocm-repo packages", count)
+
+
 def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(
         description="Publish ROCm release files to release buckets"
@@ -318,7 +348,8 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--skip-native-packages",
         action="store_true",
-        help="Skip publishing native Linux packages (deb/rpm)",
+        help="Skip publishing native Linux packages (deb/rpm repositories and the "
+        "amdrocm-repo packages)",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Print plan without copying"
@@ -360,6 +391,13 @@ def main(argv: list[str]) -> None:
         publish_native_linux_packages(
             artifacts_root, args.release_type, backend, args.build_variant
         )
+        # After the package repositories, which the amdrocm-repo package
+        # configures. ASAN builds publish their repositories under
+        # packages-asan/, which the package does not point at.
+        if not is_asan:
+            publish_repo_setup_packages(artifacts_root, args.release_type, backend)
+        else:
+            logger.info("Skipping amdrocm-repo packages for ASAN build variant")
 
 
 if __name__ == "__main__":

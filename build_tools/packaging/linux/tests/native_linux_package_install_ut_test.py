@@ -15,7 +15,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from unittest.mock import patch, MagicMock
 
 # Load the module: look in same dir as this file, then parent (covers linux/ or linux/tests/ layout).
@@ -45,6 +45,12 @@ _spec = importlib.util.spec_from_file_location(
 native_linux_package_install_test = importlib.util.module_from_spec(_spec)
 sys.modules["native_linux_package_install_test"] = native_linux_package_install_test
 _spec.loader.exec_module(native_linux_package_install_test)
+
+# The harness's package mode reads its contract from these two modules; the
+# tests compare against them directly. Loading the harness put its directory on
+# sys.path.
+import build_repo_package  # noqa: E402
+import get_url_repo_params  # noqa: E402
 
 
 def _noop_print(*args, **kwargs):
@@ -210,6 +216,14 @@ class ConfiguredPathsTest(unittest.TestCase):
             # has empty .args and would raise IndexError instead of failing.
             self.assertTrue(call.args, f"expected a positional argv, got {call}")
             self.assertIsInstance(call.args[0], list)
+
+    def test_package_keyring_is_separate_from_the_harness_keyring(self):
+        # The amdrocm-repo package ships its own keyring in a different
+        # directory; the two must not be conflated.
+        package_keyring = PurePosixPath(build_repo_package.DEB_KEYRING_PATH)
+        harness_keyring = PurePosixPath(self.mod.APT_KEYRING_FILE)
+        self.assertEqual(str(package_keyring), "/usr/share/keyrings/amdrocm.gpg")
+        self.assertNotEqual(package_keyring.parent, harness_keyring.parent)
 
 
 class NormalizeTestTypeTest(unittest.TestCase):
@@ -989,6 +1003,8 @@ class RunTestsTestTypeTest(unittest.TestCase):
             pkg_type=None,
             rocm_version=None,
             build_variant="",
+            repo_package_dir=None,
+            repo_config_only=False,
         )
 
     @patch.object(
@@ -2435,6 +2451,676 @@ class VerifyNoRunpathRealElfTest(unittest.TestCase):
         self.assertTrue(result)
         self.assertIn("not $ORIGIN-relative", output)
         self.assertIn("/opt/rocm/lib", output)
+
+
+@contextlib.contextmanager
+def _clear_ci_env():
+    """Remove CI env vars that _argv_from_ci_env reads so tests start clean."""
+    keys = [
+        "TEST_TYPE",
+        "OS_PROFILE",
+        "REPO_URL",
+        "GFX_ARCH",
+        "RELEASE_TYPE",
+        "INSTALL_PREFIX",
+        "REPO_PACKAGE_DIR",
+        "REPO_CONFIG_ONLY",
+        "GPG_KEY_URL",
+        "PACKAGES_DIR",
+        "SIMULATE_PKG_TYPE",
+        native_linux_package_install_test.ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION,
+    ]
+    saved = {k: os.environ.pop(k, None) for k in keys}
+    try:
+        yield
+    finally:
+        for k, v in saved.items():
+            if v is not None:
+                os.environ[k] = v
+
+
+class RepoPackageModeCliTest(unittest.TestCase):
+    """CLI/constructor behavior for the install-via-package mode."""
+
+    def _parse(self, argv):
+        return native_linux_package_install_test.parse_cli_arguments(
+            argv, raise_instead_of_exit=True
+        )
+
+    def test_repo_package_dir_makes_repo_url_optional(self):
+        args = self._parse(
+            [
+                "--os-profile",
+                "ubuntu2404",
+                "--release-type",
+                "prerelease",
+                "--repo-package-dir",
+                "/pkgs",
+                "--install-prefix",
+                "/opt/rocm/core",
+            ]
+        )
+        self.assertEqual(args.repo_package_dir, "/pkgs")
+        self.assertFalse(args.repo_config_only)
+
+    def test_config_only_drops_repo_url_and_install_prefix(self):
+        args = self._parse(
+            [
+                "--os-profile",
+                "ubuntu2404",
+                "--release-type",
+                "prerelease",
+                "--repo-package-dir",
+                "/pkgs",
+                "--repo-config-only",
+            ]
+        )
+        self.assertTrue(args.repo_config_only)
+        self.assertIsNone(args.repo_url)
+        self.assertIsNone(args.install_prefix)
+
+    def test_config_only_requires_repo_package_dir(self):
+        with self.assertRaises(ValueError):
+            self._parse(
+                [
+                    "--os-profile",
+                    "ubuntu2404",
+                    "--release-type",
+                    "prerelease",
+                    "--repo-config-only",
+                ]
+            )
+
+    def test_repo_url_still_required_without_repo_package_dir(self):
+        with self.assertRaises(ValueError):
+            self._parse(["--os-profile", "ubuntu2404", "--release-type", "prerelease"])
+
+    def test_repo_package_dir_rejected_with_simulate(self):
+        with self.assertRaises(ValueError):
+            self._parse(
+                [
+                    "--test-type",
+                    "simulate",
+                    "--packages-dir",
+                    "/p",
+                    "--os-profile",
+                    "ubuntu2404",
+                    "--repo-package-dir",
+                    "/pkgs",
+                ]
+            )
+
+    def test_repo_package_dir_rejects_a_line_without_a_stream(self):
+        # ci has no public repository, so there is no package whose config the
+        # harness could check. Fail at the CLI rather than mid-install.
+        with self.assertRaisesRegex(ValueError, "release, prerelease, nightly"):
+            self._parse(
+                [
+                    "--os-profile",
+                    "rhel10",
+                    "--release-type",
+                    "ci",
+                    "--repo-package-dir",
+                    "/pkgs",
+                    "--repo-config-only",
+                ]
+            )
+
+    def test_repo_package_dir_rejects_a_missing_release_type(self):
+        # --release-type has no default; without this check the None would reach
+        # the constructor's .lower() as an AttributeError.
+        with self.assertRaisesRegex(ValueError, "requires --release-type"):
+            self._parse(
+                [
+                    "--os-profile",
+                    "rhel10",
+                    "--repo-package-dir",
+                    "/pkgs",
+                    "--repo-config-only",
+                ]
+            )
+
+    def test_constructor_tolerates_none_repo_url(self):
+        runner = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            os_profile="rhel10",
+            repo_url=None,
+            release_type="nightly",
+            repo_package_dir="/pkgs",
+            repo_config_only=True,
+        )
+        self.assertEqual(runner.repo_url, "")
+        self.assertEqual(runner.repo_package_dir, "/pkgs")
+        self.assertTrue(runner.repo_config_only)
+
+
+def _package_runner(os_profile, release_type, pkg_dir="/pkgs"):
+    return native_linux_package_install_test.NativeLinuxPackageInstallTest(
+        os_profile=os_profile,
+        repo_url="",
+        release_type=release_type,
+        repo_package_dir=str(pkg_dir),
+    )
+
+
+class RepoPackageContractTest(unittest.TestCase):
+    """_repo_package_contract(): the names the harness looks for, per line.
+
+    Literal values on purpose. These are the paths a user's system ends up with,
+    so a change to any of them should have to change this test too.
+    """
+
+    def _contract(self, os_profile, release_type):
+        return _package_runner(os_profile, release_type)._repo_package_contract()
+
+    def test_deb_per_line(self):
+        cases = {
+            "release": ("stable", "amdrocm-stable", True),
+            "prerelease": ("rc", "amdrocm-stablerc", True),
+            "nightly": ("nightly", "amdrocm-nightly", False),
+        }
+        for release_type, (stream, repo_id, signed) in cases.items():
+            with self.subTest(release_type=release_type):
+                c = self._contract("ubuntu2404", release_type)
+                self.assertEqual(c.stream, stream)
+                self.assertEqual(c.repo_id, repo_id)
+                self.assertEqual(
+                    c.repo_file, f"/etc/apt/sources.list.d/{repo_id}.sources"
+                )
+                self.assertEqual(c.key_file, "/usr/share/keyrings/amdrocm.gpg")
+                self.assertIs(c.signed, signed)
+
+    def test_rpm_per_distro_directory(self):
+        cases = {
+            "rhel8": "/etc/yum.repos.d/amdrocm-stablerc.repo",
+            "rhel10": "/etc/yum.repos.d/amdrocm-stablerc.repo",
+            "sles16": "/etc/zypp/repos.d/amdrocm-stablerc.repo",
+        }
+        for os_profile, repo_file in cases.items():
+            with self.subTest(os_profile=os_profile):
+                c = self._contract(os_profile, "prerelease")
+                self.assertEqual(c.repo_file, repo_file)
+                self.assertEqual(c.key_file, "/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm")
+                self.assertIs(c.signed, True)
+
+    def test_paths_are_posix_on_every_host(self):
+        # These name paths on the target system. Built with Path, they would
+        # render with backslashes on a Windows host.
+        c = self._contract("rhel10", "nightly")
+        self.assertNotIn("\\", c.repo_file)
+        self.assertEqual(str(PurePosixPath(c.repo_file)), c.repo_file)
+
+    def test_line_without_a_stream_raises(self):
+        with self.assertRaisesRegex(ValueError, "no public amdrocm-repo stream"):
+            self._contract("rhel10", "ci")
+
+
+def _installed_paths(pkg_type, context):
+    """Paths the rendered package installs, read from its own manifest.
+
+    deb: debian/install lines are "<file> <dest-dir>/". rpm: the spec's %files
+    section, minus directives.
+    """
+    env = build_repo_package.get_jinja_env()
+    if pkg_type == "deb":
+        text = env.get_template("template/repo/deb/install.j2").render(context)
+        paths = set()
+        for line in text.splitlines():
+            if line.strip():
+                src, dest = line.split()
+                paths.add(str(PurePosixPath(dest) / PurePosixPath(src).name))
+        return paths
+    text = env.get_template("template/repo/rpm/amdrocm-repo.spec.j2").render(context)
+    files = text.split("\n%files", 1)[1].split("\n%changelog", 1)[0]
+    paths = set()
+    for line in files.splitlines()[1:]:
+        line = line.strip()
+        if line.startswith("%config"):
+            line = line.split(None, 1)[1]
+        if line and not line.startswith("%"):
+            paths.add(line)
+    return paths
+
+
+class RepoPackageContractMatchesBuilderTest(unittest.TestCase):
+    """The harness checks exactly the files the package installs.
+
+    Renders the package's manifest with the builder's own templates for every
+    profile and every stream a line maps to, so neither side is written into
+    the test.
+    """
+
+    def test_every_profile_and_stream(self):
+        for release_type in get_url_repo_params.get_public_repo_release_types():
+            stream = get_url_repo_params.get_public_repo_stream(release_type)
+            signed = build_repo_package.is_signed(stream)
+            build_id = build_repo_package.stream_shape(stream) == "build_id"
+            for os_profile, profile in build_repo_package.OS_PROFILES.items():
+                with self.subTest(release_type=release_type, os_profile=os_profile):
+                    argv = [
+                        "--os-profile",
+                        os_profile,
+                        "--stream",
+                        stream,
+                        "--repo-base-url",
+                        "https://example.com/rocm/core/packages",
+                        "--rocm-version",
+                        "10.0.0",
+                        "--dest-dir",
+                        "/tmp/out",
+                    ]
+                    if signed:
+                        argv += [
+                            "--gpg-key-url",
+                            "https://example.com/rocm/gpg/packages.gpg",
+                        ]
+                    if build_id:
+                        argv += ["--repo-sub-folder", "20260101-1"]
+                    context = build_repo_package.build_context(
+                        build_repo_package.parse_args(argv), profile
+                    )
+                    installed = _installed_paths(profile["pkg_type"], context)
+
+                    c = _package_runner(
+                        os_profile, release_type
+                    )._repo_package_contract()
+                    self.assertIn(c.repo_file, installed)
+                    if signed:
+                        self.assertIn(c.key_file, installed)
+                    else:
+                        self.assertNotIn(c.key_file, installed)
+
+
+class InstallRepoPackageTest(unittest.TestCase):
+    """Tests for install_repo_package() command construction (mocked subprocess)."""
+
+    def _runner(self, os_profile, pkg_dir, release_type="prerelease"):
+        return _package_runner(os_profile, release_type, pkg_dir)
+
+    @patch("native_linux_package_install_test._run_streaming")
+    def test_deb_installs_then_apt_update(self, mock_streaming):
+        mock_streaming.return_value = 0
+        with tempfile.TemporaryDirectory() as d:
+            pkg = Path(d) / "amdrocm-repo_10.0.0~pre-1~ubuntu2404_all.deb"
+            pkg.write_text("")
+            runner = self._runner("ubuntu2404", d)
+            with _suppress_script_output():
+                self.assertTrue(runner.install_repo_package())
+        install_cmd, refresh_cmd = (c.args[0] for c in mock_streaming.call_args_list)
+        self.assertEqual(
+            install_cmd, ["sudo", "apt", "install", "-y", str(pkg.resolve())]
+        )
+        self.assertEqual(refresh_cmd, ["sudo", "apt", "update"])
+
+    @patch("native_linux_package_install_test._run_streaming")
+    def test_dnf_installs_nogpgcheck_then_refreshes_the_stream_repo(
+        self, mock_streaming
+    ):
+        mock_streaming.return_value = 0
+        with tempfile.TemporaryDirectory() as d:
+            pkg = Path(d) / "amdrocm-repo-20260716-12345.1.nightly.el10.noarch.rpm"
+            pkg.write_text("")
+            runner = self._runner("rhel10", d, release_type="nightly")
+            with _suppress_script_output():
+                self.assertTrue(runner.install_repo_package())
+        install_cmd, refresh_cmd = (c.args[0] for c in mock_streaming.call_args_list)
+        self.assertEqual(
+            install_cmd, ["dnf", "install", "-y", "--nogpgcheck", str(pkg.resolve())]
+        )
+        # The repo id the package registers is [amdrocm-nightly]; a bare
+        # "amdrocm" makes dnf fail with "Unknown repo".
+        self.assertEqual(
+            refresh_cmd,
+            ["dnf", "makecache", "--disablerepo=*", "--enablerepo=amdrocm-nightly"],
+        )
+
+    @patch("native_linux_package_install_test._run_streaming")
+    def test_sles_installs_no_gpg_checks_then_refreshes_the_stream_repo(
+        self, mock_streaming
+    ):
+        mock_streaming.return_value = 0
+        with tempfile.TemporaryDirectory() as d:
+            pkg = Path(d) / "amdrocm-repo-10.0.0-1.stable.sles16.noarch.rpm"
+            pkg.write_text("")
+            runner = self._runner("sles16", d, release_type="release")
+            with _suppress_script_output():
+                self.assertTrue(runner.install_repo_package())
+        install_cmd, refresh_cmd = (c.args[0] for c in mock_streaming.call_args_list)
+        self.assertEqual(
+            install_cmd,
+            [
+                "zypper",
+                "--non-interactive",
+                "--no-gpg-checks",
+                "install",
+                "-y",
+                str(pkg.resolve()),
+            ],
+        )
+        self.assertEqual(
+            refresh_cmd,
+            [
+                "zypper",
+                "--non-interactive",
+                "--gpg-auto-import-keys",
+                "refresh",
+                "amdrocm-stable",
+            ],
+        )
+
+    @patch("native_linux_package_install_test._run_streaming")
+    def test_line_without_a_stream_fails_without_running(self, mock_streaming):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "amdrocm-repo_1_all.deb").write_text("")
+            runner = self._runner("ubuntu2404", d, release_type="ci")
+            with _suppress_script_output():
+                self.assertFalse(runner.install_repo_package())
+        mock_streaming.assert_not_called()
+
+    @patch("native_linux_package_install_test._run_streaming")
+    def test_missing_package_fails_without_running(self, mock_streaming):
+        with tempfile.TemporaryDirectory() as d:
+            runner = self._runner("ubuntu2404", d)  # empty dir
+            with _suppress_script_output():
+                self.assertFalse(runner.install_repo_package())
+        mock_streaming.assert_not_called()
+
+    @patch("native_linux_package_install_test._run_streaming")
+    def test_multiple_packages_fails_without_running(self, mock_streaming):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "amdrocm-repo_1_all.deb").write_text("")
+            (Path(d) / "amdrocm-repo_2_all.deb").write_text("")
+            runner = self._runner("ubuntu2404", d)
+            with _suppress_script_output():
+                self.assertFalse(runner.install_repo_package())
+        mock_streaming.assert_not_called()
+
+    @patch("native_linux_package_install_test._run_streaming")
+    def test_install_failure_returns_false_without_refresh(self, mock_streaming):
+        mock_streaming.return_value = 1  # install fails
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "amdrocm-repo_1_all.deb").write_text("")
+            runner = self._runner("ubuntu2404", d)
+            with _suppress_script_output():
+                self.assertFalse(runner.install_repo_package())
+        self.assertEqual(mock_streaming.call_count, 1)  # refresh not attempted
+
+    @patch("native_linux_package_install_test.time.sleep")
+    @patch("native_linux_package_install_test._run_streaming")
+    def test_refresh_retries_then_succeeds(self, mock_streaming, mock_sleep):
+        # install ok, refresh fails twice, then succeeds. The refresh talks to a
+        # live CDN, so a transient blip must not fail the run.
+        mock_streaming.side_effect = [0, 1, 1, 0]
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "amdrocm-repo_1_all.deb").write_text("")
+            runner = self._runner("ubuntu2404", d)
+            with _suppress_script_output():
+                self.assertTrue(runner.install_repo_package())
+        self.assertEqual(mock_streaming.call_count, 4)  # 1 install + 3 refreshes
+        # Backoff grows with the attempt number.
+        self.assertEqual([c.args[0] for c in mock_sleep.call_args_list], [3, 6])
+
+    @patch("native_linux_package_install_test.time.sleep")
+    @patch("native_linux_package_install_test._run_streaming")
+    def test_refresh_gives_up_after_the_attempt_limit(self, mock_streaming, mock_sleep):
+        mock_streaming.side_effect = [0, 1, 1, 1]
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "amdrocm-repo_1_all.deb").write_text("")
+            runner = self._runner("ubuntu2404", d)
+            with _suppress_script_output():
+                self.assertFalse(runner.install_repo_package())
+        self.assertEqual(mock_streaming.call_count, 4)
+        # No sleep after the final attempt.
+        self.assertEqual(mock_sleep.call_count, 2)
+
+    @patch("native_linux_package_install_test.time.sleep")
+    @patch("native_linux_package_install_test._run_streaming")
+    def test_refresh_retries_on_timeout(self, mock_streaming, mock_sleep):
+        # A timeout is retried like a non-zero exit, not propagated.
+        mock_streaming.side_effect = [
+            0,
+            subprocess.TimeoutExpired(cmd="apt update", timeout=1),
+            0,
+        ]
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "amdrocm-repo_1_all.deb").write_text("")
+            runner = self._runner("ubuntu2404", d)
+            with _suppress_script_output():
+                self.assertTrue(runner.install_repo_package())
+        self.assertEqual(mock_streaming.call_count, 3)
+
+
+class AssertRepoConfiguredTest(unittest.TestCase):
+    """Tests for assert_repo_configured()'s checks on the files it finds.
+
+    Where it looks is not tested here: each test points the contract at temp
+    files. The location is covered by RepoPackageContractTest (literal paths)
+    and RepoPackageContractMatchesBuilderTest (the package's own manifest).
+    """
+
+    def _check(self, os_profile, release_type, repo_file, key_file):
+        runner = _package_runner(os_profile, release_type)
+        real = runner._repo_package_contract()
+        contract = real._replace(repo_file=str(repo_file), key_file=str(key_file))
+        with patch.object(runner, "_repo_package_contract", return_value=contract):
+            with _suppress_script_output():
+                return runner.assert_repo_configured()
+
+    def test_deb_signed_requires_sources_and_keyring(self):
+        with tempfile.TemporaryDirectory() as d:
+            sources = Path(d) / "amdrocm-stablerc.sources"
+            sources.write_text(
+                "Types: deb\n"
+                "URIs: https://rc.repo.amd.com/rocm/core/packages/ubuntu2404/\n"
+                "Signed-By: /usr/share/keyrings/amdrocm.gpg\n"
+            )
+            keyring = Path(d) / "amdrocm.gpg"
+            keyring.write_text("key")
+            self.assertTrue(self._check("ubuntu2404", "prerelease", sources, keyring))
+            keyring.unlink()  # signed stream but keyring missing -> fail
+            self.assertFalse(self._check("ubuntu2404", "prerelease", sources, keyring))
+
+    def test_deb_missing_sources_fails(self):
+        self.assertFalse(
+            self._check(
+                "ubuntu2404",
+                "prerelease",
+                "/nonexistent/amdrocm-stablerc.sources",
+                "/nonexistent/amdrocm.gpg",
+            )
+        )
+
+    def test_deb_nightly_needs_no_keyring(self):
+        with tempfile.TemporaryDirectory() as d:
+            sources = Path(d) / "amdrocm-nightly.sources"
+            sources.write_text("URIs: https://x/rocm/deb/\nTrusted: yes\n")
+            self.assertTrue(
+                self._check(
+                    "ubuntu2404", "nightly", sources, "/nonexistent/amdrocm.gpg"
+                )
+            )
+
+    def test_structurally_invalid_repo_file_fails(self):
+        # A repo file missing the expected deb822 marker (URIs:) is rejected,
+        # independent of whether the host string contains "rocm".
+        with tempfile.TemporaryDirectory() as d:
+            sources = Path(d) / "amdrocm-nightly.sources"
+            sources.write_text("not a valid deb822 sources file\n")
+            self.assertFalse(
+                self._check(
+                    "ubuntu2404", "nightly", sources, "/nonexistent/amdrocm.gpg"
+                )
+            )
+
+    def test_marker_only_in_a_comment_fails(self):
+        with tempfile.TemporaryDirectory() as d:
+            sources = Path(d) / "amdrocm-nightly.sources"
+            sources.write_text("# URIs: https://x/\nTypes: deb\n")
+            self.assertFalse(
+                self._check(
+                    "ubuntu2404", "nightly", sources, "/nonexistent/amdrocm.gpg"
+                )
+            )
+
+    def test_mirror_host_without_rocm_still_passes(self):
+        # deb822 with a rocm-less mirror host is valid: the marker check must
+        # not reject it just because the URL lacks "rocm".
+        with tempfile.TemporaryDirectory() as d:
+            sources = Path(d) / "amdrocm-nightly.sources"
+            sources.write_text(
+                "Types: deb\n"
+                "URIs: https://mirror.example.com/rocm/core/packages/ubuntu2404/20260716-1/\n"
+                "Suites: stable\n"
+                "Trusted: yes\n"
+            )
+            self.assertTrue(
+                self._check(
+                    "ubuntu2404", "nightly", sources, "/nonexistent/amdrocm.gpg"
+                )
+            )
+
+    def test_rpm_signed_requires_repo_file_and_key(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d) / "amdrocm-stable.repo"
+            repo.write_text(
+                "[amdrocm-stable]\n"
+                "baseurl=https://stable.repo.amd.com/rocm/core/packages/rhel10/x86_64/\n"
+            )
+            key = Path(d) / "RPM-GPG-KEY-amdrocm"
+            key.write_text("key")
+            self.assertTrue(self._check("rhel10", "release", repo, key))
+            key.unlink()
+            self.assertFalse(self._check("rhel10", "release", repo, key))
+
+    def test_line_without_a_stream_fails(self):
+        runner = _package_runner("rhel10", "ci")
+        with _suppress_script_output():
+            self.assertFalse(runner.assert_repo_configured())
+
+
+# Run in a fresh interpreter: in the test session build_repo_package is already
+# in sys.modules (this file and build_repo_package_test.py import it), so an
+# in-process check would pass even if the harness imported it at load time.
+_NO_JINJA2_PROBE = """
+import importlib.util, sys
+sys.modules["jinja2"] = None  # any "import jinja2" now raises ImportError
+linux_dir = sys.argv[1]
+sys.path.insert(0, linux_dir)
+spec = importlib.util.spec_from_file_location(
+    "harness", linux_dir + "/native_linux_package_install_test.py"
+)
+harness = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(harness)
+harness.parse_cli_arguments(
+    ["--test-type", "simulate", "--packages-dir", "/p", "--pkg-type", "deb"],
+    raise_instead_of_exit=True,
+)
+assert "build_repo_package" not in sys.modules, "loaded build_repo_package"
+print("ok")
+"""
+
+
+class HarnessWithoutJinja2Test(unittest.TestCase):
+    """The harness loads and runs its non-package modes without jinja2.
+
+    Only the package mode needs build_repo_package (and the jinja2 it
+    imports), so only it may import it; the other modes keep working in an
+    environment that has neither.
+    """
+
+    def test_loads_and_parses_without_jinja2(self):
+        result = subprocess.run(
+            [sys.executable, "-c", _NO_JINJA2_PROBE, str(_module_path.parent)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "ok")
+
+
+class RunRepoSetupDispatchTest(unittest.TestCase):
+    """run_repo_setup_and_install dispatch: package mode vs config-only vs default."""
+
+    def _runner(self, **kw):
+        base = dict(os_profile="ubuntu2404", repo_url="", release_type="prerelease")
+        base.update(kw)
+        return native_linux_package_install_test.NativeLinuxPackageInstallTest(**base)
+
+    def test_config_only_stops_before_rocm_install(self):
+        runner = self._runner(repo_package_dir="/pkgs", repo_config_only=True)
+        runner.install_repo_package = MagicMock(return_value=True)
+        runner.assert_repo_configured = MagicMock(return_value=True)
+        runner.install_deb_packages = MagicMock(return_value=True)
+        with _suppress_script_output():
+            self.assertTrue(runner.run_repo_setup_and_install())
+        runner.install_repo_package.assert_called_once()
+        runner.assert_repo_configured.assert_called_once()
+        runner.install_deb_packages.assert_not_called()
+
+    def test_package_mode_installs_rocm_when_not_config_only(self):
+        runner = self._runner(repo_package_dir="/pkgs", repo_config_only=False)
+        runner.install_repo_package = MagicMock(return_value=True)
+        runner.assert_repo_configured = MagicMock(return_value=True)
+        runner.install_deb_packages = MagicMock(return_value=True)
+        with _suppress_script_output():
+            self.assertTrue(runner.run_repo_setup_and_install())
+        runner.install_deb_packages.assert_called_once()
+
+    def test_failed_assert_short_circuits(self):
+        runner = self._runner(repo_package_dir="/pkgs", repo_config_only=False)
+        runner.install_repo_package = MagicMock(return_value=True)
+        runner.assert_repo_configured = MagicMock(return_value=False)
+        runner.install_deb_packages = MagicMock(return_value=True)
+        with _suppress_script_output():
+            self.assertFalse(runner.run_repo_setup_and_install())
+        runner.install_deb_packages.assert_not_called()
+
+    def test_default_path_uses_manual_setup(self):
+        runner = self._runner()  # no repo_package_dir
+        runner.install_repo_package = MagicMock(return_value=True)
+        runner.setup_deb_repository = MagicMock(return_value=True)
+        runner.install_deb_packages = MagicMock(return_value=True)
+        with _suppress_script_output():
+            self.assertTrue(runner.run_repo_setup_and_install())
+        runner.setup_deb_repository.assert_called_once()
+        runner.install_repo_package.assert_not_called()
+
+
+class ArgvFromCiEnvRepoPackageTest(unittest.TestCase):
+    """_argv_from_ci_env: install-via-package env mapping and relaxed requirements."""
+
+    def test_config_only_lane_needs_no_repo_url_or_install_prefix(self):
+        env = {
+            "TEST_TYPE": "sanity",
+            "OS_PROFILE": "ubuntu2404",
+            "RELEASE_TYPE": "prerelease",
+            "REPO_PACKAGE_DIR": "/pkgs",
+            "REPO_CONFIG_ONLY": "true",
+        }
+        with _clear_ci_env(), patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        self.assertIsNotNone(argv)
+        self.assertIn("--repo-package-dir", argv)
+        self.assertEqual(argv[argv.index("--repo-package-dir") + 1], "/pkgs")
+        self.assertIn("--repo-config-only", argv)
+        self.assertNotIn("--repo-url", argv)
+        self.assertNotIn("--install-prefix", argv)
+
+    def test_package_mode_with_install_prefix_no_repo_url(self):
+        env = {
+            "TEST_TYPE": "sanity",
+            "OS_PROFILE": "rhel10",
+            "RELEASE_TYPE": "prerelease",
+            "REPO_PACKAGE_DIR": "/pkgs",
+            "INSTALL_PREFIX": "/opt/rocm/core",
+        }
+        with _clear_ci_env(), patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        self.assertIsNotNone(argv)
+        self.assertIn("--repo-package-dir", argv)
+        self.assertIn("--install-prefix", argv)
+        self.assertNotIn("--repo-url", argv)
+        self.assertNotIn("--repo-config-only", argv)
 
 
 if __name__ == "__main__":
