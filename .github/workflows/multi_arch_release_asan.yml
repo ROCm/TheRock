@@ -47,6 +47,13 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      pytorch_git_refs:
+        description: >-
+          PyTorch refs to build (comma/semicolon separated). Empty uses the
+          release-type default. Include release/2.12 explicitly; it is no
+          longer in that default set.
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       release_type:
@@ -71,6 +78,13 @@ on:
         default: true
       python_version:
         description: "Single Python version for wheel builds (empty for full matrix)"
+        type: string
+        default: ""
+      pytorch_git_refs:
+        description: >-
+          PyTorch refs to build (comma/semicolon separated). Empty uses the
+          release-type default. Include release/2.12 explicitly; it is no
+          longer in that default set.
         type: string
         default: ""
 
@@ -117,6 +131,7 @@ jobs:
       build_pytorch: ${{ inputs.build_pytorch }}
       build_jax: false
       python_version: ${{ inputs.python_version }}
+      pytorch_git_refs: ${{ inputs.pytorch_git_refs }}
       build_variant: "asan-debug"
     permissions:
       contents: read
