@@ -382,7 +382,7 @@ def main(argv: list[str] | None = None) -> int:
             "Comma, semicolon, or whitespace separated list of PyTorch refs. "
             "Use 'all' (or leave empty) for the full default set, or pass a "
             "subset of the refs available for the --release-type/--platform "
-            "(e.g. 'release/2.12, release/2.13'). For --release-type=dev any "
+            "(e.g. 'release/2.13, release/2.14'). For --release-type=dev any "
             "ref (custom branch/tag/SHA) passes through; other release types "
             "reject refs outside the available set."
         ),

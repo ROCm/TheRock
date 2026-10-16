@@ -185,7 +185,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
         )
 
     def test_resolve_cli_pytorch_git_refs_all_and_empty_use_defaults(self):
-        for raw in ("", "all", "ALL", "release/2.12, all"):
+        for raw in ("", "all", "ALL", "release/2.14 all"):
             with self.subTest(raw=raw):
                 self.assertIsNone(
                     m._resolve_cli_pytorch_git_refs(
@@ -196,11 +196,11 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
     def test_resolve_cli_pytorch_git_refs_subset_passthrough(self):
         self.assertEqual(
             m._resolve_cli_pytorch_git_refs(
-                "release/2.12, release/2.13",
+                "release/2.13, release/2.14",
                 release_type="nightly",
                 platform="linux",
             ),
-            ["release/2.12", "release/2.13"],
+            ["release/2.13", "release/2.14"],
         )
 
     def test_single_ref_covers_all_release_python_versions(self):
@@ -208,12 +208,12 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
         # version (1 ref x all Python).
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="nightly",
-            pytorch_git_refs=["release/2.12"],
+            pytorch_git_refs=["release/2.14"],
             amdgpu_families="gfx94X-dcgpu",
             platform="linux",
         )
 
-        self.assertEqual({row["pytorch_git_ref"] for row in matrix}, {"release/2.12"})
+        self.assertEqual({row["pytorch_git_ref"] for row in matrix}, {"release/2.14"})
         self.assertEqual(
             [row["python_version"] for row in matrix],
             m.RELEASE_PYTHON_VERSIONS,
@@ -239,11 +239,11 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
         )
         self.assertEqual(
             m._resolve_cli_pytorch_git_refs(
-                "release/2.12, users/alice/gfx125x-bringup",
+                "release/2.14, users/alice/gfx125x-bringup",
                 release_type="dev",
                 platform="linux",
             ),
-            ["release/2.12", "users/alice/gfx125x-bringup"],
+            ["release/2.14", "users/alice/gfx125x-bringup"],
         )
 
     def test_resolve_cli_pytorch_git_refs_non_dev_rejects_custom_branch(self):
