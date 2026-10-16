@@ -106,8 +106,10 @@ build.
 
 ```mermaid
 graph TD
+    pr[PR labelled ci:coverage] --> plan[configure_coverage_pr.py: projects and baseline]
+    plan --> matrix
     dispatch[Dispatch with projects_to_test] --> matrix[setup_coverage_matrix]
-    matrix --> compilerRuntime[Build compiler-runtime]
+    matrix --> compilerRuntime[Build or copy compiler-runtime]
     compilerRuntime --> mathLibs[Build instrumented math-libs]
     mathLibs --> report[Per project: configure, test, report]
     report --> codecov[Codecov]
@@ -129,15 +131,55 @@ at `nightly`) and set `projects_to_test`; other inputs use sensible defaults.
 Running coverage separately keeps failures off the nightly's status. Automatic
 nightly dispatch is a follow-up; `baseline_run_id` is already the right input.
 
+### Pull request coverage
+
+`multi_arch_ci_coverage_pr.yml` runs coverage for a pull request labelled
+`ci:coverage`. Each push re-runs it and cancels the previous run; remove the
+label to stop. rocm-libraries and rocm-systems pull request workflows call it
+through `uses:` with their `changed_projects` and `external_repo`, as they do
+for `setup_multi_arch.yml`, and the label gate applies to their pull requests
+too.
+
+`configure_coverage_pr.py` plans the run, then `multi_arch_ci_coverage_linux.yml`
+does the rest:
+
+- **Projects.** The onboarded projects among `changed_projects`, or every
+  buildable project when there are none (a TheRock pull request).
+  `test:<project>` labels narrow either set. A changed project that cannot be
+  measured (not onboarded, no LLVM coverage option, blocked, or no build job for
+  its stage) is listed with its reason on the job summary instead of failing
+  the run; if nothing is left, nothing is built. An explicit `projects_to_test`
+  is validated as strictly as for the nightly.
+- **Baseline.** The newest healthy `multi_arch_ci.yml` run on TheRock `main`,
+  at most 72 hours old, with the compiler-runtime and math-libs artifacts for
+  the selected families. Tests install it and overlay the project under test,
+  so the instrumented math-libs build is limited to the selected projects'
+  artifacts through `rebuild_artifacts`: hipRAND builds `rand`, not the whole
+  stage. Without a baseline the run builds the whole stage and tests its own
+  stack, like a self-contained dispatch.
+- **compiler-runtime.** Copied from the baseline when the baseline comes from
+  the running repository and the PR's changed files leave compiler-runtime
+  unaffected, by the same stage-impact analysis `multi_arch_ci.yml` uses for
+  stage reuse. Otherwise it is built. Callers in other repositories always build
+  it: artifacts embed the build workspace path, so a stage cannot configure
+  against another repository's artifacts.
+
+The test type defaults to `standard`, as in the nightly, so the numbers are
+comparable; a `test_filter:<type>` label overrides it. Pull request runs forward
+no secrets, so they skip the Codecov upload; the `coverage-report-*` artifacts
+and job summaries carry the results.
+
 ### The instrumented build
 
 `setup_coverage_matrix` runs `configure_coverage_ci.py`, emitting the matrix,
 `coverage_cmake_options`, and `needs_math_libs`. Selections naming a project
 whose stage has no build job fail immediately.
 
-`build_compiler_runtime` always runs first — every other stage pulls its
-inbound artifacts from it. It is a regular, non-instrumented build: no
-compiler-runtime project has a supported coverage option.
+`build_compiler_runtime` runs first — every other stage pulls its inbound
+artifacts from it. It is a regular, non-instrumented build: no compiler-runtime
+project has a supported coverage option. A caller can set
+`prebuilt_compiler_runtime` to have `copy_compiler_runtime` copy it from
+`baseline_run_id` instead, as pull request runs do when that is safe.
 `build_instrumented_math_libs` fans out over GPU families and is skipped when
 `needs_math_libs` is false; 17 of the 19 measurable projects live there. Report
 jobs wait for the whole fan-out, so with several families one failed build skips
@@ -179,8 +221,10 @@ dependencies. But reporting must be per project: an instrumented rocRAND writes
 its own profiles alongside hipRAND's, shifting hipRAND's numbers on unrelated
 changes. The baseline-install-then-overlay isolates exactly one project.
 
-The baseline is read from `baseline_release_type` (normally `nightly`), not the
-coverage run's `ci` channel — artifacts are bucketed per channel. The swap
+The baseline is read from the `baseline_release_type` channel, not necessarily
+the coverage run's `ci` one — artifacts are bucketed per channel. It is
+`nightly` for the nightly and `ci` for pull request runs, whose baseline is a
+`multi_arch_ci.yml` run. The swap
 downloads the project's whole artifact (`rand`, which also contains rocRAND)
 but extracts only the paths matching the project's library folder in
 `COMPONENT_MAP` (`hipRAND`). The two runs write to separate S3 paths; no files
