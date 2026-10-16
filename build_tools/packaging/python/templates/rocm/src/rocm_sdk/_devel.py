@@ -38,10 +38,16 @@ from pathlib import Path
 import platform
 import re
 import shutil
+import stat
 import sys
 import tarfile
+import tempfile
+import time
 
 from . import _dist_info as di
+
+_REPLACE_RETRY_ATTEMPTS = 100
+_REPLACE_RETRY_DELAY_SECONDS = 0.05
 
 
 def _is_windows():
@@ -299,13 +305,55 @@ def _discover_device_link_plans(site_lib_path: Path, expected_version: str):
     return plans
 
 
-def _ensure_record_entries(record_path: Path, names: list[str]):
+def _replace_with_retry(source: Path, destination: Path) -> None:
+    """Replace a file, tolerating brief reader locks."""
+    for attempt in range(_REPLACE_RETRY_ATTEMPTS):
+        try:
+            source.replace(destination)
+            return
+        except PermissionError:
+            # Windows commonly denies replacement while another process has the
+            # destination open, but transient permission conflicts can occur on
+            # other platforms too.
+            if attempt == _REPLACE_RETRY_ATTEMPTS - 1:
+                raise
+            time.sleep(_REPLACE_RETRY_DELAY_SECONDS)
+
+
+def _write_text_atomic(path: Path, text: str) -> None:
+    """Replace a text file without exposing an empty or partial destination."""
+    original_mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else None
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="\n",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temp_file:
+            temp_path = Path(temp_file.name)
+            temp_file.write(text)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+        if original_mode is not None:
+            temp_path.chmod(original_mode)
+        _replace_with_retry(temp_path, path)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
+
+def _ensure_record_entries(record_path: Path, names: list[str]) -> None:
     """Append RECORD entries for materialized devel links, de-duplicated.
 
     Reads the existing RECORD, drops any duplicate paths, appends the new
     site-packages-relative paths (with empty hash/size, per the PyPA spec), and
     rewrites the file. Writes only when there is something to add or a duplicate
-    row to remove.
+    row to remove. The atomic replacement keeps unlocked readers from observing
+    an empty or partial RECORD while the owning reconciler holds its lock.
     """
     lines = []
     seen = set()
@@ -326,7 +374,7 @@ def _ensure_record_entries(record_path: Path, names: list[str]):
         return
     for n in additions:
         lines.append(f"{n},,")
-    record_path.write_text("\n".join(lines) + "\n", newline="\n")
+    _write_text_atomic(record_path, "\n".join(lines) + "\n")
 
 
 def _record_name(site_lib_path: Path, devel_py_pkg_path: Path, relpath: str) -> str:
@@ -524,7 +572,9 @@ class FileLock:
 
             original_position = self.file.tell()
             self.file.seek(0)
-            msvcrt.locking(self.file.fileno(), msvcrt.LK_NBLCK, self.lock_size)
+            # Match the blocking Unix behavior for ordinary contention. LK_LOCK
+            # retries once per second, for up to ten attempts.
+            msvcrt.locking(self.file.fileno(), msvcrt.LK_LOCK, self.lock_size)
             self.file.seek(original_position)
         else:
             # The Unix APIs for file locking apply to the entire file descriptor.
