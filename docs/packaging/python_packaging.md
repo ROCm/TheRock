@@ -193,7 +193,8 @@ pip install "rocm[libraries,devel,device-gfx942]" --pre \
 
 [`mirror_python_dependencies.py`](/build_tools/packaging/python/mirror_python_dependencies.py)
 resolves configured third-party wheels from PyPI and publishes them to the
-structured core `whl-next` prefix. It is usable from CI or locally.
+structured third-party `whl-next` path in an explicitly selected bucket. It is
+usable from CI or locally.
 
 Resolve and download an immutable snapshot without AWS access:
 
@@ -222,17 +223,23 @@ are not refreshed. Run
 `python build_tools/packaging/python/mirror_python_dependencies.py --help` and
 the subcommand help for project and individual dependency selection.
 
-The tool publishes to the core product-local index under
-`v5/rocm/core/whl-next/`; see the
-[nightly core index](https://nightly.repo.amd.com/rocm/core/whl-next/) for a
-user-visible example. The aggregate `/rocm/whl-next/` index does not duplicate
-these wheels. Instead,
+The tool publishes under `v5/rocm/third-party/whl-next/`. Release workflows
+continue to supply a Core bucket such as `therock-repo-amd-dev-core`; the
+`third-party` path segment does not select a bucket or different credentials.
+The public product-local path is `/rocm/third-party/whl-next/`.
+
+Newly resolved snapshots use schema version 2. Version 1 snapshots record the
+old Core-path destination and are rejected instead of being silently retargeted;
+resolve a fresh snapshot before publishing.
+
+The aggregate `/rocm/whl-next/` index does not duplicate these wheels. Instead,
 [`rocm_whl_next_ownership.yaml`](/build_tools/packaging/python/rocm_whl_next_ownership.yaml)
 separately controls which product-local package page the aggregate index routes
 to. Publishing only to the product-local path is sufficient to populate the
-core index without implicitly changing that routing. If a mirrored dependency
-should also be available through the aggregate index used by pip, add its core
-ownership mapping and redeploy the aggregate index.
+third-party index without implicitly changing that routing. If a mirrored
+dependency should also be available through the aggregate index used by pip,
+add its third-party ownership mapping and redeploy the aggregate index only
+after the direct product-local path is available.
 
 The `Mirror Python Dependencies` workflow will live with the other
 [rockrel workflows](https://github.com/ROCm/rockrel/tree/main/.github/workflows).
