@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 import configure_jax_release_matrix as m
+from _therock_utils.s3_buckets import get_release_stream
 from workflow_utils import (
     WORKFLOWS_DIR,
     get_matrix_references,
@@ -16,6 +17,11 @@ from workflow_utils import (
     get_workflow_job,
     load_workflow,
 )
+
+PACKAGING_PYTHON_DIR = Path(__file__).parents[2] / "packaging" / "python"
+sys.path.insert(0, os.fspath(PACKAGING_PYTHON_DIR))
+
+from aggregate_index import load_ownership_manifest
 
 
 class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
@@ -60,6 +66,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
 
     def test_generate_jax_matrix_uses_requested_refs_only(self):
         matrix = m.generate_jax_matrix(
+            release_type="dev",
             jax_refs=["rocm-jaxlib-v0.10.2"],
             python_versions=["3.12"],
         )
@@ -91,6 +98,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         # Upstream main has no rocm-jax ref of the same name, so the tip config
         # pins the Dockerfile checkout separately and names its own label.
         matrix = m.generate_jax_matrix(
+            release_type="dev",
             jax_refs=["jax-main"],
             python_versions=["3.11", "3.12"],
         )
@@ -103,16 +111,24 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertEqual(matrix[0]["rocm_jax_ref"], "rocm-jax-infra")
         self.assertEqual(matrix[0]["wheel_type"], "nightly")
 
-    def test_tip_builds_without_publishing(self):
-        # whl-next does not route jax/jaxlib yet and the tests install from
-        # there, so tip is a build-only signal while every pinned ref publishes.
-        matrix = m.generate_jax_matrix_for_release_type(
-            release_type="nightly", platform="linux"
+    def test_tip_publishes_where_whl_next_routes_jax_and_jaxlib(self):
+        # Tip's tests install its jax and jaxlib from whl-next, so it publishes
+        # for exactly the release types whose stream routes both, and builds
+        # without publishing elsewhere. Every pinned ref publishes.
+        manifest = load_ownership_manifest(
+            PACKAGING_PYTHON_DIR / "rocm_whl_next_ownership.yaml"
         )
-        published = {row["jax_ref"]: row["publish"] for row in matrix}
-        self.assertIs(published.pop("main"), False)
-        self.assertTrue(published)
-        self.assertTrue(all(published.values()))
+        index = manifest.python_indexes[0]
+        for release_type in set(m.RELEASE_TYPES) - {"ci", "prerelease"}:
+            with self.subTest(release_type=release_type):
+                routed = index.active_packages(get_release_stream(release_type))
+                matrix = m.generate_jax_matrix_for_release_type(
+                    release_type=release_type, platform="linux"
+                )
+                published = {row["jax_ref"]: row["publish"] for row in matrix}
+                self.assertIs(published.pop("main"), {"jax", "jaxlib"} <= routed.keys())
+                self.assertTrue(published)
+                self.assertTrue(all(published.values()))
 
     def test_release_refs_build_release_wheels(self):
         # Every pinned ref has a jax/jaxlib release on PyPI, so its plugin
@@ -209,6 +225,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         # row key except jax_label, which only names the calling job, is an
         # input on each build workflow; the callers forward what they need.
         matrix = m.generate_jax_matrix(
+            release_type="dev",
             jax_refs=["rocm-jaxlib-v0.11.1", "jax-main"],
             python_versions=["3.12"],
         )
