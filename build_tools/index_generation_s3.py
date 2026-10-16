@@ -34,6 +34,9 @@ Generate index.html for all tarballs in a bucket and upload:
 
 Generate index.html for direct child directories (not files) under a prefix:
  ./index_generation_s3.py --bucket therock-dev-tarball --directory v5/rocm/extras/rocoptiq/windows-installers --directory-index --upload
+
+Generate index.html for Windows installers (.msi) under a prefix:
+ ./index_generation_s3.py --bucket therock-dev-tarball --directory v5/rocm/extras/rocoptiq/windows-installers/win11 --windows-installer-index --upload
 """
 
 import argparse
@@ -560,6 +563,11 @@ examples:
     ./index_generation_s3.py --bucket therock-dev-tarball \\
         --directory v5/rocm/extras/rocoptiq/windows-installers \\
         --directory-index --upload
+
+  Generate index.html for Windows installers (.msi) under a prefix:
+    ./index_generation_s3.py --bucket therock-dev-tarball \\
+        --directory v5/rocm/extras/rocoptiq/windows-installers/win11 \\
+        --windows-installer-index --upload
 """,
     )
     parser.add_argument(
@@ -582,18 +590,34 @@ examples:
         default="",
         help="Directory to index. Defaults to the top level directory.",
     )
-    parser.add_argument(
+    index_type_group = parser.add_mutually_exclusive_group()
+    index_type_group.add_argument(
         "--directory-index",
         action="store_true",
         help=(
             "List direct child subdirectories under --directory instead of "
-            "artifact files (default: list files)."
+            "artifact files (default: list tarballs)."
+        ),
+    )
+    index_type_group.add_argument(
+        "--windows-installer-index",
+        action="store_true",
+        help=(
+            "List .msi Windows installers under --directory instead of "
+            ".tar.gz tarballs (default: list tarballs)."
         ),
     )
     args = parser.parse_args(argv)
     s3 = boto3.client("s3", region_name=args.region)
     if args.directory_index:
         generate_directory_index_s3(
+            s3_client=s3,
+            bucket_name=args.bucket,
+            prefix=args.directory,
+            upload=args.upload,
+        )
+    elif args.windows_installer_index:
+        generate_windows_installer_index_s3(
             s3_client=s3,
             bucket_name=args.bucket,
             prefix=args.directory,
