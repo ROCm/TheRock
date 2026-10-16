@@ -27,3 +27,11 @@ foreach(_target ${_rocprofsys_lib_targets})
     )
   endif()
 endforeach()
+
+# timem explicitly disables PIE because it links static PAPI libraries that
+# are not position independent. Preserve that upstream requirement.
+foreach(_target timem timem-mpi)
+  if(TARGET "${_target}")
+    set_property(TARGET "${_target}" PROPERTY THEROCK_DISABLE_HARDENING ON)
+  endif()
+endforeach()
