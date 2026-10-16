@@ -132,6 +132,7 @@ jobs:
       VENV_DIR: ${{ contains(inputs.test_runs_on, 'windows') && format('{0}/.venv with spaces', github.workspace) || format('{0}/.venv', github.workspace) }}
       PROFILER_VENV_DIR: ${{ github.workspace }}/.venv-profiler
       COMPUTE_ANALYZE_VENV_DIR: ${{ github.workspace }}/.venv-compute-analyze
+      ROCSHMEM4PY_VENV_DIR: ${{ github.workspace }}/.venv-rocshmem4py
 
     steps:
       - name: Checkout
@@ -182,6 +183,35 @@ jobs:
         timeout-minutes: 5
         run: |
           rocm-sdk test
+
+      - name: Install rocshmem4py from packages
+        id: install_rocshmem4py
+        if: >-
+          ${{
+            !cancelled()
+            && runner.os == 'Linux'
+            && steps.install_libraries.outcome == 'success'
+            && inputs.package_find_links_url != ''
+          }}
+        run: |
+          python build_tools/setup_venv.py "${ROCSHMEM4PY_VENV_DIR}" \
+            --clean \
+            --pre \
+            --disable-cache \
+            --packages "rocshmem4py rocm-sdk-core==${ROCM_VERSION}" \
+            --index-url="${PACKAGE_INDEX_URL}" \
+            --find-links="${PACKAGE_FIND_LINKS_URL}"
+
+      - name: Test installed rocshmem4py wheel
+        if: ${{ !cancelled() && steps.install_rocshmem4py.outcome == 'success' }}
+        timeout-minutes: 5
+        env:
+          # rocSHMEM reserves its symmetric heap in GPU memory at init (1 GiB by
+          # default). The smoke test allocates 4 KiB, so keep the reservation
+          # small for runners with less GPU memory.
+          ROCSHMEM_HEAP_SIZE: 16777216 # 16 MiB
+        run: |
+          "${ROCSHMEM4PY_VENV_DIR}/bin/python" build_tools/github_actions/rocshmem4py_smoke.py
 
       - name: Install rocm[libraries,devel]
         id: install_devel

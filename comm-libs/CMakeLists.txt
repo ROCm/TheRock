@@ -253,3 +253,24 @@ if(THEROCK_ENABLE_ROCSHMEM)
       ${_rocshmem_subproject_names}
   )
 endif(THEROCK_ENABLE_ROCSHMEM)
+
+if(THEROCK_ENABLE_ROCSHMEM4PY)
+  ##############################################################################
+  # rocshmem4py
+  ##############################################################################
+  therock_python_wheel_subproject(rocshmem4py
+    SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/python/rocshmem"
+    # Compatibility bridge until rocshmem4py takes TheRock's version,
+    # rocm-sdk-core requirement, and RPATH as build inputs.
+    FINALIZE_SCRIPT "${THEROCK_SOURCE_DIR}/build_tools/packaging/python/finalize_rocshmem4py_wheel.py"
+    ARTIFACT_DESCRIPTOR artifact-rocshmem4py.toml
+    ENV_FROM_VARS
+      THEROCK_TOOLCHAIN_ROOT
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocshmem
+    RUNTIME_DEPS
+      hip-clr
+  )
+endif(THEROCK_ENABLE_ROCSHMEM4PY)

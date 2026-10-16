@@ -162,6 +162,9 @@
   "rocrtst": [
     "rocrtst"
   ],
+  "rocshmem4py": [
+    "rocshmem4py"
+  ],
   "rocshmem": [
     "rocshmem"
   ],
