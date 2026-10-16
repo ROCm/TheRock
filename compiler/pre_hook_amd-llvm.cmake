@@ -49,11 +49,11 @@ else()
     # TODO: Guard for amd-staging only. Remove condition when compiler branch is updated.
     if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/openmp/device/CMakeLists.txt")
       list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
-      set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
-      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;flang-rt;openmp")
-      set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
-      set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
-      set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
+      set(LLVM_RUNTIME_TARGETS "default;amdgpu-amd-amdhsa")
+      set(RUNTIMES_amdgpu-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;flang-rt;openmp")
+      set(RUNTIMES_amdgpu-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
+      set(RUNTIMES_amdgpu-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
+      set(RUNTIMES_amdgpu-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
       # Hosts whose C long double is already IEEE-754 binary128 (ppc64le,
       # riscv64) do not need libquadmath: flang-rt folds the F128 entry points
       # into libflang_rt.runtime instead of building libflang_rt.quadmath.
