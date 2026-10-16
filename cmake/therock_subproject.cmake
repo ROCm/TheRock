@@ -9,6 +9,8 @@
 # development flow.
 
 include(ExternalProject)
+include(therock_compiler_hardening)
+therock_initialize_hardening_policy()
 
 # Global properties.
 # THEROCK_DEFAULT_CMAKE_VARS:
@@ -36,6 +38,9 @@ set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
 
   # Debug info handling.
   THEROCK_SPLIT_DEBUG_INFO
+
+  # Host compiler and linker hardening.
+  THEROCK_HARDENING_POLICY
 )
 
 # Whenever a new package is advertised by the super-project, it is added here.
@@ -253,7 +258,11 @@ endfunction()
 #   sub-project installs. Defaults to empty, meaning that it installs at the top
 #   of the namespace.
 # CMAKE_ARGS: Additional CMake configure arguments.
-# CMAKE_INCLUDES: Additional CMake files to include at the top level.
+# CMAKE_INCLUDES: Additional CMake files to include once at the end of the
+#   first project() call, after language initialization. These run through
+#   CMAKE_PROJECT_INCLUDE. Any value passed for CMAKE_PROJECT_INCLUDE in
+#   CMAKE_ARGS runs afterward and retains its normal per-project() behavior.
+#   Changes to these files retrigger the sub-project configure step.
 # BUILD_DEPS: Projects which must build and provide their packages prior to this
 #   one.
 # RUNTIME_DEPS: Projects which must build prior to this one and whose install
@@ -292,6 +301,10 @@ endfunction()
 #   name (i.e. foobar-old) but configuration files and directories should be
 #   named relative to some other name, then that can be specified here. This
 #   affects hooks and default choices of source and binary directories.
+# HARDENING_DEFERRED: List of independently configured inner builds
+#   without a hardening bridge. BASELINE reports these gaps during top-level
+#   configuration, even when child output is suppressed. This metadata does
+#   not disable hardening on ordinary CMake targets in the same subproject.
 #
 # RPATH handling:
 # Each subproject has default logic injected which configures the INSTALL_RPATH
@@ -354,7 +367,7 @@ function(therock_cmake_subproject_declare target_name)
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS;HARDENING_DEFERRED"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -522,6 +535,7 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_CMAKE_PROJECT_TOOLCHAIN_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_toolchain.cmake"
     THEROCK_CMAKE_ARGS "${ARG_CMAKE_ARGS}"
     THEROCK_CMAKE_INCLUDES "${ARG_CMAKE_INCLUDES}"
+    THEROCK_HARDENING_DEFERRED "${ARG_HARDENING_DEFERRED}"
     # Non-transitive build deps.
     THEROCK_BUILD_DEPS "${ARG_BUILD_DEPS}"
     # Transitive runtime deps.
@@ -657,6 +671,7 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_prefix_dir "${target_name}" THEROCK_PREFIX_DIR)
   get_target_property(_output_on_failure "${target_name}" THEROCK_OUTPUT_ON_FAILURE)
   get_target_property(_logical_target_name "${target_name}" THEROCK_LOGICAL_TARGET_NAME)
+  get_target_property(_hardening_deferred_builds "${target_name}" THEROCK_HARDENING_DEFERRED)
   get_target_property(_optional_install_components "${target_name}" THEROCK_OPTIONAL_INSTALL_COMPONENTS)
 
   # RPATH properties: just mirror these to same named variables because we just
@@ -724,6 +739,14 @@ function(therock_cmake_subproject_activate target_name)
     set(_post_hook_path)
   endif()
 
+  set(_hardening_module
+    "${THEROCK_SOURCE_DIR}/cmake/therock_compiler_hardening.cmake"
+  )
+  therock_is_hardening_excluded_subproject(
+    _hardening_excluded "${target_name}"
+  )
+  list(APPEND _fprint_files "${_hardening_module}")
+
   # Report transitive runtime deps.
   if(_runtime_deps AND THEROCK_VERBOSE)
     list(JOIN _runtime_deps " " _runtime_deps_pretty)
@@ -781,6 +804,10 @@ function(therock_cmake_subproject_activate target_name)
   string(APPEND _init_contents "set(THEROCK_BUILD_STAMP_FILE \"@_build_stamp_file@\")\n")
   string(APPEND _init_contents "set(THEROCK_STAGE_STAMP_FILE \"@_stage_stamp_file@\")\n")
   string(APPEND _init_contents "set(THEROCK_SUBPROJECT_TARGET \"@target_name@\")\n")
+  string(APPEND _init_contents
+    "set(THEROCK_HARDENING_EXCLUDED @_hardening_excluded@)\n"
+    "include(\"@_hardening_module@\")\n"
+  )
   string(APPEND _init_contents
     "set(ROCM_BUILD_FLAGS_STATE_FILE \"@ROCM_BUILD_FLAGS_STATE_FILE@\")\n")
 
@@ -881,14 +908,57 @@ function(therock_cmake_subproject_activate target_name)
     string(APPEND _init_contents "set(THEROCK_USER_POST_HOOK \"@_post_hook_path@\")\n")
   endif()
   set(_global_post_include "${THEROCK_SOURCE_DIR}/cmake/therock_global_post_subproject.cmake")
+  list(APPEND _fprint_files "${_global_post_include}")
   string(APPEND _init_contents "cmake_language(DEFER CALL include \"@_global_post_include@\")\n")
+
+  # CMAKE_INCLUDES may create imported shared targets, so dispatch them at
+  # the end of the first project() call, after language initialization.
+  # Apply them once before invoking caller-provided hooks so those hooks
+  # can use definitions supplied by CMAKE_INCLUDES.
+  set(_project_include_contents)
+  set(_cmake_project_include_file)
+  set(_resolved_cmake_includes)
   foreach(_addl_cmake_include ${_cmake_includes})
-    if(NOT IS_ABSOLUTE)
-      find_path(_addl_cmake_include_path "${addl_cmake_include}" NO_CACHE NO_DEFAULT_PATH PATHS ${CMAKE_MODULE_PATH} REQUIRED)
+    if(NOT IS_ABSOLUTE "${_addl_cmake_include}")
+      find_path(_addl_cmake_include_path "${_addl_cmake_include}"
+        NO_CACHE NO_DEFAULT_PATH PATHS ${CMAKE_MODULE_PATH} REQUIRED
+      )
       cmake_path(ABSOLUTE_PATH _addl_cmake_include BASE_DIRECTORY "${_addl_cmake_include_path}")
+      unset(_addl_cmake_include_path)
     endif()
-    string(APPEND _init_contents "include(\"${_addl_cmake_include}\")\n")
+    string(APPEND _project_include_contents
+      "include(\"${_addl_cmake_include}\")\n"
+    )
+    list(APPEND _resolved_cmake_includes "${_addl_cmake_include}")
+    list(APPEND _fprint_files "${_addl_cmake_include}")
   endforeach()
+  if(_project_include_contents)
+    string(PREPEND _project_include_contents
+      "get_property(_therock_project_includes_applied GLOBAL PROPERTY THEROCK_PROJECT_INCLUDES_APPLIED)\n"
+      "if(NOT _therock_project_includes_applied)\n"
+      "  set_property(GLOBAL PROPERTY THEROCK_PROJECT_INCLUDES_APPLIED TRUE)\n"
+    )
+    string(APPEND _project_include_contents
+      "endif()\n"
+      "foreach(_therock_chained_project_include IN LISTS _therock_chained_project_includes)\n"
+      "  include(\"\${_therock_chained_project_include}\")\n"
+      "endforeach()\n"
+    )
+    set(_cmake_project_include_file
+      "${_cmake_project_init_file}.project-include.cmake"
+    )
+    file(CONFIGURE
+      OUTPUT "${_cmake_project_include_file}"
+      CONTENT "${_project_include_contents}"
+      @ONLY
+      ESCAPE_QUOTES
+    )
+    string(APPEND _init_contents
+      "set(_therock_chained_project_includes \"\${CMAKE_PROJECT_INCLUDE}\")\n"
+      "set(CMAKE_PROJECT_INCLUDE \"@_cmake_project_include_file@\")\n"
+    )
+    list(APPEND _fprint_files "${_cmake_project_include_file}")
+  endif()
 
   # Flag system: inject flag-controlled variables and defines.
   _therock_get_flag_init_contents(_flag_init_contents "${target_name}")
@@ -927,6 +997,30 @@ function(therock_cmake_subproject_activate target_name)
   set(_fileset_verbose_arg "")
   if(THEROCK_VERBOSE)
     set(_fileset_verbose_arg --verbose)
+  endif()
+
+  # Report gaps in the parent: successful child logs may be suppressed, and
+  # prebuilts or unchanged subprojects do not run their configure step.
+  if(THEROCK_HARDENING_POLICY STREQUAL "BASELINE")
+    if(_hardening_excluded)
+      message(STATUS
+        "Hardening coverage for subproject ${target_name}: "
+        "deferred compiler-group coverage"
+      )
+    endif()
+    if(EXISTS "${_prebuilt_file}")
+      message(STATUS
+        "Hardening coverage for prebuilt subproject ${target_name}: "
+        "unverified (artifact was not built by this configuration)"
+      )
+    elseif(NOT _hardening_excluded AND _hardening_deferred_builds)
+      foreach(_build IN LISTS _hardening_deferred_builds)
+        message(STATUS
+          "Hardening coverage for subproject ${target_name} (${_build}): "
+          "deferred (no TheRock policy injection)"
+        )
+      endforeach()
+    endif()
   endif()
 
   if(EXISTS "${_prebuilt_file}")
@@ -1037,7 +1131,10 @@ function(therock_cmake_subproject_activate target_name)
         "${_cmake_source_dir}/CMakeLists.txt"
         "${_cmake_project_toolchain_file}"
         "${_cmake_project_init_file}"
+        ${_cmake_project_include_file}
+        ${_resolved_cmake_includes}
         "${_global_post_include}"
+        "${_hardening_module}"
         "${ROCM_BUILD_FLAGS_STATE_FILE}"
         ${_extra_depends}
         ${_dep_provider_file}

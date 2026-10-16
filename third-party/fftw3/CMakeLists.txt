@@ -40,6 +40,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       -DENABLE_THREADS=ON
     )
     set(_fftw3_extra_declare_args
+      HARDENING_DEFERRED "FFTW (autotools)"
       FPRINT_SOURCE_DIR "${_source_dir}"
       FPRINT_FILE_GLOBS "${CMAKE_CURRENT_LIST_DIR}/*"
       EXTRA_DEPENDS "${_download_stamp}"
