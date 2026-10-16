@@ -74,6 +74,7 @@ from amdgpu_family_matrix import (
 )
 from configure_ci_path_filters import (
     get_changed_files_for_external_repo,
+    get_jobs_for_changes,
     get_git_commit_hash,
     get_git_modified_paths,
     get_git_submodule_paths,
@@ -1275,6 +1276,48 @@ def _determine_test_type(
     return "quick", "default"
 
 
+def _should_use_published_rocm_for_changes(
+    ci_inputs: CIInputs, affected_jobs: set[str]
+) -> bool:
+    """Decide whether path selection can use published ROCm dependencies.
+
+    Explicit ci:skip-rocm requests are handled separately by decide_jobs().
+    """
+    if ci_inputs.build_variant != "release":
+        print(
+            f"[JOB-SELECTION] Keeping the full ROCm graph: published packages do not yet cover "
+            f"build variant '{ci_inputs.build_variant}'"
+        )
+        return False
+
+    if ci_inputs.build_stages or ci_inputs.prebuilt_stages or ci_inputs.baseline_run_id:
+        print(
+            "[JOB-SELECTION] Keeping the full ROCm graph to honor explicit stage build/reuse "
+            "requests: "
+            f"build_stages={ci_inputs.build_stages!r}, "
+            f"prebuilt_stages={ci_inputs.prebuilt_stages!r}, "
+            f"baseline_run_id={ci_inputs.baseline_run_id!r}"
+        )
+        return False
+
+    if {"ci:build-python-packages", "ci:build-native-linux"}.intersection(
+        ci_inputs.pr_labels
+    ):
+        print(
+            "[JOB-SELECTION] Keeping the full ROCm graph: published packages cannot replace "
+            "explicitly requested packaging jobs"
+        )
+        return False
+
+    # ROCm build/test/packaging jobs always need ROCm artifacts and can't use
+    # published packages.
+    needs_rocm_artifacts = any(
+        job in affected_jobs
+        for job in ("rocm", "rocm_python", "rocm_native_linux", "rocm_native_windows")
+    )
+    return not needs_rocm_artifacts
+
+
 def decide_jobs(
     ci_inputs: CIInputs,
     git_context: GitContext,
@@ -1290,6 +1333,34 @@ def decide_jobs(
     pr_labels = ci_inputs.pr_labels
     build_pytorch_action = JobAction.RUN if ci_inputs.build_pytorch else JobAction.SKIP
     build_jax_action = JobAction.RUN if ci_inputs.build_jax else JobAction.SKIP
+
+    # Determine which jobs are directly affected by the changed files.
+    # Examples:
+    #   * {"rocm"}               for infra or ROCm component changes
+    #   * {"pytorch"} or {"jax"} for framework-only changes
+    #   * {"pytorch", "rocm"}    for mixed framework/infra changes
+    #   * {"rocm_python"}        for Python packaging changes
+    # An unavailable diff includes all groups and "no CI-relevant changes"
+    # produces an empty set.
+    if ci_inputs.external_repo:
+        affected_jobs = {"rocm"}
+    else:
+        affected_jobs = get_jobs_for_changes(git_context.changed_files)
+    print(
+        f"[JOB-SELECTION] Affected job groups: {', '.join(sorted(affected_jobs)) or '(none)'}"
+    )
+
+    use_published_rocm_for_changes = _should_use_published_rocm_for_changes(
+        ci_inputs, affected_jobs
+    )
+
+    if use_published_rocm_for_changes:
+        if "pytorch" not in affected_jobs:
+            build_pytorch_action = JobAction.SKIP
+        if "jax" not in affected_jobs:
+            build_jax_action = JobAction.SKIP
+
+    # Explicit labels override the inputs and implicit path selection.
     if "ci:build-pytorch" in pr_labels:
         build_pytorch_action = JobAction.RUN
     elif "ci:skip-pytorch" in pr_labels:
@@ -1299,7 +1370,7 @@ def decide_jobs(
     elif "ci:skip-jax" in pr_labels:
         build_jax_action = JobAction.SKIP
 
-    if "ci:skip-rocm" in pr_labels:
+    if use_published_rocm_for_changes or "ci:skip-rocm" in pr_labels:
         if ci_inputs.build_variant != "release":
             raise ValueError(
                 "ci:skip-rocm requires build_variant='release'; nightly ROCm "
@@ -1459,9 +1530,6 @@ def decide_jobs(
                 test_type=test_type,
                 test_type_reason="ASAN tests skipped due to non-nightly trigger",
             )
-
-    # Other jobs run unconditionally with no configuration.
-    # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
 
     return JobDecisions(
         build_rocm=build_rocm,
