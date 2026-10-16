@@ -153,8 +153,6 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
                     f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting"
                 )
 
-        # amdrocm-alternatives.json defines the RPM maintainer scripts
-        # and binaries for packages that use the shared templates.
         if is_postinstallscripts_available(pkg_info):
             rpm_scripts = generate_rpm_postscripts(pkg_info, config)
 
@@ -268,6 +266,8 @@ def generate_rpm_postscripts(pkg_info, config: PackageConfig):
 
     scripts = json_pkg_config["scripts"]
     binaries = json_pkg_config["binaries"]
+    core_symlinks = json_pkg_config.get("core_symlinks", False)
+    llvm_symlinks = json_pkg_config.get("llvm_symlinks", False)
 
     unsupported_scripts = set(scripts) - set(rpm_sections)
     if unsupported_scripts:
@@ -284,6 +284,8 @@ def generate_rpm_postscripts(pkg_info, config: PackageConfig):
         "target": "rpm",
         "package_name": pkg_name,
         "binaries": binaries,
+        "core_symlinks": core_symlinks,
+        "llvm_symlinks": llvm_symlinks,
     }
 
     rpm_script_sections = {}
