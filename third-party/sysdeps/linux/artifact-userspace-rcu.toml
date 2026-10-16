@@ -1,0 +1,10 @@
+[options]
+unmatched_exclude = [
+  "lib/rocm_sysdeps/share/locale/**",
+  "lib/rocm_sysdeps/share/man/**",
+  "lib/rocm_sysdeps/share/doc/**",
+]
+
+# userspace-rcu
+[components.lib."third-party/sysdeps/linux/userspace-rcu/build/stage"]
+[components.dev."third-party/sysdeps/linux/userspace-rcu/build/stage"]
