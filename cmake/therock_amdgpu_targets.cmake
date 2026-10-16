@@ -265,7 +265,8 @@ include(therock_custom_amdgpu_targets OPTIONAL)
 #   THEROCK_DIST_AMDGPU_TARGETS: Distribution targets (used by runtime components
 #     that embed device code for user-selected architectures). Controls what is
 #     reported in dist_info.json and consumed by downstream tools (e.g. PyTorch
-#     via `rocm-sdk targets`). Defaults to THEROCK_AMDGPU_FAMILIES.
+#     via `rocm-sdk targets`). Defaults to THEROCK_AMDGPU_FAMILIES, or to
+#     THEROCK_AMDGPU_TARGETS when no families are set.
 #   THEROCK_TEST_AMDGPU_TARGETS: Targets for test artifacts marked TARGET_NEUTRAL.
 #     Defaults to ALL available (registered) targets so that a single _generic
 #     test artifact works on any architecture, making upload races in classic CI
@@ -317,11 +318,17 @@ function(therock_validate_amdgpu_targets)
 
   # Expand dist families (THEROCK_DIST_AMDGPU_FAMILIES -> THEROCK_DIST_AMDGPU_TARGETS).
   # If neither THEROCK_DIST_AMDGPU_FAMILIES nor THEROCK_DIST_AMDGPU_TARGETS is set,
-  # dist defaults to the build families (THEROCK_AMDGPU_FAMILIES).
+  # dist defaults to the build families (THEROCK_AMDGPU_FAMILIES), or to the build
+  # targets when only THEROCK_AMDGPU_TARGETS is set.
   set(_dist_expanded_targets "${THEROCK_DIST_AMDGPU_TARGETS}")
   set(_dist_families "${THEROCK_DIST_AMDGPU_FAMILIES}")
   if(NOT _dist_families AND NOT _dist_expanded_targets)
-    set(_dist_families "${THEROCK_AMDGPU_FAMILIES}")
+    if(THEROCK_AMDGPU_FAMILIES)
+      set(_dist_families "${THEROCK_AMDGPU_FAMILIES}")
+    else()
+      # Only THEROCK_AMDGPU_TARGETS was given: use those as the dist targets.
+      set(_dist_expanded_targets "${_expanded_targets}")
+    endif()
   endif()
   foreach(_family ${_dist_families})
     if(NOT "${_family}" IN_LIST _available_families)
