@@ -688,7 +688,7 @@ amdgpu_family_info_matrix_explicit_only = {
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
             "bypass_tests_for_releases": True,
-            "builds_on_trigger": [""], # Never auto-included, explicit only, add nightly once moved to nightly
+            "builds_on_trigger": [], # Never auto-included, explicit only, add nightly once moved to nightly
             "tests_on_trigger": [],
         },
         "windows": {
@@ -696,7 +696,7 @@ amdgpu_family_info_matrix_explicit_only = {
             "family": "gfx117X-all",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "builds_on_trigger": [""], # Never auto-included, explicit only, add nightly once moved to nightly
+            "builds_on_trigger": [], # Never auto-included, explicit only, add nightly once moved to nightly
             "tests_on_trigger": [],
         },
     },
