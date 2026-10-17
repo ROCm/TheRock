@@ -346,7 +346,7 @@ def find_failed_components(build_dir: Path) -> List[str]:
             continue
         output = match.group(1).strip().replace("\\", "/")
         if output.startswith(build_prefix):
-            output = output[len(build_prefix):]
+            output = output[len(build_prefix) :]
         name, _category, _phase = parse_output_path(output)
         if name:
             failed.add(name)
