@@ -95,7 +95,6 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
     generate_changelog_file(pkg_info, deb_dir, build_config)
     generate_rules_file(pkg_info, deb_dir, build_config)
     generate_control_file(pkg_info, deb_dir, build_config)
-
     if is_postinstallscripts_available(pkg_info):
         generate_debian_postscripts(pkg_info, deb_dir, build_config)
 
@@ -381,7 +380,6 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
     """
     # Debian maintainer scripts supported by the template generator.
     EXEC_SCRIPTS = {"preinst", "postinst", "prerm", "postrm", "config"}
-
     pkg_name = pkg_info.get("Package")
     if not pkg_name:
         raise ValueError("Package metadata does not contain a valid 'Package' name")

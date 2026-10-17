@@ -22,7 +22,7 @@ logger = TheRockLogger(__name__)
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
-def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
+def create_nonversioned_rpm_package(pkg_name, config: PackageConfig) -> list[str]:
     """Create a non-versioned RPM meta package (.rpm).
 
     Builds a minimal RPM binary package whose payload is empty and whose primary
@@ -108,7 +108,6 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     rpmrecommends = rpmsuggests = ""
     sourcedir_list = []
     rpm_scripts = []
-
     # amdrocm-debugger: Exclude libpython requires only (provides are not an issue).
     # Multiple Python-version-specific binaries are included; the wrapper script
     # automatically selects the binary matching the system's Python version.
