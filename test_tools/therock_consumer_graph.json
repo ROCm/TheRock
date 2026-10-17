@@ -159,7 +159,9 @@
     ]
   },
   "hipcub": {
-    "consumers": []
+    "consumers": [
+      "libhipcxx"
+    ]
   },
   "hipdnn": {
     "consumers": [
@@ -410,6 +412,7 @@
   "rocprim": {
     "consumers": [
       "hipcub",
+      "libhipcxx",
       "rocalution",
       "rocprim_tests",
       "rocsolver",
@@ -523,7 +526,9 @@
     ]
   },
   "rocthrust": {
-    "consumers": []
+    "consumers": [
+      "libhipcxx"
+    ]
   },
   "roctracer": {
     "consumers": [

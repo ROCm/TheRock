@@ -1072,7 +1072,9 @@ test_matrix = {
     # libhipcxx amdclang++ tests (formerly libhipcxx_hipcc)
     "libhipcxx_amdclang": {
         "job_name": "libhipcxx_amdclang",
-        "fetch_artifact_args": "--libhipcxx --tests",
+        # --prim pulls rocThrust/hipCUB/rocPRIM. c2h tests find_package those
+        # and compile against their headers; the configs live in prim_dev.
+        "fetch_artifact_args": "--libhipcxx --prim --tests",
         "timeout_minutes": 30,
         "additional_requirements_files": [
             _get_artifact_path("libhipcxx/requirements-test.txt"),
