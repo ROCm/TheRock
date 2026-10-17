@@ -195,7 +195,20 @@ function(therock_subproject_fetch target_name)
   cmake_path(GET ARG_SOURCE_DIR PARENT_PATH _source_parent)
   cmake_path(GET ARG_SOURCE_DIR FILENAME _source_basename)
   set(_smrev_file "${_source_parent}/.${_source_basename}.smrev")
-  file(WRITE "${_smrev_file}" "${_extra};${ARG_UNPARSED_ARGUMENTS}")
+
+  # Normalize generated touch paths only in fingerprint metadata.
+  # ExternalProject_Add above continues to use the original _extra commands.
+  set(_fprint_extra "${_extra}")
+  if(ARG_TOUCH)
+    _therock_subproject_fprint_paths(
+      _fprint_touch "${THEROCK_BINARY_DIR}" "${ARG_TOUCH}")
+    set(_fprint_extra
+      BUILD_COMMAND "${CMAKE_COMMAND}" -E touch ${_fprint_touch}
+      BUILD_BYPRODUCTS ${_fprint_touch}
+    )
+  endif()
+
+  file(WRITE "${_smrev_file}" "${_fprint_extra};${ARG_UNPARSED_ARGUMENTS}")
 endfunction()
 
 # Maps a COMPILER_TOOLCHAIN name to the subproject that backs it: "amd-hip" ->
@@ -743,7 +756,7 @@ function(therock_cmake_subproject_activate target_name)
   set(_compiler_toolchain_init_contents)
   _therock_cmake_subproject_setup_toolchain("${target_name}"
     "${_compiler_toolchain}" "${_cmake_project_toolchain_file}")
-  list(APPEND _fprint_files "${_cmake_project_toolchain_file}")
+  list(APPEND _fprint_content "_toolchain.cmake=${_compiler_toolchain_fprint}")
 
   # Customize any other super-project CMake variables that are captured by
   # _init.cmake.
@@ -757,6 +770,17 @@ function(therock_cmake_subproject_activate target_name)
   endif()
 
   # Generate the project_init.cmake
+  # Only these explicitly typed path values receive build-relative identities
+  # in the fingerprint rendering. Flags and other strings remain verbatim.
+  set(_init_fprint_path_vars
+    _build_stamp_file
+    _stage_stamp_file
+    ROCM_BUILD_FLAGS_STATE_FILE
+    THEROCK_BINARY_DIR
+    CMAKE_PROGRAM_PATH
+    _prefix_dir
+    _private_pkg_config_dirs
+  )
   set(_dep_provider_file)
   if(_build_deps OR _runtime_deps)
     set(_dep_provider_file "${THEROCK_SOURCE_DIR}/cmake/therock_subproject_dep_provider.cmake")
@@ -828,9 +852,10 @@ function(therock_cmake_subproject_activate target_name)
     if(THEROCK_VERBOSE)
       message(STATUS "  INCLUDE_DIR: ${_private_include_dir}")
     endif()
-    string(APPEND _init_contents "include_directories(BEFORE \"${_private_include_dir}\")\n")
-    string(APPEND _init_contents "list(PREPEND CMAKE_REQUIRED_INCLUDES \"${_private_include_dir}\")\n")
-    string(APPEND _init_contents "list(APPEND THEROCK_SUPERPROJECT_INCLUDE_DIRS \"${_private_include_dir}\")\n")
+    _therock_subproject_template_path(_include_ref _init_fprint_path_vars "${_private_include_dir}")
+    string(APPEND _init_contents "include_directories(BEFORE \"${_include_ref}\")\n")
+    string(APPEND _init_contents "list(PREPEND CMAKE_REQUIRED_INCLUDES \"${_include_ref}\")\n")
+    string(APPEND _init_contents "list(APPEND THEROCK_SUPERPROJECT_INCLUDE_DIRS \"${_include_ref}\")\n")
   endforeach()
 
   # Link dirs.
@@ -838,21 +863,22 @@ function(therock_cmake_subproject_activate target_name)
     if(THEROCK_VERBOSE)
       message(STATUS "  LINK_DIR: ${_private_link_dir}")
     endif()
+    _therock_subproject_template_path(_link_ref _init_fprint_path_vars "${_private_link_dir}")
     # Make the link dir visible to CMake find_library.
-    string(APPEND _init_contents "list(APPEND CMAKE_LIBRARY_PATH \"${_private_link_dir}\")\n")
+    string(APPEND _init_contents "list(APPEND CMAKE_LIBRARY_PATH \"${_link_ref}\")\n")
     if(NOT MSVC)
       # The normal way.
-      string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L${_private_link_dir} -Wl,-rpath-link,${_private_link_dir}\")\n")
-      string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -L${_private_link_dir} -Wl,-rpath-link,${_private_link_dir}\")\n")
+      string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L${_link_ref} -Wl,-rpath-link,${_link_ref}\")\n")
+      string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -L${_link_ref} -Wl,-rpath-link,${_link_ref}\")\n")
     elseif(_compiler_toolchain STREQUAL "amd-llvm" OR _compiler_toolchain STREQUAL "amd-hip")
       # The Windows but using a clang-based toolchain way.
       #   Working around "lld-link: warning: ignoring unknown argument '-rpath-link'"
-      string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L${_private_link_dir} \")\n")
-      string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -L${_private_link_dir} \")\n")
+      string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L${_link_ref} \")\n")
+      string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -L${_link_ref} \")\n")
     else()
       # The MSVC way.
-      string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" /LIBPATH:${_private_link_dir}\")\n")
-      string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" /LIBPATH:${_private_link_dir}\")\n")
+      string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" /LIBPATH:${_link_ref}\")\n")
+      string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" /LIBPATH:${_link_ref}\")\n")
     endif()
   endforeach()
 
@@ -894,8 +920,9 @@ function(therock_cmake_subproject_activate target_name)
   _therock_get_flag_init_contents(_flag_init_contents "${target_name}")
   string(APPEND _init_contents "${_flag_init_contents}")
 
-  file(CONFIGURE OUTPUT "${_cmake_project_init_file}" CONTENT "${_init_contents}" @ONLY ESCAPE_QUOTES)
-  list(APPEND _fprint_files "${_cmake_project_init_file}")
+  _therock_subproject_configure_fprint(
+    _init_fprint "${_cmake_project_init_file}" "${_init_contents}" "${_init_fprint_path_vars}")
+  list(APPEND _fprint_content "_init.cmake=${_init_fprint}")
   list(APPEND _fprint_files "${ROCM_BUILD_FLAGS_STATE_FILE}")
 
   # Target flags.
@@ -996,7 +1023,7 @@ function(therock_cmake_subproject_activate target_name)
     # Finger-print vital configure content.
     cmake_path(RELATIVE_PATH _stage_dir BASE_DIRECTORY "${THEROCK_BINARY_DIR}" OUTPUT_VARIABLE _rel_stage_dir)
     cmake_path(RELATIVE_PATH _stage_destination_dir BASE_DIRECTORY "${THEROCK_BINARY_DIR}" OUTPUT_VARIABLE _rel_stage_destination_dir)
-    cmake_path(RELATIVE_PATH _cmake_source_dir BASE_DIRECTORY "${THEROCK_SOURCE_DIR}" OUTPUT_VARIABLE _rel_cmake_source_dir)
+    _therock_subproject_fprint_source_path(_rel_cmake_source_dir "${_cmake_source_dir}")
     list(APPEND _fprint_content
       "CONFIGURE"
       "CMAKE_BUILD_TYPE=${_cmake_build_type}"
@@ -1456,6 +1483,7 @@ function(_therock_cmake_subproject_setup_deps out_contents out_provided dep_dir_
   string(APPEND CMAKE_MESSAGE_INDENT "  ")
   set(_contents "${${out_contents}}")
   set(_already_provided ${${out_provided}})
+  set(_dep_fprint_path_vars)
   foreach(dep_target ${ARGN})
     _therock_assert_is_cmake_subproject("${dep_target}")
 
@@ -1477,7 +1505,8 @@ function(_therock_cmake_subproject_setup_deps out_contents out_provided dep_dir_
         if(THEROCK_VERBOSE)
           message(STATUS "INJECT ${_package_name} = ${_find_package_path} (from ${dep_target})")
         endif()
-        string(APPEND _contents "set(THEROCK_PACKAGE_DIR_${_package_name} \"${_find_package_path}\")\n")
+        _therock_subproject_template_path(_package_ref _dep_fprint_path_vars "${_find_package_path}")
+        string(APPEND _contents "set(THEROCK_PACKAGE_DIR_${_package_name} \"${_package_ref}\")\n")
         string(APPEND _contents "list(APPEND THEROCK_PROVIDED_PACKAGES ${_package_name})\n")
 
         # Now write a trampoline package config file into the prefix so that normal
@@ -1498,6 +1527,13 @@ function(_therock_cmake_subproject_setup_deps out_contents out_provided dep_dir_
   endforeach()
   set("${out_contents}" "${_contents}" PARENT_SCOPE)
   set("${out_provided}" "${_already_provided}" PARENT_SCOPE)
+  # The returned fragment is rendered by the caller. Forward its path bindings
+  # as well, leaving the real paths used by the trampoline files unchanged.
+  foreach(_path_var IN LISTS _dep_fprint_path_vars)
+    set("${_path_var}" "${${_path_var}}" PARENT_SCOPE)
+  endforeach()
+  list(APPEND _init_fprint_path_vars ${_dep_fprint_path_vars})
+  set(_init_fprint_path_vars "${_init_fprint_path_vars}" PARENT_SCOPE)
 endfunction()
 
 # Gets the staging install directories for a list of subproject deps.
@@ -1670,6 +1706,7 @@ function(_therock_cmake_subproject_setup_toolchain
   string(APPEND CMAKE_MESSAGE_INDENT "  ")
   set(_build_env_pairs "${_build_env_pairs}")
   set(_toolchain_contents)
+  set(_toolchain_fprint_path_vars)
 
   get_target_property(_disable_amdgpu_targets "${target_name}" THEROCK_DISABLE_AMDGPU_TARGETS)
   set(_filtered_gpu_targets)
@@ -1815,13 +1852,15 @@ function(_therock_cmake_subproject_setup_toolchain
     set(AMD_LLVM_C_COMPILER "${_amd_llvm_dist_dir}/lib/llvm/bin/clang${CMAKE_EXECUTABLE_SUFFIX}")
     set(AMD_LLVM_CXX_COMPILER "${_amd_llvm_dist_dir}/lib/llvm/bin/clang++${CMAKE_EXECUTABLE_SUFFIX}")
     set(AMD_LLVM_LINKER "${_amd_llvm_dist_dir}/lib/llvm/bin/lld${CMAKE_EXECUTABLE_SUFFIX}")
+    list(APPEND _toolchain_fprint_path_vars
+      _amd_llvm_dist_dir AMD_LLVM_C_COMPILER AMD_LLVM_CXX_COMPILER AMD_LLVM_LINKER)
     set(_amd_llvm_cxx_flags_spaces )
     string(JOIN " " _amd_llvm_cxx_flags_spaces ${THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS})
 
     list(APPEND _compiler_toolchain_addl_depends "${_amd_llvm_stamp_dir}/stage.stamp")
     # We inject a toolchain root into the subproject so that magic overrides can
     # use it (i.e. for old projects that require path munging, etc).
-    string(APPEND _toolchain_contents "set(THEROCK_TOOLCHAIN_ROOT \"${_amd_llvm_dist_dir}\")\n")
+    string(APPEND _toolchain_contents "set(THEROCK_TOOLCHAIN_ROOT \"@_amd_llvm_dist_dir@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER \"@AMD_LLVM_C_COMPILER@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER \"@AMD_LLVM_CXX_COMPILER@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_LINKER \"@AMD_LLVM_LINKER@\")\n")
@@ -1866,6 +1905,7 @@ function(_therock_cmake_subproject_setup_toolchain
     get_target_property(_hip_stamp_dir hip-clr THEROCK_STAMP_DIR)
     # Add a dependency on HIP's stamp.
     set(_amd_llvm_device_lib_path "${_amd_llvm_dist_dir}/lib/llvm/amdgcn/bitcode")
+    list(APPEND _toolchain_fprint_path_vars _hip_dist_dir _amd_llvm_device_lib_path)
     list(APPEND _compiler_toolchain_addl_depends "${_hip_stamp_dir}/stage.stamp")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-path=@_hip_dist_dir@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-device-lib-path=@_amd_llvm_device_lib_path@\")\n")
@@ -1882,7 +1922,9 @@ function(_therock_cmake_subproject_setup_toolchain
   set(_compiler_toolchain_addl_depends "${_compiler_toolchain_addl_depends}" PARENT_SCOPE)
   set(_compiler_toolchain_init_contents "${_compiler_toolchain_init_contents}" PARENT_SCOPE)
   set(_build_env_pairs "${_build_env_pairs}" PARENT_SCOPE)
-  file(CONFIGURE OUTPUT "${toolchain_file}" CONTENT "${_toolchain_contents}" @ONLY ESCAPE_QUOTES)
+  _therock_subproject_configure_fprint(
+    _toolchain_fprint "${toolchain_file}" "${_toolchain_contents}" "${_toolchain_fprint_path_vars}")
+  set(_compiler_toolchain_fprint "${_toolchain_fprint}" PARENT_SCOPE)
 endfunction()
 
 
@@ -1959,6 +2001,83 @@ function(_therock_subproject_fprint_source_dir out_fprint dir)
     message(STATUS "  FPRINT: '${fprint}'")
   endif()
   set("${out_fprint}" "${fprint}" PARENT_SCOPE)
+endfunction()
+
+# Identify explicitly typed path values. Opaque flags and command strings must
+# not use this helper. Preserve outside paths and parent traversal verbatim.
+function(_therock_subproject_fprint_paths out_content build_root paths)
+  cmake_path(IS_ABSOLUTE build_root _absolute_root)
+  cmake_path(GET build_root ROOT_PATH _anchor)
+  if(NOT _absolute_root OR build_root STREQUAL _anchor)
+    message(FATAL_ERROR "Fingerprint build root must be an absolute non-root directory")
+  endif()
+  set(_identities)
+  foreach(_path IN LISTS paths)
+    cmake_path(IS_ABSOLUTE _path _absolute)
+    if(_absolute)
+      cmake_path(IS_PREFIX build_root "${_path}" _in_build)
+      string(REPLACE "/" ";" _parts "${_path}")
+      if(_in_build AND NOT ".." IN_LIST _parts)
+        cmake_path(RELATIVE_PATH _path BASE_DIRECTORY "${build_root}" OUTPUT_VARIABLE _relative)
+        set(_identity "BUILD:${_relative}")
+      else()
+        set(_identity "ABSOLUTE:${_path}")
+      endif()
+    else()
+      set(_identity "RELATIVE:${_path}")
+    endif()
+    list(APPEND _identities "${_identity}")
+  endforeach()
+  set("${out_content}" "${_identities}" PARENT_SCOPE)
+endfunction()
+
+# Bind a path inserted inside a loop to a unique template variable. Both real
+# and fingerprint renderings then use the same template and original value.
+# The returned reference is inserted into template text before configuration.
+# The digest only names the variable; that name is substituted before hashing.
+function(_therock_subproject_template_path out_ref out_path_vars path)
+  string(SHA256 _path_id "${path}")
+  set(_binding "_therock_fprint_path_${_path_id}")
+  set("${_binding}" "${path}" PARENT_SCOPE)
+  set(_path_vars "${${out_path_vars}}")
+  list(APPEND _path_vars "${_binding}")
+  set("${out_path_vars}" "${_path_vars}" PARENT_SCOPE)
+  set("${out_ref}" "@${_binding}@" PARENT_SCOPE)
+endfunction()
+
+# Render the real file first, then hash the SAME template with only explicitly
+# declared path variables replaced by their logical identities. The overrides
+# are local to this function. Opaque flags and literal strings are never scanned
+# for paths or replacement markers, and generated files keep their real paths.
+function(_therock_subproject_configure_fprint out_fprint output_file template path_vars)
+  file(CONFIGURE OUTPUT "${output_file}" CONTENT "${template}" @ONLY ESCAPE_QUOTES)
+  set(_build_root "${THEROCK_BINARY_DIR}")
+  list(REMOVE_DUPLICATES path_vars)
+  foreach(_path_var IN LISTS path_vars)
+    _therock_subproject_fprint_paths("${_path_var}" "${_build_root}" "${${_path_var}}")
+  endforeach()
+  string(CONFIGURE "${template}" _fingerprint_content @ONLY ESCAPE_QUOTES)
+  string(SHA256 _fprint "${_fingerprint_content}")
+  set("${out_fprint}" "${_fprint}" PARENT_SCOPE)
+endfunction()
+
+# Downloaded sources may live under a build directory nested in the checkout.
+# Test that tree first; keep unrelated source locations distinct.
+function(_therock_subproject_fprint_source_path out_content path)
+  set(_path "${path}")
+  cmake_path(ABSOLUTE_PATH _path BASE_DIRECTORY "${THEROCK_SOURCE_DIR}" NORMALIZE)
+  cmake_path(IS_PREFIX THEROCK_BINARY_DIR "${_path}" NORMALIZE _in_build)
+  cmake_path(IS_PREFIX THEROCK_SOURCE_DIR "${_path}" NORMALIZE _in_source)
+  if(_in_build)
+    cmake_path(RELATIVE_PATH _path BASE_DIRECTORY "${THEROCK_BINARY_DIR}" OUTPUT_VARIABLE _relative)
+    set(_identity "BUILD:${_relative}")
+  elseif(_in_source)
+    cmake_path(RELATIVE_PATH _path BASE_DIRECTORY "${THEROCK_SOURCE_DIR}" OUTPUT_VARIABLE _relative)
+    set(_identity "SOURCE:${_relative}")
+  else()
+    set(_identity "EXTERNAL:${_path}")
+  endif()
+  set("${out_content}" "${_identity}" PARENT_SCOPE)
 endfunction()
 
 function(_therock_subproject_fprint_files out_content files)
