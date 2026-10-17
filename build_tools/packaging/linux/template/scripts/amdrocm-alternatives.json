@@ -35,7 +35,9 @@
       "rocprof-sys-python",
       "rocprof-sys-run",
       "rocprof-sys-sample",
-      "rocpd"
+      "rocsys",
+      "rocpd",
+      "amd-smi"
     ]
   },
   "amdrocm-base": {
