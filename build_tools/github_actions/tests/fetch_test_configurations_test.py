@@ -492,7 +492,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_miopen_dbsync_declares_gfx950_advisory(self):
         # The matrix entry itself says gfx950 is advisory -- no conditional elsewhere.
         config = fetch_test_configurations.test_matrix["miopen-dbsync"]
-        self.assertEqual(config["expect_failure_family"]["linux"], ["gfx950"])
+        self.assertEqual(config["expect_failure"]["linux"], ["gfx950"])
 
     def test_miopen_dbsync_gfx950_scheduled_on_cpu_runner_when_gpu_gated(self):
         job = self._dbsync_job("gfx950-dcgpu", True, "gfx950")
@@ -507,7 +507,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_miopen_dbsync_gfx942_stays_blocking(self):
         job = self._dbsync_job("gfx94X-dcgpu", False, "gfx942")
         self.assertIsNotNone(job)
-        self.assertNotIn("expect_failure", job)
+        self.assertFalse(job["expect_failure"])
 
     def test_miopen_dbsync_excluded_on_other_families(self):
         self.assertIsNone(self._dbsync_job("gfx120X-all", False, "gfx1200"))
@@ -525,7 +525,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertNotIn("rocblas", names)
 
     # -----------------------
-    # expect_failure_family (per-family advisory jobs)
+    # expect_failure (per-family advisory jobs)
     # -----------------------
 
     def _job_by_name(self, name):
@@ -534,47 +534,53 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         jobs = [j for j in self._get_components() if j["job_name"] == name]
         return jobs[0] if jobs else None
 
-    def test_expect_failure_family_matches_by_gfx_target(self):
+    def test_expect_failure_matches_by_gfx_target(self):
         # Default AMDGPU_FAMILIES is the gfx94X-dcgpu group; "gfx942" is one of its
         # fetch-gfx-targets, so the target form matches -- same as include_family.
-        self._inject_job("xf-target", expect_failure_family={"linux": ["gfx942"]})
-        self.assertTrue(self._job_by_name("xf-target")["expect_failure"])
+        self._inject_job("xf-target", expect_failure={"linux": ["gfx942"]})
+        self.assertIs(self._job_by_name("xf-target")["expect_failure"], True)
 
-    def test_expect_failure_family_matches_by_group_string(self):
-        self._inject_job("xf-group", expect_failure_family={"linux": ["gfx94X-dcgpu"]})
-        self.assertTrue(self._job_by_name("xf-group")["expect_failure"])
+    def test_expect_failure_matches_by_group_string(self):
+        self._inject_job("xf-group", expect_failure={"linux": ["gfx94X-dcgpu"]})
+        self.assertIs(self._job_by_name("xf-group")["expect_failure"], True)
 
-    def test_expect_failure_family_does_not_match_other_family(self):
+    def test_expect_failure_does_not_match_other_family(self):
         # The job is still scheduled; it is just blocking rather than advisory.
-        self._inject_job("xf-other", expect_failure_family={"linux": ["gfx1100"]})
+        self._inject_job("xf-other", expect_failure={"linux": ["gfx1100"]})
         job = self._job_by_name("xf-other")
         self.assertIsNotNone(job)
-        self.assertNotIn("expect_failure", job)
+        self.assertIs(job["expect_failure"], False)
 
-    def test_expect_failure_family_is_scoped_per_platform(self):
+    def test_expect_failure_is_scoped_per_platform(self):
         # A windows-only declaration does not make the linux job advisory.
-        self._inject_job("xf-otherplat", expect_failure_family={"windows": ["gfx942"]})
-        self.assertNotIn("expect_failure", self._job_by_name("xf-otherplat"))
+        self._inject_job("xf-otherplat", expect_failure={"windows": ["gfx942"]})
+        self.assertIs(self._job_by_name("xf-otherplat")["expect_failure"], False)
 
-    def test_expect_failure_family_omitted_leaves_job_blocking(self):
+    def test_expect_failure_omitted_leaves_job_blocking(self):
+        # Components that never opt in do not carry the key at all.
         self._inject_job("xf-absent")
         self.assertNotIn("expect_failure", self._job_by_name("xf-absent"))
 
-    def test_expect_failure_family_key_not_emitted(self):
-        # Control-only key: the workflows read "expect_failure", so the declaration
-        # itself must not leak into the component JSON.
-        self._inject_job("xf-strip", expect_failure_family={"linux": ["gfx942"]})
-        self.assertNotIn("expect_failure_family", self._job_by_name("xf-strip"))
+    def test_expect_failure_is_always_emitted_as_a_bool(self):
+        # test_component.yml compares with `== true`, so the declaration map must
+        # never survive into the emitted component JSON.
+        for name, decl in [
+            ("xf-bool-hit", {"linux": ["gfx942"]}),
+            ("xf-bool-miss", {"linux": ["gfx1100"]}),
+        ]:
+            with self.subTest(job=name):
+                self._inject_job(name, expect_failure=decl)
+                self.assertIsInstance(self._job_by_name(name)["expect_failure"], bool)
 
-    def test_expect_failure_family_does_not_mutate_test_matrix(self):
-        # The plumbing pops from the merged copy, so repeated runs stay consistent.
-        self._inject_job("xf-repeat", expect_failure_family={"linux": ["gfx942"]})
-        self.assertTrue(self._job_by_name("xf-repeat")["expect_failure"])
-        self.assertTrue(self._job_by_name("xf-repeat")["expect_failure"])
-
-    def test_miopen_dbsync_does_not_emit_expect_failure_family(self):
-        self.assertNotIn(
-            "expect_failure_family", self._dbsync_job("gfx950-dcgpu", True, "gfx950")
+    def test_expect_failure_does_not_mutate_test_matrix(self):
+        # The boolean is written to the merged copy, so the declaration survives
+        # for the next run rather than being consumed by the first one.
+        self._inject_job("xf-repeat", expect_failure={"linux": ["gfx942"]})
+        self.assertIs(self._job_by_name("xf-repeat")["expect_failure"], True)
+        self.assertIs(self._job_by_name("xf-repeat")["expect_failure"], True)
+        self.assertEqual(
+            fetch_test_configurations.test_matrix["xf-repeat"]["expect_failure"],
+            {"linux": ["gfx942"]},
         )
 
     # -----------------------
