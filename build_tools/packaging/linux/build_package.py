@@ -172,9 +172,10 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
     """Build all variants for a gfxarch package in kpack mode (multi-arch).
 
     For regular gfxarch packages (Metapackage=False), creates:
-    - Host package (e.g., amdrocm-fft-host8.2) - generic artifacts
+    - Host package (e.g., amdrocm-fft-host8.2) - generic artifacts; skipped when
+      omits_generic_variants() holds
     - Device packages (e.g., amdrocm-fft8.2-gfx1100, amdrocm-fft8.2-gfx94x) - arch-specific artifacts
-    - Meta package (e.g., amdrocm-fft8.2) - depends on host + all devices
+    - Meta package (e.g., amdrocm-fft8.2) - depends on host (if any) + all devices
     - Non-versioned package (e.g., amdrocm-fft) - user-facing, depends on meta
 
     For gfxarch metapackages (Metapackage=True + Gfxarch=True), creates:
@@ -201,10 +202,13 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
     # Host package (contains generic artifacts)
     # Skip for metapackages - they have no artifacts, only dependencies
     if not is_meta:
-        logger.info(f"Building host variant for {pkg_name}")
-        pkg = build_host_package(pkg_name, config)
-        if pkg:
-            built_packages.extend(pkg)
+        if omits_generic_variants(pkg_info, config.artifacts_dir):
+            logger.info(f"Skipping host variant for {pkg_name}: no generic content")
+        else:
+            logger.info(f"Building host variant for {pkg_name}")
+            pkg = build_host_package(pkg_name, config)
+            if pkg:
+                built_packages.extend(pkg)
 
     # Device packages (one per owner, retaining all selected member targets)
     # For metapackages, these become arch-specific meta packages
@@ -240,6 +244,8 @@ def build_simple_package_variants(pkg_name, config: PackageConfig) -> list:
     - Versioned package (e.g., amdrocm-core8.2)
     - Non-versioned package with no arch suffix (e.g., amdrocm-core)
 
+    Neither is built when omits_generic_variants() holds.
+
     Parameters:
         pkg_name: Name of the package to build
         config: Configuration object
@@ -248,6 +254,15 @@ def build_simple_package_variants(pkg_name, config: PackageConfig) -> list:
         List of built package filenames
     """
     built_packages = []
+    pkg_info = get_package_info(pkg_name)
+
+    # Without a versioned package, the alias would be a dangling dependency.
+    if omits_generic_variants(pkg_info, config.artifacts_dir):
+        logger.warning(
+            f"Skipping versioned and non-versioned variants for {pkg_name}: "
+            "no generic content"
+        )
+        return built_packages
 
     # Versioned package
     logger.info(f"Building versioned variant for {pkg_name}")
@@ -657,6 +672,39 @@ def build_pkg(task: BuildTask) -> tuple[str, list[str], str | None]:
             return (task.pkg_name, [], f"{type(e).__name__}: {e}")
 
 
+def partition_packages_without_content(pkg_list, config: PackageConfig):
+    """Split out packages that have no content in kpack mode.
+
+    A package is skipped when has_no_content() holds and kept when that check
+    raises, so build_pkg reports the failure. Outside kpack mode all are kept.
+
+    Parameters:
+        pkg_list: Package names selected for the build
+        config: Configuration object
+
+    Returns:
+        (kept, skipped): package names to build, and package names skipped
+    """
+    if not config.enable_kpack:
+        return list(pkg_list), []
+    kept = []
+    skipped = []
+    for pkg_name in pkg_list:
+        try:
+            no_content = has_no_content(
+                get_package_info(pkg_name), config.artifacts_dir
+            )
+        except Exception:
+            kept.append(pkg_name)
+            continue
+        if no_content:
+            logger.warning(f"Skipping {pkg_name}: optional content, no content found")
+            skipped.append(pkg_name)
+        else:
+            kept.append(pkg_name)
+    return kept, skipped
+
+
 def run(args: argparse.Namespace):
     # Create configuration from arguments
     config = create_package_config(args)
@@ -676,6 +724,9 @@ def run(args: argparse.Namespace):
     if not pkg_list:
         logger.error("No packages found to build. Package list is empty.")
         sys.exit(1)
+
+    pkg_list, no_content_list = partition_packages_without_content(pkg_list, config)
+    skipped_list.extend(no_content_list)
 
     logs_dir = Path(config.dest_dir).parent / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -722,7 +773,8 @@ def run(args: argparse.Namespace):
         failed=failed_pkglist,
     )
 
-    # Print build summary
+    # Print build summary; dest_dir may not exist if every package was skipped
+    config.dest_dir.mkdir(parents=True, exist_ok=True)
     print_build_summary(config, pkglist_status)
     if failed_pkglist:
         sys.exit(1)

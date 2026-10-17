@@ -207,6 +207,20 @@ amdrocm-blas (non-versioned)
 1. **Device packages depend on SAME-ARCH variants** of gfxarch dependencies (for binaries)
 1. **Non-gfxarch dependencies** go to host package only (inherited by devices)
 1. **No cross-architecture dependencies** - gfx1100 device never depends on gfx942 packages
+1. **No host package** for an `OptionalContent` package without generic content (see below)
+
+### Per-arch `-devel` packages without a host
+
+`amdrocm-ck-devel` is per-arch (see Development Packages and OptionalContent in `native_packaging.md`): each `amdrocm-ck-dev8.2-gfx<t>` carries that target's `libdevice_conv_operations_<t>.a` and CMake export files. Its generic artifacts hold no files, so it has no host package and each device package depends on the host's non-gfxarch dependencies:
+
+```
+amdrocm-ck-dev (non-versioned)
+└─► amdrocm-ck-dev8.2 (meta)
+    ├─► amdrocm-ck-dev8.2-gfx1100 ─► amdrocm-ck8.2, amdrocm-runtime-dev8.2
+    └─► amdrocm-ck-dev8.2-gfx942  ─► amdrocm-ck8.2, amdrocm-runtime-dev8.2
+```
+
+`amdrocm-core-devel` for a target depends on `amdrocm-ck-dev8.2-gfx<t>` only when that target has CK per-arch files.
 
 ______________________________________________________________________
 
@@ -470,6 +484,8 @@ Dependencies:
 Example for amdrocm-blas8.2-gfx1100:
   - amdrocm-blas-host8.2 (own host)
   - amdrocm-solver8.2-gfx1100 (gfxarch → same arch)
+
+No host package (OptionalContent): host's non-gfxarch deps + same-arch gfxarch deps
 ```
 
 ### Meta Package (versioned, e.g., amdrocm-blas8.2)
@@ -479,6 +495,7 @@ Dependencies = [host + all devices]
              = [amdrocm-blas-host8.2,
                 amdrocm-blas8.2-gfx1100,
                 amdrocm-blas8.2-gfx942, ...]
+(no host for an OptionalContent package without generic content)
 ```
 
 ### Metapackage (e.g., amdrocm-core8.2)

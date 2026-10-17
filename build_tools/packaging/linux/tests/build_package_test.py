@@ -21,6 +21,7 @@ Requires Python 3.10+ (``packaging_utils`` type syntax).
 import importlib.util
 import json
 import os
+import re
 import sys
 import tempfile
 import types
@@ -102,11 +103,16 @@ from packaging_utils import (  # noqa: E402
     has_artifact_for_arch,
     is_gfxarch_package,
     is_key_defined,
+    is_meta_package,
+    read_package_json_file,
     update_package_name,
     PackageCollisionError,
     validate_package_roots,
     expand_kpack_meta_dependencies,
     process_main_dependencies_kpack,
+    _artifact_dir_name_index,
+    has_generic_content,
+    omits_generic_variants,
 )
 
 
@@ -1428,6 +1434,656 @@ class HostFallbackTest(BuildPackageTestCase):
         spec = _read_spec_file(pkg_name=PKG_BLAS, config=host_cfg)
         requires = _spec_field(spec, "Requires")
         self.assertIn("amdrocm-solver-host", requires)
+
+
+# Generic kpack packaging logic, tested on a synthetic package.json.
+class _KpackBuildTestCase(BuildPackageTestCase):
+    """``_build`` returns the control/spec text of each package built (tools mocked)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        _artifact_dir_name_index.cache_clear()
+
+    def _config(
+        self, targets: tuple[str, ...], pkg_type: str = "deb", label: str = "tree"
+    ) -> PackageConfig:
+        return _kpack_config(
+            self.temp_dir / label, target=list(targets), pkg_type=pkg_type
+        )
+
+    def _build(self, cfg: PackageConfig, pkg_names) -> dict[str, str]:
+        built: dict[str, str] = {}
+        deb = sys.modules["deb_package"]
+        rpm = sys.modules["rpm_package"]
+
+        def record_deb(package_dir) -> None:
+            control = (Path(package_dir) / "debian" / "control").read_text("utf-8")
+            built[_control_field(control, "Package")] = control
+
+        def record_rpm(specfile) -> None:
+            spec = Path(specfile).read_text("utf-8")
+            built[_spec_field(spec, "Name")] = spec
+
+        with (
+            patch.object(deb, "package_with_dpkg_build", side_effect=record_deb),
+            patch.object(deb, "move_packages_to_destination", return_value=[]),
+            patch.object(rpm, "package_with_rpmbuild", side_effect=record_rpm),
+            patch.object(rpm, "move_packages_to_destination", return_value=[]),
+        ):
+            for pkg_name in pkg_names:
+                build_package.build_package_variants(pkg_name, cfg)
+        return built
+
+    @staticmethod
+    def _depends(built: dict[str, str], name: str) -> list[str]:
+        """Dependency names (versions stripped) from all Depends:/Requires: fields;
+        an empty field yields [], empty elements of a non-empty field are kept."""
+        fields: list[str] = []
+        in_field = False
+        for line in built[name].splitlines():
+            if line.startswith(("Depends:", "Requires:")):
+                fields.append(line.split(":", 1)[1])
+                in_field = True
+            elif in_field and line[:1] in (" ", "\t"):
+                fields[-1] += " " + line
+            else:
+                in_field = False
+        joined = ",".join(fields)
+        if not joined.strip():
+            return []
+        return [re.split(r"[\s(]", dep.strip())[0] for dep in joined.split(",")]
+
+
+FAKE_TARGETS = ("gfx942", "gfx1100")
+FAKE_UNBUILT_TARGET = "gfx1030"
+FAKE_PKG_TYPES = (("deb", "dev"), ("rpm", "devel"))
+FAKE_VER = ".".join(TEST_ROCM_VERSION.split(".")[:2])  # version in package names
+
+FAKE_BASE = "amdrocm-fakebase"  # Gfxarch; generic and per-arch content
+FAKE_SUPPORT = "amdrocm-fakesupport"  # not Gfxarch; generic content
+FAKE_OPT_DEVEL = "amdrocm-fakeopt-devel"  # Gfxarch + OptionalContent -devel
+FAKE_BARE_DEVEL = "amdrocm-fakebare-devel"  # as FAKE_OPT_DEVEL, no dependencies
+FAKE_OPT_SIMPLE = "amdrocm-fakeoptsimple"  # OptionalContent, not Gfxarch
+FAKE_OPT_META = "amdrocm-fakeoptmeta-devel"  # Metapackage + OptionalContent
+FAKE_STRICT = "amdrocm-fakestrict"  # Gfxarch, no OptionalContent
+FAKE_PLAIN = "amdrocm-fakeplain"  # no Gfxarch, no OptionalContent
+FAKE_NOGFX_DEVEL = "amdrocm-fakenogfx-devel"  # -devel with OptionalContent, no Gfxarch
+FAKE_GFX_DEVEL = "amdrocm-fakegfx-devel"  # -devel with Gfxarch, no OptionalContent
+FAKE_SUITE = "amdrocm-fakesuite-devel"  # Gfxarch metapackage
+
+# package -> (artifact prefix, artifact subdir name, component)
+FAKE_ARTIFACTS = {
+    FAKE_BASE: ("fakebase", "FakeBase", "lib"),
+    FAKE_SUPPORT: ("fakesupport", "FakeSupport", "lib"),
+    FAKE_OPT_DEVEL: ("fakeopt", "FakeOpt", "dev"),
+    FAKE_BARE_DEVEL: ("fakebare", "FakeBare", "dev"),
+    FAKE_OPT_SIMPLE: ("fakeoptsimple", "FakeOptSimple", "lib"),
+    FAKE_STRICT: ("fakestrict", "FakeStrict", "lib"),
+    FAKE_PLAIN: ("fakeplain", "FakePlain", "lib"),
+    FAKE_NOGFX_DEVEL: ("fakenogfx", "FakeNoGfx", "dev"),
+    FAKE_GFX_DEVEL: ("fakegfx", "FakeGfx", "dev"),
+}
+
+
+def _fake_package(
+    name: str,
+    *,
+    deps: tuple[str, ...] = (),
+    gfxarch: bool = False,
+    optional: bool = False,
+    meta: bool = False,
+) -> dict:
+    """Return a synthetic ``package.json`` entry; artifacts come from FAKE_ARTIFACTS."""
+    info: dict = {
+        "Package": name,
+        "Version": "",
+        "Architecture": "amd64",
+        "BuildArch": "x86_64",
+        "DEBDepends": list(deps),
+        "RPMRequires": list(deps),
+        "Maintainer": "Test <test@example.com>",
+        "Description_Short": f"{name} synthetic test package",
+        "Description_Long": f"{name} synthetic test package",
+        "Section": "devel",
+        "Priority": "optional",
+        "Group": "unknown",
+        "License": "MIT",
+        "Vendor": "Test",
+        "Homepage": "https://example.com",
+    }
+    if name in FAKE_ARTIFACTS:
+        artifact, subdir, component = FAKE_ARTIFACTS[name]
+        info["Artifactory"] = [
+            {
+                "Artifact": artifact,
+                "Artifact_Subdir": [{"Name": subdir, "Components": [component]}],
+            }
+        ]
+    if gfxarch:
+        info["Gfxarch"] = "True"
+    if optional:
+        info["OptionalContent"] = "True"
+    if meta:
+        info["Metapackage"] = "True"
+    return info
+
+
+FAKE_PACKAGES = [
+    _fake_package(FAKE_BASE, gfxarch=True),
+    _fake_package(FAKE_SUPPORT),
+    _fake_package(
+        FAKE_OPT_DEVEL,
+        deps=(FAKE_BASE, FAKE_SUPPORT, FAKE_OPT_SIMPLE),
+        gfxarch=True,
+        optional=True,
+    ),
+    _fake_package(FAKE_BARE_DEVEL, gfxarch=True, optional=True),
+    _fake_package(FAKE_OPT_SIMPLE, optional=True),
+    _fake_package(FAKE_OPT_META, gfxarch=True, optional=True, meta=True),
+    _fake_package(FAKE_STRICT, deps=(FAKE_SUPPORT,), gfxarch=True),
+    _fake_package(FAKE_PLAIN),
+    _fake_package(FAKE_NOGFX_DEVEL, optional=True),
+    _fake_package(FAKE_GFX_DEVEL, gfxarch=True),
+    _fake_package(
+        FAKE_SUITE,
+        deps=(FAKE_OPT_DEVEL, FAKE_OPT_SIMPLE, FAKE_PLAIN),
+        gfxarch=True,
+        meta=True,
+    ),
+]
+
+
+def _stage_fake(
+    artifacts_dir: Path, pkg_name: str, suffix: str, content: str = "files"
+) -> None:
+    """Stage ``<artifact>_<component>_<suffix>``; ``content`` is "files",
+    "empty_dir" or "manifest_only" (manifest line, no directory)."""
+    artifact, subdir, component = FAKE_ARTIFACTS[pkg_name]
+    artifact_dir = artifacts_dir / f"{artifact}_{component}_{suffix}"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    stage_path = f"{subdir}/{component}"
+    with (artifact_dir / "artifact_manifest.txt").open("a", encoding="utf-8") as f:
+        f.write(f"{stage_path}\n")
+    if content == "manifest_only":
+        return
+    (artifact_dir / stage_path).mkdir(parents=True, exist_ok=True)
+    if content == "files":
+        (artifact_dir / stage_path / STAGING_PAYLOAD_NAME).write_bytes(
+            STAGING_PAYLOAD_BYTES
+        )
+
+
+class _FakePackagesTestCase(_KpackBuildTestCase):
+    """Runs with ``FAKE_PACKAGES`` as ``package.json``."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        # Patch package.json in every module namespace; other tests may load copies.
+        namespaces: dict[int, dict] = {}
+        for module in (
+            build_package,
+            deb_package,
+            rpm_package,
+            sys.modules["deb_package"],
+            sys.modules["rpm_package"],
+            sys.modules["packaging_utils"],
+        ):
+            for namespace in (module.__dict__, module.get_package_info.__globals__):
+                if "read_package_json_file" in namespace:
+                    namespaces[id(namespace)] = namespace
+        for namespace in namespaces.values():
+            patcher = patch.dict(
+                namespace,
+                {"read_package_json_file": lambda: list(FAKE_PACKAGES)},
+            )
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def _stage_base_and_support(
+        self, cfg: PackageConfig, base_targets: tuple[str, ...] = FAKE_TARGETS
+    ) -> None:
+        _stage_fake(cfg.artifacts_dir, FAKE_SUPPORT, "generic")
+        _stage_fake(cfg.artifacts_dir, FAKE_BASE, "generic")
+        for target in base_targets:
+            _stage_fake(cfg.artifacts_dir, FAKE_BASE, target)
+
+
+class GenericContentTest(_FakePackagesTestCase):
+    """has_generic_content() and omits_generic_variants() predicates."""
+
+    def test_generic_content_requires_a_non_empty_directory_for_the_subdir(
+        self,
+    ) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic", "manifest_only")
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic", "empty_dir")
+        _stage_fake(cfg.artifacts_dir, FAKE_STRICT, "generic", "files")
+        other = cfg.artifacts_dir / "fakeplain_lib_generic"
+        (other / "Other/lib").mkdir(parents=True)
+        (other / "Other/lib" / STAGING_PAYLOAD_NAME).write_bytes(STAGING_PAYLOAD_BYTES)
+        (other / "artifact_manifest.txt").write_text("Other/lib\n", encoding="utf-8")
+
+        expected = {
+            FAKE_OPT_DEVEL: False,  # manifest line without a directory
+            FAKE_OPT_SIMPLE: False,  # existing but empty directory
+            FAKE_STRICT: True,
+            FAKE_PLAIN: False,  # content under another subdir
+            FAKE_BARE_DEVEL: False,  # nothing staged
+        }
+        for pkg_name, has_content in expected.items():
+            self.assertEqual(
+                has_generic_content(get_package_info(pkg_name), cfg.artifacts_dir),
+                has_content,
+                pkg_name,
+            )
+
+    def test_omitted_only_for_optional_non_meta_package_without_content(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic", "manifest_only")
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic", "files")
+        _stage_fake(cfg.artifacts_dir, FAKE_STRICT, "generic", "manifest_only")
+        expected = {
+            FAKE_OPT_DEVEL: True,
+            FAKE_OPT_SIMPLE: False,  # has content
+            FAKE_STRICT: False,  # not OptionalContent
+            FAKE_PLAIN: False,  # not OptionalContent, nothing staged
+            FAKE_OPT_META: False,  # metapackages never omit
+        }
+        for pkg_name, omitted in expected.items():
+            self.assertEqual(
+                omits_generic_variants(get_package_info(pkg_name), cfg.artifacts_dir),
+                omitted,
+                pkg_name,
+            )
+
+
+class DevelGfxarchRuleTest(_FakePackagesTestCase):
+    """A non-meta -devel package is per-arch only with Gfxarch, OptionalContent and
+    per-arch files."""
+
+    def _is_gfxarch(self, cfg: PackageConfig, pkg_name: str) -> bool:
+        return is_gfxarch_package(get_package_info(pkg_name), True, cfg.artifacts_dir)
+
+    def test_devel_with_gfxarch_follows_per_arch_artifacts(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic")
+        self.assertFalse(self._is_gfxarch(cfg, FAKE_OPT_DEVEL))
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "gfx942")
+        _artifact_dir_name_index.cache_clear()
+        self.assertTrue(self._is_gfxarch(cfg, FAKE_OPT_DEVEL))
+
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "xnack-suffixed artifact dirs use ':', which NTFS reserves and cannot "
+        "create; the packaging flow that consumes them is Linux-only",
+    )
+    def test_devel_with_gfxarch_matches_xnack_suffixed_artifacts(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "gfx942:xnack+")
+        self.assertTrue(self._is_gfxarch(cfg, FAKE_OPT_DEVEL))
+
+    def test_devel_with_gfxarch_needs_files_for_only_one_target(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "gfx1100", "manifest_only")
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "gfx942")
+        self.assertTrue(self._is_gfxarch(cfg, FAKE_OPT_DEVEL))
+
+    def test_devel_with_gfxarch_finds_files_in_any_artifactory_entry_or_component(
+        self,
+    ) -> None:
+        # Files are staged only under the component, or the entry, listed second.
+        second_component = _fake_package(FAKE_OPT_DEVEL, gfxarch=True, optional=True)
+        second_component["Artifactory"][0]["Artifact_Subdir"][0]["Components"] = [
+            "lib",
+            "dev",
+        ]
+        second_entry = _fake_package(FAKE_OPT_DEVEL, gfxarch=True, optional=True)
+        second_entry["Artifactory"].insert(
+            0,
+            {
+                "Artifact": "fakebase",
+                "Artifact_Subdir": [{"Name": "FakeBase", "Components": ["lib"]}],
+            },
+        )
+        for label, pkg_info in (
+            ("second_component", second_component),
+            ("second_entry", second_entry),
+        ):
+            with self.subTest(label):
+                cfg = self._config(FAKE_TARGETS, label=label)
+                _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "gfx942")
+                self.assertTrue(is_gfxarch_package(pkg_info, True, cfg.artifacts_dir))
+
+    def test_devel_without_gfxarch_stays_generic_with_per_arch_artifacts(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_NOGFX_DEVEL, "generic")
+        _stage_fake(cfg.artifacts_dir, FAKE_NOGFX_DEVEL, "gfx942")
+        self.assertFalse(self._is_gfxarch(cfg, FAKE_NOGFX_DEVEL))
+
+    def test_devel_without_optional_content_stays_generic_with_per_arch_artifacts(
+        self,
+    ) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_GFX_DEVEL, "generic")
+        _stage_fake(cfg.artifacts_dir, FAKE_GFX_DEVEL, "gfx942")
+        self.assertFalse(self._is_gfxarch(cfg, FAKE_GFX_DEVEL))
+
+    def test_devel_with_manifest_only_per_arch_artifacts_stays_generic(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "gfx942", "manifest_only")
+        self.assertFalse(self._is_gfxarch(cfg, FAKE_OPT_DEVEL))
+
+
+class OptionalContentDependencyFilterTest(_FakePackagesTestCase):
+    """Only OptionalContent packages without generic content are dropped from deps."""
+
+    def test_only_optional_packages_without_content_are_dropped(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic", "manifest_only")
+        _stage_fake(cfg.artifacts_dir, FAKE_PLAIN, "generic", "empty_dir")
+        _stage_fake(cfg.artifacts_dir, FAKE_SUPPORT, "generic")
+        deps = [FAKE_OPT_SIMPLE, FAKE_PLAIN, FAKE_SUPPORT, FAKE_OPT_META]
+        kept, _ = filter_dependencies_by_artifacts(deps, cfg.artifacts_dir, GFX_HOST)
+        self.assertCountEqual(kept, [FAKE_PLAIN, FAKE_SUPPORT, FAKE_OPT_META])
+
+
+class HostlessVariantsTest(_FakePackagesTestCase):
+    """Variants and dependency edges of a per-arch OptionalContent package."""
+
+    def _stage_opt_devel(
+        self,
+        cfg: PackageConfig,
+        targets: tuple[str, ...] = FAKE_TARGETS,
+        generic: str = "manifest_only",
+    ) -> None:
+        self._stage_base_and_support(cfg)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic", generic)
+        for target in targets:
+            _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, target)
+
+    def test_per_target_content_builds_device_packages_without_host(self) -> None:
+        targets = FAKE_TARGETS + (FAKE_UNBUILT_TARGET,)
+        for pkg_type, dev in FAKE_PKG_TYPES:
+            for generic in ("manifest_only", "empty_dir"):
+                with self.subTest(pkg_type=pkg_type, generic=generic):
+                    cfg = self._config(targets, pkg_type, f"{pkg_type}-{generic}")
+                    # Per-target content for FAKE_TARGETS only.
+                    self._stage_opt_devel(cfg, generic=generic)
+                    built = self._build(cfg, [FAKE_OPT_DEVEL])
+                    name = f"amdrocm-fakeopt-{dev}"
+                    expected = {
+                        f"{name}{FAKE_VER}-gfx942",
+                        f"{name}{FAKE_VER}-gfx1100",
+                        f"{name}{FAKE_VER}",
+                        name,
+                    }
+                    self.assertEqual(set(), expected - set(built))
+                    self.assertFalse([pkg for pkg in built if "-host" in pkg])
+                    self.assertFalse(
+                        [pkg for pkg in built if FAKE_UNBUILT_TARGET in pkg]
+                    )
+                    for target in FAKE_TARGETS:
+                        deps = self._depends(built, f"{name}{FAKE_VER}-{target}")
+                        self.assertIn(f"amdrocm-fakesupport{FAKE_VER}", deps)
+                        self.assertIn(f"amdrocm-fakebase{FAKE_VER}-{target}", deps)
+                        self.assertFalse([dep for dep in deps if "-host" in dep])
+                    self.assertCountEqual(
+                        self._depends(built, f"{name}{FAKE_VER}"),
+                        [f"{name}{FAKE_VER}-gfx1100", f"{name}{FAKE_VER}-gfx942"],
+                    )
+
+    def test_arch_dependency_without_artifacts_for_a_target_uses_its_host(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        self._stage_base_and_support(cfg, base_targets=("gfx942",))
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic", "manifest_only")
+        for target in FAKE_TARGETS:
+            _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, target)
+        built = self._build(cfg, [FAKE_OPT_DEVEL])
+        with_arch = self._depends(built, f"amdrocm-fakeopt-dev{FAKE_VER}-gfx942")
+        without_arch = self._depends(built, f"amdrocm-fakeopt-dev{FAKE_VER}-gfx1100")
+        self.assertIn(f"amdrocm-fakebase{FAKE_VER}-gfx942", with_arch)
+        self.assertIn(f"amdrocm-fakebase-host{FAKE_VER}", without_arch)
+        self.assertNotIn(f"amdrocm-fakebase{FAKE_VER}-gfx1100", without_arch)
+        self.assertIn(f"amdrocm-fakesupport{FAKE_VER}", without_arch)
+
+    def test_optional_dependency_without_content_is_not_carried(self) -> None:
+        for has_content, label in ((False, "empty"), (True, "present")):
+            with self.subTest(dependency=label):
+                cfg = self._config(FAKE_TARGETS, label=label)
+                self._stage_opt_devel(cfg)
+                _stage_fake(
+                    cfg.artifacts_dir,
+                    FAKE_OPT_SIMPLE,
+                    "generic",
+                    "files" if has_content else "manifest_only",
+                )
+                built = self._build(cfg, [FAKE_OPT_DEVEL])
+                for target in FAKE_TARGETS:
+                    deps = self._depends(
+                        built, f"amdrocm-fakeopt-dev{FAKE_VER}-{target}"
+                    )
+                    self.assertEqual(
+                        f"amdrocm-fakeoptsimple{FAKE_VER}" in deps, has_content
+                    )
+
+    def test_package_without_dependencies_gets_no_dependency_line(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_BARE_DEVEL, "generic", "manifest_only")
+        for target in FAKE_TARGETS:
+            _stage_fake(cfg.artifacts_dir, FAKE_BARE_DEVEL, target)
+        built = self._build(cfg, [FAKE_BARE_DEVEL])
+        for target in FAKE_TARGETS:
+            name = f"amdrocm-fakebare-dev{FAKE_VER}-{target}"
+            self.assertIn(name, built)
+            self.assertEqual(self._depends(built, name), [])
+
+    def test_generic_content_adds_a_host_that_device_packages_depend_on(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        self._stage_opt_devel(cfg, generic="files")
+        built = self._build(cfg, [FAKE_OPT_DEVEL])
+        host = f"amdrocm-fakeopt-dev-host{FAKE_VER}"
+        self.assertIn(host, built)
+        self.assertIn(host, self._depends(built, f"amdrocm-fakeopt-dev{FAKE_VER}"))
+        for target in FAKE_TARGETS:
+            self.assertIn(
+                host, self._depends(built, f"amdrocm-fakeopt-dev{FAKE_VER}-{target}")
+            )
+
+    def test_no_content_at_all_builds_nothing(self) -> None:
+        for content in ("manifest_only", "empty_dir"):
+            for pkg_name in (FAKE_OPT_DEVEL, FAKE_OPT_SIMPLE):
+                with self.subTest(content=content, pkg=pkg_name):
+                    cfg = self._config(FAKE_TARGETS, label=f"{content}-{pkg_name}")
+                    self._stage_base_and_support(cfg)
+                    _stage_fake(cfg.artifacts_dir, pkg_name, "generic", content)
+                    built = self._build(cfg, [pkg_name])
+                    self.assertFalse(
+                        [pkg for pkg in built if pkg.startswith("amdrocm-fakeopt")]
+                    )
+
+    def test_suite_depends_on_per_arch_package_only_for_targets_with_it(self) -> None:
+        targets = FAKE_TARGETS + (FAKE_UNBUILT_TARGET,)
+        cfg = self._config(targets)
+        self._stage_opt_devel(cfg)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic")
+        _stage_fake(cfg.artifacts_dir, FAKE_PLAIN, "generic")
+        built = self._build(cfg, [FAKE_OPT_DEVEL, FAKE_SUITE])
+        for target in FAKE_TARGETS:
+            deps = self._depends(built, f"amdrocm-fakesuite-dev{FAKE_VER}-{target}")
+            self.assertIn(f"amdrocm-fakeopt-dev{FAKE_VER}-{target}", deps)
+        unbuilt = self._depends(
+            built, f"amdrocm-fakesuite-dev{FAKE_VER}-{FAKE_UNBUILT_TARGET}"
+        )
+        self.assertFalse(
+            [dep for dep in unbuilt if dep.startswith("amdrocm-fakeopt-dev")]
+        )
+
+    def test_suite_has_no_dependency_on_package_without_content(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        self._stage_base_and_support(cfg)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic", "manifest_only")
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic", "manifest_only")
+        _stage_fake(cfg.artifacts_dir, FAKE_PLAIN, "generic")
+        built = self._build(cfg, [FAKE_OPT_DEVEL, FAKE_SUITE])
+        for target in FAKE_TARGETS:
+            deps = self._depends(built, f"amdrocm-fakesuite-dev{FAKE_VER}-{target}")
+            self.assertFalse([dep for dep in deps if dep.startswith("amdrocm-fakeopt")])
+            self.assertIn(f"amdrocm-fakeplain{FAKE_VER}", deps)
+
+
+class NonOptionalPackagesKeepVariantsTest(_FakePackagesTestCase):
+    """Packages without OptionalContent, or with content, keep variants and edges."""
+
+    def test_gfxarch_package_without_generic_content_keeps_host_edges(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_SUPPORT, "generic")
+        _stage_fake(cfg.artifacts_dir, FAKE_STRICT, "generic", "manifest_only")
+        for target in FAKE_TARGETS:
+            _stage_fake(cfg.artifacts_dir, FAKE_STRICT, target)
+        built = self._build(cfg, [FAKE_STRICT])
+        host = f"amdrocm-fakestrict-host{FAKE_VER}"
+        self.assertIn(host, self._depends(built, f"amdrocm-fakestrict{FAKE_VER}"))
+        for target in FAKE_TARGETS:
+            self.assertIn(
+                host, self._depends(built, f"amdrocm-fakestrict{FAKE_VER}-{target}")
+            )
+
+    def test_package_without_the_key_keeps_alias_when_empty(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_PLAIN, "generic", "empty_dir")
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic", "manifest_only")
+        built = self._build(cfg, [FAKE_PLAIN, FAKE_OPT_SIMPLE])
+        self.assertEqual(
+            self._depends(built, "amdrocm-fakeplain"), [f"amdrocm-fakeplain{FAKE_VER}"]
+        )
+        self.assertFalse(
+            [name for name in built if name.startswith("amdrocm-fakeoptsimple")]
+        )
+
+    def test_optional_package_with_content_keeps_alias_and_edge(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_SIMPLE, "generic")
+        _stage_fake(cfg.artifacts_dir, FAKE_PLAIN, "generic")
+        built = self._build(cfg, [FAKE_OPT_SIMPLE, FAKE_SUITE])
+        self.assertEqual(
+            self._depends(built, "amdrocm-fakeoptsimple"),
+            [f"amdrocm-fakeoptsimple{FAKE_VER}"],
+        )
+        for target in FAKE_TARGETS:
+            self.assertIn(
+                f"amdrocm-fakeoptsimple{FAKE_VER}",
+                self._depends(built, f"amdrocm-fakesuite-dev{FAKE_VER}-{target}"),
+            )
+
+
+class PackagesWithoutContentPartitionTest(_FakePackagesTestCase):
+    """In kpack mode only OptionalContent packages with no content are skipped."""
+
+    def test_only_optional_packages_without_any_content_are_skipped(self) -> None:
+        # label, package, staged (suffix, content) pairs, kpack mode, skipped
+        rows = (
+            ("interim", FAKE_OPT_DEVEL, (("generic", "manifest_only"),), True, True),
+            (
+                "per_arch",
+                FAKE_OPT_DEVEL,
+                (("generic", "manifest_only"), ("gfx942", "files")),
+                True,
+                False,
+            ),
+            ("generic", FAKE_OPT_SIMPLE, (("generic", "files"),), True, False),
+            ("plain_empty", FAKE_PLAIN, (("generic", "empty_dir"),), True, False),
+            (
+                "single_arch",
+                FAKE_OPT_DEVEL,
+                (("generic", "manifest_only"),),
+                False,
+                False,
+            ),
+        )
+        for label, pkg_name, staged, kpack, skipped in rows:
+            with self.subTest(label):
+                cfg = self._config(FAKE_TARGETS, label=label)
+                for suffix, content in staged:
+                    _stage_fake(cfg.artifacts_dir, pkg_name, suffix, content)
+                cfg = replace(cfg, enable_kpack=kpack)
+                expected = ([], [pkg_name]) if skipped else ([pkg_name], [])
+                self.assertEqual(
+                    build_package.partition_packages_without_content([pkg_name], cfg),
+                    expected,
+                )
+
+    def test_package_whose_content_check_raises_is_kept(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        broken = _fake_package(FAKE_OPT_DEVEL, gfxarch=True, optional=True)
+        del broken["Artifactory"][0]["Artifact_Subdir"]
+        with patch.object(build_package, "get_package_info", return_value=broken):
+            self.assertEqual(
+                build_package.partition_packages_without_content([FAKE_OPT_DEVEL], cfg),
+                ([FAKE_OPT_DEVEL], []),
+            )
+
+
+class RunReportsPackagesWithoutContentTest(_FakePackagesTestCase):
+    """run() reports a package with no content as skipped, not failed."""
+
+    def test_package_without_content_is_reported_as_skipped(self) -> None:
+        cfg = self._config(FAKE_TARGETS)
+        _stage_fake(cfg.artifacts_dir, FAKE_OPT_DEVEL, "generic", "manifest_only")
+        self.assertFalse(cfg.dest_dir.exists())
+        args = _args(
+            self.temp_dir, runpath_pkg=True, pkg_names=[FAKE_OPT_DEVEL], parallel=1
+        )
+        # Exercise the real worker and orchestration without external package builds.
+        with (
+            patch.object(build_package, "create_package_config", return_value=cfg),
+            patch.object(build_package, "cleanup_packaging_environment"),
+            patch.object(build_package, "ProcessPoolExecutor", ThreadPoolExecutor),
+        ):
+            build_package.run(args)
+        manifest_file = cfg.dest_dir / "built_packages.txt"
+        self.assertTrue(manifest_file.exists())
+        manifest = manifest_file.read_text("utf-8")
+        self.assertIn("# Skipped base packages: 1\n", manifest)
+        self.assertIn("# Failed to build: 0\n", manifest)
+
+
+class PackageJsonConsistencyTest(unittest.TestCase):
+    """Consistency rules for the real ``package.json``."""
+
+    DEPENDENCY_FIELD_SUFFIXES = ("Depends", "Requires", "Recommends", "Suggests")
+
+    def setUp(self) -> None:
+        self.packages = read_package_json_file()
+
+    def test_amdrocm_dependency_entries_are_exact_package_names(self) -> None:
+        names = {pkg["Package"] for pkg in self.packages}
+        misses = []
+        for pkg in self.packages:
+            for field, value in pkg.items():
+                if not field.endswith(self.DEPENDENCY_FIELD_SUFFIXES):
+                    continue
+                for element in value if isinstance(value, list) else [value]:
+                    for entry in element.split(","):
+                        entry = entry.strip()
+                        if "amdrocm" in entry and entry not in names:
+                            misses.append(
+                                f"{pkg['Package']}: {field} entry {entry!r} is "
+                                "not an exact package name"
+                            )
+        self.assertEqual([], misses)
+
+    def test_optional_content_only_on_non_meta_packages_with_artifacts(self) -> None:
+        for pkg in self.packages:
+            if not is_key_defined(pkg, "OptionalContent"):
+                continue
+            self.assertFalse(
+                is_meta_package(pkg),
+                f"{pkg['Package']}: OptionalContent is set on a metapackage",
+            )
+            self.assertTrue(
+                pkg.get("Artifactory"),
+                f"{pkg['Package']}: OptionalContent is set without Artifactory",
+            )
 
 
 if __name__ == "__main__":

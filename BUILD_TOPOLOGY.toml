@@ -683,6 +683,7 @@ artifact_deps = ["core-runtime", "core-hip", "blas", "core-amdsmi"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
+split_databases = ["composablekernel"]
 source_paths = ["composablekernel"]
 
 [artifacts.hiptensor]

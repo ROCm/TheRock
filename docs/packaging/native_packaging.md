@@ -48,6 +48,12 @@ For the RPM use case, this naming convention is valid. However, for the
 Debian use case, the suffix should be -dev. Therefore, for Debian packages,
 the names are updated to use -dev.
 
+In multi-arch (kpack) mode a non-metapackage -devel package is built per GPU
+target (e.g. `amdrocm-ck-dev<version>-gfx942`) only when it sets `Gfxarch` and
+`OptionalContent` and a `<artifact>_<component>_gfx*` manifest of one of its
+components lists a non-empty directory; otherwise it is generic. Each build
+checks every target in the artifacts directory.
+
 ## RPATH Packages
 
 By default, RUNPATH in binaries and libraries is converted to RPATH during
@@ -72,7 +78,7 @@ Mandatory fields for a package entry in package.json.
 - Group: The group or category of the package.
 - Priority: The priority level of the package.
 - Section: The section under which the package falls.
-- Gfxarch: Indicates that the package is associated with a graphics architecture.
+- Gfxarch: Indicates that the package is associated with a graphics architecture (for `-devel` packages, see Development Packages).
 - DEBDepends: The list of dependency packages. Applies to Debian packages.
 - RPMRequires: The list of dependency packages. Applies to RPM packages.
 
@@ -84,6 +90,12 @@ Optional Fields
   field is specified, the Components field will be used instead.
 - DisablePackaging: Disables the creation of the package.
 - Disable_Debug_Package: Disables the generation of the debug symbol package.
+- OptionalContent: In kpack mode, lets a non-metapackage have empty generic
+  artifacts. A per-arch package then builds no `-host` package (its device
+  packages carry the host's non-gfxarch dependencies); any other package builds
+  neither its versioned package nor its alias and is dropped from dependency
+  lists. With no per-arch files either, the package is reported as skipped. On a
+  `Gfxarch` `-devel` package it also enables per-arch packaging.
 - Disable_DWZ: Skip DWZ processing. Applies to Debian packages.
 - Disable_DH_STRIP: Disables dh_strip. Applies to Debian packages.
 - Provides: Indicates that a package provides the functionality of another package.
