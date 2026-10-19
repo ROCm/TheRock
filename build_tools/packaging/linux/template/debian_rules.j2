@@ -8,7 +8,7 @@
 
 
 override_dh_builddeb:
-	dh_builddeb -- -Zxz --root-owner-group
+	dh_builddeb -- -Zzstd -z9 --root-owner-group
 
 {% if disable_dwz %}
 override_dh_dwz:
