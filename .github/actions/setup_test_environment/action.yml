@@ -55,11 +55,6 @@ runs:
         uv pip install -r requirements-test.txt
         uv pip freeze
 
-    - name: Check Ninja on Windows
-      if: ${{ runner.os == 'Windows' }}
-      shell: bash
-      run: ninja --version
-
     - name: Download and Unpack Artifacts
       shell: bash
       env:

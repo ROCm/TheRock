@@ -859,6 +859,9 @@ test_matrix = {
     "hipdnn_install": {
         "job_name": "hipdnn_install",
         "timeout_minutes": 30,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_hipdnn_install.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -915,6 +918,9 @@ test_matrix = {
         # is why "hipdnn_install" omits it too. Do not "fix" this by adding the
         # enumerated artifact flags back; find_package would fail.
         "timeout_minutes": 10,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_hipdnn_cudnn_samples.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -1093,6 +1099,7 @@ test_matrix = {
         "timeout_minutes": 30,
         "additional_requirements_files": [
             _get_artifact_path("libhipcxx/requirements-test.txt"),
+            _get_script_path("requirements-test-ninja.txt"),
         ],
         "test_script": f"python {_get_script_path('test_libhipcxx_amdclang.py')}",
         "platform": ["linux", "windows"],
@@ -1157,6 +1164,9 @@ test_matrix = {
         # (the InOneWeekend example includes <hiprand/hiprand.hpp>).
         "fetch_artifact_args": "--hipthreads --prim --rand --tests",
         "timeout_minutes": 30,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_hipthreads_examples.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -1168,6 +1178,9 @@ test_matrix = {
         "job_name": "rocdecode",
         "fetch_artifact_args": "--rocdecode --tests",
         "timeout_minutes": 10,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_rocdecode.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
