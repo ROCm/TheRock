@@ -3651,5 +3651,198 @@ class TestCpuTestOnlyLabel(unittest.TestCase):
         self.assertIn("test-runs-on-multi-gpu-labels", entry)
 
 
+# ---------------------------------------------------------------------------
+# Sanitizer variant resolution
+# ---------------------------------------------------------------------------
+
+
+class TestResolveSanitizerVariants(unittest.TestCase):
+    """Tests for _resolve_sanitizer_variants and _get_external_repo_trigger."""
+
+    def test_external_repo_nightly_resolves_variant(self):
+        """External repo nightly should resolve to the configured variant."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref=None,
+            build_variant="asan",
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"main","event_name":"schedule"}',
+        )
+        git_context = cm.GitContext.from_external_repo("rocm-libraries")
+        variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
+        self.assertEqual(variants, ["asan"])
+
+    def test_external_repo_rockrel_nightly(self):
+        """rockrel nightly should resolve to asan."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref=None,
+            build_variant="asan",
+            external_repo='{"repository":"ROCm/rockrel","ref":"main","event_name":"schedule"}',
+        )
+        git_context = cm.GitContext.from_external_repo("rockrel")
+        variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
+        self.assertEqual(variants, ["asan"])
+
+    def test_external_repo_rocm_systems_nightly_tsan(self):
+        """rocm-systems nightly should resolve to tsan."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref=None,
+            build_variant="asan",
+            external_repo='{"repository":"ROCm/rocm-systems","ref":"main","event_name":"schedule"}',
+        )
+        git_context = cm.GitContext.from_external_repo("rocm-systems")
+        variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
+        self.assertEqual(variants, ["tsan"])
+
+    def test_submodule_bump_amd_llvm(self):
+        """amd-llvm submodule bump should resolve to asan-debug."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^",
+            build_variant="asan",
+        )
+        git_context = cm.GitContext(
+            changed_files=["compiler/amd-llvm", "some-other-file"],
+            submodule_paths=["compiler/amd-llvm", "rocm-systems", "rocm-libraries"],
+        )
+        variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
+        self.assertEqual(variants, ["asan-debug"])
+
+    def test_submodule_bump_rocm_systems(self):
+        """rocm-systems submodule bump should resolve to host-asan."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^",
+            build_variant="asan",
+        )
+        git_context = cm.GitContext(
+            changed_files=["rocm-systems"],
+            submodule_paths=["compiler/amd-llvm", "rocm-systems", "rocm-libraries"],
+        )
+        variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
+        self.assertEqual(variants, ["host-asan"])
+
+    def test_submodule_bump_multiple_submodules(self):
+        """Multiple submodule bumps can resolve to multiple variants."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^",
+            build_variant="asan",
+        )
+        git_context = cm.GitContext(
+            changed_files=["compiler/amd-llvm", "rocm-systems"],
+            submodule_paths=["compiler/amd-llvm", "rocm-systems", "rocm-libraries"],
+        )
+        variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
+        # Both should be present (order may vary based on set iteration)
+        self.assertIn("asan-debug", variants)
+        self.assertIn("host-asan", variants)
+        self.assertEqual(len(variants), 2)
+
+    def test_no_matching_rule_returns_empty(self):
+        """Unmatched source/trigger returns empty list."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref=None,
+            build_variant="asan",
+            external_repo='{"repository":"ROCm/unknown-repo","ref":"main","event_name":"schedule"}',
+        )
+        git_context = cm.GitContext.from_external_repo("unknown-repo")
+        variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
+        self.assertEqual(variants, [])
+
+    def test_external_repo_without_event_name_returns_empty(self):
+        """External repo JSON without event_name cannot resolve trigger."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref=None,
+            build_variant="asan",
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"main"}',
+        )
+        git_context = cm.GitContext.from_external_repo("rocm-libraries")
+        variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
+        self.assertEqual(variants, [])
+
+    def test_no_submodule_changes_returns_empty(self):
+        """Non-submodule changes should not trigger sanitizer rules."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^",
+            build_variant="asan",
+        )
+        git_context = cm.GitContext(
+            changed_files=["some-regular-file.py"],
+            submodule_paths=["compiler/amd-llvm", "rocm-systems"],
+        )
+        variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
+        self.assertEqual(variants, [])
+
+    def test_get_external_repo_trigger_schedule(self):
+        """schedule event_name maps to nightly trigger."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref=None,
+            build_variant="asan",
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"main","event_name":"schedule"}',
+        )
+        self.assertEqual(cm._get_external_repo_trigger(ci_inputs), "nightly")
+
+    def test_get_external_repo_trigger_pull_request(self):
+        """pull_request event_name maps to presubmit trigger."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref=None,
+            build_variant="asan",
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"main","event_name":"pull_request"}',
+        )
+        self.assertEqual(cm._get_external_repo_trigger(ci_inputs), "presubmit")
+
+    def test_get_external_repo_trigger_push(self):
+        """push event_name maps to postsubmit trigger."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref=None,
+            build_variant="asan",
+            external_repo='{"repository":"ROCm/rocm-systems","ref":"main","event_name":"push"}',
+        )
+        self.assertEqual(cm._get_external_repo_trigger(ci_inputs), "postsubmit")
+
+    def test_get_external_repo_trigger_no_external_repo(self):
+        """Non-external repo returns None."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^",
+            build_variant="asan",
+        )
+        self.assertIsNone(cm._get_external_repo_trigger(ci_inputs))
+
+
 if __name__ == "__main__":
     unittest.main()
