@@ -1,0 +1,5 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Windows test runners need Ninja for CMake builds of samples and consumer tests.
+ninja==1.13.2; sys_platform == "win32"
