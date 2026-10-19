@@ -56,6 +56,14 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      pytorch_git_refs:
+        description: >-
+          PyTorch refs to build (comma/semicolon separated). Use 'all' for the
+          full default set for the release type, a subset of the available
+          release refs (e.g. 'release/2.12, release/2.13'), or a custom
+          branch/tag/SHA for bring-up.
+        type: string
+        default: "all"
       build_runs_on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
@@ -114,6 +122,14 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      pytorch_git_refs:
+        description: >-
+          PyTorch refs to build (comma/semicolon separated). Use 'all' for the
+          full default set for the release type, a subset of the available
+          release refs (e.g. 'release/2.12, release/2.13'), or a custom
+          branch/tag/SHA for bring-up.
+        type: string
+        default: "all"
       build_runs_on:
         description: "Build runner label"
         type: string
@@ -129,7 +145,8 @@ on:
 run-name: >-
   Release Windows PyTorch Wheels
   (${{ inputs.release_type }}, ${{ inputs.rocm_version }},
-  ${{ inputs.amdgpu_families }}, py ${{ inputs.python_version || 'all' }})
+  ${{ inputs.amdgpu_families }}, py ${{ inputs.python_version || 'all' }},
+  torch ${{ inputs.pytorch_git_refs }})
 
 permissions:
   contents: read
@@ -144,6 +161,7 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
       PYTHON_VERSION: ${{ inputs.python_version }}
+      PYTORCH_GIT_REFS: ${{ inputs.pytorch_git_refs }}
 
     steps:
       - name: "Quartz - started - release PyTorch wheels"
@@ -169,6 +187,7 @@ jobs:
         run: |
           python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
             --python-versions="${PYTHON_VERSION}" \
+            --pytorch-git-refs="${PYTORCH_GIT_REFS}" \
             --platform=windows \
             --release-type="${BUILD_RELEASE_TYPE}" \
             --amdgpu-families="${AMDGPU_FAMILIES}"

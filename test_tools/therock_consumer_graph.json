@@ -676,6 +676,7 @@
       "rocfft",
       "rocprim_tests",
       "rocprofiler-systems",
+      "rocr-debug-agent-tests",
       "rocrand",
       "rocroller",
       "rocshmem",
@@ -750,6 +751,7 @@
   },
   "therock-liblzma": {
     "consumers": [
+      "amd-llvm",
       "rocgdb",
       "therock-elfutils"
     ]
