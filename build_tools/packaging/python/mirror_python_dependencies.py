@@ -74,6 +74,8 @@ DEPENDENCIES: dict[str, DependencyPolicy] = {
     "rocm-bootstrap": DependencyPolicy(project="rocm", versions=("latest",)),
     # Required by the rocprof_trace_decoder Python API in rocm-profiler.
     "pyelftools": DependencyPolicy(project="rocm", versions=("latest",)),
+    # Required by the Rocjitsu execution API (cloudpickle >=3,<4).
+    "cloudpickle": DependencyPolicy(project="rocm", versions=("3.1.2",)),
     "setuptools": DependencyPolicy(project="rocm", versions=("81.0.0",)),
 }
 

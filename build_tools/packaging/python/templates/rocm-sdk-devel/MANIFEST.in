@@ -1,2 +1,4 @@
 include src/rocm_sdk_devel/.devel_links/*.json
 recursive-include platform/* *
+include rocjitsu-pyproject.toml
+include rocjitsu_dist_info.py

@@ -21,8 +21,10 @@ Example
 """
 
 import argparse
+from collections.abc import Sequence
 import functools
 import json
+import shutil
 import subprocess
 from pathlib import Path
 import sys
@@ -107,6 +109,72 @@ def mark_amdsmi_rocm_sdk_core(core_dir: Path) -> None:
     wrapper.write_text(
         text.replace(AMDSMI_ROCM_SDK_CORE_FLAG, "_AMDSMI_ROCM_SDK_CORE = True"),
         encoding="utf-8",
+    )
+
+
+def populate_rocjitsu_bindings(devel: PopulatedDistPackage) -> None:
+    """Expose the installed Python API alongside the SDK's native emulation tools."""
+    artifacts = devel.params.filter_artifacts(
+        lambda an: an.name == "rocjitsu" and an.component in ("lib", "run"),
+        includes=[
+            "bin/rocjitsu",
+            "libexec/rocjitsu/**",
+            "lib/librocjitsu*.so*",
+            "lib/python3/site-packages/rocjitsu/**",
+            "share/rocjitsu/**",
+        ],
+    )
+    files = {
+        relpath: Path(entry.path)
+        for relpath, entry in artifacts.pm.matches()
+        if entry.is_file()
+    }
+    # Builds without emulation and older artifacts have no Python API.
+    python_prefix = "lib/python3/site-packages/rocjitsu/"
+    if python_prefix + "__init__.py" not in files:
+        return
+
+    for required in (
+        "bin/rocjitsu",
+        "libexec/rocjitsu/rocjitsu-memory",
+        "lib/librocjitsu.so",
+        "share/rocjitsu/python/pyproject.toml",
+    ):
+        if required not in files:
+            raise RuntimeError(f"Incomplete Rocjitsu installation: missing {required}")
+    if not any(
+        path.startswith("share/rocjitsu/configs/") and path.endswith(".json")
+        for path in files
+    ):
+        raise RuntimeError("Incomplete Rocjitsu installation: missing JSON presets")
+
+    python_dir = devel.path / "src/rocjitsu"
+    for relpath, source in files.items():
+        if relpath.startswith(python_prefix):
+            dest = python_dir / relpath.removeprefix(python_prefix)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, dest)
+    shutil.copy2(devel.path / "rocjitsu_dist_info.py", python_dir / "_dist_info.py")
+    # setup.py reads the upstream requirements without importing the bindings.
+    shutil.copy2(
+        files["share/rocjitsu/python/pyproject.toml"],
+        devel.path / "rocjitsu-pyproject.toml",
+    )
+
+
+def populate_devel_package(
+    devel: PopulatedDistPackage,
+    *,
+    addl_artifact_names: Sequence[str],
+    exclude_components: Sequence[str] = (),
+) -> None:
+    # The bindings and their native SDK prefix ship together on Linux.
+    if sys.platform == "linux":
+        populate_rocjitsu_bindings(devel)
+        addl_artifact_names = [*addl_artifact_names, "rocjitsu"]
+    devel.populate_devel_files(
+        addl_artifact_names=addl_artifact_names,
+        exclude_components=exclude_components,
     )
 
 
@@ -459,7 +527,8 @@ def _run_kpack_split(
     # mode the generic test binaries are host-only and can't run without device
     # code. Tests will be reintroduced via a dedicated package later.
     devel = PopulatedDistPackage(params, logical_name="devel", target_family=None)
-    devel.populate_devel_files(
+    populate_devel_package(
+        devel,
         addl_artifact_names=[
             # Header-only libraries not included in runtime packages.
             "prim",
@@ -472,8 +541,6 @@ def _run_kpack_split(
             "rocshmem",
             # hipthreads only provides a static library.
             "hipthreads",
-            # rocjitsu emulation suite.
-            "rocjitsu",
             "mirage",
         ],
         exclude_components=["test"],
@@ -559,7 +626,8 @@ def _run_legacy(
         devel = PopulatedDistPackage(
             params, logical_name="devel", target_family=target_family
         )
-        devel.populate_devel_files(
+        populate_devel_package(
+            devel,
             addl_artifact_names=[
                 # Since prim and rocwmma are header only libraries, they are not
                 # included in runtime packages, but we still want them in the devel package.
@@ -568,8 +636,6 @@ def _run_legacy(
                 # Third party dependencies needed by hipDNN consumers.
                 "flatbuffers",
                 "nlohmann-json",
-                # rocjitsu emulation suite.
-                "rocjitsu",
                 "mirage",
             ],
         )
