@@ -55,11 +55,10 @@ runs:
         uv pip install -r requirements-test.txt
         uv pip freeze
 
-    - name: Install Choco tools
+    - name: Check Ninja on Windows
       if: ${{ runner.os == 'Windows' }}
       shell: bash
-      run: |
-        choco install --no-progress -y ninja
+      run: ninja --version
 
     - name: Download and Unpack Artifacts
       shell: bash
