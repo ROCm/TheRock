@@ -2323,8 +2323,8 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
 
-    def test_host_asan_debug_nightly_has_no_sandbox_runner(self):
-        """host-asan-debug nightly cannot use the rocm-systems PR sandbox pools."""
+    def test_host_asan_debug_nightly_uses_regular_runner(self):
+        """host-asan-debug nightly uses regular pool, not sandbox."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])
         result = cm.expand_build_configs(
             ci_inputs=self._inputs(
@@ -2335,7 +2335,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
             jobs=_jobs(),
         )
         entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "")
+        # host-asan variants run on the regular test pool
+        self.assertNotEqual(entry["test-runs-on"], "")
+        self.assertNotIn("sandbox", entry["test-runs-on"])
 
     def test_explicit_strict_linux_dev_build(self):
         """Explicit selection creates a build config without GPU tests."""
