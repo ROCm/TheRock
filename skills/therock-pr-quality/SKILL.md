@@ -1,6 +1,6 @@
 ---
 name: therock-pr-quality
-description: TheRock build-repo supplements to the ROCm PR quality base skill. Use when authoring, reviewing, or merge-gating a PR that touches the superbuild, submodules/patches, artifact descriptors, or reusable CI workflows. Adds and tightens base rules; never relaxes a MUST.
+description: TheRock build-repo supplements to the ROCm PR quality base skill. Use when authoring, reviewing, or merge-gating a PR touching the superbuild, submodules, artifact descriptors, or reusable CI. Adds and tightens base rules.
 argument-hint: '[author | review | pre-merge] [PR URL | branch:<name> | local]'
 extends: rocm-pr-quality
 allowed-tools: Bash, Read, Grep, Glob, Task, WebFetch

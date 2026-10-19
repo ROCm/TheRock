@@ -1,6 +1,6 @@
 ---
 name: rocm-pr-quality
-description: Author, review, merge-gate, or check the attestation of a ROCm library PR so it is traceable, tested, and safe to merge. Use when preparing a PR, reviewing one, judging merge-readiness, or given a PR URL or branch. Library-agnostic base; overlays extend it.
+description: Author, review, merge-gate, or check attestation of a ROCm library PR so it is traceable, tested, and safe to merge. Use when preparing or reviewing a PR or judging merge-readiness. Library-agnostic; overlays extend it.
 argument-hint: '[author | review | pre-merge | check-attestation] [PR URL | branch:<name> | local] [base:<branch>]'
 allowed-tools: Bash, Read, Grep, Glob, Task, WebFetch
 ---
