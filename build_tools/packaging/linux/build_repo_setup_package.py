@@ -3,10 +3,10 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-r"""Build the ``amdrocm-repo`` package that configures a system package manager
-(apt/dnf/zypper) to install AMD ROCm from the public ROCm repositories.
+r"""Build the ``amd-repo-setup`` package that configures a system package
+manager (apt/dnf/zypper) to install AMD ROCm from the public ROCm repositories.
 
-One ``amdrocm-repo`` package is generated per target OS profile and RFC0012
+One ``amd-repo-setup`` package is generated per target OS profile and RFC0012
 stream. It ships a single repository definition and, for signed streams, the AMD
 signing key, so that after installing the package a user can install ROCm with
 their native package manager. The signing key is fetched at build time and
@@ -39,22 +39,22 @@ additionally takes ``--repo-sub-folder`` (nightly here uses 20260716-12345); a
 flat stream rejects it:
 
     --os-profile  --stream  --rocm-version   resulting package file
-    ------------  --------  ---------------  ---------------------------------------------------
-    ubuntu2404    stable    10.0.0           amdrocm-repo_10.0.0-1~ubuntu2404_all.deb
-    ubuntu2404    rc        10.0.0~pre1      amdrocm-repo_10.0.0~pre1-1~ubuntu2404_all.deb
-    ubuntu2404    nightly   10.0.0~20260716  amdrocm-repo_10.0.0~20260716-1~ubuntu2404_all.deb
-    rhel8         stable    10.0.0           amdrocm-repo-10.0.0-1.stable.el8.noarch.rpm
-    rhel8         rc        10.0.0~rc1       amdrocm-repo-10.0.0~rc1-1.rc.el8.noarch.rpm
-    rhel8         nightly   10.0.0~20260716  amdrocm-repo-10.0.0~20260716-1.nightly.el8.noarch.rpm
-    rhel10        stable    10.0.0           amdrocm-repo-10.0.0-1.stable.el10.noarch.rpm
-    sles16        stable    10.0.0           amdrocm-repo-10.0.0-1.stable.sles16.noarch.rpm
+    ------------  --------  ---------------  -------------------------------------------------------
+    ubuntu2404    stable    10.0.0           amd-repo-setup_10.0.0-1~ubuntu2404_all.deb
+    ubuntu2404    rc        10.0.0~pre1      amd-repo-setup_10.0.0~pre1-1~ubuntu2404_all.deb
+    ubuntu2404    nightly   10.0.0~20260716  amd-repo-setup_10.0.0~20260716-1~ubuntu2404_all.deb
+    rhel8         stable    10.0.0           amd-repo-setup-10.0.0-1.stable.el8.noarch.rpm
+    rhel8         rc        10.0.0~rc1       amd-repo-setup-10.0.0~rc1-1.rc.el8.noarch.rpm
+    rhel8         nightly   10.0.0~20260716  amd-repo-setup-10.0.0~20260716-1.nightly.el8.noarch.rpm
+    rhel10        stable    10.0.0           amd-repo-setup-10.0.0-1.stable.el10.noarch.rpm
+    sles16        stable    10.0.0           amd-repo-setup-10.0.0-1.stable.sles16.noarch.rpm
 
 ``rc`` configures the release-candidate repository for the next GA, and nightly
 builds a later ROCm version still, so moving from either back to stable is
 usually a downgrade. rc's repo file is ``amdrocm-stablerc`` -- see STREAM_IDS.
 
 ```
-python build_repo_package.py \
+python build_repo_setup_package.py \
     --os-profile ubuntu2404 \
     --stream stable \
     --repo-base-url https://stable.repo.amd.com/rocm/core/packages \
@@ -66,7 +66,7 @@ The same build for a per-build stream, which pins the repository to one build
 folder and ships no signing key (those repositories are unsigned):
 
 ```
-python build_repo_package.py \
+python build_repo_setup_package.py \
     --os-profile rhel8 \
     --stream nightly \
     --repo-base-url https://nightly.repo.amd.com/rocm/core/packages \
@@ -99,7 +99,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 # The package name. The repository identifier used for the repo file and its
 # section header is derived per stream by ``repo_id()``. A single repository is
 # configured per package.
-PACKAGE_NAME = "amdrocm-repo"
+PACKAGE_NAME = "amd-repo-setup"
 REPO_ID_PREFIX = "amdrocm"
 REPO_NAME = "AMD ROCm"
 
@@ -844,7 +844,7 @@ def build_rpm_package(
         "changelog_date": rpm_changelog_date(datetime.now(timezone.utc)),
     }
     spec_path = build_dir / "SPECS" / f"{PACKAGE_NAME}.spec"
-    _render(env, "template/repo/rpm/amdrocm-repo.spec.j2", spec_path, spec_context)
+    _render(env, f"template/repo/rpm/{PACKAGE_NAME}.spec.j2", spec_path, spec_context)
 
     print(f"Building rpm package: {PACKAGE_NAME} for {profile['description']}")
     subprocess.run(
@@ -947,7 +947,7 @@ def list_profiles(pkg_type: str) -> list[str]:
 def run_list_profiles(argv: list[str]) -> None:
     """Print the OS profiles for a package type as a JSON array (CI matrix)."""
     p = argparse.ArgumentParser(
-        prog="build_repo_package.py list-profiles",
+        prog="build_repo_setup_package.py list-profiles",
         description="Print the OS profiles for a package type as a JSON array.",
     )
     p.add_argument("--pkg-type", required=True, choices=["deb", "rpm"])
@@ -957,7 +957,7 @@ def run_list_profiles(argv: list[str]) -> None:
 
 def parse_args(argv=None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Build the amdrocm-repo package that configures ROCm repositories.",
+        description="Build the amd-repo-setup package that configures ROCm repositories.",
     )
     p.add_argument(
         "--os-profile",

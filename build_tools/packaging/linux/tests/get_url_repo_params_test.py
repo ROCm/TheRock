@@ -25,8 +25,8 @@ Prerequisites:
 
   - Python 3.10 or newer
   - Run from TheROCK repository root
-  - Stdlib only, except the ``get-repo-params`` and stream-consistency tests,
-    which import ``build_repo_package`` (jinja2, from requirements-test.txt);
+  - Stdlib only, except the ``get-repo-setup-params`` and stream-consistency tests,
+    which import ``build_repo_setup_package`` (jinja2, from requirements-test.txt);
     ``$GITHUB_OUTPUT`` is mocked to a temp file
 
 Run::
@@ -55,7 +55,7 @@ for _path in (_BUILD_TOOLS_DIR, _LINUX_DIR):
     if _path_str not in sys.path:
         sys.path.insert(0, _path_str)
 
-import build_repo_package  # noqa: E402
+import build_repo_setup_package  # noqa: E402
 import get_url_repo_params  # noqa: E402
 
 _EXAMPLE = get_url_repo_params.EXAMPLE_CDN_BASE
@@ -518,7 +518,7 @@ class StreamRootsConsistencyTest(unittest.TestCase):
     """The line -> stream table agrees with the builder's streams.
 
     The table records only the line -> stream name and where the stream is
-    served; everything else about a stream belongs to build_repo_package. These
+    served; everything else about a stream belongs to build_repo_setup_package. These
     tests keep the two sides from drifting when a stream is added to one only.
     """
 
@@ -527,7 +527,7 @@ class StreamRootsConsistencyTest(unittest.TestCase):
             with self.subTest(release_type=release_type):
                 self.assertIn(
                     get_url_repo_params.get_public_repo_stream(release_type),
-                    build_repo_package.STREAMS,
+                    build_repo_setup_package.STREAMS,
                 )
 
     def test_every_builder_stream_is_reachable_from_exactly_one_line(self):
@@ -535,18 +535,18 @@ class StreamRootsConsistencyTest(unittest.TestCase):
             get_url_repo_params.get_public_repo_stream(release_type)
             for release_type in get_url_repo_params.get_public_repo_release_types()
         ]
-        for stream in build_repo_package.STREAMS:
+        for stream in build_repo_setup_package.STREAMS:
             with self.subTest(stream=stream):
                 self.assertEqual(streams.count(stream), 1)
 
     def test_shape_constants_match_the_builder(self):
-        shapes = set(build_repo_package.STREAM_SHAPES.values())
+        shapes = set(build_repo_setup_package.STREAM_SHAPES.values())
         self.assertEqual(
             shapes,
             {get_url_repo_params._SHAPE_FLAT, get_url_repo_params._SHAPE_BUILD_ID},
         )
         self.assertEqual(
-            build_repo_package.stream_shape("nightly"),
+            build_repo_setup_package.stream_shape("nightly"),
             get_url_repo_params._SHAPE_BUILD_ID,
         )
 
@@ -594,7 +594,7 @@ def _outputs(text: str) -> dict[str, str]:
     return dict(line.split("=", 1) for line in text.splitlines() if "=" in line)
 
 
-_REPO_PARAMS_KEYS = {
+_REPO_SETUP_PARAMS_KEYS = {
     "os_profiles",
     "images",
     "stream",
@@ -605,13 +605,13 @@ _REPO_PARAMS_KEYS = {
 }
 
 
-class GetRepoParamsTest(unittest.TestCase):
-    """Tests for the get-repo-params subcommand."""
+class GetRepoSetupParamsTest(unittest.TestCase):
+    """Tests for the get-repo-setup-params subcommand."""
 
     def _run(self, pkg_type, release_type, run_id="12345"):
         return _run_main_with_output(
             [
-                "get-repo-params",
+                "get-repo-setup-params",
                 "--pkg-type",
                 pkg_type,
                 "--release-type",
@@ -625,7 +625,7 @@ class GetRepoParamsTest(unittest.TestCase):
         code, output = self._run("rpm", "nightly")
         self.assertEqual(code, 0)
         out = _outputs(output)
-        self.assertEqual(set(out), _REPO_PARAMS_KEYS)
+        self.assertEqual(set(out), _REPO_SETUP_PARAMS_KEYS)
         self.assertEqual(json.loads(out["os_profiles"]), ["rhel8", "rhel10", "sles16"])
         self.assertEqual(
             json.loads(out["images"]),
@@ -650,7 +650,7 @@ class GetRepoParamsTest(unittest.TestCase):
                 code, output = self._run("deb", release_type)
                 self.assertEqual(code, 0)
                 out = _outputs(output)
-                self.assertEqual(set(out), _REPO_PARAMS_KEYS)
+                self.assertEqual(set(out), _REPO_SETUP_PARAMS_KEYS)
                 self.assertEqual(json.loads(out["os_profiles"]), ["ubuntu2404"])
                 self.assertEqual(out["stream"], stream)
                 self.assertEqual(out["tier"], tier)
@@ -662,7 +662,7 @@ class GetRepoParamsTest(unittest.TestCase):
         code, output = self._run("deb", "ci")
         self.assertEqual(code, 0)
         out = _outputs(output)
-        self.assertEqual(set(out), _REPO_PARAMS_KEYS)
+        self.assertEqual(set(out), _REPO_SETUP_PARAMS_KEYS)
         self.assertEqual(json.loads(out["os_profiles"]), ["ubuntu2404"])
         for key in (
             "stream",
@@ -674,7 +674,7 @@ class GetRepoParamsTest(unittest.TestCase):
             self.assertEqual(out[key], "", key)
 
     def test_tier_names_each_line_explicitly(self):
-        # The tier becomes the uploaded file name (amdrocm-repo-<tier>.<fmt>),
+        # The tier becomes the uploaded file name (amd-repo-setup-<tier>.<fmt>),
         # so pin it per line rather than deriving the expectation the same way
         # the code does. rc's tier is "stablerc", not its stream name.
         cases = {
@@ -704,7 +704,7 @@ class GetRepoParamsTest(unittest.TestCase):
     def test_outputs_follow_the_stream_shape_not_its_name(self):
         # Register a build_id stream that is not called "nightly". Its outputs
         # must come from its shape: a dated folder and no key.
-        with patch.dict(build_repo_package.STREAM_SHAPES, {"weekly": "build_id"}):
+        with patch.dict(build_repo_setup_package.STREAM_SHAPES, {"weekly": "build_id"}):
             with patch.dict(
                 get_url_repo_params._STREAM_ROOTS,
                 {"dev": {"stream": "weekly", "root": "https://weekly.example/rocm"}},
@@ -723,7 +723,7 @@ class GetRepoParamsTest(unittest.TestCase):
                 self._run("apk", "nightly")
 
 
-# Run in a fresh interpreter: in the test session build_repo_package is already
+# Run in a fresh interpreter: in the test session build_repo_setup_package is already
 # in sys.modules (this file imports it), so an in-process check would pass even
 # if get_url_repo_params imported it at load time.
 _NO_JINJA2_PROBE = """
@@ -731,14 +731,14 @@ import os, sys, tempfile
 sys.modules["jinja2"] = None  # any "import jinja2" now raises ImportError
 sys.path.insert(0, sys.argv[1])
 import get_url_repo_params as g
-assert "build_repo_package" not in sys.modules, "loaded build_repo_package"
+assert "build_repo_setup_package" not in sys.modules, "loaded build_repo_setup_package"
 with tempfile.TemporaryDirectory() as d:
     os.environ["GITHUB_OUTPUT"] = os.path.join(d, "github_output")
     assert g.main(["extract-gfx-arch", "--artifact-group", "gfx94X-dcgpu"]) == 0
     assert g.main(["get-container-image", "--os-profile", "ubuntu2404"]) == 0
     try:
-        g.main(["get-repo-params", "--pkg-type", "deb", "--release-type", "nightly",
-                "--run-id", "1"])
+        g.main(["get-repo-setup-params", "--pkg-type", "deb",
+                "--release-type", "nightly", "--run-id", "1"])
     except ImportError:
         print("ok")
 """
@@ -749,11 +749,11 @@ class WithoutJinja2Test(unittest.TestCase):
 
     test_native_linux_packages_install.yml runs extract-gfx-arch and
     get-container-image in a job that installs no Python packages. Only
-    get-repo-params needs
-    build_repo_package, and it must fail when called, not when imported.
+    get-repo-setup-params needs build_repo_setup_package, and it must fail when
+    called, not when imported.
     """
 
-    def test_other_subcommands_run_and_get_repo_params_fails_at_call_time(self):
+    def test_other_subcommands_run_and_get_repo_setup_params_fails_at_call_time(self):
         result = subprocess.run(
             [sys.executable, "-c", _NO_JINJA2_PROBE, str(_LINUX_DIR)],
             capture_output=True,

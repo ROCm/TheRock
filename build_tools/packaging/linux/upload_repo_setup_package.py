@@ -2,14 +2,14 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-r"""Upload a built amdrocm-repo package to the per-run outputs.
+r"""Upload a built amd-repo-setup package to the per-run outputs.
 
 Not to be confused with ``upload_package_repo.py``, which uploads the package
 repository itself (the content packages and their index).
 
 The destination is
-``{run_id}-linux/amd-repo-setup/{os_profile}/amdrocm-repo-{tier}.{pkg_type}``
-(e.g. ``12345678901-linux/amd-repo-setup/rhel10/amdrocm-repo-stablerc.rpm``).
+``{run_id}-linux/amd-repo-setup/{os_profile}/amd-repo-setup-{tier}.{pkg_type}``
+(e.g. ``12345678901-linux/amd-repo-setup/rhel10/amd-repo-setup-stablerc.rpm``).
 It sits outside ``packages/<format>/``, so release promotion
 (``publish_rocm_to_release_buckets.py``) does not copy it. Publishing it to
 repo.amd.com is a separate step.
@@ -20,7 +20,7 @@ line has no artifacts bucket and raises; the upload job does not run for it.
 
 Usage:
   python build_tools/packaging/linux/upload_repo_setup_package.py \
-      --dest-dir repo-package-out \
+      --dest-dir repo-setup-package-out \
       --tier stablerc \
       --run-id 12345678901 \
       --os-profile rhel10 \
@@ -62,7 +62,7 @@ _TIER_RE = re.compile(r"^[a-z][a-z0-9]*\Z")
 
 def parse_args(argv=None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Upload an amdrocm-repo package to the per-run outputs.",
+        description="Upload an amd-repo-setup package to the per-run outputs.",
     )
     p.add_argument(
         "--dest-dir",
@@ -133,7 +133,7 @@ def upload(args: argparse.Namespace) -> str:
     dest = StorageLocation(
         root.bucket,
         f"{root.prefix}/amd-repo-setup/{args.os_profile}"
-        f"/amdrocm-repo-{args.tier}.{args.pkg_type}",
+        f"/amd-repo-setup-{args.tier}.{args.pkg_type}",
     )
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
     # Log where the file actually goes: with --output-dir that is a local path,

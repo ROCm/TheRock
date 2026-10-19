@@ -1,6 +1,6 @@
-# Configuring the ROCm package repository (`amdrocm-repo`)
+# Configuring the ROCm package repository (`amd-repo-setup`)
 
-`amdrocm-repo` is a configuration package that points a system package manager
+`amd-repo-setup` is a configuration package that points a system package manager
 (`apt`, `dnf`, or `zypper`) at a public AMD ROCm repository. Once it is
 installed, you can install and update ROCm packages with the native package
 manager.
@@ -10,7 +10,7 @@ paths are documented in [native_packaging.md](native_packaging.md).
 
 ## What the package installs
 
-`amdrocm-repo` is generated per OS profile and per stream. Every profile writes a
+`amd-repo-setup` is generated per OS profile and per stream. Every profile writes a
 single repo definition and, for signed streams, the repository signing key:
 
 | OS profile        | Package manager | Repo definition                                    | Signing key                            |
@@ -51,10 +51,9 @@ version. It targets the *next* release, though, so moving from `rc` back to
 `stable` is usually a downgrade — see [Switching streams](#switching-streams).
 
 Note that `rc`'s installed file is `amdrocm-stablerc`, not `amdrocm-rc`. The
-stream names the subdomain, while `stablerc` is the spelling RFC0012 uses for
-that stream's package (`amdrocm-repo-stablerc`). Matching it now means a future
-split into per-tier packages never has to move a file that is already on a
-user's disk.
+stream names the subdomain, while `stablerc` is the name RFC0012 gives that
+stream's tier. Matching it now means a future split into per-tier packages
+never has to move a file that is already on a user's disk.
 
 The streams are published per distro and differ only in whether a build
 identifier appears in the path:
@@ -72,22 +71,22 @@ while the key sits beside `core/`, so the two are supplied separately when
 building the package.
 
 > **Nightly is unsigned and expires.** The nightly repository publishes no
-> signatures, so the nightly `amdrocm-repo` disables signature verification
+> signatures, so the nightly `amd-repo-setup` disables signature verification
 > (`gpgcheck=0` / apt `Trusted: yes`) and ships no key.
 >
 > More importantly, a nightly repo file names **one specific build**. Nightly
-> retention prunes old builds, so a nightly `amdrocm-repo` stops resolving once
+> retention prunes old builds, so a nightly `amd-repo-setup` stops resolving once
 > the build it points at is removed — `apt update` or `dnf makecache` then fails
 > against it — and the package must be rebuilt to follow the stream. Use
 > `stable` for anything beyond short-lived testing.
 
-Two further streams exist on `repo.amd.com` but no `amdrocm-repo` is built for
+Two further streams exist on `repo.amd.com` but no `amd-repo-setup` is built for
 them: `weekly` is not yet serving content, and `dev` is intended for developer
 testing rather than end users.
 
 ## Relationship to `amdgpu-install`
 
-`amdrocm-repo` declares a conflict with `amdgpu-install`, so the two packages
+`amd-repo-setup` declares a conflict with `amdgpu-install`, so the two packages
 cannot be installed at the same time. `amdgpu-install` ships its own ROCm
 repository definition (`/etc/apt/sources.list.d/rocm.list`, or the `[rocm]`
 entry in `/etc/yum.repos.d/rocm.repo`) pointing at `repo.radeon.com`, and gives
@@ -113,7 +112,7 @@ that repository configuration too.
 > `apt remove` deliberately keeps. After a plain `remove` the package is gone
 > but the repository stays configured, still has its key, and still outranks
 > this one. The same applies if you let `apt` resolve the conflict for you:
-> installing `amdrocm-repo` over `amdgpu-install` removes that package but
+> installing `amd-repo-setup` over `amdgpu-install` removes that package but
 > leaves those files behind. `dnf` and `zypper` refuse the install outright
 > instead, and erase their repository files when the package is removed, so no
 > extra step is needed there.
@@ -138,7 +137,7 @@ that repository configuration too.
 
 ## Building the package locally
 
-`build_repo_package.py` builds `amdrocm-repo` for a single OS profile and
+`build_repo_setup_package.py` builds `amd-repo-setup` for a single OS profile and
 stream. Use Python 3.10 or newer with the `jinja2` Python package, plus the
 native packaging tools for the target format:
 
@@ -165,13 +164,13 @@ per-distro package names (SLES, for instance, has no unversioned `python3` or
 `python3-pip` to install).
 
 ```bash
-python3 build_tools/packaging/linux/build_repo_package.py \
+python3 build_tools/packaging/linux/build_repo_setup_package.py \
     --os-profile ubuntu2404 \
     --stream stable \
     --repo-base-url https://stable.repo.amd.com/rocm/core/packages \
     --gpg-key-url https://stable.repo.amd.com/rocm/gpg/packages.gpg \
     --rocm-version 10.0.0 \
-    --dest-dir ./repo-package-out
+    --dest-dir ./repo-setup-package-out
 ```
 
 `--gpg-key-url` is the full URL of the key, used verbatim. It is a separate
@@ -180,7 +179,7 @@ option because the key is not under `--repo-base-url` — packages live under
 from the other. Taking it whole rather than assembling it from a root also keeps
 where the key lives a property of the repository rather than an assumption in
 this tool. The fetch is https-only, and the fetched file must hold only the key
-pinned in `build_repo_package.py`, so a wrong, tampered or added key fails the
+pinned in `build_repo_setup_package.py`, so a wrong, tampered or added key fails the
 build regardless of the URL it came from.
 
 For a signed stream the key is fetched over the network at build time. To build
@@ -188,26 +187,26 @@ offline, pass a key file you already trust instead. It is embedded as provided;
 the pinned-key check applies only to a fetched key:
 
 ```bash
-python3 build_tools/packaging/linux/build_repo_package.py \
+python3 build_tools/packaging/linux/build_repo_setup_package.py \
     --os-profile rhel10 \
     --stream stable \
     --repo-base-url https://stable.repo.amd.com/rocm/core/packages \
     --gpg-key-file ./packages.gpg \
     --rocm-version 10.0.0 \
-    --dest-dir ./repo-package-out
+    --dest-dir ./repo-setup-package-out
 ```
 
 The nightly stream is pinned to a single build; pass its identifier. No key is
 needed, since the nightly repository is unsigned:
 
 ```bash
-python3 build_tools/packaging/linux/build_repo_package.py \
+python3 build_tools/packaging/linux/build_repo_setup_package.py \
     --os-profile ubuntu2404 \
     --stream nightly \
     --repo-base-url https://nightly.repo.amd.com/rocm/core/packages \
     --repo-sub-folder 20260722-123456789 \
     --rocm-version 10.0.0~20260722 \
-    --dest-dir ./repo-package-out
+    --dest-dir ./repo-setup-package-out
 ```
 
 Pass `--verify-repo-url` to fail the build unless the repository the package
@@ -215,13 +214,13 @@ configures is reachable. This catches a package that would install cleanly but
 fail on the user's first metadata refresh:
 
 ```bash
-python3 build_tools/packaging/linux/build_repo_package.py \
+python3 build_tools/packaging/linux/build_repo_setup_package.py \
     --os-profile rhel10 \
     --stream stable \
     --repo-base-url https://stable.repo.amd.com/rocm/core/packages \
     --gpg-key-url https://stable.repo.amd.com/rocm/gpg/packages.gpg \
     --rocm-version 10.0.0 \
-    --dest-dir ./repo-package-out \
+    --dest-dir ./repo-setup-package-out \
     --verify-repo-url
 ```
 
@@ -243,16 +242,16 @@ type. CI passes exactly that, so the package sorts the way those ROCm packages
 do — below stable at the same ROCm version. The rc versions differ between deb
 and rpm.
 
-| `--os-profile` | `--stream` | `--rocm-version`  | Resulting file                                          |
-| -------------- | ---------- | ----------------- | ------------------------------------------------------- |
-| `ubuntu2404`   | `stable`   | `10.0.0`          | `amdrocm-repo_10.0.0-1~ubuntu2404_all.deb`              |
-| `ubuntu2404`   | `rc`       | `10.0.0~pre1`     | `amdrocm-repo_10.0.0~pre1-1~ubuntu2404_all.deb`         |
-| `ubuntu2404`   | `nightly`  | `10.0.0~20260716` | `amdrocm-repo_10.0.0~20260716-1~ubuntu2404_all.deb`     |
-| `rhel8`        | `stable`   | `10.0.0`          | `amdrocm-repo-10.0.0-1.stable.el8.noarch.rpm`           |
-| `rhel8`        | `rc`       | `10.0.0~rc1`      | `amdrocm-repo-10.0.0~rc1-1.rc.el8.noarch.rpm`           |
-| `rhel8`        | `nightly`  | `10.0.0~20260716` | `amdrocm-repo-10.0.0~20260716-1.nightly.el8.noarch.rpm` |
-| `rhel10`       | `stable`   | `10.0.0`          | `amdrocm-repo-10.0.0-1.stable.el10.noarch.rpm`          |
-| `sles16`       | `stable`   | `10.0.0`          | `amdrocm-repo-10.0.0-1.stable.sles16.noarch.rpm`        |
+| `--os-profile` | `--stream` | `--rocm-version`  | Resulting file                                            |
+| -------------- | ---------- | ----------------- | --------------------------------------------------------- |
+| `ubuntu2404`   | `stable`   | `10.0.0`          | `amd-repo-setup_10.0.0-1~ubuntu2404_all.deb`              |
+| `ubuntu2404`   | `rc`       | `10.0.0~pre1`     | `amd-repo-setup_10.0.0~pre1-1~ubuntu2404_all.deb`         |
+| `ubuntu2404`   | `nightly`  | `10.0.0~20260716` | `amd-repo-setup_10.0.0~20260716-1~ubuntu2404_all.deb`     |
+| `rhel8`        | `stable`   | `10.0.0`          | `amd-repo-setup-10.0.0-1.stable.el8.noarch.rpm`           |
+| `rhel8`        | `rc`       | `10.0.0~rc1`      | `amd-repo-setup-10.0.0~rc1-1.rc.el8.noarch.rpm`           |
+| `rhel8`        | `nightly`  | `10.0.0~20260716` | `amd-repo-setup-10.0.0~20260716-1.nightly.el8.noarch.rpm` |
+| `rhel10`       | `stable`   | `10.0.0`          | `amd-repo-setup-10.0.0-1.stable.el10.noarch.rpm`          |
+| `sles16`       | `stable`   | `10.0.0`          | `amd-repo-setup-10.0.0-1.stable.sles16.noarch.rpm`        |
 
 The nightly rows add `--repo-sub-folder 20260716-12345`.
 
@@ -267,21 +266,21 @@ so a Debian 11 → 12 upgrade would see the newer package as a downgrade. On RHE
 the token is rpm's conventional `.el8`/`.el10`. SUSE defines no equivalent
 token — `%{?dist}` is empty there — so the profile name is used instead.
 
-See `build_repo_package.py --help` for the full option list.
+See `build_repo_setup_package.py --help` for the full option list.
 
 ## Installing and using the repository
 
-`amdrocm-repo` is not yet published to a public download URL, so build it for
+`amd-repo-setup` is not yet published to a public download URL, so build it for
 your distro first using the previous section. Then install the resulting file,
 refresh the package manager's metadata, and install ROCm packages.
 
-The examples below assume `--dest-dir ./repo-package-out`. The built filename
+The examples below assume `--dest-dir ./repo-setup-package-out`. The built filename
 carries the package version, so the glob below is what selects it.
 
 Ubuntu:
 
 ```bash
-sudo apt install ./repo-package-out/amdrocm-repo_*_all.deb
+sudo apt install ./repo-setup-package-out/amd-repo-setup_*_all.deb
 sudo apt-get update
 sudo apt install amdrocm
 ```
@@ -289,7 +288,7 @@ sudo apt install amdrocm
 RHEL / Rocky / Oracle Linux:
 
 ```bash
-sudo dnf install ./repo-package-out/amdrocm-repo-*.noarch.rpm
+sudo dnf install ./repo-setup-package-out/amd-repo-setup-*.noarch.rpm
 sudo dnf makecache
 sudo dnf install amdrocm
 ```
@@ -297,13 +296,13 @@ sudo dnf install amdrocm
 SLES:
 
 ```bash
-sudo zypper install --allow-unsigned-rpm ./repo-package-out/amdrocm-repo-*.noarch.rpm
+sudo zypper install --allow-unsigned-rpm ./repo-setup-package-out/amd-repo-setup-*.noarch.rpm
 sudo zypper refresh
 sudo zypper install amdrocm
 ```
 
 `zypper` verifies the signature of the package file itself, and a locally built
-`amdrocm-repo` is unsigned, so `--allow-unsigned-rpm` is required on SLES
+`amd-repo-setup` is unsigned, so `--allow-unsigned-rpm` is required on SLES
 whichever stream the package configures. `apt` and `dnf` install a local file
 without it.
 
@@ -327,8 +326,8 @@ On Debian and Ubuntu, switching in place is not supported yet: purge the
 installed package first, then install the other stream's package.
 
 ```bash
-sudo apt purge amdrocm-repo
-sudo apt install ./repo-package-out/amdrocm-repo_*_all.deb
+sudo apt purge amd-repo-setup
+sudo apt install ./repo-setup-package-out/amd-repo-setup_*_all.deb
 ```
 
 Installing over the current package keeps the old stream's `.sources` file,
@@ -343,8 +342,8 @@ stream as a downgrade. On SLES, pass `--oldpackage`: without it, `zypper` skips 
 lower-versioned package with "Nothing to do" and still exits 0.
 
 ```bash
-sudo dnf install ./repo-package-out/amdrocm-repo-*.noarch.rpm
-sudo zypper install --oldpackage --allow-unsigned-rpm ./repo-package-out/amdrocm-repo-*.noarch.rpm
+sudo dnf install ./repo-setup-package-out/amd-repo-setup-*.noarch.rpm
+sudo zypper install --oldpackage --allow-unsigned-rpm ./repo-setup-package-out/amd-repo-setup-*.noarch.rpm
 ```
 
 Refresh the package manager metadata afterwards, exactly as after a first
@@ -355,10 +354,10 @@ packages as well.
 
 ### Removing the package
 
-On Debian and Ubuntu, use `sudo apt purge amdrocm-repo`. `apt remove` keeps the
+On Debian and Ubuntu, use `sudo apt purge amd-repo-setup`. `apt remove` keeps the
 `.sources` file, so the repository stays configured. On a signed stream it also
 deletes the key, so every later `apt-get update` warns `NO_PUBKEY`. On RHEL and
-SLES, `dnf remove amdrocm-repo` or `zypper remove amdrocm-repo` deletes both the
+SLES, `dnf remove amd-repo-setup` or `zypper remove amd-repo-setup` deletes both the
 repository file and the key.
 
 ### Verifying the repository
@@ -395,16 +394,16 @@ zypper search amdrocm    # SLES
   removal is not a purge, so that package's repository file and priority pin
   remain. See the note in
   [Relationship to `amdgpu-install`](#relationship-to-amdgpu-install).
-- **`dpkg -i` refuses with `conflicting packages - not installing amdrocm-repo`.**
+- **`dpkg -i` refuses with `conflicting packages - not installing amd-repo-setup`.**
   `dpkg` will not resolve the conflict for you; purge `amdgpu-install` first.
 - **`zypper` reports `Signature verification failed [6-File is unsigned]`.**
   The package file is unsigned; pass `--allow-unsigned-rpm`.
 - **`apt` reports `Packages were downgraded and -y was used without --allow-downgrades`.** You are installing another stream's package over the
-  current one. Purge `amdrocm-repo` first; see
+  current one. Purge `amd-repo-setup` first; see
   [Switching streams](#switching-streams).
 - **`amdrocm*` packages are not listed.** Refresh the package manager metadata
   (`sudo apt-get update`, `sudo dnf makecache`, or `sudo zypper refresh`) after
-  installing `amdrocm-repo`.
+  installing `amd-repo-setup`.
 - **`amdrocm` resolves to an unexpected version.** Another ROCm repository is
   configured and is winning. Check with `apt-cache policy amdrocm`, `dnf info amdrocm`, or `zypper info amdrocm`, which name the repository each candidate
   comes from. If it is `repo.radeon.com` and `amdgpu-install` is still present

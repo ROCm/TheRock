@@ -24,7 +24,7 @@ and test_native_linux_packages_install.yml use any gpg_key_url / GPG_KEY_URL inp
 regardless of release_type (if omitted, install runs without GPG verification).
 
 Subcommands: get-base-url, get-gpg-url, get-repo-sub-folder, get-repo-url, extract-gfx-arch,
-get-container-image, get-repo-params. Run with -h for examples.
+get-container-image, get-repo-setup-params. Run with -h for examples.
 
 Maintenance (when packaging or install URLs change):
 
@@ -502,14 +502,14 @@ def cmd_repo_url(args: argparse.Namespace) -> int:
 
 # --- public repository stream (RFC0012) ---
 
-# Which repo.amd.com stream a build line's amdrocm-repo package configures.
+# Which repo.amd.com stream a build line's amd-repo-setup package configures.
 #
 # Not s3_buckets.get_release_stream(), which picks the bucket a build publishes
 # into and raises on "release", the line that configures stable. A line absent
 # here has no public stream, and callers skip the package for it.
 #
 # Only the stream name and where it is served are recorded here; its shape,
-# signing and repo id belong to build_repo_package. The key is at
+# signing and repo id belong to build_repo_setup_package. The key is at
 # <root>/gpg/packages.gpg, outside the packages base, so its URL is built here
 # and passed to the builder whole.
 _STREAM_ROOTS = {
@@ -563,7 +563,7 @@ def get_public_repo_gpg_key_url(release_type: str, *, signed: bool) -> str:
     Passed to the builder as ``--gpg-key-url`` and fetched verbatim. Only a
     signed stream publishes a key, so an unsigned one yields an empty value
     even though it has a base URL. ``signed`` comes from
-    ``build_repo_package.is_signed(stream)``, which owns that rule.
+    ``build_repo_setup_package.is_signed(stream)``, which owns that rule.
     """
     root = get_public_repo_stream_root(release_type)
     if not root or not signed:
@@ -605,16 +605,16 @@ def get_container_image_map(os_profiles: list[str]) -> dict[str, str]:
     return {profile: get_container_image(profile) for profile in os_profiles}
 
 
-# --- amdrocm-repo parameters ---
+# --- amd-repo-setup parameters ---
 
-# These mirror build_repo_package's private _FLAT / _BUILD_ID. They are compared
+# These mirror build_repo_setup_package's private _FLAT / _BUILD_ID. They are compared
 # against its public stream_shape(), and a test asserts the two agree.
 _SHAPE_FLAT = "flat"
 _SHAPE_BUILD_ID = "build_id"
 
 
-def cmd_repo_params(args: argparse.Namespace) -> int:
-    """Emit every parameter the amdrocm-repo build matrix needs, in one output.
+def cmd_repo_setup_params(args: argparse.Namespace) -> int:
+    """Emit every parameter the amd-repo-setup build matrix needs, in one output.
 
     Outputs: ``os_profiles`` and ``images`` (JSON, the matrix), then the stream
     the build line configures and what follows from it -- ``stream``, ``tier``,
@@ -622,10 +622,10 @@ def cmd_repo_params(args: argparse.Namespace) -> int:
     public stream gets all five empty, which callers read as "no package for
     this line"; the matrix is still emitted.
     """
-    # Deferred: build_repo_package imports jinja2 at module level, and this
+    # Deferred: build_repo_setup_package imports jinja2 at module level, and this
     # script's other subcommands run in a workflow job that installs no Python
     # packages. Only this subcommand needs the builder.
-    from build_repo_package import (
+    from build_repo_setup_package import (
         REPO_ID_PREFIX,
         is_signed,
         list_profiles,
@@ -652,7 +652,7 @@ def cmd_repo_params(args: argparse.Namespace) -> int:
             )
             return 1
         outputs["stream"] = stream
-        # Names the stream's package file (amdrocm-repo-<tier>.<fmt>): the repo
+        # Names the stream's package file (amd-repo-setup-<tier>.<fmt>): the repo
         # file stem without its prefix, so rc is "stablerc".
         outputs["tier"] = repo_id(stream).removeprefix(f"{REPO_ID_PREFIX}-")
         outputs["repo_base_url"] = get_public_repo_base_url(args.release_type)
@@ -950,12 +950,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_img.set_defaults(func=cmd_container_image)
 
-    # get-repo-params: every amdrocm-repo build parameter in one output
+    # get-repo-setup-params: every amd-repo-setup build parameter in one output
     p_rp = subparsers.add_parser(
-        "get-repo-params",
+        "get-repo-setup-params",
         help=(
             "Print os_profiles=, images=, stream=, tier=, repo_base_url=, "
-            "gpg_key_url= and repo_sub_folder= for an amdrocm-repo build. The last "
+            "gpg_key_url= and repo_sub_folder= for an amd-repo-setup build. The last "
             "five are empty for a line with no public repository (e.g. ci/dev)."
         ),
     )
@@ -981,7 +981,7 @@ def main(argv: list[str] | None = None) -> int:
             "stream. Ignored (and not validated) for other streams."
         ),
     )
-    p_rp.set_defaults(func=cmd_repo_params)
+    p_rp.set_defaults(func=cmd_repo_setup_params)
 
     args = parser.parse_args(argv)
     return args.func(args)
