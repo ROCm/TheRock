@@ -244,10 +244,14 @@ jobs:
       - name: Merge profraw and generate reports
         env:
           # Sources are recorded at the build container's path, not where they
-          # sit here, so tell llvm-cov how to map between them. Generated files
-          # under build/ are in neither and report as uncovered; the text
-          # summary still counts them.
+          # sit here. The HTML and text renderings need to reach them on disk,
+          # so they map the build workspace to this checkout. Codecov instead
+          # matches the lcov against the repository tree, so that export maps
+          # the build-time repo root to an empty prefix and emits repo-relative
+          # paths. The repo is a submodule one level below the superproject
+          # workspace, so its root is BUILD_WORKSPACE plus the repo name.
           BUILD_WORKSPACE: /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}
+          BUILD_REPO_ROOT: /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}/${{ github.event.repository.name }}
           HTML_ENABLED: ${{ steps.fetch_sources.outcome == 'success' }}
         run: |
           html_args=()
@@ -268,6 +272,8 @@ jobs:
             --lcov-output="${REPORT_DIR}/coverage.info" \
             --summary-output="${REPORT_DIR}/coverage_summary.txt" \
             --path-equivalence="${BUILD_WORKSPACE},${GITHUB_WORKSPACE}" \
+            --lcov-path-equivalence="${BUILD_REPO_ROOT}/," \
+            --ignore-filename-regex=".*/build/.*" \
             "${html_args[@]}"
 
       # Put totals on the run summary page, readable without downloading.

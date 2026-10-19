@@ -163,9 +163,12 @@ def export_lcov(
     objects: list[Path],
     output: Path,
     path_equivalence: str | None = None,
+    ignore_filename_regex: str | None = None,
 ) -> None:
     command = build_cov_command(llvm_cov, "export", profdata, objects, path_equivalence)
     command.append("--format=lcov")
+    if ignore_filename_regex:
+        command.append(f"-ignore-filename-regex={ignore_filename_regex}")
 
     output.parent.mkdir(parents=True, exist_ok=True)
     logging.info("Exporting lcov for %d object(s) to %s", len(objects), output)
@@ -204,13 +207,16 @@ def write_html(
     output_dir: Path,
     path_equivalence: str | None = None,
     project_title: str | None = None,
+    ignore_filename_regex: str | None = None,
 ) -> None:
     """Renders the browsable report into output_dir, entry point index.html.
 
     Unlike the other two this opens the source files, so anything not on the
     machine is reported by llvm-cov as uncovered rather than annotated. Files
     generated into the build tree are never in a source checkout, so a few
-    misses here are expected and not worth failing over.
+    misses here are expected; ignore_filename_regex drops them from this view so
+    they don't log an error per file. They stay in the lcov and text summary,
+    which count the mappings without opening the sources.
 
     Each file is shown once, its counts summed over every template
     instantiation as in the lcov. llvm-cov's default also repeats a header's
@@ -232,6 +238,8 @@ def write_html(
     )
     if project_title:
         command.append(f"--project-title={project_title}")
+    if ignore_filename_regex:
+        command.append(f"-ignore-filename-regex={ignore_filename_regex}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     logging.info("Writing HTML report to %s", output_dir / "index.html")
@@ -298,13 +306,34 @@ def main(argv: list[str] | None = None) -> int:
         type=str,
         default=None,
         help="'<from>,<to>' remapping for source paths recorded at build "
-        "time, e.g. '/__w/TheRock/TheRock,${GITHUB_WORKSPACE}'",
+        "time, e.g. '/__w/TheRock/TheRock,${GITHUB_WORKSPACE}'. Used by the "
+        "HTML and text renderings, which need to reach the sources on disk",
+    )
+    parser.add_argument(
+        "--lcov-path-equivalence",
+        type=str,
+        default=None,
+        help="Like --path-equivalence but applied only to the lcov export, "
+        "where Codecov matches paths against the repository tree rather than "
+        "the local disk. Map the build-time repo root to an empty '<to>' so "
+        "the emitted paths are repo-relative, e.g. "
+        "'/__w/rocm-libraries/rocm-libraries/rocm-libraries/,'. Defaults to "
+        "--path-equivalence",
     )
     parser.add_argument(
         "--project-title",
         type=str,
         default=None,
         help="Heading for the HTML report's index page",
+    )
+    parser.add_argument(
+        "--ignore-filename-regex",
+        type=str,
+        default=None,
+        help="Regex of source paths to drop from the lcov export and the HTML "
+        "report, e.g. '.*/build/.*' to skip build-tree generated files that "
+        "aren't on the report machine and that Codecov can't map to the "
+        "repository. The text summary still counts them",
     )
     parser.add_argument(
         "--allow-empty",
@@ -361,7 +390,8 @@ def main(argv: list[str] | None = None) -> int:
             args.profdata_output,
             objects,
             args.lcov_output,
-            args.path_equivalence,
+            args.lcov_path_equivalence or args.path_equivalence,
+            args.ignore_filename_regex,
         )
     except subprocess.CalledProcessError:
         logging.error(
@@ -391,6 +421,7 @@ def main(argv: list[str] | None = None) -> int:
             args.html_output,
             args.path_equivalence,
             args.project_title,
+            args.ignore_filename_regex,
         )
 
     # Checked after the other renderings so the report still shows what was
