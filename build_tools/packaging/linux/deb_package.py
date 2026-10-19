@@ -414,8 +414,8 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
 
     scripts = json_pkg_config["scripts"]
     binaries = json_pkg_config["binaries"]
-    core_symlinks = json_pkg_config.get("core_symlinks", False)
-    llvm_symlinks = json_pkg_config.get("llvm_symlinks", False)
+    core_symlinks = is_key_defined(json_pkg_config, "core_symlinks")
+    llvm_symlinks = is_key_defined(json_pkg_config, "llvm_symlinks")
 
     unsupported_scripts = set(scripts) - EXEC_SCRIPTS
     if unsupported_scripts:

@@ -8,7 +8,7 @@
       "rocm_agent_enumerator",
       "rocminfo"
     ],
-    "core_symlinks": true
+    "core_symlinks": "True"
   },
   "amdrocm-llvm": {
     "scripts": [
@@ -27,7 +27,7 @@
       "amdllvm",
       "offload-arch"
     ],
-    "llvm_symlinks": true
+    "llvm_symlinks": "True"
   },
   "amdrocm-hipify": {
     "scripts": [
