@@ -1735,24 +1735,20 @@ def _expand_build_config_for_platform(
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant.startswith("host-asan"):
-            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
+            # host-asan runs on the regular test pool (not sandbox) since it
+            # only instruments host code and doesn't need the ASAN-specific
+            # sandbox runners that full asan/asan-debug require.
             if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
                 test_runs_on = ""
                 print(
                     f"  {family_name}: host-asan tests only run on nightly, "
                     f"disabling tests"
                 )
-            elif "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info["test-runs-on-sandbox"]
-                print(
-                    f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
-                )
             else:
-                test_runs_on = ""
+                # Keep the regular test-runs-on runner (already set above)
                 print(
-                    f"  {family_name}: no host-asan sandbox runner available, "
-                    f"disabling tests"
+                    f"  {family_name}: using regular runner for host-asan: "
+                    f"{test_runs_on}"
                 )
         elif "asan" in build_variant:
             # Only run full ASAN tests on scheduled or workflow_dispatch runs
