@@ -23,6 +23,7 @@ Example
 import argparse
 import functools
 import json
+import shutil
 import subprocess
 from pathlib import Path
 import sys
@@ -225,6 +226,44 @@ def validate_required_dist_packages(
     )
 
 
+def collect_python_wheels(
+    *,
+    artifact_dir: Path,
+    dest_dir: Path,
+    names: list[str],
+) -> list[Path]:
+    """Copy wheels from optional prebuilt-wheel artifacts into dist/.
+
+    Each name is an artifact declared with therock_python_wheel_subproject(),
+    which installs wheels to share/<name>/wheels in its lib component.
+    """
+    copied_wheels = []
+    for name in names:
+        wheel_artifact_dir = artifact_dir / f"{name}_lib_generic"
+        if not wheel_artifact_dir.exists():
+            print(
+                f"::warning::{name} artifact not found; skipping {name} wheels. "
+                "This is expected when the project is disabled or when packaging "
+                "artifacts from an older build."
+            )
+            continue
+
+        wheels = sorted(wheel_artifact_dir.glob(f"**/stage/share/{name}/wheels/*.whl"))
+        if not wheels:
+            raise RuntimeError(
+                f"{name} artifact exists at {wheel_artifact_dir}, but contains "
+                f"no wheels under stage/share/{name}/wheels"
+            )
+
+        dist_dir = dest_dir / "dist"
+        dist_dir.mkdir(parents=True, exist_ok=True)
+        for wheel in wheels:
+            destination = shutil.copy2(wheel, dist_dir)
+            copied_wheels.append(Path(destination))
+            print(f"::: Copied {name} wheel to {destination}")
+    return copied_wheels
+
+
 def run(args: argparse.Namespace):
     manifest = load_therock_manifest(args.artifact_dir)
     kpack_split = manifest.get("flags", {}).get("KPACK_SPLIT_ARTIFACTS", False)
@@ -345,6 +384,12 @@ def run(args: argparse.Namespace):
         _run_legacy(args, params, core, host_triple)
 
     if args.build_packages:
+        if sys.platform.startswith("linux"):
+            collect_python_wheels(
+                artifact_dir=args.artifact_dir,
+                dest_dir=args.dest_dir,
+                names=["rocshmem4py"],
+            )
         validate_required_dist_packages(
             dest_dir=args.dest_dir,
             version=args.version,
