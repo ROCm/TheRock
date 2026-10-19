@@ -1,45 +1,4 @@
 {
-  "amdrocm-core": {
-    "scripts": [
-      "postinst",
-      "prerm"
-    ],
-    "binaries": [
-      "hipify-clang"
-    ]
-  },
-  "amdrocm-core-devel": {
-    "scripts": [
-      "postinst",
-      "prerm"
-    ],
-    "binaries": [
-      "MIOpenDriver"
-    ]
-  },
-  "amdrocm-developer-tools": {
-    "scripts": [
-      "postinst",
-      "prerm"
-    ],
-    "binaries": [
-      "rocgdb",
-      "rocprofv3",
-      "rocprofv3-avail",
-      "rocprof-attach",
-      "rocprof-compute",
-      "rocprof-sys-attach",
-      "rocprof-sys-avail",
-      "rocprof-sys-causal",
-      "rocprof-sys-instrument",
-      "rocprof-sys-python",
-      "rocprof-sys-run",
-      "rocprof-sys-sample",
-      "rocsys",
-      "rocpd",
-      "amd-smi"
-    ]
-  },
   "amdrocm-base": {
     "scripts": [
       "postinst",
@@ -69,5 +28,69 @@
       "offload-arch"
     ],
     "llvm_symlinks": true
+  },
+  "amdrocm-hipify": {
+    "scripts": [
+      "postinst",
+      "prerm"
+    ],
+    "binaries": [
+      "hipify-clang"
+    ]
+  },
+  "amdrocm-dnn-dev": {
+    "scripts": [
+      "postinst",
+      "prerm"
+    ],
+    "binaries": [
+      "MIOpenDriver"
+    ]
+  },
+  "amdrocm-debugger": {
+    "scripts": [
+      "postinst",
+      "prerm"
+    ],
+    "binaries": [
+      "rocgdb"
+    ]
+  },
+  "amdrocm-profiler-base": {
+    "scripts": [
+      "postinst",
+      "prerm"
+    ],
+    "binaries": [
+      "rocprofv3",
+      "rocprofv3-avail",
+      "rocprof-attach",
+      "rocpd"
+    ]
+  },
+  "amdrocm-profiler": {
+    "scripts": [
+      "postinst",
+      "prerm"
+    ],
+    "binaries": [
+      "rocprof-compute",
+      "rocprof-sys-attach",
+      "rocprof-sys-avail",
+      "rocprof-sys-causal",
+      "rocprof-sys-instrument",
+      "rocprof-sys-python",
+      "rocprof-sys-run",
+      "rocprof-sys-sample"
+    ]
+  },
+  "amdrocm-amdsmi": {
+    "scripts": [
+      "postinst",
+      "prerm"
+    ],
+    "binaries": [
+      "amd-smi"
+    ]
   }
 }
