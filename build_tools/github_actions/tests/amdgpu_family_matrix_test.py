@@ -564,5 +564,76 @@ class TestDisabledFrameworkTests(unittest.TestCase):
             )
 
 
+class TestSanitizerTriggerRules(unittest.TestCase):
+    """Tests for SANITIZER_TRIGGER_RULES and get_sanitizer_variant_for_trigger."""
+
+    def test_rules_reference_valid_triggers(self):
+        """Every rule must use a trigger from VALID_TRIGGERS."""
+        for rule in amdgpu_family_matrix.SANITIZER_TRIGGER_RULES:
+            self.assertIn(
+                rule["trigger"],
+                VALID_TRIGGERS,
+                f"Rule for {rule['source']} uses invalid trigger {rule['trigger']!r}",
+            )
+
+    def test_rules_reference_valid_build_variants(self):
+        """Every rule must reference a build variant defined in all_build_variants."""
+        linux_variants = set(amdgpu_family_matrix.all_build_variants.get("linux", {}))
+        for rule in amdgpu_family_matrix.SANITIZER_TRIGGER_RULES:
+            self.assertIn(
+                rule["build_variant"],
+                linux_variants,
+                f"Rule for {rule['source']}/{rule['trigger']} references "
+                f"unknown variant {rule['build_variant']!r}",
+            )
+
+    def test_rules_have_required_fields(self):
+        """Each rule must have source, trigger, and build_variant."""
+        for i, rule in enumerate(amdgpu_family_matrix.SANITIZER_TRIGGER_RULES):
+            for field in ("source", "trigger", "build_variant"):
+                self.assertIn(
+                    field, rule, f"Rule {i} missing required field {field!r}"
+                )
+
+    def test_no_duplicate_rules(self):
+        """No two rules should have the same (source, trigger) pair."""
+        seen = set()
+        for rule in amdgpu_family_matrix.SANITIZER_TRIGGER_RULES:
+            key = (rule["source"], rule["trigger"])
+            self.assertNotIn(
+                key,
+                seen,
+                f"Duplicate rule for {key[0]}/{key[1]}",
+            )
+            seen.add(key)
+
+    def test_lookup_known_rules(self):
+        """Verify expected (source, trigger) -> variant mappings."""
+        from amdgpu_family_matrix import get_sanitizer_variant_for_trigger
+
+        test_cases = [
+            ("rocm-systems", "submodule_bump", "host-asan"),
+            ("rocm-systems", "nightly", "tsan"),
+            ("rocm-libraries", "submodule_bump", "host-asan"),
+            ("rocm-libraries", "nightly", "asan"),
+            ("rockrel", "nightly", "asan"),
+            ("amd-llvm", "submodule_bump", "asan-debug"),
+        ]
+        for source, trigger, expected in test_cases:
+            with self.subTest(source=source, trigger=trigger):
+                self.assertEqual(
+                    get_sanitizer_variant_for_trigger(source, trigger), expected
+                )
+
+    def test_lookup_no_match_returns_none(self):
+        """Unmatched (source, trigger) pairs return None."""
+        from amdgpu_family_matrix import get_sanitizer_variant_for_trigger
+
+        self.assertIsNone(get_sanitizer_variant_for_trigger("unknown-repo", "nightly"))
+        self.assertIsNone(
+            get_sanitizer_variant_for_trigger("rocm-systems", "presubmit")
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

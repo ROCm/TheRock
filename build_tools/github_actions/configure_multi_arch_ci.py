@@ -58,9 +58,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from _therock_utils.build_topology import get_topology
 
 from amdgpu_family_matrix import (
+    SANITIZER_TRIGGER_RULES,
     all_build_variants,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
+    get_sanitizer_variant_for_trigger,
     select_build_runner,
 )
 from configure_ci_path_filters import (
@@ -1518,6 +1520,93 @@ def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[s
     return triggers
 
 
+def _get_external_repo_trigger(ci_inputs: CIInputs) -> str | None:
+    """Extract the original trigger context from an external repo call.
+
+    External repos call TheRock via workflow_dispatch, so GITHUB_EVENT_NAME
+    is always "workflow_dispatch". The external repo's original event is
+    passed in the external_repo JSON's "event_name" field.
+
+    Returns:
+        The mapped trigger name ("nightly", "presubmit", "postsubmit",
+        "submodule_bump") or None if not determinable.
+    """
+    if not ci_inputs.external_repo:
+        return None
+    try:
+        repo_json = json.loads(ci_inputs.external_repo)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    event = repo_json.get("event_name", "")
+    trigger_map = {
+        "schedule": "nightly",
+        "pull_request": "presubmit",
+        "push": "postsubmit",
+    }
+    return trigger_map.get(event)
+
+
+def _resolve_sanitizer_variants(
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+) -> list[str]:
+    """Resolve which sanitizer build variants to run based on trigger rules.
+
+    Checks SANITIZER_TRIGGER_RULES from amdgpu_family_matrix.py against the
+    current context to determine which sanitizer variants should be built.
+
+    For TheRock submodule bumps: matches changed submodule paths against rules.
+    For external repos: matches external repo name + original trigger against rules.
+
+    Returns:
+        List of build variant strings (e.g., ["host-asan", "asan-debug"]).
+        Empty list if no sanitizer rules match.
+    """
+    variants: list[str] = []
+
+    if ci_inputs.external_repo:
+        # External repo: resolve repo name and its original trigger
+        try:
+            repo_json = json.loads(ci_inputs.external_repo)
+        except (json.JSONDecodeError, TypeError):
+            return []
+        repo_name = repo_json.get("repository", "").split("/")[-1]
+        if not repo_name:
+            return []
+        trigger = _get_external_repo_trigger(ci_inputs)
+        if not trigger:
+            return []
+        variant = get_sanitizer_variant_for_trigger(repo_name, trigger)
+        if variant:
+            print(
+                f"  Sanitizer rule matched: {repo_name} + {trigger} -> {variant}"
+            )
+            variants.append(variant)
+    else:
+        # TheRock repo: check submodule bumps
+        current_triggers = _get_current_triggers(ci_inputs, git_context)
+        if "submodule_bump" not in current_triggers:
+            return []
+        if git_context.changed_files is None or git_context.submodule_paths is None:
+            return []
+        changed_submodules = set(git_context.submodule_paths) & set(
+            git_context.changed_files
+        )
+        for submodule_path in changed_submodules:
+            # Match by basename (e.g., "compiler/amd-llvm" -> "amd-llvm")
+            source_name = submodule_path.rsplit("/", 1)[-1]
+            variant = get_sanitizer_variant_for_trigger(
+                source_name, "submodule_bump"
+            )
+            if variant and variant not in variants:
+                print(
+                    f"  Sanitizer rule matched: {source_name} (submodule_bump) -> {variant}"
+                )
+                variants.append(variant)
+
+    return variants
+
+
 def _should_run_tests_for_family(
     platform_info: dict,
     ci_inputs: CIInputs,
@@ -1952,20 +2041,31 @@ def expand_build_configs(
     # =========================================================================
     all_families = _apply_external_family_overrides(all_families)
     build_variant = ci_inputs.build_variant
-    # ASAN variant selection:
+    # ASAN variant selection priority:
     # 1. ci:asan label -> asan (explicit full ASAN, highest priority)
     # 2. ci:host-asan label -> host-asan (explicit)
-    # 3. push/pull_request events -> host-asan (default for pre/postsubmit)
-    # 4. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
+    # 3. Sanitizer trigger rules -> variant from SANITIZER_TRIGGER_RULES
+    #    (source-specific: maps (repo/submodule, trigger) to the right variant)
+    # 4. push/pull_request events -> host-asan (default for pre/postsubmit)
+    # 5. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
     if build_variant == "asan":
         if "ci:asan" in ci_inputs.pr_labels:
             print("  Using full asan variant (ci:asan label)")
         elif "ci:host-asan" in ci_inputs.pr_labels:
             build_variant = "host-asan"
             print("  Using host-asan variant (ci:host-asan label)")
-        elif ci_inputs.is_push or ci_inputs.is_pull_request:
-            build_variant = "host-asan"
-            print("  Using host-asan variant (push/pull_request default)")
+        else:
+            # Check sanitizer trigger rules for source-specific variant
+            resolved = _resolve_sanitizer_variants(ci_inputs, git_context)
+            if resolved:
+                build_variant = resolved[0]
+                print(
+                    f"  Using {build_variant} variant "
+                    f"(sanitizer trigger rule)"
+                )
+            elif ci_inputs.is_push or ci_inputs.is_pull_request:
+                build_variant = "host-asan"
+                print("  Using host-asan variant (push/pull_request default)")
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
