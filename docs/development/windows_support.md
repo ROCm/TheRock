@@ -175,7 +175,10 @@ that (see [Install tools](#install-tools)).
 - A Dev Drive is recommended, due to how many source and build files are used.
   See the
   [Set up a Dev Drive on Windows 11](https://learn.microsoft.com/en-us/windows/dev-drive/)
-  article for setup instructions.
+  article for setup instructions. A Dev Drive still has its files scanned, so
+  also exclude the build directory from real-time antivirus scanning, as
+  [Antivirus real-time scanning](../environment_setup_guide.md#antivirus-real-time-scanning-windows)
+  describes.
 
 - Symlink support is recommended. If symlink support is not enabled, enable
   developer mode and/or grant your
