@@ -295,8 +295,7 @@ jobs:
 
   # Build the amdrocm-repo package for each OS profile of this package type,
   # check its contents and upload it to this run's artifacts bucket, under
-  # amd-repo-setup/<os_profile>/. Release promotion then publishes it to
-  # v5/amd-repo-setup/ in the release bucket.
+  # amd-repo-setup/<os_profile>/.
   stage_repo_package:
     name: Stage amdrocm-repo (${{ matrix.os_profile }})
     needs: [setup_repo_params]
