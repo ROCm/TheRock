@@ -19,8 +19,7 @@ packaging==25.0
 python-debian==1.1.1
 setuptools>=80.9.0,<82.0.0
 python-magic==0.4.27; sys_platform != "win32"
-# The test venv is activated before component setup. Use its Ninja executable
-# on Windows so test jobs do not depend on the Chocolatey package feed.
+# Component tests use Ninja to build samples and test programs with CMake.
 ninja==1.13.2; sys_platform == "win32"
 
 # build_tools/memory_monitor.py requirement
