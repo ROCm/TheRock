@@ -11,16 +11,33 @@ on:
   workflow_dispatch:
     inputs:
       artifact_group:
+        description: >-
+          Artifact group name used to fetch build artifacts
+          (e.g., "multi-arch-release").
         type: string
       artifact_run_id:
+        description: >-
+          Workflow run ID to retrieve build artifacts from (e.g., from a
+          Multi-Arch CI run). Required for manual dispatch since this workflow
+          only runs tests and has no build artifacts of its own.
         type: string
-        default: ""
+        required: true
       amdgpu_families:
+        description: >-
+          GPU family group to test (e.g., "gfx94X-dcgpu", "gfx110X-all",
+          "gfx950-dcgpu", "gfx120X-all", "gfx125X-dcgpu"). This selects
+          which GPU family the tests target.
         type: string
       amdgpu_targets:
+        description: >-
+          Specific GPU targets within a family (e.g., "gfx942", "gfx1100").
+          Leave empty to use the default targets for the selected family.
         type: string
         default: ""
       test_runs_on:
+        description: >-
+          GitHub Actions runner label for GPU tests. When empty, GPU tests
+          are skipped.
         type: string
       test_runs_on_cpu:
         description: "CPU test runner label (for components that don't need GPU)"
@@ -31,14 +48,35 @@ on:
         type: boolean
         default: true
       sanity_check_only_for_family:
+        description: >-
+          When true, only run sanity check tests and skip all component tests.
         type: boolean
         default: false
       test_type:
-        type: string
+        description: >-
+          Test tier controlling depth and duration of testing.
+        type: choice
+        options:
+          - quick
+          - standard
+          - comprehensive
+          - full
+        default: standard
       test_labels:
+        description: >-
+          Directly select which test components to run by name, e.g.
+          "test:rocblas,test:hipblas" or '["test:rocblas"]'. Only the listed
+          components are tested. Leave empty to run all. When combined with
+          changed_projects, the effective test set is the intersection of
+          both filters.
         type: string
       changed_projects:
-        description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
+        description: >-
+          Comma-separated list of changed projects used for dependency-graph
+          scoping (e.g., "rocblas,hipblas"). Tests run for the listed projects
+          AND their downstream consumers. Leave empty to run all. When combined
+          with test_labels, the effective test set is the intersection of both
+          filters.
         type: string
         default: ""
       skip_stages:
@@ -90,11 +128,9 @@ on:
       test_runs_on:
         type: string
       test_runs_on_cpu:
-        description: "CPU test runner label (for components that don't need GPU)"
         type: string
         default: ""
       tests_enabled:
-        description: "Whether tests should run (true when any runner is available)"
         type: boolean
         default: true
       sanity_check_only_for_family:
@@ -105,7 +141,6 @@ on:
       test_labels:
         type: string
       changed_projects:
-        description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
         default: ""
       skip_stages:

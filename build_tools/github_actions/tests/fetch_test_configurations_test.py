@@ -1086,5 +1086,66 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(hipblaslt["total_shards"], 1)  # quick uses single shard
 
 
+class ParseTestLabelsTest(unittest.TestCase):
+    """Tests for _parse_test_labels()."""
+
+    _parse = staticmethod(fetch_test_configurations._parse_test_labels)
+
+    # -- empty / default --
+    def test_empty_string(self):
+        self.assertEqual(self._parse(""), [])
+
+    def test_empty_list_literal(self):
+        self.assertEqual(self._parse("[]"), [])
+
+    def test_whitespace_only(self):
+        self.assertEqual(self._parse("   "), [])
+
+    # -- comma-separated (recommended for manual dispatch) --
+    def test_single_label(self):
+        self.assertEqual(self._parse("test:rocblas"), ["test:rocblas"])
+
+    def test_comma_separated(self):
+        self.assertEqual(
+            self._parse("test:rocblas,test:hipblas"),
+            ["test:rocblas", "test:hipblas"],
+        )
+
+    def test_comma_separated_with_spaces(self):
+        self.assertEqual(
+            self._parse("test:rocblas, test:hipblas"),
+            ["test:rocblas", "test:hipblas"],
+        )
+
+    def test_comma_separated_ci_label(self):
+        self.assertEqual(
+            self._parse("test:rocblas,ci:run-multi-gpu"),
+            ["test:rocblas", "ci:run-multi-gpu"],
+        )
+
+    # -- Python list literal (backwards compat) --
+    def test_python_list_single(self):
+        self.assertEqual(self._parse('["test:rocblas"]'), ["test:rocblas"])
+
+    def test_python_list_multiple(self):
+        self.assertEqual(
+            self._parse('["test:rocblas", "test:hipblas"]'),
+            ["test:rocblas", "test:hipblas"],
+        )
+
+    # -- error cases --
+    def test_malformed_list_raises(self):
+        with self.assertRaises(ValueError) as ctx:
+            self._parse("[tensilelite]")
+        self.assertIn("could not be parsed", str(ctx.exception))
+
+    def test_malformed_list_error_message_shows_formats(self):
+        with self.assertRaises(ValueError) as ctx:
+            self._parse("[bad]")
+        msg = str(ctx.exception)
+        self.assertIn("comma-separated", msg)
+        self.assertIn("Python list literal", msg)
+
+
 if __name__ == "__main__":
     unittest.main()

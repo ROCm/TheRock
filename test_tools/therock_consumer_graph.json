@@ -763,6 +763,7 @@
   },
   "therock-liblzma": {
     "consumers": [
+      "amd-llvm",
       "rocgdb",
       "therock-elfutils"
     ]

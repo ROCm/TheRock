@@ -29,7 +29,7 @@ def _checkout_committed_at(path: Path, iso_date: str) -> Path:
     git = ["git", "-c", "user.name=test", "-c", "user.email=test@example.com"]
     subprocess.run([*git, "init", "-q"], cwd=path, check=True)
     subprocess.run(
-        [*git, "commit", "-q", "--allow-empty", "-m", "tip"],
+        [*git, "commit", "-q", "--allow-empty", "--no-gpg-sign", "-m", "tip"],
         cwd=path,
         env=env,
         check=True,
