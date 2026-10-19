@@ -10,7 +10,9 @@ Run locally:
 """
 
 import hashlib
+import subprocess
 import sys
+import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -288,6 +290,194 @@ class CiCurrencyTest(unittest.TestCase):
     def test_no_checks(self):
         (f,) = _ci_findings([])
         self.assertEqual(f.severity, "INFO")
+
+
+def _pr(files, body="", title="", branch="users/x/y", **extra):
+    return {
+        "files": [{"path": f} for f in files],
+        "body": body,
+        "title": title,
+        "headRefName": branch,
+        **extra,
+    }
+
+
+def _sev(findings, rule):
+    return [f.severity for f in findings if f.rule == rule]
+
+
+class TestFileHeuristicTest(unittest.TestCase):
+    """M2: a production filename must not satisfy the test-file check by substring."""
+
+    def _is_test(self, path, profile="base"):
+        return pq.matches_any(path, pq.PROFILES[profile]["test_globs"])
+
+    def test_accidental_substrings_are_not_tests(self):
+        for path in ("src/contest.cpp", "src/latest.py", "library/attestation.cpp"):
+            self.assertFalse(self._is_test(path), path)
+
+    def test_real_test_paths_are_tests(self):
+        for path in (
+            "src/tests/foo.cpp",
+            "Tests/unit/a.py",
+            "clients/gtest/x.cpp",
+            "pkg/test_foo.py",
+            "pkg/foo_test.cpp",
+            "ui/foo.test.ts",
+            "src/FooTest.cpp",
+            "pkg/conftest.py",
+        ):
+            self.assertTrue(self._is_test(path), path)
+
+    def test_hipblaslt_profile_keeps_its_clients_tests(self):
+        self.assertTrue(
+            self._is_test("projects/hipblaslt/clients/tests/a.cpp", "hipblaslt")
+        )
+        self.assertFalse(
+            self._is_test("projects/hipblaslt/library/contest.cpp", "hipblaslt")
+        )
+
+    def test_product_only_pr_with_lookalike_filename_is_blocked(self):
+        findings = []
+        pq.check_tests(_pr(["src/contest.cpp"]), pq.PROFILES["base"], findings)
+        self.assertEqual(_sev(findings, "M2"), ["BLOCKING"])
+
+
+class DocsOnlyTrackingTest(unittest.TestCase):
+    """M3: the docs-only exemption applies before any tracker blocker is emitted."""
+
+    def _tracking(self, data, cross_refs=()):
+        findings = []
+        pq.check_tracking(data, pq.PROFILES["base"], findings, list(cross_refs))
+        return findings
+
+    def test_docs_only_without_tracker_is_not_blocking(self):
+        findings = self._tracking(_pr(["README.md"], title="Fix typo"))
+        self.assertEqual(_sev(findings, "M4"), ["INFO"])
+
+    def test_code_change_without_tracker_still_blocks(self):
+        findings = self._tracking(_pr(["src/a.cpp"], title="Fix typo"))
+        self.assertEqual(_sev(findings, "M4"), ["BLOCKING"])
+
+    def test_mixed_docs_and_code_still_blocks(self):
+        findings = self._tracking(_pr(["README.md", "src/a.cpp"]))
+        self.assertEqual(_sev(findings, "M4"), ["BLOCKING"])
+
+
+class WaiverScopeTest(unittest.TestCase):
+    """R5: a waiver relaxes only the rule it addresses."""
+
+    def _tests(self, body):
+        findings = []
+        pq.check_tests(_pr(["src/a.cpp"], body=body), pq.PROFILES["base"], findings)
+        return findings
+
+    def _tracking(self, body):
+        findings = []
+        pq.check_tracking(
+            _pr(["src/a.cpp"], body=body), pq.PROFILES["base"], findings, []
+        )
+        return findings
+
+    def test_tracking_waiver_does_not_suppress_missing_tests(self):
+        self.assertEqual(
+            _sev(self._tests("W-NOTICKET: no work item"), "M2"), ["BLOCKING"]
+        )
+
+    def test_testing_waiver_suppresses_missing_tests(self):
+        self.assertEqual(_sev(self._tests("W-FLAG: dark behind a flag"), "M2"), [])
+
+    def test_testing_only_waiver_does_not_satisfy_tracking(self):
+        self.assertEqual(_sev(self._tracking("W-HOTFIX: urgent"), "M4"), ["BLOCKING"])
+
+    def test_tracking_waiver_is_left_for_the_reviewer(self):
+        self.assertEqual(
+            _sev(self._tracking("W-NOTICKET: filing Monday"), "M4"), ["INFO"]
+        )
+
+    def test_unknown_overlay_code_is_pending_not_silent(self):
+        findings = self._tests("W-GFX1250: bring-up")
+        self.assertEqual(_sev(findings, "M2"), ["IMPORTANT"])
+        self.assertIn("W-GFX1250", findings[0].message)
+
+    def test_full_urls_are_reported_as_unchecked(self):
+        findings = []
+        data = _pr(["src/a.cpp"], body="See https://github.com/ROCm/TheRock/issues/1")
+        pq.check_related_links(data, findings, check_links=True, repo=None)
+        self.assertTrue(any("not link-checked" in f.message for f in findings))
+
+
+def _git(cwd, *args):
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _rev(cwd, ref):
+    return subprocess.run(
+        ["git", "rev-parse", ref], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+
+class LocalStaleBaseTest(unittest.TestCase):
+    """M1: the local stale-base check must measure from the PR head, not the clone's HEAD."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.repo = self._tmp.name
+        _git(self.repo, "init", "-q", "-b", "main")
+        (Path(self.repo) / "shared.cpp").write_text("base\n")
+        _git(self.repo, "add", ".")
+        _git(self.repo, "commit", "-q", "-m", "base")
+        _git(self.repo, "checkout", "-q", "-b", "pr")
+        (Path(self.repo) / "shared.cpp").write_text("pr change\n")
+        _git(self.repo, "commit", "-q", "-am", "pr")
+        self.head = _rev(self.repo, "HEAD")
+        _git(self.repo, "checkout", "-q", "main")
+        (Path(self.repo) / "shared.cpp").write_text("base moved\n")
+        _git(self.repo, "commit", "-q", "-am", "main moves shared.cpp")
+
+    def _run(self, head):
+        data = {
+            "baseRefName": "main",
+            "headRefOid": head,
+            "files": [{"path": "shared.cpp"}],
+        }
+        findings = []
+        pq.check_stale_base(data, pq.PROFILES["base"], self.repo, None, findings)
+        return findings
+
+    def test_overlap_is_found_even_when_clone_is_on_the_base_branch(self):
+        # Regression: with HEAD on main, merge-base(main, HEAD) == main and the overlap
+        # was reported as "none; merge is fine".
+        self.assertEqual(_rev(self.repo, "HEAD"), _rev(self.repo, "main"))
+        findings = self._run(self.head)
+        self.assertEqual(_sev(findings, "STALE-BASE"), ["IMPORTANT"])
+        self.assertIn("Overlap with base", findings[0].message)
+
+    def test_clean_when_the_base_did_not_touch_the_pr_files(self):
+        data = {
+            "baseRefName": "main",
+            "headRefOid": self.head,
+            "files": [{"path": "other.cpp"}],
+        }
+        findings = []
+        pq.check_stale_base(data, pq.PROFILES["base"], self.repo, None, findings)
+        self.assertEqual(_sev(findings, "STALE-BASE"), ["INFO"])
+        self.assertIn("No adjacent-file overlap", findings[0].message)
+
+    def test_missing_head_is_reported_not_guessed(self):
+        # The head is unknown locally; the code falls back to the API path, which cannot
+        # run offline here. It must say so rather than report "merge is fine".
+        findings = self._run("0" * 40)
+        self.assertEqual(findings[0].rule, "STALE-BASE")
+        self.assertIn("not in the local clone", findings[0].message)
+        self.assertFalse(any("merge is fine" in f.message for f in findings))
 
 
 if __name__ == "__main__":

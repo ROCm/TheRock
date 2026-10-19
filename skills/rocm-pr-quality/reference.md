@@ -206,6 +206,8 @@ Base set (overlays may add component-specific codes and may tighten who can appr
 | `W-FLAG`     | New behavior landed dark behind a safe-default flag; tests/soak before enable, with a tracker.   |
 | `W-NOTICKET` | No tracker at author time; credible reason + a commitment to file & link within a stated window. |
 
+A waiver relaxes only the rule it addresses, and the checker applies it that way. `W-DOC`, `W-BUILD`, `W-REVERT`, `W-HOTFIX`, and `W-FLAG` address the missing-tests check (M2). `W-NOTICKET`, `W-DOC`, and `W-REVERT` address the work-tracking check (M4). Any other code (for example one an overlay adds) is reported as pending the reviewer's adjudication; it does not silently suppress either check.
+
 Every waiver needs a one-to-two-sentence "why." A bare "N/A" is not a waiver. Higher-risk waivers
 (e.g. `W-HOTFIX`) require a named approver / lead sign-off.
 

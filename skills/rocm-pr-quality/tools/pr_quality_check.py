@@ -39,10 +39,23 @@ from datetime import datetime, timezone
 
 # --- Profiles: generic defaults plus component overlays ------------------------------------
 
+# Test-file patterns match whole path components or filename conventions, never a bare
+# substring: a plain "test" would also match production files such as `src/contest.cpp`.
+# Matching is case-insensitive except where noted, so CamelCase suffixes use a scoped
+# case-sensitive group (`FooTest.cpp` matches; `contest.cpp` does not).
+TEST_GLOBS = [
+    r"(^|/)g?tests?/",  # test/, tests/, gtest/ directories (any case: Tests/)
+    r"(^|/)test_[^/]+$",  # test_foo.py
+    r"[^/]_tests?\.[^/]+$",  # foo_test.cpp, foo_tests.py
+    r"\.(test|spec)\.[^/]+$",  # foo.test.ts, foo.spec.js
+    r"(?-i:[a-z0-9]Tests?)\.[^/]+$",  # FooTest.cpp, FooTests.cs
+    r"(^|/)conftest\.py$",
+]
+
 PROFILES = {
     "base": {
         "product_globs": [r"src/", r"library/", r"include/"],
-        "test_globs": [r"test", r"clients/", r"/tests?/"],
+        "test_globs": TEST_GLOBS + [r"(^|/)clients/"],
         "high_coupling": [],
         # Strong work-tracking signals (a real ticket/issue), vs. incidental cross-references.
         "tracker_regexes": [r"\b[A-Z][A-Z0-9]+-\d+\b"],
@@ -50,7 +63,7 @@ PROFILES = {
     },
     "hipblaslt": {
         "product_globs": [r"projects/hipblaslt/", r"tensilelite/"],
-        "test_globs": [r"clients/tests", r"test", r"/tests?/"],
+        "test_globs": TEST_GLOBS + [r"(^|/)clients/tests"],
         "high_coupling": [
             r"KernelWriter.*\.py",
             r"KernelWriterAssembly\.py",
@@ -64,7 +77,13 @@ PROFILES = {
 }
 
 REQUIRED_SECTIONS = ["Summary", "Risk", "Related", "Testing"]
-WAIVER_RE = re.compile(r"\bW-[A-Z\-]+\b")
+WAIVER_RE = re.compile(r"\bW-[A-Z][A-Z0-9\-]*\b")
+# Which rule each base waiver code addresses (reference.md, "Waiver codes"). A waiver only
+# relaxes the rule it names; any other code leaves that obligation open.
+TEST_WAIVERS = {"W-DOC", "W-BUILD", "W-REVERT", "W-HOTFIX", "W-FLAG"}
+TRACKING_WAIVERS = {"W-NOTICKET", "W-DOC", "W-REVERT"}
+BASE_WAIVERS = TEST_WAIVERS | TRACKING_WAIVERS
+DOC_SUFFIXES = (".md", ".rst", ".txt")
 CI_STALE_DAYS = 3
 
 
@@ -339,6 +358,22 @@ def matches_any(path: str, patterns: list[str]) -> bool:
     return any(re.search(p, path, re.IGNORECASE) for p in patterns)
 
 
+def declared_waivers(body: str | None) -> set[str]:
+    return set(WAIVER_RE.findall(body or ""))
+
+
+def waiver_status(body: str | None, covers: set[str]) -> tuple[bool, set[str]]:
+    """(covered, unknown): whether a declared waiver addresses this rule, and any declared
+    codes the base does not define (overlay codes, which a reviewer must adjudicate)."""
+    found = declared_waivers(body)
+    return bool(found & covers), found - BASE_WAIVERS
+
+
+def is_docs_only(data: dict) -> bool:
+    files = [f.get("path", "") for f in data.get("files", [])]
+    return bool(files) and all(f.endswith(DOC_SUFFIXES) for f in files)
+
+
 def check_description(body: str, findings: list[Finding]) -> None:
     body = body or ""
     missing = [
@@ -375,7 +410,7 @@ def check_tracking(
         re.search(rx, body) for rx in prof.get("issue_link_regexes", [])
     )
     closing = data.get("closingIssuesReferences") or []
-    has_waiver = bool(WAIVER_RE.search(body))
+    has_waiver, unknown_waivers = waiver_status(body, TRACKING_WAIVERS)
     body_refs = re.findall(r"(?<!\w)#(\d+)\b", body)
     mentions = sorted(set(body_refs) | set(cross_refs))
 
@@ -387,6 +422,25 @@ def check_tracking(
                 "M4",
                 "INFO",
                 "No tracker, but a waiver is declared; reviewer to adjudicate.",
+            )
+        )
+    elif is_docs_only(data):
+        # Self-evident class (reference.md, "Self-evident changes"): no tracker required.
+        findings.append(
+            Finding(
+                "M4",
+                "INFO",
+                "Docs-only change: the base policy does not require a tracker. A "
+                "repository bot or overlay may still require one; that is its own rule.",
+            )
+        )
+    elif unknown_waivers:
+        findings.append(
+            Finding(
+                "M4",
+                "IMPORTANT",
+                f"No tracker; waiver code(s) {', '.join(sorted(unknown_waivers))} are "
+                "not defined by the base skill. Pending adjudication by the reviewer.",
             )
         )
     elif mentions:
@@ -429,6 +483,15 @@ def check_related_links(
         )
         return
     if check_links:
+        if urls:
+            findings.append(
+                Finding(
+                    "M5",
+                    "INFO",
+                    f"{len(set(urls))} full URL(s) in the PR body were not link-checked; "
+                    "--check-links resolves bare #refs only.",
+                )
+            )
         for num in set(issue_refs):
             cmd = ["gh", "issue", "view", num, "--json", "number"]
             if repo:
@@ -454,9 +517,19 @@ def check_tests(data: dict, prof: dict, findings: list[Finding]) -> None:
     files = [f.get("path", "") for f in data.get("files", [])]
     product = [f for f in files if matches_any(f, prof["product_globs"])]
     tests = [f for f in files if matches_any(f, prof["test_globs"])]
-    docs_only = files and all(f.endswith((".md", ".rst", ".txt")) for f in files)
-    has_waiver = bool(WAIVER_RE.search(data.get("body", "") or ""))
-    if product and not tests and not docs_only and not has_waiver:
+    docs_only = is_docs_only(data)
+    has_waiver, unknown_waivers = waiver_status(data.get("body", ""), TEST_WAIVERS)
+    if product and not tests and not docs_only and unknown_waivers and not has_waiver:
+        findings.append(
+            Finding(
+                "M2",
+                "IMPORTANT",
+                f"{len(product)} product file(s) changed with no test files; waiver "
+                f"code(s) {', '.join(sorted(unknown_waivers))} are not defined by the base "
+                "skill. Pending adjudication by the reviewer.",
+            )
+        )
+    elif product and not tests and not docs_only and not has_waiver:
         findings.append(
             Finding(
                 "M2",
@@ -608,6 +681,13 @@ def check_stale_base_api(
     _report_overlap(overlap, prof, findings, "API (truncated)" if truncated else "API")
 
 
+def _git_has_commit(repo_path: str | None, ref: str) -> bool:
+    code, _, _ = run(
+        ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"], cwd=repo_path
+    )
+    return code == 0
+
+
 def check_stale_base(
     data: dict,
     prof: dict,
@@ -619,10 +699,37 @@ def check_stale_base(
         check_stale_base_api(data, prof, repo, findings)
         return
     base = data.get("baseRefName", "develop")
+    head = data.get("headRefOid")
     pr_files = {f.get("path", "") for f in data.get("files", [])}
-    code, mb, err = run(["git", "merge-base", f"origin/{base}", "HEAD"], cwd=repo_path)
-    if code != 0:
-        code, mb, err = run(["git", "merge-base", base, "HEAD"], cwd=repo_path)
+    # Measure from the reviewed PR's own head, never the clone's checked-out HEAD: the clone
+    # may be on another branch, and the answer would then describe the wrong change.
+    if not head or not _git_has_commit(repo_path, head):
+        findings.append(
+            Finding(
+                "STALE-BASE",
+                "INFO",
+                "PR head commit is not in the local clone (fetch it, e.g. "
+                "`git fetch origin pull/<n>/head`); using the GitHub compare API instead.",
+            )
+        )
+        check_stale_base_api(data, prof, repo, findings)
+        return
+    # Pick one base ref and use it for both the merge-base and the diff.
+    base_ref = next(
+        (r for r in (f"origin/{base}", base) if _git_has_commit(repo_path, r)), None
+    )
+    if not base_ref:
+        findings.append(
+            Finding(
+                "STALE-BASE",
+                "INFO",
+                f"Base branch '{base}' is not in the local clone; using the GitHub "
+                "compare API instead.",
+            )
+        )
+        check_stale_base_api(data, prof, repo, findings)
+        return
+    code, mb, err = run(["git", "merge-base", base_ref, head], cwd=repo_path)
     if code != 0:
         findings.append(
             Finding(
@@ -632,7 +739,7 @@ def check_stale_base(
         return
     merge_base = mb.strip()
     code, out, err = run(
-        ["git", "diff", "--name-only", f"{merge_base}..origin/{base}"], cwd=repo_path
+        ["git", "diff", "--name-only", f"{merge_base}..{base_ref}"], cwd=repo_path
     )
     if code != 0:
         findings.append(
