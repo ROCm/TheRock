@@ -3,9 +3,29 @@
 include = [
   "share/miopen/**",
 ]
+exclude = [
+  # Test-only stand-in with the same file name as the real hipDNN backend. The
+  # default lib patterns claim every .so/.dll, so without this it would ship as a
+  # runtime library.
+  "bin/fake_hipdnn_backend/**",
+]
 [components.run."ml-libs/MIOpen/stage"]
 exclude = [
   "bin/miopen_gtest*",
+  # Installed only with MIOPEN_ENABLE_HIPDNN_WRAPPER=ON, for the installed
+  # hipDNN-forwarding tests.
+  "bin/check_public_abi.py",
+  "bin/check_wrapper_abi.py",
+  "bin/compare_forwarding_runs.py",
+  "bin/fake_hipdnn_backend/**",
+  "bin/forwarding_failure_probe*",
+  "bin/known_forwarding_divergences.txt",
+  "bin/miopen_wrapper_libs.py",
+  "bin/public_symbols.baseline",
+  "bin/run_forwarding_parity.py",
+  "bin/test_forwarding_failure_modes.py",
+  "bin/wrapper_excluded_symbols.txt",
+  "bin/wrapper_only_symbols.txt",
 ]
 [components.dbg."ml-libs/MIOpen/stage"]
 [components.dev."ml-libs/MIOpen/stage"]
@@ -13,4 +33,16 @@ exclude = [
 [components.test."ml-libs/MIOpen/stage"]
 include = [
   "bin/miopen_gtest*",
+  "bin/check_public_abi.py",
+  "bin/check_wrapper_abi.py",
+  "bin/compare_forwarding_runs.py",
+  "bin/fake_hipdnn_backend/**",
+  "bin/forwarding_failure_probe*",
+  "bin/known_forwarding_divergences.txt",
+  "bin/miopen_wrapper_libs.py",
+  "bin/public_symbols.baseline",
+  "bin/run_forwarding_parity.py",
+  "bin/test_forwarding_failure_modes.py",
+  "bin/wrapper_excluded_symbols.txt",
+  "bin/wrapper_only_symbols.txt",
 ]
