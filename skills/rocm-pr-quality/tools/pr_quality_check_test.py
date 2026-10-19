@@ -480,5 +480,55 @@ class LocalStaleBaseTest(unittest.TestCase):
         self.assertFalse(any("merge is fine" in f.message for f in findings))
 
 
+class TheRockProfileTest(unittest.TestCase):
+    """R4: the overlay's high-coupling list is executable, not only prose."""
+
+    def _overlap(self, files):
+        findings = []
+        pq._report_overlap(set(files), pq.PROFILES["therock"], findings, "git")
+        return findings
+
+    def test_high_coupling_files_block(self):
+        for path in (
+            "CMakeLists.txt",
+            "cmake/therock_subproject.cmake",
+            ".gitmodules",
+            "math-libs/artifact-blas.toml",
+            "BUILD_TOPOLOGY.toml",
+            ".github/workflows/multi_arch_ci.yml",
+        ):
+            self.assertEqual(
+                _sev(self._overlap([path]), "STALE-BASE"), ["BLOCKING"], path
+            )
+
+    def test_ordinary_file_overlap_is_not_blocking(self):
+        self.assertEqual(
+            _sev(self._overlap(["docs/README.md"]), "STALE-BASE"), ["IMPORTANT"]
+        )
+
+    def test_nested_cmakelists_is_not_high_coupling(self):
+        # Only the root CMakeLists.txt is on the overlay's list.
+        self.assertEqual(
+            _sev(self._overlap(["math-libs/BLAS/CMakeLists.txt"]), "STALE-BASE"),
+            ["IMPORTANT"],
+        )
+
+    def test_python_tooling_without_tests_is_flagged(self):
+        findings = []
+        pq.check_tests(
+            _pr(["build_tools/fetch_sources.py"]), pq.PROFILES["therock"], findings
+        )
+        self.assertEqual(_sev(findings, "M2"), ["BLOCKING"])
+
+    def test_python_tooling_with_tests_is_fine(self):
+        findings = []
+        pq.check_tests(
+            _pr(["build_tools/fetch_sources.py", "build_tools/tests/fetch_test.py"]),
+            pq.PROFILES["therock"],
+            findings,
+        )
+        self.assertEqual(_sev(findings, "M2"), [])
+
+
 if __name__ == "__main__":
     unittest.main()

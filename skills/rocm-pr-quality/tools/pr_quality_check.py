@@ -61,6 +61,23 @@ PROFILES = {
         "tracker_regexes": [r"\b[A-Z][A-Z0-9]+-\d+\b"],
         "issue_link_regexes": [r"https?://\S+/issues/\d+"],
     },
+    "therock": {
+        # The build repo: python build tooling is the product code that should carry tests;
+        # CMake and descriptor changes are judged by the overlay, not by this heuristic.
+        "product_globs": [r"^build_tools/.*\.py$"],
+        "test_globs": TEST_GLOBS,
+        # Mirrors the overlay's "stale-base on high-coupling build files" list.
+        "high_coupling": [
+            r"^CMakeLists\.txt$",
+            r"^cmake/",
+            r"(^|/)\.gitmodules$",
+            r"(^|/)artifact-[^/]*\.toml$",
+            r"(^|/)BUILD_TOPOLOGY\.toml$",
+            r"^\.github/workflows/",
+        ],
+        "tracker_regexes": [r"\b[A-Z][A-Z0-9]+-\d+\b"],
+        "issue_link_regexes": [r"https?://\S+/issues/\d+"],
+    },
     "hipblaslt": {
         "product_globs": [r"projects/hipblaslt/", r"tensilelite/"],
         "test_globs": TEST_GLOBS + [r"(^|/)clients/tests"],
