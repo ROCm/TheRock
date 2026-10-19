@@ -1,0 +1,72 @@
+name: Proposal 4 CPU stage stub
+'on':
+  workflow_call:
+    inputs:
+      stage_name:
+        type: string
+        required: false
+      stage_display_name:
+        type: string
+        required: false
+      timeout_minutes:
+        type: number
+        required: false
+      amdgpu_family:
+        type: string
+        required: false
+      dist_amdgpu_families:
+        type: string
+        required: false
+      rocm_package_version:
+        type: string
+        required: false
+      build_variant_cmake_preset:
+        type: string
+        required: false
+      build_runs_on:
+        type: string
+        required: false
+      build_runs_on_large:
+        type: string
+        required: false
+      release_type:
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+      ref:
+        type: string
+        required: false
+      external_repo_config:
+        type: string
+        required: false
+      quartz_tracking_id:
+        type: string
+        required: false
+      rebuild_artifacts:
+        type: string
+        required: false
+permissions:
+  contents: read
+jobs:
+  record:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+    - name: Record graph cell; no compilation or publication
+      env:
+        INPUTS_JSON: ${{ toJSON(inputs) }}
+      run: 'python3 - <<''PY''
+
+        import json,os
+
+        x=json.loads(os.environ["INPUTS_JSON"])
+
+        print("PROPOSAL4_GRAPH_CELL="+json.dumps(x,sort_keys=True))
+
+        assert x["stage_name"]
+
+        PY
+
+        '
