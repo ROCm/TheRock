@@ -7,10 +7,12 @@ r"""Upload a built amdrocm-repo package to the per-run outputs.
 Not to be confused with ``upload_package_repo.py``, which uploads the package
 repository itself (the content packages and their index).
 
-The destination is ``WorkflowOutputRoot.repo_setup_package()`` (see that method
-for the layout). ``publish_rocm_to_release_buckets.py`` then publishes it to
-``v5/amd-repo-setup/`` in the release bucket, separately from the package
-repositories.
+The destination is
+``{run_id}-linux/amd-repo-setup/{os_profile}/amdrocm-repo-{tier}.{pkg_type}``
+(e.g. ``12345678901-linux/amd-repo-setup/rhel10/amdrocm-repo-stablerc.rpm``).
+It sits outside ``packages/<format>/``, so release promotion
+(``publish_rocm_to_release_buckets.py``) does not copy it. Publishing it to
+repo.amd.com is a separate step.
 
 The bucket and prefix come from the CI environment: ``GITHUB_REPOSITORY``,
 ``RELEASE_TYPE`` and the event payload used for fork detection. The ``release``
@@ -39,6 +41,7 @@ if str(_BUILD_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from _therock_utils.storage_backend import create_storage_backend
+from _therock_utils.storage_location import StorageLocation
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 # An os-profile becomes a path segment of the object key. The leading
@@ -127,7 +130,11 @@ def upload(args: argparse.Namespace) -> str:
     """Upload the built package to its per-run location. Returns the object key."""
     package = find_package(args.dest_dir, args.pkg_type)
     root = WorkflowOutputRoot.from_workflow_run(run_id=args.run_id, platform="linux")
-    dest = root.repo_setup_package(args.os_profile, args.tier, args.pkg_type)
+    dest = StorageLocation(
+        root.bucket,
+        f"{root.prefix}/amd-repo-setup/{args.os_profile}"
+        f"/amdrocm-repo-{args.tier}.{args.pkg_type}",
+    )
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
     # Log where the file actually goes: with --output-dir that is a local path,
     # and an s3:// URI would describe an upload that did not happen.

@@ -26,8 +26,8 @@ import upload_repo_setup_package as ursp  # noqa: E402
 RUN_ID = "12345"
 BUCKET = "therock-prerelease-artifacts"
 
-# The key the destination method is expected to produce, spelled out here so a
-# change to the uploaded layout has to be made deliberately in two places.
+# The key the upload is expected to write, spelled out here so a change to the
+# uploaded layout has to be made deliberately in two places.
 EXPECTED_RPM_KEY = "12345-linux/amd-repo-setup/rhel10/amdrocm-repo-stablerc.rpm"
 
 
