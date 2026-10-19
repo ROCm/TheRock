@@ -1,245 +1,40 @@
-# Copyright Advanced Micro Devices, Inc.
-# SPDX-License-Identifier: MIT
-
-# Notes on security:
-#   * As this runs on lower trust `pull_request` events it forwards
-#     no github secrets to child workflows.
-#   * Some child workflows are shared by releases where `secrets: inherit` is
-#     used to forward credentials for Quartz notifications.
-
-name: Multi-Arch CI
-
+name: Proposal 3 Configuration Proof
 on:
-  push:
-    branches:
-      - main
-      - multi_arch/**
-      - release/therock-*
   workflow_dispatch:
-    inputs:
-      # --- Build targets ---
-      linux_amdgpu_families:
-        type: string
-        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx120X (empty = skip linux)"
-        default: ""
-      windows_amdgpu_families:
-        type: string
-        description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx120X (empty = skip windows)"
-        default: ""
-      # --- CI labels ---
-      pr_labels:
-        type: string
-        description: "Comma-separated PR labels (e.g. ci:skip-pytorch,test:rocprim,test_filter:quick)."
-        default: ""
-      # --- Build control ---
-      build_stages:
-        type: string
-        default: ""
-        description: "Comma-separated allowlist of build stages (empty = build all). Stages outside this list are skipped entirely."
-      build_python_packages:
-        type: boolean
-        default: true
-        description: "Build ROCm Python packages"
-      build_pytorch:
-        type: boolean
-        default: true
-        description: "Build PyTorch wheels"
-      build_jax:
-        type: boolean
-        default: true
-        description: "Build JAX wheels"
-      build_native_linux:
-        type: boolean
-        default: true
-        description: "Build native Linux packages and run install tests"
-      # --- Artifact reuse ---
-      prebuilt_stages:
-        type: string
-        default: ""
-        description: "Comma-separated build stages to skip (or 'all' for all stages); artifacts are copied from baseline_run_id instead"
-      baseline_run_id:
-        type: string
-        default: ""
-        description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
-      stage_reuse_mode:
-        type: choice
-        default: "dry-run"
-        options:
-          - "off"
-          - "dry-run"
-          - "reuse-stage"
-        # off disables all artifact reuse and ignores explicit prebuilt stages and
-        # baseline inputs. dry-run reports automatic reuse opportunities without
-        # applying them. reuse-stage applies automatic reuse.
-        description: "off (disable reuse) | dry-run (report only) | reuse-stage (auto-reuse unaffected stages)"
-      stage_reuse_max_age_hours:
-        type: string
-        default: "72"
-        description: "Automatic stage reuse: reject baseline runs older than this many hours"
-      stage_reuse_commit_history:
-        type: string
-        default: "50"
-        description: "Automatic stage reuse: number of recent branch commits to fetch for ancestry"
-      changed_projects:
-        type: string
-        default: ""
-        description: >-
-          Comma-separated list of changed project paths (e.g., 'projects/rocprim').
-          Mapped to artifacts via BUILD_TOPOLOGY.toml source_paths for granular
-          reuse and test filtering (empty = run all tests).
-  workflow_call:
-    inputs:
-      linux_amdgpu_families:
-        type: string
-        default: ""
-      windows_amdgpu_families:
-        type: string
-        default: ""
-      pr_labels:
-        type: string
-        default: ""
-      build_stages:
-        type: string
-        default: ""
-      build_python_packages:
-        type: boolean
-        default: true
-      build_pytorch:
-        type: boolean
-        default: true
-      build_jax:
-        type: boolean
-        default: true
-      build_native_linux:
-        type: boolean
-        default: true
-      prebuilt_stages:
-        type: string
-        default: ""
-      baseline_run_id:
-        type: string
-        default: ""
-      stage_reuse_mode:
-        type: string
-        default: "dry-run"
-      stage_reuse_max_age_hours:
-        type: string
-        default: "72"
-      stage_reuse_commit_history:
-        type: string
-        default: "50"
-      changed_projects:
-        type: string
-        default: ""
-  pull_request:
-    types:
-      - labeled
-      - opened
-      - synchronize
-
 permissions:
   contents: read
-  actions: read # Required for stage reuse feature to query workflow runs
-
-concurrency:
-  # See https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
-  #
-  # Only allow one run at a time for 'pull_request' events.
-  # Allow multiple runs for 'push' and 'workflow_dispatch'.
-  #
-  # `github.workflow`: each workflow gets its own concurrency group
-  # `github.head_ref`: the branch name (only defined for pull_request events)
-  # `github.run_id`  : fallback, unique for each run
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: true
-
 jobs:
-  setup:
-    uses: ./.github/workflows/setup_multi_arch.yml
-    with:
-      build_variant: "release"
-      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
-      windows_amdgpu_families: ${{ inputs.windows_amdgpu_families || '' }}
-      pr_labels: ${{ inputs.pr_labels || '' }}
-      prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
-      baseline_run_id: ${{ inputs.baseline_run_id || '' }}
-      stage_reuse_mode: ${{ inputs.stage_reuse_mode || 'dry-run' }}
-      stage_reuse_max_age_hours: ${{ inputs.stage_reuse_max_age_hours || '72' }}
-      stage_reuse_commit_history: ${{ inputs.stage_reuse_commit_history || '50' }}
-      build_python_packages: ${{ github.event_name != 'workflow_dispatch' || inputs.build_python_packages }}
-      build_pytorch: ${{ github.event_name != 'workflow_dispatch' || inputs.build_pytorch }}
-      build_jax: ${{ github.event_name != 'workflow_dispatch' || inputs.build_jax }}
-      build_native_linux: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_linux }}
-      build_stages: ${{ inputs.build_stages || '' }}
-
-  linux_build_and_test:
-    name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
-    needs: setup
-    if: >-
-      ${{
-        needs.setup.outputs.linux_build_config != '' &&
-        needs.setup.outputs.enable_build_jobs == 'true'
-      }}
-    uses: ./.github/workflows/multi_arch_ci_linux.yml
-    with:
-      build_config: ${{ needs.setup.outputs.linux_build_config }}
-      test_labels: ${{ needs.setup.outputs.linux_test_labels }}
-      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
-      rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
-      rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
-      test_type: ${{ needs.setup.outputs.test_type }}
-      changed_projects: ${{ inputs.changed_projects || '' }}
-    permissions:
-      contents: read
-      id-token: write
-
-  windows_build_and_test:
-    name: Windows::${{ fromJSON(needs.setup.outputs.windows_build_config || '{}').build_variant_label || 'skip' }}
-    needs: setup
-    if: >-
-      ${{
-        needs.setup.outputs.windows_build_config != '' &&
-        needs.setup.outputs.enable_build_jobs == 'true'
-      }}
-    uses: ./.github/workflows/multi_arch_ci_windows.yml
-    with:
-      build_config: ${{ needs.setup.outputs.windows_build_config }}
-      test_labels: ${{ needs.setup.outputs.windows_test_labels }}
-      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
-      test_type: ${{ needs.setup.outputs.test_type }}
-      changed_projects: ${{ inputs.changed_projects || '' }}
-    permissions:
-      contents: read
-      id-token: write
-
-  manifest_diff:
-    name: Manifest Diff
-    # Refs are auto-derived from push / pull_request events only.
-    # For manual runs, dispatch manifest-diff.yml directly with explicit refs.
-    if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
-    uses: ./.github/workflows/manifest-diff.yml
-    permissions:
-      contents: read
-      id-token: write
-
-  ci_summary:
-    name: CI Summary
-    if: always()
-    needs:
-      - setup
-      - linux_build_and_test
-      - windows_build_and_test
-      - manifest_diff
+  configuration:
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        source_sha:
+          - a5f5ad0c079de9b2417585cbb0869af474c26b09
+          - c01e3a3f3f67966dd35612cf363b49964f33cd47
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 5
+      - name: Checkout isolated evaluation branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Checkout pinned CI source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          persist-credentials: false
-      - name: Evaluate workflow results
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          NEEDS_JSON: ${{ toJSON(needs) }}
+          repository: ROCm/TheRock
+          ref: ${{ matrix.source_sha }}
+          path: _pinned_source
+      - name: Install selector dependency
+        run: python3 -m pip install PyYAML==6.0.2
+      - name: Execute real selection and test policy functions
+        run: >-
+          python3 .github/proposal3-evaluation/postsubmit_probe.py
+          --source _pinned_source
+          --sha '${{ matrix.source_sha }}'
+          --output proof.json
+      - name: Save configuration proof in job summary
+        if: always()
         run: |
-          python build_tools/github_actions/workflow_summary.py \
-            --needs-json "${NEEDS_JSON}"
+          if [ -f proof.json ]; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat proof.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
