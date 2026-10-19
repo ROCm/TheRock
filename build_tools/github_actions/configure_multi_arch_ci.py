@@ -58,7 +58,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from _therock_utils.build_topology import get_topology
 
 from amdgpu_family_matrix import (
-    SANITIZER_TRIGGER_RULES,
     all_build_variants,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,

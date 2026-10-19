@@ -38,58 +38,32 @@ VALID_TRIGGERS = frozenset(["presubmit", "postsubmit", "submodule_bump", "nightl
 # ---------------------------------------------------------------------------
 # Sanitizer trigger rules: maps (source, trigger) → build_variant.
 #
-# Each rule specifies which sanitizer build variant to use when a particular
-# source (submodule or external repo) is changed under a particular trigger.
+# Keyed by source name (submodule basename or external repo short name).
+# Each source maps triggers to the sanitizer build variant to use.
 #
 # Sources:
-#   - Submodule names (e.g., "rocm-systems") match TheRock submodule bumps
-#   - External repo short names (e.g., "rocm-libraries") match external repo
-#     calls via workflow_dispatch with EXTERNAL_REPO JSON
+#   - Submodule basenames (e.g., "amd-llvm" from "compiler/amd-llvm")
+#   - External repo short names (e.g., "rocm-libraries", "rockrel")
 #
-# Triggers: presubmit, postsubmit, submodule_bump, nightly
-#
-# The build_variant must be a key in all_build_variants["linux"].
+# The build_variant values must be keys in all_build_variants["linux"].
 #
 # Issue: https://github.com/ROCm/TheRock/issues/9366
 # ---------------------------------------------------------------------------
-SANITIZER_TRIGGER_RULES: list[dict] = [
-    # rocm-systems: host-asan on submodule bumps
-    {
-        "source": "rocm-systems",
-        "trigger": "submodule_bump",
-        "build_variant": "host-asan",
+SANITIZER_TRIGGER_RULES: dict[str, dict[str, str]] = {
+    "rocm-systems": {
+        "submodule_bump": "host-asan",
     },
-    # rocm-systems: tsan on nightly
-    {
-        "source": "rocm-systems",
-        "trigger": "nightly",
-        "build_variant": "tsan",
+    "rocm-libraries": {
+        "submodule_bump": "host-asan",
+        "nightly": "asan",
     },
-    # rocm-libraries: host-asan on submodule bumps
-    {
-        "source": "rocm-libraries",
-        "trigger": "submodule_bump",
-        "build_variant": "host-asan",
+    "rockrel": {
+        "nightly": "asan",
     },
-    # rocm-libraries: full asan on nightly
-    {
-        "source": "rocm-libraries",
-        "trigger": "nightly",
-        "build_variant": "asan",
+    "amd-llvm": {
+        "submodule_bump": "asan-debug",
     },
-    # rockrel: full asan on nightly
-    {
-        "source": "rockrel",
-        "trigger": "nightly",
-        "build_variant": "asan",
-    },
-    # llvm (amd-llvm): asan-debug on submodule bumps
-    {
-        "source": "amd-llvm",
-        "trigger": "submodule_bump",
-        "build_variant": "asan-debug",
-    },
-]
+}
 
 
 def get_sanitizer_variant_for_trigger(
@@ -98,17 +72,14 @@ def get_sanitizer_variant_for_trigger(
     """Look up the sanitizer build variant for a (source, trigger) pair.
 
     Args:
-        source: Submodule name or external repo short name.
+        source: Submodule basename or external repo short name.
         trigger: One of VALID_TRIGGERS.
 
     Returns:
         Build variant string (e.g., "host-asan") if a rule matches,
         or None if no sanitizer rule applies.
     """
-    for rule in SANITIZER_TRIGGER_RULES:
-        if rule["source"] == source and rule["trigger"] == trigger:
-            return rule["build_variant"]
-    return None
+    return SANITIZER_TRIGGER_RULES.get(source, {}).get(trigger)
 
 
 def _log(*args, **kwargs):
