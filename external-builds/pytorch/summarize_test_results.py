@@ -175,6 +175,7 @@ def write_shard_summary(
 # ---------------------------------------------------------------------------
 
 _ARTIFACT_RE = re.compile(r"test-reports-(?P<config>.+)-(?P<shard>\d+)-(?P<num>\d+)")
+_COMPLETION_MARKER = "therock-test-complete.txt"
 
 
 def _build_report_header(
@@ -259,6 +260,9 @@ def write_combined_summary(
         shard_label = f"{shard}/{num}"
 
         failures, artifact_is_valid = _collect_results_with_health(artifact_dir)
+        artifact_is_valid = artifact_is_valid and any(
+            artifact_dir.rglob(_COMPLETION_MARKER)
+        )
         if artifact_is_valid:
             valid_report_artifact_count += 1
         for f in failures:

@@ -385,23 +385,19 @@ jobs:
             -v
 
       - name: (Linux) Run PyTorch full test suite
+        id: linux_tests
         if: ${{ runner.os == 'Linux' }}
         run: |
+          set +e
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
             --test-config "${MATRIX_TEST_CONFIG}" \
             --device-query "${DEVICE_QUERY}" \
             --gpu-policy "${GPU_POLICY}" \
             -- \
             --continue-on-collection-errors
-
-      - name: Upload test reports
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: test-reports-${{ matrix.test_config }}-${{ matrix.shard }}-${{ matrix.num_shards }}
-          path: external-builds/pytorch/pytorch/test/test-reports/
-          if-no-files-found: ignore
-          retention-days: 30
+          test_exit_code=$?
+          touch external-builds/pytorch/pytorch/test/test-reports/therock-test-complete.txt
+          echo "exit_code=${test_exit_code}" >> "$GITHUB_OUTPUT"
 
       # HACK: The test process does not terminate on its own gracefully,
       # so we write to run_pytorch_tests_exit_code.txt and then kill the process.
@@ -421,11 +417,25 @@ jobs:
           if [ -f run_pytorch_tests_exit_code.txt ]; then
             EXIT_CODE=$(cat run_pytorch_tests_exit_code.txt)
             echo "Exit code from file: ${EXIT_CODE}"
+            touch external-builds/pytorch/pytorch/test/test-reports/therock-test-complete.txt
             exit ${EXIT_CODE}
           else
             echo "No run_pytorch_tests_exit_code.txt found"
             exit 1
           fi
+
+      - name: (Linux) Propagate test exit code
+        if: ${{ runner.os == 'Linux' }}
+        run: exit ${{ steps.linux_tests.outputs.exit_code }}
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-reports-${{ matrix.test_config }}-${{ matrix.shard }}-${{ matrix.num_shards }}
+          path: external-builds/pytorch/pytorch/test/test-reports/
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Capture job summary
         id: summary
@@ -455,7 +465,9 @@ jobs:
           persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
-          sparse-checkout: external-builds/pytorch/summarize_test_results.py
+          sparse-checkout: |
+            build_tools/github_actions/capture_job_summary.py
+            external-builds/pytorch/summarize_test_results.py
 
       - name: Download all test report artifacts
         continue-on-error: true
