@@ -662,7 +662,8 @@ amdgpu_family_info_matrix = {
             "tests_on_trigger": [],
         },
     },
-    # Nightly family - builds on nightly and submodule_bump, tests only on nightly
+    # Nightly family - builds on nightly and submodule_bump, no automatic tests
+    # (tests can be triggered manually via workflow_dispatch or ci:run-all-archs)
     "gfx117x": {
         "linux": {
             "test-runs-on": "linux-gfx117x-gpu-rocm",
@@ -671,7 +672,7 @@ amdgpu_family_info_matrix = {
             "build_variants": ["release"],
             "bypass_tests_for_releases": True,
             "builds_on_trigger": ["submodule_bump", "nightly"],
-            "tests_on_trigger": ["nightly"],
+            "tests_on_trigger": [],
             "disabled_framework_tests": ["pytorch", "jax"],
         },
         "windows": {
@@ -681,7 +682,7 @@ amdgpu_family_info_matrix = {
             "build_variants": ["release"],
             "bypass_tests_for_releases": True,
             "builds_on_trigger": ["submodule_bump", "nightly"],
-            "tests_on_trigger": ["nightly"],
+            "tests_on_trigger": [],
             "disabled_framework_tests": ["pytorch", "jax"],
         },
     },
