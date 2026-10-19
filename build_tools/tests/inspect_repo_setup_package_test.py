@@ -1,9 +1,9 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Unit tests for inspect_repo_package.py.
+"""Unit tests for inspect_repo_setup_package.py.
 
-inspect_repo_package.py lives in build_tools/packaging/linux/, which is not on
+inspect_repo_setup_package.py lives in build_tools/packaging/linux/, which is not on
 the path that conftest.py sets up (it only adds build_tools/). Add it explicitly.
 Importing the module is side-effect-free thanks to its ``__main__`` guard.
 
@@ -23,7 +23,7 @@ import pytest
 _LINUX_DIR = Path(__file__).resolve().parents[1] / "packaging" / "linux"
 sys.path.insert(0, str(_LINUX_DIR))
 
-import inspect_repo_package as irp  # noqa: E402
+import inspect_repo_setup_package as irp  # noqa: E402
 
 # In the format of `dpkg-deb -c` for an ubuntu2404 build. The repo filename carries
 # the stream, so the signed and unsigned listings differ in it as well as in
@@ -37,8 +37,8 @@ drwxr-xr-x root/root         0 2026-08-11 16:15 ./etc/apt/sources.list.d/
 drwxr-xr-x root/root         0 2026-08-11 16:15 ./usr/
 drwxr-xr-x root/root         0 2026-08-11 16:15 ./usr/share/
 drwxr-xr-x root/root         0 2026-08-11 16:15 ./usr/share/doc/
-drwxr-xr-x root/root         0 2026-08-11 16:15 ./usr/share/doc/amdrocm-repo/
--rw-r--r-- root/root       177 2026-08-11 16:15 ./usr/share/doc/amdrocm-repo/changelog.gz
+drwxr-xr-x root/root         0 2026-08-11 16:15 ./usr/share/doc/amd-repo-setup/
+-rw-r--r-- root/root       177 2026-08-11 16:15 ./usr/share/doc/amd-repo-setup/changelog.gz
 """
 
 DEB_UNSIGNED_LISTING = _DEB_LISTING.format(stem="amdrocm-nightly")
@@ -143,7 +143,7 @@ class TestStreamShapes:
     """
 
     def test_shape_constants_match_the_builder(self):
-        import build_repo_package as brp
+        import build_repo_setup_package as brp
 
         assert irp._SHAPE_FLAT == brp._FLAT
         assert irp._SHAPE_BUILD_ID == brp._BUILD_ID
@@ -347,7 +347,7 @@ class TestLocateBuiltPackage:
     """One build produces one package, so anything else must fail loudly."""
 
     def test_exactly_one_match_is_returned(self, tmp_path):
-        pkg = tmp_path / "amdrocm-repo_10.0.0_all.deb"
+        pkg = tmp_path / "amd-repo-setup_10.0.0_all.deb"
         pkg.write_text("")
         assert irp.locate_built_package(tmp_path, "deb") == pkg
 
@@ -356,21 +356,21 @@ class TestLocateBuiltPackage:
             irp.locate_built_package(tmp_path, "deb")
 
     def test_two_matches_fail_and_name_the_count(self, tmp_path):
-        (tmp_path / "amdrocm-repo_10.0.0_all.deb").write_text("")
-        (tmp_path / "amdrocm-repo_10.0.1_all.deb").write_text("")
+        (tmp_path / "amd-repo-setup_10.0.0_all.deb").write_text("")
+        (tmp_path / "amd-repo-setup_10.0.1_all.deb").write_text("")
         with pytest.raises(RuntimeError, match="found 2"):
             irp.locate_built_package(tmp_path, "deb")
 
     def test_other_package_types_are_ignored(self, tmp_path):
         """A deb and an rpm in one directory are one match each, not two."""
-        deb = tmp_path / "amdrocm-repo_10.0.0_all.deb"
+        deb = tmp_path / "amd-repo-setup_10.0.0_all.deb"
         deb.write_text("")
-        (tmp_path / "amdrocm-repo-10.0.0.noarch.rpm").write_text("")
+        (tmp_path / "amd-repo-setup-10.0.0.noarch.rpm").write_text("")
         assert irp.locate_built_package(tmp_path, "deb") == deb
 
 
-DEB_FILE = "amdrocm-repo_10.0.0_all.deb"
-RPM_FILE = "amdrocm-repo-10.0.0.noarch.rpm"
+DEB_FILE = "amd-repo-setup_10.0.0_all.deb"
+RPM_FILE = "amd-repo-setup-10.0.0.noarch.rpm"
 
 
 class TestMain:
@@ -438,7 +438,7 @@ class TestMain:
         assert run_main.reads == []
 
     def test_two_packages_fail_before_reading_either(self, run_main):
-        files = [DEB_FILE, "amdrocm-repo_10.0.1_all.deb"]
+        files = [DEB_FILE, "amd-repo-setup_10.0.1_all.deb"]
         with pytest.raises(RuntimeError, match="found 2"):
             run_main(files, DEB_UNSIGNED_LISTING, "ubuntu2404", "nightly")
         assert run_main.reads == []

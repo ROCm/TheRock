@@ -61,8 +61,8 @@ on:
           built_packages.txt exist under the packages directory.
         type: boolean
         default: true
-      enable_repo_package:
-        description: "Build, verify and upload the amdrocm-repo package"
+      enable_repo_setup_package:
+        description: "Build, verify and upload the amd-repo-setup package"
         type: boolean
         required: false
         default: false
@@ -77,7 +77,7 @@ permissions:
 run-name: Build ${{ inputs.native_package_type }} packages (${{ inputs.rocm_version }}, ${{ inputs.dist_amdgpu_families }}${{ inputs.release_type && format(', {0}', inputs.release_type) || '' }})
 
 jobs:
-  # Resolve the parameters used to build and upload the amdrocm-repo package:
+  # Resolve the parameters used to build and upload the amd-repo-setup package:
   # the OS-profile build matrix for this package type, each profile's container
   # image, and the repo.amd.com stream the build line configures, with its
   # tier, packages base URL, signing-key URL and build sub-folder.
@@ -85,13 +85,13 @@ jobs:
   # The build line and the stream are different vocabularies: prerelease
   # configures rc. release_type stays the workflow input because it also selects
   # the artifact bucket; the stream is derived from it.
-  setup_repo_params:
-    name: Resolve amdrocm-repo parameters
+  resolve_repo_setup_params:
+    name: Resolve amd-repo-setup parameters
     # nightly and prerelease are the lines that upload the package. release
     # configures a stream too, but has no artifacts bucket to upload into.
     # Sanitizer variants skip: the resolved repository URL serves neither ASAN
     # packages (promoted under packages-asan) nor TSAN ones (not promoted).
-    if: inputs.enable_repo_package && contains(fromJSON('["nightly", "prerelease"]'), inputs.release_type) && !contains(inputs.build_variant, 'asan') && !contains(inputs.build_variant, 'tsan')
+    if: inputs.enable_repo_setup_package && contains(fromJSON('["nightly", "prerelease"]'), inputs.release_type) && !contains(inputs.build_variant, 'asan') && !contains(inputs.build_variant, 'tsan')
     runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-24.04' }}
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:15241d0e87bf81fe0986006ab832a36ea53a2cda0f9a31b4a5dc7826bc2396b6
@@ -111,7 +111,7 @@ jobs:
       gpg_key_url: ${{ steps.derive.outputs.gpg_key_url }}
       repo_sub_folder: ${{ steps.derive.outputs.repo_sub_folder }}
     steps:
-      - name: "Quartz - started - build amdrocm-repo"
+      - name: "Quartz - started - build amd-repo-setup"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
@@ -138,10 +138,10 @@ jobs:
       - name: Install Python requirements
         run: pip install jinja2
 
-      - name: Derive amdrocm-repo parameters
+      - name: Derive amd-repo-setup parameters
         id: derive
         run: |
-          python ./build_tools/packaging/linux/get_url_repo_params.py get-repo-params \
+          python ./build_tools/packaging/linux/get_url_repo_params.py get-repo-setup-params \
             --pkg-type "${NATIVE_PACKAGE_TYPE}" \
             --release-type "${RELEASE_TYPE}" \
             --run-id "${ARTIFACT_RUN_ID}"
@@ -293,39 +293,39 @@ jobs:
           gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
           gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
 
-  # Build the amdrocm-repo package for each OS profile of this package type,
+  # Build the amd-repo-setup package for each OS profile of this package type,
   # check its contents and upload it to this run's artifacts bucket, under
   # amd-repo-setup/<os_profile>/.
-  stage_repo_package:
-    name: Stage amdrocm-repo (${{ matrix.os_profile }})
-    needs: [setup_repo_params]
-    if: inputs.enable_repo_package && needs.setup_repo_params.outputs.repo_base_url != ''
+  stage_repo_setup_package:
+    name: Stage amd-repo-setup (${{ matrix.os_profile }})
+    needs: [resolve_repo_setup_params]
+    if: inputs.enable_repo_setup_package && needs.resolve_repo_setup_params.outputs.repo_base_url != ''
     strategy:
       fail-fast: false
       matrix:
-        # setup_repo_params does not run on the lines that do not upload, and a
+        # resolve_repo_setup_params does not run on the lines that do not upload, and a
         # skipped job's outputs are empty strings, which fromJSON cannot parse.
         # Fall back to an empty matrix so this job skips cleanly.
-        os_profile: ${{ fromJSON(needs.setup_repo_params.outputs.os_profiles || '[]') }}
+        os_profile: ${{ fromJSON(needs.resolve_repo_setup_params.outputs.os_profiles || '[]') }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-      id-token: write # Authenticate to AWS to upload the amdrocm-repo package.
+      id-token: write # Authenticate to AWS to upload the amd-repo-setup package.
     container:
       # get_url_repo_params.py manages image references for each OS profile.
       # zizmor cannot inspect the dynamically selected image.
-      image: ${{ fromJSON(needs.setup_repo_params.outputs.images || '{}')[matrix.os_profile] }} # zizmor: ignore[unpinned-images]
+      image: ${{ fromJSON(needs.resolve_repo_setup_params.outputs.images || '{}')[matrix.os_profile] }} # zizmor: ignore[unpinned-images]
     env:
       ROCM_VERSION: ${{ inputs.rocm_version }}
       NATIVE_PACKAGE_TYPE: ${{ inputs.native_package_type }}
       RELEASE_TYPE: ${{ inputs.release_type }}
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       OS_PROFILE: ${{ matrix.os_profile }}
-      STREAM: ${{ needs.setup_repo_params.outputs.stream }}
-      TIER: ${{ needs.setup_repo_params.outputs.tier }}
-      REPO_BASE_URL: ${{ needs.setup_repo_params.outputs.repo_base_url }}
-      GPG_KEY_URL: ${{ needs.setup_repo_params.outputs.gpg_key_url }}
-      REPO_SUB_FOLDER: ${{ needs.setup_repo_params.outputs.repo_sub_folder }}
+      STREAM: ${{ needs.resolve_repo_setup_params.outputs.stream }}
+      TIER: ${{ needs.resolve_repo_setup_params.outputs.tier }}
+      REPO_BASE_URL: ${{ needs.resolve_repo_setup_params.outputs.repo_base_url }}
+      GPG_KEY_URL: ${{ needs.resolve_repo_setup_params.outputs.gpg_key_url }}
+      REPO_SUB_FOLDER: ${{ needs.resolve_repo_setup_params.outputs.repo_sub_folder }}
     steps:
       - name: Checkout
         timeout-minutes: 15
@@ -359,28 +359,28 @@ jobs:
           # upload from the job that built it.
           echo "/tmp/repo-venv/bin" >> "$GITHUB_PATH"
 
-      - name: Build amdrocm-repo
+      - name: Build amd-repo-setup
         run: |
           # The build sub-folder is empty except on a per-build stream, which is
           # the only kind the builder accepts one for. The key URL is empty on an
           # unsigned stream, where the builder needs none.
-          $PYTHON_CMD build_tools/packaging/linux/build_repo_package.py \
+          $PYTHON_CMD build_tools/packaging/linux/build_repo_setup_package.py \
             --os-profile "${OS_PROFILE}" \
             --stream "${STREAM}" \
             --repo-base-url "${REPO_BASE_URL}" \
             --gpg-key-url "${GPG_KEY_URL}" \
             --repo-sub-folder "${REPO_SUB_FOLDER}" \
             --rocm-version "${ROCM_VERSION}" \
-            --dest-dir repo-package-out \
+            --dest-dir repo-setup-package-out \
             --verify-repo-url
 
       # Check the package before it is uploaded: the repository file for this
       # stream (and, on a signed stream, the key) at the expected paths, nothing
       # it must not ship, and everything owned by root.
-      - name: Inspect amdrocm-repo
+      - name: Inspect amd-repo-setup
         run: |
-          $PYTHON_CMD build_tools/packaging/linux/inspect_repo_package.py \
-            --package-dir repo-package-out \
+          $PYTHON_CMD build_tools/packaging/linux/inspect_repo_setup_package.py \
+            --package-dir repo-setup-package-out \
             --os-profile "${OS_PROFILE}" \
             --stream "${STREAM}"
 
@@ -391,28 +391,28 @@ jobs:
         with:
           release_type: ${{ inputs.release_type }}
 
-      - name: Upload amdrocm-repo
+      - name: Upload amd-repo-setup
         run: |
           $PYTHON_CMD build_tools/packaging/linux/upload_repo_setup_package.py \
-            --dest-dir repo-package-out \
+            --dest-dir repo-setup-package-out \
             --tier "${TIER}" \
             --run-id "${ARTIFACT_RUN_ID}" \
             --os-profile "${OS_PROFILE}" \
             --pkg-type "${NATIVE_PACKAGE_TYPE}"
 
-  # Report the amdrocm-repo jobs' result to Quartz. setup_repo_params reports
+  # Report the amd-repo-setup jobs' result to Quartz. resolve_repo_setup_params reports
   # their start, so this runs only when that job ran.
   notify_quartz_completed:
-    name: "Quartz - completed - build amdrocm-repo"
-    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' && needs.setup_repo_params.result != 'skipped' }}
-    needs: [setup_repo_params, stage_repo_package]
+    name: "Quartz - completed - build amd-repo-setup"
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' && needs.resolve_repo_setup_params.result != 'skipped' }}
+    needs: [resolve_repo_setup_params, stage_repo_setup_package]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true
     permissions:
       contents: read
     steps:
-      - name: "Quartz - completed - build amdrocm-repo"
+      - name: "Quartz - completed - build amd-repo-setup"
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed

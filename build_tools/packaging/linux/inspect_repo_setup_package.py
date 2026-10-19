@@ -2,7 +2,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-r"""Verify the payload of a built amdrocm-repo package before it is uploaded.
+r"""Verify the payload of a built amd-repo-setup package before it is uploaded.
 
 This is a build-time check, not an install test. Given the directory a build
 wrote its package to, it lists the archive and asserts that it contains the
@@ -29,8 +29,8 @@ Listing a package needs ``dpkg-deb`` for a deb and ``rpm`` for an rpm, which
 building one already requires.
 
 Usage:
-  python build_tools/packaging/linux/inspect_repo_package.py \
-      --package-dir repo-package-out \
+  python build_tools/packaging/linux/inspect_repo_setup_package.py \
+      --package-dir repo-setup-package-out \
       --os-profile ubuntu2404 \
       --stream nightly
 """
@@ -45,7 +45,7 @@ _THIS_DIR = Path(__file__).resolve().parent
 if str(_THIS_DIR) not in sys.path:
     sys.path.insert(0, str(_THIS_DIR))
 
-from build_repo_package import (
+from build_repo_setup_package import (
     DEB_KEYRING_PATH,
     OS_PROFILES,
     RPM_GPG_KEY_PATH,
@@ -60,7 +60,7 @@ from build_repo_package import (
 # another edit -- but one whose shape is not handled here would be checked
 # against the wrong files, so an unknown shape raises.
 #
-# These mirror build_repo_package's private _FLAT / _BUILD_ID. They are compared
+# These mirror build_repo_setup_package's private _FLAT / _BUILD_ID. They are compared
 # against the public stream_shape() return value, and a test asserts the two
 # spellings still agree.
 _SHAPE_FLAT = "flat"
@@ -71,7 +71,7 @@ _EXPECTED_OWNER = "root/root"
 
 # Key paths used before the rename. A generic rocm name is one another package
 # could also claim, and neither dpkg nor rpm will unpack two packages that own
-# the same file; see build_repo_package's DEB_KEYRING_PATH for why the rename is
+# the same file; see build_repo_setup_package's DEB_KEYRING_PATH for why the rename is
 # precautionary. Asserted absent from every package.
 _SUPERSEDED_KEY_PATHS = (
     PurePosixPath("/usr/share/keyrings/rocm.gpg"),
@@ -244,7 +244,7 @@ def read_payload(package: Path, pkg_type: str) -> list[tuple[PurePosixPath, str]
 
 def parse_args(argv=None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Verify the payload of a built amdrocm-repo package.",
+        description="Verify the payload of a built amd-repo-setup package.",
     )
     p.add_argument(
         "--package-dir",
