@@ -56,6 +56,11 @@ def _get_artifact_path(artifact_path: str) -> str:
 # related jobs without relying on name-prefix inference.
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
+    "rocr-debug-agent": [
+        "rocr-debug-agent",
+        "rocr-debug-agent-cpu",
+        "rocr-debug-agent-gpu",
+    ],
     "tensilelite": ["tensilelite", "tensilelite-common"],
 }
 
@@ -563,6 +568,27 @@ test_matrix = {
                 # https://github.com/ROCm/TheRock/actions/runs/35803014951/job/106997748160
                 "gfx125X-dcgpu",
             ],
+        },
+    },
+    "rocr-debug-agent-cpu": {
+        "job_name": "rocr-debug-agent-cpu",
+        "fetch_artifact_args": "--debug-tools --tests",
+        "timeout_minutes": 10,
+        "test_script": "echo rocr-debug-agent cpu tests are not wired up yet, this placeholder always passes",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
+    "rocr-debug-agent-gpu": {
+        "job_name": "rocr-debug-agent-gpu",
+        "fetch_artifact_args": "--debug-tools --tests",
+        "timeout_minutes": 10,
+        "test_script": "echo rocr-debug-agent gpu tests are not wired up yet, this placeholder always passes",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
         },
     },
     "rocthrust": {

@@ -160,6 +160,21 @@ CI_LABELS: list[Label] = [
     Label("test:rocgdb-cpu", COLOR_TEST, "Run ROCgdb cpu tests only"),
     Label("test:rocgdb-gpu", COLOR_TEST, "Run ROCgdb gpu tests only"),
     Label("test:rocgdb", COLOR_TEST, "Test all test:rocgdb* labels"),
+    Label(
+        "test:rocr-debug-agent-cpu",
+        COLOR_TEST,
+        "Run rocr-debug-agent CPU tests only",
+    ),
+    Label(
+        "test:rocr-debug-agent-gpu",
+        COLOR_TEST,
+        "Run rocr-debug-agent GPU tests only",
+    ),
+    Label(
+        "test:rocr-debug-agent",
+        COLOR_TEST,
+        "Test all test:rocr-debug-agent* labels",
+    ),
     Label("test:rocprofiler-sdk-spm", COLOR_TEST, "Run rocprofiler-sdk-spm tests"),
     Label("test:rpp", COLOR_TEST, "Run full tests for rpp"),
     Label("test:miopen-dbsync", COLOR_TEST, "Run miopen-dbsync (StaticFDBSync/rocjitsu) tests"),
