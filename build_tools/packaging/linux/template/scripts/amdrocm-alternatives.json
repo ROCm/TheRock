@@ -38,7 +38,7 @@
       "hipify-clang"
     ]
   },
-  "amdrocm-dnn-dev": {
+  "amdrocm-dnn-devel": {
     "scripts": [
       "postinst",
       "prerm"
