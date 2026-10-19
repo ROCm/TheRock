@@ -2,7 +2,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Install the system tools needed to build the amdrocm-repo package.
+# Install the system tools needed to build the amd-repo-setup package.
 #
 # Package mapping by --os-profile:
 #
