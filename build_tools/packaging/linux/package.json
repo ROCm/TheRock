@@ -863,6 +863,12 @@
             ]
           },
           {
+            "Name": "origami",
+            "Components": [
+              "dev"
+            ]
+          },
+          {
             "Name": "hipBLASLt",
             "Components": [
               "dev"
