@@ -662,8 +662,31 @@ amdgpu_family_info_matrix = {
             "tests_on_trigger": [],
         },
     },
+    # Nightly family - builds on nightly and submodule_bump, no automatic tests
+    # (tests can be triggered manually via workflow_dispatch or ci:run-all-archs)
+    "gfx117x": {
+        "linux": {
+            "test-runs-on": "linux-gfx117x-gpu-rocm",
+            "family": "gfx117X-all",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "bypass_tests_for_releases": True,
+            "builds_on_trigger": ["submodule_bump", "nightly"],
+            "tests_on_trigger": [],
+            "disabled_framework_tests": ["pytorch", "jax"],
+        },
+        "windows": {
+            "test-runs-on": "windows-gfx117x-gpu-rocm",
+            "family": "gfx117X-all",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "bypass_tests_for_releases": True,
+            "builds_on_trigger": ["submodule_bump", "nightly"],
+            "tests_on_trigger": [],
+            "disabled_framework_tests": ["pytorch", "jax"],
+        },
+    },
 }
-
 
 # Targets must be named explicitly; excluded from all and default CI selections.
 # These families are only included when explicitly requested via workflow_dispatch
@@ -677,26 +700,6 @@ amdgpu_family_info_matrix_explicit_only = {
             "build_variants": ["release"],
             "bypass_tests_for_releases": True,
             "builds_on_trigger": [],  # Never auto-included, explicit only
-            "tests_on_trigger": [],
-        },
-    },
-    # To be moved to nightly once upstreaming is complete and R-S , R-L is bumped
-    "gfx117x": {
-        "linux": {
-            "test-runs-on": "",
-            "family": "gfx117X-all",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-            "bypass_tests_for_releases": True,
-            "builds_on_trigger": [],  # Never auto-included, explicit only, add nightly once moved to nightly
-            "tests_on_trigger": [],
-        },
-        "windows": {
-            "test-runs-on": "",
-            "family": "gfx117X-all",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-            "builds_on_trigger": [],  # Never auto-included, explicit only, add nightly once moved to nightly
             "tests_on_trigger": [],
         },
     },
