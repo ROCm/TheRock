@@ -4,6 +4,19 @@ Rubric tables, templates, and vocabularies for the `rocm-pr-quality` base skill.
 single source of truth the author/review actions and the shared checker share. Overlays add to
 or tighten these; they never relax a MUST.
 
+## Contents
+
+- [MUST set](#must-set-verbatim--non-overridable-by-overlays) and [waiver-ability](#waiver-ability)
+- [Rule strengths](#rule-strengths-how-overlays-may-change-a-rule), [change classes](#change-classes-extensible-multiple-tags-allowed), [test-level mapping](#test-level-mapping-should)
+- [The four review questions](#the-four-review-questions)
+- [Test-substance smell scan](#test-substance-smell-scan-a-hit-is-a-prompt-to-inspect-not-a-verdict) and [agent anti-patterns](#agent--ai-generated-change-anti-patterns-a-hit-warrants-a-closer-read)
+- [PR-hygiene checklist](#pr-hygiene-checklist-author--reviewer) and [self-evident changes](#self-evident-changes-reduced-justification-exemptions)
+- [Finding tiers](#finding-tiers-individual-findings), [overall assessment](#overall-assessment-pr-level), [risk levels](#risk-levels-15)
+- [Waiver codes](#waiver-codes)
+- [PR description template](#pr-description-template) and [two-PR known-bug flow](#two-pr-known-bug-flow-satisfies-m1-without-a-same-pr-fix)
+- [Worked review output](#worked-review-output-hypothetical-fixture) (evaluation fixtures: [`evals.md`](evals.md))
+- [Review attestation](#review-attestation-action-2-approvals-only)
+
 ______________________________________________________________________
 
 ## MUST set (verbatim — non-overridable by overlays)
@@ -85,15 +98,24 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## Test-substance smell scan (a hit is `BLOCKING`, not a nit)
+## Test-substance smell scan (a hit is a prompt to inspect, not a verdict)
+
+A smell tells you where to look. Read what the test actually asserts before grading it.
 
 - assert-callable only / asserts only that a mock was called
 - `hasattr`-guarded test bodies that silently skip
 - lone `is not None` / `.called` assertions with no behavioral check
-- copy-paste tests that should be parametrized
+- copy-paste tests that could be parametrized
 - mock-only assertions that pass against a no-op implementation
 - phantom methods / attributes that do not exist in the source (AI-slop tell)
 - non-obvious tolerance or parameter choices with no recorded rationale ("why")
+
+Grading: reserve `BLOCKING` for a **demonstrated** missing guarantee: the test passes against a
+no-op, asserts nothing about behavior, cannot fail, silently skips, or exercises a method that does
+not exist. A mock-call assertion that is the intended contract (for example, "this function must
+call the logger once") is fine. Duplicated tests that each lock distinct behavior are a
+maintainability `SUGGESTION` (parametrize when touching them), not a blocker. A missing rationale
+for a non-obvious tolerance is `IMPORTANT` when the value gates pass/fail, otherwise `SUGGESTION`.
 
 Mutation question: *what single change to the source would make this test fail?* No clear answer
 → coverage padding.
@@ -288,6 +310,49 @@ When a defect is known but the fix is not ready, M1 may be met by a tracked two-
 
 The quarantine must be tracked, time-boxed, and removed by the fix — not left in place. Overlays
 define the concrete mechanism (e.g. a `known_bugs` data file).
+
+______________________________________________________________________
+
+## Worked review output (hypothetical fixture)
+
+This shows the shape a completed review takes. The PR is **invented** for illustration (library
+`libfoo`, ticket `FOO-101`); it is not a real PR and its file names, line numbers, and run links
+are placeholders. Real reviews cite real paths and runs. Evaluation cases built from the same
+shape are in [`evals.md`](evals.md).
+
+> **PR:** "[FOO-101] Fix scan overflow for 64-bit offsets", head `3f9c2a1`, base `develop`.
+> **Changed:** `src/scan.cpp` (+14/-3), `tests/scan_test.cpp` (+22/-0). Class: `defect-fix`.
+
+**Evidence checked:** the PR diff at `3f9c2a1`; the new test body (`tests/scan_test.cpp:41-62`);
+the PR's CI run (placeholder link, green, finished 1 day before the review); the base branch
+at review time.
+
+**Overall assessment:** `CHANGES REQUESTED` (one `BLOCKING` item).
+
+**The four questions**
+
+1. *What lands:* a fix to the offset arithmetic in `scan()` so inputs above 2^31 elements no
+   longer overflow a 32-bit intermediate.
+1. *Appropriate test level:* a unit test that runs `scan()` over a large (or mocked-size) input
+   and checks the result. A unit test is the lowest level that fails on the regression.
+1. *Omitted tests or flags, and waivers:* none omitted, no waiver declared.
+1. *Adjacent tests:* the 32-bit and 64-bit index instantiations of `scan()`, and `reduce()`,
+   which shares the offset helper.
+
+**Findings (most severe first)**
+
+| Finding                                                          | Severity     | Evidence                                                                                                                                                                                              |
+| ---------------------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The regression test cannot fail on the old code                  | `BLOCKING`   | `tests/scan_test.cpp:55` asserts only that a mocked allocator was called. It never reads the scan output, so it passes against the unpatched `scan()` (M1: the test must fail before and pass after). |
+| No reproduction evidence for the defect-fix                      | `IMPORTANT`  | The PR does not link a run showing the new test failing on the unpatched build.                                                                                                                       |
+| `reduce()` uses the same offset helper and is untested at 64-bit | `IMPORTANT`  | Adjacent-test question 4; `src/reduce.cpp:88` calls the helper changed in this PR.                                                                                                                    |
+| Two near-identical test cases differ only in input size          | `SUGGESTION` | `scan_test.cpp:30-39` and `:41-50`; each locks a distinct size, so this is a parametrization nicety, not a gap.                                                                                       |
+
+**Blocking items:** replace the mock-call assertion with one on the scan result for a 64-bit-sized
+input, and show it failing on the unpatched build.
+
+**Limits of this review:** reviewed commit `3f9c2a1` only; did not build or run the tests locally;
+did not review `reduce()` beyond the call site; CI evidence is the one linked run.
 
 ______________________________________________________________________
 

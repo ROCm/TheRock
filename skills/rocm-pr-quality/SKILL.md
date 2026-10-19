@@ -1,6 +1,6 @@
 ---
 name: rocm-pr-quality
-description: Help an engineer author, review, or pre-merge-gate a pull request to a ROCm library so it is traceable, tested, and safe to merge. Use when preparing a PR, reviewing a PR, or deciding whether an approved PR is safe to merge right now, or when the user provides a GitHub PR URL or branch and asks for help with PR quality, description, testing, review, or merge-readiness. Library-agnostic base; component overlays extend it.
+description: Author, review, merge-gate, or check the attestation of a ROCm library PR so it is traceable, tested, and safe to merge. Use when preparing a PR, reviewing one, judging merge-readiness, or given a PR URL or branch. Library-agnostic base; overlays extend it.
 argument-hint: '[author | review | pre-merge | check-attestation] [PR URL | branch:<name> | local] [base:<branch>]'
 allowed-tools: Bash, Read, Grep, Glob, Task, WebFetch
 ---
@@ -107,10 +107,13 @@ regardless of any waiver this skill would otherwise allow.
 ### Test substance — the mutation question (and the "why")
 
 Presence of tests is not enough. For 2–3 sampled tests ask: *what specific change to the
-source would make this test fail?* If the answer is hand-wavy, it is coverage padding — a
-blocker, not a nit. Smell scan: assert-callable-only, `hasattr`-guarded bodies, lone
-`is not None`/`.called` assertions, copy-paste that should be parametrized, mock-only
-assertions that pass against a no-op, and phantom methods that do not exist in the source.
+source would make this test fail?* If the answer is hand-wavy, it is coverage padding. Smell
+scan: assert-callable-only, `hasattr`-guarded bodies, lone `is not None`/`.called` assertions,
+copy-paste that should be parametrized, mock-only assertions that pass against a no-op, and
+phantom methods that do not exist in the source. A smell is a prompt to inspect behavior, not a
+verdict: it is `BLOCKING` only when it demonstrates a missing guarantee (the test passes against
+a no-op, asserts nothing about behavior, or cannot fail). Duplication or a missing rationale alone
+is `SUGGESTION`; see `reference.md`.
 
 Also ask for the **rationale** behind non-obvious test choices: where did this tolerance
 value come from, why this parameter combination and not another? A short paper trail prevents
@@ -259,8 +262,11 @@ waiver recorded.
 and add cross-cutting testing/reuse passes; otherwise do a single-pass review.
 
 **Output:** the overall assessment + the four answers + a severity-ordered findings list + a
-`BLOCKING`-items list. Only on request, and only after the user approves the wording, produce a
-draft request-changes comment. Never post it yourself. When the assessment is `APPROVED` and the
+`BLOCKING`-items list + a short **limits** note naming the reviewed commit, any files or scope
+you did not review, and any validation you could not run (CI evidence unavailable, no local
+build). A worked example is in `reference.md`; evaluation fixtures are in `evals.md`.
+Only on request, and only after the user approves the wording, produce a draft
+request-changes comment. Never post it yourself. When the assessment is `APPROVED` and the
 PR is not the user's own, also produce the attestation block (see "Review attestation"). If the
 user is reviewing their own PR, give the review but no block, and say that the skill does not
 attest to a person's own PRs. Drafting the approval comment itself is on request, like the
@@ -339,7 +345,9 @@ ______________________________________________________________________
   validate tickets, issues, and related PRs.
 - Save large diffs to a temp file; read focused sections rather than pasting everything.
 - The optional shared checker `tools/pr_quality_check.py` performs the deterministic subset of
-  the MUST checks (description sections, work-tracking presence, link resolution, test-file-touched
-  heuristic, CI currency, adjacent-file overlap). It is advisory; semantic judgments (test
+  the MUST checks (description sections, work-tracking presence, resolution of bare `#refs` only
+  (full URLs are reported as unchecked), test-file-touched heuristic, CI currency, adjacent-file
+  overlap). Pass `--profile` for an overlay's settings (`therock`, `hipblaslt`); the default `base`
+  profile has no high-coupling file list. It is advisory; semantic judgments (test
   substance, M3) stay with the agent and the human. It also generates and verifies the review
   attestation digest (`--check-attestation`, Action 4).
