@@ -13,7 +13,6 @@ if(NOT WIN32)
     set(_primlibs_benchmark_enable "OFF")
   else()
     set(_primlibs_benchmark_deps amdsmi)
-    set(_primlibs_benchmark_includes therock_primlibs_benchmark_deps.cmake)
   endif()
 endif()
 
