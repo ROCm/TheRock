@@ -185,6 +185,7 @@ jobs:
     name: Publish to Release Buckets
     runs-on: ubuntu-24.04
     permissions:
+      contents: read
       id-token: write
     env:
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}

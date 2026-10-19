@@ -38,19 +38,25 @@ for meson_build in "$DRM_MESON_BUILD" "$AMDGPU_MESON_BUILD"; do
   fi
 done
 
-# Append missing device IDs to amdgpu.ids
+# Add/update device IDs in amdgpu.ids. Upstream libdrm releases periodically
+# add their own entries for devices we've already listed here (sometimes with
+# a stale or differently-cased name), so each entry is applied by device/
+# revision key: any existing line for that key is deleted (a no-op if there
+# isn't one), then the entry is appended. This keeps the table correct across
+# libdrm version bumps without silently accumulating duplicate or
+# conflicting entries for the same device/revision.
 AMDGPU_IDS="$SOURCE_DIR/data/amdgpu.ids"
-cat >> "$AMDGPU_IDS" << 'EOF'
-7590,	C0,	AMD Radeon RX 9060 XT
-7590,	CF,	AMD Radeon RX 9050
-7590,	DF,	AMD Radeon RX 9050 4GB
-744B,	00,	AMD Radeon PRO W7900D
-75A0,	00,	AMD Instinct MI350X
-75A3,	00,	AMD Instinct MI355X
-75B0,	00,	AMD Instinct MI350X VF
-75B3,	00,	AMD Instinct MI355X VF
-75A8,	00,	AMD Instinct MI350P
-75B8,	00,	AMD Instinct MI350P VF
-7551,	C1,	AMD Radeon AI Pro R9700S
-7551,	C8,	AMD Radeon AI Pro R9600D
-EOF
+AMDGPU_ID_ENTRIES=(
+  "7590,	CF,	AMD Radeon RX 9050"
+  "7590,	DF,	AMD Radeon RX 9050 4GB"
+  "75A8,	00,	AMD Instinct MI350P"
+  "75B8,	00,	AMD Instinct MI350P VF"
+  "7551,	C1,	AMD Radeon AI PRO R9700S"
+  "7551,	C8,	AMD Radeon AI PRO R9600"
+)
+for entry in "${AMDGPU_ID_ENTRIES[@]}"; do
+  device_id="$(cut -d',' -f1 <<< "$entry" | xargs)"
+  revision_id="$(cut -d',' -f2 <<< "$entry" | xargs)"
+  sed -i -E "/^${device_id},[[:space:]]*${revision_id},/d" "$AMDGPU_IDS"
+  printf '%s\n' "$entry" >> "$AMDGPU_IDS"
+done

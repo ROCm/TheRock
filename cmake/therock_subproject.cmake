@@ -87,15 +87,6 @@ if(WIN32)
   list(APPEND THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS -Wno-duplicate-decl-specifier)
 endif()
 
-# Options added to every subproject when THEROCK_FLAG_WINDOWS_DRIVER_BUILD is set.
-# The compile flag is spelled per compiler; the link flag goes through CMake's
-# LINKER: prefix, which handles the driver difference.
-# /machine and /DYNAMICBASE are omitted: CMake emits the former and the linker
-# defaults to the latter.
-set(THEROCK_WINDOWS_DRIVER_BUILD_MSVC_COMPILE_FLAGS "/guard:cf")
-set(THEROCK_WINDOWS_DRIVER_BUILD_CLANG_COMPILE_FLAGS "-mguard=cf")
-set(THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS "/guard:cf")
-
 # Generates a command prefix that can be prepended to any custom command line
 # to perform log/console redirection and pretty printing.
 # LOG_FILE: If given, command output will also be sent to this log file. If
@@ -881,16 +872,6 @@ function(therock_cmake_subproject_activate target_name)
     string(APPEND _init_contents "add_link_options(\"LINKER:/Brepro\")\n")
   endif()
 
-  # Link half of the driver build options. This cannot go through
-  # CMAKE_<TYPE>_LINKER_FLAGS_INIT in the toolchain file: the private link dir
-  # handling above appends to CMAKE_<TYPE>_LINKER_FLAGS before enable_language()
-  # has populated it from *_INIT, which shadows the cache value and drops
-  # whatever the toolchain set.
-  if(MSVC AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
-    string(APPEND _init_contents
-      "add_link_options(\"LINKER:${THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS}\")\n")
-  endif()
-
   if(_dep_provider_file)
     string(APPEND _init_contents "include(${_dep_provider_file})\n")
   endif()
@@ -915,6 +896,56 @@ function(therock_cmake_subproject_activate target_name)
   _therock_get_flag_init_contents(_flag_init_contents "${target_name}")
   string(APPEND _init_contents "${_flag_init_contents}")
 
+  # Resolve TheRock's -D<PROJECT>_ENABLE_COVERAGE before anything acts on it.
+  #
+  # The registry lookup and its error live here, ahead of the flag injection
+  # below and the option translation further down, so that a typo or a project
+  # with no registered option fails configure without first appending linker
+  # flags and rewriting this subproject's compile rules.
+  #
+  # CMake definitions are conventionally upper case, so only the upper case
+  # spelling of TheRock's flag is honored (i.e. HIPDNN_ENABLE_COVERAGE, not
+  # hipDNN_ENABLE_COVERAGE).
+  #
+  # The option names upstream are not standardised: most projects take
+  # BUILD_CODE_COVERAGE or CODE_COVERAGE, a few take <PROJECT>_ENABLE_COVERAGE,
+  # RCCL takes ENABLE_CODE_COVERAGE. The generic ones are the reason the
+  # translation is per subproject rather than a global: defining
+  # BUILD_CODE_COVERAGE for the whole build would instrument every project that
+  # happens to understand it, which is exactly what per-project coverage is
+  # trying to avoid.
+  #
+  # DEFINED rather than the value, because an explicit =OFF naming a project
+  # with no registered option is still a mistake worth reporting, and is a
+  # spelling a typo readily takes.
+  string(TOUPPER "${_logical_target_name}" _coverage_project_name)
+  set(_coverage_var_name "${_coverage_project_name}_ENABLE_COVERAGE")
+  set(_coverage_option "")
+  set(_coverage_enabled OFF)
+  if(DEFINED ${_coverage_var_name})
+    set(_coverage_option "${THEROCK_COVERAGE_OPTION_${_coverage_project_name}}")
+    if(NOT _coverage_option)
+      message(FATAL_ERROR
+        "${_logical_target_name}: ${_coverage_var_name} was set but the project "
+        "has no coverage option registered. Add one to COVERAGE_PROJECTS in "
+        "build_tools/github_actions/configure_coverage_ci.py.")
+    endif()
+    # Both the link flags and the device compilation negation below are
+    # clang/lld specific. Handing the subproject its coverage option without
+    # them would instrument it halfway, so coverage is a no-op on MSVC rather
+    # than a partial one.
+    if(MSVC)
+      set(_coverage_option "")
+      if(${_coverage_var_name})
+        message(WARNING
+          "${_logical_target_name}: ${_coverage_var_name} is ignored on MSVC. "
+          "Coverage instrumentation is only supported on Linux builds.")
+      endif()
+    elseif(${_coverage_var_name})
+      set(_coverage_enabled ON)
+    endif()
+  endif()
+
   # Give the LLVM profile runtime the libraries it depends on.
   #
   # -fprofile-instr-generate links libclang_rt.profile_rocm.a, whose
@@ -931,9 +962,7 @@ function(therock_cmake_subproject_activate target_name)
   # DT_NEEDED entries are recorded no matter where the flags land relative to
   # the objects that need them, without forcing a DT_NEEDED for every other
   # library on the line.
-  string(TOUPPER "${_logical_target_name}" _coverage_project_name)
-  set(_coverage_var_name "${_coverage_project_name}_ENABLE_COVERAGE")
-  if(NOT MSVC AND ${_coverage_var_name})
+  if(_coverage_enabled)
     set(_coverage_link_flags
       " -Wl,--push-state,--no-as-needed -ldl -lpthread -Wl,--pop-state")
     string(APPEND _init_contents
@@ -972,7 +1001,7 @@ function(therock_cmake_subproject_activate target_name)
   # covered, and would need the same rewrite from wherever that happens.
   set(_coverage_project_include_arg)
   set(_coverage_configure_depends)
-  if(NOT MSVC AND ${_coverage_var_name})
+  if(_coverage_enabled)
     set(_coverage_host_only_contents
       "# Generated by therock_subproject.cmake; see the coverage comment there.\n")
     # Runs on every project() call, so the rewrite has to be idempotent.
@@ -1009,29 +1038,13 @@ function(therock_cmake_subproject_activate target_name)
 
   list(APPEND _cmake_args "${${target_name}_CMAKE_ARGS}")
 
-  # Translate TheRock's -D<PROJECT>_ENABLE_COVERAGE into whichever option the
-  # subproject actually implements. CMake definitions are conventionally upper
-  # case, so only the upper case spelling of TheRock's flag is honored (i.e.
-  # HIPDNN_ENABLE_COVERAGE, not hipDNN_ENABLE_COVERAGE).
+  # Hand the subproject whichever coverage option it actually implements.
   #
-  # The names upstream are not standardised: most projects take
-  # BUILD_CODE_COVERAGE or CODE_COVERAGE, a few take <PROJECT>_ENABLE_COVERAGE,
-  # RCCL takes ENABLE_CODE_COVERAGE. The generic ones are the reason this is
-  # done per subproject rather than by setting a global: defining
-  # BUILD_CODE_COVERAGE for the whole build would instrument every project that
-  # happens to understand it, which is exactly what per-project coverage is
-  # trying to avoid.
-  #
-  # _coverage_project_name and _coverage_var_name are set further up, where the
-  # profile runtime's link libraries are added to the init file.
-  if(DEFINED ${_coverage_var_name})
-    set(_coverage_option "${THEROCK_COVERAGE_OPTION_${_coverage_project_name}}")
-    if(NOT _coverage_option)
-      message(FATAL_ERROR
-        "${_logical_target_name}: ${_coverage_var_name} was set but the project "
-        "has no coverage option registered. Add one to COVERAGE_PROJECTS in "
-        "build_tools/github_actions/configure_coverage_ci.py.")
-    endif()
+  # _coverage_option is resolved and validated further up, where the profile
+  # runtime's link libraries are added to the init file. It is empty when the
+  # flag was not set at all, and on MSVC where coverage is a no-op, so the
+  # value passed through here is the flag's own ON or OFF.
+  if(_coverage_option)
     list(APPEND _cmake_args "-D${_coverage_option}=${${_coverage_var_name}}")
   endif()
 
@@ -1894,18 +1907,6 @@ function(_therock_cmake_subproject_setup_toolchain
     endif()
   endif()
 
-  # Compile half of the driver build options. The link half is emitted as
-  # add_link_options() in the project_init file.
-  if(MSVC AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
-    if(compiler_toolchain)
-      set(_driver_build_compile_flags "${THEROCK_WINDOWS_DRIVER_BUILD_CLANG_COMPILE_FLAGS}")
-    else()
-      set(_driver_build_compile_flags "${THEROCK_WINDOWS_DRIVER_BUILD_MSVC_COMPILE_FLAGS}")
-    endif()
-    string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" ${_driver_build_compile_flags}\")\n")
-    string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_driver_build_compile_flags}\")\n")
-  endif()
-
   # Customize debug info generation.
   if(THEROCK_MINIMAL_DEBUG_INFO)
     # System toolchain can be either MSVC or another system compiler.
@@ -2010,6 +2011,9 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-path=@_hip_dist_dir@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-device-lib-path=@_amd_llvm_device_lib_path@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER \"@AMD_LLVM_CXX_COMPILER@\")\n")
+    if(CMAKE_HIP_COMPILER_LAUNCHER)
+      string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER_LAUNCHER \"@CMAKE_HIP_COMPILER_LAUNCHER@\")\n")
+    endif()
     if(THEROCK_VERBOSE)
       message(STATUS "HIP_DIR = ${_hip_dist_dir}")
     endif()
