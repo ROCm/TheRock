@@ -1277,15 +1277,10 @@ def do_build_pytorch(
     pytorch_pyproject_text = (pytorch_dir / "pyproject.toml").read_text()
     if "scikit_build_core.build" in pytorch_pyproject_text:
         # scikit-build-core applies Git ignore rules when constructing the wheel,
-        # dropping generated, gitignored runtime files. _rocm_init.py now ships
-        # via an upstream install() (torch/CMakeLists.txt), so only these Windows
-        # DLL force-includes remain until their upstream PRs land:
-        # https://github.com/pytorch/pytorch/pull/191629 (libomp140)
+        # dropping generated, gitignored runtime files. _rocm_init.py and
+        # libomp140 now ship via upstream install() rules, so only these Flash
+        # Attention DLLs remain until pytorch/pytorch#200931 lands.
         if is_windows:
-            build_command.append(
-                "-Cwheel.force-include.torch/lib/libomp140.x86_64.dll="
-                "torch/lib/libomp140.x86_64.dll"
-            )
             if use_flash_attention:
                 # TODO: similar upstream fix for these and then drop here
                 build_command.append(
