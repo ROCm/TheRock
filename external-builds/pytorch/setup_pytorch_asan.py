@@ -43,14 +43,22 @@ def apply_asan_companion_policy(parser, args) -> None:
 
 
 def import_sanity_env(env: dict[str, str]) -> dict[str, str]:
-    """Environment for ``import torch`` so the shared runtime is loaded first."""
+    """Environment for ``import torch`` so HIP init survives the shared runtime.
+
+    The ASan runtime must be first. ``libhsa-runtime64.so.1`` has to follow it:
+    without that preload, ``torch.cuda.is_available()`` dies with a pc 0 SEGV
+    inside ``libamdhip64.so`` while HIP is initializing. ``detect_leaks=0``
+    keeps LeakSanitizer from failing the check on shutdown leaks.
+    """
     runtime = env.get("ASAN_RUNTIME_PATH", "")
-    if not runtime:
+    hsa_runtime = env.get("HSA_RUNTIME_PATH", "")
+    if not runtime or not hsa_runtime:
         raise RuntimeError(
-            "--asan import check requires ASAN_RUNTIME_PATH from apply_asan_build_env"
+            "--asan import check requires ASAN_RUNTIME_PATH and HSA_RUNTIME_PATH "
+            "from apply_asan_build_env"
         )
     return {
-        "LD_PRELOAD": runtime,
+        "LD_PRELOAD": os.pathsep.join((runtime, hsa_runtime)),
         "ASAN_OPTIONS": env.get(
             "ASAN_OPTIONS", "detect_leaks=0:abort_on_error=1:print_stacktrace=1"
         ),
@@ -81,6 +89,17 @@ def _command_output(args: list[str], cwd: Path) -> str:
     return subprocess.check_output(
         args, cwd=str(cwd), stderr=subprocess.STDOUT, text=True
     ).strip()
+
+
+def _resolve_hsa_runtime(rocm_dir: Path) -> Path:
+    """Return the ROCr runtime that the import check must preload after ASan."""
+    candidate = rocm_dir / "lib" / "libhsa-runtime64.so.1"
+    if not candidate.is_file():
+        raise RuntimeError(
+            "--asan import check requires the ROCr runtime "
+            f"{candidate}, next to libamdhip64"
+        )
+    return candidate.resolve()
 
 
 def _resolve_shared_asan_runtime(clangxx: Path, rocm_dir: Path) -> Path:
@@ -130,7 +149,9 @@ def apply_asan_build_env(env: dict[str, str], rocm_dir: Path) -> None:
             )
 
     runtime_path = _resolve_shared_asan_runtime(clangxx, rocm_dir)
+    hsa_runtime = _resolve_hsa_runtime(rocm_dir)
     env["ASAN_RUNTIME_PATH"] = str(runtime_path)
+    env["HSA_RUNTIME_PATH"] = str(hsa_runtime)
     inherited_ld_library_path = env.get(
         "LD_LIBRARY_PATH", os.environ.get("LD_LIBRARY_PATH", "")
     )
@@ -180,4 +201,5 @@ def apply_asan_build_env(env: dict[str, str], rocm_dir: Path) -> None:
     append_env_text(env, "CMAKE_ARGS", "-DCMAKE_CXX_SCAN_FOR_MODULES=OFF")
     print(f"  ASAN compiler: {clangxx}")
     print(f"  ASAN runtime: {runtime_path}")
+    print(f"  HSA runtime: {hsa_runtime}")
     print(f"  PYTORCH_ROCM_ARCH: {env.get('PYTORCH_ROCM_ARCH', '')}")

@@ -4,6 +4,7 @@
 import argparse
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -14,7 +15,54 @@ from build_prod_wheels import (
     add_env_compiler_flags,
     validate_build_args,
 )
-from setup_pytorch_asan import append_env_text
+from setup_pytorch_asan import (
+    _resolve_hsa_runtime,
+    append_env_text,
+    import_sanity_env,
+)
+
+
+class ImportSanityEnvTest(unittest.TestCase):
+    def test_preloads_asan_runtime_then_hsa(self):
+        env = {
+            "ASAN_RUNTIME_PATH": "/opt/rocm/lib/llvm/libclang_rt.asan.so",
+            "HSA_RUNTIME_PATH": "/opt/rocm/lib/libhsa-runtime64.so.1",
+            "LD_LIBRARY_PATH": "/opt/rocm/lib",
+        }
+
+        sanity = import_sanity_env(env)
+
+        self.assertEqual(
+            sanity["LD_PRELOAD"],
+            os.pathsep.join(
+                (
+                    "/opt/rocm/lib/llvm/libclang_rt.asan.so",
+                    "/opt/rocm/lib/libhsa-runtime64.so.1",
+                )
+            ),
+        )
+        self.assertIn("detect_leaks=0", sanity["ASAN_OPTIONS"])
+        self.assertEqual(sanity["LD_LIBRARY_PATH"], "/opt/rocm/lib")
+
+    def test_missing_hsa_runtime_fails_the_check(self):
+        with self.assertRaises(RuntimeError):
+            import_sanity_env(
+                {"ASAN_RUNTIME_PATH": "/opt/rocm/lib/llvm/libclang_rt.asan.so"}
+            )
+
+    def test_hsa_runtime_resolves_under_rocm_lib(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rocm_dir = Path(tmp)
+            hsa = rocm_dir / "lib" / "libhsa-runtime64.so.1"
+            hsa.parent.mkdir()
+            hsa.write_bytes(b"")
+
+            self.assertEqual(_resolve_hsa_runtime(rocm_dir), hsa.resolve())
+
+            missing = rocm_dir / "empty"
+            missing.mkdir()
+            with self.assertRaises(RuntimeError):
+                _resolve_hsa_runtime(missing)
 
 
 class AsanFlagSpacingTest(unittest.TestCase):
