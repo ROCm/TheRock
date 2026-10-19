@@ -22,6 +22,8 @@ if(THEROCK_ENABLE_ROCJITSU)
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocjitsu"
     CMAKE_ARGS
       -DBUILD_TESTING=${THEROCK_BUILD_TESTING}
+    INSTALL_OPTIONAL_COMPONENTS
+      rocjitsu-python
     INSTALL_RPATH_DIRS
       lib
   )
@@ -32,6 +34,15 @@ if(THEROCK_ENABLE_ROCJITSU)
       tools
       tests
   )
+
+  # Python-only edits must refresh the install artifacts too. Globs also allow
+  # building rocm-systems revisions that predate the Python package.
+  file(GLOB_RECURSE _rocjitsu_python_sources CONFIGURE_DEPENDS
+    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/emulation/rocjitsu/python/rocjitsu/*.py"
+    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/emulation/rocjitsu/python/pyproject.toml"
+    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/emulation/rocjitsu/python/README.md"
+  )
+  target_sources(rocjitsu PRIVATE ${_rocjitsu_python_sources})
 
   therock_cmake_subproject_activate(rocjitsu)
 

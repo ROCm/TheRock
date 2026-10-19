@@ -179,6 +179,9 @@ python_indexes:
       apex:
         owner_path: pytorch/whl-next
         stream_group: all
+      cloudpickle:
+        owner_path: core/whl-next
+        stream_group: all
       filelock:
         owner_path: core/whl-next
         stream_group: all
