@@ -1,9 +1,9 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Unit tests for build_repo_package.py.
+"""Unit tests for build_repo_setup_package.py.
 
-build_repo_package.py lives in build_tools/packaging/linux/, which is not on the
+build_repo_setup_package.py lives in build_tools/packaging/linux/, which is not on the
 path that conftest.py sets up (it only adds build_tools/). Add it explicitly.
 Importing the module is side-effect-free thanks to its ``__main__`` guard.
 """
@@ -22,7 +22,7 @@ import pytest
 _LINUX_DIR = Path(__file__).resolve().parents[1] / "packaging" / "linux"
 sys.path.insert(0, str(_LINUX_DIR))
 
-import build_repo_package as brp  # noqa: E402
+import build_repo_setup_package as brp  # noqa: E402
 import compute_rocm_package_version as crpv  # noqa: E402
 
 STABLE_BASE = "https://stable.repo.amd.com/rocm/core/packages"
@@ -891,7 +891,7 @@ _CI_PAIRS = [
 
 @_needs_dpkg
 @pytest.mark.parametrize("a,b", _CI_PAIRS)
-def test_deb_repo_packages_sort_like_their_rocm_packages(a, b):
+def test_deb_repo_setup_packages_sort_like_their_rocm_packages(a, b):
     (stream_a, over_a), (stream_b, over_b) = a, b
     rocm = _deb_cmp(
         _ci_version(stream_a, "deb", **over_a), _ci_version(stream_b, "deb", **over_b)
@@ -902,7 +902,7 @@ def test_deb_repo_packages_sort_like_their_rocm_packages(a, b):
 
 @_needs_rpm
 @pytest.mark.parametrize("a,b", _CI_PAIRS)
-def test_rpm_repo_packages_sort_like_their_rocm_packages(a, b):
+def test_rpm_repo_setup_packages_sort_like_their_rocm_packages(a, b):
     (stream_a, over_a), (stream_b, over_b) = a, b
     rocm = _rpm_cmp(
         _ci_version(stream_a, "rpm", **over_a), _ci_version(stream_b, "rpm", **over_b)
@@ -1254,7 +1254,7 @@ def _spec(stream: str, base: str, sub: str = "") -> str:
         stream, args.rocm_version, args.version_suffix, ctx["dist_tag"]
     )
     return _render(
-        "template/repo/rpm/amdrocm-repo.spec.j2",
+        f"template/repo/rpm/{brp.PACKAGE_NAME}.spec.j2",
         {
             **ctx,
             "version": version,
@@ -1266,7 +1266,7 @@ def _spec(stream: str, base: str, sub: str = "") -> str:
 
 def test_spec_name_and_repo_install():
     out = _spec("stable", STABLE_BASE)
-    assert "Name: amdrocm-repo" in out
+    assert "Name: amd-repo-setup" in out
     assert "Version: 10.0.0" in out
     assert "/etc/yum.repos.d/amdrocm-stable.repo" in out
 
@@ -1375,7 +1375,7 @@ def test_control_has_no_key_runtime_deps():
     args = _args()
     ctx = brp.build_context(args, brp.OS_PROFILES["ubuntu2404"])
     out = _render("template/repo/deb/control.j2", ctx)
-    assert "Package: amdrocm-repo" in out
+    assert "Package: amd-repo-setup" in out
     assert "gnupg" not in out
     assert "wget" not in out
 
