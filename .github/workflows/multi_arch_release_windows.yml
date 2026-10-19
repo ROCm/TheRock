@@ -137,6 +137,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -232,7 +233,8 @@ jobs:
               "release_type": "${{ inputs.release_type }}",
               "run_uninstall": "true",
               "repository": "${{ inputs.repository }}",
-              "ref": "${{ inputs.ref }}" }
+              "ref": "${{ inputs.ref }}",
+              "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}" }
 
   # The PyTorch release workflow publishes its wheels to the release index, then
   # tests from that index. Wait for the corresponding ROCm release to be published
