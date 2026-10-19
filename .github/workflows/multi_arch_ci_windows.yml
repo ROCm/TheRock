@@ -191,7 +191,7 @@ jobs:
   build_native_msi_packages:
     needs: [build_multi_arch_stages]
     name: Build Native MSI Packages
-    if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') }}
+    if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && fromJSON(inputs.build_config).build_native_windows == true }}
     uses: ./.github/workflows/multi_arch_build_native_windows_packages.yml
     with:
       artifact_run_id: ${{ github.run_id }}
