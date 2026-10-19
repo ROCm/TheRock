@@ -28,14 +28,14 @@ BUCKET = "therock-prerelease-artifacts"
 
 # The key the upload is expected to write, spelled out here so a change to the
 # uploaded layout has to be made deliberately in two places.
-EXPECTED_RPM_KEY = "12345-linux/amd-repo-setup/rhel10/amdrocm-repo-stablerc.rpm"
+EXPECTED_RPM_KEY = "12345-linux/amd-repo-setup/rhel10/amd-repo-setup-stablerc.rpm"
 
 
 def _built_dir(tmp_path, pkg_type="rpm"):
     """Return a builder output directory holding one built package."""
-    dest = tmp_path / "repo-package-out"
+    dest = tmp_path / "repo-setup-package-out"
     dest.mkdir(exist_ok=True)
-    pkg = dest / f"amdrocm-repo-7.14.0-1.stablerc.el10.noarch.{pkg_type}"
+    pkg = dest / f"amd-repo-setup-7.14.0-1.stablerc.el10.noarch.{pkg_type}"
     if not pkg.exists():
         pkg.write_bytes(b"PKG-CONTENTS")
     return dest
@@ -150,7 +150,7 @@ def test_parse_args_accepts_a_numeric_run_id(tmp_path):
 @pytest.mark.parametrize(
     "bad",
     # The tier goes into the file name; a slash or ".." would turn it into a
-    # path. Empty is what get-repo-params emits for a line with no stream.
+    # path. Empty is what get-repo-setup-params emits for a line with no stream.
     ["../x", "a/b", "nightly\n", "night ly", "", ".", "Nightly", "stable-rc"],
 )
 def test_parse_args_rejects_bad_tier(tmp_path, bad):
@@ -175,9 +175,9 @@ def test_find_package_ignores_the_builders_work_tree(tmp_path):
     # The builder leaves its work tree under <dest-dir>/<format>/, and rpmbuild
     # writes its own copy of the package there. Only the top level counts.
     dest = _built_dir(tmp_path)
-    nested = dest / "rpm" / "amdrocm-repo" / "RPMS" / "noarch"
+    nested = dest / "rpm" / "amd-repo-setup" / "RPMS" / "noarch"
     nested.mkdir(parents=True)
-    (nested / "amdrocm-repo-7.14.0-1.stablerc.el10.noarch.rpm").write_bytes(b"X")
+    (nested / "amd-repo-setup-7.14.0-1.stablerc.el10.noarch.rpm").write_bytes(b"X")
 
     assert ursp.find_package(dest, "rpm").parent == dest
 
@@ -189,7 +189,7 @@ def test_find_package_rejects_an_empty_dir(tmp_path):
 
 def test_find_package_rejects_two_packages(tmp_path):
     dest = _built_dir(tmp_path)
-    (dest / "amdrocm-repo-7.14.0-2.stablerc.el10.noarch.rpm").write_bytes(b"X")
+    (dest / "amd-repo-setup-7.14.0-2.stablerc.el10.noarch.rpm").write_bytes(b"X")
     with pytest.raises(ValueError, match="found 2"):
         ursp.find_package(dest, "rpm")
 
@@ -253,7 +253,7 @@ def test_upload_key_per_profile_and_tier(
     key = ursp.upload(args)
 
     expected = (
-        f"{RUN_ID}-linux/amd-repo-setup/{os_profile}/amdrocm-repo-{tier}.{pkg_type}"
+        f"{RUN_ID}-linux/amd-repo-setup/{os_profile}/amd-repo-setup-{tier}.{pkg_type}"
     )
     assert key == expected
     assert (staging / expected).is_file()
