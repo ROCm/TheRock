@@ -221,7 +221,7 @@ jobs:
     needs: [prepare_install_context]
     strategy:
       fail-fast: false
-    runs-on: ${{ github.repository_owner == 'ROCm' && (inputs.test_runs_on || 'linux-gfx942-1gpu-ccs-csp-ossci-rocm') || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && (inputs.test_runs_on || 'linux-gfx942-1gpu-ccs-csp-ossci-rocm') || 'ubuntu-26.04' }}
     container:
       # get_url_repo_params.py manages image references for each OS profile.
       # zizmor cannot inspect the dynamically selected image.
