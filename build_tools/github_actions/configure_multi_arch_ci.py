@@ -1572,8 +1572,8 @@ def _resolve_sanitizer_variants(
 ) -> list[str]:
     """Resolve which sanitizer build variants to run based on trigger rules.
 
-    Checks SANITIZER_TRIGGER_RULES from amdgpu_family_matrix.py against the
-    current context to determine which sanitizer variants should be built.
+    Checks sanitizer_triggers in all_build_variants against the current
+    context to determine which sanitizer variants should be built.
 
     For TheRock submodule bumps: matches changed submodule paths against rules.
     For external repos: matches external repo name + original trigger against rules.
@@ -2096,7 +2096,7 @@ def expand_build_configs(
     # ASAN variant selection priority:
     # 1. ci:asan label -> asan (explicit full ASAN, highest priority)
     # 2. ci:host-asan label -> host-asan (explicit)
-    # 3. Sanitizer trigger rules -> variant from SANITIZER_TRIGGER_RULES
+    # 3. Sanitizer trigger rules -> variant from sanitizer_triggers in all_build_variants
     #    (source-specific: maps (repo/submodule, trigger) to the right variant)
     # 4. push/pull_request events -> host-asan (default for pre/postsubmit)
     # 5. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)

@@ -565,29 +565,47 @@ class TestDisabledFrameworkTests(unittest.TestCase):
 
 
 class TestSanitizerTriggerRules(unittest.TestCase):
-    """Tests for SANITIZER_TRIGGER_RULES and get_sanitizer_variant_for_trigger."""
+    """Tests for sanitizer_triggers in all_build_variants and get_sanitizer_variant_for_trigger."""
 
-    def test_rules_reference_valid_triggers(self):
-        """Every trigger key must be from VALID_TRIGGERS."""
-        for source, triggers in amdgpu_family_matrix.SANITIZER_TRIGGER_RULES.items():
-            for trigger in triggers:
+    def test_sanitizer_triggers_use_valid_triggers(self):
+        """Every trigger key in sanitizer_triggers must be from VALID_TRIGGERS."""
+        for variant_name, config in amdgpu_family_matrix.all_build_variants.get(
+            "linux", {}
+        ).items():
+            for trigger in config.get("sanitizer_triggers", {}):
                 self.assertIn(
                     trigger,
                     VALID_TRIGGERS,
-                    f"Rule for {source} uses invalid trigger {trigger!r}",
+                    f"Variant {variant_name} uses invalid trigger {trigger!r}",
                 )
 
-    def test_rules_reference_valid_build_variants(self):
-        """Every variant must be defined in all_build_variants."""
-        linux_variants = set(amdgpu_family_matrix.all_build_variants.get("linux", {}))
-        for source, triggers in amdgpu_family_matrix.SANITIZER_TRIGGER_RULES.items():
-            for trigger, variant in triggers.items():
-                self.assertIn(
-                    variant,
-                    linux_variants,
-                    f"Rule for {source}/{trigger} references "
-                    f"unknown variant {variant!r}",
-                )
+    def test_sanitizer_triggers_sources_are_strings(self):
+        """Every source in sanitizer_triggers must be a non-empty string."""
+        for variant_name, config in amdgpu_family_matrix.all_build_variants.get(
+            "linux", {}
+        ).items():
+            for trigger, sources in config.get("sanitizer_triggers", {}).items():
+                self.assertIsInstance(sources, list, f"{variant_name}/{trigger}")
+                for source in sources:
+                    self.assertIsInstance(source, str, f"{variant_name}/{trigger}")
+                    self.assertTrue(source, f"{variant_name}/{trigger} has empty source")
+
+    def test_no_duplicate_source_trigger_across_variants(self):
+        """A (source, trigger) pair must map to at most one variant."""
+        seen: dict[tuple[str, str], str] = {}
+        for variant_name, config in amdgpu_family_matrix.all_build_variants.get(
+            "linux", {}
+        ).items():
+            for trigger, sources in config.get("sanitizer_triggers", {}).items():
+                for source in sources:
+                    key = (source, trigger)
+                    self.assertNotIn(
+                        key,
+                        seen,
+                        f"({source}, {trigger}) maps to both "
+                        f"{seen.get(key)!r} and {variant_name!r}",
+                    )
+                    seen[key] = variant_name
 
     def test_lookup_known_rules(self):
         """Verify expected (source, trigger) -> variant mappings."""

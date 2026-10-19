@@ -35,52 +35,6 @@ from pathlib import Path
 # when manually triggered, so it's not included in the explicit trigger lists.
 VALID_TRIGGERS = frozenset(["presubmit", "postsubmit", "submodule_bump", "nightly"])
 
-# ---------------------------------------------------------------------------
-# Sanitizer trigger rules: maps (source, trigger) → build_variant.
-#
-# Keyed by source name (submodule basename or external repo short name).
-# Each source maps triggers to the sanitizer build variant to use.
-#
-# Sources:
-#   - Submodule basenames (e.g., "amd-llvm" from "compiler/amd-llvm")
-#   - External repo short names (e.g., "rocm-libraries", "rockrel")
-#
-# The build_variant values must be keys in all_build_variants["linux"].
-#
-# Issue: https://github.com/ROCm/TheRock/issues/9366
-# ---------------------------------------------------------------------------
-SANITIZER_TRIGGER_RULES: dict[str, dict[str, str]] = {
-    "rocm-systems": {
-        "submodule_bump": "host-asan",
-    },
-    "rocm-libraries": {
-        "submodule_bump": "host-asan",
-        "nightly": "asan",
-    },
-    "rockrel": {
-        "nightly": "asan",
-    },
-    "amd-llvm": {
-        "submodule_bump": "asan-debug",
-    },
-}
-
-
-def get_sanitizer_variant_for_trigger(
-    source: str, trigger: str
-) -> str | None:
-    """Look up the sanitizer build variant for a (source, trigger) pair.
-
-    Args:
-        source: Submodule basename or external repo short name.
-        trigger: One of VALID_TRIGGERS.
-
-    Returns:
-        Build variant string (e.g., "host-asan") if a rule matches,
-        or None if no sanitizer rule applies.
-    """
-    return SANITIZER_TRIGGER_RULES.get(source, {}).get(trigger)
-
 
 def _log(*args, **kwargs):
     print(*args, **kwargs)
@@ -228,10 +182,16 @@ all_build_variants = {
             "build_variant_cmake_preset": "",
         },
         # full ASAN builds are run on nightly
+        # sanitizer_triggers: which (trigger -> sources) activate this variant
+        #   Sources are submodule basenames or external repo short names.
+        #   Issue: https://github.com/ROCm/TheRock/issues/9366
         "asan": {
             "build_variant_label": "asan",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
+            "sanitizer_triggers": {
+                "nightly": ["rocm-libraries", "rockrel"],
+            },
         },
         # host ASAN builds are run on nightly, with intent to run on presubmit and postsubmit
         # host ASAN detects memory errors on host code (excluding kernel binaries), while ASAN sanitizes everything
@@ -239,6 +199,9 @@ all_build_variants = {
             "build_variant_label": "host-asan",
             "build_variant_suffix": "host-asan",
             "build_variant_cmake_preset": "linux-release-host-asan",
+            "sanitizer_triggers": {
+                "submodule_bump": ["rocm-systems", "rocm-libraries"],
+            },
         },
         # Debug variants: same as asan/host-asan but with RelWithDebInfo + -g1 -gdwarf-4.
         # Used for nightly and release ASAN builds where stack traces need source line info.
@@ -246,6 +209,9 @@ all_build_variants = {
             "build_variant_label": "asan-debug",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan-debug",
+            "sanitizer_triggers": {
+                "submodule_bump": ["amd-llvm"],
+            },
         },
         "host-asan-debug": {
             "build_variant_label": "host-asan-debug",
@@ -266,6 +232,31 @@ all_build_variants = {
         },
     },
 }
+
+
+def get_sanitizer_variant_for_trigger(
+    source: str, trigger: str
+) -> str | None:
+    """Look up the sanitizer build variant for a (source, trigger) pair.
+
+    Scans sanitizer_triggers in all_build_variants["linux"] to find which
+    variant is activated by the given source and trigger.
+
+    Args:
+        source: Submodule basename or external repo short name.
+        trigger: One of VALID_TRIGGERS.
+
+    Returns:
+        Build variant string (e.g., "host-asan") if a rule matches,
+        or None if no sanitizer rule applies.
+    """
+    for variant_name, variant_config in all_build_variants.get("linux", {}).items():
+        triggers = variant_config.get("sanitizer_triggers", {})
+        sources = triggers.get(trigger, [])
+        if source in sources:
+            return variant_name
+    return None
+
 
 """
 amdgpu_family_info_matrix dictionary fields:
