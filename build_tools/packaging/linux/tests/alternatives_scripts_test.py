@@ -11,19 +11,12 @@ import json
 import unittest
 from pathlib import Path
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
-SCRIPTS_DIR = (
-    REPO_ROOT
-    / "build_tools"
-    / "packaging"
-    / "linux"
-    / "template"
-    / "scripts"
-)
+SCRIPTS_DIR = REPO_ROOT / "build_tools" / "packaging" / "linux" / "template" / "scripts"
 
 ALTERNATIVES_JSON = SCRIPTS_DIR / "amdrocm-alternatives.json"
 
@@ -117,13 +110,16 @@ class AlternativesScriptsTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.alternatives = json.loads(
-            ALTERNATIVES_JSON.read_text(encoding="utf-8")
-        )
+        cls.alternatives = json.loads(ALTERNATIVES_JSON.read_text(encoding="utf-8"))
 
         cls.environment = Environment(
             loader=FileSystemLoader(str(REPO_ROOT)),
             keep_trailing_newline=True,
+            autoescape=select_autoescape(
+                enabled_extensions=("html", "xml"),
+                default_for_string=False,
+                default=False,
+            ),
         )
 
     def render_script(self, package_name: str, script_name: str) -> str:
@@ -150,7 +146,9 @@ class AlternativesScriptsTest(unittest.TestCase):
         return template.render(context)
 
     def test_alternatives_json_exists_and_is_valid(self) -> None:
-        self.assertTrue(ALTERNATIVES_JSON.is_file(), f"Missing JSON file: {ALTERNATIVES_JSON}")
+        self.assertTrue(
+            ALTERNATIVES_JSON.is_file(), f"Missing JSON file: {ALTERNATIVES_JSON}"
+        )
         self.assertIsInstance(self.alternatives, dict)
         self.assertTrue(self.alternatives)
 
@@ -169,9 +167,17 @@ class AlternativesScriptsTest(unittest.TestCase):
                 self.assertIsInstance(package_config["binaries"], list)
                 self.assertTrue(package_config["scripts"])
                 self.assertTrue(package_config["binaries"])
-                self.assertTrue(set(package_config["scripts"]).issubset(SUPPORTED_SCRIPTS))
-                self.assertTrue(all(isinstance(script, str) for script in package_config["scripts"]))
-                self.assertTrue(all(isinstance(binary, str) for binary in package_config["binaries"]))
+                self.assertTrue(
+                    set(package_config["scripts"]).issubset(SUPPORTED_SCRIPTS)
+                )
+                self.assertTrue(
+                    all(isinstance(script, str) for script in package_config["scripts"])
+                )
+                self.assertTrue(
+                    all(
+                        isinstance(binary, str) for binary in package_config["binaries"]
+                    )
+                )
 
     def test_symlink_flags_use_true_strings(self) -> None:
         for package_name, package_config in self.alternatives.items():
@@ -191,7 +197,11 @@ class AlternativesScriptsTest(unittest.TestCase):
 
                 for binary in actual_binaries:
                     with self.subTest(binary=binary):
-                        self.assertNotIn(binary, configured_binaries, f"{binary!r} is owned by both {configured_binaries.get(binary)!r} and {package_name!r}")
+                        self.assertNotIn(
+                            binary,
+                            configured_binaries,
+                            f"{binary!r} is owned by both {configured_binaries.get(binary)!r} and {package_name!r}",
+                        )
                         configured_binaries[binary] = package_name
 
     def test_expected_symlink_ownership(self) -> None:
@@ -201,14 +211,20 @@ class AlternativesScriptsTest(unittest.TestCase):
         for package_name, package_config in self.alternatives.items():
             with self.subTest(package=package_name):
                 if package_name != "amdrocm-base":
-                    self.assertNotEqual(package_config.get("core_symlinks", "False"), "True")
+                    self.assertNotEqual(
+                        package_config.get("core_symlinks", "False"), "True"
+                    )
                 if package_name != "amdrocm-llvm":
-                    self.assertNotEqual(package_config.get("llvm_symlinks", "False"), "True")
+                    self.assertNotEqual(
+                        package_config.get("llvm_symlinks", "False"), "True"
+                    )
 
     def test_shared_templates_exist(self) -> None:
         for script_name in SUPPORTED_SCRIPTS:
             template_path = SCRIPTS_DIR / f"amdrocm-{script_name}.j2"
-            self.assertTrue(template_path.is_file(), f"Missing template: {template_path}")
+            self.assertTrue(
+                template_path.is_file(), f"Missing template: {template_path}"
+            )
 
     def test_configured_scripts_render(self) -> None:
         for package_name, package_config in self.alternatives.items():
