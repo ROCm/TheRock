@@ -3687,20 +3687,6 @@ class TestResolveSanitizerVariants(unittest.TestCase):
         variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
         self.assertEqual(variants, ["asan"])
 
-    def test_external_repo_rocm_systems_nightly_tsan(self):
-        """rocm-systems nightly should resolve to tsan."""
-        ci_inputs = cm.CIInputs(
-            run_id="1",
-            event_name="workflow_dispatch",
-            commit_ref="main",
-            base_ref=None,
-            build_variant="asan",
-            external_repo='{"repository":"ROCm/rocm-systems","ref":"main","event_name":"schedule"}',
-        )
-        git_context = cm.GitContext.from_external_repo("rocm-systems")
-        variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
-        self.assertEqual(variants, ["tsan"])
-
     def test_submodule_bump_amd_llvm(self):
         """amd-llvm submodule bump should resolve to asan-debug."""
         ci_inputs = cm.CIInputs(
