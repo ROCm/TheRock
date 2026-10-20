@@ -2052,9 +2052,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
         and the expected output (cmake preset, or None if build should be skipped).
 
         Sanitizer trigger rules from all_build_variants:
-          asan:       nightly + [rocm-libraries, rockrel]
+          asan:       nightly + [rocm-libraries]
           host-asan:  submodule_bump + [rocm-systems, rocm-libraries]
-          asan-debug: submodule_bump + [amd-llvm]
+          asan-debug: submodule_bump + [amd-llvm], nightly + [rockrel]
         """
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
@@ -2151,14 +2151,14 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 "linux-release-asan",
             ),
             (
-                "rockrel external nightly -> asan",
+                "rockrel external nightly -> asan-debug",
                 dict(
                     event_name="schedule",
                     build_variant="asan",
                     external_repo='{"repository":"ROCm/rockrel","ref":"main"}',
                 ),
                 cm.GitContext.from_external_repo("rockrel"),
-                "linux-release-asan",
+                "linux-release-asan-debug",
             ),
             # -- Presubmit from rocm-systems/rocm-libraries: host-asan NOT triggered --
             # host-asan only triggers on submodule_bump, not presubmit.
@@ -3538,7 +3538,7 @@ class TestResolveSanitizerVariant(unittest.TestCase):
         self.assertEqual(cm._resolve_sanitizer_variant(ci_inputs, git_context), "asan")
 
     def test_external_repo_rockrel_nightly(self):
-        """rockrel nightly should resolve to asan."""
+        """rockrel nightly should resolve to asan-debug."""
         ci_inputs = cm.CIInputs(
             run_id="1",
             event_name="schedule",
@@ -3548,7 +3548,9 @@ class TestResolveSanitizerVariant(unittest.TestCase):
             external_repo='{"repository":"ROCm/rockrel","ref":"main"}',
         )
         git_context = cm.GitContext.from_external_repo("rockrel")
-        self.assertEqual(cm._resolve_sanitizer_variant(ci_inputs, git_context), "asan")
+        self.assertEqual(
+            cm._resolve_sanitizer_variant(ci_inputs, git_context), "asan-debug"
+        )
 
     def test_submodule_bump_amd_llvm(self):
         """amd-llvm submodule bump should resolve to asan-debug."""

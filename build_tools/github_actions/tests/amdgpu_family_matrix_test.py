@@ -617,7 +617,7 @@ class TestSanitizerTriggerRules(unittest.TestCase):
             ("rocm-systems", "submodule_bump", "host-asan"),
             ("rocm-libraries", "submodule_bump", "host-asan"),
             ("rocm-libraries", "nightly", "asan"),
-            ("rockrel", "nightly", "asan"),
+            ("rockrel", "nightly", "asan-debug"),
             ("amd-llvm", "submodule_bump", "asan-debug"),
         ]
         for source, trigger, expected in test_cases:
