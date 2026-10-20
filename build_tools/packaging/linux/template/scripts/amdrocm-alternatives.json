@@ -53,7 +53,8 @@
       "prerm"
     ],
     "binaries": [
-      "rocgdb"
+      "rocgdb",
+      "roccoremerge"
     ]
   },
   "amdrocm-profiler-base": {
@@ -91,6 +92,15 @@
     ],
     "binaries": [
       "amd-smi"
+    ]
+  },
+  "amdrocm-opencl": {
+    "scripts": [
+      "postinst",
+      "prerm"
+    ],
+    "binaries": [
+      "clinfo"
     ]
   }
 }
