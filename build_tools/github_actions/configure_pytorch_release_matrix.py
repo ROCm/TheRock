@@ -41,10 +41,12 @@ RELEASE_STABLE_PYTORCH_REFS = {
     "linux": [
         "release/2.13",
         "release/2.14",
+        "release/2.15",
     ],
     "windows": [
         "release/2.13",
         "release/2.14",
+        "release/2.15",
     ],
 }
 
@@ -65,11 +67,13 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
     "linux": {
         "release/2.13": {"gfx90c"},
         "release/2.14": {"gfx90c"},
+        "release/2.15": {"gfx90c"},
         "nightly": {},
     },
     "windows": {
         "release/2.13": {"gfx90c"},
         "release/2.14": {"gfx90c"},
+        "release/2.15": {"gfx90c"},
     },
 }
 
@@ -90,6 +94,7 @@ PYTORCH_TEST_LEVELS = ["none", "standard"]
 PYTORCH_PRIMARY_TEST_PYTHON_VERSIONS = {
     "release/2.13": "3.11",
     "release/2.14": "3.11",
+    "release/2.15": "3.11",
     "nightly": "3.11",
 }
 
