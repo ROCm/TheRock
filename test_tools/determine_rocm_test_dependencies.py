@@ -41,6 +41,7 @@ $ python test_tools/determine_rocm_test_dependencies.py --changed-projects rocSP
 
 import argparse
 import json
+import os
 import sys
 import tomllib
 from collections import deque
@@ -49,7 +50,7 @@ from pathlib import Path
 sys.path.insert(
     0, str(Path(__file__).resolve().parents[1] / "build_tools" / "github_actions")
 )
-from github_actions_api import gha_set_output
+from github_actions_api import gha_load_github_event, gha_set_output
 
 # Level -> BFS walk depth over `consumers` edges:
 #   depth 0    = self only
@@ -560,6 +561,22 @@ def _to_ci_test_selectors(projects: set[str]) -> set[str]:
     return result
 
 
+def _get_pr_labels() -> list[str]:
+    """Read PR labels from the GitHub Actions event payload.
+
+    Returns an empty list when not running under GitHub Actions or when
+    the event is not a pull_request.
+    """
+    if "GITHUB_EVENT_PATH" not in os.environ:
+        return []
+    try:
+        event = gha_load_github_event()
+    except (FileNotFoundError, ValueError, RuntimeError, KeyError):
+        return []
+    pr_obj = event.get("pull_request", {})
+    return [label["name"] for label in pr_obj.get("labels", [])]
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Compute subproject test dependencies from the consumer graph"
@@ -668,7 +685,18 @@ def main():
             print("*")
         return
 
-    result = get_subprojects_to_test(changed, therock_dir, level=args.level)
+    # ci:no-downstream-test PR label overrides walk level to 5 (self only),
+    # so only the changed projects are tested without walking their downstream
+    # consumers.  An explicit --level CLI arg takes precedence.
+    level = args.level
+    if level is None and "ci:no-downstream-test" in _get_pr_labels():
+        level = 5
+        print(
+            "ci:no-downstream-test label detected, using level 5 (self only)",
+            file=sys.stderr,
+        )
+
+    result = get_subprojects_to_test(changed, therock_dir, level=level)
     ci_test_selectors = _to_ci_test_selectors(result)
     projects_to_test = ",".join(sorted(ci_test_selectors))
 

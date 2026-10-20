@@ -2131,41 +2131,12 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     )
     builds.log()
 
-    linux_test_labels = list(ci_inputs.linux_test_labels)
-    windows_test_labels = list(ci_inputs.windows_test_labels)
-
-    # ci:no-downstream-test: restrict tests to only the changed projects,
-    # skipping downstream consumer tests.  When changed_projects is set
-    # (external-repo flow), we inject explicit test: labels for each changed
-    # project.  fetch_test_configurations.py intersects test_labels with
-    # PROJECTS_TO_TEST, so only the directly changed components run — even
-    # though determine_rocm_test_dependencies.py still expands the consumer
-    # graph for PROJECTS_TO_TEST.
-    if (
-        "ci:no-downstream-test" in ci_inputs.pr_labels
-        and ci_inputs.changed_projects
-    ):
-        project_labels = [
-            f"test:{proj.removeprefix('projects/').lower()}"
-            for proj in ci_inputs.changed_projects
-        ]
-        # Merge with any existing test: labels (don't overwrite user selections)
-        existing = set(linux_test_labels)
-        for lbl in project_labels:
-            if lbl not in existing:
-                linux_test_labels.append(lbl)
-                windows_test_labels.append(lbl)
-        print(
-            f"  ci:no-downstream-test: injected test labels "
-            f"for changed projects: {project_labels}"
-        )
-
     return CIOutputs(
         is_ci_enabled=True,
         builds=builds,
         jobs=jobs,
-        linux_test_labels=linux_test_labels,
-        windows_test_labels=windows_test_labels,
+        linux_test_labels=ci_inputs.linux_test_labels,
+        windows_test_labels=ci_inputs.windows_test_labels,
     )
 
 
