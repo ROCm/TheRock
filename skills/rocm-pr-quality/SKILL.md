@@ -165,9 +165,10 @@ related PRs) is a SHOULD.
 
 A PR description is often the only explanation a reviewer reads. Apply
 [`prose-style-context.md`](prose-style-context.md) to every PR description, review comment,
-handoff, and design note this skill drafts. It sets the reader model (a technically literate
-engineer who has not worked in the repository), the order of priorities (correctness, clarity,
-necessary context, concision, elegance), a sentence-level gate, a list of warning words that
+handoff, and design note this skill drafts. It sets the voice (a mass-market magazine covering a
+technical subject), the reader (a smart engineer new to the component), the order of priorities
+(correctness, clarity including brevity, necessary context, elegance), a sentence-level gate
+with a cut check, a length that scales with the size of the change, a list of warning words that
 tend to stand in for a concrete fact, and evidence-and-scope rules for test and risk claims.
 
 This is a SHOULD, not part of M1 to M5: it governs how findings and descriptions are written,
@@ -177,7 +178,8 @@ machine gate still decide which headings and tracker line the description must c
 them as written.
 
 **Recommend a rewrite, not just a critique.** When this skill authors a description, run the
-draft through the sentence-level gate and final acceptance test before presenting it. When it
+draft through the sentence-level gate, the cut pass, and the final acceptance test before
+presenting it. When it
 reviews a description that fails the gate (an undefined term, a warning word with no fact
 behind it, a claim with no evidence or scope, repetition that hides the change), name the
 failed gate items and offer a specific rewrite the author can paste in. The rewrite is
@@ -223,8 +225,8 @@ not render empty `N/A` fields in the body.
    a follow-up tracker, or a documented waiver. "Disable/skip/weaken tests to green CI" is never
    valid.
 1. Draft a complete PR description from the template in `reference.md`, then run it through the
-   sentence-level gate and final acceptance test in `prose-style-context.md` and present the
-   revised text. New PRs are **draft by default**; open ready-for-review only when the user
+   sentence-level gate, cut pass, and final acceptance test in `prose-style-context.md` and
+   present the revised text. New PRs are **draft by default**; open ready-for-review only when the user
    explicitly asks.
 1. Prompt for the things authors skip: work tracking, flags for default-path/experimental
    behavior, and adjacent tests ("what else exercises this code path that you should run?").
