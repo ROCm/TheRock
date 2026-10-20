@@ -177,7 +177,7 @@ jobs:
   configure_test_matrix:
     name: "Configure test matrix (${{ inputs.amdgpu_families }}${{ contains(inputs.test_runs_on, 'wsl') && ', WSL' || '' }})"
     if: ${{ inputs.tests_enabled }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       sanity_component: ${{ steps.configure.outputs.sanity_component }}
       components: ${{ steps.configure.outputs.components }}
@@ -327,7 +327,7 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [configure_test_matrix, test_sanity_check, test_components]
     name: "Quartz - completed - test ROCm artifacts"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:
