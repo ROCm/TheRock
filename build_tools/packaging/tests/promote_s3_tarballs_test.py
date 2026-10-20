@@ -116,12 +116,18 @@ class RunTest(unittest.TestCase):
             (ASAN_PREFIX + "therock-dist-linux-gfx950-7.13.0rc1.tar.gz", 99),
         ]
 
-    def test_variant_sets_prefix(self):
-        args = _args(**{"tarball-variant": "asan"})
-        self.assertEqual(args.source_prefix, ASAN_PREFIX)
-        self.assertEqual(args.dest_prefix, ASAN_PREFIX)
+    def test_default_lists_release_and_asan(self):
+        args = _args()
+        self.assertEqual(
+            args.source_prefixes,
+            [
+                "v5/rocm/core/tarball/",
+                "v5/rocm/core/tarball-asan/",
+            ],
+        )
+        self.assertIsNone(args.dest_prefix)
 
-    def test_dry_run_does_not_copy(self):
+    def test_dry_run_copies_both_prefixes(self):
         client = FakeClient(self._objects())
         copied = []
         output = io.StringIO()
@@ -135,7 +141,8 @@ class RunTest(unittest.TestCase):
         self.assertEqual(copied, [])
         self.assertIn("[DRY-RUN] Would copy:", output.getvalue())
         self.assertIn("therock-dist-linux-gfx950-7.13.0.tar.gz", output.getvalue())
-        self.assertNotIn("tarball-asan", output.getvalue())
+        self.assertIn("tarball-asan/", output.getvalue())
+        self.assertIn("tarball/", output.getvalue())
 
     def test_execute_copies_renamed_key(self):
         client = FakeClient(self._objects())
@@ -153,13 +160,20 @@ class RunTest(unittest.TestCase):
                 (
                     RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0rc1.tar.gz",
                     RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz",
-                )
+                ),
+                (
+                    ASAN_PREFIX + "therock-dist-linux-gfx950-7.13.0rc1.tar.gz",
+                    ASAN_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz",
+                ),
             ],
         )
 
     def test_existing_destination_is_skipped(self):
-        dest = RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz"
-        client = FakeClient(self._objects(), existing={dest})
+        existing = {
+            RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz",
+            ASAN_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz",
+        }
+        client = FakeClient(self._objects(), existing=existing)
         copied = []
         output = io.StringIO()
         with redirect_stdout(output):
@@ -173,8 +187,11 @@ class RunTest(unittest.TestCase):
         self.assertIn("[SKIP] Already exists:", output.getvalue())
 
     def test_allow_overwrite_copies_existing_destination(self):
-        dest = RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz"
-        client = FakeClient(self._objects(), existing={dest})
+        existing = {
+            RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz",
+            ASAN_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz",
+        }
+        client = FakeClient(self._objects(), existing=existing)
         copied = []
         with redirect_stdout(io.StringIO()):
             code = promote_s3_tarballs(
@@ -183,7 +200,13 @@ class RunTest(unittest.TestCase):
                 copy_fn=lambda src, dst: copied.append(dst),
             )
         self.assertEqual(code, 0)
-        self.assertEqual(copied, [dest])
+        self.assertEqual(
+            copied,
+            [
+                RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz",
+                ASAN_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz",
+            ],
+        )
 
     def test_missing_version_fails(self):
         client = FakeClient(self._objects())

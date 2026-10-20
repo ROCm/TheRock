@@ -86,8 +86,7 @@ TYPICAL USAGE:
   python ./build_tools/packaging/promote_packages.py \
     --version=7.13.0rc1 \
     --source-bucket=therock-repo-amd-rc-core \
-    --dest-bucket=therock-repo-amd-stable-staging-core \
-    --tarball-variant=release
+    --dest-bucket=therock-repo-amd-stable-staging-core
 
 TESTING:
   # Point the on-demand test at a directory of already-downloaded RC packages:
@@ -118,10 +117,7 @@ _BUILD_TOOLS_DIR = pathlib.Path(__file__).resolve().parent.parent
 if str(_BUILD_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
-from _therock_utils.python_package_paths import (
-    CORE_TARBALL_PREFIXES,
-    core_tarball_prefix,
-)
+from _therock_utils.python_package_paths import CORE_TARBALL_PREFIXES
 
 # Need dynamic load as change_wheel_version needs to be imported via parent directory
 this_file = pathlib.Path(__file__).resolve()
@@ -271,20 +267,17 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
         help="Bucket that receives the renamed therock-dist tarballs",
     )
     parser.add_argument(
-        "--tarball-variant",
-        default="release",
-        choices=sorted(CORE_TARBALL_PREFIXES),
-        help="release -> v5/rocm/core/tarball/, asan -> v5/rocm/core/tarball-asan/",
-    )
-    parser.add_argument(
         "--source-prefix",
         default=None,
-        help="Source key prefix. Defaults to the prefix for --tarball-variant.",
+        help=(
+            "Source key prefix. Defaults to both v5/rocm/core/tarball/ and "
+            "v5/rocm/core/tarball-asan/."
+        ),
     )
     parser.add_argument(
         "--dest-prefix",
         default=None,
-        help="Destination key prefix. Defaults to the source prefix.",
+        help="Destination key prefix. Requires --source-prefix. Defaults to that prefix.",
     )
     parser.add_argument(
         "--execute",
@@ -366,12 +359,21 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
             )
         if args.delete_old_on_success:
             parser.error("An S3 tarball copy does not use --delete-old-on-success")
-        source_prefix = args.source_prefix or core_tarball_prefix(args.tarball_variant)
-        if not source_prefix.endswith("/"):
-            source_prefix += "/"
-        args.source_prefix = source_prefix
-        dest_prefix = args.dest_prefix or source_prefix
-        args.dest_prefix = dest_prefix if dest_prefix.endswith("/") else dest_prefix + "/"
+        if args.dest_prefix and not args.source_prefix:
+            parser.error("--dest-prefix requires --source-prefix")
+        if args.source_prefix:
+            source_prefix = args.source_prefix
+            if not source_prefix.endswith("/"):
+                source_prefix += "/"
+            args.source_prefixes = [source_prefix]
+            dest_prefix = args.dest_prefix or source_prefix
+            args.dest_prefix = (
+                dest_prefix if dest_prefix.endswith("/") else dest_prefix + "/"
+            )
+        else:
+            # Release and ASAN are separate prefixes. The filename does not say which.
+            args.source_prefixes = list(CORE_TARBALL_PREFIXES.values())
+            args.dest_prefix = None
     elif args.input_dir is None:
         parser.error(
             "--input-dir is required unless --source-bucket and --dest-bucket are set"
@@ -1574,20 +1576,27 @@ def promote_s3_tarballs(args: argparse.Namespace, client=None, copy_fn=None) -> 
     if not args.execute:
         print("DRY-RUN MODE: No copies will be performed")
     print(f"Version: {args.version}")
-    print(f"Variant: {args.tarball_variant}")
-    print(f"Source: s3://{args.source_bucket}/{args.source_prefix}")
-    print(f"Destination: s3://{args.dest_bucket}/{args.dest_prefix}")
+    print(f"Source bucket: {args.source_bucket}")
+    print(f"Destination bucket: {args.dest_bucket}")
+    for prefix in args.source_prefixes:
+        print(f"Prefix: {prefix}")
     if client is None:
         client = boto3.client("s3")
-    objects = list_object_sizes(client, args.source_bucket, args.source_prefix)
-    planned, unchanged = select_tarball_copies(
-        objects,
-        args.source_prefix,
-        args.dest_prefix,
-        args.version,
-        args.src_version_type,
-        args.dest_version,
-    )
+    planned: list[tuple[str, str, int]] = []
+    unchanged: list[str] = []
+    for source_prefix in args.source_prefixes:
+        dest_prefix = args.dest_prefix or source_prefix
+        objects = list_object_sizes(client, args.source_bucket, source_prefix)
+        batch, batch_unchanged = select_tarball_copies(
+            objects,
+            source_prefix,
+            dest_prefix,
+            args.version,
+            args.src_version_type,
+            args.dest_version,
+        )
+        planned.extend(batch)
+        unchanged.extend(batch_unchanged)
     for name in unchanged:
         print(f"    [SKIP] Version unchanged: {name}")
     if not planned:

@@ -179,22 +179,15 @@ python build_tools/packaging/promote_packages.py --input-dir=./promotion/downloa
 
 `therock-dist-*.tar.gz` files are renamed and their contents are not modified.
 For the structured layout, copy them to the promoted key instead of downloading
-them. The command is dry-run until `--execute`. An existing destination key is
-skipped unless `--allow-overwrite` is set. Run it once for `release` and once
-for `asan`.
+them. The command lists both `tarball/` and `tarball-asan/` and keeps each
+object in its own prefix. It is dry-run until `--execute`. An existing
+destination key is skipped unless `--allow-overwrite` is set.
 
 ```bash
 python build_tools/packaging/promote_packages.py \
   --version=7.13.0rc1 \
   --source-bucket=therock-repo-amd-rc-core \
   --dest-bucket=therock-repo-amd-stable-staging-core \
-  --tarball-variant=release
-
-python build_tools/packaging/promote_packages.py \
-  --version=7.13.0rc1 \
-  --source-bucket=therock-repo-amd-rc-core \
-  --dest-bucket=therock-repo-amd-stable-staging-core \
-  --tarball-variant=asan \
   --execute
 ```
 
