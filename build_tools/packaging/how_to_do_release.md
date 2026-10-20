@@ -184,13 +184,13 @@ skipped unless `--allow-overwrite` is set. Run it once for `release` and once
 for `asan`.
 
 ```bash
-python build_tools/packaging/copy_promoted_tarballs.py \
+python build_tools/packaging/promote_packages.py \
   --version=7.13.0rc1 \
   --source-bucket=therock-repo-amd-rc-core \
   --dest-bucket=therock-repo-amd-stable-staging-core \
   --tarball-variant=release
 
-python build_tools/packaging/copy_promoted_tarballs.py \
+python build_tools/packaging/promote_packages.py \
   --version=7.13.0rc1 \
   --source-bucket=therock-repo-amd-rc-core \
   --dest-bucket=therock-repo-amd-stable-staging-core \
@@ -366,7 +366,7 @@ then listed as `[DRY-RUN] Would overwrite: ...` in the dry run.
 
 After promoting the flat local `wheels/` directory, upload back to the
 product-owned repo.amd.com buckets. Release and ASAN `therock-dist-*.tar.gz`
-files can be copied with `copy_promoted_tarballs.py` instead of downloading
+files can be copied with `promote_packages.py` instead of downloading
 and uploading them.
 
 ```bash

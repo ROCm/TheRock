@@ -2,7 +2,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Unit tests for copy_promoted_tarballs.py."""
+"""Unit tests for the S3 therock-dist rename in promote_packages.py."""
 
 import io
 import os
@@ -15,11 +15,11 @@ from botocore.exceptions import ClientError
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from copy_promoted_tarballs import (  # noqa: E402
+from promote_packages import (  # noqa: E402
     parse_arguments,
+    promote_s3_tarballs,
     promoted_tarball_name,
-    run,
-    select_copies,
+    select_tarball_copies,
 )
 
 RELEASE_PREFIX = "v5/rocm/core/tarball/"
@@ -30,7 +30,6 @@ class FakeClient:
     def __init__(self, objects, existing=None):
         self.objects = list(objects)
         self.existing = set(existing or [])
-        self.heads = []
 
     def get_paginator(self, name):
         if name != "list_objects_v2":
@@ -47,7 +46,6 @@ class FakeClient:
         return [{"Contents": contents}]
 
     def head_object(self, Bucket, Key):
-        self.heads.append((Bucket, Key))
         if Key not in self.existing:
             raise ClientError(
                 {"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject"
@@ -56,17 +54,18 @@ class FakeClient:
 
 
 def _args(**overrides):
-    argv = [
-        "--version=7.13.0rc1",
-        "--source-bucket=src-bucket",
-        "--dest-bucket=dst-bucket",
-    ]
-    for key, value in overrides.items():
-        flag = "--" + key.replace("_", "-")
+    values = {
+        "version": "7.13.0rc1",
+        "source-bucket": "src-bucket",
+        "dest-bucket": "dst-bucket",
+    }
+    values.update(overrides)
+    argv = []
+    for key, value in values.items():
         if value is True:
-            argv.append(flag)
+            argv.append(f"--{key}")
         elif value is not False:
-            argv.append(f"{flag}={value}")
+            argv.append(f"--{key}={value}")
     return parse_arguments(argv)
 
 
@@ -94,17 +93,20 @@ class SelectCopiesTest(unittest.TestCase):
             (ASAN_PREFIX + "therock-dist-linux-gfx950-7.13.0rc1.tar.gz", 20),
             (RELEASE_PREFIX + "therock-dist-linux-gfx950-7.12.0rc1.tar.gz", 30),
             (RELEASE_PREFIX + "rocm-7.13.0rc1.tar.gz", 40),
-            (RELEASE_PREFIX + "nested/therock-dist-linux-gfx950-7.13.0rc1.tar.gz", 50),
+            (
+                RELEASE_PREFIX + "nested/therock-dist-linux-gfx950-7.13.0rc1.tar.gz",
+                50,
+            ),
         ]
-        planned, unchanged = select_copies(
+        planned, unchanged = select_tarball_copies(
             objects, RELEASE_PREFIX, RELEASE_PREFIX, "7.13.0rc1", "rc", "release"
         )
         self.assertEqual(unchanged, [])
         self.assertEqual(
-            [item.dest_key for item in planned],
+            [dest for _, dest, _ in planned],
             [RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz"],
         )
-        self.assertEqual(planned[0].size, 10)
+        self.assertEqual(planned[0][2], 10)
 
 
 class RunTest(unittest.TestCase):
@@ -115,7 +117,7 @@ class RunTest(unittest.TestCase):
         ]
 
     def test_variant_sets_prefix(self):
-        args = _args(tarball_variant="asan")
+        args = _args(**{"tarball-variant": "asan"})
         self.assertEqual(args.source_prefix, ASAN_PREFIX)
         self.assertEqual(args.dest_prefix, ASAN_PREFIX)
 
@@ -124,7 +126,11 @@ class RunTest(unittest.TestCase):
         copied = []
         output = io.StringIO()
         with redirect_stdout(output):
-            code = run(client, _args(), copy_fn=lambda src, dst: copied.append((src, dst)))
+            code = promote_s3_tarballs(
+                _args(),
+                client=client,
+                copy_fn=lambda src, dst: copied.append((src, dst)),
+            )
         self.assertEqual(code, 0)
         self.assertEqual(copied, [])
         self.assertIn("[DRY-RUN] Would copy:", output.getvalue())
@@ -134,11 +140,10 @@ class RunTest(unittest.TestCase):
     def test_execute_copies_renamed_key(self):
         client = FakeClient(self._objects())
         copied = []
-        output = io.StringIO()
-        with redirect_stdout(output):
-            code = run(
-                client,
+        with redirect_stdout(io.StringIO()):
+            code = promote_s3_tarballs(
                 _args(execute=True),
+                client=client,
                 copy_fn=lambda src, dst: copied.append((src, dst)),
             )
         self.assertEqual(code, 0)
@@ -158,9 +163,9 @@ class RunTest(unittest.TestCase):
         copied = []
         output = io.StringIO()
         with redirect_stdout(output):
-            code = run(
-                client,
+            code = promote_s3_tarballs(
                 _args(execute=True),
+                client=client,
                 copy_fn=lambda src, dst: copied.append((src, dst)),
             )
         self.assertEqual(code, 0)
@@ -172,9 +177,9 @@ class RunTest(unittest.TestCase):
         client = FakeClient(self._objects(), existing={dest})
         copied = []
         with redirect_stdout(io.StringIO()):
-            code = run(
-                client,
-                _args(execute=True, allow_overwrite=True),
+            code = promote_s3_tarballs(
+                _args(execute=True, **{"allow-overwrite": True}),
+                client=client,
                 copy_fn=lambda src, dst: copied.append(dst),
             )
         self.assertEqual(code, 0)
@@ -184,9 +189,15 @@ class RunTest(unittest.TestCase):
         client = FakeClient(self._objects())
         output = io.StringIO()
         with redirect_stdout(output):
-            code = run(client, _args(version="7.99.0rc1"))
+            code = promote_s3_tarballs(
+                _args(version="7.99.0rc1"), client=client
+            )
         self.assertEqual(code, 1)
         self.assertIn("[ERROR]:", output.getvalue())
+
+    def test_local_promotion_still_requires_input_dir(self):
+        with self.assertRaises(SystemExit):
+            parse_arguments([])
 
 
 if __name__ == "__main__":
