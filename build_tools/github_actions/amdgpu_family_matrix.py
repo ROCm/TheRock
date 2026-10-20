@@ -237,19 +237,7 @@ all_build_variants = {
 def get_sanitizer_variant_for_trigger(
     source: str, trigger: str
 ) -> str | None:
-    """Look up the sanitizer build variant for a (source, trigger) pair.
-
-    Scans sanitizer_triggers in all_build_variants["linux"] to find which
-    variant is activated by the given source and trigger.
-
-    Args:
-        source: Submodule basename or external repo short name.
-        trigger: One of VALID_TRIGGERS.
-
-    Returns:
-        Build variant string (e.g., "host-asan") if a rule matches,
-        or None if no sanitizer rule applies.
-    """
+    """Return the sanitizer variant matching (source, trigger), or None."""
     for variant_name, variant_config in all_build_variants.get("linux", {}).items():
         triggers = variant_config.get("sanitizer_triggers", {})
         sources = triggers.get(trigger, [])
