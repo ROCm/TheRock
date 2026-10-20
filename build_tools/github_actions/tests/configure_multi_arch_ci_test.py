@@ -2160,12 +2160,13 @@ class TestExpandBuildConfigs(unittest.TestCase):
     def test_variant_filters_by_platform_and_family_support(self):
         """ASAN: only gfx94x on linux supports it, gfx110x doesn't, windows has no ASAN config."""
         # gfx94x supports asan, gfx110x is release-only, windows has no asan variant.
+        # Use ci:asan label to explicitly enable asan (trigger rules gate the variant).
         targets = cm.TargetSelection(
             linux_families=["gfx94x", "gfx110x"],
             windows_families=["gfx110x"],
         )
         result = cm.expand_build_configs(
-            ci_inputs=self._inputs(build_variant="asan"),
+            ci_inputs=self._inputs(build_variant="asan", pr_labels=["ci:asan"]),
             git_context=cm.GitContext(),
             targets=targets,
             jobs=_jobs(),
@@ -2177,14 +2178,12 @@ class TestExpandBuildConfigs(unittest.TestCase):
         # Windows has no asan variant config at all.
         self.assertIsNone(result.windows)
 
-    def test_variant_filters_by_trigger(self):
-        """ASAN: without trigger rules, all events stay as full asan."""
+    def test_asan_no_trigger_match_skips_build(self):
+        """ASAN: without matching trigger rules or labels, build is skipped entirely."""
         targets = cm.TargetSelection(
             linux_families=["gfx94x"],
         )
-        # All events without matching trigger rules keep the original asan variant.
-        # Specific variant remapping is handled by sanitizer_triggers in all_build_variants.
-        for event_name in ("schedule", "push", "workflow_dispatch"):
+        for event_name in ("schedule", "push", "pull_request", "workflow_dispatch"):
             with self.subTest(event_name=event_name):
                 ci_inputs = cm.CIInputs(
                     run_id="12345",
@@ -2199,44 +2198,8 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     targets=targets,
                     jobs=_jobs(),
                 )
-                self.assertIsNotNone(result.linux)
-                self.assertEqual(
-                    result.linux.build_variant_cmake_preset,
-                    "linux-release-asan",
-                )
-
-    def test_asan_excludes_families_without_asan_support(self):
-        """ASAN: gfx110x only supports release, so it must be excluded.
-
-        Families without the asan build variant in their build_variants list
-        are filtered out. gfx110x only supports release, so it should be
-        excluded from the result regardless of event type.
-        """
-        targets = cm.TargetSelection(
-            linux_families=["gfx94x", "gfx110x"],
-        )
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="push",
-            commit_ref="main",
-            base_ref="HEAD^1",
-            build_variant="asan",
-        )
-        result = cm.expand_build_configs(
-            ci_inputs=ci_inputs,
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        self.assertIsNotNone(result.linux)
-        self.assertEqual(
-            result.linux.build_variant_cmake_preset, "linux-release-asan"
-        )
-        # Only gfx94x should survive (it supports asan), gfx110x should be excluded
-        family_names = [info["amdgpu_family"] for info in result.linux.per_family_info]
-        self.assertIn("gfx94X-dcgpu", family_names)
-        self.assertNotIn("gfx110X-all", family_names)
-        self.assertEqual(len(result.linux.per_family_info), 1)
+                self.assertIsNone(result.linux)
+                self.assertIsNone(result.windows)
 
     def test_test_runner_kernel_overrides_runner_label(self):
         """test_runner:oem label swaps in kernel-specific runner for gfx1151."""
@@ -2280,30 +2243,22 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertNotEqual(entry["test-runs-on"], "linux-gfx1151-gpu-rocm")
         self.assertNotIn("oem", entry["test-runs-on"])
 
-    # TODO(#3433): Remove sandbox tests once ASAN tests are passing
-    def test_asan_runner_selection(self):
-        """Sandbox runners stay disabled for TheRock nightly and PR builds."""
+    def test_asan_without_trigger_rules_skips(self):
+        """ASAN without matching trigger rules skips entirely (no build produced)."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
-        # Schedule: sandbox pools are reserved for rocm-systems PRs.
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(event_name="schedule", build_variant="asan"),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "")
-
-        # PR: disables tests (empty runner)
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(event_name="pull_request", build_variant="asan"),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "")
+        for event_name in ("schedule", "pull_request"):
+            with self.subTest(event_name=event_name):
+                result = cm.expand_build_configs(
+                    ci_inputs=self._inputs(
+                        event_name=event_name, build_variant="asan"
+                    ),
+                    git_context=cm.GitContext(),
+                    targets=targets,
+                    jobs=_jobs(),
+                )
+                self.assertIsNone(result.linux)
+                self.assertIsNone(result.windows)
 
     def test_asan_debug_nightly_has_no_sandbox_runner(self):
         """asan-debug nightly cannot use the rocm-systems PR sandbox pools."""

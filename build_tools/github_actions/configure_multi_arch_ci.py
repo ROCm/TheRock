@@ -2058,7 +2058,7 @@ def expand_build_configs(
     # 2. ci:host-asan label -> host-asan (explicit)
     # 3. Sanitizer trigger rules -> variant from sanitizer_triggers in all_build_variants
     #    (source-specific: maps (repo/submodule, trigger) to the right variant)
-    # 4. No match -> stays as original build_variant (asan for nightly/manual)
+    # 4. No match -> skip (sanitizers only run when a rule matches)
     if build_variant == "asan":
         if "ci:asan" in ci_inputs.pr_labels:
             print("  Using full asan variant (ci:asan label)")
@@ -2074,6 +2074,9 @@ def expand_build_configs(
                     f"  Using {build_variant} variant "
                     f"(sanitizer trigger rule)"
                 )
+            else:
+                print("  No sanitizer trigger rule matched, skipping ASAN build")
+                return BuildConfigs(linux=None, windows=None)
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
