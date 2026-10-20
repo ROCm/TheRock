@@ -427,7 +427,7 @@ amdgpu_family_info_matrix = {
             "disabled_framework_tests": ["pytorch"],
         },
     },
-    # Postsubmit family - builds on postsubmit, tests on postsubmit and nightly
+    # Postsubmit family - builds on postsubmit, tests only on nightly
     "gfx90a": {
         "linux": {
             "test-runs-on": "linux-gfx90a-1gpu-ossci-rocm",
@@ -439,7 +439,7 @@ amdgpu_family_info_matrix = {
                 "submodule_bump",
                 "nightly",
             ],
-            "tests_on_trigger": ["postsubmit", "nightly"],
+            "tests_on_trigger": ["nightly"],
             # Only run tests when gfx90a label is present on PR
             "trigger_test_label_only": True,
         },
