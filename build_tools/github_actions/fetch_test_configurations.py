@@ -869,6 +869,7 @@ test_matrix = {
         "timeout_minutes": 20,
         "additional_requirements_files": [
             _get_artifact_path("share/rocprofiler-sdk/tests/requirements.txt"),
+            _get_script_path("requirements-test-ninja.txt"),
         ],
         "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --enable-cdash",
         "platform": ["linux"],
@@ -1173,6 +1174,7 @@ test_matrix = {
         "timeout_minutes": 20,
         "additional_requirements_files": [
             _get_artifact_path("libhipcxx/requirements-test.txt"),
+            _get_script_path("requirements-test-ninja.txt"),
         ],
         "test_script": f"python {_get_script_path('test_libhipcxx_hiprtc.py')}",
         "platform": ["linux"],
@@ -1250,6 +1252,9 @@ test_matrix = {
         "job_name": "rocjpeg",
         "fetch_artifact_args": "--rocjpeg --tests",
         "timeout_minutes": 10,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_rocjpeg.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
@@ -1264,6 +1269,9 @@ test_matrix = {
         # TODO(ROCm/rocm-libraries#10187): lower once perf tests are split out
         # of the correctness suite.
         "timeout_minutes": 60,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_rpp.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
