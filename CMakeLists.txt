@@ -517,6 +517,11 @@ add_subdirectory(media-libs)
 # rocprofiler-systems both find_package(hipfile) (SDK for API tracing; systems
 # for optional GPU-direct storage I/O telemetry when the package is usable).
 add_subdirectory(storage-libs)
+# rocSHMEM must be added before profiler for the same reason: rocprofiler-sdk
+# performs an optional find_package(rocshmem) for rocSHMEM API-trace feature
+# detection. The rest of comm-libs (rccl) depends on the profiler, so it is
+# added after and does not include this subdirectory itself.
+add_subdirectory(comm-libs/rocshmem)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
