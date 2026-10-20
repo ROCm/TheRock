@@ -78,8 +78,10 @@ WORKFLOW_TEST_SCOPE_BY_REPO = {
 }
 
 # Patterns for TheRock workflow changes in the calling repository.
-CALLER_WORKFLOW_TRIGGER_PATTERNS = [
-    ".github/workflows/therock*",
+# TODO(geomin12): Disabled to test ci:no-downstream-test label in
+# rocm-libraries PR #14060. Restore after validation.
+CALLER_WORKFLOW_TRIGGER_PATTERNS: list[str] = [
+    # ".github/workflows/therock*",
 ]
 
 # Changes to project discovery or shared test logic retain global coverage.
