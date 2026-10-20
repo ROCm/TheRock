@@ -144,6 +144,7 @@ class StackTest(unittest.TestCase):
         )
 
 
+@unittest.skipIf(os.name == "nt", "jax-lab runs on Linux only")
 class WorkloadEnvTest(unittest.TestCase):
     def test_what_jax_lab_run_sh_reads(self):
         env = e2e.workload_env(
@@ -168,6 +169,7 @@ class WorkloadEnvTest(unittest.TestCase):
         self.assertEqual(env["PYTHON"], sys.executable)
 
 
+@unittest.skipIf(os.name == "nt", "jax-lab runs on Linux only")
 class RunWorkloadTest(unittest.TestCase):
     def run_script(self, script: str, timeout_minutes: float) -> str:
         with tempfile.TemporaryDirectory() as tmp:
