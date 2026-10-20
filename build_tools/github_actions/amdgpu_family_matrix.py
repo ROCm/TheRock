@@ -190,7 +190,7 @@ all_build_variants = {
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
             "sanitizer_triggers": {
-                "nightly": ["rocm-libraries", "rockrel"],
+                "nightly": ["rocm-libraries"],
             },
         },
         # host ASAN builds are run on nightly, with intent to run on presubmit and postsubmit
@@ -211,6 +211,7 @@ all_build_variants = {
             "build_variant_cmake_preset": "linux-release-asan-debug",
             "sanitizer_triggers": {
                 "submodule_bump": ["amd-llvm"],
+                "nightly": ["rockrel"],
             },
         },
         "host-asan-debug": {
