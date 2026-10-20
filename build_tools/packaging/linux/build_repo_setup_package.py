@@ -176,8 +176,9 @@ MAX_GPG_KEY_BYTES = 1 << 20  # 1 MiB
 REPO_VERIFY_TIMEOUT_SEC = 30
 REPO_VERIFY_ATTEMPTS = 3
 REPO_VERIFY_BACKOFF_SEC = 3
-# HTTP statuses worth retrying: request timeout and rate limiting. Any other 4xx
-# means the repository is not at that URL, which retrying cannot change.
+# HTTP statuses worth retrying, in this check and in the signing-key fetch:
+# request timeout and rate limiting. Any other 4xx means nothing is served at
+# that URL, which retrying cannot change.
 RETRYABLE_HTTP_STATUS = frozenset({408, 429})
 
 # Primary-key fingerprint of the AMD ROCm signing key. The key is fetched over
@@ -573,8 +574,9 @@ def deb_version(rocm_version: str, version_suffix: str, os_profile: str) -> str:
 def _fetch_signing_key(url: str) -> bytes:
     """Fetch the armored signing key over https, size-bounded, with retries.
 
-    Network and HTTP errors are retried; a scheme downgrade or an over-size
-    body fails immediately.
+    Network errors and the HTTP statuses in ``RETRYABLE_HTTP_STATUS`` are
+    retried. Any other HTTP status, a scheme downgrade or an over-size body
+    fails immediately, as in ``verify_repo_url``.
     """
     # The fetched key is embedded and trusted, so it must travel over https.
     _require_https(url, "signing key URL")
@@ -593,10 +595,19 @@ def _fetch_signing_key(url: str) -> bytes:
                     f"signing key exceeds {MAX_GPG_KEY_BYTES} bytes: {url}"
                 )
             return key
+        except urllib.error.HTTPError as e:
+            # HTTPError is a URLError, so it must be caught first. A missing or
+            # forbidden key is a wrong URL, not a blip: fail now rather than
+            # sleeping through the remaining attempts.
+            if e.code not in RETRYABLE_HTTP_STATUS:
+                raise RuntimeError(
+                    f"failed to fetch signing key: HTTP {e.code}: {url}"
+                ) from e
+            last_error = e
         except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
             last_error = e
-            if attempt < GPG_FETCH_ATTEMPTS:
-                time.sleep(GPG_FETCH_BACKOFF_SEC * attempt)
+        if attempt < GPG_FETCH_ATTEMPTS:
+            time.sleep(GPG_FETCH_BACKOFF_SEC * attempt)
     raise RuntimeError(
         f"failed to fetch signing key after {GPG_FETCH_ATTEMPTS} attempts: {url}"
     ) from last_error
@@ -609,6 +620,9 @@ def _run_gpg(argv: list[str], **kwargs) -> subprocess.CompletedProcess:
     the keyring, and either path when the key is fetched, to check its
     fingerprint.
     An rpm build given --gpg-key-file does neither, so it needs no gpg at all.
+
+    The callers capture gpg's output, and ``CalledProcessError`` leaves it out
+    of its message, so a failure is re-raised with gpg's own error text.
     """
     try:
         return subprocess.run(argv, check=True, **kwargs)
@@ -619,6 +633,12 @@ def _run_gpg(argv: list[str], **kwargs) -> subprocess.CompletedProcess:
             "gnupg/gnupg2. Note that --gpg-key-file skips the fetch, not the deb "
             "keyring step, so a signed deb build needs gpg either way"
         ) from e
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr
+        if isinstance(stderr, bytes):
+            stderr = stderr.decode(errors="replace")
+        detail = (stderr or "").strip() or "no error output"
+        raise RuntimeError(f"gpg exited with status {e.returncode}: {detail}") from e
 
 
 def _primary_fingerprints(listing: str) -> list[str]:
