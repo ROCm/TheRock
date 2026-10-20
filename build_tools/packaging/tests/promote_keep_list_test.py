@@ -6,20 +6,23 @@ promote_packages.py.
 
 These tests exercise the pure-function helpers (multi-arch detection, keep-list
 application to METADATA / requires.txt / _dist_info.py, filename-based per-target
-arch extraction, version string promotion) on synthetic inputs. They run
-without network access and complete in well under a second.
+arch extraction, version string promotion) and the S3 therock-dist rename on
+synthetic inputs. They run without network access and complete in well under a second.
 
 The end-to-end integration tests that download real RC packages live in
 promote_packages_test.py and are not exercised here.
 """
 
+import io
 import os
 import sys
 import tempfile
 import textwrap
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
+from botocore.exceptions import ClientError
 from packaging.metadata import Metadata
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
@@ -802,6 +805,165 @@ class ParseArgumentsMutexTest(unittest.TestCase):
             ["--input-dir", "/fake", "--multi-arch-targets", "gfx1010,gfx1201"]
         )
         self.assertEqual(ns.multi_arch_targets, "gfx1010,gfx1201")
+
+
+RELEASE_PREFIX = "v5/rocm/core/tarball/"
+ASAN_PREFIX = "v5/rocm/core/tarball-asan/"
+
+
+class FakeS3Client:
+    def __init__(self, objects, existing=None):
+        self.objects = list(objects)
+        self.existing = set(existing or [])
+
+    def get_paginator(self, name):
+        if name != "list_objects_v2":
+            raise AssertionError(name)
+        return self
+
+    def paginate(self, **kwargs):
+        prefix = kwargs["Prefix"]
+        contents = [
+            {"Key": key, "Size": size}
+            for key, size in self.objects
+            if key.startswith(prefix)
+        ]
+        return [{"Contents": contents}]
+
+    def head_object(self, Bucket, Key):
+        if Key not in self.existing:
+            raise ClientError(
+                {"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject"
+            )
+        return {}
+
+
+def _s3_args(**overrides):
+    values = {
+        "version": "7.13.0rc1",
+        "source-bucket": "src-bucket",
+        "dest-bucket": "dst-bucket",
+    }
+    values.update(overrides)
+    argv = []
+    for key, value in values.items():
+        if value is True:
+            argv.append(f"--{key}")
+        elif value is not False:
+            argv.append(f"--{key}={value}")
+    return ptf.parse_arguments(argv)
+
+
+class S3TarballCopyTest(unittest.TestCase):
+    def _objects(self):
+        return [
+            (RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0rc1.tar.gz", 10),
+            (ASAN_PREFIX + "therock-dist-linux-gfx950-7.13.0rc1.tar.gz", 99),
+        ]
+
+    def test_rc_release_renames_version_token(self):
+        self.assertEqual(
+            ptf.promoted_tarball_name(
+                "therock-dist-linux-gfx950-7.13.0rc1.tar.gz", "rc", "release"
+            ),
+            "therock-dist-linux-gfx950-7.13.0.tar.gz",
+        )
+
+    def test_final_version_is_unchanged(self):
+        self.assertIsNone(
+            ptf.promoted_tarball_name(
+                "therock-dist-linux-gfx950-7.13.0.tar.gz", "rc", "release"
+            )
+        )
+
+    def test_selects_therock_dist_only(self):
+        objects = self._objects() + [
+            (RELEASE_PREFIX + "therock-dist-linux-gfx950-7.12.0rc1.tar.gz", 30),
+            (RELEASE_PREFIX + "rocm-7.13.0rc1.tar.gz", 40),
+            (RELEASE_PREFIX + "nested/therock-dist-linux-gfx950-7.13.0rc1.tar.gz", 50),
+        ]
+        planned, unchanged = ptf.select_tarball_copies(
+            objects, RELEASE_PREFIX, RELEASE_PREFIX, "7.13.0rc1", "rc", "release"
+        )
+        self.assertEqual(unchanged, [])
+        self.assertEqual(
+            [dest for _, dest, _ in planned],
+            [RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz"],
+        )
+
+    def test_default_lists_release_and_asan(self):
+        args = _s3_args()
+        self.assertEqual(args.source_prefixes, [RELEASE_PREFIX, ASAN_PREFIX])
+
+    def test_dry_run_does_not_copy(self):
+        copied = []
+        output = io.StringIO()
+        with redirect_stdout(output):
+            code = ptf.promote_s3_tarballs(
+                _s3_args(),
+                client=FakeS3Client(self._objects()),
+                copy_fn=lambda src, dst: copied.append((src, dst)),
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(copied, [])
+        text = output.getvalue()
+        self.assertIn("[DRY-RUN] Would copy:", text)
+        self.assertIn(RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz", text)
+        self.assertIn(ASAN_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz", text)
+
+    def test_execute_copies_renamed_key(self):
+        copied = []
+        with redirect_stdout(io.StringIO()):
+            code = ptf.promote_s3_tarballs(
+                _s3_args(execute=True),
+                client=FakeS3Client(self._objects()),
+                copy_fn=lambda src, dst: copied.append((src, dst)),
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            copied,
+            [
+                (
+                    RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0rc1.tar.gz",
+                    RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz",
+                ),
+                (
+                    ASAN_PREFIX + "therock-dist-linux-gfx950-7.13.0rc1.tar.gz",
+                    ASAN_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz",
+                ),
+            ],
+        )
+
+    def test_existing_destination_is_skipped(self):
+        existing = {
+            RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz",
+            ASAN_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz",
+        }
+        copied = []
+        output = io.StringIO()
+        with redirect_stdout(output):
+            code = ptf.promote_s3_tarballs(
+                _s3_args(execute=True),
+                client=FakeS3Client(self._objects(), existing=existing),
+                copy_fn=lambda src, dst: copied.append((src, dst)),
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(copied, [])
+        self.assertIn("[SKIP] Already exists:", output.getvalue())
+
+    def test_missing_version_fails(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            code = ptf.promote_s3_tarballs(
+                _s3_args(version="7.99.0rc1"),
+                client=FakeS3Client(self._objects()),
+            )
+        self.assertEqual(code, 1)
+        self.assertIn("[ERROR]:", output.getvalue())
+
+    def test_local_promotion_still_requires_input_dir(self):
+        with self.assertRaises(SystemExit):
+            ptf.parse_arguments([])
 
 
 if __name__ == "__main__":

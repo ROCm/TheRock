@@ -180,8 +180,8 @@ python build_tools/packaging/promote_packages.py --input-dir=./promotion/downloa
 `therock-dist-*.tar.gz` files are renamed and their contents are not modified.
 For the structured layout, copy them to the promoted key instead of downloading
 them. The command lists both `tarball/` and `tarball-asan/` and keeps each
-object in its own prefix. It is dry-run until `--execute`. An existing
-destination key is skipped unless `--allow-overwrite` is set.
+object in its own prefix. It is dry-run until `--execute`. A destination key
+that already exists is skipped.
 
 ```bash
 python build_tools/packaging/promote_packages.py \

@@ -267,29 +267,10 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
         help="Bucket that receives the renamed therock-dist tarballs",
     )
     parser.add_argument(
-        "--source-prefix",
-        default=None,
-        help=(
-            "Source key prefix. Defaults to both v5/rocm/core/tarball/ and "
-            "v5/rocm/core/tarball-asan/."
-        ),
-    )
-    parser.add_argument(
-        "--dest-prefix",
-        default=None,
-        help="Destination key prefix. Requires --source-prefix. Defaults to that prefix.",
-    )
-    parser.add_argument(
         "--execute",
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Perform the S3 copy. Without this flag the command only prints the plan.",
-    )
-    parser.add_argument(
-        "--allow-overwrite",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Replace a destination key that already exists (default: skip it)",
     )
 
     args = parser.parse_args(argv)
@@ -359,35 +340,14 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
             )
         if args.delete_old_on_success:
             parser.error("An S3 tarball copy does not use --delete-old-on-success")
-        if args.dest_prefix and not args.source_prefix:
-            parser.error("--dest-prefix requires --source-prefix")
-        if args.source_prefix:
-            source_prefix = args.source_prefix
-            if not source_prefix.endswith("/"):
-                source_prefix += "/"
-            args.source_prefixes = [source_prefix]
-            dest_prefix = args.dest_prefix or source_prefix
-            args.dest_prefix = (
-                dest_prefix if dest_prefix.endswith("/") else dest_prefix + "/"
-            )
-        else:
-            # Release and ASAN are separate prefixes. The filename does not say which.
-            args.source_prefixes = list(CORE_TARBALL_PREFIXES.values())
-            args.dest_prefix = None
+        # Release and ASAN are separate prefixes. The filename does not say which.
+        args.source_prefixes = list(CORE_TARBALL_PREFIXES.values())
     elif args.input_dir is None:
         parser.error(
             "--input-dir is required unless --source-bucket and --dest-bucket are set"
         )
-    elif (
-        args.version
-        or args.execute
-        or args.allow_overwrite
-        or args.source_prefix
-        or args.dest_prefix
-    ):
-        parser.error(
-            "--version, --execute, --allow-overwrite, and prefix flags require --source-bucket"
-        )
+    elif args.version or args.execute:
+        parser.error("--version and --execute require --source-bucket and --dest-bucket")
 
     return args
 
@@ -1527,7 +1487,6 @@ def copy_tarballs(
     dest_bucket: str,
     planned: list[tuple[str, str, int]],
     execute: bool,
-    allow_overwrite: bool,
     copy_fn=None,
 ) -> tuple[int, int]:
     """Copy planned objects. Returns (copied, skipped_existing)."""
@@ -1547,8 +1506,7 @@ def copy_tarballs(
     try:
         for source_key, dest_key, size in planned:
             same_object = source_bucket == dest_bucket and source_key == dest_key
-            exists = object_exists(client, dest_bucket, dest_key)
-            if same_object or (exists and not allow_overwrite):
+            if same_object or object_exists(client, dest_bucket, dest_key):
                 print(f"    [SKIP] Already exists: s3://{dest_bucket}/{dest_key}")
                 skipped += 1
                 continue
@@ -1559,9 +1517,8 @@ def copy_tarballs(
                 copy_fn(source_key, dest_key)
                 print(" done")
             else:
-                action = "overwrite" if exists else "copy"
                 print(
-                    f"    [DRY-RUN] Would {action}: {source} -> {destination} ({size} bytes)"
+                    f"    [DRY-RUN] Would copy: {source} -> {destination} ({size} bytes)"
                 )
             copied += 1
     finally:
@@ -1585,12 +1542,11 @@ def promote_s3_tarballs(args: argparse.Namespace, client=None, copy_fn=None) -> 
     planned: list[tuple[str, str, int]] = []
     unchanged: list[str] = []
     for source_prefix in args.source_prefixes:
-        dest_prefix = args.dest_prefix or source_prefix
         objects = list_object_sizes(client, args.source_bucket, source_prefix)
         batch, batch_unchanged = select_tarball_copies(
             objects,
             source_prefix,
-            dest_prefix,
+            source_prefix,
             args.version,
             args.src_version_type,
             args.dest_version,
@@ -1610,7 +1566,6 @@ def promote_s3_tarballs(args: argparse.Namespace, client=None, copy_fn=None) -> 
         args.dest_bucket,
         planned,
         args.execute,
-        args.allow_overwrite,
         copy_fn=copy_fn,
     )
     print(f"Copies: {copied}")
