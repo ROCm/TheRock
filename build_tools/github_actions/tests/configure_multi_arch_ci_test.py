@@ -3344,23 +3344,38 @@ class TestTriggerHelpers(unittest.TestCase):
         self.assertEqual(triggers, {"presubmit", "submodule_bump"})
 
     def test_get_current_triggers_external_repo_no_submodule_bump(self):
-        """submodule_bump only applies to TheRock, not external repos."""
+        """External repos resolve triggers from JSON event_name, not submodule_bump."""
         for event, expected in [
             ("pull_request", {"presubmit"}),
             ("push", {"postsubmit"}),
+            ("schedule", {"nightly"}),
         ]:
             with self.subTest(event=event):
                 ci_inputs = cm.CIInputs(
                     run_id="12345",
-                    event_name=event,
+                    event_name="workflow_dispatch",
                     commit_ref="main",
                     base_ref="HEAD^",
                     build_variant="release",
-                    external_repo='{"repository":"ROCm/rocm-libraries","ref":"main"}',
+                    external_repo=f'{{"repository":"ROCm/rocm-libraries","ref":"main","event_name":"{event}"}}',
                 )
                 git_context = cm.GitContext.from_external_repo("rocm-libraries")
                 triggers = cm._get_current_triggers(ci_inputs, git_context)
                 self.assertEqual(triggers, expected)
+
+    def test_get_current_triggers_external_repo_without_event_name(self):
+        """External repo without event_name in JSON returns empty triggers."""
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref=None,
+            build_variant="release",
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"main"}',
+        )
+        git_context = cm.GitContext.from_external_repo("rocm-libraries")
+        triggers = cm._get_current_triggers(ci_inputs, git_context)
+        self.assertEqual(triggers, set())
 
     def test_should_run_tests_trigger_matching(self):
         """Verify test gating based on trigger match."""
@@ -3658,8 +3673,8 @@ class TestCpuTestOnlyLabel(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-class TestResolveSanitizerVariants(unittest.TestCase):
-    """Tests for _resolve_sanitizer_variants and _get_external_repo_trigger."""
+class TestResolveSanitizerVariant(unittest.TestCase):
+    """Tests for _resolve_sanitizer_variant and _get_current_triggers with external repos."""
 
     def test_external_repo_nightly_resolves_variant(self):
         """External repo nightly should resolve to the configured variant."""
@@ -3672,8 +3687,9 @@ class TestResolveSanitizerVariants(unittest.TestCase):
             external_repo='{"repository":"ROCm/rocm-libraries","ref":"main","event_name":"schedule"}',
         )
         git_context = cm.GitContext.from_external_repo("rocm-libraries")
-        variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
-        self.assertEqual(variants, ["asan"])
+        self.assertEqual(
+            cm._resolve_sanitizer_variant(ci_inputs, git_context), "asan"
+        )
 
     def test_external_repo_rockrel_nightly(self):
         """rockrel nightly should resolve to asan."""
@@ -3686,8 +3702,9 @@ class TestResolveSanitizerVariants(unittest.TestCase):
             external_repo='{"repository":"ROCm/rockrel","ref":"main","event_name":"schedule"}',
         )
         git_context = cm.GitContext.from_external_repo("rockrel")
-        variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
-        self.assertEqual(variants, ["asan"])
+        self.assertEqual(
+            cm._resolve_sanitizer_variant(ci_inputs, git_context), "asan"
+        )
 
     def test_submodule_bump_amd_llvm(self):
         """amd-llvm submodule bump should resolve to asan-debug."""
@@ -3702,8 +3719,9 @@ class TestResolveSanitizerVariants(unittest.TestCase):
             changed_files=["compiler/amd-llvm", "some-other-file"],
             submodule_paths=["compiler/amd-llvm", "rocm-systems", "rocm-libraries"],
         )
-        variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
-        self.assertEqual(variants, ["asan-debug"])
+        self.assertEqual(
+            cm._resolve_sanitizer_variant(ci_inputs, git_context), "asan-debug"
+        )
 
     def test_submodule_bump_rocm_systems(self):
         """rocm-systems submodule bump should resolve to host-asan."""
@@ -3718,11 +3736,12 @@ class TestResolveSanitizerVariants(unittest.TestCase):
             changed_files=["rocm-systems"],
             submodule_paths=["compiler/amd-llvm", "rocm-systems", "rocm-libraries"],
         )
-        variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
-        self.assertEqual(variants, ["host-asan"])
+        self.assertEqual(
+            cm._resolve_sanitizer_variant(ci_inputs, git_context), "host-asan"
+        )
 
-    def test_submodule_bump_multiple_submodules(self):
-        """Multiple submodule bumps can resolve to multiple variants."""
+    def test_submodule_bump_multiple_returns_first_match(self):
+        """Multiple submodule bumps returns the first matching variant."""
         ci_inputs = cm.CIInputs(
             run_id="1",
             event_name="push",
@@ -3734,14 +3753,12 @@ class TestResolveSanitizerVariants(unittest.TestCase):
             changed_files=["compiler/amd-llvm", "rocm-systems"],
             submodule_paths=["compiler/amd-llvm", "rocm-systems", "rocm-libraries"],
         )
-        variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
-        # Both should be present (order may vary based on set iteration)
-        self.assertIn("asan-debug", variants)
-        self.assertIn("host-asan", variants)
-        self.assertEqual(len(variants), 2)
+        result = cm._resolve_sanitizer_variant(ci_inputs, git_context)
+        # Returns whichever matches first (set iteration order)
+        self.assertIn(result, ("asan-debug", "host-asan"))
 
-    def test_no_matching_rule_returns_empty(self):
-        """Unmatched source/trigger returns empty list."""
+    def test_no_matching_rule_returns_none(self):
+        """Unmatched source/trigger returns None."""
         ci_inputs = cm.CIInputs(
             run_id="1",
             event_name="workflow_dispatch",
@@ -3751,10 +3768,9 @@ class TestResolveSanitizerVariants(unittest.TestCase):
             external_repo='{"repository":"ROCm/unknown-repo","ref":"main","event_name":"schedule"}',
         )
         git_context = cm.GitContext.from_external_repo("unknown-repo")
-        variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
-        self.assertEqual(variants, [])
+        self.assertIsNone(cm._resolve_sanitizer_variant(ci_inputs, git_context))
 
-    def test_external_repo_without_event_name_returns_empty(self):
+    def test_external_repo_without_event_name_returns_none(self):
         """External repo JSON without event_name cannot resolve trigger."""
         ci_inputs = cm.CIInputs(
             run_id="1",
@@ -3765,10 +3781,9 @@ class TestResolveSanitizerVariants(unittest.TestCase):
             external_repo='{"repository":"ROCm/rocm-libraries","ref":"main"}',
         )
         git_context = cm.GitContext.from_external_repo("rocm-libraries")
-        variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
-        self.assertEqual(variants, [])
+        self.assertIsNone(cm._resolve_sanitizer_variant(ci_inputs, git_context))
 
-    def test_no_submodule_changes_returns_empty(self):
+    def test_no_submodule_changes_returns_none(self):
         """Non-submodule changes should not trigger sanitizer rules."""
         ci_inputs = cm.CIInputs(
             run_id="1",
@@ -3781,55 +3796,29 @@ class TestResolveSanitizerVariants(unittest.TestCase):
             changed_files=["some-regular-file.py"],
             submodule_paths=["compiler/amd-llvm", "rocm-systems"],
         )
-        variants = cm._resolve_sanitizer_variants(ci_inputs, git_context)
-        self.assertEqual(variants, [])
+        self.assertIsNone(cm._resolve_sanitizer_variant(ci_inputs, git_context))
 
-    def test_get_external_repo_trigger_schedule(self):
-        """schedule event_name maps to nightly trigger."""
-        ci_inputs = cm.CIInputs(
-            run_id="1",
-            event_name="workflow_dispatch",
-            commit_ref="main",
-            base_ref=None,
-            build_variant="asan",
-            external_repo='{"repository":"ROCm/rocm-libraries","ref":"main","event_name":"schedule"}',
-        )
-        self.assertEqual(cm._get_external_repo_trigger(ci_inputs), "nightly")
-
-    def test_get_external_repo_trigger_pull_request(self):
-        """pull_request event_name maps to presubmit trigger."""
-        ci_inputs = cm.CIInputs(
-            run_id="1",
-            event_name="workflow_dispatch",
-            commit_ref="main",
-            base_ref=None,
-            build_variant="asan",
-            external_repo='{"repository":"ROCm/rocm-libraries","ref":"main","event_name":"pull_request"}',
-        )
-        self.assertEqual(cm._get_external_repo_trigger(ci_inputs), "presubmit")
-
-    def test_get_external_repo_trigger_push(self):
-        """push event_name maps to postsubmit trigger."""
-        ci_inputs = cm.CIInputs(
-            run_id="1",
-            event_name="workflow_dispatch",
-            commit_ref="main",
-            base_ref=None,
-            build_variant="asan",
-            external_repo='{"repository":"ROCm/rocm-systems","ref":"main","event_name":"push"}',
-        )
-        self.assertEqual(cm._get_external_repo_trigger(ci_inputs), "postsubmit")
-
-    def test_get_external_repo_trigger_no_external_repo(self):
-        """Non-external repo returns None."""
-        ci_inputs = cm.CIInputs(
-            run_id="1",
-            event_name="push",
-            commit_ref="main",
-            base_ref="HEAD^",
-            build_variant="asan",
-        )
-        self.assertIsNone(cm._get_external_repo_trigger(ci_inputs))
+    def test_external_repo_trigger_via_get_current_triggers(self):
+        """_get_current_triggers resolves external repo event_name."""
+        test_cases = [
+            ("schedule", {"nightly"}),
+            ("pull_request", {"presubmit"}),
+            ("push", {"postsubmit"}),
+        ]
+        for event_name, expected in test_cases:
+            with self.subTest(event_name=event_name):
+                ci_inputs = cm.CIInputs(
+                    run_id="1",
+                    event_name="workflow_dispatch",
+                    commit_ref="main",
+                    base_ref=None,
+                    build_variant="asan",
+                    external_repo=f'{{"repository":"ROCm/rocm-libraries","ref":"main","event_name":"{event_name}"}}',
+                )
+                git_context = cm.GitContext.from_external_repo("rocm-libraries")
+                self.assertEqual(
+                    cm._get_current_triggers(ci_inputs, git_context), expected
+                )
 
 
 if __name__ == "__main__":

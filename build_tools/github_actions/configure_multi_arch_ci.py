@@ -1507,12 +1507,24 @@ def decide_jobs(
 # ---------------------------------------------------------------------------
 
 
+# Maps GitHub event names to TheRock trigger names.
+# Used by _get_current_triggers for both local and external-repo contexts.
+_EVENT_TO_TRIGGER: dict[str, str] = {
+    "schedule": "nightly",
+    "push": "postsubmit",
+    "pull_request": "presubmit",
+}
+
+
 def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[str]:
     """Determine which triggers are active for current CI context.
 
     Triggers are cumulative - multiple can be active at once. For example,
     a push to main with submodule changes activates both "postsubmit" and
     "submodule_bump" triggers.
+
+    For external repos, the original event is read from the external_repo
+    JSON "event_name" field, since TheRock always sees workflow_dispatch.
 
     Note: workflow_dispatch (on_demand) is handled separately - it implicitly
     allows all families, so it's not returned as a trigger here.
@@ -1523,108 +1535,90 @@ def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[s
     """
     triggers: set[str] = set()
 
+    # For external repos, resolve the caller's original event.
+    if ci_inputs.external_repo:
+        try:
+            repo_json = json.loads(ci_inputs.external_repo)
+        except (json.JSONDecodeError, TypeError):
+            return triggers
+        event = repo_json.get("event_name", "")
+        trigger = _EVENT_TO_TRIGGER.get(event)
+        if trigger:
+            triggers.add(trigger)
+        return triggers
+
     # Event-based triggers (mutually exclusive)
     # Note: workflow_dispatch handled separately in _should_run_tests_for_family
-    if ci_inputs.is_schedule:
-        triggers.add("nightly")
-    if ci_inputs.is_push:
-        triggers.add("postsubmit")
-    if ci_inputs.is_pull_request:
-        triggers.add("presubmit")
+    trigger = _EVENT_TO_TRIGGER.get(ci_inputs.event_name)
+    if trigger:
+        triggers.add(trigger)
 
     # Context-based triggers (can stack on top of event triggers)
     # submodule_bump only applies to TheRock, not external repos.
-    if git_context.has_submodule_changes is True and not ci_inputs.external_repo:
+    if git_context.has_submodule_changes is True:
         triggers.add("submodule_bump")
 
     return triggers
 
 
-def _get_external_repo_trigger(ci_inputs: CIInputs) -> str | None:
-    """Extract the original trigger context from an external repo call.
-
-    External repos call TheRock via workflow_dispatch, so GITHUB_EVENT_NAME
-    is always "workflow_dispatch". The external repo's original event is
-    passed in the external_repo JSON's "event_name" field.
-
-    Returns:
-        The mapped trigger name ("nightly", "presubmit", "postsubmit",
-        "submodule_bump") or None if not determinable.
-    """
+def _get_external_repo_name(ci_inputs: CIInputs) -> str:
+    """Extract the short repo name from external_repo JSON, or empty string."""
     if not ci_inputs.external_repo:
-        return None
+        return ""
     try:
         repo_json = json.loads(ci_inputs.external_repo)
     except (json.JSONDecodeError, TypeError):
-        return None
-    event = repo_json.get("event_name", "")
-    trigger_map = {
-        "schedule": "nightly",
-        "pull_request": "presubmit",
-        "push": "postsubmit",
-    }
-    return trigger_map.get(event)
+        return ""
+    return repo_json.get("repository", "").split("/")[-1]
 
 
-def _resolve_sanitizer_variants(
+def _resolve_sanitizer_variant(
     ci_inputs: CIInputs,
     git_context: GitContext,
-) -> list[str]:
-    """Resolve which sanitizer build variants to run based on trigger rules.
+) -> str | None:
+    """Resolve which sanitizer build variant to use based on trigger rules.
 
-    Checks sanitizer_triggers in all_build_variants against the current
-    context to determine which sanitizer variants should be built.
-
-    For TheRock submodule bumps: matches changed submodule paths against rules.
-    For external repos: matches external repo name + original trigger against rules.
+    For external repos: matches repo name + trigger against sanitizer_triggers
+    in all_build_variants.
+    For TheRock submodule bumps: matches changed submodule basenames against
+    sanitizer_triggers.
 
     Returns:
-        List of build variant strings (e.g., ["host-asan", "asan-debug"]).
-        Empty list if no sanitizer rules match.
+        Build variant string (e.g., "host-asan") if a rule matches,
+        or None if no sanitizer rule applies.
     """
-    variants: list[str] = []
+    current_triggers = _get_current_triggers(ci_inputs, git_context)
+    if not current_triggers:
+        return None
 
     if ci_inputs.external_repo:
-        # External repo: resolve repo name and its original trigger
-        try:
-            repo_json = json.loads(ci_inputs.external_repo)
-        except (json.JSONDecodeError, TypeError):
-            return []
-        repo_name = repo_json.get("repository", "").split("/")[-1]
-        if not repo_name:
-            return []
-        trigger = _get_external_repo_trigger(ci_inputs)
-        if not trigger:
-            return []
-        variant = get_sanitizer_variant_for_trigger(repo_name, trigger)
-        if variant:
-            print(
-                f"  Sanitizer rule matched: {repo_name} + {trigger} -> {variant}"
-            )
-            variants.append(variant)
-    else:
-        # TheRock repo: check submodule bumps
-        current_triggers = _get_current_triggers(ci_inputs, git_context)
-        if "submodule_bump" not in current_triggers:
-            return []
+        source = _get_external_repo_name(ci_inputs)
+        if not source:
+            return None
+        for trigger in current_triggers:
+            variant = get_sanitizer_variant_for_trigger(source, trigger)
+            if variant:
+                print(
+                    f"  Sanitizer rule matched: {source} + {trigger} -> {variant}"
+                )
+                return variant
+    elif "submodule_bump" in current_triggers:
         if git_context.changed_files is None or git_context.submodule_paths is None:
-            return []
+            return None
         changed_submodules = set(git_context.submodule_paths) & set(
             git_context.changed_files
         )
         for submodule_path in changed_submodules:
             # Match by basename (e.g., "compiler/amd-llvm" -> "amd-llvm")
-            source_name = submodule_path.rsplit("/", 1)[-1]
-            variant = get_sanitizer_variant_for_trigger(
-                source_name, "submodule_bump"
-            )
-            if variant and variant not in variants:
+            source = submodule_path.rsplit("/", 1)[-1]
+            variant = get_sanitizer_variant_for_trigger(source, "submodule_bump")
+            if variant:
                 print(
-                    f"  Sanitizer rule matched: {source_name} (submodule_bump) -> {variant}"
+                    f"  Sanitizer rule matched: {source} (submodule_bump) -> {variant}"
                 )
-                variants.append(variant)
+                return variant
 
-    return variants
+    return None
 
 
 def _should_run_tests_for_family(
@@ -2104,9 +2098,9 @@ def expand_build_configs(
             print("  Using host-asan variant (ci:host-asan label)")
         else:
             # Check sanitizer trigger rules for source-specific variant
-            resolved = _resolve_sanitizer_variants(ci_inputs, git_context)
+            resolved = _resolve_sanitizer_variant(ci_inputs, git_context)
             if resolved:
-                build_variant = resolved[0]
+                build_variant = resolved
                 print(
                     f"  Using {build_variant} variant "
                     f"(sanitizer trigger rule)"
