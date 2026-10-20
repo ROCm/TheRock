@@ -1827,7 +1827,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "test-runs-on-labels",
             "test-runs-on-multi-gpu",
             "test-runs-on-multi-gpu-labels",
-            "test-runs-on-wsl",
             "test_type",
         }
         for config in [result.linux, result.windows]:
@@ -2327,7 +2326,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         # Tests are force-enabled despite presubmit trigger not in tests_on_trigger
         self.assertNotEqual(entry["test-runs-on"], "")
 
-    def _gfx110x_linux_entry(self, pr_labels, test_only=True, **kwargs):
+    def _gfx110x_linux_config(self, pr_labels, test_only=True, **kwargs):
         targets = cm.TargetSelection(
             linux_families=["gfx110x"],
             linux_test_only_families=["gfx110x"] if test_only else [],
@@ -2340,22 +2339,27 @@ class TestExpandBuildConfigs(unittest.TestCase):
             targets=targets,
             jobs=_jobs(),
         )
-        return result.linux.per_family_info[0]
+        return result.linux
 
-    def test_run_wsl_selects_wsl_runner(self):
-        entry = self._gfx110x_linux_entry(["ci:test:gfx110x", "ci:run-wsl"])
-        self.assertEqual(entry["test-runs-on-wsl"], "wsl-gfx1101-gpu-rocm")
-        self.assertEqual(entry["test-runs-on"], "linux-gfx110X-gpu-rocm")
+    def test_run_wsl_adds_wsl_family_entry(self):
+        config = self._gfx110x_linux_config(["ci:test:gfx110x", "ci:run-wsl"])
+        self.assertEqual(
+            config.per_family_info[0]["test-runs-on"], "linux-gfx110X-gpu-rocm"
+        )
+        [wsl] = config.wsl_per_family_info
+        self.assertEqual(wsl["amdgpu_family"], "gfx110X-all")
+        self.assertEqual(wsl["test-runs-on"], "wsl-gfx1101-gpu-rocm")
+        self.assertNotIn("test-runs-on-labels", wsl)
 
-    def test_no_wsl_runner_without_run_wsl_label(self):
-        entry = self._gfx110x_linux_entry(["ci:test:gfx110x"])
-        self.assertNotIn("test-runs-on-wsl", entry)
+    def test_no_wsl_family_entry_without_run_wsl_label(self):
+        config = self._gfx110x_linux_config(["ci:test:gfx110x"])
+        self.assertEqual(config.wsl_per_family_info, [])
 
-    def test_no_wsl_runner_when_family_gpu_tests_are_gated(self):
+    def test_no_wsl_family_entry_when_family_gpu_tests_are_gated(self):
         """gfx110x Linux tests only run nightly; ci:run-wsl alone does not enable them."""
-        entry = self._gfx110x_linux_entry(["ci:run-wsl"], test_only=False)
-        self.assertEqual(entry["test-runs-on"], "")
-        self.assertNotIn("test-runs-on-wsl", entry)
+        config = self._gfx110x_linux_config(["ci:run-wsl"], test_only=False)
+        self.assertEqual(config.per_family_info[0]["test-runs-on"], "")
+        self.assertEqual(config.wsl_per_family_info, [])
 
     def test_test_only_overrides_build_only(self):
         """When family is in both build_only and test_only, test_only wins."""
@@ -2809,10 +2813,12 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         python_fields = {f.name for f in fields(cm.BuildConfig)}
         # build_native_linux is Linux-only. JAX builds are release-only and
         # Linux-only for now, so Windows CI workflows do not consume them.
+        # WSL tests the Linux build, so wsl_per_family_info is Linux-only too.
         unused_fields = {
             "build_native_linux",
             "build_jax",
             "jax_build_matrix",
+            "wsl_per_family_info",
         }
         self.assertEqual(
             yaml_fields,

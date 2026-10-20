@@ -58,9 +58,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from _therock_utils.build_topology import get_topology
 
 from amdgpu_family_matrix import (
+    WSL_RUN_LABEL,
     all_build_variants,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
+    get_wsl_test_runner,
     select_build_runner,
 )
 from configure_ci_path_filters import (
@@ -201,32 +203,8 @@ def _get_allowed_test_labels_for_stages(build_stages: list[str]) -> list[str] | 
     return sorted(allowed) if allowed else []
 
 
-# Opt-in label for testing a family's Linux build on its test-runs-on-wsl runner.
-# Those tests also need the wsl-rocdxg stage's artifact (the WSL libhsakmt).
-WSL_RUN_LABEL = "ci:run-wsl"
+# ci:run-wsl tests also need the wsl-rocdxg stage's artifact (the WSL libhsakmt).
 WSL_REQUIRED_STAGE = "wsl-rocdxg"
-
-
-def _get_wsl_test_runner(
-    platform: str,
-    platform_info: dict,
-    test_runs_on: str,
-    build_variant: str,
-    pr_labels: list[str],
-) -> str:
-    """WSL runner that tests a family's Linux build, or "" for none.
-
-    WSL tests reuse the Linux artifacts, so they follow the family's Linux GPU test
-    decision (trigger gating, build/test-only labels, ...) and need ci:run-wsl.
-    """
-    if (
-        WSL_RUN_LABEL not in pr_labels
-        or platform != "linux"
-        or not test_runs_on
-        or "asan" in build_variant
-    ):
-        return ""
-    return platform_info.get("test-runs-on-wsl", "")
 
 
 def _apply_stage_test_labels(
@@ -776,6 +754,9 @@ class BuildConfig:
     # Cross-platform pair, populated identically in linux and windows configs.
     linux_amdgpu_families: str = ""  # Semicolon-separated
     windows_amdgpu_families: str = ""  # Semicolon-separated
+    # Families whose Linux build is also tested on WSL (ci:run-wsl). Same shape
+    # as per_family_info, with the WSL runner as test-runs-on.
+    wsl_per_family_info: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -1618,8 +1599,9 @@ def _expand_build_config_for_platform(
     - amdgpu_family: family name for THEROCK_AMDGPU_FAMILIES
     - amdgpu_targets: comma-separated gfx targets for split artifact fetching
     - test-runs-on: runner label for testing (empty = no test runner available)
-    - test-runs-on-wsl: (optional) WSL runner that also tests the Linux build
     - sanity_check_only_for_family: whether to limit test scope
+
+    Families with a WSL runner (ci:run-wsl) are also listed in wsl_per_family_info.
 
     Args:
         build_only_families: Families where tests should be skipped even if
@@ -1642,6 +1624,7 @@ def _expand_build_config_for_platform(
             break
 
     per_family_info: list[dict] = []
+    wsl_per_family_info: list[dict] = []
     for family_name in families:
         # select_targets already validates family names and filters by
         # platform availability. Family name uniqueness is validated by
@@ -1805,17 +1788,25 @@ def _expand_build_config_for_platform(
             family_info["test-runs-on-multi-gpu-labels"] = platform_info[
                 "test-runs-on-multi-gpu-labels"
             ]
-        test_runs_on_wsl = _get_wsl_test_runner(
-            platform, platform_info, test_runs_on, build_variant, ci_inputs.pr_labels
-        )
-        if test_runs_on_wsl:
-            family_info["test-runs-on-wsl"] = test_runs_on_wsl
         # Per-family test labels allow limiting which tests run for specific architectures
         if "test_labels_for_family" in platform_info:
             family_info["test_labels_for_family"] = platform_info[
                 "test_labels_for_family"
             ]
         per_family_info.append(family_info)
+
+        test_runs_on_wsl = get_wsl_test_runner(
+            platform_info,
+            labels=ci_inputs.pr_labels,
+            test_runs_on=test_runs_on,
+            build_variant=build_variant,
+        )
+        if test_runs_on_wsl:
+            wsl_family_info = {
+                k: v for k, v in family_info.items() if not k.startswith("test-runs-on")
+            }
+            wsl_family_info["test-runs-on"] = test_runs_on_wsl
+            wsl_per_family_info.append(wsl_family_info)
 
     if not per_family_info:
         return None
@@ -1905,6 +1896,7 @@ def _expand_build_config_for_platform(
 
     return BuildConfig(
         per_family_info=per_family_info,
+        wsl_per_family_info=wsl_per_family_info,
         dist_amdgpu_families=dist_amdgpu_families,
         artifact_group=f"multi-arch-{suffix or 'release'}",
         build_variant_label=variant_config["build_variant_label"],

@@ -892,6 +892,23 @@ def get_cpu_test_runner(platform: str) -> str:
 # Valid ML framework tests that can be disabled per-family
 VALID_DISABLED_FRAMEWORK_TESTS = frozenset(["pytorch", "jax"])
 
+# Opt-in label for also testing a family's Linux build on its test-runs-on-wsl runner.
+WSL_RUN_LABEL = "ci:run-wsl"
+
+
+def get_wsl_test_runner(
+    platform_info: dict, *, labels: list[str], test_runs_on: str, build_variant: str
+) -> str:
+    """WSL runner that also tests a family's Linux build, or "" for none.
+
+    platform_info is the family's "linux" entry, with runners from the CI config.
+    WSL reuses the Linux artifacts, so it follows the family's Linux GPU test
+    decision (test_runs_on) and needs ci:run-wsl. ASAN builds are not tested on WSL.
+    """
+    if WSL_RUN_LABEL not in labels or not test_runs_on or "asan" in build_variant:
+        return ""
+    return platform_info.get("test-runs-on-wsl", "")
+
 
 def is_framework_test_disabled_for_family(
     *, amdgpu_family: str, platform: str, framework: str
