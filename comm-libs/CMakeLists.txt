@@ -1,17 +1,9 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+set(_rccl_enabled OFF)
 if(THEROCK_ENABLE_RCCL)
-  set(_rccl_enabled ON)
-  if(THEROCK_TEST_AMDGPU_TARGETS AND NOT "${THEROCK_TEST_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_rccl_targets rccl ${THEROCK_TEST_AMDGPU_TARGETS})
-    if(NOT _rccl_targets)
-      message(STATUS
-        "rccl: no supported gfx targets remain after filtering "
-        "(THEROCK_TEST_AMDGPU_TARGETS='${THEROCK_TEST_AMDGPU_TARGETS}'); skipping subproject.")
-      set(_rccl_enabled OFF)
-    endif()
-  endif()
+  therock_check_subproject_targets(_rccl_enabled rccl)
 endif()
 
 if(THEROCK_ENABLE_RCCL AND _rccl_enabled)
@@ -173,17 +165,9 @@ if(THEROCK_ENABLE_RCCL AND _rccl_enabled)
   )
 endif(THEROCK_ENABLE_RCCL AND _rccl_enabled)
 
+set(_rocshmem_enabled OFF)
 if(THEROCK_ENABLE_ROCSHMEM)
-  set(_rocshmem_enabled ON)
-  if(THEROCK_TEST_AMDGPU_TARGETS AND NOT "${THEROCK_TEST_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_rocshmem_targets rocshmem ${THEROCK_TEST_AMDGPU_TARGETS})
-    if(NOT _rocshmem_targets)
-      message(STATUS
-        "rocshmem: no supported gfx targets remain after filtering "
-        "(THEROCK_TEST_AMDGPU_TARGETS='${THEROCK_TEST_AMDGPU_TARGETS}'); skipping subproject.")
-      set(_rocshmem_enabled OFF)
-    endif()
-  endif()
+  therock_check_subproject_targets(_rocshmem_enabled rocshmem)
 endif()
 
 if(THEROCK_ENABLE_ROCSHMEM AND _rocshmem_enabled)
