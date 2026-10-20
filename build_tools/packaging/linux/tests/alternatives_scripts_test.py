@@ -3,303 +3,202 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Tests for ROCm alternatives JSON and shared maintainer-script templates."""
+"""Tests for amdrocm-alternatives.json and the shared postinst/prerm templates.
 
-from __future__ import annotations
+Scripts come from the real deb and RPM generators. Packages and binaries are
+read from the config files; only the template-defined symlink groups are listed.
+"""
 
-import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
 import unittest
+from collections import Counter
 from pathlib import Path
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+LINUX_DIR = Path(__file__).resolve().parents[1]
+sys.path[:0] = [str(LINUX_DIR.parents[1]), str(LINUX_DIR)]
 
+import deb_package  # noqa: E402
+import rpm_package  # noqa: E402
+from packaging_utils import (  # noqa: E402
+    PackageConfig,
+    is_key_defined,
+    is_postinstallscripts_available,
+    load_alternatives_binaries,
+    read_package_json_file,
+)
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
-
-SCRIPTS_DIR = REPO_ROOT / "build_tools" / "packaging" / "linux" / "template" / "scripts"
-
-ALTERNATIVES_JSON = SCRIPTS_DIR / "amdrocm-alternatives.json"
-
-SUPPORTED_SCRIPTS = {
-    "postinst",
-    "prerm",
+MAJOR, MINOR = 10, 2
+VERSION = f"{MAJOR}.{MINOR}.0"
+PREFIX = f"/opt/rocm/core-{MAJOR}.{MINOR}"
+RPM_SECTIONS = {"postinst": "%post", "prerm": "%preun"}
+ACTIONS = {"postinst": "--install", "prerm": "--remove"}
+PREFIX_LINES = {
+    "deb": f"PKG_INSTALL_PREFIX={PREFIX}",
+    "rpm": 'PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"',
+}
+# Symlink flag -> (only package allowed to set it, alternatives it controls).
+SYMLINK_GROUPS = {
+    "core_symlinks": (
+        "amdrocm-base",
+        ["core", f"core-{MAJOR}", "rocm-bin", "rocm-lib", "rocm-include"]
+        + ["rocm-libexec", "rocm-share"],
+    ),
+    "llvm_symlinks": ("amdrocm-llvm", ["rocm-llvm", "rocm-amdgcn"]),
 }
 
-EXPECTED_PACKAGES = {
-    "amdrocm-base": {
-        "binaries": {
-            "rocm_agent_enumerator",
-            "rocminfo",
-        },
-        "core_symlinks": "True",
-        "llvm_symlinks": "False",
-    },
-    "amdrocm-llvm": {
-        "binaries": {
-            "hipcc",
-            "hipconfig",
-            "amdclang",
-            "amdclang++",
-            "amdclang-cl",
-            "amdclang-cpp",
-            "amdflang",
-            "amdlld",
-            "amdllvm",
-            "offload-arch",
-        },
-        "core_symlinks": "False",
-        "llvm_symlinks": "True",
-    },
-    "amdrocm-hipify": {
-        "binaries": {
-            "hipify-clang",
-        },
-        "core_symlinks": "False",
-        "llvm_symlinks": "False",
-    },
-    "amdrocm-dnn-devel": {
-        "binaries": {
-            "MIOpenDriver",
-        },
-        "core_symlinks": "False",
-        "llvm_symlinks": "False",
-    },
-    "amdrocm-debugger": {
-        "binaries": {
-            "rocgdb",
-        },
-        "core_symlinks": "False",
-        "llvm_symlinks": "False",
-    },
-    "amdrocm-profiler-base": {
-        "binaries": {
-            "rocprofv3",
-            "rocprofv3-avail",
-            "rocprof-attach",
-            "rocpd",
-        },
-        "core_symlinks": "False",
-        "llvm_symlinks": "False",
-    },
-    "amdrocm-profiler": {
-        "binaries": {
-            "rocprof-compute",
-            "rocprof-sys-attach",
-            "rocprof-sys-avail",
-            "rocprof-sys-causal",
-            "rocprof-sys-instrument",
-            "rocprof-sys-python",
-            "rocprof-sys-run",
-            "rocprof-sys-sample",
-        },
-        "core_symlinks": "False",
-        "llvm_symlinks": "False",
-    },
-    "amdrocm-amdsmi": {
-        "binaries": {
-            "amd-smi",
-        },
-        "core_symlinks": "False",
-        "llvm_symlinks": "False",
-    },
+# Packages whose scripts run against a real update-alternatives, the binaries
+# that exist in the sandbox (the rest must be skipped), and the
+# /opt/rocm/<link> -> <prefix>/<dir> links the two packages own.
+SANDBOX_PACKAGES = ("amdrocm-base", "amdrocm-llvm")
+SANDBOX_BINARIES = ("rocminfo", "hipcc", "amdclang")
+SANDBOX_DIR_LINKS = {"core": "", f"core-{MAJOR}": ""} | {
+    d: d for d in ("bin", "lib", "include", "libexec", "share", "llvm", "amdgcn")
 }
+UPDATE_ALTERNATIVES = shutil.which("update-alternatives")
 
 
+@unittest.skipIf(
+    sys.platform == "win32",
+    "Linux maintainer scripts are only built and installed on Linux.",
+)
 class AlternativesScriptsTest(unittest.TestCase):
-    """Test alternatives configuration and shared Jinja templates."""
-
     @classmethod
     def setUpClass(cls) -> None:
-        cls.alternatives = json.loads(ALTERNATIVES_JSON.read_text(encoding="utf-8"))
+        cls.alternatives = load_alternatives_binaries()
+        cls.packages = {pkg["Package"]: pkg for pkg in read_package_json_file()}
+        temp = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(temp.cleanup)
+        cls.deb_root = Path(temp.name)
 
-        cls.environment = Environment(
-            loader=FileSystemLoader(str(REPO_ROOT)),
-            keep_trailing_newline=True,
-            autoescape=select_autoescape(
-                enabled_extensions=("html", "xml"),
-                default_for_string=False,
-                default=False,
-            ),
+        cls.scripts = {}  # (package, target, script) -> rendered text
+        for name in cls.alternatives.keys() & cls.packages.keys():
+            for target in PREFIX_LINES:
+                config = PackageConfig(
+                    cls.deb_root, cls.deb_root, target, VERSION, "", PREFIX, ""
+                )
+                if target == "deb":
+                    deb_dir = cls.deb_root / name
+                    deb_package.generate_debian_postscripts(
+                        cls.packages[name], deb_dir, config
+                    )
+                    for file in deb_dir.iterdir():
+                        cls.scripts[(name, target, file.name)] = file.read_text(
+                            encoding="utf-8"
+                        )
+                else:
+                    sections = rpm_package.generate_rpm_postscripts(
+                        cls.packages[name], config
+                    )
+                    for script, section in RPM_SECTIONS.items():
+                        cls.scripts[(name, target, script)] = sections.get(section)
+
+    def test_config_matches_postinstall_flags(self) -> None:
+        flagged = {
+            name
+            for name, pkg in self.packages.items()
+            if is_postinstallscripts_available(pkg)
+        }
+        self.assertEqual(set(self.alternatives), flagged)
+
+    def test_each_binary_and_symlink_group_has_one_owner(self) -> None:
+        counts = Counter(
+            binary for cfg in self.alternatives.values() for binary in cfg["binaries"]
         )
+        self.assertEqual([b for b, n in counts.items() if n > 1], [])
+        for flag, (owner, _) in SYMLINK_GROUPS.items():
+            owners = [
+                n for n, cfg in self.alternatives.items() if is_key_defined(cfg, flag)
+            ]
+            self.assertEqual(owners, [owner], flag)
 
-    def render_script(self, package_name: str, script_name: str) -> str:
-        """Render a shared maintainer script for one configured package."""
+    def test_generated_scripts(self) -> None:
+        for name, cfg in self.alternatives.items():
+            for target in PREFIX_LINES:
+                for script in ACTIONS:
+                    with self.subTest(package=name, target=target, script=script):
+                        text = self.scripts.get((name, target, script))
+                        self.assertIsNotNone(text, "script was not generated")
 
-        package_config = self.alternatives[package_name]
+                        bash = subprocess.run(["bash", "-n"], input=text, text=True)
+                        self.assertEqual(bash.returncode, 0)
+                        if target == "deb":
+                            path = self.deb_root / name / script
+                            self.assertTrue(os.access(path, os.X_OK))
 
-        context = {
-            "install_prefix": "/opt/rocm/core-10.2",
-            "version_major": 10,
-            "version_minor": 2,
-            "version_patch": 0,
-            "target": "deb",
-            "package_name": package_name,
-            "binaries": package_config["binaries"],
-            "core_symlinks": "core_symlinks" in package_config,
-            "llvm_symlinks": "llvm_symlinks" in package_config,
+                        # postinst only installs and prerm only removes.
+                        for other, other_action in ACTIONS.items():
+                            self.assertEqual(other_action in text, other == script)
+                        self.assertIn(PREFIX_LINES[target], text)
+
+                        for binary in cfg["binaries"]:
+                            self.assertIn(f'"$PKG_INSTALL_PREFIX/bin/{binary}"', text)
+                        for flag, (_, alternatives) in SYMLINK_GROUPS.items():
+                            enabled = is_key_defined(cfg, flag)
+                            for alternative in alternatives:
+                                self.assertEqual(f'"{alternative}"' in text, enabled)
+
+    @unittest.skipUnless(UPDATE_ALTERNATIVES, "update-alternatives is not installed")
+    def test_update_alternatives_install_and_remove(self) -> None:
+        """Run the real postinst and prerm against a sandboxed update-alternatives."""
+        root = (self.deb_root / "sandbox").resolve()
+        prefix = root / "prefix"
+        for directory in ("usr/bin", "opt/rocm", "alt", "admin", "tools"):
+            (root / directory).mkdir(parents=True)
+        for directory in SANDBOX_DIR_LINKS.values():
+            (prefix / directory).mkdir(parents=True, exist_ok=True)
+        for binary in SANDBOX_BINARIES:
+            (prefix / "bin" / binary).touch(mode=0o755)
+
+        # Same tool, but its state and the /usr/bin and /opt/rocm links live in root.
+        wrapper = root / "tools" / "update-alternatives"
+        wrapper.write_text(
+            "#!/bin/bash\n"
+            "args=()\n"
+            'for arg in "$@"; do\n'
+            f'    case "$arg" in /usr/bin/*|/opt/rocm/*) arg="{root}$arg" ;; esac\n'
+            '    args+=("$arg")\n'
+            "done\n"
+            f"exec {UPDATE_ALTERNATIVES} --altdir {root}/alt --admindir {root}/admin "
+            '"${args[@]}"\n',
+            encoding="utf-8",
+        )
+        wrapper.chmod(0o755)
+        env = {
+            **os.environ,
+            "PATH": f"{wrapper.parent}{os.pathsep}{os.environ['PATH']}",
         }
 
-        template = self.environment.get_template(
-            f"build_tools/packaging/linux/template/scripts/amdrocm-{script_name}.j2"
-        )
+        def run(script: str, action: str, names) -> None:
+            for name in names:
+                subprocess.run([root / name / script, action], env=env, check=True)
 
-        return template.render(context)
+        def links() -> dict[str, Path]:
+            return {
+                str(link.relative_to(root)): Path(os.path.realpath(link))
+                for directory in ("usr/bin", "opt/rocm")
+                for link in (root / directory).iterdir()
+            }
 
-    def test_alternatives_json_exists_and_is_valid(self) -> None:
-        self.assertTrue(
-            ALTERNATIVES_JSON.is_file(), f"Missing JSON file: {ALTERNATIVES_JSON}"
-        )
-        self.assertIsInstance(self.alternatives, dict)
-        self.assertTrue(self.alternatives)
-
-    def test_expected_packages_are_configured(self) -> None:
-        for package_name in EXPECTED_PACKAGES:
-            with self.subTest(package=package_name):
-                self.assertIn(package_name, self.alternatives)
-
-    def test_package_configuration_has_valid_structure(self) -> None:
-        for package_name, package_config in self.alternatives.items():
-            with self.subTest(package=package_name):
-                self.assertIsInstance(package_config, dict)
-                self.assertIn("scripts", package_config)
-                self.assertIn("binaries", package_config)
-                self.assertIsInstance(package_config["scripts"], list)
-                self.assertIsInstance(package_config["binaries"], list)
-                self.assertTrue(package_config["scripts"])
-                self.assertTrue(package_config["binaries"])
-                self.assertTrue(
-                    set(package_config["scripts"]).issubset(SUPPORTED_SCRIPTS)
-                )
-                self.assertTrue(
-                    all(isinstance(script, str) for script in package_config["scripts"])
-                )
-                self.assertTrue(
-                    all(
-                        isinstance(binary, str) for binary in package_config["binaries"]
-                    )
-                )
-
-    def test_symlink_flags_use_true_strings(self) -> None:
-        for package_name, package_config in self.alternatives.items():
-            with self.subTest(package=package_name):
-                if "core_symlinks" in package_config:
-                    self.assertEqual(package_config["core_symlinks"], "True")
-                if "llvm_symlinks" in package_config:
-                    self.assertEqual(package_config["llvm_symlinks"], "True")
-
-    def test_expected_binary_ownership(self) -> None:
-        configured_binaries: dict[str, str] = {}
-
-        for package_name, expected in EXPECTED_PACKAGES.items():
-            with self.subTest(package=package_name):
-                actual_binaries = set(self.alternatives[package_name]["binaries"])
-                self.assertEqual(actual_binaries, expected["binaries"])
-
-                for binary in actual_binaries:
-                    with self.subTest(binary=binary):
-                        self.assertNotIn(
-                            binary,
-                            configured_binaries,
-                            f"{binary!r} is owned by both {configured_binaries.get(binary)!r} and {package_name!r}",
-                        )
-                        configured_binaries[binary] = package_name
-
-    def test_expected_symlink_ownership(self) -> None:
-        self.assertEqual(self.alternatives["amdrocm-base"].get("core_symlinks"), "True")
-        self.assertEqual(self.alternatives["amdrocm-llvm"].get("llvm_symlinks"), "True")
-
-        for package_name, package_config in self.alternatives.items():
-            with self.subTest(package=package_name):
-                if package_name != "amdrocm-base":
-                    self.assertNotEqual(
-                        package_config.get("core_symlinks", "False"), "True"
-                    )
-                if package_name != "amdrocm-llvm":
-                    self.assertNotEqual(
-                        package_config.get("llvm_symlinks", "False"), "True"
-                    )
-
-    def test_shared_templates_exist(self) -> None:
-        for script_name in SUPPORTED_SCRIPTS:
-            template_path = SCRIPTS_DIR / f"amdrocm-{script_name}.j2"
-            self.assertTrue(
-                template_path.is_file(), f"Missing template: {template_path}"
+        config = PackageConfig(root, root, "deb", VERSION, "", str(prefix), "")
+        for name in SANDBOX_PACKAGES:
+            deb_package.generate_debian_postscripts(
+                self.packages[name], root / name, config
             )
 
-    def test_configured_scripts_render(self) -> None:
-        for package_name, package_config in self.alternatives.items():
-            for script_name in package_config["scripts"]:
-                with self.subTest(package=package_name, script=script_name):
-                    rendered = self.render_script(package_name, script_name)
-                    self.assertTrue(rendered.strip())
-                    self.assertIn("update-alternatives", rendered)
+        run("postinst", "configure", SANDBOX_PACKAGES)
+        expected = {f"usr/bin/{b}": prefix / "bin" / b for b in SANDBOX_BINARIES}
+        expected |= {
+            f"opt/rocm/{link}": prefix / target
+            for link, target in SANDBOX_DIR_LINKS.items()
+        }
+        self.assertEqual(links(), expected)
 
-    def test_base_postinst_renders_core_symlink_logic(self) -> None:
-        rendered = self.render_script("amdrocm-base", "postinst")
-        self.assertIn('"/opt/rocm/core"', rendered)
-        self.assertIn('"/opt/rocm/core-10"', rendered)
-        self.assertIn('"core"', rendered)
-        self.assertIn('"core-10"', rendered)
-        self.assertIn('"rocm-bin"', rendered)
-        self.assertIn('"rocm-lib"', rendered)
-        self.assertIn('"rocm-include"', rendered)
-        self.assertIn('"rocm_agent_enumerator"', rendered)
-        self.assertIn('"rocminfo"', rendered)
-        self.assertNotIn('"rocm-llvm"', rendered)
-        self.assertNotIn('"rocm-amdgcn"', rendered)
-
-    def test_base_prerm_renders_core_removal_logic(self) -> None:
-        rendered = self.render_script("amdrocm-base", "prerm")
-        self.assertIn('"core"', rendered)
-        self.assertIn('"core-10"', rendered)
-        self.assertIn('"rocm-bin"', rendered)
-        self.assertIn('"rocm-lib"', rendered)
-        self.assertIn('"rocm-include"', rendered)
-        self.assertIn('"rocm_agent_enumerator"', rendered)
-        self.assertIn('"rocminfo"', rendered)
-        self.assertNotIn('"rocm-llvm"', rendered)
-        self.assertNotIn('"rocm-amdgcn"', rendered)
-
-    def test_llvm_postinst_renders_llvm_symlink_logic(self) -> None:
-        rendered = self.render_script("amdrocm-llvm", "postinst")
-        self.assertIn('"/opt/rocm/llvm"', rendered)
-        self.assertIn('"/opt/rocm/amdgcn"', rendered)
-        self.assertIn('"/opt/rocm/libexec"', rendered)
-        self.assertIn('"/opt/rocm/share"', rendered)
-        self.assertIn('"rocm-llvm"', rendered)
-        self.assertIn('"rocm-amdgcn"', rendered)
-        self.assertIn('"rocm-libexec"', rendered)
-        self.assertIn('"rocm-share"', rendered)
-        self.assertIn('"hipcc"', rendered)
-        self.assertIn('"hipconfig"', rendered)
-        self.assertNotIn('"/opt/rocm/core"', rendered)
-        self.assertNotIn('"rocm-bin"', rendered)
-
-    def test_llvm_prerm_renders_llvm_removal_logic(self) -> None:
-        rendered = self.render_script("amdrocm-llvm", "prerm")
-        self.assertIn('"rocm-llvm"', rendered)
-        self.assertIn('"rocm-amdgcn"', rendered)
-        self.assertIn('"rocm-libexec"', rendered)
-        self.assertIn('"rocm-share"', rendered)
-        self.assertIn('"hipcc"', rendered)
-        self.assertIn('"hipconfig"', rendered)
-        self.assertNotIn('"core"', rendered)
-        self.assertNotIn('"rocm-bin"', rendered)
-
-    def test_false_symlink_flags_do_not_enable_logic(self) -> None:
-        rendered = self.render_script("amdrocm-hipify", "postinst")
-        self.assertNotIn('"/opt/rocm/core-10"', rendered)
-        self.assertNotIn('"/opt/rocm/llvm"', rendered)
-        self.assertIn('"hipify-clang"', rendered)
-
-    def test_binary_entries_generate_commands(self) -> None:
-        for package_name, package_config in self.alternatives.items():
-            rendered = self.render_script(package_name, "postinst")
-
-            for binary in package_config["binaries"]:
-                with self.subTest(package=package_name, binary=binary):
-                    self.assertIn(binary, rendered)
-                    self.assertIn(f'"/usr/bin/{binary}"', rendered)
+        run("prerm", "remove", reversed(SANDBOX_PACKAGES))
+        self.assertEqual(links(), {})
 
 
 if __name__ == "__main__":

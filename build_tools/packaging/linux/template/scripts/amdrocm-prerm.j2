@@ -58,21 +58,8 @@ do_remove_alternatives() {
         "rocm-include" \
         "$PKG_INSTALL_PREFIX/include" \
         || true
-{% endif %}
 
-{% if llvm_symlinks %}
-    # Remove /opt/rocm/llvm, /opt/rocm/amdgcn,
-    # /opt/rocm/libexec, and /opt/rocm/share.
-    update-alternatives --remove \
-        "rocm-llvm" \
-        "$PKG_INSTALL_PREFIX/llvm" \
-        || true
-
-    update-alternatives --remove \
-        "rocm-amdgcn" \
-        "$PKG_INSTALL_PREFIX/amdgcn" \
-        || true
-
+    # Remove /opt/rocm/libexec and /opt/rocm/share.
     update-alternatives --remove \
         "rocm-libexec" \
         "$PKG_INSTALL_PREFIX/libexec" \
@@ -81,6 +68,19 @@ do_remove_alternatives() {
     update-alternatives --remove \
         "rocm-share" \
         "$PKG_INSTALL_PREFIX/share" \
+        || true
+{% endif %}
+
+{% if llvm_symlinks %}
+    # Remove /opt/rocm/llvm and /opt/rocm/amdgcn.
+    update-alternatives --remove \
+        "rocm-llvm" \
+        "$PKG_INSTALL_PREFIX/llvm" \
+        || true
+
+    update-alternatives --remove \
+        "rocm-amdgcn" \
+        "$PKG_INSTALL_PREFIX/amdgcn" \
         || true
 {% endif %}
 }

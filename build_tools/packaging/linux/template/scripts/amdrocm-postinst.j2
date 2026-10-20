@@ -18,12 +18,33 @@ do_update_alternatives() {
     command -v update-alternatives >/dev/null || return 0
 
     local altscore now
-    now=$(date -u +%s)
+    now=$(date -u +%s)          # Number of seconds since 1 Jan 1970
 
-    # Build an alternatives priority from the ROCm version.
+    # The reason for this approach rather than using the build number
+    # is to allow for jobs from different builds. In one build job the
+    # job number might be at 1200, whilst in a release job the number
+    # may be only 1. This approach assumes that if you install a build
+    # with a different semantic version then the highest is the
+    # desired one, but if you install two with the same semver then
+    # the newest is the desired version.
+
+    # Build up a score. It needs to fit in 32 bits
     altscore=$(({{ version_major }} - 3))
-    altscore=$((altscore * 14 + {{ version_minor }}))
-    altscore=$((altscore * 14 + {{ version_patch }}))
+    altscore=$((altscore * 14 + {{ version_minor }})) # Allow up to 14 minor
+    altscore=$((altscore * 14 + {{ version_patch }})) # Allow up to 14 patch
+
+    # So far if the version is 10.x we have a number (altscore)
+    # that is at most 1567.  2**31/1567 is about 1.37 million. So
+    # multiply altscore by 1,000,000 and add in a factor of how many
+    # minutes have passed from an arbitrary point in time (1,600,000,000
+    # seconds after 1 Jan 1970 or Sep 13 12:26:40 2020) on the
+    # basis that no one is going to be installing a new version more
+    # often than every minute. This does get things wrong if a million
+    # minutes pass and you are downgrading, but the chances of someone
+    # waiting almost 2 years between installing a version and the
+    # previous patch level is small.
+    # Note: altscore must stay below about 2140 to fit in 32 bits, so
+    # this overflows from ROCm 14 (14.0.0 gives 2156).
     altscore=$((altscore * 1000000 + (now - 1600000000) / 60))
 
 {% if target == "deb" %}
@@ -64,23 +85,8 @@ do_update_alternatives() {
         "rocm-include" \
         "$PKG_INSTALL_PREFIX/include" \
         "$altscore"
-{% endif %}
 
-{% if llvm_symlinks %}
-    # Install /opt/rocm/llvm, /opt/rocm/amdgcn,
-    # /opt/rocm/libexec, and /opt/rocm/share.
-    update-alternatives --install \
-        "/opt/rocm/llvm" \
-        "rocm-llvm" \
-        "$PKG_INSTALL_PREFIX/llvm" \
-        "$altscore"
-
-    update-alternatives --install \
-        "/opt/rocm/amdgcn" \
-        "rocm-amdgcn" \
-        "$PKG_INSTALL_PREFIX/amdgcn" \
-        "$altscore"
-
+    # Install /opt/rocm/libexec and /opt/rocm/share.
     update-alternatives --install \
         "/opt/rocm/libexec" \
         "rocm-libexec" \
@@ -91,6 +97,21 @@ do_update_alternatives() {
         "/opt/rocm/share" \
         "rocm-share" \
         "$PKG_INSTALL_PREFIX/share" \
+        "$altscore"
+{% endif %}
+
+{% if llvm_symlinks %}
+    # Install /opt/rocm/llvm and /opt/rocm/amdgcn.
+    update-alternatives --install \
+        "/opt/rocm/llvm" \
+        "rocm-llvm" \
+        "$PKG_INSTALL_PREFIX/llvm" \
+        "$altscore"
+
+    update-alternatives --install \
+        "/opt/rocm/amdgcn" \
+        "rocm-amdgcn" \
+        "$PKG_INSTALL_PREFIX/amdgcn" \
         "$altscore"
 {% endif %}
 
