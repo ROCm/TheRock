@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -146,6 +147,15 @@ def gh_api(
 
 
 LIBRARIES_BASELINE_GATE_JOB_NAME = "Libraries Baseline Ready"
+# A full Multi-Arch CI run has ~1000 jobs. Asking the jobs endpoint for them
+# 100 at a time makes it reply 502 every single time; 50 is served fine.
+RUN_JOBS_PAGE_SIZE = 50
+# Each of the resulting ~20 pages is a slow (multi-second) request that the
+# server randomly answers with a 502, or drops mid-body, so pages need
+# retrying. Both show up here; only the 502 surfaces as a RuntimeError.
+RUN_JOBS_PAGE_ATTEMPTS = 5
+RUN_JOBS_RETRY_DELAY_SECONDS = 5
+RUN_JOBS_RETRY_ERRORS = (RuntimeError, requests.RequestException)
 
 
 def _list_run_jobs(repo: str, token: str, run_id: str | int) -> list[dict[str, Any]]:
@@ -154,14 +164,26 @@ def _list_run_jobs(repo: str, token: str, run_id: str | int) -> list[dict[str, A
     page = 1
 
     while True:
-        result = gh_api(
-            token,
-            f"repos/{repo}/actions/runs/{run_id}/jobs?per_page=100&page={page}",
+        endpoint = (
+            f"repos/{repo}/actions/runs/{run_id}/jobs"
+            f"?per_page={RUN_JOBS_PAGE_SIZE}&page={page}"
         )
+        for attempt in range(1, RUN_JOBS_PAGE_ATTEMPTS + 1):
+            try:
+                result = gh_api(token, endpoint)
+                break
+            except RUN_JOBS_RETRY_ERRORS as e:
+                if attempt == RUN_JOBS_PAGE_ATTEMPTS:
+                    raise
+                print(f"[WARN] Retrying jobs page {page} of run {run_id}: {e}")
+                time.sleep(RUN_JOBS_RETRY_DELAY_SECONDS * attempt)
+
         page_jobs = result.get("jobs", [])
         jobs.extend(page_jobs)
 
-        if len(page_jobs) < 100 or len(jobs) >= result.get("total_count", 0):
+        if len(page_jobs) < RUN_JOBS_PAGE_SIZE or len(jobs) >= result.get(
+            "total_count", 0
+        ):
             return jobs
 
         page += 1
@@ -177,10 +199,21 @@ def _baseline_gate_jobs_succeeded(repo: str, token: str, run_id: str | int) -> b
     elsewhere in the matrix does not block a baseline that is otherwise fine
     to reuse. If no such job is found at all, treat the run as unsafe to use;
     that should only happen for a run that predates this gate.
+
+    A run whose job list cannot be read at all is also treated as unusable
+    rather than raised: losing the baseline costs a rebuild, while failing
+    here would abort the push handler and leave the downstream repo with no
+    TheRock ref bump PR whatsoever.
     """
+    try:
+        run_jobs = _list_run_jobs(repo, token, run_id)
+    except RUN_JOBS_RETRY_ERRORS as e:
+        print(f"[WARN] Could not list jobs for run {run_id}: {e}")
+        return False
+
     gate_jobs = [
         job
-        for job in _list_run_jobs(repo, token, run_id)
+        for job in run_jobs
         if job["name"].endswith(LIBRARIES_BASELINE_GATE_JOB_NAME)
     ]
     if not gate_jobs:
@@ -220,12 +253,17 @@ def get_baseline_run_id_from_merged_pr(
     math-libs/compiler-runtime failure elsewhere in the matrix makes the
     overall run "failure" even when every stage rocm-libraries needs
     succeeded, and rejecting on that basis would throw away perfectly good
-    baselines. `status=completed` still filters candidate runs to ones that
-    have finished; their overall `conclusion` no longer decides usability. If
-    the newest matching run's gate job did not succeed (or does not exist),
-    we deliberately do not fall back to an older run on a different commit;
-    the caller treats a `None` return as "no baseline", which forces a full
-    rebuild instead of a plausible-looking but wrong artifact reuse.
+    baselines. Candidate runs are deliberately not filtered on run `status`
+    either: the gate job finishes with the build stages, but the run around
+    it stays in progress for hours while the test matrix drains, and this
+    function is called seconds after the merge. Filtering on
+    `status=completed` left only the short-lived duplicate runs that
+    concurrency cancelled when the bump PR's labels were applied, none of
+    which ever reach the gate job, so every bump produced an empty baseline.
+    If no matching run's gate job succeeded (or none exists), we deliberately
+    do not fall back to an older run on a different commit; the caller treats
+    a `None` return as "no baseline", which forces a full rebuild instead of
+    a plausible-looking but wrong artifact reuse.
     """
     # Find the PR that produced this merge commit
     prs = gh_api(token, f"repos/{repo}/commits/{merge_commit_sha}/pulls")
@@ -241,10 +279,10 @@ def get_baseline_run_id_from_merged_pr(
         print(f"[WARN] No merged PR found for commit {merge_commit_sha[:7]}")
         return None
 
-    # Get the completed workflow run for this PR's head commit
+    # Get the workflow runs for this PR's head commit
     pr_head_sha = pr["head"]["sha"]
     runs = gh_api(
-        token, f"repos/{repo}/actions/runs?head_sha={pr_head_sha}&status=completed"
+        token, f"repos/{repo}/actions/runs?head_sha={pr_head_sha}&per_page=100"
     )
     matching_runs = [
         run for run in runs.get("workflow_runs", []) if run["name"] == workflow_name

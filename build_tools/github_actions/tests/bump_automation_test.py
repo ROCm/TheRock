@@ -10,6 +10,8 @@ import textwrap
 import unittest
 from unittest.mock import patch
 
+import requests
+
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from bump_automation import (
     _baseline_gate_jobs_succeeded,
@@ -28,6 +30,8 @@ from bump_automation import (
     handle_push,
     latest_commit,
     LIBRARIES_BASELINE_GATE_JOB_NAME,
+    RUN_JOBS_PAGE_ATTEMPTS,
+    RUN_JOBS_PAGE_SIZE,
     search_issues,
     submodule_changed,
     update_ci_env_file,
@@ -115,14 +119,59 @@ class ListRunJobsTest(unittest.TestCase):
         mock_api.assert_called_once()
 
     def test_follows_pagination_until_all_jobs_are_retrieved(self):
-        first_page = _jobs_page([_gate_job("success")] * 100, total_count=101)
-        second_page = _jobs_page([_gate_job("success")], total_count=101)
+        total = RUN_JOBS_PAGE_SIZE + 1
+        first_page = _jobs_page([_gate_job("success")] * RUN_JOBS_PAGE_SIZE, total)
+        second_page = _jobs_page([_gate_job("success")], total)
         with patch(
             "bump_automation.gh_api", side_effect=[first_page, second_page]
         ) as mock_api:
             jobs = _list_run_jobs("ROCm/TheRock", "token", 111)
-        self.assertEqual(len(jobs), 101)
+        self.assertEqual(len(jobs), total)
         self.assertEqual(mock_api.call_count, 2)
+
+    def test_retries_a_page_that_fails_transiently(self):
+        # The jobs endpoint intermittently 502s while paging through a full
+        # Multi-Arch CI run; one bad page must not lose the whole baseline.
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                RuntimeError("GitHub API failed: 502 Server Error"),
+                _jobs_page([_gate_job("success")]),
+            ],
+        ) as mock_api, patch("bump_automation.time.sleep"):
+            jobs = _list_run_jobs("ROCm/TheRock", "token", 111)
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(mock_api.call_count, 2)
+
+    def test_retries_a_page_whose_response_body_was_dropped(self):
+        # The same endpoint also drops responses mid-body, which surfaces as
+        # a requests exception rather than a non-ok status.
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                requests.exceptions.ChunkedEncodingError("Connection broken"),
+                _jobs_page([_gate_job("success")]),
+            ],
+        ) as mock_api, patch("bump_automation.time.sleep"):
+            jobs = _list_run_jobs("ROCm/TheRock", "token", 111)
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(mock_api.call_count, 2)
+
+    def test_raises_after_exhausting_retries(self):
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=RuntimeError("GitHub API failed: 502 Server Error"),
+        ) as mock_api, patch("bump_automation.time.sleep"):
+            with self.assertRaises(RuntimeError):
+                _list_run_jobs("ROCm/TheRock", "token", 111)
+        self.assertEqual(mock_api.call_count, RUN_JOBS_PAGE_ATTEMPTS)
+
+    def test_requests_a_page_size_the_jobs_endpoint_can_serve(self):
+        # per_page=100 makes the endpoint 502 on runs with ~1000 jobs.
+        with patch("bump_automation.gh_api", return_value=_jobs_page([])) as mock_api:
+            _list_run_jobs("ROCm/TheRock", "token", 111)
+        self.assertLessEqual(RUN_JOBS_PAGE_SIZE, 50)
+        self.assertIn(f"per_page={RUN_JOBS_PAGE_SIZE}", mock_api.call_args.args[1])
 
 
 class BaselineGateJobsSucceededTest(unittest.TestCase):
@@ -165,6 +214,17 @@ class BaselineGateJobsSucceededTest(unittest.TestCase):
                 _baseline_gate_jobs_succeeded("ROCm/TheRock", "token", 111)
             )
 
+    def test_false_when_the_job_list_cannot_be_read(self):
+        # Aborting here would leave the downstream repo with no ref bump PR at
+        # all; a missing baseline only costs a rebuild.
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=RuntimeError("GitHub API failed: 502 Server Error"),
+        ), patch("bump_automation.time.sleep"):
+            self.assertFalse(
+                _baseline_gate_jobs_succeeded("ROCm/TheRock", "token", 111)
+            )
+
     def test_false_when_the_gate_job_was_skipped(self):
         # Skipping is how the gate reports a reused stage that did not succeed,
         # so this is the primary rejection path rather than an edge case.
@@ -188,8 +248,19 @@ class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
             "head": {"sha": self.HEAD_SHA},
         }
 
-    def _run(self, run_id: int, conclusion: str | None, name: str = "Multi-Arch CI"):
-        return {"id": run_id, "name": name, "conclusion": conclusion}
+    def _run(
+        self,
+        run_id: int,
+        conclusion: str | None,
+        name: str = "Multi-Arch CI",
+        status: str = "completed",
+    ):
+        return {
+            "id": run_id,
+            "name": name,
+            "conclusion": conclusion,
+            "status": status,
+        }
 
     def test_returns_the_run_id_when_its_gate_job_succeeded(self):
         with patch(
@@ -225,6 +296,29 @@ class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
                 "ROCm/TheRock", "token", self.MERGE_SHA
             )
         self.assertEqual(run_id, "111")
+
+    def test_returns_the_run_id_while_the_run_is_still_in_progress(self):
+        # Bump PRs merge while their Multi-Arch CI run is still draining the
+        # test matrix, hours after the gate job finished. Restricting the
+        # lookup to completed runs left only the duplicate runs that
+        # concurrency cancelled when the bump PR's labels were applied, and
+        # every bump wrote an empty baseline-run-id as a result.
+        cancelled_duplicate = self._run(111, "cancelled", status="completed")
+        real_run = self._run(112, None, status="in_progress")
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                [self._pr()],
+                {"workflow_runs": [cancelled_duplicate, real_run]},
+                _jobs_page([{"name": "setup", "conclusion": "cancelled"}]),
+                _jobs_page([_gate_job("success")]),
+            ],
+        ) as mock_api:
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertEqual(run_id, "112")
+        self.assertNotIn("status=completed", mock_api.call_args_list[1].args[1])
 
     def test_skips_runs_whose_gate_job_did_not_succeed(self):
         with patch(
