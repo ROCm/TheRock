@@ -40,7 +40,8 @@ SUBMODULE_CONFIG = {
         "repo": "ROCm/rocm-systems",
         "files": [],
         "updater": "ref",
-        "token_key": "systems",
+        # Selects an entry in the tokens dictionary, not a literal credential.
+        "token_key": "systems",  # nosec B105
         # See the "rocm-libraries" entry below for why this is per-repo.
         "bot_author": "systems-assistant[bot]",
         # Changes to rocm-systems should run the full matrix of CI jobs:
@@ -54,7 +55,8 @@ SUBMODULE_CONFIG = {
         "repo": "ROCm/rocm-libraries",
         "files": [ROCM_LIBRARIES_CI_ENV_FILE],
         "updater": "ci-env",
-        "token_key": "libraries",
+        # Selects an entry in the tokens dictionary, not a literal credential.
+        "token_key": "libraries",  # nosec B105
         # GitHub App bot identity that opens "Update TheRock reference to
         # (...)" PRs on this repo; only used by the "ci-env" updater's stale
         # pin-PR cleanup. Each downstream repo has its own GitHub App (see
@@ -73,7 +75,8 @@ SUBMODULE_CONFIG = {
         "files": [],
         "updater": "submodule-only",
         # We will reuse the rocm-systems token for now.
-        "token_key": "systems",
+        # Selects an entry in the tokens dictionary, not a literal credential.
+        "token_key": "systems",  # nosec B105
         "branch": "amd-staging-rocgdb-16",
         # Changes to rocgdb can run a limited matrix of CI jobs:
         #   * Build for all gfx archs
@@ -85,7 +88,8 @@ SUBMODULE_CONFIG = {
         "files": [],
         "updater": "submodule-only",
         # We will reuse the rocm-systems token for now.
-        "token_key": "systems",
+        # Selects an entry in the tokens dictionary, not a literal credential.
+        "token_key": "systems",  # nosec B105
         # Changes to mesa-fork can run a limited matrix of CI jobs:
         #   * Build for all gfx archs
         #   * mesa-fork tests only (no impact on other project builds/tests)
@@ -194,7 +198,7 @@ def gh_api_paginate(token: str, endpoint: str) -> list:
     results = []
     url = f"https://api.github.com/{endpoint}"
     while url:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=60)
         if not response.ok:
             raise RuntimeError(
                 f"GitHub API failed: {response.status_code} {response.text}"

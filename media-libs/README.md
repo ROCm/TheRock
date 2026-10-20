@@ -5,8 +5,9 @@ This directory contains media decoding libraries for AMD GPUs.
 - **rocDecode** -- high-performance video decoding using VA-API
 - **rocJPEG** -- high-performance JPEG decoding using VA-API
 
-Both libraries depend on AMD Mesa for VA-API support and are only available
-on Linux.
+Both libraries depend on AMD Mesa for VA-API support. rocDecode builds on both
+Linux and Windows (Windows uses the vaon12 VA-API-on-D3D12 backend); rocJPEG is
+currently available on Linux only.
 
 ## Dependencies
 

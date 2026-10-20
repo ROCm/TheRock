@@ -5,10 +5,9 @@
 This script determines what test configurations to run.
 
 Outputs (written to $GITHUB_OUTPUT):
-  - sanity_component: JSON object for the sanity component, always present as a
-    prerequisite that must pass before other components are run. The
-    ``test_runner`` field within this object is non-empty only on GPU runners,
-    so callers can gate GPU-only steps on that field.
+  - sanity_component: JSON object for sanity, or null when excluded. When
+    selected, sanity must pass before other components run. Its ``test_runner``
+    field is non-empty only on GPU runners.
   - components: JSON array of component configs for the regular test matrix
     (excludes sanity, which is output separately above).
   - platform: lowercase OS name derived from RUNNER_OS.
@@ -56,26 +55,53 @@ def _get_artifact_path(artifact_path: str) -> str:
 # keys it expands to. Use this when a single label should select multiple
 # related jobs without relying on name-prefix inference.
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
-    "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
+    "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
     "tensilelite": ["tensilelite", "tensilelite-common"],
 }
 
 
+def _parse_test_labels(raw: str) -> list[str]:
+    """Parse the TEST_LABELS environment variable into a list of strings.
+
+    Accepts either Python list literal syntax (e.g. '["test:rocblas"]') or a
+    plain comma-separated string (e.g. 'test:rocblas,test:hipblas').  The
+    latter is friendlier for manual workflow_dispatch runs where users are
+    unlikely to type valid Python list syntax.
+    """
+    raw = raw.strip()
+    if not raw or raw == "[]":
+        return []
+
+    # If it looks like a Python list literal, try ast.literal_eval first.
+    if raw.startswith("["):
+        try:
+            result = ast.literal_eval(raw)
+            if isinstance(result, list):
+                return [str(item) for item in result]
+        except (ValueError, SyntaxError) as exc:
+            raise ValueError(
+                f"TEST_LABELS looks like a Python list but could not be parsed: {raw!r}. "
+                f'Expected format: \'["test:rocblas", "test:hipblas"]\' (Python list literal) '
+                f"or 'test:rocblas,test:hipblas' (comma-separated string). "
+                f"Original error: {exc}"
+            ) from exc
+
+    # Fall back to comma-separated string parsing.
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 # Base container options applied to all Linux containers
-# --ipc host - Allows shared memory between host and container
 # --user 0:0 - Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
 # --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
 # --ulimit nofile=1048576:1048576 - Increase open file limit for RCCL
-# --security-opt seccomp=unconfined - enables memory mapping, and is recommended for containers running in HPC environments
 _BASE_CONTAINER_OPTIONS = [
-    "--ipc host",
     "--user 0:0",
     "--ulimit memlock=-1:-1",
     "--ulimit nofile=1048576:1048576",
-    "--security-opt seccomp=unconfined",
 ]
 
 # GPU-specific container options (only applied when linux_cpu_runner != True)
+# --security-opt seccomp=unconfined - enables memory mapping and device ioctls needed by ROCm/HPC GPU workloads
 # --group-add video - Grants access to GPU video group
 # --device /dev/kfd - AMD KFD device for GPU compute
 # --device /dev/dri - Direct Rendering Infrastructure devices
@@ -83,6 +109,7 @@ _BASE_CONTAINER_OPTIONS = [
 # --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
 # -e ROCR_VISIBLE_DEVICES - Pass host's GPU isolation env var to container (used on ARC runners)
 _GPU_CONTAINER_OPTIONS = [
+    "--security-opt seccomp=unconfined",
     "--group-add video",
     "--device /dev/kfd",
     "--device /dev/dri",
@@ -205,11 +232,16 @@ _rocgdb_common = {
 # not in the list; omit the field to run on every tier (the default). For example, a
 # component whose suite is too slow for the quick sanity tier opts out of it with:
 #   "test_types": ["standard", "comprehensive", "full"]
+#
+# A component's "skip_stages" lists build stages whose absence excludes the test.
+# If any listed stage is in SKIP_STAGES, the component is skipped. Reused stages
+# still supply artifacts and do not exclude tests. Omit the field for no stage gate.
 
 test_matrix = {
-    # Sanity tests - always run first as a prerequisite for other component tests
+    # Sanity runs first when compiler-runtime artifacts are available.
     "sanity": {
         "job_name": "sanity",
+        "skip_stages": ["compiler-runtime"],
         "fetch_artifact_args": "--sanity",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_sanity.py')}",
@@ -490,19 +522,6 @@ test_matrix = {
             ],
         },
     },
-    # Corefile tests require specific hardware support (GPU core dump capable runners).
-    # test_runner is pre-pinned so the family-based runner selection loop skips it.
-    # Only gfx942 has core-dump support, so include_family opts the job in to that
-    # family alone rather than enumerating every other architecture to exclude.
-    "rocgdb-corefile": {
-        **_rocgdb_common,
-        "job_name": "rocgdb-corefile",
-        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --gpu-corefile-tests",
-        "test_runner": "linux-gfx942-gpu-rocm-mathlib",
-        "include_family": {
-            "linux": ["gfx942"],
-        },
-    },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
         "fetch_artifact_args": "--debug-tools --tests",
@@ -757,6 +776,8 @@ test_matrix = {
         },
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+        # RCCL collective ops use cross-process shared memory via /dev/shm
+        "container_options": ["--ipc host"],
     },
     # rocSHMEM tests
     "rocshmem": {
@@ -862,6 +883,26 @@ test_matrix = {
             # becomes a zombie process, blocking the test job indefinitely.
             # See: https://github.com/ROCm/TheRock/actions/runs/15831078820/job/107341707111
             "linux": ["gfx125X-dcgpu"],
+        },
+    },
+    # NVIDIA cuDNN sample corpus built against hipDNN's cuDNN compatibility
+    # shim. Distinct from "hipdnn-samples" above, which is hipDNN's own sample
+    # suite; these two are easy to confuse and test entirely different things.
+    "hipdnn-cudnn-samples": {
+        "job_name": "hipdnn-cudnn-samples",
+        # No "fetch_artifact_args" on purpose: this job calls
+        # find_package(hipdnn_frontend), whose config file and headers live in
+        # the "dev" component, and install_rocm_from_artifacts.py expands each
+        # selected artifact to <name>_lib plus <name>_test only -- never
+        # <name>_dev. Omitting the key takes the fetch-everything branch, which
+        # is why "hipdnn_install" omits it too. Do not "fix" this by adding the
+        # enumerated artifact flags back; find_package would fail.
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_hipdnn_cudnn_samples.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
         },
     },
     # profiler-hub install/consumption tests
@@ -1111,13 +1152,16 @@ test_matrix = {
         "fetch_artifact_args": "--rocdecode --tests",
         "timeout_minutes": 10,
         "test_script": f"python {_get_script_path('test_rocdecode.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
+            "windows": 1,
         },
         # rocdecode requires FFmpeg dev libraries (libavcodec-dev, libavformat-dev,
-        # libavutil-dev) for test builds. These are not bundled in TheRock
-        # artifacts and are provided via the specialized media image.
+        # libavutil-dev) for the extended (FFmpeg-demux) test builds, which run only
+        # on Linux via the specialized media image below. Windows runs the always-on
+        # tests (raw decode, caps, negative API) with ENABLE_EXTENDED_TESTS=OFF via
+        # the vaon12 backend, so it needs no FFmpeg and no container image.
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:d715ae2db664b055c90343e00588ce9ac3eec387513fe359396e5e08e75521ca",
     },
     "rocjpeg": {
@@ -1220,8 +1264,9 @@ def run():
     projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     test_type = os.getenv("TEST_TYPE", "standard")
-    test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
+    test_labels = _parse_test_labels(os.getenv("TEST_LABELS") or "[]")
     build_variant = os.getenv("BUILD_VARIANT", "release")
+    skip_stages = os.getenv("SKIP_STAGES", "").split(",")
 
     # Check for ci:run-multi-gpu label to force multi-GPU tests
     enable_multi_gpu_by_label = "ci:run-multi-gpu" in test_labels
@@ -1307,6 +1352,15 @@ def run():
     all_components = []
     for key in test_matrix:
         job_name = test_matrix[key]["job_name"]
+
+        excluded_stages = set(skip_stages).intersection(
+            test_matrix[key].get("skip_stages", [])
+        )
+        if excluded_stages:
+            logging.info(
+                f"Excluding {job_name}: stages {sorted(excluded_stages)} are skipped"
+            )
+            continue
 
         # Resolve the individual gfx targets for the current family once, so both
         # include_family and exclude_family can match either the family group
@@ -1551,7 +1605,7 @@ def run():
         _build_container_options(c, platform) for c in components_with_runners
     ]
 
-    # Separate sanity (always a prerequisite) from the regular component matrix.
+    # Separate sanity from the regular component matrix.
     sanity_component = next(
         (c for c in all_components if c.get("job_name") == "sanity"), None
     )

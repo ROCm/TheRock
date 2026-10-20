@@ -58,7 +58,8 @@ class LibraryEntry:
         # local single-command Linux builds). find_libraries skips these
         # rather than raising when no file matches.
         self.optional = optional
-        assert shortname not in ALL_LIBRARIES
+        if shortname in ALL_LIBRARIES:
+            raise AssertionError(f"Duplicate library: {shortname}")
         ALL_LIBRARIES[shortname] = self
 
     def __repr__(self):
@@ -201,7 +202,8 @@ def determine_target_family() -> str:
         target_family = discover_current_target_family()
         if target_family is None:
             target_family = DEFAULT_TARGET_FAMILY
-    assert target_family is not None
+    if target_family is None:
+        raise AssertionError("Target family could not be determined")
     if package_owner(target_family) not in group_package_targets(
         AVAILABLE_TARGET_FAMILIES
     ):
@@ -291,7 +293,7 @@ LibraryEntry(
 LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
 LibraryEntry("rocm_kpack", "core", "librocm_kpack.so*", "rocm_kpack*.dll")
 LibraryEntry("rocm_smi64", "core", "librocm_smi64.so*", "")
-LibraryEntry("rocdecode", "core", "librocdecode.so*", "")
+LibraryEntry("rocdecode", "core", "librocdecode.so*", "rocdecode*.dll")
 LibraryEntry("rocjpeg", "core", "librocjpeg.so*", "")
 LibraryEntry("amd_smi", "core", "libamd_smi.so*", "")
 LibraryEntry("rocdxg", "core", "librocdxg*.so*", "", optional=True)

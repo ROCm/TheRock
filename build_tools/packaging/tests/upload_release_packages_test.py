@@ -11,18 +11,53 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
+
+from botocore.exceptions import ClientError
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from upload_release_packages import (
     infer_structured_product,
+    object_exists,
     parse_arguments,
     upload_python_files,
+    upload_release_packages,
     upload_tarball_files,
 )
 
 
+class FakeS3Client:
+    """`head_object` finds only `existing` keys; `upload_file` records uploads."""
+
+    def __init__(self, existing=(), status=404):
+        self.existing = set(existing)
+        self.status = status
+        self.uploaded = []
+
+    def head_object(self, Bucket, Key):
+        if (Bucket, Key) not in self.existing:
+            raise ClientError(
+                {
+                    "Error": {"Code": str(self.status)},
+                    "ResponseMetadata": {"HTTPStatusCode": self.status},
+                },
+                "HeadObject",
+            )
+        return {}
+
+    def upload_file(self, filename, bucket, key):
+        self.uploaded.append((bucket, key))
+
+
 class StructuredUploadTest(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch(
+            "upload_release_packages.boto3.client", return_value=FakeS3Client()
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_infer_structured_product_routes_torch_prefixes_to_pytorch(self):
         filenames = [
             "torch-2.10.0+rocm7.13.0-cp312-cp312-linux_x86_64.whl",
@@ -194,6 +229,80 @@ class StructuredUploadTest(unittest.TestCase):
             self.assertEqual(args.bucket, "")
             self.assertEqual(args.tarball_bucket, "therock-repo-amd-nightly-core")
             self.assertEqual(args.tarball_bucket_prefix, "v5/rocm/core/tarball-asan/")
+
+
+class OverwriteGuardTest(unittest.TestCase):
+    TORCH = "torch-2.12.0+rocm10.0.0-cp312-cp312-linux_x86_64.whl"
+    TRITON = "triton-3.8.0+git669b31ac.rocm10.0.0-cp312-cp312-linux_x86_64.whl"
+    TARBALL = "therock-dist-linux-multiarch-10.0.0.tar.gz"
+    TORCH_DEST = (
+        "therock-repo-amd-rc-pytorch",
+        f"v5/rocm/pytorch/whl-next/torch/{TORCH}",
+    )
+    TARBALL_DEST = ("therock-repo-amd-rc-core", f"v5/rocm/core/tarball/{TARBALL}")
+
+    def _upload(self, client, execute, allow_overwrite=False):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "wheels").mkdir()
+            (root / "tarball").mkdir()
+            for name in (self.TORCH, self.TRITON):
+                (root / "wheels" / name).write_text("x")
+            (root / "tarball" / self.TARBALL).write_text("x")
+            output = io.StringIO()
+            with mock.patch(
+                "upload_release_packages.boto3.client", return_value=client
+            ):
+                with contextlib.redirect_stdout(output):
+                    upload_release_packages(
+                        root,
+                        upload_tarballs=True,
+                        tarball_bucket_name="therock-repo-amd-rc-core",
+                        tarball_bucket_prefix="v5/rocm/core/tarball/",
+                        execute=execute,
+                        multi_arch=True,
+                        structured=True,
+                        repo_stream="rc",
+                        allow_overwrite=allow_overwrite,
+                    )
+            return output.getvalue()
+
+    def test_errors_are_not_treated_as_missing(self):
+        for status, hint in ((403, True), (500, False)):
+            with self.subTest(status=status):
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output), self.assertRaises(ClientError):
+                    object_exists(FakeS3Client(status=status), "b", "k")
+                self.assertEqual("s3:ListBucket" in output.getvalue(), hint)
+
+    def test_existing_files_are_skipped(self):
+        for execute in (True, False):
+            with self.subTest(execute=execute):
+                client = FakeS3Client(existing=[self.TORCH_DEST, self.TARBALL_DEST])
+                output = self._upload(client, execute=execute)
+                for dest in (self.TORCH_DEST, self.TARBALL_DEST):
+                    self.assertIn(
+                        f"[SKIP] Already exists: s3://{'/'.join(dest)}", output
+                    )
+                    self.assertNotIn(dest, client.uploaded)
+                if execute:
+                    self.assertEqual(len(client.uploaded), 1)
+                else:
+                    self.assertEqual(output.count("[DRY-RUN] Would upload"), 1)
+
+    def test_allow_overwrite_replaces_existing_files(self):
+        for execute in (True, False):
+            with self.subTest(execute=execute):
+                client = FakeS3Client(existing=[self.TORCH_DEST])
+                output = self._upload(client, execute=execute, allow_overwrite=True)
+                if execute:
+                    self.assertIn(f"Overwriting {self.TORCH} ...", output)
+                    self.assertIn(self.TORCH_DEST, client.uploaded)
+                    self.assertEqual(len(client.uploaded), 3)
+                else:
+                    self.assertIn(f"[DRY-RUN] Would overwrite: {self.TORCH}", output)
+                    self.assertEqual(output.count("[DRY-RUN] Would upload"), 2)
+                    self.assertEqual(client.uploaded, [])
 
 
 if __name__ == "__main__":

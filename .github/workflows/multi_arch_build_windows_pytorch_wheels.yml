@@ -293,7 +293,7 @@ jobs:
           if command -v ninja >/dev/null 2>&1; then
             printf '%s\n' "ninja already installed: $(ninja --version)"
           else
-            choco install --no-progress -y ninja --version 1.13.1
+            choco install --no-progress -y ninja --version 1.13.2
           fi
 
       # Build a fixed version of libuv from source, no matter the pytorch ref.
@@ -373,7 +373,7 @@ jobs:
 
       - name: Configure AWS Credentials for sccache
         if: ${{ inputs.cache_type == 'sccache' && github.repository_owner == 'ROCm' }}
-        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           aws-region: us-east-1
           role-to-assume: >-
@@ -580,7 +580,7 @@ jobs:
 
   configure_pytorch_tests:
     name: Configure PyTorch Tests | ${{ inputs.test_level }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     outputs:
@@ -656,7 +656,7 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [build_pytorch_wheels, configure_pytorch_tests, test_pytorch_wheels]
     name: "Quartz - completed - build PyTorch wheels"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:
