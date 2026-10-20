@@ -151,7 +151,7 @@ run-name: Test - Native Linux packages Install (${{ inputs.os_profile }})
 jobs:
   prepare_install_context:
     name: Prepare install context (package type, GPU arch, container image, container_gpu_options)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       pkg_type: ${{ steps.derive.outputs.pkg_type }}
       gfx_arch: ${{ steps.derive.outputs.gfx_arch }}
@@ -221,7 +221,7 @@ jobs:
     needs: [prepare_install_context]
     strategy:
       fail-fast: false
-    runs-on: ${{ github.repository_owner == 'ROCm' && (inputs.test_runs_on || 'linux-gfx942-1gpu-ccs-csp-ossci-rocm') || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && (inputs.test_runs_on || 'linux-gfx942-1gpu-ccs-csp-ossci-rocm') || 'ubuntu-26.04' }}
     container:
       # get_url_repo_params.py manages image references for each OS profile.
       # zizmor cannot inspect the dynamically selected image.
@@ -325,7 +325,7 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [prepare_install_context, test_native_linux_packages_install]
     name: "Quartz - completed - test rpm/deb install"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:
