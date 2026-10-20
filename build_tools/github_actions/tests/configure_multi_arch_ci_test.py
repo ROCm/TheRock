@@ -552,7 +552,7 @@ class TestDecideJobs(unittest.TestCase):
         return cm.CIInputs(**defaults)
 
     def test_all_job_groups_run(self):
-        """All job groups are set to run (subgraph selection is Phase 4)."""
+        """Without path selection, default inputs run ROCm and PyTorch."""
         result = cm.decide_jobs(
             self._inputs(), git_context=cm.GitContext(), targets=cm.TargetSelection()
         )
@@ -591,6 +591,101 @@ class TestDecideJobs(unittest.TestCase):
                 git_context=cm.GitContext(),
                 targets=cm.TargetSelection(),
             )
+
+    @patch("configure_multi_arch_ci.get_jobs_for_changes")
+    def test_framework_only_changes_select_the_pruned_graph(self, classify):
+        for frameworks in ({"pytorch"}, {"jax"}, {"pytorch", "jax"}):
+            with self.subTest(frameworks=frameworks):
+                classify.return_value = frameworks
+                jobs = cm.decide_jobs(
+                    self._inputs(build_pytorch=True, build_jax=True),
+                    cm.GitContext(),
+                    cm.TargetSelection(),
+                )
+                self.assertEqual(jobs.build_rocm.action, cm.JobAction.SKIP)
+                self.assertEqual(jobs.test_rocm.action, cm.JobAction.SKIP)
+                self.assertEqual(jobs.build_rocm_python.action, cm.JobAction.PREBUILT)
+                self.assertEqual(
+                    jobs.build_pytorch.action,
+                    cm.JobAction.RUN if "pytorch" in frameworks else cm.JobAction.SKIP,
+                )
+                self.assertEqual(jobs.test_pytorch.action, jobs.build_pytorch.action)
+                self.assertEqual(
+                    jobs.build_jax.action,
+                    cm.JobAction.RUN if "jax" in frameworks else cm.JobAction.SKIP,
+                )
+
+    @patch(
+        "configure_multi_arch_ci.get_jobs_for_changes",
+        return_value={"pytorch", "jax"},
+    )
+    def test_framework_selection_respects_disabled_build_input(self, classify):
+        jobs = cm.decide_jobs(
+            self._inputs(build_pytorch=False, build_jax=True),
+            cm.GitContext(),
+            cm.TargetSelection(),
+        )
+        self.assertEqual(jobs.build_pytorch.action, cm.JobAction.SKIP)
+        self.assertEqual(jobs.build_jax.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_rocm.action, cm.JobAction.SKIP)
+
+    @patch("configure_multi_arch_ci.get_jobs_for_changes", return_value={"jax"})
+    def test_explicit_framework_labels_override_path_selection(self, classify):
+        # JAX is affected and enabled by the input, but ci:skip-jax takes precedence.
+        # Likewise, ci:build-pytorch enables PyTorch despite its input and paths.
+        jobs = cm.decide_jobs(
+            self._inputs(
+                build_pytorch=False,
+                build_jax=True,
+                pr_labels=["ci:build-pytorch", "ci:skip-jax"],
+            ),
+            cm.GitContext(),
+            cm.TargetSelection(),
+        )
+        self.assertEqual(jobs.build_rocm.action, cm.JobAction.SKIP)
+        self.assertEqual(jobs.build_pytorch.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_jax.action, cm.JobAction.SKIP)
+
+    @patch(
+        "configure_multi_arch_ci.get_jobs_for_changes", return_value={"pytorch", "rocm"}
+    )
+    def test_other_changes_retain_workflow_input_selection(self, classify):
+        jobs = cm.decide_jobs(
+            self._inputs(build_pytorch=False, build_jax=True),
+            cm.GitContext(),
+            cm.TargetSelection(),
+        )
+        self.assertEqual(jobs.build_rocm.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_rocm_python.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_pytorch.action, cm.JobAction.SKIP)
+        self.assertEqual(jobs.build_jax.action, cm.JobAction.RUN)
+
+    @patch("configure_multi_arch_ci.get_jobs_for_changes", return_value={"pytorch"})
+    def test_implicit_selection_preserves_explicit_rocm_requests(self, classify):
+        jobs = cm.decide_jobs(
+            self._inputs(pr_labels=["ci:build-python-packages"], build_jax=True),
+            cm.GitContext(),
+            cm.TargetSelection(),
+        )
+        self.assertEqual(jobs.build_rocm.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_pytorch.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_jax.action, cm.JobAction.RUN)
+        classify.assert_called_once_with(None)
+
+    @patch("configure_multi_arch_ci.get_jobs_for_changes", return_value={"pytorch"})
+    def test_implicit_selection_does_not_use_published_packages_for_asan(
+        self, classify
+    ):
+        jobs = cm.decide_jobs(
+            self._inputs(build_variant="asan", build_jax=True),
+            cm.GitContext(),
+            cm.TargetSelection(),
+        )
+        self.assertEqual(jobs.build_rocm.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_rocm_python.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_pytorch.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_jax.action, cm.JobAction.RUN)
+        classify.assert_called_once_with(None)
 
     def test_build_pytorch_input_skips_pytorch_jobs(self):
         result = cm.decide_jobs(
@@ -2762,6 +2857,45 @@ class TestConfigurePipeline(unittest.TestCase):
         outputs = cm.configure(inputs, cm.GitContext())
         self.assertFalse(outputs.is_ci_enabled)
         self.assertIsNone(outputs.builds.linux)
+
+    @patch(
+        "configure_multi_arch_ci.get_latest_package_version",
+        return_value="10.2.0a20261015",
+    )
+    def test_pytorch_path_selects_pytorch_with_published_rocm_packages(self, lookup):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            build_pytorch=True,
+            build_jax=True,
+            built_rocm_version="10.2.0.dev0+abcdef",
+        )
+        outputs = cm.configure(
+            inputs,
+            cm.GitContext(
+                changed_files=["external-builds/pytorch/skip_tests/generic.py"]
+            ),
+        )
+        self.assertTrue(outputs.is_ci_enabled)
+        for config in (outputs.builds.linux, outputs.builds.windows):
+            self.assertIsNotNone(config)
+            # Only build PyTorch, using packages from repo.amd.com.
+            self.assertFalse(config.build_rocm)
+            self.assertFalse(config.build_python_packages)
+            self.assertTrue(config.build_pytorch)
+            self.assertFalse(config.build_jax)
+            self.assertEqual(config.framework_rocm_version, "10.2.0a20261015")
+            self.assertEqual(
+                config.rocm_package_index_url,
+                "https://nightly.repo.amd.com/rocm/whl-next/",
+            )
+            self.assertEqual(config.rocm_package_find_links_url, "")
+        lookup.assert_called_once_with(
+            "rocm", "https://nightly.repo.amd.com/rocm/whl-next/"
+        )
 
     @patch("configure_multi_arch_ci.get_latest_package_version", return_value="10.1.0")
     def test_framework_labels_select_builds_without_rocm(self, lookup):
