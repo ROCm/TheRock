@@ -65,6 +65,7 @@ SKIPPABLE_PATH_PATTERNS = [
     "*.md",
     "*.rst",
     "*CODEOWNERS",
+    ".github/workflows/*",
     "docs/*",
     "projects/*/docs/*",
     "shared/*/docs/*",
