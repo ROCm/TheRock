@@ -145,7 +145,6 @@ def gh_api(
     return response.json()
 
 
-
 def gh_api_paginate(token: str, endpoint: str) -> list:
     """Fetch all pages of a GitHub list endpoint and return the combined results."""
     headers = {

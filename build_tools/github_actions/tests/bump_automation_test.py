@@ -87,7 +87,6 @@ class LatestCommitTest(unittest.TestCase):
         )
 
 
-
 class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
     MERGE_SHA = "df3d451a3c054e14705ddf94e58498e1208df8d5"
     HEAD_SHA = "23bc501d4b826695062a657d0b582076c354dd77"
