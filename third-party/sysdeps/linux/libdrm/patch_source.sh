@@ -52,7 +52,7 @@ AMDGPU_ID_ENTRIES=(
   "75A8,	00,	AMD Instinct MI350P"
   "75B8,	00,	AMD Instinct MI350P VF"
   "7551,	C1,	AMD Radeon AI PRO R9700S"
-  "7551,	C8,	AMD Radeon AI Pro R9600 Series"
+  "7551,	C8,	AMD Radeon AI PRO R9600 Series"
 )
 for entry in "${AMDGPU_ID_ENTRIES[@]}"; do
   device_id="$(cut -d',' -f1 <<< "$entry" | xargs)"
