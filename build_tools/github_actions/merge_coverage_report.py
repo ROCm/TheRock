@@ -127,6 +127,23 @@ def count_profiled_functions(llvm_profdata: Path, profdata: Path) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def strip_lcov_prefix(lcov: Path, prefix: str) -> None:
+    """Rewrites the lcov's SF: paths to drop a build-time prefix.
+
+    llvm-cov records absolute paths from the build container, but Codecov
+    matches a report against the repository tree and needs repo-relative paths.
+    Its -path-equivalence can't map a prefix to an empty string (it rejects a
+    missing 'to'), so the leading repo root is stripped here instead.
+    """
+    lines = lcov.read_text().splitlines(keepends=True)
+    rewritten = []
+    for line in lines:
+        if line.startswith("SF:") and line[3:].startswith(prefix):
+            line = "SF:" + line[3 + len(prefix) :]
+        rewritten.append(line)
+    lcov.write_text("".join(rewritten))
+
+
 def count_lcov_lines(lcov: Path) -> tuple[int, int]:
     """Returns (lines found, lines hit) summed over every file in an lcov report."""
     found = hit = 0
@@ -310,15 +327,15 @@ def main(argv: list[str] | None = None) -> int:
         "HTML and text renderings, which need to reach the sources on disk",
     )
     parser.add_argument(
-        "--lcov-path-equivalence",
+        "--lcov-strip-prefix",
         type=str,
         default=None,
-        help="Like --path-equivalence but applied only to the lcov export, "
-        "where Codecov matches paths against the repository tree rather than "
-        "the local disk. Map the build-time repo root to an empty '<to>' so "
-        "the emitted paths are repo-relative, e.g. "
-        "'/__w/rocm-libraries/rocm-libraries/rocm-libraries/,'. Defaults to "
-        "--path-equivalence",
+        help="Prefix to drop from every SF: path in the lcov export so the "
+        "emitted paths are repo-relative and Codecov can match them against "
+        "the repository tree, e.g. "
+        "'/__w/rocm-libraries/rocm-libraries/rocm-libraries/'. llvm-cov's "
+        "-path-equivalence can't map a prefix to an empty string, so the strip "
+        "is a post-process step on the lcov instead",
     )
     parser.add_argument(
         "--project-title",
@@ -390,7 +407,7 @@ def main(argv: list[str] | None = None) -> int:
             args.profdata_output,
             objects,
             args.lcov_output,
-            args.lcov_path_equivalence or args.path_equivalence,
+            None,
             args.ignore_filename_regex,
         )
     except subprocess.CalledProcessError:
@@ -401,6 +418,8 @@ def main(argv: list[str] | None = None) -> int:
             len(objects),
         )
         return 1
+    if args.lcov_strip_prefix:
+        strip_lcov_prefix(args.lcov_output, args.lcov_strip_prefix)
     logging.info("Wrote coverage report to %s", args.lcov_output)
     lines_found, lines_hit = count_lcov_lines(args.lcov_output)
 
