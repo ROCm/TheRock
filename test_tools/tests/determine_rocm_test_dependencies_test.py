@@ -1259,19 +1259,19 @@ class TestNoDownstreamTestLabel(_FixtureTestCase):
         finally:
             os.unlink(event_file)
 
-    def test_explicit_level_overrides_pr_label(self) -> None:
-        """Explicit --level takes precedence over ci:no-downstream-test label."""
+    def test_label_overrides_explicit_level(self) -> None:
+        """ci:no-downstream-test label takes precedence over explicit --level."""
         env, event_file = self._env_with_event(["ci:no-downstream-test"])
         try:
-            # --level 4 should include consumers even with the label
+            # --level 4 would include consumers, but label forces level 5
             proc = self._run(
                 "--changed-projects", "rocroller", "--level", "4", env=env
             )
             self.assertEqual(proc.returncode, 0, proc.stderr)
             projects = set(json.loads(proc.stdout.strip()))
-            self.assertIn("hipblaslt", projects)
-            # Label message should NOT appear since explicit --level wins
-            self.assertNotIn("ci:no-downstream-test label detected", proc.stderr)
+            self.assertNotIn("hipblaslt", projects)
+            self.assertEqual(projects, {"rocroller"})
+            self.assertIn("ci:no-downstream-test label detected", proc.stderr)
         finally:
             os.unlink(event_file)
 
