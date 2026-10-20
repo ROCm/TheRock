@@ -274,7 +274,7 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   test_components:
-    name: "Test ${{ matrix.components.job_name }}${{ needs.configure_test_matrix.outputs.platform == 'wsl' && ' (WSL)' || '' }}"
+    name: 'Test ${{ matrix.components.job_name }}'
     needs: [test_sanity_check, configure_test_matrix]
     # Run when:
     #   - sanity check passed or its prerequisite stage was excluded
