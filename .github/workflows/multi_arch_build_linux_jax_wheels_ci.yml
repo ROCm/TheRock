@@ -7,7 +7,7 @@
 #
 # Built shape:
 #   - One manylinux JAX wheel build for one python_version and jax_ref matrix cell.
-#   - Installs ROCm packages from the run-scoped CI find-links URL.
+#   - Installs ROCm packages from this run or a published package index.
 #   - Uploads the resulting wheels to run-scoped CI Python artifacts.
 #   - Tests those wheels when test_amdgpu_family names a family to test on.
 
@@ -49,11 +49,15 @@ on:
         type: boolean
         default: true
       rocm_version:
-        description: "ROCm package version to install and build against."
+        description: "Exact ROCm package version to install and build against."
         type: string
         required: true
       rocm_package_find_links_url:
         description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        type: string
+        default: ""
+      rocm_package_index_url:
+        description: "URL for pip --index-url to install ROCm packages; use this or rocm_package_find_links_url."
         type: string
         default: ""
       repository:
@@ -122,11 +126,15 @@ on:
           - nightly
         default: release
       rocm_version:
-        description: "ROCm package version to install and build against."
+        description: "Exact ROCm package version to install and build against."
         type: string
         required: true
       rocm_package_find_links_url:
         description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        type: string
+        default: ""
+      rocm_package_index_url:
+        description: "URL for pip --index-url to install ROCm packages; use this or rocm_package_find_links_url."
         type: string
         default: ""
       repository:
@@ -220,9 +228,9 @@ jobs:
       - name: Build manylinux image
         working-directory: jax-source
         env:
-          THEROCK_VERSION: ""
+          THEROCK_VERSION: ${{ inputs.rocm_version }}
           GFX_ARCH: ${{ inputs.gfx_arch }}
-          ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
+          ROCM_PACKAGE_URL: ${{ inputs.rocm_package_find_links_url || inputs.rocm_package_index_url }}
         run: |
           cp ../rocm-jax/docker/manylinux/Dockerfile.jax-manylinux_2_28-therock \
             Dockerfile.jax-manylinux_2_28-therock
@@ -232,7 +240,7 @@ jobs:
           docker build \
             -t "${MANYLINUX_IMAGE_TAG}" \
             --file=Dockerfile.jax-manylinux_2_28-therock \
-            --build-arg=THEROCK_INDEX_URL="${ROCM_PACKAGE_FIND_LINKS_URL}" \
+            --build-arg=THEROCK_INDEX_URL="${ROCM_PACKAGE_URL}" \
             --build-arg=THEROCK_VERSION="${THEROCK_VERSION}" \
             --build-arg=GFX_ARCH="${GFX_ARCH}" \
             --progress=plain \
@@ -363,6 +371,7 @@ jobs:
       wheel_find_links_url: ${{ needs.build_jax_wheels.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_version }}
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
+      rocm_package_index_url: ${{ inputs.rocm_package_index_url }}
       release_type: ci
       test_size: ${{ inputs.test_size }}
       python_version: ${{ inputs.python_version }}
