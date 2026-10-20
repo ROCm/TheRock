@@ -676,6 +676,67 @@ def test_fetch_signing_key_gives_up_after_attempts(monkeypatch):
         brp._fetch_signing_key(f"{STABLE_BASE}/gpg/rocm.gpg")
 
 
+@pytest.mark.parametrize("code,reason", [(403, "Forbidden"), (404, "Not Found")])
+def test_fetch_signing_key_does_not_retry_a_missing_key(monkeypatch, code, reason):
+    # A wrong --gpg-key-url will not become right, so it must fail on the first
+    # attempt, as verify_repo_url does, rather than spending the retry budget.
+    calls = {"n": 0}
+
+    def missing(*a, **k):
+        calls["n"] += 1
+        raise brp.urllib.error.HTTPError(
+            f"{STABLE_BASE}/gpg/rocm.gpg", code, reason, {}, None
+        )
+
+    monkeypatch.setattr(brp.urllib.request, "urlopen", missing)
+    monkeypatch.setattr(brp.time, "sleep", lambda s: pytest.fail("must not back off"))
+    with pytest.raises(RuntimeError, match=f"HTTP {code}"):
+        brp._fetch_signing_key(f"{STABLE_BASE}/gpg/rocm.gpg")
+    assert calls["n"] == 1
+
+
+def test_fetch_signing_key_retries_rate_limiting(monkeypatch):
+    calls = {"n": 0}
+
+    def throttled(*a, **k):
+        calls["n"] += 1
+        if calls["n"] < 2:
+            raise brp.urllib.error.HTTPError(
+                f"{STABLE_BASE}/gpg/rocm.gpg", 429, "Too Many Requests", {}, None
+            )
+        return _FakeResponse(b"KEY", f"{STABLE_BASE}/gpg/rocm.gpg")
+
+    monkeypatch.setattr(brp.urllib.request, "urlopen", throttled)
+    monkeypatch.setattr(brp.time, "sleep", lambda s: None)
+    assert brp._fetch_signing_key(f"{STABLE_BASE}/gpg/rocm.gpg") == b"KEY"
+    assert calls["n"] == 2
+
+
+def test_run_gpg_reports_gpg_error_output(monkeypatch):
+    # The callers capture gpg's output and CalledProcessError leaves it out of
+    # its message, so without this a failed build only reports an exit status.
+    def failing(argv, **kwargs):
+        raise subprocess.CalledProcessError(
+            2, argv, output=b"", stderr=b"gpg: no valid OpenPGP data found.\n"
+        )
+
+    monkeypatch.setattr(brp.subprocess, "run", failing)
+    with pytest.raises(
+        RuntimeError, match="status 2: gpg: no valid OpenPGP data found"
+    ):
+        brp._run_gpg(
+            ["gpg", "--dearmor"], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+
+
+@_needs_gpg
+def test_extract_pinned_key_reports_gpg_error_for_a_non_key():
+    # A key URL that serves something else (an HTML error page with a 200, say)
+    # must fail with real gpg's own explanation.
+    with pytest.raises(RuntimeError, match="no valid OpenPGP data found"):
+        brp._extract_pinned_key(b"not a key\n")
+
+
 # --- versioning ---------------------------------------------------------------
 #
 # Every stream takes --rocm-version as given. CI passes the version that
