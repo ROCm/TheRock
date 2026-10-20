@@ -2293,6 +2293,28 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 cm.GitContext.from_external_repo("rockrel"),
                 "linux-release-asan",
             ),
+            # -- Presubmit from rocm-systems/rocm-libraries: host-asan NOT triggered --
+            # host-asan only triggers on submodule_bump, not presubmit.
+            (
+                "rocm-systems presubmit does not trigger host-asan",
+                dict(
+                    event_name="pull_request",
+                    build_variant="asan",
+                    external_repo='{"repository":"ROCm/rocm-systems","ref":"main"}',
+                ),
+                cm.GitContext.from_external_repo("rocm-systems"),
+                None,
+            ),
+            (
+                "rocm-libraries presubmit does not trigger host-asan",
+                dict(
+                    event_name="pull_request",
+                    build_variant="asan",
+                    external_repo='{"repository":"ROCm/rocm-libraries","ref":"main"}',
+                ),
+                cm.GitContext.from_external_repo("rocm-libraries"),
+                None,
+            ),
             # -- Non-asan sanitizer variants pass through directly --
             (
                 "asan-debug direct (no remap logic)",
