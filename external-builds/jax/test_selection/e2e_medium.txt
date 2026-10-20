@@ -1,0 +1,4 @@
+# ROCm/jax-lab workloads for a medium run, one "<target> <workload> <gpus>" each.
+# See "End-to-end workloads" in README.md for why these two.
+maxtext_release llama3_1_8b 8
+maxtext_release deepseek2_16b 8

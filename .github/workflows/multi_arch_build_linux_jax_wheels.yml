@@ -364,6 +364,7 @@ jobs:
     env:
       TEST_AMDGPU_FAMILY: ${{ inputs.test_amdgpu_family }}
       TEST_SIZE: ${{ inputs.test_size }}
+      PYTHON_VERSION: ${{ inputs.python_version }}
 
     steps:
       - name: Checking out repository
@@ -392,7 +393,8 @@ jobs:
           python ./build_tools/github_actions/configure_jax_test_matrix.py \
             --target "${TEST_AMDGPU_FAMILY}" \
             --platform linux \
-            --test-size "${TEST_SIZE}"
+            --test-size "${TEST_SIZE}" \
+            --python-version "${PYTHON_VERSION}"
 
       - name: Capture job summary
         id: summary
@@ -432,6 +434,9 @@ jobs:
       test_subset: ${{ matrix.test_subset }}
       test_timeout_minutes: ${{ matrix.test_timeout_minutes }}
       test_list: ${{ matrix.test_list }}
+      e2e_list: ${{ matrix.e2e_list }}
+      e2e_timeout_minutes: ${{ matrix.e2e_timeout_minutes }}
+      job_timeout_minutes: ${{ matrix.job_timeout_minutes }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:
