@@ -1892,7 +1892,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertFalse(result.linux.build_native_linux)
 
     def test_build_native_windows_input_disables_native_packages(self):
-        """build_native_windows=False disables the Windows MSI build."""
+        """build_native_windows=False disables the native Windows build."""
         targets = cm.TargetSelection(windows_families=["gfx110x"])
         enabled = cm.expand_build_configs(
             ci_inputs=self._inputs(build_native_windows=True),
@@ -2235,7 +2235,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 self.assertEqual(getattr(result.linux, config_field), expected)
 
     def test_native_windows_label_overrides(self):
-        """PR labels can enable/disable the native-windows (MSI) build."""
+        """PR labels can enable/disable the native Windows build."""
         targets = cm.TargetSelection(windows_families=["gfx110x"])
         cases = [
             # (label, input_default, expected)

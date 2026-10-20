@@ -216,32 +216,6 @@ def compute_version(
                 f"for release type '{release_type}'"
             )
 
-    # Handle Windows MSI packages (WiX ProductVersion: numeric major.minor.build.0).
-    #
-    # Unlike the other package types, the MSI version does NOT carry a dev/nightly
-    # suffix: Windows Installer versions must be numeric #.#.#.# and it compares
-    # only the first three fields. We keep major.minor from version.json visible
-    # and put the build DATE (days since the ROCm 1.0 epoch) in the third field,
-    # so every build outranks the previous one within its major.minor line. The
-    # marketing patch (e.g. 10.2.0) is surfaced separately via the MSI's
-    # ARPDISPLAYVERSION property, not here. Cross-line coexistence (10.2 vs 10.3)
-    # is handled by a per-major.minor UpgradeCode in the generator, so this field
-    # never has to order across lines. All release types share one shape; a
-    # release simply has the highest build field in its line because it is built
-    # last (no further nightlies follow a major.minor's release).
-    if package_type == "msi":
-        parts = base_version.split(".")
-        if len(parts) < 2 or not parts[0] or not parts[1]:
-            raise ValueError(
-                f"base version must be at least major.minor for msi (got "
-                f"{base_version!r})"
-            )
-        major, minor = parts[0], parts[1]
-        build_field = compute_msi_build_field()
-        rocm_package_version = f"{major}.{minor}.{build_field}.0"
-        _log(f"Full version  : '{rocm_package_version}'")
-        return rocm_package_version
-
     # Handle wheel packages (Python packaging standards)
     if package_type == "wheel":
         if custom_version_suffix:
@@ -276,8 +250,8 @@ def compute_version(
 
         return rocm_package_version
 
-    # Handle native packages (deb/rpm)
-    else:  # package_type in ["deb", "rpm"]
+    # Handle native Linux packages (deb/rpm)
+    elif package_type in ("deb", "rpm"):
         if custom_version_suffix:
             # Custom suffix uses the provided value
             version_suffix_str = f"{custom_version_suffix}"
@@ -318,6 +292,36 @@ def compute_version(
         _log(f"Full version  : '{rocm_package_version}'")
 
         return rocm_package_version
+
+    # Handle native Windows packages (MSI; WiX ProductVersion: numeric
+    # major.minor.build.0).
+    #
+    # Unlike the other package types, the MSI version does NOT carry a dev/nightly
+    # suffix: Windows Installer versions must be numeric #.#.#.# and it compares
+    # only the first three fields. We keep major.minor from version.json visible
+    # and put the build DATE (days since the ROCm 1.0 epoch) in the third field,
+    # so every build outranks the previous one within its major.minor line. The
+    # marketing patch (e.g. 10.2.0) is surfaced separately via the MSI's
+    # ARPDISPLAYVERSION property, not here. Cross-line coexistence (10.2 vs 10.3)
+    # is handled by a per-major.minor UpgradeCode in the generator, so this field
+    # never has to order across lines. All release types share one shape; a
+    # release simply has the highest build field in its line because it is built
+    # last (no further nightlies follow a major.minor's release).
+    elif package_type == "msi":
+        parts = base_version.split(".")
+        if len(parts) < 2 or not parts[0] or not parts[1]:
+            raise ValueError(
+                f"base version must be at least major.minor for msi (got "
+                f"{base_version!r})"
+            )
+        major, minor = parts[0], parts[1]
+        build_field = compute_msi_build_field()
+        rocm_package_version = f"{major}.{minor}.{build_field}.0"
+        _log(f"Full version  : '{rocm_package_version}'")
+        return rocm_package_version
+
+    else:
+        raise AssertionError(f"Unexpected package type: {package_type}")
 
 
 def main(argv):

@@ -1757,16 +1757,16 @@ def _expand_build_config_for_platform(
         if build_python_packages
         else []
     )
-    build_native_linux = ci_inputs.build_native_linux
-    # Native Windows (MSI) packages are built only on the windows platform.
+    build_native_linux = ci_inputs.build_native_linux and platform == "linux"
     build_native_windows = ci_inputs.build_native_windows and platform == "windows"
 
     # PR labels can override packaging build decisions.
     pr_labels = ci_inputs.pr_labels
-    if "ci:build-native-linux" in pr_labels:
-        build_native_linux = True
-    elif "ci:skip-native-linux" in pr_labels:
-        build_native_linux = False
+    if platform == "linux":
+        if "ci:build-native-linux" in pr_labels:
+            build_native_linux = True
+        elif "ci:skip-native-linux" in pr_labels:
+            build_native_linux = False
 
     if platform == "windows":
         if "ci:build-native-windows" in pr_labels:
