@@ -63,6 +63,7 @@ CONSOLE_SCRIPT_TESTS = [
     ConsoleScriptTest(
         "rocprof-sys-instrument", ["--version"], "rocprof-sys-instrument", True
     ),
+    ConsoleScriptTest("rocsys", ["--version"], "rocsys", True),
 ]
 
 

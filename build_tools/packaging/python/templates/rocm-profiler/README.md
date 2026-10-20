@@ -12,6 +12,7 @@ profiling tools:
 - `rocprof-sys-python`
 - `rocprof-sys-run`
 - `rocprof-sys-sample`
+- `rocsys`
 
 ## Purpose
 

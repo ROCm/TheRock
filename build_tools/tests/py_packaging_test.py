@@ -2054,16 +2054,18 @@ class PerTargetExtrasTest(TmpDirTestCase):
 
 
 # ---------------------------------------------------------------------------
-# Regression tests for AIPROFSYST-669: rocm-profiler wheel silently dropped
-# libprofiler-hub.so*
+# rocm-profiler wheel allowlist. Includes the AIPROFSYST-669 regression,
+# where libprofiler-hub.so* was silently dropped.
 # ---------------------------------------------------------------------------
 
 
-class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
-    """profiler-hub is a runtime .so dependency of rocprofiler-systems
-    (NEEDED libprofiler-hub.so.0). PROFILER_WHEEL_INCLUDES never listed it,
-    so it was silently dropped from the rocm-profiler wheel, breaking every
-    rocprof-sys tool at load time.
+class ProfilerWheelIncludesTest(TmpDirTestCase):
+    """PROFILER_WHEEL_INCLUDES is a targeted allowlist.
+
+    profiler-hub is a runtime .so dependency of rocprofiler-systems
+    (NEEDED libprofiler-hub.so.0). The allowlist once omitted it, so it was
+    silently dropped from the rocm-profiler wheel. bin/rocprof-sys-* likewise
+    does not match bin/rocsys, so that binary must be listed on its own.
     """
 
     def _add_artifact(
@@ -2092,9 +2094,12 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
             artifacts=ArtifactCatalog(artifact_dir),
         )
 
-    def test_profiler_wheel_includes_libprofiler_hub(self):
-        """libprofiler-hub.so*, staged under its own profiler-hub artifact,
-        must be selected into the profiler wheel, same as librocprof-sys*.
+    def test_profiler_wheel_includes_allowlisted_files(self):
+        """Allowlisted profiler libraries and binaries are copied into the wheel.
+
+        libprofiler-hub.so* arrives from its own artifact and must be selected
+        the same way as librocprof-sys*. bin/rocsys must be selected too:
+        bin/rocprof-sys-* does not match that name.
         """
         from build_python_packages import (
             PROFILER_WHEEL_INCLUDES,
@@ -2109,6 +2114,16 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
             "generic",
             {
                 "lib/librocprof-sys.so.1": "rocprof-sys runtime",
+            },
+        )
+        self._add_artifact(
+            artifact_dir,
+            "rocprofiler-systems",
+            "run",
+            "generic",
+            {
+                "bin/rocsys": "unified cli",
+                "bin/rocprof-sys-run": "existing cli",
             },
         )
         self._add_artifact(
@@ -2135,11 +2150,17 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
             "(AIPROFSYST-669 regression)",
         )
         self.assertTrue(profiler.files.has("lib/librocprof-sys.so.1"))
+        self.assertTrue(
+            profiler.files.has("bin/rocsys"),
+            "bin/rocsys was dropped from the profiler wheel",
+        )
+        self.assertTrue(profiler.files.has("bin/rocprof-sys-run"))
 
-    def test_profiler_wheel_excludes_unrelated_lib_files(self):
-        """PROFILER_WHEEL_INCLUDES is a targeted allowlist, not a bare lib/**
-        catch-all - an unrelated file must not sneak into the profiler wheel,
-        even once the profiler-hub library arrives via its own artifact.
+    def test_profiler_wheel_excludes_unrelated_files(self):
+        """The allowlist is not a bare lib/** or bin/** catch-all.
+
+        An unrelated library or binary must not enter the profiler wheel,
+        including once the profiler-hub library arrives via its own artifact.
         """
         from build_python_packages import (
             PROFILER_WHEEL_INCLUDES,
@@ -2157,6 +2178,15 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
                 "lib/libunrelated-dependency.so.1": "should not be selected",
             },
         )
+        self._add_artifact(
+            artifact_dir,
+            "rocprofiler-systems",
+            "run",
+            "generic",
+            {
+                "bin/not-a-profiler-tool": "should not be selected",
+            },
+        )
 
         params = self._make_params(artifact_dir)
         profiler_artifacts = params.filter_artifacts(
@@ -2168,6 +2198,7 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
 
         self.assertTrue(profiler.files.has("lib/libprofiler-hub.so.0"))
         self.assertFalse(profiler.files.has("lib/libunrelated-dependency.so.1"))
+        self.assertFalse(profiler.files.has("bin/not-a-profiler-tool"))
 
 
 class EnsureProfilerLibrarySymlinksTest(unittest.TestCase):
