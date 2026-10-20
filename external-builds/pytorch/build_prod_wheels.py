@@ -1286,16 +1286,6 @@ def do_build_pytorch(
                 "-Cwheel.force-include.torch/lib/libomp140.x86_64.dll="
                 "torch/lib/libomp140.x86_64.dll"
             )
-            if use_flash_attention:
-                # TODO: similar upstream fix for these and then drop here
-                build_command.append(
-                    "-Cwheel.force-include.torch/lib/aotriton_v2.dll="
-                    "torch/lib/aotriton_v2.dll"
-                )
-                build_command.append(
-                    "-Cwheel.force-include.torch/lib/liblzma.dll="
-                    "torch/lib/liblzma.dll"
-                )
 
     if is_windows:
         # PyPI `ninja` before 1.13.2 is unusable on Windows: 1.11.1 loops without
