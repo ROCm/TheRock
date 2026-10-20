@@ -240,7 +240,8 @@ def run_simulate_install_test(pkg_type: str, packages_dir: str) -> bool:
         return False
 
     if pkg_type == "deb":
-        debs = [str(p.resolve()) for p in path.glob("*.deb")]
+        # Search recursively so nested layouts (e.g. pool/main/) are found too
+        debs = [str(p.resolve()) for p in path.rglob("*.deb")]
         if not debs:
             print(f"[FAIL] No .deb files found in {packages_dir}", file=sys.stderr)
             return False
@@ -248,7 +249,8 @@ def run_simulate_install_test(pkg_type: str, packages_dir: str) -> bool:
         # Use absolute paths so apt treats them as local files, not package names
         cmd = ["apt", "install", "--simulate"] + debs
     elif pkg_type == "rpm":
-        rpms = [str(p.resolve()) for p in path.glob("*.rpm")]
+        # Search recursively so nested layouts (e.g. x86_64/) are found too
+        rpms = [str(p.resolve()) for p in path.rglob("*.rpm")]
         if not rpms:
             print(f"[FAIL] No .rpm files found in {packages_dir}", file=sys.stderr)
             return False

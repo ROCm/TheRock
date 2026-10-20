@@ -6,9 +6,9 @@ Builds and sends a single POST /sign request, handling both the direct-HTTP
 path (Phase 1/2 — GPG_SIGNING_SERVER, optional pre-shared bearer token) and
 the AWS SigV4-via-API-Gateway path (Phase 1b — GPG_SIGNING_API_URL, cross-cloud
 build runners). This is the one place the SigV4 signing algorithm is
-implemented — both gpgshim (RPM package signing) and repo_utils.py (repository
-metadata signing) import it, so there is exactly one copy to keep correct,
-not two.
+implemented — both gpgshim (RPM package signing) and sign_package_repo.py
+(repository metadata signing) import it, so there is exactly one copy to
+keep correct, not two.
 
 Stdlib only — no boto3/requests — matches gpgshim's zero-dependency,
 Python 3.6-compatible design goal (signing_server-requirements.md P1b-SHIM-2).
@@ -256,3 +256,31 @@ def sign_data(
             "Invalid response from signing server: missing 'signature' field"
         )
     return b64decode(result["signature"])
+
+
+# Maps a workflow `release_type` (ci/dev/nightly/prerelease/release) to the
+# GPG_TIER value sent to the signing server, i.e. which key_alias in
+# authorization.json is used. Two release types deliberately map to None
+# (skip signing, no error):
+#   - "ci": per signing-server-requirements.md P1-CI-1, signing is only
+#     activated for dev/nightly/prerelease builds meant for distribution —
+#     not routine CI/PR validation builds, to avoid unnecessary signing
+#     server load.
+#   - "release": per signing-server-design.md Section 4.1b, the
+#     release-tier key is excluded from automated/cross-cloud signing and
+#     stays a manual, operator-driven process (sign-file CLI over VPN) —
+#     this function is how that boundary is enforced on the client/workflow
+#     side, not just documented.
+_RELEASE_TYPE_TO_TIER = {
+    "ci": None,
+    "dev": "dev",
+    "nightly": "nightly",
+    "prerelease": "nightly",
+    "release": None,
+}
+
+
+def resolve_signing_tier(release_type):
+    """Resolve a workflow `release_type` to a GPG_TIER, or None if this
+    release type must not be signed automatically (see module comment)."""
+    return _RELEASE_TYPE_TO_TIER.get(release_type)
