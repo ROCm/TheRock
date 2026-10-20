@@ -1523,6 +1523,23 @@ def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[s
     """
     triggers: set[str] = set()
 
+    # For external repos, derive the trigger from the external repo's event_name
+    # rather than the GitHub event (which is always workflow_dispatch).
+    if ci_inputs.external_repo:
+        try:
+            repo_json = json.loads(ci_inputs.external_repo)
+            ext_event = repo_json.get("event_name", "")
+        except (json.JSONDecodeError, TypeError):
+            ext_event = ""
+        _EVENT_TO_TRIGGER = {
+            "schedule": "nightly",
+            "push": "postsubmit",
+            "pull_request": "presubmit",
+        }
+        if ext_event in _EVENT_TO_TRIGGER:
+            triggers.add(_EVENT_TO_TRIGGER[ext_event])
+        return triggers
+
     # Event-based triggers (mutually exclusive)
     # Note: workflow_dispatch handled separately in _should_run_tests_for_family
     if ci_inputs.is_schedule:
@@ -1534,7 +1551,7 @@ def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[s
 
     # Context-based triggers (can stack on top of event triggers)
     # submodule_bump only applies to TheRock, not external repos.
-    if git_context.has_submodule_changes is True and not ci_inputs.external_repo:
+    if git_context.has_submodule_changes is True:
         triggers.add("submodule_bump")
 
     return triggers
@@ -2057,8 +2074,7 @@ def expand_build_configs(
     # 2. ci:host-asan label -> host-asan (explicit)
     # 3. Sanitizer trigger rules -> variant from sanitizer_triggers in all_build_variants
     #    (source-specific: maps (repo/submodule, trigger) to the right variant)
-    # 4. push/pull_request events -> host-asan (default for pre/postsubmit)
-    # 5. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
+    # 4. No match -> stays as original build_variant (asan for nightly/manual)
     if build_variant == "asan":
         if "ci:asan" in ci_inputs.pr_labels:
             print("  Using full asan variant (ci:asan label)")
@@ -2074,9 +2090,6 @@ def expand_build_configs(
                     f"  Using {build_variant} variant "
                     f"(sanitizer trigger rule)"
                 )
-            elif ci_inputs.is_push or ci_inputs.is_pull_request:
-                build_variant = "host-asan"
-                print("  Using host-asan variant (push/pull_request default)")
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
