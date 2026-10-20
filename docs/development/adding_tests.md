@@ -204,9 +204,12 @@ component whose family has no multi-GPU pool still gets its emulated variant.
 >   override. `rocm-systems` currently puts a `gfx125X` override first, which
 >   would route mi450x emulated jobs onto the scarce MI455 GPU runners.
 >
-> `rocrtst` — the one emulated component today — lives in `rocm-systems`.
+> `rocrtst` — the one emulated component today — lives in `rocm-systems`. Its
+> `ROCRTST_PLATFORM_OVERRIDE=EMULATOR` setting is rocrtst-specific; add
+> `emulate_env` for another component only when that component's own test runner
+> needs an emulation switch.
 
-### Emulator artifacts and baselines
+### CI and release emulator artifacts and baselines
 
 Emulated component jobs fetch `mirage` and `rocjitsu` artifacts from the current
 workflow run with `--mirage --rocjitsu`. The emulation stage builds those
@@ -214,6 +217,12 @@ artifacts from the same TheRock source checkout as the rest of the workflow. For
 release workflows, that means the release branch's `rocm-systems` submodule. For
 external `rocm-systems` CI, the workflow can pass the external checkout through
 `THEROCK_ROCM_SYSTEMS_SOURCE_DIR`, just like the other source-package overrides.
+
+The `emulation` canary job uses the same artifact fetch and `mirage run` wrapper
+as component emulation, then runs
+[`test_tools/emulation_test.py`](../../test_tools/emulation_test.py). When the
+canary fails, component emulation failures are expected until the stack-level
+failure is fixed.
 
 This keeps the tested emulator artifacts aligned with the packages produced by
 the workflow and avoids checking out a second `rocm-systems` tree. It does not

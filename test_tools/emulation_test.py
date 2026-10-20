@@ -17,6 +17,7 @@ TEST_TYPE selects how much to run; see docs/development/test_filtering.md.
 import logging
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import emulation
