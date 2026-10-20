@@ -474,7 +474,7 @@ endif(THEROCK_ENABLE_OCL_ICD)
 
 set(_ocl_clr_enabled OFF)
 if(THEROCK_ENABLE_OCL_RUNTIME)
-  therock_check_subproject_targets(_ocl_clr_targets ocl-clr)
+  therock_check_subproject_targets(_ocl_clr_enabled ocl-clr)
 endif()
 
 if(THEROCK_ENABLE_OCL_RUNTIME AND _ocl_clr_enabled)
@@ -587,7 +587,7 @@ endif(THEROCK_ENABLE_OCL_RUNTIME AND _ocl_clr_enabled)
 
 set(_hip_tests_enabled OFF)
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
-  therock_check_subproject_targets(_hip_tests_targets hip-tests ${THEROCK_TEST_AMDGPU_TARGETS})
+  therock_check_subproject_targets(_hip_tests_enabled hip-tests ${THEROCK_TEST_AMDGPU_TARGETS})
 endif()
 
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS AND _hip_tests_enabled)
