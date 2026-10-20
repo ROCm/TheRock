@@ -1487,40 +1487,8 @@ def decide_jobs(
 
 
 def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[str]:
-    """Determine which triggers are active for current CI context.
-
-    Triggers are cumulative - multiple can be active at once. For example,
-    a push to main with submodule changes activates both "postsubmit" and
-    "submodule_bump" triggers.
-
-    For external repos, the original event is read from the external_repo
-    JSON "event_name" field, since TheRock always sees workflow_dispatch.
-
-    Note: workflow_dispatch (on_demand) is handled separately - it implicitly
-    allows all families, so it's not returned as a trigger here.
-
-    Returns:
-        Set of active trigger names from: presubmit, postsubmit, submodule_bump,
-        nightly.
-    """
+    """Determine which triggers are active for the current CI context."""
     triggers: set[str] = set()
-
-    # For external repos, resolve the caller's original event.
-    if ci_inputs.external_repo:
-        event_to_trigger = {
-            "schedule": "nightly",
-            "push": "postsubmit",
-            "pull_request": "presubmit",
-        }
-        try:
-            repo_json = json.loads(ci_inputs.external_repo)
-        except (json.JSONDecodeError, TypeError):
-            return triggers
-        event = repo_json.get("event_name", "")
-        trigger = event_to_trigger.get(event)
-        if trigger:
-            triggers.add(trigger)
-        return triggers
 
     if ci_inputs.is_schedule:
         triggers.add("nightly")
@@ -1552,17 +1520,7 @@ def _resolve_sanitizer_variant(
     ci_inputs: CIInputs,
     git_context: GitContext,
 ) -> str | None:
-    """Resolve which sanitizer build variant to use based on trigger rules.
-
-    For external repos: matches repo name + trigger against sanitizer_triggers
-    in all_build_variants.
-    For TheRock submodule bumps: matches changed submodule basenames against
-    sanitizer_triggers.
-
-    Returns:
-        Build variant string (e.g., "host-asan") if a rule matches,
-        or None if no sanitizer rule applies.
-    """
+    """Return the sanitizer variant for the current (source, trigger) pair, or None."""
     current_triggers = _get_current_triggers(ci_inputs, git_context)
     if not current_triggers:
         return None
