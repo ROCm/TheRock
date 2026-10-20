@@ -188,7 +188,7 @@ jobs:
         run: |
           choco source disable -n=chocolatey
           choco source add -n=internal -s http://nexus-service.nexus-ns.svc.cluster.local:8081/repository/choco-group/ --priority=1
-          choco install --no-progress -y ninja --version 1.13.1
+          choco install --no-progress -y ninja --version 1.13.2
 
       # Build a fixed version of libuv from source, no matter the pytorch ref.
       # gloo requires >= 1.26; v1.47.0 matches upstream's source build.
@@ -246,7 +246,7 @@ jobs:
 
       - name: Configure AWS Credentials for sccache
         if: ${{ steps.cache.outputs.cache_type == 'sccache' }}
-        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::324352301041:role/therock-ci
