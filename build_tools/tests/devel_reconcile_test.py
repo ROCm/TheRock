@@ -24,6 +24,8 @@ import unittest
 import unittest.mock
 from pathlib import Path, PurePosixPath
 
+from utils import intercept_file_write
+
 # Import the runtime module straight from the package template source tree.
 ROCM_SDK_SRC = (
     Path(__file__).resolve().parent.parent
@@ -294,25 +296,11 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
         publication_ready = threading.Event()
         allow_publication = threading.Event()
         worker_errors: list[BaseException] = []
-        real_open = Path.open
-        real_replace = Path.replace
 
-        def paused_open(path: Path, *args, **kwargs):
-            mode = args[0] if args else kwargs.get("mode", "r")
-            opened_file = real_open(path, *args, **kwargs)
-            if path == record_path and "w" in mode:
-                # Opening the destination for writing has already truncated it.
-                publication_ready.set()
-                if not allow_publication.wait(timeout=5):
-                    raise TimeoutError("Timed out waiting to write the RECORD")
-            return opened_file
-
-        def paused_replace(path: Path, target: Path) -> Path:
-            if Path(target) == record_path:
-                publication_ready.set()
-                if not allow_publication.wait(timeout=5):
-                    raise TimeoutError("Timed out waiting to publish the RECORD")
-            return real_replace(path, target)
+        def pause() -> None:
+            publication_ready.set()
+            if not allow_publication.wait(timeout=5):
+                raise TimeoutError("Timed out waiting to publish the RECORD")
 
         def update_record() -> None:
             try:
@@ -320,10 +308,7 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
             except BaseException as exc:
                 worker_errors.append(exc)
 
-        with (
-            unittest.mock.patch.object(Path, "open", new=paused_open),
-            unittest.mock.patch.object(Path, "replace", new=paused_replace),
-        ):
+        with intercept_file_write(record_path, on_write=pause):
             worker = threading.Thread(target=update_record)
             worker.start()
             try:
