@@ -12,8 +12,8 @@
 # Stages disabled on Windows: comm-libs, dctools-core, profiler-apps
 # (see BUILD_TOPOLOGY.toml disable_platforms)
 #
-# media-libs runs on Windows but builds only sysdeps-amd-mesa (VA-API);
-# rocdecode/rocjpeg remain disable_platforms=["windows"].
+# media-libs runs on Windows and builds sysdeps-amd-mesa (VA-API) and rocdecode
+# (via the vaon12 backend); rocjpeg remains disable_platforms=["windows"].
 #
 # Artifacts flow between stages via S3 using the artifact_manager.py tool.
 
@@ -56,15 +56,15 @@ on:
           prebuilt_stages, no artifacts exist for these stages afterwards.
       build_runs_on_large:
         type: string
-        default: "azure-windows-scale-rocm"
+        default: "aws-windows-scale-rocm-prod-mix"
         description: "Build runner label for CPU-intensive stages (selected by configure script with weighted distribution)"
       build_runs_on_small:
         type: string
-        default: "azure-windows-scale-rocm"
+        default: "aws-windows-scale-rocm-prod-mix"
         description: "Build runner label for low-CPU stages (no dedicated small pool for Windows yet, defaults to standard pool)"
       build_runs_on_medium:
         type: string
-        default: "azure-windows-scale-rocm"
+        default: "aws-windows-scale-rocm-prod-mix"
         description: "Build runner label for medium-CPU stages (no dedicated medium pool for Windows yet, defaults to standard pool)"
       rocm_package_version:
         type: string
@@ -95,7 +95,7 @@ jobs:
   notify_quartz_start:
     if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     name: "Quartz - started - build ROCm"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:
@@ -239,9 +239,9 @@ jobs:
   # ==========================================================================
   # STAGE: media-libs (generic, parallel to math-libs)
   # ==========================================================================
-  # On Windows this builds only sysdeps-amd-mesa (VA-API). rocdecode/rocjpeg
-  # are disable_platforms=["windows"] in BUILD_TOPOLOGY.toml and are filtered
-  # out by configure_stage.py, so they are not built here.
+  # On Windows this builds sysdeps-amd-mesa (VA-API) and rocdecode (vaon12
+  # backend). rocjpeg is still disable_platforms=["windows"] in
+  # BUILD_TOPOLOGY.toml and is filtered out by configure_stage.py.
   media-libs:
     needs: compiler-runtime
     if: >-
@@ -280,7 +280,7 @@ jobs:
     name: "Libraries Baseline Ready"
     # Skipped rather than failed; see the Linux copy for why.
     needs: [runtime-tests, debug-tools, media-libs]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Report reused stage results
         env:
@@ -291,7 +291,7 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [compiler-runtime, runtime-tests, math-libs, debug-tools, media-libs]
     name: "Quartz - completed - build ROCm"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:

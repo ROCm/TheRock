@@ -33,13 +33,6 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.12",
-                    "amdgpu_families": "gfx94X-dcgpu",
-                    "test_level": "standard",
-                    "test_amdgpu_families": "auto",
-                },
-                {
-                    "python_version": "3.12",
                     "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx94X-dcgpu",
                     "test_level": "standard",
@@ -64,13 +57,22 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.12",
+                    "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx110X-all",
                     "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 },
             ],
         )
+
+    def test_release_defaults_exclude_python310(self):
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="nightly",
+            amdgpu_families="gfx94X-dcgpu",
+            platform="linux",
+        )
+
+        self.assertNotIn("3.10", {row["python_version"] for row in matrix})
 
     def test_explicit_versions_and_refs_narrow_matrix(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
@@ -96,7 +98,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
 
     def test_filters_exact_unsupported_family(self):
         # Unsupported families are filtered while supported ones are kept.
-        for pytorch_git_ref in ("release/2.13", "release/2.14"):
+        for pytorch_git_ref in ("release/2.13", "release/2.14", "release/2.15"):
             with self.subTest(pytorch_git_ref=pytorch_git_ref):
                 matrix = m.generate_pytorch_matrix_for_release_type(
                     release_type="dev",
@@ -144,7 +146,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
     def test_release_uses_primary_python_version_for_standard_tests(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="nightly",
-            python_versions=["3.10", "3.11", "3.12"],
+            python_versions=["3.11", "3.12", "3.13"],
             pytorch_git_refs=["release/2.13"],
             amdgpu_families="gfx94X-dcgpu",
             platform="linux",
@@ -152,14 +154,14 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
 
         self.assertEqual(
             [(row["python_version"], row["test_level"]) for row in matrix],
-            [("3.10", "none"), ("3.11", "standard"), ("3.12", "none")],
+            [("3.11", "standard"), ("3.12", "none"), ("3.13", "none")],
         )
 
     def test_summary_explains_an_all_none_matrix(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="dev",
             python_versions=["3.12"],
-            pytorch_git_refs=["release/2.12", "nightly"],
+            pytorch_git_refs=["release/2.13", "nightly"],
             amdgpu_families="gfx94X-dcgpu",
             platform="linux",
         )
@@ -168,19 +170,104 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             release_type="dev",
             platform="linux",
             python_versions=["3.12"],
-            pytorch_git_refs=["release/2.12", "nightly"],
+            pytorch_git_refs=["release/2.13", "nightly"],
             amdgpu_families="gfx94X-dcgpu",
             matrix=matrix,
         )
 
         self.assertIn("| Generated rows | 2 (`none`: 2) |", summary)
-        self.assertIn("`release/2.12`: `3.11`", summary)
+        self.assertIn("`release/2.13`: `3.11`", summary)
         self.assertIn("`nightly`: `3.11`", summary)
         self.assertIn("All generated rows use `none`", summary)
         self.assertIn(
-            "| `3.12` | `release/2.12` | `gfx94X-dcgpu` | `none` |",
+            "| `3.12` | `release/2.13` | `gfx94X-dcgpu` | `none` |",
             summary,
         )
+
+    def test_resolve_cli_pytorch_git_refs_all_and_empty_use_defaults(self):
+        for raw in ("", "all", "ALL", "release/2.14 all"):
+            with self.subTest(raw=raw):
+                self.assertIsNone(
+                    m._resolve_cli_pytorch_git_refs(
+                        raw, release_type="nightly", platform="linux"
+                    )
+                )
+
+    def test_resolve_cli_pytorch_git_refs_subset_passthrough(self):
+        self.assertEqual(
+            m._resolve_cli_pytorch_git_refs(
+                "release/2.13, release/2.14",
+                release_type="nightly",
+                platform="linux",
+            ),
+            ["release/2.13", "release/2.14"],
+        )
+
+    def test_single_ref_covers_all_release_python_versions(self):
+        # Selecting one PyTorch ref builds it against every release Python
+        # version (1 ref x all Python).
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="nightly",
+            pytorch_git_refs=["release/2.14"],
+            amdgpu_families="gfx94X-dcgpu",
+            platform="linux",
+        )
+
+        self.assertEqual({row["pytorch_git_ref"] for row in matrix}, {"release/2.14"})
+        self.assertEqual(
+            [row["python_version"] for row in matrix],
+            m.RELEASE_PYTHON_VERSIONS,
+        )
+
+    def test_resolve_cli_pytorch_git_refs_rejects_unknown_ref_for_non_dev(self):
+        # Non-dev release types reject refs outside the available set.
+        with self.assertRaises(ValueError):
+            m._resolve_cli_pytorch_git_refs(
+                "release/9.99", release_type="nightly", platform="linux"
+            )
+
+    def test_resolve_cli_pytorch_git_refs_dev_passes_through_custom_branch(self):
+        # dev is the developer bring-up path: arbitrary refs flow through so a
+        # custom branch/tag/SHA can opt into new GPU families early.
+        self.assertEqual(
+            m._resolve_cli_pytorch_git_refs(
+                "users/alice/gfx125x-bringup",
+                release_type="dev",
+                platform="linux",
+            ),
+            ["users/alice/gfx125x-bringup"],
+        )
+        self.assertEqual(
+            m._resolve_cli_pytorch_git_refs(
+                "release/2.14, users/alice/gfx125x-bringup",
+                release_type="dev",
+                platform="linux",
+            ),
+            ["release/2.14", "users/alice/gfx125x-bringup"],
+        )
+
+    def test_resolve_cli_pytorch_git_refs_non_dev_rejects_custom_branch(self):
+        # Outside dev, a custom branch is not a known release ref and is
+        # rejected so production releases only build supported refs.
+        with self.assertRaises(ValueError):
+            m._resolve_cli_pytorch_git_refs(
+                "users/alice/gfx125x-bringup",
+                release_type="nightly",
+                platform="linux",
+            )
+
+    def test_resolve_cli_pytorch_git_refs_is_release_type_aware(self):
+        # "nightly" is a valid ref for nightly releases but not for prerelease.
+        self.assertEqual(
+            m._resolve_cli_pytorch_git_refs(
+                "nightly", release_type="nightly", platform="linux"
+            ),
+            ["nightly"],
+        )
+        with self.assertRaises(ValueError):
+            m._resolve_cli_pytorch_git_refs(
+                "nightly", release_type="prerelease", platform="linux"
+            )
 
     def test_generated_rows_cover_workflow_matrix_inputs(self):
         # The generate_pytorch_matrix_for_release_type script produces matrix

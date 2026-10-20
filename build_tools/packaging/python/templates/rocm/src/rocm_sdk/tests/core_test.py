@@ -117,15 +117,36 @@ class ROCmCoreTest(unittest.TestCase):
             if "libtest_linking_lib" in str(so_path):
                 # rocprim unit tests, not actual library files
                 continue
-            if "opencl" in str(so_path):
-                # We use OpenCL ICD from distro rather than TheRock
-                # and we do not build it
+            if (
+                "opencl" in str(so_path)
+                or "oclruntime" in so_path.name
+                or "oclperf" in so_path.name
+                or "oclgl" in so_path.name
+            ):
+                # OpenCL ICD comes from the distro; oclruntime/oclperf are
+                # test-only libraries that depend on libOpenCL.
                 continue
+
+            extra_setup = ""
+            if is_windows:
+                # Some libraries (e.g. rocdecode) import DLLs that ship under
+                # lib/rocm_sysdeps/bin rather than co-located in bin/. Linux
+                # resolves these via RPATH; Windows has no RPATH equivalent, so
+                # the sysdeps bin directory must be on the DLL search path. The
+                # library lives at <root>/bin/<name>.dll and the sysdeps DLLs at
+                # the sibling <root>/lib/rocm_sysdeps/bin.
+                sysdeps_bin = so_path.parents[1] / "lib" / "rocm_sysdeps" / "bin"
+                if sysdeps_bin.is_dir():
+                    sysdeps_dir = str(sysdeps_bin).replace("\\", "\\\\")
+                    extra_setup = f"import os; os.add_dll_directory('{sysdeps_dir}'); "
+
             with self.subTest(msg="Check shared library loads", so_path=so_path):
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
                 # etc).
-                command = "import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
+                command = (
+                    extra_setup + "import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
+                )
                 cmd = [sys.executable, "-c", command, str(so_path)]
                 subprocess.check_call(cmd)
 

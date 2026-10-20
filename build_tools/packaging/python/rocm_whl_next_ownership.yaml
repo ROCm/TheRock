@@ -207,6 +207,9 @@ python_indexes:
       pillow:
         owner_path: core/whl-next
         stream_group: all
+      pyelftools:
+        owner_path: core/whl-next
+        stream_group: all
       rocm:
         owner_path: core/whl-next
         stream_group: all
