@@ -247,7 +247,13 @@ if(THEROCK_ENABLE_PRIM)
   )
 endif(THEROCK_ENABLE_PRIM)
 
+set(_fft_enabled OFF)
 if(THEROCK_ENABLE_FFT)
+  therock_check_subproject_targets(_fft_enabled rocFFT)
+endif()
+set(_fft_enabled ${_fft_enabled} PARENT_SCOPE)
+
+if(THEROCK_ENABLE_FFT AND _fft_enabled)
   if(WIN32)
     # TODO(#36): enable once `rocfft_aot_helper.exe` can access hiprtc0605.dll
     #   "The code execution cannot proceed because hiprtc0605.dll was not found."
@@ -342,7 +348,7 @@ if(THEROCK_ENABLE_FFT)
       test
     SUBPROJECT_DEPS ${_fft_subproject_names}
   )
-endif(THEROCK_ENABLE_FFT)
+endif(THEROCK_ENABLE_FFT AND _fft_enabled)
 
 if(THEROCK_ENABLE_BLAS)
   add_subdirectory(support)
@@ -429,7 +435,14 @@ if(THEROCK_ENABLE_ROCWMMA)
   )
 endif(THEROCK_ENABLE_ROCWMMA)
 
+set(_rocalution_enabled OFF)
 if(THEROCK_ENABLE_ROCALUTION)
+  set(_rocalution_enabled ON)
+  therock_check_subproject_targets(_rocalution_enabled rocALUTION)
+endif()
+set(_rocalution_enabled ${_rocalution_enabled} PARENT_SCOPE)
+
+if(THEROCK_ENABLE_ROCALUTION AND _rocalution_enabled)
   ##############################################################################
   # rocALUTION
   ##############################################################################
@@ -479,7 +492,7 @@ if(THEROCK_ENABLE_ROCALUTION)
     SUBPROJECT_DEPS
       rocALUTION
   )
-endif(THEROCK_ENABLE_ROCALUTION)
+endif(THEROCK_ENABLE_ROCALUTION AND _rocalution_enabled)
 
 if(THEROCK_ENABLE_LIBHIPCXX)
   ##############################################################################

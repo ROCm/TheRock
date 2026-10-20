@@ -8,7 +8,13 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
   list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
 endif()
 
+set(_miopen_enabled OFF)
 if(THEROCK_ENABLE_MIOPEN)
+  therock_check_subproject_targets(_miopen_enabled MIOpen)
+endif()
+set(_miopen_enabled ${_miopen_enabled} PARENT_SCOPE)
+
+if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
   # MIOpen's CK use is gated on both the per-arch CK availability
   # (math-libs/CMakeLists.txt) and the user-facing
   # THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL opt-out, which lets
@@ -81,7 +87,7 @@ if(THEROCK_ENABLE_MIOPEN)
     SUBPROJECT_DEPS
       MIOpen
   )
-endif(THEROCK_ENABLE_MIOPEN)
+endif(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
 
 if(THEROCK_ENABLE_HIPDNN)
   ##############################################################################
@@ -194,7 +200,7 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
 
 endif(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
 
-if(THEROCK_ENABLE_MIOPENPROVIDER)
+if(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
   ##############################################################################
   # hipDNN MIOpen provider
   ##############################################################################
@@ -239,7 +245,7 @@ if(THEROCK_ENABLE_MIOPENPROVIDER)
     SUBPROJECT_DEPS
       miopenprovider
   )
-endif(THEROCK_ENABLE_MIOPENPROVIDER)
+endif(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
 
 if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
   ##############################################################################
