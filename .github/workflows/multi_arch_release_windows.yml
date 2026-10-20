@@ -15,6 +15,8 @@ on:
         description: JSON object with build configuration for this platform.
       rocm_package_version:
         type: string
+      rocm_msi_package_version:
+        type: string
       test_type:
         type: string
       release_type:
@@ -131,6 +133,7 @@ jobs:
     with:
       artifact_run_id: ${{ github.run_id }}
       rocm_version: ${{ inputs.rocm_package_version }}
+      msi_version: ${{ inputs.rocm_msi_package_version }}
       # Only the runtime package is published in artifacts today; core's Windows
       # artifacts (core-amdsmi, core-runtime) are not yet available.
       packages: runtime
