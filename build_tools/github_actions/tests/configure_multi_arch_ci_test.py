@@ -1150,7 +1150,7 @@ class TestSelectTargets(unittest.TestCase):
         self.assertIn("gfx906", result_with.linux_families)
 
     def test_pull_request_run_all_archs_label(self):
-        """PR with ci:run-all-archs label selects all families."""
+        """PR with ci:run-all-archs label selects all families except excluded."""
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
@@ -1162,6 +1162,8 @@ class TestSelectTargets(unittest.TestCase):
         result = cm.select_targets(inputs)
         # Should include nightly-only families
         self.assertIn("gfx906", result.linux_families)
+        # gfx125x is excluded from ci:run-all-archs (only runs on specified repos)
+        self.assertNotIn("gfx125x", result.linux_families)
 
     def test_run_all_archs_with_gfx_label_order_independent(self):
         """ci:run-all-archs + ci:gfx* produces the same result regardless of label order.

@@ -960,10 +960,16 @@ def _apply_arch_labels(
             gfx_targets.append((label, target))
 
     # 1. ci:run-all-archs takes highest priority — override to all families.
+    # gfx125x (gfx125X-dcgpu) is excluded: it only runs on specified repos
+    # (e.g. rocm-systems, rocm-libraries) via its own label, not in TheRock.
+    _RUN_ALL_ARCHS_EXCLUDE = {"gfx125x"}
     if has_run_all:
-        linux_names[:] = list(all_families.keys())
-        windows_names[:] = list(all_families.keys())
-        print("  Label 'ci:run-all-archs' -> all families")
+        linux_names[:] = [f for f in all_families if f not in _RUN_ALL_ARCHS_EXCLUDE]
+        windows_names[:] = [f for f in all_families if f not in _RUN_ALL_ARCHS_EXCLUDE]
+        print(
+            "  Label 'ci:run-all-archs' -> all families"
+            f" (excluding {_RUN_ALL_ARCHS_EXCLUDE})"
+        )
 
     # 2. ci:gfx* — build AND test, bypassing trigger-based test gating.
     for label, target in gfx_targets:
