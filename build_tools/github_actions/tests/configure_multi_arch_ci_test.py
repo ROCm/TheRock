@@ -2066,51 +2066,46 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertIsNone(result.windows)
 
     def test_variant_filters_by_trigger(self):
-        """ASAN: based on event type, we run an expected ASAN build variant"""
+        """ASAN: without trigger rules, all events stay as full asan."""
         targets = cm.TargetSelection(
             linux_families=["gfx94x"],
         )
-        test_cases = [
-            ("schedule", "linux-release-asan"),
-            ("push", "linux-release-host-asan"),
-            ("workflow_dispatch", "linux-release-asan"),
-        ]
-        for event_name, expected_variant in test_cases:
+        # All events without matching trigger rules keep the original asan variant.
+        # Specific variant remapping is handled by sanitizer_triggers in all_build_variants.
+        for event_name in ("schedule", "push", "workflow_dispatch"):
             with self.subTest(event_name=event_name):
-                defaults = dict(
+                ci_inputs = cm.CIInputs(
                     run_id="12345",
                     event_name=event_name,
                     commit_ref="main",
                     base_ref="HEAD^1",
                     build_variant="asan",
                 )
-                ci_inputs = cm.CIInputs(**defaults)
                 result = cm.expand_build_configs(
                     ci_inputs=ci_inputs,
                     git_context=cm.GitContext(),
                     targets=targets,
                     jobs=_jobs(),
                 )
-                # Only gfx94x on linux survives.
                 self.assertIsNotNone(result.linux)
-                build_variant_cmake_preset = result.linux.build_variant_cmake_preset
-                self.assertEqual(build_variant_cmake_preset, expected_variant)
+                self.assertEqual(
+                    result.linux.build_variant_cmake_preset,
+                    "linux-release-asan",
+                )
 
-    def test_push_asan_excludes_families_without_host_asan_support(self):
-        """Push ASAN: gfx110x only supports release, so it must be excluded.
+    def test_asan_excludes_families_without_asan_support(self):
+        """ASAN: gfx110x only supports release, so it must be excluded.
 
-        When build_variant=asan on push events, the effective variant becomes
-        host-asan. Families must be filtered using this effective variant, not
-        the original asan variant. gfx110x only supports release (not host-asan),
-        so it should be excluded from the result.
+        Families without the asan build variant in their build_variants list
+        are filtered out. gfx110x only supports release, so it should be
+        excluded from the result regardless of event type.
         """
-        # gfx94x supports host-asan, gfx110x only supports release (not host-asan)
         targets = cm.TargetSelection(
             linux_families=["gfx94x", "gfx110x"],
         )
         ci_inputs = cm.CIInputs(
             run_id="12345",
-            event_name="push",  # push triggers asan -> host-asan remap
+            event_name="push",
             commit_ref="main",
             base_ref="HEAD^1",
             build_variant="asan",
@@ -2122,11 +2117,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
             jobs=_jobs(),
         )
         self.assertIsNotNone(result.linux)
-        # Verify it's a host-asan build
         self.assertEqual(
-            result.linux.build_variant_cmake_preset, "linux-release-host-asan"
+            result.linux.build_variant_cmake_preset, "linux-release-asan"
         )
-        # Only gfx94x should survive (it supports host-asan), gfx110x should be excluded
+        # Only gfx94x should survive (it supports asan), gfx110x should be excluded
         family_names = [info["amdgpu_family"] for info in result.linux.per_family_info]
         self.assertIn("gfx94X-dcgpu", family_names)
         self.assertNotIn("gfx110X-all", family_names)
