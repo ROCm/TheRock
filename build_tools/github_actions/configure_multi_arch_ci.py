@@ -960,16 +960,10 @@ def _apply_arch_labels(
             gfx_targets.append((label, target))
 
     # 1. ci:run-all-archs takes highest priority — override to all families.
-    # gfx125x (gfx125X-dcgpu) is excluded: it only runs on specified repos
-    # (e.g. rocm-systems, rocm-libraries) via its own label, not in TheRock.
-    _RUN_ALL_ARCHS_EXCLUDE = {"gfx125x"}
     if has_run_all:
-        linux_names[:] = [f for f in all_families if f not in _RUN_ALL_ARCHS_EXCLUDE]
-        windows_names[:] = [f for f in all_families if f not in _RUN_ALL_ARCHS_EXCLUDE]
-        print(
-            "  Label 'ci:run-all-archs' -> all families"
-            f" (excluding {_RUN_ALL_ARCHS_EXCLUDE})"
-        )
+        linux_names[:] = list(all_families.keys())
+        windows_names[:] = list(all_families.keys())
+        print("  Label 'ci:run-all-archs' -> all families")
 
     # 2. ci:gfx* — build AND test, bypassing trigger-based test gating.
     for label, target in gfx_targets:
@@ -1547,7 +1541,12 @@ def _should_run_tests_for_family(
         return True, "workflow_dispatch (on_demand)"
 
     # ci:run-all-archs label means build AND test all families
+    # TODO(ROCm/rocm-systems#11374): Remove once gfx125x can run in ROCm/TheRock.
+    _RUN_ALL_ARCHS_TEST_EXCLUDE = {"gfx125X-dcgpu"}
     if "ci:run-all-archs" in ci_inputs.pr_labels:
+        family = platform_info.get("family", "")
+        if family in _RUN_ALL_ARCHS_TEST_EXCLUDE:
+            return False, f"ci:run-all-archs excludes tests for {family}"
         return True, "ci:run-all-archs label"
 
     tests_on_trigger = set(platform_info.get("tests_on_trigger", []))
