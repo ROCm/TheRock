@@ -1487,9 +1487,23 @@ def decide_jobs(
 
 
 def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[str]:
-    """Determine which triggers are active for the current CI context."""
+    """Determine which triggers are active for current CI context.
+
+    Triggers are cumulative - multiple can be active at once. For example,
+    a push to main with submodule changes activates both "postsubmit" and
+    "submodule_bump" triggers.
+
+    Note: workflow_dispatch (on_demand) is handled separately - it implicitly
+    allows all families, so it's not returned as a trigger here.
+
+    Returns:
+        Set of active trigger names from: presubmit, postsubmit, submodule_bump,
+        nightly.
+    """
     triggers: set[str] = set()
 
+    # Event-based triggers (mutually exclusive)
+    # Note: workflow_dispatch handled separately in _should_run_tests_for_family
     if ci_inputs.is_schedule:
         triggers.add("nightly")
     if ci_inputs.is_push:
