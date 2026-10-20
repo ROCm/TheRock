@@ -588,7 +588,9 @@ class TestSanitizerTriggerRules(unittest.TestCase):
                 self.assertIsInstance(sources, list, f"{variant_name}/{trigger}")
                 for source in sources:
                     self.assertIsInstance(source, str, f"{variant_name}/{trigger}")
-                    self.assertTrue(source, f"{variant_name}/{trigger} has empty source")
+                    self.assertTrue(
+                        source, f"{variant_name}/{trigger} has empty source"
+                    )
 
     def test_no_duplicate_source_trigger_across_variants(self):
         """A (source, trigger) pair must map to at most one variant."""
