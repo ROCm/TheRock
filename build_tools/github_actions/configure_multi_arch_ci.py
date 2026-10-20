@@ -1523,24 +1523,8 @@ def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[s
     """
     triggers: set[str] = set()
 
-    # For external repos, derive the trigger from the external repo's event_name
-    # rather than the GitHub event (which is always workflow_dispatch).
-    if ci_inputs.external_repo:
-        try:
-            repo_json = json.loads(ci_inputs.external_repo)
-            ext_event = repo_json.get("event_name", "")
-        except (json.JSONDecodeError, TypeError):
-            ext_event = ""
-        _EVENT_TO_TRIGGER = {
-            "schedule": "nightly",
-            "push": "postsubmit",
-            "pull_request": "presubmit",
-        }
-        if ext_event in _EVENT_TO_TRIGGER:
-            triggers.add(_EVENT_TO_TRIGGER[ext_event])
-        return triggers
-
     # Event-based triggers (mutually exclusive)
+    # External repos use workflow_call, so the caller's event propagates here.
     # Note: workflow_dispatch handled separately in _should_run_tests_for_family
     if ci_inputs.is_schedule:
         triggers.add("nightly")
