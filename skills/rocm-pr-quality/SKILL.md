@@ -19,7 +19,9 @@ Pick the action from the user's request. If it is ambiguous, ask which one they 
 
 Detailed rubric tables, the PR description template, change classes, the test-level map,
 waiver codes, and the MUST set live in `reference.md` in this directory. Read it before
-running an action.
+running an action. The style guide for written artifacts (PR descriptions, review comments,
+handoffs) lives in `prose-style-context.md`, also in this directory. Read it before drafting or
+rewriting any prose.
 
 ______________________________________________________________________
 
@@ -159,6 +161,29 @@ reverse edges (GitHub back-references; Jira dev-panel auto-linking when the issu
 branch/PR title). M5 makes the core links mandatory; broader context (design docs, loosely
 related PRs) is a SHOULD.
 
+### Prose and style for written artifacts (SHOULD)
+
+A PR description is often the only explanation a reviewer reads. Apply
+[`prose-style-context.md`](prose-style-context.md) to every PR description, review comment,
+handoff, and design note this skill drafts. It sets the reader model (a technically literate
+engineer who has not worked in the repository), the order of priorities (correctness, clarity,
+necessary context, concision, elegance), a sentence-level gate, a list of warning words that
+tend to stand in for a concrete fact, and evidence-and-scope rules for test and risk claims.
+
+This is a SHOULD, not part of M1 to M5: it governs how findings and descriptions are written,
+and it never relaxes a MUST. Overlays may tighten it, for example by making the description
+rewrite below required rather than recommended. The repository's own PR template and any
+machine gate still decide which headings and tracker line the description must carry; keep
+them as written.
+
+**Recommend a rewrite, not just a critique.** When this skill authors a description, run the
+draft through the sentence-level gate and final acceptance test before presenting it. When it
+reviews a description that fails the gate (an undefined term, a warning word with no fact
+behind it, a claim with no evidence or scope, repetition that hides the change), name the
+failed gate items and offer a specific rewrite the author can paste in. The rewrite is
+advisory and follows operating principle 2: show it in the chat and never post or edit
+anything on GitHub without approval.
+
 ______________________________________________________________________
 
 ## Action 1 — Author assist
@@ -197,8 +222,10 @@ not render empty `N/A` fields in the body.
    changed, require at least one of: tests exercising the change, a safe-default flag guard plus
    a follow-up tracker, or a documented waiver. "Disable/skip/weaken tests to green CI" is never
    valid.
-1. Draft a complete PR description from the template in `reference.md`. New PRs are **draft by
-   default**; open ready-for-review only when the user explicitly asks.
+1. Draft a complete PR description from the template in `reference.md`, then run it through the
+   sentence-level gate and final acceptance test in `prose-style-context.md` and present the
+   revised text. New PRs are **draft by default**; open ready-for-review only when the user
+   explicitly asks.
 1. Prompt for the things authors skip: work tracking, flags for default-path/experimental
    behavior, and adjacent tests ("what else exercises this code path that you should run?").
 
@@ -244,6 +271,9 @@ web diff alone has lower confidence). Do not modify files during review.
    (2) what test level is appropriate, (3) if tests/flags are omitted, is that acceptable
    (waiver?), (4) what adjacent tests should have been considered.
 1. Adjudicate any author-declared waiver: accept a well-justified one, reject a weak one.
+1. Read the PR description against `prose-style-context.md`. When it fails the gate, list the
+   failed items as `SUGGESTION`s and include a recommended rewrite (see "Prose and style for
+   written artifacts").
 
 **Evidence-based review (CI validation).** Treat CI as data, not a binary. Look at *all* CI runs on
 the PR, not only the one linked in the description — a green rollup can hide a skipped lane, a flaky
