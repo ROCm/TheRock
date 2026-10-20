@@ -1486,15 +1486,6 @@ def decide_jobs(
 # ---------------------------------------------------------------------------
 
 
-# Maps GitHub event names to TheRock trigger names.
-# Used by _get_current_triggers for both local and external-repo contexts.
-_EVENT_TO_TRIGGER: dict[str, str] = {
-    "schedule": "nightly",
-    "push": "postsubmit",
-    "pull_request": "presubmit",
-}
-
-
 def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[str]:
     """Determine which triggers are active for current CI context.
 
@@ -1516,25 +1507,31 @@ def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[s
 
     # For external repos, resolve the caller's original event.
     if ci_inputs.external_repo:
+        event_to_trigger = {
+            "schedule": "nightly",
+            "push": "postsubmit",
+            "pull_request": "presubmit",
+        }
         try:
             repo_json = json.loads(ci_inputs.external_repo)
         except (json.JSONDecodeError, TypeError):
             return triggers
         event = repo_json.get("event_name", "")
-        trigger = _EVENT_TO_TRIGGER.get(event)
+        trigger = event_to_trigger.get(event)
         if trigger:
             triggers.add(trigger)
         return triggers
 
-    # Event-based triggers (mutually exclusive)
-    # Note: workflow_dispatch handled separately in _should_run_tests_for_family
-    trigger = _EVENT_TO_TRIGGER.get(ci_inputs.event_name)
-    if trigger:
-        triggers.add(trigger)
+    if ci_inputs.is_schedule:
+        triggers.add("nightly")
+    if ci_inputs.is_push:
+        triggers.add("postsubmit")
+    if ci_inputs.is_pull_request:
+        triggers.add("presubmit")
 
     # Context-based triggers (can stack on top of event triggers)
     # submodule_bump only applies to TheRock, not external repos.
-    if git_context.has_submodule_changes is True:
+    if git_context.has_submodule_changes is True and not ci_inputs.external_repo:
         triggers.add("submodule_bump")
 
     return triggers
