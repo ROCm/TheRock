@@ -188,8 +188,14 @@ class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
             "head": {"sha": self.HEAD_SHA},
         }
 
-    def _run(self, run_id: int, conclusion: str | None, name: str = "Multi-Arch CI"):
-        return {"id": run_id, "name": name, "conclusion": conclusion}
+    def _run(
+        self,
+        run_id: int,
+        conclusion: str | None,
+        name: str = "Multi-Arch CI",
+        status: str = "completed",
+    ):
+        return {"id": run_id, "name": name, "conclusion": conclusion, "status": status}
 
     def test_returns_the_run_id_when_its_gate_job_succeeded(self):
         with patch(
@@ -246,7 +252,11 @@ class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
             )
         self.assertEqual(run_id, "112")
 
-    def test_returns_none_when_no_run_gate_job_succeeded(self):
+    def test_falls_back_to_newest_run_when_no_gate_job_succeeded(self):
+        # When no run has passing gate jobs (CI still running, or needs a
+        # re-run), we fall back to the newest matching run.  The downstream
+        # CI won't consume the baseline for hours, by which time the run
+        # will have completed.
         with patch(
             "bump_automation.gh_api",
             side_effect=[
@@ -264,11 +274,11 @@ class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
             run_id = get_baseline_run_id_from_merged_pr(
                 "ROCm/TheRock", "token", self.MERGE_SHA
             )
-        self.assertIsNone(run_id)
+        self.assertEqual(run_id, "111")
 
-    def test_returns_none_when_gate_job_is_missing(self):
+    def test_falls_back_to_run_when_gate_job_is_missing(self):
         # A run that predates the gate job (or is otherwise structurally
-        # different) must not be treated as a usable baseline.
+        # different) is still better than no baseline at all.
         with patch(
             "bump_automation.gh_api",
             side_effect=[
@@ -280,7 +290,28 @@ class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
             run_id = get_baseline_run_id_from_merged_pr(
                 "ROCm/TheRock", "token", self.MERGE_SHA
             )
-        self.assertIsNone(run_id)
+        self.assertEqual(run_id, "111")
+
+    def test_falls_back_to_in_progress_run(self):
+        # When the CI run is still in progress (e.g. on a re-run attempt),
+        # we return its ID.  By the time the downstream CI consumes it, the
+        # run will have completed.
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                [self._pr()],
+                {
+                    "workflow_runs": [
+                        self._run(111, None, status="in_progress"),
+                    ]
+                },
+                _jobs_page([]),  # no gate jobs yet
+            ],
+        ):
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertEqual(run_id, "111")
 
     def test_returns_none_when_no_matching_workflow_name(self):
         with patch(
@@ -379,6 +410,64 @@ class UpdateCiEnvFileTest(unittest.TestCase):
         )
         result = self._run(content)
         self.assertIn("oldsha1234567", result)
+
+    def _run_with_baseline(self, content: str, baseline_run_id: str | None) -> str:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
+            f.write(content)
+            path = f.name
+        try:
+            update_ci_env_file(path, "newsha1234567", baseline_run_id=baseline_run_id)
+            return Path(path).read_text()
+        finally:
+            os.unlink(path)
+
+    def test_updates_baseline_run_id_when_provided(self):
+        content = textwrap.dedent(
+            """\
+            outputs:
+              therock-ref:
+                description: "TheRock commit ref"
+                value: "oldsha1234567"
+              baseline-run-id:
+                description: "Baseline run ID"
+                value: "11111111111"
+        """
+        )
+        result = self._run_with_baseline(content, "99999999999")
+        self.assertIn('"99999999999"', result)
+        self.assertNotIn("11111111111", result)
+
+    def test_preserves_baseline_run_id_when_none(self):
+        content = textwrap.dedent(
+            """\
+            outputs:
+              therock-ref:
+                description: "TheRock commit ref"
+                value: "oldsha1234567"
+              baseline-run-id:
+                description: "Baseline run ID"
+                value: "11111111111" # some old comment
+        """
+        )
+        result = self._run_with_baseline(content, None)
+        self.assertIn('"11111111111"', result)
+        self.assertIn("# some old comment", result)
+
+    def test_preserves_empty_baseline_run_id_when_none(self):
+        content = textwrap.dedent(
+            """\
+            outputs:
+              therock-ref:
+                description: "TheRock commit ref"
+                value: "oldsha1234567"
+              baseline-run-id:
+                description: "Baseline run ID"
+                value: ""
+        """
+        )
+        result = self._run_with_baseline(content, None)
+        # The existing empty value is kept as-is (not rewritten)
+        self.assertIn('value: ""', result)
 
 
 class UpdateTheRockWorkflowFileTest(unittest.TestCase):
