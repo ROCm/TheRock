@@ -482,6 +482,13 @@ Both scripts report pass/fail status and exit with code 0 on success. ROCgdb tra
 - Unexpected failures
 - Comparison of compiler-specific failures
 
+**ROCdbgapi:** amd-dbgapi also packages its GoogleTest binaries into a `test`
+component (built under `-DTHEROCK_BUILD_TESTING=ON`), installed to
+`tests/` within the amd-dbgapi dist tree. There is no dedicated runner script
+for it yet, and the `amd-dbgapi-cpu` and `amd-dbgapi-gpu` CI jobs are
+currently placeholders that always pass rather than exercising the test
+binaries, pending a runner script similar to `test_rocgdb.py`.
+
 ## rocgdb-emulate
 
 `rocgdb-emulate` runs ROCgdb inside a mirage session, so GPU programs can be
