@@ -55,6 +55,7 @@ def _get_artifact_path(artifact_path: str) -> str:
 # keys it expands to. Use this when a single label should select multiple
 # related jobs without relying on name-prefix inference.
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
+    "amd-dbgapi": ["amd-dbgapi-cpu", "amd-dbgapi-gpu"],
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
     "tensilelite": ["tensilelite", "tensilelite-common"],
 }
@@ -531,6 +532,22 @@ test_matrix = {
                 "gfx125X-dcgpu",
             ],
         },
+    },
+    # Placeholders until the amd-dbgapi GoogleTest suite has a dedicated runner
+    # script. The test_script below always succeeds, so these jobs just wire
+    # up scheduling and artifact fetching ahead of the real test invocation.
+    "amd-dbgapi-cpu": {
+        **_rocgdb_common,
+        "job_name": "amd-dbgapi-cpu",
+        "platform": ["linux", "windows"],
+        "test_script": "echo amd-dbgapi cpu tests are not wired up yet, this placeholder always passes",
+        "linux_cpu_runner": True,
+    },
+    "amd-dbgapi-gpu": {
+        **_rocgdb_common,
+        "job_name": "amd-dbgapi-gpu",
+        "platform": ["linux", "windows"],
+        "test_script": "echo amd-dbgapi gpu tests are not wired up yet, this placeholder always passes",
     },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",

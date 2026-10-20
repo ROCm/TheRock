@@ -1070,6 +1070,26 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(job_names.count("rocgdb-cpu"), 1)
         self.assertEqual(job_names.count("rocgdb-gpu"), 1)
 
+    def test_all_amd_dbgapi_label_selects_cpu_and_gpu_jobs(self):
+        """test:amd-dbgapi should expand to amd-dbgapi-cpu and amd-dbgapi-gpu."""
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:amd-dbgapi"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("amd-dbgapi-cpu", names)
+        self.assertIn("amd-dbgapi-gpu", names)
+
+    def test_amd_dbgapi_cpu_job_runs_on_cpu_runner_with_placeholder_script(self):
+        """amd-dbgapi-cpu is a placeholder that always passes and uses a CPU runner."""
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:amd-dbgapi"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        job = next(c for c in components if c["job_name"] == "amd-dbgapi-cpu")
+        self.assertTrue(job["linux_cpu_runner"])
+        self.assertIn("echo", job["test_script"])
+
     # -----------------------
     # mesa-fork labels
     # -----------------------
