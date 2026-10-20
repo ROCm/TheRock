@@ -163,7 +163,7 @@ ______________________________________________________________________
 | Tier            | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **BLOCKING**    | Must fix before merge: correctness/logic error, security issue, leak/crash in normal use, ABI/API break, breaking change without a migration path, missing required tests for new functionality, an untested broad-blast-radius change to a default/shipping path, incomplete cleanup of code this PR modifies (dead params/constants/helpers left behind), or asserting a lane as validation coverage for the change when the component's `TESTING.md` documents that lane as non-gating/informational or a known gap. |
-| **IMPORTANT**   | Should fix: real behavioral risk, missing validation for a likely edge case, meaningful test gap, missing required device/arch coverage, or a maintainability issue likely to cause defects soon.                                                                                                                                                                                                                                                                                                                       |
+| **IMPORTANT**   | Should fix: real behavioral risk, missing validation for a likely edge case, meaningful test gap, missing required device/arch coverage, a relevant test that PR CI does not run with no evidence in the PR description that it was run and passed, or a maintainability issue likely to cause defects soon.                                                                                                                                                                                                            |
 | **SUGGESTION**  | Nice to have on code already being touched: clarity, naming, a small refactor, an extra test case, or resolving/worsening a documented Known Risk/Gap in `TESTING.md` without updating that entry.                                                                                                                                                                                                                                                                                                                      |
 | **FUTURE WORK** | Out of scope for this PR: improvements to code not being modified, larger refactors, follow-up features. Track separately; do not block this PR.                                                                                                                                                                                                                                                                                                                                                                        |
 
@@ -194,15 +194,31 @@ than one.
 
 **What to extract from it:**
 
-- Which lanes actually **gate** a merge versus which are **informational** (green-but-not-required,
-  or documented as silently skipped in some environment). This distinction is the whole point of
-  the document — "is CI covering that?" should be a lookup, not a guess.
+- **Gating versus informational.** For each test relevant to the change, check whether CI runs it
+  on this PR and, if so, whether it **blocks** the merge or is **informational**
+  (green-but-not-required, or documented as silently skipped in some environment). Do not treat a
+  green rollup as proof that the relevant tests ran, or that they gate.
+- **Triggers.** Which events run which validation: every PR, only PRs touching certain paths or
+  submodules, opt-in labels or workflow-dispatch, or nightly/post-merge only. A suite that runs
+  only nightly does not cover the PR in front of you.
+- **Required checks.** Which automated checks are required for merge. A `TESTING.md` may list
+  CI workflows without saying which ones branch protection requires, so confirm against the repo
+  (`gh pr checks <PR> --required`) rather than inferring it from the workflow list. Expect
+  important builds and tests to be non-required in large repos, where long time to signal, flaky
+  hardware runners, or runner capacity keep them from gating every PR. Overlays may name the
+  repo's current required set as an example.
 - The component's own test tiers/suites and what each is for, so the Testing Summary/Checklist
   can name the right one instead of a generic label.
 - The **Known Risks and Gaps** table (or equivalent). If the PR touches an area a gap row already
   names, say so explicitly rather than silently rediscovering it — and check whether the PR should
   update that row (close it, tighten it, or leave it, with a note either way).
 - Owners / review cadence, if the change needs a named domain reviewer beyond standard CODEOWNERS.
+
+**Relevant tests that CI does not run need evidence in the PR.** If a test the change warrants is
+not run by PR CI (wrong trigger, informational-only, or a documented gap), the PR description
+should show it was run and passed: the command, the devices for hardware tests, and a log or run
+link when one exists. Authors add this to the Testing Checklist; reviewers flag its absence
+(`IMPORTANT`, per the finding-tiers table).
 
 **No `TESTING.md` for this component yet?** The rollout is in progress — absence is not a
 blocker. Fall back to CI-config discovery and the risk-dimension lens below, and add a

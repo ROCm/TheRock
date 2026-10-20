@@ -184,7 +184,10 @@ not render empty `N/A` fields in the body.
    changed file's directory) — see "Discover the component's `TESTING.md` first" in
    `reference.md`. Use its documented tiers and its real-gate-vs-informational distinction to
    describe testing accurately in the Testing Summary/Checklist and Device/Architecture Coverage,
-   and explicitly flag in the PR body if the change touches a documented Known Risk/Gap. If none
+   and explicitly flag in the PR body if the change touches a documented Known Risk/Gap. Check
+   which relevant tests PR CI will actually run and which checks are required
+   (`gh pr checks <PR> --required`); for a relevant test CI will not run, record the local or
+   manual run (command, devices, log/run link) in the Testing Checklist. If no `TESTING.md`
    exists for the touched component yet, fall back to the risk-dimension lens and CI-config
    discovery, and note the gap as a `SUGGESTION`.
 1. Scan branch name, commit messages, and diff for tracker keys, issue numbers, and referenced
@@ -230,9 +233,11 @@ web diff alone has lower confidence). Do not modify files during review.
 1. Discover the nearest `TESTING.md`(s) for the changed paths and reconcile the PR's testing
    claims against them (see "Discover the component's `TESTING.md` first" in `reference.md`). A
    claim that a lane "passed"/"gates" the change when the doc marks that lane informational-only
-   or a documented known gap is a finding (`BLOCKING`, per the finding-tiers table). If the PR
-   touches an area a Known Risks/Gaps row already names, check whether that row should be
-   updated (closed, tightened, or left with a note) alongside the code change.
+   or a documented known gap is a finding (`BLOCKING`, per the finding-tiers table). For each
+   relevant test, check whether PR CI runs it and whether it is required or informational; if CI
+   does not run it, check that the PR description shows it was run and passed (`IMPORTANT` if
+   missing). If the PR touches an area a Known Risks/Gaps row already names, check whether that
+   row should be updated (closed, tightened, or left with a note) alongside the code change.
 1. Assess blast radius and device/arch coverage; reconcile what the content warrants against what
    the PR actually tested/claimed. Flag gaps; do not over-escalate.
 1. Answer the four review questions explicitly: (1) what new/changed functionality lands,
