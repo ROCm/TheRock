@@ -289,17 +289,9 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
   )
 endif(THEROCK_ENABLE_HIPBLASLTPROVIDER)
 
+set(_hipkernelprovider_enabled OFF)
 if(THEROCK_ENABLE_HIPKERNELPROVIDER)
-  set(_hipkernelprovider_enabled ON)
-  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_hipkernelprovider_targets hipkernelprovider ${THEROCK_AMDGPU_TARGETS})
-    if(NOT _hipkernelprovider_targets)
-      message(STATUS
-        "hipkernelprovider: no supported gfx targets remain after filtering "
-        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
-      set(_hipkernelprovider_enabled OFF)
-    endif()
-  endif()
+  therock_check_subproject_targets(_hipkernelprovider_enabled hipkernelprovider)
 endif()
 
 if(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
@@ -350,17 +342,9 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
   )
 endif(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
 
+set(_hipdnn_samples_enabled OFF)
 if(THEROCK_ENABLE_HIPDNN_SAMPLES)
-  set(_hipdnn_samples_enabled ON)
-  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_hipdnn_samples_targets hipDNN_samples ${THEROCK_AMDGPU_TARGETS})
-    if(NOT _hipdnn_samples_targets)
-      message(STATUS
-        "hipDNN_samples: no supported gfx targets remain after filtering "
-        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
-      set(_hipdnn_samples_enabled OFF)
-    endif()
-  endif()
+  therock_check_subproject_targets(_hipdnn_samples_enabled hipDNN_samples)
 endif()
 
 if(THEROCK_ENABLE_HIPDNN_SAMPLES AND _hipdnn_samples_enabled)
