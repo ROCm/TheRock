@@ -6,6 +6,7 @@ from pathlib import Path
 import os
 import sys
 import json
+import math
 import unittest
 from unittest.mock import patch
 
@@ -252,11 +253,88 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         )
 
     # -----------------------
+    # Test filter timeout budgets (#9318)
+    # -----------------------
+
+    def test_every_component_declares_a_timeout(self):
+        """resolve_timeout_minutes needs timeout_minutes on every entry."""
+        for key, config in fetch_test_configurations.test_matrix.items():
+            with self.subTest(component=key):
+                self.assertIn("timeout_minutes", config)
+
+    def test_no_component_exceeds_its_filter_budget(self):
+        """The budgets are the law -- no component may opt out of them."""
+        for (
+            test_type,
+            budget,
+        ) in fetch_test_configurations.TEST_FILTER_BUDGET_MINUTES.items():
+            os.environ["TEST_TYPE"] = test_type
+            fetch_test_configurations.run()
+            for job in self._get_components():
+                with self.subTest(test_type=test_type, job=job["job_name"]):
+                    self.assertLessEqual(
+                        job["timeout_minutes"],
+                        math.ceil(budget / job["total_shards"]),
+                    )
+
+    def test_budget_is_split_across_shards(self):
+        """rocblas is 6 shards on linux, so standard gives each 45/6 minutes."""
+        os.environ["PROJECTS_TO_TEST"] = "rocblas"
+        os.environ["TEST_TYPE"] = "standard"
+
+        fetch_test_configurations.run()
+        rocblas = self._get_components()[0]
+
+        self.assertEqual(rocblas["total_shards"], 6)
+        self.assertEqual(rocblas["timeout_minutes"], 8)
+
+    def test_full_filter_keeps_the_declared_timeout(self):
+        os.environ["PROJECTS_TO_TEST"] = "rocblas"
+        os.environ["TEST_TYPE"] = "full"
+
+        fetch_test_configurations.run()
+        rocblas = self._get_components()[0]
+
+        self.assertEqual(rocblas["timeout_minutes"], 288)
+
+    def test_timeout_follows_platform_shard_count(self):
+        """hipblaslt is sharded 6x on linux and 1x on windows, so budgets differ."""
+        os.environ["PROJECTS_TO_TEST"] = "hipblaslt"
+        os.environ["TEST_TYPE"] = "standard"
+        fetch_test_configurations.run()
+        self.assertEqual(self._get_components()[0]["timeout_minutes"], 8)
+
+        os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
+        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
+        fetch_test_configurations.run()
+        self.assertEqual(self._get_components()[0]["timeout_minutes"], 45)
+
+    def test_windows_hip_tests_backends_are_budgeted(self):
+        """The PAL/ROCR split builds entries on its own path; it must budget too."""
+        os.environ["PROJECTS_TO_TEST"] = "hip-tests"
+        os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
+        os.environ["TEST_TYPE"] = "standard"
+        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        self.assertEqual(
+            {j["job_name"] for j in components},
+            {"hip-tests (PAL)", "hip-tests (ROCR)"},
+        )
+        for job in components:
+            with self.subTest(job=job["job_name"]):
+                # 4 windows shards against the 45 min standard budget.
+                self.assertEqual(job["total_shards"], 4)
+                self.assertEqual(job["timeout_minutes"], 12)
+
+    # -----------------------
     # tensilelite ctest-stage gating (AIHPBLAS-4410)
     # -----------------------
 
     def test_tensilelite_standard_appends_ctest_stage(self):
-        """TEST_TYPE=standard should append the ctest stage and extend the timeout."""
+        """TEST_TYPE=standard should append the ctest stage."""
         os.environ["PROJECTS_TO_TEST"] = "tensilelite"
         os.environ["TEST_TYPE"] = "standard"
 
@@ -268,10 +346,12 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             "TEST_COMPONENT=hipblaslt-tensilelite", tensilelite["test_script"]
         )
         self.assertIn("test_runner.py", tensilelite["test_script"])
-        self.assertEqual(tensilelite["timeout_minutes"], 30)
+        # Declared 15 is below the 45 min standard budget, so it is kept as-is:
+        # chaining the extra stage does not buy the component more time.
+        self.assertEqual(tensilelite["timeout_minutes"], 15)
 
     def test_tensilelite_quick_omits_ctest_stage(self):
-        """TEST_TYPE=quick should not append the ctest stage or extend the timeout."""
+        """TEST_TYPE=quick should not append the ctest stage."""
         os.environ["PROJECTS_TO_TEST"] = "tensilelite"
         os.environ["TEST_TYPE"] = "quick"
 
@@ -282,7 +362,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertNotIn(
             "TEST_COMPONENT=hipblaslt-tensilelite", tensilelite["test_script"]
         )
-        self.assertEqual(tensilelite["timeout_minutes"], 15)
+        # Clamped from the declared 15 down to the 5 min quick budget.
+        self.assertEqual(tensilelite["timeout_minutes"], 5)
 
     # -----------------------
     # tensilelite-common (Tensile/Tests/common on real hardware)
@@ -326,7 +407,21 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 self.assertNotIn(
                     "TEST_COMPONENT=hipblaslt-tensilelite", job["test_script"]
                 )
-                self.assertEqual(job["timeout_minutes"], 180)
+
+    def test_tensilelite_common_timeout_follows_the_filter_budget(self):
+        """The declared 180 applies on full only; budgeted filters clamp it."""
+        os.environ["PROJECTS_TO_TEST"] = "tensilelite-common"
+        expected = {"quick": 5, "standard": 45, "comprehensive": 180, "full": 180}
+        for test_type, timeout in expected.items():
+            with self.subTest(test_type=test_type):
+                os.environ["TEST_TYPE"] = test_type
+                fetch_test_configurations.run()
+                job = next(
+                    j
+                    for j in self._get_components()
+                    if j["job_name"] == "tensilelite-common"
+                )
+                self.assertEqual(job["timeout_minutes"], timeout)
 
     def test_tensilelite_label_selects_unit_and_common_jobs(self):
         os.environ["TEST_LABELS"] = json.dumps(["test:tensilelite"])
@@ -362,6 +457,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             "job_name": name,
             "platform": ["linux"],
             "total_shards_dict": {"linux": 1},
+            "timeout_minutes": 30,
             **extra,
         }
 
@@ -1263,6 +1359,85 @@ class ParseTestLabelsTest(unittest.TestCase):
         msg = str(ctx.exception)
         self.assertIn("comma-separated", msg)
         self.assertIn("Python list literal", msg)
+
+
+class TestFilterBudgets(unittest.TestCase):
+    def test_budgets_match_documented_values(self):
+        """Documented execution times, with 1.5x headroom on the longer two."""
+        self.assertEqual(
+            fetch_test_configurations.TEST_FILTER_BUDGET_MINUTES,
+            {"quick": 5, "standard": 45, "comprehensive": 180},
+        )
+
+    def test_full_is_unbudgeted(self):
+        """The doc sizes "full" as "2+ hours" with no upper bound."""
+        self.assertNotIn("full", fetch_test_configurations.TEST_FILTER_BUDGET_MINUTES)
+
+
+class TestResolveTimeoutMinutes(unittest.TestCase):
+    def test_unsharded_component_gets_the_whole_budget(self):
+        self.assertEqual(
+            fetch_test_configurations.resolve_timeout_minutes("standard", 1, 1000), 45
+        )
+
+    def test_budget_is_divided_across_shards(self):
+        """The budget covers the whole suite, so N shards get budget/N each."""
+        self.assertEqual(
+            fetch_test_configurations.resolve_timeout_minutes("standard", 6, 1000), 8
+        )
+        self.assertEqual(
+            fetch_test_configurations.resolve_timeout_minutes("comprehensive", 6, 1000),
+            30,
+        )
+
+    def test_uneven_division_rounds_up(self):
+        """45/6 is 8 minutes a shard, not a truncated 7."""
+        self.assertEqual(
+            fetch_test_configurations.resolve_timeout_minutes("standard", 6, 1000), 8
+        )
+
+    def test_heavy_sharding_still_leaves_a_minute(self):
+        """5/8 must not floor to a zero-minute timeout."""
+        self.assertEqual(
+            fetch_test_configurations.resolve_timeout_minutes("quick", 8, 1000), 1
+        )
+
+    def test_declared_timeout_is_a_ceiling(self):
+        """A component tighter than its budget keeps the tighter value."""
+        self.assertEqual(
+            fetch_test_configurations.resolve_timeout_minutes("standard", 1, 5), 5
+        )
+
+    def test_budget_never_loosens_a_declared_timeout(self):
+        for test_type in fetch_test_configurations.TEST_FILTER_BUDGET_MINUTES:
+            with self.subTest(test_type=test_type):
+                self.assertLessEqual(
+                    fetch_test_configurations.resolve_timeout_minutes(test_type, 1, 10),
+                    10,
+                )
+
+    def test_there_is_no_per_component_override(self):
+        """Budgets are the law; a component cannot buy itself more time."""
+        with self.assertRaises(TypeError):
+            fetch_test_configurations.resolve_timeout_minutes(
+                "standard", 1, 1000, {"standard": 240}
+            )
+
+    def test_full_passes_the_declared_timeout_through(self):
+        self.assertEqual(
+            fetch_test_configurations.resolve_timeout_minutes("full", 6, 288), 288
+        )
+
+    def test_unknown_filter_is_treated_as_unbudgeted(self):
+        self.assertEqual(
+            fetch_test_configurations.resolve_timeout_minutes("something-new", 1, 288),
+            288,
+        )
+
+    def test_zero_shards_is_treated_as_one(self):
+        self.assertEqual(
+            fetch_test_configurations.resolve_timeout_minutes("standard", 0, 1000), 45
+        )
 
 
 if __name__ == "__main__":

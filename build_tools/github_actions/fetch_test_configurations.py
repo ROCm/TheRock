@@ -20,6 +20,7 @@ import argparse
 import ast
 import json
 import logging
+import math
 import os
 import platform as platform_module
 from pathlib import Path
@@ -246,6 +247,43 @@ _rocgdb_common = {
 # A component's "skip_stages" lists build stages whose absence excludes the test.
 # If any listed stage is in SKIP_STAGES, the component is skipped. Reused stages
 # still supply artifacts and do not exclude tests. Omit the field for no stage gate.
+#
+# Timeouts
+# ========
+# "timeout_minutes" is the component's own cap, used verbatim on "full". Other
+# filters tighten it to TEST_FILTER_BUDGET_MINUTES / shard count, so Linux and
+# Windows differ for free. No per-component overrides; see
+# docs/development/test_filtering.md.
+
+
+# Whole-suite budget on one shard, per docs/development/test_filtering.md, with
+# 1.5x headroom on the long filters so flake fails the test, not the clock.
+# "full" is omitted ("2+ hours", no cap): those keep their declared timeout.
+TEST_FILTER_BUDGET_MINUTES = {
+    "quick": 5,
+    "standard": 45,  # 30 x 1.5
+    "comprehensive": 180,  # 120 x 1.5
+}
+
+
+def resolve_timeout_minutes(
+    test_type: str,
+    total_shards: int,
+    declared_timeout_minutes: int,
+) -> int:
+    """Return the per-shard step timeout, in minutes, for one component.
+
+    The lesser of the component's own timeout and its filter budget split across
+    shards, so this can only tighten. "full" (or an unknown filter) is unbudgeted.
+    """
+    budget = TEST_FILTER_BUDGET_MINUTES.get(test_type)
+    if budget is None:
+        return declared_timeout_minutes
+
+    # Round up: 45/6 is 8 minutes a shard, not a truncated 7.
+    per_shard = max(1, math.ceil(budget / max(1, total_shards)))
+    return min(declared_timeout_minutes, per_shard)
+
 
 test_matrix = {
     # Sanity runs first when compiler-runtime artifacts are available.
@@ -386,8 +424,9 @@ test_matrix = {
     #
     # In Math CI (4 xdist workers) this suite takes up to 2h03 on gfx950 and
     # 64 min on gfx942. Only gfx942 is on the PR path (gfx950 and gfx90a are
-    # postsubmit, gfx120X-all is nightly), so it runs unsharded; the timeout is
-    # sized for gfx950.
+    # postsubmit, gfx120X-all is nightly), so it runs unsharded; "timeout_minutes"
+    # applies on full. The 2h03 clears the 180 min comprehensive budget only
+    # because it is unsharded -- sharding would divide the budget below it.
     #
     # Until the pinned rocm-libraries ships the hw-common category,
     # pytest_runner.py skips this job with a warning instead of failing.
@@ -1456,12 +1495,17 @@ def run():
                     total_shards = 1
 
                 shard_arr = list(range(1, total_shards + 1))
+                timeout_minutes = resolve_timeout_minutes(
+                    test_type,
+                    total_shards,
+                    base["timeout_minutes"],
+                )
 
                 pal_entry = {
                     **_common_settings,
                     "job_name": "hip-tests (PAL)",
                     "fetch_artifact_args": base["fetch_artifact_args"],
-                    "timeout_minutes": base["timeout_minutes"],
+                    "timeout_minutes": timeout_minutes,
                     "test_script": base["test_script"],
                     "platform": base["platform"],
                     "total_shards": total_shards,
@@ -1475,7 +1519,7 @@ def run():
                     **_common_settings,
                     "job_name": "hip-tests (ROCR)",
                     "fetch_artifact_args": base["fetch_artifact_args"],
-                    "timeout_minutes": base["timeout_minutes"],
+                    "timeout_minutes": timeout_minutes,
                     "test_script": base["test_script"],
                     "platform": base["platform"],
                     "total_shards": total_shards,
@@ -1517,11 +1561,6 @@ def run():
                     job_config_data["test_script"]
                     + f" && TEST_COMPONENT=hipblaslt-tensilelite python {_get_script_path('test_runner.py')}"
                 )
-                # +15 min over the pytest-only baseline for the added ctest
-                # stage; re-measure once CI timing is observed and adjust.
-                job_config_data["timeout_minutes"] = (
-                    job_config_data["timeout_minutes"] + 15
-                )
 
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
@@ -1534,6 +1573,13 @@ def run():
             if test_type == "quick":
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
+
+            # Must follow the quick-tier shard clamp above, which feeds the split.
+            job_config_data["timeout_minutes"] = resolve_timeout_minutes(
+                test_type,
+                job_config_data["total_shards"],
+                job_config_data["timeout_minutes"],
+            )
 
             # If the test requires multi GPU testing, we use a multi-GPU test runner for this specific test
             # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)

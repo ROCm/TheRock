@@ -63,3 +63,31 @@ https://github.com/ROCm/TheRock/blob/main/build_tools/github_actions/test_execut
 
 - Each test filter should build on top of each other, to bring confidence to ROCm at each stage of development
 - These test execution times will be enforced with GitHub Actions step timeouts, and going over the timeout will cause a CI failure
+
+## Timeout enforcement
+
+The execution times above are enforced, not advisory. They live in
+`TEST_FILTER_BUDGET_MINUTES` in
+[`build_tools/github_actions/fetch_test_configurations.py`](../../build_tools/github_actions/fetch_test_configurations.py),
+which applies them as the `timeout-minutes` of the `Test` step in
+`test_component.yml` -- the step that runs only the test script, so setup time
+is excluded exactly as the definition above states.
+
+`standard` and `comprehensive` are enforced at 1.5x their documented time (45
+and 180 minutes) so that a slow runner or a flaky retry fails the test rather
+than the clock. `quick` is held exact, since the point of the filter is that it
+stays immediate.
+
+Because a budget covers the whole suite run serially on one shard, a component
+split across N shards gets `budget / N` per shard. A `standard` suite on six
+shards has 45/6 = 8 minutes per shard, not 45. Shard counts are already
+per-platform, so a component sharded differently on Linux and Windows gets a
+different per-shard timeout on each.
+
+A component's own `timeout_minutes` in `test_matrix` still applies as a ceiling,
+so a suite that declares less than its budget keeps the lower value. The budget
+can only tighten it. `full` is unbudgeted -- the filter is defined as "2+ hours"
+with no upper bound -- so `timeout_minutes` is used verbatim there.
+
+There is **no per-component override**. A suite that cannot finish inside its
+budget needs to be made faster, sharded further, or moved to a later filter.
