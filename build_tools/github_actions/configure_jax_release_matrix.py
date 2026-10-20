@@ -57,6 +57,13 @@ JAX_REF_CONFIGS = {
         # JAX dropped Python 3.11 support in 0.11.0.
         "exclude_python_versions": ["3.11"],
     },
+    "rocm-jaxlib-v0.12.0": {
+        "jax_ref": "rocm-jaxlib-v0.12.0",
+        "jax_repository": "ROCm/jax",
+        "gfx_arch": "device-all",
+        # JAX dropped Python 3.11 support in 0.11.0.
+        "exclude_python_versions": ["3.11"],
+    },
     # Upstream JAX at its moving tip, built against the ROCm of the same run
     # (tip vs tip), the way PyTorch's "nightly" ref is a row of its release
     # matrix. Release types other than prerelease include it (RELEASE_JAX_REFS).
@@ -88,6 +95,7 @@ RELEASE_STABLE_JAX_REFS = {
         "rocm-jaxlib-v0.11.0",
         "rocm-jaxlib-v0.11.1",
         "rocm-jaxlib-v0.11.2",
+        "rocm-jaxlib-v0.12.0",
     ],
 }
 
@@ -101,7 +109,7 @@ RELEASE_JAX_REFS = {
 # rather than every release version. Additional refs can be opted in as needed.
 CI_JAX_REFS = {
     "linux": [
-        "rocm-jaxlib-v0.11.2",
+        "rocm-jaxlib-v0.12.0",
     ],
 }
 
