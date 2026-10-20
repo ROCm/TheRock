@@ -221,7 +221,7 @@ permissions:
 jobs:
   build_pytorch_wheels:
     name: Build | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_git_ref }}
-    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
     permissions:
       id-token: write
       contents: read
@@ -532,7 +532,7 @@ jobs:
 
   configure_pytorch_tests:
     name: Configure PyTorch Tests | ${{ inputs.test_level }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     outputs:
@@ -619,7 +619,7 @@ jobs:
         contains(inputs.amdgpu_families, 'gfx94X-dcgpu')
       }}
     needs: [build_pytorch_wheels]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       actions: write
       contents: read
@@ -648,7 +648,7 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [build_pytorch_wheels, configure_pytorch_tests, test_pytorch_wheels, dispatch_pytorch_wheels_full_test]
     name: "Quartz - completed - build PyTorch wheels"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:

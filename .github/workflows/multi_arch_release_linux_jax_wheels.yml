@@ -96,7 +96,7 @@ permissions:
   contents: read
 jobs:
   setup_matrix:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       jax_matrix: ${{ steps.matrix.outputs.jax_matrix }}
     env:
@@ -167,7 +167,7 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [setup_matrix, build_jax_wheels]
     name: "Quartz - completed - release JAX wheels"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:
