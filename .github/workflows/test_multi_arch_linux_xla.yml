@@ -174,6 +174,18 @@ jobs:
           repository: ${{ inputs.xla_repository }}
           ref: ${{ inputs.xla_commit || inputs.xla_ref }}
 
+      # Same tool and input the JAX test workflow uses (expand_amdgpu_families.py
+      # --output-mode=device-extras); bare "targets" mode gives the comma-separated
+      # gfx target list TF_ROCM_AMDGPU_TARGETS wants instead of pip extras. A
+      # multi-arch test_amdgpu_family (e.g. covering both gfx942 and gfx950)
+      # expands to both targets here, so there is nothing to hardcode.
+      - name: Compute ROCm AMDGPU targets
+        run: |
+          targets=$(python build_tools/github_actions/expand_amdgpu_families.py \
+            --amdgpu-families "${TEST_AMDGPU_FAMILY}")
+          echo "Expanded family '${TEST_AMDGPU_FAMILY}' -> '${targets}'"
+          echo "ROCM_AMD_GPU_TARGETS=${targets}" >> "$GITHUB_ENV"
+
       # The device serial numbers it prints identify a recurring bad device
       # across runs, since the runner and the device index change every time.
       - name: Driver / GPU sanity check
@@ -189,7 +201,6 @@ jobs:
             --config=ci_single_gpu \
             --config=no_flaky \
             --repo_env=TF_ROCM_RBE_DOCKER_IMAGE="${DOCKER_IMAGE}" \
-            --repo_env=TF_ROCM_AMDGPU_TARGETS=gfx950 \
             --repo_env=ROCM_DISTRO_URL="${ROCM_DISTRO_URL}" \
             --repo_env=ROCM_DISTRO_HASH="${ROCM_DISTRO_HASH}" \
             --repo_env=TF_ROCM_AMDGPU_TARGETS="${ROCM_AMD_GPU_TARGETS}" \
@@ -211,7 +222,6 @@ jobs:
             --config=ci_single_gpu \
             --config=no_flaky \
             --repo_env=TF_ROCM_RBE_DOCKER_IMAGE="${DOCKER_IMAGE}" \
-            --repo_env=TF_ROCM_AMDGPU_TARGETS=gfx950 \
             --repo_env=ROCM_DISTRO_URL="${ROCM_DISTRO_URL}" \
             --repo_env=ROCM_DISTRO_HASH="${ROCM_DISTRO_HASH}" \
             --repo_env=TF_ROCM_AMDGPU_TARGETS="${ROCM_AMD_GPU_TARGETS}" \
