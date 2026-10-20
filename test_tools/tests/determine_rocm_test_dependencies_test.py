@@ -1150,6 +1150,82 @@ class TestExplain(_FixtureTestCase):
 # --list-subprojects works with NO build/ dir (finding #8): committed graph is
 # read from --therock-dir/test_tools/, not build/.
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# ci:no-downstream-test: --level 5 via CLI produces self-only results.
+# This is the code path exercised by test_artifacts.yml when the label is set.
+# ---------------------------------------------------------------------------
+class TestNoDownstreamTestLabel(_FixtureTestCase):
+    """Verify --level 5 (ci:no-downstream-test) selects only changed projects."""
+
+    def _run(self, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), "--therock-dir", str(self.root), *args],
+            capture_output=True,
+            text=True,
+        )
+
+    def test_level_5_cli_self_only(self) -> None:
+        """--level 5 selects only the changed project, no consumers."""
+        proc = self._run("--changed-projects", "rocroller", "--level", "5")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        projects = json.loads(proc.stdout.strip())
+        self.assertEqual(set(projects), {"rocroller"})
+
+    def test_level_5_cli_vs_default(self) -> None:
+        """--level 5 is strictly smaller than default (level 4) selection."""
+        proc_5 = self._run("--changed-projects", "rocroller", "--level", "5")
+        proc_default = self._run("--changed-projects", "rocroller")
+        self.assertEqual(proc_5.returncode, 0, proc_5.stderr)
+        self.assertEqual(proc_default.returncode, 0, proc_default.stderr)
+        set_5 = set(json.loads(proc_5.stdout.strip()))
+        set_default = set(json.loads(proc_default.stdout.strip()))
+        self.assertTrue(set_5 < set_default, f"{set_5} should be a strict subset of {set_default}")
+
+    def test_level_5_gha_output(self) -> None:
+        """--level 5 with --gha-output writes self-only to GITHUB_OUTPUT."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".txt"
+        ) as handle:
+            output_file = handle.name
+        try:
+            env = os.environ.copy()
+            env["GITHUB_OUTPUT"] = output_file
+            proc = self._run_with_env(
+                env, "--changed-projects", "amdsmi", "--level", "5", "--gha-output"
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            content = Path(output_file).read_text()
+            self.assertIn("projects_to_test=", content)
+            # Level 5 = self only: amdsmi but NOT rdc or hipblaslt
+            self.assertIn("amdsmi", content)
+            self.assertNotIn("rdc", content)
+            self.assertNotIn("hipblaslt", content)
+        finally:
+            os.unlink(output_file)
+
+    def test_level_5_multiple_projects(self) -> None:
+        """--level 5 with multiple changed projects returns only those projects (plus policy includes)."""
+        proc = self._run(
+            "--changed-projects", "rocroller,amdsmi", "--level", "5"
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        projects = json.loads(proc.stdout.strip())
+        # amdsmi has test_include=["hip-tests"] in the fixture policy, so
+        # hip-tests is still included even at level 5. But no consumers
+        # (rdc, hipblaslt) should appear.
+        self.assertEqual(set(projects), {"rocroller", "amdsmi", "hip-tests"})
+        self.assertNotIn("rdc", projects)
+        self.assertNotIn("hipblaslt", projects)
+
+    def _run_with_env(self, env, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), "--therock-dir", str(self.root), *args],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+
 class TestListSubprojectsNoBuildDir(_FixtureTestCase):
     def test_no_build_dir_present(self) -> None:
         # The fixture root has NO build/ directory — assert it stays that way.

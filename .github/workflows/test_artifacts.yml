@@ -224,9 +224,16 @@ jobs:
         shell: bash
         env:
           CHANGED_PROJECTS: ${{ inputs.changed_projects }}
+          TEST_LABELS: ${{ inputs.test_labels }}
         run: |
+          LEVEL_FLAG=""
+          if echo "$TEST_LABELS" | grep -q "ci:no-downstream-test"; then
+            echo "ci:no-downstream-test label detected, using --level 5 (self only)"
+            LEVEL_FLAG="--level 5"
+          fi
           python ./test_tools/determine_rocm_test_dependencies.py \
             --changed-projects "$CHANGED_PROJECTS" \
+            $LEVEL_FLAG \
             --gha-output
 
       - name: "Configuring CI options"
