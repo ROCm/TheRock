@@ -117,7 +117,7 @@ jobs:
   build_rocm_wheels:
     name: Build Python | ${{ inputs.artifact_group }}
     # Note: GitHub-hosted runners run out of disk space for some gpu families
-    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
     permissions:
       contents: read
       id-token: write

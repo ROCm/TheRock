@@ -85,7 +85,7 @@ jobs:
     permissions:
       contents: write # Push the compiler bump branch.
     name: Create compiler bump branch
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       branch_name: ${{ steps.create-branch.outputs.branch_name }}
     steps:
@@ -317,7 +317,7 @@ jobs:
     name: Publish Linux Artifacts
     needs: [create-branch, setup-linux, build-linux, build-linux-tarballs, build-linux-python-packages, build-linux-native-deb-packages, build-linux-native-rpm-packages]
     if: ${{ inputs.dry_run != true && needs.build-linux-tarballs.result == 'success' && needs.build-linux-python-packages.result == 'success' && needs.build-linux-native-deb-packages.result == 'success' && needs.build-linux-native-rpm-packages.result == 'success' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -359,7 +359,7 @@ jobs:
     name: Trigger Linux PyTorch Wheels
     needs: [create-branch, setup-linux, build-linux-python-packages, publish-linux-artifacts]
     if: ${{ inputs.dry_run != true && needs.publish-linux-artifacts.result == 'success' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Trigger PyTorch Build
         uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
@@ -384,7 +384,7 @@ jobs:
     name: Trigger Linux JAX Wheels
     needs: [create-branch, setup-linux, build-linux-python-packages, publish-linux-artifacts]
     if: ${{ inputs.dry_run != true && needs.publish-linux-artifacts.result == 'success' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Trigger JAX Build
         uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
@@ -491,7 +491,7 @@ jobs:
     name: Publish Windows Artifacts
     needs: [create-branch, setup-windows, build-windows, build-windows-tarballs, build-windows-python-packages]
     if: ${{ inputs.dry_run != true && needs.build-windows-tarballs.result == 'success' && needs.build-windows-python-packages.result == 'success' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -533,7 +533,7 @@ jobs:
     name: Trigger Windows PyTorch Wheels
     needs: [create-branch, setup-windows, build-windows-python-packages, publish-windows-artifacts]
     if: ${{ inputs.dry_run != true && needs.publish-windows-artifacts.result == 'success' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Trigger PyTorch Build
         uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
@@ -559,7 +559,7 @@ jobs:
     name: Dispatch ASAN Build
     needs: create-branch
     if: ${{ inputs.dry_run != true && (inputs.linux_amdgpu_families || 'all') != 'none' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       run_url: ${{ steps.dispatch.outputs.runUrlHtml }}
     steps:
@@ -595,7 +595,7 @@ jobs:
     name: Trigger Linux Tests (gfx94X-dcgpu)
     needs: [create-branch, setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' && ((inputs.linux_amdgpu_families || 'all') == 'all' || contains(inputs.linux_amdgpu_families, 'gfx94X-dcgpu')) }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       test_run_url: ${{ steps.trigger-tests.outputs.runUrlHtml }}
     steps:
@@ -642,7 +642,7 @@ jobs:
     name: Trigger Linux Tests (gfx1151)
     needs: [create-branch, setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' && ((inputs.linux_amdgpu_families || 'all') == 'all' || contains(inputs.linux_amdgpu_families, 'gfx1151')) }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       test_run_url: ${{ steps.trigger-tests.outputs.runUrlHtml }}
     steps:
@@ -689,7 +689,7 @@ jobs:
     name: Trigger Linux Tests (gfx950-dcgpu)
     needs: [create-branch, setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' && ((inputs.linux_amdgpu_families || 'all') == 'all' || contains(inputs.linux_amdgpu_families, 'gfx950-dcgpu')) }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       test_run_url: ${{ steps.trigger-tests.outputs.runUrlHtml }}
     steps:
@@ -737,7 +737,7 @@ jobs:
     name: Trigger Windows Tests (gfx110X-all)
     needs: [create-branch, setup-windows, build-windows]
     if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-windows.result == 'success' && ((inputs.windows_amdgpu_families || 'all') == 'all' || contains(inputs.windows_amdgpu_families, 'gfx110X-all')) }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       test_run_url: ${{ steps.trigger-tests.outputs.runUrlHtml }}
     steps:
@@ -806,7 +806,7 @@ jobs:
       - trigger-gfx950-tests
       - trigger-windows-tests
     if: always()
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     env:
       LLVM_REF: ${{ inputs.llvm_ref || 'amd-staging' }}
       HIPIFY_REF: ${{ inputs.hipify_ref || 'amd-staging' }}
