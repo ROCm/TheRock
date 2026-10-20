@@ -234,9 +234,7 @@ all_build_variants = {
 }
 
 
-def get_sanitizer_variant_for_trigger(
-    source: str, trigger: str
-) -> str | None:
+def get_sanitizer_variant_for_trigger(source: str, trigger: str) -> str | None:
     """Return the sanitizer variant matching (source, trigger), or None."""
     for variant_name, variant_config in all_build_variants.get("linux", {}).items():
         triggers = variant_config.get("sanitizer_triggers", {})
