@@ -1568,9 +1568,7 @@ def _resolve_sanitizer_variant(
         for trigger in current_triggers:
             variant = get_sanitizer_variant_for_trigger(source, trigger)
             if variant:
-                print(
-                    f"  Sanitizer rule matched: {source} + {trigger} -> {variant}"
-                )
+                print(f"  Sanitizer rule matched: {source} + {trigger} -> {variant}")
                 return variant
     elif "submodule_bump" in current_triggers:
         if git_context.changed_files is None or git_context.submodule_paths is None:
@@ -2070,10 +2068,7 @@ def expand_build_configs(
             resolved = _resolve_sanitizer_variant(ci_inputs, git_context)
             if resolved:
                 build_variant = resolved
-                print(
-                    f"  Using {build_variant} variant "
-                    f"(sanitizer trigger rule)"
-                )
+                print(f"  Using {build_variant} variant " f"(sanitizer trigger rule)")
             else:
                 print("  No sanitizer trigger rule matched, skipping ASAN build")
                 return BuildConfigs(linux=None, windows=None)
