@@ -171,8 +171,31 @@ Or run manually for each arch-subdirectory
 # For python packages (repeat for each arch)
 python build_tools/packaging/promote_packages.py --input-dir=./promotion/download/<arch> --delete-old-on-success
 
-# For tarballs
+# For tarballs that are already on local disk
 python build_tools/packaging/promote_packages.py --input-dir=./promotion/download/tarball --delete-old-on-success
+```
+
+### Rename distribution tarballs in S3
+
+`therock-dist-*.tar.gz` files are renamed and their contents are not modified.
+For the structured layout, copy them to the promoted key instead of downloading
+them. The command is dry-run until `--execute`. An existing destination key is
+skipped unless `--allow-overwrite` is set. Run it once for `release` and once
+for `asan`.
+
+```bash
+python build_tools/packaging/copy_promoted_tarballs.py \
+  --version=7.13.0rc1 \
+  --source-bucket=therock-repo-amd-rc-core \
+  --dest-bucket=therock-repo-amd-stable-staging-core \
+  --tarball-variant=release
+
+python build_tools/packaging/copy_promoted_tarballs.py \
+  --version=7.13.0rc1 \
+  --source-bucket=therock-repo-amd-rc-core \
+  --dest-bucket=therock-repo-amd-stable-staging-core \
+  --tarball-variant=asan \
+  --execute
 ```
 
 ### Promoting nightly (`a`) builds
@@ -341,8 +364,10 @@ then listed as `[DRY-RUN] Would overwrite: ...` in the dry run.
 
 ### Structured repo.amd.com upload
 
-After promoting the flat local `wheels/`, `tarball/`, or `tarball-asan/`
-directories, upload back to the product-owned repo.amd.com buckets:
+After promoting the flat local `wheels/` directory, upload back to the
+product-owned repo.amd.com buckets. Release and ASAN `therock-dist-*.tar.gz`
+files can be copied with `copy_promoted_tarballs.py` instead of downloading
+and uploading them.
 
 ```bash
 python build_tools/packaging/upload_release_packages.py \
