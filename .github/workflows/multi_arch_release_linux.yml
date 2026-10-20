@@ -344,9 +344,32 @@ jobs:
               "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
+  # XLA tests against the published ROCm tarball, the same way the JAX release
+  # above tests against the published Python package index: wait for the
+  # corresponding ROCm release to be published before triggering the test.
+  trigger_test_xla:
+    needs: [build_tarballs, publish_to_release_buckets]
+    name: Trigger Test XLA
+    runs-on: ubuntu-26.04
+    permissions:
+      actions: write
+    steps:
+      - name: Trigger XLA Test
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: test_multi_arch_linux_xla.yml
+          inputs: |
+            {
+              "test_amdgpu_family": "${{ contains(fromJSON(inputs.build_config).dist_amdgpu_families, 'gfx94X-dcgpu') && 'gfx94X-dcgpu' || '' }}",
+              "rocm_version": "${{ inputs.rocm_package_version }}",
+              "repository": "${{ inputs.repository || github.repository }}",
+              "ref": "${{ inputs.ref || '' }}",
+              "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
+            }
+
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_native_install, trigger_release_pytorch_wheels, trigger_release_jax_wheels]
+    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_native_install, trigger_release_pytorch_wheels, trigger_release_jax_wheels, trigger_test_xla]
     name: "Quartz - completed - release Linux"
     runs-on: ubuntu-26.04
     timeout-minutes: 10
