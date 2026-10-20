@@ -33,8 +33,8 @@ on:
       test_size:
         description: >-
           How much of test_subset to run: "small" takes the PR-sized selection
-          of it, "medium" and "large" take all of it. On the multi-GPU job it
-          also picks the end-to-end scope: two workloads, or the whole set.
+          of it, "medium" and "large" take all of it. The end-to-end workloads
+          a size runs arrive separately, as e2e_list.
         type: string
         default: "medium"
       python_version:
@@ -104,6 +104,23 @@ on:
         required: false
         type: string
         default: ""
+      e2e_list:
+        description: >-
+          File of ROCm/jax-lab workloads to run after the tests, from
+          configure_jax_test_matrix.py. Empty runs none.
+        required: false
+        type: string
+        default: ""
+      e2e_timeout_minutes:
+        description: "Budget for the end-to-end step, from configure_jax_test_matrix.py."
+        required: false
+        type: number
+        default: 0
+      job_timeout_minutes:
+        description: "Budget for the whole job, from configure_jax_test_matrix.py."
+        required: false
+        type: number
+        default: 240
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -143,8 +160,8 @@ on:
         description: >-
           How much of test_subset to run: "small" takes the PR-sized selection,
           which exists for the "all" subset only, and "medium" and "large" take
-          all of it. On the "multi" subset it picks the end-to-end scope. A run
-          dispatched here names its selection in test_list instead.
+          all of it. A run dispatched here names its selection in test_list
+          and its end-to-end workloads in e2e_list instead.
         type: choice
         options:
           - small
@@ -217,6 +234,14 @@ on:
           it.
         type: string
         default: ""
+      e2e_list:
+        description: >-
+          File of ROCm/jax-lab workloads to run after the tests, e.g.
+          external-builds/jax/test_selection/e2e_medium.txt. Empty runs none.
+          Needs a multi-GPU test_runs_on and Python 3.12. A dispatched run gives
+          the step 120 minutes and the job 360.
+        type: string
+        default: ""
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -231,10 +256,10 @@ jobs:
   test_jax_wheels:
     name: Test JAX | ${{ inputs.test_size }} | ${{ inputs.test_subset }} | ${{ inputs.test_amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
-    # Room for the longest subset plus its setup, where installing the ROCm
-    # packages alone has taken over an hour; the test step below holds each
-    # subset to its own budget.
-    timeout-minutes: 240
+    # configure_jax_test_matrix.py sizes it for the setup and this job's steps;
+    # the test and end-to-end steps below each hold to their own budget.
+    # workflow_dispatch is at its 25-input limit, so a dispatched run falls back.
+    timeout-minutes: ${{ inputs.job_timeout_minutes || 360 }}
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
 
@@ -306,6 +331,17 @@ jobs:
           path: jax
           repository: ${{ inputs.jax_repository }}
           ref: ${{ inputs.jax_commit || inputs.jax_ref }}
+
+      - name: Checkout jax-lab
+        if: ${{ inputs.e2e_list != '' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+        with:
+          persist-credentials: false
+          path: jax-lab
+          repository: ROCm/jax-lab
+          # Pinned, so that a jax-lab change reaches these runs through a PR here.
+          ref: dae9978dd1df40d5ba65a03a21b3e88fbc271220
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -395,6 +431,7 @@ jobs:
       # allocation and both layers of retry, so that the same command
       # reproduces this job locally. See the comments in the script.
       - name: Run JAX tests
+        id: jax_tests
         # What a size selects and how long that takes is decided once, in
         # configure_jax_test_matrix.py, and arrives here as the caller's inputs.
         timeout-minutes: ${{ inputs.test_timeout_minutes }}
@@ -410,15 +447,20 @@ jobs:
 
       # The multi-GPU job is the one a nightly takes weekly, and the workloads
       # need those GPUs, so they ride along with it instead of asking the pool
-      # for a slot of their own.
+      # for a slot of their own. They run whether or not the tests passed.
       - name: Run end-to-end workloads
-        if: ${{ inputs.test_subset == 'multi' }}
+        if: ${{ !cancelled() && inputs.e2e_list != '' && steps.jax_tests.outcome != 'skipped' }}
+        timeout-minutes: ${{ inputs.e2e_timeout_minutes || 120 }}
         env:
-          E2E_SCOPE: ${{ inputs.test_size == 'large' && 'full' || 'partial' }}
+          E2E_LIST: ${{ inputs.e2e_list }}
+          TEST_RUNS_ON: ${{ inputs.test_runs_on }}
         run: |
-          # TODO: run the ROCm/jax-lab workloads once that repository is public:
-          # llama and mixtral for partial, the whole set for full.
-          echo "::warning::End-to-end workloads (${E2E_SCOPE}) are not wired yet"
+          python external-builds/jax/run_jax_e2e.py \
+            --jax-lab-dir jax-lab \
+            --workload-list "${E2E_LIST}" \
+            --results-dir jax/test-artifacts/e2e \
+            --runner "${TEST_RUNS_ON}" \
+            --rocm-version "${ROCM_VERSION}"
 
       - name: Upload test logs
         if: always()
