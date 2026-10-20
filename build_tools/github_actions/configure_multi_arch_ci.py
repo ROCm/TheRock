@@ -1551,7 +1551,7 @@ def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[s
 
     # Context-based triggers (can stack on top of event triggers)
     # submodule_bump only applies to TheRock, not external repos.
-    if git_context.has_submodule_changes is True:
+    if git_context.has_submodule_changes is True and not ci_inputs.external_repo:
         triggers.add("submodule_bump")
 
     return triggers
