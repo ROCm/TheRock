@@ -310,6 +310,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           working-directory: /home/runner/work/rocm-libraries/rocm-libraries/
           files: ${{ env.REPORT_DIR }}/coverage.info
-          flags: ${{ inputs.codecov_flag || inputs.project_name }}
+          flags: "${{ inputs.codecov_flag || inputs.project_name }} - Nightly"
           name: ${{ inputs.project_name }}-${{ inputs.amdgpu_families }}
+          disable_search: true
           fail_ci_if_error: false
