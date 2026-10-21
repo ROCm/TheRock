@@ -966,6 +966,7 @@ def _apply_arch_labels(
         print("  Label 'ci:run-all-archs' -> all families")
 
     # 2. ci:gfx* — build AND test, bypassing trigger-based test gating.
+    # Test: a ci:gfx* label also opts a nightly-only family into the PR matrix.
     for label, target in gfx_targets:
         linux_names.append(target)
         windows_names.append(target)
