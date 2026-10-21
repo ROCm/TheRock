@@ -33,10 +33,12 @@ if(THEROCK_ENABLE_RAND)
       -DROCM_DIR=
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
       -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
+      -DBUILD_FORTRAN_WRAPPER=${THEROCK_FLAG_BUILD_FORTRAN_LIBS}
     CMAKE_INCLUDES
       ${_primlibs_benchmark_includes}
     COMPILER_TOOLCHAIN
       amd-hip
+    FORTRAN_OPTIONAL
     BUILD_DEPS
       rocm-cmake
       therock-googletest
@@ -66,8 +68,10 @@ if(THEROCK_ENABLE_RAND)
       -DROCM_PATH=
       -DROCM_DIR=
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
+      -DBUILD_FORTRAN_WRAPPER=${THEROCK_FLAG_BUILD_FORTRAN_LIBS}
     COMPILER_TOOLCHAIN
       amd-hip
+    FORTRAN_OPTIONAL
     BUILD_DEPS
       rocm-cmake
       therock-googletest

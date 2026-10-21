@@ -306,6 +306,56 @@ if(THEROCK_ENABLE_COMPILER)
   )
 endif(THEROCK_ENABLE_COMPILER)
 
+
+##############################################################################
+# amd-llvm-flang
+# Fortran compiler (Flang) + MLIR, built separately from base LLVM.
+##############################################################################
+
+if(THEROCK_ENABLE_FLANG AND THEROCK_ENABLE_FLANG_STANDALONE)
+  set(_extra_flang_cmake_args)
+  if(FLANG_PARALLEL_COMPILE_JOBS)
+    message(STATUS "Flang build concurrency level set to ${FLANG_PARALLEL_COMPILE_JOBS}")
+    list(APPEND _extra_flang_cmake_args "-DFLANG_PARALLEL_COMPILE_JOBS=${FLANG_PARALLEL_COMPILE_JOBS}")
+  else()
+    message(WARNING "Flang concurrency is unlimited. Memory usage may be much higher. Set -DFLANG_PARALLEL_COMPILE_JOBS to reduce memory use.")
+  endif()
+  if(LLVM_PARALLEL_LINK_JOBS)
+    list(APPEND _extra_flang_cmake_args "-DLLVM_PARALLEL_LINK_JOBS=${LLVM_PARALLEL_LINK_JOBS}")
+  endif()
+
+  therock_cmake_subproject_declare(amd-llvm-flang
+    EXTERNAL_SOURCE_DIR "amd-llvm-flang"
+    BINARY_DIR "amd-llvm-flang"
+    DISABLE_AMDGPU_TARGETS
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -C${CMAKE_CURRENT_SOURCE_DIR}/amd-llvm/clang/cmake/caches/flang-standalone.cmake
+      ${_extra_flang_cmake_args}
+    RUNTIME_DEPS
+      amd-llvm
+    INTERFACE_PROGRAM_DIRS
+      lib/llvm/bin
+    INSTALL_DESTINATION "lib/llvm"
+  )
+  therock_cmake_subproject_provide_package(amd-llvm-flang Flang lib/llvm/lib/cmake/flang)
+  therock_cmake_subproject_activate(amd-llvm-flang)
+
+  therock_provide_artifact(amd-llvm-flang
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-amd-llvm-flang.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+    SUBPROJECT_DEPS
+      amd-llvm-flang
+  )
+endif()
+
+
 if(THEROCK_ENABLE_HIPIFY)
   ##############################################################################
   # HIPIFY
