@@ -482,6 +482,34 @@ Both scripts report pass/fail status and exit with code 0 on success. ROCgdb tra
 - Unexpected failures
 - Comparison of compiler-specific failures
 
+## rocgdb-emulate
+
+`rocgdb-emulate` runs ROCgdb inside a mirage session, so GPU programs can be
+debugged on an emulated GPU instead of real hardware. It is installed in `bin/`
+next to `rocgdb` and needs a ROCm tree built with
+`-DTHEROCK_ENABLE_EMULATION=ON`.
+
+```bash
+# Debug ./my_app on an emulated MI350X
+rocgdb-emulate --profile mi350x ./my_app
+
+# Pick the profile from the GPU target ./my_app was built for
+rocgdb-emulate ./my_app
+```
+
+Profiles are `mi300x` (gfx942), `mi350x` (gfx950) and `mi450x` (gfx1250); the
+gfx names work too. `ROCGDB_EMULATE_PROFILE` sets a default profile. All other
+arguments go to ROCgdb unchanged. `rocgdb-emulate --help-emulate` prints the
+usage, and `ROCGDB_WRAPPER_DEBUG=1` shows the chosen profile and command
+without running it.
+
+- Kernel breakpoints stay pending until the first kernel launch. Answer `y`
+  when asked, or use `set breakpoint pending on` in batch mode.
+- Emulator messages such as the mirage `ip_versions` warning and
+  `[rj warn] ... IB_STS` lines are harmless. `MIRAGE_LOG=error` hides the mirage
+  one.
+- If ROCgdb is killed with `kill -9`, run `mirage cleanup`.
+
 ## Additional information
 
 ### ROCgdb dependency on terminfo for TUI mode
