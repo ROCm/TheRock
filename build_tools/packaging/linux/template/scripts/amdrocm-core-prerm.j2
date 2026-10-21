@@ -2,18 +2,6 @@
 
 binaries=( hipcc hipconfig hipify-clang rocminfo amd-smi rocm_agent_enumerator amdclang amdclang++ amdclang-cl amdclang-cpp amdflang amdlld )
 
-is_debian_like() {
-    local id_like="$1"
-    case " $id_like " in
-        (*" debian "*|*" ubuntu "*)
-            return 0
-            ;;
-        (*)
-            return 1
-            ;;
-    esac
-}
-
 do_update_alternatives(){
     # skip update if program doesn't exist
     command -v update-alternatives >/dev/null || return 0
@@ -46,19 +34,18 @@ do_update_alternatives(){
     update-alternatives --remove "rocm-share" "$PKG_INSTALL_PREFIX/share" || true
 }
 
-if [ -e /etc/os-release ] && source /etc/os-release && is_debian_like "${ID_LIKE:-$ID}"
-then
-   case "$1" in
-       (remove|upgrade)
-           do_update_alternatives
-       ;;
-       (purge)
-           # nothing to do
-       ;;
-       (*)
-           exit 0
-       ;;
-   esac
-else
+{% if target == "deb" %}
+case "$1" in
+    remove|upgrade)
+        do_update_alternatives
+        ;;
+esac
+{% else %}
+# RPM passes the number of instances of this package left after the
+# transaction: 0 on erase, 1 or more on upgrade, reinstall or downgrade. In the
+# latter case this old package's %preun runs after the new package's %post, and
+# removing here would delete the alternatives the new package just installed.
+if [ "$1" -eq 0 ]; then
     do_update_alternatives
 fi
+{% endif %}

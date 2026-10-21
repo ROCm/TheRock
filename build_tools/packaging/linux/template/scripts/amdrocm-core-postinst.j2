@@ -52,6 +52,9 @@ do_update_alternatives(){
        PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
     {% endif %}
 
+    # A relocated RPM payload does not create /opt/rocm.
+    mkdir -p /opt/rocm
+
     # Install /opt/rocm/core soft link
     update-alternatives --install "/opt/rocm/core" "core" "$PKG_INSTALL_PREFIX" "$altscore"
     update-alternatives --install "/opt/rocm/core-{{ version_major }}" "core-{{ version_major }}" "$PKG_INSTALL_PREFIX" "$altscore"
