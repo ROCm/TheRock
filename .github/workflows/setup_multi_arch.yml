@@ -28,9 +28,13 @@ on:
         description: 'Comma-separated Windows GPU families. "all" = all, "none" or empty = skip.'
         type: string
         default: ""
-      pr_labels:
+      linux_test_labels:
+        description: "Comma-separated list of test labels for Linux."
         type: string
-        description: "Comma-separated PR labels (e.g. ci:skip-pytorch,test:rocprim,test_filter:quick)."
+        default: ""
+      windows_test_labels:
+        description: "Comma-separated list of test labels for Windows."
+        type: string
         default: ""
       prebuilt_stages:
         description: "Comma-separated build stages to skip (artifacts copied from baseline_run_id instead)."
@@ -61,8 +65,7 @@ on:
           and baseline_run_id, and performs no reuse analysis or baseline lookup;
           "dry-run" (default) reports what automatic reuse could do while still
           honoring explicit prebuilt_stages; "reuse-stage" applies automatic
-          reuse and also honors explicit prebuilt_stages. Release branches
-          always use "off", regardless of this input.
+          reuse and also honors explicit prebuilt_stages.
         type: string
         default: "dry-run"
       stage_reuse_max_age_hours:
@@ -115,6 +118,10 @@ on:
           artifact-level reuse (e.g., 'rocprim' -> 'prim' artifact).
         type: string
         default: ""
+      skip_gpu_tests:
+        description: "When true, suppress GPU test jobs for all families (build-only run)."
+        type: boolean
+        default: false
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -166,7 +173,7 @@ permissions:
 
 jobs:
   setup:
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-24.04
     outputs:
       enable_build_jobs: ${{ steps.configure.outputs.enable_build_jobs }}
       linux_build_config: ${{ steps.configure.outputs.linux_build_config }}
@@ -214,7 +221,7 @@ jobs:
         with:
           persist-credentials: false
           repository: ROCm/therock-ci-config
-          ref: main
+          ref: users/kkhalasi/azure-arc-dev-test
           path: ci-config
         continue-on-error: true
 
@@ -249,7 +256,8 @@ jobs:
           PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
-          PR_LABELS: ${{ inputs.pr_labels }}
+          LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
+          WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BUILD_STAGES: ${{ inputs.build_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
@@ -263,7 +271,6 @@ jobs:
           # For baseline run selection, use repository input (defaults to GITHUB_REPOSITORY).
           # External repos set repository to "ROCm/TheRock" to fetch TheRock baseline runs.
           THEROCK_REPOSITORY: ${{ inputs.repository || github.repository }}
-          THEROCK_CHECKOUT_REF: ${{ inputs.ref }}
           # Token for GitHub API calls (branch history, baseline workflow runs)
           GITHUB_TOKEN: ${{ github.token }}
           # External repo JSON (e.g., {"repository":"ROCm/rocm-libraries","ref":"..."})
@@ -273,6 +280,7 @@ jobs:
           EXTERNAL_FAMILY_OVERRIDES: ${{ inputs.external_repo != '' && toJSON(fromJSON(inputs.external_repo).family_overrides) || '' }}
           # Changed projects from external repos for granular artifact-level reuse
           CHANGED_PROJECTS: ${{ inputs.changed_projects }}
+          SKIP_GPU_TESTS: ${{ inputs.skip_gpu_tests }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
       # Note: Other scripts treat "dev releases" and "CI builds" differently.
@@ -291,13 +299,11 @@ jobs:
         id: rocm_package_version
         env:
           CHECKOUT_COMMIT: ${{ steps.checkout.outputs.commit }}
-          BUILD_VARIANT: ${{ inputs.build_variant }}
         run: |
           python ./build_tools/compute_rocm_package_version.py \
             --release-type="${BUILD_RELEASE_TYPE}" \
             --prerelease-version="${PRERELEASE_VERSION}" \
-            --override-git-sha="${CHECKOUT_COMMIT}" \
-            --build-variant="${BUILD_VARIANT}"
+            --override-git-sha="${CHECKOUT_COMMIT}"
 
       - name: Detect external repo config
         id: external_repo_config

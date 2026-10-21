@@ -26,10 +26,14 @@ on:
         type: string
         description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx120X (empty = skip windows)"
         default: ""
-      # --- CI labels ---
-      pr_labels:
+      # --- Test targets ---
+      linux_test_labels:
         type: string
-        description: "Comma-separated PR labels (e.g. ci:skip-pytorch,test:rocprim,test_filter:quick)."
+        description: "Comma-separated Linux test options. Use test:* to filter tests (e.g. test:rocprim). Use test_filter:* to set test type (e.g. test_filter:quick)."
+        default: ""
+      windows_test_labels:
+        type: string
+        description: "Comma-separated Windows test options. Use test:* to filter tests (e.g. test:rocprim). Use test_filter:* to set test type (e.g. test_filter:quick)."
         default: ""
       # --- Build control ---
       build_stages:
@@ -87,50 +91,10 @@ on:
           Comma-separated list of changed project paths (e.g., 'projects/rocprim').
           Mapped to artifacts via BUILD_TOPOLOGY.toml source_paths for granular
           reuse and test filtering (empty = run all tests).
-  workflow_call:
-    inputs:
-      linux_amdgpu_families:
-        type: string
-        default: ""
-      windows_amdgpu_families:
-        type: string
-        default: ""
-      pr_labels:
-        type: string
-        default: ""
-      build_stages:
-        type: string
-        default: ""
-      build_python_packages:
+      skip_gpu_tests:
         type: boolean
         default: true
-      build_pytorch:
-        type: boolean
-        default: true
-      build_jax:
-        type: boolean
-        default: true
-      build_native_linux:
-        type: boolean
-        default: true
-      prebuilt_stages:
-        type: string
-        default: ""
-      baseline_run_id:
-        type: string
-        default: ""
-      stage_reuse_mode:
-        type: string
-        default: "dry-run"
-      stage_reuse_max_age_hours:
-        type: string
-        default: "72"
-      stage_reuse_commit_history:
-        type: string
-        default: "50"
-      changed_projects:
-        type: string
-        default: ""
+        description: "When true, suppress GPU test jobs for all families (build-only run)."
   pull_request:
     types:
       - labeled
@@ -160,7 +124,8 @@ jobs:
       build_variant: "release"
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
       windows_amdgpu_families: ${{ inputs.windows_amdgpu_families || '' }}
-      pr_labels: ${{ inputs.pr_labels || '' }}
+      linux_test_labels: ${{ inputs.linux_test_labels || '' }}
+      windows_test_labels: ${{ inputs.windows_test_labels || '' }}
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
       stage_reuse_mode: ${{ inputs.stage_reuse_mode || 'dry-run' }}
@@ -171,6 +136,7 @@ jobs:
       build_jax: ${{ github.event_name != 'workflow_dispatch' || inputs.build_jax }}
       build_native_linux: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_linux }}
       build_stages: ${{ inputs.build_stages || '' }}
+      skip_gpu_tests: ${{ inputs.skip_gpu_tests || false }}
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
@@ -230,7 +196,7 @@ jobs:
       - linux_build_and_test
       - windows_build_and_test
       - manifest_diff
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 5
