@@ -1172,9 +1172,7 @@ class TestNoDownstreamTestLabel(_FixtureTestCase):
                 "labels": [{"name": lbl, "id": i} for i, lbl in enumerate(labels)]
             }
         }
-        handle = tempfile.NamedTemporaryFile(
-            mode="w", delete=False, suffix=".json"
-        )
+        handle = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json")
         json.dump(event, handle)
         handle.close()
         return handle.name
@@ -1203,7 +1201,9 @@ class TestNoDownstreamTestLabel(_FixtureTestCase):
         self.assertEqual(proc_default.returncode, 0, proc_default.stderr)
         set_5 = set(json.loads(proc_5.stdout.strip()))
         set_default = set(json.loads(proc_default.stdout.strip()))
-        self.assertTrue(set_5 < set_default, f"{set_5} should be a strict subset of {set_default}")
+        self.assertTrue(
+            set_5 < set_default, f"{set_5} should be a strict subset of {set_default}"
+        )
 
     def test_level_5_multiple_projects(self) -> None:
         """--level 5 with multiple changed projects returns only those projects (plus policy includes)."""
@@ -1264,9 +1264,7 @@ class TestNoDownstreamTestLabel(_FixtureTestCase):
         env, event_file = self._env_with_event(["ci:no-downstream-test"])
         try:
             # --level 4 would include consumers, but label forces level 5
-            proc = self._run(
-                "--changed-projects", "rocroller", "--level", "4", env=env
-            )
+            proc = self._run("--changed-projects", "rocroller", "--level", "4", env=env)
             self.assertEqual(proc.returncode, 0, proc.stderr)
             projects = set(json.loads(proc.stdout.strip()))
             self.assertNotIn("hipblaslt", projects)
