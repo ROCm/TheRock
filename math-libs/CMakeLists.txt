@@ -100,11 +100,11 @@ if(THEROCK_ENABLE_RAND)
 endif(THEROCK_ENABLE_RAND)
 
 if(THEROCK_ENABLE_PRIM)
-  # THEROCK_ENABLE_HIPCCL selects between the unified hipCCL superbuild
+  # THEROCK_FLAG_BUILD_HIPCCL selects between the unified hipCCL superbuild
   # (projects/hipccl/hipccl3) and the legacy separate rocPRIM/hipCUB/rocThrust
   # subprojects (projects/{rocprim,hipcub,rocthrust}). Both source trees exist
   # in rocm-libraries; this flag controls which TheRock builds and ships.
-  if(THEROCK_ENABLE_HIPCCL)
+  if(THEROCK_FLAG_BUILD_HIPCCL)
     ##############################################################################
     # hipCCL (unified rocPRIM + hipCUB + rocThrust)
     #
