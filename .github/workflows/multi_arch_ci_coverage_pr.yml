@@ -7,11 +7,14 @@
 # configure_coverage_pr.py picks the coverage projects the change touches
 # (`test:<project>` labels narrow them) and a non-instrumented baseline from
 # main; multi_arch_ci_coverage_linux.yml then builds those projects instrumented
-# and tests each one against the baseline.
+# and tests each one against the baseline. patch_coverage_report.py then
+# measures the change itself: how many of the lines it adds the tests run.
 #
 # rocm-libraries and rocm-systems pull request workflows call this through a
 # cross-repo `uses:`, passing changed_projects and external_repo as they do for
-# setup_multi_arch.yml. The label gate applies to their pull requests too.
+# setup_multi_arch.yml. As with ASAN, the caller runs on every pull request
+# event and the label gate here decides. docs/development/code_coverage.md has
+# a caller to copy.
 #
 # As this runs on lower trust `pull_request` events it forwards no github
 # secrets to child workflows, so reports are kept as run artifacts and on the
@@ -208,3 +211,77 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
+  patch_coverage:
+    name: Patch Coverage
+    needs: [setup, coverage]
+    # Also after a failed coverage job: the reports it did produce still
+    # measure the change.
+    if: >-
+      ${{
+        !cancelled() &&
+        github.event_name == 'pull_request' &&
+        needs.setup.outputs.enabled == 'true'
+      }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ needs.setup.outputs.ref }}
+          sparse-checkout: build_tools/github_actions
+          sparse-checkout-cone-mode: true
+
+      - name: Setting up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: 3.12
+
+      - name: Download coverage reports
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: coverage-report-*
+          path: coverage-reports
+        continue-on-error: true
+
+      # The pull request is the caller's (github.repository); the build
+      # compiled its merge commit, which external_repo names for a cross-repo
+      # caller and setup checked out otherwise.
+      - name: Report patch coverage
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BUILT_SHA: >-
+            ${{
+              needs.setup.outputs.external_repo_config != '' &&
+              fromJSON(needs.setup.outputs.external_repo_config).ref ||
+              needs.setup.outputs.ref
+            }}
+        run: |
+          python build_tools/github_actions/patch_coverage_report.py \
+            --repository="${REPOSITORY}" \
+            --pr-number="${PR_NUMBER}" \
+            --base-sha="${BASE_SHA}" \
+            --head-sha="${HEAD_SHA}" \
+            --built-sha="${BUILT_SHA}" \
+            --reports-dir=coverage-reports \
+            --json-output=patch-coverage/patch_coverage.json \
+            --markdown-output=patch-coverage/patch_coverage.md
+
+      - name: Upload patch coverage report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-patch
+          path: patch-coverage
+          if-no-files-found: warn
+          overwrite: true

@@ -157,6 +157,7 @@ graph TD
     compilerRuntime --> mathLibs[Build instrumented math-libs]
     mathLibs --> report[Per project: configure, test, report]
     report --> codecov[Codecov]
+    report --> patch[Pull requests: patch coverage]
 ```
 
 `multi_arch_ci_coverage_linux.yml` is the entry point: it computes the matrix,
@@ -182,7 +183,9 @@ nightly dispatch is a follow-up; `baseline_run_id` is already the right input.
 label to stop. rocm-libraries and rocm-systems pull request workflows call it
 through `uses:` with their `changed_projects` and `external_repo`, as they do
 for `setup_multi_arch.yml`, and the label gate applies to their pull requests
-too.
+too (see [Calling it from another repository](#calling-it-from-another-repository)).
+The run reports each project's coverage, then the
+[patch coverage](#patch-coverage) of the change itself.
 
 `configure_coverage_pr.py` plans the run, then `multi_arch_ci_coverage_linux.yml`
 does the rest:
@@ -212,6 +215,117 @@ The test type defaults to `standard`, as in the nightly, so the numbers are
 comparable; a `test_filter:<type>` label overrides it. Pull request runs forward
 no secrets, so they skip the Codecov upload; the `coverage-report-*` artifacts
 and job summaries carry the results.
+
+#### Patch coverage
+
+A project's coverage says how well its tests cover the whole project, not
+whether they cover the change. The `Patch Coverage` job answers that: of the
+lines the pull request adds, as its "Files changed" tab shows them, how many are
+code and how many of those the tests ran. `patch_coverage_report.py` maps each
+added line onto the merge commit the run built and looks it up in every
+project's `coverage.info`.
+
+- A changed line counts when some report has a hit count for it, and is covered
+  when any project's tests ran it on any GPU family.
+- Changed lines without a hit count are not code as far as coverage goes:
+  comments, declarations, and code no instrumented library contains.
+- A changed file no report mentions is not measured: tests, build files,
+  documentation, and the code of projects the run did not measure. The summary
+  lists these files.
+
+The totals and a per-file table go to the job summary, with the source of each
+uncovered line. Uncovered lines also get warning annotations, which GitHub shows
+on the pull request's diff. The `coverage-patch` artifact has the same results
+as `patch_coverage.json` and `patch_coverage.md`. Low patch coverage is
+reported, not failed.
+
+#### Calling it from another repository
+
+A rocm-libraries or rocm-systems pull request gets coverage from a caller
+workflow in that repository, built like `therock-multi-arch-ci-asan.yml`: it
+runs on every pull request event and leaves the decision to the label gate.
+The repository needs a `ci:coverage` label. The changed projects come from
+`configure_external_repo_ci.py`, as for the multi-arch CI; when it finds none,
+the caller skips rather than measuring every project. Pin both TheRock
+references to the same commit.
+
+```yaml
+name: TheRock Multi-Arch CI Coverage
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+permissions:
+  contents: read
+
+# No concurrency group: the called workflow keeps one coverage run per pull
+# request, and one here would let any new label cancel it.
+
+jobs:
+  configure:
+    name: Configure Coverage Projects
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'ci:coverage') }}
+    runs-on: ubuntu-24.04
+    outputs:
+      changed_projects: ${{ steps.configure.outputs.changed_projects }}
+    steps:
+      - name: Checkout repository config
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          sparse-checkout: .github/repos-config.json
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout TheRock for configure script
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ROCm/TheRock
+          ref: <TheRock commit>
+          path: _therock
+          sparse-checkout: build_tools/github_actions
+          sparse-checkout-cone-mode: true
+
+      - name: Configure CI
+        id: configure
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 _therock/build_tools/github_actions/configure_external_repo_ci.py \
+            --event-name "${{ github.event_name }}" \
+            --github-repo "${{ github.repository }}" \
+            --base-sha "${{ github.event.pull_request.base.sha }}" \
+            --head-sha "${{ github.event.pull_request.head.sha }}" \
+            --config-path ".github/repos-config.json"
+
+  coverage:
+    name: Coverage
+    needs: configure
+    if: ${{ needs.configure.outputs.changed_projects != '' }}
+    uses: ROCm/TheRock/.github/workflows/multi_arch_ci_coverage_pr.yml@<TheRock commit>
+    with:
+      changed_projects: ${{ needs.configure.outputs.changed_projects }}
+      repository: ROCm/TheRock
+      ref: <TheRock commit>
+      external_repo: >-
+        {
+          "repository": "${{ github.repository }}",
+          "ref": "${{ github.sha }}",
+          "base_sha": "${{ github.event.pull_request.base.sha }}",
+          "head_sha": "${{ github.sha }}",
+          "pr_number": ${{ github.event.pull_request.number }},
+          "event_name": "${{ github.event_name }}",
+          "skip_ci_config": ".github/skip-ci-config.toml"
+        }
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+```
+
+No `baseline_run_id` is passed, so the planner picks the newest healthy run on
+TheRock `main`, checking it has the artifacts the selected families need.
+Coverage runs from another repository always build compiler-runtime (see
+above), so the run takes longer than the same change made in TheRock.
 
 ### The instrumented build
 
