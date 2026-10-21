@@ -360,8 +360,27 @@ class SigningHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == "/quit":
+            # When no application-layer auth is enabled there is no token
+            # to gate this with, so the only safe restriction available is
+            # network topology: this must never be callable remotely (from
+            # sg-build-runner, the operator VPN, or the API Gateway VPC
+            # Link), only from the instance itself. Anyone with that kind
+            # of access already has systemctl/process-kill privileges, so
+            # this doesn't grant anything new; it only removes the
+            # unauthenticated-over-the-network shutdown vector.
+            # TODO: once AUTH_ENABLED/TRUST_APIGW_HEADER is in place, also
+            # require a valid token/role here as defense-in-depth on top
+            # of the localhost restriction, not instead of it.
+            client_ip = self.client_address[0]
+            if client_ip not in ("127.0.0.1", "::1"):
+                self.log_message(
+                    "Rejected /quit from non-localhost address: %s", client_ip
+                )
+                self.send_error(403, "Forbidden")
+                return
+
             self.send_json_response(200, {"message": "Server shutting down"})
-            self.log_message("Shutdown requested via /quit endpoint")
+            self.log_message("Shutdown requested via /quit endpoint (localhost)")
 
             def shutdown():
                 time.sleep(0.5)
@@ -378,7 +397,27 @@ class SigningHandler(BaseHTTPRequestHandler):
 
         try:
             # --- Read and size-check request body ---
-            content_length = int(self.headers.get("Content-Length", 0))
+            # Validate Content-Length explicitly before trusting it for
+            # anything: a missing/non-numeric header must not raise an
+            # uncaught ValueError (which the outer handler would turn into
+            # a 500 that leaks the exception text), and a negative value
+            # must not be allowed to slip past the ">" check below and
+            # reach rfile.read() — read(-1) means "read until EOF", which
+            # would make MAX_REQUEST_SIZE meaningless for a client willing
+            # to send a negative Content-Length.
+            raw_content_length = self.headers.get("Content-Length", "0")
+            try:
+                content_length = int(raw_content_length)
+            except (TypeError, ValueError):
+                self.send_json_error(
+                    400, f"Invalid Content-Length header: {raw_content_length!r}"
+                )
+                return
+            if content_length < 0:
+                self.send_json_error(
+                    400, "Invalid Content-Length header: must not be negative"
+                )
+                return
             if content_length > self.MAX_REQUEST_SIZE:
                 self.log_message(
                     "Request rejected: %d bytes exceeds %d byte limit",
