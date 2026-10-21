@@ -47,6 +47,7 @@ LINUX_CONSOLE_SCRIPT_TESTS = [
     ("amd-smi", [], "AMD-SMI", True),
     ("rocm_agent_enumerator", [], "", True),
     ("rocminfo", [], "", True),
+    ("rocm-smi", [], "Management", True),
     ("hipify-perl", ["--help"], "USAGE:", True),
 ]
 

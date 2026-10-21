@@ -66,16 +66,8 @@ def setup_env(env):
             env["LD_LIBRARY_PATH"] = f"{HIP_LIB_PATH}:{env['LD_LIBRARY_PATH']}"
         else:
             env["LD_LIBRARY_PATH"] = str(HIP_LIB_PATH)
-        ROCM_SYSDEPS_LIB_PATH = ROCM_PATH / "lib" / "rocm_sysdeps" / "lib"
-        LD_PRELOAD_LIBS = [
-            str(ROCM_SYSDEPS_LIB_PATH / "librocm_sysdeps_va.so.2"),
-            str(ROCM_SYSDEPS_LIB_PATH / "librocm_sysdeps_va-drm.so.2"),
-        ]
-        LD_PRELOAD_VALUE = ":".join(LD_PRELOAD_LIBS)
-        logging.info(f"++ rocdecode setting LD_PRELOAD={LD_PRELOAD_VALUE}")
-        env["LD_PRELOAD"] = LD_PRELOAD_VALUE
-        logging.info(f"++ rocdecode setting LIBVA_DRIVERS_PATH={ROCM_SYSDEPS_LIB_PATH}")
-        env["LIBVA_DRIVERS_PATH"] = str(ROCM_SYSDEPS_LIB_PATH)
+        # The patched sysdeps libva locates the bundled Mesa VA-API driver on
+        # its own, so no LD_PRELOAD or LIBVA_DRIVERS_PATH is needed.
     elif platform.system() == "Windows":
         # Windows uses the vaon12 (VA-API-on-D3D12) backend. The patched libva
         # locates vaon12_drv_video.dll relative to ROCM_PATH
