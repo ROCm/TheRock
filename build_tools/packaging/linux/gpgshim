@@ -17,6 +17,7 @@ import hashlib
 import json
 import time
 import random
+import tempfile
 import argparse
 import logging
 from urllib.error import HTTPError, URLError
@@ -320,6 +321,115 @@ class GPGShim:
         sys.stderr.write("gpgshim: {}\n".format(message))
         sys.stderr.flush()
 
+    # ------------------------------------------------------------------
+    # ppid-based signature cache
+    #
+    # rpmsign's header-sign and payload-sign calls share one parent PID,
+    # which is what makes ppid a useful correlation key across the two
+    # separate gpgshim invocations. But ppid alone is NOT a safe cache
+    # key: PIDs are reused by the OS, and rpmsign can legitimately ask
+    # for a signature over genuinely different bytes under the same
+    # ppid (e.g. a header-only signature vs. a header+payload
+    # signature). A cache keyed purely on ppid would then silently
+    # return a signature that is valid for different data than what's
+    # actually being signed. Every cache entry is therefore tagged with
+    # an identity (data digest + key/tier + digest algorithm) and is
+    # only ever used when that identity matches exactly — a mismatch
+    # (stale entry, PID reuse, or genuinely different data) always falls
+    # back to a fresh, correct signing request instead of reusing the
+    # wrong bytes.
+    # ------------------------------------------------------------------
+
+    def _cache_file_path(self):
+        """Path for this invocation's cache entry, in a private,
+        owner-only directory — or None if that directory can't be
+        trusted (wrong owner/permissions), in which case caching is
+        simply disabled for this run rather than risking a shared or
+        tampered location.
+        """
+        cache_dir = os.path.join(
+            tempfile.gettempdir(), "gpgshim-cache-{}".format(os.getuid())
+        )
+        try:
+            os.makedirs(cache_dir, mode=0o700, exist_ok=True)
+            st = os.stat(cache_dir)
+            if st.st_uid != os.getuid() or (st.st_mode & 0o777) != 0o700:
+                self.logger.debug(
+                    "cache dir {} has unexpected owner/permissions — "
+                    "disabling caching for this invocation".format(cache_dir)
+                )
+                return None
+        except OSError as e:
+            self.logger.debug(
+                "could not prepare cache dir {}: {} — disabling caching".format(
+                    cache_dir, e
+                )
+            )
+            return None
+        return os.path.join(cache_dir, "{}.sig".format(os.getppid()))
+
+    def _cache_identity(self, data, options, digest_algo):
+        """Everything that must match for a cached signature to be
+        valid for the current call: the exact bytes being signed, and
+        the key/tier and digest algorithm requested.
+        """
+        key = self.tier if self.tier else (options.get("local_user") or self.key_id)
+        return "{}:{}:{}".format(self.compute_hash(data), key, digest_algo)
+
+    def _read_cache(self, cache_file, identity):
+        """Return the cached signature only if its stored identity
+        matches exactly; otherwise None — never a partial or guessed
+        match. Always consumes (deletes) the entry, so a mismatched or
+        corrupt file can't be misread by a later, unrelated invocation
+        that happens to reuse this PID.
+        """
+        try:
+            with open(cache_file, "rb") as f:
+                header = f.readline()
+                signature = f.read()
+        except (IOError, OSError):
+            return None
+
+        try:
+            os.unlink(cache_file)
+        except OSError:
+            pass
+
+        try:
+            cached_identity = header.decode("utf-8").rstrip("\n")
+        except UnicodeDecodeError:
+            cached_identity = None
+
+        if cached_identity != identity:
+            self.logger.debug(
+                "cache entry found but identity does not match (stale "
+                "entry or PID reuse) — ignoring, will sign fresh"
+            )
+            return None
+
+        self.logger.debug("cache hit: identity matches, reusing signature")
+        return signature
+
+    def _write_cache(self, cache_file, identity, signature):
+        """Write the (identity, signature) pair atomically — a
+        temp file plus rename, so a reader can never observe a
+        partially-written entry.
+        """
+        tmp_path = "{}.tmp{}".format(cache_file, os.getpid())
+        try:
+            fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "wb") as f:
+                f.write("{}\n".format(identity).encode("utf-8"))
+                f.write(signature)
+            os.replace(tmp_path, cache_file)
+            self.logger.debug("cached signature to: {}".format(cache_file))
+        except OSError as e:
+            self.logger.debug("failed to cache signature: {}".format(e))
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
     def run(self, args):
         """Main entry point."""
         self.logger.debug(
@@ -344,18 +454,9 @@ class GPGShim:
         # V4 RPM signing optimization: rpmsign calls gpg twice
         # 1st call: sign header (~4KB) - read data, send to server, cache signature
         # 2nd call: sign full RPM (1GB) - read data (but don't send), use cached signature
-        # Use ppid as cache key since both calls come from same rpmsign process
         # IMPORTANT: We must always read from stdin (rpmsign is piping data)
         output_file = options.get("output")
-        cache_file = (
-            "/tmp/gpgshim-cache-{}.sig".format(os.getppid()) if output_file else None
-        )
-
-        # Check if we have a cached signature from previous call
-        use_cache = False
-        if cache_file and os.path.exists(cache_file):
-            self.logger.debug("found cached signature: {}".format(cache_file))
-            use_cache = True
+        cache_file = self._cache_file_path() if output_file else None
 
         # Always read data from stdin (rpmsign is piping it, we must consume it)
         self.logger.debug("reading data from stdin...")
@@ -368,27 +469,24 @@ class GPGShim:
 
         self.logger.debug("read {} bytes from stdin".format(len(data)))
 
-        # If we have a cached signature, use it (don't send data to server)
-        if use_cache:
+        # A cache hit is only ever a hit if the stored identity (data
+        # digest + key/tier + digest algorithm) matches this exact call —
+        # see _read_cache()'s docstring for why ppid alone is unsafe.
+        digest_algo = options.get("digest_algo", "SHA256")
+        cache_identity = self._cache_identity(data, options, digest_algo)
+        cached_signature = (
+            self._read_cache(cache_file, cache_identity) if cache_file else None
+        )
+
+        if cached_signature is not None:
             self.logger.debug(
                 "using cached signature (not sending {} bytes to server)".format(
                     len(data)
                 )
             )
-            try:
-                with open(cache_file, "rb") as f:
-                    signature = f.read()
-                os.unlink(cache_file)
-                self.logger.debug(
-                    "loaded cached signature ({} bytes), deleted cache".format(
-                        len(signature)
-                    )
-                )
-            except Exception as e:
-                self.error("Failed to load cached signature: {}".format(e))
-                return 1
+            signature = cached_signature
         else:
-            # No cache - perform remote signing
+            # No valid cache entry - perform remote signing
             self.logger.debug(
                 "calling sign_remote() with {} bytes...".format(len(data))
             )
@@ -403,12 +501,7 @@ class GPGShim:
 
             # Cache signature for potential second call from rpmsign
             if cache_file:
-                try:
-                    with open(cache_file, "wb") as f:
-                        f.write(signature)
-                    self.logger.debug("cached signature to: {}".format(cache_file))
-                except Exception as e:
-                    self.logger.debug("failed to cache signature: {}".format(e))
+                self._write_cache(cache_file, cache_identity, signature)
 
         # Write signature to output file or stdout (both as binary)
         if output_file:
