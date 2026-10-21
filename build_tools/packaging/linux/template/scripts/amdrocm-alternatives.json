@@ -82,7 +82,8 @@
       "rocprof-sys-instrument",
       "rocprof-sys-python",
       "rocprof-sys-run",
-      "rocprof-sys-sample"
+      "rocprof-sys-sample",
+      "rocsys"
     ]
   },
   "amdrocm-amdsmi": {
