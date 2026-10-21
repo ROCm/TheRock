@@ -653,7 +653,8 @@ class SigningHandler(BaseHTTPRequestHandler):
                     )
                     return
 
-            # Phase 1: source-IP rate limiting (no auth token, use IP as key)
+            # No auth token present: rate limit keyed by source IP instead
+            # of a token/role identity.
             if (
                 not self.AUTH_ENABLED
                 and not self.TRUST_APIGW_HEADER
@@ -664,9 +665,25 @@ class SigningHandler(BaseHTTPRequestHandler):
                     self.__class__._authz_cache = load_authorization_config(
                         self.AUTHZ_CONFIG_FILE
                     )
-                check_rate_limit(
+                if not check_rate_limit(
                     client_id, "default", self._rate_limits, self._authz_cache
-                )
+                ):
+                    self.log_message("Rate limit exceeded for client %s", client_id)
+                    self.send_json_error(429, "Rate limit exceeded")
+                    audit_log(
+                        "RATE_LIMITED",
+                        client_id,
+                        "default",
+                        key_id,
+                        digest_algo,
+                        self.client_address[0],
+                        False,
+                        self.AUDIT_LOG_FILE,
+                        None,
+                        auth_type,
+                        int((time.time() - request_start) * 1000),
+                    )
+                    return
 
             # --- Acquire semaphore ---
             semaphore = get_signing_semaphore()
