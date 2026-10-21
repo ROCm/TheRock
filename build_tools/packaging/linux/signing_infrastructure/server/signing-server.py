@@ -5,10 +5,13 @@ Production signing server for GPG package signing.
 Accepts POST /sign requests containing data to sign, invokes gpg, and
 returns the detached or clearsigned signature.
 
-Phase 1:  No application-layer auth — access controlled by VPC Security Groups.
-Phase 1b: Enable --trust-apigw-header for cross-cloud build runners, authenticated
-          by AWS IAM/SigV4 at an API Gateway front door before reaching this server.
-Phase 2:  Enable --enable-auth for pre-shared token validation.
+Auth modes (mutually exclusive, selected by server flags):
+  - Default (no flags): no application-layer auth — access controlled by
+    VPC Security Groups only.
+  - --trust-apigw-header: trusts the X-Signing-Client-Role header for caller
+    identity, set only by an API Gateway front door that has already
+    verified the caller via AWS IAM/SigV4.
+  - --enable-auth: validates a pre-shared app token / OIDC / JWT per request.
 
 Key loading:
   Pass --secrets-manager-secret <name> (repeatable) to fetch GPG private keys
@@ -47,7 +50,7 @@ def get_signing_semaphore():
 
 
 # ---------------------------------------------------------------------------
-# Secrets Manager key loading (Phase 1)
+# Secrets Manager key loading
 # ---------------------------------------------------------------------------
 
 
@@ -223,7 +226,8 @@ class SigningHandler(BaseHTTPRequestHandler):
     @property
     def MAX_REQUEST_SIZE(self):
         # 512 KB default: RPM headers are 50-100 KB; metadata files < 10 KB.
-        # POST /sign-rpm (Phase 2) overrides this per-request for full RPMs.
+        # TODO: a dedicated endpoint for signing full RPM payloads (rather
+        # than just headers) would need a larger override of this limit.
         return int(os.environ.get("MAX_REQUEST_SIZE", "524288"))
 
     @property
@@ -234,13 +238,14 @@ class SigningHandler(BaseHTTPRequestHandler):
     def AUTH_ENABLED(self):
         return os.environ.get("AUTH_ENABLED", "false").lower() == "true"
 
-    # Phase 1b: cross-cloud build runners, authenticated by API Gateway via
-    # SigV4 before the request ever reaches this server. Defaults OFF so a
-    # direct VPN/Security-Group-only deployment never honors a caller-
-    # supplied header. Only enable this on a signing server that is
-    # network-reachable exclusively through the API Gateway's VPC Link (i.e.
-    # the Security Group only admits that VPC Link's traffic) — otherwise a
-    # caller with any other network path in could forge this header.
+    # Header carrying caller identity for cross-cloud build runners,
+    # authenticated by API Gateway via SigV4 before the request ever reaches
+    # this server. Defaults OFF so a direct VPN/Security-Group-only
+    # deployment never honors a caller-supplied header. Only enable this on
+    # a signing server that is network-reachable exclusively through the
+    # API Gateway's VPC Link (i.e. the Security Group only admits that VPC
+    # Link's traffic) — otherwise a caller with any other network path in
+    # could forge this header.
     SIGNING_CLIENT_HEADER = "X-Signing-Client-Role"
 
     @property
@@ -276,7 +281,8 @@ class SigningHandler(BaseHTTPRequestHandler):
           - authz_config['artifact_profiles'] artifact → armor, clearsign, digest_algo
 
         Falls back to direct fields (key_id, armor, clearsign, digest_algo)
-        if tier/artifact are absent — backward compatible with Phase 1 API.
+        if tier/artifact are absent — backward compatible with the original
+        explicit key_id/digest_algo/armor/clearsign request format.
 
         Returns:
             (key_id, digest_algo, armor, clearsign, error_msg)
@@ -445,7 +451,7 @@ class SigningHandler(BaseHTTPRequestHandler):
 
             request = json.loads(body.decode("utf-8"))
 
-            # --- Authentication (Phase 1: disabled; Phase 2: token/JWT/OIDC) ---
+            # --- Authentication (only runs when AUTH_ENABLED) ---
             payload = None
             auth_type = "none"
             client_id = self.client_address[0]  # source IP as default identifier
@@ -553,7 +559,8 @@ class SigningHandler(BaseHTTPRequestHandler):
                 client_id,
             )
 
-            # --- Authorization (Phase 1: only key_id in-keyring check) ---
+            # --- Authorization (role-based key/tier access control; only
+            # runs when AUTH_ENABLED or TRUST_APIGW_HEADER) ---
             if (self.AUTH_ENABLED or self.TRUST_APIGW_HEADER) and payload:
                 if self._authz_cache is None:
                     self.__class__._authz_cache = load_authorization_config(
@@ -740,12 +747,13 @@ class SigningHandler(BaseHTTPRequestHandler):
         """
         Validate request token.
 
-        Phase 2 — tries in order:
+        Tries in order:
           1. Pre-shared app token (Bearer token, constant-time compare)
           2. GitHub OIDC token (RS256, requires PyJWT)
           3. JWT HMAC-SHA256 token (shared secret)
 
-        Phase 1 — AUTH_ENABLED=false, this method is never called.
+        Only called when AUTH_ENABLED=true; the caller returns early
+        otherwise (see the check at the top of this method).
 
         Returns:
             (payload dict, auth_type str) or (None, None) on failure.
@@ -760,7 +768,7 @@ class SigningHandler(BaseHTTPRequestHandler):
 
         token = auth_header[7:]
 
-        # 1. Pre-shared app token (Phase 2 primary)
+        # 1. Pre-shared app token (tried first)
         if self.TOKENS_FILE:
             if self._tokens_cache is None:
                 self.__class__._tokens_cache = load_tokens_config(self.TOKENS_FILE)
@@ -948,7 +956,7 @@ def main():
     parser.add_argument("--read-timeout", type=int, default=10)
     parser.add_argument("--max-threads", type=int, default=10)
 
-    # Phase 1: Secrets Manager key loading
+    # Secrets Manager key loading
     parser.add_argument(
         "--secrets-manager-secret",
         action="append",
@@ -962,21 +970,22 @@ def main():
         "--region", default="", help="AWS region for Secrets Manager (optional)"
     )
 
-    # Phase 2: Authentication
+    # Application-layer authentication
     parser.add_argument(
         "--enable-auth",
         action="store_true",
-        help="Enable application-layer token authentication (Phase 2)",
+        help="Enable application-layer token authentication",
     )
     parser.add_argument(
         "--tokens-file",
         default="",
-        help="Path to tokens.json with pre-shared tokens (Phase 2)",
+        help="Path to tokens.json with pre-shared tokens",
     )
     parser.add_argument(
         "--secrets-file",
         default="",
-        help="Path to secrets.json with JWT shared secrets (Phase 2 fallback)",
+        help="Path to secrets.json with JWT shared secrets "
+        "(used as a JWT-validation fallback)",
     )
     parser.add_argument(
         "--authz-config",
@@ -989,16 +998,15 @@ def main():
         help="Path to audit log file (optional; always logs to stdout)",
     )
 
-    # Phase 1b: Cross-cloud client access (API Gateway + SigV4)
+    # Cross-cloud client access (API Gateway + SigV4)
     parser.add_argument(
         "--trust-apigw-header",
         action="store_true",
-        help="Trust the X-Signing-Client-Role header for caller identity "
-        "(Phase 1b). Only enable this if the server is reachable "
-        "exclusively through the API Gateway VPC Link — never on a "
-        "server also reachable directly, where a caller could forge "
-        "this header themselves. Requires --authz-config with a "
-        "'clients' map.",
+        help="Trust the X-Signing-Client-Role header for caller identity. "
+        "Only enable this if the server is reachable exclusively "
+        "through the API Gateway VPC Link — never on a server also "
+        "reachable directly, where a caller could forge this header "
+        "themselves. Requires --authz-config with a 'clients' map.",
     )
 
     # TLS
@@ -1078,7 +1086,7 @@ def main():
     if args.trust_apigw_header:
         os.environ["TRUST_APIGW_HEADER"] = "true"
 
-    # --- Load keys from Secrets Manager (Phase 1) ---
+    # --- Load keys from Secrets Manager ---
     global _keyring_ready
     if args.sm_secrets:
         keyring_dir = os.environ.get("GNUPGHOME", "")
@@ -1127,11 +1135,11 @@ def main():
     print(f"GPG:       {args.gpg}")
     print(f"Keyring:   {keyring_dir or '(system default)'}")
     if args.enable_auth:
-        auth_status = "ENABLED (Phase 2 — token/OIDC/JWT)"
+        auth_status = "ENABLED (pre-shared token / OIDC / JWT)"
     elif args.trust_apigw_header:
-        auth_status = "ENABLED (Phase 1b — API Gateway client-role header)"
+        auth_status = "ENABLED (API Gateway client-role header)"
     else:
-        auth_status = "DISABLED (Phase 1 — VPC Security Groups)"
+        auth_status = "DISABLED (relying on VPC Security Groups)"
     print(f"Auth:      {auth_status}")
     print(f"TLS:       {'ENABLED' if args.enable_tls else 'DISABLED'}")
     print(f"Threads:   {args.max_threads}")

@@ -2,7 +2,7 @@
   "$comment": "Authorization configuration for GPG signing server.",
   "$comment2": "key_aliases maps tier names to GPG key identifiers — update per environment.",
   "$comment3": "artifact_profiles maps artifact types to GPG signing parameters.",
-  "$comment4": "clients (Phase 1b) maps an AWS IAM role name -> an entry in 'roles' below. Populated when signing-server.py runs with --trust-apigw-header (cross-cloud build runners via API Gateway + SigV4). Role names here currently ASSUME reuse of the existing S3-upload IAM roles from build_tools/_therock_utils/s3_buckets.py — this is an UNCONFIRMED assumption (see signing-server-design.md §4.1b); if dedicated signing-only roles are provisioned instead, only these keys need to change. therock-release is intentionally absent — release-tier signing stays manual/operator-only, not automated cross-cloud.",
+  "$comment4": "clients maps an AWS IAM role name -> an entry in 'roles' below. Populated when signing-server.py runs with --trust-apigw-header (cross-cloud build runners via API Gateway + SigV4). Role names here currently ASSUME reuse of the existing S3-upload IAM roles from build_tools/_therock_utils/s3_buckets.py — this is an UNCONFIRMED assumption (see signing-server-design.md §4.1b); if dedicated signing-only roles are provisioned instead, only these keys need to change. therock-release is intentionally absent — release-tier signing stays manual/operator-only, not automated cross-cloud.",
 
   "key_aliases": {
     "dev": "nunnikri@amd.com",
@@ -53,7 +53,7 @@
 
   "roles": {
     "default": {
-      "description": "Phase 1 catch-all — applied to all requests when AUTH_ENABLED=false. Rate limit keyed by source IP.",
+      "description": "Catch-all role applied to all requests when AUTH_ENABLED=false. Rate limit keyed by source IP.",
       "allowed_keys": [],
       "allowed_digest_algos": [
         "SHA256",
@@ -71,7 +71,7 @@
       "max_requests_per_hour": 100
     },
     "therock-dev": {
-      "description": "Phase 2: TheRock dev/PR builds.",
+      "description": "TheRock dev/PR builds.",
       "allowed_keys": [],
       "allowed_digest_algos": [
         "SHA256",
@@ -80,7 +80,7 @@
       "max_requests_per_hour": 10000
     },
     "therock-nightly": {
-      "description": "Phase 2: TheRock nightly builds.",
+      "description": "TheRock nightly builds.",
       "allowed_keys": [],
       "allowed_digest_algos": [
         "SHA256",
@@ -89,7 +89,7 @@
       "max_requests_per_hour": 5000
     },
     "therock-release": {
-      "description": "Phase 2: TheRock release builds.",
+      "description": "TheRock release builds.",
       "allowed_keys": [],
       "allowed_digest_algos": [
         "SHA256",

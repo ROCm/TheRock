@@ -4,12 +4,12 @@ Authentication and authorization module for GPG signing server.
 
 Supports multiple auth mechanisms — active ones depend on server config:
 
-Phase 1 (AUTH_ENABLED=false):
+When AUTH_ENABLED=false:
   No application-layer auth. Access controlled by VPC Security Groups.
   Rate limiting keyed by source IP address.
 
-Phase 2 (AUTH_ENABLED=true):
-  1. Pre-shared app token (HMAC constant-time compare) — primary
+When AUTH_ENABLED=true, tried in order:
+  1. Pre-shared app token (HMAC constant-time compare)
   2. GitHub OIDC (RS256, keyless) — for GitHub Actions integration
   3. JWT (HMAC-SHA256) — fallback for existing integrations
 
@@ -389,8 +389,8 @@ def normalize_client_role_identity(role_identity):
 
 def authorize_client_role_request(role_identity, key_id, digest_algo, authz_config):
     """
-    Authorize a request identified by an AWS IAM role (Phase 1b: cross-cloud
-    build runners authenticated via SigV4 through API Gateway).
+    Authorize a request identified by an AWS IAM role — used for cross-cloud
+    build runners authenticated via SigV4 through API Gateway.
 
     `role_identity` must come from a header that only API Gateway's own
     integration mapping can set (never a value a caller could inject
@@ -478,7 +478,7 @@ def load_secrets(secrets_file):
 
 def load_tokens_config(tokens_file):
     """
-    Load pre-shared caller tokens from JSON file (Phase 2).
+    Load pre-shared caller tokens from JSON file.
 
     Format:
         {
@@ -489,8 +489,8 @@ def load_tokens_config(tokens_file):
             }
         }
 
-    In Phase 2 the server fetches this from Secrets Manager at startup;
-    this file-based loader is used for local testing and fallback.
+    In production the server fetches this from Secrets Manager at startup;
+    this file-based loader is used for local testing and as a fallback.
     """
     if not tokens_file or not os.path.exists(tokens_file):
         return {}
@@ -503,7 +503,7 @@ def load_tokens_config(tokens_file):
 
 def validate_app_token(token, tokens_map):
     """
-    Validate a pre-shared application token (Phase 2).
+    Validate a pre-shared application token.
 
     Uses constant-time comparison to prevent timing attacks.
 
@@ -620,7 +620,8 @@ def check_rate_limit(client_id, role, rate_limits, authz_config):
         Modifies rate_limits dict in place (stores timestamps)
     """
     # Get rate limit for this role
-    # Phase 1: client_id is source IP; role may be 'default'
+    # When no auth token is present, client_id is the source IP and role
+    # may be 'default'
     roles = authz_config.get("roles", {})
     if role not in roles:
         role = "default"
@@ -673,7 +674,7 @@ def audit_log(
 
     Args:
         action:      'SIGNED', 'DENIED', 'AUTH_FAILED', 'RATE_LIMITED'
-        client_id:   Token client_id or source IP (Phase 1)
+        client_id:   Token client_id, or source IP if no auth token is present
         role:        Role name or 'none'
         key_id:      Signing key ID
         digest_algo: Digest algorithm

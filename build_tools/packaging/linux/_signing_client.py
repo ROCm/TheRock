@@ -3,12 +3,13 @@
 Shared HTTP client for the remote GPG signing server.
 
 Builds and sends a single POST /sign request, handling both the direct-HTTP
-path (Phase 1/2 — GPG_SIGNING_SERVER, optional pre-shared bearer token) and
-the AWS SigV4-via-API-Gateway path (Phase 1b — GPG_SIGNING_API_URL, cross-cloud
-build runners). This is the one place the SigV4 signing algorithm is
-implemented — both gpgshim (RPM package signing) and sign_package_repo.py
-(repository metadata signing) import it, so there is exactly one copy to
-keep correct, not two.
+path (GPG_SIGNING_SERVER, optional pre-shared bearer token — for a server
+reachable directly, e.g. over a VPN) and the AWS SigV4-via-API-Gateway path
+(GPG_SIGNING_API_URL — for cross-cloud build runners with no static secrets,
+authenticated via their ambient AWS credentials). This is the one place the
+SigV4 signing algorithm is implemented — both gpgshim (RPM package signing)
+and sign_package_repo.py (repository metadata signing) import it, so there
+is exactly one copy to keep correct, not two.
 
 Stdlib only — no boto3/requests — matches gpgshim's zero-dependency,
 Python 3.6-compatible design goal (signing_server-requirements.md P1b-SHIM-2).
@@ -177,10 +178,11 @@ def send_signing_request(config, payload, user_agent="therock-signing-client/1.0
     headers = {"Content-Type": "application/json", "User-Agent": user_agent}
 
     if config.api_url:
-        # Cross-cloud path (Phase 1b): authenticate via AWS SigV4 using
-        # temporary credentials already present in the caller's environment.
-        # Fail fast with a clear error rather than sending an unsigned
-        # request that API Gateway would reject with an opaque 403.
+        # Authenticate via AWS SigV4 using temporary credentials already
+        # present in the caller's environment (e.g. from GitHub OIDC -> AWS
+        # STS federation). Fail fast with a clear error rather than sending
+        # an unsigned request that API Gateway would reject with an opaque
+        # 403.
         if not (config.aws_access_key and config.aws_secret_key):
             raise ValueError(
                 "GPG_SIGNING_API_URL is set but AWS_ACCESS_KEY_ID/"
@@ -198,7 +200,8 @@ def send_signing_request(config, payload, user_agent="therock-signing-client/1.0
             )
         )
     elif config.auth_token:
-        # Direct/operator path: pre-shared bearer token (Phase 2), unchanged.
+        # Direct path to a server reachable without API Gateway: pre-shared
+        # bearer token.
         headers["Authorization"] = "Bearer {}".format(config.auth_token)
 
     request = Request(target_url, data=body, headers=headers, method="POST")
@@ -262,15 +265,14 @@ def sign_data(
 # GPG_TIER value sent to the signing server, i.e. which key_alias in
 # authorization.json is used. Two release types deliberately map to None
 # (skip signing, no error):
-#   - "ci": per signing-server-requirements.md P1-CI-1, signing is only
-#     activated for dev/nightly/prerelease builds meant for distribution —
-#     not routine CI/PR validation builds, to avoid unnecessary signing
-#     server load.
-#   - "release": per signing-server-design.md Section 4.1b, the
-#     release-tier key is excluded from automated/cross-cloud signing and
-#     stays a manual, operator-driven process (sign-file CLI over VPN) —
-#     this function is how that boundary is enforced on the client/workflow
-#     side, not just documented.
+#   - "ci": routine CI/PR validation builds are not meant for distribution,
+#     so signing is skipped to avoid unnecessary signing-server load (see
+#     signing-server-requirements.md P1-CI-1).
+#   - "release": the release-tier key is excluded from automated/cross-cloud
+#     signing by policy and stays a manual, operator-driven process
+#     (sign-file CLI over VPN) — this function is how that boundary is
+#     enforced on the client/workflow side, not just documented (see
+#     signing-server-design.md Section 4.1b).
 _RELEASE_TYPE_TO_TIER = {
     "ci": None,
     "dev": "dev",

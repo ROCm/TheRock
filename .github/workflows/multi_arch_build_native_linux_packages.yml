@@ -155,12 +155,13 @@ jobs:
             --version-suffix "${ARTIFACT_RUN_ID}" \
             --build-variant "${BUILD_VARIANT}"
 
-      # Configured before signing (not just before Upload) because the
-      # Phase 1b cross-cloud SigV4 path reuses these same temporary AWS
-      # credentials — see signing-server-design.md Section 4.1b. One
-      # invocation covers both the signing steps below and the Upload step
-      # at the end; aws-actions/configure-aws-credentials sets env vars for
-      # the rest of the job.
+      # Positioned before Build Packages/signing (not just before Upload)
+      # because sign_native_packages.py and sign_package_repo.py reuse
+      # these same temporary AWS credentials to SigV4-sign their requests
+      # to the signing server — see signing-server-design.md Section 4.1b.
+      # One invocation covers both the signing steps below and the Upload
+      # step at the end; aws-actions/configure-aws-credentials sets env
+      # vars for the rest of the job.
       - name: Configure AWS credentials for signing and artifact uploads
         uses: ./.github/actions/configure_aws_artifacts_credentials
         with:

@@ -79,17 +79,16 @@ def sign_rpm_packages(package_dir: Path, tier: str) -> int:
                 "rpmsign",
                 "--define",
                 f"%__gpg {_GPGSHIM_PATH}",
-                # Forward-compat with RPM 6.x, which requires _gpg_name (or
-                # _openpgp_sign_id) to be set even when the actual signing
-                # command is redirected elsewhere — confirmed live against
-                # RPM 6.0.1 (rpmsign fails with "you must set
-                # %_openpgp_sign_id" without this). The value itself is
-                # never used cryptographically: gpgshim's GPG_TIER-based
-                # path (set above) always takes priority over any
-                # --local-user value rpmsign might derive from this and
-                # pass through. Current CI (Ubuntu 24.04) runs RPM 4.18.x,
-                # where this define is inert but harmless — not separately
-                # verified live, since 4.x predates the requirement entirely.
+                # RPM 6.x requires _gpg_name (or _openpgp_sign_id) to be set
+                # even when the signing command itself is redirected via
+                # %__gpg, or rpmsign aborts with "you must set
+                # %_openpgp_sign_id". The value is never used
+                # cryptographically: gpgshim's GPG_TIER-based key selection
+                # (set via env above) always takes priority over any
+                # --local-user value rpmsign might derive from this and pass
+                # through. RPM 4.x (used by current CI images) does not
+                # require this define; setting it anyway is harmless since
+                # the value goes unused there too.
                 "--define",
                 "_gpg_name gpgshim-managed",
                 "--addsign",
