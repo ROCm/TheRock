@@ -177,6 +177,7 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
         with:
           persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
@@ -184,6 +185,7 @@ jobs:
 
       - name: Checkout XLA
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
         with:
           persist-credentials: false
           path: xla
@@ -210,7 +212,7 @@ jobs:
           python build_tools/print_driver_gpu_info.py
 
       - name: Run XLA tests [single_gpu]
-        timeout-minutes: ${{ inputs.test_timeout_minutes }}
+        timeout-minutes: 120
         run: |
           build_tools/rocm/run_xla_ci_build.sh \
             --config=rocm_ci_hermetic \
@@ -231,7 +233,7 @@ jobs:
             //xla/...
 
       - name: Run XLA tests [cpu]
-        timeout-minutes: ${{ inputs.test_timeout_minutes }}
+        timeout-minutes: 120
         run: |
           build_tools/rocm/run_xla_ci_build.sh \
             --config=rocm_ci_hermetic \
