@@ -63,11 +63,6 @@ CI_PYTORCH_REFS = {
 
 # Unknown explicit refs are left unfiltered so bring-up branches can opt into
 # new GPU families before the default PyTorch refs support them.
-#
-# gfx117X-all (gfx1170, gfx1171): PyTorch's bundled composable_kernel predates
-# gfx117 support, so the ck_gemm target fails to compile with
-# "use of undeclared identifier 'CK_BUFFER_RESOURCE_3RD_DWORD'". Remove the
-# entries below once PyTorch's third_party/composable_kernel supports gfx117.
 UNSUPPORTED_AMDGPU_FAMILIES = {
     "linux": {
         "release/2.13": {"gfx90c", "gfx117X-all"},
