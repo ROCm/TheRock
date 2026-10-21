@@ -47,8 +47,15 @@ function(therock_sanitizer_configure
       # Avoids: (1) -Woption-ignored on gfx942 without :xnack+ (MIOpen failure due to -Werror)
       #         (2) handleSanitizeOption dropping all device -I/-D with -fno-gpu-sanitize (Bug in Driver)
       # TODO: If this is indeed a Driver bug, then this can be replaced with -fno-gpu-sanitize when that is fixed.
+      # FLAGS_INIT is copied into CMAKE_*_FLAGS only the first time a build tree
+      # is configured. hip-clr also skips its own host flags when THEROCK_SANITIZER
+      # is set, so a reconfigure (or any path that keeps a stale CMAKE_CXX_FLAGS
+      # cache) links libamdhip64 against the ASan runtime without instrumenting
+      # its objects. add_compile_options is applied on every configure, same as
+      # add_link_options below.
       string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -Xarch_host -fsanitize=address -Xarch_host -fno-omit-frame-pointer\")\n")
       string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -Xarch_host -fsanitize=address -Xarch_host -fno-omit-frame-pointer\")\n")
+      string(APPEND _stanza "add_compile_options(\"$<$<COMPILE_LANGUAGE:C,CXX>:SHELL:-Xarch_host -fsanitize=address -Xarch_host -fno-omit-frame-pointer>\")\n")
     else()
       # TODO: Support ASAN_STATIC/TSAN_STATIC to use static sanitizer linkage. Shared is almost always the right thing,
       # so make the sanitizer imply shared linkage.
