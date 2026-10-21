@@ -248,6 +248,21 @@ option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to t
 # Include generated topology (contains feature definitions)
 include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
 
+# Master Flang switch (Linux + COMPILER only). Path when ON:
+#   Default: fortran distribution (FLANG_STANDALONE off).
+#   Opt-in:  FLANG_STANDALONE=ON -> amd-llvm-flang (fortran dist forced OFF).
+cmake_dependent_option(THEROCK_ENABLE_FLANG
+  "Build/install Flang (standalone amd-llvm-flang and/or amd-llvm fortran distribution)" ON
+  "THEROCK_ENABLE_COMPILER;NOT WIN32" OFF)
+
+# FLANG=OFF must win over a cached/topology FLANG_STANDALONE=ON.
+if(NOT THEROCK_ENABLE_FLANG AND THEROCK_ENABLE_FLANG_STANDALONE)
+  set(THEROCK_ENABLE_FLANG_STANDALONE OFF CACHE BOOL
+    "Enables amd-llvm-flang (requires THEROCK_ENABLE_FLANG)" FORCE)
+endif()
+
+set(THEROCK_ENABLE_FLANG_STANDALONE ON CACHE BOOL "TEST STANDALONE BUILD - TEMPORARY" FORCE)
+
 # Per-distribution toggles for amd-llvm staging (see clang/cmake/caches/ROCm.cmake).
 # Defined after topology so THEROCK_ENABLE_COMPILER exists. Compose
 # THEROCK_AMD_LLVM_DISTRIBUTION; empty aggregate = full cmake --install.
@@ -261,8 +276,8 @@ if(THEROCK_ENABLE_COMPILER)
   option(THEROCK_ENABLE_COMPILER_TOOLS_DISTRIBUTION
     "Stage LLVM 'tools' distribution for amd-llvm" ON)
   cmake_dependent_option(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION
-    "Stage LLVM 'fortran' distribution for amd-llvm" ON
-    "NOT WIN32" OFF)
+    "Stage LLVM 'fortran' distribution for amd-llvm (requires FLANG; OFF when FLANG_STANDALONE is ON)" OFF
+    "THEROCK_ENABLE_FLANG;NOT THEROCK_ENABLE_FLANG_STANDALONE" OFF)
   cmake_dependent_option(THEROCK_ENABLE_COMPILER_MULTILIBS_DISTRIBUTION
     "Stage LLVM 'multilibs' distribution for amd-llvm" OFF
     "NOT WIN32" OFF)
@@ -297,6 +312,25 @@ if(THEROCK_ENABLE_COMPILER)
     "Semicolon-separated LLVM distributions to build/stage for amd-llvm (composed from THEROCK_ENABLE_COMPILER_*_DISTRIBUTION). Empty = full cmake --build + cmake --install. See clang/cmake/caches/ROCm.cmake"
     FORCE)
   unset(_therock_amd_llvm_distribution)
+endif()
+
+# FLANG=ON requires exactly one delivery path (standalone XOR fortran dist).
+# dependent_option already clears fortran dist when standalone is ON / FLANG is OFF.
+if(THEROCK_ENABLE_FLANG
+   AND NOT THEROCK_ENABLE_FLANG_STANDALONE
+   AND NOT THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION)
+  message(FATAL_ERROR
+    "THEROCK_ENABLE_FLANG=ON requires one of:\n"
+    "  -DTHEROCK_ENABLE_FLANG_STANDALONE=ON\n"
+    "  -DTHEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION=ON")
+endif()
+
+# No Flang toolchain => no Fortran clients/wrappers/tests in subprojects.
+# FLAGS.cmake runs before topology, so sync the effective policy here.
+if(NOT THEROCK_ENABLE_FLANG AND THEROCK_FLAG_BUILD_FORTRAN_LIBS)
+  set(THEROCK_FLAG_BUILD_FORTRAN_LIBS OFF CACHE BOOL
+    "Build Fortran components in sub-projects (requires THEROCK_ENABLE_FLANG)" FORCE)
+  set(ROCM_BUILD_FORTRAN_LIBS OFF)
 endif()
 
 ################################################################################
