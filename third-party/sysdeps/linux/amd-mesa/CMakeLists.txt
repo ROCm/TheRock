@@ -18,6 +18,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         "-DMESON_BUILD=${MESON_BUILD}"
         "-DPython3_EXECUTABLE=${Python3_EXECUTABLE}"
       RUNTIME_DEPS
+        therock-elfutils
         therock-libdrm
       INSTALL_DESTINATION
         lib/rocm_sysdeps
@@ -79,7 +80,7 @@ add_custom_target(
         -Dva-libs-path="/lib"
         -Dallow-fallback-for=libva # NOTE: Use local build of VA library
         -Dforce_fallback_for=libva # NOTE: Enforce local build, if public VA found
-        -Dpkg_config_path="${CMAKE_CURRENT_BINARY_DIR}"/../../../libdrm/build/dist/lib/rocm_sysdeps/lib/pkgconfig
+        -Dpkg_config_path="${CMAKE_CURRENT_BINARY_DIR}"/../../../libdrm/build/dist/lib/rocm_sysdeps/lib/pkgconfig,"${CMAKE_CURRENT_BINARY_DIR}"/../../../elfutils/build/dist/lib/rocm_sysdeps/lib/pkgconfig
         -Degl=disabled
         -Dgallium-drivers=radeonsi
         -Dgallium-rusticl=false
@@ -91,7 +92,7 @@ add_custom_target(
         -Dglx=disabled
         -Dllvm=disabled
         -Dopengl=false
-        -Dvideo-codecs=h264dec,h265dec,av1dec,vp9dec,jpegdec
+        -Dvideo-codecs=h264dec,h265dec,av1dec,vp9dec,jpegdec,h264enc,h265enc,av1enc
         -Dvulkan-drivers=
         -Dplatforms=
         -Dlibva:with_glx=no
@@ -125,7 +126,7 @@ add_custom_target(
         -Dva-libs-path="/lib"
         -Dallow-fallback-for=libva # NOTE: Use local build of VA library
         -Dforce_fallback_for=libva # NOTE: Enforce local build, if public VA found
-        -Dpkg_config_path="${CMAKE_CURRENT_BINARY_DIR}"/../../../libdrm/build/dist/lib/rocm_sysdeps/lib/pkgconfig
+        -Dpkg_config_path="${CMAKE_CURRENT_BINARY_DIR}"/../../../libdrm/build/dist/lib/rocm_sysdeps/lib/pkgconfig,"${CMAKE_CURRENT_BINARY_DIR}"/../../../elfutils/build/dist/lib/rocm_sysdeps/lib/pkgconfig
         -Degl=disabled
         -Dgallium-drivers=radeonsi
         -Dgallium-rusticl=false
@@ -137,7 +138,7 @@ add_custom_target(
         -Dglx=disabled
         -Dllvm=disabled
         -Dopengl=false
-        -Dvideo-codecs=h264dec,h265dec,av1dec,vp9dec,jpegdec
+        -Dvideo-codecs=h264dec,h265dec,av1dec,vp9dec,jpegdec,h264enc,h265enc,av1enc
         -Dvulkan-drivers=
         -Dplatforms=
         -Dlibva:with_glx=no
