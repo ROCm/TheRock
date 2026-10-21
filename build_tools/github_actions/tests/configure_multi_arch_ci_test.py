@@ -1149,6 +1149,23 @@ class TestSelectTargets(unittest.TestCase):
         self.assertNotIn("gfx906", result_without.linux_families)
         self.assertIn("gfx906", result_with.linux_families)
 
+    def test_pull_request_gfx117x_label_enables_builds_and_tests(self):
+        """PR gfx117X label bypasses nightly-only build and test gating."""
+        result = cm.select_targets(
+            cm.CIInputs(
+                run_id="12345",
+                event_name="pull_request",
+                commit_ref="feature",
+                base_ref="HEAD^",
+                build_variant="release",
+                pr_labels=["ci:gfx117X-all"],
+            )
+        )
+        self.assertIn("gfx117x", result.linux_families)
+        self.assertIn("gfx117x", result.windows_families)
+        self.assertIn("gfx117x", result.linux_test_only_families)
+        self.assertIn("gfx117x", result.windows_test_only_families)
+
     def test_pull_request_run_all_archs_label(self):
         """PR with ci:run-all-archs label selects all families."""
         inputs = cm.CIInputs(
