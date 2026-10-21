@@ -40,6 +40,24 @@ therock_declare_flag(
   DESCRIPTION "Build flag infrastructure integer conformance canary"
 )
 
+# RFC0018 flag metadata (recorded here as a comment until therock_declare_flag
+# grows dedicated OWNER/CREATED/EXPIRES/STAGE keywords; see
+# docs/rfcs/RFC0018-Feature-Flag-Lifecycle-and-Canary-Promotion.md):
+#   OWNER    prim-team
+#   CREATED  2026-10-21
+#   EXPIRES  2027-04-21
+#   STAGE    default-on
+# Build-time flag: changes build topology, install layout and artifacts, so it
+# cannot be a runtime flag. ON builds the unified hipCCL superbuild; OFF is the
+# kill switch back to the legacy separate subprojects (no PR revert needed).
+therock_declare_flag(
+  NAME BUILD_HIPCCL
+  TYPE BOOL
+  DEFAULT_VALUE ON
+  DESCRIPTION "Build rocPRIM/hipCUB/rocThrust together as the unified hipCCL superbuild (rocm-libraries projects/hipccl/hipccl3) instead of the legacy separate subprojects. OFF builds the legacy subprojects."
+  ISSUE AIPRIMS-251
+)
+
 therock_declare_flag(
   NAME KPACK_SPLIT_ARTIFACTS
   DEFAULT_VALUE ON
