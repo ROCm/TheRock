@@ -204,7 +204,7 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_activate(hipCUB)
 
   set(_rocthrust_tests_enabled OFF)
-  if (THEROCK_BUILD_TESTING)
+  if(THEROCK_BUILD_TESTING)
     therock_check_subproject_targets(_rocthrust_tests_enabled rocThrust_tests)
   endif()
 
