@@ -150,7 +150,7 @@ build.
 
 ```mermaid
 graph TD
-    pr[PR labelled ci:coverage] --> plan[configure_coverage_pr.py: projects and baseline]
+    pr[PR changing a project, or labelled ci:coverage] --> plan[configure_coverage_pr.py: projects and baseline]
     plan --> matrix
     dispatch[Dispatch with projects_to_test] --> matrix[setup_coverage_matrix]
     matrix --> compilerRuntime[Build or copy compiler-runtime]
@@ -178,14 +178,16 @@ nightly dispatch is a follow-up; `baseline_run_id` is already the right input.
 
 ### Pull request coverage
 
-`multi_arch_ci_coverage_pr.yml` runs coverage for a pull request labelled
-`ci:coverage`. Each push re-runs it and cancels the previous run; remove the
-label to stop. rocm-libraries and rocm-systems pull request workflows call it
-through `uses:` with their `changed_projects` and `external_repo`, as they do
-for `setup_multi_arch.yml`, and the label gate applies to their pull requests
-too (see [Calling it from another repository](#calling-it-from-another-repository)).
-The run reports each project's coverage, then the
-[patch coverage](#patch-coverage) of the change itself.
+`multi_arch_ci_coverage_pr.yml` runs coverage for pull requests. rocm-libraries
+and rocm-systems pull request workflows call it through `uses:` with their
+`changed_projects` and `external_repo`, as they do for `setup_multi_arch.yml`,
+and their pull requests run coverage whenever they change a project (see
+[Calling it from another repository](#calling-it-from-another-repository)). A
+TheRock pull request changes no project, so it would measure every buildable
+one; it runs coverage only when labelled `ci:coverage`, and removing the label
+stops it. Each push re-runs coverage and cancels the previous run. The run
+reports each project's coverage, then the [patch coverage](#patch-coverage) of
+the change itself.
 
 `configure_coverage_pr.py` plans the run, then `multi_arch_ci_coverage_linux.yml`
 does the rest:
@@ -242,12 +244,13 @@ reported, not failed.
 #### Calling it from another repository
 
 A rocm-libraries or rocm-systems pull request gets coverage from a caller
-workflow in that repository, built like `therock-multi-arch-ci-asan.yml`: it
-runs on every pull request event and leaves the decision to the label gate.
-The repository needs a `ci:coverage` label. The changed projects come from
-`configure_external_repo_ci.py`, as for the multi-arch CI; when it finds none,
-the caller skips rather than measuring every project. Pin both TheRock
-references to the same commit.
+workflow in that repository, built like `therock-multi-arch-ci.yml`. The changed
+projects come from `configure_external_repo_ci.py`, as for the multi-arch CI,
+and every pull request that changes a project runs coverage, with no label. The
+run measures the changed projects it can and lists the rest with their reasons;
+when the script finds no changed project, the caller skips rather than
+measuring every project. Of label events, only `test:` and `test_filter:` labels
+re-run coverage. Pin both TheRock references to the same commit.
 
 ```yaml
 name: TheRock Multi-Arch CI Coverage
@@ -265,7 +268,12 @@ permissions:
 jobs:
   configure:
     name: Configure Coverage Projects
-    if: ${{ contains(github.event.pull_request.labels.*.name, 'ci:coverage') }}
+    if: >-
+      ${{
+        github.event.action != 'labeled' ||
+        startsWith(github.event.label.name, 'test:') ||
+        startsWith(github.event.label.name, 'test_filter:')
+      }}
     runs-on: ubuntu-24.04
     outputs:
       changed_projects: ${{ steps.configure.outputs.changed_projects }}

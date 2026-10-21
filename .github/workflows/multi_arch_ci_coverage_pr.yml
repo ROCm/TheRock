@@ -3,18 +3,19 @@
 
 # Multi-Arch CI Coverage - Pull Request
 #
-# Opt-in code coverage for pull requests, enabled by the `ci:coverage` label.
-# configure_coverage_pr.py picks the coverage projects the change touches
-# (`test:<project>` labels narrow them) and a non-instrumented baseline from
-# main; multi_arch_ci_coverage_linux.yml then builds those projects instrumented
-# and tests each one against the baseline. patch_coverage_report.py then
-# measures the change itself: how many of the lines it adds the tests run.
+# Code coverage for pull requests. configure_coverage_pr.py picks the coverage
+# projects the change touches (`test:<project>` labels narrow them) and a
+# non-instrumented baseline from main; multi_arch_ci_coverage_linux.yml then
+# builds those projects instrumented and tests each one against the baseline.
+# patch_coverage_report.py then measures the change itself: how many of the
+# lines it adds the tests run.
 #
 # rocm-libraries and rocm-systems pull request workflows call this through a
 # cross-repo `uses:`, passing changed_projects and external_repo as they do for
-# setup_multi_arch.yml. As with ASAN, the caller runs on every pull request
-# event and the label gate here decides. docs/development/code_coverage.md has
-# a caller to copy.
+# setup_multi_arch.yml, and their pull requests run coverage whenever they
+# change a project. A TheRock pull request changes no project, so it would
+# measure every buildable one; it runs only with the `ci:coverage` label.
+# docs/development/code_coverage.md has a caller to copy.
 #
 # As this runs on lower trust `pull_request` events it forwards no github
 # secrets to child workflows, so reports are kept as run artifacts and on the
@@ -63,7 +64,7 @@ on:
         default: ""
       changed_projects:
         type: string
-        description: "Comma-separated changed project paths from the external repo (e.g. projects/hiprand). Empty = every buildable project."
+        description: "Comma-separated changed project paths from the external repo (e.g. projects/hiprand); a pull request passing any runs without the ci:coverage label. Empty = every buildable project."
         default: ""
       amdgpu_families:
         type: string
@@ -103,14 +104,15 @@ permissions:
 
 concurrency:
   # One run per pull request; a new push cancels the old run. Events that do not
-  # run coverage (no ci:coverage label, or an unrelated label being added) get a
-  # group of their own so they cannot cancel a run in progress. Keep the
-  # condition in sync with the setup job's `if`. The "coverage-pr" infix keeps
-  # the group apart from a cross-repo caller's own.
+  # run coverage (no changed projects and no ci:coverage label, or an unrelated
+  # label being added) get a group of their own so they cannot cancel a run in
+  # progress. Keep the condition in sync with the setup job's `if`. The
+  # "coverage-pr" infix keeps the group apart from a cross-repo caller's own.
   group: >-
     ${{ github.workflow }}-coverage-pr-${{
       github.event_name == 'pull_request' &&
-      contains(github.event.pull_request.labels.*.name, 'ci:coverage') &&
+      (inputs.changed_projects != '' ||
+        contains(github.event.pull_request.labels.*.name, 'ci:coverage')) &&
       (github.event.action != 'labeled' ||
         github.event.label.name == 'ci:coverage' ||
         startsWith(github.event.label.name, 'test:') ||
@@ -125,7 +127,8 @@ jobs:
     if: >-
       ${{
         github.event_name != 'pull_request' ||
-        (contains(github.event.pull_request.labels.*.name, 'ci:coverage') &&
+        ((inputs.changed_projects != '' ||
+            contains(github.event.pull_request.labels.*.name, 'ci:coverage')) &&
           (github.event.action != 'labeled' ||
             github.event.label.name == 'ci:coverage' ||
             startsWith(github.event.label.name, 'test:') ||
