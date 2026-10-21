@@ -39,7 +39,7 @@ on:
         type: string
         default: "ROCm/xla"
       xla_commit:
-        description: "XLA commit to test. Empty uses xla_ref, which a moving ref like rocm-dev-infra may have advanced past."
+        description: "XLA commit to test. Empty uses xla_ref, which a moving ref like rocm-jaxlib-v0.11.2 may have advanced past."
         type: string
         default: ""
       test_runs_on:
@@ -74,11 +74,11 @@ on:
       rocm_version:
         description: ROCm version to test against (TheRock build under test)
         type: string
-        default: "7.14.0.dev0"
+        default: "10.2.0.dev0"
       rocm_distro_url:
         description: "URL of the TheRock multi-arch distro tarball to test against."
         type: string
-        default: "https://nightly.repo.amd.com/rocm/core/tarball/therock-dist-linux-multiarch-7.14.0.dev0.tar.gz"
+        default: ""
       rocm_distro_hash:
         description: 'sha256 of the tarball, or "no_hash" to skip verification.'
         type: string
@@ -94,7 +94,7 @@ on:
       xla_ref:
         description: "ROCm/xla ref to check out."
         type: string
-        default: "rocm-dev-infra"
+        default: "rocm-jaxlib-v0.11.2"
       xla_repository:
         description: "Repository holding the XLA checkout the test suite runs from."
         type: string
@@ -125,13 +125,21 @@ on:
           set it manually.
         type: string
         default: ""
+  # Validates the pipeline itself whenever it changes, with literal defaults
+  # standing in for what a real caller (e.g. multi_arch_release_linux.yml's
+  # trigger_test_xla job) would pass — pull_request has no `inputs` context,
+  # so every `inputs.x` below is null here and falls back to these defaults.
+  pull_request:
+    paths:
+      - ".github/workflows/test_multi_arch_linux_xla.yml"
+
 permissions:
   contents: read
 
 jobs:
   test_xla:
-    name: Test XLA | ${{ inputs.test_subset }} | ${{ inputs.test_amdgpu_family }}
-    runs-on: ${{ inputs.test_runs_on }}
+    name: Test XLA | ${{ inputs.test_subset || 'all' }} | ${{ inputs.test_amdgpu_family || 'gfx94X-dcgpu' }}
+    runs-on: ${{ inputs.test_runs_on || 'linux-gfx942-1gpu-ccs-csp-ossci-rocm' }}
     timeout-minutes: 240
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
@@ -142,8 +150,6 @@ jobs:
         --shm-size=128g
         --device /dev/kfd
         --device /dev/dri
-        --group-add render
-        --group-add video
         --user root
         --env-file /etc/podinfo/gha-gpu-isolation-settings
         -e KUBE_CPU_REQUEST
@@ -156,12 +162,12 @@ jobs:
     env:
       QUARTZ_REPORTING_WORKFLOW: test_multi_arch_linux_xla.yml
       QUARTZ_WORKFLOW_POSTFIX: "- test XLA (partial)"
-      TEST_AMDGPU_FAMILY: ${{ inputs.test_amdgpu_family }}
-      ROCM_VERSION: ${{ inputs.rocm_version }}
-      XLA_REF: ${{ inputs.xla_ref }}
-      TEST_SUBSET: ${{ inputs.test_subset }}
-      ROCM_DISTRO_URL: ${{ inputs.rocm_distro_url }}
-      ROCM_DISTRO_HASH: ${{ inputs.rocm_distro_hash }}
+      TEST_AMDGPU_FAMILY: ${{ inputs.test_amdgpu_family || 'gfx94X-dcgpu' }}
+      ROCM_VERSION: ${{ inputs.rocm_version || '10.2.0.dev0' }}
+      XLA_REF: ${{ inputs.xla_ref || 'rocm-jaxlib-v0.11.2' }}
+      TEST_SUBSET: ${{ inputs.test_subset || 'all' }}
+      ROCM_DISTRO_URL: ${{ inputs.rocm_distro_url || 'https://nightly.repo.amd.com/rocm/core/tarball/therock-dist-linux-multiarch-10.2.0a20261021.tar.gz' }}
+      ROCM_DISTRO_HASH: ${{ inputs.rocm_distro_hash || 'no_hash' }}
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -189,8 +195,8 @@ jobs:
         with:
           persist-credentials: false
           path: xla
-          repository: ${{ inputs.xla_repository }}
-          ref: ${{ inputs.xla_commit || inputs.xla_ref }}
+          repository: ${{ inputs.xla_repository || 'ROCm/xla' }}
+          ref: ${{ inputs.xla_commit || inputs.xla_ref || 'rocm-jaxlib-v0.11.2' }}
 
       # Same tool and input the JAX test workflow uses (expand_amdgpu_families.py
       # --output-mode=device-extras); bare "targets" mode gives the comma-separated
@@ -213,42 +219,35 @@ jobs:
 
       - name: Run XLA tests [single_gpu]
         timeout-minutes: 120
+        working-directory: xla
         run: |
           build_tools/rocm/run_xla_ci_build.sh \
             --config=rocm_ci_hermetic \
             --config=ci_single_gpu \
-            --config=no_flaky \
             --repo_env=TF_ROCM_RBE_DOCKER_IMAGE="${DOCKER_IMAGE}" \
             --repo_env=ROCM_DISTRO_URL="${ROCM_DISTRO_URL}" \
             --repo_env=ROCM_DISTRO_HASH="${ROCM_DISTRO_HASH}" \
             --repo_env=TF_ROCM_AMDGPU_TARGETS="${ROCM_AMD_GPU_TARGETS}" \
             --repo_env=TF_ROCM_RBE_SINGLE_GPU_POOL="${ROCM_SINGLE_GPU_RBE_POOL}" \
             --local_test_jobs=1 \
-            --bes_keywords=xla \
-            --bes_keywords=upstream \
-            --bes_keywords=gpu \
-            --bes_keywords=pull_request \
+            --jobs=50 \
             --build_event_json_file=xla_single_gpu_build_events.json \
             -- \
             //xla/...
 
       - name: Run XLA tests [cpu]
         timeout-minutes: 120
+        working-directory: xla
         run: |
           build_tools/rocm/run_xla_ci_build.sh \
             --config=rocm_ci_hermetic \
             --config=ci_single_gpu \
-            --config=no_flaky \
             --repo_env=TF_ROCM_RBE_DOCKER_IMAGE="${DOCKER_IMAGE}" \
             --repo_env=ROCM_DISTRO_URL="${ROCM_DISTRO_URL}" \
             --repo_env=ROCM_DISTRO_HASH="${ROCM_DISTRO_HASH}" \
             --repo_env=TF_ROCM_AMDGPU_TARGETS="${ROCM_AMD_GPU_TARGETS}" \
             --repo_env=TF_ROCM_RBE_SINGLE_GPU_POOL="${ROCM_SINGLE_GPU_RBE_POOL}" \
-            --local_test_jobs=1 \
-            --bes_keywords=xla \
-            --bes_keywords=upstream \
-            --bes_keywords=gpu \
-            --bes_keywords=pull_request \
+            --jobs=50 \
             --build_event_json_file=xla_single_gpu_build_events.json \
             -- \
             //xla/...
