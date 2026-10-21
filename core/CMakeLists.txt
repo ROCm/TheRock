@@ -587,7 +587,7 @@ endif(THEROCK_ENABLE_OCL_RUNTIME AND _ocl_clr_enabled)
 
 set(_hip_tests_enabled OFF)
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
-  therock_check_subproject_targets(_hip_tests_enabled hip-tests ${THEROCK_TEST_AMDGPU_TARGETS})
+  therock_check_subproject_targets(_hip_tests_enabled hip-tests TARGETS_VAR THEROCK_TEST_AMDGPU_TARGETS)
 endif()
 
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS AND _hip_tests_enabled)
@@ -631,7 +631,7 @@ endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS AND _hip_tests_enab
 
 set(_rocrtst_enabled OFF)
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime)
-  therock_check_subproject_targets(_rocrtst_enabled rocrtst ${THEROCK_TEST_AMDGPU_TARGETS})
+  therock_check_subproject_targets(_rocrtst_enabled rocrtst TARGETS_VAR THEROCK_TEST_AMDGPU_TARGETS)
 endif()
 
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime AND _rocrtst_enabled)
