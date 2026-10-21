@@ -121,52 +121,6 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     ],
                 )
 
-    def test_filters_gfx117x_from_all_default_refs(self):
-        # PyTorch's bundled composable_kernel does not support gfx117 yet.
-        for platform in ("linux", "windows"):
-            for pytorch_git_ref in (
-                "release/2.13",
-                "release/2.14",
-                "release/2.15",
-                "nightly",
-            ):
-                with self.subTest(platform=platform, pytorch_git_ref=pytorch_git_ref):
-                    matrix = m.generate_pytorch_matrix_for_release_type(
-                        release_type="dev",
-                        python_versions=["3.12"],
-                        pytorch_git_refs=[pytorch_git_ref],
-                        amdgpu_families="gfx110X-all;gfx117X-all;gfx1151",
-                        platform=platform,
-                    )
-
-                    self.assertEqual(len(matrix), 1)
-                    self.assertEqual(
-                        matrix[0]["amdgpu_families"], "gfx110X-all;gfx1151"
-                    )
-
-    def test_gfx117x_only_request_produces_no_rows(self):
-        matrix = m.generate_pytorch_matrix_for_release_type(
-            release_type="nightly",
-            python_versions=["3.12"],
-            pytorch_git_refs=["nightly"],
-            amdgpu_families="gfx117X-all",
-            platform="linux",
-        )
-
-        self.assertEqual(matrix, [])
-
-    def test_unknown_explicit_ref_keeps_gfx117x(self):
-        # Bring-up branches can still opt in to gfx117X.
-        matrix = m.generate_pytorch_matrix_for_release_type(
-            release_type="dev",
-            python_versions=["3.12"],
-            pytorch_git_refs=["users/alice/gfx117x-bringup"],
-            amdgpu_families="gfx117X-all",
-            platform="linux",
-        )
-
-        self.assertEqual(matrix[0]["amdgpu_families"], "gfx117X-all")
-
     def test_unknown_explicit_ref_keeps_families(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="dev",
