@@ -369,12 +369,14 @@ def report_project(artifact_name: str) -> str:
 def load_reports(reports_dir: Path) -> dict[str, dict[str, LineHits]]:
     """Per project, the line hit counts of its coverage-report-* artifacts.
 
-    A project tested on several GPU families merges into one entry, so a line
+    reports_dir holds one artifact per subdirectory, or is one artifact. A
+    project tested on several GPU families merges into one entry, so a line
     counts as run if it ran on any of them.
     """
     reports: dict[str, dict[str, LineHits]] = {}
-    for lcov in sorted(reports_dir.glob(f"{REPORT_ARTIFACT_PREFIX}*/coverage.info")):
-        project = report_project(lcov.parent.name)
+    found = [*reports_dir.glob("coverage.info"), *reports_dir.glob("*/coverage.info")]
+    for lcov in sorted(found):
+        project = report_project(lcov.parent.resolve().name)
         files = reports.setdefault(project, {})
         for path, hits in parse_lcov(lcov.read_text(errors="replace")).items():
             _merge_hits(files.setdefault(path, {}), hits)
@@ -506,8 +508,8 @@ def render_markdown(
     covered, missed = coverage.covered, coverage.missed
     if not projects:
         headline = (
-            "No coverage report was produced, so there is nothing to measure "
-            "the change against. The coverage jobs say why."
+            "No coverage report was found, so there is nothing to measure the "
+            "change against."
         )
     elif covered + missed:
         headline = (
@@ -693,7 +695,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         "--reports-dir",
         type=Path,
         required=True,
-        help="Directory holding the downloaded coverage-report-* artifacts",
+        help="Directory holding the downloaded coverage-report-<project>-<family> "
+        "artifacts, one per subdirectory, or one such artifact",
     )
     parser.add_argument(
         "--git-dir",

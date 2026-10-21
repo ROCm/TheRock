@@ -199,6 +199,13 @@ class ReportTest(unittest.TestCase):
                 load_reports(Path(tmp)), {"rocrand": {"/src/a.cpp": {1: 2, 2: 1}}}
             )
 
+    def test_load_reports_from_one_artifact(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            report = Path(tmp) / "coverage-report-hiprand-gfx94X-dcgpu"
+            report.mkdir()
+            (report / "coverage.info").write_text(_lcov({"/src/h.cpp": {3: 1}}))
+            self.assertEqual(load_reports(report), {"hiprand": {"/src/h.cpp": {3: 1}}})
+
     def test_index_matches_whole_path_components(self):
         index = CoverageIndex(
             {
@@ -299,7 +306,7 @@ class OutputTest(unittest.TestCase):
     def test_markdown_without_reports_or_code(self):
         empty = PatchCoverage(files=[], unmeasured=["README.md"])
         self.assertIn(
-            "No coverage report was produced",
+            "No coverage report was found",
             render_markdown(empty, projects=[], sources={}, **self.DETAILS),
         )
         self.assertIn(

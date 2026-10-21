@@ -227,6 +227,7 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+      actions: read # gh run download lists this run's artifacts.
     steps:
       - name: Checking out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -243,12 +244,15 @@ jobs:
         with:
           python-version: 3.12
 
+      # gh rather than download-artifact, which extracts a lone match straight
+      # into the path and so drops the artifact name that names the project.
       - name: Download coverage reports
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
-        with:
-          pattern: coverage-report-*
-          path: coverage-reports
         continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "${GITHUB_RUN_ID}" --repo "${GITHUB_REPOSITORY}" \
+            --pattern 'coverage-report-*' --dir coverage-reports
 
       # The pull request is the caller's (github.repository); the build
       # compiled its merge commit, which external_repo names for a cross-repo
