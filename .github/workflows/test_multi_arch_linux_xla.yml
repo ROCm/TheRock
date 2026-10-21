@@ -14,6 +14,14 @@ on:
         description: ROCm version to test against (TheRock build under test)
         required: true
         type: string
+      rocm_distro_url:
+        description: "URL of the TheRock multi-arch distro tarball to test against."
+        required: true
+        type: string
+      rocm_distro_hash:
+        description: 'sha256 of the tarball, or "no_hash" to skip verification.'
+        type: string
+        default: "no_hash"
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -67,6 +75,14 @@ on:
         description: ROCm version to test against (TheRock build under test)
         type: string
         default: "7.14.0.dev0"
+      rocm_distro_url:
+        description: "URL of the TheRock multi-arch distro tarball to test against."
+        type: string
+        default: "https://nightly.repo.amd.com/rocm/core/tarball/therock-dist-linux-multiarch-7.14.0.dev0.tar.gz"
+      rocm_distro_hash:
+        description: 'sha256 of the tarball, or "no_hash" to skip verification.'
+        type: string
+        default: "no_hash"
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -144,8 +160,8 @@ jobs:
       ROCM_VERSION: ${{ inputs.rocm_version }}
       XLA_REF: ${{ inputs.xla_ref }}
       TEST_SUBSET: ${{ inputs.test_subset }}
-      ROCM_DISTRO_URL: https://nightly.repo.amd.com/rocm/core/tarball/therock-dist-linux-multiarch-${{ inputs.rocm_version }}.tar.gz
-      ROCM_DISTRO_HASH: "no_hash"
+      ROCM_DISTRO_URL: ${{ inputs.rocm_distro_url }}
+      ROCM_DISTRO_HASH: ${{ inputs.rocm_distro_hash }}
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"

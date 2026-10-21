@@ -344,11 +344,12 @@ jobs:
               "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
-  # XLA tests against the published ROCm tarball, the same way the JAX release
-  # above tests against the published Python package index: wait for the
-  # corresponding ROCm release to be published before triggering the test.
+  # XLA tests against the multiarch tarball build_tarballs already produced
+  # and uploaded (upload_tarballs.py sets tarball_urls.multiarch), so this
+  # does not need to wait for publish_to_release_buckets: that tarball is
+  # already a reachable HTTPS URL in the CI artifacts bucket.
   trigger_test_xla:
-    needs: [build_tarballs, publish_to_release_buckets]
+    needs: [build_tarballs]
     name: Trigger Test XLA
     runs-on: ubuntu-26.04
     permissions:
@@ -362,6 +363,7 @@ jobs:
             {
               "test_amdgpu_family": "${{ contains(fromJSON(inputs.build_config).dist_amdgpu_families, 'gfx94X-dcgpu') && 'gfx94X-dcgpu' || '' }}",
               "rocm_version": "${{ inputs.rocm_package_version }}",
+              "rocm_distro_url": "${{ fromJSON(needs.build_tarballs.outputs.tarball_urls).multiarch }}",
               "repository": "${{ inputs.repository || github.repository }}",
               "ref": "${{ inputs.ref || '' }}",
               "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
