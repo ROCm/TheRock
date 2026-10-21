@@ -160,7 +160,7 @@ import tempfile
 import textwrap
 import urllib.request
 
-import setup_pytorch_asan
+import setup_pytorch_sanitizer
 
 script_dir = Path(__file__).resolve().parent
 
@@ -546,7 +546,7 @@ def validate_build_args(
     parser: argparse.ArgumentParser, args: argparse.Namespace
 ) -> None:
     """Resolve automatic project selections and validate build arguments."""
-    setup_pytorch_asan.apply_asan_companion_policy(parser, args)
+    setup_pytorch_sanitizer.apply_sanitizer_companion_policy(parser, args)
 
     # If a project dir exists, enable that project --build-* option by default.
     if args.build_triton is None:
@@ -917,8 +917,9 @@ def do_build(args: argparse.Namespace):
 
             run_command([str(sccache_path), "--zero-stats"], cwd=tempfile.gettempdir())
 
-        if args.asan:
-            setup_pytorch_asan.apply_asan_build_env(env, rocm_dir)
+        sanitizer = setup_pytorch_sanitizer.selected_sanitizer(args)
+        if sanitizer is not None:
+            setup_pytorch_sanitizer.apply_sanitizer_build_env(env, rocm_dir, sanitizer)
 
         _do_build_wheels_core(
             args,
@@ -1358,7 +1359,12 @@ def do_build_pytorch(
     )
 
     print("+++ Sanity checking installed torch (unavailable is okay on CPU machines):")
-    sanity_env = setup_pytorch_asan.import_sanity_env(env) if args.asan else None
+    sanitizer = setup_pytorch_sanitizer.selected_sanitizer(args)
+    sanity_env = (
+        setup_pytorch_sanitizer.import_sanity_env(env, sanitizer)
+        if sanitizer is not None
+        else None
+    )
     sanity_check_output = capture(
         [sys.executable, "-c", "import torch; print(torch.cuda.is_available())"],
         cwd=tempfile.gettempdir(),
