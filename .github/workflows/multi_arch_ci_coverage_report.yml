@@ -313,4 +313,5 @@ jobs:
           flags: "${{ inputs.codecov_flag || inputs.project_name }} - Nightly"
           name: ${{ inputs.project_name }}-${{ inputs.amdgpu_families }}
           disable_search: true
+          recurse_submodules: true
           fail_ci_if_error: false
