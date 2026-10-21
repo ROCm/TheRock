@@ -33,6 +33,44 @@ from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, build_
 from _therock_utils.sdk_targets import group_package_targets, package_owner
 
 
+LLVM_TOOLCHAIN_ARTIFACT_NAMES = [
+    # Together these preserve core-wheel coverage of the former monolithic
+    # amd-llvm artifact once Flang is split out.
+    "amd-llvm",
+    "amd-llvm-flang",
+]
+
+
+CORE_ARTIFACT_NAMES = [
+    "amd-dbgapi",
+    "aqlprofile",
+    "base",
+    "core-amdsmi",
+    "core-hip",
+    "core-kpack",
+    "core-ocl",
+    "core-hipinfo",
+    "core-runtime",
+    "hipfile",
+    "hipify",
+    "host-blas",
+    "host-suite-sparse",
+    "rocdecode",
+    "rocgdb",
+    "rocjpeg",
+    "rocprofiler-sdk",
+    "rocr-debug-agent",
+    "sysdeps",
+    "sysdeps-amd-mesa",
+    "sysdeps-expat",
+    "sysdeps-gmp",
+    "sysdeps-mpfr",
+    "sysdeps-ncurses",
+    "sysdeps-util-linux",
+    "wsl-rocdxg",
+] + LLVM_TOOLCHAIN_ARTIFACT_NAMES
+
+
 def _amdgpu_families_arg(value: str) -> list[str] | None:
     """Argparse type for --linux/windows-amdgpu-families CLI flags.
 
@@ -275,6 +313,7 @@ def run(args: argparse.Namespace):
 
     # Populate each target neutral library package.
     core = PopulatedDistPackage(params, logical_name="core")
+    core.rpath_dep(core, "lib")
     core.rpath_dep(core, "lib/llvm/lib")
     if host_triple:
         core.rpath_dep(core, f"lib/llvm/lib/{host_triple}")
@@ -556,35 +595,7 @@ def _run_legacy(
 
 
 def core_artifact_filter(an: ArtifactName) -> bool:
-    core = an.name in [
-        "amd-dbgapi",
-        "amd-llvm",
-        "aqlprofile",
-        "base",
-        "core-amdsmi",
-        "core-hip",
-        "core-kpack",
-        "core-ocl",
-        "core-hipinfo",
-        "core-runtime",
-        "hipfile",
-        "hipify",
-        "host-blas",
-        "host-suite-sparse",
-        "rocdecode",
-        "rocgdb",
-        "rocjpeg",
-        "rocprofiler-sdk",
-        "rocr-debug-agent",
-        "sysdeps",
-        "sysdeps-amd-mesa",
-        "sysdeps-expat",
-        "sysdeps-gmp",
-        "sysdeps-mpfr",
-        "sysdeps-ncurses",
-        "sysdeps-util-linux",
-        "wsl-rocdxg",
-    ] and an.component in [
+    core = an.name in CORE_ARTIFACT_NAMES and an.component in [
         "lib",
         "run",
     ]

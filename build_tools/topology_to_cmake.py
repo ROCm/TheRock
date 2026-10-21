@@ -221,6 +221,10 @@ def generate_feature_declarations(topology: BuildTopology, f: TextIO):
     ):
         f.write(f"therock_add_feature({feature_name}\n")
         f.write(f"  GROUP {feature_group}\n")
+        if artifact.feature_default is False:
+            f.write("  DEFAULT OFF\n")
+        elif artifact.feature_default is True:
+            f.write("  DEFAULT ON\n")
         f.write(f'  DESCRIPTION "Enables {artifact.name}"\n')
 
         if requires:

@@ -57,6 +57,17 @@ therock_declare_flag(
     hipkernelprovider
 )
 
+if(WIN32)
+  set(_fortran_default OFF)
+else()
+  set(_fortran_default ON)
+endif()
+therock_declare_flag(
+  NAME BUILD_FORTRAN_LIBS
+  DEFAULT_VALUE ${_fortran_default}
+  DESCRIPTION "Build Fortran components in sub-projects (wrappers, tests, hipfort). Forced OFF when THEROCK_ENABLE_FLANG is OFF."
+)
+
 therock_declare_flag(
   NAME HIPBLASLTPROVIDER_ENABLE_MX_GEMM
   DEFAULT_VALUE OFF
@@ -187,4 +198,9 @@ endif()
 # Finalize all flags and report.
 ###############################################################################
 therock_finalize_flags()
+
+# Always propagate the Fortran build policy to sub-projects, even when disabled.
+set(ROCM_BUILD_FORTRAN_LIBS "${THEROCK_FLAG_BUILD_FORTRAN_LIBS}")
+set_property(GLOBAL APPEND PROPERTY THEROCK_DEFAULT_CMAKE_VARS ROCM_BUILD_FORTRAN_LIBS)
+
 therock_report_flags()

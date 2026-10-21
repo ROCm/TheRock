@@ -360,7 +360,7 @@ endfunction()
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
-    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
+    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH;FORTRAN_REQUIRED;FORTRAN_OPTIONAL"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
     "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS;INSTALL_DISTRIBUTION"
   )
@@ -369,6 +369,28 @@ function(therock_cmake_subproject_declare target_name)
   endif()
   if(NOT ARG_LOGICAL_TARGET_NAME)
     set(ARG_LOGICAL_TARGET_NAME "${target_name}")
+  endif()
+
+  # FORTRAN_REQUIRED / FORTRAN_OPTIONAL: wire Flang when clients are enabled.
+  set(_fortran_toolchain_subproject)
+  if(ARG_FORTRAN_REQUIRED AND NOT THEROCK_FLAG_BUILD_FORTRAN_LIBS)
+    message(FATAL_ERROR
+      "Subproject ${target_name} requires Fortran, but "
+      "THEROCK_FLAG_BUILD_FORTRAN_LIBS is OFF.")
+  endif()
+  if((ARG_FORTRAN_REQUIRED OR ARG_FORTRAN_OPTIONAL) AND THEROCK_FLAG_BUILD_FORTRAN_LIBS)
+    if(NOT THEROCK_ENABLE_FLANG)
+      message(FATAL_ERROR
+        "Subproject ${target_name} requested Fortran, but "
+        "THEROCK_ENABLE_FLANG is OFF.")
+    endif()
+    if(THEROCK_ENABLE_FLANG_STANDALONE)
+      set(_fortran_toolchain_subproject amd-llvm-flang)
+    else()
+      # fortran distribution stages flang into the amd-llvm install tree.
+      set(_fortran_toolchain_subproject amd-llvm)
+    endif()
+    list(APPEND ARG_RUNTIME_DEPS "${_fortran_toolchain_subproject}")
   endif()
 
   cmake_path(IS_ABSOLUTE ARG_EXTERNAL_SOURCE_DIR _source_is_absolute)
@@ -552,6 +574,7 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_INTERFACE_PROGRAM_DIRS "${_interface_program_dirs}"
     THEROCK_IGNORE_PACKAGES "${ARG_IGNORE_PACKAGES}"
     THEROCK_COMPILER_TOOLCHAIN "${ARG_COMPILER_TOOLCHAIN}"
+    THEROCK_FORTRAN_TOOLCHAIN_SUBPROJECT "${_fortran_toolchain_subproject}"
     # Any extra depend files that must be added to the configure phase of dependents.
     THEROCK_INTERFACE_CONFIGURE_DEPEND_FILES "${_transitive_configure_depend_files}"
     THEROCK_EXTRA_DEPENDS "${ARG_EXTRA_DEPENDS}"
@@ -763,6 +786,23 @@ function(therock_cmake_subproject_activate target_name)
   _therock_cmake_subproject_setup_toolchain("${target_name}"
     "${_compiler_toolchain}" "${_cmake_project_toolchain_file}")
   list(APPEND _fprint_files "${_cmake_project_toolchain_file}")
+
+  get_target_property(_fortran_toolchain_subproject
+    "${target_name}" THEROCK_FORTRAN_TOOLCHAIN_SUBPROJECT)
+  if(_fortran_toolchain_subproject)
+    _therock_assert_is_cmake_subproject("${_fortran_toolchain_subproject}")
+    get_target_property(_fortran_dist_dir "${_fortran_toolchain_subproject}" THEROCK_DIST_DIR)
+    get_target_property(_fortran_stamp_dir "${_fortran_toolchain_subproject}" THEROCK_STAMP_DIR)
+    set(_fortran_compiler "${_fortran_dist_dir}/lib/llvm/bin/flang${CMAKE_EXECUTABLE_SUFFIX}")
+    list(APPEND _compiler_toolchain_addl_depends "${_fortran_stamp_dir}/stage.stamp")
+    file(APPEND "${_cmake_project_toolchain_file}"
+      "set(CMAKE_Fortran_COMPILER \"${_fortran_compiler}\")\n"
+      "set(LLVM_Fortran_COMPILER \"${_fortran_compiler}\")\n"
+    )
+    if(THEROCK_VERBOSE)
+      message(STATUS "  Fortran toolchain: ${_fortran_toolchain_subproject} (${_fortran_compiler})")
+    endif()
+  endif()
 
   # Customize any other super-project CMake variables that are captured by
   # _init.cmake.
