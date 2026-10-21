@@ -67,18 +67,41 @@ target_include_directories(aux-overlay-build-flags-conformance PRIVATE
 )
 
 if(NOT WIN32)
-  add_custom_target(symlinks ALL
+  set(_symlink_commands
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/bin"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "lib/llvm" "${CMAKE_CURRENT_BINARY_DIR}/llvm"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "lib/llvm/amdgcn" "${CMAKE_CURRENT_BINARY_DIR}/amdgcn"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdclang" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang"
-    COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdflang" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdflang"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdclang++" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang++"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdclang-cl" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cl"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdclang-cpp" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cpp"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdlld" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdlld"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdllvm" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdllvm"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/offload-arch" "${CMAKE_CURRENT_BINARY_DIR}/bin/offload-arch"
+  )
+
+  set(_symlink_files
+    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang"
+    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang++"
+    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cl"
+    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cpp"
+    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdlld"
+    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdllvm"
+    "${CMAKE_CURRENT_BINARY_DIR}/bin/offload-arch"
+  )
+
+  # Public amdflang only when Flang is enabled. Independent of
+  # ROCM_BUILD_FORTRAN_LIBS (math wrappers / hipfort).
+  if(THEROCK_ENABLE_FLANG)
+    list(APPEND _symlink_commands
+      COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/flang" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdflang"
+    )
+    list(APPEND _symlink_files "${CMAKE_CURRENT_BINARY_DIR}/bin/amdflang")
+  endif()
+
+  file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bin")
+  add_custom_target(symlinks ALL
+    ${_symlink_commands}
   )
   # llvm and amdgcn are symlinks to directories; install(FILES) rejects
   # directories, so create the symlinks directly at install time.
@@ -92,14 +115,7 @@ if(NOT WIN32)
       \"\${CMAKE_INSTALL_PREFIX}/amdgcn\" SYMBOLIC)
   ")
   install(FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang"
-    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdflang"
-    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang++"
-    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cl"
-    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cpp"
-    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdlld"
-    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdllvm"
-    "${CMAKE_CURRENT_BINARY_DIR}/bin/offload-arch"
+    ${_symlink_files}
     DESTINATION bin
   )
 
@@ -117,7 +133,10 @@ if(NOT WIN32)
     DESTINATION "lib/llvm/bin")
 
   # Generate additional config aliases
-  set(config_names "clang-${LLVM_VERSION_MAJOR}.cfg;clang++.cfg;clang.cfg;clang-cl.cfg;clang-cpp.cfg;flang.cfg")
+  set(config_names "clang-${LLVM_VERSION_MAJOR}.cfg;clang++.cfg;clang.cfg;clang-cl.cfg;clang-cpp.cfg")
+  if(THEROCK_ENABLE_FLANG)
+    list(APPEND config_names "flang.cfg")
+  endif()
   foreach(name ${config_names})
     message(STATUS "Generating ${rocm_config_dir}/${name}")
     file(WRITE "${rocm_config_dir}/${name}" "@rocm.cfg")

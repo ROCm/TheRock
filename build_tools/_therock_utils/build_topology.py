@@ -113,6 +113,7 @@ class Artifact:
     platform: Optional[str] = None  # e.g., "windows"
     feature_name: Optional[str] = None  # Override default feature name
     feature_group: Optional[str] = None  # Override default feature group
+    feature_default: Optional[bool] = None  # Override feature default (else ON with group)
     disable_platforms: List[str] = field(
         default_factory=list
     )  # Platforms where disabled
@@ -239,6 +240,7 @@ class BuildTopology:
                 platform=artifact_data.get("platform"),
                 feature_name=artifact_data.get("feature_name"),
                 feature_group=artifact_data.get("feature_group"),
+                feature_default=artifact_data.get("feature_default"),
                 disable_platforms=artifact_data.get("disable_platforms", []),
                 disable_platforms_if_flags_not_set=disable_platforms_if_flags_not_set,
                 disable_processors=artifact_data.get("disable_processors", []),
