@@ -150,7 +150,7 @@ build.
 
 ```mermaid
 graph TD
-    pr[PR changing a project, or labelled ci:coverage] --> plan[configure_coverage_pr.py: projects and baseline]
+    pr[rocm-libraries or rocm-systems PR changing a project] --> plan[configure_coverage_pr.py: changed projects and baseline]
     plan --> matrix
     dispatch[Dispatch with projects_to_test] --> matrix[setup_coverage_matrix]
     matrix --> compilerRuntime[Build or copy compiler-runtime]
@@ -178,27 +178,28 @@ nightly dispatch is a follow-up; `baseline_run_id` is already the right input.
 
 ### Pull request coverage
 
-`multi_arch_ci_coverage_pr.yml` runs coverage for pull requests. rocm-libraries
-and rocm-systems pull request workflows call it through `uses:` with their
+`multi_arch_ci_coverage_pr.yml` runs coverage for pull requests, and measures
+only the coverage projects a pull request changes. rocm-libraries and
+rocm-systems pull request workflows call it through `uses:` with their
 `changed_projects` and `external_repo`, as they do for `setup_multi_arch.yml`,
 and their pull requests run coverage whenever they change a project (see
 [Calling it from another repository](#calling-it-from-another-repository)). A
-TheRock pull request changes no project, so it would measure every buildable
-one; it runs coverage only when labelled `ci:coverage`, and removing the label
-stops it. Each push re-runs coverage and cancels the previous run. The run
-reports each project's coverage, then the [patch coverage](#patch-coverage) of
-the change itself.
+TheRock pull request changes no project's source, so it does not run pull
+request coverage; dispatch the workflow with `projects_to_test` to measure
+named projects from TheRock. Each push re-runs coverage and cancels the
+previous run. The run reports each project's coverage, then the
+[patch coverage](#patch-coverage) of the change itself.
 
 `configure_coverage_pr.py` plans the run, then `multi_arch_ci_coverage_linux.yml`
 does the rest:
 
-- **Projects.** The onboarded projects among `changed_projects`, or every
-  buildable project when there are none (a TheRock pull request).
-  `test:<project>` labels narrow either set. A changed project that cannot be
-  measured (not onboarded, no LLVM coverage option, blocked, or no build job for
-  its stage) is listed with its reason on the job summary instead of failing
-  the run; if nothing is left, nothing is built. An explicit `projects_to_test`
-  is validated as strictly as for the nightly.
+- **Projects.** The onboarded projects among `changed_projects`, narrowed by
+  `test:<project>` labels; with no changed projects, nothing is measured. A
+  changed project that cannot be measured (not onboarded, no LLVM coverage
+  option, blocked, or no build job for its stage) is listed with its reason on
+  the job summary instead of failing the run; if nothing is left, nothing is
+  built. An explicit `projects_to_test` replaces `changed_projects` and is
+  validated as strictly as for the nightly.
 - **Baseline.** The newest healthy `multi_arch_ci.yml` run on TheRock `main`,
   at most 72 hours old, with the compiler-runtime and math-libs artifacts for
   the selected families. Tests install it and overlay the project under test,
@@ -248,9 +249,9 @@ workflow in that repository, built like `therock-multi-arch-ci.yml`. The changed
 projects come from `configure_external_repo_ci.py`, as for the multi-arch CI,
 and every pull request that changes a project runs coverage, with no label. The
 run measures the changed projects it can and lists the rest with their reasons;
-when the script finds no changed project, the caller skips rather than
-measuring every project. Of label events, only `test:` and `test_filter:` labels
-re-run coverage. Pin both TheRock references to the same commit.
+when the script finds no changed project, the caller skips coverage. Of label
+events, only `test:` and `test_filter:` labels re-run coverage. Pin both
+TheRock references to the same commit.
 
 ```yaml
 name: TheRock Multi-Arch CI Coverage

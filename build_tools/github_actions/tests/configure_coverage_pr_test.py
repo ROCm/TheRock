@@ -81,11 +81,10 @@ class SelectProjectsTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             configure_coverage_pr.select_projects("rccl", "", [])
 
-    def test_no_input_selects_every_buildable_project(self):
-        selection = configure_coverage_pr.select_projects("", "", ["ci:coverage"])
-        self.assertEqual(
-            selection.projects, sorted(configure_coverage_ci.DEFAULT_PROJECTS)
-        )
+    def test_no_changed_projects_selects_nothing(self):
+        selection = configure_coverage_pr.select_projects("", "", [])
+        self.assertEqual(selection.projects, [])
+        self.assertEqual(selection.skipped, {})
 
     def test_changed_projects_skip_what_cannot_be_measured(self):
         selection = configure_coverage_pr.select_projects(
@@ -112,11 +111,14 @@ class SelectProjectsTest(unittest.TestCase):
         self.assertEqual(selection.projects, [])
         self.assertTrue(selection.skipped[path])
 
-    def test_test_labels_narrow_the_default(self):
+    def test_test_labels_without_changed_projects_select_nothing(self):
         selection = configure_coverage_pr.select_projects(
-            "", "", ["ci:coverage", "test:hipRAND", "test_filter:quick"]
+            "", "", ["test:hipRAND", "test_filter:quick"]
         )
-        self.assertEqual(selection.projects, ["hiprand"])
+        self.assertEqual(selection.projects, [])
+        self.assertEqual(
+            selection.skipped, {"test:hiprand": "not among the changed projects"}
+        )
 
     def test_test_labels_intersect_changed_projects(self):
         selection = configure_coverage_pr.select_projects(
@@ -408,7 +410,6 @@ class MainTest(unittest.TestCase):
         event = {
             "pull_request": {
                 "labels": [
-                    {"name": "ci:coverage"},
                     {"name": "test:hiprand"},
                     {"name": "test_filter:quick"},
                 ]
@@ -419,7 +420,13 @@ class MainTest(unittest.TestCase):
         ), mock.patch.object(
             configure_coverage_pr, "_pr_changed_files", return_value=["rocm-libraries"]
         ):
-            outputs, summary = self._run({"GITHUB_EVENT_NAME": "pull_request"}, event)
+            outputs, summary = self._run(
+                {
+                    "GITHUB_EVENT_NAME": "pull_request",
+                    "CHANGED_PROJECTS": "projects/hiprand,projects/rocrand",
+                },
+                event,
+            )
         self.assertEqual(outputs["projects_to_test"], "hiprand")
         self.assertEqual(outputs["test_type"], "quick")
         self.assertEqual(outputs["baseline_run_id"], "4242")
@@ -434,6 +441,16 @@ class MainTest(unittest.TestCase):
         self.assertEqual(outputs["enabled"], "false")
         self.assertEqual(outputs["projects_to_test"], "")
         self.assertIn("nothing is built", summary)
+
+    def test_pull_request_without_changed_projects_measures_nothing(self):
+        event = {"pull_request": {"labels": [{"name": "test:hiprand"}]}}
+        with mock.patch.object(
+            configure_coverage_pr, "find_baseline_run", side_effect=_fail_if_called
+        ):
+            outputs, summary = self._run({"GITHUB_EVENT_NAME": "pull_request"}, event)
+        self.assertEqual(outputs["enabled"], "false")
+        self.assertEqual(outputs["projects_to_test"], "")
+        self.assertIn("`test:hiprand` | no: not among the changed projects", summary)
 
 
 if __name__ == "__main__":

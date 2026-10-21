@@ -11,9 +11,10 @@ Project selection:
     nightly's (configure_coverage_ci.parse_projects).
   - Otherwise the candidates are the onboarded projects named in
     CHANGED_PROJECTS (an external repo's changed subtrees, e.g.
-    "projects/hiprand"), or every buildable project when that is empty.
-    `test:<project>` PR labels narrow the candidates further. A candidate that
-    cannot be measured is skipped with its reason instead of failing the run.
+    "projects/hiprand"); a pull request coverage run measures only what the
+    change touches, so with none there are no candidates. `test:<project>` PR
+    labels narrow the candidates further. A candidate that cannot be measured
+    is skipped with its reason instead of failing the run.
   An empty selection sets enabled=false, and nothing is built.
 
 Baseline:
@@ -149,18 +150,14 @@ def select_projects(
         return Selection(projects=projects)
 
     skipped: dict[str, str] = {}
-    changed = [p.strip() for p in changed_projects.split(",") if p.strip()]
-    if changed:
-        candidates: set[str] = set()
-        for path in changed:
-            key = changed_project_key(path)
-            reason = skip_reason(key)
-            if reason:
-                skipped[path] = reason
-            else:
-                candidates.add(key)
-    else:
-        candidates = set(DEFAULT_PROJECTS)
+    candidates: set[str] = set()
+    for path in [p.strip() for p in changed_projects.split(",") if p.strip()]:
+        key = changed_project_key(path)
+        reason = skip_reason(key)
+        if reason:
+            skipped[path] = reason
+        else:
+            candidates.add(key)
 
     labelled = {
         label.removeprefix(TEST_LABEL_PREFIX).strip().lower()
