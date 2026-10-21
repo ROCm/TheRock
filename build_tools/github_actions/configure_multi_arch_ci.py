@@ -1542,7 +1542,7 @@ def _should_run_tests_for_family(
 
     # ci:run-all-archs label means build AND test all families
     # TODO(ROCm/rocm-systems#11374): Remove once gfx125x can run in ROCm/TheRock.
-    _RUN_ALL_ARCHS_TEST_EXCLUDE = {"gfx125X-dcgpu"}
+    _RUN_ALL_ARCHS_TEST_EXCLUDE = {"gfx125X-dcgpu", "gfx117X-all"}
     if "ci:run-all-archs" in ci_inputs.pr_labels:
         family = platform_info.get("family", "")
         if family in _RUN_ALL_ARCHS_TEST_EXCLUDE:
