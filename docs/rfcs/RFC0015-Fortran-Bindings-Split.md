@@ -683,9 +683,6 @@ All these pull requests share one shape:
 What remains before they leave draft:
 
 - each `rocm-libraries` `fortran/` gains its `metadata/`; only the HIP binding has one so far, and ROCTx needs none;
-- the committed modules are regenerated with the generator release the regeneration workflow will run, so that its first run on each library changes nothing.
-  Most of them predate parts of this design, such as the `X` / `X_` generics, ROCTx's typed strings, and the solvers' array forms;
-- ROCTx moves into `projects/fortran/`, beside HIP;
 - hipBLAS drops the temporary `hip` stub module its clients build until the HIP binding is installed;
 - the projects wire `fortran/` the same way: today rocSOLVER adds it inside `if(BUILD_LIBRARY)` while the others add it unconditionally, and some inline the amdflang preference while others keep it in `fortran/cmake/ROCmFortranCompiler.cmake`.
 
@@ -1313,7 +1310,9 @@ Each library's Fortran tests move to its `fortran/test/`, next to the binding th
 rocBLAS and hipBLAS are not there yet (see [Maintaining the bindings under the split](#maintaining-the-bindings-under-the-split)).
 Every math library's `fortran/test/` follows one convention:
 
-- Each test is one Fortran program (`<name>.f03`) and its own CTest test, `<lib>_fortran_<name>`.
+- Each test is one Fortran program and its own CTest test.
+  A `<name>.f03` test calls the raw and typed forms and is registered as `<lib>_fortran_<name>`.
+  A `<name>.f08` test calls the array overloads and is registered as `<lib>_fortran_<name>_f2008`; it is built unless `FORTRAN_ARRAY_INTERFACES` is `none`.
   It is labeled `gpu`, since it needs an AMD GPU.
 - Tests are built under `BUILD_FORTRAN_CLIENTS` and, in-tree, under the project's own test switch.
   They are skipped under ASan.
