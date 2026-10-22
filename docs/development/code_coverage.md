@@ -226,7 +226,9 @@ whether they cover the change. The `Patch Coverage` job answers that: of the
 lines the pull request adds, as its "Files changed" tab shows them, how many are
 code and how many of those the tests ran. `patch_coverage_report.py` maps each
 added line onto the merge commit the run built and looks it up in every
-project's `coverage.info`.
+project's `coverage.info`. The pull request is the one that triggered the
+caller; a caller can name another through the `pull_request` input, a JSON
+object with `repository`, `number`, `base_sha` and `head_sha`.
 
 - A changed line counts when some report has a hit count for it, and is covered
   when any project's tests ran it on any GPU family.

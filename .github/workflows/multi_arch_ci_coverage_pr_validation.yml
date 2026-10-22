@@ -1,0 +1,106 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Multi-Arch CI Coverage - Pull Request Validation
+#
+# TEMPORARY: remove before merging ROCm/TheRock#9320.
+#
+# Runs multi_arch_ci_coverage_pr.yml on ROCm/rocm-libraries#11516 without
+# changing that repository or pull request. It does what the rocm-libraries
+# caller in docs/development/code_coverage.md does on that pull request's
+# pull_request event, with the event's commits pinned below, and names the
+# pull request through the pull_request input so patch coverage measures it
+# rather than this one.
+
+name: Multi-Arch CI Coverage - Pull Request Validation
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  contents: read
+
+jobs:
+  configure:
+    name: Configure Coverage Projects
+    # Only the pull request that carries this workflow; it starts GPU jobs.
+    if: ${{ github.event.pull_request.number == 9320 }}
+    runs-on: ubuntu-24.04
+    env:
+      PR_REPOSITORY: ROCm/rocm-libraries
+      PR_NUMBER: 11516
+      PR_BASE_SHA: dde230d925ff3c8e8cc3cd680ec85028c380698e
+      PR_HEAD_SHA: f274a89aa0fab447142d02c275ec5e756b571f54
+      # refs/pull/11516/merge; a caller passes github.sha.
+      PR_MERGE_SHA: b94f3fe927997c50d34b84bf2dd2e522ddc940ac
+    outputs:
+      changed_projects: ${{ steps.configure.outputs.changed_projects }}
+      external_repo: ${{ steps.describe.outputs.external_repo }}
+      pull_request: ${{ steps.describe.outputs.pull_request }}
+    steps:
+      - name: Checkout repository config
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          repository: ${{ env.PR_REPOSITORY }}
+          ref: ${{ env.PR_MERGE_SHA }}
+          sparse-checkout: .github/repos-config.json
+          sparse-checkout-cone-mode: false
+          path: external
+
+      - name: Checkout TheRock for configure script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          sparse-checkout: build_tools/github_actions
+          path: _therock
+
+      - name: Configure CI
+        id: configure
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 _therock/build_tools/github_actions/configure_external_repo_ci.py \
+            --event-name pull_request \
+            --github-repo "${PR_REPOSITORY}" \
+            --base-sha "${PR_BASE_SHA}" \
+            --head-sha "${PR_HEAD_SHA}" \
+            --config-path external/.github/repos-config.json
+
+      - name: Describe the pull request
+        id: describe
+        run: |
+          external_repo=$(jq -cn \
+            --arg repository "${PR_REPOSITORY}" --arg ref "${PR_MERGE_SHA}" \
+            --arg base_sha "${PR_BASE_SHA}" --argjson pr_number "${PR_NUMBER}" \
+            '{repository: $repository, ref: $ref, base_sha: $base_sha,
+              head_sha: $ref, pr_number: $pr_number,
+              event_name: "pull_request",
+              skip_ci_config: ".github/skip-ci-config.toml"}')
+          pull_request=$(jq -cn \
+            --arg repository "${PR_REPOSITORY}" --argjson number "${PR_NUMBER}" \
+            --arg base_sha "${PR_BASE_SHA}" --arg head_sha "${PR_HEAD_SHA}" \
+            '{repository: $repository, number: $number,
+              base_sha: $base_sha, head_sha: $head_sha}')
+          echo "external_repo=${external_repo}" >> "${GITHUB_OUTPUT}"
+          echo "pull_request=${pull_request}" >> "${GITHUB_OUTPUT}"
+
+  coverage:
+    name: Coverage
+    needs: configure
+    if: ${{ needs.configure.outputs.changed_projects != '' }}
+    uses: ./.github/workflows/multi_arch_ci_coverage_pr.yml
+    with:
+      changed_projects: ${{ needs.configure.outputs.changed_projects }}
+      external_repo: ${{ needs.configure.outputs.external_repo }}
+      pull_request: ${{ needs.configure.outputs.pull_request }}
+    permissions:
+      contents: read
+      actions: read
+      id-token: write

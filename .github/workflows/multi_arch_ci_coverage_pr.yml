@@ -85,6 +85,10 @@ on:
         type: string
         description: "JSON object describing the external repo checkout, as for setup_multi_arch.yml."
         default: ""
+      pull_request:
+        type: string
+        description: "JSON object with repository, number, base_sha and head_sha naming the pull request whose patch coverage is reported. Empty = the pull request that triggered the caller."
+        default: ""
       repository:
         type: string
         description: "Repository holding this workflow's scripts. Cross-repo callers pass ROCm/TheRock."
@@ -214,7 +218,7 @@ jobs:
     if: >-
       ${{
         !cancelled() &&
-        github.event_name == 'pull_request' &&
+        (github.event_name == 'pull_request' || inputs.pull_request != '') &&
         needs.setup.outputs.enabled == 'true'
       }}
     runs-on: ubuntu-24.04
@@ -248,16 +252,17 @@ jobs:
           gh run download "${GITHUB_RUN_ID}" --repo "${GITHUB_REPOSITORY}" \
             --pattern 'coverage-report-*' --dir coverage-reports
 
-      # The pull request is the caller's (github.repository); the build
-      # compiled its merge commit, which external_repo names for a cross-repo
-      # caller and setup checked out otherwise.
+      # The pull request is the caller's (github.repository) unless the
+      # pull_request input names one; the build compiled its merge commit,
+      # which external_repo names for a cross-repo caller and setup checked
+      # out otherwise.
       - name: Report patch coverage
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPOSITORY: ${{ inputs.pull_request && fromJSON(inputs.pull_request).repository || github.repository }}
+          PR_NUMBER: ${{ inputs.pull_request && fromJSON(inputs.pull_request).number || github.event.pull_request.number }}
+          BASE_SHA: ${{ inputs.pull_request && fromJSON(inputs.pull_request).base_sha || github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ inputs.pull_request && fromJSON(inputs.pull_request).head_sha || github.event.pull_request.head.sha }}
           BUILT_SHA: >-
             ${{
               needs.setup.outputs.external_repo_config != '' &&
