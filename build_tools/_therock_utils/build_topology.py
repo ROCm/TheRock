@@ -113,7 +113,9 @@ class Artifact:
     platform: Optional[str] = None  # e.g., "windows"
     feature_name: Optional[str] = None  # Override default feature name
     feature_group: Optional[str] = None  # Override default feature group
-    feature_default: Optional[bool] = None  # Override feature default (else ON with group)
+    feature_default: Optional[bool] = (
+        None  # Override feature default (else ON with group)
+    )
     disable_platforms: List[str] = field(
         default_factory=list
     )  # Platforms where disabled
