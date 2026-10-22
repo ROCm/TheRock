@@ -76,6 +76,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_windows_jobs_selected(self):
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
+        # Use gfx110x for Windows since gfx94x doesn't have a Windows test runner
+        os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
 
         fetch_test_configurations.run()
         components = self._get_components()
@@ -96,6 +98,57 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
         self.assertEqual(len(components), 1)
         self.assertEqual(components[0]["job_name"], "hipblas")
+
+    def test_sanity_follows_skipped_stages(self):
+        # The same stage allowlist must apply to sanity even when project and
+        # label filters select unrelated component tests.
+        for platform, family in [("linux", "gfx94X-dcgpu"), ("windows", "gfx110X-all")]:
+            for skipped, expected in [
+                ("", True),
+                ("emulation", True),
+                ("compiler-runtime", False),
+                ("compiler-runtime,math-libs", False),
+            ]:
+                with self.subTest(platform=platform, skipped=skipped):
+                    sys.argv = [
+                        "fetch_test_configurations.py",
+                        f"--platform={platform}",
+                    ]
+                    os.environ.update(
+                        AMDGPU_FAMILIES=family,
+                        SKIP_STAGES=skipped,
+                        PROJECTS_TO_TEST="hipblas",
+                        TEST_LABELS='["test:hipblas"]',
+                    )
+                    fetch_test_configurations.run()
+                    sanity = json.loads(self.gha_output["sanity_component"])
+                    self.assertEqual(sanity is not None, expected)
+                    if expected:
+                        self.assertEqual(sanity["job_name"], "sanity")
+                        self.assertTrue(sanity["test_runner"])
+                    self.assertEqual(
+                        [c["job_name"] for c in self._get_components()], ["hipblas"]
+                    )
+
+    def test_component_follows_configured_skipped_stages(self):
+        os.environ["PROJECTS_TO_TEST"] = "hipblas,rocblas"
+        with patch.dict(
+            fetch_test_configurations.test_matrix["hipblas"],
+            {"skip_stages": ["math-libs", "primitives"]},
+        ):
+            for skipped, expected in [
+                ("", {"hipblas", "rocblas"}),
+                ("emulation", {"hipblas", "rocblas"}),
+                ("math-libs", {"rocblas"}),
+                ("primitives", {"rocblas"}),
+                ("emulation,primitives", {"rocblas"}),
+            ]:
+                with self.subTest(skipped=skipped):
+                    os.environ["SKIP_STAGES"] = skipped
+                    fetch_test_configurations.run()
+                    self.assertEqual(
+                        {c["job_name"] for c in self._get_components()}, expected
+                    )
 
     def test_test_labels_filter(self):
         os.environ["TEST_LABELS"] = json.dumps(["rocblas", "hipblas"])
@@ -132,6 +185,34 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertGreater(len(components), 0)
 
     # -----------------------
+    # kpack debug opt-out
+    # -----------------------
+
+    def test_kpack_debug_opt_out_passed_through(self):
+        # A component opts out of kpack debug logs by setting
+        # "rocm_kpack_debug": "0" on its test_matrix entry. fetch_test_configurations
+        # passes the field through verbatim; the "1" default and the debug-re-run
+        # override both live in the workflow YAML, not here.
+        self._inject_job("kpack-opt-out", rocm_kpack_debug="0")
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        job = next(j for j in components if j["job_name"] == "kpack-opt-out")
+        self.assertEqual(job["rocm_kpack_debug"], "0")
+
+    def test_kpack_debug_absent_when_not_set(self):
+        # When a component omits "rocm_kpack_debug", the field is not emitted and
+        # the workflow applies its "1" default via fromJSON(...).rocm_kpack_debug.
+        self._inject_job("kpack-default")
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        job = next(j for j in components if j["job_name"] == "kpack-default")
+        self.assertNotIn("rocm_kpack_debug", job)
+
+    # -----------------------
     # Sharding behavior
     # -----------------------
 
@@ -159,6 +240,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         components = self._get_components()
         hipblaslt_linux = components[0]
 
+        # Use gfx110x for Windows since gfx94x doesn't have a Windows test runner
+        os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
         fetch_test_configurations.run()
         components = self._get_components()
@@ -349,16 +432,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         )
         self.assertIn("inc-noexc", self._selected_names())
 
-    def test_corefile_included_on_gfx942(self):
-        # Default AMDGPU_FAMILIES is gfx94X-dcgpu, whose gfx target is gfx942.
-        os.environ["PROJECTS_TO_TEST"] = "rocgdb-corefile"
-        self.assertIn("rocgdb-corefile", self._selected_names())
-
-    def test_corefile_excluded_on_other_family(self):
-        os.environ["PROJECTS_TO_TEST"] = "rocgdb-corefile"
-        os.environ["AMDGPU_FAMILIES"] = "gfx1150"
-        self.assertNotIn("rocgdb-corefile", self._selected_names())
-
     # -----------------------
     # test_types tier gating
     # -----------------------
@@ -391,6 +464,124 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync"
         os.environ["TEST_TYPE"] = "quick"
         self.assertNotIn("miopen-dbsync", self._selected_names())
+
+    def _dbsync_job(self, families, gated_gpu, gfx_target):
+        """Run selection for miopen-dbsync on `families`; return its job or None."""
+        os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync"
+        os.environ["AMDGPU_FAMILIES"] = families
+        if gated_gpu:
+            # configure_multi_arch_ci blanked the GPU runner (e.g. tests_on_trigger).
+            os.environ["TEST_RUNS_ON"] = ""
+        target = families.split("-")[0].lower()
+        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
+            target: {
+                "linux": {
+                    "test-runs-on": "" if gated_gpu else "some-gpu-runner",
+                    "fetch-gfx-targets": [gfx_target],
+                }
+            }
+        }
+        fetch_test_configurations.run()
+        jobs = [j for j in self._get_components() if j["job_name"] == "miopen-dbsync"]
+        return jobs[0] if jobs else None
+
+    def test_miopen_dbsync_include_family_covers_gfx942_and_gfx950(self):
+        config = fetch_test_configurations.test_matrix["miopen-dbsync"]
+        self.assertEqual(config["include_family"]["linux"], ["gfx942", "gfx950"])
+
+    def test_miopen_dbsync_declares_gfx950_advisory(self):
+        # The matrix entry itself says gfx950 is advisory -- no conditional elsewhere.
+        config = fetch_test_configurations.test_matrix["miopen-dbsync"]
+        self.assertEqual(config["expect_failure"]["linux"], ["gfx950"])
+
+    def test_miopen_dbsync_gfx950_scheduled_on_cpu_runner_when_gpu_gated(self):
+        job = self._dbsync_job("gfx950-dcgpu", True, "gfx950")
+        self.assertIsNotNone(job)
+        self.assertTrue(job["linux_cpu_runner"])
+        self.assertTrue(job["test_runner"])
+
+    def test_miopen_dbsync_gfx950_is_advisory(self):
+        job = self._dbsync_job("gfx950-dcgpu", True, "gfx950")
+        self.assertTrue(job["expect_failure"])
+
+    def test_miopen_dbsync_gfx942_stays_blocking(self):
+        job = self._dbsync_job("gfx94X-dcgpu", False, "gfx942")
+        self.assertIsNotNone(job)
+        self.assertFalse(job["expect_failure"])
+
+    def test_miopen_dbsync_excluded_on_other_families(self):
+        self.assertIsNone(self._dbsync_job("gfx120X-all", False, "gfx1200"))
+
+    def test_gpu_components_not_scheduled_on_gated_gfx950(self):
+        # The CPU lane must not leak GPU-requiring components onto gated gfx950.
+        os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync,rocblas"
+        os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
+        os.environ["TEST_RUNS_ON"] = ""
+        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
+            "gfx950": {"linux": {"test-runs-on": "", "fetch-gfx-targets": ["gfx950"]}}
+        }
+        names = self._selected_names()
+        self.assertIn("miopen-dbsync", names)
+        self.assertNotIn("rocblas", names)
+
+    # -----------------------
+    # expect_failure (per-family advisory jobs)
+    # -----------------------
+
+    def _job_by_name(self, name):
+        """Run selection and return the emitted job dict for `name`, or None."""
+        fetch_test_configurations.run()
+        jobs = [j for j in self._get_components() if j["job_name"] == name]
+        return jobs[0] if jobs else None
+
+    def test_expect_failure_matches_by_gfx_target(self):
+        # Default AMDGPU_FAMILIES is the gfx94X-dcgpu group; "gfx942" is one of its
+        # fetch-gfx-targets, so the target form matches -- same as include_family.
+        self._inject_job("xf-target", expect_failure={"linux": ["gfx942"]})
+        self.assertIs(self._job_by_name("xf-target")["expect_failure"], True)
+
+    def test_expect_failure_matches_by_group_string(self):
+        self._inject_job("xf-group", expect_failure={"linux": ["gfx94X-dcgpu"]})
+        self.assertIs(self._job_by_name("xf-group")["expect_failure"], True)
+
+    def test_expect_failure_does_not_match_other_family(self):
+        # The job is still scheduled; it is just blocking rather than advisory.
+        self._inject_job("xf-other", expect_failure={"linux": ["gfx1100"]})
+        job = self._job_by_name("xf-other")
+        self.assertIsNotNone(job)
+        self.assertIs(job["expect_failure"], False)
+
+    def test_expect_failure_is_scoped_per_platform(self):
+        # A windows-only declaration does not make the linux job advisory.
+        self._inject_job("xf-otherplat", expect_failure={"windows": ["gfx942"]})
+        self.assertIs(self._job_by_name("xf-otherplat")["expect_failure"], False)
+
+    def test_expect_failure_omitted_leaves_job_blocking(self):
+        # Components that never opt in do not carry the key at all.
+        self._inject_job("xf-absent")
+        self.assertNotIn("expect_failure", self._job_by_name("xf-absent"))
+
+    def test_expect_failure_is_always_emitted_as_a_bool(self):
+        # test_component.yml compares with `== true`, so the declaration map must
+        # never survive into the emitted component JSON.
+        for name, decl in [
+            ("xf-bool-hit", {"linux": ["gfx942"]}),
+            ("xf-bool-miss", {"linux": ["gfx1100"]}),
+        ]:
+            with self.subTest(job=name):
+                self._inject_job(name, expect_failure=decl)
+                self.assertIsInstance(self._job_by_name(name)["expect_failure"], bool)
+
+    def test_expect_failure_does_not_mutate_test_matrix(self):
+        # The boolean is written to the merged copy, so the declaration survives
+        # for the next run rather than being consumed by the first one.
+        self._inject_job("xf-repeat", expect_failure={"linux": ["gfx942"]})
+        self.assertIs(self._job_by_name("xf-repeat")["expect_failure"], True)
+        self.assertIs(self._job_by_name("xf-repeat")["expect_failure"], True)
+        self.assertEqual(
+            fetch_test_configurations.test_matrix["xf-repeat"]["expect_failure"],
+            {"linux": ["gfx942"]},
+        )
 
     # -----------------------
     # Multi-GPU logic (RCCL)
@@ -634,6 +825,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_windows_hip_tests_emits_pal_and_rocr_entries(self):
         """On Windows, hip-tests runs with both PAL and ROCR backends."""
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
+        # Use gfx110x for Windows since gfx94x doesn't have a Windows test runner
+        os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
         os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
 
         fetch_test_configurations.run()
@@ -672,6 +865,19 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_platform_is_emitted(self):
         fetch_test_configurations.run()
         self.assertEqual(self.gha_output["platform"], "linux")
+
+    def test_container_images_are_sha256_pinned(self):
+        # Check the full matrix, including jobs filtered out for a given run.
+        # Entries without an override use the workflow's default image.
+        for job_name, config in fetch_test_configurations.test_matrix.items():
+            if "container_image" not in config:
+                continue
+            with self.subTest(job=job_name):
+                self.assertRegex(
+                    config["container_image"],
+                    r"^[^@\s]+@sha256:[0-9a-f]{64}\Z",
+                    "Container image overrides must use a full SHA-256 digest pin",
+                )
 
     def test_container_options_on_windows_is_string_not_list(self):
         # Regression: a list value here caused
@@ -798,8 +1004,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     # TEST_LABEL_GROUPS expansion
     # -----------------------
 
-    def test_all_rocgdb_label_selects_cpu_gpu_and_corefile_jobs(self):
-        """test:rocgdb should expand to rocgdb-cpu, rocgdb-gpu, and rocgdb-corefile."""
+    def test_all_rocgdb_label_selects_cpu_and_gpu_jobs(self):
+        """test:rocgdb should expand to rocgdb-cpu and rocgdb-gpu."""
         with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocgdb"])}):
             fetch_test_configurations.run()
             components = self._get_components()
@@ -807,7 +1013,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertIn("rocgdb-cpu", names)
         self.assertIn("rocgdb-gpu", names)
-        self.assertIn("rocgdb-corefile", names)
 
     def test_all_rocgdb_label_excludes_unrelated_jobs(self):
         """test:rocgdb should not include jobs outside the rocgdb group."""
@@ -831,7 +1036,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertIn("rocgdb-cpu", names)
         self.assertIn("rocgdb-gpu", names)
-        self.assertIn("rocgdb-corefile", names)
         self.assertIn("rocblas", names)
 
     def test_unknown_group_label_is_treated_as_literal(self):
@@ -855,7 +1059,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                         "test:rocgdb",
                         "test:rocgdb-cpu",
                         "test:rocgdb-gpu",
-                        "test:rocgdb-corefile",
                     ]
                 )
             },
@@ -866,7 +1069,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         job_names = [job["job_name"] for job in components]
         self.assertEqual(job_names.count("rocgdb-cpu"), 1)
         self.assertEqual(job_names.count("rocgdb-gpu"), 1)
-        self.assertEqual(job_names.count("rocgdb-corefile"), 1)
 
     # -----------------------
     # mesa-fork labels
@@ -904,6 +1106,163 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertIn("rocdecode", names)
         self.assertIn("rocjpeg", names)
+
+    # -----------------------
+    # CPU-only components when GPU is gated
+    # -----------------------
+
+    def test_cpu_only_components_run_without_gpu_runner(self):
+        """CPU-only components (linux_cpu_runner=True) run even without GPU runner."""
+        os.environ["TEST_LABELS"] = json.dumps(["test:rocgdb-cpu"])
+
+        def fake_get_all_families(_):
+            # No test-runs-on or test-runs-on-labels defined - GPU runner not available
+            return {"gfx94x": {"linux": {}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        # rocgdb-cpu has linux_cpu_runner=True, should be included
+        self.assertIn("rocgdb-cpu", names)
+
+    def test_gpu_components_excluded_without_gpu_runner(self):
+        """GPU-requiring components are excluded when no GPU runner is available."""
+        os.environ["TEST_LABELS"] = json.dumps(["test:rocblas"])
+
+        def fake_get_all_families(_):
+            # No test-runs-on or test-runs-on-labels defined - GPU runner not available
+            return {"gfx94x": {"linux": {}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        # rocblas requires GPU, should be excluded when no runner available
+        self.assertNotIn("rocblas", names)
+
+    def test_multi_gpu_excluded_when_gpu_tests_gated(self):
+        """Multi-GPU tests excluded when TEST_RUNS_ON is empty (trigger gating)."""
+        os.environ["TEST_RUNS_ON"] = ""
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx942-prod",
+                        "test-runs-on-multi-gpu": "linux-mi300-mgpu",
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        names = {job["job_name"] for job in self._get_components()}
+        self.assertNotIn("rccl", names)
+        self.assertNotIn("rocshmem", names)
+
+    # -----------------------
+    # test_type_for_family enforcement
+    # -----------------------
+
+    def test_test_type_for_family_strict_override(self):
+        """test_type_for_family strictly overrides TEST_TYPE env var."""
+        os.environ["TEST_TYPE"] = "full"
+        os.environ["PROJECTS_TO_TEST"] = "hipblaslt"
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx942-prod",
+                        "test_type_for_family": "quick",
+                        "fetch-gfx-targets": ["gfx942"],
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        hipblaslt = next(j for j in components if j["job_name"] == "hipblaslt")
+        self.assertEqual(hipblaslt["test_type"], "quick")
+        self.assertEqual(hipblaslt["total_shards"], 1)  # quick uses single shard
+
+
+class ParseTestLabelsTest(unittest.TestCase):
+    """Tests for _parse_test_labels()."""
+
+    _parse = staticmethod(fetch_test_configurations._parse_test_labels)
+
+    # -- empty / default --
+    def test_empty_string(self):
+        self.assertEqual(self._parse(""), [])
+
+    def test_empty_list_literal(self):
+        self.assertEqual(self._parse("[]"), [])
+
+    def test_whitespace_only(self):
+        self.assertEqual(self._parse("   "), [])
+
+    # -- comma-separated (recommended for manual dispatch) --
+    def test_single_label(self):
+        self.assertEqual(self._parse("test:rocblas"), ["test:rocblas"])
+
+    def test_comma_separated(self):
+        self.assertEqual(
+            self._parse("test:rocblas,test:hipblas"),
+            ["test:rocblas", "test:hipblas"],
+        )
+
+    def test_comma_separated_with_spaces(self):
+        self.assertEqual(
+            self._parse("test:rocblas, test:hipblas"),
+            ["test:rocblas", "test:hipblas"],
+        )
+
+    def test_comma_separated_ci_label(self):
+        self.assertEqual(
+            self._parse("test:rocblas,ci:run-multi-gpu"),
+            ["test:rocblas", "ci:run-multi-gpu"],
+        )
+
+    # -- Python list literal (backwards compat) --
+    def test_python_list_single(self):
+        self.assertEqual(self._parse('["test:rocblas"]'), ["test:rocblas"])
+
+    def test_python_list_multiple(self):
+        self.assertEqual(
+            self._parse('["test:rocblas", "test:hipblas"]'),
+            ["test:rocblas", "test:hipblas"],
+        )
+
+    # -- error cases --
+    def test_malformed_list_raises(self):
+        with self.assertRaises(ValueError) as ctx:
+            self._parse("[tensilelite]")
+        self.assertIn("could not be parsed", str(ctx.exception))
+
+    def test_malformed_list_error_message_shows_formats(self):
+        with self.assertRaises(ValueError) as ctx:
+            self._parse("[bad]")
+        msg = str(ctx.exception)
+        self.assertIn("comma-separated", msg)
+        self.assertIn("Python list literal", msg)
 
 
 if __name__ == "__main__":

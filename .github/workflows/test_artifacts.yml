@@ -11,26 +11,76 @@ on:
   workflow_dispatch:
     inputs:
       artifact_group:
+        description: >-
+          Artifact group name used to fetch build artifacts
+          (e.g., "multi-arch-release").
         type: string
       artifact_run_id:
+        description: >-
+          Workflow run ID to retrieve build artifacts from (e.g., from a
+          Multi-Arch CI run). Required for manual dispatch since this workflow
+          only runs tests and has no build artifacts of its own.
         type: string
-        default: ""
+        required: true
       amdgpu_families:
+        description: >-
+          GPU family group to test (e.g., "gfx94X-dcgpu", "gfx110X-all",
+          "gfx950-dcgpu", "gfx120X-all", "gfx125X-dcgpu"). This selects
+          which GPU family the tests target.
         type: string
       amdgpu_targets:
+        description: >-
+          Specific GPU targets within a family (e.g., "gfx942", "gfx1100").
+          Leave empty to use the default targets for the selected family.
         type: string
         default: ""
       test_runs_on:
+        description: >-
+          GitHub Actions runner label for GPU tests. When empty, GPU tests
+          are skipped.
         type: string
+      test_runs_on_cpu:
+        description: "CPU test runner label (for components that don't need GPU)"
+        type: string
+        default: ""
+      tests_enabled:
+        description: "Whether tests should run (true when any runner is available)"
+        type: boolean
+        default: true
       sanity_check_only_for_family:
+        description: >-
+          When true, only run sanity check tests and skip all component tests.
         type: boolean
         default: false
       test_type:
-        type: string
+        description: >-
+          Test tier controlling depth and duration of testing.
+        type: choice
+        options:
+          - quick
+          - standard
+          - comprehensive
+          - full
+        default: standard
       test_labels:
+        description: >-
+          Directly select which test components to run by name, e.g.
+          "test:rocblas,test:hipblas" or '["test:rocblas"]'. Only the listed
+          components are tested. Leave empty to run all. When combined with
+          changed_projects, the effective test set is the intersection of
+          both filters.
         type: string
       changed_projects:
-        description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
+        description: >-
+          Comma-separated list of changed projects used for dependency-graph
+          scoping (e.g., "rocblas,hipblas"). Tests run for the listed projects
+          AND their downstream consumers. Leave empty to run all. When combined
+          with test_labels, the effective test set is the intersection of both
+          filters.
+        type: string
+        default: ""
+      skip_stages:
+        description: "Build stages excluded from the build and artifact reuse (comma-separated)"
         type: string
         default: ""
       release_type:
@@ -77,6 +127,12 @@ on:
         default: ""
       test_runs_on:
         type: string
+      test_runs_on_cpu:
+        type: string
+        default: ""
+      tests_enabled:
+        type: boolean
+        default: true
       sanity_check_only_for_family:
         type: boolean
         default: false
@@ -85,7 +141,10 @@ on:
       test_labels:
         type: string
       changed_projects:
-        description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
+        type: string
+        default: ""
+      skip_stages:
+        description: "Build stages excluded from the build and artifact reuse (comma-separated)"
         type: string
         default: ""
       release_type:
@@ -116,9 +175,8 @@ run-name: Test Artifacts (${{ inputs.amdgpu_families }}, ${{ inputs.release_type
 jobs:
   configure_test_matrix:
     name: "Configure test matrix (${{ inputs.amdgpu_families }})"
-    # if there is a test machine available
-    if: ${{ inputs.test_runs_on != '' }}
-    runs-on: ubuntu-24.04
+    if: ${{ inputs.tests_enabled }}
+    runs-on: ubuntu-26.04
     outputs:
       sanity_component: ${{ steps.configure.outputs.sanity_component }}
       components: ${{ steps.configure.outputs.components }}
@@ -179,11 +237,16 @@ jobs:
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
           PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
+          SKIP_STAGES: ${{ inputs.skip_stages }}
           CI_CONFIG_PATH: ci-config
           BUILD_VARIANT: ${{ inputs.build_variant }}
+          # Pass the policy-gated GPU runner label. When empty, GPU tests are gated
+          # but CPU-only tests (linux_cpu_runner: True) can still run.
+          TEST_RUNS_ON: ${{ inputs.test_runs_on }}
+          TEST_RUNS_ON_CPU: ${{ inputs.test_runs_on_cpu }}
         run: |
           python ./build_tools/github_actions/fetch_test_configurations.py \
-            --platform=${{ contains(inputs.test_runs_on, 'windows') && 'windows' || 'linux' }}
+            --platform=${{ (contains(inputs.test_runs_on, 'windows') || contains(inputs.test_runs_on_cpu, 'windows')) && 'windows' || 'linux' }}
 
   test_sanity_check:
     name: 'Test Sanity Check'
@@ -211,7 +274,7 @@ jobs:
     name: 'Test ${{ matrix.components.job_name }}'
     needs: [test_sanity_check, configure_test_matrix]
     # Run when:
-    #   - sanity check passed
+    #   - sanity check passed or its prerequisite stage was excluded
     #   - there are components to test
     #   - sanity_check_only_for_family is not set
     if: >-
@@ -238,8 +301,7 @@ jobs:
       #      Only applies to workflow_dispatch events (not PR/workflow_call chains).
       #      Bot-triggered runs (e.g., nightly from rockrel) skip this and use rules below.
       #   2. Multi-GPU components use the multi-GPU runner (required for correct execution)
-      #   3. CPU-only components use standard GitHub runners (aws-linux-scale-rocm-prod)
-      #   4. Per-component runner (set by fetch_test_configurations.py)
+      #   3. Per-component runner (set by fetch_test_configurations.py, includes CPU-only)
       test_runs_on: >-
         ${{
           (github.event_name == 'workflow_dispatch' &&
@@ -248,8 +310,6 @@ jobs:
             inputs.test_runs_on) ||
           (matrix.components.multi_gpu_runner != '' &&
             matrix.components.multi_gpu_runner) ||
-          (matrix.components.linux_cpu_runner == true &&
-            'aws-linux-scale-rocm-prod') ||
           matrix.components.test_runner
         }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
@@ -264,7 +324,7 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [configure_test_matrix, test_sanity_check, test_components]
     name: "Quartz - completed - test ROCm artifacts"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:

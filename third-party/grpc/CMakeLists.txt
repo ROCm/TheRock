@@ -4,6 +4,13 @@
 # gRPC static library for RDC
 set(THEROCK_GRPC_VERSION "1.78.1" CACHE INTERNAL "gRPC version built by TheRock")
 
+# BoringSSL does not support ppc64le; use the system OpenSSL instead.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64")
+  set(_grpc_ssl_provider package)
+else()
+  set(_grpc_ssl_provider module)
+endif()
+
 therock_subproject_fetch(therock-grpc-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/grpc/grpc.git
@@ -43,7 +50,7 @@ therock_cmake_subproject_declare(therock-grpc
     -DgRPC_ABSL_PROVIDER=module
     -DgRPC_CARES_PROVIDER=module
     -DgRPC_RE2_PROVIDER=module
-    -DgRPC_SSL_PROVIDER=module
+    -DgRPC_SSL_PROVIDER=${_grpc_ssl_provider}
     -DgRPC_PROTOBUF_PROVIDER=module
 
     # Disable tests and unnecessary language plugins

@@ -52,7 +52,7 @@ class RenderDistInfoTest(unittest.TestCase):
         source = render_dist_info(template)
         self.assertNotIn("from _therock_utils", source)
         namespace = {}
-        exec(source, namespace)
+        exec(source, namespace)  # nosec B102
         self.assertEqual(namespace["ownership_data"](), ownership_data())
         self.assertEqual(namespace["package_owner"]("gfx1250-strict"), "gfx1250")
 

@@ -12,7 +12,8 @@ matched with a glob rather than a hardcoded major version.
 For JAX <= 0.9.0, jaxlib is built and expected in the wheelhouse.
 For JAX >= 0.9.1, jaxlib is not built - it is installed from upstream PyPI
 (e.g. `pip install jaxlib==0.9.1`). Only jax_rocm<major>_plugin and
-jax_rocm<major>_pjrt are built.
+jax_rocm<major>_pjrt are built, except for refs with no PyPI release (upstream
+main), which build jax and jaxlib from the same checkout.
 
 Expected wheels:
 * jaxlib (not built for JAX >= 0.9.1)

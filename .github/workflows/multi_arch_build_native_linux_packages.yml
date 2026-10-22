@@ -55,23 +55,31 @@ on:
         type: string
         required: false
         default: "aws-linux-scale-rocm-prod"
+      enable_pre_upload_build_verify:
+        description: >-
+          After build_package.py, verify Created Packages listed in
+          built_packages.txt exist under the packages directory.
+        type: boolean
+        default: true
     outputs:
       package_repository_url:
         description: "Public repository URL for package installation"
         value: ${{ jobs.build_native_packages.outputs.package_repository_url }}
 
 permissions:
-  id-token: write
   contents: read
 
 run-name: Build ${{ inputs.native_package_type }} packages (${{ inputs.rocm_version }}, ${{ inputs.dist_amdgpu_families }}${{ inputs.release_type && format(', {0}', inputs.release_type) || '' }})
 
 jobs:
   build_native_packages:
+    permissions:
+      contents: read
+      id-token: write # Authenticate to AWS to upload package repositories.
     name: Build ${{ inputs.native_package_type }} packages
-    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
     container:
-      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:15241d0e87bf81fe0986006ab832a36ea53a2cda0f9a31b4a5dc7826bc2396b6
     outputs:
       package_repository_url: ${{ steps.upload-packages.outputs.package_repository_url }}
       summary: ${{ steps.summary.outputs.summary }}
@@ -154,6 +162,16 @@ jobs:
             --pkg-type "${NATIVE_PACKAGE_TYPE}" \
             --version-suffix "${ARTIFACT_RUN_ID}" \
             --build-variant "${BUILD_VARIANT}"
+
+      # Presence check: Created Packages in built_packages.txt must exist on disk.
+      # Blocking — failure skips simulate-install / upload.
+      - name: Pre-upload build package verification
+        if: ${{ inputs.enable_pre_upload_build_verify }}
+        id: pre-upload-build-verify
+        run: |
+          python ./build_tools/packaging/linux/native_linux_package_pre_upload_test.py \
+            --packages-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --pkg-type "${NATIVE_PACKAGE_TYPE}"
 
       - name: Simulated install Test
         id: test-packages

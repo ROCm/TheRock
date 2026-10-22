@@ -555,6 +555,8 @@ def cmd_extract_gfx_arch(args: argparse.Namespace) -> int:
 # Maps OS profile prefixes to container images (checked in order; first match wins).
 # Single-profile entries (e.g. "rhel8") require an exact match so "rhel10" does not
 # match the "rhel8" prefix via startswith.
+# TODO: Centralize these floating image references with the other consumers.
+#       See https://github.com/ROCm/TheRock/pull/7683 for example.
 _OS_PROFILE_TO_IMAGE: list[tuple[tuple[str, ...], str]] = [
     (("sles",), "registry.suse.com/bci/bci-base:16.0"),
     (("ubuntu", "debian"), "ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest"),

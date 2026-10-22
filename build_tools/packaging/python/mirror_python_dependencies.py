@@ -23,6 +23,7 @@ import sys
 import tempfile
 from typing import Protocol, runtime_checkable
 from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
 
 import boto3  # type: ignore[import-untyped]
 from botocore.exceptions import ClientError
@@ -224,7 +225,11 @@ def fetch_pypi_project(package: str) -> dict[str, object]:
     """Fetch and validate top-level PyPI JSON project metadata."""
     url = f"https://pypi.org/pypi/{package}/json"
     request = Request(url, headers={"Accept": _PYPI_ACCEPT})
-    with urlopen(request) as response:
+    with urlopen(
+        request,
+        timeout=60,
+        # Fixed HTTPS PyPI endpoint.
+    ) as response:  # nosec B310
         raw_data: object = json.load(response)
     return _require_mapping(raw_data, f"PyPI response for {package}")
 
@@ -344,11 +349,17 @@ def select_release_wheels(
 
 def download_wheel(wheel: PypiWheel, output_path: Path) -> None:
     """Download one wheel and validate its size and PyPI SHA256."""
+    if urlsplit(wheel.url).scheme != "https" or not urlsplit(wheel.url).netloc:
+        raise ValueError(f"Expected an HTTPS wheel URL: {wheel.url}")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha256()
     size = 0
     request = Request(wheel.url, headers={"Accept": "application/octet-stream"})
-    with urlopen(request) as response, output_path.open("wb") as output_file:
+    # HTTPS URL checked above.
+    with (
+        urlopen(request, timeout=60) as response,  # nosec B310
+        output_path.open("wb") as output_file,
+    ):
         while chunk := response.read(_DOWNLOAD_CHUNK_SIZE):
             output_file.write(chunk)
             digest.update(chunk)

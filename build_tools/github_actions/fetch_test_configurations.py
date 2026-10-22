@@ -5,10 +5,9 @@
 This script determines what test configurations to run.
 
 Outputs (written to $GITHUB_OUTPUT):
-  - sanity_component: JSON object for the sanity component, always present as a
-    prerequisite that must pass before other components are run. The
-    ``test_runner`` field within this object is non-empty only on GPU runners,
-    so callers can gate GPU-only steps on that field.
+  - sanity_component: JSON object for sanity, or null when excluded. When
+    selected, sanity must pass before other components run. Its ``test_runner``
+    field is non-empty only on GPU runners.
   - components: JSON array of component configs for the regular test matrix
     (excludes sanity, which is output separately above).
   - platform: lowercase OS name derived from RUNNER_OS.
@@ -28,6 +27,7 @@ from pathlib import Path
 from github_actions_api import *
 from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
+    get_cpu_test_runner,
     select_weighted_label,
 )
 
@@ -55,26 +55,53 @@ def _get_artifact_path(artifact_path: str) -> str:
 # keys it expands to. Use this when a single label should select multiple
 # related jobs without relying on name-prefix inference.
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
-    "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
+    "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
     "tensilelite": ["tensilelite", "tensilelite-common"],
 }
 
 
+def _parse_test_labels(raw: str) -> list[str]:
+    """Parse the TEST_LABELS environment variable into a list of strings.
+
+    Accepts either Python list literal syntax (e.g. '["test:rocblas"]') or a
+    plain comma-separated string (e.g. 'test:rocblas,test:hipblas').  The
+    latter is friendlier for manual workflow_dispatch runs where users are
+    unlikely to type valid Python list syntax.
+    """
+    raw = raw.strip()
+    if not raw or raw == "[]":
+        return []
+
+    # If it looks like a Python list literal, try ast.literal_eval first.
+    if raw.startswith("["):
+        try:
+            result = ast.literal_eval(raw)
+            if isinstance(result, list):
+                return [str(item) for item in result]
+        except (ValueError, SyntaxError) as exc:
+            raise ValueError(
+                f"TEST_LABELS looks like a Python list but could not be parsed: {raw!r}. "
+                f'Expected format: \'["test:rocblas", "test:hipblas"]\' (Python list literal) '
+                f"or 'test:rocblas,test:hipblas' (comma-separated string). "
+                f"Original error: {exc}"
+            ) from exc
+
+    # Fall back to comma-separated string parsing.
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 # Base container options applied to all Linux containers
-# --ipc host - Allows shared memory between host and container
 # --user 0:0 - Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
 # --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
 # --ulimit nofile=1048576:1048576 - Increase open file limit for RCCL
-# --security-opt seccomp=unconfined - enables memory mapping, and is recommended for containers running in HPC environments
 _BASE_CONTAINER_OPTIONS = [
-    "--ipc host",
     "--user 0:0",
     "--ulimit memlock=-1:-1",
     "--ulimit nofile=1048576:1048576",
-    "--security-opt seccomp=unconfined",
 ]
 
 # GPU-specific container options (only applied when linux_cpu_runner != True)
+# --security-opt seccomp=unconfined - enables memory mapping and device ioctls needed by ROCm/HPC GPU workloads
 # --group-add video - Grants access to GPU video group
 # --device /dev/kfd - AMD KFD device for GPU compute
 # --device /dev/dri - Direct Rendering Infrastructure devices
@@ -82,6 +109,7 @@ _BASE_CONTAINER_OPTIONS = [
 # --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
 # -e ROCR_VISIBLE_DEVICES - Pass host's GPU isolation env var to container (used on ARC runners)
 _GPU_CONTAINER_OPTIONS = [
+    "--security-opt seccomp=unconfined",
     "--group-add video",
     "--device /dev/kfd",
     "--device /dev/dri",
@@ -204,11 +232,26 @@ _rocgdb_common = {
 # not in the list; omit the field to run on every tier (the default). For example, a
 # component whose suite is too slow for the quick sanity tier opts out of it with:
 #   "test_types": ["standard", "comprehensive", "full"]
+#
+# A component may mark itself advisory (non-blocking) on specific GPU families via
+# "expect_failure", a map keyed by platform whose value is a list of family entries,
+# matched exactly like include_family/exclude_family (so either the family group
+# string or an individual gfx target works). It is resolved to a single boolean per
+# job before the matrix is emitted, which test_component.yml maps to
+# continue-on-error plus an "(xfail)" job-name suffix. The job is still scheduled and
+# still reports; it just cannot fail the run. Use it to land coverage for an arch
+# that is still being qualified without blocking everyone else. For example:
+#   "expect_failure": {"linux": ["gfx950"]}
+#
+# A component's "skip_stages" lists build stages whose absence excludes the test.
+# If any listed stage is in SKIP_STAGES, the component is skipped. Reused stages
+# still supply artifacts and do not exclude tests. Omit the field for no stage gate.
 
 test_matrix = {
-    # Sanity tests - always run first as a prerequisite for other component tests
+    # Sanity runs first when compiler-runtime artifacts are available.
     "sanity": {
         "job_name": "sanity",
+        "skip_stages": ["compiler-runtime"],
         "fetch_artifact_args": "--sanity",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_sanity.py')}",
@@ -252,6 +295,9 @@ test_matrix = {
     "rocblas": {
         "job_name": "rocblas",
         "fetch_artifact_args": "--blas --tests",
+        # Suppress per-test kpack debug logging (test_component.yml defaults it to
+        # "1" for diagnostics, which floods this suite's -V ctest output).
+        "rocm_kpack_debug": "0",
         # GHA step timeout: max category timeout in rocBLAS should be 24 hours / 6 shards = 4 hours per shard
         # 240 min + 20% margin = 288 min
         "timeout_minutes": 288,
@@ -372,6 +418,9 @@ test_matrix = {
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --solver --tests",
+        # Suppress per-test kpack debug logging (test_component.yml defaults it to
+        # "1" for diagnostics, which floods this suite's -V ctest output).
+        "rocm_kpack_debug": "0",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -421,6 +470,10 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+        "exclude_family": {
+            # known failure
+            "linux": ["gfx125X-dcgpu"],
         },
     },
     "rocsolver": {
@@ -477,19 +530,6 @@ test_matrix = {
                 # GPU tests do not honor ROCR_VISIBLE_DEVICES and utilizes other gpus during test runs. excluding
                 "gfx125X-dcgpu",
             ],
-        },
-    },
-    # Corefile tests require specific hardware support (GPU core dump capable runners).
-    # test_runner is pre-pinned so the family-based runner selection loop skips it.
-    # Only gfx942 has core-dump support, so include_family opts the job in to that
-    # family alone rather than enumerating every other architecture to exclude.
-    "rocgdb-corefile": {
-        **_rocgdb_common,
-        "job_name": "rocgdb-corefile",
-        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --gpu-corefile-tests",
-        "test_runner": "linux-gfx942-gpu-rocm-mathlib",
-        "include_family": {
-            "linux": ["gfx942"],
         },
     },
     "rocr-debug-agent": {
@@ -708,8 +748,10 @@ test_matrix = {
     # The runner ships in the MIOpen dist (share/miopen/bin/run_dbsync_rocjitsu.py, pulled via
     # --miopen; defined in rocm-libraries projects/miopen/test/gtest/dbsync/): it resolves arch + CU
     # list from AMDGPU_FAMILIES, sparse-builds the pinned rocjitsu KMD, and runs StaticFDBSync once
-    # per CU with a CU-corrected config. include_family restricts it to gfx942, whose FAMILY_MAP
-    # entry covers both CU variants -- MI300X (304 CU) and MI300A (228 CU) -- in a single job.
+    # per CU with a CU-corrected config. include_family restricts it to the arches rocjitsu has a
+    # KMD config for: gfx942, whose FAMILY_MAP entry covers both CU variants -- MI300X (304 CU) and
+    # MI300A (228 CU) -- in a single job, and gfx950 (MI355X, 256 CU; advisory, see
+    # expect_failure below).
     # linux_cpu_runner: no scarce GPU test runner needed; uses the default no_rocm Ubuntu container
     # (the runner sudo-apt-installs cmake/build-essential/libdrm-dev to build rocjitsu).
     "miopen-dbsync": {
@@ -719,15 +761,20 @@ test_matrix = {
         # job entirely on the `quick` tier -- no job is scheduled, so no artifact fetch
         # or rocjitsu build is paid for on quick (the runner script also self-skips on
         # TEST_TYPE=quick as a backstop). Runs serially (MIOPEN_DBSYNC_MAX_THREADS=1)
-        # under rocjitsu; full set (gfx942 304+228) + artifact fetch + rocjitsu build
-        # measures ~15 min, so 30 gives margin and fails a hung interposer faster.
+        # under rocjitsu; full set (gfx942 304+228, gfx950 256) + artifact fetch + rocjitsu
+        # build measures ~15 min, so 30 gives margin and fails a hung interposer faster.
         "timeout_minutes": 30,
         "test_script": "python ./build/share/miopen/bin/run_dbsync_rocjitsu.py",
         "platform": ["linux"],
         "linux_cpu_runner": True,
         "test_types": ["standard", "comprehensive", "full"],
         "include_family": {
-            "linux": ["gfx942"],
+            "linux": ["gfx942", "gfx950"],
+        },
+        # TODO(ALMIOPEN-2674): drop this once gfx950 dbsync has been green for a
+        # few consecutive standard/comprehensive/full runs.
+        "expect_failure": {
+            "linux": ["gfx950"],
         },
         "total_shards_dict": {
             "linux": 1,
@@ -746,6 +793,8 @@ test_matrix = {
         },
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+        # RCCL collective ops use cross-process shared memory via /dev/shm
+        "container_options": ["--ipc host"],
     },
     # rocSHMEM tests
     "rocshmem": {
@@ -853,6 +902,39 @@ test_matrix = {
             "linux": ["gfx125X-dcgpu"],
         },
     },
+    # NVIDIA cuDNN sample corpus built against hipDNN's cuDNN compatibility
+    # shim. Distinct from "hipdnn-samples" above, which is hipDNN's own sample
+    # suite; these two are easy to confuse and test entirely different things.
+    "hipdnn-cudnn-samples": {
+        "job_name": "hipdnn-cudnn-samples",
+        # No "fetch_artifact_args" on purpose: this job calls
+        # find_package(hipdnn_frontend), whose config file and headers live in
+        # the "dev" component, and install_rocm_from_artifacts.py expands each
+        # selected artifact to <name>_lib plus <name>_test only -- never
+        # <name>_dev. Omitting the key takes the fetch-everything branch, which
+        # is why "hipdnn_install" omits it too. Do not "fix" this by adding the
+        # enumerated artifact flags back; find_package would fail.
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_hipdnn_cudnn_samples.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
+    # profiler-hub install/consumption tests
+    "profiler-hub": {
+        "job_name": "profiler-hub",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_profiler_hub_install.py')}",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "total_shards_dict": {"linux": 1},
+        "exclude_family": {
+            # known failure
+            "linux": ["gfx125X-dcgpu"],
+        },
+    },
     # MIOpen provider tests
     "miopenprovider": {
         "job_name": "miopenprovider",
@@ -906,8 +988,8 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 2,
+            "windows": 2,
         },
         "exclude_family": {
             "linux": [
@@ -1087,13 +1169,16 @@ test_matrix = {
         "fetch_artifact_args": "--rocdecode --tests",
         "timeout_minutes": 10,
         "test_script": f"python {_get_script_path('test_rocdecode.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
+            "windows": 1,
         },
         # rocdecode requires FFmpeg dev libraries (libavcodec-dev, libavformat-dev,
-        # libavutil-dev) for test builds. These are not bundled in TheRock
-        # artifacts and are provided via the specialized media image.
+        # libavutil-dev) for the extended (FFmpeg-demux) test builds, which run only
+        # on Linux via the specialized media image below. Windows runs the always-on
+        # tests (raw decode, caps, negative API) with ENABLE_EXTENDED_TESTS=OFF via
+        # the vaon12 backend, so it needs no FFmpeg and no container image.
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:d715ae2db664b055c90343e00588ce9ac3eec387513fe359396e5e08e75521ca",
     },
     "rocjpeg": {
@@ -1148,6 +1233,9 @@ test_matrix = {
     "hiptensor": {
         "job_name": "hiptensor",
         "fetch_artifact_args": "--hiptensor --tests",
+        # Suppress per-test kpack debug logging (test_component.yml defaults it to
+        # "1" for diagnostics, which floods this suite's -V ctest output).
+        "rocm_kpack_debug": "0",
         # Github Actions step timeout, applied to every tier (it does not vary by test_type).
         # Must be sized for the largest tier the nightly runs (comprehensive),
         # not quick/standard -- otherwise the step is killed mid-suite well
@@ -1193,8 +1281,9 @@ def run():
     projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     test_type = os.getenv("TEST_TYPE", "standard")
-    test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
+    test_labels = _parse_test_labels(os.getenv("TEST_LABELS") or "[]")
     build_variant = os.getenv("BUILD_VARIANT", "release")
+    skip_stages = os.getenv("SKIP_STAGES", "").split(",")
 
     # Check for ci:run-multi-gpu label to force multi-GPU tests
     enable_multi_gpu_by_label = "ci:run-multi-gpu" in test_labels
@@ -1209,6 +1298,19 @@ def run():
     test_runs_on_multi_gpu_default = None
     # For ASAN builds, use the sandbox runner if available
     test_runs_on_sandbox = None
+
+    # Check if GPU runner was passed from configure_multi_arch_ci.py via workflow.
+    # This carries the policy decision (e.g., trigger gating). When set to empty,
+    # GPU tests are gated but CPU-only tests (linux_cpu_runner: True) can still run.
+    test_runs_on_from_workflow = os.getenv("TEST_RUNS_ON")
+    # CPU runner: prefer workflow input, fall back to get_cpu_test_runner()
+    test_runs_on_cpu = os.getenv("TEST_RUNS_ON_CPU") or get_cpu_test_runner(platform)
+    gpu_tests_gated = test_runs_on_from_workflow == ""
+    if gpu_tests_gated:
+        logging.info(
+            "GPU tests gated (TEST_RUNS_ON is empty), only CPU-only components will run"
+        )
+
     if amdgpu_families:
         shortened_family = amdgpu_families.split("-")[0].lower()
         all_families = get_all_families_for_trigger_types(
@@ -1216,15 +1318,46 @@ def run():
         )
         if shortened_family in all_families:
             platform_info = all_families[shortened_family].get(platform, {})
-            test_runs_on_labels = platform_info.get("test-runs-on-labels")
-            test_runs_on_default = platform_info.get("test-runs-on", "")
-            test_runs_on_multi_gpu_labels = platform_info.get(
-                "test-runs-on-multi-gpu-labels"
-            )
-            test_runs_on_multi_gpu_default = platform_info.get(
-                "test-runs-on-multi-gpu", ""
-            )
+            # Use policy-gated value from workflow if available, otherwise use static matrix
+            if gpu_tests_gated:
+                # GPU tests are gated - don't use runner labels or defaults for GPU
+                # This includes multi-GPU runners since they are also GPU tests
+                test_runs_on_labels = None
+                test_runs_on_default = ""
+                test_runs_on_multi_gpu_labels = None
+                test_runs_on_multi_gpu_default = ""
+            elif test_runs_on_from_workflow is not None:
+                # Workflow provided a non-empty runner - use it but allow label distribution
+                test_runs_on_labels = platform_info.get("test-runs-on-labels")
+                test_runs_on_default = test_runs_on_from_workflow
+                test_runs_on_multi_gpu_labels = platform_info.get(
+                    "test-runs-on-multi-gpu-labels"
+                )
+                test_runs_on_multi_gpu_default = platform_info.get(
+                    "test-runs-on-multi-gpu", ""
+                )
+            else:
+                # Fallback to static matrix (backward compatibility)
+                test_runs_on_labels = platform_info.get("test-runs-on-labels")
+                test_runs_on_default = platform_info.get("test-runs-on", "")
+                test_runs_on_multi_gpu_labels = platform_info.get(
+                    "test-runs-on-multi-gpu-labels"
+                )
+                test_runs_on_multi_gpu_default = platform_info.get(
+                    "test-runs-on-multi-gpu", ""
+                )
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
+
+            # Enforce test_type_for_family if set in the family matrix.
+            # This is a strict override - families with limited hardware (e.g., MI455)
+            # should always run quick tests regardless of what's passed in TEST_TYPE.
+            test_type_for_family = platform_info.get("test_type_for_family")
+            if test_type_for_family and test_type_for_family != test_type:
+                logging.info(
+                    f"Overriding test_type from '{test_type}' to '{test_type_for_family}' "
+                    f"(test_type_for_family for {amdgpu_families})"
+                )
+                test_type = test_type_for_family
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
@@ -1236,6 +1369,15 @@ def run():
     all_components = []
     for key in test_matrix:
         job_name = test_matrix[key]["job_name"]
+
+        excluded_stages = set(skip_stages).intersection(
+            test_matrix[key].get("skip_stages", [])
+        )
+        if excluded_stages:
+            logging.info(
+                f"Excluding {job_name}: stages {sorted(excluded_stages)} are skipped"
+            )
+            continue
 
         # Resolve the individual gfx targets for the current family once, so both
         # include_family and exclude_family can match either the family group
@@ -1303,7 +1445,7 @@ def run():
         if platform in test_matrix[key]["platform"] and (
             key == "sanity" or key in project_array or "*" in project_array
         ):
-            logging.info(f"Including job {job_name} with test_type {test_type}")
+            logging.info(f"Requesting job {job_name} with test_type {test_type}")
 
             # Hip-tests on Windows run with both PAL and ROCR backends.
             # See: https://github.com/ROCm/TheRock/issues/3587
@@ -1346,6 +1488,17 @@ def run():
 
             job_config_data = {**_common_settings, **test_matrix[key]}
             job_config_data["test_type"] = test_type
+
+            # A component declares the families it is advisory on via
+            # "expect_failure" (see the key reference above). Resolve that
+            # declaration down to the single boolean the workflows read --
+            # test_component.yml compares it with `== true` to set
+            # continue-on-error, so the emitted value must never stay a map.
+            _xfail = job_config_data.get("expect_failure")
+            if _xfail:
+                job_config_data["expect_failure"] = _family_matches(
+                    _xfail.get(platform, []), amdgpu_families, _family_gfx_targets
+                )
 
             # tensilelite: append the tensilelite/tests C++ gtest suite (run via
             # ctest -L <test_type>, driven by the shared test_runner.py) after
@@ -1420,6 +1573,8 @@ def run():
     # For ASan builds, use the sandbox runner to isolate potentially failing tests.
     # This matches multiple build variants, including "asan", "host-asan",
     # "asan-debug", and "host-asan-debug".
+    logging.info("")
+    logging.info("Assigning runners to requested jobs...")
     is_asan_build = "asan" in build_variant
     components_with_runners = []
     for component in all_components:
@@ -1435,14 +1590,26 @@ def run():
             else:
                 # No multi-GPU runner configured for this family; skip the component
                 logging.info(
-                    f"Excluding job {job_name}: multi-GPU required but no multi-GPU runner configured"
+                    f"  Excluding {job_name}: multi-GPU required but no multi-GPU runner configured"
                 )
                 continue
         elif "test_runner" not in component:
             # Regular components use standard runner labels.
             # Skip if test_runner is already pre-pinned (e.g. rocgdb-corefile).
-            # For ASAN builds, use the sandbox runner if available
-            if is_asan_build and test_runs_on_sandbox:
+            is_cpu_only = component.get("linux_cpu_runner", False)
+            if is_cpu_only:
+                if test_runs_on_cpu:
+                    component["test_runner"] = test_runs_on_cpu
+                    logging.info(
+                        f"  {job_name}: CPU-only, using runner: {test_runs_on_cpu}"
+                    )
+                else:
+                    logging.info(
+                        f"  Excluding {job_name}: CPU runner required but none configured"
+                    )
+                    continue
+            elif is_asan_build and test_runs_on_sandbox:
+                # For ASAN builds, use the sandbox runner if available
                 component["test_runner"] = test_runs_on_sandbox
                 logging.info(
                     f"  {job_name}: using ASAN sandbox runner: {test_runs_on_sandbox}"
@@ -1453,6 +1620,12 @@ def run():
                 )
             elif test_runs_on_default:
                 component["test_runner"] = test_runs_on_default
+            else:
+                # No GPU runner available and component requires GPU - skip it
+                logging.info(
+                    f"  Excluding {job_name}: GPU runner required but none configured"
+                )
+                continue
         components_with_runners.append(component)
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)
@@ -1460,7 +1633,7 @@ def run():
         _build_container_options(c, platform) for c in components_with_runners
     ]
 
-    # Separate sanity (always a prerequisite) from the regular component matrix.
+    # Separate sanity from the regular component matrix.
     sanity_component = next(
         (c for c in all_components if c.get("job_name") == "sanity"), None
     )
