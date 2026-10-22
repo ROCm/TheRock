@@ -145,6 +145,56 @@ def gh_api(
     return response.json()
 
 
+LIBRARIES_BASELINE_GATE_JOB_NAME = "Libraries Baseline Ready"
+# A Multi-Arch CI run has ~900 jobs, and the run-jobs endpoint reliably
+# answers 502 for those runs at the API maximum of 100 per page. 50 serves.
+RUN_JOBS_PAGE_SIZE = 50
+
+
+def _list_run_jobs(repo: str, token: str, run_id: str | int) -> list[dict[str, Any]]:
+    """Return every job in a workflow run, following pagination."""
+    jobs: list[dict[str, Any]] = []
+    page = 1
+
+    while True:
+        result = gh_api(
+            token,
+            f"repos/{repo}/actions/runs/{run_id}/jobs"
+            f"?per_page={RUN_JOBS_PAGE_SIZE}&page={page}",
+        )
+        page_jobs = result.get("jobs", [])
+        jobs.extend(page_jobs)
+
+        if len(page_jobs) < RUN_JOBS_PAGE_SIZE or len(jobs) >= result.get(
+            "total_count", 0
+        ):
+            return jobs
+
+        page += 1
+
+
+def _baseline_gate_jobs_succeeded(repo: str, token: str, run_id: str | int) -> bool:
+    """Return whether every "Libraries Baseline Ready" job in this run succeeded.
+
+    That job (defined in multi_arch_build_portable_linux.yml and
+    multi_arch_build_windows.yml) depends on exactly the stages rocm-libraries
+    reuses via `baseline_run_id`. Checking it instead of the whole run's
+    `conclusion` means an unrelated math-libs/compiler-runtime failure
+    elsewhere in the matrix does not block a baseline that is otherwise fine
+    to reuse. If no such job is found at all, treat the run as unsafe to use;
+    that should only happen for a run that predates this gate.
+    """
+    gate_jobs = [
+        job
+        for job in _list_run_jobs(repo, token, run_id)
+        if job["name"].endswith(LIBRARIES_BASELINE_GATE_JOB_NAME)
+    ]
+    if not gate_jobs:
+        print(f"[WARN] Run {run_id} has no '{LIBRARIES_BASELINE_GATE_JOB_NAME}' job")
+        return False
+    return all(job.get("conclusion") == "success" for job in gate_jobs)
+
+
 def gh_api_paginate(token: str, endpoint: str) -> list:
     """Fetch all pages of a GitHub list endpoint and return the combined results."""
     headers = {
@@ -170,17 +220,23 @@ def get_baseline_run_id_from_merged_pr(
     """Get the baseline run ID from the PR that was just merged.
 
     Downstream repos reuse this run's build-stage artifacts directly (via
-    ``baseline_run_id``).  The PR was already merged, so its CI run was
-    deemed acceptable — the merge itself is the quality gate.
+    ``baseline_run_id``), so only a run where those specific stages actually
+    succeeded is safe to hand out. We check the "Libraries Baseline Ready"
+    gate job rather than the whole run's ``conclusion``: an unrelated
+    math-libs/compiler-runtime failure elsewhere in the matrix makes the
+    overall run "failure" even when every stage rocm-libraries needs
+    succeeded.
 
-    We filter by ``event=pull_request`` to target the PR-triggered run
-    specifically, avoiding any push-triggered or other runs on the same
-    SHA.  No additional gate-job or status checks are applied: the
-    ``baseline-run-id`` is consumed hours later when the downstream bump
-    PR merges, so even an in-progress or re-running CI will have completed
-    by then (see #9402).
+    We filter by ``event=pull_request`` to target the PR-triggered runs, but
+    deliberately not by run status. The gate job finishes with the build
+    stages, hours before the test matrix behind it, so a bump PR is routinely
+    merged while its run is still ``in_progress`` (or re-running a failed
+    job); filtering on ``status=completed`` hid exactly those runs and left
+    only the cancelled duplicates GitHub creates on the same head SHA, which
+    have no gate job (see #9402). Those duplicates can also come back first
+    in the list, so the gate job, not list order, decides which run is used.
 
-    Returns ``None`` only when no matching run exists at all; the caller
+    Returns ``None`` when no matching run's gate job succeeded; the caller
     preserves the existing ``baseline-run-id`` in that case.
     """
     # Find the PR that produced this merge commit
@@ -197,9 +253,8 @@ def get_baseline_run_id_from_merged_pr(
         print(f"[WARN] No merged PR found for commit {merge_commit_sha[:7]}")
         return None
 
-    # Find the PR-triggered workflow run for this PR's head commit.
-    # Filtering by event=pull_request targets exactly the CI run that was
-    # validated before the PR was merged.
+    # Find the PR-triggered workflow runs for this PR's head commit,
+    # finished or not.
     pr_head_sha = pr["head"]["sha"]
     runs = gh_api(
         token,
@@ -213,13 +268,33 @@ def get_baseline_run_id_from_merged_pr(
         print(f"[WARN] No {workflow_name} PR run found for PR #{pr['number']}")
         return None
 
-    run = matching_runs[0]
+    for run in matching_runs:
+        try:
+            gate_succeeded = _baseline_gate_jobs_succeeded(repo, token, run["id"])
+        except RuntimeError as e:
+            # The jobs endpoint is flaky on runs this large. Skipping the run
+            # costs a baseline refresh; letting the error escape would abort
+            # the whole pin PR.
+            print(f"[WARN] Could not read jobs for run {run['id']}: {e}")
+            continue
+        if gate_succeeded:
+            print(
+                f"[INFO] Using {workflow_name} PR run {run['id']} for "
+                f"PR #{pr['number']} (status={run.get('status')}, "
+                f"conclusion={run.get('conclusion')})"
+            )
+            return str(run["id"])
+        print(
+            f"[WARN] Run {run['id']} (status={run.get('status')}, "
+            f"conclusion={run.get('conclusion')}) does not have all reused "
+            f"stages succeeded; skipping"
+        )
+
     print(
-        f"[INFO] Using {workflow_name} PR run {run['id']} for "
-        f"PR #{pr['number']} (status={run.get('status')}, "
-        f"conclusion={run.get('conclusion')})"
+        f"[WARN] No {workflow_name} run with all reused stages succeeded "
+        f"found for PR #{pr['number']}"
     )
-    return str(run["id"])
+    return None
 
 
 def latest_commit(repo: str, token: str, branch: str | None = None) -> str:
