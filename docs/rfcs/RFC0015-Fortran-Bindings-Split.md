@@ -281,7 +281,7 @@ The workflow is *out-of-band*: it runs on its own, reads the default branch, and
 - Nothing is required: the bot regenerates the binding after the PR merges.
 - In the PR, the Fortran build and test jobs run but are not required.
   Until the bot's pull request lands, a removed or renamed C function can make a binding test fail to link.
-  Once the archives use per-procedure sections and `-Wl,--gc-sections` (a 10.3 prerequisite, see [Rollout](#rollout-and-success-criteria)), only a test that calls that function fails.
+  Since each archive has one section per procedure and the tests link with `-Wl,--gc-sections`, only a test that calls that function fails.
 - The developer may also regenerate the binding in the same PR, with the generator's `--overwrite` option (it needs Julia; see the [generator appendix](#appendix-the-generator-rocm-fortran-generator)).
   This touches `fortran/`, so the bindings team then has to review the PR.
 
@@ -652,7 +652,7 @@ The rollout has three stages, each with a clear exit.
    - each library's header input is defined;
    - the metadata check fails on unmatched entries;
    - a failed regeneration, such as a header that is valid C++ but not valid C, opens an issue for the header's owners;
-   - each archive is compiled with one section per procedure, and the tests link with `-Wl,--gc-sections`.
+   - each archive is compiled with one section per procedure, and the tests link with `-Wl,--gc-sections` (done in the twelve pull requests).
 
    The backlog appendix details each of these.
    Before the first release that packages the bindings, every `bind(C, name=)` label must resolve against the shipped libraries.
@@ -1746,16 +1746,10 @@ The few that are prerequisites of a later stage are named in Rollout: the regene
 - The ASan build variant ships no Fortran, since Fortran is not yet instrumented under ROCm's ASan configuration.
   The presence check reports that distinctly rather than as "not installed for your compiler".
   The same holds for the coverage variant.
-- Build each `lib<lib>_fortran.a` with `-ffunction-sections -fdata-sections`, as hipfort `develop` and the hipfort sandbox do.
-  The reasons are given under [Why not fuse with the vendor library](#appendix-hipforts-build-artifacts), in the [appendix on hipfort's build artifacts](#appendix-hipforts-build-artifacts).
-  The per-library `fortran/CMakeLists.txt` files in `rocm-libraries` and `rocm-systems` do not do so yet.
-  Pass the compile flags only to the compilers that split sections: GNU, LLVMFlang, Flang and NVHPC.
-  Spell the link flag `-Wl,--gc-sections` rather than `LINKER:--gc-sections`.
-  CMake 3.27 defines no linker wrapper flag for LLVMFlang.
-  It passes the latter to `amdflang` as a bare `--gc-sections`, which fails the link.
-  The migration guide documents the link flags.
-  For now, it also says that the archives ROCm ships are not split.
-  So `--gc-sections` only helps with a binding the user builds with the section flags.
+- Each `lib<lib>_fortran.a` is built with `-ffunction-sections -fdata-sections`, as in hipfort `develop`, for the reasons given under [Why not fuse with the vendor library](#appendix-hipforts-build-artifacts).
+  The twelve pull requests pass these flags only to the compilers that split sections (GNU, LLVMFlang, Flang and NVHPC), and link their tests with `-Wl,--gc-sections`.
+  They spell it `-Wl,--gc-sections` rather than `LINKER:--gc-sections`, which CMake 3.27 passes to `amdflang` as a bare `--gc-sections`, failing the link.
+  The migration guide documents the link flags; once a release packages these archives, it no longer needs to say that the archives ROCm ships are not split.
 
 **Consumer experience and policy.**
 
