@@ -2047,92 +2047,192 @@ class TestExpandBuildConfigs(unittest.TestCase):
         )
         self.assertFalse(result.linux.build_native_linux)
 
-    def test_variant_filters_by_platform_and_family_support(self):
-        """ASAN: only gfx94x on linux supports it, gfx110x doesn't, windows has no ASAN config."""
-        # gfx94x supports asan, gfx110x is release-only, windows has no asan variant.
-        targets = cm.TargetSelection(
-            linux_families=["gfx94x", "gfx110x"],
-            windows_families=["gfx110x"],
-        )
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(build_variant="asan"),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        # Only gfx94x on linux survives.
-        self.assertIsNotNone(result.linux)
-        linux_per_family = result.linux.per_family_info
-        self.assertEqual(len(linux_per_family), 1)
-        # Windows has no asan variant config at all.
-        self.assertIsNone(result.windows)
+    def test_sanitizer_variant_selection_integration(self):
+        """Integration test: verify ASAN variant selection across all scenarios.
 
-    def test_variant_filters_by_trigger(self):
-        """ASAN: based on event type, we run an expected ASAN build variant"""
-        targets = cm.TargetSelection(
-            linux_families=["gfx94x"],
-        )
-        test_cases = [
-            ("schedule", "linux-release-asan"),
-            ("push", "linux-release-host-asan"),
-            ("workflow_dispatch", "linux-release-asan"),
-        ]
-        for event_name, expected_variant in test_cases:
-            with self.subTest(event_name=event_name):
-                defaults = dict(
-                    run_id="12345",
-                    event_name=event_name,
-                    commit_ref="main",
-                    base_ref="HEAD^1",
+        Each case specifies inputs (event, build_variant, labels, git context)
+        and the expected output (cmake preset, or None if build should be skipped).
+
+        Sanitizer trigger rules from all_build_variants:
+          asan:       nightly + [rocm-libraries]
+          host-asan:  submodule_bump + [rocm-systems, rocm-libraries]
+          asan-debug: submodule_bump + [amd-llvm], nightly + [rockrel]
+        """
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+
+        # (description, ci_inputs_kwargs, git_context, expected_preset_or_none)
+        # expected=None means build is skipped (linux=None, windows=None)
+        cases = [
+            # -- Regular PR/push: release variant, no ASAN at all --
+            (
+                "regular PR (release)",
+                dict(event_name="pull_request", build_variant="release"),
+                cm.GitContext(),
+                "",  # release has empty cmake preset
+            ),
+            (
+                "regular push (release)",
+                dict(event_name="push", build_variant="release"),
+                cm.GitContext(),
+                "",
+            ),
+            # -- build_variant=asan with NO matching trigger rule -> SKIP --
+            (
+                "asan PR, no labels, no trigger rules",
+                dict(event_name="pull_request", build_variant="asan"),
+                cm.GitContext(),
+                None,
+            ),
+            (
+                "asan push, no trigger rules",
+                dict(event_name="push", build_variant="asan"),
+                cm.GitContext(),
+                None,
+            ),
+            (
+                "asan schedule, no trigger rules",
+                dict(event_name="schedule", build_variant="asan"),
+                cm.GitContext(),
+                None,
+            ),
+            (
+                "asan workflow_dispatch, no trigger rules",
+                dict(event_name="workflow_dispatch", build_variant="asan"),
+                cm.GitContext(),
+                None,
+            ),
+            # -- Explicit PR labels override trigger rules --
+            (
+                "ci:asan label forces full asan",
+                dict(
+                    event_name="pull_request",
                     build_variant="asan",
-                )
-                ci_inputs = cm.CIInputs(**defaults)
+                    pr_labels=["ci:asan"],
+                ),
+                cm.GitContext(),
+                "linux-release-asan",
+            ),
+            (
+                "ci:host-asan label forces host-asan",
+                dict(
+                    event_name="pull_request",
+                    build_variant="asan",
+                    pr_labels=["ci:host-asan"],
+                ),
+                cm.GitContext(),
+                "linux-release-host-asan",
+            ),
+            # -- Trigger rules: submodule_bump --
+            (
+                "rocm-systems submodule bump -> host-asan",
+                dict(event_name="push", build_variant="asan"),
+                cm.GitContext(
+                    changed_files=["rocm-systems"],
+                    submodule_paths=["rocm-systems", "rocm-libraries"],
+                ),
+                "linux-release-host-asan",
+            ),
+            (
+                "amd-llvm submodule bump -> asan-debug",
+                dict(event_name="push", build_variant="asan"),
+                cm.GitContext(
+                    changed_files=["compiler/amd-llvm"],
+                    submodule_paths=["compiler/amd-llvm", "rocm-systems"],
+                ),
+                "linux-release-asan-debug",
+            ),
+            # -- Trigger rules: external repo nightly --
+            (
+                "rocm-libraries external nightly -> asan",
+                dict(
+                    event_name="schedule",
+                    build_variant="asan",
+                    external_repo='{"repository":"ROCm/rocm-libraries","ref":"main"}',
+                ),
+                cm.GitContext.from_external_repo("rocm-libraries"),
+                "linux-release-asan",
+            ),
+            (
+                "rockrel external nightly -> asan-debug",
+                dict(
+                    event_name="schedule",
+                    build_variant="asan",
+                    external_repo='{"repository":"ROCm/rockrel","ref":"main"}',
+                ),
+                cm.GitContext.from_external_repo("rockrel"),
+                "linux-release-asan-debug",
+            ),
+            # -- Presubmit from rocm-systems/rocm-libraries: host-asan NOT triggered --
+            # host-asan only triggers on submodule_bump, not presubmit.
+            (
+                "rocm-systems presubmit does not trigger host-asan",
+                dict(
+                    event_name="pull_request",
+                    build_variant="asan",
+                    external_repo='{"repository":"ROCm/rocm-systems","ref":"main"}',
+                ),
+                cm.GitContext.from_external_repo("rocm-systems"),
+                None,
+            ),
+            (
+                "rocm-libraries presubmit does not trigger host-asan",
+                dict(
+                    event_name="pull_request",
+                    build_variant="asan",
+                    external_repo='{"repository":"ROCm/rocm-libraries","ref":"main"}',
+                ),
+                cm.GitContext.from_external_repo("rocm-libraries"),
+                None,
+            ),
+            # -- Non-asan sanitizer variants pass through directly --
+            (
+                "asan-debug direct (no remap logic)",
+                dict(event_name="schedule", build_variant="asan-debug"),
+                cm.GitContext(),
+                "linux-release-asan-debug",
+            ),
+            (
+                "host-asan-debug direct (no remap logic)",
+                dict(event_name="schedule", build_variant="host-asan-debug"),
+                cm.GitContext(),
+                "linux-release-host-asan-debug",
+            ),
+            (
+                "tsan direct (no remap logic)",
+                dict(event_name="schedule", build_variant="tsan"),
+                cm.GitContext(),
+                "linux-release-tsan",
+            ),
+        ]
+
+        for desc, input_kwargs, git_context, expected_preset in cases:
+            with self.subTest(desc=desc):
+                ci_inputs = self._inputs(**input_kwargs)
                 result = cm.expand_build_configs(
                     ci_inputs=ci_inputs,
-                    git_context=cm.GitContext(),
+                    git_context=git_context,
                     targets=targets,
                     jobs=_jobs(),
                 )
-                # Only gfx94x on linux survives.
-                self.assertIsNotNone(result.linux)
-                build_variant_cmake_preset = result.linux.build_variant_cmake_preset
-                self.assertEqual(build_variant_cmake_preset, expected_variant)
-
-    def test_push_asan_excludes_families_without_host_asan_support(self):
-        """Push ASAN: gfx110x only supports release, so it must be excluded.
-
-        When build_variant=asan on push events, the effective variant becomes
-        host-asan. Families must be filtered using this effective variant, not
-        the original asan variant. gfx110x only supports release (not host-asan),
-        so it should be excluded from the result.
-        """
-        # gfx94x supports host-asan, gfx110x only supports release (not host-asan)
-        targets = cm.TargetSelection(
-            linux_families=["gfx94x", "gfx110x"],
-        )
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="push",  # push triggers asan -> host-asan remap
-            commit_ref="main",
-            base_ref="HEAD^1",
-            build_variant="asan",
-        )
-        result = cm.expand_build_configs(
-            ci_inputs=ci_inputs,
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        self.assertIsNotNone(result.linux)
-        # Verify it's a host-asan build
-        self.assertEqual(
-            result.linux.build_variant_cmake_preset, "linux-release-host-asan"
-        )
-        # Only gfx94x should survive (it supports host-asan), gfx110x should be excluded
-        family_names = [info["amdgpu_family"] for info in result.linux.per_family_info]
-        self.assertIn("gfx94X-dcgpu", family_names)
-        self.assertNotIn("gfx110X-all", family_names)
-        self.assertEqual(len(result.linux.per_family_info), 1)
+                if expected_preset is None:
+                    self.assertIsNone(
+                        result.linux,
+                        f"Expected build to be skipped, but got linux config",
+                    )
+                    self.assertIsNone(
+                        result.windows,
+                        f"Expected build to be skipped, but got windows config",
+                    )
+                else:
+                    self.assertIsNotNone(
+                        result.linux,
+                        f"Expected linux config with preset "
+                        f"{expected_preset!r}, but got None",
+                    )
+                    self.assertEqual(
+                        result.linux.build_variant_cmake_preset,
+                        expected_preset,
+                    )
 
     def test_test_runner_kernel_overrides_runner_label(self):
         """test_runner:oem label swaps in kernel-specific runner for gfx1151."""
@@ -2176,31 +2276,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertNotEqual(entry["test-runs-on"], "linux-gfx1151-gpu-rocm")
         self.assertNotIn("oem", entry["test-runs-on"])
 
-    # TODO(#3433): Remove sandbox tests once ASAN tests are passing
-    def test_asan_runner_selection(self):
-        """Sandbox runners stay disabled for TheRock nightly and PR builds."""
-        targets = cm.TargetSelection(linux_families=["gfx94x"])
-
-        # Schedule: sandbox pools are reserved for rocm-systems PRs.
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(event_name="schedule", build_variant="asan"),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "")
-
-        # PR: disables tests (empty runner)
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(event_name="pull_request", build_variant="asan"),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "")
-
     def test_asan_debug_nightly_has_no_sandbox_runner(self):
         """asan-debug nightly cannot use the rocm-systems PR sandbox pools."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])
@@ -2213,8 +2288,8 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
 
-    def test_host_asan_debug_nightly_has_no_sandbox_runner(self):
-        """host-asan-debug nightly cannot use the rocm-systems PR sandbox pools."""
+    def test_host_asan_debug_nightly_uses_regular_runner(self):
+        """host-asan-debug nightly uses regular pool, not sandbox."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])
         result = cm.expand_build_configs(
             ci_inputs=self._inputs(
@@ -2225,7 +2300,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
             jobs=_jobs(),
         )
         entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "")
+        # host-asan variants run on the regular test pool
+        self.assertNotEqual(entry["test-runs-on"], "")
+        self.assertNotIn("sandbox", entry["test-runs-on"])
 
     def test_explicit_strict_linux_dev_build(self):
         """Explicit selection creates a build config without GPU tests."""
@@ -3203,10 +3280,11 @@ class TestTriggerHelpers(unittest.TestCase):
         self.assertEqual(triggers, {"presubmit", "submodule_bump"})
 
     def test_get_current_triggers_external_repo_no_submodule_bump(self):
-        """submodule_bump only applies to TheRock, not external repos."""
+        """External repos use workflow_call; caller's event propagates directly."""
         for event, expected in [
             ("pull_request", {"presubmit"}),
             ("push", {"postsubmit"}),
+            ("schedule", {"nightly"}),
         ]:
             with self.subTest(event=event):
                 ci_inputs = cm.CIInputs(
@@ -3215,7 +3293,7 @@ class TestTriggerHelpers(unittest.TestCase):
                     commit_ref="main",
                     base_ref="HEAD^",
                     build_variant="release",
-                    external_repo='{"repository":"ROCm/rocm-libraries","ref":"main"}',
+                    external_repo=f'{{"repository":"ROCm/rocm-libraries","ref":"main"}}',
                 )
                 git_context = cm.GitContext.from_external_repo("rocm-libraries")
                 triggers = cm._get_current_triggers(ci_inputs, git_context)
@@ -3510,6 +3588,144 @@ class TestCpuTestOnlyLabel(unittest.TestCase):
         entry = self._expand()
         # gfx94x has multi-GPU support
         self.assertIn("test-runs-on-multi-gpu-labels", entry)
+
+
+# ---------------------------------------------------------------------------
+# Sanitizer variant resolution
+# ---------------------------------------------------------------------------
+
+
+class TestResolveSanitizerVariant(unittest.TestCase):
+    """Tests for _resolve_sanitizer_variant and _get_current_triggers with external repos."""
+
+    def test_external_repo_nightly_resolves_variant(self):
+        """External repo nightly should resolve to the configured variant."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="schedule",
+            commit_ref="main",
+            base_ref=None,
+            build_variant="asan",
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"main"}',
+        )
+        git_context = cm.GitContext.from_external_repo("rocm-libraries")
+        self.assertEqual(cm._resolve_sanitizer_variant(ci_inputs, git_context), "asan")
+
+    def test_external_repo_rockrel_nightly(self):
+        """rockrel nightly should resolve to asan-debug."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="schedule",
+            commit_ref="main",
+            base_ref=None,
+            build_variant="asan",
+            external_repo='{"repository":"ROCm/rockrel","ref":"main"}',
+        )
+        git_context = cm.GitContext.from_external_repo("rockrel")
+        self.assertEqual(
+            cm._resolve_sanitizer_variant(ci_inputs, git_context), "asan-debug"
+        )
+
+    def test_submodule_bump_amd_llvm(self):
+        """amd-llvm submodule bump should resolve to asan-debug."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^",
+            build_variant="asan",
+        )
+        git_context = cm.GitContext(
+            changed_files=["compiler/amd-llvm", "some-other-file"],
+            submodule_paths=["compiler/amd-llvm", "rocm-systems", "rocm-libraries"],
+        )
+        self.assertEqual(
+            cm._resolve_sanitizer_variant(ci_inputs, git_context), "asan-debug"
+        )
+
+    def test_submodule_bump_rocm_systems(self):
+        """rocm-systems submodule bump should resolve to host-asan."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^",
+            build_variant="asan",
+        )
+        git_context = cm.GitContext(
+            changed_files=["rocm-systems"],
+            submodule_paths=["compiler/amd-llvm", "rocm-systems", "rocm-libraries"],
+        )
+        self.assertEqual(
+            cm._resolve_sanitizer_variant(ci_inputs, git_context), "host-asan"
+        )
+
+    def test_submodule_bump_multiple_returns_first_match(self):
+        """Multiple submodule bumps returns the first matching variant."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^",
+            build_variant="asan",
+        )
+        git_context = cm.GitContext(
+            changed_files=["compiler/amd-llvm", "rocm-systems"],
+            submodule_paths=["compiler/amd-llvm", "rocm-systems", "rocm-libraries"],
+        )
+        result = cm._resolve_sanitizer_variant(ci_inputs, git_context)
+        # Returns whichever matches first (set iteration order)
+        self.assertIn(result, ("asan-debug", "host-asan"))
+
+    def test_no_matching_rule_returns_none(self):
+        """Unmatched source/trigger returns None."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="schedule",
+            commit_ref="main",
+            base_ref=None,
+            build_variant="asan",
+            external_repo='{"repository":"ROCm/unknown-repo","ref":"main"}',
+        )
+        git_context = cm.GitContext.from_external_repo("unknown-repo")
+        self.assertIsNone(cm._resolve_sanitizer_variant(ci_inputs, git_context))
+
+    def test_no_submodule_changes_returns_none(self):
+        """Non-submodule changes should not trigger sanitizer rules."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^",
+            build_variant="asan",
+        )
+        git_context = cm.GitContext(
+            changed_files=["some-regular-file.py"],
+            submodule_paths=["compiler/amd-llvm", "rocm-systems"],
+        )
+        self.assertIsNone(cm._resolve_sanitizer_variant(ci_inputs, git_context))
+
+    def test_external_repo_trigger_via_get_current_triggers(self):
+        """_get_current_triggers uses caller's event via workflow_call."""
+        test_cases = [
+            ("schedule", {"nightly"}),
+            ("pull_request", {"presubmit"}),
+            ("push", {"postsubmit"}),
+        ]
+        for event_name, expected in test_cases:
+            with self.subTest(event_name=event_name):
+                ci_inputs = cm.CIInputs(
+                    run_id="1",
+                    event_name=event_name,
+                    commit_ref="main",
+                    base_ref=None,
+                    build_variant="asan",
+                    external_repo=f'{{"repository":"ROCm/rocm-libraries","ref":"main"}}',
+                )
+                git_context = cm.GitContext.from_external_repo("rocm-libraries")
+                self.assertEqual(
+                    cm._get_current_triggers(ci_inputs, git_context), expected
+                )
 
 
 if __name__ == "__main__":

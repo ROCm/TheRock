@@ -61,6 +61,7 @@ from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
+    get_sanitizer_variant_for_trigger,
     select_build_runner,
 )
 from configure_ci_path_filters import (
@@ -1502,6 +1503,7 @@ def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[s
     triggers: set[str] = set()
 
     # Event-based triggers (mutually exclusive)
+    # External repos use workflow_call, so the caller's event propagates here.
     # Note: workflow_dispatch handled separately in _should_run_tests_for_family
     if ci_inputs.is_schedule:
         triggers.add("nightly")
@@ -1516,6 +1518,54 @@ def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[s
         triggers.add("submodule_bump")
 
     return triggers
+
+
+def _get_external_repo_name(ci_inputs: CIInputs) -> str:
+    """Extract the short repo name from external_repo JSON, or empty string."""
+    if not ci_inputs.external_repo:
+        return ""
+    try:
+        repo_json = json.loads(ci_inputs.external_repo)
+    except (json.JSONDecodeError, TypeError):
+        return ""
+    return repo_json.get("repository", "").split("/")[-1]
+
+
+def _resolve_sanitizer_variant(
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+) -> str | None:
+    """Return the sanitizer variant for the current (source, trigger) pair, or None."""
+    current_triggers = _get_current_triggers(ci_inputs, git_context)
+    if not current_triggers:
+        return None
+
+    if ci_inputs.external_repo:
+        source = _get_external_repo_name(ci_inputs)
+        if not source:
+            return None
+        for trigger in current_triggers:
+            variant = get_sanitizer_variant_for_trigger(source, trigger)
+            if variant:
+                print(f"  Sanitizer rule matched: {source} + {trigger} -> {variant}")
+                return variant
+    elif "submodule_bump" in current_triggers:
+        if git_context.changed_files is None or git_context.submodule_paths is None:
+            return None
+        changed_submodules = set(git_context.submodule_paths) & set(
+            git_context.changed_files
+        )
+        for submodule_path in changed_submodules:
+            # Match by basename (e.g., "compiler/amd-llvm" -> "amd-llvm")
+            source = submodule_path.rsplit("/", 1)[-1]
+            variant = get_sanitizer_variant_for_trigger(source, "submodule_bump")
+            if variant:
+                print(
+                    f"  Sanitizer rule matched: {source} (submodule_bump) -> {variant}"
+                )
+                return variant
+
+    return None
 
 
 def _should_run_tests_for_family(
@@ -1652,24 +1702,20 @@ def _expand_build_config_for_platform(
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant.startswith("host-asan"):
-            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
+            # host-asan runs on the regular test pool (not sandbox) since it
+            # only instruments host code and doesn't need the ASAN-specific
+            # sandbox runners that full asan/asan-debug require.
             if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
                 test_runs_on = ""
                 print(
                     f"  {family_name}: host-asan tests only run on nightly, "
                     f"disabling tests"
                 )
-            elif "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info["test-runs-on-sandbox"]
-                print(
-                    f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
-                )
             else:
-                test_runs_on = ""
+                # Keep the regular test-runs-on runner (already set above)
                 print(
-                    f"  {family_name}: no host-asan sandbox runner available, "
-                    f"disabling tests"
+                    f"  {family_name}: using regular runner for host-asan: "
+                    f"{test_runs_on}"
                 )
         elif "asan" in build_variant:
             # Only run full ASAN tests on scheduled or workflow_dispatch runs
@@ -1957,20 +2003,27 @@ def expand_build_configs(
     # =========================================================================
     all_families = _apply_external_family_overrides(all_families)
     build_variant = ci_inputs.build_variant
-    # ASAN variant selection:
+    # ASAN variant selection priority:
     # 1. ci:asan label -> asan (explicit full ASAN, highest priority)
     # 2. ci:host-asan label -> host-asan (explicit)
-    # 3. push/pull_request events -> host-asan (default for pre/postsubmit)
-    # 4. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
+    # 3. Sanitizer trigger rules -> variant from sanitizer_triggers in all_build_variants
+    #    (source-specific: maps (repo/submodule, trigger) to the right variant)
+    # 4. No match -> skip (sanitizers only run when a rule matches)
     if build_variant == "asan":
         if "ci:asan" in ci_inputs.pr_labels:
             print("  Using full asan variant (ci:asan label)")
         elif "ci:host-asan" in ci_inputs.pr_labels:
             build_variant = "host-asan"
             print("  Using host-asan variant (ci:host-asan label)")
-        elif ci_inputs.is_push or ci_inputs.is_pull_request:
-            build_variant = "host-asan"
-            print("  Using host-asan variant (push/pull_request default)")
+        else:
+            # Check sanitizer trigger rules for source-specific variant
+            resolved = _resolve_sanitizer_variant(ci_inputs, git_context)
+            if resolved:
+                build_variant = resolved
+                print(f"  Using {build_variant} variant " f"(sanitizer trigger rule)")
+            else:
+                print("  No sanitizer trigger rule matched, skipping ASAN build")
+                return BuildConfigs(linux=None, windows=None)
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
