@@ -1,7 +1,12 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+set(_rccl_enabled OFF)
 if(THEROCK_ENABLE_RCCL)
+  therock_check_subproject_targets(_rccl_enabled rccl)
+endif()
+
+if(THEROCK_ENABLE_RCCL AND _rccl_enabled)
   # Most libraries need to depend on the profiler, but is conditionally only used
   # on Posix.
   set(optional_profiler_deps)
@@ -167,9 +172,14 @@ if(THEROCK_ENABLE_RCCL)
     SUBPROJECT_DEPS
       ${_rccl_subproject_names}
   )
+endif(THEROCK_ENABLE_RCCL AND _rccl_enabled)
+
+set(_rocshmem_enabled OFF)
+if(THEROCK_ENABLE_ROCSHMEM)
+  therock_check_subproject_targets(_rocshmem_enabled rocshmem)
 endif()
 
-if(THEROCK_ENABLE_ROCSHMEM)
+if(THEROCK_ENABLE_ROCSHMEM AND _rocshmem_enabled)
   ##############################################################################
   # rocSHMEM
   ##############################################################################
@@ -252,4 +262,4 @@ if(THEROCK_ENABLE_ROCSHMEM)
     SUBPROJECT_DEPS
       ${_rocshmem_subproject_names}
   )
-endif(THEROCK_ENABLE_ROCSHMEM)
+endif(THEROCK_ENABLE_ROCSHMEM AND _rocshmem_enabled)
