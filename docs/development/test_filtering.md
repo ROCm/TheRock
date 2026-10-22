@@ -41,9 +41,9 @@
 
 <br/>
 
-- <b>dnn_benchmarking</b>: Opt-in workload suites that are not part of the quick → full ladder
-  - Runs on: on-demand only (`test_filter:dnn_benchmarking`); never chosen automatically
-  - Characteristics: hipDNN provider integration tests over the dnn-benchmarking workload graphs; only components that declare `dnn_benchmarking_timeout_minutes` in `fetch_test_configurations.py` run it (currently `miopenprovider` and `hipblasltprovider`)
+- <b>workloads</b>: Opt-in workload suites that are not part of the quick → full ladder
+  - Runs on: on-demand only (`test_filter:workloads`); never chosen automatically
+  - Characteristics: hipDNN provider integration tests over the dnn-benchmarking workload graphs; only components that declare `workloads_timeout_minutes` in `fetch_test_configurations.py` run it (currently `miopenprovider` and `hipblasltprovider`)
   - Execution time: hours (step timeout 180 min)
   - Target: periodic workload coverage of the hipDNN providers
 
