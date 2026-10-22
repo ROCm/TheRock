@@ -64,7 +64,6 @@ from amdgpu_family_matrix import (
     select_build_runner,
 )
 from configure_ci_path_filters import (
-    _is_path_skippable_for_patterns,
     get_changed_files_for_external_repo,
     get_git_commit_hash,
     get_git_modified_paths,
@@ -72,7 +71,6 @@ from configure_ci_path_filters import (
     is_ci_run_required,
     load_skip_ci_patterns_for_external_repo,
 )
-from configure_external_repo_ci import PROJECT_SCOPED_WORKFLOW_ALIASES
 from configure_jax_release_matrix import generate_jax_matrix_for_release_type
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
 from configure_rocm_python_test_matrix import build_rocm_python_test_matrix
@@ -441,31 +439,6 @@ class CIInputs:
         return inputs
 
 
-def _prefix_external_changed_files(
-    repo_name: str,
-    changed_files: list[str],
-    skip_patterns: list[str] | None,
-) -> list[str]:
-    """Drop skippable and alias paths, then prefix the submodule name."""
-    alias_paths = set(PROJECT_SCOPED_WORKFLOW_ALIASES)
-    staged: list[str] = []
-    for raw in changed_files:
-        path = raw.strip()
-        if path.startswith("./"):
-            path = path[2:]
-        if not path or path in alias_paths:
-            continue
-        if skip_patterns and _is_path_skippable_for_patterns(
-            path=path,
-            patterns=skip_patterns,
-        ):
-            continue
-        if repo_name and not (path == repo_name or path.startswith(f"{repo_name}/")):
-            path = f"{repo_name}/{path}"
-        staged.append(path)
-    return staged
-
-
 @dataclass(frozen=True)
 class GitContext:
     """Git-derived data for the current commit/PR.
@@ -513,35 +486,20 @@ class GitContext:
         return GitContext()
 
     @staticmethod
-    def from_external_repo(
-        external_repo_name: str,
-        changed_files: list[str] | None = None,
-        skip_patterns: list[str] | None = None,
-    ) -> "GitContext":
+    def from_external_repo(external_repo_name: str) -> "GitContext":
         """Create context for external repo builds (e.g., rocm-libraries).
 
-        ``changed_files is None`` (schedule, dispatch, or a truncated diff)
-        keeps the repo name as the only changed path, which impacts every
-        stage of that submodule.
+        For external repos, we treat the repo name as both a changed file and
+        a submodule path so that stage reuse analysis can determine which
+        TheRock stages are affected.
 
-        A real file list is prefixed with the submodule name (``rocm-systems/``
-        for rocm-systems) so ``parse_changed_path`` can match it. Skippable
-        paths and project-owned workflow aliases are dropped first; those are
-        not build inputs. ``submodule_paths`` stays the repo name.
-        ``_get_current_triggers`` still ignores ``submodule_bump`` for external
-        repos.
+        Note: has_submodule_changes will be True, but _get_current_triggers()
+        ignores this for external repos since submodule_bump only applies to
+        TheRock itself (when its submodule pointers are updated).
         """
         print(f"External repo detected: {external_repo_name}")
-        if changed_files is None:
-            staged = [external_repo_name]
-        else:
-            staged = _prefix_external_changed_files(
-                repo_name=external_repo_name,
-                changed_files=changed_files,
-                skip_patterns=skip_patterns,
-            )
         return GitContext(
-            changed_files=staged,
+            changed_files=[external_repo_name],
             submodule_paths=[external_repo_name],
         )
 
@@ -1332,12 +1290,6 @@ def _determine_test_type(
     if git_context.has_submodule_changes is True:
         matching = set(git_context.submodule_paths) & set(git_context.changed_files)
         return "standard", f"submodule(s) changed: {sorted(matching)}"
-
-    # A real external-repo file list is prefixed with the submodule name, so
-    # the repo name is not itself a changed file and has_submodule_changes is
-    # false. The standard suite still applies. submodule_bump stays TheRock-only.
-    if ci_inputs.external_repo and git_context.changed_files:
-        return "standard", "external repo changes"
 
     # Default: quick tests for fast CI feedback.
     return "quick", "default"
@@ -2207,9 +2159,8 @@ def main():
 
     # Check if this is an external repo build (e.g., rocm-libraries calling TheRock workflows)
     if ci_inputs.external_repo:
+        # External repo: use repo name for stage reuse analysis.
         # external_repo is JSON like {"repository":"ROCm/rocm-libraries","ref":"..."}
-        # Stage reuse uses the changed-file list inside that JSON. A missing
-        # list falls back to the repo name.
         try:
             external_repo = json.loads(ci_inputs.external_repo)
         except (json.JSONDecodeError, TypeError) as exc:
@@ -2223,18 +2174,7 @@ def main():
                 f"EXTERNAL_REPO missing 'repository' field: {ci_inputs.external_repo!r}"
             )
         external_repo_name = repo_full_name.split("/")[-1]
-        # None means there is no usable diff (schedule, dispatch, truncated
-        # API). from_external_repo then keeps the repo-name fallback.
-        changed_files = get_changed_files_for_external_repo(external_repo)
-        skip_patterns = None
-        skip_ci_config = external_repo.get("skip_ci_config")
-        if skip_ci_config:
-            skip_patterns = load_skip_ci_patterns_for_external_repo(skip_ci_config)
-        git_context = GitContext.from_external_repo(
-            external_repo_name=external_repo_name,
-            changed_files=changed_files,
-            skip_patterns=skip_patterns,
-        )
+        git_context = GitContext.from_external_repo(external_repo_name)
     elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.

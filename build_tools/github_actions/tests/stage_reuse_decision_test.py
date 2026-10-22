@@ -10,12 +10,10 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import configure_multi_arch_ci as cma
 
 import stage_reuse_decision as srd
-from _therock_utils.build_topology import get_topology
 from stage_reuse_decision import StageReuseMode, compute_auto_stage_reuse
 from baseline_runs import (
     BaselineRun,
@@ -987,22 +985,6 @@ class PlanStageReuseTest(unittest.TestCase):
         plan = srd.plan_stage_reuse(changed_files=None, topology=FakeTopology())
         self.assertTrue(plan.full_rebuild_required)
         self.assertEqual(plan.candidate_stages, ())
-
-    def test_hrr_path_calls_baseline_selector(self):
-        """copy_stages from an hrr path must reach select_baseline_run."""
-        selector = Mock(return_value=_baseline("123", ["base_lib_generic.tar.zst"]))
-        result = compute_auto_stage_reuse(
-            changed_files=["rocm-systems/projects/hrr/playback/foo.cpp"],
-            mode=StageReuseMode.REUSE_STAGE,
-            linux_amdgpu_families=["gfx94X"],
-            topology=get_topology(),
-            baseline_selector=selector,
-        )
-        selector.assert_called()
-        self.assertFalse(result.full_rebuild_required)
-        self.assertIn("math-libs", result.candidate_stages)
-        self.assertIn("compiler-runtime", result.rebuild_stages)
-        self.assertNotIn("math-libs", result.rebuild_stages)
 
 
 class TargetFamiliesTest(unittest.TestCase):
