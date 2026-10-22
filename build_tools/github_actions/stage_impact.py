@@ -391,30 +391,32 @@ class StageImpactAnalyzer:
         return (impacted, is_conservative)
 
     def _stages_for_impacted_artifacts(self, impacted_artifacts: Set[str]) -> Set[str]:
-        """Stages that produce these artifacts, plus stages that consume them.
+        """Stages that produce these artifacts or any transitive consumer of them.
 
-        The walk starts at the impacted artifacts. A sibling artifact in the
-        same stage does not pull in its own consumers.
+        The closure runs over artifacts, not stages: a sibling artifact in the
+        same stage pulls in its own consumers only when it depends on an
+        impacted artifact, so core-hrr does not drag in the consumers of
+        core-hip, while a core-runtime change still reaches everything that
+        depends on core-hip.
         """
-        consumers = self._artifact_to_consumer_stages()
+        artifact_consumers: dict[str, set[str]] = {}
+        for artifact in self.topology.artifacts.values():
+            for dep_name in artifact.artifact_deps:
+                artifact_consumers.setdefault(dep_name, set()).add(artifact.name)
+
+        closure = set(impacted_artifacts)
+        work = list(impacted_artifacts)
+        while work:
+            for consumer in artifact_consumers.get(work.pop(), ()):
+                if consumer not in closure:
+                    closure.add(consumer)
+                    work.append(consumer)
+
         stages: set[str] = set()
-        for name in impacted_artifacts:
+        for name in closure:
             stage_name = self.topology.get_stage_for_artifact(name)
             if stage_name:
                 stages.add(stage_name)
-
-        seen = set(impacted_artifacts)
-        work = set(impacted_artifacts)
-        while work:
-            artifact_name = work.pop()
-            for consumer_stage in consumers.get(artifact_name, ()):
-                if consumer_stage in stages:
-                    continue
-                stages.add(consumer_stage)
-                produced = self.topology.get_produced_artifacts(consumer_stage)
-                new_artifacts = produced - seen
-                seen.update(new_artifacts)
-                work.update(new_artifacts)
         return stages
 
     def _get_stage_artifacts(self, stage_names: Set[str]) -> Set[str]:
