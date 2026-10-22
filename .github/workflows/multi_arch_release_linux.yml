@@ -317,11 +317,12 @@ jobs:
 
   # The JAX release workflow publishes its wheels to the release index, then tests
   # from that index. Wait for the corresponding ROCm release to be published before
-  # triggering the downstream release.
+  # triggering the downstream release. Also gated on trigger_test_xla: the JAX
+  # wheel release does not go out if XLA tests against this release fail.
   # TODO: Consider pulling ROCm packages from the published release index instead
   #   of the artifact bucket now that this waits for release bucket publication.
   trigger_release_jax_wheels:
-    needs: [build_python_packages, publish_to_release_buckets]
+    needs: [build_python_packages, publish_to_release_buckets, trigger_test_xla]
     name: Trigger Release JAX Wheels
     if: ${{ inputs.build_jax != false && fromJSON(inputs.build_config).build_jax == true }}
     runs-on: ubuntu-26.04
@@ -348,10 +349,15 @@ jobs:
   # and uploaded (upload_tarballs.py sets tarball_urls.multiarch), so this
   # does not need to wait for publish_to_release_buckets: that tarball is
   # already a reachable HTTPS URL in the CI artifacts bucket.
+  #
+  # Unlike every other benc-uk/workflow-dispatch trigger in this file, this one
+  # blocks and fails with it: trigger_release_jax_wheels needs this job, so an
+  # XLA test failure (or timeout) blocks the JAX wheel release.
   trigger_test_xla:
     needs: [build_tarballs]
     name: Trigger Test XLA
     runs-on: ubuntu-26.04
+    timeout-minutes: 330
     permissions:
       actions: write
     steps:
@@ -359,6 +365,10 @@ jobs:
         uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
           workflow: test_multi_arch_linux_xla.yml
+          wait-for-completion: "true"
+          wait-timeout-seconds: "18000" # 5h, above test_multi_arch_linux_xla.yml's own 240min job timeout
+          wait-interval-seconds: "30"
+          sync-status: "true" # fail this step (and trigger_release_jax_wheels) if the XLA test run fails
           inputs: |
             {
               "test_amdgpu_family": "${{ contains(fromJSON(inputs.build_config).dist_amdgpu_families, 'gfx94X-dcgpu') && 'gfx94X-dcgpu' || '' }}",
