@@ -165,6 +165,8 @@ def test_checked_in_manifest_bkc_contains_only_gfx1250_targets() -> None:
         "amd-torchvision-device-gfx1250",
         "rocm-sdk-device-gfx1250",
     }
+    # JAX has no bkc routes. Exclude it by owner path, not a "jax-" name
+    # prefix, which jax and jaxlib do not have.
     expected_bkc_packages = {
         package_name
         for package_name, package in index.packages.items()
