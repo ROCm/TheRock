@@ -1911,11 +1911,16 @@ class RunRepoSetupAndInstallTest(unittest.TestCase):
     )
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "verify_published_checksum_metadata",
+        return_value=True,
+    )
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
         "setup_deb_repository",
         return_value=True,
     )
     def test_returns_true_for_deb_when_setup_and_install_succeed(
-        self, mock_setup, mock_install
+        self, mock_setup, mock_checksums, mock_install
     ):
         # Test that run_repo_setup_and_install returns True when setup and install both succeed (deb).
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
@@ -1924,7 +1929,36 @@ class RunRepoSetupAndInstallTest(unittest.TestCase):
         )
         self.assertTrue(t.run_repo_setup_and_install())
         mock_setup.assert_called_once()
+        mock_checksums.assert_called_once()
         mock_install.assert_called_once()
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "install_deb_packages",
+        return_value=True,
+    )
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "verify_published_checksum_metadata",
+        return_value=False,
+    )
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "setup_deb_repository",
+        return_value=True,
+    )
+    def test_returns_false_when_published_checksums_fail(
+        self, mock_setup, mock_checksums, mock_install
+    ):
+        # Checksum metadata failure must stop the install.
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+        )
+        self.assertFalse(t.run_repo_setup_and_install())
+        mock_setup.assert_called_once()
+        mock_checksums.assert_called_once()
+        mock_install.assert_not_called()
 
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
@@ -1947,11 +1981,16 @@ class RunRepoSetupAndInstallTest(unittest.TestCase):
     )
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "verify_published_checksum_metadata",
+        return_value=True,
+    )
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
         "setup_rpm_repository",
         return_value=True,
     )
     def test_returns_true_for_rpm_when_setup_and_install_succeed(
-        self, mock_setup, mock_install
+        self, mock_setup, mock_checksums, mock_install
     ):
         # Test that run_repo_setup_and_install returns True when setup and install both succeed (rpm).
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
@@ -1960,6 +1999,7 @@ class RunRepoSetupAndInstallTest(unittest.TestCase):
         )
         self.assertTrue(t.run_repo_setup_and_install())
         mock_setup.assert_called_once()
+        mock_checksums.assert_called_once()
         mock_install.assert_called_once()
 
 

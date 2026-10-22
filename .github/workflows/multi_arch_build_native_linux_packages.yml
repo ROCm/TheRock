@@ -262,6 +262,15 @@ jobs:
             --package-dir "${{ env.PACKAGE_DIST_DIR }}" \
             --release-type "${RELEASE_TYPE}"
 
+      # Checksums are authoritative only after repository metadata exists.
+      # Failure blocks upload. DEB requires MD5 and SHA256; RPM requires SHA256
+      # or stronger.
+      - name: Verify package repository checksums
+        run: |
+          python ./build_tools/packaging/linux/verify_package_repo_checksums.py \
+            --pkg-type "${NATIVE_PACKAGE_TYPE}" \
+            --package-dir "${{ env.PACKAGE_DIST_DIR }}"
+
       - name: Configure AWS credentials for artifact uploads
         uses: ./.github/actions/configure_aws_artifacts_credentials
         with:
