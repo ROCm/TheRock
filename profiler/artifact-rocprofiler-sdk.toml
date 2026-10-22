@@ -42,3 +42,13 @@ include = [
   "lib/python*/**",
 ]
 [components.dev."profiler/rocprof-trace-decoder/stage"]
+
+# rocm-systems-fortran: the HIP and ROCTx Fortran bindings, present once
+# rocm-systems has projects/fortran. Archives, .mod files and config packages
+# are default dev paths; share/ holds the .F90 sources for other compilers.
+[components.dev."profiler/rocm-systems-fortran/stage"]
+include = [
+  "share/hip/fortran/**",
+  "share/roctx/fortran/**",
+]
+optional = true
