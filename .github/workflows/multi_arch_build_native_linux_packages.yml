@@ -92,7 +92,7 @@ jobs:
     # Sanitizer variants skip: the resolved repository URL serves neither ASAN
     # packages (promoted under packages-asan) nor TSAN ones (not promoted).
     if: inputs.enable_repo_setup_package && contains(fromJSON('["nightly", "prerelease"]'), inputs.release_type) && !contains(inputs.build_variant, 'asan') && !contains(inputs.build_variant, 'tsan')
-    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:15241d0e87bf81fe0986006ab832a36ea53a2cda0f9a31b4a5dc7826bc2396b6
     # Resolves parameters only; it needs no cloud credentials.
@@ -307,7 +307,7 @@ jobs:
         # skipped job's outputs are empty strings, which fromJSON cannot parse.
         # Fall back to an empty matrix so this job skips cleanly.
         os_profile: ${{ fromJSON(needs.resolve_repo_setup_params.outputs.os_profiles || '[]') }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       id-token: write # Authenticate to AWS to upload the amd-repo-setup package.
@@ -392,6 +392,7 @@ jobs:
           release_type: ${{ inputs.release_type }}
 
       - name: Upload amd-repo-setup
+        id: upload-repo-setup-package
         run: |
           $PYTHON_CMD build_tools/packaging/linux/upload_repo_setup_package.py \
             --dest-dir repo-setup-package-out \
@@ -406,7 +407,7 @@ jobs:
     name: "Quartz - completed - build amd-repo-setup"
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' && needs.resolve_repo_setup_params.result != 'skipped' }}
     needs: [resolve_repo_setup_params, stage_repo_setup_package]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     permissions:
