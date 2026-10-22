@@ -100,6 +100,20 @@ class GPGShim:
 
         return result
 
+    def _extract_plaintext_arg(self, raw_args):
+        """Return the RPM-GPG plaintext-filename positional argument — the
+        single argument after the last '--' separator in the raw argv — or
+        None if that shape isn't present. Operates on the raw args (not
+        argparse's parsed output) since this is specifically about what RPM
+        put after '--', independent of which flags we recognize."""
+        if "--" not in raw_args:
+            return None
+        last_sep = len(raw_args) - 1 - raw_args[::-1].index("--")
+        trailing = raw_args[last_sep + 1 :]
+        if len(trailing) != 1:
+            return None
+        return trailing[0]
+
     def read_stdin_data(self):
         """Read data from stdin (binary mode)."""
         # stdin might be text mode, get the underlying binary buffer
@@ -451,14 +465,35 @@ class GPGShim:
         for key, value in options.items():
             self.logger.debug("  {}: {}".format(key, value))
 
-        # V4 RPM signing optimization: rpmsign calls gpg twice
-        # 1st call: sign header (~4KB) - read data, send to server, cache signature
-        # 2nd call: sign full RPM (1GB) - read data (but don't send), use cached signature
-        # IMPORTANT: We must always read from stdin (rpmsign is piping data)
+        # RPM's %__gpg_sign_cmd invokes us with the plaintext-to-sign as the
+        # last positional argument, after a '--' separator. Debian/Ubuntu's
+        # packaged rpm (what CI's build-runner image uses) sets that
+        # argument to a literal '-' — GPG's own convention for "read from
+        # stdin" — so RPM itself pipes the data into our stdin rather than
+        # passing a real file/FIFO path. This was verified live against a
+        # real signing server and rpm --checksig (see
+        # signing_infrastructure/docs/signing-server-review.md, B1/B2).
+        #
+        # That '-' convention is a property of this specific RPM packaging,
+        # not of RPM in general — a future base-image change could switch
+        # %__plaintext_filename to a real path instead. Check for that
+        # explicitly and fail loudly rather than silently reading the wrong
+        # (likely empty) stdin and producing a signature over nothing.
+        plaintext_arg = self._extract_plaintext_arg(args)
+        if plaintext_arg != "-":
+            self.error(
+                "Unsupported RPM/GPG invocation: expected the plaintext "
+                "argument to be '-' (read from stdin), got {!r} instead. "
+                "This usually means the RPM packaging on this host changed "
+                "%__plaintext_filename to a real file/FIFO path — gpgshim "
+                "needs to be updated to read that path directly instead of "
+                "stdin.".format(plaintext_arg)
+            )
+            return 1
+
         output_file = options.get("output")
         cache_file = self._cache_file_path() if output_file else None
 
-        # Always read data from stdin (rpmsign is piping it, we must consume it)
         self.logger.debug("reading data from stdin...")
 
         data = self.read_stdin_data()
