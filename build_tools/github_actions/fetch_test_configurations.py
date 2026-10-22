@@ -60,21 +60,48 @@ TEST_LABEL_GROUPS: dict[str, list[str]] = {
 }
 
 
+def _parse_test_labels(raw: str) -> list[str]:
+    """Parse the TEST_LABELS environment variable into a list of strings.
+
+    Accepts either Python list literal syntax (e.g. '["test:rocblas"]') or a
+    plain comma-separated string (e.g. 'test:rocblas,test:hipblas').  The
+    latter is friendlier for manual workflow_dispatch runs where users are
+    unlikely to type valid Python list syntax.
+    """
+    raw = raw.strip()
+    if not raw or raw == "[]":
+        return []
+
+    # If it looks like a Python list literal, try ast.literal_eval first.
+    if raw.startswith("["):
+        try:
+            result = ast.literal_eval(raw)
+            if isinstance(result, list):
+                return [str(item) for item in result]
+        except (ValueError, SyntaxError) as exc:
+            raise ValueError(
+                f"TEST_LABELS looks like a Python list but could not be parsed: {raw!r}. "
+                f'Expected format: \'["test:rocblas", "test:hipblas"]\' (Python list literal) '
+                f"or 'test:rocblas,test:hipblas' (comma-separated string). "
+                f"Original error: {exc}"
+            ) from exc
+
+    # Fall back to comma-separated string parsing.
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 # Base container options applied to all Linux containers
-# --ipc host - Allows shared memory between host and container
 # --user 0:0 - Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
 # --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
 # --ulimit nofile=1048576:1048576 - Increase open file limit for RCCL
-# --security-opt seccomp=unconfined - enables memory mapping, and is recommended for containers running in HPC environments
 _BASE_CONTAINER_OPTIONS = [
-    "--ipc host",
     "--user 0:0",
     "--ulimit memlock=-1:-1",
     "--ulimit nofile=1048576:1048576",
-    "--security-opt seccomp=unconfined",
 ]
 
 # GPU-specific container options (only applied when linux_cpu_runner != True)
+# --security-opt seccomp=unconfined - enables memory mapping and device ioctls needed by ROCm/HPC GPU workloads
 # --group-add video - Grants access to GPU video group
 # --device /dev/kfd - AMD KFD device for GPU compute
 # --device /dev/dri - Direct Rendering Infrastructure devices
@@ -82,6 +109,7 @@ _BASE_CONTAINER_OPTIONS = [
 # --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
 # -e ROCR_VISIBLE_DEVICES - Pass host's GPU isolation env var to container (used on ARC runners)
 _GPU_CONTAINER_OPTIONS = [
+    "--security-opt seccomp=unconfined",
     "--group-add video",
     "--device /dev/kfd",
     "--device /dev/dri",
@@ -204,6 +232,16 @@ _rocgdb_common = {
 # not in the list; omit the field to run on every tier (the default). For example, a
 # component whose suite is too slow for the quick sanity tier opts out of it with:
 #   "test_types": ["standard", "comprehensive", "full"]
+#
+# A component may mark itself advisory (non-blocking) on specific GPU families via
+# "expect_failure", a map keyed by platform whose value is a list of family entries,
+# matched exactly like include_family/exclude_family (so either the family group
+# string or an individual gfx target works). It is resolved to a single boolean per
+# job before the matrix is emitted, which test_component.yml maps to
+# continue-on-error plus an "(xfail)" job-name suffix. The job is still scheduled and
+# still reports; it just cannot fail the run. Use it to land coverage for an arch
+# that is still being qualified without blocking everyone else. For example:
+#   "expect_failure": {"linux": ["gfx950"]}
 #
 # A component's "skip_stages" lists build stages whose absence excludes the test.
 # If any listed stage is in SKIP_STAGES, the component is skipped. Reused stages
@@ -710,8 +748,10 @@ test_matrix = {
     # The runner ships in the MIOpen dist (share/miopen/bin/run_dbsync_rocjitsu.py, pulled via
     # --miopen; defined in rocm-libraries projects/miopen/test/gtest/dbsync/): it resolves arch + CU
     # list from AMDGPU_FAMILIES, sparse-builds the pinned rocjitsu KMD, and runs StaticFDBSync once
-    # per CU with a CU-corrected config. include_family restricts it to gfx942, whose FAMILY_MAP
-    # entry covers both CU variants -- MI300X (304 CU) and MI300A (228 CU) -- in a single job.
+    # per CU with a CU-corrected config. include_family restricts it to the arches rocjitsu has a
+    # KMD config for: gfx942, whose FAMILY_MAP entry covers both CU variants -- MI300X (304 CU) and
+    # MI300A (228 CU) -- in a single job, and gfx950 (MI355X, 256 CU; advisory, see
+    # expect_failure below).
     # linux_cpu_runner: no scarce GPU test runner needed; uses the default no_rocm Ubuntu container
     # (the runner sudo-apt-installs cmake/build-essential/libdrm-dev to build rocjitsu).
     "miopen-dbsync": {
@@ -721,15 +761,20 @@ test_matrix = {
         # job entirely on the `quick` tier -- no job is scheduled, so no artifact fetch
         # or rocjitsu build is paid for on quick (the runner script also self-skips on
         # TEST_TYPE=quick as a backstop). Runs serially (MIOPEN_DBSYNC_MAX_THREADS=1)
-        # under rocjitsu; full set (gfx942 304+228) + artifact fetch + rocjitsu build
-        # measures ~15 min, so 30 gives margin and fails a hung interposer faster.
+        # under rocjitsu; full set (gfx942 304+228, gfx950 256) + artifact fetch + rocjitsu
+        # build measures ~15 min, so 30 gives margin and fails a hung interposer faster.
         "timeout_minutes": 30,
         "test_script": "python ./build/share/miopen/bin/run_dbsync_rocjitsu.py",
         "platform": ["linux"],
         "linux_cpu_runner": True,
         "test_types": ["standard", "comprehensive", "full"],
         "include_family": {
-            "linux": ["gfx942"],
+            "linux": ["gfx942", "gfx950"],
+        },
+        # TODO(ALMIOPEN-2674): drop this once gfx950 dbsync has been green for a
+        # few consecutive standard/comprehensive/full runs.
+        "expect_failure": {
+            "linux": ["gfx950"],
         },
         "total_shards_dict": {
             "linux": 1,
@@ -748,6 +793,8 @@ test_matrix = {
         },
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+        # RCCL collective ops use cross-process shared memory via /dev/shm
+        "container_options": ["--ipc host"],
     },
     # rocSHMEM tests
     "rocshmem": {
@@ -1122,13 +1169,16 @@ test_matrix = {
         "fetch_artifact_args": "--rocdecode --tests",
         "timeout_minutes": 10,
         "test_script": f"python {_get_script_path('test_rocdecode.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
+            "windows": 1,
         },
         # rocdecode requires FFmpeg dev libraries (libavcodec-dev, libavformat-dev,
-        # libavutil-dev) for test builds. These are not bundled in TheRock
-        # artifacts and are provided via the specialized media image.
+        # libavutil-dev) for the extended (FFmpeg-demux) test builds, which run only
+        # on Linux via the specialized media image below. Windows runs the always-on
+        # tests (raw decode, caps, negative API) with ENABLE_EXTENDED_TESTS=OFF via
+        # the vaon12 backend, so it needs no FFmpeg and no container image.
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:d715ae2db664b055c90343e00588ce9ac3eec387513fe359396e5e08e75521ca",
     },
     "rocjpeg": {
@@ -1231,7 +1281,7 @@ def run():
     projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     test_type = os.getenv("TEST_TYPE", "standard")
-    test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
+    test_labels = _parse_test_labels(os.getenv("TEST_LABELS") or "[]")
     build_variant = os.getenv("BUILD_VARIANT", "release")
     skip_stages = os.getenv("SKIP_STAGES", "").split(",")
 
@@ -1438,6 +1488,17 @@ def run():
 
             job_config_data = {**_common_settings, **test_matrix[key]}
             job_config_data["test_type"] = test_type
+
+            # A component declares the families it is advisory on via
+            # "expect_failure" (see the key reference above). Resolve that
+            # declaration down to the single boolean the workflows read --
+            # test_component.yml compares it with `== true` to set
+            # continue-on-error, so the emitted value must never stay a map.
+            _xfail = job_config_data.get("expect_failure")
+            if _xfail:
+                job_config_data["expect_failure"] = _family_matches(
+                    _xfail.get(platform, []), amdgpu_families, _family_gfx_targets
+                )
 
             # tensilelite: append the tensilelite/tests C++ gtest suite (run via
             # ctest -L <test_type>, driven by the shared test_runner.py) after

@@ -96,7 +96,7 @@ jobs:
   notify_quartz_start:
     if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     name: "Quartz - started - build ROCm"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:
@@ -519,7 +519,7 @@ jobs:
         media-libs,
         wsl-rocdxg,
       ]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Report reused stage results
         env:
@@ -530,7 +530,7 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [compiler-runtime, emulation, runtime-tests, wsl-rocdxg, math-libs, comm-libs, storage-libs, debug-tools, dctools-core, profiler-apps, media-libs]
     name: "Quartz - completed - build ROCm"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:
