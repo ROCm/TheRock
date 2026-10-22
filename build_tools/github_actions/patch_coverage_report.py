@@ -24,8 +24,9 @@ tests themselves.
 The commits come from a blobless depth-1 fetch, so even for rocm-libraries the
 cost is three trees and the blobs of the changed files.
 
-The results go to the job summary, a JSON report, and warning annotations on
-uncovered lines, numbered as in the pull request head so they land on its diff.
+The results go to the job summary, a JSON report, an HTML page showing each
+measured file's diff with the hit count of every line, and warning annotations
+on uncovered lines, numbered as in the pull request head so they land on its diff.
 Low coverage is reported, not failed: the job fails only when it cannot compute
 the numbers.
 """
@@ -41,8 +42,10 @@ import sys
 import tempfile
 from collections import defaultdict
 from dataclasses import dataclass, field
+from html import escape
 from pathlib import Path, PurePosixPath
-from typing import Mapping, Optional, Sequence
+from typing import Iterable, Mapping, Optional, Sequence
+from urllib.parse import quote
 
 sys.path.insert(0, os.fspath(Path(__file__).resolve().parent))
 
@@ -77,6 +80,16 @@ class Hunk:
     new_count: int
 
 
+@dataclass(frozen=True)
+class DiffLine:
+    """A line of a hunk: its header ("@@"), context (" "), added or removed."""
+
+    kind: str
+    text: str
+    old: Optional[int] = None
+    new: Optional[int] = None
+
+
 @dataclass
 class FileDiff:
     old_path: Optional[str] = None
@@ -84,6 +97,7 @@ class FileDiff:
     hunks: list[Hunk] = field(default_factory=list)
     # New-side numbers of the lines the hunks add.
     added: list[int] = field(default_factory=list)
+    lines: list[DiffLine] = field(default_factory=list)
 
 
 @dataclass
@@ -145,7 +159,7 @@ def parse_diff(text: str) -> list[FileDiff]:
     """The files, hunks, and added lines of a `git diff` listing."""
     files: list[FileDiff] = []
     current: Optional[FileDiff] = None
-    new_line = 0
+    old_line = new_line = 0
     for line in text.splitlines():
         if line.startswith("diff --git "):
             current = FileDiff()
@@ -165,15 +179,22 @@ def parse_diff(text: str) -> list[FileDiff]:
                     new_count=1 if new_count is None else int(new_count),
                 )
             )
-            new_line = int(new_start)
+            current.lines.append(DiffLine("@@", line))
+            old_line, new_line = int(old_start), int(new_start)
         elif current.hunks:
             # Hunk content, which can itself start with "---" or "+++". Removed
             # lines and "\ No newline at end of file" leave the new side alone.
             if line.startswith("+"):
                 current.added.append(new_line)
+                current.lines.append(DiffLine("+", line[1:], new=new_line))
                 new_line += 1
             elif line.startswith(" "):
+                current.lines.append(DiffLine(" ", line[1:], old_line, new_line))
+                old_line += 1
                 new_line += 1
+            elif line.startswith("-"):
+                current.lines.append(DiffLine("-", line[1:], old=old_line))
+                old_line += 1
         elif line.startswith("--- "):
             current.old_path = _diff_path(line[4:], "a/")
         elif line.startswith("+++ "):
@@ -276,8 +297,8 @@ class Repository:
         return self.git("show", f"{sha}:{path}").splitlines()
 
 
-def changed_lines(repo: Repository, merge_base: str, head: str) -> dict[str, list[int]]:
-    """Per file, the head line numbers the pull request adds.
+def changed_files(repo: Repository, merge_base: str, head: str) -> list[FileDiff]:
+    """The files the pull request adds lines to, as its diff shows them.
 
     With GitHub's three lines of context: the amount changes how git aligns
     some edits, so fewer would mark different lines than the pull request shows.
@@ -285,11 +306,12 @@ def changed_lines(repo: Repository, merge_base: str, head: str) -> dict[str, lis
     text = repo.diff(
         merge_base, head, "--unified=3", "--find-renames", "--diff-filter=AMR"
     )
-    return {
-        file_diff.new_path: file_diff.added
-        for file_diff in parse_diff(text)
-        if file_diff.new_path and file_diff.added
-    }
+    return [f for f in parse_diff(text) if f.new_path and f.added]
+
+
+def changed_lines(files: Sequence[FileDiff]) -> dict[str, list[int]]:
+    """Per file, the head line numbers the pull request adds."""
+    return {f.new_path: f.added for f in files}
 
 
 # Per changed file, the hunks taking head line numbers to the built commit's,
@@ -494,6 +516,21 @@ def annotations(coverage: PatchCoverage, limit: int) -> list[str]:
     return commands[:limit]
 
 
+def headline(coverage: PatchCoverage, projects: Sequence[str]) -> str:
+    covered, missed = coverage.covered, coverage.missed
+    if not projects:
+        return (
+            "No coverage report was found, so there is nothing to measure the "
+            "change against."
+        )
+    if covered + missed:
+        return (
+            f"{covered} of {covered + missed} changed lines covered "
+            f"({format_percent(covered, missed)})."
+        )
+    return "None of the changed lines is code the coverage reports measure."
+
+
 def render_markdown(
     coverage: PatchCoverage,
     *,
@@ -505,19 +542,7 @@ def render_markdown(
     projects: Sequence[str],
     sources: Mapping[str, Sequence[str]],
 ) -> str:
-    covered, missed = coverage.covered, coverage.missed
-    if not projects:
-        headline = (
-            "No coverage report was found, so there is nothing to measure the "
-            "change against."
-        )
-    elif covered + missed:
-        headline = (
-            f"**{covered} of {covered + missed} changed lines covered "
-            f"({format_percent(covered, missed)}).**"
-        )
-    else:
-        headline = "**None of the changed lines is code the coverage reports measure.**"
+    summary = headline(coverage, projects)
     pr = (
         f"[{repository}#{pr_number}](https://github.com/{repository}/pull/{pr_number})"
         if pr_number
@@ -527,7 +552,7 @@ def render_markdown(
     lines = [
         "## Patch coverage",
         "",
-        headline,
+        f"**{summary}**" if projects else summary,
         "",
         f"{pr} changes {changed} file(s) (`{merge_base[:10]}...{head[:10]}`). "
         f"Coverage is from the build of `{built[:10]}` and the reports of "
@@ -625,6 +650,294 @@ def render_markdown(
     return "\n".join(lines)
 
 
+# Per project, test, and file: the changed lines, in head numbering, the test ran.
+TestLines = Mapping[str, Mapping[str, Mapping[str, Sequence[int]]]]
+
+HTML_STYLE = """
+body { font: 14px/1.5 system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
+  color: #1f2328; max-width: 1400px; margin: 2em auto; padding: 0 1em; }
+h1 { font-size: 1.6em; margin-bottom: 0.2em; }
+h2 { font-size: 1.25em; margin-top: 2em; padding-bottom: 0.3em;
+  border-bottom: 1px solid #d1d9e0; }
+a { color: #0969da; text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, table.diff { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.headline { font-size: 1.2em; font-weight: 600; }
+table.data { border-collapse: collapse; margin: 0.5em 0; }
+table.data th, table.data td { border: 1px solid #d1d9e0; padding: 0.25em 0.6em;
+  text-align: left; vertical-align: top; }
+table.data th { background: #f6f8fa; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.bar { display: inline-block; width: 8em; height: 0.6em; margin-right: 0.5em;
+  vertical-align: middle; background: #ffcecb; border-radius: 3px; overflow: hidden; }
+.bar span { display: block; height: 100%; background: #2da44e; }
+.legend span { display: inline-block; margin-right: 0.4em; padding: 0 0.5em;
+  border: 1px solid #d1d9e0; border-radius: 3px; }
+details { margin: 0.6em 0; }
+details > summary { cursor: pointer; }
+details.file { border: 1px solid #d1d9e0; border-radius: 6px; }
+details.file > summary { padding: 0.5em 0.8em; background: #f6f8fa; }
+.scroll { overflow-x: auto; }
+table.diff { border-collapse: collapse; width: 100%; }
+table.diff td { padding: 0 0.6em; white-space: pre; vertical-align: top; }
+table.diff td.n { width: 1%; text-align: right; color: #59636e; user-select: none; }
+table.diff tr.hunk td { padding: 0.2em 0.6em; background: #ddf4ff; color: #59636e; }
+.removed { background: #f6f8fa; color: #818b98; }
+.covered { background: #dafbe1; }
+.missed { background: #ffebe9; }
+.notcode { background: #eef1f5; }
+.unmapped { background: #fff8c5; }
+"""
+
+LINE_STATES = {
+    "covered": "Covered: a test ran it",
+    "missed": "Not covered: no test ran it",
+    "notcode": "Not code: no report counts it",
+    "unmapped": "Not measured: the built commit has it differently",
+    "removed": "Removed",
+}
+
+
+def _natural_key(text: str) -> list:
+    return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", text)]
+
+
+def render_html(
+    coverage: PatchCoverage,
+    *,
+    repository: str,
+    pr_number: Optional[int],
+    merge_base: str,
+    head: str,
+    built: str,
+    projects: Sequence[str],
+    diffs: Sequence[FileDiff],
+    maps: LineMaps,
+    index: CoverageIndex,
+    tests: Optional[TestLines] = None,
+) -> str:
+    """A self-contained page with every measured file's diff and line hit counts.
+
+    Given `tests`, it also lists the tests that ran each changed line.
+    """
+    url = f"https://github.com/{repository}"
+    diff_of = {f.new_path: f for f in diffs}
+
+    def link(href: str, text: str) -> str:
+        return f'<a href="{escape(href)}">{text}</a>'
+
+    def source(path: str, line: Optional[int] = None) -> str:
+        return f"{url}/blob/{head}/{quote(path)}" + (f"#L{line}" if line else "")
+
+    def commit(sha: str) -> str:
+        return link(f"{url}/commit/{sha}", f"<code>{sha[:10]}</code>")
+
+    def bar(covered: int, missed: int) -> str:
+        value = percent(covered, missed)
+        if value is None:
+            return "-"
+        return (
+            f'<span class="bar"><span style="width:{value}%"></span></span>{value:.2f}%'
+        )
+
+    def cell(value: object, css: str = "num") -> str:
+        return f'<td class="{css}">{value}</td>'
+
+    # Per file and changed line, the tests that ran it.
+    ran_by: dict[str, dict[int, list[str]]] = defaultdict(lambda: defaultdict(list))
+    for by_test in (tests or {}).values():
+        for test, files in by_test.items():
+            for path, lines in files.items():
+                for line in lines:
+                    ran_by[path][line].append(test)
+
+    title = f"Patch coverage: {repository}" + (f"#{pr_number}" if pr_number else "")
+    pr = (
+        link(f"{url}/pull/{pr_number}", escape(f"{repository}#{pr_number}"))
+        if pr_number
+        else escape(f"The pull request to {repository}")
+    )
+    page = [
+        "<!DOCTYPE html>",
+        '<html lang="en"><head><meta charset="utf-8">',
+        f"<title>{escape(title)}</title>",
+        f"<style>{HTML_STYLE}</style>",
+        "</head><body>",
+        f"<h1>{escape(title)}</h1>",
+        f'<p class="headline">{escape(headline(coverage, projects))}</p>',
+        f"<p>{pr} changes {len(coverage.files) + len(coverage.unmeasured)} "
+        f"file(s) ({commit(merge_base)}...{commit(head)}). Coverage is from the "
+        f"build of {commit(built)} and the reports of "
+        f"{escape(', '.join(projects) or 'no project')}.</p>",
+    ]
+
+    show_unmapped = any(f.unmapped for f in coverage.files)
+    show_tests = tests is not None
+    if coverage.files:
+        page += [
+            "<h2>Files</h2>",
+            '<table class="data"><tr><th>File</th><th>Changed lines</th>'
+            "<th>Covered</th><th>Not covered</th><th>Not code</th>"
+            + ("<th>Not measured</th>" if show_unmapped else "")
+            + "<th>Patch coverage</th><th>Measured by</th></tr>",
+        ]
+        for i, result in enumerate(coverage.files):
+            c, m, u = len(result.covered), len(result.missed), len(result.unmapped)
+            changed = len(diff_of[result.path].added) if result.path in diff_of else 0
+            page.append(
+                f"<tr><td>{link(f'#file-{i}', f'<code>{escape(result.path)}</code>')}"
+                f"</td>{cell(changed)}{cell(c)}{cell(m)}{cell(max(changed - c - m - u, 0))}"
+                + (cell(u) if show_unmapped else "")
+                + f"{cell(bar(c, m), '')}{cell(escape(', '.join(result.measured_by)), '')}</tr>"
+            )
+        page.append("</table>")
+
+    by_project = coverage.by_project()
+    if len(by_project) > 1:
+        page.append(
+            '<table class="data"><tr><th>Project</th><th>Covered</th>'
+            "<th>Not covered</th><th>Patch coverage</th></tr>"
+        )
+        page += [
+            f"<tr>{cell(escape(project), '')}{cell(c)}{cell(m)}{cell(bar(c, m), '')}</tr>"
+            for project, (c, m) in by_project.items()
+        ]
+        page.append("</table>")
+
+    if coverage.files:
+        page += [
+            "<h2>Changed lines</h2>",
+            "<p>Each measured file's diff, numbered as in the pull request, with how "
+            "many times the tests ran each line of the built commit"
+            + (" and how many tests ran each changed line" if show_tests else "")
+            + '.</p><p class="legend">'
+            + "".join(
+                f'<span class="{css}">{text}</span>'
+                for css, text in LINE_STATES.items()
+            )
+            + "</p>",
+        ]
+    columns = 6 if show_tests else 5
+    for i, result in enumerate(coverage.files):
+        file_diff = diff_of.get(result.path)
+        found = index.lookup(result.path)
+        hunks = maps.get(result.path, [])
+        state = {line: "covered" for line in result.covered}
+        state.update((line, "missed") for line in result.missed)
+        state.update((line, "unmapped") for line in result.unmapped)
+        rows = []
+        for line in file_diff.lines if file_diff else ():
+            if line.kind == "@@":
+                rows.append(
+                    f'<tr class="hunk"><td colspan="{columns}">{escape(line.text)}</td></tr>'
+                )
+                continue
+            css, hits, tested = "", "", ""
+            if line.kind == "-":
+                css = "removed"
+            else:
+                if line.kind == "+":
+                    css = state.get(line.new, "notcode")
+                built_line = None if hunks is None else map_line(line.new, hunks)
+                counts = {
+                    project: line_hits[built_line]
+                    for project, line_hits in found.items()
+                    if built_line in line_hits
+                }
+                if counts:
+                    detail = ", ".join(f"{p}: {n:,}" for p, n in sorted(counts.items()))
+                    hits = f'<span title="{escape(detail)}">{max(counts.values()):,}</span>'
+                names = (
+                    ran_by[result.path].get(line.new, ()) if line.kind == "+" else ()
+                )
+                if names:
+                    suites = defaultdict(int)
+                    for name in names:
+                        suites[name.split(".", 1)[0]] += 1
+                    detail = ", ".join(f"{s}: {n}" for s, n in sorted(suites.items()))
+                    tested = f'<span title="{escape(detail)}">{len(names):,}</span>'
+            new = link(source(result.path, line.new), str(line.new)) if line.new else ""
+            rows.append(
+                f'<tr class="{css}">{cell(line.old or "", "n")}{cell(new, "n")}'
+                f'{cell(hits, "n")}'
+                + (cell(tested, "n") if show_tests else "")
+                + f'{cell(escape(line.kind + line.text), "")}</tr>'
+            )
+        c, m = len(result.covered), len(result.missed)
+        header = (
+            '<tr class="hunk"><td>Old</td><td>New</td><td>Hits</td>'
+            + ("<td>Tests</td>" if show_tests else "")
+            + "<td></td></tr>"
+        )
+        page.append(
+            f'<details class="file" id="file-{i}"{" open" if c or m else ""}>'
+            f"<summary><code>{escape(result.path)}</code>: {c} covered, {m} not "
+            f"covered ({link(source(result.path), 'file at head')})</summary>"
+            f'<div class="scroll"><table class="diff">{header}{"".join(rows)}'
+            "</table></div></details>"
+        )
+
+    if coverage.unmeasured:
+        page += [
+            f"<h2>{len(coverage.unmeasured)} changed file(s) no report measures</h2>",
+            "<p>Tests, build files, documentation, and the code of projects this run "
+            "did not measure.</p><ul>",
+            *(
+                f"<li>{link(source(path), f'<code>{escape(path)}</code>')}</li>"
+                for path in coverage.unmeasured
+            ),
+            "</ul>",
+        ]
+
+    if show_tests:
+        by_suite: dict[str, dict[str, Mapping[str, Sequence[int]]]] = defaultdict(dict)
+        for by_test in tests.values():
+            for test, files in by_test.items():
+                if any(files.values()):
+                    by_suite[test.split(".", 1)[0]][test] = files
+
+        def ran(files: Iterable[Mapping[str, Sequence[int]]]) -> str:
+            union: dict[str, set[int]] = defaultdict(set)
+            for each in files:
+                for path, lines in each.items():
+                    union[path].update(lines)
+            return "; ".join(
+                f'<span title="{escape(path)}">{escape(PurePosixPath(path).name)}</span> '
+                f"{format_ranges(sorted(lines))}"
+                for path, lines in sorted(union.items())
+                if lines
+            )
+
+        count = sum(map(len, by_suite.values()))
+        page += [
+            "<h2>Tests that ran the changed lines</h2>",
+            f"<p>{count:,} test(s) in {len(by_suite)} suite(s) ran at least one "
+            "changed line.</p>",
+            '<table class="data"><tr><th>Suite</th><th>Tests</th>'
+            "<th>Changed lines they ran</th></tr>",
+            *(
+                f"<tr>{cell(f'<code>{escape(suite)}</code>', '')}"
+                f"{cell(len(suite_tests))}{cell(ran(suite_tests.values()), '')}</tr>"
+                for suite, suite_tests in sorted(by_suite.items())
+            ),
+            "</table>",
+        ]
+        for suite, suite_tests in sorted(by_suite.items()):
+            page += [
+                f"<details><summary><code>{escape(suite)}</code>: "
+                f"{len(suite_tests):,} test(s)</summary>",
+                '<table class="data"><tr><th>Test</th><th>Changed lines it ran</th></tr>',
+                *(
+                    f"<tr>{cell(f'<code>{escape(test)}</code>', '')}"
+                    f"{cell(ran([suite_tests[test]]), '')}</tr>"
+                    for test in sorted(suite_tests, key=_natural_key)
+                ),
+                "</table></details>",
+            ]
+    page.append("</body></html>")
+    return "\n".join(page) + "\n"
+
+
 def to_json(
     coverage: PatchCoverage,
     *,
@@ -707,12 +1020,27 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--json-output", type=Path, default=None)
     parser.add_argument("--markdown-output", type=Path, default=None)
     parser.add_argument(
+        "--html-output",
+        type=Path,
+        default=None,
+        help="Page with every measured file's diff and line hit counts",
+    )
+    parser.add_argument(
+        "--tests-json",
+        type=Path,
+        default=None,
+        help="Adds to the HTML page the tests that ran each changed line, read as "
+        '{"<project>": {"<test>": {"<file>": [<head line>, ...]}}}',
+    )
+    parser.add_argument(
         "--max-annotations",
         type=int,
         default=DEFAULT_MAX_ANNOTATIONS,
         help="Most uncovered line ranges to annotate on the pull request",
     )
     args = parser.parse_args(argv)
+    if args.tests_json and not args.html_output:
+        parser.error("--tests-json needs --html-output")
 
     reports = load_reports(args.reports_dir)
     merge_base = args.merge_base_sha or find_merge_base(
@@ -729,9 +1057,11 @@ def main(argv: Optional[list[str]] = None) -> int:
             token=os.environ.get("GITHUB_TOKEN"),
         )
         repo.fetch([merge_base, args.head_sha, built])
-        changes = changed_lines(repo, merge_base, args.head_sha)
+        diffs = changed_files(repo, merge_base, args.head_sha)
+        changes = changed_lines(diffs)
         maps = line_maps(repo, args.head_sha, built, list(changes))
-        coverage = measure(changes, maps, CoverageIndex(reports))
+        index = CoverageIndex(reports)
+        coverage = measure(changes, maps, index)
         sources = {
             f.path: repo.show_lines(args.head_sha, f.path)
             for f in coverage.files
@@ -755,6 +1085,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         args.json_output.parent.mkdir(parents=True, exist_ok=True)
         args.json_output.write_text(
             json.dumps(to_json(coverage, **details), indent=2) + "\n"
+        )
+    if args.html_output:
+        tests = json.loads(args.tests_json.read_text()) if args.tests_json else None
+        args.html_output.parent.mkdir(parents=True, exist_ok=True)
+        args.html_output.write_text(
+            render_html(
+                coverage, diffs=diffs, maps=maps, index=index, tests=tests, **details
+            )
         )
     for command in annotations(coverage, args.max_annotations):
         print(command)

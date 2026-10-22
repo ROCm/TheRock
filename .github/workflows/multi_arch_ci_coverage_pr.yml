@@ -278,7 +278,8 @@ jobs:
             --built-sha="${BUILT_SHA}" \
             --reports-dir=coverage-reports \
             --json-output=patch-coverage/patch_coverage.json \
-            --markdown-output=patch-coverage/patch_coverage.md
+            --markdown-output=patch-coverage/patch_coverage.md \
+            --html-output=patch-coverage/patch_coverage.html
 
       - name: Upload patch coverage report
         if: ${{ always() }}

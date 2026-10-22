@@ -17,11 +17,13 @@ sys.path.insert(0, os.fspath(Path(__file__).parents[2]))
 import patch_coverage_report
 from patch_coverage_report import (
     CoverageIndex,
+    DiffLine,
     FileResult,
     Hunk,
     PatchCoverage,
     Repository,
     annotations,
+    changed_files,
     changed_lines,
     line_maps,
     load_reports,
@@ -29,6 +31,7 @@ from patch_coverage_report import (
     measure,
     parse_diff,
     parse_lcov,
+    render_html,
     render_markdown,
     report_project,
 )
@@ -104,7 +107,24 @@ class ParseDiffTest(unittest.TestCase):
                 "\\ No newline at end of file",
             ]
         )
-        self.assertEqual(parse_diff(diff)[0].added, [2, 3, 12])
+        file_diff = parse_diff(diff)[0]
+        self.assertEqual(file_diff.added, [2, 3, 12])
+        self.assertEqual(
+            file_diff.lines,
+            [
+                DiffLine("@@", "@@ -1,4 +1,5 @@ int f()"),
+                DiffLine(" ", "a", 1, 1),
+                DiffLine("-", "b", old=2),
+                DiffLine("+", "B", new=2),
+                DiffLine("+", "C", new=3),
+                DiffLine(" ", "d", 3, 4),
+                DiffLine("@@", "@@ -10,3 +11,3 @@"),
+                DiffLine(" ", "x", 10, 11),
+                DiffLine("-", "y", old=11),
+                DiffLine("+", "Y", new=12),
+                DiffLine(" ", "z", 12, 13),
+            ],
+        )
 
     def test_rename_and_unusual_names(self):
         diff = "\n".join(
@@ -314,6 +334,77 @@ class OutputTest(unittest.TestCase):
             render_markdown(empty, projects=["hiprand"], sources={}, **self.DETAILS),
         )
 
+    def test_html(self):
+        diffs = parse_diff(
+            "\n".join(
+                [
+                    "diff --git a/src/a.cpp b/src/a.cpp",
+                    "--- a/src/a.cpp",
+                    "+++ b/src/a.cpp",
+                    "@@ -1,3 +1,5 @@",
+                    " int f() {",
+                    "-  return 0;",
+                    "+  if (x < 1)",
+                    "+    return 1;",
+                    "+  // done",
+                    " }",
+                    "diff --git a/tests/a_test.cpp b/tests/a_test.cpp",
+                    "--- a/tests/a_test.cpp",
+                    "+++ b/tests/a_test.cpp",
+                    "@@ -1 +1,2 @@",
+                    " TEST(A, B) {}",
+                    "+TEST(A, C) {}",
+                ]
+            )
+        )
+        index = CoverageIndex(
+            {"rocrand": {f"{WORKSPACE}/src/a.cpp": {1: 7, 2: 7, 3: 0, 5: 7}}}
+        )
+        coverage = measure(changed_lines(diffs), {}, index)
+        details = dict(
+            coverage=coverage,
+            projects=["rocrand"],
+            diffs=diffs,
+            maps={},
+            index=index,
+            **self.DETAILS,
+        )
+        tests = {
+            "rocrand": {
+                "Suite.t/10": {"src/a.cpp": [2]},
+                "Suite.t/2": {"src/a.cpp": [2]},
+                "Suite.t/1": {"src/a.cpp": [2]},
+                "Other.idle": {"src/a.cpp": []},
+            }
+        }
+        text = render_html(tests=tests, **details)
+
+        self.assertIn(
+            '<p class="headline">1 of 2 changed lines covered (50.00%).</p>', text
+        )
+        self.assertIn("+  if (x &lt; 1)", text)
+        for css in ("covered", "missed", "notcode", "removed"):
+            self.assertIn(f'<tr class="{css}">', text)
+        self.assertIn('<span title="rocrand: 7">7</span>', text)
+        # Line 3 is code no test ran; line 4 is a comment, so has no count.
+        self.assertIn('<span title="rocrand: 0">0</span>', text)
+        self.assertIn(
+            'href="https://github.com/ROCm/rocm-libraries/blob/'
+            f'{"b" * 40}/src/a.cpp#L2"',
+            text,
+        )
+        self.assertIn('<span title="Suite: 3">3</span>', text)
+        self.assertIn("3 test(s) in 1 suite(s) ran at least one changed line.", text)
+        self.assertNotIn("Other.idle", text)
+        positions = [text.index(f"<code>Suite.t/{n}</code>") for n in (1, 2, 10)]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("1 changed file(s) no report measures", text)
+        self.assertIn("<code>tests/a_test.cpp</code>", text)
+
+        text = render_html(**details)
+        self.assertNotIn("Tests that ran the changed lines", text)
+        self.assertNotIn("<td>Tests</td>", text)
+
     def test_annotations(self):
         commands = annotations(self._coverage(), limit=10)
         self.assertEqual(
@@ -397,7 +488,7 @@ class GitTest(unittest.TestCase):
     def test_changed_lines_and_mapping(self):
         repo = Repository(self.tmp / "scratch", self.url)
         repo.fetch([self.merge_base, self.head, self.built])
-        changes = changed_lines(repo, self.merge_base, self.head)
+        changes = changed_lines(changed_files(repo, self.merge_base, self.head))
         self.assertEqual(
             changes,
             {"src/a.cpp": [5, 9, 10], "src/c.cpp": [1, 2, 3], "tests/t.cpp": [1]},
@@ -421,6 +512,9 @@ class GitTest(unittest.TestCase):
         )
         summary = self.tmp / "summary.md"
         json_output = self.tmp / "out" / "patch_coverage.json"
+        html_output = self.tmp / "out" / "patch_coverage.html"
+        tests_json = self.tmp / "tests.json"
+        tests_json.write_text(json.dumps({"rocrand": {"S.t": {"src/a.cpp": [5]}}}))
         real_repository = patch_coverage_report.Repository
 
         def local_repository(path, url, token=None):
@@ -439,6 +533,8 @@ class GitTest(unittest.TestCase):
                     f"--merge-base-sha={self.merge_base}",
                     f"--reports-dir={self.tmp / 'reports'}",
                     f"--json-output={json_output}",
+                    f"--html-output={html_output}",
+                    f"--tests-json={tests_json}",
                 ]
             )
         self.assertEqual(exit_code, 0)
@@ -458,6 +554,15 @@ class GitTest(unittest.TestCase):
         self.assertIn("**2 of 4 changed lines covered (50.00%).**", text)
         self.assertIn("\n9 | new8a\n", text)
         self.assertIn("\n2 | c2\n", text)
+        page = html_output.read_text()
+        self.assertIn("2 of 4 changed lines covered (50.00%).", page)
+        # Head line 5 is built line 8, which ran 5 times.
+        self.assertIn(
+            '<span title="rocrand: 5">5</span></td><td class="n">'
+            '<span title="S: 1">1</span>',
+            page,
+        )
+        self.assertIn("+changed5", page)
 
 
 if __name__ == "__main__":

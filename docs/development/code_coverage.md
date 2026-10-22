@@ -241,8 +241,10 @@ object with `repository`, `number`, `base_sha` and `head_sha`.
 The totals and a per-file table go to the job summary, with the source of each
 uncovered line. Uncovered lines also get warning annotations, which GitHub shows
 on the pull request's diff. The `coverage-patch` artifact has the same results
-as `patch_coverage.json` and `patch_coverage.md`. Low patch coverage is
-reported, not failed.
+as `patch_coverage.json` and `patch_coverage.md`, and `patch_coverage.html`, a
+page showing each measured file's diff with the hit count of every line. Given
+`--tests-json`, the script adds the tests that ran each changed line to that page.
+Low patch coverage is reported, not failed.
 
 #### Calling it from another repository
 
