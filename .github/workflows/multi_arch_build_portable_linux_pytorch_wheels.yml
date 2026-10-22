@@ -556,13 +556,6 @@ jobs:
             --build-variant="${{ inputs.build_variant }}" \
             --structured
 
-      - name: Upload ASAN torch wheel artifact
-        if: ${{ startsWith(inputs.build_variant, 'asan') }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: pytorch-asan-wheel-${{ github.run_id }}-py${{ inputs.python_version }}
-          path: ${{ github.workspace }}/output/packages/dist/*.whl
-
       - name: Capture job summary
         id: summary
         if: always()
