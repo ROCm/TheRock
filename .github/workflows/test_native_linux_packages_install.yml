@@ -243,6 +243,7 @@ jobs:
       - name: Install System Prerequisites
         run: |
           echo "Installing prerequisites for ${PKG_TYPE} on container"
+          # cmake is for the downstream find_package smoke test, including sanity.
 
           if [ "${PKG_TYPE}" = "deb" ]; then
             sudo apt update
@@ -252,7 +253,8 @@ jobs:
               ca-certificates \
               gpg \
               lsb-release \
-              binutils
+              binutils \
+              cmake
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod, apt-utils"
               sudo apt install -y pciutils kmod apt-utils
@@ -267,7 +269,8 @@ jobs:
               gpg2 \
               lsb-release \
               update-alternatives \
-              binutils
+              binutils \
+              cmake
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive on SLES (e.g. rdhc): pciutils, kmod"
               zypper install -y pciutils kmod
@@ -280,7 +283,8 @@ jobs:
               ca-certificates \
               gnupg2 \
               dnf-plugins-core \
-              binutils
+              binutils \
+              cmake
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod"
               dnf install -y --allowerasing pciutils kmod
@@ -313,6 +317,18 @@ jobs:
         run: |
           echo "TEST - OS:${OS_PROFILE} REPO:${REPO_URL} Arch:${GFX_ARCH} Type:${RELEASE_TYPE}"
           $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=long -s
+
+      - name: Downstream CMake smoke test
+        # Configure-only find_package(hip) and find_package(hipblaslt) against
+        # INSTALL_PREFIX. The helper has no skip path; this if is the only gate.
+        # install and simulate have no installed prefix. Empty, sanity, quick,
+        # standard, full, and comprehensive run it. Helper unit tests run in
+        # unit_tests.yml, not in this job.
+        if: ${{ inputs.test_type != 'install' && inputs.test_type != 'simulate' }}
+        run: |
+          echo "CMAKE SMOKE - OS:${OS_PROFILE} Prefix:${INSTALL_PREFIX}"
+          $PYTHON_CMD build_tools/packaging/linux/downstream_cmake_smoke.py \
+            --install-prefix "${INSTALL_PREFIX}"
 
       - name: Package Uninstall Test
         # Gated by workflow input only; no RUN_UNINSTALL env (reuses job env from install step).
