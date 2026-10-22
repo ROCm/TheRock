@@ -478,12 +478,6 @@ pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
 pip install "jax==${JAX_VERSION}"
 ```
 
-> [!NOTE]
-> The dev and nightly indexes also carry `.dev` builds of `jax`, `jaxlib`, and the
-> ROCm plugin and PJRT, built from upstream `jax-ml/jax` `main`. Installing `jax` or
-> `jaxlib` from those indexes without a version pin resolves to that build, so pin
-> versions and take `jax` from PyPI as shown above to get a release.
-
 After installing, verify JAX can see your GPU:
 
 ```python
