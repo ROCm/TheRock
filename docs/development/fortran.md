@@ -8,10 +8,10 @@ Flang disabled.
 
 There are two mutually exclusive ways to get `lib/llvm/bin/flang`:
 
-| Path | Flag | What builds |
-|------|------|-------------|
-| amd-llvm distribution (default) | `THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION=ON` | Stages the LLVM `fortran` distribution from `amd-llvm` |
-| Standalone (opt-in) | `THEROCK_ENABLE_FLANG_STANDALONE=ON` | `amd-llvm-flang` (Flang + MLIR; flang-rt and OpenMP Fortran modules via a runtimes ExternalProject) |
+| Path                            | Flag                                              | What builds                                                                                         |
+| ------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| amd-llvm distribution (default) | `THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION=ON` | Stages the LLVM `fortran` distribution from `amd-llvm`                                              |
+| Standalone (opt-in)             | `THEROCK_ENABLE_FLANG_STANDALONE=ON`              | `amd-llvm-flang` (Flang + MLIR; flang-rt and OpenMP Fortran modules via a runtimes ExternalProject) |
 
 Host OpenMP (`libomp`) continues to come from the main `amd-llvm` / `runtimes`
 build. The standalone path does **not** use a separate `amd-llvm-offload`
@@ -34,8 +34,8 @@ Related artifacts / packaging:
 - **ON**: exactly one delivery path must be enabled:
   - fortran distribution **or**
   - standalone
-  Configure fails if both are off. If standalone is on, the fortran
-  distribution option is forced off (do not build Flang twice).
+    Configure fails if both are off. If standalone is on, the fortran
+    distribution option is forced off (do not build Flang twice).
 
 When Flang is enabled, `base/aux-overlay` installs the public `bin/amdflang`
 symlink and `flang.cfg` (points at `lib/llvm/bin/flang`).
@@ -49,14 +49,14 @@ options are off.
 Effective default Flang path on Linux with ALL: **amd-llvm fortran distribution**
 (`FLANG=ON`, `FLANG_STANDALONE=OFF`, `COMPILER_FORTRAN_DISTRIBUTION=ON`).
 
-| Flag | Default (Linux / ALL) | Default (Windows) | Role |
-|------|----------------------|-------------------|------|
-| `THEROCK_ENABLE_FLANG` | **ON** | **OFF** | Master enable for Flang (Linux + `COMPILER` only). |
-| `THEROCK_ENABLE_FLANG_STANDALONE` | **OFF** | **OFF** | Build `amd-llvm-flang`. Opt-in via topology `feature_default = false`. Forced OFF if Flang is off. |
-| `THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION` | **ON** | **OFF** | Stage amd-llvm’s `fortran` distribution. ON when Flang is on and standalone is off; forced off when standalone is on. |
-| `THEROCK_FLAG_BUILD_FORTRAN_LIBS` | **ON** | **OFF** | Build Fortran clients/wrappers/tests in subprojects. Forced OFF if Flang is off. |
-| `ROCM_BUILD_FORTRAN_LIBS` | same as flag | same as flag | Same policy, mirrored into subprojects. |
-| `FLANG_PARALLEL_COMPILE_JOBS` / `LLVM_PARALLEL_LINK_JOBS` | (unset) | (unset) | Cap Flang/LLVM memory use. |
+| Flag                                                      | Default (Linux / ALL) | Default (Windows) | Role                                                                                                                  |
+| --------------------------------------------------------- | --------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `THEROCK_ENABLE_FLANG`                                    | **ON**                | **OFF**           | Master enable for Flang (Linux + `COMPILER` only).                                                                    |
+| `THEROCK_ENABLE_FLANG_STANDALONE`                         | **OFF**               | **OFF**           | Build `amd-llvm-flang`. Opt-in via topology `feature_default = false`. Forced OFF if Flang is off.                    |
+| `THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION`            | **ON**                | **OFF**           | Stage amd-llvm’s `fortran` distribution. ON when Flang is on and standalone is off; forced off when standalone is on. |
+| `THEROCK_FLAG_BUILD_FORTRAN_LIBS`                         | **ON**                | **OFF**           | Build Fortran clients/wrappers/tests in subprojects. Forced OFF if Flang is off.                                      |
+| `ROCM_BUILD_FORTRAN_LIBS`                                 | same as flag          | same as flag      | Same policy, mirrored into subprojects.                                                                               |
+| `FLANG_PARALLEL_COMPILE_JOBS` / `LLVM_PARALLEL_LINK_JOBS` | (unset)               | (unset)           | Cap Flang/LLVM memory use.                                                                                            |
 
 Subprojects opt into the toolchain with `therock_cmake_subproject_declare`:
 
