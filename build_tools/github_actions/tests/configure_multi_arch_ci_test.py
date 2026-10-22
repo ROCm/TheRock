@@ -470,6 +470,18 @@ class TestShouldSkipCI(unittest.TestCase):
         )
         self.assertTrue(cm.should_skip_ci(inputs, git))
 
+    def test_host_asan_pr_label_skips(self):
+        """ASAN PR with only ci:host-asan skips CI.
+
+        host-asan is not a presubmit path. ci:asan is the label that runs
+        full ASAN on a pull request.
+        """
+        inputs = self._inputs(build_variant="asan", pr_labels=["ci:host-asan"])
+        git = cm.GitContext(
+            changed_files=["CMakeLists.txt", "build_tools/script.py"],
+        )
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+
     def test_asan_pr_with_ci_asan_label_runs(self):
         """ASAN PR with ci:asan label runs CI."""
         inputs = self._inputs(build_variant="asan", pr_labels=["ci:asan"])
@@ -857,21 +869,34 @@ class TestDecideJobs(unittest.TestCase):
 
     # TODO(#3433): Remove ASAN tests once ASAN tests are passing
     def test_asan_tests_only_run_on_nightly_triggers(self):
-        """ASAN tests only run on schedule/workflow_dispatch, skip on PR/push."""
+        """Full ASAN tests run on schedule/workflow_dispatch and skip on a PR.
+
+        A push remaps to host-asan, so the test job stays enabled. Per-family
+        runners still decide whether gfx90a actually tests.
+        """
         git_context = cm.GitContext()
 
-        # PR and push should skip ASAN tests
-        for event in ["pull_request", "push"]:
-            result = cm.decide_jobs(
-                self._inputs(event_name=event, build_variant="asan"),
-                git_context=git_context,
-                targets=cm.TargetSelection(),
-            )
-            self.assertEqual(
-                result.test_rocm.action,
-                cm.JobAction.SKIP,
-                f"ASAN tests should skip on {event}",
-            )
+        result = cm.decide_jobs(
+            self._inputs(event_name="pull_request", build_variant="asan"),
+            git_context=git_context,
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(
+            result.test_rocm.action,
+            cm.JobAction.SKIP,
+            "full ASAN tests should skip on pull_request",
+        )
+
+        result = cm.decide_jobs(
+            self._inputs(event_name="push", build_variant="asan"),
+            git_context=git_context,
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(
+            result.test_rocm.action,
+            cm.JobAction.RUN,
+            "push host-asan keeps the test job enabled",
+        )
 
         # Schedule and workflow_dispatch should run ASAN tests
         for event in ["schedule", "workflow_dispatch"]:
@@ -2055,7 +2080,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             windows_families=["gfx110x"],
         )
         result = cm.expand_build_configs(
-            ci_inputs=self._inputs(build_variant="asan"),
+            ci_inputs=self._inputs(event_name="schedule", build_variant="asan"),
             git_context=cm.GitContext(),
             targets=targets,
             jobs=_jobs(),
@@ -2070,7 +2095,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
     def test_variant_filters_by_trigger(self):
         """ASAN: based on event type, we run an expected ASAN build variant"""
         targets = cm.TargetSelection(
-            linux_families=["gfx94x"],
+            linux_families=["gfx94x", "gfx90a"],
         )
         test_cases = [
             ("schedule", "linux-release-asan"),
@@ -2098,21 +2123,18 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 build_variant_cmake_preset = result.linux.build_variant_cmake_preset
                 self.assertEqual(build_variant_cmake_preset, expected_variant)
 
-    def test_push_asan_excludes_families_without_host_asan_support(self):
-        """Push ASAN: gfx110x only supports release, so it must be excluded.
+    def test_push_asan_runs_host_asan_on_gfx90a(self):
+        """Push ASAN becomes host-asan and keeps only gfx90a.
 
-        When build_variant=asan on push events, the effective variant becomes
-        host-asan. Families must be filtered using this effective variant, not
-        the original asan variant. gfx110x only supports release (not host-asan),
-        so it should be excluded from the result.
+        A plain postsubmit push builds host-asan but does not test.
+        A submodule bump tests on linux-gfx90a-1gpu-ossci-rocm.
         """
-        # gfx94x supports host-asan, gfx110x only supports release (not host-asan)
         targets = cm.TargetSelection(
-            linux_families=["gfx94x", "gfx110x"],
+            linux_families=["gfx94x", "gfx110x", "gfx90a"],
         )
         ci_inputs = cm.CIInputs(
             run_id="12345",
-            event_name="push",  # push triggers asan -> host-asan remap
+            event_name="push",
             commit_ref="main",
             base_ref="HEAD^1",
             build_variant="asan",
@@ -2124,15 +2146,41 @@ class TestExpandBuildConfigs(unittest.TestCase):
             jobs=_jobs(),
         )
         self.assertIsNotNone(result.linux)
-        # Verify it's a host-asan build
         self.assertEqual(
             result.linux.build_variant_cmake_preset, "linux-release-host-asan"
         )
-        # Only gfx94x should survive (it supports host-asan), gfx110x should be excluded
         family_names = [info["amdgpu_family"] for info in result.linux.per_family_info]
-        self.assertIn("gfx94X-dcgpu", family_names)
-        self.assertNotIn("gfx110X-all", family_names)
-        self.assertEqual(len(result.linux.per_family_info), 1)
+        self.assertEqual(family_names, ["gfx90a"])
+        self.assertEqual(result.linux.per_family_info[0]["test-runs-on"], "")
+
+        submodule_bump = cm.expand_build_configs(
+            ci_inputs=ci_inputs,
+            git_context=cm.GitContext(
+                changed_files=["rocm-libraries"],
+                submodule_paths=["rocm-libraries"],
+            ),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertEqual(
+            submodule_bump.linux.per_family_info[0]["test-runs-on"],
+            "linux-gfx90a-1gpu-ossci-rocm",
+        )
+
+    def test_pull_request_asan_stays_full_asan(self):
+        """A pull request does not remap asan to host-asan."""
+        targets = cm.TargetSelection(linux_families=["gfx94x", "gfx90a"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(event_name="pull_request", build_variant="asan"),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux)
+        self.assertEqual(result.linux.build_variant_cmake_preset, "linux-release-asan")
+        family_names = [info["amdgpu_family"] for info in result.linux.per_family_info]
+        self.assertEqual(family_names, ["gfx94X-dcgpu"])
+        self.assertEqual(result.linux.per_family_info[0]["test-runs-on"], "")
 
     def test_test_runner_kernel_overrides_runner_label(self):
         """test_runner:oem label swaps in kernel-specific runner for gfx1151."""
@@ -2213,9 +2261,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
 
-    def test_host_asan_debug_nightly_has_no_sandbox_runner(self):
-        """host-asan-debug nightly cannot use the rocm-systems PR sandbox pools."""
-        targets = cm.TargetSelection(linux_families=["gfx94x"])
+    def test_host_asan_debug_uses_gfx90a_runner(self):
+        """host-asan-debug tests use the gfx90a runner, not a sandbox pool."""
+        targets = cm.TargetSelection(linux_families=["gfx90a"])
         result = cm.expand_build_configs(
             ci_inputs=self._inputs(
                 event_name="schedule", build_variant="host-asan-debug"
@@ -2225,7 +2273,18 @@ class TestExpandBuildConfigs(unittest.TestCase):
             jobs=_jobs(),
         )
         entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "")
+        self.assertEqual(entry["test-runs-on"], "linux-gfx90a-1gpu-ossci-rocm")
+
+        # A presubmit family no longer builds host-asan-debug.
+        dropped = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="schedule", build_variant="host-asan-debug"
+            ),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(linux_families=["gfx94x"]),
+            jobs=_jobs(),
+        )
+        self.assertIsNone(dropped.linux)
 
     def test_explicit_strict_linux_dev_build(self):
         """Explicit selection creates a build config without GPU tests."""
