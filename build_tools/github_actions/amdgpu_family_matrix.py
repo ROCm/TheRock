@@ -662,6 +662,29 @@ amdgpu_family_info_matrix = {
             "tests_on_trigger": [],
         },
     },
+    # Nightly and submodule_bump only builds, no postsubmit. Tests only on nightly
+    "gfx117x": {
+        "linux": {
+            "test-runs-on": "linux-gfx117x-gpu-rocm",
+            "family": "gfx117X-all",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "builds_on_trigger": ["nightly", "submodule_bump"],
+            "bypass_tests_for_releases": True,
+            "tests_on_trigger": ["nightly"],
+            "disabled_framework_tests": ["pytorch", "jax"],
+        },
+        "windows": {
+            "test-runs-on": "windows-gfx117x-gpu-rocm",
+            "family": "gfx117X-all",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "builds_on_trigger": ["nightly", "submodule_bump"],
+            "bypass_tests_for_releases": True,
+            "tests_on_trigger": ["nightly"],
+            "disabled_framework_tests": ["pytorch", "jax"],
+        },
+    },
 }
 
 
@@ -677,26 +700,6 @@ amdgpu_family_info_matrix_explicit_only = {
             "build_variants": ["release"],
             "bypass_tests_for_releases": True,
             "builds_on_trigger": [],  # Never auto-included, explicit only
-            "tests_on_trigger": [],
-        },
-    },
-    # To be moved to nightly once upstreaming is complete and R-S , R-L is bumped
-    "gfx117x": {
-        "linux": {
-            "test-runs-on": "",
-            "family": "gfx117X-all",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-            "bypass_tests_for_releases": True,
-            "builds_on_trigger": [],  # Never auto-included, explicit only, add nightly once moved to nightly
-            "tests_on_trigger": [],
-        },
-        "windows": {
-            "test-runs-on": "",
-            "family": "gfx117X-all",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-            "builds_on_trigger": [],  # Never auto-included, explicit only, add nightly once moved to nightly
             "tests_on_trigger": [],
         },
     },
