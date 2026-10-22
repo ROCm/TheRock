@@ -1162,6 +1162,8 @@ class TestSelectTargets(unittest.TestCase):
         result = cm.select_targets(inputs)
         # Should include nightly-only families
         self.assertIn("gfx906", result.linux_families)
+        # gfx125x should be built but not tested (ROCm/rocm-systems#11374)
+        self.assertIn("gfx125x", result.linux_families)
 
     def test_run_all_archs_with_gfx_label_order_independent(self):
         """ci:run-all-archs + ci:gfx* produces the same result regardless of label order.
@@ -3263,6 +3265,78 @@ class TestTriggerHelpers(unittest.TestCase):
                 )
                 self.assertTrue(should_run)
                 self.assertIn("ci:run-all-archs", reason)
+
+    def test_should_run_tests_ci_run_all_archs_excludes_gfx125x(self):
+        """ci:run-all-archs skips tests for gfx125X-dcgpu (ROCm/rocm-systems#11374)."""
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="main",
+            build_variant="release",
+            pr_labels=["ci:run-all-archs"],
+        )
+        should_run, reason = cm._should_run_tests_for_family(
+            {"tests_on_trigger": ["nightly"], "family": "gfx125X-dcgpu"},
+            ci_inputs,
+            cm.GitContext.empty(),
+        )
+        self.assertFalse(should_run)
+        self.assertIn("gfx125X-dcgpu", reason)
+
+    def test_should_run_tests_ci_run_all_archs_excludes_gfx117x(self):
+        """ci:run-all-archs skips tests for gfx117X-all."""
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="main",
+            build_variant="release",
+            pr_labels=["ci:run-all-archs"],
+        )
+        should_run, reason = cm._should_run_tests_for_family(
+            {"tests_on_trigger": ["nightly"], "family": "gfx117X-all"},
+            ci_inputs,
+            cm.GitContext.empty(),
+        )
+        self.assertFalse(should_run)
+        self.assertIn("gfx117X-all", reason)
+
+    def test_gfx_specific_label_bypasses_run_all_archs_exclusion(self):
+        """ci:gfx* labels run tests even for families excluded from ci:run-all-archs.
+
+        Families in _RUN_ALL_ARCHS_TEST_EXCLUDE (gfx125X-dcgpu, gfx117X-all) have
+        tests skipped under ci:run-all-archs, but a gfx-specific label like
+        ci:gfx125X-dcgpu adds the family to test_only_families, which bypasses
+        _should_run_tests_for_family entirely (line 1716 guard).
+
+        This test verifies the end-to-end configure() path for gfx125x (which
+        has test runners configured). gfx117x has no test-runs-on so it is
+        verified at the _should_run_tests_for_family unit level above.
+        """
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="main",
+            build_variant="release",
+            pr_labels=["ci:gfx125X-dcgpu"],
+        )
+        outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+        # _find_family_info is on TestRealFamilyMatrix; inline the lookup here.
+        family_info = None
+        if outputs.builds.linux:
+            for fi in outputs.builds.linux.per_family_info:
+                if fi["amdgpu_family"] == "gfx125X-dcgpu":
+                    family_info = fi
+                    break
+
+        self.assertIsNotNone(family_info, "gfx125X-dcgpu should be built")
+        self.assertNotEqual(
+            family_info["test-runs-on"],
+            "",
+            "ci:gfx125X-dcgpu label should enable tests despite exclusion set",
+        )
 
 
 # ---------------------------------------------------------------------------
