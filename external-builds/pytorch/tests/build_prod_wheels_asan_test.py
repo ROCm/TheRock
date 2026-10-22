@@ -16,6 +16,7 @@ from build_prod_wheels import (
 )
 from setup_pytorch_asan import (
     append_env_text,
+    enable_apex_asan,
     enable_torchaudio_asan,
     enable_torchvision_asan,
 )
@@ -222,6 +223,89 @@ def make_extension():
         self.assertNotIn(
             "is_available() and ((CUDA_HOME is not None) or IS_ROCM)) or FORCE_CUDA",
             patched,
+        )
+
+    def test_asan_allows_an_explicit_apex_build(self):
+        parser = argparse.ArgumentParser()
+        args = self._args(asan=True, build_apex=True)
+
+        validate_build_args(parser, args)
+
+        self.assertTrue(args.build_apex)
+        self.assertFalse(args.build_triton)
+        self.assertFalse(args.build_pytorch_audio)
+        self.assertFalse(args.build_pytorch_vision)
+
+    def test_asan_patches_apex_extensions_once(self):
+        import tempfile
+
+        setup = """\
+import os
+import torch
+if not torch.cuda.is_available() and not IS_ROCM_PYTORCH:
+    pass
+elif not torch.cuda.is_available() and IS_ROCM_PYTORCH:
+    pass
+"""
+        builder = """\
+WARNING = f"{YELLOW} [WARNING] {END}"
+
+def jit_load(self):
+        nvcc_args = self.strip_empty_entries(self.nvcc_args())
+        cxx_args = self.strip_empty_entries(self.cxx_args())
+        op_module = load(name=self.name,
+                         extra_ldflags=self.strip_empty_entries(self.extra_ldflags()),
+                         )
+
+def builder(self):
+        return CppExtension(name=self.absolute_name(),
+                            extra_compile_args={'cxx': self.strip_empty_entries(self.cxx_args())},
+                            extra_link_args=self.strip_empty_entries(self.extra_ldflags()))
+
+        cuda_ext = ExtensionBuilder(name=self.absolute_name(),
+                                    sources=self.strip_empty_entries(self.sources()),
+                                    include_dirs=include_dirs,
+                                    libraries=self.strip_empty_entries(self.libraries_args()),
+                                    extra_compile_args=compile_args,
+                                    extra_link_args=self.strip_empty_entries(self.extra_ldflags()))
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            setup_path = root / "setup.py"
+            setup_path.write_text(setup)
+            builder_path = root / "op_builder" / "builder.py"
+            builder_path.parent.mkdir(parents=True)
+            builder_path.write_text(builder)
+
+            enable_apex_asan(root)
+            setup_patched = setup_path.read_text()
+            builder_patched = builder_path.read_text()
+            enable_apex_asan(root)
+            self.assertEqual(setup_patched, setup_path.read_text())
+            self.assertEqual(builder_patched, builder_path.read_text())
+
+        self.assertIn("-shared-libasan", builder_patched)
+        self.assertIn(
+            "cxx_args = self.strip_empty_entries(self.cxx_args()) + _asan_flags()",
+            builder_patched,
+        )
+        self.assertIn(
+            "extra_ldflags=self.strip_empty_entries(self.extra_ldflags()) + _asan_flags()",
+            builder_patched,
+        )
+        self.assertEqual(builder_patched.count("def _asan_flags():"), 1)
+        self.assertIn('os.environ.pop("LD_PRELOAD", None)', setup_patched)
+        self.assertIn(
+            'os.environ.get("USE_ASAN") != "1" and not torch.cuda.is_available()',
+            setup_patched,
+        )
+        self.assertNotIn(
+            "if not torch.cuda.is_available() and not IS_ROCM_PYTORCH:",
+            setup_patched,
+        )
+        self.assertNotIn(
+            "elif not torch.cuda.is_available() and IS_ROCM_PYTORCH:",
+            setup_patched,
         )
 
     def test_asan_rejects_an_explicit_non_audio_companion(self):
