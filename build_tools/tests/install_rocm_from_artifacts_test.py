@@ -483,6 +483,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         libhipcxx=False,
         hipthreads=False,
         dev=False,
+        flang=False,
         tests=False,
     )
     defaults.update(overrides)
