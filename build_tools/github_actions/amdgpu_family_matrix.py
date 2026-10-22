@@ -451,19 +451,19 @@ amdgpu_family_info_matrix = {
             "disabled_framework_tests": ["pytorch"],
         },
     },
-    # Postsubmit family - builds on postsubmit, tests on postsubmit and nightly
+    # Postsubmit family - builds on postsubmit, tests on nightly only (machines used for host-asan)
     "gfx90a": {
         "linux": {
             "test-runs-on": "linux-gfx90a-1gpu-ossci-rocm",
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
-            "build_variants": ["release", "asan-debug"],
+            "build_variants": ["release", "asan-debug", "host-asan", "host-asan-debug"],
             "builds_on_trigger": [
                 "postsubmit",
                 "submodule_bump",
                 "nightly",
             ],
-            "tests_on_trigger": ["postsubmit", "nightly"],
+            "tests_on_trigger": ["nightly"],
             # Only run tests when gfx90a label is present on PR
             "trigger_test_label_only": True,
         },
