@@ -264,6 +264,10 @@ jobs:
             echo "::warning::Sources unavailable; skipping the annotated HTML report."
           fi
 
+          # Strip through the submodule root so Codecov SF: paths are relative
+          # to rocm-libraries/ (matching its working-directory). path-equivalence
+          # maps the build-time submodule path to GITHUB_WORKSPACE for HTML.
+          BUILD_SUBMODULE_PATH="${BUILD_REPO_ROOT}/rocm-libraries"
           python ./build_tools/github_actions/merge_coverage_report.py \
             --profraw-dir="${PROFRAW_DIR}" \
             --rocm-dir="${OUTPUT_ARTIFACTS_DIR}" \
@@ -271,8 +275,8 @@ jobs:
             --profdata-output="${REPORT_DIR}/coverage.profdata" \
             --lcov-output="${REPORT_DIR}/coverage.info" \
             --summary-output="${REPORT_DIR}/coverage_summary.txt" \
-            --path-equivalence="${BUILD_WORKSPACE},${GITHUB_WORKSPACE}" \
-            --lcov-strip-prefix="${BUILD_REPO_ROOT}/" \
+            --path-equivalence="${BUILD_SUBMODULE_PATH},${GITHUB_WORKSPACE}" \
+            --lcov-strip-prefix="${BUILD_SUBMODULE_PATH}/" \
             --ignore-filename-regex=".*/build/.*" \
             "${html_args[@]}"
 
@@ -308,7 +312,7 @@ jobs:
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          working-directory: /home/runner/work/rocm-libraries/rocm-libraries/
+          working-directory: ${{ github.workspace }}/rocm-libraries
           files: ${{ env.REPORT_DIR }}/coverage.info
           flags: "${{ inputs.codecov_flag || inputs.project_name }} - Nightly"
           name: ${{ inputs.project_name }}-${{ inputs.amdgpu_families }}
