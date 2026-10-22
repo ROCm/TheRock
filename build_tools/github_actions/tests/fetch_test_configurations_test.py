@@ -159,15 +159,15 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertEqual(names, {"rocblas", "hipblas"})
 
-    def test_dnn_benchmarking_runs_only_opted_in_providers_with_long_timeout(self):
-        os.environ["TEST_TYPE"] = "dnn_benchmarking"
+    def test_workloads_runs_only_opted_in_providers_with_long_timeout(self):
+        os.environ["TEST_TYPE"] = "workloads"
 
         fetch_test_configurations.run()
         components = {job["job_name"]: job for job in self._get_components()}
 
         self.assertEqual(set(components), {"miopenprovider", "hipblasltprovider"})
         for job in components.values():
-            self.assertEqual(job["test_type"], "dnn_benchmarking")
+            self.assertEqual(job["test_type"], "workloads")
             self.assertEqual(job["timeout_minutes"], 180)
 
     def test_other_test_types_keep_provider_timeout(self):
