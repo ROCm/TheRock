@@ -43,6 +43,7 @@ if(THEROCK_ENABLE_ROCJITSU)
   therock_test_validate_shared_lib(PATH rocjitsu/dist/lib
     LIB_NAMES
       librocjitsu.so
+      librocjitsu_hooks.so
   )
   therock_provide_artifact(rocjitsu
     TARGET_NEUTRAL

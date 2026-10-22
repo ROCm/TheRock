@@ -3,11 +3,14 @@
 default_patterns = false
 include = [
   "lib/librocjitsu.so",
+  "lib/librocjitsu_hooks.so",
+  "lib/librocjitsu_plugin_*.so",
 ]
 [components.dbg."emulation/rocjitsu/stage"]
 [components.dev."emulation/rocjitsu/stage"]
 [components.run."emulation/rocjitsu/stage"]
 include = [
+  "bin/rocjitsu",
   "bin/rj_pretranslate",
   "bin/rocjitsu-pretranslate.py",
   "share/rocjitsu/**",
