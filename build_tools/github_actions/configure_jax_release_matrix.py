@@ -79,10 +79,12 @@ JAX_REF_CONFIGS = {
         # main has no release on PyPI, so jax and jaxlib are built from the same
         # checkout and dated from its HEAD commit (see resolve_jax_version.py).
         "wheel_type": "nightly",
-        # The tests install jax and jaxlib from whl-next, which routes them for
-        # these streams only (rocm_whl_next_ownership.yaml); elsewhere tip
-        # builds without publishing.
+        # Published to rocm/jax/whl-next for these alone: publication to the
+        # bkc stream fails for every JAX row today.
         "publish_release_types": ["dev", "nightly"],
+        # The tests install jax and jaxlib from the aggregate whl-next, which
+        # does not route them yet (rocm_whl_next_ownership.yaml).
+        "run_tests": False,
         # JAX dropped Python 3.11 support in 0.11.0.
         "exclude_python_versions": ["3.11"],
     },
@@ -180,6 +182,8 @@ def generate_jax_matrix(
                     # wheels; CI uploads to run-scoped artifacts either way.
                     "publish": release_type
                     in ref_cfg.get("publish_release_types", RELEASE_TYPES),
+                    # Whether the release build tests what it published.
+                    "run_tests": ref_cfg.get("run_tests", True),
                 }
             )
 

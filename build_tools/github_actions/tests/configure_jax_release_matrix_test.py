@@ -9,7 +9,6 @@ from pathlib import Path
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 import configure_jax_release_matrix as m
-from _therock_utils.s3_buckets import get_release_stream
 from workflow_utils import (
     WORKFLOWS_DIR,
     get_matrix_references,
@@ -17,11 +16,6 @@ from workflow_utils import (
     get_workflow_job,
     load_workflow,
 )
-
-PACKAGING_PYTHON_DIR = Path(__file__).parents[2] / "packaging" / "python"
-sys.path.insert(0, os.fspath(PACKAGING_PYTHON_DIR))
-
-from aggregate_index import load_ownership_manifest
 
 
 class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
@@ -48,6 +42,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
                 "gfx_arch",
                 "wheel_type",
                 "publish",
+                "run_tests",
             },
         )
 
@@ -111,24 +106,23 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertEqual(matrix[0]["rocm_jax_ref"], "rocm-jax-infra")
         self.assertEqual(matrix[0]["wheel_type"], "nightly")
 
-    def test_tip_publishes_where_whl_next_routes_jax_and_jaxlib(self):
-        # Tip's tests install its jax and jaxlib from whl-next, so it publishes
-        # for exactly the release types whose stream routes both, and builds
-        # without publishing elsewhere. Every pinned ref publishes.
-        manifest = load_ownership_manifest(
-            PACKAGING_PYTHON_DIR / "rocm_whl_next_ownership.yaml"
-        )
-        index = manifest.python_indexes[0]
+    def test_tip_publishes_on_dev_and_nightly_without_testing(self):
+        # Tip publishes to rocm/jax/whl-next before the aggregate whl-next
+        # routes its jax and jaxlib, which its tests install from. Every pinned
+        # ref publishes and tests.
         for release_type in set(m.RELEASE_TYPES) - {"ci", "prerelease"}:
             with self.subTest(release_type=release_type):
-                routed = index.active_packages(get_release_stream(release_type))
                 matrix = m.generate_jax_matrix_for_release_type(
                     release_type=release_type, platform="linux"
                 )
-                published = {row["jax_ref"]: row["publish"] for row in matrix}
-                self.assertIs(published.pop("main"), {"jax", "jaxlib"} <= routed.keys())
-                self.assertTrue(published)
-                self.assertTrue(all(published.values()))
+                rows = {row["jax_ref"]: row for row in matrix}
+                tip = rows.pop("main")
+                self.assertIs(tip["publish"], release_type in ("dev", "nightly"))
+                self.assertIs(tip["run_tests"], False)
+                self.assertTrue(rows)
+                for row in rows.values():
+                    self.assertIs(row["publish"], True)
+                    self.assertIs(row["run_tests"], True)
 
     def test_release_refs_build_release_wheels(self):
         # Every pinned ref has a jax/jaxlib release on PyPI, so its plugin
