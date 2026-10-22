@@ -18,18 +18,16 @@ _ASAN_COMPANION_BUILDS = (
     ("build_pytorch_vision", "--build-pytorch-vision"),
     ("build_apex", "--build-apex"),
 )
-# Triton stays off: building it rewrites the torch wheel's install requirements.
 _ASAN_ALLOWED_COMPANIONS = frozenset(
-    {"build_pytorch_audio", "build_pytorch_vision", "build_apex"}
+    {"build_triton", "build_pytorch_audio", "build_pytorch_vision", "build_apex"}
 )
 
 
 def apply_asan_companion_policy(parser, args) -> None:
-    """Build torch, plus torchaudio, torchvision, and apex when requested.
+    """Build torch and explicitly requested companion wheels.
 
-    An explicit ``--build-triton`` is rejected. An unset flag is forced off
-    before the checkout-directory default can turn it on. ``--no-build-*`` is
-    left as false.
+    An unset flag is forced off before the checkout-directory default can turn
+    it on. ``--no-build-*`` is left as false.
     """
     if not args.asan:
         return
@@ -366,6 +364,29 @@ def append_env_text(env: dict[str, str], name: str, addition: str) -> None:
     if current and not current.endswith((" ", "\t")):
         current += " "
     env[name] = f"{current}{addition} "
+
+
+def configure_triton_asan(env: dict[str, str]) -> None:
+    """Enable Triton's native ASan build with the shared Clang runtime.
+
+    Triton's setup.py supplies the compile sanitizer flag but not the shared
+    runtime or frame pointers. Append CMake overrides after its defaults so
+    the extension and build tools consistently use the ROCm Clang runtime.
+    The C++ unit tests are not part of the wheel, and CMake executes them
+    during the build to discover GoogleTest cases. Triton's prebuilt LLVM
+    poisons allocator memory, so that discovery aborts under ASan.
+    """
+    env["TRITON_BUILD_WITH_ASAN"] = "1"
+    for cmake_arg in (
+        "-DTRITON_BUILD_UT=OFF",
+        '-DCMAKE_C_FLAGS="-fsanitize=address -fno-omit-frame-pointer"',
+        '-DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer"',
+        "-DCMAKE_EXE_LINKER_FLAGS=-shared-libasan",
+        "-DCMAKE_MODULE_LINKER_FLAGS=-shared-libasan",
+        "-DCMAKE_SHARED_LINKER_FLAGS=-shared-libasan",
+    ):
+        if cmake_arg not in env.get("TRITON_APPEND_CMAKE_ARGS", ""):
+            append_env_text(env, "TRITON_APPEND_CMAKE_ARGS", cmake_arg)
 
 
 def _command_output(args: list[str], cwd: Path) -> str:

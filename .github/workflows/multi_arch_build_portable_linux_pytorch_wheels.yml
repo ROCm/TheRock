@@ -102,7 +102,7 @@ on:
         type: boolean
         default: false
       build_variant:
-        description: "Build variant (release, asan, asan-debug). ASAN variants build torch, torchaudio, torchvision, and apex."
+        description: "Build variant (release, asan, asan-debug). ASAN variants build torch and all companion wheels."
         type: string
         default: "release"
       quartz_tracking_id:
@@ -207,7 +207,7 @@ on:
         type: boolean
         default: false
       build_variant:
-        description: "Build variant (release, asan, asan-debug). ASAN variants build torch, torchaudio, torchvision, and apex."
+        description: "Build variant (release, asan, asan-debug). ASAN variants build torch and all companion wheels."
         type: string
         default: "release"
       quartz_tracking_id:
@@ -325,11 +325,8 @@ jobs:
           ./external-builds/pytorch/pytorch_apex_repo.py checkout \
             --repo-hashtag master \
             --no-commit-hipify
-          # ASAN variants skip triton.
-          if [[ "${BUILD_VARIANT}" != asan* ]]; then
-            ./external-builds/pytorch/pytorch_triton_repo.py checkout \
-              --no-commit-hipify
-          fi
+          ./external-builds/pytorch/pytorch_triton_repo.py checkout \
+            --no-commit-hipify
 
       - name: Checkout PyTorch source repos (stable)
         if: ${{ inputs.pytorch_git_ref != 'nightly' }}
@@ -352,11 +349,8 @@ jobs:
           ./external-builds/pytorch/pytorch_apex_repo.py checkout \
             --require-related-commit \
             --no-commit-hipify
-          # ASAN variants skip triton.
-          if [[ "${BUILD_VARIANT}" != asan* ]]; then
-            ./external-builds/pytorch/pytorch_triton_repo.py checkout \
-              --no-commit-hipify
-          fi
+          ./external-builds/pytorch/pytorch_triton_repo.py checkout \
+            --no-commit-hipify
 
       # determine_version.py sets optional_build_prod_arguments in
       # GITHUB_ENV (--rocm-sdk-version, --version-suffix).
@@ -416,10 +410,10 @@ jobs:
           elif [ "${CACHE_TYPE}" = "ccache" ]; then
             cache_flag="--use-ccache"
           fi
-          # ASAN variants build torch, torchaudio, torchvision, and apex.
+          # ASAN variants build torch and all companion wheels.
           asan_flag=""
           if [[ "${BUILD_VARIANT}" == asan* ]]; then
-            asan_flag="--asan --build-pytorch-audio --build-pytorch-vision --build-apex --no-build-triton"
+            asan_flag="--asan --build-triton --build-pytorch-audio --build-pytorch-vision --build-apex --no-enable-pytorch-flash-attention"
           fi
 
           # build_prod_wheels.py forwards --index-url and --find-links to pip

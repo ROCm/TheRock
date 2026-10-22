@@ -16,6 +16,7 @@ from build_prod_wheels import (
 )
 from setup_pytorch_asan import (
     append_env_text,
+    configure_triton_asan,
     enable_apex_asan,
     enable_torchaudio_asan,
     enable_torchvision_asan,
@@ -140,6 +141,44 @@ class AsanBuildSelectionTest(unittest.TestCase):
         validate_build_args(parser, args)
 
         self.assertFalse(args.build_pytorch_audio)
+
+    def test_asan_allows_an_explicit_triton_build(self):
+        parser = argparse.ArgumentParser()
+        args = self._args(asan=True, build_triton=True)
+
+        validate_build_args(parser, args)
+
+        self.assertTrue(args.build_triton)
+        self.assertFalse(args.build_pytorch_audio)
+        self.assertFalse(args.build_pytorch_vision)
+        self.assertFalse(args.build_apex)
+
+    def test_asan_configures_triton_shared_runtime_once(self):
+        import shlex
+
+        env = {
+            "TRITON_APPEND_CMAKE_ARGS": (
+                "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE"
+            )
+        }
+
+        configure_triton_asan(env)
+        configured = dict(env)
+        configure_triton_asan(env)
+
+        self.assertEqual(configured, env)
+        self.assertEqual(env["TRITON_BUILD_WITH_ASAN"], "1")
+        cmake_args = shlex.split(env["TRITON_APPEND_CMAKE_ARGS"])
+        self.assertIn("-DTRITON_BUILD_UT=OFF", cmake_args)
+        self.assertIn(
+            "-DCMAKE_C_FLAGS=-fsanitize=address -fno-omit-frame-pointer",
+            cmake_args,
+        )
+        self.assertIn(
+            "-DCMAKE_CXX_FLAGS=-fsanitize=address -fno-omit-frame-pointer",
+            cmake_args,
+        )
+        self.assertIn("-DCMAKE_MODULE_LINKER_FLAGS=-shared-libasan", cmake_args)
 
     def test_asan_patches_torchaudio_extensions_once(self):
         import tempfile
@@ -308,12 +347,22 @@ def builder(self):
             setup_patched,
         )
 
-    def test_asan_rejects_an_explicit_non_audio_companion(self):
+    def test_asan_allows_all_explicit_companions(self):
         parser = argparse.ArgumentParser()
-        args = self._args(asan=True, build_triton=True, build_pytorch_audio=True)
+        args = self._args(
+            asan=True,
+            build_triton=True,
+            build_pytorch_audio=True,
+            build_pytorch_vision=True,
+            build_apex=True,
+        )
 
-        with self.assertRaises(SystemExit):
-            validate_build_args(parser, args)
+        validate_build_args(parser, args)
+
+        self.assertTrue(args.build_triton)
+        self.assertTrue(args.build_pytorch_audio)
+        self.assertTrue(args.build_pytorch_vision)
+        self.assertTrue(args.build_apex)
 
 
 if __name__ == "__main__":
