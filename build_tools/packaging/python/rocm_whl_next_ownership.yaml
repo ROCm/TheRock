@@ -195,9 +195,6 @@ python_indexes:
       markupsafe:
         owner_path: core/whl-next
         stream_group: all
-      ml-dtypes:
-        owner_path: core/whl-next
-        stream_group: all
       mpmath:
         owner_path: core/whl-next
         stream_group: all
@@ -205,9 +202,6 @@ python_indexes:
         owner_path: core/whl-next
         stream_group: all
       numpy:
-        owner_path: core/whl-next
-        stream_group: all
-      opt-einsum:
         owner_path: core/whl-next
         stream_group: all
       pillow:
@@ -314,9 +308,6 @@ python_indexes:
         owner_path: core/whl-next
         stream_group: all
       sympy:
-        owner_path: core/whl-next
-        stream_group: all
-      tomli:
         owner_path: core/whl-next
         stream_group: all
       torch:
