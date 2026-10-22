@@ -43,6 +43,7 @@ if str(_BUILD_TOOLS_DIR) not in sys.path:
 from _therock_utils.storage_backend import create_storage_backend
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from github_actions.github_actions_api import gha_set_output
 
 # An os-profile becomes a path segment of the object key. The leading
 # alphanumeric rejects "." and "..", which would escape a local staging
@@ -127,7 +128,12 @@ def find_package(dest_dir: Path, pkg_type: str) -> Path:
 
 
 def upload(args: argparse.Namespace) -> str:
-    """Upload the built package to its per-run location. Returns the object key."""
+    """Upload the built package to its per-run location. Returns the object key.
+
+    After an upload to S3, the package's https URL is written to
+    ``$GITHUB_OUTPUT`` as ``repo_setup_package_url``. A dry run or a local
+    staging run uploads nothing there, so it writes no output.
+    """
     package = find_package(args.dest_dir, args.pkg_type)
     root = WorkflowOutputRoot.from_workflow_run(run_id=args.run_id, platform="linux")
     dest = StorageLocation(
@@ -146,6 +152,8 @@ def upload(args: argparse.Namespace) -> str:
     backend.upload_file(package, dest)
     if not args.dry_run:
         print(f"Uploaded: {target}")
+        if args.output_dir is None:
+            gha_set_output({"repo_setup_package_url": dest.https_url})
     return dest.relative_path
 
 

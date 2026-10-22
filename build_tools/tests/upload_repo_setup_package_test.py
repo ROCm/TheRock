@@ -65,6 +65,9 @@ def _argv(tmp_path, **overrides):
 
 def _stub_bucket(monkeypatch, external_repo=""):
     """Stub bucket resolution, which otherwise reads the CI environment."""
+    # CI sets GITHUB_OUTPUT for the test step itself; a test must not write the
+    # upload's output into it.
+    monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
     monkeypatch.setattr(
         "_therock_utils.workflow_outputs._retrieve_bucket_info",
         lambda **kwargs: (external_repo, BUCKET),
@@ -335,6 +338,42 @@ def test_upload_without_output_dir_selects_s3_backend(tmp_path, monkeypatch):
     factory.assert_called_once()
     assert factory.call_args.kwargs["staging_dir"] is None
     assert factory.call_args.kwargs["dry_run"] is True
+
+
+def test_upload_writes_the_package_url_to_github_output(tmp_path, monkeypatch):
+    # Later steps read the uploaded package's URL from the step output.
+    _stub_bucket(monkeypatch)
+    github_output = tmp_path / "github_output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(github_output))
+    args = ursp.parse_args(_argv(tmp_path))
+
+    with mock.patch("upload_repo_setup_package.create_storage_backend"):
+        ursp.upload(args)
+
+    assert github_output.read_text().splitlines() == [
+        f"repo_setup_package_url=https://{BUCKET}.s3.amazonaws.com/{EXPECTED_RPM_KEY}"
+    ]
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [{"dry_run": True}, {"output_dir": "staging"}],
+    ids=["dry-run", "output-dir"],
+)
+def test_upload_writes_no_output_without_an_s3_upload(tmp_path, monkeypatch, overrides):
+    # Neither a dry run nor local staging puts anything in S3, so a URL would
+    # point at an object that does not exist.
+    _stub_bucket(monkeypatch)
+    github_output = tmp_path / "github_output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(github_output))
+    if "output_dir" in overrides:
+        overrides = {"output_dir": tmp_path / overrides["output_dir"]}
+    args = ursp.parse_args(_argv(tmp_path, **overrides))
+
+    with mock.patch("upload_repo_setup_package.create_storage_backend"):
+        ursp.upload(args)
+
+    assert not github_output.exists()
 
 
 def test_upload_rejects_the_release_line(tmp_path, monkeypatch):
