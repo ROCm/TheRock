@@ -6,14 +6,15 @@
 Full installation and simulate-install test script for ROCm native packages.
 
 Test modes (--test-type):
-- sanity: Basic test. Repo-based install plus basic verification only
-  (steps 1 and 2).
+- sanity: Basic test. Repo setup, published checksum metadata, install, and
+  basic verification (steps 1 and 2). A checksum mismatch stops the install.
 - quick / standard: CI aliases for sanity.
 - full: Full test. Repo-based install plus basic verification plus full
   verification (steps 1, 2, and 3).
   Steps (invoked one by one from main):
-  1. Repo setup and install: set up package-manager repository and install
-     ROCm packages. Arch suffixes in metapackage names are used only when both
+  1. Repo setup and install: set up package-manager repository, require the
+     published index checksum metadata, and install ROCm packages. Arch
+     suffixes in metapackage names are used only when both
      ``--gfx-arch`` and ``--rocm-version`` are set (e.g. ``amdrocm7.13-gfx1100``).
      With ``--rocm-version`` only: ``amdrocm7.13`` / ``amdrocm-core-sdk7.13``.
      With neither or ``--gfx-arch`` alone: ``amdrocm`` / ``amdrocm-core-sdk``.
@@ -21,11 +22,12 @@ Test modes (--test-type):
      list, rocminfo. (Run for both sanity and full.)
   3. Full verification: rdhc.py / RDHC test. (Run only for full.)
 - comprehensive: CI alias for full.
-- install: Repo-based install only (step 1). No rocminfo or component checks.
+- install: Repo setup, published checksum metadata, and package install
+  (step 1). No rocminfo or component checks. Checksum failure stops the install.
   Used by release workflows that dispatch install tests off the critical path.
 - simulate: Dry-run only. Simulated install of local .deb or .rpm files
-  (apt install --simulate or rpm -Uvh --test --nodeps). No repo setup or
-  actual install. Requires --packages-dir.
+  (apt install --simulate or rpm -Uvh --test --nodeps). No repository, no
+  published checksum check, and no actual install. Requires --packages-dir.
 
 Path and repo name are overridable via environment variables: ROCM_REPO_NAME (repo id used for
 APT list, Zypper/Yum repo file and section), ROCM_APT_SOURCES_LIST,
@@ -86,19 +88,19 @@ Example invocations:
          --release-type prerelease \\
          --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
 
- # --test-type sanity (default): repo install + basic verification only (steps 1-2)
+ # --test-type sanity (default): checksum metadata, then install, then basic verification (steps 1-2)
  python3 native_linux_package_install_test.py --test-type sanity \\
          --os-profile ubuntu2404 \\
          --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
          --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
- # --test-type full: same as sanity plus rdhc full verification (steps 1-3)
+ # --test-type full: checksum metadata, install, basic verification, and rdhc (steps 1-3)
  python3 native_linux_package_install_test.py --test-type full \\
          --os-profile ubuntu2404 \\
          --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
          --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
- # --test-type install: repo install only (no verification)
+ # --test-type install: checksum metadata, then install. No rocminfo or rdhc.
  python3 native_linux_package_install_test.py --test-type install \\
          --os-profile ubuntu2404 \\
          --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
@@ -126,7 +128,7 @@ Example invocations:
  --repo-url https://therock-dev-artifacts.s3.amazonaws.com/25137154844-linux/packages/deb \\
  --rocm-version 7.13 --release-type dev --install-prefix /opt/rocm/core
 
- # Simulate install (dry-run) from local .deb or .rpm directory
+ # Simulate install (dry-run) from local .deb or .rpm files. No repository, so no checksum check.
  python3 native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
  python3 native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/rpms --pkg-type rpm
 """
@@ -145,7 +147,6 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
-from packaging_utils import normalize_target_list
 from native_linux_package_test_common import (
     ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION,
     VERIFY_KEY_COMPONENTS,
@@ -154,6 +155,11 @@ from native_linux_package_test_common import (
     is_sles,
     major_minor_rocm_version_from_input,
     run_streaming as _run_streaming,
+)
+from packaging_utils import normalize_target_list
+from verify_package_repo_checksums import (
+    PackageChecksumError,
+    verify_published_repository_checksums,
 )
 
 
@@ -784,11 +790,36 @@ gpgcheck=0
             print(f"\n[FAIL] Error during installation: {e}")
             return False
 
-    def run_repo_setup_and_install(self) -> bool:
-        """Step 1: Repo setup and install. Run for both sanity (basic) and full test.
+    def verify_published_checksum_metadata(self) -> bool:
+        """Require published index checksums before installing packages.
+
+        DEB metadata must provide MD5 and SHA256, and its ``Release`` checksum
+        must match ``Packages.gz``. RPM metadata must provide SHA256 or stronger,
+        and ``repomd.xml`` must match the primary metadata. APT, DNF, and Zypper
+        check the downloaded package archives again during installation.
 
         Returns:
-        True if repository setup and package installation both succeeded.
+            True when the published checksum metadata matches.
+        """
+        print("\n" + "=" * 80)
+        print("CHECKING PUBLISHED REPOSITORY CHECKSUMS")
+        print("=" * 80)
+        try:
+            verify_published_repository_checksums(self.repo_url, self.package_type)
+        except PackageChecksumError as error:
+            print("\n[FAIL] Published repository checksum metadata check failed")
+            for line in error.errors:
+                print(f"  {line}")
+            return False
+        print("\n[PASS] Published repository checksum metadata matches")
+        return True
+
+    def run_repo_setup_and_install(self) -> bool:
+        """Step 1: Repo setup, checksum metadata, and install.
+
+        Returns:
+        True if repository setup, checksum metadata, and package installation
+        all succeeded.
         """
         print("\n" + "=" * 80)
         print("STEP 1: REPOSITORY SETUP AND PACKAGE INSTALLATION")
@@ -821,11 +852,13 @@ gpgcheck=0
         if self.package_type == "deb":
             if not self.setup_deb_repository():
                 return False
+        elif not self.setup_rpm_repository():
+            return False
+        if not self.verify_published_checksum_metadata():
+            return False
+        if self.package_type == "deb":
             return self.install_deb_packages()
-        else:
-            if not self.setup_rpm_repository():
-                return False
-            return self.install_rpm_packages()
+        return self.install_rpm_packages()
 
     def run_basic_verification(self) -> bool:
         """Step 2: Basic test — install prefix, key components, packages list, rocminfo.
@@ -1357,6 +1390,12 @@ gpgcheck=0
 
 _CLI_EXAMPLES_EPILOG = """
 Examples:
+ # install, sanity, and full check published checksum metadata before install.
+ # DEB requires MD5sum and SHA256 in Packages, and Release must match Packages.gz.
+ # RPM requires SHA256 or stronger, and repomd.xml must match primary metadata.
+ # simulate has no repository, so it skips that check.
+ # A mismatch or unreadable index fails the run before apt, dnf, or zypper install.
+
  # Nightly DEB (Ubuntu 24.04) - run inside matching container/VM
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
  --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
@@ -1384,17 +1423,17 @@ Examples:
  --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
  --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
 
- # --test-type sanity (default): repo install + basic verification only
+ # --test-type sanity (default): checksum metadata, then install, then basic verification
  python native_linux_package_install_test.py --test-type sanity --os-profile ubuntu2404 \\
  --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
- # --test-type full: install + basic verification + rdhc
+ # --test-type full: checksum metadata, install, basic verification, and rdhc
  python native_linux_package_install_test.py --test-type full --os-profile ubuntu2404 \\
  --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
- # --test-type install: install only
+ # --test-type install: checksum metadata, then install. No rocminfo or rdhc.
  python native_linux_package_install_test.py --test-type install --os-profile ubuntu2404 \\
  --repo-url https://therock-dev-artifacts.s3.amazonaws.com/26299074718-linux/packages/deb \\
  --gfx-arch gfx94x --release-type dev --install-prefix /opt/rocm/core
@@ -1427,7 +1466,7 @@ Examples:
  --repo-url https://therock-dev-artifacts.s3.amazonaws.com/25137154844-linux/packages/deb \\
  --release-type dev --install-prefix /opt/rocm/core
 
- # Simulate install (dry-run) from local packages
+ # Simulate install (dry-run) from local packages. No repository, so no checksum check.
  python native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
  python native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/rpms --pkg-type rpm
 """
@@ -1435,7 +1474,10 @@ Examples:
 
 def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
     kwargs: dict = dict(
-        description="Full installation and simulate-install test for ROCm native packages",
+        description=(
+            "Install ROCm native packages and fail if published checksum "
+            "metadata does not match. simulate skips the repository check."
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=_CLI_EXAMPLES_EPILOG,
     )
@@ -1445,12 +1487,12 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
     parser.add_argument(
         "--os-profile",
         type=str,
-        help="OS profile (e.g., ubuntu2404, rhel8, debian12, sles15, sles16, almalinux9, centos7, azl3). Required for sanity/full; for simulate, used only to derive pkg-type if --pkg-type is omitted.",
+        help="OS profile (e.g., ubuntu2404, rhel8, debian12, sles15, sles16, almalinux9, centos7, azl3). Required for install, sanity, and full. For simulate, used only to derive pkg-type if --pkg-type is omitted.",
     )
     parser.add_argument(
         "--repo-url",
         type=str,
-        help="Full repository URL (constructed in YAML workflow). Required for sanity/full; not used for simulate.",
+        help="HTTPS repository URL. Required for install, sanity, and full, which check its checksum metadata before install. Not used for simulate.",
     )
     parser.add_argument(
         "--gfx-arch",
@@ -1509,7 +1551,7 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         "--test-type",
         type=str,
         default="sanity",
-        help="Test type: 'install' = repo install only; 'sanity' = install + basic verification; 'full' = sanity + rdhc; 'simulate' = dry-run local packages (requires --packages-dir). Also accepts CI test types: quick, standard, comprehensive.",
+        help="Test type: 'install', 'sanity', and 'full' check published checksum metadata before install. 'sanity' then runs basic verification; 'full' also runs rdhc. 'simulate' dry-runs local packages and skips the checksum check (requires --packages-dir). Also accepts CI test types: quick, standard, comprehensive.",
     )
     parser.add_argument(
         "--packages-dir",
