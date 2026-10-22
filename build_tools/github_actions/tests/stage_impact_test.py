@@ -869,9 +869,7 @@ class ImpactedArtifactStageNarrowingTest(unittest.TestCase):
             while changed:
                 changed = False
                 for other in topology.artifacts.values():
-                    if other.name not in closure and closure & set(
-                        other.artifact_deps
-                    ):
+                    if other.name not in closure and closure & set(other.artifact_deps):
                         closure.add(other.name)
                         changed = True
             expected = {
