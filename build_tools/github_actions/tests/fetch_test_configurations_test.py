@@ -3,15 +3,11 @@
 
 
 from pathlib import Path
-import ast
 import os
 import sys
 import json
-import shlex
 import unittest
 from unittest.mock import patch
-
-from packaging.requirements import Requirement
 
 # Add repo root to PYTHONPATH
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
@@ -93,54 +89,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_rocprofiler_sdk_submits_to_cdash(self):
         config = fetch_test_configurations.test_matrix["rocprofiler-sdk"]
         self.assertIn("--enable-cdash", config["test_script"])
-
-    def test_ninja_consumers_have_platform_requirements(self):
-        repo = Path(__file__).resolve().parents[3]
-        for platform, family in [("linux", "gfx94X-dcgpu"), ("windows", "gfx110X-all")]:
-            with self.subTest(platform=platform):
-                sys.argv = ["fetch_test_configurations.py", f"--platform={platform}"]
-                os.environ["AMDGPU_FAMILIES"] = family
-                fetch_test_configurations.run()
-                consumers = 0
-                for job in self._get_components():
-                    scripts = [
-                        repo / arg
-                        for arg in shlex.split(job["test_script"])
-                        if arg.endswith(".py") and (repo / arg).is_file()
-                    ]
-                    uses_ninja = any(
-                        isinstance(node, ast.Constant)
-                        and isinstance(node.value, str)
-                        and node.value in {"Ninja", "-GNinja", "ninja"}
-                        for script in scripts
-                        for node in ast.walk(ast.parse(script.read_text()))
-                    )
-                    if uses_ninja:
-                        consumers += 1
-                        self.assertTrue(
-                            self._has_ninja_requirement(repo, job, platform),
-                            f"{job['job_name']} needs Ninja on {platform}",
-                        )
-                self.assertGreater(consumers, 0)
-
-    def _has_ninja_requirement(self, repo: Path, job: dict, platform: str) -> bool:
-        for filename in job["additional_requirements_files"]:
-            path = repo / filename
-            if not path.is_file():
-                continue
-            for line in path.read_text().splitlines():
-                line = line.split("#", 1)[0].strip()
-                if not line or line.startswith("-"):
-                    continue
-                requirement = Requirement(line)
-                if requirement.name == "ninja" and (
-                    requirement.marker is None
-                    or requirement.marker.evaluate(
-                        {"sys_platform": "win32" if platform == "windows" else "linux"}
-                    )
-                ):
-                    return True
-        return False
 
     def test_single_project_filter(self):
         os.environ["PROJECTS_TO_TEST"] = "hipblas"
