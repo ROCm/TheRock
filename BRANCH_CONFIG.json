@@ -1,0 +1,6 @@
+{
+  "flags": {
+    "HIPDNN_ENABLE_KERNEL_INGESTOR": true,
+    "HIPKERNELPROVIDER_ENABLE_ROCKE": true
+  }
+}
