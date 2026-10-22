@@ -274,7 +274,7 @@ if(THEROCK_ENABLE_COMPILER)
   option(THEROCK_ENABLE_COMPILER_TOOLS_DISTRIBUTION
     "Stage LLVM 'tools' distribution for amd-llvm" ON)
   cmake_dependent_option(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION
-    "Stage LLVM 'fortran' distribution for amd-llvm (requires FLANG; OFF when FLANG_STANDALONE is ON)" OFF
+    "Stage LLVM 'fortran' distribution for amd-llvm (requires FLANG; OFF when FLANG_STANDALONE is ON)" ON
     "THEROCK_ENABLE_FLANG;NOT THEROCK_ENABLE_FLANG_STANDALONE" OFF)
   cmake_dependent_option(THEROCK_ENABLE_COMPILER_MULTILIBS_DISTRIBUTION
     "Stage LLVM 'multilibs' distribution for amd-llvm" OFF
@@ -313,7 +313,14 @@ if(THEROCK_ENABLE_COMPILER)
 endif()
 
 #TODO Temporary enabling standalone for testing
-set(THEROCK_ENABLE_FLANG_STANDALONE ON)
+if(THEROCK_ENABLE_COMPILER)
+  set(THEROCK_ENABLE_FLANG_STANDALONE ON CACHE BOOL
+    "Enables amd-llvm-flang (requires THEROCK_ENABLE_FLANG)" FORCE)
+  set(THEROCK_ENABLE_FLANG_STANDALONE ON)  # keep normal var in sync
+endif()
+
+message("!!!!!!!!!${THEROCK_ENABLE_COMPILER}")
+message("!!!!!!!!!${THEROCK_ENABLE_FLANG_STANDALONE}")
 
 # FLANG=ON requires exactly one delivery path (standalone XOR fortran dist).
 # dependent_option already clears fortran dist when standalone is ON / FLANG is OFF.
