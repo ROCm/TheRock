@@ -123,7 +123,7 @@ BUILD_RUNNER_LABELS = {
             {"label": "aws-linux-scale-rocm-prod", "weight": 1.0},
         ],
         "small": [
-            {"label": "aws-linux-scale-rocm-small", "weight": 1.0},
+            {"label": "aws-linux-scale-rocm-prod", "weight": 1.0},
         ],
         "medium": [
             {"label": "aws-linux-scale-rocm-medium", "weight": 1.0},
