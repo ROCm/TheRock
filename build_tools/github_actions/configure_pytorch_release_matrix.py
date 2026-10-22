@@ -65,15 +65,16 @@ CI_PYTORCH_REFS = {
 # new GPU families before the default PyTorch refs support them.
 UNSUPPORTED_AMDGPU_FAMILIES = {
     "linux": {
-        "release/2.13": {"gfx90c"},
-        "release/2.14": {"gfx90c"},
-        "release/2.15": {"gfx90c"},
-        "nightly": {},
+        "release/2.13": {"gfx90c", "gfx117X-all"},
+        "release/2.14": {"gfx90c", "gfx117X-all"},
+        "release/2.15": {"gfx90c", "gfx117X-all"},
+        "nightly": {"gfx117X-all"},
     },
     "windows": {
-        "release/2.13": {"gfx90c"},
-        "release/2.14": {"gfx90c"},
-        "release/2.15": {"gfx90c"},
+        "release/2.13": {"gfx90c", "gfx117X-all"},
+        "release/2.14": {"gfx90c", "gfx117X-all"},
+        "release/2.15": {"gfx90c", "gfx117X-all"},
+        "nightly": {"gfx117X-all"},
     },
 }
 
