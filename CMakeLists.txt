@@ -261,8 +261,6 @@ if(NOT THEROCK_ENABLE_FLANG AND THEROCK_ENABLE_FLANG_STANDALONE)
     "Enables amd-llvm-flang (requires THEROCK_ENABLE_FLANG)" FORCE)
 endif()
 
-set(THEROCK_ENABLE_FLANG_STANDALONE ON CACHE BOOL "TEST STANDALONE BUILD - TEMPORARY" FORCE)
-
 # Per-distribution toggles for amd-llvm staging (see clang/cmake/caches/ROCm.cmake).
 # Defined after topology so THEROCK_ENABLE_COMPILER exists. Compose
 # THEROCK_AMD_LLVM_DISTRIBUTION; empty aggregate = full cmake --install.
@@ -313,6 +311,9 @@ if(THEROCK_ENABLE_COMPILER)
     FORCE)
   unset(_therock_amd_llvm_distribution)
 endif()
+
+#TODO Temporary enabling standalone for testing
+set(THEROCK_ENABLE_FLANG_STANDALONE ON)
 
 # FLANG=ON requires exactly one delivery path (standalone XOR fortran dist).
 # dependent_option already clears fortran dist when standalone is ON / FLANG is OFF.
