@@ -50,7 +50,8 @@ This section is for the maintainers of HIP, ROCTx, and the ten `rocm-libraries` 
 
 - Your project gains a `fortran/` directory.
   It holds the generated binding, its curated metadata, its CMake build and its tests.
-  The Fortran-bindings team owns it through CODEOWNERS.
+  Your team and the Fortran-bindings team own it together through CODEOWNERS.
+  Your team reviews its curated metadata, which records what only the library knows, such as whether a pointer argument is on the host or the device.
 - You never write binding code, and you never have to run the generator.
   After your PR merges, the regeneration workflow's next run regenerates the binding, and a bot opens a pull request that the bindings team reviews.
   You may regenerate the binding in your own PR instead, but that is optional.
@@ -291,7 +292,7 @@ The workflow is *out-of-band*: it runs on its own, reads the default branch, and
 - **What.** Every binding of the monorepo, so a change to a shared header (such as HIP, or rocBLAS for rocSOLVER) or a new generator release is caught too.
 - **Output.** One pull request per library, on the branch `bot/fortran/<lib>`, recreated on each run and closed when it has nothing left to change.
   A blocked library never delays the others.
-- **Review.** The Fortran-bindings team, which owns `fortran/` through CODEOWNERS, reviews and merges these pull requests within five business days.
+- **Review.** The Fortran-bindings team, which co-owns `fortran/` through CODEOWNERS, reviews and merges these pull requests within five business days.
   The project's Fortran jobs are required on them, and the bindings team fixes a pull request that fails.
 - **Flags.** The pull request lists the changes that need a decision: a public Fortran name removed, an existing signature changed, an argument renamed, an argument not yet classified.
 - **Inputs.** The generator release, its Julia environment and, for `rocm-libraries`, the source of the HIP headers are pinned in a file of the monorepo.
@@ -386,10 +387,11 @@ For a `rocm-systems` or `rocm-libraries` project, the change is small and bounde
 - A regeneration workflow runs the generator outside the developers' PRs, and a bot opens a pull request per library when a binding changed (see [Keeping the bindings in sync](#keeping-the-bindings-in-sync)).
   Developers may regenerate their binding in their own PR, but nothing requires it.
 
-- A CODEOWNERS entry gives the Fortran-bindings team ownership of `fortran/`.
+- A CODEOWNERS entry gives `fortran/` to the library's team and the Fortran-bindings team together.
+  The library's team reviews the curated metadata, which records what only the library knows.
 
 - C and C++ developers do not write binding code.
-  The bot proposes the regenerated bindings, and the bindings team owns the manual metadata.
+  The bot proposes the regenerated bindings, and the bindings team maintains the manual metadata, which the library's team reviews.
 
 - A Fortran failure never blocks a C or C++ PR, because the Fortran jobs are not required there.
   A failed regeneration, for example on a header that is no longer valid C, opens an issue for the header's owners.
@@ -1223,8 +1225,11 @@ The CUDA metadata (`<lib>.txt`, `<lib>_enums_cuda.txt`, `*.cuda.finc`) does **no
 The packaged track has no CUDA backend, so those files stay in the generator.
 The generator reads them only to generate `ROCm/hipfort`, whose CUDA backend is kept until 11.0.
 The CODEOWNERS entry is not a file in `fortran/` either.
-Both monorepos keep one CODEOWNERS file per project, and a merge job assembles the root `.github/CODEOWNERS` from them.
-So a library's `fortran/` is a line in its project's file, and `rocm-systems`' `projects/fortran/` gets its own.
+It is a line in the monorepo's root `.github/CODEOWNERS`, which both monorepos edit by hand.
+In `rocm-libraries`, `/projects/<lib>/fortran/` is owned by the library's review team (for example `@ROCm/fft-reviewers`) and the Fortran-bindings team, `@ROCm/rocm-fortran-maintainers`.
+The line goes after the project's other entries, because the last matching pattern wins, and a broader one such as `/projects/rocblas/**/CMakeLists.txt` would otherwise take `fortran/CMakeLists.txt`.
+In `rocm-systems`, `/projects/fortran/` is owned by `@ROCm/hip-reviewers`, which reviews HIP's metadata, and the Fortran-bindings team.
+A team must have write access to a repository for its CODEOWNERS entry to take effect, so the Fortran-bindings team needs it in both monorepos.
 
 **Install tree.** A `.mod` is compiler- and version-specific (see the [appendix on `.mod` incompatibility](#appendix-fortran-mod-and-a-incompatibility-across-compilers-and-versions)).
 So artifacts install under a per-compiler subdirectory, one archive and one module set per library:
