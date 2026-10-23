@@ -248,6 +248,121 @@ option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to t
 # Include generated topology (contains feature definitions)
 include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
 
+# Master Flang switch (Linux + COMPILER only). Path when ON:
+#   Default: fortran distribution.
+#   Opt-in standalone: FLANG_STANDALONE=ON and COMPILER_FORTRAN_DISTRIBUTION=OFF
+#   -> amd-llvm-flang. If both are ON, prefer the fortran distribution.
+cmake_dependent_option(THEROCK_ENABLE_FLANG
+  "Build/install Flang (standalone amd-llvm-flang and/or amd-llvm fortran distribution)" ON
+  "THEROCK_ENABLE_COMPILER;NOT WIN32" OFF)
+
+# FLANG=OFF must win over a cached/topology FLANG_STANDALONE=ON.
+if(NOT THEROCK_ENABLE_FLANG AND THEROCK_ENABLE_FLANG_STANDALONE)
+  set(THEROCK_ENABLE_FLANG_STANDALONE OFF CACHE BOOL
+    "Enables amd-llvm-flang (requires THEROCK_ENABLE_FLANG)" FORCE)
+endif()
+
+# Per-distribution toggles for amd-llvm staging (see clang/cmake/caches/ROCm.cmake).
+# Defined after topology so THEROCK_ENABLE_COMPILER exists. Compose
+# THEROCK_AMD_LLVM_DISTRIBUTION; empty aggregate = full cmake --install.
+if(THEROCK_ENABLE_COMPILER)
+  option(THEROCK_ENABLE_COMPILER_DISTRIBUTION
+    "Stage LLVM 'compiler' distribution for amd-llvm" ON)
+  option(THEROCK_ENABLE_COMPILER_RUNTIMES_DISTRIBUTION
+    "Stage LLVM 'runtimes' distribution for amd-llvm" ON)
+  option(THEROCK_ENABLE_COMPILER_DEV_DISTRIBUTION
+    "Stage LLVM 'dev' distribution for amd-llvm" ON)
+  option(THEROCK_ENABLE_COMPILER_TOOLS_DISTRIBUTION
+    "Stage LLVM 'tools' distribution for amd-llvm" ON)
+  cmake_dependent_option(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION
+    "Stage LLVM 'fortran' distribution for amd-llvm (default ON when FLANG is ON)" OFF
+    "THEROCK_ENABLE_FLANG" OFF)
+  cmake_dependent_option(THEROCK_ENABLE_COMPILER_MULTILIBS_DISTRIBUTION
+    "Stage LLVM 'multilibs' distribution for amd-llvm" OFF
+    "NOT WIN32" OFF)
+  option(THEROCK_ENABLE_COMPILER_UTILS_DISTRIBUTION
+    "Stage LLVM 'utils' distribution for amd-llvm" ON)
+
+  set(_therock_amd_llvm_distribution)
+  if(THEROCK_ENABLE_COMPILER_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution compiler)
+  endif()
+  if(THEROCK_ENABLE_COMPILER_RUNTIMES_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution runtimes)
+  endif()
+  if(THEROCK_ENABLE_COMPILER_DEV_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution dev)
+  endif()
+  if(THEROCK_ENABLE_COMPILER_TOOLS_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution tools)
+  endif()
+  if(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution fortran)
+  endif()
+  if(THEROCK_ENABLE_COMPILER_MULTILIBS_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution multilibs)
+  endif()
+  if(THEROCK_ENABLE_COMPILER_UTILS_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution utils)
+  endif()
+  # FORCE so toggling THEROCK_ENABLE_COMPILER_*_DISTRIBUTION updates the effective
+  # list on reconfigure. Override by flipping the per-distribution options.
+  set(THEROCK_AMD_LLVM_DISTRIBUTION "${_therock_amd_llvm_distribution}" CACHE STRING
+    "Semicolon-separated LLVM distributions to build/stage for amd-llvm (composed from THEROCK_ENABLE_COMPILER_*_DISTRIBUTION). Empty = full cmake --build + cmake --install. See clang/cmake/caches/ROCm.cmake"
+    FORCE)
+  unset(_therock_amd_llvm_distribution)
+endif()
+
+# Prefer fortran distribution over standalone when both are enabled.
+if(THEROCK_ENABLE_FLANG
+   AND THEROCK_ENABLE_FLANG_STANDALONE
+   AND THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION)
+  message(STATUS
+    "FLANG_STANDALONE and COMPILER_FORTRAN_DISTRIBUTION both ON; "
+    "preferring fortran distribution (disabling standalone amd-llvm-flang)")
+  set(THEROCK_ENABLE_FLANG_STANDALONE OFF CACHE BOOL
+    "Enables amd-llvm-flang (requires THEROCK_ENABLE_FLANG)" FORCE)
+  set(THEROCK_ENABLE_FLANG_STANDALONE OFF)
+endif()
+
+
+# If FLANG is on but neither delivery path was chosen (e.g. ENABLE_ALL with
+# standalone feature_default=false and dist left unset), default to the
+# fortran distribution so full-tree / non-stage configures still work.
+if(THEROCK_ENABLE_FLANG
+   AND NOT THEROCK_ENABLE_FLANG_STANDALONE
+   AND NOT THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION)
+  message(STATUS
+    "FLANG=ON with no delivery path selected; "
+    "defaulting COMPILER_FORTRAN_DISTRIBUTION=ON")
+  set(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION ON CACHE BOOL
+    "Stage LLVM 'fortran' distribution for amd-llvm (default ON when FLANG is ON)"
+    FORCE)
+  set(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION ON)
+  # Composition above may have run before dist was enabled; ensure fortran
+  # is in the amd-llvm distribution list.
+  if(THEROCK_ENABLE_COMPILER)
+    set(_therock_amd_llvm_distribution "${THEROCK_AMD_LLVM_DISTRIBUTION}")
+    list(APPEND _therock_amd_llvm_distribution fortran)
+    list(REMOVE_DUPLICATES _therock_amd_llvm_distribution)
+    set(THEROCK_AMD_LLVM_DISTRIBUTION "${_therock_amd_llvm_distribution}" CACHE STRING
+      "Semicolon-separated LLVM distributions to build/stage for amd-llvm (composed from THEROCK_ENABLE_COMPILER_*_DISTRIBUTION). Empty = full cmake --build + cmake --install. See clang/cmake/caches/ROCm.cmake"
+      FORCE)
+    unset(_therock_amd_llvm_distribution)
+  endif()
+endif()
+
+message("!!!!!THEROCK_ENABLE_FLANG_STANDALONE: ${THEROCK_ENABLE_FLANG_STANDALONE}")
+message("!!!!!THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION: ${THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION}")
+
+# No Flang toolchain => no Fortran clients/wrappers/tests in subprojects.
+# FLAGS.cmake runs before topology, so sync the effective policy here.
+if(NOT THEROCK_ENABLE_FLANG AND THEROCK_FLAG_BUILD_FORTRAN_LIBS)
+  set(THEROCK_FLAG_BUILD_FORTRAN_LIBS OFF CACHE BOOL
+    "Build Fortran components in sub-projects (requires THEROCK_ENABLE_FLANG)" FORCE)
+  set(ROCM_BUILD_FORTRAN_LIBS OFF)
+endif()
+
 ################################################################################
 # Manual features that don't map to artifacts
 ################################################################################

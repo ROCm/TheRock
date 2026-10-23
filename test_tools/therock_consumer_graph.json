@@ -19,6 +19,7 @@
     "consumers": [
       "amd-comgr",
       "amd-dbgapi",
+      "amd-llvm-flang",
       "amdsmi",
       "aqlprofile",
       "hip-clr",
@@ -40,6 +41,15 @@
       "therock-elfio",
       "therock-grpc",
       "therock-spdlog"
+    ]
+  },
+  "amd-llvm-flang": {
+    "consumers": [
+      "hipblas",
+      "hiprand",
+      "rocblas",
+      "rocrand",
+      "rocsolver"
     ]
   },
   "amdsmi": {
