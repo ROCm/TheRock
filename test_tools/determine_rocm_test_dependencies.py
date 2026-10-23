@@ -128,10 +128,6 @@ _EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
 _CI_TEST_SELECTOR_ALIASES = {
     "hipdnn_integration_tests": ["hipdnn-integration-tests"],
     "hipdnn_samples": ["hipdnn-samples"],
-    # miopen-dbsync is a GPU-free dbsync (rocjitsu) job with no graph key of its
-    # own. Aliasing here selects it whenever miopen is in the result, so MIOpen
-    # PRs schedule it (it still limits itself by tier and family in
-    # fetch_test_configurations.py). The key itself is kept: it is the `miopen` job.
     "miopen": ["miopen", "miopen-dbsync"],
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
     "rocr-debug-agent-tests": ["rocr-debug-agent"],
