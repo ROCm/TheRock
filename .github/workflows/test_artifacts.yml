@@ -245,8 +245,6 @@ jobs:
           # but CPU-only tests (linux_cpu_runner: True) can still run.
           TEST_RUNS_ON: ${{ inputs.test_runs_on }}
           TEST_RUNS_ON_CPU: ${{ inputs.test_runs_on_cpu }}
-        # The platform follows the runner: Windows, WSL (the Linux build on a
-        # WSL-hosted runner), or Linux.
         run: |
           python ./build_tools/github_actions/fetch_test_configurations.py \
             --platform=${{ (contains(inputs.test_runs_on, 'windows') || contains(inputs.test_runs_on_cpu, 'windows')) && 'windows' || contains(inputs.test_runs_on, 'wsl') && 'wsl' || 'linux' }}
