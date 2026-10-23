@@ -312,16 +312,6 @@ if(THEROCK_ENABLE_COMPILER)
   unset(_therock_amd_llvm_distribution)
 endif()
 
-#TODO Temporary enabling standalone for testing
-if(THEROCK_ENABLE_COMPILER)
-  set(THEROCK_ENABLE_FLANG_STANDALONE ON CACHE BOOL
-    "Enables amd-llvm-flang (requires THEROCK_ENABLE_FLANG)" FORCE)
-  set(THEROCK_ENABLE_FLANG_STANDALONE ON)  # keep normal var in sync
-endif()
-
-message("!!!!!!!!!${THEROCK_ENABLE_COMPILER}")
-message("!!!!!!!!!${THEROCK_ENABLE_FLANG_STANDALONE}")
-
 # FLANG=ON requires exactly one delivery path (standalone XOR fortran dist).
 # dependent_option already clears fortran dist when standalone is ON / FLANG is OFF.
 if(THEROCK_ENABLE_FLANG
