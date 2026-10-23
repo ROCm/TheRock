@@ -51,6 +51,11 @@ else()
   set(_enable_rocRoller "ON")
 endif()
 
+# rocRoller has an unconditional dependency on mxDataGenerator
+if(NOT _mxdatagenerator_enabled)
+  set(_enable_rocRoller "OFF")
+endif()
+
 if(_enable_rocRoller)
   therock_cmake_subproject_declare(rocRoller
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/rocroller"
