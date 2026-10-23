@@ -343,8 +343,14 @@ For each compiler, a binding installs:
 - a CMake package, `<lib>-fortran`, exporting a target in the C library's namespace (`roc::rocblas_fortran`, `hip::hip_fortran`, ...).
 
 The deliverable is per library: `find_package(rocblas-fortran)` gives the Fortran binding and, through it, the C library.
-Fusing everything into one package, or shipping only a subset, stays possible (P2).
+Fusing everything into one CMake package, or shipping only a subset, stays possible (P2).
 The build appendix has the details: the compiler guard, the CMake package, the install tree, and the test convention.
+
+**Distro packages.**
+A library's binding ships in that library's existing `-dev` package (for example `amdrocm-rocblas-dev`), not in a separate `-fortran` package: it adds a few MB and no dependency for C users.
+The HIP and ROCTx bindings ship in HIP's and ROCTx's `-dev` packages.
+The packages carry the `.mod` files of `amdflang`, the compiler ROCm ships; users of another compiler build the binding from the installed `.F90` sources.
+The `hipfort` package stays separate until 11.0 and installs side by side.
 
 Every project with a binding takes the same options.
 Their per-library forms use the project's prefix: `ROCSPARSE_`, `HIPFFT_` and `HIPFFTW_`, `HIP_`, and so on.
@@ -1416,6 +1422,7 @@ The items below are written against that mechanism rather than a second one.
 1. **Artifact descriptors.**
    The default `dev` component already collects `**/*.a`, `**/include/**` and `**/cmake/**`.
    So the `.mod` files, the archives and the config packages land in `dev` with no change.
+   From there they reach the library's existing `-dev` distro package (see [Building and shipping a binding](#building-and-shipping-a-binding)).
    Four edits remain:
    - Declare the `projects/fortran/` subproject and give it an artifact descriptor.
      Its `dev` component holds the `.mod` files, archives, config packages and `share/`.
