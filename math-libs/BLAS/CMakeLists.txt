@@ -141,6 +141,11 @@ if(NOT WIN32)
   endif()
 endif()
 
+set(hipBLASLt_mxdatagenerator_dep)
+if(_mxdatagenerator_enabled)
+  set(hipBLASLt_mxdatagenerator_dep mxDataGenerator)
+endif()
+
 set(hipBLASLt_rocRoller_deps)
 if(_enable_rocRoller)
   list(APPEND hipBLASLt_rocRoller_build_deps
@@ -180,7 +185,7 @@ therock_cmake_subproject_declare(hipBLASLt
     amd-hip
   BUILD_DEPS
     hipBLAS-common
-    mxDataGenerator
+    ${${hipBLASLt_mxdatagenerator_dep}}
     rocm-cmake
     therock-googletest
     therock-msgpack-cxx
