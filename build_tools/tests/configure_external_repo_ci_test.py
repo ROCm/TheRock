@@ -381,6 +381,12 @@ class ConfigureNonSubtreeTest(unittest.TestCase):
         self.assertFalse(r.run_all_tests)
         self.assertEqual(r.changed_projects, "projects/rocm-core")
 
+    def test_therock_workflow_on_rocm_systems_runs_all(self):
+        # rocm-systems is not in WORKFLOW_TEST_SCOPE_BY_REPO.
+        r = self._configure([".github/workflows/therock-ci.yml"])
+        self.assertTrue(r.run_all_tests)
+        self.assertEqual(r.changed_projects, "")
+
     def test_declared_prefixes_are_wellformed(self):
         for prefix in CI_RELEVANT_NON_SUBTREE_PREFIXES:
             self.assertEqual(len(prefix.split("/")), 2, prefix)
