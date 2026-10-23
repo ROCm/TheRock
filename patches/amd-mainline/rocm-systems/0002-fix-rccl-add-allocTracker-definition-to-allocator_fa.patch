@@ -1,0 +1,34 @@
+From 2f5643d0ed8ee309b68237d53bd8b28a5f39e75d Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Mon, 19 Oct 2026 15:58:25 +0000
+Subject: [PATCH] fix(rccl): add allocTracker definition to allocator_fakes
+
+The allocationTracker global array is referenced by RCCL test code but
+was missing a definition in allocator_fakes.cc, causing linker errors.
+Add the include for alloc.h (which declares the type and MAX_ALLOC_TRACK_NGPU)
+and define the array.
+---
+ projects/rccl/test/host/fakes/allocator_fakes.cc | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/projects/rccl/test/host/fakes/allocator_fakes.cc b/projects/rccl/test/host/fakes/allocator_fakes.cc
+index a4875e950e3..4c20389978c 100644
+--- a/projects/rccl/test/host/fakes/allocator_fakes.cc
++++ b/projects/rccl/test/host/fakes/allocator_fakes.cc
+@@ -6,10 +6,13 @@
+ 
+ #include "allocator_fakes.h"
+ 
++#include "alloc.h"
+ #include "allocator.h"
+ #include "comm.h"
+ #include "fail_loud.h"
+ 
++struct allocationTracker allocTracker[MAX_ALLOC_TRACK_NGPU] = {};
++
+ static ncclResult_t DefaultShadowPoolToHost(struct ncclShadowPool*, void*, void**) {
+   FailLoudUnfaked("allocator_fakes", "ncclShadowPoolToHost");
+ }
+-- 
+2.52.0
+

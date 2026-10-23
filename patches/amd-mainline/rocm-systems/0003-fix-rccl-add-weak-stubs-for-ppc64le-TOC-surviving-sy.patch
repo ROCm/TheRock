@@ -1,0 +1,74 @@
+From 1a871a14fe00e4e780b5d5ab94dedc91af12d354 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Mon, 19 Oct 2026 19:40:42 +0000
+Subject: [PATCH] fix(rccl): add weak stubs for ppc64le TOC-surviving symbols
+ in host tests
+
+On ppc64le, the ELF TOC (Table of Contents) generates relocations for
+function pointers even when --gc-sections would discard them on x86.
+This causes linker errors in RCCL host microtests:
+
+- topo.cc stores ncclGinGetDevCount, ncclRmaGetDevCount,
+  ncclCollNetGetDevCount, ncclCollNetSetVirtDevCount,
+  ncclNetGetDevCount, ncclNetSetVirtDevCount as function pointers
+  in a netInfo struct. Add weak abort-stubs in transport_stubs.cc.
+
+- rome_models.cc externs topoPathTypeStr[] which is defined in
+  topo.cc (not linked by rccl-UnitTestsMicroRomeModels). Add a
+  weak definition in nccl_fakes.cc, guarded by
+  RCCL_NCCL_FAKES_OMIT_GRAPH to avoid collision with the real
+  topo.cc linked by rccl-UnitTestsMicroGraph.
+
+Weak symbols allow tests that supply their own strong definitions
+(e.g. gin-plugin-init-test.cc) to win without duplicate-symbol errors.
+---
+ projects/rccl/test/host/fakes/nccl_fakes.cc     | 10 ++++++++++
+ .../rccl/test/host/fakes/transport_stubs.cc     | 17 +++++++++++++++++
+ 2 files changed, 27 insertions(+)
+
+diff --git a/projects/rccl/test/host/fakes/nccl_fakes.cc b/projects/rccl/test/host/fakes/nccl_fakes.cc
+index 9390bea3f92..8a9d1b4f0e8 100644
+--- a/projects/rccl/test/host/fakes/nccl_fakes.cc
++++ b/projects/rccl/test/host/fakes/nccl_fakes.cc
+@@ -592,3 +592,13 @@ void ResetNcclFakes()
+     g_commGraphRegister            = DefaultCommGraphRegister;
+     g_commGraphDeregister          = DefaultCommGraphDeregister;
+ }
++
++// ppc64le TOC references survive --gc-sections, so rome_models.cc's
++// extern topoPathTypeStr[] needs a definition even when the code path is dead.
++// Weak so that tests linking topo_stubs.cc (which has a strong definition) win.
++#if defined(__powerpc64__) || defined(__PPC64__)
++#ifndef RCCL_NCCL_FAKES_OMIT_GRAPH
++#include "graph.h"
++__attribute__((weak)) const char* topoPathTypeStr[] = {"LOC", "XGMI", "NVB", "C2C", "PIX", "PXB", "P2C", "PXN", "PHB", "SYS", "NET", "DIS"};
++#endif
++#endif
+diff --git a/projects/rccl/test/host/fakes/transport_stubs.cc b/projects/rccl/test/host/fakes/transport_stubs.cc
+index 02ab61f7d93..1e82cbb3821 100644
+--- a/projects/rccl/test/host/fakes/transport_stubs.cc
++++ b/projects/rccl/test/host/fakes/transport_stubs.cc
+@@ -145,3 +145,20 @@ static ncclResult_t ReachableCanConnect(int* ret, struct ncclComm*, struct ncclT
+ }
+ static struct ncclTransport reachableTransport = {"fake", ReachableCanConnect};
+ struct ncclTransport* ncclTransports[NTRANSPORTS] = {&reachableTransport, &reachableTransport};
++
++// ppc64le TOC references survive --gc-sections, so plugin device-count
++// functions referenced as function pointers in topo.cc need definitions
++// even though the code path that stores them is dead.  Use weak symbols
++// so tests that supply their own strong definitions (e.g. gin-plugin-init-test)
++// win without a duplicate-symbol error.
++#if defined(__powerpc64__) || defined(__PPC64__)
++#include "gin.h"
++#include "net.h"
++#include "rma.h"
++__attribute__((weak)) ncclResult_t ncclGinGetDevCount(int, int*, int*) { ::abort(); }
++__attribute__((weak)) ncclResult_t ncclRmaGetDevCount(int, int*, int*) { ::abort(); }
++__attribute__((weak)) ncclResult_t ncclCollNetGetDevCount(int, int*, int*) { ::abort(); }
++__attribute__((weak)) ncclResult_t ncclCollNetSetVirtDevCount(int, int) { ::abort(); }
++__attribute__((weak)) ncclResult_t ncclNetGetDevCount(int, int*, int*) { ::abort(); }
++__attribute__((weak)) ncclResult_t ncclNetSetVirtDevCount(int, int) { ::abort(); }
++#endif
+-- 
+2.52.0
+
