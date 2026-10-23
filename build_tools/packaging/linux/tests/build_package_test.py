@@ -396,6 +396,13 @@ class SharedOwnerPackagingTest(BuildPackageTestCase):
             )
         return replace(cfg, gfx_arch="gfx1250", versioned_pkg=True)
 
+    def _add_absent_manifest_roots(self, cfg: PackageConfig) -> None:
+        for target in cfg.gfxarch_list:
+            manifest = cfg.artifacts_dir / f"fft_lib_{target}" / "artifact_manifest.txt"
+            # A split archive can retain a root with no remaining files.
+            with manifest.open("a") as stream:
+                stream.write("empty/rocFFT/stage\n")
+
     @patch.object(deb_package, "move_packages_to_destination", return_value=[])
     @patch.object(deb_package, "package_with_dpkg_build")
     def test_deb_retains_only_selected_payloads(self, mock_build, _mock_move):
@@ -422,6 +429,37 @@ class SharedOwnerPackagingTest(BuildPackageTestCase):
                         (payload_dir / f"fft_{target}.kpack").read_bytes(),
                         STAGING_PAYLOAD_BYTES,
                     )
+
+    @patch.object(deb_package, "move_packages_to_destination", return_value=[])
+    @patch.object(deb_package, "package_with_dpkg_build")
+    def test_deb_retains_kpacks_with_absent_manifest_roots(self, mock_build, _move):
+        cfg = self._stage_targets(("gfx1250", "gfx1250-strict"))
+        self._add_absent_manifest_roots(cfg)
+        deb_package.create_versioned_deb_package(PKG_FFT, cfg)
+        payload_dir = (
+            mock_build.call_args.args[0] / cfg.install_prefix.lstrip("/") / ".kpack"
+        )
+        self.assertEqual(
+            {path.name: path.read_bytes() for path in payload_dir.iterdir()},
+            {
+                f"fft_{target}.kpack": STAGING_PAYLOAD_BYTES
+                for target in cfg.gfxarch_list
+            },
+        )
+
+    @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
+    @patch.object(rpm_package, "package_with_rpmbuild")
+    def test_rpm_retains_kpacks_with_absent_manifest_roots(self, external_build, _move):
+        cfg = self._stage_targets(("gfx1250", "gfx1250-strict"), "rpm")
+        self._add_absent_manifest_roots(cfg)
+        rpm_package.create_versioned_rpm_package(PKG_FFT, cfg)
+        external_build.assert_called_once()
+        spec = _read_spec_file(PKG_FFT, cfg)
+        for target in cfg.gfxarch_list:
+            root = self.stage_roots[target][0]
+            absent_root = cfg.artifacts_dir / f"fft_lib_{target}" / "empty/rocFFT/stage"
+            self.assertIn(f'cp -R "{root}"/*', spec)
+            self.assertNotIn(str(absent_root), spec)
 
     @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
     @patch.object(rpm_package, "package_with_rpmbuild")
@@ -571,6 +609,23 @@ class SharedOwnerPackagingTest(BuildPackageTestCase):
             build_package.build_device_package(PKG_FFT, cfg, "gfx1250")
         external_build.assert_not_called()
 
+    @patch.object(
+        build_package,
+        "create_versioned_deb_package",
+        side_effect=RuntimeError("Package build failed"),
+    )
+    def test_device_failure_propagates(self, _build):
+        cfg = self._stage_targets(("gfx1250",))
+        with self.assertRaisesRegex(RuntimeError, "Package build failed"):
+            build_package.build_device_package(PKG_FFT, cfg, "gfx1250")
+
+    @patch.object(build_package, "create_versioned_deb_package", return_value=[])
+    def test_empty_device_variant_remains_skippable(self, _build):
+        cfg = self._stage_targets(("gfx1250",))
+        self.assertEqual(
+            build_package.build_device_package(PKG_FFT, cfg, "gfx1250"), []
+        )
+
 
 class PackageFailureExitTest(BuildPackageTestCase):
     def _run_failing_build(self, error: Exception) -> None:
@@ -593,8 +648,10 @@ class PackageFailureExitTest(BuildPackageTestCase):
             )
         self.assertEqual(raised.exception.code, 1)
 
-    def test_other_failure_keeps_existing_exit_behavior(self):
-        self._run_failing_build(RuntimeError("Package build failed"))
+    def test_other_failure_exits_nonzero(self):
+        with self.assertRaises(SystemExit) as raised:
+            self._run_failing_build(RuntimeError("Package build failed"))
+        self.assertEqual(raised.exception.code, 1)
 
 
 class PackageRootCollisionTest(BuildPackageTestCase):

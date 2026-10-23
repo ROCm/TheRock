@@ -427,7 +427,7 @@ amdgpu_family_info_matrix = {
             "disabled_framework_tests": ["pytorch"],
         },
     },
-    # Postsubmit family - builds on postsubmit, tests on postsubmit and nightly
+    # Postsubmit family - builds on postsubmit, tests only on nightly
     "gfx90a": {
         "linux": {
             "test-runs-on": "linux-gfx90a-1gpu-ossci-rocm",
@@ -439,7 +439,7 @@ amdgpu_family_info_matrix = {
                 "submodule_bump",
                 "nightly",
             ],
-            "tests_on_trigger": ["postsubmit", "nightly"],
+            "tests_on_trigger": ["nightly"],
             # Only run tests when gfx90a label is present on PR
             "trigger_test_label_only": True,
         },
@@ -662,6 +662,29 @@ amdgpu_family_info_matrix = {
             "tests_on_trigger": [],
         },
     },
+    # Nightly and submodule_bump only builds, no postsubmit. Tests only on nightly
+    "gfx117x": {
+        "linux": {
+            "test-runs-on": "linux-gfx117x-gpu-rocm",
+            "family": "gfx117X-all",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "builds_on_trigger": ["nightly", "submodule_bump"],
+            "bypass_tests_for_releases": True,
+            "tests_on_trigger": ["nightly"],
+            "disabled_framework_tests": ["pytorch", "jax"],
+        },
+        "windows": {
+            "test-runs-on": "windows-gfx117x-gpu-rocm",
+            "family": "gfx117X-all",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "builds_on_trigger": ["nightly", "submodule_bump"],
+            "bypass_tests_for_releases": True,
+            "tests_on_trigger": ["nightly"],
+            "disabled_framework_tests": ["pytorch", "jax"],
+        },
+    },
 }
 
 
@@ -812,12 +835,26 @@ def get_all_families_for_trigger_types(trigger_types: list[str]) -> dict:
     workflow_dispatch where all families are implicitly allowed).
     """
     # Always start with local definitions - source of truth for build support
-    result = _get_local_families_for_trigger_types(trigger_types)
+    result = copy.deepcopy(_get_local_families_for_trigger_types(trigger_types))
 
     # Overlay external runner config if available
     external_config = load_external_runner_config()
     if external_config is not None:
         result = _overlay_runner_config(result, external_config)
+
+    # These sandbox pools are reserved for rocm-systems PR testing. Apply the
+    # policy to both setup and component selection, including local fallbacks.
+    # TODO(#6624): Move sandbox repository/trigger restrictions into each
+    # family's dictionary so the policy is explicit and can vary by family.
+    if (
+        os.environ.get("GITHUB_REPOSITORY") != "ROCm/rocm-systems"
+        or os.environ.get("GITHUB_EVENT_NAME") != "pull_request"
+    ):
+        for family in ("gfx94x", "gfx950"):
+            runners = result.get(family, {}).get("linux", {})
+            if "test-runs-on-sandbox" in runners:
+                runners["test-runs-on-sandbox"] = ""
+                runners["test-runs-on-sandbox-labels"] = []
 
     return result
 
