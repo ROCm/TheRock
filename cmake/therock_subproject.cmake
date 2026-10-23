@@ -519,6 +519,7 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_PREFIX_DIR "${_prefix_dir}"
     THEROCK_CMAKE_SOURCE_DIR "${_cmake_source_dir}"
     THEROCK_CMAKE_PROJECT_INIT_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_init.cmake"
+    THEROCK_CMAKE_PROJECT_COVERAGE_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_coverage.cmake"
     THEROCK_CMAKE_PROJECT_TOOLCHAIN_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_toolchain.cmake"
     THEROCK_CMAKE_ARGS "${ARG_CMAKE_ARGS}"
     THEROCK_CMAKE_INCLUDES "${ARG_CMAKE_INCLUDES}"
@@ -639,6 +640,7 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_cmake_args "${target_name}" THEROCK_CMAKE_ARGS)
   get_target_property(_cmake_includes "${target_name}" THEROCK_CMAKE_INCLUDES)
   get_target_property(_cmake_project_init_file "${target_name}" THEROCK_CMAKE_PROJECT_INIT_FILE)
+  get_target_property(_cmake_project_coverage_file "${target_name}" THEROCK_CMAKE_PROJECT_COVERAGE_FILE)
   get_target_property(_cmake_project_toolchain_file "${target_name}" THEROCK_CMAKE_PROJECT_TOOLCHAIN_FILE)
   get_target_property(_cmake_source_dir "${target_name}" THEROCK_CMAKE_SOURCE_DIR)
   get_target_property(_exclude_from_all "${target_name}" THEROCK_EXCLUDE_FROM_ALL)
@@ -894,6 +896,202 @@ function(therock_cmake_subproject_activate target_name)
   _therock_get_flag_init_contents(_flag_init_contents "${target_name}")
   string(APPEND _init_contents "${_flag_init_contents}")
 
+  # Resolve TheRock's -D<PROJECT>_ENABLE_COVERAGE before anything acts on it.
+  #
+  # The registry lookup and its error live here, ahead of the flag injection
+  # below and the option translation further down, so that a typo or a project
+  # with no registered option fails configure without first appending linker
+  # flags and rewriting this subproject's compile rules.
+  #
+  # CMake definitions are conventionally upper case, so only the upper case
+  # spelling of TheRock's flag is honored (i.e. HIPDNN_ENABLE_COVERAGE, not
+  # hipDNN_ENABLE_COVERAGE).
+  #
+  # The option names upstream are not standardised: most projects take
+  # BUILD_CODE_COVERAGE or CODE_COVERAGE, a few take <PROJECT>_ENABLE_COVERAGE,
+  # RCCL takes ENABLE_CODE_COVERAGE. The generic ones are the reason the
+  # translation is per subproject rather than a global: defining
+  # BUILD_CODE_COVERAGE for the whole build would instrument every project that
+  # happens to understand it, which is exactly what per-project coverage is
+  # trying to avoid.
+  #
+  # DEFINED rather than the value, because an explicit =OFF naming a project
+  # with no registered option is still a mistake worth reporting, and is a
+  # spelling a typo readily takes.
+  string(TOUPPER "${_logical_target_name}" _coverage_project_name)
+  set(_coverage_var_name "${_coverage_project_name}_ENABLE_COVERAGE")
+  set(_coverage_option "")
+  set(_coverage_enabled OFF)
+  if(DEFINED ${_coverage_var_name})
+    set(_coverage_option "${THEROCK_COVERAGE_OPTION_${_coverage_project_name}}")
+    if(NOT _coverage_option)
+      message(FATAL_ERROR
+        "${_logical_target_name}: ${_coverage_var_name} was set but the project "
+        "has no coverage option registered. Add one to COVERAGE_PROJECTS in "
+        "build_tools/github_actions/configure_coverage_ci.py.")
+    endif()
+    # Both the link flags and the device compilation negation below are
+    # clang/lld specific. Handing the subproject its coverage option without
+    # them would instrument it halfway, so coverage is a no-op on MSVC rather
+    # than a partial one.
+    if(MSVC)
+      set(_coverage_option "")
+      if(${_coverage_var_name})
+        message(WARNING
+          "${_logical_target_name}: ${_coverage_var_name} is ignored on MSVC. "
+          "Coverage instrumentation is only supported on Linux builds.")
+      endif()
+    elseif(${_coverage_var_name})
+      set(_coverage_enabled ON)
+    endif()
+  endif()
+
+  # Give the LLVM profile runtime the libraries it depends on.
+  #
+  # -fprofile-instr-generate links libclang_rt.profile_rocm.a, whose
+  # InstrProfilingPlatformROCm.cpp calls dlsym, dladdr and pthread_once. The
+  # driver does not put -ldl or -lpthread on the link line, and on the
+  # manylinux base those symbols are still in libdl and libpthread rather than
+  # in libc, so an instrumented shared library is left with undefined
+  # references. The library itself links -- shared objects tolerate that -- but
+  # every executable linking against it then fails
+  # --no-allow-shlib-undefined, which is how this shows up: hipRAND's tests
+  # cannot link against an instrumented libhiprand.so.
+  #
+  # push-state/pop-state keeps --no-as-needed scoped to these two, so the
+  # DT_NEEDED entries are recorded no matter where the flags land relative to
+  # the objects that need them, without forcing a DT_NEEDED for every other
+  # library on the line.
+  if(_coverage_enabled)
+    set(_coverage_link_flags
+      " -Wl,--push-state,--no-as-needed -ldl -lpthread -Wl,--pop-state")
+    string(APPEND _init_contents
+      "string(APPEND CMAKE_EXE_LINKER_FLAGS \"${_coverage_link_flags}\")\n")
+    string(APPEND _init_contents
+      "string(APPEND CMAKE_SHARED_LINKER_FLAGS \"${_coverage_link_flags}\")\n")
+    string(APPEND _init_contents
+      "string(APPEND CMAKE_MODULE_LINKER_FLAGS \"${_coverage_link_flags}\")\n")
+  endif()
+
+  # Keep the instrumentation off the GPU.
+  #
+  # The upstream coverage options pass -fprofile-instr-generate and
+  # -fcoverage-mapping unqualified, and the HIP driver forwards both to the
+  # device compilation, so kernels are instrumented too. That is not what this
+  # pipeline measures, and it does not survive contact with the runtime: the
+  # device image gains a per-TU __llvm_profile_sections_ symbol that
+  # libclang_rt.profile_rocm.a looks up with hipModuleGetGlobal at exit, and a
+  # __profd_ for every kernel. Symbols the runtime cannot resolve abort the
+  # process after the tests have already passed (rocSPARSE, on a rocPRIM
+  # trampoline kernel), and where the readback does succeed it writes a second
+  # profile named after the device -- gfx942:sramecc+:xnack-.0.<host name> --
+  # which cannot be uploaded as an artifact because of the colons.
+  #
+  # -Xarch_device confines the negation to the device compilation; the host
+  # keeps -fprofile-instrument=clang and its coverage mapping. Order decides
+  # this, since the last of a -f/-fno- pair wins and the project's own flags
+  # come from COMPILE_OPTIONS, which land after CMAKE_<LANG>_FLAGS. Appending
+  # to the compile rule after <FLAGS> is the one position that is reliably
+  # last. The rule does not exist yet in CMAKE_PROJECT_TOP_LEVEL_INCLUDES,
+  # which runs before any language is enabled, hence the separate file below.
+  #
+  # This reaches the languages a project() call enables, which is where the
+  # HIP sources in these projects are compiled -- as CXX, through the amd-hip
+  # toolchain. A language brought up later by a bare enable_language() is not
+  # covered, and would need the same rewrite from wherever that happens.
+  #
+  # The same file takes these projects off ccache. ccache (4.11 at least)
+  # removes every -Xarch_<arch> <arg> pair unless <arch> also arrived as an
+  # Apple-style -arch, from the cache key and from the command it runs alike.
+  # That drops the negation below, so kernels end up instrumented after all,
+  # and drops the -Xarch_host spelling some upstream coverage options use
+  # (rocRAND, hipRAND), so those libraries end up not instrumented at all.
+  # Nothing fails at build time: either way the damage only shows up once the
+  # tests run.
+  set(_coverage_project_include_arg)
+  set(_coverage_configure_depends)
+  if(_coverage_enabled)
+    set(_coverage_host_only_contents
+      "# Generated by therock_subproject.cmake; see the coverage comment there.\n")
+    foreach(_coverage_lang IN ITEMS C CXX HIP)
+      string(APPEND _coverage_host_only_contents
+        "set(CMAKE_${_coverage_lang}_COMPILER_LAUNCHER \"\")\n")
+    endforeach()
+    # Runs on every project() call, so the rewrite has to be idempotent.
+    # -Wno-unused-command-line-argument because -Xarch_device is unused for
+    # the plain C++ sources that make up most of these projects, and several
+    # of them build with -Werror.
+    foreach(_coverage_lang IN ITEMS C CXX HIP)
+      string(APPEND _coverage_host_only_contents
+        "if(CMAKE_${_coverage_lang}_COMPILE_OBJECT AND NOT CMAKE_${_coverage_lang}_COMPILE_OBJECT MATCHES \"fno-profile-instr-generate\")\n"
+        "  string(REPLACE \"<FLAGS>\" \"<FLAGS> -Xarch_device -fno-profile-instr-generate -Xarch_device -fno-coverage-mapping -Wno-unused-command-line-argument\"\n"
+        "    CMAKE_${_coverage_lang}_COMPILE_OBJECT \"\${CMAKE_${_coverage_lang}_COMPILE_OBJECT}\")\n"
+        "endif()\n")
+    endforeach()
+    # Uninstrumented kernels don't stop clang from giving every HIP translation
+    # unit a host-side shadow of its device counters, registered from a
+    # constructor, or the driver from force-linking the GPU half of the profile
+    # runtime (InstrProfilingPlatformROCm.cpp, in both libclang_rt.profile.a
+    # and libclang_rt.profile_rocm.a) to take the registrations. At exit that
+    # half asks the HIP runtime for the device side of each shadow, which only
+    # exists when the device code has profile data. The HIP runtime aborts
+    # ("Cannot create GlobalVar Obj") right after the first module writes its
+    # profile, so every other module's is lost. Linking a stub that defines
+    # each of its entry points as a no-op into every executable and shared
+    # library takes the registrations instead. -fuse-cuid=none would stop the
+    # shadows instead, but then every translation unit defines the same
+    # __hip_cuid_ and any library with two HIP sources fails to link. Should a
+    # compiler update add an entry point the stub lacks, links fail on
+    # duplicate symbols rather than bringing the GPU half back.
+    #
+    # The GPU half also wraps hipLaunchKernel, hipModuleLoad and the like, as
+    # weak definitions of those names, so it is extracted for them too by a
+    # link that reaches the profile runtime archives while they are still
+    # unresolved. The driver adds the archives after the HIP runtime, but
+    # rocSPARSE names them itself, ahead of it. Putting the HIP runtime in
+    # front of every object resolves those functions first; --as-needed keeps
+    # it from becoming a dependency of anything that does not call into it.
+    set(_coverage_profile_stub_source
+      "${THEROCK_SOURCE_DIR}/cmake/therock_coverage_profile_stub.c")
+    string(APPEND _coverage_host_only_contents
+      "set(_therock_coverage_stub \"\${CMAKE_BINARY_DIR}/therock_coverage_profile_stub.o\")\n"
+      "if(\"${_coverage_profile_stub_source}\" IS_NEWER_THAN \"\${_therock_coverage_stub}\")\n"
+      "  if(CMAKE_C_COMPILER)\n"
+      "    set(_therock_coverage_cc \"\${CMAKE_C_COMPILER}\")\n"
+      "  else()\n"
+      "    set(_therock_coverage_cc \"\${CMAKE_CXX_COMPILER}\")\n"
+      "  endif()\n"
+      "  execute_process(\n"
+      "    COMMAND \"\${_therock_coverage_cc}\" -x c -O2 -fPIC -c\n"
+      "      \"${_coverage_profile_stub_source}\" -o \"\${_therock_coverage_stub}\"\n"
+      "    RESULT_VARIABLE _therock_coverage_result)\n"
+      "  if(NOT _therock_coverage_result EQUAL 0)\n"
+      "    message(FATAL_ERROR \"Could not compile ${_coverage_profile_stub_source}\")\n"
+      "  endif()\n"
+      "endif()\n"
+      "set(_therock_coverage_hip \"\")\n"
+      "if(THEROCK_TOOLCHAIN_ROOT)\n"
+      "  file(GLOB _therock_coverage_hip_libs \"\${THEROCK_TOOLCHAIN_ROOT}/lib/libamdhip64.so*\")\n"
+      "  if(_therock_coverage_hip_libs)\n"
+      "    list(GET _therock_coverage_hip_libs 0 _therock_coverage_hip_lib)\n"
+      "    set(_therock_coverage_hip \" -Wl,--push-state,--as-needed \${_therock_coverage_hip_lib} -Wl,--pop-state\")\n"
+      "  endif()\n"
+      "endif()\n"
+      "foreach(_therock_coverage_kind IN ITEMS EXE SHARED MODULE)\n"
+      "  if(NOT CMAKE_\${_therock_coverage_kind}_LINKER_FLAGS MATCHES \"therock_coverage_profile_stub\")\n"
+      "    string(APPEND CMAKE_\${_therock_coverage_kind}_LINKER_FLAGS \" \${_therock_coverage_stub}\${_therock_coverage_hip}\")\n"
+      "  endif()\n"
+      "endforeach()\n")
+    file(CONFIGURE OUTPUT "${_cmake_project_coverage_file}"
+      CONTENT "${_coverage_host_only_contents}" @ONLY ESCAPE_QUOTES)
+    list(APPEND _fprint_files
+      "${_cmake_project_coverage_file}" "${_coverage_profile_stub_source}")
+    set(_coverage_project_include_arg
+      "-DCMAKE_PROJECT_INCLUDE=${_cmake_project_coverage_file}")
+    set(_coverage_configure_depends
+      "${_cmake_project_coverage_file}" "${_coverage_profile_stub_source}")
+  endif()
+
   file(CONFIGURE OUTPUT "${_cmake_project_init_file}" CONTENT "${_init_contents}" @ONLY ESCAPE_QUOTES)
   list(APPEND _fprint_files "${_cmake_project_init_file}")
   list(APPEND _fprint_files "${ROCM_BUILD_FLAGS_STATE_FILE}")
@@ -908,6 +1106,16 @@ function(therock_cmake_subproject_activate target_name)
   set(_prebuilt_file "${_stage_dir}.prebuilt")
 
   list(APPEND _cmake_args "${${target_name}_CMAKE_ARGS}")
+
+  # Hand the subproject whichever coverage option it actually implements.
+  #
+  # _coverage_option is resolved and validated further up, where the profile
+  # runtime's link libraries are added to the init file. It is empty when the
+  # flag was not set at all, and on MSVC where coverage is a no-op, so the
+  # value passed through here is the flag's own ON or OFF.
+  if(_coverage_option)
+    list(APPEND _cmake_args "-D${_coverage_option}=${${_coverage_var_name}}")
+  endif()
 
   # Derive the CMAKE_BUILD_TYPE from either {project}_BUILD_TYPE or the global
   # CMAKE_BUILD_TYPE.
@@ -1020,6 +1228,7 @@ function(therock_cmake_subproject_activate target_name)
         "-DTHEROCK_STAGE_INSTALL_ROOT=${_stage_dir}"
         "-DCMAKE_TOOLCHAIN_FILE=${_cmake_project_toolchain_file}"
         "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${_cmake_project_init_file}"
+        ${_coverage_project_include_arg}
         ${_cmake_args}
       # CMake doesn't always generate a compile_commands.json so touch one to keep
       # the build graph sane.
@@ -1037,6 +1246,7 @@ function(therock_cmake_subproject_activate target_name)
         "${_cmake_source_dir}/CMakeLists.txt"
         "${_cmake_project_toolchain_file}"
         "${_cmake_project_init_file}"
+        ${_coverage_configure_depends}
         "${_global_post_include}"
         "${ROCM_BUILD_FLAGS_STATE_FILE}"
         ${_extra_depends}
