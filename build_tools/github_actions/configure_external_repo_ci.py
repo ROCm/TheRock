@@ -4,7 +4,11 @@
 
 """Configure CI for external repos (rocm-systems, rocm-libraries).
 
-This script determines which projects changed and whether to run/skip tests.
+This script determines which projects changed based on git diff.
+
+Note: Skip-CI logic (for docs-only changes) has been moved to
+configure_multi_arch_ci.py, which uses TOML config files for skip patterns.
+This allows external repos to define their own skip patterns.
 
 Stage Reuse:
     TheRock's stage_reuse_decision.py handles stage impact analysis and
@@ -24,8 +28,10 @@ Usage:
 
 Outputs (to $GITHUB_OUTPUT):
     changed_projects: Comma-separated list of changed project paths
-    run_all_tests: "true" if CI files changed (run full test suite)
-    skip_tests: "true" if only docs/skippable files changed
+    run_all_tests: "true" for schedule/dispatch, shared CI changes,
+                workflow changes without a configured project scope, or when
+                changed projects cannot be determined safely
+    test_type: "quick" when run_all_tests is true, "standard" otherwise
 """
 
 import argparse
@@ -58,14 +64,25 @@ F = TypeVar("F", bound=Callable[..., object])
 SKIPPABLE_PATH_PATTERNS = [
     "*.md",
     "*.rst",
+    "*CODEOWNERS",
     "docs/*",
     "projects/*/docs/*",
     "shared/*/docs/*",
 ]
 
-# Patterns that trigger a full test run when changed (CI infrastructure)
-FULL_TEST_TRIGGER_PATTERNS = [
+# Repositories that scope TheRock workflow changes to configured projects.
+# Repositories absent from this map retain full-test coverage.
+WORKFLOW_TEST_SCOPE_BY_REPO = {
+    "rocm/rocm-libraries": "configured-projects",
+}
+
+# Patterns for TheRock workflow changes in the calling repository.
+CALLER_WORKFLOW_TRIGGER_PATTERNS = [
     ".github/workflows/therock*",
+]
+
+# Changes to project discovery or shared test logic retain global coverage.
+FULL_TEST_TRIGGER_PATTERNS = [
     ".github/scripts/therock*",
     ".github/scripts/get_changed_projects.py",
     ".github/scripts/ci_utils.py",
@@ -81,14 +98,13 @@ FULL_TEST_TRIGGER_PATTERNS = [
 
 # CI-relevant monorepo directories that are NOT subtree-synced repos and so are
 # absent from an external repo's repos-config.json. Without these, a PR confined
-# to shared/* or emulation/* yields no matched subtree -> empty changed_projects
-# -> TheRock falls back to building and testing everything. Each entry MUST have
-# a corresponding mapping in TheRock (build-topology alias + the test selector's
-# _EXTERNAL_SUBTREE_ALIASES); the test selector hard-fails on an unmapped
-# shared/* or emulation/* path, so keep this list in lock-step with TheRock when
-# adding directories. (Currently enumerates rocm-systems' non-subtree dirs;
-# rocm-libraries paths already resolve as repos-config subtrees.)
+# to one of these paths yields no matched subtree -> empty changed_projects ->
+# TheRock falls back to building and testing everything. Each entry MUST have a
+# corresponding mapping in TheRock (build-topology alias + the test selector's
+# _EXTERNAL_SUBTREE_ALIASES), so keep this list in lock-step with TheRock when
+# adding directories.
 CI_RELEVANT_NON_SUBTREE_PREFIXES = {
+    "dnn-providers/cmake",
     "shared/amdgpu-windows-interop",
     "shared/kpack",
     "shared/machine-readable-isa",
@@ -104,7 +120,7 @@ class ConfigureResult:
 
     changed_projects: str  # Comma-separated list
     run_all_tests: bool
-    skip_tests: bool
+    test_type: str  # "quick" when run_all_tests=True, otherwise "standard"
 
 
 @dataclass
@@ -295,13 +311,18 @@ def configure(
     head_sha: Optional[str],
     config_path: str,
 ) -> ConfigureResult:
-    """Main configuration logic."""
+    """Main configuration logic.
+
+    Note: Skip-CI logic (for docs-only changes) is now handled by
+    configure_multi_arch_ci.py using TOML config files. This function
+    focuses on determining changed_projects and run_all_tests.
+    """
 
     # Schedule/workflow_dispatch events run all tests
     if event_name in ("schedule", "workflow_dispatch"):
         logger.info(f"{event_name} event - running all tests")
         return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
+            changed_projects="", run_all_tests=True, test_type="quick"
         )
 
     # Get modified paths via GitHub API
@@ -316,36 +337,76 @@ def configure(
     else:
         logger.warning("No SHAs provided - running all tests")
         return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
+            changed_projects="", run_all_tests=True, test_type="quick"
         )
 
     # If API returned None (truncated results), fall back to run-all
     if modified_paths is None:
         logger.info("Truncated API response - running all tests")
         return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
+            changed_projects="", run_all_tests=True, test_type="quick"
         )
 
     if not modified_paths:
-        logger.info("No modified paths - skipping tests")
+        logger.info("No modified paths - no projects changed")
         return ConfigureResult(
-            changed_projects="", run_all_tests=False, skip_tests=True
+            changed_projects="", run_all_tests=False, test_type="standard"
         )
 
     logger.info(f"Modified paths: {len(modified_paths)} files")
 
-    # Check if CI files changed (run all tests)
+    # Shared CI and test-selection changes can affect other repositories.
     if matches_patterns(modified_paths, FULL_TEST_TRIGGER_PATTERNS):
-        logger.info("CI files changed - running all tests")
+        logger.info("Shared CI files changed - running all tests")
         return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
+            changed_projects="", run_all_tests=True, test_type="quick"
         )
 
-    # Check if only skippable files changed
-    if not has_non_skippable(modified_paths):
-        logger.info("Only skippable files changed - skipping tests")
+    # Apply the calling repository's workflow test policy.
+    if matches_patterns(modified_paths, CALLER_WORKFLOW_TRIGGER_PATTERNS):
+        workflow_test_scope = WORKFLOW_TEST_SCOPE_BY_REPO.get(github_repo.lower())
+        if workflow_test_scope != "configured-projects":
+            logger.info(
+                "Workflow changed in %s - running all tests",
+                github_repo,
+            )
+            return ConfigureResult(
+                changed_projects="", run_all_tests=True, test_type="quick"
+            )
+
+        config = load_repo_config(config_path)
+        if not config:
+            logger.warning("No config loaded - running all tests")
+            return ConfigureResult(
+                changed_projects="", run_all_tests=True, test_type="quick"
+            )
+
+        own_projects = get_valid_prefixes(config)
+
+        # A second, unknown change must retain the conservative full run.
+        other_paths = {
+            path
+            for path in modified_paths
+            if not matches_patterns([path], CALLER_WORKFLOW_TRIGGER_PATTERNS)
+        }
+        unclassified = get_unclassified_paths(other_paths, own_projects)
+        if unclassified:
+            logger.info(
+                f"Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
+                " - running all tests"
+            )
+            return ConfigureResult(
+                changed_projects="", run_all_tests=True, test_type="quick"
+            )
+
+        logger.info(
+            "Workflow changed in %s - testing configured projects",
+            github_repo,
+        )
         return ConfigureResult(
-            changed_projects="", run_all_tests=False, skip_tests=True
+            changed_projects=",".join(sorted(own_projects)),
+            run_all_tests=False,
+            test_type="standard",
         )
 
     # Find changed projects from config
@@ -353,7 +414,7 @@ def configure(
     if not config:
         logger.warning("No config loaded - running all tests")
         return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
+            changed_projects="", run_all_tests=True, test_type="quick"
         )
 
     valid_prefixes = get_valid_prefixes(config) | CI_RELEVANT_NON_SUBTREE_PREFIXES
@@ -369,7 +430,7 @@ def configure(
             " - running all tests"
         )
         return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
+            changed_projects="", run_all_tests=True, test_type="quick"
         )
 
     matched = find_matched_subtrees(modified_paths, valid_prefixes)
@@ -378,7 +439,7 @@ def configure(
     return ConfigureResult(
         changed_projects=",".join(matched),
         run_all_tests=False,
-        skip_tests=False,
+        test_type="standard",
     )
 
 
@@ -435,7 +496,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         {
             "changed_projects": result.changed_projects,
             "run_all_tests": str(result.run_all_tests).lower(),
-            "skip_tests": str(result.skip_tests).lower(),
+            "test_type": result.test_type,
         }
     )
 

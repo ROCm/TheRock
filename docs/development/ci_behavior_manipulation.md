@@ -19,16 +19,62 @@ CI runs on pull requests if modified files pass the filters in
 
 The following labels may be added to a pull request to modify CI behavior:
 
-| Label or group     | Description                                                                                                                                                                                       |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci:skip`          | Skip all builds and tests                                                                                                                                                                         |
-| `ci:run-all-archs` | Build and test all possible architectures                                                                                                                                                         |
-| `ci:asan`          | Enable ASAN CI builds and tests. ASAN CI is skipped by default on PRs unless this label is present.                                                                                               |
-| `ci:host-asan`     | Alias for `ci:asan`. Enable ASAN CI builds and tests.                                                                                                                                             |
-| `gfx...`           | Opt-in to building and testing the specified gfx family (e.g. `gfx120X`, `gfx950`)                                                                                                                |
-| `test:...`         | Run tests only for the specified projects (e.g. `test:rocthrust`, `test:hipblaslt`). Sets test level to `full` unless overridden by `test_filter:`. Multiple `test:` labels can be combined.      |
-| `test_runner:...`  | Run tests on only custom test machines (e.g. `test_runner:oem`). Single-arch CI only.                                                                                                             |
-| `test_filter:...`  | Override the test level (e.g. `test_filter:comprehensive`, `test_filter:quick`). Takes priority over all other test level logic. See [test_filtering.md](./test_filtering.md) for allowed values. |
+| Label or group             | Description                                                                                                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci:skip`                  | Skip all builds and tests                                                                                                                                                                         |
+| `ci:run-all-archs`         | Build and test all possible architectures                                                                                                                                                         |
+| `ci:asan`                  | Enable ASAN CI builds and tests. ASAN CI is skipped by default on PRs unless this label is present.                                                                                               |
+| `ci:host-asan`             | Alias for `ci:asan`. Enable ASAN CI builds and tests.                                                                                                                                             |
+| `ci:run-multi-gpu`         | Opt-in to running multi-GPU tests.                                                                                                                                                                |
+| `ci:cpu-test-only`         | Run only CPU tests (skip GPU tests). Useful for changes that don't require GPU testing.                                                                                                           |
+| `ci:platform:linux`        | Run CI only on Linux (skip Windows builds/tests)                                                                                                                                                  |
+| `ci:platform:windows`      | Run CI only on Windows (skip Linux builds/tests)                                                                                                                                                  |
+| `ci:gfx...`                | Opt-in to building and testing the specified gfx family (e.g. `ci:gfx120X-all`, `ci:gfx950-dcgpu`)                                                                                                |
+| `ci:build:gfx...`          | Opt-in to building only (no tests) for the specified gfx family (e.g. `ci:build:gfx94x`, `ci:build:gfx950`). See [Build/Test-specific labels](#buildtest-specific-architecture-labels).           |
+| `ci:test:gfx...`           | Opt-in to testing only for the specified gfx family (e.g. `ci:test:gfx94x`). Requires a corresponding build label. See [Build/Test-specific labels](#buildtest-specific-architecture-labels).     |
+| `test:...`                 | Run tests only for the specified projects (e.g. `test:rocthrust`, `test:hipblaslt`). Multiple `test:` labels can be combined.                                                                     |
+| `test_runner:...`          | Run tests on only custom test machines (e.g. `test_runner:oem`). Single-arch CI only.                                                                                                             |
+| `test_filter:...`          | Override the test level (e.g. `test_filter:comprehensive`, `test_filter:quick`). Takes priority over all other test level logic. See [test_filtering.md](./test_filtering.md) for allowed values. |
+| `ci:build-native-linux`    | Opt-in to building native Linux packages (deb/rpm).                                                                                                                                               |
+| `ci:skip-native-linux`     | Skip native Linux package builds.                                                                                                                                                                 |
+| `ci:build-python-packages` | Opt-in to building Python packages.                                                                                                                                                               |
+| `ci:skip-python-packages`  | Skip Python package builds.                                                                                                                                                                       |
+| `ci:build-pytorch`         | Opt-in to building PyTorch packages.                                                                                                                                                              |
+| `ci:skip-pytorch`          | Skip PyTorch package builds.                                                                                                                                                                      |
+| `ci:build-jax`             | Opt-in to building JAX packages.                                                                                                                                                                  |
+| `ci:skip-jax`              | Skip JAX package builds.                                                                                                                                                                          |
+
+#### Build/Test-specific architecture labels
+
+For fine-grained control over which architectures build vs. test, you can use
+`ci:build:gfx...` and `ci:test:gfx...` labels instead of (or in addition to) the
+standard `ci:gfx...` labels.
+
+**Use cases:**
+
+- **Build-only (`ci:build:gfx...`)**: Verify compilation for an architecture without
+  running tests. Useful when you only need to validate that code compiles for a
+  specific GPU target, or when test hardware isn't available/needed.
+
+- **Test-only (`ci:test:gfx...`)**: Force-enable tests for an architecture that
+  wouldn't normally run tests on PRs (e.g., due to trigger-based gating). This
+  requires a corresponding build label (`ci:gfx...` or `ci:build:gfx...`) since
+  tests depend on build artifacts.
+
+**Examples:**
+
+| Labels                               | Result                                             |
+| ------------------------------------ | -------------------------------------------------- |
+| `ci:build:gfx950`                    | Build for gfx950, skip tests                       |
+| `ci:gfx94x`                          | Build and test for gfx94x (standard behavior)      |
+| `ci:gfx950` + `ci:test:gfx950`       | Build for gfx950 and force-enable tests            |
+| `ci:build:gfx90a` + `ci:test:gfx90a` | Build for gfx90a and force-enable tests            |
+| `ci:test:gfx950` (alone)             | **Error**: test label requires corresponding build |
+
+> [!NOTE]
+> The `ci:test:gfx...` label will only enable tests if test hardware is available
+> for that architecture. If no test runner exists for the family, the label is
+> ignored with a warning.
 
 ### Push
 
@@ -49,6 +95,33 @@ Actions workflow page:
 \[\[ [Multi-Arch CI workflow dispatch](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml) \]\]
 Inputs allow per-platform family selection, test label filtering, and prebuilt
 stage configuration.
+
+The `pr_labels` input accepts comma-separated labels using the same names and
+label-driven behavior as pull requests. For example,
+`test:rocprim,test_filter:comprehensive` selects rocPRIM tests and requests
+comprehensive testing.
+
+#### Running tests against existing artifacts (`test_artifacts.yml`)
+
+[`test_artifacts.yml`](https://github.com/ROCm/TheRock/actions/workflows/test_artifacts.yml)
+runs tests against pre-built artifacts. Find a recent successful
+[Multi-Arch CI](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml)
+run on `main`, note its run ID, then go to **Actions** > **Test Artifacts** >
+**Run workflow**:
+
+| Input              | Example                                                                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `artifact_run_id`  | `35193881163` (from the Multi-Arch CI run URL). **Required** — this workflow only runs tests and needs artifacts from a previous build run. |
+| `artifact_group`   | `multi-arch-release`                                                                                                                        |
+| `amdgpu_families`  | `gfx94X-dcgpu`, `gfx110X-all`, `gfx120X-all`, `gfx950-dcgpu`                                                                                |
+| `test_runs_on`     | Runner label, e.g. `linux-gfx942-1gpu-ccs-ossci-rocm`                                                                                       |
+| `test_type`        | `quick` / `standard` / `comprehensive` / `full`                                                                                             |
+| `test_labels`      | `test:rocblas,test:hipblas` (comma-separated, empty = all). Directly selects which test components to run by name.                          |
+| `changed_projects` | `rocblas,hipblas` (comma-separated, empty = all). Selects projects and their downstream consumers via the dependency graph.                 |
+
+When both `test_labels` and `changed_projects` are set, the effective test set
+is the **intersection** of both filters — only components that match both a
+`test_labels` entry and a `changed_projects` dependency are run.
 
 ## Prebuilt stages
 

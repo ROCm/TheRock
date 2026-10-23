@@ -54,11 +54,22 @@ else()
       set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
       set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
       set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
-      # ppc64le has native 128-bit long double, so libquadmath is not needed.
-      if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
-        set(FLANG_RUNTIME_F128_MATH_LIB "")
+      # Hosts whose C long double is already IEEE-754 binary128 (ppc64le,
+      # riscv64) do not need libquadmath: flang-rt folds the F128 entry points
+      # into libflang_rt.runtime instead of building libflang_rt.quadmath.
+      #
+      # This must be a typed cache entry, not a normal variable.
+      # flang/cmake/modules/FlangCommon.cmake declares the variable with
+      # set(... CACHE STRING) and LLVM sets cmake_minimum_required(3.20), so
+      # CMP0126 is OLD there and that call would discard a normal variable of
+      # the same name, leaving the flang driver and the flang-rt runtimes build
+      # with different values. An existing typed cache entry makes the
+      # FlangCommon.cmake declaration a no-op, so this selection is
+      # authoritative for both.
+      if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le|riscv64")
+        set(FLANG_RUNTIME_F128_MATH_LIB "" CACHE STRING "Library implementing REAL(16) math for flang-rt" FORCE)
       else()
-        set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
+        set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath" CACHE STRING "Library implementing REAL(16) math for flang-rt" FORCE)
       endif()
       set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
       #TODO: Enable when HWLOC dependency is figured out
@@ -97,7 +108,14 @@ set(PACKAGE_VENDOR "AMD" CACHE STRING "Vendor" FORCE)
 # of the compiler).
 set(LLVM_EXTERNAL_ROCM_DEVICE_LIBS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/amd/device-libs")
 set(LLVM_EXTERNAL_SPIRV_LLVM_TRANSLATOR_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/spirv-llvm-translator")
-set(LLVM_EXTERNAL_PROJECTS "rocm-device-libs;spirv-llvm-translator" CACHE STRING "Enable extra projects" FORCE)
+set(LLVM_EXTERNAL_SQTT_MARKER_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/amd/sqtt-marker")
+
+set(EXTERNAL_PROJECTS "rocm-device-libs;spirv-llvm-translator")
+if(NOT WIN32)
+    # LLVM plugins do not work on Windows unless LLVM_EXPORT_SYMBOLS_FOR_PLUGINS is set.
+    list(APPEND EXTERNAL_PROJECTS "sqtt-marker")
+endif()
+set(LLVM_EXTERNAL_PROJECTS "${EXTERNAL_PROJECTS}" CACHE STRING "Enable extra projects" FORCE)
 
 # TODO2: This mechanism has races in certain situations, failing to create a
 # symlink. Revisit once devicemanager code is made more robust.

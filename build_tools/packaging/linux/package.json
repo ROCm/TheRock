@@ -38,6 +38,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
@@ -111,6 +112,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False",
     "Disable_DWZ": "True",
     "Disable_RPM_STRIP": "True"
@@ -429,6 +431,51 @@
     ],
     "Gfxarch": "False",
     "Disable_DWZ": "True"
+  },
+  {
+    "Package": "amdrocm-fft-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-fft-devel",
+      "amdrocm-rand",
+      "libfftw3-double3",
+      "libfftw3-single3"
+    ],
+    "RPMRequires": [
+      "amdrocm-fft-devel",
+      "amdrocm-rand"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm FFT library test suite and validation binaries",
+    "Description_Long": "Comprehensive test suite for rocFFT and hipFFT libraries. Includes unit tests, performance benchmarks, and correctness validation tools for Fast Fourier Transform operations on AMD GPUs. Provides test binaries and verification utilities for FFT algorithm implementation.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "fft",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocFFT",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "hipFFT",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
   },
   {
     "Package": "amdrocm-fft",
@@ -813,6 +860,12 @@
           },
           {
             "Name": "rocBLAS",
+            "Components": [
+              "dev"
+            ]
+          },
+          {
+            "Name": "origami",
             "Components": [
               "dev"
             ]
@@ -1548,7 +1601,7 @@
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm foundational profiling tools and tracing infrastructure",
-    "Description_Long": "Base profiling infrastructure for ROCm applications. Includes rocprofiler-sdk (profiling API framework), aqlprofile (low-level AQL packet profiling), roctracer (API tracing library), and rocprof-trace-decoder (trace analysis utilities). Provides runtime libraries, development headers, and documentation for building performance analysis tools.",
+    "Description_Long": "Base profiling infrastructure for ROCm applications. Includes rocprofiler-sdk (profiling API framework), aqlprofile (low-level AQL packet profiling), roctracer (API tracing library), rocprof-trace-decoder (trace analysis utilities), and profiler-hub (rocpd profiling data storage). Provides runtime libraries, development headers, and documentation for building performance analysis tools.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1610,8 +1663,23 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "profiler-hub",
+        "Artifact_Subdir": [
+          {
+            "Name": "profiler-hub",
+            "Components": [
+              "lib",
+              "dev",
+              "run",
+              "doc"
+            ]
+          }
+        ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
@@ -1624,17 +1692,19 @@
       "amdrocm-runtime",
       "amdrocm-sysdeps",
       "amdrocm-amdsmi",
+      "amdrocm-hipfile",
       "amdrocm-profiler-base"
     ],
     "RPMRequires": [
       "amdrocm-runtime",
       "amdrocm-sysdeps",
       "amdrocm-amdsmi",
+      "amdrocm-hipfile",
       "amdrocm-profiler-base"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm profiler tools test suite and validation binaries",
-    "Description_Long": "Test suite for rocprofiler-compute and rocprofiler-systems. Includes unit tests and validation binaries for compute workload profiling and system-level performance analysis. Provides test executables for verifying kernel profiling, hardware counter collection, and tracing functionality.",
+    "Description_Long": "Test suite for rocprofiler-compute, rocprofiler-systems, and profiler-hub. Includes unit tests and validation binaries for compute workload profiling and system-level performance analysis. Provides test executables for verifying kernel profiling, hardware counter collection, and tracing functionality.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1680,6 +1750,17 @@
         "Artifact_Subdir": [
           {
             "Name": "aqlprofile",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "profiler-hub",
+        "Artifact_Subdir": [
+          {
+            "Name": "profiler-hub",
             "Components": [
               "test"
             ]
@@ -1747,6 +1828,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False",
     "Disable_DWZ": "True"
   },
@@ -1755,8 +1837,12 @@
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
-    "DEBDepends": [],
-    "RPMRequires": [],
+    "DEBDepends": [
+      "amdrocm-llvm"
+    ],
+    "RPMRequires": [
+      "amdrocm-llvm"
+    ],
     "Maintainer": "ROCm Compiler Support <rocm.compiler.support@amd.com>",
     "Description_Short": "Automated CUDA to HIP source code translation tool",
     "Description_Long": "HIPIFY is a source-to-source translation tool that automatically converts CUDA C++ code to HIP C++. Translates CUDA runtime and driver API calls along with usage of the CUDA math and utility libraries to their HIP equivalents. Enables migration of CUDA applications to run on AMD GPUs through the HIP abstraction layer.",
@@ -1779,6 +1865,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
@@ -1873,6 +1960,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
@@ -1960,6 +2048,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
@@ -2468,10 +2557,12 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "libc6",
-      "amdrocm-base"
+      "amdrocm-base",
+      "amdrocm-sysdeps"
     ],
     "RPMRequires": [
-      "amdrocm-base"
+      "amdrocm-base",
+      "amdrocm-sysdeps"
     ],
     "Maintainer": "rocSHMEM Maintainer <rocshmem-maintainer@amd.com>",
     "Description_Short": "ROCm OpenSHMEM library for GPU focused intra-kernel networking",
@@ -2766,6 +2857,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "True"
   },
   {
@@ -2861,9 +2953,11 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
+      "amdrocm-runtime",
       "amdrocm-sysdeps"
     ],
     "RPMRequires": [
+      "amdrocm-runtime",
       "amdrocm-sysdeps"
     ],
     "Maintainer": "ROCm Debugger Support <rocm-gdb.support@amd.com>",
@@ -2917,6 +3011,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
@@ -3543,7 +3638,6 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
-    "Postinstall": "True",
     "Gfxarch": "True"
   },
   {
@@ -3706,7 +3800,6 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
-    "Postinstall": "True",
     "Gfxarch": "True"
   },
   {
@@ -3790,7 +3883,6 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
-    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
