@@ -465,6 +465,124 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_TYPE"] = "quick"
         self.assertNotIn("miopen-dbsync", self._selected_names())
 
+    def _dbsync_job(self, families, gated_gpu, gfx_target):
+        """Run selection for miopen-dbsync on `families`; return its job or None."""
+        os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync"
+        os.environ["AMDGPU_FAMILIES"] = families
+        if gated_gpu:
+            # configure_multi_arch_ci blanked the GPU runner (e.g. tests_on_trigger).
+            os.environ["TEST_RUNS_ON"] = ""
+        target = families.split("-")[0].lower()
+        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
+            target: {
+                "linux": {
+                    "test-runs-on": "" if gated_gpu else "some-gpu-runner",
+                    "fetch-gfx-targets": [gfx_target],
+                }
+            }
+        }
+        fetch_test_configurations.run()
+        jobs = [j for j in self._get_components() if j["job_name"] == "miopen-dbsync"]
+        return jobs[0] if jobs else None
+
+    def test_miopen_dbsync_include_family_covers_gfx942_and_gfx950(self):
+        config = fetch_test_configurations.test_matrix["miopen-dbsync"]
+        self.assertEqual(config["include_family"]["linux"], ["gfx942", "gfx950"])
+
+    def test_miopen_dbsync_declares_gfx950_advisory(self):
+        # The matrix entry itself says gfx950 is advisory -- no conditional elsewhere.
+        config = fetch_test_configurations.test_matrix["miopen-dbsync"]
+        self.assertEqual(config["expect_failure"]["linux"], ["gfx950"])
+
+    def test_miopen_dbsync_gfx950_scheduled_on_cpu_runner_when_gpu_gated(self):
+        job = self._dbsync_job("gfx950-dcgpu", True, "gfx950")
+        self.assertIsNotNone(job)
+        self.assertTrue(job["linux_cpu_runner"])
+        self.assertTrue(job["test_runner"])
+
+    def test_miopen_dbsync_gfx950_is_advisory(self):
+        job = self._dbsync_job("gfx950-dcgpu", True, "gfx950")
+        self.assertTrue(job["expect_failure"])
+
+    def test_miopen_dbsync_gfx942_stays_blocking(self):
+        job = self._dbsync_job("gfx94X-dcgpu", False, "gfx942")
+        self.assertIsNotNone(job)
+        self.assertFalse(job["expect_failure"])
+
+    def test_miopen_dbsync_excluded_on_other_families(self):
+        self.assertIsNone(self._dbsync_job("gfx120X-all", False, "gfx1200"))
+
+    def test_gpu_components_not_scheduled_on_gated_gfx950(self):
+        # The CPU lane must not leak GPU-requiring components onto gated gfx950.
+        os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync,rocblas"
+        os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
+        os.environ["TEST_RUNS_ON"] = ""
+        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
+            "gfx950": {"linux": {"test-runs-on": "", "fetch-gfx-targets": ["gfx950"]}}
+        }
+        names = self._selected_names()
+        self.assertIn("miopen-dbsync", names)
+        self.assertNotIn("rocblas", names)
+
+    # -----------------------
+    # expect_failure (per-family advisory jobs)
+    # -----------------------
+
+    def _job_by_name(self, name):
+        """Run selection and return the emitted job dict for `name`, or None."""
+        fetch_test_configurations.run()
+        jobs = [j for j in self._get_components() if j["job_name"] == name]
+        return jobs[0] if jobs else None
+
+    def test_expect_failure_matches_by_gfx_target(self):
+        # Default AMDGPU_FAMILIES is the gfx94X-dcgpu group; "gfx942" is one of its
+        # fetch-gfx-targets, so the target form matches -- same as include_family.
+        self._inject_job("xf-target", expect_failure={"linux": ["gfx942"]})
+        self.assertIs(self._job_by_name("xf-target")["expect_failure"], True)
+
+    def test_expect_failure_matches_by_group_string(self):
+        self._inject_job("xf-group", expect_failure={"linux": ["gfx94X-dcgpu"]})
+        self.assertIs(self._job_by_name("xf-group")["expect_failure"], True)
+
+    def test_expect_failure_does_not_match_other_family(self):
+        # The job is still scheduled; it is just blocking rather than advisory.
+        self._inject_job("xf-other", expect_failure={"linux": ["gfx1100"]})
+        job = self._job_by_name("xf-other")
+        self.assertIsNotNone(job)
+        self.assertIs(job["expect_failure"], False)
+
+    def test_expect_failure_is_scoped_per_platform(self):
+        # A windows-only declaration does not make the linux job advisory.
+        self._inject_job("xf-otherplat", expect_failure={"windows": ["gfx942"]})
+        self.assertIs(self._job_by_name("xf-otherplat")["expect_failure"], False)
+
+    def test_expect_failure_omitted_leaves_job_blocking(self):
+        # Components that never opt in do not carry the key at all.
+        self._inject_job("xf-absent")
+        self.assertNotIn("expect_failure", self._job_by_name("xf-absent"))
+
+    def test_expect_failure_is_always_emitted_as_a_bool(self):
+        # test_component.yml compares with `== true`, so the declaration map must
+        # never survive into the emitted component JSON.
+        for name, decl in [
+            ("xf-bool-hit", {"linux": ["gfx942"]}),
+            ("xf-bool-miss", {"linux": ["gfx1100"]}),
+        ]:
+            with self.subTest(job=name):
+                self._inject_job(name, expect_failure=decl)
+                self.assertIsInstance(self._job_by_name(name)["expect_failure"], bool)
+
+    def test_expect_failure_does_not_mutate_test_matrix(self):
+        # The boolean is written to the merged copy, so the declaration survives
+        # for the next run rather than being consumed by the first one.
+        self._inject_job("xf-repeat", expect_failure={"linux": ["gfx942"]})
+        self.assertIs(self._job_by_name("xf-repeat")["expect_failure"], True)
+        self.assertIs(self._job_by_name("xf-repeat")["expect_failure"], True)
+        self.assertEqual(
+            fetch_test_configurations.test_matrix["xf-repeat"]["expect_failure"],
+            {"linux": ["gfx942"]},
+        )
+
     # -----------------------
     # Multi-GPU logic (RCCL)
     # -----------------------

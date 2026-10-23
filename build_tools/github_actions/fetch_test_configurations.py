@@ -194,7 +194,7 @@ _rocgdb_common = {
     "timeout_minutes": 30,
     "platform": ["linux"],
     "total_shards": 1,
-    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:aa3f8966fcdefca04d4c04fb10ae7f8b654d1bb1cc6a894ea7089e5a01953197",  # 2026-07-22T15:21:18.527038581Z
+    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:7615107f2f16969fe47e297028c10482968d4a4821bc947ad4fec79ef69e3761",  # 2026-10-01T09:35:28.00411791Z
     "container_options": ["--cap-add=SYS_PTRACE"],
 }
 
@@ -243,6 +243,16 @@ _rocgdb_common = {
 # not in the list; omit the field to run on every tier (the default). For example, a
 # component whose suite is too slow for the quick sanity tier opts out of it with:
 #   "test_types": ["standard", "comprehensive", "full"]
+#
+# A component may mark itself advisory (non-blocking) on specific GPU families via
+# "expect_failure", a map keyed by platform whose value is a list of family entries,
+# matched exactly like include_family/exclude_family (so either the family group
+# string or an individual gfx target works). It is resolved to a single boolean per
+# job before the matrix is emitted, which test_component.yml maps to
+# continue-on-error plus an "(xfail)" job-name suffix. The job is still scheduled and
+# still reports; it just cannot fail the run. Use it to land coverage for an arch
+# that is still being qualified without blocking everyone else. For example:
+#   "expect_failure": {"linux": ["gfx950"]}
 #
 # A component's "skip_stages" lists build stages whose absence excludes the test.
 # If any listed stage is in SKIP_STAGES, the component is skipped. Reused stages
@@ -751,8 +761,10 @@ test_matrix = {
     # The runner ships in the MIOpen dist (share/miopen/bin/run_dbsync_rocjitsu.py, pulled via
     # --miopen; defined in rocm-libraries projects/miopen/test/gtest/dbsync/): it resolves arch + CU
     # list from AMDGPU_FAMILIES, sparse-builds the pinned rocjitsu KMD, and runs StaticFDBSync once
-    # per CU with a CU-corrected config. include_family restricts it to gfx942, whose FAMILY_MAP
-    # entry covers both CU variants -- MI300X (304 CU) and MI300A (228 CU) -- in a single job.
+    # per CU with a CU-corrected config. include_family restricts it to the arches rocjitsu has a
+    # KMD config for: gfx942, whose FAMILY_MAP entry covers both CU variants -- MI300X (304 CU) and
+    # MI300A (228 CU) -- in a single job, and gfx950 (MI355X, 256 CU; advisory, see
+    # expect_failure below).
     # linux_cpu_runner: no scarce GPU test runner needed; uses the default no_rocm Ubuntu container
     # (the runner sudo-apt-installs cmake/build-essential/libdrm-dev to build rocjitsu).
     "miopen-dbsync": {
@@ -762,15 +774,20 @@ test_matrix = {
         # job entirely on the `quick` tier -- no job is scheduled, so no artifact fetch
         # or rocjitsu build is paid for on quick (the runner script also self-skips on
         # TEST_TYPE=quick as a backstop). Runs serially (MIOPEN_DBSYNC_MAX_THREADS=1)
-        # under rocjitsu; full set (gfx942 304+228) + artifact fetch + rocjitsu build
-        # measures ~15 min, so 30 gives margin and fails a hung interposer faster.
+        # under rocjitsu; full set (gfx942 304+228, gfx950 256) + artifact fetch + rocjitsu
+        # build measures ~15 min, so 30 gives margin and fails a hung interposer faster.
         "timeout_minutes": 30,
         "test_script": "python ./build/share/miopen/bin/run_dbsync_rocjitsu.py",
         "platform": ["linux"],
         "linux_cpu_runner": True,
         "test_types": ["standard", "comprehensive", "full"],
         "include_family": {
-            "linux": ["gfx942"],
+            "linux": ["gfx942", "gfx950"],
+        },
+        # TODO(ALMIOPEN-2674): drop this once gfx950 dbsync has been green for a
+        # few consecutive standard/comprehensive/full runs.
+        "expect_failure": {
+            "linux": ["gfx950"],
         },
         "total_shards_dict": {
             "linux": 1,
@@ -1492,6 +1509,17 @@ def run():
             # WSL jobs are non-blocking until their results are stable.
             if platform == "wsl":
                 job_config_data["expect_failure"] = True
+
+            # A component declares the families it is advisory on via
+            # "expect_failure" (see the key reference above). Resolve that
+            # declaration down to the single boolean the workflows read --
+            # test_component.yml compares it with `== true` to set
+            # continue-on-error, so the emitted value must never stay a map.
+            _xfail = job_config_data.get("expect_failure")
+            if _xfail:
+                job_config_data["expect_failure"] = _family_matches(
+                    _xfail.get(platform, []), amdgpu_families, _family_gfx_targets
+                )
 
             # tensilelite: append the tensilelite/tests C++ gtest suite (run via
             # ctest -L <test_type>, driven by the shared test_runner.py) after
