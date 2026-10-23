@@ -249,8 +249,9 @@ option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to t
 include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
 
 # Master Flang switch (Linux + COMPILER only). Path when ON:
-#   Default: fortran distribution (FLANG_STANDALONE off).
-#   Opt-in:  FLANG_STANDALONE=ON -> amd-llvm-flang (fortran dist forced OFF).
+#   Default: fortran distribution.
+#   Opt-in standalone: FLANG_STANDALONE=ON and COMPILER_FORTRAN_DISTRIBUTION=OFF
+#   -> amd-llvm-flang. If both are ON, prefer the fortran distribution.
 cmake_dependent_option(THEROCK_ENABLE_FLANG
   "Build/install Flang (standalone amd-llvm-flang and/or amd-llvm fortran distribution)" ON
   "THEROCK_ENABLE_COMPILER;NOT WIN32" OFF)
@@ -274,8 +275,8 @@ if(THEROCK_ENABLE_COMPILER)
   option(THEROCK_ENABLE_COMPILER_TOOLS_DISTRIBUTION
     "Stage LLVM 'tools' distribution for amd-llvm" ON)
   cmake_dependent_option(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION
-    "Stage LLVM 'fortran' distribution for amd-llvm (requires FLANG; OFF when FLANG_STANDALONE is ON)" OFF
-    "THEROCK_ENABLE_FLANG;NOT THEROCK_ENABLE_FLANG_STANDALONE" OFF)
+    "Stage LLVM 'fortran' distribution for amd-llvm (default ON when FLANG is ON)" OFF
+    "THEROCK_ENABLE_FLANG" OFF)
   cmake_dependent_option(THEROCK_ENABLE_COMPILER_MULTILIBS_DISTRIBUTION
     "Stage LLVM 'multilibs' distribution for amd-llvm" OFF
     "NOT WIN32" OFF)
@@ -312,8 +313,22 @@ if(THEROCK_ENABLE_COMPILER)
   unset(_therock_amd_llvm_distribution)
 endif()
 
+# Prefer fortran distribution over standalone when both are enabled.
+if(THEROCK_ENABLE_FLANG
+   AND THEROCK_ENABLE_FLANG_STANDALONE
+   AND THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION)
+  message(STATUS
+    "FLANG_STANDALONE and COMPILER_FORTRAN_DISTRIBUTION both ON; "
+    "preferring fortran distribution (disabling standalone amd-llvm-flang)")
+  set(THEROCK_ENABLE_FLANG_STANDALONE OFF CACHE BOOL
+    "Enables amd-llvm-flang (requires THEROCK_ENABLE_FLANG)" FORCE)
+  set(THEROCK_ENABLE_FLANG_STANDALONE OFF)
+endif()
+
+
+message("!!!!!THEROCK_ENABLE_FLANG_STANDALONE: ${THEROCK_ENABLE_FLANG_STANDALONE}")
+message("!!!!!THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION: ${THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION}")
 # FLANG=ON requires exactly one delivery path (standalone XOR fortran dist).
-# dependent_option already clears fortran dist when standalone is ON / FLANG is OFF.
 if(THEROCK_ENABLE_FLANG
    AND NOT THEROCK_ENABLE_FLANG_STANDALONE
    AND NOT THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION)
