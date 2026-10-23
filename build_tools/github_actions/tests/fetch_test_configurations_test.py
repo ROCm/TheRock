@@ -952,7 +952,20 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_linux_jobs_are_not_expect_failure(self):
         fetch_test_configurations.run()
         for job in self._get_components():
-            self.assertNotIn("expect_failure", job, job["job_name"])
+            self.assertFalse(job.get("expect_failure"), job["job_name"])
+
+    def test_native_gfx110x_wsl_components_are_not_expect_failure(self):
+        """The "wsl" xfail entry must not leak into the native Linux jobs."""
+        os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
+        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests", "test:rocrtst"])
+        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
+            "gfx110x": {"linux": {"test-runs-on": "linux-gfx110X-gpu-rocm"}}
+        }
+        fetch_test_configurations.run()
+        jobs = {job["job_name"]: job for job in self._get_components()}
+        self.assertEqual(set(jobs), {"hip-tests", "rocrtst"})
+        for job in jobs.values():
+            self.assertFalse(job["expect_failure"], job["job_name"])
 
     # -----------------------
     # ASAN sandbox runner selection

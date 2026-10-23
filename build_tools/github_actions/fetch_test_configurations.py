@@ -285,6 +285,8 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hiptests.py')}",
         # "wsl": the Linux build on a WSL-hosted runner (ci:run-wsl).
         "platform": ["linux", "windows", "wsl"],
+        # Advisory on WSL until its results are stable.
+        "expect_failure": {"wsl": ["gfx110X-all"]},
         "total_shards_dict": {
             "linux": 4,
             "windows": 4,
@@ -1237,6 +1239,8 @@ test_matrix = {
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "wsl"],
+        # Advisory on WSL until its results are stable.
+        "expect_failure": {"wsl": ["gfx110X-all"]},
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
@@ -1506,9 +1510,6 @@ def run():
 
             job_config_data = {**_common_settings, **test_matrix[key]}
             job_config_data["test_type"] = test_type
-            # WSL jobs are non-blocking until their results are stable.
-            if platform == "wsl":
-                job_config_data["expect_failure"] = True
 
             # A component declares the families it is advisory on via
             # "expect_failure" (see the key reference above). Resolve that
