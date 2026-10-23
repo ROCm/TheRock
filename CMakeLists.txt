@@ -274,7 +274,7 @@ if(THEROCK_ENABLE_COMPILER)
   option(THEROCK_ENABLE_COMPILER_TOOLS_DISTRIBUTION
     "Stage LLVM 'tools' distribution for amd-llvm" ON)
   cmake_dependent_option(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION
-    "Stage LLVM 'fortran' distribution for amd-llvm (requires FLANG; OFF when FLANG_STANDALONE is ON)" ON
+    "Stage LLVM 'fortran' distribution for amd-llvm (requires FLANG; OFF when FLANG_STANDALONE is ON)" OFF
     "THEROCK_ENABLE_FLANG;NOT THEROCK_ENABLE_FLANG_STANDALONE" OFF)
   cmake_dependent_option(THEROCK_ENABLE_COMPILER_MULTILIBS_DISTRIBUTION
     "Stage LLVM 'multilibs' distribution for amd-llvm" OFF
