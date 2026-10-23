@@ -96,12 +96,12 @@ def get_stage_features(
     2. Features for artifacts that are inbound dependencies (needed but prebuilt)
 
     Artifacts disabled for platform_name or processor_name are excluded.
-    Artifacts with feature_default = false are opt-in and are not enabled by
-    stage membership alone; pass them via --artifacts (or -DTHEROCK_ENABLE_*=ON)
-    to enable.
 
     Note: The inbound dependencies will be marked as prebuilt via buildctl.py bootstrap,
     but CMake still needs their features enabled for dependency resolution.
+    Note: Artifacts with feature_default=false (e.g. FLANG_STANDALONE) are still
+    enabled here when produced by the stage so CI can pass them through; CMake
+    prefers COMPILER_FORTRAN_DISTRIBUTION when both are ON.
     """
     if stage_name not in topology.build_stages:
         raise ValueError(f"Unknown stage: {stage_name}")
@@ -120,11 +120,6 @@ def get_stage_features(
     for artifact_name in all_artifacts:
         if artifact_name in topology.artifacts:
             artifact = topology.artifacts[artifact_name]
-            # Honor topology opt-in: do not auto-enable feature_default=false
-            # (e.g. amd-llvm-flang / FLANG_STANDALONE) just because the artifact
-            # lives in this stage's artifact group.
-            if artifact.feature_default is False:
-                continue
             if topology.is_artifact_disabled_on_platform(
                 artifact,
                 platform_name,
