@@ -59,6 +59,7 @@ if TEST_TYPE not in VALID_TEST_CATEGORIES:
     )
     TEST_TYPE = "quick"
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+OS_TYPE = platform.system().lower()  # 'linux' | 'windows' | 'darwin'
 
 # Map job names to actual test directory names
 # The job names come from TEST_COMPONENT env var (set by GitHub Actions workflow)
@@ -100,9 +101,16 @@ if not test_component_job_name:
     )
     sys.exit(1)
 
-TEST_COMPONENT = COMPONENT_DIR_MAPPING.get(
-    test_component_job_name, test_component_job_name
+# A job_name like "hip-tests (PAL)" is a CI matrix variant of the underlying
+# "hip-tests" component (see fetch_test_configurations.py). Strip the trailing
+# parenthesised variant suffix before COMPONENT_DIR_MAPPING / COMPONENT_OVERRIDES
+# lookups so a single override entry covers the base job and all its variants.
+component_lookup_key = (
+    re.sub(r"\s*\([^)]*\)\s*$", "", test_component_job_name).strip()
+    or test_component_job_name
 )
+
+TEST_COMPONENT = COMPONENT_DIR_MAPPING.get(component_lookup_key, component_lookup_key)
 
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
@@ -185,8 +193,10 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #   tree, e.g. rocroller.
 #
 # - env: Literal environment variables to set (overwriting any inherited value).
-#   Values are formatted with str.format() and currently support the placeholder
-#   "{rocm_path}", which expands to the absolute ROCM_PATH.
+#   Values are formatted with str.format() and support the placeholders
+#   "{rocm_path}", which expands to the absolute ROCM_PATH, and "{test_type}",
+#   which expands to the normalized TEST_TYPE category (quick/standard/
+#   comprehensive/full), e.g. hip-tests sets HIP_TEST_LEVEL="{test_type}".
 #
 # - ctest_parallel_count: Int. Overrides the module-level ctest_parallel_count
 #   default for this component. Use 0 to drop the "--parallel N" flag entirely
@@ -248,6 +258,41 @@ COMPONENT_OVERRIDES = {
         # function listings, etc). Drop -V to keep CI logs readable;
         # --output-on-failure still surfaces output for any failing test.
         "ctest_verbose": False,
+    },
+    # hip-tests installs Catch2 binaries + CTestTestfile.cmake under
+    # ROCM_PATH/share/hip/catch_tests (not ROCM_PATH/bin/<component>/).
+    # Category (quick/standard/comprehensive/full) tags are baked into the test
+    # binaries via catch_discover_tests(ADD_TAGS_AS_LABELS), wired by
+    # rocm-systems#12266, so `ctest -L <category>` selects the tier's tests.
+    # Per-arch/OS/platform exclusions are resolved at build time from each
+    # test's YAML `disabled:` list (matching cases are registered DISABLED TRUE
+    # in ctest), so no runner-side arch-exclude labels are needed.
+    #
+    # Two independent knobs must agree (rocm-systems#12266):
+    #   - `ctest -L <category>` selects *which* tests run (label filter).
+    #   - HIP_TEST_LEVEL selects the workload *parameters* (sizes, iteration
+    #     counts). A ctest label filter never reaches the test binary, so
+    #     without HIP_TEST_LEVEL every tier would run at the binary default
+    #     (level_2). HIP_TEST_LEVEL accepts a category name, which resolves to
+    #     the highest level it covers (quick -> level_0 ... full -> level_4);
+    #     an invalid value aborts the run, so it is set to the normalized
+    #     TEST_TYPE category below to pair with `ctest -L <category>`.
+    #
+    # The tests dlopen HIP (libamdhip64 / amdhip64.dll) at discovery and run
+    # time. catch_discover_tests uses DISCOVERY_MODE PRE_TEST without DL_PATHS,
+    # so `ctest -N` executes each binary to enumerate cases; the HIP runtime
+    # must therefore be resolvable. Put it on both LD_LIBRARY_PATH (Linux .so
+    # in lib) and PATH (Windows .dll in bin) so discovery does not fail with a
+    # missing-library error (e.g. Windows 0xc0000135 STATUS_DLL_NOT_FOUND).
+    "hip-tests": {
+        "test_dir": ["share", "hip", "catch_tests"],
+        "additional_env_paths": {
+            "PATH": [["bin"], ["lib"]],
+            "LD_LIBRARY_PATH": [["lib"]],
+        },
+        "env": {
+            "HIP_TEST_LEVEL": "{test_type}",
+        },
     },
     # rocwmma installs three independent CTestTestfile.cmake fragments:
     #   bin/rocwmma/             - per-target plain runs + regression_tests
@@ -343,7 +388,7 @@ def apply_component_overrides(
       paths to env vars. Used by components like rocroller that load shared
       libraries straight out of the build tree.
     - 'env' sets literal environment variables (str.format() with the
-      "{rocm_path}" placeholder).
+      "{rocm_path}" and "{test_type}" placeholders).
 
     ctest_parallel: per-component ctest -j override; falls back to
     default_parallel_count when the component does not pin one.
@@ -362,13 +407,15 @@ def apply_component_overrides(
     _prepend_env_paths(env, rocm_path, overrides.get("additional_env_paths", {}))
     _prepend_env_paths(env, therock_dir, overrides.get("env_prepend_from_therock", {}))
     for env_key, value_template in overrides.get("env", {}).items():
-        env[env_key] = value_template.format(rocm_path=str(rocm_path))
+        env[env_key] = value_template.format(
+            rocm_path=str(rocm_path), test_type=test_type
+        )
     return test_dir, overrides.get("ctest_parallel", default_parallel_count)
 
 
 TEST_DIR = str(Path(THEROCK_BIN_DIR) / TEST_COMPONENT)
 TEST_DIR, ctest_parallel_count = apply_component_overrides(
-    test_component_job_name,
+    component_lookup_key,
     TEST_TYPE,
     ROCM_PATH,
     THEROCK_DIR,
@@ -465,7 +512,16 @@ def check_available_labels():
 
         return gpu_archs, exclude_labels
     except subprocess.CalledProcessError as e:
-        print(f"Error running ctest --print-labels: {e}", file=sys.stderr)
+        # Surface ctest's own output so failures during test discovery are
+        # diagnosable from CI logs. For components using deferred (PRE_TEST)
+        # Catch2 discovery, `ctest -N` executes each test binary to enumerate
+        # cases; when that enumeration fails, the real reason is in ctest's
+        # captured stdout/stderr (otherwise swallowed).
+        print(f"Error running ctest discovery: {e}", file=sys.stderr)
+        if e.stdout:
+            print(f"--- ctest stdout ---\n{e.stdout}", file=sys.stderr)
+        if e.stderr:
+            print(f"--- ctest stderr ---\n{e.stderr}", file=sys.stderr)
         sys.exit(1)
     except FileNotFoundError:
         print(
