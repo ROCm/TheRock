@@ -141,6 +141,12 @@ if(NOT WIN32)
   endif()
 endif()
 
+set(_hipblaslt_build_testing ${THEROCK_BUILD_TESTING})
+set(_hipblaslt_enable_mxdatagenerator ${_mxdatagenerator_enabled})
+if(NOT _mxdatagenerator_enabled)
+  set(_hipblaslt_build_testing OFF)
+endif()
+
 set(hipBLASLt_rocRoller_deps)
 if(_enable_rocRoller)
   list(APPEND hipBLASLt_rocRoller_build_deps
@@ -166,10 +172,11 @@ therock_cmake_subproject_declare(hipBLASLt
     -DHIPBLASLT_ENABLE_BLIS=OFF  # TODO: Evaluate
     # TensileLite's C++ gtest suite (tests/) is Linux-only for now (unvalidated
     # on Windows); mirrors the TENSILELITE_ENABLE_CLIENT guard below.
-    -DTENSILELITE_BUILD_TESTING=$<IF:$<BOOL:${WIN32}>,OFF,${THEROCK_BUILD_TESTING}>
-    -DTENSILELITE_ENABLE_CLIENT=$<IF:$<BOOL:${WIN32}>,OFF,${THEROCK_BUILD_TESTING}>
-    -DHIPBLASLT_BUILD_TESTING=${THEROCK_BUILD_TESTING}
-    -DHIPBLASLT_INSTALL_TENSILELITE_TEST_ARTIFACTS=${THEROCK_BUILD_TESTING}
+    -DTENSILELITE_BUILD_TESTING=$<IF:$<BOOL:${WIN32}>,OFF,${_hipblaslt_build_testing}>
+    -DTENSILELITE_ENABLE_CLIENT=$<IF:$<BOOL:${WIN32}>,OFF,${_hipblaslt_build_testing}>
+    -DHIPBLASLT_BUILD_TESTING=${_hipblaslt_build_testing}
+    -DHIPBLASLT_INSTALL_TENSILELITE_TEST_ARTIFACTS=${_hipblaslt_build_testing}
+    -DHIPBLASLT_ENABLE_MXDATAGENERATOR=${_hipblaslt_enable_mxdatagenerator}
     -DROCISA_USE_STABLE_ABI=ON
     -DHIPBLASLT_ENABLE_ROCROLLER=${_enable_rocRoller}
     -DHIPBLASLT_ENABLE_FETCH=OFF
