@@ -288,7 +288,7 @@ skip_tests = {
             "test_amdsmi_explicit_unversioned_path_is_redirected",
             "test_amdsmi_versioned_library_path_is_preserved",
             # Windows builds have USE_KINETO=OFF, so allocations in the test body
-            # get no Python frames. See https://github.com/ROCm/rockrel/issues/8935
+            # get no Python frames. See https://github.com/ROCm/TheRock/issues/8935
             "test_memory_profiler_viz",
         ],
         "nn": [
