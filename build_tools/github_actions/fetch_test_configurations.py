@@ -1298,6 +1298,7 @@ def run():
     test_runs_on_multi_gpu_default = None
     # For ASAN builds, use the sandbox runner if available
     test_runs_on_sandbox = None
+    host_asan_ci_runners = False
 
     # Check if GPU runner was passed from configure_multi_arch_ci.py via workflow.
     # This carries the policy decision (e.g., trigger gating). When set to empty,
@@ -1347,6 +1348,14 @@ def run():
                     "test-runs-on-multi-gpu", ""
                 )
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
+            if build_variant.startswith("host-asan") and platform_info.get(
+                "host-asan-use-ci-runners", False
+            ):
+                # Opted-in families use default CI labels without load distribution.
+                host_asan_ci_runners = True
+                test_runs_on_labels = None
+                test_runs_on_multi_gpu_labels = None
+                test_runs_on_sandbox = ""
 
             # Enforce test_type_for_family if set in the family matrix.
             # This is a strict override - families with limited hardware (e.g., MI455)
@@ -1570,9 +1579,7 @@ def run():
 
     # Per-component runner selection for better load distribution
     # Each component gets its own independent random draw based on configured weights
-    # For ASan builds, use the sandbox runner to isolate potentially failing tests.
-    # This matches multiple build variants, including "asan", "host-asan",
-    # "asan-debug", and "host-asan-debug".
+    # ASan variants use sandbox runners unless the family opts into host-ASan CI runners.
     logging.info("")
     logging.info("Assigning runners to requested jobs...")
     is_asan_build = "asan" in build_variant
@@ -1593,9 +1600,9 @@ def run():
                     f"  Excluding {job_name}: multi-GPU required but no multi-GPU runner configured"
                 )
                 continue
-        elif "test_runner" not in component:
+        elif "test_runner" not in component or host_asan_ci_runners:
             # Regular components use standard runner labels.
-            # Skip if test_runner is already pre-pinned (e.g. rocgdb-corefile).
+            # Preserve pre-pinned runners unless the family opts into host-ASan CI runners.
             is_cpu_only = component.get("linux_cpu_runner", False)
             if is_cpu_only:
                 if test_runs_on_cpu:
