@@ -193,8 +193,10 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #   tree, e.g. rocroller.
 #
 # - env: Literal environment variables to set (overwriting any inherited value).
-#   Values are formatted with str.format() and currently support the placeholder
-#   "{rocm_path}", which expands to the absolute ROCM_PATH.
+#   Values are formatted with str.format() and support the placeholders
+#   "{rocm_path}", which expands to the absolute ROCM_PATH, and "{test_type}",
+#   which expands to the normalized TEST_TYPE category (quick/standard/
+#   comprehensive/full), e.g. hip-tests sets HIP_TEST_LEVEL="{test_type}".
 #
 # - ctest_parallel_count: Int. Overrides the module-level ctest_parallel_count
 #   default for this component. Use 0 to drop the "--parallel N" flag entirely
@@ -265,14 +267,31 @@ COMPONENT_OVERRIDES = {
     # Per-arch/OS/platform exclusions are resolved at build time from each
     # test's YAML `disabled:` list (matching cases are registered DISABLED TRUE
     # in ctest), so no runner-side arch-exclude labels are needed.
-    # NOTE: `ctest -L <category>` selects the right tests but leaves workload
-    # parameters at the binary's default level_2; setting HIP_TEST_LEVEL would
-    # additionally parameterise the run (intentionally not done here).
-    # The tests dlopen HIP from ROCM_PATH/lib.
+    #
+    # Two independent knobs must agree (rocm-systems#12266):
+    #   - `ctest -L <category>` selects *which* tests run (label filter).
+    #   - HIP_TEST_LEVEL selects the workload *parameters* (sizes, iteration
+    #     counts). A ctest label filter never reaches the test binary, so
+    #     without HIP_TEST_LEVEL every tier would run at the binary default
+    #     (level_2). HIP_TEST_LEVEL accepts a category name, which resolves to
+    #     the highest level it covers (quick -> level_0 ... full -> level_4);
+    #     an invalid value aborts the run, so it is set to the normalized
+    #     TEST_TYPE category below to pair with `ctest -L <category>`.
+    #
+    # The tests dlopen HIP (libamdhip64 / amdhip64.dll) at discovery and run
+    # time. catch_discover_tests uses DISCOVERY_MODE PRE_TEST without DL_PATHS,
+    # so `ctest -N` executes each binary to enumerate cases; the HIP runtime
+    # must therefore be resolvable. Put it on both LD_LIBRARY_PATH (Linux .so
+    # in lib) and PATH (Windows .dll in bin) so discovery does not fail with a
+    # missing-library error (e.g. Windows 0xc0000135 STATUS_DLL_NOT_FOUND).
     "hip-tests": {
         "test_dir": ["share", "hip", "catch_tests"],
         "additional_env_paths": {
+            "PATH": [["bin"], ["lib"]],
             "LD_LIBRARY_PATH": [["lib"]],
+        },
+        "env": {
+            "HIP_TEST_LEVEL": "{test_type}",
         },
     },
     # rocwmma installs three independent CTestTestfile.cmake fragments:
@@ -369,7 +388,7 @@ def apply_component_overrides(
       paths to env vars. Used by components like rocroller that load shared
       libraries straight out of the build tree.
     - 'env' sets literal environment variables (str.format() with the
-      "{rocm_path}" placeholder).
+      "{rocm_path}" and "{test_type}" placeholders).
 
     ctest_parallel: per-component ctest -j override; falls back to
     default_parallel_count when the component does not pin one.
@@ -388,7 +407,9 @@ def apply_component_overrides(
     _prepend_env_paths(env, rocm_path, overrides.get("additional_env_paths", {}))
     _prepend_env_paths(env, therock_dir, overrides.get("env_prepend_from_therock", {}))
     for env_key, value_template in overrides.get("env", {}).items():
-        env[env_key] = value_template.format(rocm_path=str(rocm_path))
+        env[env_key] = value_template.format(
+            rocm_path=str(rocm_path), test_type=test_type
+        )
     return test_dir, overrides.get("ctest_parallel", default_parallel_count)
 
 
