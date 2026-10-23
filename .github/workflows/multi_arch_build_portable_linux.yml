@@ -62,7 +62,7 @@ on:
         description: "Build runner label for CPU-intensive stages (selected by configure script with weighted distribution)"
       build_runs_on_small:
         type: string
-        default: "aws-linux-scale-rocm-small"
+        default: "aws-linux-scale-rocm-prod"
         description: "Build runner label for low-CPU stages (storage-libs, media-libs, dctools-core, debug-tools, profiler-apps, cv-libs, emulation)"
       build_runs_on_medium:
         type: string
