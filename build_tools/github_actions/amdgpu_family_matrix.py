@@ -427,7 +427,7 @@ amdgpu_family_info_matrix = {
             "disabled_framework_tests": ["pytorch"],
         },
     },
-    # Postsubmit family - builds on postsubmit, tests on postsubmit and nightly
+    # Postsubmit family - builds on postsubmit, tests only on nightly
     "gfx90a": {
         "linux": {
             "test-runs-on": "linux-gfx90a-1gpu-ossci-rocm",
@@ -439,7 +439,7 @@ amdgpu_family_info_matrix = {
                 "submodule_bump",
                 "nightly",
             ],
-            "tests_on_trigger": ["postsubmit", "nightly"],
+            "tests_on_trigger": ["nightly"],
             # Only run tests when gfx90a label is present on PR
             "trigger_test_label_only": True,
         },
@@ -660,6 +660,29 @@ amdgpu_family_info_matrix = {
             "build_variants": ["release"],
             "builds_on_trigger": ["nightly"],
             "tests_on_trigger": [],
+        },
+    },
+    # Nightly and submodule_bump only builds, no postsubmit. Tests only on nightly
+    "gfx117x": {
+        "linux": {
+            "test-runs-on": "linux-gfx117x-gpu-rocm",
+            "family": "gfx117X-all",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "builds_on_trigger": ["nightly", "submodule_bump"],
+            "bypass_tests_for_releases": True,
+            "tests_on_trigger": ["nightly"],
+            "disabled_framework_tests": ["pytorch", "jax"],
+        },
+        "windows": {
+            "test-runs-on": "windows-gfx117x-gpu-rocm",
+            "family": "gfx117X-all",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "builds_on_trigger": ["nightly", "submodule_bump"],
+            "bypass_tests_for_releases": True,
+            "tests_on_trigger": ["nightly"],
+            "disabled_framework_tests": ["pytorch", "jax"],
         },
     },
 }
