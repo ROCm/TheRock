@@ -1,0 +1,261 @@
+# Build-only Windows PyTorch (ROCm) wheel workflow (bring-up draft).
+#
+# Derived from ROCm/TheRock .github/workflows/multi_arch_build_windows_pytorch_wheels.yml
+# (read from the default branch on 2026-10-21). Differences from that file:
+#   - Build job only: no test jobs, no Quartz notifications, no kpack split,
+#     no S3 publish, no AWS credential steps.
+#   - TheRock is checked out into ./TheRock at a chosen ref, because this
+#     workflow lives in a different repository than TheRock's scripts.
+#   - sccache is off (it needs AWS roles that only TheRock's account has).
+#   - The wheels are uploaded as a GitHub Actions artifact instead of S3.
+#   - A push trigger limited to the bring-up branch and to this file, so the
+#     workflow can run from a non-default branch. On push there are no inputs,
+#     so every input below has a fallback in the expressions ("inputs.x || default").
+
+name: Windows PyTorch ROCm build
+
+on:
+  push:
+    branches:
+      - users/windows-pytorch-build
+    paths:
+      - .github/workflows/windows-pytorch-build.yml
+  workflow_dispatch:
+    inputs:
+      amdgpu_families:
+        description: >-
+          Semicolon-separated AMD GPU families to build for (for example
+          'gfx120X-all'). Expanded to gfx targets by TheRock's
+          expand_amdgpu_families.py. Default: gfx120X-all.
+        type: string
+        default: "gfx120X-all"
+      python_version:
+        description: Python version to build wheels for. Default 3.12 (used by TheRock's own dispatched Windows builds that succeeded).
+        type: string
+        default: "3.12"
+      pytorch_git_ref:
+        description: PyTorch ref to check out ("nightly" or a release branch such as "release/2.13"). Default nightly.
+        type: string
+        default: "nightly"
+      pytorch_gitrepo_origin:
+        description: >-
+          Optional PyTorch git origin override (for example a fork URL). Empty
+          means ROCm/pytorch for stable refs; it is not used for the "nightly" ref.
+        type: string
+        default: ""
+      rocm_version:
+        description: >-
+          ROCm package version to install and build against. Must exist on the
+          index below. Default 10.2.0a20261012 (the version a successful TheRock
+          Windows nightly build of 2026-10-15 used).
+        type: string
+        default: "10.2.0a20261012"
+      rocm_package_index_url:
+        description: pip --index-url for ROCm packages (PEP 503 index).
+        type: string
+        default: "https://nightly.repo.amd.com/rocm/whl-next"
+      release_type:
+        description: Release type string passed to build_prod_wheels.py. TheRock's own dispatched Windows builds use "dev".
+        type: string
+        default: "dev"
+      therock_ref:
+        description: Branch, tag or SHA of ROCm/TheRock that provides the build scripts.
+        type: string
+        default: "main"
+      build_runs_on:
+        description: Build runner label.
+        type: string
+        default: "aws-windows-scale-rocm-prod-mix"
+
+run-name: >-
+  Windows PyTorch ROCm build (${{ inputs.amdgpu_families || 'gfx120X-all' }},
+  py ${{ inputs.python_version || '3.12' }}, torch ${{ inputs.pytorch_git_ref || 'nightly' }})
+
+# A new push to the branch cancels the previous run, so a shared runner is not
+# kept busy by superseded runs.
+concurrency:
+  group: windows-pytorch-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build_pytorch_wheels:
+    name: Build | py ${{ inputs.python_version || '3.12' }} | torch ${{ inputs.pytorch_git_ref || 'nightly' }}
+    # Same expression as TheRock: the runner label is only used for repositories
+    # owned by the ROCm organization; anything else falls back to a GitHub-hosted runner.
+    runs-on: ${{ github.repository_owner == 'ROCm' && (inputs.build_runs_on || 'aws-windows-scale-rocm-prod-mix') || 'windows-2022' }}
+    timeout-minutes: 240
+    env:
+      PYTHON_VERSION: ${{ inputs.python_version || '3.12' }}
+      PYTORCH_GITREPO_ORIGIN: ${{ inputs.pytorch_gitrepo_origin || '' }}
+      PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref || 'nightly' }}
+      ROCM_VERSION: ${{ inputs.rocm_version || '10.2.0a20261012' }}
+      ROCM_INDEX_URL: ${{ inputs.rocm_package_index_url || 'https://nightly.repo.amd.com/rocm/whl-next' }}
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx120X-all' }}
+      BUILD_RELEASE_TYPE: ${{ inputs.release_type || 'dev' }}
+      CHECKOUT_ROOT: B:/src
+      # Note the \ here instead of /. This should be used from 'cmd' not 'bash'!
+      PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
+      optional_build_prod_arguments: ""
+    defaults:
+      run:
+        # Mixed uses of 'bash' (this default) and 'cmd' below, as in TheRock's workflow.
+        shell: bash
+    steps:
+      - name: Checkout TheRock (build scripts)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: ROCm/TheRock
+          ref: ${{ inputs.therock_ref || 'main' }}
+          path: TheRock
+
+      - name: Configure Git Identity
+        run: |
+          git config --global user.name "ci-bringup"
+          git config --global user.email "ci-bringup@users.noreply.github.com"
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Select Python version
+        working-directory: TheRock
+        run: |
+          python build_tools/github_actions/python_to_cp_version.py \
+            --python-version "${PYTHON_VERSION}"
+
+      # Runner-specific: this is the package-source setup used on AMD's Windows
+      # runners in TheRock's workflow (internal Nexus mirror). It will not work
+      # on a GitHub-hosted runner.
+      - name: Install requirements
+        run: |
+          choco source disable -n=chocolatey
+          choco source add -n=internal -s http://nexus-service.nexus-ns.svc.cluster.local:8081/repository/choco-group/ --priority=1
+          if command -v ninja >/dev/null 2>&1; then
+            printf '%s\n' "ninja already installed: $(ninja --version)"
+          else
+            choco install --no-progress -y ninja --version 1.13.2
+          fi
+
+      # Build a fixed version of libuv from source, no matter the pytorch ref.
+      # gloo requires >= 1.26; v1.47.0 matches upstream's source build.
+      # This keeps USE_DISTRIBUTED on (without libuv PyTorch turns it off, as in the local builds).
+      - name: Build libuv from source for GLOO
+        run: |
+          git clone https://github.com/libuv/libuv.git -b v1.47.0 --depth 1
+          cmake -S libuv -B libuv/build -DBUILD_TESTING=OFF
+          cmake --build libuv/build --config Release
+          cmake --install libuv/build --prefix "${{ github.workspace }}/libuv-install"
+          echo "libuv_ROOT=${{ github.workspace }}/libuv-install" >> $GITHUB_ENV
+
+      # After other installs, so MSVC gets priority in the PATH.
+      - name: Configure MSVC
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+      - name: Install python deps for CI
+        working-directory: TheRock
+        run: |
+          pip install -r external-builds/pytorch/requirements-ci.txt
+
+      - name: Checkout PyTorch source repos (nightly)
+        if: ${{ env.PYTORCH_GIT_REF == 'nightly' }}
+        working-directory: TheRock
+        timeout-minutes: 30
+        run: |
+          git config --global core.longpaths true
+          python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
+            --repo-hashtag nightly \
+            --no-commit-hipify
+          python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_audio \
+            --repo-hashtag nightly \
+            --no-commit-hipify
+          python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_vision \
+            --repo-hashtag nightly \
+            --no-commit-hipify
+
+      - name: Checkout PyTorch source repos (stable)
+        if: ${{ env.PYTORCH_GIT_REF != 'nightly' }}
+        working-directory: TheRock
+        timeout-minutes: 30
+        run: |
+          git config --global core.longpaths true
+          pytorch_origin="${PYTORCH_GITREPO_ORIGIN}"
+          if [ -z "${pytorch_origin}" ]; then
+            pytorch_origin="https://github.com/ROCm/pytorch.git"
+          fi
+          python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
+            --gitrepo-origin "${pytorch_origin}" \
+            --repo-hashtag "${PYTORCH_GIT_REF}" \
+            --no-commit-hipify
+          python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_audio \
+            --torch-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
+            --require-related-commit \
+            --no-commit-hipify
+          python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_vision \
+            --torch-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
+            --require-related-commit \
+            --no-commit-hipify
+
+      # determine_version.py sets optional_build_prod_arguments in GITHUB_ENV
+      # (--rocm-sdk-version ==<rocm_version>, --version-suffix).
+      - name: Determine optional arguments passed to `build_prod_wheels.py`
+        working-directory: TheRock
+        run: |
+          python build_tools/github_actions/determine_version.py \
+            --rocm-version "${ROCM_VERSION}"
+
+      - name: Expand amdgpu families to gfx targets
+        id: expand
+        working-directory: TheRock
+        run: |
+          targets=$(python build_tools/github_actions/expand_amdgpu_families.py \
+            --amdgpu-families "${AMDGPU_FAMILIES}")
+          echo "Expanded families '${AMDGPU_FAMILIES}' -> '${targets}'"
+          echo "targets=${targets}" >> "$GITHUB_OUTPUT"
+
+      # Using 'cmd' here is load bearing (TheRock issue 827: configuration
+      # problems when run under bash). No compiler cache flag in this workflow.
+      - name: Build PyTorch wheels
+        shell: cmd
+        working-directory: TheRock
+        env:
+          ROCM_FIND_LINKS: ""
+          AMDGPU_TARGETS: ${{ steps.expand.outputs.targets }}
+        run: |
+          setlocal EnableDelayedExpansion
+          echo "Building PyTorch wheels for !AMDGPU_FAMILIES!"
+          python ./external-builds/pytorch/build_prod_wheels.py ^
+            build ^
+            --install-rocm ^
+            --index-url="!ROCM_INDEX_URL!" ^
+            --find-links="!ROCM_FIND_LINKS!" ^
+            --root-checkout-dir ${{ env.CHECKOUT_ROOT }} ^
+            --clean ^
+            --output-dir "!PACKAGE_DIST_DIR!" ^
+            --release-type="!BUILD_RELEASE_TYPE!" ^
+            --pytorch-git-ref="!PYTORCH_GIT_REF!" ^
+            --pytorch-rocm-arch "!AMDGPU_TARGETS!" ^
+            ${{ env.optional_build_prod_arguments }}
+
+      - name: Sanity check wheel
+        shell: cmd
+        working-directory: TheRock
+        run: |
+          python external-builds/pytorch/sanity_check_wheel.py "%PACKAGE_DIST_DIR%"
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pytorch-windows-wheels-py${{ env.PYTHON_VERSION }}
+          path: ${{ env.PACKAGE_DIST_DIR }}
+          if-no-files-found: error
+          retention-days: 14
