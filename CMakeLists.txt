@@ -326,17 +326,34 @@ if(THEROCK_ENABLE_FLANG
 endif()
 
 
-message("!!!!!THEROCK_ENABLE_FLANG_STANDALONE: ${THEROCK_ENABLE_FLANG_STANDALONE}")
-message("!!!!!THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION: ${THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION}")
-# FLANG=ON requires exactly one delivery path (standalone XOR fortran dist).
+# If FLANG is on but neither delivery path was chosen (e.g. ENABLE_ALL with
+# standalone feature_default=false and dist left unset), default to the
+# fortran distribution so full-tree / non-stage configures still work.
 if(THEROCK_ENABLE_FLANG
    AND NOT THEROCK_ENABLE_FLANG_STANDALONE
    AND NOT THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION)
-  message(FATAL_ERROR
-    "THEROCK_ENABLE_FLANG=ON requires one of:\n"
-    "  -DTHEROCK_ENABLE_FLANG_STANDALONE=ON\n"
-    "  -DTHEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION=ON")
+  message(STATUS
+    "FLANG=ON with no delivery path selected; "
+    "defaulting COMPILER_FORTRAN_DISTRIBUTION=ON")
+  set(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION ON CACHE BOOL
+    "Stage LLVM 'fortran' distribution for amd-llvm (default ON when FLANG is ON)"
+    FORCE)
+  set(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION ON)
+  # Composition above may have run before dist was enabled; ensure fortran
+  # is in the amd-llvm distribution list.
+  if(THEROCK_ENABLE_COMPILER)
+    set(_therock_amd_llvm_distribution "${THEROCK_AMD_LLVM_DISTRIBUTION}")
+    list(APPEND _therock_amd_llvm_distribution fortran)
+    list(REMOVE_DUPLICATES _therock_amd_llvm_distribution)
+    set(THEROCK_AMD_LLVM_DISTRIBUTION "${_therock_amd_llvm_distribution}" CACHE STRING
+      "Semicolon-separated LLVM distributions to build/stage for amd-llvm (composed from THEROCK_ENABLE_COMPILER_*_DISTRIBUTION). Empty = full cmake --build + cmake --install. See clang/cmake/caches/ROCm.cmake"
+      FORCE)
+    unset(_therock_amd_llvm_distribution)
+  endif()
 endif()
+
+message("!!!!!THEROCK_ENABLE_FLANG_STANDALONE: ${THEROCK_ENABLE_FLANG_STANDALONE}")
+message("!!!!!THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION: ${THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION}")
 
 # No Flang toolchain => no Fortran clients/wrappers/tests in subprojects.
 # FLAGS.cmake runs before topology, so sync the effective policy here.
