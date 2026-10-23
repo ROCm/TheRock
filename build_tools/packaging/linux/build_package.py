@@ -358,15 +358,14 @@ def build_device_package(pkg_name, config: PackageConfig, device_arch: str) -> l
     try:
         if device_config.pkg_type == "rpm":
             return create_versioned_rpm_package(pkg_name, device_config)
-        else:
-            return create_versioned_deb_package(pkg_name, device_config)
+        return create_versioned_deb_package(pkg_name, device_config)
     except PackageCollisionError:
         raise
     except Exception as e:
         logger.error(
             f"Failed to build device package for {pkg_name} ({device_arch}): {e}"
         )
-        return []
+        raise
 
 
 def build_meta_package(pkg_name, config: PackageConfig) -> list:
@@ -683,7 +682,6 @@ def run(args: argparse.Namespace):
 
     built_pkglist = []
     failed_pkglist = []
-    had_collision = False
 
     with ProcessPoolExecutor(max_workers=args.parallel) as executor:
         futures = {
@@ -697,8 +695,6 @@ def run(args: argparse.Namespace):
             except Exception as e:
                 logger.error(f"Package {pkg_name} failed: {e}")
                 failed_pkglist.append(pkg_name)
-                if isinstance(e, PackageCollisionError):
-                    had_collision = True
                 continue
 
             if error:
@@ -728,7 +724,7 @@ def run(args: argparse.Namespace):
 
     # Print build summary
     print_build_summary(config, pkglist_status)
-    if had_collision:
+    if failed_pkglist:
         sys.exit(1)
 
 
