@@ -115,6 +115,9 @@ if(THEROCK_ENABLE_ROCPROFV3)
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
       -DROCPROFILER_BUILD_CI=ON
+      # Developer mode is the component's -Werror switch, but it also requires
+      # the format/lint tools at configure time and enables warnings beyond
+      # -Wall. -Werror is applied in post_hook_rocprofiler-sdk.cmake instead.
       -DROCPROFILER_BUILD_DEVELOPER=OFF
       -DROCPROFILER_BUILD_TESTS=${THEROCK_BUILD_TESTING}
       -DROCPROFILER_BUILD_INTEGRATION_TESTS=OFF
