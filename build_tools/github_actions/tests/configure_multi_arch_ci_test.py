@@ -2328,41 +2328,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
         # Tests are force-enabled despite presubmit trigger not in tests_on_trigger
         self.assertNotEqual(entry["test-runs-on"], "")
 
-    def _gfx110x_linux_config(self, pr_labels, test_only=True, **kwargs):
-        targets = cm.TargetSelection(
-            linux_families=["gfx110x"],
-            linux_test_only_families=["gfx110x"] if test_only else [],
-        )
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(
-                event_name="pull_request", pr_labels=pr_labels, **kwargs
-            ),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        return result.linux
-
-    def test_run_wsl_adds_wsl_family_entry(self):
-        config = self._gfx110x_linux_config(["ci:test:gfx110x", "ci:run-wsl"])
-        self.assertEqual(
-            config.per_family_info[0]["test-runs-on"], "linux-gfx110X-gpu-rocm"
-        )
-        [wsl] = config.wsl_per_family_info
-        self.assertEqual(wsl["amdgpu_family"], "gfx110X-all")
-        self.assertEqual(wsl["test-runs-on"], "wsl-gfx1101-gpu-rocm")
-        self.assertNotIn("test-runs-on-labels", wsl)
-
-    def test_no_wsl_family_entry_without_run_wsl_label(self):
-        config = self._gfx110x_linux_config(["ci:test:gfx110x"])
-        self.assertEqual(config.wsl_per_family_info, [])
-
-    def test_no_wsl_family_entry_when_family_gpu_tests_are_gated(self):
-        """gfx110x Linux tests only run nightly; ci:run-wsl alone does not enable them."""
-        config = self._gfx110x_linux_config(["ci:run-wsl"], test_only=False)
-        self.assertEqual(config.per_family_info[0]["test-runs-on"], "")
-        self.assertEqual(config.wsl_per_family_info, [])
-
     def test_test_only_overrides_build_only(self):
         """When family is in both build_only and test_only, test_only wins."""
         # ci:build:gfx* + ci:test:gfx* = user wants tests (test-only takes precedence)

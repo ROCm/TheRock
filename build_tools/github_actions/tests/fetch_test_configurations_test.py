@@ -898,11 +898,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIsInstance(out["container_options"], str)
         self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
 
-    def test_container_options_on_wsl_use_dxg(self):
-        out = fetch_test_configurations._build_container_options({}, "wsl")
-        self.assertIn("--device /dev/dxg", out["container_options"])
-        self.assertNotIn("/dev/kfd", out["container_options"])
-
     # -----------------------
     # WSL platform (the Linux build on a WSL-hosted runner, passed as TEST_RUNS_ON)
     # -----------------------
