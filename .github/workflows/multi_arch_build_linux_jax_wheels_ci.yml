@@ -48,6 +48,10 @@ on:
         description: "Accepted so a release matrix row can run here unchanged. CI uploads to run-scoped artifacts and tests from there either way."
         type: boolean
         default: true
+      run_tests:
+        description: "Accepted so a release matrix row can run here unchanged. CI tests its run-scoped artifacts either way."
+        type: boolean
+        default: true
       rocm_version:
         description: "ROCm package version to install and build against."
         type: string
