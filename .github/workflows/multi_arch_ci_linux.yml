@@ -309,7 +309,6 @@ jobs:
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       linux_amdgpu_families: ${{ fromJSON(inputs.build_config).linux_amdgpu_families }}
       windows_amdgpu_families: ${{ fromJSON(inputs.build_config).windows_amdgpu_families }}
-      multiarch_index: true
       package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_medium }}
@@ -331,16 +330,7 @@ jobs:
     with:
       amdgpu_family: ${{ matrix.amdgpu_family }}
       test_runs_on: ${{ matrix.test_runs_on }}
-      # TODO: Simplify to just `needs.build_python_packages.outputs.package_find_links_url`
-      # once kpack split is always enabled.
-      package_find_links_url: >-
-        ${{
-          needs.build_python_packages.outputs.kpack_split == 'true'
-          && needs.build_python_packages.outputs.package_find_links_url
-          || format('{0}/{1}/index.html',
-              needs.build_python_packages.outputs.package_find_links_url,
-              matrix.amdgpu_family)
-        }}
+      package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       python_version: ${{ matrix.python_version }}
       rocm_version: ${{ inputs.rocm_package_version }}
       container_image_name: ${{ matrix.container_image_name }}
@@ -350,11 +340,6 @@ jobs:
 
   # Multi-arch PyTorch build: one fat wheel covering every target, then
   # split into a host wheel + per-gfx device wheels via rocm-kpack.
-  # KPACK_SPLIT_ARTIFACTS is always ON in multi-arch CI (FLAGS.cmake
-  # default; build_configure.py's opt-out only fires in single-arch CI),
-  # so the split path is unconditional here. The split itself runs inline
-  # in multi_arch_build_portable_linux_pytorch_wheels_ci.yml based on
-  # inputs.kpack_split.
   build_pytorch_wheel_fat:
     needs: [build_python_packages]
     name: Build PyTorch (fat + split)
@@ -377,7 +362,6 @@ jobs:
       # The reusable workflow expands this to gfx targets via
       # cmake/therock_amdgpu_targets.cmake.
       amdgpu_families: ${{ matrix.amdgpu_families }}
-      kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_large }}

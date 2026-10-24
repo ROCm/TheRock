@@ -32,10 +32,6 @@ on:
         description: ROCm version to pip install (e.g. "7.10.0a20251124")
         required: true
         type: string
-      kpack_split:
-        description: "'true' if this is a kpack-split flat build."
-        type: string
-        default: "false"
       container_image_name:
         description: >-
           Short, human-readable label for the container image (e.g. 'ubuntu24.04',

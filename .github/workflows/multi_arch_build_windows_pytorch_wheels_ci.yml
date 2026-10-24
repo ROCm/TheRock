@@ -8,7 +8,8 @@
 #     via rocm_package_find_links_url) or a PEP 503 index (via
 #     rocm_package_index_url); provide whichever one applies.
 #   - Builds torch only (no torchvision, torchaudio)
-#   - No S3 upload, staging, testing, or promotion — just build + sanity check
+#   - Uploads split wheels to the CI artifacts bucket; does not publish to
+#     release buckets or promote packages
 #
 # TODO(#3291): Build more packages (torchvision, torchaudio, etc.)
 #
@@ -56,10 +57,6 @@ on:
           `rocm-sdk targets` fallback.
         type: string
         default: ""
-      kpack_split:
-        description: "'true' if this is a kpack-split flat build."
-        type: string
-        default: "false"
       build_runs_on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
@@ -134,7 +131,6 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url }}
       ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
-      ARTIFACT_GROUP: ${{ inputs.artifact_group }}
       CHECKOUT_ROOT: B:/src
       # Note the \ here instead of /. This should be used from 'cmd' not 'bash'!
       PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
@@ -274,9 +270,8 @@ jobs:
       # Using 'cmd' here is load bearing! There are configuration issues when
       # run under 'bash': https://github.com/ROCm/TheRock/issues/827#issuecomment-3025858800
       #
-      # inputs.amdgpu_families is only populated by the multi-arch caller
-      # today. Legacy single-family CI (ci_linux.yml) leaves it empty and
-      # falls back to `rocm-sdk targets` inside build_prod_wheels.py.
+      # Callers without amdgpu_families fall back to `rocm-sdk targets`
+      # inside build_prod_wheels.py.
       # TODO(#4687): Make --pytorch-rocm-arch required here once every
       # caller plumbs the value through and the fallback in
       # build_prod_wheels.py::get_rocm_sdk_targets is removed.
@@ -297,7 +292,6 @@ jobs:
           set "PYTORCH_ROCM_ARCH_FLAG="
           if not "!AMDGPU_TARGETS!"=="" set "PYTORCH_ROCM_ARCH_FLAG=--pytorch-rocm-arch !AMDGPU_TARGETS!"
 
-          echo "Building PyTorch wheels for !ARTIFACT_GROUP! (cache: !CACHE_TYPE!)"
           python ./external-builds/pytorch/build_prod_wheels.py ^
             build ^
             --install-rocm ^
@@ -335,15 +329,13 @@ jobs:
       # smaller host wheel plus one device wheel per gfx target. Source-install
       # from the TheRock checkout — kpack has no published wheel today.
       # The outer actions/checkout skips submodules for speed, so pull in
-      # rocm-systems only when we actually need it.
+      # rocm-systems here for the splitter.
       - name: Init rocm-systems submodule
-        if: ${{ inputs.kpack_split == 'true' }}
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git submodule update --init --depth=1 rocm-systems
 
       - name: Install kpack tooling
-        if: ${{ inputs.kpack_split == 'true' }}
         run: |
           pip install \
             -e rocm-systems/python/rocm-bootstrap \
@@ -353,7 +345,6 @@ jobs:
       # rocm_kpack.tools.split_python_wheels flow into build_prod_wheels.py and
       # document the standalone developer workflow.
       - name: Split PyTorch fat wheel
-        if: ${{ inputs.kpack_split == 'true' }}
         run: |
           DIST_DIR="$(cygpath -u "${PACKAGE_DIST_DIR}")"
 
@@ -414,6 +405,4 @@ jobs:
         run: |
           python build_tools/github_actions/upload_python_packages.py \
             --input-packages-dir="${PACKAGE_DIST_DIR}" \
-            --artifact-group="${ARTIFACT_GROUP}" \
-            --run-id="${{ github.run_id }}" \
-            --multiarch
+            --run-id="${{ github.run_id }}"

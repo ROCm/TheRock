@@ -168,7 +168,6 @@ jobs:
       jax_pjrt_version: ${{ steps.write_jax_versions.outputs.jax_pjrt_version }}
       jax_commit: ${{ steps.checkout_jax.outputs.commit }}
     env:
-      ARTIFACT_GROUP: ${{ inputs.artifact_group }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
       RELEASE_TYPE: ci
       MANYLINUX_IMAGE_TAG: therock-jax-manylinux:${{ inputs.jax_ref }}-${{ inputs.python_version }}
@@ -299,9 +298,7 @@ jobs:
         run: |
           python build_tools/github_actions/upload_python_packages.py \
             --input-packages-dir="${PACKAGE_DIST_DIR}" \
-            --artifact-group="${ARTIFACT_GROUP}" \
-            --run-id="${{ github.run_id }}" \
-            --multiarch
+            --run-id="${{ github.run_id }}"
 
 
   configure_jax_tests:
