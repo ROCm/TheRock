@@ -244,10 +244,13 @@ class ValidTestCategoriesTest(unittest.TestCase):
                 "standard",
                 "comprehensive",
                 "full",
+                "workloads",
                 "ffm-quick",
                 "ffm-standard",
                 "ffm-comprehensive",
                 "ffm-full",
+                "emu-fast",
+                "emu-full",
             },
         )
 
