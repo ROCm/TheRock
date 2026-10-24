@@ -579,7 +579,7 @@ add_python_variant("none" "--disable-python" "")
 add_custom_target(build_all_rocgdb ALL DEPENDS ${ALL_ROCGDB_TARGETS})
 
 ################################
-# ROCgdb script generation step.
+# ROCgdb script installation step.
 ################################
 
 # Since we potentially have multiple versions of python, and each rocgdb
@@ -589,14 +589,31 @@ add_custom_target(build_all_rocgdb ALL DEPENDS ${ALL_ROCGDB_TARGETS})
 # process transparent to the end user.
 set(ROCGDB_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/rocgdb")
 
-# Install the generated script.
+# Install the script.
 install(PROGRAMS ${ROCGDB_SCRIPT}
         DESTINATION bin
+        COMPONENT rocgdb)
+
+################################
+# ROCgdb emulator script installation step.
+################################
+
+# Convenience script that runs rocgdb inside a mirage session, so the program
+# being debugged sees an emulated GPU instead of real hardware. It picks the
+# emulator profile from --profile, ROCGDB_EMULATE_PROFILE or the program's
+# offload target, and uses the mirage and rocgdb installed next to it.
+set(ROCGDB_EMULATE_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/rocgdb-emulate.py")
+
+# Install the emulator script without the .py extension.
+install(PROGRAMS ${ROCGDB_EMULATE_SCRIPT}
+        DESTINATION bin
+        RENAME rocgdb-emulate
         COMPONENT rocgdb)
 
 if(BUILD_TESTING)
   # Track for build validation.
   list(APPEND ROCGDB_BUILD_INTEGRITY_FILES "bin/rocgdb")
+  list(APPEND ROCGDB_BUILD_INTEGRITY_FILES "bin/rocgdb-emulate")
 endif()
 
 ##################################
