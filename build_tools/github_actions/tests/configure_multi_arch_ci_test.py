@@ -201,6 +201,47 @@ class TestCIInputs(unittest.TestCase):
         # Validation should pass without raising - ci:run-multi-gpu is a control label
         inputs.validate()
 
+    def test_build_stages_with_only_control_labels_auto_selects_tests(self):
+        """A partial build with only ci:* labels still gets the stage-compatible
+        test labels, so tests for components that were not built are not scheduled."""
+        inputs = _run_from_environ(
+            event_name="workflow_dispatch",
+            event_payload={},
+            extra_env={
+                "LINUX_AMDGPU_FAMILIES": "gfx110X",
+                "PR_LABELS": "ci:run-wsl",
+                "BUILD_STAGES": "compiler-runtime,runtime-tests,wsl-rocdxg",
+            },
+        )
+        self.assertEqual(
+            sorted(inputs.linux_test_labels),
+            ["ci:run-wsl", "test:hip-tests", "test:kfdtest", "test:rocrtst"],
+        )
+
+    def test_run_wsl_partial_build_requires_wsl_rocdxg_stage(self):
+        """WSL tests need the wsl-rocdxg artifact (the WSL libhsakmt)."""
+        with self.assertRaisesRegex(ValueError, "wsl-rocdxg"):
+            _run_from_environ(
+                event_name="workflow_dispatch",
+                event_payload={},
+                extra_env={
+                    "LINUX_AMDGPU_FAMILIES": "gfx110X",
+                    "PR_LABELS": "ci:run-wsl,test:hip-tests",
+                    "BUILD_STAGES": "compiler-runtime,runtime-tests",
+                },
+            )
+
+    def test_run_wsl_full_build_needs_no_stage_check(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            linux_test_labels=["test:hip-tests", "ci:run-wsl"],
+        )
+        inputs.validate()
+
 
 class TestCIInputsFromEnviron(unittest.TestCase):
     """Test CIInputs.from_environ() with event payload fixtures.
@@ -2739,10 +2780,12 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         python_fields = {f.name for f in fields(cm.BuildConfig)}
         # build_native_linux is Linux-only. JAX builds are release-only and
         # Linux-only for now, so Windows CI workflows do not consume them.
+        # WSL tests the Linux build, so wsl_per_family_info is Linux-only too.
         unused_fields = {
             "build_native_linux",
             "build_jax",
             "jax_build_matrix",
+            "wsl_per_family_info",
         }
         self.assertEqual(
             yaml_fields,
