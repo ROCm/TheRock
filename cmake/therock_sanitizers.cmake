@@ -102,6 +102,47 @@ function(therock_sanitizer_configure
       string(APPEND _stanza "message(STATUS \"HOST_ASAN enabled - GPU_TARGETS unchanged\")\n")
     endif()
 
+    # Compact ASAN: shrink host objects. Injected here (not via super-project
+    # CMAKE_CXX_FLAGS) so gcc sysdeps never see clang/HIP-only flags.
+    # A subproject opts out with -D{subproject}_ASAN_COMPACT=OFF without
+    # changing its THEROCK_SANITIZER setting.
+    #
+    # --offload-compress is not a C/CXX flag: AMD Clang warns that it is unused
+    # on ordinary C++ files, and -Werror fails the build. A COMPILE_LANGUAGE
+    # genex in the global flags also breaks RCCL's device-link custom commands.
+    # Native HIP (rocPRIM with USE_HIPCXX=ON) does not read C/CXX flags, so the
+    # same compact settings go on CMAKE_HIP_FLAGS, with host -Oz and device -O3.
+    # rocRAND compiles device code as C++ through hip::device; its pre-hook adds
+    # --offload-compress only to those targets. -Oz is host-only (-Xarch_host);
+    # device -Oz fails rocPRIM isel. No global -flto: it OOMs
+    # rocprofiler-systems and drops rocRoller symbols.
+    #
+    # -fsanitize-address-outline-instrumentation is only meaningful with
+    # -fsanitize=address. That sanitizer flag is injected on C/CXX, not HIP.
+    # libhipcxx header tests compile as HIP with -Wall -Werror and no
+    # -fsanitize=address, so the modifier is unused and fails the build.
+    set(_asan_compact "${THEROCK_ASAN_COMPACT}")
+    if(DEFINED "${subproject_name}_ASAN_COMPACT")
+      set(_asan_compact "${${subproject_name}_ASAN_COMPACT}")
+    endif()
+    if(_asan_compact AND (_sanitizer STREQUAL "ASAN" OR _sanitizer STREQUAL "HOST_ASAN"))
+      set(_compact_compile_flags "-gz -gline-tables-only -fdata-sections -ffunction-sections")
+      set(_compact_asan_flags "-fsanitize-address-outline-instrumentation ${_compact_compile_flags}")
+      # Subproject pre-hooks key off this. It is set only when compact flags
+      # are actually injected, so {subproject}_ASAN_COMPACT=OFF stays off.
+      string(APPEND _stanza "set(THEROCK_ASAN_COMPACT ON)\n")
+      string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" ${_compact_asan_flags}\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_compact_asan_flags}\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_HIP_FLAGS_INIT \" ${_compact_compile_flags} --offload-compress\")\n")
+      string(APPEND _stanza "set(CMAKE_C_FLAGS_RELEASE \"-O3 -Xarch_host -Oz -DNDEBUG\" CACHE STRING \"\" FORCE)\n")
+      string(APPEND _stanza "set(CMAKE_CXX_FLAGS_RELEASE \"-O3 -Xarch_host -Oz -DNDEBUG\" CACHE STRING \"\" FORCE)\n")
+      string(APPEND _stanza "set(CMAKE_HIP_FLAGS_RELEASE \"-O3 -Xarch_host -Oz -DNDEBUG\" CACHE STRING \"\" FORCE)\n")
+      string(APPEND _stanza "string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT \" -Wl,--gc-sections\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_SHARED_LINKER_FLAGS_INIT \" -Wl,--gc-sections\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_MODULE_LINKER_FLAGS_INIT \" -Wl,--gc-sections\")\n")
+      string(APPEND _stanza "message(STATUS \"ASAN compact flags enabled (fresh build directory required; do not toggle THEROCK_ASAN_COMPACT in place)\")\n")
+    endif()
+
     # Action at a distance: Signal that the sub-project should extend its build and install
     # RPATHs to include the clang resource dir.
     string(APPEND _stanza "set(THEROCK_INCLUDE_CLANG_RESOURCE_DIR_RPATH ON)")
