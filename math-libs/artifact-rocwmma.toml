@@ -20,4 +20,6 @@ include = [
   "bin/*-bench*",
   "bin/rocwmma/CTestTestfile.cmake",
   "bin/rocwmma/*/CTestTestfile.cmake",
+  # Watchdog scripts
+  "bin/rocwmma/scripts/*",
 ]
