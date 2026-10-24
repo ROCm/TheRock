@@ -187,12 +187,18 @@ all_build_variants = {
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
         },
-        # host ASAN builds are run on nightly, with intent to run on presubmit and postsubmit
         # host ASAN detects memory errors on host code (excluding kernel binaries), while ASAN sanitizes everything
+        #
+        # "tests_on_trigger": triggers this variant runs its tests on, same
+        # vocabulary as the per-family field. Presubmit is included because a
+        # host-asan build only happens when the caller asked for one, so
+        # dropping its tests would pay for the build and discard the result:
+        # https://github.com/ROCm/TheRock/issues/7202
         "host-asan": {
             "build_variant_label": "host-asan",
             "build_variant_suffix": "host-asan",
             "build_variant_cmake_preset": "linux-release-host-asan",
+            "tests_on_trigger": ["presubmit", "nightly"],
         },
         # Debug variants: same as asan/host-asan but with RelWithDebInfo + -g1 -gdwarf-4.
         # Used for nightly and release ASAN builds where stack traces need source line info.
@@ -205,6 +211,7 @@ all_build_variants = {
             "build_variant_label": "host-asan-debug",
             "build_variant_suffix": "host-asan",
             "build_variant_cmake_preset": "linux-release-host-asan-debug",
+            "tests_on_trigger": ["presubmit", "nightly"],
         },
         "tsan": {
             "build_variant_label": "tsan",
@@ -220,6 +227,16 @@ all_build_variants = {
         },
     },
 }
+
+
+def build_variant_runs_tests(variant_config: dict, current_triggers: set[str]) -> bool:
+    """Returns whether a build variant runs its tests on any of current_triggers.
+
+    Caveat: a variant with no "tests_on_trigger" never runs tests, so only call
+    this for variants that declare one. Today that is the host-asan variants.
+    """
+    return bool(set(variant_config.get("tests_on_trigger", [])) & current_triggers)
+
 
 """
 amdgpu_family_info_matrix dictionary fields:
