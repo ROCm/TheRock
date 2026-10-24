@@ -343,6 +343,9 @@ test_matrix = {
         "exclude_family": {
             # rocroller does not support gfx110X architectures (see TheRock#6693)
             # rocroller does not plan to support Linux and Windows gfx115X architectures
+            # rocroller-tests are not run for gfx1250. "gfx1250" matches the
+            # gfx125X-dcgpu family through its fetch-gfx-targets list.
+            # gfx1250-strict is an explicit-only family and must be named itself.
             "linux": [
                 "gfx1100",
                 "gfx1101",
@@ -352,6 +355,8 @@ test_matrix = {
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx1250",
+                "gfx1250-strict",
             ],
             "windows": [
                 "gfx1100",
