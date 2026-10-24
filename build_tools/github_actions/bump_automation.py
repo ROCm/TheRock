@@ -152,50 +152,6 @@ def gh_api(
     return response.json()
 
 
-LIBRARIES_BASELINE_GATE_JOB_NAME = "Libraries Baseline Ready"
-
-
-def _list_run_jobs(repo: str, token: str, run_id: str | int) -> list[dict[str, Any]]:
-    """Return every job in a workflow run, following pagination."""
-    jobs: list[dict[str, Any]] = []
-    page = 1
-
-    while True:
-        result = gh_api(
-            token,
-            f"repos/{repo}/actions/runs/{run_id}/jobs?per_page=100&page={page}",
-        )
-        page_jobs = result.get("jobs", [])
-        jobs.extend(page_jobs)
-
-        if len(page_jobs) < 100 or len(jobs) >= result.get("total_count", 0):
-            return jobs
-
-        page += 1
-
-
-def _baseline_gate_jobs_succeeded(repo: str, token: str, run_id: str | int) -> bool:
-    """Return whether every "Libraries Baseline Ready" job in this run succeeded.
-
-    That job (defined in multi_arch_build_portable_linux.yml and
-    multi_arch_build_windows.yml) depends on exactly the stages rocm-libraries
-    reuses via `baseline_run_id`. Checking it instead of the whole run's
-    `conclusion` means an unrelated math-libs/compiler-runtime failure
-    elsewhere in the matrix does not block a baseline that is otherwise fine
-    to reuse. If no such job is found at all, treat the run as unsafe to use;
-    that should only happen for a run that predates this gate.
-    """
-    gate_jobs = [
-        job
-        for job in _list_run_jobs(repo, token, run_id)
-        if job["name"].endswith(LIBRARIES_BASELINE_GATE_JOB_NAME)
-    ]
-    if not gate_jobs:
-        print(f"[WARN] Run {run_id} has no '{LIBRARIES_BASELINE_GATE_JOB_NAME}' job")
-        return False
-    return all(job.get("conclusion") == "success" for job in gate_jobs)
-
-
 def gh_api_paginate(token: str, endpoint: str) -> list:
     """Fetch all pages of a GitHub list endpoint and return the combined results."""
     headers = {
@@ -221,18 +177,18 @@ def get_baseline_run_id_from_merged_pr(
     """Get the baseline run ID from the PR that was just merged.
 
     Downstream repos reuse this run's build-stage artifacts directly (via
-    `baseline_run_id`), so only a run where those specific stages actually
-    succeeded is safe to hand out. We check the "Libraries Baseline Ready"
-    gate job rather than the whole run's `conclusion`: an unrelated
-    math-libs/compiler-runtime failure elsewhere in the matrix makes the
-    overall run "failure" even when every stage rocm-libraries needs
-    succeeded, and rejecting on that basis would throw away perfectly good
-    baselines. `status=completed` still filters candidate runs to ones that
-    have finished; their overall `conclusion` no longer decides usability. If
-    the newest matching run's gate job did not succeed (or does not exist),
-    we deliberately do not fall back to an older run on a different commit;
-    the caller treats a `None` return as "no baseline", which forces a full
-    rebuild instead of a plausible-looking but wrong artifact reuse.
+    ``baseline_run_id``).  The PR was already merged, so its CI run was
+    deemed acceptable — the merge itself is the quality gate.
+
+    We filter by ``event=pull_request`` to target the PR-triggered run
+    specifically, avoiding any push-triggered or other runs on the same
+    SHA.  No additional gate-job or status checks are applied: the
+    ``baseline-run-id`` is consumed hours later when the downstream bump
+    PR merges, so even an in-progress or re-running CI will have completed
+    by then (see #9402).
+
+    Returns ``None`` only when no matching run exists at all; the caller
+    preserves the existing ``baseline-run-id`` in that case.
     """
     # Find the PR that produced this merge commit
     prs = gh_api(token, f"repos/{repo}/commits/{merge_commit_sha}/pulls")
@@ -248,35 +204,29 @@ def get_baseline_run_id_from_merged_pr(
         print(f"[WARN] No merged PR found for commit {merge_commit_sha[:7]}")
         return None
 
-    # Get the completed workflow run for this PR's head commit
+    # Find the PR-triggered workflow run for this PR's head commit.
+    # Filtering by event=pull_request targets exactly the CI run that was
+    # validated before the PR was merged.
     pr_head_sha = pr["head"]["sha"]
     runs = gh_api(
-        token, f"repos/{repo}/actions/runs?head_sha={pr_head_sha}&status=completed"
+        token,
+        f"repos/{repo}/actions/runs?head_sha={pr_head_sha}&event=pull_request",
     )
     matching_runs = [
-        run for run in runs.get("workflow_runs", []) if run["name"] == workflow_name
+        r for r in runs.get("workflow_runs", []) if r["name"] == workflow_name
     ]
 
-    for run in matching_runs:
-        if _baseline_gate_jobs_succeeded(repo, token, run["id"]):
-            print(
-                f"[INFO] Found {workflow_name} run {run['id']} with all reused "
-                f"stages succeeded for PR #{pr['number']}"
-            )
-            return str(run["id"])
-        print(
-            f"[WARN] Run {run['id']} (conclusion={run.get('conclusion')}) does not "
-            f"have all reused stages succeeded; skipping"
-        )
+    if not matching_runs:
+        print(f"[WARN] No {workflow_name} PR run found for PR #{pr['number']}")
+        return None
 
-    if matching_runs:
-        print(
-            f"[WARN] No {workflow_name} run with all reused stages succeeded "
-            f"found for PR #{pr['number']}"
-        )
-    else:
-        print(f"[WARN] No {workflow_name} run found for PR #{pr['number']}")
-    return None
+    run = matching_runs[0]
+    print(
+        f"[INFO] Using {workflow_name} PR run {run['id']} for "
+        f"PR #{pr['number']} (status={run.get('status')}, "
+        f"conclusion={run.get('conclusion')})"
+    )
+    return str(run["id"])
 
 
 def latest_commit(repo: str, token: str, branch: str | None = None) -> str:
@@ -336,16 +286,17 @@ def update_ci_env_file(
             continue
 
         if in_baseline_run_id and stripped.startswith("value:"):
-            indent = line[: line.find("value:")]
             if baseline_run_id:
+                indent = line[: line.find("value:")]
                 updated_lines.append(
                     f'{indent}value: "{baseline_run_id}" # Updated by assistant-librarian[bot] on submodule bumps\n'
                 )
             else:
-                # Keep empty if no successful run found
-                updated_lines.append(
-                    f'{indent}value: "" # Updated by assistant-librarian[bot] on submodule bumps\n'
-                )
+                # Preserve the existing baseline-run-id when no successful run
+                # is found.  A stale-but-valid baseline is better than none:
+                # blanking the field disables stage reuse and forces a full
+                # rebuild in rocm-libraries CI.
+                updated_lines.append(line)
             in_baseline_run_id = False
             continue
 
@@ -841,7 +792,8 @@ def handle_push(
             print(f"[INFO] Using baseline run ID {baseline_run_id} from merged PR")
         else:
             print(
-                f"[WARN] Could not get baseline run ID from merged PR, proceeding without it"
+                f"[WARN] Could not find baseline run ID from merged PR; "
+                f"keeping existing baseline-run-id in ci-env"
             )
 
     # Update workflow YAML
@@ -887,6 +839,12 @@ def handle_push(
         )
         if baseline_run_id:
             pr_body += f"\n\nBaseline run ID: [{baseline_run_id}](https://github.com/{THEROCK_REPO}/actions/runs/{baseline_run_id})"
+        else:
+            pr_body += (
+                "\n\n**Note:** No successful baseline run was found for the "
+                "merged PR. The existing `baseline-run-id` in ci-env was "
+                "preserved (not cleared)."
+            )
 
         pr = gh_api(
             token,
