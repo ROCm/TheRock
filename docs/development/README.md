@@ -10,6 +10,7 @@
 
 - [Artifacts](artifacts.md)
 - [Build System](build_system.md)
+- [Code Coverage](code_coverage.md)
 - [Dependencies](dependencies.md)
 - [Development Guide](development_guide.md)
 - [Installing Artifacts](installing_artifacts.md)
