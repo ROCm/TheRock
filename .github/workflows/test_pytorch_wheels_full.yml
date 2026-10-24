@@ -364,6 +364,14 @@ jobs:
         run: |
           rocm-sdk test
 
+      - name: Install packages from PyTorch's CI image
+        if: ${{ runner.os == 'Linux' }}
+        timeout-minutes: 20
+        run: |
+          python external-builds/pytorch/install_pytorch_ci_packages.py \
+            --pytorch-dir external-builds/pytorch/pytorch \
+            --index-url="${PACKAGE_INDEX_URL}"
+
       - name: Run PyTorch smoketests
         timeout-minutes: 10
         run: |

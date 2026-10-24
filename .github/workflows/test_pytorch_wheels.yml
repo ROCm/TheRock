@@ -273,6 +273,18 @@ jobs:
         run: |
           rocm-sdk test
 
+      # Installs what PyTorch's ROCm CI image adds (e.g. rocm-origami) at the
+      # versions pinned in the PyTorch checkout. Must run after `rocm-sdk test`:
+      # it may install rocm[devel], which adds the devel tests to that step.
+      - name: Install packages from PyTorch's CI image
+        if: ${{ runner.os == 'Linux' }}
+        timeout-minutes: 20
+        run: |
+          python external-builds/pytorch/install_pytorch_ci_packages.py \
+            --pytorch-dir external-builds/pytorch/pytorch \
+            --index-url="${PACKAGE_INDEX_URL}" \
+            --find-links="${PACKAGE_FIND_LINKS_URL}"
+
       - name: Run PyTorch smoketests
         timeout-minutes: 10
         run: |
