@@ -385,6 +385,39 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertEqual(inputs.linux_test_labels, ["ci:run-multi-gpu"])
         self.assertEqual(inputs.windows_test_labels, ["ci:run-multi-gpu"])
 
+    def test_ci_no_downstream_test_label_passed_to_test_labels(self):
+        """ci:no-downstream-test label is included in linux/windows_test_labels."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {
+                    "labels": [
+                        {"name": "ci:no-downstream-test", "id": 1},
+                        {"name": "test:rocblas", "id": 2},
+                    ]
+                }
+            },
+        )
+        self.assertIn("ci:no-downstream-test", inputs.linux_test_labels)
+        self.assertIn("ci:no-downstream-test", inputs.windows_test_labels)
+        self.assertIn("test:rocblas", inputs.linux_test_labels)
+        self.assertIn("test:rocblas", inputs.windows_test_labels)
+
+    def test_ci_no_downstream_test_label_alone(self):
+        """ci:no-downstream-test label without other test labels."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {
+                    "labels": [
+                        {"name": "ci:no-downstream-test", "id": 1},
+                    ]
+                }
+            },
+        )
+        self.assertEqual(inputs.linux_test_labels, ["ci:no-downstream-test"])
+        self.assertEqual(inputs.windows_test_labels, ["ci:no-downstream-test"])
+
     def test_push_reads_before_sha(self):
         """Push events use event.before as the diff base."""
         inputs = _run_from_environ(
