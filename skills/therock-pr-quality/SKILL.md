@@ -1,6 +1,6 @@
 ---
 name: therock-pr-quality
-description: TheRock build-repo supplements to the ROCm PR quality base skill. Use for TheRock PR author, review, or pre-merge gating where the change touches the superbuild, submodules/patches, artifact descriptors, or reusable CI workflows. Adds and tightens base rules; never relaxes a base MUST.
+description: TheRock build-repo supplements to the ROCm PR quality base skill. Use when authoring, reviewing, or merge-gating a PR touching the superbuild, submodules, artifact descriptors, or reusable CI. Adds and tightens base rules.
 argument-hint: '[author | review | pre-merge] [PR URL | branch:<name> | local]'
 extends: rocm-pr-quality
 allowed-tools: Bash, Read, Grep, Glob, Task, WebFetch
@@ -10,9 +10,12 @@ allowed-tools: Bash, Read, Grep, Glob, Task, WebFetch
 
 ## Dependency (mandatory — do this first)
 
-Read and apply the `rocm-pr-quality` base skill before anything below. It lives in this same repo at
-`skills/rocm-pr-quality/` (`SKILL.md` + `reference.md`). The supplements here only **ADD** rules or
-**TIGHTEN** thresholds; they never relax a base MUST-rule. On any conflict, the base MUST-rule wins.
+Read and apply the `rocm-pr-quality` base skill before anything below. It lives in this same repo:
+[`SKILL.md`](../rocm-pr-quality/SKILL.md) and [`reference.md`](../rocm-pr-quality/reference.md). The
+`extends` and `argument-hint` keys above are repo conventions that not every agent runtime
+interprets, which is why this section tells you to load the base explicitly. The supplements here
+only **ADD** rules or **TIGHTEN** thresholds; they never relax a base MUST-rule. On any conflict,
+the base MUST-rule wins.
 
 This overlay is for the *build-repo* concerns that the library overlays (e.g. `hipblaslt-pr-quality`)
 do not cover: the superbuild itself, submodules and patches, artifact descriptors, and the reusable
@@ -52,7 +55,11 @@ Consult and cite these when reviewing build-repo PRs:
   [cmake](../../docs/development/style_guides/cmake_style_guide.md),
   [bash](../../docs/development/style_guides/bash_style_guide.md),
   [github_actions](../../docs/development/style_guides/github_actions_style_guide.md).
-- Formatting: `.pre-commit-config.yaml` (run `pre-commit run --all-files`).
+- Formatting: `.pre-commit-config.yaml`. When authoring, run `pre-commit run --files <changed files>`
+  (the hooks can rewrite files; commit the result). When reviewing, do not modify the PR's checkout
+  (the base review contract is read-only): run the hooks in a throwaway checkout of the PR head, or
+  read the PR's own pre-commit check result, and report any formatter diff as a finding. Avoid
+  `--all-files`, which can rewrite files the PR never touched.
 
 Cite the specific guide section for a style finding.
 
@@ -125,8 +132,12 @@ On top of the base classes, tag TheRock PRs with:
 
 ### Adds — reusable CI workflow wiring
 
-- When a reusable (`workflow_call`) workflow's interface changes, **all callers** are updated in the
-  same PR; a caller left on the old interface is `BLOCKING`.
+- When a reusable (`workflow_call`) workflow's interface changes, inspect **every caller**. Callers
+  are updated in the same PR only where the change breaks them or changes their intended behavior
+  (a removed or renamed input, a changed output, a new required input); a caller left on a breaking
+  interface is `BLOCKING`. An added optional input with a behavior-preserving default needs no caller
+  edit. Callers outside this repo, or pinned to a version, cannot be edited here: state the migration
+  obligation in the PR instead.
 - Reusable-workflow inputs are read via `inputs.*`, not `github.event.inputs.*` (that only exists for
   `workflow_dispatch`); flag the mismatch.
 - `runs-on` for self-hosted/specialized runners is pinned to the intended label set, not a generic
@@ -151,6 +162,9 @@ root `CMakeLists.txt`, `cmake/**`, `.gitmodules`, `artifact-*.toml`, `BUILD_TOPO
 reusable workflows under `.github/workflows/`. Overlap with the base branch on any of these since the
 PR diverged → **mandatory** rebase + re-run (base default is strong-recommend), because these break
 combinations that neither PR's own CI can see.
+
+The helper implements this list: run it with `--profile therock` so overlap on these files is
+reported as `BLOCKING`. The default `base` profile has no high-coupling list and will not flag it.
 
 ______________________________________________________________________
 
