@@ -600,6 +600,74 @@ class RpmPackageVersionTest(unittest.TestCase):
         self.assertEqual(version, "8.0.0~custom1")
 
 
+class MsiPackageVersionTest(unittest.TestCase):
+    RELEASE_TYPES = ("ci", "dev", "nightly", "release")
+
+    def _compute(self, release_type, base="10.2.0"):
+        return compute_rocm_package_version.compute_version(
+            package_type="msi",
+            release_type=release_type,
+            override_base_version=base,
+        )
+
+    def test_is_four_field_numeric(self):
+        # WiX requires a numeric #.#.#.# ProductVersion (WIX0108 otherwise).
+        for release_type in self.RELEASE_TYPES:
+            with self.subTest(release_type=release_type):
+                version = self._compute(release_type)
+                fields = version.split(".")
+                self.assertEqual(len(fields), 4)
+                for f in fields:
+                    self.assertTrue(f.isdigit(), msg=f"non-numeric field in {version}")
+
+    def test_keeps_major_minor_and_zero_fourth_field(self):
+        for release_type in self.RELEASE_TYPES:
+            with self.subTest(release_type=release_type):
+                major, minor, _build, fourth = self._compute(release_type).split(".")
+                self.assertEqual((major, minor), ("10", "2"))
+                self.assertEqual(fourth, "0")
+
+    def test_build_field_within_installer_limit(self):
+        # The third field must fit Windows Installer's 65535 cap.
+        for release_type in self.RELEASE_TYPES:
+            with self.subTest(release_type=release_type):
+                build = int(self._compute(release_type).split(".")[2])
+                self.assertLessEqual(build, 65535)
+
+    def test_all_release_types_share_one_shape(self):
+        # No dev/nightly suffix: every release type yields the same version on a
+        # given day (release "wins" only because it is built last, not via a
+        # different formula).
+        versions = {self._compute(rt) for rt in self.RELEASE_TYPES}
+        self.assertEqual(len(versions), 1)
+
+    def test_build_field_is_monotonic_by_date(self):
+        # A later build date must yield a strictly greater third field so a newer
+        # build upgrades an older one within its major.minor line.
+        import datetime
+
+        earlier = compute_rocm_package_version.compute_msi_build_field(
+            datetime.date(2026, 10, 14)
+        )
+        later = compute_rocm_package_version.compute_msi_build_field(
+            datetime.date(2026, 10, 16)
+        )
+        self.assertEqual(later - earlier, 2)
+        self.assertGreater(later, earlier)
+
+    def test_rejects_base_without_minor(self):
+        with self.assertRaisesRegex(ValueError, "major.minor"):
+            self._compute("release", base="10")
+
+    def test_rejects_date_past_installer_limit(self):
+        import datetime
+
+        with self.assertRaisesRegex(ValueError, "65535"):
+            compute_rocm_package_version.compute_msi_build_field(
+                datetime.date(2200, 1, 1)
+            )
+
+
 # Test meaningful combinations of argparse options through the real computation path,
 # including main()'s side effect of writing versions to GitHub Actions outputs.
 class MainFunctionTest(unittest.TestCase):
@@ -630,6 +698,7 @@ class MainFunctionTest(unittest.TestCase):
                 "rocm_package_version",
                 "rocm_deb_package_version",
                 "rocm_rpm_package_version",
+                "rocm_msi_package_version",
             },
         )
         self.assertEqual(
@@ -639,6 +708,9 @@ class MainFunctionTest(unittest.TestCase):
         self.assertTrue(outputs["rocm_deb_package_version"].startswith("7.99.0~dev"))
         self.assertTrue(outputs["rocm_rpm_package_version"].startswith("7.99.0~"))
         self.assertTrue(outputs["rocm_rpm_package_version"].endswith("gabcdef12"))
+        # MSI: major.minor.<days-since-epoch>.0 (no dev suffix).
+        build_field = compute_rocm_package_version.compute_msi_build_field()
+        self.assertEqual(outputs["rocm_msi_package_version"], f"7.99.{build_field}.0")
 
     def test_sets_prerelease_outputs(self):
         with mock.patch.object(
@@ -655,11 +727,13 @@ class MainFunctionTest(unittest.TestCase):
                 ]
             )
 
+        build_field = compute_rocm_package_version.compute_msi_build_field()
         gha_set_output.assert_called_once_with(
             {
                 "rocm_package_version": "7.99.0rc2",
                 "rocm_deb_package_version": "7.99.0~pre2",
                 "rocm_rpm_package_version": "7.99.0~rc2",
+                "rocm_msi_package_version": f"7.99.{build_field}.0",
             }
         )
 
@@ -676,11 +750,15 @@ class MainFunctionTest(unittest.TestCase):
                 ]
             )
 
+        # MSI versions must stay numeric #.#.#.#, so the msi branch ignores the
+        # custom suffix and always emits major.minor.<days-since-epoch>.0.
+        build_field = compute_rocm_package_version.compute_msi_build_field()
         gha_set_output.assert_called_once_with(
             {
                 "rocm_package_version": "7.99.0.custom1",
                 "rocm_deb_package_version": "7.99.0.custom1",
                 "rocm_rpm_package_version": "7.99.0.custom1",
+                "rocm_msi_package_version": f"7.99.{build_field}.0",
             }
         )
 
