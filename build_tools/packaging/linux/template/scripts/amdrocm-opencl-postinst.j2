@@ -1,0 +1,54 @@
+#!/bin/bash
+set -e
+
+do_register_icd() {
+    local pkg_install_prefix
+    local lib_path
+    local icd_dir="/etc/OpenCL/vendors"
+    local icd_file
+
+    {% if target == "deb" %}
+    pkg_install_prefix="{{ install_prefix }}"
+    {% else %}
+    # Fall back to the build-time prefix
+    pkg_install_prefix="${RPM_INSTALL_PREFIX0:-{{ install_prefix }}}"
+    {% endif %}
+
+    lib_path="${pkg_install_prefix}/lib/opencl/libamdocl64.so"
+
+    # Qualified by major.minor only, matching the granularity of the install
+    icd_file="${icd_dir}/amdocl64_$(printf '%d%02d' \
+        {{ version_major }} {{ version_minor }}).icd"
+
+    if [ ! -e "$lib_path" ]; then
+        echo "error: OpenCL runtime not found: $lib_path" >&2
+        return 1
+    fi
+
+    install -d -m 0755 "$icd_dir"
+
+    # Use an absolute library path so discovery does not depend on
+    # libamdocl64.so being present in the system linker search path.
+    printf '%s\n' "$lib_path" > "$icd_file"
+    chmod 0644 "$icd_file"
+}
+
+{% if target == "deb" %}
+
+case "$1" in
+    configure)
+        do_register_icd
+        ;;
+    abort-upgrade|abort-remove|abort-deconfigure)
+        exit 0
+        ;;
+    *)
+        exit 0
+        ;;
+esac
+
+{% else %}
+
+do_register_icd
+
+{% endif %}
