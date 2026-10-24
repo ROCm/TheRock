@@ -56,6 +56,7 @@ def _get_artifact_path(artifact_path: str) -> str:
 # related jobs without relying on name-prefix inference.
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
+    "rocr-debug-agent": ["rocr-debug-agent-cpu", "rocr-debug-agent-gpu"],
     "tensilelite": ["tensilelite", "tensilelite-common"],
 }
 
@@ -547,15 +548,25 @@ test_matrix = {
             ],
         },
     },
-    "rocr-debug-agent": {
-        "job_name": "rocr-debug-agent",
+    "rocr-debug-agent-cpu": {
+        "job_name": "rocr-debug-agent-cpu",
         "fetch_artifact_args": "--debug-tools --tests",
         "timeout_minutes": 10,
-        "test_script": "python ./build/tests/rocm-debug-agent/test_rocr-debug-agent.py",
+        "test_script": "python ./build/tests/rocm-debug-agent/test_rocr-debug-agent.py --cpu-tests",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
+    "rocr-debug-agent-gpu": {
+        "job_name": "rocr-debug-agent-gpu",
+        "fetch_artifact_args": "--debug-tools --tests",
+        "timeout_minutes": 10,
+        "test_script": "python ./build/tests/rocm-debug-agent/test_rocr-debug-agent.py --gpu-tests",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
-            "windows": 1,
         },
         "exclude_family": {
             "linux": [
