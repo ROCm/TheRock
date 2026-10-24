@@ -25,8 +25,8 @@ ownership manifest.
 
 For a new mirrored dependency, add its version policy to `DEPENDENCIES` in
 [`mirror_python_dependencies.py`](mirror_python_dependencies.py). Mirroring
-publishes to the core product index; it does not automatically expose the
-package through the aggregate index.
+publishes to the third-party product path in a caller-selected Core bucket; it
+does not automatically expose the package through the aggregate index.
 
 See [Mirroring Third-Party Python Dependencies](../../../docs/packaging/python_packaging.md#mirroring-third-party-python-dependencies)
 for the mirroring commands and publication behavior.
@@ -38,9 +38,9 @@ normalized name to the manifest. For example, `example_package` becomes
 `example-package`:
 
 ```yaml
-      # Mirrored dependencies use core, regardless of their policy's project.
+      # Mirrored dependencies use the third-party product path.
       example-package:
-        owner_path: core/whl-next
+        owner_path: third-party/whl-next
         # Select the streams where this package will actually be published.
         streams: [dev, nightly]
 ```
@@ -58,7 +58,8 @@ Product indexes may intentionally contain packages outside aggregate ownership.
 Publish the package to the affected product buckets and wait for the product
 indexer to create its package page and wheel links. Verify those links before
 deploying a new aggregate route. For mirrored dependencies, the public package
-page is `/rocm/core/whl-next/<normalized-package>/`.
+page is `/rocm/third-party/whl-next/<normalized-package>/`. This path remains
+backed by the Core bucket and uses its existing publication credentials.
 
 ### 4. Generate and deploy aggregate artifacts
 
@@ -112,8 +113,9 @@ python tools/cloudfront_functions/generate_rocm_python_index_and_router.py \
 
 - `--content-root` is a local directory, not a bucket name or URL.
 - The helper downloads product indexes such as `/rocm/core/whl-next/`,
-  `/rocm/pytorch/whl-next/`, and `/rocm/jax/whl-next/`. It does not download the
-  aggregate `/rocm/whl-next/` index.
+  `/rocm/third-party/whl-next/`, `/rocm/pytorch/whl-next/`, and
+  `/rocm/jax/whl-next/`. It does not download the aggregate `/rocm/whl-next/`
+  index.
 - A product root referenced by active ownership for the stream is required. A
   root referenced only by inactive ownership is included when present and
   skipped when it returns 404.
@@ -133,6 +135,8 @@ The snapshot used in the example has this layout:
 /tmp/rocm-whl-next-nightly-snapshot/
   rocm/core/whl-next/index.html
   rocm/core/whl-next/<package>/index.html
+  rocm/third-party/whl-next/index.html
+  rocm/third-party/whl-next/<package>/index.html
   rocm/pytorch/whl-next/index.html
   rocm/pytorch/whl-next/<package>/index.html
   rocm/jax/whl-next/index.html
