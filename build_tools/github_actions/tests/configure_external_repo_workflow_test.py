@@ -75,15 +75,13 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
     def test_libraries_workflow_selects_library_projects(self):
         result = self.configure({WORKFLOW})
 
-        self.assertFalse(result.run_all_tests)
-        self.assertEqual(set(result.changed_projects.split(",")), LIBRARY_PROJECTS)
-        self.assertNotIn("projects/rccl", result.changed_projects.split(","))
+        self.assertEqual(set(result.split(",")), LIBRARY_PROJECTS)
+        self.assertNotIn("projects/rccl", result.split(","))
 
     def test_libraries_workflow_with_known_source_selects_all_libraries(self):
         result = self.configure({WORKFLOW, "projects/rocblas/src/rocblas.cpp"})
 
-        self.assertFalse(result.run_all_tests)
-        self.assertEqual(set(result.changed_projects.split(",")), LIBRARY_PROJECTS)
+        self.assertEqual(set(result.split(",")), LIBRARY_PROJECTS)
 
     def test_systems_workflow_preserves_full_test_run(self):
         result = self.configure(
@@ -92,8 +90,7 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
             entries=SYSTEM_ENTRIES,
         )
 
-        self.assertTrue(result.run_all_tests)
-        self.assertEqual(result.changed_projects, "")
+        self.assertEqual(result, "")
 
     def test_shared_ci_changes_preserve_full_test_run(self):
         for path in (
@@ -104,20 +101,17 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
             with self.subTest(path=path):
                 result = self.configure({WORKFLOW, path})
 
-                self.assertTrue(result.run_all_tests)
-                self.assertEqual(result.changed_projects, "")
+                self.assertEqual(result, "")
 
     def test_workflow_with_unclassified_path_preserves_full_test_run(self):
         result = self.configure({WORKFLOW, "unexpected/config.py"})
 
-        self.assertTrue(result.run_all_tests)
-        self.assertEqual(result.changed_projects, "")
+        self.assertEqual(result, "")
 
     def test_workflow_without_config_preserves_full_test_run(self):
         result = self.configure({WORKFLOW}, config_exists=False)
 
-        self.assertTrue(result.run_all_tests)
-        self.assertEqual(result.changed_projects, "")
+        self.assertEqual(result, "")
 
     def test_configured_repository_workflow_selects_its_projects(self):
         with patch.dict(
@@ -130,23 +124,20 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
                 entries=[("projects", "example")],
             )
 
-        self.assertFalse(result.run_all_tests)
-        self.assertEqual(result.changed_projects, "projects/example")
+        self.assertEqual(result, "projects/example")
 
     def test_unknown_repository_workflow_preserves_full_test_run(self):
         result = self.configure({WORKFLOW}, repo="ROCm/unknown")
 
-        self.assertTrue(result.run_all_tests)
-        self.assertEqual(result.changed_projects, "")
+        self.assertEqual(result, "")
 
     def test_ordinary_source_changes_stay_selective(self):
         result = self.configure({"projects/rocblas/src/rocblas.cpp"})
 
-        self.assertFalse(result.run_all_tests)
-        self.assertEqual(result.changed_projects, "projects/rocblas")
+        self.assertEqual(result, "projects/rocblas")
 
     def test_libraries_workflow_does_not_select_rccl_downstream(self):
-        result = self.configure({WORKFLOW})
+        changed_projects = self.configure({WORKFLOW})
         therock_root = Path(ci.__file__).resolve().parents[2]
         selector = therock_root / "test_tools/determine_rocm_test_dependencies.py"
 
@@ -155,7 +146,7 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
                 sys.executable,
                 str(selector),
                 "--changed-projects",
-                result.changed_projects,
+                changed_projects,
                 "--format",
                 "list",
             ],

@@ -27,11 +27,15 @@ Usage:
         --config-path .github/repos-config.json
 
 Outputs (to $GITHUB_OUTPUT):
-    changed_projects: Comma-separated list of changed project paths
-    run_all_tests: "true" for schedule/dispatch, shared CI changes,
-                workflow changes without a configured project scope, or when
-                changed projects cannot be determined safely
-    test_type: "quick" when run_all_tests is true, "standard" otherwise
+    changed_projects: Comma-separated list of changed project paths. Empty when
+                the run cannot be narrowed safely -- for schedule/dispatch,
+                shared CI changes, workflow changes without a configured
+                project scope, or an unclassifiable diff -- which downstream
+                means "test every project".
+
+Test depth (test_type) is not decided here: TheRock's
+configure_multi_arch_ci.py derives it from the same diff, using the CI-plumbing
+patterns in configure_ci_path_filters.py.
 """
 
 import argparse
@@ -112,15 +116,6 @@ CI_RELEVANT_NON_SUBTREE_PREFIXES = {
     "emulation/mirage",
     "emulation/rocjitsu",
 }
-
-
-@dataclass
-class ConfigureResult:
-    """Result of CI configuration analysis."""
-
-    changed_projects: str  # Comma-separated list
-    run_all_tests: bool
-    test_type: str  # "quick" when run_all_tests=True, otherwise "standard"
 
 
 @dataclass
@@ -310,20 +305,22 @@ def configure(
     base_sha: Optional[str],
     head_sha: Optional[str],
     config_path: str,
-) -> ConfigureResult:
+) -> str:
     """Main configuration logic.
+
+    Returns the comma-separated project paths this run is scoped to. An empty
+    string means the run could not be narrowed safely, which downstream means
+    "test every project".
 
     Note: Skip-CI logic (for docs-only changes) is now handled by
     configure_multi_arch_ci.py using TOML config files. This function
-    focuses on determining changed_projects and run_all_tests.
+    focuses on determining changed_projects.
     """
 
     # Schedule/workflow_dispatch events run all tests
     if event_name in ("schedule", "workflow_dispatch"):
         logger.info(f"{event_name} event - running all tests")
-        return ConfigureResult(
-            changed_projects="", run_all_tests=True, test_type="quick"
-        )
+        return ""
 
     # Get modified paths via GitHub API
     if event_name == "pull_request" and base_sha and head_sha:
@@ -336,31 +333,23 @@ def configure(
         modified_paths = get_modified_paths_api(github_repo, base_sha, head_sha)
     else:
         logger.warning("No SHAs provided - running all tests")
-        return ConfigureResult(
-            changed_projects="", run_all_tests=True, test_type="quick"
-        )
+        return ""
 
     # If API returned None (truncated results), fall back to run-all
     if modified_paths is None:
         logger.info("Truncated API response - running all tests")
-        return ConfigureResult(
-            changed_projects="", run_all_tests=True, test_type="quick"
-        )
+        return ""
 
     if not modified_paths:
         logger.info("No modified paths - no projects changed")
-        return ConfigureResult(
-            changed_projects="", run_all_tests=False, test_type="standard"
-        )
+        return ""
 
     logger.info(f"Modified paths: {len(modified_paths)} files")
 
     # Shared CI and test-selection changes can affect other repositories.
     if matches_patterns(modified_paths, FULL_TEST_TRIGGER_PATTERNS):
         logger.info("Shared CI files changed - running all tests")
-        return ConfigureResult(
-            changed_projects="", run_all_tests=True, test_type="quick"
-        )
+        return ""
 
     # Apply the calling repository's workflow test policy.
     if matches_patterns(modified_paths, CALLER_WORKFLOW_TRIGGER_PATTERNS):
@@ -370,16 +359,12 @@ def configure(
                 "Workflow changed in %s - running all tests",
                 github_repo,
             )
-            return ConfigureResult(
-                changed_projects="", run_all_tests=True, test_type="quick"
-            )
+            return ""
 
         config = load_repo_config(config_path)
         if not config:
             logger.warning("No config loaded - running all tests")
-            return ConfigureResult(
-                changed_projects="", run_all_tests=True, test_type="quick"
-            )
+            return ""
 
         own_projects = get_valid_prefixes(config)
 
@@ -395,27 +380,19 @@ def configure(
                 f"Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
                 " - running all tests"
             )
-            return ConfigureResult(
-                changed_projects="", run_all_tests=True, test_type="quick"
-            )
+            return ""
 
         logger.info(
             "Workflow changed in %s - testing configured projects",
             github_repo,
         )
-        return ConfigureResult(
-            changed_projects=",".join(sorted(own_projects)),
-            run_all_tests=False,
-            test_type="standard",
-        )
+        return ",".join(sorted(own_projects))
 
     # Find changed projects from config
     config = load_repo_config(config_path)
     if not config:
         logger.warning("No config loaded - running all tests")
-        return ConfigureResult(
-            changed_projects="", run_all_tests=True, test_type="quick"
-        )
+        return ""
 
     valid_prefixes = get_valid_prefixes(config) | CI_RELEVANT_NON_SUBTREE_PREFIXES
 
@@ -429,18 +406,12 @@ def configure(
             f"Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
             " - running all tests"
         )
-        return ConfigureResult(
-            changed_projects="", run_all_tests=True, test_type="quick"
-        )
+        return ""
 
     matched = find_matched_subtrees(modified_paths, valid_prefixes)
     logger.info(f"Matched projects: {matched}")
 
-    return ConfigureResult(
-        changed_projects=",".join(matched),
-        run_all_tests=False,
-        test_type="standard",
-    )
+    return ",".join(matched)
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -484,7 +455,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     logger.info(f"Configuring CI for {args.github_repo}")
 
-    result = configure(
+    changed_projects = configure(
         event_name=args.event_name,
         github_repo=args.github_repo,
         base_sha=args.base_sha or None,
@@ -492,13 +463,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         config_path=args.config_path,
     )
 
-    set_github_output(
-        {
-            "changed_projects": result.changed_projects,
-            "run_all_tests": str(result.run_all_tests).lower(),
-            "test_type": result.test_type,
-        }
-    )
+    set_github_output({"changed_projects": changed_projects})
 
     return 0
 

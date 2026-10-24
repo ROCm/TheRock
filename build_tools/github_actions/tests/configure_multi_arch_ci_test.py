@@ -638,6 +638,58 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.test_rocm.test_type, "quick")
 
+    def test_external_repo_ci_change_is_quick(self):
+        """An external repo diff touching TheRock CI plumbing → quick tests.
+
+        from_external_repo() makes has_submodule_changes unconditionally True,
+        so this must win over the submodule rule to take effect at all.
+        """
+        git = cm.GitContext.from_external_repo(
+            "rocm-libraries",
+            external_changed_files=[".github/workflows/therock-multi-arch-ci.yml"],
+        )
+        result = cm.decide_jobs(
+            self._inputs(
+                external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
+            ),
+            git_context=git,
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.test_rocm.test_type, "quick")
+        self.assertIn("CI plumbing", result.test_rocm.test_type_reason)
+
+    def test_external_repo_source_change_stays_standard(self):
+        """An external repo diff touching library source obeys the ruleset."""
+        git = cm.GitContext.from_external_repo(
+            "rocm-libraries",
+            external_changed_files=["projects/rocblas/src/rocblas.cpp"],
+        )
+        result = cm.decide_jobs(
+            self._inputs(
+                external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
+            ),
+            git_context=git,
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.test_rocm.test_type, "standard")
+        self.assertIn("submodule", result.test_rocm.test_type_reason)
+
+    def test_external_repo_ci_change_yields_to_test_filter_label(self):
+        """The quick downgrade is still overridable by an explicit label."""
+        git = cm.GitContext.from_external_repo(
+            "rocm-libraries",
+            external_changed_files=[".github/workflows/therock-ci.yml"],
+        )
+        result = cm.decide_jobs(
+            self._inputs(
+                external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}',
+                pr_labels=["test_filter:comprehensive"],
+            ),
+            git_context=git,
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.test_rocm.test_type, "comprehensive")
+
     def test_nightly_release_is_comprehensive(self):
         """Nightly release → comprehensive tests."""
         result = cm.decide_jobs(
