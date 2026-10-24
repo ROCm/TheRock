@@ -765,8 +765,10 @@ test_matrix = {
     # list from AMDGPU_FAMILIES, sparse-builds the pinned rocjitsu KMD, and runs StaticFDBSync once
     # per CU with a CU-corrected config. include_family restricts it to the arches rocjitsu has a
     # KMD config for: gfx942, whose FAMILY_MAP entry covers both CU variants -- MI300X (304 CU) and
-    # MI300A (228 CU) -- in a single job, and gfx950 (MI355X, 256 CU; advisory, see
-    # expect_failure below).
+    # MI300A (228 CU) -- in a single job, gfx950 (MI355X, 256 CU; advisory, see expect_failure
+    # below), and the Navi families, which carry one FAMILY_MAP entry per shipped SystemDB
+    # (gfx110X-all -> gfx110060 at 96 CU + gfx110220 at 32 CU, gfx1151 -> gfx115128 at 40 CU,
+    # gfx120X-all -> gfx120020 at 32 CU + gfx120140 at 64 CU).
     # linux_cpu_runner: no scarce GPU test runner needed; uses the default no_rocm Ubuntu container
     # (the runner sudo-apt-installs cmake/build-essential/libdrm-dev to build rocjitsu).
     "miopen-dbsync": {
@@ -777,19 +779,46 @@ test_matrix = {
         # or rocjitsu build is paid for on quick (the runner script also self-skips on
         # TEST_TYPE=quick as a backstop). Runs serially (MIOPEN_DBSYNC_MAX_THREADS=1)
         # under rocjitsu; full set (gfx942 304+228, gfx950 256) + artifact fetch + rocjitsu
-        # build measures ~15 min, so 30 gives margin and fails a hung interposer faster.
+        # build measures ~15 min, so 30 gives margin and fails a hung interposer faster. A Navi
+        # job runs at most two CU configs, and its wall time is host dependent (the same gfx1100
+        # database measured 11.8 s on one machine and 58.8 s on another). On the
+        # ROCm/rocm-libraries#13411 interposer runs the slowest observed Navi param is gfx1201 at
+        # ~114 s, and a gfx110X-all job is two params that measured 58.8 s and 28.9 s on a slower
+        # host, so 30 min still leaves plenty of margin.
         "timeout_minutes": 30,
         "test_script": "python ./build/share/miopen/bin/run_dbsync_rocjitsu.py",
         "platform": ["linux"],
         "linux_cpu_runner": True,
         "test_types": ["standard", "comprehensive", "full"],
         "include_family": {
-            "linux": ["gfx942", "gfx950"],
+            "linux": [
+                "gfx942",
+                "gfx950",
+                # Navi system DBs shipped in rocm-libraries projects/miopen/src/kernels/:
+                # gfx110060, gfx110220, gfx115128, gfx120020, gfx120140. Nothing gated
+                # them before. The Windows gfx110X lane lands on gfx1101 runners, where
+                # every Navi StaticFDBSync param is SKIPPED, which is how
+                # ROCm/rocm-libraries#13394 reached develop. The matching FAMILY_MAP
+                # entries come from ROCm/rocm-libraries#13411; see also #12013.
+                "gfx1100",
+                "gfx1102",
+                "gfx1151",
+                "gfx1200",
+                "gfx1201",
+            ],
         },
-        # TODO(ALMIOPEN-2674): drop this once gfx950 dbsync has been green for a
+        # TODO(ALMIOPEN-2674): drop gfx950 once its dbsync has been green for a
         # few consecutive standard/comprehensive/full runs.
+        # TODO(ROCm/rocm-libraries#13429): drop gfx1151 once CK is_applicable stops
+        # aborting with "invalid device function" on real gfx1151. gfx1151 dbsync is
+        # validated only under the rocjitsu interposer, and the CU correction is
+        # load-bearing there: the rocjitsu config declares 32 CU while the shipped
+        # database gfx115128 is a 40 CU database.
+        # Entries match per family group, so listing either target of a group makes
+        # that whole job advisory. If the gfx120X re-runs on #13411 do not pass, add
+        # "gfx1200" to the list below and gfx120X-all becomes advisory too.
         "expect_failure": {
-            "linux": ["gfx950"],
+            "linux": ["gfx950", "gfx1151"],
         },
         "total_shards_dict": {
             "linux": 1,
