@@ -3027,7 +3027,7 @@
     ],
     "Maintainer": "ROCm Debugger Support <rocm-gdb.support@amd.com>",
     "Description_Short": "ROCm debugger test suite and validation binaries",
-    "Description_Long": "Test suite for the ROCm debugger stack. Includes rocgdb-test and rocr-debug-agent-tests for validating kernel debugging, wavefront inspection, and memory examination functionality. Provides test executables for verifying source-level GPU debugging on AMD platforms.",
+    "Description_Long": "Test suite for the ROCm debugger stack. Includes rocgdb-test, rocr-debug-agent-tests, and amd-dbgapi-tests for validating kernel debugging, wavefront inspection, and memory examination functionality. Provides test executables for verifying source-level GPU debugging on AMD platforms.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -3052,6 +3052,17 @@
         "Artifact_Subdir": [
           {
             "Name": "rocgdb",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "amd-dbgapi",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-dbgapi",
             "Components": [
               "test"
             ]
