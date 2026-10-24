@@ -32,14 +32,15 @@ We generate the following types of packages:
   `Requires-Dist` on the matching version of `rocm-sdk-libraries`. Users install
   only the device wheels for their GPU target(s).
 - Devel package: The `rocm-sdk-devel` package is the catch-all for everything.
-  For any file already populated in a runtime package, it will include it as
-  a relative symlink in the tarball. During extraction, file symlinks are
-  converted to hardlinks to improve compatibility, while directory symlinks
-  remain as symlinks. Shared library soname links are also rewritten as needed.
-  Since symlinks/hardlinks and non-standard attributes cannot be included in a
-  wheel file, the platform contents are stored in a `_devel.tar` or `_devel.tar.xz`
-  file. The installed package is extended in response to requesting a path to it
-  via the `rocm-sdk` tool.
+  Files that do not require link setup are stored directly in the wheel. For
+  any file already populated in a runtime package, it records a relative link
+  instead; source symlinks are recorded as links as well. These links are
+  stored in `.devel_links/devel.json` because wheel archives do not portably
+  represent symlinks. During initialization, file links are created as
+  hardlinks to improve compatibility, while directory symlinks remain as
+  symlinks. Shared library soname links are also rewritten as needed. The
+  installed package is initialized in response to requesting a path to it via
+  the `rocm-sdk` tool.
 
 ### Kpack-split packaging
 
@@ -58,7 +59,7 @@ files. Each installed `rocm-sdk-device-{target}` wheel ships a manifest, and
 `hipcc` - hardlinks that wheel's device files from `rocm-sdk-libraries` into the
 devel tree, recording them in the device wheel's `RECORD` so `pip uninstall`
 removes them. Because the compiler trampolines only trigger this on the first
-expansion, after installing or removing a `rocm-sdk-device-*` wheel in an
+initialization, after installing or removing a `rocm-sdk-device-*` wheel in an
 already-initialized environment, re-run `rocm-sdk init` or `rocm-sdk test` to
 refresh the device files in the devel tree.
 
