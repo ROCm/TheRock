@@ -5,33 +5,42 @@
 # mxDataGenerator
 ################################################################################
 
-therock_cmake_subproject_declare(mxDataGenerator
-  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/mxdatagenerator"
-  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/mxDataGenerator"
-  BACKGROUND_BUILD
-  CMAKE_ARGS
-    # TODO: Enable tests once there is install support
-    #-DMXDATAGENERATOR_BUILD_TESTING=${THEROCK_BUILD_TESTING}
-  COMPILER_TOOLCHAIN
-    amd-hip
-  BUILD_DEPS
-    amd-llvm
-    therock-googletest
-)
-therock_cmake_subproject_provide_package(mxDataGenerator
-  mxDataGenerator lib/cmake)
-therock_cmake_subproject_activate(mxDataGenerator)
+set(_mxdatagenerator_enabled ON)
+if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+  therock_check_subproject_targets(_mxdatagenerator_enabled mxDataGenerator)
+endif()
+set(_mxdatagenerator_enabled ${_mxdatagenerator_enabled} PARENT_SCOPE)
 
-################################################################################
-# support artifact
-################################################################################
+if(_mxdatagenerator_enabled)
+  therock_cmake_subproject_declare(mxDataGenerator
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/mxdatagenerator"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/mxDataGenerator"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      # TODO: Enable tests once there is install support
+      #-DMXDATAGENERATOR_BUILD_TESTING=${THEROCK_BUILD_TESTING}
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      amd-llvm
+      therock-googletest
+  )
+  therock_cmake_subproject_provide_package(mxDataGenerator
+    mxDataGenerator lib/cmake)
+  therock_cmake_subproject_activate(mxDataGenerator)
 
-therock_provide_artifact(support
-  TARGET_NEUTRAL
-  DESCRIPTOR artifact-support.toml
-  COMPONENTS
-    dev
-    doc
-  SUBPROJECT_DEPS
-    mxDataGenerator
-)
+  ################################################################################
+  # support artifact
+  ################################################################################
+
+  therock_provide_artifact(support
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-support.toml
+    COMPONENTS
+      dev
+      doc
+    SUBPROJECT_DEPS
+      mxDataGenerator
+  )
+
+endif(_mxdatagenerator_enabled)
