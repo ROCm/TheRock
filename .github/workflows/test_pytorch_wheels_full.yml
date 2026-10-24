@@ -290,7 +290,7 @@ jobs:
           DEVICE_EXTRAS: ${{ steps.expand.outputs.device_extras }}
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION} rocm[devel,${DEVICE_EXTRAS}]" \
+            --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION} torchvision rocm[devel,${DEVICE_EXTRAS}]" \
             --index-url="${PACKAGE_INDEX_URL}" \
             --activate-in-future-github-actions-steps
 
