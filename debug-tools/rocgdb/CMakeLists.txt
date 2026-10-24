@@ -441,6 +441,7 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
         --disable-gas
         --disable-gdbserver
         --disable-gdbtk
+        --disable-gprof
         --disable-gprofng
         --disable-ld
         --disable-shared
