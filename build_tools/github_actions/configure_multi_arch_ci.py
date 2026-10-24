@@ -823,7 +823,7 @@ def should_skip_ci(
     - 'ci:skip' PR label
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
-    - ASAN builds on PRs without ci:asan or ci:host-asan labels
+    - ASAN builds on PRs without a ci:asan label. host-asan is not a presubmit path.
 
     For external repo builds, path filtering uses changed_files and
     skip_ci_patterns from the external_repo JSON (both must be provided).
@@ -876,21 +876,21 @@ def should_skip_ci(
             print("  TheRock: CI can be skipped")
             return True
 
-    # 3. ASAN skip - only evaluated if path filtering didn't skip CI
-    has_asan_label = (
-        "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
-    )
+    # 3. ASAN skip - only evaluated if path filtering didn't skip CI.
+    # host-asan is postsubmit/submodule-bump on gfx90a, not a presubmit path.
+    # A ci:host-asan label does not enable the asan workflow on a pull request.
     if (
         ci_inputs.is_pull_request
         and ci_inputs.build_variant == "asan"
-        and not has_asan_label
+        and "ci:asan" not in ci_inputs.pr_labels
     ):
         print(
-            "  Skipping: ASAN PR without enabling label (add 'ci:asan' or 'ci:host-asan' to enable)"
+            "  Skipping: ASAN PR without ci:asan label "
+            "(host-asan is not part of presubmit)"
         )
         return True
 
-    if has_asan_label and ci_inputs.build_variant == "asan":
+    if "ci:asan" in ci_inputs.pr_labels and ci_inputs.build_variant == "asan":
         print("  Running: ASAN CI triggered by PR label")
 
     return False
@@ -1310,6 +1310,27 @@ def _determine_test_type(
     return "quick", "default"
 
 
+def select_asan_build_variant(ci_inputs: CIInputs) -> str:
+    """Choose the ASAN variant for this event.
+
+    host-asan is the postsubmit and submodule-bump build. Its tests run on
+    gfx90a when a submodule changes, and on nightly or manual runs. It is not
+    a presubmit variant. Nightly and manual runs of the asan workflow stay on
+    full asan unless ``ci:host-asan`` is set on a non-PR event. ``ci:asan``
+    always keeps full asan.
+
+    Returns the original variant when it is not ``asan``.
+    """
+    build_variant = ci_inputs.build_variant
+    if build_variant != "asan":
+        return build_variant
+    if "ci:asan" in ci_inputs.pr_labels or ci_inputs.is_pull_request:
+        return "asan"
+    if "ci:host-asan" in ci_inputs.pr_labels or ci_inputs.is_push:
+        return "host-asan"
+    return "asan"
+
+
 def decide_jobs(
     ci_inputs: CIInputs,
     git_context: GitContext,
@@ -1457,14 +1478,22 @@ def decide_jobs(
 
     # TODO(#3433): Plumb test_rocm.action through workflow outputs. Until then,
     # the skip is enforced in _expand_build_config_for_platform() via test_runs_on.
-    if ci_inputs.build_variant == "asan":
-        # Only run ASAN tests on scheduled or workflow_dispatch runs, to avoid impact on submodule bumps
-        if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-            test_rocm = TestRocmDecision(
-                action=JobAction.SKIP,
-                test_type=test_type,
-                test_type_reason="ASAN tests skipped due to non-nightly trigger",
-            )
+    effective_variant = select_asan_build_variant(ci_inputs)
+    if effective_variant == "asan" and not (
+        ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch
+    ):
+        # Full ASAN tests stay on nightly. Presubmit ci:asan builds do not test.
+        test_rocm = TestRocmDecision(
+            action=JobAction.SKIP,
+            test_type=test_type,
+            test_type_reason="ASAN tests skipped due to non-nightly trigger",
+        )
+    elif effective_variant.startswith("host-asan") and ci_inputs.is_pull_request:
+        test_rocm = TestRocmDecision(
+            action=JobAction.SKIP,
+            test_type=test_type,
+            test_type_reason="host-asan tests are not part of presubmit",
+        )
 
     build_pytorch_action = JobAction.RUN if ci_inputs.build_pytorch else JobAction.SKIP
     build_jax_action = JobAction.RUN if ci_inputs.build_jax else JobAction.SKIP
@@ -1669,25 +1698,17 @@ def _expand_build_config_for_platform(
                 )
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
+        # host-asan tests run on the gfx90a runner for submodule bumps.
+        # They are not part of presubmit, and they do not use the
+        # mi325/mi350 sandbox pools. See ROCm/TheRock#9366.
         if build_variant.startswith("host-asan"):
-            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: host-asan tests only run on nightly, "
-                    f"disabling tests"
-                )
-            elif "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info["test-runs-on-sandbox"]
-                print(
-                    f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
-                )
+            if family_name == "gfx90a" and not ci_inputs.is_pull_request:
+                print(f"  {family_name}: host-asan tests use {test_runs_on}")
             else:
                 test_runs_on = ""
                 print(
-                    f"  {family_name}: no host-asan sandbox runner available, "
-                    f"disabling tests"
+                    f"  {family_name}: host-asan tests run on gfx90a outside "
+                    f"presubmit, disabling tests"
                 )
         elif "asan" in build_variant:
             # Only run full ASAN tests on scheduled or workflow_dispatch runs
@@ -1731,6 +1752,27 @@ def _expand_build_config_for_platform(
         # trigger matches.
         # Skip trigger-based gating for test-only families (ci:test:gfx*) - they
         # explicitly request tests regardless of trigger type.
+        elif (
+            test_runs_on
+            and build_variant.startswith("host-asan")
+            and family_name == "gfx90a"
+        ):
+            # gfx90a's tests_on_trigger is nightly-only so release tests stay
+            # off the postsubmit path. host-asan tests run on gfx90a for
+            # submodule bumps (and nightly or manual runs), not presubmit.
+            current_triggers = _get_current_triggers(ci_inputs, git_context)
+            allowed = {"submodule_bump", "nightly"}
+            if ci_inputs.is_workflow_dispatch or current_triggers & allowed:
+                print(
+                    f"  {family_name}: host-asan tests enabled "
+                    f"({current_triggers or {'workflow_dispatch'}})"
+                )
+            else:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: host-asan tests disabled "
+                    f"(current={current_triggers})"
+                )
         elif test_runs_on and family_name not in test_only_families:
             should_run, reason = _should_run_tests_for_family(
                 platform_info, ci_inputs, git_context
@@ -1988,21 +2030,11 @@ def expand_build_configs(
     #            env var in setup_multi_arch.yml
     # =========================================================================
     all_families = _apply_external_family_overrides(all_families)
-    build_variant = ci_inputs.build_variant
-    # ASAN variant selection:
-    # 1. ci:asan label -> asan (explicit full ASAN, highest priority)
-    # 2. ci:host-asan label -> host-asan (explicit)
-    # 3. push/pull_request events -> host-asan (default for pre/postsubmit)
-    # 4. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
-    if build_variant == "asan":
-        if "ci:asan" in ci_inputs.pr_labels:
-            print("  Using full asan variant (ci:asan label)")
-        elif "ci:host-asan" in ci_inputs.pr_labels:
-            build_variant = "host-asan"
-            print("  Using host-asan variant (ci:host-asan label)")
-        elif ci_inputs.is_push or ci_inputs.is_pull_request:
-            build_variant = "host-asan"
-            print("  Using host-asan variant (push/pull_request default)")
+    build_variant = select_asan_build_variant(ci_inputs)
+    if build_variant != ci_inputs.build_variant:
+        print(f"  Using {build_variant} variant")
+    elif build_variant == "asan" and "ci:asan" in ci_inputs.pr_labels:
+        print("  Using full asan variant (ci:asan label)")
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None

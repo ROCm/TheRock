@@ -187,7 +187,8 @@ all_build_variants = {
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
         },
-        # host ASAN builds are run on nightly, with intent to run on presubmit and postsubmit
+        # host ASAN builds run on gfx90a. Tests run there on submodule bumps.
+        # They are not a presubmit variant. See ROCm/TheRock#9366.
         # host ASAN detects memory errors on host code (excluding kernel binaries), while ASAN sanitizes everything
         "host-asan": {
             "build_variant_label": "host-asan",
@@ -281,8 +282,6 @@ amdgpu_family_info_matrix = {
                 "release",
                 "asan",
                 "asan-debug",
-                "host-asan",
-                "host-asan-debug",
                 "tsan",
             ],
             "builds_on_trigger": [
@@ -410,14 +409,7 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "linux-mi455-gpu-rocm",
             "family": "gfx125X-dcgpu",
             "fetch-gfx-targets": ["gfx1250"],
-            # gfx1250 has xnack enabled by default and is not in the
-            # gfx942/gfx950 xnack+ munging list in therock_sanitizers.cmake,
-            # so GPU_TARGETS stays plain "gfx1250" for these variants.
-            "build_variants": [
-                "release",
-                "host-asan",
-                "host-asan-debug",
-            ],
+            "build_variants": ["release"],
             "builds_on_trigger": [
                 "presubmit",
                 "postsubmit",
@@ -438,7 +430,15 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "linux-gfx90a-1gpu-ossci-rocm",
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
-            "build_variants": ["release", "asan-debug"],
+            # host-asan is built here for postsubmit and submodule bumps.
+            # Tests use this family's runner when a submodule changes.
+            # gfx90a is not in the presubmit trigger set. See ROCm/TheRock#9366.
+            "build_variants": [
+                "release",
+                "asan-debug",
+                "host-asan",
+                "host-asan-debug",
+            ],
             "builds_on_trigger": [
                 "postsubmit",
                 "submodule_bump",
@@ -473,8 +473,6 @@ amdgpu_family_info_matrix = {
                 "release",
                 "asan",
                 "asan-debug",
-                "host-asan",
-                "host-asan-debug",
                 "tsan",
             ],
             "builds_on_trigger": [
