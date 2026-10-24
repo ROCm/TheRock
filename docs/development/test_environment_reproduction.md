@@ -4,13 +4,24 @@ This guide explains how to reproduce test failures from CI locally.
 
 ## Quick Start (Automated)
 
-The easiest way to reproduce a test failure is using the `reproduce_test_failure.py`
-script, which automates the entire setup process.
+The easiest way to reproduce a test failure is to copy the commands printed in
+the failed CI test job. They use `reproduce_test_failure.py` to set up the
+environment and include the tested source commit and, on Linux, the selected
+container image. Run them in Bash (Git Bash on Windows). For example, on Linux:
 
 ```bash
-git clone https://github.com/ROCm/TheRock.git
+git clone https://github.com/{SOURCE_REPOSITORY}.git TheRock
 cd TheRock
-python build_tools/github_actions/reproduce_test_failure.py --run-id {CI_RUN_ID} --repository {GITHUB_REPO} --amdgpu-family {GPU_FAMILY} --test-script "{TEST_SCRIPT}"
+git fetch origin {SOURCE_SHA}
+git checkout --detach {SOURCE_SHA}
+python build_tools/github_actions/reproduce_test_failure.py \
+    --run-id {CI_RUN_ID} \
+    --repository {GITHUB_REPO} \
+    --source-repository {SOURCE_REPOSITORY} \
+    --source-sha {SOURCE_SHA} \
+    --container-image {CI_IMAGE} \
+    --amdgpu-family {GPU_FAMILY} \
+    --test-script "{TEST_SCRIPT}"
 ```
 
 Options:
@@ -18,7 +29,10 @@ Options:
 - `--setup-only`: Set up the environment and drop into a shell without running
   the test
 
-When a test fails in CI, the reproduction command is printed in the job output.
+The printed command also includes the CI checkout ref when one is available. If
+fetching a PR merge commit by SHA fails, use the printed fetch fallback.
+`--container-image` applies only to Linux. A manually invoked helper defaults
+to the moving `:latest` image unless an image is supplied.
 
 ## Linux
 
@@ -27,11 +41,15 @@ from TheRock.
 
 ### Docker Image
 
-The base image is available at:
+The default image is available at:
 
 ```
 ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
 ```
+
+For a CI failure, use the image reference printed by the job. The default and
+current component images are pinned by digest; a caller can supply another
+reference. Using `:latest` can select a different image.
 
 ### Manual Steps
 
@@ -43,11 +61,13 @@ docker run -it \
     --group-add video \
     --device /dev/kfd \
     --device /dev/dri \
-    ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest /bin/bash
+    {CI_IMAGE} /bin/bash
 
 # Inside the container:
 curl -LsSf https://astral.sh/uv/install.sh | bash && source $HOME/.local/bin/env
-git clone https://github.com/ROCm/TheRock.git && cd TheRock
+git clone https://github.com/{SOURCE_REPOSITORY}.git TheRock && cd TheRock
+git fetch origin {SOURCE_SHA}
+git checkout --detach {SOURCE_SHA}
 uv venv .venv && source .venv/bin/activate
 uv pip install -r requirements-test.txt
 GITHUB_REPOSITORY={GITHUB_REPO} python build_tools/install_rocm_from_artifacts.py \
@@ -99,8 +119,10 @@ irm https://astral.sh/uv/install.ps1 | iex
 $env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')
 
 # Clone and setup
-git clone https://github.com/ROCm/TheRock.git
+git clone https://github.com/{SOURCE_REPOSITORY}.git TheRock
 Set-Location TheRock
+git fetch origin {SOURCE_SHA}
+git checkout --detach {SOURCE_SHA}
 uv venv .venv
 .venv\Scripts\Activate.ps1
 uv pip install -r requirements-test.txt
@@ -122,13 +144,20 @@ python build_tools/github_actions/test_executable_scripts/test_rocblas.py
 
 ## Parameters
 
-| Parameter          | Description                                                                                                                                            |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `CI_RUN_ID`        | GitHub Actions run ID (e.g., from `https://github.com/ROCm/TheRock/actions/runs/16948046392` → `16948046392`)                                          |
-| `GPU_FAMILY`       | LLVM target name (e.g., `gfx94X-dcgpu`, `gfx1151`, `gfx110X-all`)                                                                                      |
-| `GITHUB_REPO`      | Repository where the CI run was executed (e.g., `ROCm/TheRock`, `ROCm/rocm-libraries`)                                                                 |
-| `ADDITIONAL_FLAGS` | Optional flags for `install_rocm_from_artifacts.py`. See [installing_artifacts.md](installing_artifacts.md#component-selection) for available options. |
-| `TEST_SCRIPT`      | The test command to run (e.g., `python build_tools/github_actions/test_executable_scripts/test_rocblas.py`)                                            |
+| Parameter           | Description                                                                                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CI_RUN_ID`         | GitHub Actions run ID (e.g., from `https://github.com/ROCm/TheRock/actions/runs/16948046392` → `16948046392`)                                          |
+| `GPU_FAMILY`        | LLVM target name (e.g., `gfx94X-dcgpu`, `gfx1151`, `gfx110X-all`)                                                                                      |
+| `GITHUB_REPO`       | Repository where the CI run was executed (e.g., `ROCm/TheRock`, `ROCm/rocm-libraries`)                                                                 |
+| `SOURCE_REPOSITORY` | Repository checked out by the test job (e.g., `ROCm/TheRock` or a fork)                                                                                |
+| `SOURCE_SHA`        | Commit in the test job's source checkout when the reproduction command is printed                                                                      |
+| `CI_IMAGE`          | Linux container image reference selected by the test job                                                                                               |
+| `ADDITIONAL_FLAGS`  | Optional flags for `install_rocm_from_artifacts.py`. See [installing_artifacts.md](installing_artifacts.md#component-selection) for available options. |
+| `TEST_SCRIPT`       | The test command to run (e.g., `python build_tools/github_actions/test_executable_scripts/test_rocblas.py`)                                            |
+
+The helper reproduces the source revision, selected container image, artifact
+run, and test command. The local GPU, kernel, runner configuration, and transient
+node state can still differ from the CI machine.
 
 ## Test Scripts
 
