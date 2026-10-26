@@ -138,16 +138,6 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
-  NAME HIP_HRR_CAPTURE
-  DEFAULT_VALUE OFF
-  DESCRIPTION "Compile HIP Record and Replay capture into amdhip64 (CI and testing builds only)"
-  CPP_DEFINES
-    HIP_HRR_CAPTURE_ENABLED=1
-  SUB_PROJECTS
-    hip-clr
-)
-
-therock_declare_flag(
   NAME HSA_HOTSWAP_DEFAULT_ON
   DEFAULT_VALUE ON
   DESCRIPTION "Enable automatic ROCr hotswap loading by default when HSA_HOTSWAP_ENABLE is unset"

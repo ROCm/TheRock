@@ -375,14 +375,8 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
         "-DHRR_BUILD_PLAYBACK=ON"
         "-DHRR_BUILD_TESTS=OFF"
         "-DHIP_PLATFORM=amd"
-      BUILD_DEPS
-        rocm-cmake
       RUNTIME_DEPS
         hip-clr
-      INTERFACE_LINK_DIRS
-        "lib"
-      INTERFACE_INSTALL_RPATH_DIRS
-        "lib"
     )
     therock_cmake_subproject_glob_c_sources(hrr SUBDIRS .)
     therock_cmake_subproject_activate(hrr)

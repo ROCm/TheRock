@@ -133,16 +133,6 @@
       }
     },
     {
-      "name": "linux-release-hrr-capture",
-      "displayName": "Linux release build with HRR capture",
-      "description": "Ninja generator, default compiler, Release, with HIP Record and Replay capture compiled into amdhip64 (CI and testing only)",
-      "generator": "Ninja",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "THEROCK_FLAG_HIP_HRR_CAPTURE": "ON"
-      }
-    },
-    {
       "name": "windows-base",
       "displayName": "Windows base preset",
       "description": "Ninja generator, MSVC (cl.exe), x64 architecture",
