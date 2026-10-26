@@ -133,11 +133,14 @@ jobs:
 
       - name: Set MANYLINUX_IMAGE environment variable
         shell: bash
+        env:
+          INPUT_IMAGE_REF: ${{ inputs.image_ref }}
+          RESOLVED_IMAGE_REF: ${{ steps.resolve_image.outputs.image_ref }}
         run: |
-          if [[ -n "${{ inputs.image_ref }}" ]]; then
-            echo "MANYLINUX_IMAGE=${{ inputs.image_ref }}" >> $GITHUB_ENV
+          if [[ -n "${INPUT_IMAGE_REF}" ]]; then
+            echo "MANYLINUX_IMAGE=${INPUT_IMAGE_REF}" >> $GITHUB_ENV
           else
-            echo "MANYLINUX_IMAGE=${{ steps.resolve_image.outputs.image_ref }}" >> $GITHUB_ENV
+            echo "MANYLINUX_IMAGE=${RESOLVED_IMAGE_REF}" >> $GITHUB_ENV
           fi
 
       - name: Setting up Python
