@@ -2279,6 +2279,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     event_name="schedule",
                     build_variant="asan",
                     external_repo='{"repository":"ROCm/rocm-libraries","ref":"main"}',
+                    repository_name="rocm-libraries",
                 ),
                 cm.GitContext.from_external_repo("rocm-libraries"),
                 "linux-release-asan",
@@ -2289,6 +2290,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     event_name="schedule",
                     build_variant="asan",
                     external_repo='{"repository":"ROCm/rockrel","ref":"main"}',
+                    repository_name="rockrel",
                 ),
                 cm.GitContext.from_external_repo("rockrel"),
                 "linux-release-asan-debug",
@@ -2301,6 +2303,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     event_name="pull_request",
                     build_variant="asan",
                     external_repo='{"repository":"ROCm/rocm-systems","ref":"main"}',
+                    repository_name="rocm-systems",
                 ),
                 cm.GitContext.from_external_repo("rocm-systems"),
                 None,
@@ -2311,6 +2314,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     event_name="pull_request",
                     build_variant="asan",
                     external_repo='{"repository":"ROCm/rocm-libraries","ref":"main"}',
+                    repository_name="rocm-libraries",
                 ),
                 cm.GitContext.from_external_repo("rocm-libraries"),
                 None,
@@ -3767,6 +3771,7 @@ class TestResolveSanitizerVariant(unittest.TestCase):
             base_ref=None,
             build_variant="asan",
             external_repo='{"repository":"ROCm/rocm-libraries","ref":"main"}',
+            repository_name="rocm-libraries",
         )
         git_context = cm.GitContext.from_external_repo("rocm-libraries")
         self.assertEqual(cm._resolve_sanitizer_variant(ci_inputs, git_context), "asan")
@@ -3780,6 +3785,7 @@ class TestResolveSanitizerVariant(unittest.TestCase):
             base_ref=None,
             build_variant="asan",
             external_repo='{"repository":"ROCm/rockrel","ref":"main"}',
+            repository_name="rockrel",
         )
         git_context = cm.GitContext.from_external_repo("rockrel")
         self.assertEqual(
@@ -3846,6 +3852,7 @@ class TestResolveSanitizerVariant(unittest.TestCase):
             base_ref=None,
             build_variant="asan",
             external_repo='{"repository":"ROCm/unknown-repo","ref":"main"}',
+            repository_name="unknown-repo",
         )
         git_context = cm.GitContext.from_external_repo("unknown-repo")
         self.assertIsNone(cm._resolve_sanitizer_variant(ci_inputs, git_context))

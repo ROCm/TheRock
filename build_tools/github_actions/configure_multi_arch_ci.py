@@ -434,9 +434,7 @@ class CIInputs:
                 json.loads(external_repo_raw).get("repository", "").split("/")[-1]
             )
         else:
-            repository_name = (
-                os.environ.get("GITHUB_REPOSITORY", "").split("/")[-1]
-            )
+            repository_name = os.environ.get("GITHUB_REPOSITORY", "").split("/")[-1]
 
         inputs = CIInputs(
             run_id=run_id,
@@ -879,7 +877,9 @@ def should_skip_ci(
             skip_ci_patterns = load_skip_ci_patterns_for_external_repo(skip_ci_config)
 
         # Evaluate skip logic
-        if not is_ci_run_required(changed_files, skip_ci_patterns, ci_inputs.repository_name):
+        if not is_ci_run_required(
+            changed_files, skip_ci_patterns, ci_inputs.repository_name
+        ):
             print("  External repo build: CI can be skipped")
             return True
 
