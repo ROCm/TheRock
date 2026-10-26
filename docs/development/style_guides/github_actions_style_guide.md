@@ -285,6 +285,36 @@ to supply executable code. Document that assumption beside a local suppression:
     cmake -B build ${{ inputs.cmake_args }}
 ```
 
+#### Security - Suppress unpinned-images findings for resolved references
+
+Container image references resolved from `dockerfiles/docker_images.json` at
+run time (through `resolve-docker-images.yml` or `get_image_ref()`) are
+digest-pinned in the JSON file, but zizmor cannot see through the
+`needs.*.outputs` or `fromJSON(...)` expression that carries the reference
+into a `container.image` field. It reports
+[unpinned-images](https://docs.zizmor.sh/audits/#unpinned-images) at low
+confidence even though the underlying image is pinned. Suppress these
+findings with `# zizmor: ignore[unpinned-images]` and a short comment pointing
+back to the registry file.
+
+```yaml
+jobs:
+  resolve-images:
+    uses: ./.github/workflows/resolve-docker-images.yml
+    with:
+      image_name: no_rocm_image_ubuntu24_04
+
+  test:
+    needs: [resolve-images]
+    container:
+      # Pinned by dockerfiles/docker_images.json; resolved at run time.
+      image: ${{ needs.resolve-images.outputs.image_ref }} # zizmor: ignore[unpinned-images]
+```
+
+**Exceptions:** If an image reference is genuinely unpinned (a bare tag, or a
+value that didn't come from `docker_images.json`), fix the pin instead of
+suppressing the finding.
+
 #### Security - Disable checkout credential persistence
 
 Set `persist-credentials: false` on `actions/checkout` unless later Git
