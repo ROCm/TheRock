@@ -1,0 +1,45 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Cherry-pick to release
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: Target ROCm repository
+        required: true
+        type: choice
+        options:
+          - TheRock
+          - rocm-systems
+          - rocm-libraries
+      commits:
+        description: Commit SHAs from the target repository's default branch
+        required: true
+        type: string
+      release_branch:
+        description: Target release branch
+        required: true
+        type: string
+      jira_id:
+        description: JIRA issue key (required for non-BKC release branches)
+        required: false
+        type: string
+      dry_run:
+        description: Validate and build commits without pushing or opening a PR
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  register:
+    name: Register workflow
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Registration placeholder
+        run: echo "Cherry-pick to release workflow is not enabled yet."
