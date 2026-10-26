@@ -257,6 +257,9 @@ _rocgdb_common = {
 # A component's "skip_stages" lists build stages whose absence excludes the test.
 # If any listed stage is in SKIP_STAGES, the component is skipped. Reused stages
 # still supply artifacts and do not exclude tests. Omit the field for no stage gate.
+#
+# "skip_on_asan": True drops a component from ASAN builds (any BUILD_VARIANT containing
+# "asan"), for tests that cannot work under ASAN.
 
 test_matrix = {
     # Sanity runs first when compiler-runtime artifacts are available.
@@ -783,6 +786,8 @@ test_matrix = {
         "platform": ["linux"],
         "linux_cpu_runner": True,
         "test_types": ["standard", "comprehensive", "full"],
+        # StaticFDBSync is compiled out under ASAN.
+        "skip_on_asan": True,
         "include_family": {
             "linux": ["gfx942", "gfx950"],
         },
@@ -1304,6 +1309,7 @@ def run():
     test_type = os.getenv("TEST_TYPE", "standard")
     test_labels = _parse_test_labels(os.getenv("TEST_LABELS") or "[]")
     build_variant = os.getenv("BUILD_VARIANT", "release")
+    is_asan_build = "asan" in build_variant
     skip_stages = os.getenv("SKIP_STAGES", "").split(",")
 
     # Check for ci:run-multi-gpu label to force multi-GPU tests
@@ -1398,6 +1404,12 @@ def run():
         if excluded_stages:
             logging.info(
                 f"Excluding {job_name}: stages {sorted(excluded_stages)} are skipped"
+            )
+            continue
+
+        if is_asan_build and test_matrix[key].get("skip_on_asan"):
+            logging.info(
+                f"Excluding job {job_name}: skip_on_asan on build variant {build_variant}"
             )
             continue
 
@@ -1597,7 +1609,6 @@ def run():
     # "asan-debug", and "host-asan-debug".
     logging.info("")
     logging.info("Assigning runners to requested jobs...")
-    is_asan_build = "asan" in build_variant
     components_with_runners = []
     for component in all_components:
         job_name = component.get("job_name", "unknown")

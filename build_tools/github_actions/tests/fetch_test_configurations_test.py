@@ -512,6 +512,38 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_miopen_dbsync_excluded_on_other_families(self):
         self.assertIsNone(self._dbsync_job("gfx120X-all", False, "gfx1200"))
 
+    def test_miopen_dbsync_not_scheduled_on_asan_builds(self):
+        # StaticFDBSync is compiled out under ASAN, so the job must not be scheduled.
+        for build_variant in ("asan", "host-asan", "asan-debug", "host-asan-debug"):
+            for families, gfx_target in (
+                ("gfx94X-dcgpu", "gfx942"),
+                ("gfx950-dcgpu", "gfx950"),
+            ):
+                with self.subTest(build_variant=build_variant, families=families):
+                    os.environ["BUILD_VARIANT"] = build_variant
+                    self.assertIsNone(self._dbsync_job(families, False, gfx_target))
+
+    def test_miopen_dbsync_still_scheduled_on_non_asan_builds(self):
+        for build_variant in (None, "release", "tsan"):
+            with self.subTest(build_variant=build_variant):
+                if build_variant is None:
+                    os.environ.pop("BUILD_VARIANT", None)
+                else:
+                    os.environ["BUILD_VARIANT"] = build_variant
+                self.assertIsNotNone(self._dbsync_job("gfx94X-dcgpu", False, "gfx942"))
+
+    def test_skip_on_asan_only_drops_flagged_components_on_asan_builds(self):
+        self._inject_job("asan-incompatible", skip_on_asan=True)
+        os.environ["BUILD_VARIANT"] = "asan"
+        self.assertNotIn("asan-incompatible", self._selected_names())
+        os.environ["BUILD_VARIANT"] = "release"
+        self.assertIn("asan-incompatible", self._selected_names())
+
+    def test_asan_build_still_schedules_unflagged_components(self):
+        self._inject_job("asan-compatible")
+        os.environ["BUILD_VARIANT"] = "asan"
+        self.assertIn("asan-compatible", self._selected_names())
+
     def test_gpu_components_not_scheduled_on_gated_gfx950(self):
         # The CPU lane must not leak GPU-requiring components onto gated gfx950.
         os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync,rocblas"
