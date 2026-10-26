@@ -30,6 +30,7 @@ import sys
 from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, build_packages
+from _therock_utils.sdk_targets import group_package_targets, package_owner
 
 
 def _amdgpu_families_arg(value: str) -> list[str] | None:
@@ -202,7 +203,7 @@ def validate_required_dist_packages(
         windows_targets=windows_targets,
         platform_name=platform_name,
     )
-    for target in expected_targets or []:
+    for target in group_package_targets(expected_targets or []):
         required_patterns.append(f"rocm_sdk_device_{target}-{version}-*.whl")
 
     if _has_devel_artifacts(artifacts):
@@ -290,6 +291,7 @@ def run(args: argparse.Namespace):
                 "include/rocprofiler-systems/**",
                 "lib/librocprof-sys*",
                 "lib/python/site-packages/rocprofsys/**",
+                "lib/python*/site-packages/rocprof_trace_decoder/**",
                 "lib/rocprofiler-systems/**",
                 "libexec/rocprofiler-systems/**",
                 "share/**/rocprofiler-systems/**",
@@ -302,7 +304,7 @@ def run(args: argparse.Namespace):
         includes=PROFILER_WHEEL_INCLUDES,
     )
 
-    if profiler_artifacts.artifact_names:
+    if _artifact_catalog_has_matches(profiler_artifacts):
         profiler = PopulatedDistPackage(params, logical_name="profiler")
         profiler.rpath_dep(core, "lib")
         profiler.rpath_dep(core, "lib/llvm/lib")
@@ -357,6 +359,11 @@ def run(args: argparse.Namespace):
     )
 
 
+def _artifact_catalog_has_matches(artifacts: ArtifactCatalog) -> bool:
+    """Return whether an artifact catalog has at least one included file."""
+    return any(True for _ in artifacts.pm.matches())
+
+
 def _run_kpack_split(
     args: argparse.Namespace,
     params: Parameters,
@@ -389,16 +396,16 @@ def _run_kpack_split(
     # Per-ISA device wheels. Device artifacts overlay into
     # _rocm_sdk_libraries/lib/ and may include ELF .so files (per-arch
     # MIOpen CK kernels) with dynamic deps on core.
-    # Group by base target (strip xnack suffix) to merge variants like
-    # 'gfx950' and 'gfx950:xnack+' into a single device package.
-    all_base_targets = sorted(set(t.split(":")[0] for t in params.all_target_families))
-    for target in all_base_targets:
+    # Group supplied members before construction, preserving artifact identities.
+    owner_groups = group_package_targets(sorted(params.all_target_families))
+    for target, members in owner_groups.items():
         dev = PopulatedDistPackage(params, logical_name="device", target_family=target)
         dev.rpath_dep(core, "lib")
         dev.rpath_dep(core, "lib/rocm_sysdeps/lib")
         dev.populate_device_files(
             params.filter_artifacts(
-                filter=functools.partial(device_artifact_filter, target),
+                filter=lambda an: an.target_family in members
+                and device_artifact_filter(target, an),
             )
         )
         if args.build_packages:
@@ -617,19 +624,21 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
 
 
 def profiler_artifact_filter(an: ArtifactName) -> bool:
-    return an.name in [
+    profiler_tools = an.name in [
+        "profiler-hub",
         "rocprofiler-compute",
         "rocprofiler-systems",
     ] and an.component in ["lib", "run"]
+    trace_decoder_python = an.name == "rocprofiler-sdk" and an.component == "lib"
+    return profiler_tools or trace_decoder_python
 
 
 # File-path allowlist for the rocm-profiler wheel, applied on top of
-# profiler_artifact_filter(). rocprofiler-systems' own ProfilerHub.cmake
-# vendors profiler-hub as a runtime .so dependency (NEEDED libprofiler-hub.so.0);
-# it stages into the same lib/ dir as librocprof-sys* but needs its own glob
-# entry here, or it gets silently dropped from the wheel.
+# profiler_artifact_filter(); profiler-hub must pass both gates or
+# libprofiler-hub.so.0 is silently dropped despite librocprof-sys* needing it.
 PROFILER_WHEEL_INCLUDES = [
     # rocprofiler-systems
+    "bin/rocsys",
     "bin/rocprof-sys-*",
     "include/rocprofiler-systems/**",
     "lib/librocprof-sys*",
@@ -643,21 +652,17 @@ PROFILER_WHEEL_INCLUDES = [
     "libexec/rocprofiler-compute/**",
     "lib/rocprofiler-compute/**",
     "share/**/rocprofiler-compute/**",
+    # rocprof-trace-decoder Python API
+    "lib/python*/site-packages/rocprof_trace_decoder/**",
 ]
 
 
 def device_artifact_filter(target: str, an: ArtifactName) -> bool:
-    """Selects per-ISA library artifacts for a specific GFX target.
+    """Select supplied device artifacts belonging to a package owner.
 
-    Unlike libraries_artifact_filter, this only matches the specific ISA target
-    (no generic). Used in kpack-split mode for device wheel population.
-
-    Matches both the base target and any xnack variants (e.g., target='gfx950'
-    matches artifacts for both 'gfx950' and 'gfx950:xnack+'), merging them into
-    a single device package.
+    Does not select generic artifacts or expand requested build targets.
     """
-    # Strip xnack suffix from artifact's target_family for comparison
-    artifact_base_target = an.target_family.split(":")[0]
+    artifact_base_target = package_owner(an.target_family)
     return (
         an.name
         in [
@@ -674,7 +679,7 @@ def device_artifact_filter(target: str, an: ArtifactName) -> bool:
             "rccl",
         ]
         and an.component == "lib"
-        and artifact_base_target == target
+        and artifact_base_target == package_owner(target)
     )
 
 

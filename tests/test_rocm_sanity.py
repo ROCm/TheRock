@@ -9,8 +9,10 @@ import platform
 import pytest
 import re
 import shlex
+import shutil
 import subprocess
 import sys
+import tempfile
 
 THIS_DIR = Path(__file__).resolve().parent
 
@@ -29,11 +31,9 @@ def is_windows():
     return "windows" == platform.system().lower()
 
 
-def run_command(command: list[str], cwd=None):
+def run_command(command: list[str], cwd=None, env: dict[str, str] | None = None):
     logger.info(f"++ Run [{cwd}]$ {shlex.join(command)}")
-    process = subprocess.run(
-        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True
-    )
+    process = subprocess.run(command, capture_output=True, cwd=cwd, text=True, env=env)
     if process.returncode != 0:
         logger.error(f"Command failed!")
         logger.error("command stdout:")
@@ -55,7 +55,94 @@ def rocm_info_output():
         return None
 
 
+@pytest.fixture(scope="session")
+def clinfo_output() -> str:
+    env = os.environ.copy()
+    if is_windows():
+        vendor = THEROCK_BIN_DIR / "amdocl64.dll"
+        if not vendor.is_file():
+            raise FileNotFoundError(f"OpenCL vendor runtime not found: {vendor}")
+        env["PATH"] = str(THEROCK_BIN_DIR) + os.pathsep + env.get("PATH", "")
+        # The system ICD loader can fall back to a registered driver. Load the
+        # built vendor directly via clinfo's application-local OpenCL.dll.
+        # amdocl64 exports the OpenCL entry points used by clinfo.
+        with tempfile.TemporaryDirectory(prefix="therock-clinfo-") as directory:
+            clinfo = Path(directory) / "clinfo.exe"
+            shutil.copy2(THEROCK_BIN_DIR / "clinfo.exe", clinfo)
+            shutil.copy2(vendor, Path(directory) / "OpenCL.dll")
+            # Keep Comgr beside the vendor so CLR cannot pick up an older
+            # driver-installed DLL from System32 before searching PATH.
+            shutil.copy2(
+                THEROCK_BIN_DIR / "amd_comgr.dll",
+                Path(directory) / "amd_comgr.dll",
+            )
+            process = run_command([str(clinfo)], cwd=directory, env=env)
+            # clinfo can exit successfully even when device initialization fails.
+            if process.stderr:
+                logger.info("clinfo stderr:\n%s", process.stderr)
+            return process.stdout
+
+    lib_dir = THEROCK_BIN_DIR.parent / "lib"
+    vendor = lib_dir / "opencl" / "libamdocl64.so"
+    if not vendor.is_file():
+        raise FileNotFoundError(f"OpenCL vendor runtime not found: {vendor}")
+
+    # Support both the distro ocl-icd loader and the Khronos loader without
+    # depending on system-wide ICD registration.
+    env["OCL_ICD_VENDORS"] = str(vendor)
+    env["OCL_ICD_FILENAMES"] = str(vendor)
+    library_dirs = (lib_dir, lib_dir / "llvm" / "lib", lib_dir / "rocm_sysdeps" / "lib")
+    library_path = [str(path) for path in library_dirs if path.is_dir()]
+    if env.get("LD_LIBRARY_PATH"):
+        library_path.append(env["LD_LIBRARY_PATH"])
+    env["LD_LIBRARY_PATH"] = os.pathsep.join(library_path)
+
+    return run_command([str(THEROCK_BIN_DIR / "clinfo")], env=env).stdout
+
+
 class TestROCmSanity:
+    @pytest.mark.skipif(
+        is_asan(),
+        reason="runtime GPU enumeration is flaky under ASAN, see TheRock#3312",
+    )
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES and "gfx125X-dcgpu" in AMDGPU_FAMILIES,
+        reason="clinfo test is disabled for gfx125X-dcgpu due to hangs",
+    )
+    @pytest.mark.parametrize(
+        "to_search",
+        [
+            r"Platform\s*Name:\s*AMD Accelerated Parallel Processing",
+            r"Device\s*Type:\s*CL_DEVICE_TYPE_GPU",
+            r"Name:\s*gfx",
+        ],
+        ids=[
+            "clinfo - AMD Platform Search",
+            "clinfo - GPU Device Type Search",
+            "clinfo - GFX Name Search",
+        ],
+    )
+    def test_clinfo_output(self, clinfo_output: str, to_search: str):
+        check.is_not_none(
+            re.search(to_search, clinfo_output),
+            f"Failed to search for {to_search} in clinfo output:\n{clinfo_output}",
+        )
+
+    def test_hipify_version(self):
+        executable = "hipify-clang.exe" if is_windows() else "hipify-clang"
+        # Exercise the installed tool's library search paths, not the test runner's.
+        env = os.environ.copy()
+        env.pop("LD_LIBRARY_PATH", None)
+        env.pop("LD_PRELOAD", None)
+        process = subprocess.run(
+            [str(THEROCK_BIN_DIR / executable), "--version"],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        assert process.returncode == 0, process.stdout + process.stderr
+        assert "LLVM version" in process.stdout
+
     @pytest.mark.skipif(is_windows(), reason="rocminfo is not supported on Windows")
     # TODO(#3312): Re-enable once rocminfo test is fixed for ASAN builds
     @pytest.mark.skipif(
@@ -87,17 +174,12 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in rocminfo output",
         )
 
-    # TODO(#4755): Re-enable test for windows once offload-arch.exe is fixed
-    @pytest.mark.skipif(
-        is_windows(),
-        reason="Windows offload-arch.exe is not retrieving correct data, ignoring test",
-    )
     # TODO(#7458): Re-enable once gfx1250 binary translator supports this kernel code pattern
     @pytest.mark.skipif(
         AMDGPU_FAMILIES and "gfx125X-dcgpu" in AMDGPU_FAMILIES,
         reason="gfx1250 binary translator does not yet support this kernel code pattern, see #7458",
     )
-    def test_hip_printf(self):
+    def test_hip_vector_add(self):
         platform_executable_suffix = ".exe" if is_windows() else ""
 
         # Look up offload arch, e.g. gfx1100, for explicit `--offload-arch`.
@@ -132,11 +214,26 @@ class TestROCmSanity:
         ), f"Expected offload-arch to return gfx####, got:\n{process.stdout}"
 
         # Compiling .cpp file using amdclang++
+        # On Linux, bin/amdclang++ is a symlink to lib/llvm/bin/amdclang++.
+        # On Windows, the symlink is not created, so use lib/llvm/bin/ directly.
         rocm_path = (THEROCK_BIN_DIR / "..").resolve()
         hip_check_executable_file = f"hip_check{platform_executable_suffix}"
+        if is_windows():
+            amdclangxx_path = str(
+                (
+                    THEROCK_BIN_DIR
+                    / ".."
+                    / "lib"
+                    / "llvm"
+                    / "bin"
+                    / f"amdclang++{platform_executable_suffix}"
+                ).resolve()
+            )
+        else:
+            amdclangxx_path = f"{THEROCK_BIN_DIR}/amdclang++"
         run_command(
             [
-                f"{THEROCK_BIN_DIR}/amdclang++",
+                amdclangxx_path,
                 f"--hip-path={rocm_path}",
                 f"--hip-device-lib-path={rocm_path}/lib/llvm/amdgcn/bitcode",
                 "-x",
@@ -152,8 +249,7 @@ class TestROCmSanity:
         )
 
         # Running and checking the executable
-        platform_executable_prefix = "./" if not is_windows() else ""
-        hip_check_executable = f"{platform_executable_prefix}hip_check"
+        hip_check_executable = str(THEROCK_BIN_DIR / hip_check_executable_file)
         process = run_command([hip_check_executable], cwd=str(THEROCK_BIN_DIR))
         check.equal(process.returncode, 0)
         check.greater(

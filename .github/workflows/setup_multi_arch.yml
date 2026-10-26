@@ -28,13 +28,9 @@ on:
         description: 'Comma-separated Windows GPU families. "all" = all, "none" or empty = skip.'
         type: string
         default: ""
-      linux_test_labels:
-        description: "Comma-separated list of test labels for Linux."
+      pr_labels:
         type: string
-        default: ""
-      windows_test_labels:
-        description: "Comma-separated list of test labels for Windows."
-        type: string
+        description: "Comma-separated PR labels (e.g. ci:skip-pytorch,test:rocprim,test_filter:quick)."
         default: ""
       prebuilt_stages:
         description: "Comma-separated build stages to skip (artifacts copied from baseline_run_id instead)."
@@ -65,7 +61,8 @@ on:
           and baseline_run_id, and performs no reuse analysis or baseline lookup;
           "dry-run" (default) reports what automatic reuse could do while still
           honoring explicit prebuilt_stages; "reuse-stage" applies automatic
-          reuse and also honors explicit prebuilt_stages.
+          reuse and also honors explicit prebuilt_stages. Release branches
+          always use "off", regardless of this input.
         type: string
         default: "dry-run"
       stage_reuse_max_age_hours:
@@ -169,7 +166,7 @@ permissions:
 
 jobs:
   setup:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       enable_build_jobs: ${{ steps.configure.outputs.enable_build_jobs }}
       linux_build_config: ${{ steps.configure.outputs.linux_build_config }}
@@ -185,6 +182,9 @@ jobs:
     env:
       QUARTZ_REPORTING_WORKFLOW: setup_multi_arch.yml
       QUARTZ_WORKFLOW_POSTFIX: "- setup"
+      BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
+      PRERELEASE_VERSION: ${{ inputs.prerelease_version }}
+      EXTERNAL_REPO: ${{ inputs.external_repo }}
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
@@ -200,7 +200,9 @@ jobs:
       - name: Checking out repository
         id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
           # We need the parent commit to do a diff
@@ -208,10 +210,27 @@ jobs:
 
       - name: Checkout CI config
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
+          persist-credentials: false
           repository: ROCm/therock-ci-config
           ref: main
           path: ci-config
+        continue-on-error: true
+
+      # Checkout external repo config (skip-ci-config.toml) for path-based CI skip.
+      # This sparse checkout fetches only the .github directory to minimize checkout time.
+      - name: Checkout external repo config
+        if: inputs.external_repo != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          repository: ${{ fromJSON(inputs.external_repo).repository }}
+          ref: ${{ fromJSON(inputs.external_repo).ref }}
+          path: external-repo-config
+          sparse-checkout: .github
+          sparse-checkout-cone-mode: false
         continue-on-error: true
 
       # Note: the script reads PR labels, the base ref, etc. from the event
@@ -230,8 +249,7 @@ jobs:
           PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
-          LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
-          WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
+          PR_LABELS: ${{ inputs.pr_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BUILD_STAGES: ${{ inputs.build_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
@@ -245,10 +263,10 @@ jobs:
           # For baseline run selection, use repository input (defaults to GITHUB_REPOSITORY).
           # External repos set repository to "ROCm/TheRock" to fetch TheRock baseline runs.
           THEROCK_REPOSITORY: ${{ inputs.repository || github.repository }}
+          THEROCK_CHECKOUT_REF: ${{ inputs.ref }}
           # Token for GitHub API calls (branch history, baseline workflow runs)
           GITHUB_TOKEN: ${{ github.token }}
           # External repo JSON (e.g., {"repository":"ROCm/rocm-libraries","ref":"..."})
-          EXTERNAL_REPO: ${{ inputs.external_repo }}
           CI_CONFIG_PATH: ci-config
           # External repo family overrides allow callers to add/modify GPU family configs
           # (e.g., adding test runners for architectures not enabled in TheRock's default config)
@@ -271,18 +289,22 @@ jobs:
       # buckets, use different ccache namespaces, etc.
       - name: Compute package version
         id: rocm_package_version
+        env:
+          CHECKOUT_COMMIT: ${{ steps.checkout.outputs.commit }}
+          BUILD_VARIANT: ${{ inputs.build_variant }}
         run: |
           python ./build_tools/compute_rocm_package_version.py \
-            --release-type=${{ inputs.release_type }} \
-            --prerelease-version=${{ inputs.prerelease_version }} \
-            --override-git-sha=${{ steps.checkout.outputs.commit }}
+            --release-type="${BUILD_RELEASE_TYPE}" \
+            --prerelease-version="${PRERELEASE_VERSION}" \
+            --override-git-sha="${CHECKOUT_COMMIT}" \
+            --build-variant="${BUILD_VARIANT}"
 
       - name: Detect external repo config
         id: external_repo_config
         if: ${{ inputs.external_repo != '' }}
         run: |
           python ./build_tools/github_actions/detect_external_repo_config.py \
-            --external-repo-json='${{ inputs.external_repo }}'
+            --external-repo-json="${EXTERNAL_REPO}"
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true

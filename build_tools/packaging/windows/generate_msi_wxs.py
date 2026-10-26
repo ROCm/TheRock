@@ -12,8 +12,7 @@ List available packages:
     python generate_msi_wxs.py --list
 
 Generate from CI artifacts (recommended):
-    python generate_msi_wxs.py --package runtime \\
-        --artifacts-url https://therock-nightly-artifacts.s3.amazonaws.com/<run-id>-windows
+    python generate_msi_wxs.py --package runtime --run-id <run-id>
 
 Generate from a local build:
     python generate_msi_wxs.py --package runtime --build build/
@@ -37,23 +36,22 @@ import argparse
 import hashlib
 import json
 import os
+import subprocess
 import sys
-import tarfile
 import urllib.request
 import uuid
-import xml.etree.ElementTree as ET
+
+# Only constructs XML; does not parse input.
+import xml.etree.ElementTree as ET  # nosec B405
 from dataclasses import dataclass, field
 from pathlib import Path
-
-import pyzstd
-import yaml
 
 # Add build_tools/ to sys.path so _therock_utils can be imported.
 BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent.parent
 if str(BUILD_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(BUILD_TOOLS_DIR))
 
-from _therock_utils.artifacts import ArtifactCatalog, ArtifactName, ArtifactPopulator
+from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
 
 
 # ---------------------------------------------------------------------------
@@ -85,9 +83,6 @@ class PackageDef:
     feature_id: str
     feature_title: str
 
-    # Registry key written under HKLM to record the install location.
-    registry_key: str
-
     # One-line description for --list output.
     description: str
 
@@ -99,9 +94,11 @@ class PackageDef:
 
     # DLL filenames to install into the Windows System32 directory as a
     # default-enabled "legacy install" feature (for applications that load
-    # ROCm DLLs from System32 rather than PATH). Each name is resolved against
-    # the extracted artifacts and the _legacy/bin cache fallback. Empty means
-    # the package emits no legacy feature.
+    # ROCm DLLs from System32 rather than PATH). Current runtime DLLs are
+    # resolved from the extracted artifacts; the legacy driver-supplied DLLs
+    # (amdhip64_6.dll, amd_comgr_2.dll) come from the rocm-systems source
+    # checkout (see resolve_legacy_dlls). This script does not fetch any of
+    # them. Empty means the package emits no System32 install feature.
     legacy_system32_dlls: list[str] = None
 
     def __post_init__(self):
@@ -126,7 +123,6 @@ PACKAGES: dict[str, PackageDef] = {
         upgrade_code="C3D4E5F6-A7B8-9012-CDEF-123456789012",
         feature_id="ROCmRuntime",
         feature_title="AMD ROCm Runtime",
-        registry_key="Software\\AMD\\ROCm\\runtime\\{major}.{minor}",
         per_artifact_includes={
             "amd-llvm": ["bin/amd_comgr.dll"],
         },
@@ -154,7 +150,6 @@ PACKAGES: dict[str, PackageDef] = {
         upgrade_code="A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
         feature_id="ROCmCore",
         feature_title="AMD ROCm Core Runtime",
-        registry_key="Software\\AMD\\ROCm\\core\\{major}.{minor}",
     ),
 }
 
@@ -179,6 +174,16 @@ STANDARD_DIR_TOKENS: set[str] = {
     "CommonAppDataFolder",
 }
 
+# The only install root whose protection (admin-write-only ACL) we can vouch for
+# at generate time. Adding a directory to the machine PATH is only safe when that
+# directory is not writable by a lower-privileged user — otherwise the entry
+# becomes a DLL/exe planting slot (CWE-427). ProgramFiles64Folder is the default
+# and is admin-only by default ACL; custom --install-root values (absolute paths,
+# or user-writable tokens like TempFolder/LocalAppDataFolder) have an unknown or
+# user-writable ACL, so the PATH entry is skipped for them. See
+# add_path_registration.
+PROTECTED_DEFAULT_ROOT = "ProgramFiles64Folder"
+
 
 # ---------------------------------------------------------------------------
 # Artifact download, extraction, and file collection
@@ -186,87 +191,52 @@ STANDARD_DIR_TOKENS: set[str] = {
 
 
 def fetch_artifacts(
-    artifacts_url: str,
-    artifact_names: list[str],
-    components: set[str],
+    run_id: str,
     dest_dir: Path,
+    run_github_repo: str | None = None,
 ) -> Path:
-    """Download and extract artifact tarballs from a remote URL into dest_dir.
+    """Fetch generic (host) artifacts for a CI run into dest_dir/artifacts.
 
-    For each (artifact, component) pair, downloads:
-        {artifacts_url}/{artifact}_{component}_generic.tar.zst
-    and extracts it into dest_dir/_extracted/{artifact}_{component}_generic/,
-    preserving the internal layout (basedir paths from artifact_manifest.txt).
-    The artifact_manifest.txt is also written to disk so ArtifactCatalog can
-    read it.
+    Delegates to build_tools/artifact_manager.py (the shared artifact-fetch
+    tool, as build_tarballs.py does) rather than reimplementing download and
+    extraction. It resolves the S3 bucket from the run id, downloads the generic
+    (host) lib-component artifacts, and extracts each archive to
+        dest_dir/artifacts/{name}_{component}_{family}/
+    with an artifact_manifest.txt that ArtifactCatalog reads. The package's
+    ArtifactCatalog filter selects only the artifacts it needs from that set.
 
-    Returns the _extracted/ directory.
+    Downloads and extractions are cached under dest_dir so repeat runs reuse
+    them. Returns the dest_dir/artifacts directory.
     """
-
-    def _open_zst(path: Path):
-        return tarfile.TarFile(fileobj=pyzstd.ZstdFile(path, "rb"), mode="r")
-
-    artifacts_url = artifacts_url.rstrip("/")
-    download_dir = dest_dir / "_downloads"
-    extract_dir = dest_dir / "_extracted"
-    download_dir.mkdir(parents=True, exist_ok=True)
-    extract_dir.mkdir(parents=True, exist_ok=True)
-
-    for artifact_name in artifact_names:
-        for component in sorted(components):
-            filename = f"{artifact_name}_{component}_generic.tar.zst"
-            url = f"{artifacts_url}/{filename}"
-            local_path = download_dir / filename
-
-            if local_path.exists():
-                print(f"  Cached:    {filename}")
-            else:
-                print(f"  Fetching:  {filename}")
-                tmp_path = local_path.with_suffix(".tmp")
-                try:
-                    urllib.request.urlretrieve(url, tmp_path)
-                except urllib.error.HTTPError as e:
-                    tmp_path.unlink(missing_ok=True)
-                    # 404 is expected: not every artifact publishes every
-                    # component (e.g. Windows-only components have no Linux
-                    # tarball). Any other HTTP error is a real failure.
-                    if e.code == 404:
-                        print(f"  Skipped:   {filename} (not found)")
-                        continue
-                    sys.exit(f"Error fetching {url}: HTTP {e.code} {e.reason}")
-                except Exception:
-                    tmp_path.unlink(missing_ok=True)
-                    raise
-                tmp_path.rename(local_path)
-
-            artifact_out = extract_dir / f"{artifact_name}_{component}_generic"
-            manifest_path = artifact_out / "artifact_manifest.txt"
-            already_extracted = artifact_out.exists()
-            if already_extracted and manifest_path.exists():
-                print(f"  Extracted: {filename} (cached)")
-                continue
-            artifact_out.mkdir(parents=True, exist_ok=True)
-            # Read manifest from first tar member and write it to disk so
-            # ArtifactCatalog can find it, then extract the rest of the files.
-            with _open_zst(local_path) as tf:
-                manifest_member = tf.next()
-                if (
-                    manifest_member is None
-                    or manifest_member.name != "artifact_manifest.txt"
-                ):
-                    sys.exit(
-                        f"Archive {filename} missing artifact_manifest.txt as first member"
-                    )
-                manifest_text = tf.extractfile(manifest_member).read().decode()
-                manifest_path.write_text(manifest_text)
-            if already_extracted:
-                print(f"  Manifest:  {filename} (files already present)")
-            else:
-                print(f"  Extracting {filename}...")
-                populator = ArtifactPopulator(output_path=artifact_out, flatten=False)
-                populator(local_path)
-
-    return extract_dir
+    # Cache the downloaded .tar.zst archives (the expensive part) across runs.
+    # extract mode re-extracts each run; artifact_manager only supports its
+    # extraction cache in --flatten mode, which is not the per-artifact layout
+    # ArtifactCatalog reads.
+    download_cache = dest_dir / "_downloads"
+    # Only the lib component is packaged today (PACKAGE_COMPONENTS); exclude the
+    # rest so the fetch stays small. Additional components can be pulled in once
+    # more MSI packages are scoped.
+    exclude_components = sorted(
+        {"run", "dev", "dbg", "doc", "test"} - PACKAGE_COMPONENTS
+    )
+    cmd = [
+        sys.executable,
+        str(BUILD_TOOLS_DIR / "artifact_manager.py"),
+        "fetch",
+        f"--run-id={run_id}",
+        # MSI packaging is Windows-only; never fetch other platforms' artifacts.
+        "--platform=windows",
+        "--stage=all",
+        "--generic-only",
+        f"--exclude-components={','.join(exclude_components)}",
+        f"--output-dir={dest_dir}",
+        f"--download-cache-dir={download_cache}",
+    ]
+    if run_github_repo:
+        cmd.append(f"--run-github-repo={run_github_repo}")
+    print(f"Fetching artifacts for run {run_id} (windows) ...")
+    subprocess.run(cmd, check=True)
+    return dest_dir / "artifacts"
 
 
 def collect_files_from_catalog(
@@ -285,7 +255,7 @@ def collect_files_from_catalog(
     if not artifact_dir.is_dir():
         print(
             f"Warning: artifact directory not found: {artifact_dir}\n"
-            "Run a Windows build or provide --artifacts-url.",
+            "Run a Windows build or provide --run-id.",
             file=sys.stderr,
         )
         return []
@@ -337,85 +307,32 @@ def collect_files_from_catalog(
     return sorted((Path(r), s) for r, s in seen.items())
 
 
-def fetch_legacy_dlls_from_dvc(
-    dest_dir: Path,
-    repo_root: Path,
-) -> None:
-    """Download legacy DLLs tracked by DVC in rocm-systems into dest_dir.
-
-    Reads *.dvc pointer files from
-    rocm-systems/shared/amdgpu-windows-interop/legacy/ and fetches each DLL
-    from the DVC S3 remote (s3://therock-dvc/rocm-systems, anonymous) into
-    dest_dir. The S3 object key is derived from the md5 hash in the pointer
-    file: <md5[:2]>/<md5[2:]>.
-
-    dest_dir is the _legacy/bin/ path that resolve_legacy_dlls() searches as
-    its fallback. Missing DLLs are warned and skipped; a DVC fetch failure
-    does not abort the generator.
-    """
-    dvc_dir = (
-        repo_root / "rocm-systems" / "shared" / "amdgpu-windows-interop" / "legacy"
-    )
-    if not dvc_dir.is_dir():
-        print(
-            f"Warning: rocm-systems legacy DVC dir not found: {dvc_dir}\n"
-            "  (submodule not initialized? run: git submodule update --init rocm-systems)",
-            file=sys.stderr,
-        )
-        return
-
-    dvc_remote = "https://therock-dvc.s3.us-east-2.amazonaws.com/rocm-systems/files/md5"
-    dest_dir.mkdir(parents=True, exist_ok=True)
-
-    for dvc_file in sorted(dvc_dir.glob("*.dvc")):
-        dll_name = dvc_file.stem  # e.g. amdhip64_6.dll
-        dest = dest_dir / dll_name
-        if dest.exists():
-            print(f"  Cached:    {dll_name} (legacy DVC)")
-            continue
-
-        try:
-            data = yaml.safe_load(dvc_file.read_text(encoding="utf-8"))
-            md5 = data["outs"][0]["md5"]
-        except Exception as e:
-            print(
-                f"Warning: could not parse {dvc_file.name}: {e}",
-                file=sys.stderr,
-            )
-            continue
-
-        s3_key = f"{md5[:2]}/{md5[2:]}"
-        url = f"{dvc_remote}/{s3_key}"
-        print(f"  Fetching:  {dll_name} (legacy DVC, md5={md5[:8]}...)")
-        try:
-            urllib.request.urlretrieve(url, dest)
-        except Exception as e:
-            print(
-                f"Warning: failed to fetch legacy DLL {dll_name} from {url}: {e}",
-                file=sys.stderr,
-            )
-            dest.unlink(missing_ok=True)
-
-
 def resolve_legacy_dlls(
     artifact_dir: Path,
     dll_names: list[str],
+    repo_root: Path,
 ) -> list[tuple[str, Path]]:
-    """Resolve legacy System32 DLLs to concrete source paths.
+    """Resolve the System32 install feature's DLLs to concrete source paths.
 
     Each name is searched for (by basename) first among the extracted
-    artifacts in artifact_dir, then in the _legacy/bin cache fallback
-    (a sibling of artifact_dir, i.e. <cache>/_legacy/bin). Driver-sourced
-    DLLs like amdhip64_6.dll and amd_comgr_2.dll live only in the fallback.
+    artifacts in artifact_dir, then in the rocm-systems source checkout at
+    shared/amdgpu-windows-interop/legacy/. The current runtime DLLs
+    (amdhip64_7.dll, amd_comgr.dll, rocm_kpack.dll) come from the artifacts;
+    only the legacy driver-supplied DLLs (amdhip64_6.dll, amd_comgr_2.dll) live
+    in that source dir, where the build's DVC pull materializes them — this
+    script does not fetch them; their presence is a prerequisite for including
+    them in the MSI.
 
-    Returns a list of (dll_name, source_path). Missing DLLs are reported as
-    a warning and skipped so the generator never fails on an absent legacy
-    DLL.
+    Returns a list of (dll_name, source_path). Their presence is a
+    prerequisite, so a DLL that cannot be found in either location is a fatal
+    error (the MSI must not silently ship without its declared System32 DLLs).
     """
     if not dll_names:
         return []
 
-    legacy_fallback = artifact_dir.parent / "_legacy" / "bin"
+    legacy_fallback = (
+        repo_root / "rocm-systems" / "shared" / "amdgpu-windows-interop" / "legacy"
+    )
     resolved: list[tuple[str, Path]] = []
     for name in dll_names:
         found: Path | None = None
@@ -429,12 +346,13 @@ def resolve_legacy_dlls(
             if fallback.is_file():
                 found = fallback
         if found is None:
-            print(
-                f"Warning: legacy DLL not found, skipping: {name} "
-                f"(searched {artifact_dir} and {legacy_fallback})",
-                file=sys.stderr,
+            raise FileNotFoundError(
+                f"System32 DLL not found: {name} "
+                f"(searched {artifact_dir} and {legacy_fallback}). "
+                "These DLLs are a prerequisite; ensure the artifacts and the "
+                "rocm-systems DVC files are present (e.g. run fetch_sources.py "
+                "--dvc-projects rocm-systems)."
             )
-            continue
         resolved.append((name, found))
     return resolved
 
@@ -494,30 +412,39 @@ def parse_args() -> argparse.Namespace:
         help="Package to generate. Use --list to see available packages.",
     )
     parser.add_argument(
+        "--packages",
+        metavar="NAME[,NAME...]",
+        default=None,
+        help=(
+            "Comma-separated list of packages to generate in one invocation "
+            "(e.g. 'runtime,core'). Choices are the same as --package. "
+            "Mutually exclusive with --package. With more than one package, "
+            "--output-dir is required (--output names a single file)."
+        ),
+    )
+    parser.add_argument(
         "--list",
         action="store_true",
         help="List available package names and exit.",
     )
     parser.add_argument(
-        "--artifacts-url",
+        "--run-id",
         default=None,
-        metavar="URL",
+        metavar="RUN_ID",
         help=(
-            "Base URL of a TheRock artifact storage directory containing "
-            "{name}_{component}_generic.tar.zst files. When set, artifacts "
-            "are downloaded and extracted into --artifacts-cache-dir and used "
-            "as stage trees instead of --build-root. "
-            "Example: https://therock-nightly-artifacts.s3.amazonaws.com/27315369389-windows"
+            "GitHub Actions run id to fetch artifacts from. When set, artifacts "
+            "are fetched via build_tools/artifact_manager.py into "
+            "--artifacts-cache-dir and used instead of --build-root. The S3 "
+            "bucket is resolved from the run id; public artifacts need no "
+            "credentials. Example: 27315369389"
         ),
     )
     parser.add_argument(
-        "--fetch-legacy-dlls",
-        action=argparse.BooleanOptionalAction,
+        "--run-github-repo",
         default=None,
+        metavar="OWNER/REPO",
         help=(
-            "Fetch legacy DLLs from DVC (rocm-systems submodule) into the "
-            "_legacy/bin cache used by the legacy System32 install feature. "
-            "Defaults to True when --artifacts-url is set, False otherwise."
+            "Repository that owns --run-id (for fork runs). " "Default: ROCm/TheRock."
         ),
     )
     parser.add_argument(
@@ -527,7 +454,7 @@ def parse_args() -> argparse.Namespace:
         metavar="PATH",
         help=(
             "Directory for downloaded and extracted artifacts when using "
-            "--artifacts-url. Defaults to <script-dir>/artifact-cache. "
+            "--run-id. Defaults to <script-dir>/artifact-cache. "
             "Reuse this dir across runs to avoid re-downloading."
         ),
     )
@@ -538,7 +465,18 @@ def parse_args() -> argparse.Namespace:
         metavar="PATH",
         help=(
             "CMake build directory. Artifacts are read from <build-root>/artifacts/. "
-            f"Default: {default_build}. Ignored when --artifacts-url is set."
+            f"Default: {default_build}. Ignored when --run-id is set."
+        ),
+    )
+    parser.add_argument(
+        "--repo-root",
+        type=Path,
+        default=repo_root,
+        metavar="PATH",
+        help=(
+            "TheRock repo root. Used to locate the rocm-systems source checkout "
+            "for the legacy driver DLLs (shared/amdgpu-windows-interop/legacy). "
+            f"Default: {repo_root}."
         ),
     )
     parser.add_argument(
@@ -547,8 +485,21 @@ def parse_args() -> argparse.Namespace:
         default=None,
         metavar="PATH",
         help=(
-            "Destination path for the generated .wxs file. "
+            "Destination path for the generated .wxs file. Names a single file, "
+            "so it cannot be combined with --output-dir or multiple packages. "
             "Default: <script-dir>/<output-stem>.wxs"
+        ),
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help=(
+            "Directory to write generated .wxs files into, each named "
+            "<output-stem>.wxs from the package definition (so callers need not "
+            "compute the filename). Mutually exclusive with --output; required "
+            "when generating more than one package."
         ),
     )
     parser.add_argument(
@@ -590,15 +541,42 @@ def parse_args() -> argparse.Namespace:
             print(f"  {name:<20} {pkg.description}")
         sys.exit(0)
 
-    if not args.package:
-        parser.error("--package is required (use --list to see options)")
+    # --package and --packages are mutually exclusive; exactly one is required.
+    if args.package and args.packages:
+        parser.error("use either --package or --packages, not both")
+    if not args.package and not args.packages:
+        parser.error("--package or --packages is required (use --list to see options)")
 
-    if args.output is None:
-        pkg = PACKAGES[args.package]
-        args.output = script_dir / f"{pkg.output_stem}.wxs"
+    # Normalize to a validated, de-duplicated list preserving first-seen order.
+    if args.packages:
+        names = [p.strip() for p in args.packages.split(",") if p.strip()]
+        if not names:
+            parser.error("--packages was empty")
+        invalid = [n for n in names if n not in PACKAGES]
+        if invalid:
+            parser.error(
+                f"invalid package(s): {', '.join(invalid)} "
+                f"(choose from {', '.join(PACKAGES)})"
+            )
+        seen: set[str] = set()
+        args.package_list = [n for n in names if not (n in seen or seen.add(n))]
+    else:
+        args.package_list = [args.package]
+
+    # --output names a single file: it cannot combine with --output-dir or with
+    # more than one package.
+    if args.output is not None and args.output_dir is not None:
+        parser.error("--output and --output-dir are mutually exclusive")
+    if args.output is not None and len(args.package_list) > 1:
+        parser.error(
+            "--output takes a single file; use --output-dir with multiple packages"
+        )
 
     if args.artifacts_cache_dir is None:
         args.artifacts_cache_dir = script_dir / "artifact-cache"
+
+    # Where build_all() writes when neither --output nor --output-dir is given.
+    args.default_output_dir = script_dir
 
     return args
 
@@ -625,6 +603,59 @@ def _stable_guid(*parts: str) -> str:
     upgrade and repair behavior.
     """
     return str(uuid.uuid5(uuid.NAMESPACE_URL, "/".join(parts))).upper()
+
+
+def discovery_registry_key(major: str, minor: str) -> str:
+    """Return the shared SDK-discovery registry subkey for a ROCm major.minor.
+
+    The single source of truth for the per-version, package-agnostic key
+    ``Software\\AMD\\ROCm\\{major}.{minor}`` written by add_discovery_registry
+    (RFC0014). Consumers that need to locate ROCm (e.g. the install test) import
+    this so the written and read key cannot drift apart.
+    """
+    return f"Software\\AMD\\ROCm\\{major}.{minor}"
+
+
+def parse_major_minor(version: str) -> tuple[str, str]:
+    """Return ``(major, minor)`` from a dotted version like ``10.2.0``.
+
+    Raises ``ValueError`` on a version without at least major and minor
+    components. The MSI install path and discovery key are both scoped to
+    ``major.minor``, so consumers (the generator and the install test) share
+    this parse to stay consistent.
+    """
+    parts = version.split(".")
+    if len(parts) < 2 or not parts[0] or not parts[1]:
+        raise ValueError(f"version must be at least major.minor (got {version!r})")
+    return parts[0], parts[1]
+
+
+def expected_msi_filename(package: str) -> str:
+    """Return the MSI filename the generator writes for ``package``.
+
+    The generator names each package's output ``<output_stem>.msi``; the install
+    test imports this so it looks for the same filename the build produced,
+    without duplicating the stem-to-filename rule.
+    """
+    try:
+        return f"{PACKAGES[package].output_stem}.msi"
+    except KeyError as e:
+        raise ValueError(
+            f"unknown package {package!r}; choose from {', '.join(PACKAGES)}"
+        ) from e
+
+
+def install_subdir_for(package: str, version: str) -> str:
+    """Return the versioned install subdirectory name for ``package``.
+
+    Expands the package's ``install_subdir`` template (e.g. ``core-{major}.{minor}``)
+    the same way resolve_install_layout does, so the install test derives the
+    install location from the same rule the generator uses.
+    """
+    major, minor = parse_major_minor(version)
+    return PACKAGES[package].install_subdir.format(
+        version=version, major=major, minor=minor
+    )
 
 
 @dataclass
@@ -686,53 +717,54 @@ class WixDocument:
     directory_cache: dict[str, ET.Element] = field(default_factory=dict)
 
 
-def resolve_package_inputs(args: argparse.Namespace) -> PackageInputs:
+def resolve_artifact_dir(args: argparse.Namespace) -> Path:
+    """Return the directory of extracted artifacts for the selected source.
+
+    Fetches from the CI run when --run-id is set (once; the fetch is not
+    package-specific), otherwise points at the local build tree. Callers that
+    build several packages should resolve this once and reuse it.
+    """
+    if args.run_id:
+        return fetch_artifacts(
+            run_id=args.run_id,
+            dest_dir=args.artifacts_cache_dir,
+            run_github_repo=args.run_github_repo,
+        )
+    # Local build: artifacts live at build/artifacts/{name}_{component}_generic/
+    return args.build_root / "artifacts"
+
+
+def resolve_package_inputs(
+    args: argparse.Namespace, artifact_dir: Path | None = None
+) -> PackageInputs:
     """Gather artifacts and payload/legacy file lists for the selected package.
 
-    Downloads artifacts when --artifacts-url is set and fetches legacy DLLs from
-    DVC when applicable, then enumerates the concrete files to install.
+    ``artifact_dir`` is the extracted-artifacts directory; when omitted it is
+    resolved from ``args`` (which fetches when --run-id is set). Legacy System32
+    DLLs are read from wherever they already exist (the extracted artifacts, or
+    the rocm-systems source checkout for the driver-supplied ones) — this script
+    never fetches them; see resolve_legacy_dlls().
     """
     package = PACKAGES[args.package]
 
-    if args.artifacts_url:
-        print(f"Fetching artifacts from {args.artifacts_url} ...")
-        artifact_dir = fetch_artifacts(
-            artifacts_url=args.artifacts_url,
-            artifact_names=package.artifacts,
-            components=PACKAGE_COMPONENTS,
-            dest_dir=args.artifacts_cache_dir,
-        )
-        legacy_bin = args.artifacts_cache_dir / "_legacy" / "bin"
-    else:
-        # Local build: artifacts live at build/artifacts/{name}_{component}_generic/
-        artifact_dir = args.build_root / "artifacts"
-        legacy_bin = args.build_root / "_legacy" / "bin"
-
-    # --fetch-legacy-dlls defaults to True in --artifacts-url mode, False for a
-    # local build. Skip entirely when the package declares no legacy DLLs.
-    fetch_legacy = args.fetch_legacy_dlls
-    if fetch_legacy is None:
-        fetch_legacy = bool(args.artifacts_url)
-    if fetch_legacy and package.legacy_system32_dlls:
-        print("Fetching legacy DLLs from DVC ...")
-        fetch_legacy_dlls_from_dvc(
-            dest_dir=legacy_bin,
-            repo_root=Path(__file__).parent.parent.parent.parent,
-        )
+    if artifact_dir is None:
+        artifact_dir = resolve_artifact_dir(args)
 
     return PackageInputs(
         package=package,
         version=args.package_version,
         files=collect_files_from_catalog(artifact_dir, package),
-        legacy_dlls=resolve_legacy_dlls(artifact_dir, package.legacy_system32_dlls),
+        legacy_dlls=resolve_legacy_dlls(
+            artifact_dir,
+            package.legacy_system32_dlls,
+            repo_root=args.repo_root,
+        ),
     )
 
 
 def resolve_install_layout(args: argparse.Namespace, version: str) -> InstallLayout:
     """Resolve the install location and versioned subdirectory name."""
-    parts = version.split(".")
-    major = parts[0] if len(parts) > 0 else ""
-    minor = parts[1] if len(parts) > 1 else ""
+    major, minor = parse_major_minor(version)
     package = PACKAGES[args.package]
     subdir_name = package.install_subdir.format(
         version=version, major=major, minor=minor
@@ -789,8 +821,13 @@ def create_wix_document(package: PackageDef, version: str) -> WixDocument:
         pkg, _tag("Property"), Id="ENABLE_LONG_PATHS", Value="1", Secure="yes"
     )
     ET.SubElement(pkg, _tag("Property"), Id="INSTALLFOLDER", Secure="yes")
-    # Legacy System32 install is on by default; set LEGACY_INSTALL=0 to disable.
-    ET.SubElement(pkg, _tag("Property"), Id="LEGACY_INSTALL", Value="1", Secure="yes")
+    # Legacy System32 install is off by default; set LEGACY_SYSTEM32_INSTALL=1 to enable.
+    # The current runtime DLLs are already installed under the install dir's bin/
+    # and reachable via PATH, so copying them into System32 is opt-in for apps
+    # that load ROCm DLLs from System32 rather than PATH.
+    ET.SubElement(
+        pkg, _tag("Property"), Id="LEGACY_SYSTEM32_INSTALL", Value="0", Secure="yes"
+    )
     # When INSTALLFOLDER is set on the command line, redirect InstallDir to it.
     # Runs in both UI and execute sequences so repair/modify picks it up too.
     ET.SubElement(
@@ -900,13 +937,32 @@ def add_path_registration(
     layout: InstallLayout,
     files: list[tuple[Path, Path]],
 ) -> None:
-    """Add the machine PATH entry and install-dir registry marker.
+    """Add the machine PATH entry for the package's bin directory.
 
     No-op when the package installs nothing under bin/, since there would be
-    nothing worth adding to PATH.
+    nothing worth adding to PATH. The PATH entry is package-specific (each
+    package owns its own PATH modification), so the component GUID is derived
+    from the package feature id. The SDK-discovery registry key is written
+    separately by add_discovery_registry (shared across packages).
+
+    The machine PATH entry is only emitted when installing to the default,
+    admin-protected root (PROTECTED_DEFAULT_ROOT). A custom --install-root may be
+    a user-writable location, and putting a user-writable directory on the machine
+    PATH is a DLL/exe planting risk (CWE-427), so the PATH entry is skipped there;
+    discovery should use the SDK-discovery registry key instead.
     """
     installs_to_bin = any(install_rel.parts[0] == "bin" for install_rel, _ in files)
     if not installs_to_bin:
+        return
+
+    if layout.install_root != PROTECTED_DEFAULT_ROOT:
+        print(
+            f"Note: install root {layout.install_root!r} is not the default "
+            f"protected root ({PROTECTED_DEFAULT_ROOT}); skipping the machine PATH "
+            "entry (its ACL is unknown/user-writable). Consumers should locate "
+            "ROCm via the SDK-discovery registry key instead.",
+            file=sys.stderr,
+        )
         return
 
     component = ET.SubElement(
@@ -926,20 +982,62 @@ def add_path_registration(
         Action="set",
         System="yes",
     )
-    registry_key = package.registry_key.format(
-        version=layout.version, major=layout.major, minor=layout.minor
+    ET.SubElement(feature, _tag("ComponentRef"), Id="EnvPath")
+
+
+def add_discovery_registry(
+    doc: WixDocument, feature: ET.Element, layout: InstallLayout
+) -> None:
+    """Add the shared SDK-discovery registry key: Software\\AMD\\ROCm\\{X.Y}.
+
+    Writes ``InstallDir`` and ``Version`` under a per-version, package-agnostic
+    key so tools and build systems can locate ROCm without knowing which MSI
+    packages are installed. This follows RFC0014 (Windows Packaging
+    Requirements), which specifies a shared per-version discovery key.
+
+    ROCm ships multiple MSI packages (runtime, core, ...) that coexist under one
+    ``{major}.{minor}`` install directory, so every package writes this same key
+    with identical values. The component GUID is therefore derived only from the
+    version (not the package), so Windows Installer ref-counts it across
+    packages: it is created once and removed only when the last package at that
+    version uninstalls. The per-package ProductCode is intentionally NOT written
+    here — each MSI already registers its own ProductCode in the standard
+    ``HKLM\\...\\Uninstall\\{ProductCode}`` hive (used by Add/Remove Programs),
+    so duplicating it here would be redundant and reintroduce the multi-package
+    collision this shared key avoids.
+
+    ``Bitness="always64"`` keeps the key in the native 64-bit registry view
+    (an x64 package would otherwise land it under WOW6432Node), where x64
+    consumers expect it.
+    """
+    discovery_key = discovery_registry_key(layout.major, layout.minor)
+    component = ET.SubElement(
+        doc.install_dir,
+        _tag("Component"),
+        Id="RocmDiscovery",
+        Guid=_stable_guid("ROCm_discovery", f"{layout.major}.{layout.minor}"),
+        Bitness="always64",
     )
     ET.SubElement(
         component,
         _tag("RegistryValue"),
         Root="HKLM",
-        Key=registry_key,
+        Key=discovery_key,
         Name="InstallDir",
         Value="[InstallDir]",
         Type="string",
         KeyPath="yes",
     )
-    ET.SubElement(feature, _tag("ComponentRef"), Id="EnvPath")
+    ET.SubElement(
+        component,
+        _tag("RegistryValue"),
+        Root="HKLM",
+        Key=discovery_key,
+        Name="Version",
+        Value=layout.version,
+        Type="string",
+    )
+    ET.SubElement(feature, _tag("ComponentRef"), Id="RocmDiscovery")
 
 
 def add_long_paths_feature(doc: WixDocument, package: PackageDef) -> None:
@@ -1000,32 +1098,61 @@ def add_long_paths_feature(doc: WixDocument, package: PackageDef) -> None:
     ET.SubElement(feature, _tag("ComponentRef"), Id="LongPathsEnable")
 
 
+def _get_or_create_system64_dir(doc: WixDocument) -> ET.Element:
+    """Return the shared System64Folder <StandardDirectory>, creating it once.
+
+    System64Folder is the real C:\\Windows\\System32 in an x64 package;
+    SystemFolder resolves to the WOW64-redirected SysWOW64 regardless of package
+    architecture, which is not what we want for 64-bit DLLs. Both the legacy
+    install feature and the cleanup feature target it, and WiX rejects a second
+    StandardDirectory with the same Id, so it is cached on the document.
+    """
+    cached = doc.directory_cache.get("System64Folder")
+    if cached is None:
+        cached = ET.SubElement(
+            doc.package, _tag("StandardDirectory"), Id="System64Folder"
+        )
+        doc.directory_cache["System64Folder"] = cached
+    return cached
+
+
 def add_legacy_system32_feature(
     doc: WixDocument, legacy_dlls: list[tuple[str, Path]]
 ) -> None:
-    """Add the legacy System32 DLL feature (on unless LEGACY_INSTALL=0).
+    """Add the opt-in legacy System32 DLL feature plus its cleanup counterpart.
 
-    No-op when the package has no legacy DLLs to install.
+    The two features are mutually exclusive, keyed off LEGACY_SYSTEM32_INSTALL (default
+    "0"):
+      - LegacyInstall (Level 0 by default; raised to 1 when LEGACY_SYSTEM32_INSTALL=1)
+        copies the DLLs into System32.
+      - LegacyCleanup (Level 1 by default; dropped to 0 when LEGACY_SYSTEM32_INSTALL=1)
+        removes those same DLL names from System32 on both install and
+        uninstall, so a default (non-legacy) install scrubs stale copies left by
+        an AMD driver, an older ROCm installer, or a prior LEGACY_SYSTEM32_INSTALL=1
+        install that would otherwise shadow the runtime shipped under bin/.
+
+    No file is both installed and removed by a single install because exactly one
+    of the two features is active for any given LEGACY_SYSTEM32_INSTALL value.
+
+    No-op when the package declares no legacy DLLs.
     """
     if not legacy_dlls:
         return
 
-    # System64Folder is the real C:\Windows\System32 in an x64 package;
-    # SystemFolder resolves to the WOW64-redirected SysWOW64 regardless of
-    # package architecture, which is not what we want for 64-bit DLLs.
-    system_dir = ET.SubElement(
-        doc.package, _tag("StandardDirectory"), Id="System64Folder"
-    )
+    system_dir = _get_or_create_system64_dir(doc)
     feature = ET.SubElement(
         doc.package,
         _tag("Feature"),
         Id="LegacyInstall",
         Title="Legacy System32 DLLs",
-        Level="1",
+        Level="0",
     )
-    # Turn the feature off when LEGACY_INSTALL=0. Default property value
-    # is "1", so the feature is enabled unless explicitly disabled.
-    ET.SubElement(feature, _tag("Level"), Value="0", Condition='LEGACY_INSTALL = "0"')
+    # Turn the feature on when LEGACY_SYSTEM32_INSTALL=1. Default feature Level is 0
+    # (not installed) and the default property value is "0", so System32 copies
+    # are opt-in and installed only when explicitly requested.
+    ET.SubElement(
+        feature, _tag("Level"), Value="1", Condition='LEGACY_SYSTEM32_INSTALL = "1"'
+    )
     for dll_name, source in legacy_dlls:
         install_rel = Path("System32") / dll_name
         comp_id = make_id(install_rel, "c")
@@ -1045,6 +1172,65 @@ def add_legacy_system32_feature(
         )
         ET.SubElement(feature, _tag("ComponentRef"), Id=comp_id)
 
+    add_legacy_system32_cleanup_feature(doc, system_dir, legacy_dlls)
+
+
+def add_legacy_system32_cleanup_feature(
+    doc: WixDocument,
+    system_dir: ET.Element,
+    legacy_dlls: list[tuple[str, Path]],
+) -> None:
+    """Remove the declared legacy DLL names from System32 on a non-legacy install.
+
+    Uses declarative WiX <RemoveFile On="both"> (delete on install and
+    uninstall) rather than a shell CustomAction. The removals live in one
+    component whose keypath is an HKLM registry marker (System32 is not under the
+    install tree, so a file keypath there would be wrong); the component is
+    gated by the LegacyCleanup feature, which is off when LEGACY_SYSTEM32_INSTALL=1.
+    """
+    feature = ET.SubElement(
+        doc.package,
+        _tag("Feature"),
+        Id="LegacyCleanup",
+        Title="Remove Legacy System32 DLLs",
+        Level="1",
+    )
+    # Mirror image of LegacyInstall: drop this feature to Level 0 when the user
+    # opted into the System32 install, so the same install never both places and
+    # removes a DLL.
+    ET.SubElement(
+        feature, _tag("Level"), Value="0", Condition='LEGACY_SYSTEM32_INSTALL = "1"'
+    )
+
+    component = ET.SubElement(
+        system_dir,
+        _tag("Component"),
+        Id="LegacyCleanup",
+        Guid=_stable_guid("System32", "LegacyCleanup"),
+    )
+    # System32 holds no install-owned file to anchor the keypath, so use an
+    # HKLM registry marker (the EnvPath/LongPaths convention for non-file
+    # components).
+    ET.SubElement(
+        component,
+        _tag("RegistryValue"),
+        Root="HKLM",
+        Key="Software\\AMD\\ROCm\\LegacyCleanup",
+        Name="Performed",
+        Value="1",
+        Type="integer",
+        KeyPath="yes",
+    )
+    for dll_name, _ in legacy_dlls:
+        ET.SubElement(
+            component,
+            _tag("RemoveFile"),
+            Id=make_id(Path("System32Cleanup") / dll_name, "rf"),
+            Name=dll_name,
+            On="both",
+        )
+    ET.SubElement(feature, _tag("ComponentRef"), Id="LegacyCleanup")
+
 
 def write_wxs(root: ET.Element, output_path: Path) -> None:
     """Serialize the WiX document to output_path with a stable XML declaration."""
@@ -1057,9 +1243,14 @@ def write_wxs(root: ET.Element, output_path: Path) -> None:
         tree.write(f, encoding="utf-8", xml_declaration=False)
 
 
-def build_wxs(args: argparse.Namespace) -> None:
-    """Generate a WiX v4 .wxs source file for the selected package."""
-    inputs = resolve_package_inputs(args)
+def build_wxs(args: argparse.Namespace, artifact_dir: Path | None = None) -> None:
+    """Generate a WiX v4 .wxs source file for the selected package.
+
+    ``artifact_dir`` is threaded through to resolve_package_inputs so a caller
+    building several packages can fetch the (package-independent) artifacts once
+    and reuse the extracted directory.
+    """
+    inputs = resolve_package_inputs(args, artifact_dir)
     layout = resolve_install_layout(args, inputs.version)
 
     doc = create_wix_document(inputs.package, inputs.version)
@@ -1067,6 +1258,7 @@ def build_wxs(args: argparse.Namespace) -> None:
     feature = add_primary_feature(doc, inputs.package)
     add_payload_components(doc, feature, inputs.files)
     add_path_registration(doc, feature, inputs.package, layout, inputs.files)
+    add_discovery_registry(doc, feature, layout)
     add_long_paths_feature(doc, inputs.package)
     add_legacy_system32_feature(doc, inputs.legacy_dlls)
 
@@ -1077,5 +1269,28 @@ def build_wxs(args: argparse.Namespace) -> None:
     print(f"Install:  {layout.display_path}")
 
 
+def build_all(args: argparse.Namespace) -> None:
+    """Generate one .wxs per requested package.
+
+    Resolves (and, for --run-id, fetches) the artifacts once — the fetch is not
+    package-specific — then loops over args.package_list, writing each package's
+    .wxs to its resolved output path.
+    """
+    artifact_dir = resolve_artifact_dir(args)
+    explicit_output = args.output  # Set only for single-package --output.
+    for pkg_name in args.package_list:
+        args.package = pkg_name
+        if explicit_output is not None:
+            args.output = explicit_output
+        else:
+            out_dir = (
+                args.output_dir
+                if args.output_dir is not None
+                else args.default_output_dir
+            )
+            args.output = out_dir / f"{PACKAGES[pkg_name].output_stem}.wxs"
+        build_wxs(args, artifact_dir)
+
+
 if __name__ == "__main__":
-    build_wxs(parse_args())
+    build_all(parse_args())

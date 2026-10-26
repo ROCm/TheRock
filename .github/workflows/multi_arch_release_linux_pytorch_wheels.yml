@@ -8,6 +8,10 @@
 # * https://github.com/ROCm/TheRock/issues/3332
 # * https://github.com/ROCm/TheRock/issues/3291
 
+# Notes on security:
+#   * Higher-trust entry points: manual runs and automation from https://github.com/ROCm/rockrel.
+#   * Inherit Quartz credentials through nested workflows without repeating mappings.
+
 name: Multi-Arch Release Linux PyTorch Wheels
 
 on:
@@ -52,6 +56,14 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      pytorch_git_refs:
+        description: >-
+          PyTorch refs to build (comma/semicolon separated). Use 'all' for the
+          full default set for the release type, a subset of the available
+          release refs (e.g. 'release/2.12, release/2.13'), or a custom
+          branch/tag/SHA for bring-up.
+        type: string
+        default: "all"
       run_full_pytorch_tests:
         description: Run full PyTorch tests after scheduled nightly wheel builds complete.
         type: boolean
@@ -114,6 +126,14 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      pytorch_git_refs:
+        description: >-
+          PyTorch refs to build (comma/semicolon separated). Use 'all' for the
+          full default set for the release type, a subset of the available
+          release refs (e.g. 'release/2.12, release/2.13'), or a custom
+          branch/tag/SHA for bring-up.
+        type: string
+        default: "all"
       run_full_pytorch_tests:
         description: Run full PyTorch tests after scheduled nightly wheel builds complete.
         type: boolean
@@ -130,16 +150,28 @@ on:
         type: string
         default: ""
 
-run-name: Release Linux PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
+run-name: >-
+  Release Linux PyTorch Wheels
+  (${{ inputs.release_type }}, ${{ inputs.rocm_version }},
+  ${{ inputs.amdgpu_families }}, py ${{ inputs.python_version || 'all' }},
+  torch ${{ inputs.pytorch_git_refs }},
+  full tests ${{ inputs.run_full_pytorch_tests }})
 
 permissions:
   contents: read
 
 jobs:
   setup_matrix:
-    runs-on: ubuntu-24.04
+    name: Configure PyTorch Release Matrix
+    runs-on: ubuntu-26.04
     outputs:
       pytorch_matrix: ${{ steps.matrix.outputs.pytorch_matrix }}
+    env:
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
+      PYTHON_VERSION: ${{ inputs.python_version }}
+      PYTORCH_GIT_REFS: ${{ inputs.pytorch_git_refs }}
+
     steps:
       - name: "Quartz - started - release PyTorch wheels"
         continue-on-error: true
@@ -156,6 +188,7 @@ jobs:
         timeout-minutes: 15
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
@@ -163,10 +196,11 @@ jobs:
         id: matrix
         run: |
           python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
-            --python-versions="${{ inputs.python_version }}" \
+            --python-versions="${PYTHON_VERSION}" \
+            --pytorch-git-refs="${PYTORCH_GIT_REFS}" \
             --platform=linux \
-            --release-type="${{ inputs.release_type }}" \
-            --amdgpu-families="${{ inputs.amdgpu_families }}"
+            --release-type="${BUILD_RELEASE_TYPE}" \
+            --amdgpu-families="${AMDGPU_FAMILIES}"
 
   build_pytorch_wheels:
     needs: setup_matrix
@@ -184,10 +218,11 @@ jobs:
       # request more permissions than its caller grants).
       actions: write
     uses: ./.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
       test_amdgpu_families: ${{ matrix.test_amdgpu_families }}
+      test_level: ${{ matrix.test_level }}
       python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       rocm_version: ${{ inputs.rocm_version }}
@@ -208,7 +243,7 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [setup_matrix, build_pytorch_wheels]
     name: "Quartz - completed - release PyTorch wheels"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:

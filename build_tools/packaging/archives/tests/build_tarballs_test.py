@@ -169,6 +169,47 @@ class TestMain(unittest.TestCase):
                         main(argv)
         return MainMocks(fetch_mock, compress_mock, kpack_mock)
 
+    def test_shared_owner_preserves_selected_targets(self) -> None:
+        for selected in (
+            ["gfx1250"],
+            ["gfx1250-strict"],
+            ["gfx1250", "gfx1250-strict"],
+            ["gfx1250-strict", "gfx1250"],
+        ):
+            with self.subTest(
+                selected=selected
+            ), tempfile.TemporaryDirectory() as tmpdir:
+                families = [*selected, "gfx1151"]
+                fetch, compress, _ = self._run_main_with_mocks(
+                    [
+                        "--run-id=123",
+                        f"--dist-amdgpu-families={';'.join(families)}",
+                        "--platform=linux",
+                        "--package-version=7.13.0",
+                        f"--output-dir={tmpdir}",
+                        "--include-test-tarballs",
+                    ],
+                    kpack_split=True,
+                )
+                self.assertEqual(
+                    [call.kwargs["amdgpu_families"] for call in fetch.call_args_list],
+                    [selected, selected, ["gfx1151"], ["gfx1151"], families, families],
+                )
+                self.assertCountEqual(
+                    [
+                        call.kwargs["tarball_path"].name
+                        for call in compress.call_args_list
+                    ],
+                    [
+                        "therock-dist-linux-gfx1250-7.13.0.tar.gz",
+                        "therock-dist-linux-gfx1250-tests-7.13.0.tar.gz",
+                        "therock-dist-linux-gfx1151-7.13.0.tar.gz",
+                        "therock-dist-linux-gfx1151-tests-7.13.0.tar.gz",
+                        "therock-dist-linux-multiarch-7.13.0.tar.gz",
+                        "therock-dist-linux-multiarch-tests-7.13.0.tar.gz",
+                    ],
+                )
+
     def test_default_builds_tarballs_without_tests_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "tarballs"
