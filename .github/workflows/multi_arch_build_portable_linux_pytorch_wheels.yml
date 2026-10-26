@@ -416,10 +416,11 @@ jobs:
           elif [ "${CACHE_TYPE}" = "ccache" ]; then
             cache_flag="--use-ccache"
           fi
-          # ASAN variants build torch only. --no-build-* keeps companion projects off.
-          asan_flag=""
+          # asan and asan-debug both compile torch with AddressSanitizer.
+          # The wheel builder turns companion projects off for that variant.
+          build_variant_flag=""
           if [[ "${BUILD_VARIANT}" == asan* ]]; then
-            asan_flag="--asan --no-build-triton --no-build-pytorch-audio --no-build-pytorch-vision --no-build-apex"
+            build_variant_flag="--build-variant=asan"
           fi
 
           # build_prod_wheels.py forwards --index-url and --find-links to pip
@@ -444,7 +445,7 @@ jobs:
             --release-type="${BUILD_RELEASE_TYPE}" \
             --pytorch-git-ref="${PYTORCH_GIT_REF}" \
             --pytorch-rocm-arch "${AMDGPU_TARGETS}" \
-            ${asan_flag} \
+            ${build_variant_flag} \
             ${{ env.optional_build_prod_arguments }}
 
       - name: Report cache stats
