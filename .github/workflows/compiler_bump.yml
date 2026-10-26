@@ -269,6 +269,7 @@ jobs:
       multiarch_index: true
       package_version: ${{ needs.setup-linux.outputs.rocm_package_version }}
       release_type: dev
+      build_runs_on: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_medium }}
       repository: ${{ github.repository }}
       ref: ${{ needs.setup-linux.outputs.ref }}
 
@@ -288,6 +289,7 @@ jobs:
       native_package_type: deb
       release_type: dev
       build_variant: release
+      build_runs_on: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_small }}
       repository: ${{ github.repository }}
       ref: ${{ needs.setup-linux.outputs.ref }}
 
@@ -307,6 +309,7 @@ jobs:
       native_package_type: rpm
       release_type: dev
       build_variant: release
+      build_runs_on: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_small }}
       repository: ${{ github.repository }}
       ref: ${{ needs.setup-linux.outputs.ref }}
 
@@ -481,6 +484,7 @@ jobs:
       multiarch_index: true
       package_version: ${{ needs.setup-windows.outputs.rocm_package_version }}
       release_type: dev
+      build_runs_on: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on_large }}
       repository: ${{ github.repository }}
       ref: ${{ needs.setup-windows.outputs.ref }}
 

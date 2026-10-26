@@ -58,9 +58,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from _therock_utils.build_topology import get_topology
 
 from amdgpu_family_matrix import (
+    WSL_RUN_LABEL,
     all_build_variants,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
+    get_wsl_test_runner,
     select_build_runner,
 )
 from configure_ci_path_filters import (
@@ -201,6 +203,39 @@ def _get_allowed_test_labels_for_stages(build_stages: list[str]) -> list[str] | 
     return sorted(allowed) if allowed else []
 
 
+# ci:run-wsl tests also need the wsl-rocdxg stage's artifact (the WSL libhsakmt).
+WSL_REQUIRED_STAGE = "wsl-rocdxg"
+
+
+def _apply_stage_test_labels(
+    platform: str,
+    labels: list[str],
+    build_stages: list[str],
+    allowed_labels: list[str],
+) -> list[str]:
+    """Validate or auto-select test labels for a partial build (build_stages set).
+
+    Selection is decided by component labels (test:*) only. ci:* control labels
+    (ci:run-wsl, ci:run-multi-gpu, ...) are kept but never count as a selection:
+    with only control labels, the stage-compatible test labels are auto-selected,
+    so a partial build never schedules tests for components it did not build.
+    """
+    component_labels = [lbl for lbl in labels if not lbl.startswith("ci:")]
+    if not component_labels:
+        return [f"test:{lbl}" for lbl in allowed_labels] + labels
+    invalid = [
+        lbl
+        for lbl in component_labels
+        if lbl.replace("test:", "") not in allowed_labels
+    ]
+    if invalid:
+        raise ValueError(
+            f"{platform} test labels {invalid} require stages not in "
+            f"build_stages {build_stages}. Allowed: {allowed_labels}"
+        )
+    return labels
+
+
 # ---------------------------------------------------------------------------
 # Dataclasses — the typed interfaces between pipeline steps
 # ---------------------------------------------------------------------------
@@ -225,6 +260,7 @@ class CIInputs:
     build_pytorch: bool = True
     build_jax: bool = False
     build_native_linux: bool = True
+    build_native_windows: bool = True
     python_versions: list[str] = field(default_factory=list)
 
     # Labels from the PR event payload or workflow_dispatch pr_labels input.
@@ -263,8 +299,9 @@ class CIInputs:
     def validate(self) -> None:
         """Validate inputs for consistency (fail-fast behavior).
 
-        Raises ValueError for conflicting build selections or test labels
-        requiring stages not in build_stages.
+        Raises ValueError for conflicting build selections, test labels requiring
+        stages not in build_stages, or ci:run-wsl on a partial build without the
+        wsl-rocdxg stage.
         """
         for job in ("native-linux", "python-packages", "pytorch", "jax"):
             build_label = f"ci:build-{job}"
@@ -278,18 +315,18 @@ class CIInputs:
                 ("Linux", self.linux_test_labels),
                 ("Windows", self.windows_test_labels),
             ]:
-                # ci: labels are control labels, not test component labels; skip validation
-                invalid = [
-                    lbl
-                    for lbl in labels
-                    if not lbl.startswith("ci:")
-                    and lbl.replace("test:", "") not in allowed_labels
-                ]
-                if invalid:
-                    raise ValueError(
-                        f"{platform} test labels {invalid} require stages not in "
-                        f"build_stages {self.build_stages}. Allowed: {allowed_labels}"
-                    )
+                _apply_stage_test_labels(
+                    platform, labels, self.build_stages, allowed_labels
+                )
+            if (
+                WSL_RUN_LABEL in self.linux_test_labels
+                and WSL_REQUIRED_STAGE not in self.build_stages
+            ):
+                raise ValueError(
+                    f"{WSL_RUN_LABEL} needs the {WSL_REQUIRED_STAGE} stage (the WSL "
+                    f"libhsakmt), which is not in build_stages {self.build_stages}. "
+                    f"Add {WSL_REQUIRED_STAGE} to build_stages."
+                )
 
     @property
     def is_pull_request(self) -> bool:
@@ -330,6 +367,9 @@ class CIInputs:
         build_native_linux = (
             os.environ.get("BUILD_NATIVE_LINUX", "true").lower() != "false"
         )
+        build_native_windows = (
+            os.environ.get("BUILD_NATIVE_WINDOWS", "true").lower() != "false"
+        )
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
@@ -367,41 +407,17 @@ class CIInputs:
         windows_test_labels = pr_test_labels + pr_ci_labels
 
         # When build_stages limits the build, validate or auto-select test labels.
-        # - If labels provided: fail-fast if they require stages not in build_stages
-        # - If no labels provided: auto-select compatible labels for the stages
+        # - If test:* labels provided: fail-fast if they require stages not in build_stages
+        # - If none (only ci:* control labels, or nothing): auto-select compatible labels
         build_stages = _parse_comma_list(os.environ.get("BUILD_STAGES", ""))
         allowed_labels = _get_allowed_test_labels_for_stages(build_stages)
         if allowed_labels is not None:
-            # ci: labels are control labels, not test component labels; skip validation
-            if linux_test_labels:
-                invalid = [
-                    lbl
-                    for lbl in linux_test_labels
-                    if not lbl.startswith("ci:")
-                    and lbl.replace("test:", "") not in allowed_labels
-                ]
-                if invalid:
-                    raise ValueError(
-                        f"Linux test labels {invalid} require stages not in "
-                        f"build_stages {build_stages}. Allowed: {allowed_labels}"
-                    )
-            else:
-                linux_test_labels = [f"test:{lbl}" for lbl in allowed_labels]
-
-            if windows_test_labels:
-                invalid = [
-                    lbl
-                    for lbl in windows_test_labels
-                    if not lbl.startswith("ci:")
-                    and lbl.replace("test:", "") not in allowed_labels
-                ]
-                if invalid:
-                    raise ValueError(
-                        f"Windows test labels {invalid} require stages not in "
-                        f"build_stages {build_stages}. Allowed: {allowed_labels}"
-                    )
-            else:
-                windows_test_labels = [f"test:{lbl}" for lbl in allowed_labels]
+            linux_test_labels = _apply_stage_test_labels(
+                "Linux", linux_test_labels, build_stages, allowed_labels
+            )
+            windows_test_labels = _apply_stage_test_labels(
+                "Windows", windows_test_labels, build_stages, allowed_labels
+            )
 
         inputs = CIInputs(
             run_id=run_id,
@@ -414,6 +430,7 @@ class CIInputs:
             build_pytorch=build_pytorch,
             build_jax=build_jax,
             build_native_linux=build_native_linux,
+            build_native_windows=build_native_windows,
             python_versions=[python_version] if python_version else [],
             pr_labels=pr_labels,
             pr_base_ref=pr_base_ref,
@@ -720,6 +737,7 @@ class BuildConfig:
     build_variant_suffix: str
     build_variant_cmake_preset: str
     build_native_linux: bool
+    build_native_windows: bool
     build_python_packages: bool
     build_pytorch: bool
     build_jax: bool
@@ -742,6 +760,9 @@ class BuildConfig:
     # Cross-platform pair, populated identically in linux and windows configs.
     linux_amdgpu_families: str = ""  # Semicolon-separated
     windows_amdgpu_families: str = ""  # Semicolon-separated
+    # Families whose Linux build is also tested on WSL (ci:run-wsl). Same shape
+    # as per_family_info, with the WSL runner as test-runs-on.
+    wsl_per_family_info: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -1541,7 +1562,12 @@ def _should_run_tests_for_family(
         return True, "workflow_dispatch (on_demand)"
 
     # ci:run-all-archs label means build AND test all families
+    # TODO(ROCm/rocm-systems#11374): Remove once gfx125x can run in ROCm/TheRock.
+    _RUN_ALL_ARCHS_TEST_EXCLUDE = {"gfx125X-dcgpu", "gfx117X-all"}
     if "ci:run-all-archs" in ci_inputs.pr_labels:
+        family = platform_info.get("family", "")
+        if family in _RUN_ALL_ARCHS_TEST_EXCLUDE:
+            return False, f"ci:run-all-archs excludes tests for {family}"
         return True, "ci:run-all-archs label"
 
     tests_on_trigger = set(platform_info.get("tests_on_trigger", []))
@@ -1586,6 +1612,8 @@ def _expand_build_config_for_platform(
     - test-runs-on: runner label for testing (empty = no test runner available)
     - sanity_check_only_for_family: whether to limit test scope
 
+    Families with a WSL runner (ci:run-wsl) are also listed in wsl_per_family_info.
+
     Args:
         build_only_families: Families where tests should be skipped even if
             hardware is available (from ci:build:gfx* labels).
@@ -1607,6 +1635,7 @@ def _expand_build_config_for_platform(
             break
 
     per_family_info: list[dict] = []
+    wsl_per_family_info: list[dict] = []
     for family_name in families:
         # select_targets already validates family names and filters by
         # platform availability. Family name uniqueness is validated by
@@ -1777,6 +1806,19 @@ def _expand_build_config_for_platform(
             ]
         per_family_info.append(family_info)
 
+        test_runs_on_wsl = get_wsl_test_runner(
+            platform_info,
+            labels=ci_inputs.pr_labels,
+            test_runs_on=test_runs_on,
+            build_variant=build_variant,
+        )
+        if test_runs_on_wsl:
+            wsl_family_info = {
+                k: v for k, v in family_info.items() if not k.startswith("test-runs-on")
+            }
+            wsl_family_info["test-runs-on"] = test_runs_on_wsl
+            wsl_per_family_info.append(wsl_family_info)
+
     if not per_family_info:
         return None
 
@@ -1825,14 +1867,22 @@ def _expand_build_config_for_platform(
         if build_python_packages
         else []
     )
-    build_native_linux = ci_inputs.build_native_linux
+    build_native_linux = ci_inputs.build_native_linux and platform == "linux"
+    build_native_windows = ci_inputs.build_native_windows and platform == "windows"
 
     # PR labels can override packaging build decisions.
     pr_labels = ci_inputs.pr_labels
-    if "ci:build-native-linux" in pr_labels:
-        build_native_linux = True
-    elif "ci:skip-native-linux" in pr_labels:
-        build_native_linux = False
+    if platform == "linux":
+        if "ci:build-native-linux" in pr_labels:
+            build_native_linux = True
+        elif "ci:skip-native-linux" in pr_labels:
+            build_native_linux = False
+
+    if platform == "windows":
+        if "ci:build-native-windows" in pr_labels:
+            build_native_windows = True
+        elif "ci:skip-native-windows" in pr_labels:
+            build_native_windows = False
 
     if "ci:build-python-packages" in pr_labels:
         build_python_packages = True
@@ -1859,18 +1909,21 @@ def _expand_build_config_for_platform(
         build_pytorch = False
         build_jax = False
         build_native_linux = False
+        build_native_windows = False
         pytorch_build_matrix = []
         jax_build_matrix = []
         test_python_packages_matrix = []
 
     return BuildConfig(
         per_family_info=per_family_info,
+        wsl_per_family_info=wsl_per_family_info,
         dist_amdgpu_families=dist_amdgpu_families,
         artifact_group=f"multi-arch-{suffix or 'release'}",
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
         build_native_linux=build_native_linux,
+        build_native_windows=build_native_windows,
         build_python_packages=build_python_packages,
         build_pytorch=build_pytorch,
         build_jax=build_jax,

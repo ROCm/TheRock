@@ -38,6 +38,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
@@ -111,6 +112,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False",
     "Disable_DWZ": "True",
     "Disable_RPM_STRIP": "True"
@@ -1677,6 +1679,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
@@ -1825,6 +1828,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False",
     "Disable_DWZ": "True"
   },
@@ -1861,6 +1865,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
@@ -1955,6 +1960,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
@@ -2042,6 +2048,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
@@ -2850,6 +2857,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "True"
   },
   {
@@ -3003,6 +3011,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
@@ -3629,7 +3638,6 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
-    "Postinstall": "True",
     "Gfxarch": "True"
   },
   {
@@ -3792,7 +3800,6 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
-    "Postinstall": "True",
     "Gfxarch": "True"
   },
   {
@@ -3876,7 +3883,6 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
-    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
