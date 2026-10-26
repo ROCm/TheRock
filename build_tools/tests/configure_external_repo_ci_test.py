@@ -4,11 +4,8 @@
 
 """Tests for configure_external_repo_ci.py."""
 
-import json
 import os
-import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -21,8 +18,6 @@ from configure_external_repo_ci import (
     RepoEntry,
     configure,
     find_matched_subtrees,
-    get_event_pr_number,
-    get_pr_modified_paths_api,
     get_unclassified_paths,
     get_valid_prefixes,
     has_non_skippable,
@@ -312,19 +307,6 @@ class ConfigureTest(unittest.TestCase):
         self.assertEqual(result.changed_projects, "projects/rocblas")
         self.assertEqual(result.run_all_tests, False)
 
-    @patch("configure_external_repo_ci.get_pr_modified_paths_api", return_value=None)
-    @patch("configure_external_repo_ci.get_event_pr_number", return_value=123)
-    @patch("configure_external_repo_ci.get_modified_paths_api", return_value=None)
-    def test_truncated_pr_files_runs_all_tests(self, *_mocks):
-        result = configure(
-            event_name="pull_request",
-            github_repo="ROCm/rocm-libraries",
-            base_sha="abc123",
-            head_sha="def456",
-            config_path="",
-        )
-        self.assertEqual(result.run_all_tests, True)
-
     def test_no_shas_provided_runs_all_tests(self):
         result = configure(
             event_name="pull_request",
@@ -345,47 +327,6 @@ class ConfigureTest(unittest.TestCase):
             config_path="",
         )
         self.assertEqual(result.run_all_tests, True)
-
-
-class GetEventPrNumberTest(unittest.TestCase):
-    """Tests for get_event_pr_number()."""
-
-    def _pr_number_for_event(self, event: dict):
-        with tempfile.TemporaryDirectory() as tmp:
-            event_path = Path(tmp) / "event.json"
-            event_path.write_text(json.dumps(event))
-            with patch.dict(os.environ, {"GITHUB_EVENT_PATH": str(event_path)}):
-                return get_event_pr_number()
-
-    def test_pull_request_event_returns_number(self):
-        self.assertEqual(self._pr_number_for_event({"pull_request": {"number": 7}}), 7)
-
-    def test_push_event_returns_none(self):
-        self.assertIsNone(self._pr_number_for_event({"before": "abc123"}))
-
-    def test_missing_event_path_returns_none(self):
-        with patch.dict(os.environ):
-            os.environ.pop("GITHUB_EVENT_PATH", None)
-            self.assertIsNone(get_event_pr_number())
-
-
-class GetPrModifiedPathsApiTest(unittest.TestCase):
-    """Tests for get_pr_modified_paths_api()."""
-
-    def _paths_for_stdout(self, stdout: str):
-        completed = subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout)
-        with patch("configure_external_repo_ci.subprocess.run", return_value=completed):
-            return get_pr_modified_paths_api("ROCm/rocm-libraries", 7)
-
-    def test_returns_listed_paths(self):
-        self.assertEqual(
-            self._paths_for_stdout("projects/a/x.cpp\nprojects/b/y.cpp\n"),
-            {"projects/a/x.cpp", "projects/b/y.cpp"},
-        )
-
-    def test_truncated_listing_returns_none(self):
-        stdout = "".join(f"projects/a/{i}.cpp\n" for i in range(3000))
-        self.assertIsNone(self._paths_for_stdout(stdout))
 
 
 class GetUnclassifiedPathsTest(unittest.TestCase):
