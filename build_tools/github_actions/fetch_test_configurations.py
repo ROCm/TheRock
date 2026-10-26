@@ -56,6 +56,7 @@ def _get_artifact_path(artifact_path: str) -> str:
 # related jobs without relying on name-prefix inference.
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
+    "rocwmma": ["rocwmma", "rocwmma_install"],
     "tensilelite": ["tensilelite", "tensilelite-common"],
 }
 
@@ -1051,6 +1052,37 @@ test_matrix = {
         },
     },
     # rocWMMA tests
+    "rocwmma_install": {
+        "job_name": "rocwmma_install",
+        # External compilation needs dev artifacts (headers, CMake exports and
+        # compiler). Selective component fetching currently omits those.
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_rocwmma_install.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {"linux": 1, "windows": 1},
+        "linux_cpu_runner": True,
+        "skip_stages": ["math-libs"],
+        # The superbuild omits rocWMMA test artifacts for pre-MFMA/WMMA targets
+        # (cmake/therock_amdgpu_targets.cmake, TheRock#1944).
+        "exclude_family": {
+            "linux": [
+                "gfx900",
+                "gfx90c",
+                "gfx906",
+                "gfx101X-all",
+                "gfx103X-all",
+                "gfx1030",
+            ],
+            "windows": [
+                "gfx900",
+                "gfx90c",
+                "gfx906",
+                "gfx101X-all",
+                "gfx103X-all",
+                "gfx1030",
+            ],
+        },
+    },
     "rocwmma": {
         "job_name": "rocwmma",
         "fetch_artifact_args": "--rocwmma --tests --blas",
