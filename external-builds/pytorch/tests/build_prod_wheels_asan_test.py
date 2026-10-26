@@ -15,11 +15,28 @@ from build_prod_wheels import (
     add_env_compiler_flags,
     validate_build_args,
 )
-from setup_pytorch_asan import (
+from setup_pytorch_sanitizer import (
+    SANITIZERS,
     _resolve_hsa_runtime,
     append_env_text,
     import_sanity_env,
+    selected_sanitizer,
 )
+
+
+class SanitizerTableTest(unittest.TestCase):
+    def test_only_asan_is_implemented(self):
+        self.assertEqual(set(SANITIZERS), {"asan"})
+        self.assertEqual(
+            selected_sanitizer(argparse.Namespace(build_variant="asan")).name, "asan"
+        )
+        self.assertEqual(
+            selected_sanitizer(argparse.Namespace(build_variant="asan-debug")).name,
+            "asan",
+        )
+        self.assertIsNone(
+            selected_sanitizer(argparse.Namespace(build_variant="release"))
+        )
 
 
 class ImportSanityEnvTest(unittest.TestCase):
@@ -30,7 +47,7 @@ class ImportSanityEnvTest(unittest.TestCase):
             "LD_LIBRARY_PATH": "/opt/rocm/lib",
         }
 
-        sanity = import_sanity_env(env)
+        sanity = import_sanity_env(env, SANITIZERS["asan"])
 
         self.assertEqual(
             sanity["LD_PRELOAD"],
@@ -47,7 +64,8 @@ class ImportSanityEnvTest(unittest.TestCase):
     def test_missing_hsa_runtime_fails_the_check(self):
         with self.assertRaises(RuntimeError):
             import_sanity_env(
-                {"ASAN_RUNTIME_PATH": "/opt/rocm/lib/llvm/libclang_rt.asan.so"}
+                {"ASAN_RUNTIME_PATH": "/opt/rocm/lib/llvm/libclang_rt.asan.so"},
+                SANITIZERS["asan"],
             )
 
     def test_hsa_runtime_resolves_under_rocm_lib(self):
@@ -57,12 +75,14 @@ class ImportSanityEnvTest(unittest.TestCase):
             hsa.parent.mkdir()
             hsa.write_bytes(b"")
 
-            self.assertEqual(_resolve_hsa_runtime(rocm_dir), hsa.resolve())
+            self.assertEqual(
+                _resolve_hsa_runtime(rocm_dir, SANITIZERS["asan"]), hsa.resolve()
+            )
 
             missing = rocm_dir / "empty"
             missing.mkdir()
             with self.assertRaises(RuntimeError):
-                _resolve_hsa_runtime(missing)
+                _resolve_hsa_runtime(missing, SANITIZERS["asan"])
 
 
 class AsanFlagSpacingTest(unittest.TestCase):
@@ -127,7 +147,7 @@ class AsanBuildSelectionTest(unittest.TestCase):
     def _args(self, **overrides):
         source = Path(__file__).resolve().parent
         args = argparse.Namespace(
-            asan=False,
+            build_variant="release",
             build_triton=None,
             build_pytorch_audio=None,
             build_pytorch_vision=None,
@@ -156,7 +176,7 @@ class AsanBuildSelectionTest(unittest.TestCase):
 
     def test_asan_leaves_companions_off_when_sources_exist(self):
         parser = argparse.ArgumentParser()
-        args = self._args(asan=True)
+        args = self._args(build_variant="asan")
 
         validate_build_args(parser, args)
 
@@ -167,7 +187,7 @@ class AsanBuildSelectionTest(unittest.TestCase):
 
     def test_asan_rejects_an_explicit_companion_build(self):
         parser = argparse.ArgumentParser()
-        args = self._args(asan=True, build_pytorch_audio=True)
+        args = self._args(build_variant="asan", build_pytorch_audio=True)
 
         with self.assertRaises(SystemExit):
             validate_build_args(parser, args)
