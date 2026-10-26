@@ -76,18 +76,10 @@ from _therock_utils.s3_buckets import (
 )
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
 from _therock_utils.storage_location import StorageLocation
-from _therock_utils.python_package_paths import plan_key_copies
+from _therock_utils.python_package_paths import is_asan_variant, plan_key_copies
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 logger = logging.getLogger(__name__)
-
-
-def _is_asan_variant(build_variant: str) -> bool:
-    """True if build_variant is any ASAN-family variant: "asan", "host-asan",
-    "asan-debug" (RelWithDebInfo + line-number debug info, see
-    amdgpu_family_matrix.py's all_build_variants), or "host-asan-debug".
-    """
-    return "asan" in build_variant
 
 
 def publish_tarballs(
@@ -113,7 +105,7 @@ def publish_tarballs(
     dest_bucket = get_product_release_bucket_config(release_type, "core")
     dest_path = (
         "v5/rocm/core/tarball-asan"
-        if _is_asan_variant(build_variant)
+        if is_asan_variant(build_variant)
         else "v5/rocm/core/tarball"
     )
     dest = StorageLocation(dest_bucket.name, dest_path)
@@ -256,7 +248,7 @@ def publish_native_linux_packages(
     """
     dest_bucket = get_product_release_bucket_config(release_type, "core")
     today = datetime.date.today().strftime("%Y%m%d")
-    is_asan = _is_asan_variant(build_variant)
+    is_asan = is_asan_variant(build_variant)
 
     for pkg_type in ["deb", "rpm"]:
         source = artifacts_root.native_linux_packages(pkg_type)
@@ -342,7 +334,7 @@ def main(argv: list[str]) -> None:
         run_id=args.run_id, platform=args.platform, release_type=args.release_type
     )
     backend = create_storage_backend(dry_run=args.dry_run)
-    is_asan = _is_asan_variant(args.build_variant)
+    is_asan = is_asan_variant(args.build_variant)
 
     publish_tarballs(artifacts_root, args.release_type, backend, args.build_variant)
     if not is_asan:

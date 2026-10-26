@@ -405,7 +405,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
     def test_host_asan_variants_publish_same_as_asan(self, mock_copy):
         # host-asan and host-asan-debug are also ASAN-family variants and are
         # assumed to publish to the same "-asan" paths as full ASAN (see the
-        # ASSUMPTION note on _is_asan_variant — unverified against a real
+        # ASSUMPTION note on is_asan_variant — unverified against a real
         # host-asan publish run, since nothing calls this script with
         # "host-asan" today).
         for build_variant in ("host-asan", "host-asan-debug"):
