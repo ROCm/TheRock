@@ -448,13 +448,14 @@ Safety Features:
 
     parser.add_argument(
         "--python-index",
-        default=STRUCTURED_DEFAULT_INDEX,
+        default=None,
         choices=STRUCTURED_INDEXES,
         help=(
             "Product-local aggregate index to publish into with --structured: "
             "whl is the flat pip-installable index, whl-next is the device-extra "
             "index used for gfx-specific builds, whl-next-asan is for ASAN-instrumented "
-            f"wheels (default: {STRUCTURED_DEFAULT_INDEX})"
+            "wheels. If not specified, defaults to whl-next-asan with "
+            f"--tarball-variant=asan, {STRUCTURED_DEFAULT_INDEX} otherwise."
         ),
     )
 
@@ -537,6 +538,16 @@ Safety Features:
     )
 
     args = parser.parse_args(argv)
+
+    # Determine python index: explicit --python-index takes precedence,
+    # otherwise default to whl-next-asan for ASAN tarballs, whl-next otherwise.
+    if args.python_index is not None:
+        python_index = args.python_index
+    elif args.tarball_variant == "asan":
+        python_index = "whl-next-asan"
+    else:
+        python_index = STRUCTURED_DEFAULT_INDEX
+    args.python_index = python_index
 
     if args.structured:
         args.multi_arch = True

@@ -11,10 +11,10 @@ structured layout, where each package lives in its own directory:
     v5/rocm/<product>/<index>/<normalized-package>/index.html
     v5/rocm/<product>/<index>/index.html            (product-local root listing)
 
-`<index>` is `whl` or `whl-next`. Release streams are selected by hostname
-(e.g. nightly.repo.amd.com), never encoded in the path, so this generator is
-stream-agnostic and knows nothing about CloudFront routing, aggregate
-`/rocm/whl/` roots, or S3 bucket -> URL mapping.
+`<index>` is `whl`, `whl-next`, or `whl-next-asan`. Release streams are
+selected by hostname (e.g. nightly.repo.amd.com), never encoded in the path,
+so this generator is stream-agnostic and knows nothing about CloudFront
+routing, aggregate `/rocm/whl/` roots, or S3 bucket -> URL mapping.
 
 Unlike the legacy flat generator (`manage.py`), package identity comes from the
 directory name (authoritative, PEP 503-normalized), package pages use
