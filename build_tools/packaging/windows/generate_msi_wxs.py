@@ -1325,9 +1325,17 @@ def build_wxs(args: argparse.Namespace, artifact_dir: Path | None = None) -> Non
 
     write_wxs(doc.root, args.output)
 
-    print(f"Written:  {args.output}")
-    print(f"Files:    {len(inputs.files)}")
+    print(f"Package:  {inputs.package.product_name}")
+    print(f"Version:  {inputs.version}  (display: {inputs.display_version})")
     print(f"Install:  {layout.display_path}")
+    print(f"Files:    {len(inputs.files)}")
+    for install_rel, source in inputs.files:
+        print(f"  {install_rel}  <-  {source.name}")
+    if inputs.legacy_dlls:
+        print(f"Legacy System32 DLLs ({len(inputs.legacy_dlls)}):")
+        for dll_name, source in inputs.legacy_dlls:
+            print(f"  {dll_name}  <-  {source}")
+    print(f"Written:  {args.output}")
 
 
 def build_all(args: argparse.Namespace) -> None:
@@ -1337,6 +1345,7 @@ def build_all(args: argparse.Namespace) -> None:
     package-specific — then loops over args.package_list, writing each package's
     .wxs to its resolved output path.
     """
+    print(f"Building packages: {', '.join(args.package_list)}")
     artifact_dir = resolve_artifact_dir(args)
     explicit_output = args.output  # Set only for single-package --output.
     for pkg_name in args.package_list:
