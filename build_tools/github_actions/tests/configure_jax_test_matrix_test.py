@@ -119,9 +119,7 @@ class BuildTestMatrixTest(unittest.TestCase):
             ),
             contextlib.redirect_stdout(io.StringIO()) as out,
         ):
-            matrix = self.matrix(
-                target="mock-family", platform="windows", size="large"
-            )
+            matrix = self.matrix(target="mock-family", platform="windows", size="large")
 
         self.assertEqual(matrix["include"], [])
         self.assertIn("::warning::", out.getvalue())
