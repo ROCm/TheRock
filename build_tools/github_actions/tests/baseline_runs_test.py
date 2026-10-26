@@ -473,6 +473,93 @@ class BaselineRunsTest(unittest.TestCase):
         self.assertEqual(baseline.job_health.failed_job_names, ())
         self.assertEqual(baseline.artifact_availability.missing_artifacts, ())
 
+    def test_select_baseline_run_accepts_one_complete_artifact_group(self):
+        run = _workflow_run("partial")
+
+        def backend_factory(workflow_run, github_repository, platform):
+            return FakeBackend(
+                [
+                    "base_lib_generic.tar.zst",
+                    "rocprofiler-sdk_lib_generic.tar.zst",
+                ]
+            )
+
+        def workflow_jobs_fetcher(workflow_run, github_repository):
+            return [_workflow_job("Build Multi-Arch Stages")]
+
+        baseline = baseline_runs.select_baseline_run(
+            required_artifact_groups={
+                "compiler-runtime": [
+                    RequiredArtifact("base", "generic"),
+                ],
+                "profiler-apps": [
+                    RequiredArtifact("rocprofiler-sdk", "generic"),
+                    RequiredArtifact("rocprofiler-systems", "generic"),
+                ],
+            },
+            platform="linux",
+            workflow_runs=[run],
+            backend_factory=backend_factory,
+            workflow_jobs_fetcher=workflow_jobs_fetcher,
+        )
+
+        self.assertIsNotNone(baseline)
+        assert baseline is not None
+        self.assertEqual(baseline.run_id, "partial")
+        self.assertEqual(
+            baseline.artifact_availability.missing_artifacts,
+            (RequiredArtifact("rocprofiler-systems", "generic"),),
+        )
+
+    def test_select_baseline_run_rejects_when_no_group_is_complete(self):
+        run = _workflow_run("incomplete")
+
+        def backend_factory(workflow_run, github_repository, platform):
+            return FakeBackend(["rocprofiler-sdk_lib_generic.tar.zst"])
+
+        def workflow_jobs_fetcher(workflow_run, github_repository):
+            return [_workflow_job("Build Multi-Arch Stages")]
+
+        baseline = baseline_runs.select_baseline_run(
+            required_artifact_groups={
+                "compiler-runtime": [
+                    RequiredArtifact("base", "generic"),
+                ],
+                "profiler-apps": [
+                    RequiredArtifact("rocprofiler-sdk", "generic"),
+                    RequiredArtifact("rocprofiler-systems", "generic"),
+                ],
+            },
+            platform="linux",
+            workflow_runs=[run],
+            backend_factory=backend_factory,
+            workflow_jobs_fetcher=workflow_jobs_fetcher,
+        )
+
+        self.assertIsNone(baseline)
+
+    def test_select_baseline_run_strict_mode_still_requires_every_pair(self):
+        run = _workflow_run("partial")
+
+        def backend_factory(workflow_run, github_repository, platform):
+            return FakeBackend(["base_lib_generic.tar.zst"])
+
+        def workflow_jobs_fetcher(workflow_run, github_repository):
+            return [_workflow_job("Build Multi-Arch Stages")]
+
+        baseline = baseline_runs.select_baseline_run(
+            required_artifacts=[
+                RequiredArtifact("base", "generic"),
+                RequiredArtifact("rocprofiler-systems", "generic"),
+            ],
+            platform="linux",
+            workflow_runs=[run],
+            backend_factory=backend_factory,
+            workflow_jobs_fetcher=workflow_jobs_fetcher,
+        )
+
+        self.assertIsNone(baseline)
+
     def test_select_baseline_run_skips_run_when_required_build_job_failed(self):
         runs = [
             _workflow_run("failed-build", conclusion="failure"),

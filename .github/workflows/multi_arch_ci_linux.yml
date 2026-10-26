@@ -61,7 +61,8 @@ jobs:
       contents: read
       id-token: write
     container:
-      image: python:3.12-slim
+      # https://hub.docker.com/_/python/tags?name=3.12-slim
+      image: python:3.12-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f
     steps:
       - name: Checking out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -151,11 +152,45 @@ jobs:
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
       test_runs_on: ${{ matrix.family_info.test-runs-on }}
+      test_runs_on_cpu: ${{ matrix.family_info.test-runs-on-cpu }}
+      tests_enabled: ${{ matrix.family_info.tests_enabled }}
       test_type: ${{ matrix.family_info.test_type || inputs.test_type }}
       # Per-family test_labels override global test_labels when specified
       # Convert array to JSON string for workflow input compatibility
       test_labels: ${{ matrix.family_info.test_labels_for_family && toJSON(matrix.family_info.test_labels_for_family) || inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
+      skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
+      changed_projects: ${{ inputs.changed_projects }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
+
+  # The same Linux build tested on WSL-hosted runners, for the families that
+  # configure_multi_arch_ci.py gave a WSL runner (ci:run-wsl).
+  test_artifacts_wsl_per_family:
+    needs: [copy_prebuilt_stages, build_multi_arch_stages]
+    name: Test ${{ matrix.family_info.amdgpu_family }} (WSL)
+    if: >-
+      ${{
+        !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') &&
+        join(fromJSON(inputs.build_config).wsl_per_family_info.*.amdgpu_family, '') != ''
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(inputs.build_config).wsl_per_family_info }}
+    uses: ./.github/workflows/test_artifacts.yml
+    with:
+      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
+      amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
+      amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
+      test_runs_on: ${{ matrix.family_info.test-runs-on }}
+      tests_enabled: ${{ matrix.family_info.tests_enabled }}
+      test_type: ${{ matrix.family_info.test_type || inputs.test_type }}
+      test_labels: ${{ matrix.family_info.test_labels_for_family && toJSON(matrix.family_info.test_labels_for_family) || inputs.test_labels }}
+      sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
+      skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
       changed_projects: ${{ inputs.changed_projects }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
@@ -212,7 +247,6 @@ jobs:
       ref: ${{ inputs.ref }}
     permissions:
       contents: read
-      id-token: write
 
   test_native_packages_rhel8:
     needs: [build_native_rpm_packages]
@@ -230,7 +264,6 @@ jobs:
       ref: ${{ inputs.ref }}
     permissions:
       contents: read
-      id-token: write
 
   test_native_packages_rhel10:
     needs: [build_native_rpm_packages]
@@ -248,7 +281,6 @@ jobs:
       ref: ${{ inputs.ref }}
     permissions:
       contents: read
-      id-token: write
 
   test_native_packages_sles16:
     needs: [build_native_rpm_packages]
@@ -266,7 +298,6 @@ jobs:
       ref: ${{ inputs.ref }}
     permissions:
       contents: read
-      id-token: write
 
   build_python_packages:
     needs: [build_multi_arch_stages]
@@ -281,7 +312,7 @@ jobs:
       multiarch_index: true
       package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
-      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_medium }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -377,6 +408,8 @@ jobs:
       jax_repository: ${{ matrix.jax_repository }}
       gfx_arch: ${{ matrix.gfx_arch }}
       jax_ref: ${{ matrix.jax_ref }}
+      rocm_jax_ref: ${{ matrix.rocm_jax_ref }}
+      wheel_type: ${{ matrix.wheel_type }}
       rocm_version: ${{ inputs.rocm_package_version }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       # One representative family, so a PR pays for the JAX tests once rather

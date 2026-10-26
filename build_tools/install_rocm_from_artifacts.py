@@ -300,7 +300,9 @@ def _untar_files(output_dir: Path, destination: Path):
     """
     log(f"Extracting {destination.name} to {str(output_dir)}")
     with tarfile.open(destination) as extracted_tar_file:
-        extracted_tar_file.extractall(output_dir, filter="tar")
+        # Preserve packaged modes and ownership; the data filter changes them.
+        # Only extract trusted ROCm artifacts: tar permits external link targets.
+        extracted_tar_file.extractall(output_dir, filter="tar")  # nosec B202
     destination.unlink()
 
 
@@ -394,10 +396,17 @@ def retrieve_artifacts_by_run_id(args):
         "host-suite-sparse_lib",
     ]
 
+    # WSL has no amdgpu kernel driver: the runtime reaches the GPU (/dev/dxg)
+    # through the WSL libhsakmt that the wsl-rocdxg stage builds. The WSL kernel
+    # release ("...-microsoft-standard-WSL2") identifies it, also in containers.
+    if "microsoft" in platform.release().lower():
+        base_artifact_patterns.append("wsl-rocdxg_lib")
+
     if args.base_only:
         argv.extend(base_artifact_patterns)
     elif any(
         [
+            args.sanity,
             args.aqlprofile,
             args.blas,
             args.debug_tools,
@@ -439,6 +448,9 @@ def retrieve_artifacts_by_run_id(args):
         argv.extend(base_artifact_patterns)
 
         extra_artifacts = []
+        if args.sanity:
+            argv.append("core-ocl_run")  # clinfo for the OpenCL sanity test
+            argv.append("hipify_run")  # hipify-clang for the HIPIFY sanity test
         if args.aqlprofile:
             extra_artifacts.append("aqlprofile")
         if args.blas:
@@ -546,8 +558,10 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rocprofiler-compute_run")
         if args.rocprofiler_systems:
             extra_artifacts.append("rocprofiler-systems")
-            # Contains executables (rocprof-sys-run, rocprof-sys-instrument, etc.)
+            # Contains executables (rocsys, rocprof-sys-run, rocprof-sys-instrument, etc.)
             argv.append("rocprofiler-systems_run")
+            # rocprofiler-systems links libprofiler-hub.so.0 at runtime.
+            argv.append("profiler-hub_lib")
             if args.tests:
                 # Tests need version.h for rocprofiler-sdk version detection.
                 argv.append("rocprofiler-sdk_dev")
@@ -1073,6 +1087,12 @@ def main(argv):
         action=argparse.BooleanOptionalAction,
     )
 
+    artifacts_group.add_argument(
+        "--sanity",
+        default=False,
+        help="Include base artifacts, clinfo, and hipify-clang for sanity tests",
+        action=argparse.BooleanOptionalAction,
+    )
     artifacts_group.add_argument(
         "--base-only", help="Include only base artifacts", action="store_true"
     )

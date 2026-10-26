@@ -6,6 +6,9 @@ distribution as Debian and RPM packages.
 This process involves both the reorganization of artifacts and the
 execution of package management tools
 
+To configure a system package manager to install ROCm from a public repository,
+see [rocm_repo_setup.md](rocm_repo_setup.md).
+
 ## General Design
 
 The required packages and their details are stored in a JSON file

@@ -58,6 +58,7 @@ See also the [ROCm Device Support Wishlist GitHub Discussion](https://github.com
 | ------------ | ----------- | ------------- | ------------- | ------------- |
 | **RDNA4**    | **gfx1201** | ✅            | ✅            | ✅            |
 | **RDNA4**    | **gfx1200** | ✅            | ✅            | ✅            |
+| **RDNA4**    | **gfx117x** | ✅            |               |               |
 | **RDNA3.5**  | **gfx1153** | ✅            | ✅            | ✅            |
 | **RDNA3.5**  | **gfx1152** | ✅            | ✅            | ✅            |
 | **RDNA3.5**  | **gfx1151** | ✅            | ✅            | ✅            |
@@ -90,6 +91,7 @@ Check [windows_support.md](https://github.com/ROCm/TheRock/blob/main/docs/develo
 | ------------ | ----------- | ------------- | ------------- | ------------- |
 | **RDNA4**    | **gfx1201** | ✅            | ✅            | ✅            |
 | **RDNA4**    | **gfx1200** | ✅            | ✅            | ✅            |
+| **RDNA4**    | **gfx117x** | ✅            |               |               |
 | **RDNA3.5**  | **gfx1153** | ✅            | ✅            | ✅            |
 | **RDNA3.5**  | **gfx1152** | ✅            | ✅            | ✅            |
 | **RDNA3.5**  | **gfx1151** | ✅            | ✅            | ✅            |
