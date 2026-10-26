@@ -5,7 +5,7 @@
 #
 # TEMPORARY: remove before merging ROCm/TheRock#9320.
 #
-# Runs multi_arch_ci_coverage_pr.yml on ROCm/rocm-libraries#11516 without
+# Runs multi_arch_ci_coverage_pr.yml on ROCm/rocm-libraries#14364 without
 # changing that repository or pull request. It does what the rocm-libraries
 # caller in docs/development/code_coverage.md does on that pull request's
 # pull_request event, with the event's commits pinned below, and names the
@@ -32,11 +32,11 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       PR_REPOSITORY: ROCm/rocm-libraries
-      PR_NUMBER: 11516
-      PR_BASE_SHA: dde230d925ff3c8e8cc3cd680ec85028c380698e
-      PR_HEAD_SHA: f274a89aa0fab447142d02c275ec5e756b571f54
-      # refs/pull/11516/merge; a caller passes github.sha.
-      PR_MERGE_SHA: b94f3fe927997c50d34b84bf2dd2e522ddc940ac
+      PR_NUMBER: 14364
+      PR_BASE_SHA: c8b0a8a3d3c1543abed1bb78535073d17649d17d
+      PR_HEAD_SHA: 9821c49d7a3fa095c5495a1577acaaf7ccd155d8
+      # refs/pull/14364/merge; a caller passes github.sha.
+      PR_MERGE_SHA: 315aec7ce492ab1f28f05b4e213e127dc1b88f76
     outputs:
       changed_projects: ${{ steps.configure.outputs.changed_projects }}
       external_repo: ${{ steps.describe.outputs.external_repo }}
