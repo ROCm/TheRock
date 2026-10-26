@@ -448,18 +448,6 @@ amdgpu_family_info_matrix = {
             # Only run tests when gfx90a label is present on PR
             "trigger_test_label_only": True,
         },
-        "windows": {
-            "test-runs-on": "",
-            "family": "gfx90a",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-            "builds_on_trigger": [
-                "postsubmit",
-                "submodule_bump",
-                "nightly",
-            ],
-            "tests_on_trigger": [],
-        },
     },
     # Limited hardware - builds on postsubmit, tests only on submodule_bump
     "gfx950": {
