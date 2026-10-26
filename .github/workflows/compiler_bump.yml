@@ -12,7 +12,6 @@
 # Key difference from multi_arch_release.yml:
 # - Builds ALL architectures (release + ASAN)
 # - Tests gfx90a, gfx94x, gfx950, gfx1151 (Linux) and gfx110x (Windows) with quick/standard test type
-# - Triggers rocgdb tests for all Linux architectures
 # - No ASAN tests (build only for downstream consumption)
 
 # Notes on security:
@@ -784,153 +783,6 @@ jobs:
           echo "## Linux Tests Triggered (gfx90a)" >> "$GITHUB_STEP_SUMMARY"
           echo "**Test Run:** ${TEST_RUN_URL}" >> "$GITHUB_STEP_SUMMARY"
 
-  # ==========================================================================
-  # Phase 3b - rocgdb tests: All Linux architectures
-  # ==========================================================================
-  trigger-rocgdb-tests-gfx90a:
-    permissions:
-      actions: write # Dispatch downstream workflows.
-    name: Trigger rocgdb Tests (gfx90a)
-    needs: [create-branch, setup-linux, build-linux]
-    if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' && ((inputs.linux_amdgpu_families || 'all') == 'all' || contains(inputs.linux_amdgpu_families, 'gfx90a')) }}
-    runs-on: ubuntu-26.04
-    steps:
-      - name: Get gfx90a family info
-        id: family-info
-        env:
-          BUILD_CONFIG: ${{ needs.setup-linux.outputs.linux_build_config }}
-        run: |
-          FAMILY_INFO=$(echo "$BUILD_CONFIG" | jq -r '.per_family_info[] | select(.amdgpu_family == "gfx90a")')
-          echo "amdgpu_targets=$(echo "$FAMILY_INFO" | jq -r '.amdgpu_targets // ""')" >> "$GITHUB_OUTPUT"
-
-      - name: Trigger rocgdb tests for gfx90a
-        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
-        with:
-          workflow: test_artifacts.yml
-          inputs: |
-            {
-              "artifact_group": "gfx90a",
-              "artifact_run_id": "${{ github.run_id }}",
-              "amdgpu_families": "gfx90a",
-              "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
-              "test_runs_on": "linux-gfx90a-1gpu-ossci-rocm",
-              "test_type": "${{ inputs.test_type || 'standard' }}",
-              "test_labels": "test:rocgdb",
-              "release_type": "dev",
-              "repository": "${{ github.repository }}",
-              "ref": "${{ needs.create-branch.outputs.branch_name }}",
-              "build_variant": "release"
-            }
-
-  trigger-rocgdb-tests-gfx94x:
-    permissions:
-      actions: write # Dispatch downstream workflows.
-    name: Trigger rocgdb Tests (gfx94X-dcgpu)
-    needs: [create-branch, setup-linux, build-linux]
-    if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' && ((inputs.linux_amdgpu_families || 'all') == 'all' || contains(inputs.linux_amdgpu_families, 'gfx94X-dcgpu')) }}
-    runs-on: ubuntu-26.04
-    steps:
-      - name: Get gfx94X-dcgpu family info
-        id: family-info
-        env:
-          BUILD_CONFIG: ${{ needs.setup-linux.outputs.linux_build_config }}
-        run: |
-          FAMILY_INFO=$(echo "$BUILD_CONFIG" | jq -r '.per_family_info[] | select(.amdgpu_family == "gfx94X-dcgpu")')
-          echo "test_runs_on=$(echo "$FAMILY_INFO" | jq -r '.["test-runs-on"] // ""')" >> "$GITHUB_OUTPUT"
-          echo "amdgpu_targets=$(echo "$FAMILY_INFO" | jq -r '.amdgpu_targets // ""')" >> "$GITHUB_OUTPUT"
-
-      - name: Trigger rocgdb tests for gfx94X-dcgpu
-        if: ${{ steps.family-info.outputs.test_runs_on != '' }}
-        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
-        with:
-          workflow: test_artifacts.yml
-          inputs: |
-            {
-              "artifact_group": "gfx94X-dcgpu",
-              "artifact_run_id": "${{ github.run_id }}",
-              "amdgpu_families": "gfx94X-dcgpu",
-              "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
-              "test_runs_on": "${{ steps.family-info.outputs.test_runs_on }}",
-              "test_type": "${{ inputs.test_type || 'standard' }}",
-              "test_labels": "test:rocgdb",
-              "release_type": "dev",
-              "repository": "${{ github.repository }}",
-              "ref": "${{ needs.create-branch.outputs.branch_name }}",
-              "build_variant": "release"
-            }
-
-  trigger-rocgdb-tests-gfx950:
-    permissions:
-      actions: write # Dispatch downstream workflows.
-    name: Trigger rocgdb Tests (gfx950-dcgpu)
-    needs: [create-branch, setup-linux, build-linux]
-    if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' && ((inputs.linux_amdgpu_families || 'all') == 'all' || contains(inputs.linux_amdgpu_families, 'gfx950-dcgpu')) }}
-    runs-on: ubuntu-26.04
-    steps:
-      - name: Get gfx950-dcgpu family info
-        id: family-info
-        env:
-          BUILD_CONFIG: ${{ needs.setup-linux.outputs.linux_build_config }}
-        run: |
-          FAMILY_INFO=$(echo "$BUILD_CONFIG" | jq -r '.per_family_info[] | select(.amdgpu_family == "gfx950-dcgpu")')
-          echo "amdgpu_targets=$(echo "$FAMILY_INFO" | jq -r '.amdgpu_targets // ""')" >> "$GITHUB_OUTPUT"
-
-      - name: Trigger rocgdb tests for gfx950-dcgpu
-        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
-        with:
-          workflow: test_artifacts.yml
-          inputs: |
-            {
-              "artifact_group": "gfx950-dcgpu",
-              "artifact_run_id": "${{ github.run_id }}",
-              "amdgpu_families": "gfx950-dcgpu",
-              "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
-              "test_runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
-              "test_type": "${{ inputs.test_type || 'standard' }}",
-              "test_labels": "test:rocgdb",
-              "release_type": "dev",
-              "repository": "${{ github.repository }}",
-              "ref": "${{ needs.create-branch.outputs.branch_name }}",
-              "build_variant": "release"
-            }
-
-  trigger-rocgdb-tests-gfx1151:
-    permissions:
-      actions: write # Dispatch downstream workflows.
-    name: Trigger rocgdb Tests (gfx1151)
-    needs: [create-branch, setup-linux, build-linux]
-    if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' && ((inputs.linux_amdgpu_families || 'all') == 'all' || contains(inputs.linux_amdgpu_families, 'gfx1151')) }}
-    runs-on: ubuntu-26.04
-    steps:
-      - name: Get gfx1151 family info
-        id: family-info
-        env:
-          BUILD_CONFIG: ${{ needs.setup-linux.outputs.linux_build_config }}
-        run: |
-          FAMILY_INFO=$(echo "$BUILD_CONFIG" | jq -r '.per_family_info[] | select(.amdgpu_family == "gfx1151")')
-          echo "test_runs_on=$(echo "$FAMILY_INFO" | jq -r '.["test-runs-on"] // ""')" >> "$GITHUB_OUTPUT"
-          echo "amdgpu_targets=$(echo "$FAMILY_INFO" | jq -r '.amdgpu_targets // ""')" >> "$GITHUB_OUTPUT"
-
-      - name: Trigger rocgdb tests for gfx1151
-        if: ${{ steps.family-info.outputs.test_runs_on != '' }}
-        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
-        with:
-          workflow: test_artifacts.yml
-          inputs: |
-            {
-              "artifact_group": "gfx1151",
-              "artifact_run_id": "${{ github.run_id }}",
-              "amdgpu_families": "gfx1151",
-              "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
-              "test_runs_on": "${{ steps.family-info.outputs.test_runs_on }}",
-              "test_type": "${{ inputs.test_type || 'standard' }}",
-              "test_labels": "test:rocgdb",
-              "release_type": "dev",
-              "repository": "${{ github.repository }}",
-              "ref": "${{ needs.create-branch.outputs.branch_name }}",
-              "build_variant": "release"
-            }
-
   trigger-windows-tests:
     permissions:
       actions: write # Dispatch downstream workflows.
@@ -1005,10 +857,6 @@ jobs:
       - trigger-linux-tests-gfx1151
       - trigger-linux-tests-gfx90a
       - trigger-gfx950-tests
-      - trigger-rocgdb-tests-gfx90a
-      - trigger-rocgdb-tests-gfx94x
-      - trigger-rocgdb-tests-gfx950
-      - trigger-rocgdb-tests-gfx1151
       - trigger-windows-tests
     if: always()
     runs-on: ubuntu-26.04
@@ -1165,26 +1013,6 @@ jobs:
           elif [ "${{ needs.trigger-gfx950-tests.result }}" == "failure" ]; then
             echo "- :x: Test trigger failed (gfx950-dcgpu)" >> "$GITHUB_STEP_SUMMARY"
           fi
-
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "### rocgdb Tests" >> "$GITHUB_STEP_SUMMARY"
-
-          # rocgdb tests per arch
-          for arch_result in \
-            "gfx90a:${{ needs.trigger-rocgdb-tests-gfx90a.result }}" \
-            "gfx94X-dcgpu:${{ needs.trigger-rocgdb-tests-gfx94x.result }}" \
-            "gfx950-dcgpu:${{ needs.trigger-rocgdb-tests-gfx950.result }}" \
-            "gfx1151:${{ needs.trigger-rocgdb-tests-gfx1151.result }}"; do
-            ARCH="${arch_result%%:*}"
-            RESULT="${arch_result##*:}"
-            if [ "$RESULT" == "success" ]; then
-              echo "- :white_check_mark: rocgdb tests triggered ($ARCH)" >> "$GITHUB_STEP_SUMMARY"
-            elif [ "$RESULT" == "failure" ]; then
-              echo "- :x: rocgdb test trigger failed ($ARCH)" >> "$GITHUB_STEP_SUMMARY"
-            elif [ "$RESULT" == "skipped" ]; then
-              echo "- :fast_forward: rocgdb tests skipped ($ARCH)" >> "$GITHUB_STEP_SUMMARY"
-            fi
-          done
 
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "### Windows" >> "$GITHUB_STEP_SUMMARY"
