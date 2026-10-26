@@ -315,6 +315,69 @@ jobs:
 value that didn't come from `docker_images.json`), fix the pin instead of
 suppressing the finding.
 
+#### Resolve docker images once per call graph
+
+When a workflow is called through several layers (a hub workflow calling a
+leaf workflow, which itself calls another reusable workflow), resolve each
+image once at the top of the call graph instead of re-running
+`resolve-docker-images.yml` at every level. Re-resolving at each layer adds
+redundant jobs and risks two layers disagreeing if `docker_images.json`
+changes between resolutions during a single run.
+
+Give the called workflow an optional `image_ref` input that defaults to an
+empty string. Gate its own resolver job on that input being empty, so a
+caller that already resolved the image skips the extra job, while a workflow
+invoked directly (for local testing, or as the top of its own call graph)
+still resolves it itself:
+
+```yaml
+on:
+  workflow_call:
+    inputs:
+      image_ref:
+        description: >-
+          Pre-resolved image reference. When empty, this workflow resolves
+          the image itself.
+        type: string
+        default: ""
+
+jobs:
+  resolve-images:
+    if: ${{ inputs.image_ref == '' }}
+    uses: ./.github/workflows/resolve-docker-images.yml
+    with:
+      image_name: no_rocm_image_ubuntu24_04
+
+  test:
+    needs: [resolve-images]
+    if: ${{ !cancelled() }}
+    container:
+      # Pinned by dockerfiles/docker_images.json; resolved at run time.
+      image: ${{ inputs.image_ref != '' && inputs.image_ref || needs.resolve-images.outputs.image_ref }} # zizmor: ignore[unpinned-images]
+```
+
+A caller that has already resolved the image passes it straight through
+instead of letting the callee resolve it again:
+
+```yaml
+jobs:
+  resolve-images:
+    uses: ./.github/workflows/resolve-docker-images.yml
+    with:
+      image_name: no_rocm_image_ubuntu24_04
+
+  test:
+    needs: [resolve-images]
+    uses: ./.github/workflows/test.yml
+    with:
+      image_ref: ${{ needs.resolve-images.outputs.image_ref }}
+```
+
+Give the `test` job `if: ${{ !cancelled() }}` whenever it would otherwise have
+no `if:` of its own, since its `resolve-images` dependency is conditionally
+skipped and GitHub Actions otherwise skips downstream jobs whose needs were
+skipped.
+
 #### Security - Disable checkout credential persistence
 
 Set `persist-credentials: false` on `actions/checkout` unless later Git
