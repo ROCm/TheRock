@@ -12,7 +12,7 @@
 #     workflow can run from a non-default branch. On push there are no inputs,
 #     so every input below has a fallback in the expressions ("inputs.x || default").
 
-name: Windows PyTorch ROCm build and test
+name: Windows PyTorch ROCm build and test (four GPU families)
 
 on:
   push:
@@ -26,9 +26,12 @@ on:
         description: >-
           Semicolon-separated AMD GPU families to build for (for example
           'gfx120X-all'). Expanded to gfx targets by TheRock's
-          expand_amdgpu_families.py. Default: gfx120X-all.
+          expand_amdgpu_families.py. Default: the four families tested below
+          (gfx103X-all;gfx110X-all;gfx1151;gfx120X-all).
+          The test job runs one job per family listed in its matrix, so a smaller
+          build here makes the other families' test jobs fail.
         type: string
-        default: "gfx120X-all"
+        default: "gfx103X-all;gfx110X-all;gfx1151;gfx120X-all"
       python_version:
         description: Python version to build wheels for. Default 3.12 (used by TheRock's own dispatched Windows builds that succeeded).
         type: string
@@ -70,10 +73,6 @@ on:
         description: Also run the PyTorch tests on a GPU runner after the build (the test runners are scarce; leave off unless needed).
         type: boolean
         default: false
-      test_runs_on:
-        description: Test runner label (GPU). Must match the GPU family built. Default windows-gfx120X-gpu-rocm.
-        type: string
-        default: "windows-gfx120X-gpu-rocm"
       prebuilt_run_id:
         description: >-
           Skip the build and test the wheels uploaded by this earlier run of this
@@ -83,7 +82,7 @@ on:
         default: ""
 
 run-name: >-
-  Windows PyTorch ROCm build (${{ inputs.amdgpu_families || 'gfx120X-all' }},
+  Windows PyTorch ROCm build (${{ inputs.amdgpu_families || 'gfx103X-all;gfx110X-all;gfx1151;gfx120X-all' }},
   py ${{ inputs.python_version || '3.12' }}, torch ${{ inputs.pytorch_git_ref || 'nightly' }})
 
 # A new push to the branch cancels the previous run, so a shared runner is not
@@ -103,14 +102,14 @@ jobs:
     # Same expression as TheRock: the runner label is only used for repositories
     # owned by the ROCm organization; anything else falls back to a GitHub-hosted runner.
     runs-on: ${{ github.repository_owner == 'ROCm' && (inputs.build_runs_on || 'aws-windows-scale-rocm-prod-mix') || 'windows-2022' }}
-    timeout-minutes: 240
+    timeout-minutes: 360
     env:
       PYTHON_VERSION: ${{ inputs.python_version || '3.12' }}
       PYTORCH_GITREPO_ORIGIN: ${{ inputs.pytorch_gitrepo_origin || '' }}
       PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref || 'nightly' }}
       ROCM_VERSION: ${{ inputs.rocm_version || '10.2.0a20261012' }}
       ROCM_INDEX_URL: ${{ inputs.rocm_package_index_url || 'https://nightly.repo.amd.com/rocm/whl-next' }}
-      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx120X-all' }}
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx103X-all;gfx110X-all;gfx1151;gfx120X-all' }}
       BUILD_RELEASE_TYPE: ${{ inputs.release_type || 'dev' }}
       CHECKOUT_ROOT: B:/src
       # Note the \ here instead of /. This should be used from 'cmd' not 'bash'!
@@ -292,18 +291,28 @@ jobs:
   # ordinary push, because the GPU runners are scarce.
   # ---------------------------------------------------------------------------
   test_pytorch_wheels:
-    name: Test PyTorch | ${{ inputs.amdgpu_families || 'gfx120X-all' }}
+    name: Test PyTorch | ${{ matrix.name }}
     needs: build_pytorch_wheels
     # always(): the build job may be skipped (prebuilt run), and a skipped need would otherwise skip this job.
     if: ${{ always() && (needs.build_pytorch_wheels.result == 'success' || needs.build_pytorch_wheels.result == 'skipped') && (inputs.run_tests == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[run-tests]'))) }}
-    runs-on: ${{ inputs.test_runs_on || 'windows-gfx120X-gpu-rocm' }}
+    runs-on: ${{ matrix.runs_on }}
     timeout-minutes: 180
+    # One test job per GPU family, each on that family's Windows GPU runner label
+    # (labels from TheRock's amdgpu_family_matrix.py). The families must be part of the build above.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "gfx103X (RDNA2)", family: "gfx103X-all", runs_on: "windows-gfx1030-gpu-rocm" }
+          - { name: "gfx110X (RDNA3)", family: "gfx110X-all", runs_on: "windows-gfx110X-gpu-rocm" }
+          - { name: "gfx1151 (Strix Halo)", family: "gfx1151", runs_on: "windows-gfx1151-gpu-rocm" }
+          - { name: "gfx120X (RDNA4)", family: "gfx120X-all", runs_on: "windows-gfx120X-gpu-rocm" }
     env:
       PYTHON_VERSION: ${{ inputs.python_version || '3.12' }}
       PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref || 'nightly' }}
       ROCM_VERSION: ${{ inputs.rocm_version || '10.2.0a20261012' }}
       ROCM_INDEX_URL: ${{ inputs.rocm_package_index_url || 'https://nightly.repo.amd.com/rocm/whl-next' }}
-      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx120X-all' }}
+      AMDGPU_FAMILIES: ${{ matrix.family }}
       # Pin OpenBLAS threads to 1 for deterministic reductions (as in TheRock's test workflow).
       OPENBLAS_NUM_THREADS: "1"
       PYTORCH_NUM_PYTEST_RERUNS: "2"
@@ -341,7 +350,7 @@ jobs:
           fi
           echo "Using wheels from run ${RUN_ID}"
           echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
-          echo "VENV_DIR=${RUNNER_TEMP}/venv-${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
+          echo "VENV_DIR=${RUNNER_TEMP}/venv-${GITHUB_RUN_ID}-${AMDGPU_FAMILIES}" >> "$GITHUB_ENV"
 
       - name: Download wheels
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -450,7 +459,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: test-reports-${{ inputs.amdgpu_families || 'gfx120X-all' }}
+          name: test-reports-${{ matrix.family }}
           path: TheRock/external-builds/pytorch/pytorch/test/test-reports/
           if-no-files-found: ignore
           retention-days: 30
