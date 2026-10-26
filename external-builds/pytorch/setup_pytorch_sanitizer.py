@@ -3,10 +3,10 @@
 
 """Sanitizer setup for the PyTorch wheel build.
 
-build_prod_wheels.py calls these helpers when a sanitizer flag is set. The
-table below is the sanitizer setup. AddressSanitizer is the only row: TSan
-and LSan get a row when they have a real wheel build. The GPU list and the
-installed ROCm version stay as the caller supplied them.
+build_prod_wheels.py calls these helpers when --build-variant names a
+sanitizer. The table below is the sanitizer setup. AddressSanitizer is the
+only row: TSan and LSan get a row when they have a real wheel build. The GPU
+list and the installed ROCm version stay as the caller supplied them.
 """
 
 import os
@@ -28,7 +28,6 @@ class SanitizerSpec:
     """One sanitizer's compiler, runtime, and import-check settings."""
 
     name: str
-    arg_attr: str
     pytorch_switch: str
     runtime_filenames: tuple[str, ...]
     link_flag: str
@@ -55,7 +54,6 @@ class SanitizerSpec:
 SANITIZERS = {
     "asan": SanitizerSpec(
         name="asan",
-        arg_attr="asan",
         pytorch_switch="USE_ASAN",
         runtime_filenames=(
             "libclang_rt.asan-{machine}.so",
@@ -71,14 +69,17 @@ SANITIZERS = {
 
 
 def selected_sanitizer(args) -> SanitizerSpec | None:
-    """Return the sanitizer selected by the build arguments."""
-    selected = [
-        spec for spec in SANITIZERS.values() if getattr(args, spec.arg_attr, False)
-    ]
+    """Return the sanitizer selected by ``--build-variant``.
+
+    ``asan``, ``asan-debug``, and ``host-asan`` all select AddressSanitizer.
+    ``release`` selects none.
+    """
+    variant = getattr(args, "build_variant", "") or ""
+    selected = [spec for spec in SANITIZERS.values() if spec.name in variant]
     if not selected:
         return None
     if len(selected) > 1:
-        names = ", ".join(f"--{spec.name}" for spec in selected)
+        names = ", ".join(spec.name for spec in selected)
         raise RuntimeError(f"only one sanitizer can be selected, got {names}")
     return selected[0]
 
@@ -92,9 +93,8 @@ def apply_sanitizer_companion_policy(parser, args) -> None:
 
     An argparse mutually exclusive group cannot express this. The group sees
     that an option was present, and ``BooleanOptionalAction`` registers both
-    ``--build-triton`` and ``--no-build-triton`` in that group. ``--asan
-    --no-build-triton`` would be rejected even though the stored value is
-    false. An omitted flag stays ``None`` until the assignment below.
+    ``--build-triton`` and ``--no-build-triton`` in that group. An omitted
+    flag stays ``None`` until the assignment below.
     """
     spec = selected_sanitizer(args)
     if spec is None:
@@ -104,8 +104,8 @@ def apply_sanitizer_companion_policy(parser, args) -> None:
     ]
     if requested:
         parser.error(
-            f"--{spec.name} builds torch only and cannot be combined with "
-            + ", ".join(requested)
+            f"--build-variant={spec.name} builds torch only and cannot be "
+            "combined with " + ", ".join(requested)
         )
     for attr, _flag in _COMPANION_BUILDS:
         if getattr(args, attr) is None:
