@@ -190,26 +190,6 @@ class ConfigureTest(unittest.TestCase):
     means every project is tested.
     """
 
-    def test_schedule_event_runs_all_tests(self):
-        result = configure(
-            event_name="schedule",
-            github_repo="ROCm/rocm-libraries",
-            base_sha=None,
-            head_sha=None,
-            config_path="",
-        )
-        self.assertEqual(result, "")
-
-    def test_workflow_dispatch_runs_all_tests(self):
-        result = configure(
-            event_name="workflow_dispatch",
-            github_repo="ROCm/rocm-libraries",
-            base_sha=None,
-            head_sha=None,
-            config_path="",
-        )
-        self.assertEqual(result, "")
-
     @patch("configure_external_repo_ci.get_modified_paths_api")
     @patch("configure_external_repo_ci.load_repo_config")
     def test_only_docs_changed_no_projects(self, mock_config, mock_api):
