@@ -13,6 +13,14 @@ on:
         description: >-
           Optional newline-separated list of Docker build args (e.g.
           "BASE_IMAGE=...") to pass through to docker/build-push-action.
+          Ignored when BASE_IMAGE_NAME is set.
+        type: string
+        default: ""
+      BASE_IMAGE_NAME:
+        description: >-
+          Optional logical image key from dockerfiles/docker_images.json. When
+          set, it is resolved to a full image reference and passed as the
+          BASE_IMAGE build arg, instead of using BUILD_ARGS.
         type: string
         default: ""
 
@@ -36,6 +44,13 @@ jobs:
         with:
           # Image pushes use registry authentication from "Log in to the Container registry".
           persist-credentials: false
+
+      - name: Resolve base image reference
+        if: ${{ inputs.BASE_IMAGE_NAME != '' }}
+        id: resolve_base_image
+        uses: ./.github/actions/resolve_docker_image
+        with:
+          image_name: ${{ inputs.BASE_IMAGE_NAME }}
 
       - name: Log in to the Container registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -85,4 +100,4 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: ${{ inputs.BUILD_ARGS }}
+          build-args: ${{ inputs.BASE_IMAGE_NAME != '' && format('BASE_IMAGE={0}', steps.resolve_base_image.outputs.image_ref) || inputs.BUILD_ARGS }} # zizmor: ignore[unpinned-images]

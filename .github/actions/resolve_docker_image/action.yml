@@ -1,0 +1,26 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: "Resolve Docker image reference"
+
+description: "Resolve a logical image key from dockerfiles/docker_images.json to a full image reference"
+
+inputs:
+  image_name:
+    description: "Logical image key from dockerfiles/docker_images.json (e.g. therock_build_manylinux_x86_64)."
+    required: true
+
+outputs:
+  image_ref:
+    description: "Full image reference for the requested image_name"
+    value: ${{ steps.resolve.outputs.image_ref }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Resolve image reference
+      id: resolve
+      shell: bash
+      run: |
+        ref=$(python3 build_tools/resolve_docker_image.py get-image "${{ inputs.image_name }}")
+        echo "image_ref=${ref}" >> "$GITHUB_OUTPUT"
