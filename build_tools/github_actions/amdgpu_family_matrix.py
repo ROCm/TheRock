@@ -231,6 +231,8 @@ amdgpu_family_info_matrix dictionary fields:
 - test-runs-on-multi-gpu-labels: (optional) List of runner label configs for multi-GPU load balancing.
     Same format as test-runs-on-labels.
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
+- test-runs-on-wsl: (optional, linux only) GitHub runner label for WSL-hosted GPU runners. With the
+    ci:run-wsl label, the Linux build is also tested there, for components listing "wsl" in their platform.
 - family: (required) AMD GPU family name, used for test selection and artifact fetching
 - fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])
 - build_variants: (optional) list of build variants to build for this architecture (e.g. ["release", "asan"])
@@ -301,6 +303,9 @@ amdgpu_family_info_matrix = {
     "gfx110x": {
         "linux": {
             "test-runs-on": "linux-gfx110X-gpu-rocm",
+            # WSL-hosted V710 runners (TheRock-Infra wsl-* pools): Linux jobs on a
+            # Windows host whose runner lives in WSL2. Used by ci:run-wsl.
+            "test-runs-on-wsl": "wsl-gfx1101-gpu-rocm",
             "family": "gfx110X-all",
             "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
             "bypass_tests_for_releases": True,
@@ -760,6 +765,7 @@ def _extract_runner_labels_from_v1(external_config: dict) -> dict:
         "test-runs-on-multi-gpu",
         "test-runs-on-multi-gpu-labels",
         "test-runs-on-kernel",
+        "test-runs-on-wsl",
     }
 
     for _trigger, families in gpu_families.items():
@@ -908,6 +914,23 @@ def get_cpu_test_runner(platform: str) -> str:
 
 # Valid ML framework tests that can be disabled per-family
 VALID_DISABLED_FRAMEWORK_TESTS = frozenset(["pytorch", "jax"])
+
+# Opt-in label for also testing a family's Linux build on its test-runs-on-wsl runner.
+WSL_RUN_LABEL = "ci:run-wsl"
+
+
+def get_wsl_test_runner(
+    platform_info: dict, *, labels: list[str], test_runs_on: str, build_variant: str
+) -> str:
+    """WSL runner that also tests a family's Linux build, or "" for none.
+
+    platform_info is the family's "linux" entry, with runners from the CI config.
+    WSL reuses the Linux artifacts, so it follows the family's Linux GPU test
+    decision (test_runs_on) and needs ci:run-wsl. ASAN builds are not tested on WSL.
+    """
+    if WSL_RUN_LABEL not in labels or not test_runs_on or "asan" in build_variant:
+        return ""
+    return platform_info.get("test-runs-on-wsl", "")
 
 
 def is_framework_test_disabled_for_family(

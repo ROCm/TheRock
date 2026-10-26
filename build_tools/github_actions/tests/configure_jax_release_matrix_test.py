@@ -236,12 +236,14 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertNotIn(("3.11", "rocm-jaxlib-v0.11.0"), combos)
         self.assertNotIn(("3.11", "rocm-jaxlib-v0.11.1"), combos)
         self.assertNotIn(("3.11", "rocm-jaxlib-v0.11.2"), combos)
+        self.assertNotIn(("3.11", "rocm-jaxlib-v0.12.0"), combos)
         # 3.11 is still valid for refs that don't exclude it.
         self.assertIn(("3.11", "rocm-jaxlib-v0.10.2"), combos)
         # Non-excluded Python versions are still paired with the 0.11 refs.
         self.assertIn(("3.12", "rocm-jaxlib-v0.11.0"), combos)
         self.assertIn(("3.12", "rocm-jaxlib-v0.11.1"), combos)
         self.assertIn(("3.12", "rocm-jaxlib-v0.11.2"), combos)
+        self.assertIn(("3.12", "rocm-jaxlib-v0.12.0"), combos)
 
     def test_ci_builds_single_jax_ref(self):
         # CI keeps the runner queues short by building one ref, while still
@@ -251,7 +253,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
             release_type="ci",
             platform="linux",
         )
-        self.assertEqual({row["jax_ref"] for row in matrix}, {"rocm-jaxlib-v0.11.2"})
+        self.assertEqual({row["jax_ref"] for row in matrix}, {"rocm-jaxlib-v0.12.0"})
 
     def test_unknown_release_type_raises(self):
         with self.assertRaises(ValueError):
