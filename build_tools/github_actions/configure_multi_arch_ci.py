@@ -108,27 +108,6 @@ def _get_all_build_stages() -> list[str]:
 
 @dataclass
 class ExternalRepoConfig:
-    """Schema for the external_repo JSON blob a calling repo passes to TheRock.
-
-    Calling repositories (rocm-libraries, rocm-systems) serialise this as a JSON
-    object in the EXTERNAL_REPO environment variable when they invoke TheRock's
-    reusable workflows.
-
-    Required fields:
-        repository: Full GitHub repository name, e.g. "ROCm/rocm-libraries".
-
-    Optional fields:
-        event_name:     GitHub event type that triggered the calling repo's
-                        workflow (push, pull_request, schedule, ...).
-        base_sha:       Base commit SHA for diff computation.
-        head_sha:       Head commit SHA for diff computation.
-        pr_number:      Pull-request number (for PR events); used to fetch
-                        changed files via the GitHub PR-files API.
-        base_ref:       Base ref for git-diff fallback when SHAs are absent.
-        skip_ci_config: Relative path to the skip-CI TOML config file inside
-                        the calling repo (e.g. ".github/skip-ci-config.toml").
-    """
-
     repository: str
     event_name: str = ""
     base_sha: str | None = None
