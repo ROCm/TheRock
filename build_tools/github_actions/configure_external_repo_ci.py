@@ -55,6 +55,8 @@ from typing import (
     TypeVar,
 )
 
+from github_actions_api import gha_load_github_event
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -194,6 +196,47 @@ def get_modified_paths_api(
     return {f["filename"] for f in files}
 
 
+@retry(
+    max_attempts=3,
+    delay_seconds=2,
+    exceptions=(subprocess.TimeoutExpired, subprocess.CalledProcessError),
+)
+def get_pr_modified_paths_api(github_repo: str, pr_number: int) -> Optional[Set[str]]:
+    """Get paths of files changed in a PR using GitHub API (PR files endpoint).
+
+    Returns None if the result is truncated (3000+ files).
+    """
+    result = subprocess.run(
+        [
+            "gh",
+            "api",
+            "--paginate",
+            f"repos/{github_repo}/pulls/{pr_number}/files?per_page=100",
+            "--jq",
+            ".[].filename",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=120,
+    )
+    files = result.stdout.splitlines()
+    # GitHub PR files API returns max 3000 files
+    if len(files) >= 3000:
+        logger.warning("PR files API returned 3000+ files, result may be truncated")
+        return None
+    return set(files)
+
+
+def get_event_pr_number() -> Optional[int]:
+    """Return the PR number from the GitHub Actions event payload, if any."""
+    try:
+        event = gha_load_github_event()
+    except KeyError:
+        return None
+    return event.get("pull_request", {}).get("number")
+
+
 def matches_patterns(paths: Iterable[str], patterns: Iterable[str]) -> bool:
     """Check if any path matches any pattern."""
     for path in paths:
@@ -329,6 +372,10 @@ def configure(
     if event_name == "pull_request" and base_sha and head_sha:
         logger.info(f"Getting PR diff via API: {base_sha}...{head_sha}")
         modified_paths = get_modified_paths_api(github_repo, base_sha, head_sha)
+        pr_number = get_event_pr_number() if modified_paths is None else None
+        if pr_number:
+            logger.info(f"Getting PR #{pr_number} files via API")
+            modified_paths = get_pr_modified_paths_api(github_repo, pr_number)
     elif event_name == "push" and base_sha and head_sha:
         # For push, the caller passes github.event.before as base_sha;
         # the compare API does not understand git "^" ancestry syntax.
