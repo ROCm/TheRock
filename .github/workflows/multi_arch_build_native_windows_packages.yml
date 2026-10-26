@@ -40,6 +40,13 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_call:
     inputs:
       artifact_github_repo:
@@ -63,6 +70,9 @@ on:
       ref:
         type: string
         default: ""
+      quartz_tracking_id:
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -84,7 +94,7 @@ jobs:
     env:
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
       ARTIFACT_GITHUB_REPO: ${{ inputs.artifact_github_repo }}
-      PACKAGE_VERSION: ${{ inputs.rocm_version }}
+      ROCM_VERSION: ${{ inputs.rocm_version }}
       PACKAGES: ${{ inputs.packages }}
       MSI_DIR: ${{ github.workspace }}/msi-output
       RELEASE_TYPE: ${{ inputs.release_type }}
@@ -104,6 +114,31 @@ jobs:
 
       - name: Install Python requirements
         run: pip install -r requirements.txt
+
+      # The incoming rocm_version is the PEP440 wheel version (e.g.
+      # 10.2.0.dev0+<sha>), which WiX rejects (WIX0108: the MSI ProductVersion
+      # must be numeric #.#.#.#). Derive the numeric MSI ProductVersion
+      # (major.minor.<days-since-2016-04-01>.0) for Package/@Version; the full
+      # rocm_version is kept as the display version (ARP + discovery key). Writes
+      # to GITHUB_ENV rather than capturing stdout, since the helper logs there.
+      - name: Compute MSI version
+        run: |
+          python - <<'PY'
+          import os, re
+          from compute_rocm_package_version import compute_msi_build_field
+
+          rocm_version = os.environ["ROCM_VERSION"]
+          m = re.match(r"^(\d+)\.(\d+)\.", rocm_version)
+          if not m:
+              raise SystemExit(f"cannot parse major.minor from {rocm_version!r}")
+          major, minor = m.group(1), m.group(2)
+          msi_version = f"{major}.{minor}.{compute_msi_build_field()}.0"
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              f.write(f"MSI_PACKAGE_VERSION={msi_version}\n")
+          print(f"MSI ProductVersion: {msi_version}  (display {rocm_version})")
+          PY
+        env:
+          PYTHONPATH: ${{ github.workspace }}/build_tools
 
       # Pin to WiX v4: v5+ compiles the same schema but v7 gates every command
       # behind the OSMF EULA (error WIX7015), which would fail unattended CI.
@@ -131,7 +166,8 @@ jobs:
             --packages "${PACKAGES}" \
             --run-id "${ARTIFACT_RUN_ID}" \
             --run-github-repo "${ARTIFACT_GITHUB_REPO}" \
-            --package-version "${PACKAGE_VERSION}" \
+            --package-version "${MSI_PACKAGE_VERSION}" \
+            --display-version "${ROCM_VERSION}" \
             --output-dir "${MSI_DIR}"
 
           # Compile every generated .wxs into a matching .msi alongside it.
