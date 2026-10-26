@@ -164,6 +164,10 @@ on:
       quartz_tracking_id:
         type: string
         default: ""
+      image_ref:
+        description: "Already-resolved docker image reference. When empty, this workflow resolves its own image."
+        type: string
+        default: ""
   push:
     branches:
       - ADHOCBUILD
@@ -175,6 +179,7 @@ run-name: Test Artifacts (${{ inputs.amdgpu_families }}, ${{ inputs.release_type
 
 jobs:
   resolve-images:
+    if: ${{ inputs.image_ref == '' }}
     uses: ./.github/workflows/resolve-docker-images.yml
     with:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
@@ -275,7 +280,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       build_variant: ${{ inputs.build_variant }}
-      default_container_image: ${{ needs.resolve-images.outputs.image_ref }}
+      default_container_image: ${{ inputs.image_ref != '' && inputs.image_ref || needs.resolve-images.outputs.image_ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   test_components:
@@ -326,7 +331,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       build_variant: ${{ inputs.build_variant }}
-      default_container_image: ${{ needs.resolve-images.outputs.image_ref }}
+      default_container_image: ${{ inputs.image_ref != '' && inputs.image_ref || needs.resolve-images.outputs.image_ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:

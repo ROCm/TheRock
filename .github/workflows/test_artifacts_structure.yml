@@ -65,12 +65,17 @@ on:
         description: "Runner label for the build job"
         type: string
         default: "aws-linux-scale-rocm-prod"
+      image_ref:
+        description: "Already-resolved docker image reference. When empty, this workflow resolves its own image."
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
 jobs:
   resolve-images:
+    if: ${{ inputs.image_ref == '' }}
     uses: ./.github/workflows/resolve-docker-images.yml
     with:
       image_name: python_slim
@@ -78,9 +83,10 @@ jobs:
   test_artifact_structure:
     name: "Validate artifact structure"
     needs: [resolve-images]
+    if: ${{ !cancelled() }}
     runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
     container:
-      image: ${{ needs.resolve-images.outputs.image_ref }} # zizmor: ignore[unpinned-images]
+      image: ${{ inputs.image_ref != '' && inputs.image_ref || needs.resolve-images.outputs.image_ref }} # zizmor: ignore[unpinned-images]
     env:
       ARTIFACT_GITHUB_REPO: ${{ inputs.artifact_github_repo }}
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"

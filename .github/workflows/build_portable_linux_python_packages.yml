@@ -100,6 +100,10 @@ on:
         description: "Runner label for the build job"
         type: string
         default: "aws-linux-scale-rocm-medium"
+      image_ref:
+        description: "Already-resolved docker image reference. When empty, this workflow resolves its own image."
+        type: string
+        default: ""
     outputs:
       package_find_links_url:
         description: URL for pip --find-links to install built packages
@@ -115,6 +119,7 @@ run-name: Build portable Linux Python Packages (${{ inputs.artifact_group }}, ${
 
 jobs:
   resolve-images:
+    if: ${{ inputs.image_ref == '' }}
     uses: ./.github/workflows/resolve-docker-images.yml
     with:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
@@ -122,6 +127,7 @@ jobs:
 
   build_rocm_wheels:
     needs: [resolve-images]
+    if: ${{ !cancelled() }}
     name: Build Python | ${{ inputs.artifact_group }}
     # Note: GitHub-hosted runners run out of disk space for some gpu families
     runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
@@ -129,7 +135,7 @@ jobs:
       contents: read
       id-token: write
     container:
-      image: ${{ needs.resolve-images.outputs.image_ref }}
+      image: ${{ inputs.image_ref != '' && inputs.image_ref || needs.resolve-images.outputs.image_ref }} # zizmor: ignore[unpinned-images]
     outputs:
       package_find_links_url: ${{ steps.upload.outputs.package_find_links_url }}
       kpack_split: ${{ steps.upload.outputs.kpack_split }}

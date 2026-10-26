@@ -58,6 +58,16 @@ jobs:
     with:
       image_name: python_slim
 
+  resolve-images-manylinux:
+    uses: ./.github/workflows/resolve-docker-images.yml
+    with:
+      image_name: therock_build_manylinux_x86_64
+
+  resolve-images-no-rocm:
+    uses: ./.github/workflows/resolve-docker-images.yml
+    with:
+      image_name: no_rocm_image_ubuntu24_04
+
   copy_prebuilt_stages:
     name: Copy Prebuilt Stages
     needs: [resolve-images]
@@ -105,10 +115,11 @@ jobs:
 
   build_multi_arch_stages:
     name: Build Multi-Arch Stages
-    needs: copy_prebuilt_stages
+    needs: [copy_prebuilt_stages, resolve-images-manylinux]
     if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux.yml
     with:
+      image_ref: ${{ needs.resolve-images-manylinux.outputs.image_ref }}
       matrix_per_family_json: ${{ toJSON(fromJSON(inputs.build_config).per_family_info) }}
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
@@ -131,7 +142,7 @@ jobs:
       id-token: write
 
   validate_artifact_structure:
-    needs: [build_multi_arch_stages]
+    needs: [build_multi_arch_stages, resolve-images]
     name: Validate Artifact Structure
     if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') }}
     uses: ./.github/workflows/test_artifacts_structure.yml
@@ -142,9 +153,10 @@ jobs:
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      image_ref: ${{ needs.resolve-images.outputs.image_ref }}
 
   test_artifacts_per_family:
-    needs: [copy_prebuilt_stages, build_multi_arch_stages]
+    needs: [copy_prebuilt_stages, build_multi_arch_stages, resolve-images-no-rocm]
     name: Test ${{ matrix.family_info.amdgpu_family }}
     if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') }}
     strategy:
@@ -170,11 +182,12 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
+      image_ref: ${{ needs.resolve-images-no-rocm.outputs.image_ref }}
 
   # The same Linux build tested on WSL-hosted runners, for the families that
   # configure_multi_arch_ci.py gave a WSL runner (ci:run-wsl).
   test_artifacts_wsl_per_family:
-    needs: [copy_prebuilt_stages, build_multi_arch_stages]
+    needs: [copy_prebuilt_stages, build_multi_arch_stages, resolve-images-no-rocm]
     name: Test ${{ matrix.family_info.amdgpu_family }} (WSL)
     if: >-
       ${{
@@ -201,9 +214,10 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
+      image_ref: ${{ needs.resolve-images-no-rocm.outputs.image_ref }}
 
   build_native_deb_packages:
-    needs: [build_multi_arch_stages]
+    needs: [build_multi_arch_stages, resolve-images-no-rocm]
     name: Build DEB Packages
     if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
@@ -215,12 +229,13 @@ jobs:
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      image_ref: ${{ needs.resolve-images-no-rocm.outputs.image_ref }}
     permissions:
       contents: read
       id-token: write
 
   build_native_rpm_packages:
-    needs: [build_multi_arch_stages]
+    needs: [build_multi_arch_stages, resolve-images-no-rocm]
     name: Build RPM Packages
     if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
@@ -232,6 +247,7 @@ jobs:
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      image_ref: ${{ needs.resolve-images-no-rocm.outputs.image_ref }}
     permissions:
       contents: read
       id-token: write
@@ -305,7 +321,7 @@ jobs:
       contents: read
 
   build_python_packages:
-    needs: [build_multi_arch_stages]
+    needs: [build_multi_arch_stages, resolve-images-manylinux]
     name: Build Python Packages
     if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && fromJSON(inputs.build_config).build_python_packages == true }}
     uses: ./.github/workflows/build_portable_linux_python_packages.yml
@@ -320,6 +336,7 @@ jobs:
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_medium }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      image_ref: ${{ needs.resolve-images-manylinux.outputs.image_ref }}
     permissions:
       contents: read
       id-token: write
@@ -361,7 +378,7 @@ jobs:
   # in multi_arch_build_portable_linux_pytorch_wheels_ci.yml based on
   # inputs.kpack_split.
   build_pytorch_wheel_fat:
-    needs: [build_python_packages]
+    needs: [build_python_packages, resolve-images-manylinux]
     name: Build PyTorch (fat + split)
     if: >-
       ${{
@@ -388,6 +405,7 @@ jobs:
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_large }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      image_ref: ${{ needs.resolve-images-manylinux.outputs.image_ref }}
     permissions:
       contents: read
       id-token: write
