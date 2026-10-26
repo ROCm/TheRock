@@ -74,6 +74,13 @@ on:
         description: Test runner label (GPU). Must match the GPU family built. Default windows-gfx120X-gpu-rocm.
         type: string
         default: "windows-gfx120X-gpu-rocm"
+      prebuilt_run_id:
+        description: >-
+          Skip the build and test the wheels uploaded by this earlier run of this
+          workflow (its run ID). On a push, put [prebuilt:<run id>] in the commit
+          message instead. Artifacts expire after 14 days.
+        type: string
+        default: ""
 
 run-name: >-
   Windows PyTorch ROCm build (${{ inputs.amdgpu_families || 'gfx120X-all' }},
@@ -87,9 +94,11 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build_pytorch_wheels:
+    if: ${{ !inputs.prebuilt_run_id && !contains(github.event.head_commit.message, '[prebuilt:') }}
     name: Build | py ${{ inputs.python_version || '3.12' }} | torch ${{ inputs.pytorch_git_ref || 'nightly' }}
     # Same expression as TheRock: the runner label is only used for repositories
     # owned by the ROCm organization; anything else falls back to a GitHub-hosted runner.
@@ -285,7 +294,8 @@ jobs:
   test_pytorch_wheels:
     name: Test PyTorch | ${{ inputs.amdgpu_families || 'gfx120X-all' }}
     needs: build_pytorch_wheels
-    if: ${{ inputs.run_tests == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[run-tests]')) }}
+    # always(): the build job may be skipped (prebuilt run), and a skipped need would otherwise skip this job.
+    if: ${{ always() && (needs.build_pytorch_wheels.result == 'success' || needs.build_pytorch_wheels.result == 'skipped') && (inputs.run_tests == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[run-tests]'))) }}
     runs-on: ${{ inputs.test_runs_on || 'windows-gfx120X-gpu-rocm' }}
     timeout-minutes: 180
     env:
@@ -294,7 +304,6 @@ jobs:
       ROCM_VERSION: ${{ inputs.rocm_version || '10.2.0a20261012' }}
       ROCM_INDEX_URL: ${{ inputs.rocm_package_index_url || 'https://nightly.repo.amd.com/rocm/whl-next' }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx120X-all' }}
-      VENV_DIR: ${{ github.workspace }}/.venv
       # Pin OpenBLAS threads to 1 for deterministic reductions (as in TheRock's test workflow).
       OPENBLAS_NUM_THREADS: "1"
       PYTORCH_NUM_PYTEST_RERUNS: "2"
@@ -315,11 +324,32 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Download wheels built by this run
+      # Decide which run's wheels to test, and pick a venv location that is unique to
+      # this run. The test runners are persistent machines: a fixed "<workspace>/.venv"
+      # left over from an earlier job (without pip) made the first test attempt fail.
+      - name: Resolve wheel source and venv location
+        id: source
+        env:
+          PREBUILT_INPUT: ${{ inputs.prebuilt_run_id || '' }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message || '' }}
+        run: |
+          RUN_ID="${GITHUB_RUN_ID}"
+          if [ -n "${PREBUILT_INPUT}" ]; then
+            RUN_ID="${PREBUILT_INPUT}"
+          elif [[ "${COMMIT_MESSAGE}" =~ \[prebuilt:([0-9]+)\] ]]; then
+            RUN_ID="${BASH_REMATCH[1]}"
+          fi
+          echo "Using wheels from run ${RUN_ID}"
+          echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
+          echo "VENV_DIR=${RUNNER_TEMP}/venv-${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
+
+      - name: Download wheels
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: pytorch-windows-wheels-py${{ env.PYTHON_VERSION }}
           path: wheels
+          run-id: ${{ steps.source.outputs.run_id }}
+          github-token: ${{ github.token }}
 
       # Multi-arch packages use pip extras (rocm[device-gfx...]) to select the
       # GPU-specific kernels. Expand the family to the extras string.
@@ -345,6 +375,7 @@ jobs:
           TORCH_WHEEL="$(ls wheels/torch-*.whl | head -n 1)"
           echo "Installing ${TORCH_WHEEL} and rocm[${DEVICE_EXTRAS}]==${ROCM_VERSION}"
           python TheRock/build_tools/setup_venv.py "${VENV_DIR}" \
+            --clean \
             --packages "${TORCH_WHEEL} rocm[${DEVICE_EXTRAS}]==${ROCM_VERSION}" \
             --extra-index-url="${ROCM_INDEX_URL}" \
             --activate-in-future-github-actions-steps
@@ -423,3 +454,8 @@ jobs:
           path: TheRock/external-builds/pytorch/pytorch/test/test-reports/
           if-no-files-found: ignore
           retention-days: 30
+
+      - name: Remove the venv
+        if: always()
+        run: |
+          rm -rf "${VENV_DIR}" || true
