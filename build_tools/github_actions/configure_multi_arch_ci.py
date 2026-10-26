@@ -291,6 +291,11 @@ class CIInputs:
     # Non-empty when an external repo calls TheRock workflows
     external_repo: str = ""
 
+    # Short repository name (e.g., "TheRock", "rocm-libraries", "rocm-systems").
+    # Always set: derived from external_repo JSON when present, otherwise from
+    # GITHUB_REPOSITORY. Used for sanitizer trigger lookups and other repo-aware logic.
+    repository_name: str = ""
+
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
         print("CIInputs:")
@@ -420,6 +425,19 @@ class CIInputs:
                 "Windows", windows_test_labels, build_stages, allowed_labels
             )
 
+        # Derive repository_name: for external repos, parse from EXTERNAL_REPO
+        # JSON (same blob that should_skip_ci and main() also parse for other
+        # fields). For TheRock itself, use GITHUB_REPOSITORY.
+        external_repo_raw = os.environ.get("EXTERNAL_REPO", "")
+        if external_repo_raw:
+            repository_name = (
+                json.loads(external_repo_raw).get("repository", "").split("/")[-1]
+            )
+        else:
+            repository_name = (
+                os.environ.get("GITHUB_REPOSITORY", "").split("/")[-1]
+            )
+
         inputs = CIInputs(
             run_id=run_id,
             event_name=event_name,
@@ -451,7 +469,8 @@ class CIInputs:
             baseline_repository=os.environ.get("BASELINE_REPOSITORY")
             or os.environ.get("THEROCK_REPOSITORY", ""),
             changed_projects=_parse_comma_list(os.environ.get("CHANGED_PROJECTS", "")),
-            external_repo=os.environ.get("EXTERNAL_REPO", ""),
+            external_repo=external_repo_raw,
+            repository_name=repository_name,
         )
         inputs.validate()
         return inputs
@@ -848,19 +867,7 @@ def should_skip_ci(
     # from the TOML config. This allows external repos to skip TheRock CI when only
     # docs/metadata files are changed.
     if ci_inputs.external_repo:
-        try:
-            external_repo = json.loads(ci_inputs.external_repo)
-        except (json.JSONDecodeError, TypeError) as e:
-            raise ValueError(
-                f"Invalid external_repo JSON: {ci_inputs.external_repo!r}"
-            ) from e
-
-        if not isinstance(external_repo, dict):
-            raise ValueError(
-                f"external_repo must be a JSON object, got: {type(external_repo).__name__}"
-            )
-
-        repo_name = external_repo.get("repository", "").split("/")[-1]
+        external_repo = json.loads(ci_inputs.external_repo)
 
         # Get changed files via helper function (uses API or git diff)
         changed_files = get_changed_files_for_external_repo(external_repo)
@@ -872,7 +879,7 @@ def should_skip_ci(
             skip_ci_patterns = load_skip_ci_patterns_for_external_repo(skip_ci_config)
 
         # Evaluate skip logic
-        if not is_ci_run_required(changed_files, skip_ci_patterns, repo_name):
+        if not is_ci_run_required(changed_files, skip_ci_patterns, ci_inputs.repository_name):
             print("  External repo build: CI can be skipped")
             return True
 
@@ -1541,49 +1548,43 @@ def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[s
     return triggers
 
 
-def _get_external_repo_name(ci_inputs: CIInputs) -> str:
-    """Extract the short repo name from external_repo JSON, or empty string."""
-    if not ci_inputs.external_repo:
-        return ""
-    try:
-        repo_json = json.loads(ci_inputs.external_repo)
-    except (json.JSONDecodeError, TypeError):
-        return ""
-    return repo_json.get("repository", "").split("/")[-1]
-
-
 def _resolve_sanitizer_variant(
     ci_inputs: CIInputs,
     git_context: GitContext,
 ) -> str | None:
-    """Return the sanitizer variant for the current (source, trigger) pair, or None."""
+    """Return the sanitizer variant for the current (source, trigger) pair, or None.
+
+    Uses ci_inputs to determine the repository and trigger type, then looks up
+    the matching sanitizer variant from amdgpu_family_matrix.py config. This
+    logic is uniform for both external repos and TheRock submodule bumps.
+    """
     current_triggers = _get_current_triggers(ci_inputs, git_context)
     if not current_triggers:
         return None
 
+    # Determine source(s) to check against sanitizer_triggers config.
+    # External repos: single source from ci_inputs.repository_name.
+    # TheRock submodule bumps: each changed submodule basename is a source.
+    # TheRock non-submodule triggers: use repository_name (e.g., "TheRock").
+    sources: list[str] = []
     if ci_inputs.external_repo:
-        source = _get_external_repo_name(ci_inputs)
-        if not source:
-            return None
-        for trigger in current_triggers:
-            variant = get_sanitizer_variant_for_trigger(source, trigger)
-            if variant:
-                print(f"  Sanitizer rule matched: {source} + {trigger} -> {variant}")
-                return variant
+        sources = [ci_inputs.repository_name]
     elif "submodule_bump" in current_triggers:
         if git_context.changed_files is None or git_context.submodule_paths is None:
             return None
         changed_submodules = set(git_context.submodule_paths) & set(
             git_context.changed_files
         )
-        for submodule_path in changed_submodules:
-            # Match by basename (e.g., "compiler/amd-llvm" -> "amd-llvm")
-            source = submodule_path.rsplit("/", 1)[-1]
-            variant = get_sanitizer_variant_for_trigger(source, "submodule_bump")
+        sources = [path.rsplit("/", 1)[-1] for path in changed_submodules]
+    else:
+        # TheRock non-submodule triggers (e.g., nightly, presubmit)
+        sources = [ci_inputs.repository_name]
+
+    for source in sources:
+        for trigger in current_triggers:
+            variant = get_sanitizer_variant_for_trigger(source, trigger)
             if variant:
-                print(
-                    f"  Sanitizer rule matched: {source} (submodule_bump) -> {variant}"
-                )
+                print(f"  Sanitizer rule matched: {source} + {trigger} -> {variant}")
                 return variant
 
     return None
@@ -2260,22 +2261,7 @@ def main():
 
     # Check if this is an external repo build (e.g., rocm-libraries calling TheRock workflows)
     if ci_inputs.external_repo:
-        # External repo: use repo name for stage reuse analysis.
-        # external_repo is JSON like {"repository":"ROCm/rocm-libraries","ref":"..."}
-        try:
-            external_repo = json.loads(ci_inputs.external_repo)
-        except (json.JSONDecodeError, TypeError) as exc:
-            raise ValueError(
-                f"EXTERNAL_REPO contains invalid JSON: {ci_inputs.external_repo!r}"
-            ) from exc
-
-        repo_full_name = external_repo.get("repository", "")
-        if not repo_full_name:
-            raise ValueError(
-                f"EXTERNAL_REPO missing 'repository' field: {ci_inputs.external_repo!r}"
-            )
-        external_repo_name = repo_full_name.split("/")[-1]
-        git_context = GitContext.from_external_repo(external_repo_name)
+        git_context = GitContext.from_external_repo(ci_inputs.repository_name)
     elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.
