@@ -87,15 +87,6 @@ if(WIN32)
   list(APPEND THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS -Wno-duplicate-decl-specifier)
 endif()
 
-# Options added to every subproject when THEROCK_FLAG_WINDOWS_DRIVER_BUILD is set.
-# The compile flag is spelled per compiler; the link flag goes through CMake's
-# LINKER: prefix, which handles the driver difference.
-# /machine and /DYNAMICBASE are omitted: CMake emits the former and the linker
-# defaults to the latter.
-set(THEROCK_WINDOWS_DRIVER_BUILD_MSVC_COMPILE_FLAGS "/guard:cf")
-set(THEROCK_WINDOWS_DRIVER_BUILD_CLANG_COMPILE_FLAGS "-mguard=cf")
-set(THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS "/guard:cf")
-
 # Generates a command prefix that can be prepended to any custom command line
 # to perform log/console redirection and pretty printing.
 # LOG_FILE: If given, command output will also be sent to this log file. If
@@ -879,16 +870,6 @@ function(therock_cmake_subproject_activate target_name)
     string(APPEND _init_contents "add_link_options(\"LINKER:/Brepro\")\n")
   endif()
 
-  # Link half of the driver build options. This cannot go through
-  # CMAKE_<TYPE>_LINKER_FLAGS_INIT in the toolchain file: the private link dir
-  # handling above appends to CMAKE_<TYPE>_LINKER_FLAGS before enable_language()
-  # has populated it from *_INIT, which shadows the cache value and drops
-  # whatever the toolchain set.
-  if(MSVC AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
-    string(APPEND _init_contents
-      "add_link_options(\"LINKER:${THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS}\")\n")
-  endif()
-
   if(_dep_provider_file)
     string(APPEND _init_contents "include(${_dep_provider_file})\n")
   endif()
@@ -1642,6 +1623,32 @@ function(therock_filter_amdgpu_targets out_var project_name)
   set("${out_var}" "${_filtered}" PARENT_SCOPE)
 endfunction()
 
+# Resolve whether <subproject_name> still has supported gfx targets after the
+# per-arch EXCLUDE_TARGET_PROJECTS filter. Writes ON/OFF into <out_var> in the
+# caller's scope and logs a STATUS line when it flips to OFF.
+function(therock_check_subproject_targets out_var subproject_name)
+  cmake_parse_arguments(ARG "" "TARGETS_VAR;DEFAULT" "" ${ARGN})
+  if(NOT ARG_TARGETS_VAR)
+    set(ARG_TARGETS_VAR "THEROCK_AMDGPU_TARGETS")
+  endif()
+  if(NOT DEFINED ARG_DEFAULT)
+    set(ARG_DEFAULT ON)
+  endif()
+
+  set(_enabled "${ARG_DEFAULT}")
+  set(_targets "${${ARG_TARGETS_VAR}}")
+  if(_targets AND NOT "${_targets}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_filtered "${subproject_name}" ${_targets})
+    if(NOT _filtered)
+      message(STATUS
+        "${subproject_name}: no supported gfx targets remain after filtering "
+        "(${ARG_TARGETS_VAR}='${_targets}'); skipping subproject.")
+      set(_enabled OFF)
+    endif()
+  endif()
+  set(${out_var} "${_enabled}" PARENT_SCOPE)
+endfunction()
+
 # Filters the target's THEROCK_AMDGPU_TARGETS property based on global settings for the project.
 function(_therock_filter_project_gpu_targets out_var target_name)
   get_property(_excludes GLOBAL PROPERTY "THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${target_name}")
@@ -1785,18 +1792,6 @@ function(_therock_cmake_subproject_setup_toolchain
     endif()
   endif()
 
-  # Compile half of the driver build options. The link half is emitted as
-  # add_link_options() in the project_init file.
-  if(MSVC AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
-    if(compiler_toolchain)
-      set(_driver_build_compile_flags "${THEROCK_WINDOWS_DRIVER_BUILD_CLANG_COMPILE_FLAGS}")
-    else()
-      set(_driver_build_compile_flags "${THEROCK_WINDOWS_DRIVER_BUILD_MSVC_COMPILE_FLAGS}")
-    endif()
-    string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" ${_driver_build_compile_flags}\")\n")
-    string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_driver_build_compile_flags}\")\n")
-  endif()
-
   # Customize debug info generation.
   if(THEROCK_MINIMAL_DEBUG_INFO)
     # System toolchain can be either MSVC or another system compiler.
@@ -1901,6 +1896,9 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-path=@_hip_dist_dir@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-device-lib-path=@_amd_llvm_device_lib_path@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER \"@AMD_LLVM_CXX_COMPILER@\")\n")
+    if(CMAKE_HIP_COMPILER_LAUNCHER)
+      string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER_LAUNCHER \"@CMAKE_HIP_COMPILER_LAUNCHER@\")\n")
+    endif()
     if(THEROCK_VERBOSE)
       message(STATUS "HIP_DIR = ${_hip_dist_dir}")
     endif()

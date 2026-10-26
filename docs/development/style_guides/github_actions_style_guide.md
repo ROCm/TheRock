@@ -57,7 +57,7 @@ Benefits:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-24.04  # We can change this across our projects when we want
+    runs-on: ubuntu-26.04  # We can change this across our projects when we want
 ```
 
 ❌ **Avoid:**
@@ -378,7 +378,7 @@ on:
 
 jobs:
   notify:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Notify Quartz
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
@@ -493,7 +493,7 @@ jobs:
   trigger_workflow:
     permissions:
       actions: write # Dispatch a downstream workflow.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
@@ -527,9 +527,34 @@ jobs:
     uses: ./.github/workflows/test.yml
 
   trigger_workflow:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
           workflow: downstream.yml
 ```
+
+#### Security - Limit GitHub App token permissions
+
+When creating a GitHub App token, explicitly request only the permissions its
+consumers need. Without `permission-*` inputs, `actions/create-github-app-token`
+inherits all installation permissions. See
+[zizmor's github-app audit](https://docs.zizmor.sh/audits/#github-app) and the
+[action's permission inputs](https://github.com/actions/create-github-app-token#permission-permission-name).
+
+For example, a token used only to create tags needs contents write access:
+
+```yaml
+- name: Create tagging token
+  id: tagging-token
+  uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+  with:
+    app-id: ${{ secrets.APP_ID }}
+    private-key: ${{ secrets.APP_PRIVATE_KEY }}
+    permission-contents: write # Create tags.
+```
+
+Omitting both `owner` and `repositories` scopes the token to the current
+repository. For cross-repository operations, set `owner` and `repositories` to
+limit access to the required repositories. The App installation must already
+allow every requested permission.
