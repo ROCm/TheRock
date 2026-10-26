@@ -386,32 +386,37 @@ type = "target-neutral"
 artifact_deps = ["sysdeps"]
 feature_group = "MEDIA_LIBS" # Controlled by THEROCK_ENABLE_MEDIA_LIBS
 
+# expat, gmp, mpfr and ncurses are linked by rocgdb and by nothing else, so
+# they are grouped with it: CI builds them in the debug-tools stage, and
+# THEROCK_ENABLE_DEBUG_TOOLS instead of CORE decides whether they are built by
+# default.  If anything else starts linking one, it belongs with the core
+# sysdeps instead.
 [artifacts.sysdeps-expat]
-artifact_group = "third-party-sysdeps"
+artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = []
-feature_group = "CORE"
+feature_group = "DEBUG_TOOLS"
 disable_platforms = ["windows"]
 
 [artifacts.sysdeps-gmp]
-artifact_group = "third-party-sysdeps"
+artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = []
-feature_group = "CORE"
+feature_group = "DEBUG_TOOLS"
 disable_platforms = ["windows"]
 
 [artifacts.sysdeps-mpfr]
-artifact_group = "third-party-sysdeps"
+artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = ["sysdeps-gmp"]  # mpfr depends on gmp
-feature_group = "CORE"
+feature_group = "DEBUG_TOOLS"
 disable_platforms = ["windows"]
 
 [artifacts.sysdeps-ncurses]
-artifact_group = "third-party-sysdeps"
+artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = []
-feature_group = "CORE"
+feature_group = "DEBUG_TOOLS"
 disable_platforms = ["windows"]
 
 [artifacts.sysdeps-libmnl]
