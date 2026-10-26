@@ -12,7 +12,7 @@
 #     workflow can run from a non-default branch. On push there are no inputs,
 #     so every input below has a fallback in the expressions ("inputs.x || default").
 
-name: Windows PyTorch ROCm build
+name: Windows PyTorch ROCm build and test
 
 on:
   push:
@@ -66,6 +66,14 @@ on:
         description: Build runner label.
         type: string
         default: "aws-windows-scale-rocm-prod-mix"
+      run_tests:
+        description: Also run the PyTorch tests on a GPU runner after the build (the test runners are scarce; leave off unless needed).
+        type: boolean
+        default: false
+      test_runs_on:
+        description: Test runner label (GPU). Must match the GPU family built. Default windows-gfx120X-gpu-rocm.
+        type: string
+        default: "windows-gfx120X-gpu-rocm"
 
 run-name: >-
   Windows PyTorch ROCm build (${{ inputs.amdgpu_families || 'gfx120X-all' }},
@@ -259,3 +267,159 @@ jobs:
           path: ${{ env.PACKAGE_DIST_DIR }}
           if-no-files-found: error
           retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Test job (draft). Runs the same six suites as TheRock's Windows test jobs,
+  # on a GPU runner, using the wheel built by the job above.
+  #
+  # Differences from TheRock's test_pytorch_wheels.yml:
+  #   - The wheel comes from this run's GitHub artifact, not from a package index
+  #     (TheRock publishes to S3; this workflow has no AWS credentials).
+  #   - The fat torch wheel is not kpack-split here, so the GPU kernels come from
+  #     the rocm[device-...] extra at the same ROCm version, as in the local builds.
+  #   - No Quartz notifications.
+  # The test job only starts when the run was dispatched with run_tests = true, or
+  # when the commit message of a push contains "[run-tests]". It never runs on an
+  # ordinary push, because the GPU runners are scarce.
+  # ---------------------------------------------------------------------------
+  test_pytorch_wheels:
+    name: Test PyTorch | ${{ inputs.amdgpu_families || 'gfx120X-all' }}
+    needs: build_pytorch_wheels
+    if: ${{ inputs.run_tests == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[run-tests]')) }}
+    runs-on: ${{ inputs.test_runs_on || 'windows-gfx120X-gpu-rocm' }}
+    timeout-minutes: 180
+    env:
+      PYTHON_VERSION: ${{ inputs.python_version || '3.12' }}
+      PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref || 'nightly' }}
+      ROCM_VERSION: ${{ inputs.rocm_version || '10.2.0a20261012' }}
+      ROCM_INDEX_URL: ${{ inputs.rocm_package_index_url || 'https://nightly.repo.amd.com/rocm/whl-next' }}
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx120X-all' }}
+      VENV_DIR: ${{ github.workspace }}/.venv
+      # Pin OpenBLAS threads to 1 for deterministic reductions (as in TheRock's test workflow).
+      OPENBLAS_NUM_THREADS: "1"
+      PYTORCH_NUM_PYTEST_RERUNS: "2"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout TheRock (test scripts)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: ROCm/TheRock
+          ref: ${{ inputs.therock_ref || 'main' }}
+          path: TheRock
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Download wheels built by this run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: pytorch-windows-wheels-py${{ env.PYTHON_VERSION }}
+          path: wheels
+
+      # Multi-arch packages use pip extras (rocm[device-gfx...]) to select the
+      # GPU-specific kernels. Expand the family to the extras string.
+      - name: Expand GPU family to device extras
+        id: expand
+        working-directory: TheRock
+        run: |
+          python build_tools/github_actions/expand_amdgpu_families.py \
+            --amdgpu-families "${AMDGPU_FAMILIES}" \
+            --output-mode=device-extras
+
+      - name: Set git options
+        run: |
+          git config --global --add safe.directory $PWD
+          git config --global core.longpaths true
+
+      - name: Set up virtual environment
+        timeout-minutes: 15
+        env:
+          DEVICE_EXTRAS: ${{ steps.expand.outputs.device_extras }}
+        run: |
+          ls -l wheels
+          TORCH_WHEEL="$(ls wheels/torch-*.whl | head -n 1)"
+          echo "Installing ${TORCH_WHEEL} and rocm[${DEVICE_EXTRAS}]==${ROCM_VERSION}"
+          python TheRock/build_tools/setup_venv.py "${VENV_DIR}" \
+            --packages "${TORCH_WHEEL} rocm[${DEVICE_EXTRAS}]==${ROCM_VERSION}" \
+            --extra-index-url="${ROCM_INDEX_URL}" \
+            --activate-in-future-github-actions-steps
+
+      # Check out the same PyTorch commit the wheel was built from, for the test files.
+      - name: Checkout PyTorch test sources
+        timeout-minutes: 30
+        working-directory: TheRock
+        run: |
+          if [ "${PYTORCH_GIT_REF}" = "nightly" ]; then
+            ORIGIN="https://github.com/pytorch/pytorch.git"
+          else
+            ORIGIN="https://github.com/ROCm/pytorch.git"
+          fi
+          TORCH_SHA=$(python -c "import torch; print(torch.version.git_version)")
+          echo "Pinning pytorch test source to wheel commit: ${TORCH_SHA}"
+          python external-builds/pytorch/pytorch_torch_repo.py checkout \
+            --gitrepo-origin "${ORIGIN}" \
+            --repo-hashtag "${TORCH_SHA}" \
+            --no-hipify \
+            --no-submodules
+
+      - name: Install test requirements
+        working-directory: TheRock
+        run: |
+          python -m pip install -r external-builds/pytorch/requirements-test.txt
+          python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
+          pip freeze
+
+      - name: Driver / GPU sanity check
+        timeout-minutes: 3
+        working-directory: TheRock
+        run: |
+          python ./build_tools/print_driver_gpu_info.py
+
+      - name: Run rocm-sdk sanity tests
+        timeout-minutes: 5
+        run: |
+          rocm-sdk test
+
+      - name: Run PyTorch smoketests
+        timeout-minutes: 10
+        working-directory: TheRock
+        run: |
+          python ./external-builds/pytorch/run_pytorch_smoke_tests.py -- \
+            --log-cli-level=INFO \
+            -v
+
+      # Same command and suite list as TheRock's Windows test jobs (test_nn is
+      # excluded on Windows by PyTorch's own blocklist). Add --shard N --num-shards M
+      # (or SHARD_NUMBER / NUM_TEST_SHARDS) if a run needs to be split to stay
+      # under the 3 hour limit.
+      - name: Run PyTorch tests
+        timeout-minutes: 120
+        working-directory: TheRock
+        run: |
+          python ./external-builds/pytorch/run_pytorch_tests_full.py \
+            --test-config default \
+            --device-query unique \
+            --gpu-policy single \
+            --include \
+              test_nn \
+              test_torch \
+              test_cuda \
+              test_unary_ufuncs \
+              test_binary_ufuncs \
+              test_autograd \
+            -- \
+            --continue-on-collection-errors
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-reports-${{ inputs.amdgpu_families || 'gfx120X-all' }}
+          path: TheRock/external-builds/pytorch/pytorch/test/test-reports/
+          if-no-files-found: ignore
+          retention-days: 30
