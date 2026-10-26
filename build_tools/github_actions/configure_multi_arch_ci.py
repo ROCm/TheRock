@@ -1730,11 +1730,20 @@ def _expand_build_config_for_platform(
             # host-asan runs on the regular test pool (not sandbox) since it
             # only instruments host code and doesn't need the ASAN-specific
             # sandbox runners that full asan/asan-debug require.
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+            # host-asan tests run on presubmit/submodule_bump (rocm-systems/rocm-libraries)
+            # and nightly, unlike full ASAN which is nightly-only.
+            # "nightly" covers other families (e.g. gfx950); gfx90a uses presubmit/submodule_bump.
+            host_asan_triggers = {"presubmit", "submodule_bump", "nightly"}
+            current_triggers = _get_current_triggers(ci_inputs, git_context)
+            if not (
+                ci_inputs.is_schedule
+                or ci_inputs.is_workflow_dispatch
+                or current_triggers & host_asan_triggers
+            ):
                 test_runs_on = ""
                 print(
-                    f"  {family_name}: host-asan tests only run on nightly, "
-                    f"disabling tests"
+                    f"  {family_name}: host-asan tests only run on presubmit, "
+                    f"submodule_bump, or nightly, disabling tests"
                 )
             else:
                 # Keep the regular test-runs-on runner (already set above)
@@ -1791,6 +1800,42 @@ def _expand_build_config_for_platform(
             if not should_run:
                 test_runs_on = ""
                 print(f"  {family_name}: tests disabled ({reason})")
+
+        # Restrict tests to a specific set of source repos when test_source_repos is set.
+        # Applied after trigger gating so test_only_families (ci:gfx* labels) still bypass.
+        # Mirrors _resolve_sanitizer_variant: checks external_repo first, then native
+        # submodule paths (basename match) for TheRock-native submodule bump builds.
+        # workflow_dispatch is excluded: explicit user intent should not be silently
+        # blocked by the absence of external_repo or file change data.
+        test_source_repos = platform_info.get("test_source_repos")
+        if (
+            test_source_repos
+            and test_runs_on
+            and family_name not in test_only_families
+            and not ci_inputs.is_workflow_dispatch
+            and "ci:run-all-archs" not in ci_inputs.pr_labels
+        ):
+            source_matched = False
+            if ci_inputs.external_repo:
+                source = _get_external_repo_name(ci_inputs)
+                source_matched = source in test_source_repos
+            elif (
+                git_context.changed_files is not None
+                and git_context.submodule_paths is not None
+            ):
+                changed_submodules = set(git_context.submodule_paths) & set(
+                    git_context.changed_files
+                )
+                source_matched = any(
+                    path.rsplit("/", 1)[-1] in test_source_repos
+                    for path in changed_submodules
+                )
+            if not source_matched:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: tests disabled "
+                    f"(source not in test_source_repos={test_source_repos})"
+                )
 
         # If test_type_for_family is set, force the test type for this family.
         # This overrides the global test_type, allowing families with limited

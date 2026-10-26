@@ -184,6 +184,8 @@ class TestTriggerFiltering(unittest.TestCase):
         self.assertIn("gfx950", result)
         # gfx900 only builds on nightly
         self.assertNotIn("gfx900", result)
+        # gfx90a is now presubmit/submodule_bump only; must not appear on postsubmit
+        self.assertNotIn("gfx90a", result)
 
     def test_multiple_triggers_union(self):
         """Multiple trigger types return union of matching families."""
@@ -614,7 +616,9 @@ class TestSanitizerTriggerRules(unittest.TestCase):
         from amdgpu_family_matrix import get_sanitizer_variant_for_trigger
 
         test_cases = [
+            ("rocm-systems", "presubmit", "host-asan"),
             ("rocm-systems", "submodule_bump", "host-asan"),
+            ("rocm-libraries", "presubmit", "host-asan"),
             ("rocm-libraries", "submodule_bump", "host-asan"),
             ("rocm-libraries", "nightly", "asan"),
             ("rockrel", "nightly", "asan-debug"),
@@ -631,8 +635,9 @@ class TestSanitizerTriggerRules(unittest.TestCase):
         from amdgpu_family_matrix import get_sanitizer_variant_for_trigger
 
         self.assertIsNone(get_sanitizer_variant_for_trigger("unknown-repo", "nightly"))
+        # rocm-systems postsubmit has no sanitizer variant
         self.assertIsNone(
-            get_sanitizer_variant_for_trigger("rocm-systems", "presubmit")
+            get_sanitizer_variant_for_trigger("rocm-systems", "postsubmit")
         )
 
 

@@ -1067,6 +1067,9 @@ class TestSelectTargets(unittest.TestCase):
         self.assertIn("gfx950", result.linux_families)
         # gfx125x is build-only, but should still be covered by default builds.
         self.assertIn("gfx125x", result.linux_families)
+        # gfx90a has presubmit in builds_on_trigger so it appears in push (which
+        # queries presubmit+postsubmit families). Tests are gated by test_source_repos.
+        self.assertIn("gfx90a", result.linux_families)
 
     def test_schedule_returns_all_families(self):
         """Schedule trigger selects all families (presubmit+postsubmit+nightly)."""
@@ -2295,10 +2298,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 cm.GitContext.from_external_repo("rockrel"),
                 "linux-release-asan-debug",
             ),
-            # -- Presubmit from rocm-systems/rocm-libraries: host-asan NOT triggered --
-            # host-asan only triggers on submodule_bump, not presubmit.
+            # -- Presubmit from rocm-systems/rocm-libraries: host-asan IS triggered --
+            # host-asan triggers on both presubmit and submodule_bump.
             (
-                "rocm-systems presubmit does not trigger host-asan",
+                "rocm-systems presubmit triggers host-asan",
                 dict(
                     event_name="pull_request",
                     build_variant="asan",
@@ -2306,10 +2309,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     repository_name="rocm-systems",
                 ),
                 cm.GitContext.from_external_repo("rocm-systems"),
-                None,
+                "linux-release-host-asan",
             ),
             (
-                "rocm-libraries presubmit does not trigger host-asan",
+                "rocm-libraries presubmit triggers host-asan",
                 dict(
                     event_name="pull_request",
                     build_variant="asan",
@@ -2317,7 +2320,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     repository_name="rocm-libraries",
                 ),
                 cm.GitContext.from_external_repo("rocm-libraries"),
-                None,
+                "linux-release-host-asan",
             ),
             # -- Non-asan sanitizer variants pass through directly --
             (
@@ -2438,6 +2441,195 @@ class TestExpandBuildConfigs(unittest.TestCase):
         # host-asan variants run on the regular test pool
         self.assertNotEqual(entry["test-runs-on"], "")
         self.assertNotIn("sandbox", entry["test-runs-on"])
+
+    # -------------------------------------------------------------------------
+    # gfx90a host-asan source-repo gating tests
+    # -------------------------------------------------------------------------
+
+    def test_gfx90a_host_asan_rocm_systems_presubmit(self):
+        """gfx90a tests run when rocm-systems fires a presubmit with host-asan."""
+        targets = cm.TargetSelection(linux_families=["gfx90a"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="pull_request",
+                commit_ref="feature",
+                base_ref="main",
+                build_variant="host-asan",
+                external_repo='{"repository":"ROCm/rocm-systems","ref":"main"}',
+            ),
+            git_context=cm.GitContext.from_external_repo("rocm-systems"),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertNotEqual(
+            entry["test-runs-on"],
+            "",
+            "gfx90a should have a test runner for rocm-systems host-asan presubmit",
+        )
+
+    def test_gfx90a_host_asan_rocm_libraries_presubmit(self):
+        """gfx90a tests run when rocm-libraries fires a presubmit with host-asan."""
+        targets = cm.TargetSelection(linux_families=["gfx90a"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="pull_request",
+                commit_ref="feature",
+                base_ref="main",
+                build_variant="host-asan",
+                external_repo='{"repository":"ROCm/rocm-libraries","ref":"main"}',
+            ),
+            git_context=cm.GitContext.from_external_repo("rocm-libraries"),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertNotEqual(
+            entry["test-runs-on"],
+            "",
+            "gfx90a should have a test runner for rocm-libraries host-asan presubmit",
+        )
+
+    def test_gfx90a_host_asan_rocm_systems_submodule_bump(self):
+        """gfx90a tests run when TheRock bumps the rocm-systems submodule (host-asan)."""
+        targets = cm.TargetSelection(linux_families=["gfx90a"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="push",
+                commit_ref="main",
+                base_ref="HEAD^1",
+                build_variant="host-asan",
+            ),
+            git_context=cm.GitContext(
+                changed_files=["rocm-systems"],
+                submodule_paths=["rocm-systems"],
+            ),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertNotEqual(
+            entry["test-runs-on"],
+            "",
+            "gfx90a should have a test runner for rocm-systems host-asan submodule_bump",
+        )
+
+    def test_gfx90a_host_asan_rocm_libraries_submodule_bump(self):
+        """gfx90a tests run when TheRock bumps the rocm-libraries submodule (host-asan)."""
+        targets = cm.TargetSelection(linux_families=["gfx90a"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="push",
+                commit_ref="main",
+                base_ref="HEAD^1",
+                build_variant="host-asan",
+            ),
+            git_context=cm.GitContext(
+                changed_files=["rocm-libraries"],
+                submodule_paths=["rocm-libraries"],
+            ),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertNotEqual(
+            entry["test-runs-on"],
+            "",
+            "gfx90a should have a test runner for rocm-libraries host-asan submodule_bump",
+        )
+
+    def test_postsubmit_gfx90a_has_no_tests(self):
+        """gfx90a tests must be disabled on a regular postsubmit (non-source-repo push)."""
+        targets = cm.TargetSelection(linux_families=["gfx90a"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="push",
+                commit_ref="main",
+                base_ref="HEAD^1",
+                build_variant="release",
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertEqual(
+            entry["test-runs-on"],
+            "",
+            "gfx90a tests must be disabled on a non-source-repo postsubmit",
+        )
+
+    def test_gfx90a_host_asan_workflow_dispatch_bypasses_source_repo_gate(self):
+        """workflow_dispatch must not be blocked by the test_source_repos gate."""
+        targets = cm.TargetSelection(linux_families=["gfx90a"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="workflow_dispatch",
+                build_variant="host-asan",
+            ),
+            git_context=cm.GitContext.empty(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertNotEqual(
+            entry["test-runs-on"],
+            "",
+            "gfx90a host-asan tests must not be gated by test_source_repos on workflow_dispatch",
+        )
+
+    def test_gfx90a_host_asan_run_all_archs_bypasses_source_repo_gate(self):
+        """ci:run-all-archs must bypass test_source_repos gating for gfx90a."""
+        targets = cm.TargetSelection(linux_families=["gfx90a"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="pull_request",
+                commit_ref="feature",
+                base_ref="main",
+                build_variant="host-asan",
+                external_repo='{"repository":"ROCm/rocm-other","ref":"main"}',
+                pr_labels=["ci:run-all-archs"],
+            ),
+            git_context=cm.GitContext.from_external_repo("rocm-other"),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertNotEqual(
+            entry["test-runs-on"],
+            "",
+            "ci:run-all-archs must enable gfx90a tests regardless of source repo",
+        )
+
+    def test_gfx90a_tests_disabled_for_non_source_repo(self):
+        """gfx90a host-asan tests are disabled when source is not rocm-systems/rocm-libraries."""
+        targets = cm.TargetSelection(linux_families=["gfx90a"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="pull_request",
+                commit_ref="feature",
+                base_ref="main",
+                build_variant="host-asan",
+                external_repo='{"repository":"ROCm/rocm-other","ref":"main"}',
+            ),
+            git_context=cm.GitContext.from_external_repo("rocm-other"),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertEqual(
+            entry["test-runs-on"],
+            "",
+            "gfx90a tests must be disabled for non-approved source repos",
+        )
 
     def test_explicit_strict_linux_dev_build(self):
         """Explicit selection creates a build config without GPU tests."""
