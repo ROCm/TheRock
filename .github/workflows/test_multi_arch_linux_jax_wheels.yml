@@ -246,7 +246,7 @@ jobs:
       summary: ${{ steps.summary.outputs.summary }}
 
     container:
-      image: ${{ needs.resolve-images.outputs.image_ref }}
+      image: ${{ needs.resolve-images.outputs.image_ref }} # zizmor: ignore[unpinned-images]
       options: >-
         --shm-size=128g
         --device /dev/kfd

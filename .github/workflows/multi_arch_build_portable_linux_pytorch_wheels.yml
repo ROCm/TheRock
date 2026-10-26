@@ -233,7 +233,7 @@ jobs:
       id-token: write
       contents: read
     container:
-      image: ${{ needs.resolve-images.outputs.image_ref }}
+      image: ${{ needs.resolve-images.outputs.image_ref }} # zizmor: ignore[unpinned-images]
     env:
       PYTHON_VERSION: ${{ inputs.python_version }}
       PYTORCH_GITREPO_ORIGIN: ${{ inputs.pytorch_gitrepo_origin }}

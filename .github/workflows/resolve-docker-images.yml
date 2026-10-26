@@ -35,8 +35,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 5
+        with:
+          persist-credentials: false
       - name: Read image reference
         id: read
+        env:
+          IMAGE_NAME: ${{ inputs.image_name }}
         run: |
-          ref=$(python3 build_tools/resolve_docker_image.py get-image "${{ inputs.image_name }}")
+          ref=$(python3 build_tools/resolve_docker_image.py get-image "${IMAGE_NAME}")
           echo "image_ref=${ref}" >> "$GITHUB_OUTPUT"

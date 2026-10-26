@@ -21,6 +21,8 @@ runs:
     - name: Resolve image reference
       id: resolve
       shell: bash
+      env:
+        IMAGE_NAME: ${{ inputs.image_name }}
       run: |
-        ref=$(python3 build_tools/resolve_docker_image.py get-image "${{ inputs.image_name }}")
+        ref=$(python3 build_tools/resolve_docker_image.py get-image "${IMAGE_NAME}")
         echo "image_ref=${ref}" >> "$GITHUB_OUTPUT"

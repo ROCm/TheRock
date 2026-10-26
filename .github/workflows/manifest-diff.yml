@@ -90,7 +90,7 @@ jobs:
       id-token: write
       contents: read
     container:
-      image: ${{ needs.resolve-images.outputs.image_ref }}
+      image: ${{ needs.resolve-images.outputs.image_ref }} # zizmor: ignore[unpinned-images]
     env:
       END_REF: ${{ inputs.end_ref || (github.event_name == 'pull_request' && github.event.pull_request.head.sha) || github.sha }}
       START_REF: ${{ inputs.start_ref || (github.event_name == 'push' && github.event.before) || '' }}
