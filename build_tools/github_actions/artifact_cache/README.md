@@ -34,7 +34,7 @@ part of the contract even if the raw CMake fingerprint remains unchanged.
 Existing component keys have `components_json='[]'` and keep their original
 identity, key ID and productions. `--granularity component` selects the previous
 behavior. Package `cache`, `keys`, `plan`, `publish` and `restore` CLIs default to
-bundle mode. The lower-level Python APIs and `build_tools/artifact_cache.py`
+bundle mode. The lower-level Python APIs and `build_tools/github_actions/artifact_cache/collector.py`
 entry points keep their component default for compatibility; Python callers
 select bundles with `granularity="bundle"`. Commits/run labels are provenance.
 
@@ -66,7 +66,7 @@ Opening a database validates it and never creates or migrates tables. A Python
 Stop cache commands before migrating. After installing the revision-6 code:
 
 ```bash
-python3 -m build_tools.github_actions.fingerprint_cache.migrate_schema \
+python3 -m build_tools.github_actions.artifact_cache.migrate_schema \
   --db /home/master/erman/cache.db \
   --backup /home/master/erman/cache-before-bundles.db
 ```
@@ -108,7 +108,7 @@ count bundles in bundle mode. Component observation collection stays version 3.
 Use the same command for cold and warm runs:
 
 ```bash
-python3 -m build_tools.github_actions.fingerprint_cache.local_cache cache \
+python3 -m build_tools.github_actions.artifact_cache.local_cache cache \
   --build build \
   --db /home/master/erman/cache.db \
   --cache /home/master/erman/cache-test/managed-objects \
@@ -241,8 +241,8 @@ it does not guess a safe partial-build dependency closure.
 Inspect keys without publication:
 
 ```bash
-python3 -m build_tools.github_actions.fingerprint_cache.local_cache keys --build build
-python3 -m build_tools.github_actions.fingerprint_cache stats --db /home/master/erman/cache.db
+python3 -m build_tools.github_actions.artifact_cache.local_cache keys --build build
+python3 -m build_tools.github_actions.artifact_cache stats --db /home/master/erman/cache.db
 ```
 
 `keys` reconfigures, so it writes build metadata. It does not write the database
@@ -274,12 +274,12 @@ candidates throughout the database and still make no physical-reuse claim.
 ## Explicit publication and restoration
 
 ```bash
-python3 -m build_tools.github_actions.fingerprint_cache publish \
+python3 -m build_tools.github_actions.artifact_cache publish \
   --db /home/master/erman/cache.db --build build \
   --expected /home/master/erman/amdsmi-expected.json \
   --cache /home/master/erman/cache-test/managed-objects
 
-python3 -m build_tools.github_actions.fingerprint_cache restore \
+python3 -m build_tools.github_actions.artifact_cache restore \
   --db /home/master/erman/cache.db --build build \
   --expected /home/master/erman/amdsmi-expected.json \
   --cache /home/master/erman/cache-test/managed-objects \
@@ -291,8 +291,8 @@ archive members, file contents, modes and safe symlink targets. Missing or corru
 productions are retired, and an older eligible production is tried. The result
 is a real component export tree. No `.prebuilt` markers are written and no CI job
 is skipped. Exit status is 1 for unresolved restore misses, 2 for an error.
-The previous `build_tools/artifact_cache.py collect/build-publish/restore`
-commands remain supported with component semantics.
+The collector provides `collect`, `build-publish`, and `restore` commands.
+These default to component granularity.
 
 ### Stored bundle format
 
@@ -320,7 +320,7 @@ Add `--verbose` to see cache events while an operation runs. Add `--log-file`
 to retain those events in a **new** UTF-8 text file. The file receives detailed
 events even without `--verbose`; the terminal then retains its normal compact
 phases and final artifact report. The flags are supported by `local_cache`, the
-package CLI, and `build_tools/artifact_cache.py` subcommands.
+package CLI, and `build_tools/github_actions/artifact_cache/collector.py` subcommands.
 
 Keep the database, object-store directory and expected list from your
 existing experiment. Changing the log location does not make a cache cold.
@@ -331,7 +331,7 @@ cd /home/master/erman/TheRock
 mkdir -p /home/master/erman/cache-test
 THEROCK_DIAGNOSTIC_RUN="$(mktemp -d /home/master/erman/cache-test/logging-XXXXXX)"
 
-python3 -m build_tools.github_actions.fingerprint_cache.local_cache cache \
+python3 -m build_tools.github_actions.artifact_cache.local_cache cache \
   --build build \
   --db /home/master/erman/cache.db \
   --cache "${THEROCK_CACHE_RUN:?Use the existing experiment directory}/objects" \
@@ -398,11 +398,11 @@ experiment branch before a real managed-build run.
 ## Planning and read policy
 
 ```bash
-python3 -m build_tools.github_actions.fingerprint_cache plan \
+python3 -m build_tools.github_actions.artifact_cache plan \
   --db /home/master/erman/cache.db --build build \
   --topology BUILD_TOPOLOGY.toml
 
-python3 -m build_tools.github_actions.fingerprint_cache lookup \
+python3 -m build_tools.github_actions.artifact_cache lookup \
   --db /home/master/erman/cache.db \
   --artifact core-amdsmi/bundle/generic --fingerprint <raw-64-hex-fingerprint> \
   --components core-amdsmi_dev_generic,core-amdsmi_lib_generic
@@ -446,15 +446,15 @@ relabeled when the rule changes.
 
 ```bash
 # Offline import: no GitHub or S3 access.
-python3 -m build_tools.github_actions.fingerprint_cache ingest \
+python3 -m build_tools.github_actions.artifact_cache ingest \
   --db /home/master/erman/cache.db --runs-json /path/to/runs.json \
   --repo ROCm/TheRock --platform linux --variant release
 
 # Optional live history import; uses existing TheRock GitHub/S3 helpers and auth.
-python3 -m build_tools.github_actions.fingerprint_cache ingest \
+python3 -m build_tools.github_actions.artifact_cache ingest \
   --db /home/master/erman/cache.db --max-runs 20 --require-trusted
 
-python3 -m build_tools.github_actions.fingerprint_cache replay \
+python3 -m build_tools.github_actions.artifact_cache replay \
   --db /home/master/erman/cache.db --repo ROCm/TheRock
 ```
 
@@ -485,9 +485,9 @@ real per-output fingerprints can. Tests exercise both modes and overlapping runs
 
 ```bash
 # Retire metadata; neither command deletes payload files or observation history.
-python3 -m build_tools.github_actions.fingerprint_cache evict \
+python3 -m build_tools.github_actions.artifact_cache evict \
   --db /home/master/erman/cache.db --before 2026-01-01T00:00:00Z
-python3 -m build_tools.github_actions.fingerprint_cache evict \
+python3 -m build_tools.github_actions.artifact_cache evict \
   --db /home/master/erman/cache.db --missing
 ```
 
@@ -518,7 +518,7 @@ source fingerprint implementation or GPU builds.
 | `history_ingest.py` | Offline/live history evidence, with no fabricated ready outputs |
 | `replay.py` | Completion-aware reuse estimates and same-commit comparison |
 | `cli.py`, `__main__.py`, `__init__.py` | Root/module commands and lazy Python API |
-| `build_tools/artifact_cache.py` | Existing collection and explicit build/restore entry points |
+| `build_tools/github_actions/artifact_cache/collector.py` | Existing collection and explicit build/restore entry points |
 
 The original `topology_view.py` is not required by this path; the new adapter
 uses the real topology parser directly. Legacy APIs that accepted derived
