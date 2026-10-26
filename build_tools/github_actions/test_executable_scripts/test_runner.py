@@ -472,11 +472,17 @@ def check_available_labels():
         sys.exit(1)
 
     try:
+        # Pass environ_vars so component env overrides (e.g. hip-tests'
+        # PATH/LD_LIBRARY_PATH to the HIP runtime) reach the discovery process.
+        # With deferred (PRE_TEST) Catch2 discovery, `ctest -N` executes each
+        # test binary to enumerate cases; on Windows the HIP DLLs must be on
+        # PATH or the binary fails to load (0xc0000135) and discovery aborts.
         list_result = subprocess.run(
             ["ctest", "-N", "--test-dir", str(test_dir)],
             capture_output=True,
             text=True,
             check=True,
+            env=environ_vars,
         )
         total_tests = sum(
             1
@@ -495,6 +501,7 @@ def check_available_labels():
             capture_output=True,
             text=True,
             check=True,
+            env=environ_vars,
         )
 
         gpu_archs = set()
