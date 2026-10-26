@@ -28,9 +28,9 @@ from _therock_utils.artifacts import _identical_entries, PatternMatcher
 logger = TheRockLogger(__name__)
 
 # Constants
-# Used for creating host package in kpack mode (contains generic content)
+# Used for creating host package (contains generic content)
 GFX_HOST = "gfx_host"
-# Used for creating versioned meta package in kpack mode (depends on host + devices)
+# Used for creating versioned meta package (depends on host + devices)
 GFX_META = "gfx_meta"
 
 # Splits comma-, semicolon-, or whitespace-separated arch tokens in one string.
@@ -81,8 +81,7 @@ def normalize_target_list(
 # install_prefix - Install prefix for the package
 # gfx_arch - gfxarch used for building package
 # versioned_pkg - Used to indicate versioned or non versioned packages
-# enable_kpack - To enable multi-architecture support
-# gfxarch_list - List of all architectures for multi-arch mode
+# gfxarch_list - List of all architectures to build device packages for
 #
 # frozen=True makes this dataclass immutable (hashable and thread-safe).
 # Note: gfxarch_list uses tuple instead of list because frozen dataclasses
@@ -97,7 +96,6 @@ class PackageConfig:
     install_prefix: str
     gfx_arch: str
     versioned_pkg: bool = True
-    enable_kpack: bool = False
     gfxarch_list: tuple = field(default_factory=tuple)
     build_variant: str = ""
 
@@ -250,43 +248,37 @@ def _has_arch_specific_artifacts(pkg_info, artifacts_dir):
 
 def is_gfxarch_package(
     pkg_info,
-    enable_kpack=False,
     artifacts_dir: Path | None = None,
 ):
     """Check whether the package is associated with a graphics architecture
 
     Parameters:
     pkg_info (dict): A dictionary containing package details.
-    enable_kpack (bool): Enable multi-architecture support.
-    artifacts_dir (Path | None): Artifact tree root; required for kpack gfx-arch
-        detection (passed explicitly by callers; when enable_kpack is True and this
-        is None, the package is not treated as gfx-arch-specific).
+    artifacts_dir (Path | None): Artifact tree root; required for gfx-arch
+        detection (passed explicitly by callers; when this is None, the
+        package is not treated as gfx-arch-specific).
 
     Returns:
-    bool : True if Gfxarch is set, else False.
-           False if devel package when enable_kpack is True
-           False if Gfxarch is set but no arch-specific artifacts exist (kpack mode)
-           When enable_kpack is True, False if artifacts_dir is None: kpack logic
-           cannot classify the package as gfx-arch-specific without an artifact path.
+    bool : For metapackages, True if Gfxarch is set, else False.
+           False if non-meta devel package.
+           Otherwise True if arch-specific artifacts exist, else False.
+           False if artifacts_dir is None: the package cannot be classified
+           as gfx-arch-specific without an artifact path.
     """
-    if enable_kpack:
-        # Only non-metapackage -devel should be non-gfxarch
-        # Metapackages like amdrocm-core-devel should create arch-specific variants
-        if is_devel_package(pkg_info) and not is_meta_package(pkg_info):
-            return False
-
-    # In kpack mode, verify arch-specific artifacts exist
-    if enable_kpack:
-        # Metapackages don't have artifacts but should still respect Gfxarch metadata
-        if is_meta_package(pkg_info):
-            return is_key_defined(pkg_info, "Gfxarch")
-        if artifacts_dir:
-            return _has_arch_specific_artifacts(pkg_info, artifacts_dir)
-        # Do not fall through to Gfxarch metadata: without artifacts we cannot treat
-        # the package as gfx-arch-specific for kpack splits (explicit bool).
+    # Only non-metapackage -devel should be non-gfxarch
+    # Metapackages like amdrocm-core-devel should create arch-specific variants
+    if is_devel_package(pkg_info) and not is_meta_package(pkg_info):
         return False
 
-    return is_key_defined(pkg_info, "Gfxarch")
+    # Metapackages don't have artifacts but should still respect Gfxarch metadata
+    if is_meta_package(pkg_info):
+        return is_key_defined(pkg_info, "Gfxarch")
+    # Verify arch-specific artifacts exist
+    if artifacts_dir:
+        return _has_arch_specific_artifacts(pkg_info, artifacts_dir)
+    # Do not fall through to Gfxarch metadata: without artifacts we cannot treat
+    # the package as gfx-arch-specific (explicit bool).
+    return False
 
 
 def get_package_info(pkgname, raise_if_missing=True):
@@ -440,36 +432,29 @@ def update_package_name(pkg_name, config: PackageConfig):
     if config.pkg_type.lower() == "deb":
         updated_pkgname = debian_replace_devel_name(pkg_name)
 
-    # For GFX_HOST in kpack mode, add "-host" before version suffix
+    is_gfxarch = is_gfxarch_package(pkg_info, config.artifacts_dir)
+
+    # For GFX_HOST, add "-host" before version suffix
     # Result: amdrocm-fft-host8.2 (not amdrocm-fft8.2-host)
-    if (
-        config.enable_kpack
-        and is_gfxarch_package(pkg_info, config.enable_kpack, config.artifacts_dir)
-        and config.gfx_arch == GFX_HOST
-    ):
+    if is_gfxarch and config.gfx_arch == GFX_HOST:
         updated_pkgname += "-host"
 
     updated_pkgname += pkg_suffix
 
-    if is_gfxarch_package(pkg_info, config.enable_kpack, config.artifacts_dir):
-        if config.enable_kpack:
-            if config.gfx_arch == GFX_HOST:
-                # Host package: "-host" already added before version
-                pass
-            elif config.gfx_arch == GFX_META:
-                # Meta package: no arch suffix (e.g., amdrocm-fft8.2)
-                pass
-            else:
-                # Device package: add gfx arch suffix (e.g., amdrocm-fft8.2-gfx1100)
-                gfx_arch = re.sub(
-                    r"-(?:all|dcgpu|dgpu|igpu)$",
-                    "",
-                    package_owner(config.gfx_arch).lower(),
-                )
-                updated_pkgname += "-" + gfx_arch
+    if is_gfxarch:
+        if config.gfx_arch == GFX_HOST:
+            # Host package: "-host" already added before version
+            pass
+        elif config.gfx_arch == GFX_META:
+            # Meta package: no arch suffix (e.g., amdrocm-fft8.2)
+            pass
         else:
-            # Single-arch mode: add gfx arch suffix
-            gfx_arch = config.gfx_arch.lower().split("-", 1)[0]
+            # Device package: add gfx arch suffix (e.g., amdrocm-fft8.2-gfx1100)
+            gfx_arch = re.sub(
+                r"-(?:all|dcgpu|dgpu|igpu)$",
+                "",
+                package_owner(config.gfx_arch).lower(),
+            )
             updated_pkgname += "-" + gfx_arch
 
     return updated_pkgname
@@ -590,14 +575,11 @@ def process_nonversioned_dependencies(pkg_info: dict, config: PackageConfig) -> 
     - meta / non-meta
     - GfxArch=True / GfxArch=False
 
-    Examples (kpack mode):
+    Examples:
     - amdrocm-blas -> amdrocm-blas8.2
     - amdrocm-blas-devel -> amdrocm-blas-devel8.2
     - amdrocm-core -> amdrocm-core8.2
     - amdrocm-core-devel -> amdrocm-core-devel8.2
-
-    Examples (single-arch mode):
-    - amdrocm-blas -> amdrocm-blas8.2-gfx1100
 
     Parameters:
     pkg_info: Package details from JSON
@@ -608,12 +590,8 @@ def process_nonversioned_dependencies(pkg_info: dict, config: PackageConfig) -> 
     pkg_name = pkg_info.get("Package")
 
     # Create config for versioned package lookup
-    # In kpack mode: GFX_META ensures no arch suffix (just version)
-    # In single-arch mode: preserve original gfx_arch for arch-specific deps
-    if config.enable_kpack:
-        versioned_config = replace(config, versioned_pkg=True, gfx_arch=GFX_META)
-    else:
-        versioned_config = replace(config, versioned_pkg=True)
+    # GFX_META ensures no arch suffix (just version)
+    versioned_config = replace(config, versioned_pkg=True, gfx_arch=GFX_META)
 
     # Get versioned package name
     versioned_pkg_name = update_package_name(pkg_name, versioned_config)
@@ -629,26 +607,6 @@ def process_versioned_dependencies(
     pkg_info: dict, field_key: str, config: PackageConfig
 ) -> str:
     """Process main dependency field (DEBDepends/RPMRequires).
-
-    Delegates to kpack or single-arch handler based on build mode.
-
-    Parameters:
-    pkg_info: Package details from JSON
-    field_key: Key to extract ("DEBDepends" or "RPMRequires")
-    config: Configuration object containing package metadata
-
-    Returns: Comma-separated string of versioned dependencies
-    """
-    if config.enable_kpack:
-        return process_main_dependencies_kpack(pkg_info, field_key, config)
-    else:
-        return process_main_dependencies_single_arch(pkg_info, field_key, config)
-
-
-def process_main_dependencies_kpack(
-    pkg_info: dict, field_key: str, config: PackageConfig
-) -> str:
-    """Process main dependencies for kpack (multi-arch) mode.
 
     Handles:
     - Meta packages: depend on all arch-specific variants
@@ -698,7 +656,7 @@ def process_main_dependencies_kpack(
         dep_list, _ = filter_dependencies_by_artifacts(
             dep_list, config.artifacts_dir, config.gfx_arch
         )
-    elif not is_gfxarch_package(pkg_info, config.enable_kpack, config.artifacts_dir):
+    elif not is_gfxarch_package(pkg_info, config.artifacts_dir):
         # Non-gfxarch versioned package: use all dependencies directly
         # These packages don't have host/device split, so include everything
         dep_list = pkg_info.get(field_key, [])
@@ -720,7 +678,6 @@ def process_main_dependencies_kpack(
             for dep in dep_list
             if is_gfxarch_package(
                 get_package_info(dep, raise_if_missing=False) or {},
-                config.enable_kpack,
                 config.artifacts_dir,
             )
         ]
@@ -750,35 +707,12 @@ def process_main_dependencies_kpack(
     return deps
 
 
-def process_main_dependencies_single_arch(
-    pkg_info: dict, field_key: str, config: PackageConfig
-) -> str:
-    """Process main dependencies for single-arch mode.
-
-    Simple case: use full dependency list from package.json and add version suffixes.
-
-    Parameters:
-    pkg_info: Package details from JSON
-    field_key: Key to extract ("DEBDepends" or "RPMRequires")
-    config: Configuration object containing package metadata
-
-    Returns: Comma-separated string of versioned dependencies
-    """
-    is_meta = is_meta_package(pkg_info)
-    dep_list = pkg_info.get(field_key, []) or []
-
-    if not dep_list:
-        return ""
-    return resolve_versioned_dependency_list(dep_list, config, is_meta)
-
-
 def process_secondary_dependencies(
     pkg_info: dict, field_key: str, config: PackageConfig
 ) -> str:
     """Process secondary dependency fields (Recommends/Suggests).
 
     Simple processing: get from JSON and add version suffixes.
-    Works the same for both kpack and single-arch modes.
 
     Parameters:
     pkg_info: Package details from JSON
@@ -815,7 +749,7 @@ def convert_to_versiondependency(
     # Make sure the flag is set to True
 
     # Create config with versioned_pkg=True and conditionally override gfx_arch
-    if config.enable_kpack and not preserve_arch:
+    if not preserve_arch:
         if not config.versioned_pkg:
             # Non-versioned package depends on versioned meta package
             # e.g., amdrocm-fft -> amdrocm-fft8.2
@@ -939,7 +873,7 @@ def move_packages_to_destination(updated_pkg_name, config: PackageConfig):
 
 def package_target_members(config: PackageConfig) -> tuple[str, ...]:
     """Return selected targets contributing to the current device package."""
-    if not config.enable_kpack or config.gfx_arch in ("", GFX_HOST, GFX_META):
+    if config.gfx_arch in ("", GFX_HOST, GFX_META):
         return ()
     return tuple(
         group_package_targets(config.gfxarch_list).get(
@@ -980,7 +914,6 @@ def filter_components_fromartifactory(
     pkg_name,
     artifacts_dir,
     gfx_arch,
-    enable_kpack=False,
     *,
     target_members: tuple[str, ...] = (),
 ):
@@ -992,17 +925,16 @@ def filter_components_fromartifactory(
     pkg_name : package name
     artifacts_dir : Directory where artifacts are saved
     gfx_arch : graphics architecture
-    enable_kpack : enable multi-architecture support
 
     Returns: List of directories
     """
-    if enable_kpack and target_members:
+    if target_members:
         roots = list(
             dict.fromkeys(
                 root
                 for member in target_members
                 for root in filter_components_fromartifactory(
-                    pkg_name, artifacts_dir, member, enable_kpack
+                    pkg_name, artifacts_dir, member
                 )
             )
         )
@@ -1015,23 +947,16 @@ def filter_components_fromartifactory(
     pkg_info = get_package_info(pkg_name)
     sourcedir_list = []
 
-    if enable_kpack:
-        # GFX_META is a meta package with no artifacts
-        if gfx_arch == GFX_META:
-            return sourcedir_list  # Return empty list for meta package
-        # GFX_HOST uses "generic" artifacts
-        if gfx_arch == GFX_HOST:
-            dir_suffix = "generic"
-        elif is_gfxarch_package(pkg_info, enable_kpack, artifacts_dir):
-            dir_suffix = gfx_arch
-        else:
-            dir_suffix = "generic"
+    # GFX_META is a meta package with no artifacts
+    if gfx_arch == GFX_META:
+        return sourcedir_list  # Return empty list for meta package
+    # GFX_HOST uses "generic" artifacts
+    if gfx_arch == GFX_HOST:
+        dir_suffix = "generic"
+    elif is_gfxarch_package(pkg_info, artifacts_dir):
+        dir_suffix = gfx_arch
     else:
-        dir_suffix = (
-            gfx_arch
-            if is_gfxarch_package(pkg_info, enable_kpack, artifacts_dir)
-            else "generic"
-        )
+        dir_suffix = "generic"
 
     artifactory = pkg_info.get("Artifactory")
     if artifactory is None:
@@ -1052,15 +977,10 @@ def filter_components_fromartifactory(
             )
             is_gfxarch = str(artifact["Artifact_Gfxarch"]).lower() == "true"
 
-            # In kpack mode, skip non-gfxarch artifacts when building gfx-specific packages
+            # Skip non-gfxarch artifacts when building gfx-specific packages
             # This prevents generic artifacts from being included in both base and arch-specific packages
             # For non-gfxarch packages (gfx_arch=""), we SHOULD include Artifact_Gfxarch=False artifacts
-            if (
-                enable_kpack
-                and gfx_arch
-                and gfx_arch not in (GFX_HOST, GFX_META)
-                and not is_gfxarch
-            ):
+            if gfx_arch and gfx_arch not in (GFX_HOST, GFX_META) and not is_gfxarch:
                 logger.debug(
                     f"{pkg_name} : Skipping artifact '{artifact_prefix}' for {gfx_arch} package "
                     f"(Artifact_Gfxarch=False, should only be in generic package)"
@@ -1103,7 +1023,7 @@ def filter_components_fromartifactory(
                                     # a shared kpack under another root. Match the artifact
                                     # flattener's handling of these absent roots, while
                                     # retaining validation of every existing payload.
-                                    if enable_kpack and not source_path.exists():
+                                    if not source_path.exists():
                                         logger.debug(
                                             "Skipping absent split-artifact manifest "
                                             f"root: {source_path}"
@@ -1120,11 +1040,13 @@ def filter_components_fromartifactory(
 def resolve_versioned_dependency_list(dep_list, config: PackageConfig, is_meta):
     """Resolve a dependency list into a versioned dependency string.
 
-    Handles three cases based on multi-arch mode and package type:
-    - Generic metapackages in multi-arch mode: dependencies are already expanded
+    Handles cases based on package variant and package type:
+    - Generic metapackages: dependencies are already expanded
       and versioned, so just join and add version suffix.
-    - Arch-specific metapackages in multi-arch mode: convert dependencies while
+    - Arch-specific metapackages: convert dependencies while
       preserving architecture, then add version suffix.
+    - Gfx-specific non-meta packages: resolve the base dependency as generic
+      and gfxarch dependencies with arch suffix.
     - Normal path: convert dependencies and conditionally add version suffix
       for metapackages.
 
@@ -1135,23 +1057,19 @@ def resolve_versioned_dependency_list(dep_list, config: PackageConfig, is_meta):
 
     Returns: A comma-separated string of versioned dependencies
     """
-    if config.versioned_pkg and config.enable_kpack and config.gfx_arch == GFX_META:
+    if config.versioned_pkg and config.gfx_arch == GFX_META:
         # GFX_META: versioned meta package depends on host + all devices
         # dep_list already contains versioned arch-specific package names
         # Just add version suffix and join
         deps = append_version_suffix(", ".join(dep_list), config)
-    elif (
-        config.enable_kpack and is_meta and config.gfx_arch not in (GFX_HOST, GFX_META)
-    ):
+    elif is_meta and config.gfx_arch not in (GFX_HOST, GFX_META):
         # Arch-specific metapackage: preserve architecture for gfxarch dependencies
         # For -devel metapackages: mix arch-specific (gfxarch) and generic (non-gfxarch)
         result_deps = []
         for dep in dep_list:
             dep_info = get_package_info(dep)
             # Only gfxarch dependencies get arch suffix, others stay generic
-            preserve = dep_info and is_gfxarch_package(
-                dep_info, config.enable_kpack, config.artifacts_dir
-            )
+            preserve = dep_info and is_gfxarch_package(dep_info, config.artifacts_dir)
             versioned = convert_to_versiondependency(
                 [dep], config, preserve_arch=preserve
             )
@@ -1160,11 +1078,7 @@ def resolve_versioned_dependency_list(dep_list, config: PackageConfig, is_meta):
 
         deps = ", ".join(result_deps)
         deps = append_version_suffix(deps, config)
-    elif (
-        config.enable_kpack
-        and not is_meta
-        and config.gfx_arch not in (GFX_HOST, GFX_META)
-    ):
+    elif not is_meta and config.gfx_arch not in (GFX_HOST, GFX_META):
         # Gfx-specific non-meta package:
         # dep_list[0] is the versioned-dependency (resolved as generic)
         # dep_list[1:] are gfxarch dependencies (resolved with arch suffix)
@@ -1220,7 +1134,7 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
         return False
 
     # Non-gfxarch packages do not need arch-specific artifacts
-    if not is_gfxarch_package(pkg_info, enable_kpack=True, artifacts_dir=artifacts_dir):
+    if not is_gfxarch_package(pkg_info, artifacts_dir=artifacts_dir):
         return True
 
     # Meta packages do not have their own artifacts
@@ -1332,7 +1246,7 @@ def filter_archs_with_artifacts(
         return list(gfxarch_list)
 
     # Non-gfxarch packages do not have arch-specific variants
-    if not is_gfxarch_package(pkg_info, enable_kpack=True, artifacts_dir=artifacts_dir):
+    if not is_gfxarch_package(pkg_info, artifacts_dir=artifacts_dir):
         return list(gfxarch_list)
 
     # Meta packages inherit from their dependencies, return all archs
@@ -1421,9 +1335,7 @@ def filter_dependencies_by_artifacts(
 
         # Non-gfxarch packages: missing artifacts should fail the build,
         # so we don't filter them out here
-        if not is_gfxarch_package(
-            dep_info, enable_kpack=True, artifacts_dir=artifacts_dir
-        ):
+        if not is_gfxarch_package(dep_info, artifacts_dir=artifacts_dir):
             filtered.append(dep)
             continue
 

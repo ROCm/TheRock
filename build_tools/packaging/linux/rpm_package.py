@@ -125,7 +125,6 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
             pkg_name,
             config.artifacts_dir,
             config.gfx_arch,
-            config.enable_kpack,
             target_members=package_target_members(config),
         )
         sourcedir_list.extend(dir_list)
@@ -138,19 +137,14 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         sourcedir_list = [path for path in sourcedir_list if path.is_dir()]
 
         # GFX_META is a versioned meta package (empty content, just dependencies)
-        is_gfx_meta = config.enable_kpack and config.gfx_arch == GFX_META
+        is_gfx_meta = config.gfx_arch == GFX_META
 
         # Skip if we have no artifacts for non-meta packages
         if not sourcedir_list and not is_meta and not is_gfx_meta:
-            if config.enable_kpack:
-                logger.info(
-                    f"{pkg_name}: Empty sourcedir_list and not a meta package, skipping"
-                )
-                return False
-            else:
-                sys.exit(
-                    f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting"
-                )
+            logger.info(
+                f"{pkg_name}: Empty sourcedir_list and not a meta package, skipping"
+            )
+            return False
 
         if is_postinstallscripts_available(pkg_info):
             rpm_scripts = generate_rpm_postscripts(pkg_info, config)

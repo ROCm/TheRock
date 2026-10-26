@@ -106,7 +106,7 @@ from packaging_utils import (  # noqa: E402
     PackageCollisionError,
     validate_package_roots,
     expand_kpack_meta_dependencies,
-    process_main_dependencies_kpack,
+    process_versioned_dependencies,
 )
 
 
@@ -140,7 +140,6 @@ def _args(tmp: Path, **overrides: object) -> Namespace:
         "version_suffix": TEST_VERSION_SUFFIX,
         "install_prefix": TEST_INSTALL_PREFIX,
         "runpath_pkg": False,
-        "enable_kpack": False,
         "pkg_names": None,
         "clean_build": False,
         "build_variant": "",
@@ -188,7 +187,6 @@ def _artifact_suffix_for_staging(
     artifact: dict[str, object],
     gfx_arch: str,
     *,
-    enable_kpack: bool,
     artifacts_dir: Path,
 ) -> str | None:
     """Compute artifact directory suffix using packaging naming rules.
@@ -199,33 +197,22 @@ def _artifact_suffix_for_staging(
     otherwise tests may stage the wrong layout and still pass (false positive).
     ``ArtifactStagingTest`` catches gross mismatches but not every routing edge case.
     """
-    if enable_kpack:
-        if gfx_arch == GFX_META:
-            return None
-        if gfx_arch == GFX_HOST:
-            dir_suffix = "generic"
-        elif is_gfxarch_package(pkg_info, enable_kpack, artifacts_dir):
-            dir_suffix = gfx_arch
-        elif is_key_defined(pkg_info, "Gfxarch"):
-            # Staging device trees before gfx dirs exist: Gfxarch metadata still
-            # implies arch-specific suffixes once kpack splits are in play.
-            dir_suffix = gfx_arch
-        else:
-            dir_suffix = "generic"
+    if gfx_arch == GFX_META:
+        return None
+    if gfx_arch == GFX_HOST:
+        dir_suffix = "generic"
+    elif is_gfxarch_package(pkg_info, artifacts_dir):
+        dir_suffix = gfx_arch
+    elif is_key_defined(pkg_info, "Gfxarch"):
+        # Staging device trees before gfx dirs exist: Gfxarch metadata still
+        # implies arch-specific suffixes once kpack splits are in play.
+        dir_suffix = gfx_arch
     else:
-        dir_suffix = (
-            gfx_arch
-            if is_gfxarch_package(pkg_info, enable_kpack, artifacts_dir)
-            else "generic"
-        )
+        dir_suffix = "generic"
 
     if "Artifact_Gfxarch" in artifact:
         is_artifact_gfx = str(artifact["Artifact_Gfxarch"]).lower() == "true"
-        if (
-            enable_kpack
-            and gfx_arch not in (GFX_HOST, GFX_META)
-            and not is_artifact_gfx
-        ):
+        if gfx_arch not in (GFX_HOST, GFX_META) and not is_artifact_gfx:
             return None
         return gfx_arch if is_artifact_gfx else "generic"
     return dir_suffix
@@ -236,7 +223,6 @@ def _stage_package_artifacts(
     artifacts_dir: Path,
     gfx_arch: str,
     *,
-    enable_kpack: bool = True,
     payload_name: str = STAGING_PAYLOAD_NAME,
     dir_suffix_override: str | None = None,
 ) -> list[Path]:
@@ -248,7 +234,7 @@ def _stage_package_artifacts(
     only ever built with an xnack-suffixed artifact directory.
     """
     pkg_info = get_package_info(pkg_name)
-    if enable_kpack and gfx_arch == GFX_META:
+    if gfx_arch == GFX_META:
         return []
 
     created: list[Path] = []
@@ -263,7 +249,6 @@ def _stage_package_artifacts(
             pkg_info,
             artifact,
             gfx_arch,
-            enable_kpack=enable_kpack,
             artifacts_dir=artifacts_dir,
         )
         if suffix is None:
@@ -308,7 +293,7 @@ def _kpack_config(tmp: Path, **overrides: object) -> PackageConfig:
     """Build kpack ``PackageConfig`` via ``create_package_config`` (not hand-built)."""
     root = Path(tmp)
     _write_kpack_manifest(root / "artifacts")
-    args = _args(root, enable_kpack=True, **overrides)
+    args = _args(root, **overrides)
     return build_package.create_package_config(args)
 
 
@@ -360,14 +345,12 @@ def _stage_fft_kpack_tree(artifacts_dir: Path, *, include_host: bool = False) ->
         pkg_name=PKG_FFT,
         artifacts_dir=artifacts_dir,
         gfx_arch=TEST_GFX_TARGET,
-        enable_kpack=True,
     )
     if include_host:
         _stage_package_artifacts(
             pkg_name=PKG_FFT,
             artifacts_dir=artifacts_dir,
             gfx_arch=GFX_HOST,
-            enable_kpack=True,
         )
 
 
@@ -505,7 +488,7 @@ class SharedOwnerPackagingTest(BuildPackageTestCase):
         info = get_package_info("amdrocm-rocalution")
         for field in ("DEBDepends", "RPMRequires"):
             with self.subTest(field=field):
-                deps = process_main_dependencies_kpack(info, field, cfg)
+                deps = process_versioned_dependencies(info, field, cfg)
                 self.assertIn("amdrocm-rand7.1-gfx1250", deps)
                 self.assertNotIn("gfx1250-strict", deps)
 
@@ -692,13 +675,11 @@ class ArtifactStagingTest(BuildPackageTestCase):
             pkg_name=PKG_FFT,
             artifacts_dir=artifacts,
             gfx_arch=GFX_HOST,
-            enable_kpack=True,
         )
         sourcedirs = filter_components_fromartifactory(
             pkg_name=PKG_FFT,
             artifacts_dir=artifacts,
             gfx_arch=GFX_HOST,
-            enable_kpack=True,
         )
         self.assertTrue(sourcedirs)
 
@@ -708,19 +689,16 @@ class ArtifactStagingTest(BuildPackageTestCase):
             pkg_name=PKG_FFT,
             artifacts_dir=artifacts,
             gfx_arch=TEST_GFX_TARGET,
-            enable_kpack=True,
         )
         sourcedirs = filter_components_fromartifactory(
             pkg_name=PKG_FFT,
             artifacts_dir=artifacts,
             gfx_arch=TEST_GFX_TARGET,
-            enable_kpack=True,
         )
         self.assertTrue(sourcedirs)
         self.assertTrue(
             is_gfxarch_package(
                 pkg_info=get_package_info(PKG_FFT),
-                enable_kpack=True,
                 artifacts_dir=artifacts,
             )
         )
@@ -744,19 +722,16 @@ class CreateVersionedDebPackageTest(BuildPackageTestCase):
             pkg_name=PKG_FFT,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=GFX_HOST,
-            enable_kpack=True,
         )
         _stage_package_artifacts(
             pkg_name=PKG_FFT,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=TEST_GFX_TARGET,
-            enable_kpack=True,
         )
         _stage_package_artifacts(
             pkg_name=PKG_RUNTIME,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=GFX_HOST,
-            enable_kpack=True,
         )
         host_cfg = replace(cfg, gfx_arch=GFX_HOST)
 
@@ -777,7 +752,6 @@ class CreateVersionedDebPackageTest(BuildPackageTestCase):
             pkg_name=PKG_FFT,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=TEST_GFX_TARGET,
-            enable_kpack=True,
         )
         device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
 
@@ -801,7 +775,6 @@ class CreateVersionedDebPackageTest(BuildPackageTestCase):
             pkg_name=PKG_FFT,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=TEST_GFX_TARGET,
-            enable_kpack=True,
         )
         device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
 
@@ -854,7 +827,6 @@ class CreateVersionedDebPackageTest(BuildPackageTestCase):
             pkg_name=PKG_DEBUGGER,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=EMPTY_GFX_ARCH,
-            enable_kpack=True,
         )
         versioned_cfg = replace(cfg, gfx_arch=EMPTY_GFX_ARCH)
 
@@ -883,19 +855,16 @@ class CreateVersionedRpmPackageTest(BuildPackageTestCase):
             pkg_name=PKG_FFT,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=GFX_HOST,
-            enable_kpack=True,
         )
         _stage_package_artifacts(
             pkg_name=PKG_FFT,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=TEST_GFX_TARGET,
-            enable_kpack=True,
         )
         _stage_package_artifacts(
             pkg_name=PKG_RUNTIME,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=GFX_HOST,
-            enable_kpack=True,
         )
         host_cfg = replace(cfg, gfx_arch=GFX_HOST)
 
@@ -916,7 +885,6 @@ class CreateVersionedRpmPackageTest(BuildPackageTestCase):
             pkg_name=PKG_FFT,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=TEST_GFX_TARGET,
-            enable_kpack=True,
         )
         device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
 
@@ -985,7 +953,6 @@ class BuildPackageVariantsRoutingTest(BuildPackageTestCase):
         self.assertFalse(
             is_gfxarch_package(
                 pkg_info=pkg_info,
-                enable_kpack=True,
                 artifacts_dir=cfg.artifacts_dir,
             )
         )
@@ -1021,49 +988,51 @@ class BuildPackageVariantsRoutingTest(BuildPackageTestCase):
 class CreatePackageConfigTest(BuildPackageTestCase):
     """``create_package_config`` maps CLI args to ``PackageConfig``."""
 
-    def test_explicit_targets_in_kpack_mode(self) -> None:
-        cfg = build_package.create_package_config(
-            _args(
-                self.temp_dir,
-                enable_kpack=True,
-                target=[TEST_GFX_TARGET, TEST_GFX_TARGET_ALT],
-            )
+    def test_explicit_targets(self) -> None:
+        cfg = _kpack_config(
+            self.temp_dir,
+            target=[TEST_GFX_TARGET, TEST_GFX_TARGET_ALT],
         )
-        self.assertTrue(cfg.enable_kpack)
+        self.assertEqual(cfg.gfx_arch, EMPTY_GFX_ARCH)
         self.assertEqual(cfg.gfxarch_list, (TEST_GFX_TARGET, TEST_GFX_TARGET_ALT))
 
-    def test_auto_detect_kpack_from_manifest(self) -> None:
+    @patch.object(
+        build_package, "create_package_config", side_effect=RuntimeError("stop")
+    )
+    def test_run_requires_kpack_manifest(self, mock_config: object) -> None:
+        # Without a kpack manifest: exit before creating the config.
+        with self.assertRaises(SystemExit) as ctx:
+            build_package.run(_args(self.temp_dir))
+        self.assertEqual(ctx.exception.code, 1)
+        mock_config.assert_not_called()
+
+        # With a kpack manifest: pass the check and proceed to config creation.
         _write_kpack_manifest(self.artifacts_dir())
-        cfg = build_package.create_package_config(_args(self.temp_dir))
-        self.assertTrue(cfg.enable_kpack)
+        with self.assertRaisesRegex(RuntimeError, "stop"):
+            build_package.run(_args(self.temp_dir))
+        mock_config.assert_called_once()
 
     def test_invalid_rocm_version_raises(self) -> None:
         with self.assertRaises(ValueError):
-            build_package.create_package_config(
-                _args(self.temp_dir, rocm_version="7"),
-            )
+            _kpack_config(self.temp_dir, rocm_version="7")
 
     def test_asan_family_variants_get_asan_install_prefix(self) -> None:
         """asan, host-asan, and their "-debug" counterparts must all get the
         same "-asan-MAJOR.MINOR" install prefix suffix as full asan."""
         for build_variant in ("asan", "host-asan", "asan-debug", "host-asan-debug"):
             with self.subTest(build_variant=build_variant):
-                cfg = build_package.create_package_config(
-                    _args(
-                        self.temp_dir,
-                        build_variant=build_variant,
-                        install_prefix=build_package.DEFAULT_INSTALL_PREFIX,
-                    )
+                cfg = _kpack_config(
+                    self.temp_dir,
+                    build_variant=build_variant,
+                    install_prefix=build_package.DEFAULT_INSTALL_PREFIX,
                 )
                 self.assertTrue(cfg.install_prefix.endswith("-asan-7.1"))
 
     def test_release_variant_gets_plain_install_prefix(self) -> None:
-        cfg = build_package.create_package_config(
-            _args(
-                self.temp_dir,
-                build_variant="release",
-                install_prefix=build_package.DEFAULT_INSTALL_PREFIX,
-            )
+        cfg = _kpack_config(
+            self.temp_dir,
+            build_variant="release",
+            install_prefix=build_package.DEFAULT_INSTALL_PREFIX,
         )
         self.assertFalse("asan" in cfg.install_prefix)
         self.assertTrue(cfg.install_prefix.endswith("-7.1"))
@@ -1079,19 +1048,18 @@ class UpdatePackageNameAsanSuffixTest(BuildPackageTestCase):
     def test_asan_family_variants_get_asan_name_suffix(self) -> None:
         for build_variant in ("asan", "host-asan", "asan-debug", "host-asan-debug"):
             with self.subTest(build_variant=build_variant):
-                cfg = build_package.create_package_config(
-                    _args(self.temp_dir, build_variant=build_variant)
-                )
+                cfg = _kpack_config(self.temp_dir, build_variant=build_variant)
                 updated = update_package_name(
-                    "amdrocm-core", replace(cfg, versioned_pkg=True)
+                    "amdrocm-core",
+                    replace(cfg, versioned_pkg=True, gfx_arch=TEST_GFX_TARGET),
                 )
                 self.assertEqual(updated, f"amdrocm-core-asan7.1-{TEST_GFX_TARGET}")
 
     def test_release_variant_gets_plain_name(self) -> None:
-        cfg = build_package.create_package_config(
-            _args(self.temp_dir, build_variant="release")
+        cfg = _kpack_config(self.temp_dir, build_variant="release")
+        updated = update_package_name(
+            "amdrocm-core", replace(cfg, versioned_pkg=True, gfx_arch=TEST_GFX_TARGET)
         )
-        updated = update_package_name("amdrocm-core", replace(cfg, versioned_pkg=True))
         self.assertEqual(updated, f"amdrocm-core7.1-{TEST_GFX_TARGET}")
 
 
@@ -1320,35 +1288,30 @@ class HostFallbackTest(BuildPackageTestCase):
             pkg_name=PKG_BLAS,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=TEST_GFX_TARGET,
-            enable_kpack=True,
         )
         # Stage BLAS host artifacts (needed for host package test)
         _stage_package_artifacts(
             pkg_name=PKG_BLAS,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=GFX_HOST,
-            enable_kpack=True,
         )
         # Stage SOLVER for gfx942 only (NOT gfx1100) - makes it a gfxarch package
         _stage_package_artifacts(
             pkg_name=PKG_SOLVER,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=TEST_GFX_TARGET_ALT,
-            enable_kpack=True,
         )
         # Stage SOLVER host artifacts - this is what we'll fall back to
         _stage_package_artifacts(
             pkg_name=PKG_SOLVER,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=GFX_HOST,
-            enable_kpack=True,
         )
         # Stage RUNTIME (non-gfxarch dependency needed by BLAS)
         _stage_package_artifacts(
             pkg_name=PKG_RUNTIME,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=GFX_HOST,
-            enable_kpack=True,
         )
 
         device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
@@ -1383,35 +1346,30 @@ class HostFallbackTest(BuildPackageTestCase):
             pkg_name=PKG_BLAS,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=TEST_GFX_TARGET,
-            enable_kpack=True,
         )
         # Stage BLAS host artifacts (needed for host package test)
         _stage_package_artifacts(
             pkg_name=PKG_BLAS,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=GFX_HOST,
-            enable_kpack=True,
         )
         # Stage SOLVER for gfx942 only (NOT gfx1100) - makes it a gfxarch package
         _stage_package_artifacts(
             pkg_name=PKG_SOLVER,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=TEST_GFX_TARGET_ALT,
-            enable_kpack=True,
         )
         # Stage SOLVER host artifacts - this is what we'll fall back to
         _stage_package_artifacts(
             pkg_name=PKG_SOLVER,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=GFX_HOST,
-            enable_kpack=True,
         )
         # Stage RUNTIME (non-gfxarch dependency needed by BLAS)
         _stage_package_artifacts(
             pkg_name=PKG_RUNTIME,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=GFX_HOST,
-            enable_kpack=True,
         )
 
         device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
