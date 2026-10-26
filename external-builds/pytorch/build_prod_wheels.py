@@ -862,7 +862,7 @@ def do_build(args: argparse.Namespace):
         pytorch_rocm_arch,
         triton_dir,
         is_windows,
-        asan=args.asan,
+        asan=setup_pytorch_sanitizer.selected_sanitizer(args) is not None,
     )
     print(f"  PATH = {env['PATH']}")
 
@@ -1619,11 +1619,12 @@ def main(argv: list[str]):
         help="apex source directory",
     )
     build_p.add_argument(
-        "--asan",
-        action="store_true",
-        default=False,
-        help="Build the torch wheel with AddressSanitizer. "
-        "Triton, torchaudio, torchvision, and apex are not built.",
+        "--build-variant",
+        default="release",
+        help="Build variant passed by the release workflow (release, asan, "
+        "asan-debug, host-asan). A variant containing 'asan' builds the torch "
+        "wheel with AddressSanitizer. Triton, torchaudio, torchvision, and "
+        "apex are not built.",
     )
     build_p.add_argument(
         "--pytorch-rocm-arch",

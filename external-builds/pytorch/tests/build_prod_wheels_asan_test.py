@@ -27,8 +27,16 @@ from setup_pytorch_sanitizer import (
 class SanitizerTableTest(unittest.TestCase):
     def test_only_asan_is_implemented(self):
         self.assertEqual(set(SANITIZERS), {"asan"})
-        self.assertEqual(selected_sanitizer(argparse.Namespace(asan=True)).name, "asan")
-        self.assertIsNone(selected_sanitizer(argparse.Namespace(asan=False)))
+        self.assertEqual(
+            selected_sanitizer(argparse.Namespace(build_variant="asan")).name, "asan"
+        )
+        self.assertEqual(
+            selected_sanitizer(argparse.Namespace(build_variant="asan-debug")).name,
+            "asan",
+        )
+        self.assertIsNone(
+            selected_sanitizer(argparse.Namespace(build_variant="release"))
+        )
 
 
 class ImportSanityEnvTest(unittest.TestCase):
@@ -139,7 +147,7 @@ class AsanBuildSelectionTest(unittest.TestCase):
     def _args(self, **overrides):
         source = Path(__file__).resolve().parent
         args = argparse.Namespace(
-            asan=False,
+            build_variant="release",
             build_triton=None,
             build_pytorch_audio=None,
             build_pytorch_vision=None,
@@ -168,7 +176,7 @@ class AsanBuildSelectionTest(unittest.TestCase):
 
     def test_asan_leaves_companions_off_when_sources_exist(self):
         parser = argparse.ArgumentParser()
-        args = self._args(asan=True)
+        args = self._args(build_variant="asan")
 
         validate_build_args(parser, args)
 
@@ -179,7 +187,7 @@ class AsanBuildSelectionTest(unittest.TestCase):
 
     def test_asan_rejects_an_explicit_companion_build(self):
         parser = argparse.ArgumentParser()
-        args = self._args(asan=True, build_pytorch_audio=True)
+        args = self._args(build_variant="asan", build_pytorch_audio=True)
 
         with self.assertRaises(SystemExit):
             validate_build_args(parser, args)
