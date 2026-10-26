@@ -35,7 +35,6 @@ import io
 import json
 import os
 from pathlib import Path
-import platform
 import re
 import shutil
 import sys
@@ -45,7 +44,7 @@ from . import _dist_info as di
 
 
 def _is_windows():
-    return platform.system() == "Windows"
+    return sys.platform == "win32"
 
 
 def get_devel_root() -> Path:

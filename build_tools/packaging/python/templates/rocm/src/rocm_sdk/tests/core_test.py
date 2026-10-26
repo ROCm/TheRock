@@ -10,6 +10,7 @@ import platform
 import subprocess
 import sys
 import unittest
+from unittest import mock
 
 from .. import _dist_info as di
 from . import utils
@@ -183,3 +184,17 @@ class ROCmCoreTest(unittest.TestCase):
                     shortname=lib_entry.shortname,
                 ):
                     rocm_sdk.preload_libraries(lib_entry.shortname)
+
+    def testFindLibrariesDoesNotCallPlatformSystem(self):
+        # On Windows with Python >= 3.12, platform.system() runs a WMI query, after
+        # which amd_comgr.dll can fail to initialize (TheRock#9305).
+        target_family = di.determine_target_family()
+        shortnames = [
+            lib_entry.shortname
+            for lib_entry in di.ALL_LIBRARIES.values()
+            if lib_entry.package.has_py_package(target_family)
+        ]
+        with mock.patch(
+            "platform.system", side_effect=AssertionError("platform.system() called")
+        ):
+            rocm_sdk.find_libraries(*shortnames)
