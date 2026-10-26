@@ -173,7 +173,8 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
         )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_files")
-    def test_structured_whl_next(self, mock_upload_files):
+    @mock.patch("github_actions.publish_pytorch_to_release_bucket.gha_set_output")
+    def test_structured_whl_next(self, mock_set_output, mock_upload_files):
         # Test regular, ASAN, and explicit override use correct index
         test_cases = [
             ("release", None, "whl-next"),  # Regular build -> whl-next
@@ -185,6 +186,7 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
                 build_variant=build_variant, explicit_index=explicit_index
             ):
                 mock_upload_files.reset_mock()
+                mock_set_output.reset_mock()
                 self._touch("torch-2.10.0-cp312-cp312-linux_x86_64.whl")
                 mock_upload_files.return_value = 1
                 args = [
@@ -207,6 +209,12 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
                     dest.relative_path,
                     f"v5/rocm/pytorch/{expected_index}/torch/"
                     "torch-2.10.0-cp312-cp312-linux_x86_64.whl",
+                )
+                mock_set_output.assert_called_once_with(
+                    {
+                        "package_index_url": "https://dev.repo.amd.com/rocm/"
+                        f"{expected_index}/"
+                    }
                 )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_files")

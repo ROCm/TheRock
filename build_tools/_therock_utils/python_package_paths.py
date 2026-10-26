@@ -39,7 +39,7 @@ ACCEPTED_FILE_EXTENSIONS = (".whl", ".tar.gz", ".zip")
 
 # Valid aggregate index names (the second path segment).
 # whl: flat pip-installable index (backward-compatible, all device extras)
-# whl-next: device-extra index for gfx-specific builds (explicit device selection)
+# whl-next: index for gfx-specific builds (explicit device selection)
 # whl-next-asan: ASAN-instrumented wheels for memory error detection
 INDEX_NAMES = ("whl", "whl-next", "whl-next-asan")
 DEFAULT_INDEX = "whl-next"
@@ -61,6 +61,14 @@ CORE_TARBALL_PREFIXES = {
     "release": "v5/rocm/core/tarball/",
     "asan": "v5/rocm/core/tarball-asan/",
 }
+
+
+def is_asan_variant(build_variant: str) -> bool:
+    """True if build_variant is any ASAN-family variant: "asan", "host-asan",
+    "asan-debug" (RelWithDebInfo + line-number debug info, see
+    amdgpu_family_matrix.py's all_build_variants), or "host-asan-debug".
+    """
+    return "asan" in build_variant
 
 
 def repo_product_bucket(stream: str, product: str) -> str:

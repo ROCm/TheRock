@@ -34,7 +34,7 @@ from _therock_utils.s3_buckets import (
     get_release_bucket_config,
     get_release_package_index_url,
 )
-from _therock_utils.python_package_paths import plan_local_uploads
+from _therock_utils.python_package_paths import is_asan_variant, plan_local_uploads
 from _therock_utils.storage_backend import create_storage_backend
 from _therock_utils.storage_location import StorageLocation
 from github_actions.github_actions_api import gha_set_output
@@ -100,8 +100,9 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--build-variant",
         default="release",
-        help="Build variant (release, asan, asan-debug, host-asan, etc.). "
-        "ASAN variants publish to whl-next-asan index by default.",
+        choices=["release", "asan", "asan-debug", "host-asan", "host-asan-debug"],
+        help="Build variant (default: release). ASAN variants publish to "
+        "whl-next-asan index by default.",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Print plan without uploading"
@@ -113,10 +114,9 @@ def main(argv: list[str]) -> None:
 
     # Determine python index: explicit --python-index takes precedence,
     # then ASAN default, then whl-next
-    is_asan = "asan" in args.build_variant
     if args.python_index is not None:
         python_index = args.python_index
-    elif is_asan:
+    elif is_asan_variant(args.build_variant):
         python_index = "whl-next-asan"
     else:
         python_index = "whl-next"
@@ -126,7 +126,9 @@ def main(argv: list[str]) -> None:
     if args.structured:
         bucket = get_product_release_bucket_config(args.release_type, "pytorch")
         _publish_structured(args.source_dir, bucket.name, python_index, backend)
-        package_index_url = get_release_package_index_url(args.release_type)
+        package_index_url = get_release_package_index_url(
+            args.release_type, python_index
+        )
     else:
         bucket = get_release_bucket_config(args.release_type, "python")
         dest = StorageLocation(bucket.name, "v4/whl")
