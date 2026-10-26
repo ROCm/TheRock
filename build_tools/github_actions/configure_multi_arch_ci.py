@@ -106,18 +106,84 @@ def _get_all_build_stages() -> list[str]:
     return list(topology.build_stages.keys())
 
 
-def parse_external_repo(raw: str) -> dict:
-    """Parse the external_repo JSON blob a calling repo passes to TheRock."""
+@dataclass
+class ExternalRepoConfig:
+    """Schema for the external_repo JSON blob a calling repo passes to TheRock.
+
+    Calling repositories (rocm-libraries, rocm-systems) serialise this as a JSON
+    object in the EXTERNAL_REPO environment variable when they invoke TheRock's
+    reusable workflows.
+
+    Required fields:
+        repository: Full GitHub repository name, e.g. "ROCm/rocm-libraries".
+
+    Optional fields:
+        event_name:     GitHub event type that triggered the calling repo's
+                        workflow (push, pull_request, schedule, ...).
+        base_sha:       Base commit SHA for diff computation.
+        head_sha:       Head commit SHA for diff computation.
+        pr_number:      Pull-request number (for PR events); used to fetch
+                        changed files via the GitHub PR-files API.
+        base_ref:       Base ref for git-diff fallback when SHAs are absent.
+        skip_ci_config: Relative path to the skip-CI TOML config file inside
+                        the calling repo (e.g. ".github/skip-ci-config.toml").
+    """
+
+    repository: str
+    event_name: str = ""
+    base_sha: str | None = None
+    head_sha: str | None = None
+    pr_number: int | None = None
+    base_ref: str | None = None
+    skip_ci_config: str | None = None
+
+
+def parse_external_repo(raw: str) -> ExternalRepoConfig:
+    """Parse and validate the external_repo JSON blob.
+
+    Raises ValueError for malformed JSON, non-object payloads, or a missing
+    ``repository`` field.
+    """
     try:
-        external_repo = json.loads(raw)
+        data = json.loads(raw)
     except (json.JSONDecodeError, TypeError) as e:
         raise ValueError(f"Invalid external_repo JSON: {raw!r}") from e
 
-    if not isinstance(external_repo, dict):
+    if not isinstance(data, dict):
         raise ValueError(
-            f"external_repo must be a JSON object, got: {type(external_repo).__name__}"
+            f"external_repo must be a JSON object, got: {type(data).__name__}"
         )
-    return external_repo
+
+    repository = data.get("repository")
+    if not repository or not isinstance(repository, str):
+        raise ValueError(
+            f"external_repo must contain a non-empty 'repository' string, "
+            f"got: {data.get('repository')!r}"
+        )
+
+    # Coerce pr_number to int if provided as a string.
+    pr_number = data.get("pr_number")
+    if isinstance(pr_number, str) and pr_number.isdigit():
+        pr_number = int(pr_number)
+    elif pr_number is not None and not isinstance(pr_number, int):
+        pr_number = None
+
+    known_fields = {f.name for f in fields(ExternalRepoConfig)}
+    unknown = set(data.keys()) - known_fields
+    if unknown:
+        logging.getLogger(__name__).debug(
+            "Ignoring unknown external_repo fields: %s", sorted(unknown)
+        )
+
+    return ExternalRepoConfig(
+        repository=repository,
+        event_name=data.get("event_name", ""),
+        base_sha=data.get("base_sha"),
+        head_sha=data.get("head_sha"),
+        pr_number=pr_number,
+        base_ref=data.get("base_ref"),
+        skip_ci_config=data.get("skip_ci_config"),
+    )
 
 
 def _parse_comma_list(raw: str) -> list[str]:
@@ -854,10 +920,10 @@ def should_skip_ci(
     # external repos to skip TheRock CI when only docs/metadata files changed.
     if ci_inputs.external_repo:
         external_repo = parse_external_repo(ci_inputs.external_repo)
-        repo_name = external_repo.get("repository", "").split("/")[-1]
+        repo_name = external_repo.repository.split("/")[-1]
 
         # Get skip patterns from TOML config file
-        skip_ci_config = external_repo.get("skip_ci_config")
+        skip_ci_config = external_repo.skip_ci_config
         skip_ci_patterns = None
         if skip_ci_config:
             skip_ci_patterns = load_skip_ci_patterns_for_external_repo(skip_ci_config)
@@ -2109,19 +2175,15 @@ def main():
     # Check if this is an external repo build (e.g., rocm-libraries calling TheRock workflows)
     if ci_inputs.external_repo:
         # External repo: use repo name for stage reuse analysis.
-        # external_repo is JSON like {"repository":"ROCm/rocm-libraries","ref":"..."}
         external_repo = parse_external_repo(ci_inputs.external_repo)
 
-        repo_full_name = external_repo.get("repository", "")
-        if not repo_full_name:
-            raise ValueError(
-                f"EXTERNAL_REPO missing 'repository' field: {ci_inputs.external_repo!r}"
-            )
         # Fetch the calling repo's diff once here; both skip-CI and test depth
         # read it off the context.
         git_context = GitContext.from_external_repo(
-            repo_full_name.split("/")[-1],
-            external_changed_files=get_changed_files_for_external_repo(external_repo),
+            external_repo.repository.split("/")[-1],
+            external_changed_files=get_changed_files_for_external_repo(
+                asdict(external_repo)
+            ),
         )
     elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
         # 'pull_request' and 'push' events can use the list of changed files
