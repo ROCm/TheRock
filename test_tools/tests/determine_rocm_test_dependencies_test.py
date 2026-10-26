@@ -1150,6 +1150,140 @@ class TestExplain(_FixtureTestCase):
 # --list-subprojects works with NO build/ dir (finding #8): committed graph is
 # read from --therock-dir/test_tools/, not build/.
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# ci:no-downstream-test: auto-detected from GITHUB_EVENT_PATH PR labels,
+# overrides walk level to 5 (self only).  Also testable via --level 5 CLI.
+# ---------------------------------------------------------------------------
+class TestNoDownstreamTestLabel(_FixtureTestCase):
+    """Verify ci:no-downstream-test label selects only changed projects."""
+
+    def _run(self, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), "--therock-dir", str(self.root), *args],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+    def _make_event_file(self, labels: list[str]) -> str:
+        """Create a temporary GitHub event payload with the given PR labels."""
+        event = {
+            "pull_request": {
+                "labels": [{"name": lbl, "id": i} for i, lbl in enumerate(labels)]
+            }
+        }
+        handle = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json")
+        json.dump(event, handle)
+        handle.close()
+        return handle.name
+
+    def _env_with_event(self, labels: list[str]) -> tuple[dict, str]:
+        """Return (env_dict, event_file_path) with GITHUB_EVENT_PATH set."""
+        event_file = self._make_event_file(labels)
+        env = os.environ.copy()
+        env["GITHUB_EVENT_PATH"] = event_file
+        return env, event_file
+
+    # -- CLI --level 5 tests (explicit override) --
+
+    def test_level_5_cli_self_only(self) -> None:
+        """--level 5 selects only the changed project, no consumers."""
+        proc = self._run("--changed-projects", "rocroller", "--level", "5")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        projects = json.loads(proc.stdout.strip())
+        self.assertEqual(set(projects), {"rocroller"})
+
+    def test_level_5_cli_vs_default(self) -> None:
+        """--level 5 is strictly smaller than default (level 4) selection."""
+        proc_5 = self._run("--changed-projects", "rocroller", "--level", "5")
+        proc_default = self._run("--changed-projects", "rocroller")
+        self.assertEqual(proc_5.returncode, 0, proc_5.stderr)
+        self.assertEqual(proc_default.returncode, 0, proc_default.stderr)
+        set_5 = set(json.loads(proc_5.stdout.strip()))
+        set_default = set(json.loads(proc_default.stdout.strip()))
+        self.assertTrue(
+            set_5 < set_default, f"{set_5} should be a strict subset of {set_default}"
+        )
+
+    def test_level_5_multiple_projects(self) -> None:
+        """--level 5 with multiple changed projects returns only those projects (plus policy includes)."""
+        proc = self._run("--changed-projects", "rocroller,amdsmi", "--level", "5")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        projects = json.loads(proc.stdout.strip())
+        # amdsmi has test_include=["hip-tests"] in the fixture policy, so
+        # hip-tests is still included even at level 5. But no consumers
+        # (rdc, hipblaslt) should appear.
+        self.assertEqual(set(projects), {"rocroller", "amdsmi", "hip-tests"})
+        self.assertNotIn("rdc", projects)
+        self.assertNotIn("hipblaslt", projects)
+
+    # -- PR label auto-detection via GITHUB_EVENT_PATH --
+
+    def test_pr_label_auto_detects_self_only(self) -> None:
+        """ci:no-downstream-test in PR labels auto-selects level 5."""
+        env, event_file = self._env_with_event(["ci:no-downstream-test"])
+        try:
+            proc = self._run("--changed-projects", "rocroller", env=env)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            projects = json.loads(proc.stdout.strip())
+            self.assertEqual(set(projects), {"rocroller"})
+            self.assertIn("ci:no-downstream-test label detected", proc.stderr)
+        finally:
+            os.unlink(event_file)
+
+    def test_pr_label_excludes_downstream(self) -> None:
+        """ci:no-downstream-test excludes downstream consumers."""
+        env, event_file = self._env_with_event(["ci:no-downstream-test"])
+        try:
+            # Without label: amdsmi → {amdsmi, rdc, hipblaslt, ...}
+            proc_default = self._run("--changed-projects", "amdsmi")
+            default_projects = set(json.loads(proc_default.stdout.strip()))
+            self.assertIn("rdc", default_projects)
+
+            # With label: amdsmi only (plus policy includes)
+            proc_label = self._run("--changed-projects", "amdsmi", env=env)
+            self.assertEqual(proc_label.returncode, 0, proc_label.stderr)
+            label_projects = set(json.loads(proc_label.stdout.strip()))
+            self.assertNotIn("rdc", label_projects)
+            self.assertNotIn("hipblaslt", label_projects)
+        finally:
+            os.unlink(event_file)
+
+    def test_pr_label_no_effect_without_projects(self) -> None:
+        """ci:no-downstream-test with no changed projects still returns all."""
+        env, event_file = self._env_with_event(["ci:no-downstream-test"])
+        try:
+            proc = self._run("--changed-projects", "", env=env)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(proc.stdout.strip(), "*")
+        finally:
+            os.unlink(event_file)
+
+    def test_label_overrides_explicit_level(self) -> None:
+        """ci:no-downstream-test label takes precedence over explicit --level."""
+        env, event_file = self._env_with_event(["ci:no-downstream-test"])
+        try:
+            # --level 4 would include consumers, but label forces level 5
+            proc = self._run("--changed-projects", "rocroller", "--level", "4", env=env)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            projects = set(json.loads(proc.stdout.strip()))
+            self.assertNotIn("hipblaslt", projects)
+            self.assertEqual(projects, {"rocroller"})
+            self.assertIn("ci:no-downstream-test label detected", proc.stderr)
+        finally:
+            os.unlink(event_file)
+
+    def test_no_event_path_falls_back_to_default(self) -> None:
+        """Without GITHUB_EVENT_PATH, default level is used (no crash)."""
+        env = os.environ.copy()
+        env.pop("GITHUB_EVENT_PATH", None)
+        proc = self._run("--changed-projects", "rocroller", env=env)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        projects = set(json.loads(proc.stdout.strip()))
+        # Default level 4: includes direct consumers
+        self.assertIn("hipblaslt", projects)
+
+
 class TestListSubprojectsNoBuildDir(_FixtureTestCase):
     def test_no_build_dir_present(self) -> None:
         # The fixture root has NO build/ directory — assert it stays that way.
