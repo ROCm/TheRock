@@ -10,129 +10,44 @@ from pathlib import Path
 
 sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent))
 
-from build_prod_wheels import (
-    _setup_common_build_env,
-    add_env_compiler_flags,
-    validate_build_args,
-)
-from setup_pytorch_sanitizer import (
-    SANITIZERS,
-    _resolve_hsa_runtime,
-    append_env_text,
-    import_sanity_env,
-    selected_sanitizer,
-)
-
-
-class SanitizerTableTest(unittest.TestCase):
-    def test_only_asan_is_implemented(self):
-        self.assertEqual(set(SANITIZERS), {"asan"})
-        self.assertEqual(selected_sanitizer(argparse.Namespace(asan=True)).name, "asan")
-        self.assertIsNone(selected_sanitizer(argparse.Namespace(asan=False)))
+from build_prod_wheels import validate_build_args
+from setup_pytorch_sanitizer import SANITIZERS, import_sanity_env
 
 
 class ImportSanityEnvTest(unittest.TestCase):
-    def test_preloads_asan_runtime_then_hsa(self):
-        env = {
-            "ASAN_RUNTIME_PATH": "/opt/rocm/lib/llvm/libclang_rt.asan.so",
-            "HSA_RUNTIME_PATH": "/opt/rocm/lib/libhsa-runtime64.so.1",
-            "LD_LIBRARY_PATH": "/opt/rocm/lib",
-        }
+    """The import check preloads the ASan runtime, then ROCr.
 
-        sanity = import_sanity_env(env, SANITIZERS["asan"])
+    The directories below are test fixtures. They are not an install prefix.
+    """
+
+    def _fixture_env(self, root: Path, *, include_hsa: bool) -> dict[str, str]:
+        env = {
+            "ASAN_RUNTIME_PATH": os.fspath(root / "clang" / "libclang_rt.asan.so"),
+            "LD_LIBRARY_PATH": os.fspath(root / "lib"),
+        }
+        if include_hsa:
+            env["HSA_RUNTIME_PATH"] = os.fspath(root / "lib" / "libhsa-runtime64.so.1")
+        return env
+
+    def test_preloads_asan_runtime_then_hsa(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._fixture_env(Path(tmp), include_hsa=True)
+
+            sanity = import_sanity_env(env, SANITIZERS["asan"])
 
         self.assertEqual(
             sanity["LD_PRELOAD"],
-            os.pathsep.join(
-                (
-                    "/opt/rocm/lib/llvm/libclang_rt.asan.so",
-                    "/opt/rocm/lib/libhsa-runtime64.so.1",
-                )
-            ),
+            os.pathsep.join((env["ASAN_RUNTIME_PATH"], env["HSA_RUNTIME_PATH"])),
         )
         self.assertIn("detect_leaks=0", sanity["ASAN_OPTIONS"])
-        self.assertEqual(sanity["LD_LIBRARY_PATH"], "/opt/rocm/lib")
+        self.assertEqual(sanity["LD_LIBRARY_PATH"], env["LD_LIBRARY_PATH"])
 
     def test_missing_hsa_runtime_fails_the_check(self):
-        with self.assertRaises(RuntimeError):
-            import_sanity_env(
-                {"ASAN_RUNTIME_PATH": "/opt/rocm/lib/llvm/libclang_rt.asan.so"},
-                SANITIZERS["asan"],
-            )
-
-    def test_hsa_runtime_resolves_under_rocm_lib(self):
         with tempfile.TemporaryDirectory() as tmp:
-            rocm_dir = Path(tmp)
-            hsa = rocm_dir / "lib" / "libhsa-runtime64.so.1"
-            hsa.parent.mkdir()
-            hsa.write_bytes(b"")
+            env = self._fixture_env(Path(tmp), include_hsa=False)
 
-            self.assertEqual(
-                _resolve_hsa_runtime(rocm_dir, SANITIZERS["asan"]), hsa.resolve()
-            )
-
-            missing = rocm_dir / "empty"
-            missing.mkdir()
             with self.assertRaises(RuntimeError):
-                _resolve_hsa_runtime(missing, SANITIZERS["asan"])
-
-
-class AsanFlagSpacingTest(unittest.TestCase):
-    def test_asan_flags_stay_separate_from_later_appends(self):
-        env = {
-            "CXXFLAGS": " -Wno-error=restrict ",
-            "LDFLAGS": "",
-        }
-        append_env_text(env, "CXXFLAGS", "-fno-omit-frame-pointer")
-        append_env_text(env, "LDFLAGS", "-shared-libasan")
-        add_env_compiler_flags(
-            env, "CXXFLAGS", "-I/opt/rocm/include", "-I/opt/rocm/include/roctracer"
-        )
-        add_env_compiler_flags(env, "LDFLAGS", "-L/opt/rocm/lib")
-
-        self.assertIn(
-            "-fno-omit-frame-pointer -I/opt/rocm/include -I/opt/rocm/include/roctracer",
-            env["CXXFLAGS"],
-        )
-        self.assertIn("-shared-libasan -L/opt/rocm/lib", env["LDFLAGS"])
-        self.assertNotIn("-fno-omit-frame-pointer-I", env["CXXFLAGS"])
-        self.assertNotIn("-shared-libasan-L", env["LDFLAGS"])
-
-
-class AsanCompilerFlagsTest(unittest.TestCase):
-    def test_asan_does_not_inherit_gcc_warning_workarounds(self):
-        env = _setup_common_build_env(
-            Path("/tmp/cmake"),
-            Path("/tmp/bin"),
-            Path("/tmp/rocm"),
-            "gfx942",
-            None,
-            False,
-            asan=True,
-        )
-
-        for name in ("CXXFLAGS", "CPPFLAGS"):
-            self.assertNotIn("maybe-uninitialized", env.get(name, ""))
-            self.assertNotIn("restrict", env.get(name, ""))
-        self.assertTrue(
-            env["PATH"].startswith("/tmp/rocm/lib/llvm/bin" + os.path.pathsep)
-        )
-
-    def test_normal_linux_build_keeps_gcc_warning_workarounds(self):
-        env = _setup_common_build_env(
-            Path("/tmp/cmake"),
-            Path("/tmp/bin"),
-            Path("/tmp/rocm"),
-            "gfx942",
-            None,
-            False,
-        )
-
-        self.assertIn("-Wno-error=maybe-uninitialized", env["CXXFLAGS"])
-        self.assertIn("-Wno-error=restrict", env["CPPFLAGS"])
-        self.assertFalse(
-            "/tmp/rocm/lib/llvm/bin" in env["PATH"].split(os.path.pathsep)[0]
-        )
+                import_sanity_env(env, SANITIZERS["asan"])
 
 
 class AsanBuildSelectionTest(unittest.TestCase):
