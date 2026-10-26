@@ -544,6 +544,13 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["BUILD_VARIANT"] = "asan"
         self.assertIn("asan-compatible", self._selected_names())
 
+    def test_asan_build_with_project_filter_keeps_only_unflagged_components(self):
+        os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync,rocblas"
+        os.environ["BUILD_VARIANT"] = "asan"
+        names = self._selected_names()
+        self.assertIn("rocblas", names)
+        self.assertNotIn("miopen-dbsync", names)
+
     def test_gpu_components_not_scheduled_on_gated_gfx950(self):
         # The CPU lane must not leak GPU-requiring components onto gated gfx950.
         os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync,rocblas"

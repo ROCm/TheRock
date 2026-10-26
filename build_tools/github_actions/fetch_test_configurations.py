@@ -786,7 +786,7 @@ test_matrix = {
         "platform": ["linux"],
         "linux_cpu_runner": True,
         "test_types": ["standard", "comprehensive", "full"],
-        # StaticFDBSync is compiled out under ASAN.
+        # StaticFDBSync skips itself at runtime under ASAN.
         "skip_on_asan": True,
         "include_family": {
             "linux": ["gfx942", "gfx950"],
