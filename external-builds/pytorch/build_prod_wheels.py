@@ -1230,6 +1230,14 @@ def do_build_pytorch(
             env, "CXXFLAGS", f"-I{rocm_dir / 'include' / 'roctracer'}"
         )
         add_env_compiler_flags(env, "LDFLAGS", f"-L{sysdeps_dir / 'lib'}")
+        # libtorch_cpu.so lives in torch/lib. These are relative to that file,
+        # so the install prefix does not have to be known here.
+        add_env_compiler_flags(
+            env,
+            "LDFLAGS",
+            "-Wl,-rpath,\\$ORIGIN/../../_rocm_sdk_core/lib",
+            "-Wl,-rpath,\\$ORIGIN/../../_rocm_sdk_core/lib/host-math/lib",
+        )
 
         # needed to find liblzma packaged by rocm as sysdep to build aotriton
         os.environ["PKG_CONFIG_PATH"] = f"{sysdeps_dir / 'lib' / 'pkgconfig'}"
