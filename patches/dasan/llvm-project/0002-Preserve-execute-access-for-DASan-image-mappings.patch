@@ -1,0 +1,160 @@
+From: Sahil Faizal <safaizal@amd.com>
+Subject: [PATCH] Preserve execute access for DASan image mappings
+
+The pinned ROCr VM mapping path takes explicit page permissions separately
+from executable allocation flags. Its KfdDriver::Map forwards mem_perm(perms)
+to hsaKmtMemoryVaMap, whose MapDrmPerm adds AMDGPU_VM_PAGE_EXECUTABLE only
+when HSA_MEMORY_ACCESS_EX is present. The reserved-address loader test also
+explicitly maps code with HSA_ACCESS_PERMISSION_RW | HSA_ACCESS_PERMISSION_EX.
+DASan previously mapped its newly reserved executable images with RW only.
+
+Mark only reserved executable image mappings as executable. Carry that intent
+in MappedRange so permission updates preserve GPU execute access; CPU mappings,
+heap allocations, metadata, and data-only aliases retain their existing access.
+Add the current HSA_ACCESS_PERMISSION_EX value to standalone declarations.
+
+Source evidence at ROCr f535db62a0dc73f2d56d4b93d9bbd4f3155e113b:
+- projects/rocr-runtime/runtime/hsa-runtime/core/driver/kfd/amd_kfd_driver.cpp
+  mem_perm and KfdDriver::Map
+- projects/rocr-runtime/libhsakmt/src/memory.c
+  MapDrmPerm and hsaKmtMemoryVaMap assign explicit DRM page permissions
+- projects/rocr-runtime/rocrtst/suites/functional/loader_reserved_address.cc
+  LoadAtAddressTest maps reserved code with RW | EX
+
+LLVM base: b07aa864f5b2bf648e6a61e2902cbfde83192481 plus patch 0001.
+Validation: exact-source patch checks; GPU runtime validation pending.
+Drop this one-off patch when upstream DASan carries executable mapping intent.
+
+diff --git a/compiler-rt/lib/dasan/dasan_image.cpp b/compiler-rt/lib/dasan/dasan_image.cpp
+index f0236a9..7b7f66b 100644
+--- a/compiler-rt/lib/dasan/dasan_image.cpp
++++ b/compiler-rt/lib/dasan/dasan_image.cpp
+@@ -302,7 +302,8 @@ bool ReserveExecutable(hsa_agent_t Agent, uptr LoadSize, uptr* Addr, uptr* Span,
+     return false;
+   u64 H = 0;
+   if (!VaCreate(Device, MapSize, HSA_AMD_MEMORY_POOL_EXECUTABLE_FLAG, &H) ||
+-      !VaMap(Alias, MapSize, H, /*ReadOnly=*/false, Device)) {
++      !VaMap(Alias, MapSize, H, /*ReadOnly=*/false, Device, /*Offset=*/0,
++             /*Executable=*/true)) {
+     if (H)
+       VaDestroy(H);
+     A.Deallocate(Alias, MapSize, 0);
+diff --git a/compiler-rt/lib/dasan/dasan_platform.cpp b/compiler-rt/lib/dasan/dasan_platform.cpp
+index 2e7d48d..711ac8c 100644
+--- a/compiler-rt/lib/dasan/dasan_platform.cpp
++++ b/compiler-rt/lib/dasan/dasan_platform.cpp
+@@ -44,6 +44,7 @@ struct MappedRange {
+   uptr Size;
+   DeviceId Device;
+   bool CpuRw;
++  bool Executable;
+   InternalMmapVectorNoCtor<hsa_agent_t> Agents;
+ 
+   bool Covers(uptr P) const { return P >= Addr && P < Addr + Size; }
+@@ -61,6 +62,7 @@ struct MappedRange {
+     Size = O.Size;
+     Device = O.Device;
+     CpuRw = O.CpuRw;
++    Executable = O.Executable;
+     Agents.swap(O.Agents);
+   }
+ };
+@@ -114,7 +116,8 @@ void DropMapped(uptr I) {
+ 
+ // Metadata is read-only to the device unless the host cannot reach it
+ // directly, in which case the copy engine needs the owner to hold it RW.
+-bool Grant(uptr Addr, uptr Size, bool ReadOnly, DeviceId Device, bool WithCpu) {
++bool Grant(uptr Addr, uptr Size, bool ReadOnly, DeviceId Device, bool WithCpu,
++           bool Executable) {
+   InternalMmapVector<hsa_amd_memory_access_desc_t> Descs;
+   hsa_agent_t Owner = {};
+   const bool HaveOwner = Device && AgentForDevice(Device, &Owner);
+@@ -125,17 +128,21 @@ bool Grant(uptr Addr, uptr Size, bool ReadOnly, DeviceId Device, bool WithCpu) {
+       Descs.push_back({HSA_ACCESS_PERMISSION_RW, Cpu});
+     }
+   }
+-  if (HaveOwner)
+-    Descs.push_back({(ReadOnly && WithCpu) ? HSA_ACCESS_PERMISSION_RO
+-                                           : HSA_ACCESS_PERMISSION_RW,
+-                     Owner});
++  if (HaveOwner) {
++    u32 Perm = (ReadOnly && WithCpu) ? HSA_ACCESS_PERMISSION_RO
++                                   : HSA_ACCESS_PERMISSION_RW;
++    if (Executable)
++      Perm |= HSA_ACCESS_PERMISSION_EX;
++    Descs.push_back({static_cast<hsa_access_permission_t>(Perm), Owner});
++  }
+   if (Descs.empty())
+     return false;
+   if (O().SetAccess(Addr, Size, Descs.data(), Descs.size()))
+     return true;
+   if (!ReadOnly || !Device || !WithCpu)
+     return false;
+-  Descs.back().permissions = HSA_ACCESS_PERMISSION_RW;
++  Descs.back().permissions = static_cast<hsa_access_permission_t>(
++      HSA_ACCESS_PERMISSION_RW | (Executable ? HSA_ACCESS_PERMISSION_EX : 0));
+   return O().SetAccess(Addr, Size, Descs.data(), Descs.size());
+ }
+ 
+@@ -274,11 +281,11 @@ bool VaShare(uptr Addr, uptr Size, u64* Handle, uptr* Offset) {
+ void VaDestroy(u64 Handle) { O().ReleaseHandle(Handle); }
+ 
+ bool VaMap(uptr Addr, uptr Size, u64 Handle, bool ReadOnly, DeviceId Device,
+-           uptr Offset) {
++           uptr Offset, bool Executable) {
+   if (!O().Map(Addr, Size, Offset, Handle))
+     return false;
+   const bool WithCpu = HostCanAccess(Device);
+-  if (!Grant(Addr, Size, ReadOnly, Device, WithCpu)) {
++  if (!Grant(Addr, Size, ReadOnly, Device, WithCpu, Executable)) {
+     O().Unmap(Addr, Size);
+     return false;
+   }
+@@ -288,6 +295,7 @@ bool VaMap(uptr Addr, uptr Size, u64 Handle, bool ReadOnly, DeviceId Device,
+   R.Size = Size;
+   R.Device = Device;
+   R.CpuRw = WithCpu;
++  R.Executable = Executable;
+   hsa_agent_t Gpu = {};
+   if (Device && AgentForDevice(Device, &Gpu))
+     R.Note(Gpu);
+@@ -333,6 +341,14 @@ bool VaAllowAgents(uptr Addr, uptr Size, const hsa_agent_t* Agents, u32 N,
+     if (!M.Overlaps(Addr, End))
+       continue;
+     Hit = true;
++    // Executable image mappings must retain execute access when an agent's
++    // permissions are updated. Ordinary allocations remain non-executable.
++    for (u32 A = 0; A < N; ++A) {
++      u32 Perm = Descs[A].permissions & ~HSA_ACCESS_PERMISSION_EX;
++      if (M.Executable && O().IsGpu(Agents[A]))
++        Perm |= HSA_ACCESS_PERMISSION_EX;
++      Descs[A].permissions = static_cast<hsa_access_permission_t>(Perm);
++    }
+     if (!O().SetAccess(M.Addr, M.Size, Descs.data(), Descs.size()))
+       return false;
+     for (u32 A = 0; A < N; ++A) M.Note(Agents[A]);
+diff --git a/compiler-rt/lib/dasan/dasan_platform.h b/compiler-rt/lib/dasan/dasan_platform.h
+index 9f5590d..00a3efb 100644
+--- a/compiler-rt/lib/dasan/dasan_platform.h
++++ b/compiler-rt/lib/dasan/dasan_platform.h
+@@ -46,7 +46,7 @@ bool VaShare(uptr Addr, uptr Size, u64* Handle, uptr* Offset);
+ void VaDestroy(u64 Handle);
+ 
+ bool VaMap(uptr Addr, uptr Size, u64 Handle, bool ReadOnly, DeviceId Device,
+-           uptr Offset = 0);
++           uptr Offset = 0, bool Executable = false);
+ void VaUnmap(uptr Addr, uptr Size);
+ bool VaAllow(uptr Addr, uptr Size, DeviceId Device, bool ReadOnly);
+ bool VaAllowAgents(uptr Addr, uptr Size, const hsa_agent_t* Agents, u32 N,
+diff --git a/compiler-rt/lib/sanitizer_common/sanitizer_offload_hsa.h b/compiler-rt/lib/sanitizer_common/sanitizer_offload_hsa.h
+index 144e5c0..c173e1e 100644
+--- a/compiler-rt/lib/sanitizer_common/sanitizer_offload_hsa.h
++++ b/compiler-rt/lib/sanitizer_common/sanitizer_offload_hsa.h
+@@ -164,6 +164,7 @@ typedef enum { HSA_EXT_POINTER_TYPE_HSA = 1 } hsa_amd_pointer_type_t;
+ typedef enum {
+   HSA_ACCESS_PERMISSION_RO = 1,
+   HSA_ACCESS_PERMISSION_RW = 3,
++  HSA_ACCESS_PERMISSION_EX = 4,
+ } hsa_access_permission_t;
+ 
+ typedef enum { MEMORY_TYPE_NONE = 0 } hsa_amd_memory_type_t;
