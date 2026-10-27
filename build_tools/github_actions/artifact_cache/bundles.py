@@ -104,9 +104,14 @@ def group_records(records, *, authoritative):
                   "fingerprint_state": state, "fingerprint": fingerprint, "detail": reason,
                   "components": list(components), "component_records": members}
         key = ArtifactKey(identity, fingerprint, components=components) if state == "valid" else None
-        trace("BUNDLE_KEY" if key else "BUNDLE_SKIPPED", artifact=identity,
-              components=list(components), fingerprint=fingerprint,
-              epoch=key.epoch if key else None, reason=reason)
+        trace(
+            "ARTIFACT_KEY" if key else "BUNDLE_SKIPPED",
+            artifact=identity,
+            components=list(components),
+            fingerprint=fingerprint,
+            epoch=key.epoch if key else None,
+            reason=reason,
+        )
         result.append((record, key))
     return sorted(result, key=lambda item: item[0]["artifact_identity"])
 
