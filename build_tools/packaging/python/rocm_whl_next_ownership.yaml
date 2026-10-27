@@ -261,6 +261,16 @@ python_indexes:
         owner_path: core/whl-next
       rocm-sdk-device-gfx1153:
         owner_path: core/whl-next
+      rocm-sdk-device-gfx1170:
+        owner_path: core/whl-next
+        streams:
+          - dev
+          - nightly
+      rocm-sdk-device-gfx1171:
+        owner_path: core/whl-next
+        streams:
+          - dev
+          - nightly
       rocm-sdk-device-gfx1200:
         owner_path: core/whl-next
       rocm-sdk-device-gfx1201:

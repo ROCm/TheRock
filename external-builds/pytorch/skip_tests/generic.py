@@ -24,6 +24,11 @@ skip_tests = {
             # runtime-only and does not configure a native compiler or install
             # the ROCm development headers. See #8217.
             "test_mempool_limited_memory_with_allocator",
+            # JIT-compile throwing_free_allocator, but the wheel test environment
+            # is runtime-only and has no ROCm development files to link against
+            # (/usr/bin/ld: cannot find -lamdhip64). See #8889.
+            "test_custom_mempool_free_exception_does_not_fail_malloc",
+            "test_custom_mempool_free_exception_propagates_from_empty_cache",
             # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI
             "test_memory_snapshot",
             "test_memory_plots",
@@ -282,6 +287,9 @@ skip_tests = {
             "test_amdsmi_bare_unversioned_path_uses_loader_first",
             "test_amdsmi_explicit_unversioned_path_is_redirected",
             "test_amdsmi_versioned_library_path_is_preserved",
+            # Windows builds have USE_KINETO=OFF, so allocations in the test body
+            # get no Python frames. See https://github.com/ROCm/TheRock/issues/8935
+            "test_memory_profiler_viz",
         ],
         "nn": [
             # Hangs on some Windows ROCm runners until the job hits the 6h limit.

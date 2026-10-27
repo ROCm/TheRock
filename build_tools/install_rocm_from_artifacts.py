@@ -396,6 +396,12 @@ def retrieve_artifacts_by_run_id(args):
         "host-suite-sparse_lib",
     ]
 
+    # WSL has no amdgpu kernel driver: the runtime reaches the GPU (/dev/dxg)
+    # through the WSL libhsakmt that the wsl-rocdxg stage builds. The WSL kernel
+    # release ("...-microsoft-standard-WSL2") identifies it, also in containers.
+    if "microsoft" in platform.release().lower():
+        base_artifact_patterns.append("wsl-rocdxg_lib")
+
     if args.base_only:
         argv.extend(base_artifact_patterns)
     elif any(
@@ -552,7 +558,7 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rocprofiler-compute_run")
         if args.rocprofiler_systems:
             extra_artifacts.append("rocprofiler-systems")
-            # Contains executables (rocprof-sys-run, rocprof-sys-instrument, etc.)
+            # Contains executables (rocsys, rocprof-sys-run, rocprof-sys-instrument, etc.)
             argv.append("rocprofiler-systems_run")
             # rocprofiler-systems links libprofiler-hub.so.0 at runtime.
             argv.append("profiler-hub_lib")
