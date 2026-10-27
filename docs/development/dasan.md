@@ -29,6 +29,15 @@ URL, fetches only the `compiler-runtime` source set, and applies TheRock's
 normal compatibility patches. It refuses already initialized experimental
 submodules because `fetch_sources.py` resets their contents.
 
+The launcher then applies the local `patches/dasan/llvm-project` compatibility
+patch, including on an already prepared checkout. The supplied LLVM branch
+uses an obsolete ROCr executable-allocation enum and bit value; the selected
+ROCr revision expects `HSA_AMD_MEMORY_POOL_EXECUTABLE_FLAG` with value `1 << 2`.
+The patch updates both the call site and fallback enum definition. The normal
+source patch helper records LLVM's `.smrev` without clearing ROCr's patch
+metadata. Subsequent launches detect the already applied patch; dirty compiler
+sources or conflicts stop the build for inspection.
+
 ```bash
 python3 build_tools/dasan_build.py \
   --output-dir /absolute/path/to/unique-dasan-output \
@@ -111,8 +120,18 @@ requires all three host lit tests to pass. It writes `summary.json`, detailed
 logs, and lit JSON reports to the validation directory. GPU tests are explicitly
 reported as unrun by default. On a GPU machine, pass `--gpu-arch gfx942` or
 `--gpu-arch gfx950` to require the 21 HIP tests; only the multi-device test may
-be unsupported unless `--require-multi-device` is also passed. The three OpenMP
-tests are outside this validator's scope and require separate validation.
+be unsupported unless `--require-multi-device` is also passed. To exercise all
+27 source tests on a machine with eight gfx950 GPUs, append:
+
+```bash
+--gpu-arch gfx950 --gpu-device-count 8 --require-multi-device --openmp
+```
+
+Set the architecture and device count to the actual validation hardware.
+`--openmp` enables the three OpenMP tests and uses a generated lit site overlay
+to supply runtime capabilities that a CPU-only build could not discover.
+Without that flag, OpenMP tests remain explicitly unrun. The validator also
+executes installed static and shared host initialization smoke programs.
 
 The LLVM team's initial observation was approximately 28 lit tests; the pinned
 source contains 27 (3 host, 21 HIP, and 3 OpenMP). They reported three

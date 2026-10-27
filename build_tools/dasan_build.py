@@ -146,6 +146,51 @@ def record_sources(output: Path) -> None:
     write_json(output / "sources.json", manifest)
 
 
+def apply_dasan_patches(log: Path) -> None:
+    compiler = REPO / "compiler" / "amd-llvm"
+    patches = sorted((REPO / "patches" / "dasan" / "llvm-project").glob("*.patch"))
+    if not patches:
+        raise RuntimeError("Missing patches/dasan/llvm-project compatibility patches")
+    if capture(["git", "status", "--porcelain", "--untracked-files=no"], compiler):
+        raise RuntimeError(
+            "Refusing to patch compiler with tracked uncommitted changes"
+        )
+    subprocess.check_call(
+        ["git", "merge-base", "--is-ancestor", PINS["compiler/amd-llvm"][1], "HEAD"],
+        cwd=compiler,
+    )
+    reverse = subprocess.run(
+        ["git", "apply", "--reverse", "--check", *map(str, reversed(patches))],
+        cwd=compiler,
+        capture_output=True,
+        text=True,
+    )
+    if reverse.returncode == 0:
+        print("DASan compiler compatibility patches are already applied", flush=True)
+        return
+    forward = subprocess.run(
+        ["git", "apply", "--check", *map(str, patches)],
+        cwd=compiler,
+        capture_output=True,
+        text=True,
+    )
+    if forward.returncode:
+        raise RuntimeError("DASan compiler patch conflict:\n" + forward.stderr)
+    # Call the normal helper directly: its CLI would clear other projects'
+    # .smrev files. Only the LLVM patch state should change here.
+    run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; sys.path.insert(0, 'build_tools'); "
+            "from argparse import Namespace; "
+            "from fetch_sources import apply_patches; "
+            "apply_patches(Namespace(patch_tag='dasan'), ['llvm-project'])",
+        ],
+        log,
+    )
+
+
 def build(args: argparse.Namespace, extra: list[str]) -> None:
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -160,6 +205,7 @@ def build(args: argparse.Namespace, extra: list[str]) -> None:
         run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], log)
         if args.prepare_sources:
             prepare_sources(log)
+        apply_dasan_patches(log)
         record_sources(output)
         if not args.prepare_only:
             from configure_stage import generate_cmake_args, get_topology
