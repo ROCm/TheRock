@@ -155,6 +155,8 @@ def build(args: argparse.Namespace, extra: list[str]) -> None:
     try:
         os.environ["CCACHE_DIR"] = str(output / "ccache")
         os.environ["PIP_CACHE_DIR"] = str(output / "pip-cache")
+        # Subprojects invoke cmake --build separately from the outer Ninja build.
+        os.environ["CMAKE_BUILD_PARALLEL_LEVEL"] = str(args.jobs)
         run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], log)
         if args.prepare_sources:
             prepare_sources(log)
