@@ -26,7 +26,7 @@ The raw fingerprint is unchanged. Each member must supply that same valid
 of the whole requested bundle. Different artifact names or targets never merge,
 even if their fingerprints match. Split outputs without sidecars remain skipped.
 
-There is no namespace. The database uses `(epoch, artifact_id, fingerprint,
+The database uses `(epoch, artifact_id, fingerprint,
 components_json)` as its unique key. `components_json` is the canonical sorted
 JSON array of full component directory identities. A request for `lib` alone
 cannot hit a production for `lib + dev`, or vice versa. Component selection is
@@ -53,8 +53,8 @@ integrity digests do not change when the epoch changes. Legacy `e1:release:...`
 strings remain historical simulation keys, not relational lookup keys.
 
 Use separate databases to isolate experiments or incompatible build environments.
-The fingerprint must cover all input differences that affect substitutability;
-removing namespace does not add missing platform/toolchain inputs to CMake.
+The fingerprint must cover all input differences that affect substitutability,
+including relevant platform and toolchain settings.
 
 | Existing table/view | Role |
 | --- | --- |
@@ -89,7 +89,7 @@ bundle run builds incrementally and publishes separate complete bundle entries.
 For older revisions 3/4, the migration also removes `key_namespace`, merging
 equal keys onto the smallest key ID and remapping entry/observation references.
 Version-3 keys gain fixed epoch 1; existing epochs remain unchanged. The backup
-retains the old schema and values. No namespace is reintroduced.
+retains the old schema and values.
 
 The migration verifies foreign keys and integrity before committing. Failures
 roll back changes and retain any backup already made. Unknown extensions that
@@ -104,12 +104,10 @@ THEROCK_CACHE_SCHEMA="$PWD/build_tools/therock_fingerprint_cache.sql" \
   python3 -m unittest discover -s build_tools/github_actions/tests -p 'artifact_cache_*_test.py' -v
 ```
 
-Update scripts by removing `--namespace` and `namespace=`. Old arguments are
-rejected rather than silently ignored. `ArtifactKey` takes identity and raw
-fingerprint, with epoch as a keyword argument. Collector JSON is now
-`report_version=3` because `key_namespace` was removed; bundle-aware cache/publication/restore JSON is `report_version=2`, with
-`granularity` and per-unit `components`. Summary field names are unchanged but
-count bundles in bundle mode. Component observation collection stays version 3.
+`ArtifactKey` takes identity and raw fingerprint, with epoch as a keyword
+argument. Component observation reports use `report_version=3`. Bundle-aware
+cache/publication/restore reports use `report_version=2`, with `granularity`
+and per-unit `components`. Summary counts refer to bundles in bundle mode.
 
 ## Local one-command workflow
 
@@ -180,8 +178,9 @@ to a JSON report. A mixed run could end with:
 - `NO_FINGERPRINT`: the expected fingerprint file is missing, so cache lookup,
   restoration and storage are skipped for this artifact. Its normal build is
   still possible.
-- `CACHE_SKIPPED`: another fingerprint problem, such as invalid contents or an
-  unreadable file, prevents cache use. The original diagnostic is included.
+- `CACHE_SKIPPED`: a fingerprint or bundle-completeness problem prevents cache
+  use, such as invalid or differing fingerprints, an unreadable sidecar, or
+  unknown complete component membership. The diagnostic explains why.
   Neither label claims that the artifact was built, restored or stored.
 
 Direct publication reports `STORED` without a preceding `MISS`, because it does
@@ -261,7 +260,7 @@ or cache objects. The cache directory must be separate from source/build trees.
 Tracked source changes, including changes to this package, must be committed
 locally before managed build/restore commands. They need not be pushed.
 
-## Cold and warm tests without namespaces
+## Cold and warm tests
 
 A cold cache starts with a new database and a new object directory. Its normal
 CMake build can still be incremental. The warm run uses that same database,
@@ -321,9 +320,8 @@ entry IDs in both JSON files to confirm the same saved productions were used.
 Cache-skipped outputs remain reported in both phases; they are not verified hits.
 An all-skipped run does not validate a working cold/warm cache.
 
-Several immutable productions can share one key, including productions migrated
-from old experiment namespaces. Local cache verification and restore select
-candidates under the supplied `--cache` / `--cache-root` directory **before**
+Several immutable productions can share one key. Local cache verification and
+restore select candidates under the supplied `--cache` / `--cache-root` directory **before**
 ranking them by age. A newer candidate stored elsewhere does not hide an older
 local one, and is not retired. The path comparison uses a directory boundary;
 physical verification still rejects symlinks and invalid contents. A store with
@@ -427,7 +425,7 @@ neither flag is supplied.
 | `RUN_START`, `RUN_END`, `OPERATION_FAILED` | Selected paths/operation and final exit status |
 | `BUILD_LOCK_*`, `SOURCE_CHECK_*`, `SOURCE_STATE` | Managed lock, clean tracked source checks, repository count and root commit |
 | `COMMAND*`, `CONFIGURE_LOG` | Executed argument list, elapsed time/failure and the retained configure-log path |
-| `DISCOVERY`, `FINGERPRINT`, `KEY`, `ARTIFACT_KEY` (legacy label: `BUNDLE_KEY`), `BUNDLE_SKIPPED`, `BUNDLE_OUTPUTS_DECLARED` | Explicit vs observed inventory, sidecar path, validity/reason, raw hash and `ArtifactKey` scope |
+| `DISCOVERY`, `FINGERPRINT`, `KEY`, `BUNDLE_SKIPPED`, `BUNDLE_OUTPUTS_DECLARED` | Explicit vs observed inventory, sidecar path, validity/reason, raw hash and `ArtifactKey` scope |
 | `DB_LOOKUP`, `DB_LOOKUP_RESULT`, `CACHE_DECISION` | Metadata lookup size, effective read policy, selected candidate or miss; no physical reuse claim |
 | `CANDIDATE_CHECK`, `OBJECT_CHECK`, `OBJECT_VERIFIED`, `INVENTORY_VERIFIED` | Entry ID, actual object paths, expected and verified SHA-256/sizes, inventory member counts |
 | `CANDIDATE_REJECTED`, `ENTRY_INVALIDATED`, `CANDIDATE_CHANGED` | Corruption or changed eligibility and retry of another candidate |
@@ -436,10 +434,6 @@ neither flag is supplied.
 | `PRODUCER_RECORD_COMMITTED`, `DB_TRANSACTION_*`, `ENTRY_COMMITTED` | Producer observation commit and separate ready-entry transaction; rollback is explicit |
 | `PLAN_SCOPE`, `PLAN_ARTIFACT` | Topology/changed-path scope, stage mapping and metadata-only decisions |
 | `RESTORE_DESTINATION_READY` | Explicit restore has installed verified exports at the requested new destination |
-
-`ARTIFACT_KEY` is the key-creation event name after the logging rename in
-`bundles.py`; code without that rename emits `BUNDLE_KEY`. Both describe an
-`ArtifactKey`. This diagnostic label does not change the database contract.
 
 `OBJECT_SAVED` does not mean that a ready database entry exists.
 `ENTRY_COMMITTED` reports the actual database commit; a later final input check
@@ -655,17 +649,20 @@ selection.
 
 ## Tests
 
-All 17 cache test files live in `build_tools/github_actions/tests/` and use the
+Cache tests live in `build_tools/github_actions/tests/` and use the
 `artifact_cache_*_test.py` naming pattern. `_artifact_cache_fixtures.py` supplies
 shared test data and is not itself a test suite. The collector fixture is in
 `artifact_cache_collector_test.py`; the SQL schema remains at
 `build_tools/therock_fingerprint_cache.sql`.
 
 The DB contract and relational-schema tests are consolidated in
-`artifact_cache_db_test.py`. Redundant mixed hit/miss and duplicate-key tests
-are covered there once. The incomplete-publication check lives in
+`artifact_cache_db_test.py`, including selection of the requested object store
+before candidate ranking and read-policy checks. Redundant mixed hit/miss and
+duplicate-key tests are covered there once. The incomplete-publication check lives in
 `artifact_cache_publish_restore_test.py`, including assertions that no entry
-or file rows remain. Managed build, command-line workflow and diagnostic tests
+or file rows remain. That file also tests fallback from a corrupt production
+without invalidating productions in another object store. Managed build,
+command-line workflow and diagnostic tests
 retain their separate coverage because they exercise different boundaries.
 `artifact_cache_dependency_impact_test.py` covers configured consumer traversal,
 artifact mapping, explanation paths, invalid metadata, and reporting without
