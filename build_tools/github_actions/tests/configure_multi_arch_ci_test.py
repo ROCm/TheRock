@@ -1789,6 +1789,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_pytorch=True,
             build_jax=False,
             build_native_linux=True,
+            build_native_windows=False,
             build_python_packages=True,
         )
         d = config.to_dict()
@@ -1821,6 +1822,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_pytorch=True,
             build_jax=False,
             build_native_linux=True,
+            build_native_windows=False,
             build_python_packages=True,
         )
         # Present config → valid JSON
@@ -2120,6 +2122,40 @@ class TestExpandBuildConfigs(unittest.TestCase):
             jobs=_jobs(),
         )
         self.assertFalse(result.linux.build_native_linux)
+
+    def test_build_native_windows_input_disables_native_packages(self):
+        """build_native_windows=False disables the native Windows build."""
+        targets = cm.TargetSelection(windows_families=["gfx110x"])
+        enabled = cm.expand_build_configs(
+            ci_inputs=self._inputs(build_native_windows=True),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertTrue(enabled.windows.build_native_windows)
+
+        disabled = cm.expand_build_configs(
+            ci_inputs=self._inputs(build_native_windows=False),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertFalse(disabled.windows.build_native_windows)
+
+    def test_build_native_windows_only_on_windows_platform(self):
+        """build_native_windows never enables the flag on the Linux config."""
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=["gfx110x"],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(build_native_windows=True),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertFalse(result.linux.build_native_windows)
+        self.assertTrue(result.windows.build_native_windows)
 
     def test_variant_filters_by_platform_and_family_support(self):
         """ASAN: only gfx94x on linux supports it, gfx110x doesn't, windows has no ASAN config."""
@@ -2429,6 +2465,29 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 )
                 self.assertIsNotNone(result.linux)
                 self.assertEqual(getattr(result.linux, config_field), expected)
+
+    def test_native_windows_label_overrides(self):
+        """PR labels can enable/disable the native Windows build."""
+        targets = cm.TargetSelection(windows_families=["gfx110x"])
+        cases = [
+            # (label, input_default, expected)
+            ("ci:build-native-windows", False, True),
+            ("ci:skip-native-windows", True, False),
+        ]
+        for label, default, expected in cases:
+            with self.subTest(label=label):
+                result = cm.expand_build_configs(
+                    ci_inputs=self._inputs(
+                        event_name="pull_request",
+                        build_native_windows=default,
+                        pr_labels=[label],
+                    ),
+                    git_context=cm.GitContext(),
+                    targets=targets,
+                    jobs=_jobs(build_pytorch=False, build_jax=False),
+                )
+                self.assertIsNotNone(result.windows)
+                self.assertEqual(result.windows.build_native_windows, expected)
 
     def test_pytorch_forces_python_packages_even_with_skip_label(self):
         """PyTorch/JAX depend on python packages, so skip label is ignored."""
@@ -2798,12 +2857,16 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         workflow_path = WORKFLOWS_DIR / "multi_arch_ci_linux.yml"
         yaml_fields = self._extract_build_config_fields(workflow_path)
         python_fields = {f.name for f in fields(cm.BuildConfig)}
+        # build_native_windows is Windows-only, so Linux CI does not consume it.
+        unused_fields = {
+            "build_native_windows",
+        }
         self.assertEqual(
             yaml_fields,
-            python_fields,
+            python_fields - unused_fields,
             f"BuildConfig fields mismatch with {workflow_path.name}.\n"
             f"  In YAML but not Python: {yaml_fields - python_fields}\n"
-            f"  In Python but not YAML: {python_fields - yaml_fields}",
+            f"  In Python but not YAML: {python_fields - yaml_fields - unused_fields}",
         )
 
     def test_windows_workflow_uses_all_ci_fields(self):
