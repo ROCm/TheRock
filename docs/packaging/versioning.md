@@ -450,4 +450,58 @@ The `python-debian` package can be used to work with debian package versions:
 
 ## Native Windows package versions
 
-TODO: fill this in together with https://github.com/ROCm/TheRock/pull/2159
+TheRock ships Windows MSI installer packages. MSI versions are handled by the
+same script as the Linux packages:
+
+- [`build_tools/compute_rocm_package_version.py`](/build_tools/compute_rocm_package_version.py)
+  (`package_type="msi"`)
+  - [`build_tools/tests/compute_rocm_package_version_test.py`](/build_tools/tests/compute_rocm_package_version_test.py)
+
+### ProductVersion
+
+Windows Installer requires a numeric four-field `ProductVersion` (`#.#.#.#`) and
+compares only the first three fields when deciding upgrades; the fourth field is
+ignored and the third (build) field is capped at 65535. A PEP440 wheel version
+such as `10.2.0.dev0+<git-sha>` is therefore rejected (WiX error WIX0108).
+
+The MSI `ProductVersion` is instead:
+
+| Field    | Value                                        | Source                         |
+| -------- | -------------------------------------------- | ------------------------------ |
+| major    | `X`                                          | `rocm-version` in version.json |
+| minor    | `Y`                                          | `rocm-version` in version.json |
+| build    | days since 2016-04-01 (ROCm 1.0, April 2016) | the build date                 |
+| (fourth) | `0`                                          | constant                       |
+
+Example: a build on 2026-10-16 of ROCm `10.2.x` produces ProductVersion
+`10.2.3850.0`.
+
+All release types (ci/dev/nightly/release) share this one shape — there is no
+`~dev`/`~rc`-style suffix, because the version must stay numeric. The build field
+increases by one per day, so a later build always outranks an earlier one. A
+`release` is simply the highest build in its line because it is built last; no
+further nightlies are produced for a `major.minor` once it releases.
+
+The human-facing ROCm version (e.g. `10.2.0.dev0+<sha>` or `10.2.0`) is preserved
+separately as the MSI `ARPDISPLAYVERSION` property (shown in Add/Remove Programs)
+and in the shared `HKLM\Software\AMD\ROCm\{X.Y}` discovery key, so the dated
+`ProductVersion` is an installer-ordering detail rather than the version users
+see.
+
+### Coexistence of multiple major.minor versions
+
+Different ROCm `major.minor` versions (e.g. 10.2 and 10.3) install side by side,
+like the CUDA Toolkit. Each MSI package derives its Windows Installer
+`UpgradeCode` per `major.minor`
+(`uuid5(<package base GUID>, "major.minor")` in
+[`generate_msi_wxs.py`](/build_tools/packaging/windows/generate_msi_wxs.py)), so:
+
+- 10.2 and 10.3 have different UpgradeCodes → distinct products that coexist,
+  each under its own `Program Files\AMD\ROCm\core-{X.Y}\` directory.
+- Builds within one `major.minor` share an UpgradeCode → a newer build upgrades
+  the older one in place (`MajorUpgrade` with `AllowSameVersionUpgrades="yes"` so
+  two builds on the same day still replace rather than install side by side).
+
+Because coexistence is handled by the per-`major.minor` UpgradeCode, the
+`ProductVersion` only ever has to order builds *within* one line, never across
+lines.

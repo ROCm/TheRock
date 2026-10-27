@@ -107,7 +107,7 @@ on:
         required: false
         default: ""
       jax_ref:
-        description: "JAX ref to build from jax_repository (e.g. rocm-jaxlib-v0.11.2)."
+        description: "JAX ref to build from jax_repository (e.g. rocm-jaxlib-v0.12.0)."
         type: string
         required: true
       rocm_jax_ref:

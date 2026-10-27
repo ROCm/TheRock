@@ -28,6 +28,7 @@ from bump_automation import (
     handle_push,
     latest_commit,
     LIBRARIES_BASELINE_GATE_JOB_NAME,
+    RUN_JOBS_PAGE_SIZE,
     search_issues,
     submodule_changed,
     update_ci_env_file,
@@ -115,14 +116,18 @@ class ListRunJobsTest(unittest.TestCase):
         mock_api.assert_called_once()
 
     def test_follows_pagination_until_all_jobs_are_retrieved(self):
-        first_page = _jobs_page([_gate_job("success")] * 100, total_count=101)
-        second_page = _jobs_page([_gate_job("success")], total_count=101)
+        total = RUN_JOBS_PAGE_SIZE + 1
+        first_page = _jobs_page([_gate_job("success")] * RUN_JOBS_PAGE_SIZE, total)
+        second_page = _jobs_page([_gate_job("success")], total)
         with patch(
             "bump_automation.gh_api", side_effect=[first_page, second_page]
         ) as mock_api:
             jobs = _list_run_jobs("ROCm/TheRock", "token", 111)
-        self.assertEqual(len(jobs), 101)
+        self.assertEqual(len(jobs), total)
         self.assertEqual(mock_api.call_count, 2)
+        self.assertIn(
+            f"per_page={RUN_JOBS_PAGE_SIZE}", mock_api.call_args_list[0].args[1]
+        )
 
 
 class BaselineGateJobsSucceededTest(unittest.TestCase):
@@ -188,8 +193,19 @@ class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
             "head": {"sha": self.HEAD_SHA},
         }
 
-    def _run(self, run_id: int, conclusion: str | None, name: str = "Multi-Arch CI"):
-        return {"id": run_id, "name": name, "conclusion": conclusion}
+    def _run(
+        self,
+        run_id: int,
+        conclusion: str | None,
+        name: str = "Multi-Arch CI",
+        status: str = "completed",
+    ):
+        return {
+            "id": run_id,
+            "name": name,
+            "conclusion": conclusion,
+            "status": status,
+        }
 
     def test_returns_the_run_id_when_its_gate_job_succeeded(self):
         with patch(
@@ -207,6 +223,77 @@ class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
         # The run lookup must key off the PR's pre-merge head SHA, not the
         # merge commit itself.
         self.assertIn(self.HEAD_SHA, mock_api.call_args_list[1].args[1])
+        self.assertIn("event=pull_request", mock_api.call_args_list[1].args[1])
+
+    def test_skips_cancelled_duplicates_listed_before_the_real_run(self):
+        # GitHub creates several Multi-Arch CI runs per head SHA and cancels
+        # all but one within seconds. They share a created_at, so the real
+        # run can come back anywhere in the list (fourth of five on #9032).
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                [self._pr()],
+                {
+                    "workflow_runs": [
+                        self._run(111, "cancelled"),
+                        self._run(112, "cancelled"),
+                        self._run(113, None, status="in_progress"),
+                    ]
+                },
+                _jobs_page([]),
+                _jobs_page([]),
+                _jobs_page([_gate_job("success")]),
+            ],
+        ):
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertEqual(run_id, "113")
+
+    def test_accepts_a_run_that_has_not_finished_yet(self):
+        # The gate job finishes with the build stages, long before the tests
+        # behind it, so bump PRs routinely merge while their run is still
+        # going. Filtering those runs out is what blanked the baseline in
+        # #9402, so the query must not constrain run status.
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                [self._pr()],
+                {
+                    "workflow_runs": [
+                        self._run(111, None, status="in_progress"),
+                    ]
+                },
+                _jobs_page([_gate_job("success")]),
+            ],
+        ) as mock_api:
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertEqual(run_id, "111")
+        self.assertNotIn("status=", mock_api.call_args_list[1].args[1])
+
+    def test_skips_a_run_whose_jobs_cannot_be_listed(self):
+        # The jobs endpoint 502s often enough on ~900-job runs that an error
+        # must cost one baseline refresh, not the whole pin PR.
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                [self._pr()],
+                {
+                    "workflow_runs": [
+                        self._run(111, "success"),
+                        self._run(112, "success"),
+                    ]
+                },
+                RuntimeError("GitHub API failed: 502"),
+                _jobs_page([_gate_job("success")]),
+            ],
+        ):
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertEqual(run_id, "112")
 
     def test_returns_the_run_id_even_when_overall_run_conclusion_is_failure(self):
         # This is the real scenario that motivated the gate-job check: an
@@ -379,6 +466,64 @@ class UpdateCiEnvFileTest(unittest.TestCase):
         )
         result = self._run(content)
         self.assertIn("oldsha1234567", result)
+
+    def _run_with_baseline(self, content: str, baseline_run_id: str | None) -> str:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
+            f.write(content)
+            path = f.name
+        try:
+            update_ci_env_file(path, "newsha1234567", baseline_run_id=baseline_run_id)
+            return Path(path).read_text()
+        finally:
+            os.unlink(path)
+
+    def test_updates_baseline_run_id_when_provided(self):
+        content = textwrap.dedent(
+            """\
+            outputs:
+              therock-ref:
+                description: "TheRock commit ref"
+                value: "oldsha1234567"
+              baseline-run-id:
+                description: "Baseline run ID"
+                value: "11111111111"
+        """
+        )
+        result = self._run_with_baseline(content, "99999999999")
+        self.assertIn('"99999999999"', result)
+        self.assertNotIn("11111111111", result)
+
+    def test_preserves_baseline_run_id_when_none(self):
+        content = textwrap.dedent(
+            """\
+            outputs:
+              therock-ref:
+                description: "TheRock commit ref"
+                value: "oldsha1234567"
+              baseline-run-id:
+                description: "Baseline run ID"
+                value: "11111111111" # some old comment
+        """
+        )
+        result = self._run_with_baseline(content, None)
+        self.assertIn('"11111111111"', result)
+        self.assertIn("# some old comment", result)
+
+    def test_preserves_empty_baseline_run_id_when_none(self):
+        content = textwrap.dedent(
+            """\
+            outputs:
+              therock-ref:
+                description: "TheRock commit ref"
+                value: "oldsha1234567"
+              baseline-run-id:
+                description: "Baseline run ID"
+                value: ""
+        """
+        )
+        result = self._run_with_baseline(content, None)
+        # The existing empty value is kept as-is (not rewritten)
+        self.assertIn('value: ""', result)
 
 
 class UpdateTheRockWorkflowFileTest(unittest.TestCase):

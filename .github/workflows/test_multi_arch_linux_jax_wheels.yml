@@ -166,7 +166,7 @@ on:
       jax_ref:
         description: "JAX ref to check out from jax_repository."
         type: string
-        default: "rocm-jaxlib-v0.11.2"
+        default: "rocm-jaxlib-v0.12.0"
       jax_repository:
         description: "Repository holding the JAX checkout the test suite runs from."
         type: string
