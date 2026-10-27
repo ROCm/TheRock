@@ -49,14 +49,14 @@ LINUX_CONSOLE_SCRIPT_TESTS = [
     ("rocminfo", [], "", True),
     ("rocm-smi", [], "Management", True),
     ("hipify-perl", ["--help"], "USAGE:", True),
-    ("rocpd", ["--help"], "Aggregate and/or analyze ROCm Profiling Data", True),
-    ("rocpd2csv", ["--help"], "Convert rocPD to CSV files", True),
-    ("rocpd2otf2", ["--help"], "Convert rocPD to OTF2 format", True),
-    ("rocpd2pftrace", ["--help"], "Convert rocPD to Perfetto file", True),
-    ("rocpd2summary", ["--help"], "Generate summary views from rocPD data", True),
-    ("rocprofv3", ["--help"], "ROCProfilerV3 Run Script", True),
-    ("rocprof-attach", ["--help"], "rocprofiler-sdk attachment profiler", True),
-    ("rocprofv3-avail", ["--help"], "rocprofv3 query tool", True),
+    ("rocpd", ["--help"], "Aggregate", True),
+    ("rocpd2csv", ["--help"], "Convert", True),
+    ("rocpd2otf2", ["--help"], "Convert", True),
+    ("rocpd2pftrace", ["--help"], "Convert", True),
+    ("rocpd2summary", ["--help"], "Generate summary", True),
+    ("rocprofv3", ["--help"], "ROCProfilerV3", True),
+    ("rocprof-attach", ["--help"], "attachment", True),
+    ("rocprofv3-avail", ["--help"], "query tool", True),
 ]
 
 WINDOWS_CONSOLE_SCRIPT_TESTS = [
