@@ -64,6 +64,7 @@ def write_subproject(source_dir: Path) -> None:
         source_dir / "main" / "CMakeLists.txt",
         """
         cmake_minimum_required(VERSION 3.25)
+        set(THEROCK_TEST_PROJECT_INCLUDE_FIXTURE ON)
         project(main_project C)
         add_subdirectory(nested)
 
@@ -106,12 +107,12 @@ def write_project_include(path: Path, marker: str) -> None:
     )
 
 
-def write_preserved_project_include(path: Path, subproject_source_dir: Path) -> None:
+def write_preserved_project_include(path: Path) -> None:
     write_file(
         path,
-        f"""
+        """
         # Exclude compiler-check projects where the helper is unavailable.
-        if(CMAKE_SOURCE_DIR STREQUAL "{subproject_source_dir.as_posix()}")
+        if(THEROCK_TEST_PROJECT_INCLUDE_FIXTURE)
           therock_test_record_preserved_include()
         endif()
         """,
@@ -130,9 +131,7 @@ class ProjectIncludeTest(unittest.TestCase):
         self.preserved_include = self.source_dir / "preserved-include.cmake"
 
         write_subproject(self.source_dir)
-        write_preserved_project_include(
-            self.preserved_include, self.source_dir / "main"
-        )
+        write_preserved_project_include(self.preserved_include)
 
     def configure(self, project_include: Path) -> None:
         write_harness(
