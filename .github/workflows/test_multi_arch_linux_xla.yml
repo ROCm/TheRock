@@ -155,6 +155,12 @@ jobs:
         -v /data:/data:ro
         -e KUBE_CPU_REQUEST
         -e KUBE_MEMORY_REQUEST
+      volumes:
+        - /etc/rbe-certs/temp-rbe-cert.crt:/data/temp-rbe-cert.crt:ro
+        - /etc/rbe-certs/temp-rbe-cert.key:/data/temp-rbe-cert.key:ro
+        - /etc/rbe-certs/bb-rbe-ca.crt:/data/bb-rbe-ca.crt:ro
+        - /etc/rbe-certs/bb-rbe-client.crt:/data/bb-rbe-client.crt:ro
+        - /etc/rbe-certs/bb-rbe-client.key:/data/bb-rbe-client.key:ro
 
     defaults:
       run:
