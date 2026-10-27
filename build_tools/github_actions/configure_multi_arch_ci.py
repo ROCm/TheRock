@@ -296,6 +296,15 @@ class CIInputs:
     # GITHUB_REPOSITORY. Used for sanitizer trigger lookups and other repo-aware logic.
     repository_name: str = ""
 
+    def __post_init__(self) -> None:
+        # Derive repository_name from external_repo JSON when not explicitly set.
+        if not self.repository_name and self.external_repo:
+            object.__setattr__(
+                self,
+                "repository_name",
+                json.loads(self.external_repo).get("repository", "").split("/")[-1],
+            )
+
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
         print("CIInputs:")
@@ -1817,7 +1826,7 @@ def _expand_build_config_for_platform(
         ):
             source_matched = False
             if ci_inputs.external_repo:
-                source = _get_external_repo_name(ci_inputs)
+                source = ci_inputs.repository_name
                 source_matched = source in test_source_repos
             elif (
                 git_context.changed_files is not None
