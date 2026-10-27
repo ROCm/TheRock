@@ -124,6 +124,7 @@ option(THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY
 
 option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
+option(THEROCK_ENABLE_DASAN "Builds experimental device address sanitizer runtimes (requires DASan LLVM sources)" OFF)
 option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" OFF)
 set(THEROCK_COMGR_DLL_NAME "" CACHE STRING "Override the Comgr DLL name for the comgr build and CLR load (e.g. amd_comgr_opencl.dll); empty = component default")
 
@@ -275,6 +276,18 @@ cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
 # Finalize all feature flags.
 therock_finalize_features()
 therock_report_features()
+
+if(THEROCK_ENABLE_DASAN)
+  if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "THEROCK_ENABLE_DASAN currently requires Linux")
+  endif()
+  if(NOT THEROCK_ENABLE_COMPILER)
+    message(FATAL_ERROR "THEROCK_ENABLE_DASAN requires THEROCK_ENABLE_COMPILER=ON")
+  endif()
+  if(THEROCK_SANITIZER)
+    message(FATAL_ERROR "THEROCK_ENABLE_DASAN cannot be combined with THEROCK_SANITIZER")
+  endif()
+endif()
 
 ################################################################################
 # GPU target selection
