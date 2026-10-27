@@ -242,7 +242,7 @@ jobs:
     needs: [setup_coverage_matrix, build_compiler_runtime]
     if: >-
       ${{
-        !cancelled() && !failure() &&
+        !cancelled() && !failure()
       }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
