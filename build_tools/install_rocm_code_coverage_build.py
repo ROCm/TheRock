@@ -63,6 +63,8 @@ COMPONENT_MAP = {
     "rocwmma": ("rocwmma", "rocWMMA"),
     "rpp": ("rpp", "rpp"),
     "composablekernel": ("composable-kernel", "composable_kernel"),
+	"rccl": ("rccl", "rccl"),
+	"rocshmem": ("rocshmem", "rocshmem"),
 }
 
 
