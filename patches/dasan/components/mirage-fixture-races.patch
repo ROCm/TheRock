@@ -1,0 +1,178 @@
+diff --git a/emulation/mirage/Cargo.lock b/emulation/mirage/Cargo.lock
+index f5ea358a..cbae11cc 100644
+--- a/emulation/mirage/Cargo.lock
++++ b/emulation/mirage/Cargo.lock
+@@ -524,6 +524,15 @@ version = "2.8.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
+ 
++[[package]]
++name = "memoffset"
++version = "0.9.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
++dependencies = [
++ "autocfg",
++]
++
+ [[package]]
+ name = "mio"
+ version = "1.2.1"
+@@ -670,6 +679,7 @@ dependencies = [
+  "cfg-if",
+  "cfg_aliases",
+  "libc",
++ "memoffset",
+ ]
+ 
+ [[package]]
+diff --git a/emulation/mirage/core/src/reclaim.rs b/emulation/mirage/core/src/reclaim.rs
+index bbe84ee5..9158ec4f 100644
+--- a/emulation/mirage/core/src/reclaim.rs
++++ b/emulation/mirage/core/src/reclaim.rs
+@@ -305,6 +305,25 @@ mod tests {
+     /// assertion cannot leave a `sleep` behind for the rest of the suite.
+     struct Tagged(std::process::Child);
+ 
++    // /proc may expose a transiently empty environment during exec, even
++    // after Command::spawn has observed its CLOEXEC error pipe close. Wait for
++    // fixture readiness independently of the marker parser being tested.
++    fn wait_for_environ(pid: u32) {
++        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
++        loop {
++            if let Ok(environ) = std::fs::read(format!("/proc/{pid}/environ"))
++                && !environ.is_empty()
++            {
++                return;
++            }
++            assert!(
++                std::time::Instant::now() < deadline,
++                "process {pid} environment never became ready"
++            );
++            std::thread::sleep(std::time::Duration::from_millis(1));
++        }
++    }
++
+     impl Tagged {
+         /// One tagged process, and exactly one.
+         ///
+@@ -335,9 +354,19 @@ mod tests {
+         /// and leave the other in place; a candidate rejected for two
+         /// reasons at once proves neither of them.
+         fn marked(session: Option<&str>, runtime: Option<&str>, script: &str) -> Self {
+-            let mut command = std::process::Command::new("/bin/sh");
++            // Spawn the steady-state process directly. Waiting for the shell's
++            // exec does not wait for its second exec into sleep: /proc/environ
++            // can be transiently empty while that second exec replaces its mm.
++            let mut command = if script == "exec sleep 300" {
++                let mut command = std::process::Command::new("sleep");
++                command.arg("300");
++                command
++            } else {
++                let mut command = std::process::Command::new("/bin/sh");
++                command.args(["-c", script]);
++                command
++            };
+             command
+-                .args(["-c", script])
+                 .stdin(std::process::Stdio::null())
+                 .stdout(std::process::Stdio::null())
+                 .stderr(std::process::Stdio::null());
+@@ -355,7 +384,9 @@ mod tests {
+                 // would make an "untagged" process silently tagged.
+                 None => command.env_remove(ENV_RUNTIME),
+             };
+-            Self(command.spawn().unwrap())
++            let child = Self(command.spawn().unwrap());
++            wait_for_environ(child.pid());
++            child
+         }
+ 
+         fn pid(&self) -> u32 {
+@@ -540,6 +571,8 @@ mod tests {
+             std::thread::sleep(std::time::Duration::from_millis(20));
+         };
+ 
++        wait_for_environ(grandchild);
++
+         let found = mine(&session);
+         assert!(
+             found.iter().any(|s| s.pid == child.pid()),
+@@ -630,9 +663,9 @@ mod tests {
+ 
+         let _runtime = PinnedRuntime::new();
+         let session = unique("nonutf8");
+-        let mut command = std::process::Command::new("/bin/sh");
++        let mut command = std::process::Command::new("sleep");
+         command
+-            .args(["-c", "exec sleep 300"])
++            .arg("300")
+             .env(ENV_SESSION, session.as_str())
+             .env(ENV_RUNTIME, owning_runtime())
+             // Invalid UTF-8: a lone 0xff can begin no sequence. Not a NUL
+@@ -643,6 +676,7 @@ mod tests {
+             .stdout(std::process::Stdio::null())
+             .stderr(std::process::Stdio::null());
+         let child = Tagged(command.spawn().unwrap());
++        wait_for_environ(child.pid());
+ 
+         let found = mine(&session);
+         assert!(
+diff --git a/emulation/mirage/ctl/Cargo.toml b/emulation/mirage/ctl/Cargo.toml
+index 8e65b307..af23fb88 100644
+--- a/emulation/mirage/ctl/Cargo.toml
++++ b/emulation/mirage/ctl/Cargo.toml
+@@ -21,6 +21,7 @@ tracing = { workspace = true }
+ tracing-subscriber = { workspace = true }
+ 
+ [dev-dependencies]
++nix = { workspace = true, features = ["socket"] }
+ tempfile = { workspace = true }
+ 
+ [lints]
+diff --git a/emulation/mirage/ctl/src/run.rs b/emulation/mirage/ctl/src/run.rs
+index 5b1b4943..4de9d52d 100644
+--- a/emulation/mirage/ctl/src/run.rs
++++ b/emulation/mirage/ctl/src/run.rs
+@@ -1874,6 +1874,15 @@ mod tests {
+         let _ = child.wait();
+     }
+ 
++    // A concurrent Command::spawn can inherit a listener until its exec closes
++    // CLOEXEC descriptors. Closing only our copy can therefore leave a corpse
++    // briefly connectable. Shutdown affects every inherited descriptor too.
++    fn leave_dead_socket(path: &std::path::Path) {
++        use std::os::fd::AsRawFd as _;
++        let listener = std::os::unix::net::UnixListener::bind(path).unwrap();
++        nix::sys::socket::shutdown(listener.as_raw_fd(), nix::sys::socket::Shutdown::Both).unwrap();
++    }
++
+     #[test]
+     fn a_run_that_was_killed_is_not_a_candidate_for_exec() {
+         // The socket file outlives a `SIGKILL`ed run: that leak is
+@@ -1889,10 +1898,9 @@ mod tests {
+ 
+         let dead = SessionId::new("s-dead").unwrap();
+         let dead_path = mirage_core::paths::run_socket_path(&dead);
+-        // Bound and dropped: the file stays, nothing answers on it. The
+-        // listener is not unlinked on drop, which is precisely why a
+-        // killed run leaves one behind.
+-        drop(std::os::unix::net::UnixListener::bind(&dead_path).unwrap());
++        // Leave the socket file, but make it unconnectable even if another
++        // test's concurrent child spawn temporarily inherited its descriptor.
++        leave_dead_socket(&dead_path);
+ 
+         let alive = SessionId::new("s-live").unwrap();
+         let _listener =
+@@ -1919,10 +1927,7 @@ mod tests {
+         mirage_core::paths::set_test_root(root.path());
+         std::fs::create_dir_all(mirage_core::paths::run_socket_root()).unwrap();
+         let dead = SessionId::new("s-dead").unwrap();
+-        drop(
+-            std::os::unix::net::UnixListener::bind(mirage_core::paths::run_socket_path(&dead))
+-                .unwrap(),
+-        );
++        leave_dead_socket(&mirage_core::paths::run_socket_path(&dead));
+ 
+         let picked = runtime().block_on(sole_live_run());
+         mirage_core::paths::clear_test_root();

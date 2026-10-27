@@ -1,0 +1,56 @@
+diff --git a/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/isa/arch/amdgpu/shared/fp_mode.h b/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/isa/arch/amdgpu/shared/fp_mode.h
+index e0d3ccd8..4f082488 100644
+--- a/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/isa/arch/amdgpu/shared/fp_mode.h
++++ b/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/isa/arch/amdgpu/shared/fp_mode.h
+@@ -931,6 +931,15 @@ inline uint32_t mullit_f32(uint32_t s0, uint32_t s1, uint32_t s2, uint32_t round
+ /// inside a region that already owns it.
+ template <Arithmetic operation>
+ inline double arithmetic_f16_unscoped(float lhs, float rhs, float addend) {
++  if constexpr (operation == Arithmetic::ADD || operation == Arithmetic::MUL) {
++    // Preserve guest source order for NaN sign/payload selection. Host ADD/MUL
++    // may commute operands, so relying on host arithmetic makes scalar and SIMD
++    // repair paths disagree. Widening also quiets a selected signaling NaN.
++    if (std::isnan(lhs))
++      return static_cast<double>(lhs);
++    if (std::isnan(rhs))
++      return static_cast<double>(rhs);
++  }
+   return detail::evaluate_arithmetic<operation>(static_cast<double>(lhs), static_cast<double>(rhs),
+                                                 static_cast<double>(addend));
+ }
+diff --git a/emulation/rocjitsu/tests/valu_fp_mode_test.cpp b/emulation/rocjitsu/tests/valu_fp_mode_test.cpp
+index ebeb40c4..e92a402e 100644
+--- a/emulation/rocjitsu/tests/valu_fp_mode_test.cpp
++++ b/emulation/rocjitsu/tests/valu_fp_mode_test.cpp
+@@ -5928,6 +5928,31 @@ TEST(ValuFpModeHelpers, SimdTrackerRestoresNestedObserversAndIsolatesThreads) {
+   EXPECT_TRUE(outer.only_tracked_path_executed(SimdFastPath::VOP3_TERNARY_FP16));
+ }
+ 
++TEST(ValuFpModeHelpers, F16BinaryNanPreservesFirstSourceSignAndPayload) {
++  using amdgpu::fp_mode::Arithmetic;
++  struct Case {
++    uint16_t lhs, rhs, expected;
++  };
++  constexpr Case cases[] = {
++      {0x7e11, 0xfe22, 0x7e11}, {0xfe22, 0x7e11, 0xfe22},
++      {0x7c11, 0xfe22, 0x7e11}, {0xfc22, 0x7e11, 0xfe22},
++      {0x3c00, 0x7e11, 0x7e11}, {0x3c00, 0xfc22, 0xfe22},
++      {0x7e11, 0x3c00, 0x7e11}, {0xfc22, 0x3c00, 0xfe22},
++  };
++  const auto check = [&]<Arithmetic operation>() {
++    for (const auto &test : cases)
++      for (uint32_t mode = 0; mode < 4; ++mode) {
++        SCOPED_TRACE(::testing::Message() << test.lhs << ':' << test.rhs << ':' << mode);
++        const double value = amdgpu::fp_mode::arithmetic_f16<operation>(
++            util::f16_to_f32(test.lhs), util::f16_to_f32(test.rhs), 0.0f, mode);
++        EXPECT_EQ(amdgpu::fp_mode::finish_arithmetic_f16(value, mode, 3, false),
++                  test.expected);
++      }
++  };
++  check.template operator()<Arithmetic::ADD>();
++  check.template operator()<Arithmetic::MUL>();
++}
++
+ TEST(ValuFpModeHelpers, F16BinaryRneMatchesScalarAcrossHalfEncodings) {
+   if (!util::has_stdx_simd)
+     GTEST_SKIP() << "std::experimental::simd unavailable";

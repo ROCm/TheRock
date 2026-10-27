@@ -1,0 +1,2835 @@
+{
+  "baseline_run_id": 40443090683,
+  "archive_sha256": "78fa7a7911d09917532396ffdc8fbed0f35a761d9d1cde9f3bfcebf3510e09d1",
+  "layout_source": "Completed matching pinned local build: artifact_manifest.txt ownership only; all payload bytes come from CI.",
+  "rules": [
+    {
+      "path": ".info",
+      "directory": true,
+      "stages": [
+        "base/rocm-core/stage"
+      ]
+    },
+    {
+      "path": "amdgcn",
+      "directory": false,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "bin/amdclang",
+      "directory": false,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "bin/amdclang++",
+      "directory": false,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "bin/amdclang-cl",
+      "directory": false,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "bin/amdclang-cpp",
+      "directory": false,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "bin/amdflang",
+      "directory": false,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "bin/amdlld",
+      "directory": false,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "bin/amdllvm",
+      "directory": false,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "bin/hipcc",
+      "directory": false,
+      "stages": [
+        "compiler/hipcc/stage"
+      ]
+    },
+    {
+      "path": "bin/hipcc_cmake_linker_helper",
+      "directory": false,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "bin/hipconfig",
+      "directory": false,
+      "stages": [
+        "compiler/hipcc/stage"
+      ]
+    },
+    {
+      "path": "bin/hipdemangleatp",
+      "directory": false,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "bin/hipify-clang",
+      "directory": false,
+      "stages": [
+        "compiler/hipify/stage"
+      ]
+    },
+    {
+      "path": "bin/hipify-perl",
+      "directory": false,
+      "stages": [
+        "compiler/hipify/stage"
+      ]
+    },
+    {
+      "path": "bin/offload-arch",
+      "directory": false,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "bin/rocm-smi",
+      "directory": false,
+      "stages": [
+        "base/rocm_smi_lib/stage"
+      ]
+    },
+    {
+      "path": "bin/rocm_agent_enumerator",
+      "directory": false,
+      "stages": [
+        "core/rocminfo/stage"
+      ]
+    },
+    {
+      "path": "bin/rocminfo",
+      "directory": false,
+      "stages": [
+        "core/rocminfo/stage"
+      ]
+    },
+    {
+      "path": "include/amd_comgr",
+      "directory": true,
+      "stages": [
+        "compiler/amd-comgr/stage"
+      ]
+    },
+    {
+      "path": "include/half",
+      "directory": true,
+      "stages": [
+        "base/half/stage"
+      ]
+    },
+    {
+      "path": "include/hip",
+      "directory": true,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "include/hip_prof_str.h",
+      "directory": false,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "include/hsa",
+      "directory": true,
+      "stages": [
+        "core/ROCR-Runtime/stage"
+      ]
+    },
+    {
+      "path": "include/hsakmt",
+      "directory": true,
+      "stages": [
+        "core/ROCR-Runtime/stage"
+      ]
+    },
+    {
+      "path": "include/oam",
+      "directory": true,
+      "stages": [
+        "base/rocm_smi_lib/stage"
+      ]
+    },
+    {
+      "path": "include/rocm-core",
+      "directory": true,
+      "stages": [
+        "base/rocm-core/stage"
+      ]
+    },
+    {
+      "path": "include/rocm_kpack",
+      "directory": true,
+      "stages": [
+        "core/rocm-kpack/stage"
+      ]
+    },
+    {
+      "path": "include/rocm_smi",
+      "directory": true,
+      "stages": [
+        "base/rocm_smi_lib/stage"
+      ]
+    },
+    {
+      "path": "include/rocprofiler-register",
+      "directory": true,
+      "stages": [
+        "base/rocprofiler-register/stage"
+      ]
+    },
+    {
+      "path": "lib/.hipInfo",
+      "directory": false,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "lib/cmake/AMDDeviceLibs",
+      "directory": true,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "lib/cmake/amd_comgr",
+      "directory": true,
+      "stages": [
+        "compiler/amd-comgr/stage"
+      ]
+    },
+    {
+      "path": "lib/cmake/clang",
+      "directory": true,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "lib/cmake/hip",
+      "directory": true,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "lib/cmake/hip-lang",
+      "directory": true,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "lib/cmake/hiprtc",
+      "directory": true,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "lib/cmake/hsa-runtime64",
+      "directory": true,
+      "stages": [
+        "core/ROCR-Runtime/stage"
+      ]
+    },
+    {
+      "path": "lib/cmake/hsakmt",
+      "directory": true,
+      "stages": [
+        "core/ROCR-Runtime/stage"
+      ]
+    },
+    {
+      "path": "lib/cmake/lld",
+      "directory": true,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "lib/cmake/llvm",
+      "directory": true,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "lib/cmake/rocm-core",
+      "directory": true,
+      "stages": [
+        "base/rocm-core/stage"
+      ]
+    },
+    {
+      "path": "lib/cmake/rocm-kpack",
+      "directory": true,
+      "stages": [
+        "core/rocm-kpack/stage"
+      ]
+    },
+    {
+      "path": "lib/cmake/rocm_smi",
+      "directory": true,
+      "stages": [
+        "base/rocm_smi_lib/stage"
+      ]
+    },
+    {
+      "path": "lib/cmake/rocprofiler-register",
+      "directory": true,
+      "stages": [
+        "base/rocprofiler-register/stage"
+      ]
+    },
+    {
+      "path": "lib/libamd_comgr.so",
+      "directory": false,
+      "stages": [
+        "compiler/amd-comgr/stage"
+      ]
+    },
+    {
+      "path": "lib/libamd_comgr.so.3",
+      "directory": false,
+      "stages": [
+        "compiler/amd-comgr/stage"
+      ]
+    },
+    {
+      "path": "lib/libamd_comgr.so.3.5.0",
+      "directory": false,
+      "stages": [
+        "compiler/amd-comgr/stage"
+      ]
+    },
+    {
+      "path": "lib/libamdhip64.so",
+      "directory": false,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "lib/libamdhip64.so.7",
+      "directory": false,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "lib/libamdhip64.so.7.17.26431-0000000",
+      "directory": false,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "lib/libhiprtc-builtins.so",
+      "directory": false,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "lib/libhiprtc-builtins.so.7",
+      "directory": false,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "lib/libhiprtc-builtins.so.7.17.26431-0000000",
+      "directory": false,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "lib/libhiprtc.so",
+      "directory": false,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "lib/libhiprtc.so.7",
+      "directory": false,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "lib/libhiprtc.so.7.17.26431-0000000",
+      "directory": false,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "lib/libhsa-runtime64.so",
+      "directory": false,
+      "stages": [
+        "core/ROCR-Runtime/stage"
+      ]
+    },
+    {
+      "path": "lib/libhsa-runtime64.so.1",
+      "directory": false,
+      "stages": [
+        "core/ROCR-Runtime/stage"
+      ]
+    },
+    {
+      "path": "lib/libhsa-runtime64.so.1.22.0",
+      "directory": false,
+      "stages": [
+        "core/ROCR-Runtime/stage"
+      ]
+    },
+    {
+      "path": "lib/libhsakmt.a",
+      "directory": false,
+      "stages": [
+        "core/ROCR-Runtime/stage"
+      ]
+    },
+    {
+      "path": "lib/liboam.so",
+      "directory": false,
+      "stages": [
+        "base/rocm_smi_lib/stage"
+      ]
+    },
+    {
+      "path": "lib/liboam.so.1",
+      "directory": false,
+      "stages": [
+        "base/rocm_smi_lib/stage"
+      ]
+    },
+    {
+      "path": "lib/liboam.so.1.0",
+      "directory": false,
+      "stages": [
+        "base/rocm_smi_lib/stage"
+      ]
+    },
+    {
+      "path": "lib/librocm-core.so",
+      "directory": false,
+      "stages": [
+        "base/rocm-core/stage"
+      ]
+    },
+    {
+      "path": "lib/librocm-core.so.1",
+      "directory": false,
+      "stages": [
+        "base/rocm-core/stage"
+      ]
+    },
+    {
+      "path": "lib/librocm-core.so.1.0.100300",
+      "directory": false,
+      "stages": [
+        "base/rocm-core/stage"
+      ]
+    },
+    {
+      "path": "lib/librocm_kpack.so",
+      "directory": false,
+      "stages": [
+        "core/rocm-kpack/stage"
+      ]
+    },
+    {
+      "path": "lib/librocm_kpack.so.0",
+      "directory": false,
+      "stages": [
+        "core/rocm-kpack/stage"
+      ]
+    },
+    {
+      "path": "lib/librocm_kpack.so.0.1.0",
+      "directory": false,
+      "stages": [
+        "core/rocm-kpack/stage"
+      ]
+    },
+    {
+      "path": "lib/librocm_smi64.so",
+      "directory": false,
+      "stages": [
+        "base/rocm_smi_lib/stage"
+      ]
+    },
+    {
+      "path": "lib/librocm_smi64.so.1",
+      "directory": false,
+      "stages": [
+        "base/rocm_smi_lib/stage"
+      ]
+    },
+    {
+      "path": "lib/librocm_smi64.so.1.0",
+      "directory": false,
+      "stages": [
+        "base/rocm_smi_lib/stage"
+      ]
+    },
+    {
+      "path": "lib/librocprofiler-register.so",
+      "directory": false,
+      "stages": [
+        "base/rocprofiler-register/stage"
+      ]
+    },
+    {
+      "path": "lib/librocprofiler-register.so.0",
+      "directory": false,
+      "stages": [
+        "base/rocprofiler-register/stage"
+      ]
+    },
+    {
+      "path": "lib/librocprofiler-register.so.0.6.0",
+      "directory": false,
+      "stages": [
+        "base/rocprofiler-register/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/amdgcn",
+      "directory": true,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/FileCheck",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/UnicodeNameMappingGenerator",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/amd-llvm-spirv",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/amdclang",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/amdclang++",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/amdclang-24",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/amdclang-cl",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/amdclang-cpp",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/amdflang",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/amdgpu-arch",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/amdlld",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/amdllvm",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/bbc",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/c-index-test",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang++",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang++.cfg",
+      "directory": false,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-24",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-24.cfg",
+      "directory": false,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-apply-replacements",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-change-namespace",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-cl",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-cl.cfg",
+      "directory": false,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-cpp",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-cpp.cfg",
+      "directory": false,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-doc",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-dxc",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-format",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-include-cleaner",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-include-fixer",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-installapi",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-linker-wrapper",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-move",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-nvlink-wrapper",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-offload-bundler",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-offload-packager",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-query",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-refactor",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-reorder-fields",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-repl",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-scan-deps",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-ssaf-analyzer",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-ssaf-format",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-ssaf-linker",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-ssaf-src-edit-merge",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-sycl-linker",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-tblgen",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang-tidy",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/clang.cfg",
+      "directory": false,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/count",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/diagtool",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/dsymutil",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/f18-parse-demo",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/find-all-symbols",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/fir-lsp-server",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/fir-opt",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/flang",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/flang-24",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/flang-new",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/flang.cfg",
+      "directory": false,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/git-clang-format",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/gpurun",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/hmaptool",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/ld.lld",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/ld64.lld",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llc",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/lld",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/lld-link",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/lli",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/lli-child-target",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llubi",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-PerfectShuffle",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-addr2line",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-ar",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-as",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-bcanalyzer",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-bitcode-strip",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-c-test",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-calc-occupancy",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-cas",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-cat",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-cfi-verify",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-cgdata",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-config",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-cov",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-ctxprof-util",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-cvtres",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-cxxdump",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-cxxfilt",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-cxxmap",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-debuginfo-analyzer",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-debuginfod",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-debuginfod-find",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-diff",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-dis",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-dlltool",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-dwarfdump",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-dwarfutil",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-dwp",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-exegesis",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-extract",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-extract-bundle-entry",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-gpu-loader",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-gsymutil",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-ifs",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-install-name-tool",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-ir2vec",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-jitlink",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-jitlink-executor",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-lib",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-libtool-darwin",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-link",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-lipo",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-lto",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-lto2",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-mc",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-mca",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-ml",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-ml64",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-modextract",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-nm",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-objcopy",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-objdump",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-offload-binary",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-offload-device-info",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-offload-wrapper",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-omp-kernel-replay",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-opt-report",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-otool",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-pdbutil",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-profdata",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-profgen",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-ranlib",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-rc",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-readelf",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-readobj",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-readtapi",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-reduce",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-remarkutil",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-rtdyld",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-size",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-split",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-stress",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-strings",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-strip",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-symbolizer",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-tblgen",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-test-mustache-spec",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-tli-checker",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-undname",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-windres",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/llvm-xray",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/mlir-cat",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/mlir-irdl-to-cpp",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/mlir-linalg-ods-yaml-gen",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/mlir-lsp-server",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/mlir-minimal-opt",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/mlir-minimal-opt-canonicalize",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/mlir-opt",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/mlir-pdll",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/mlir-pdll-lsp-server",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/mlir-query",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/mlir-reduce",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/mlir-rewrite",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/mlir-runner",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/mlir-src-sharder",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/mlir-tblgen",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/mlir-transform-opt",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/mlir-translate",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/modularize",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/not",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/nvptx-arch",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/obj2yaml",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/offload-arch",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/opt",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/pp-trace",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/reduce-chunk-list",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/rocm.cfg",
+      "directory": false,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/run-clang-tidy",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/sancov",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/sanstats",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/split-file",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/tblgen-lsp-server",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/tblgen-to-irdl",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/tco",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/verify-uselistorder",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/wasm-ld",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/yaml-bench",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/bin/yaml2obj",
+      "directory": false,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/include",
+      "directory": true,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/lib",
+      "directory": true,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/llvm/share",
+      "directory": true,
+      "stages": [
+        "compiler/amd-llvm/stage"
+      ]
+    },
+    {
+      "path": "lib/pkgconfig",
+      "directory": true,
+      "stages": [
+        "core/ROCR-Runtime/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/bin",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/bzip2/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/backtrace-supported.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libbacktrace/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/backtrace.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libbacktrace/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/bzlib.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/bzip2/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/dwarf.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/elfutils/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/elf.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/elfutils/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/elfutils",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/elfutils/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/gelf.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/elfutils/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/libdrm",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/libdrm/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/libelf.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/elfutils/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/libiberty",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/libiberty/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/libmnl",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/libmnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/libnl3",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/libsync.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libdrm/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/lzma",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/liblzma/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/lzma.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/liblzma/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/netlink",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/nlist.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/elfutils/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/numa.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/numactl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/numacompat1.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/numactl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/numaif.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/numactl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/sqlite3.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/sqlite3/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/sqlite3ext.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/sqlite3/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/sys",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/libcap/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/xf86drm.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libdrm/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/xf86drmMode.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libdrm/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/zconf.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/zlib/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/zdict.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/zstd/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/zlib.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/zlib/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/zstd.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/zstd/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/include/zstd_errors.h",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/zstd/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/cmake/BZip2",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/bzip2/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/cmake/LIBLZMA",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/liblzma/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/cmake/LibElf",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/elfutils/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/cmake/Libcap",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/libcap/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/cmake/NUMA",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/numactl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/cmake/SQLite3",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/sqlite3/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/cmake/ZLIB",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/zlib/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/cmake/libbacktrace",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/libbacktrace/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/cmake/libdw",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/elfutils/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/cmake/libiberty",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/libiberty/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/cmake/liblzma",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/liblzma/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/cmake/libmnl",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/libmnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/cmake/libnl",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/cmake/zstd",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/zstd/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libasm.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/elfutils/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libbacktrace.a",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libbacktrace/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libbz2.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/bzip2/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libcap.a",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libcap/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libcap.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libcap/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libdrm.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libdrm/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libdrm_amdgpu.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libdrm/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libdw.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/elfutils/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libelf.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/elfutils/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libiberty.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libiberty/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libiberty.so.0",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libiberty/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/liblzma.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/liblzma/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libmnl.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libmnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libnl-3.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libnl-genl-3.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libnl-idiag-3.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libnl-nf-3.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libnl-route-3.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libnl-xfrm-3.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libnuma.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/numactl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libpsx.a",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libcap/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libpsx.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libcap/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_asm.so.1",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/elfutils/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_bz2.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/bzip2/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_cap.so.2",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libcap/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_drm.so.2",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libdrm/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_drm_amdgpu.so.1",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libdrm/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_dw.so.1",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/elfutils/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_elf.so.1",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/elfutils/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_liblzma.so.5",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/liblzma/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_liblzma.so.5.8.1",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/liblzma/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_mnl.so.0",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libmnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_nl_3.so.200",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_nl_genl_3.so.200",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_nl_idiag_3.so.200",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_nl_nf_3.so.200",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_nl_route_3.so.200",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_nl_xfrm_3.so.200",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_numa.so.1",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/numactl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_psx.so.2",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libcap/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_sqlite3.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/sqlite3/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_z.so.1",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/zlib/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_z.so.1.3.2",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/zlib/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_zstd.so.1",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/zstd/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/librocm_sysdeps_zstd.so.1.5.7",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/zstd/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libsqlite3.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/sqlite3/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libz.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/zlib/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/libzstd.so",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/zstd/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/pkgconfig/libbacktrace.pc",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libbacktrace/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/pkgconfig/libcap.pc",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libcap/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/pkgconfig/libdrm.pc",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libdrm/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/pkgconfig/libdrm_amdgpu.pc",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libdrm/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/pkgconfig/libdw.pc",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/elfutils/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/pkgconfig/libelf.pc",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/elfutils/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/pkgconfig/liblzma.pc",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/liblzma/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/pkgconfig/libmnl.pc",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libmnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/pkgconfig/libnl-3.0.pc",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/pkgconfig/libnl-genl-3.0.pc",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/pkgconfig/libnl-idiag-3.0.pc",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/pkgconfig/libnl-nf-3.0.pc",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/pkgconfig/libnl-route-3.0.pc",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/pkgconfig/libnl-xfrm-3.0.pc",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libnl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/pkgconfig/libpsx.pc",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/libcap/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/pkgconfig/libzstd.pc",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/zstd/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/pkgconfig/numa.pc",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/numactl/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/lib/pkgconfig/zlib.pc",
+      "directory": false,
+      "stages": [
+        "third-party/sysdeps/linux/zlib/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocm_sysdeps/share",
+      "directory": true,
+      "stages": [
+        "third-party/sysdeps/linux/libdrm/build/stage"
+      ]
+    },
+    {
+      "path": "lib/rocmmod",
+      "directory": false,
+      "stages": [
+        "base/rocm-core/stage"
+      ]
+    },
+    {
+      "path": "libexec/hipify",
+      "directory": true,
+      "stages": [
+        "compiler/hipify/stage"
+      ]
+    },
+    {
+      "path": "libexec/rocm-core",
+      "directory": true,
+      "stages": [
+        "base/rocm-core/stage"
+      ]
+    },
+    {
+      "path": "libexec/rocm_smi",
+      "directory": true,
+      "stages": [
+        "base/rocm_smi_lib/stage"
+      ]
+    },
+    {
+      "path": "llvm",
+      "directory": false,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    },
+    {
+      "path": "share/doc/amd_comgr",
+      "directory": true,
+      "stages": [
+        "compiler/amd-comgr/stage"
+      ]
+    },
+    {
+      "path": "share/doc/half",
+      "directory": true,
+      "stages": [
+        "base/half/stage"
+      ]
+    },
+    {
+      "path": "share/doc/hip",
+      "directory": true,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "share/doc/hip-asan",
+      "directory": true,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "share/doc/hipcc",
+      "directory": true,
+      "stages": [
+        "compiler/hipcc/stage"
+      ]
+    },
+    {
+      "path": "share/doc/rocm-cmake",
+      "directory": true,
+      "stages": [
+        "base/rocm-cmake/stage"
+      ]
+    },
+    {
+      "path": "share/doc/rocm-core",
+      "directory": true,
+      "stages": [
+        "base/rocm-core/stage"
+      ]
+    },
+    {
+      "path": "share/doc/rocm-smi-lib",
+      "directory": true,
+      "stages": [
+        "base/rocm_smi_lib/stage"
+      ]
+    },
+    {
+      "path": "share/doc/rocminfo",
+      "directory": true,
+      "stages": [
+        "core/rocminfo/stage"
+      ]
+    },
+    {
+      "path": "share/doc/rocprofiler-register",
+      "directory": true,
+      "stages": [
+        "base/rocprofiler-register/stage"
+      ]
+    },
+    {
+      "path": "share/doc/rocr",
+      "directory": true,
+      "stages": [
+        "core/ROCR-Runtime/stage"
+      ]
+    },
+    {
+      "path": "share/hip",
+      "directory": true,
+      "stages": [
+        "core/clr/stage"
+      ]
+    },
+    {
+      "path": "share/modulefiles",
+      "directory": true,
+      "stages": [
+        "base/rocprofiler-register/stage"
+      ]
+    },
+    {
+      "path": "share/rocm",
+      "directory": true,
+      "stages": [
+        "base/rocm-cmake/stage"
+      ]
+    },
+    {
+      "path": "share/rocmcmakebuildtools",
+      "directory": true,
+      "stages": [
+        "base/rocm-cmake/stage"
+      ]
+    },
+    {
+      "path": "share/rocprofiler-register",
+      "directory": true,
+      "stages": [
+        "base/rocprofiler-register/stage"
+      ]
+    },
+    {
+      "path": "share/therock",
+      "directory": true,
+      "stages": [
+        "base/aux-overlay/stage"
+      ]
+    }
+  ]
+}

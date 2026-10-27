@@ -1,0 +1,280 @@
+diff --git a/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/kmd/linux/libc_passthrough.cpp b/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/kmd/linux/libc_passthrough.cpp
+index c742b39f..fb1d3ec2 100644
+--- a/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/kmd/linux/libc_passthrough.cpp
++++ b/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/kmd/linux/libc_passthrough.cpp
+@@ -54,8 +54,44 @@ void LibcPassthrough::resolve() {
+   xstat64_fn = util::lookup_symbol<decltype(xstat64_fn)>(handle, "__xstat64");
+   lxstat_fn = util::lookup_symbol<decltype(lxstat_fn)>(handle, "__lxstat");
+   lxstat64_fn = util::lookup_symbol<decltype(lxstat64_fn)>(handle, "__lxstat64");
++#if defined(__GLIBC__) && defined(_STAT_VER)
++  // Before glibc 2.33 the public stat functions are inline wrappers around
++  // versioned entry points, not exported symbols. Call the resolved real
++  // aliases directly so these fallbacks cannot recurse into our interposer.
++  if (!stat && xstat_fn)
++    stat = [](const char *path, struct stat *buf) {
++      return libc_passthrough().xstat_fn(_STAT_VER, path, buf);
++    };
++  if (!lstat && lxstat_fn)
++    lstat = [](const char *path, struct stat *buf) {
++      return libc_passthrough().lxstat_fn(_STAT_VER, path, buf);
++    };
++  if (!fstat_fn && fxstat_fn)
++    fstat_fn = [](int fd, struct stat *buf) {
++      return libc_passthrough().fxstat_fn(_STAT_VER, fd, buf);
++    };
++  if (!stat64_fn && xstat64_fn)
++    stat64_fn = [](const char *path, struct stat64 *buf) {
++      return libc_passthrough().xstat64_fn(_STAT_VER, path, buf);
++    };
++  if (!lstat64_fn && lxstat64_fn)
++    lstat64_fn = [](const char *path, struct stat64 *buf) {
++      return libc_passthrough().lxstat64_fn(_STAT_VER, path, buf);
++    };
++  if (!fstat64_fn && fxstat64_fn)
++    fstat64_fn = [](int fd, struct stat64 *buf) {
++      return libc_passthrough().fxstat64_fn(_STAT_VER, fd, buf);
++    };
++#endif
+   readlink_fn = util::lookup_symbol<decltype(readlink_fn)>(handle, "readlink");
+   realpath_fn = util::lookup_symbol<decltype(realpath_fn)>(handle, "realpath");
++#if defined(__GLIBC__)
++  // Older glibc dlsym(RTLD_NEXT) may select the compatibility realpath symbol,
++  // which rejects a null output buffer. Prefer the allocating POSIX variant.
++  if (auto modern = reinterpret_cast<decltype(realpath_fn)>(
++          dlvsym(handle, "realpath", "GLIBC_2.3")))
++    realpath_fn = modern;
++#endif
+   realpath_chk_fn = util::lookup_symbol<decltype(realpath_chk_fn)>(handle, "__realpath_chk");
+   fork = util::lookup_symbol<decltype(fork)>(handle, "fork");
+   // Keep ready() false unless every required interposed libc entry point was
+diff --git a/emulation/rocjitsu/scripts/run-vfio-guest.py b/emulation/rocjitsu/scripts/run-vfio-guest.py
+index 799f964b..fc12c610 100755
+--- a/emulation/rocjitsu/scripts/run-vfio-guest.py
++++ b/emulation/rocjitsu/scripts/run-vfio-guest.py
+@@ -9,9 +9,11 @@ from __future__ import annotations
+ 
+ import argparse
+ import contextlib
++import ctypes
+ import json
+ import math
+ import os
++import platform
+ from pathlib import Path
+ import selectors
+ import signal
+@@ -33,6 +35,27 @@ class GuestRunError(ValueError):
+     """A QEMU or vfio-user launch requirement was not satisfied."""
+ 
+ 
++def open_pidfd(pid: int) -> int:
++    """Open a pidfd even when Python was built against older Linux headers."""
++    native = getattr(os, "pidfd_open", None)
++    if native is not None:
++        return native(pid)
++    # Linux 5.3 added this syscall; manylinux Python may lack its wrapper even
++    # when the running kernel supports it. These architectures share number 434.
++    if sys.platform != "linux" or platform.machine() not in (
++        "x86_64", "aarch64", "ppc64", "ppc64le"
++    ):
++        raise GuestRunError("pidfd_open is unavailable on this Python/platform")
++    syscall = ctypes.CDLL(None, use_errno=True).syscall
++    syscall.restype = ctypes.c_long
++    syscall.argtypes = (ctypes.c_long, ctypes.c_int, ctypes.c_uint)
++    fd = syscall(434, pid, 0)
++    if fd < 0:
++        error = ctypes.get_errno()
++        raise OSError(error, os.strerror(error))
++    return fd
++
++
+ @contextlib.contextmanager
+ def managed_termination_signals() -> Iterator[None]:
+     """Turn ordinary launcher termination into cleanup-aware unwinding."""
+@@ -450,8 +473,8 @@ def run_qemu(
+                 stderr=subprocess.STDOUT,
+                 preexec_fn=restore_child_signal_mask,
+             )
+-        guest_pidfd = os.pidfd_open(guest.pid)
+-        server_pidfd = os.pidfd_open(server.pid)
++        guest_pidfd = open_pidfd(guest.pid)
++        server_pidfd = open_pidfd(server.pid)
+         with selectors.DefaultSelector() as selector:
+             selector.register(guest_pidfd, selectors.EVENT_READ, "guest")
+             selector.register(server_pidfd, selectors.EVENT_READ, "server")
+diff --git a/emulation/rocjitsu/tests/cdna5_tensor_dma_test.cpp b/emulation/rocjitsu/tests/cdna5_tensor_dma_test.cpp
+index 5bbd2d5c..57da3a39 100644
+--- a/emulation/rocjitsu/tests/cdna5_tensor_dma_test.cpp
++++ b/emulation/rocjitsu/tests/cdna5_tensor_dma_test.cpp
+@@ -193,6 +193,7 @@ TEST(Gfx1250ExecutionTest, TensorDmaRejectsElementCountOverflow) {
+ TEST(Gfx1250ExecutionTest, TensorDmaIterationsMayReuseResidentLds) {
+   using namespace amdgpu::tensor_dma_detail;
+   Gfx1250Sim sim;
++  ASSERT_NO_FATAL_FAILURE(sim.initialize());
+   auto *cu = sim.cu();
+   auto *wf = cu->dispatch_wf(0, 0, kGfx1250ScalarSlots, 32);
+   ASSERT_NE(wf, nullptr);
+@@ -219,6 +220,7 @@ TEST(Gfx1250ExecutionTest, TensorDmaIterationsMayReuseResidentLds) {
+ TEST(Gfx1250ExecutionTest, TensorDmaRejectsOutOfRangeIterationLdsIncrement) {
+   using namespace amdgpu::tensor_dma_detail;
+   Gfx1250Sim sim;
++  ASSERT_NO_FATAL_FAILURE(sim.initialize());
+   auto *cu = sim.cu();
+   auto *wf = cu->dispatch_wf(0, 0, kGfx1250ScalarSlots, 32);
+   ASSERT_NE(wf, nullptr);
+@@ -243,6 +245,7 @@ TEST(Gfx1250ExecutionTest, TensorDmaRejectsOutOfRangeIterationLdsIncrement) {
+ TEST(Gfx1250ExecutionTest, TensorDmaRejectsZeroLdsAllocation) {
+   using namespace amdgpu::tensor_dma_detail;
+   Gfx1250Sim sim;
++  ASSERT_NO_FATAL_FAILURE(sim.initialize());
+   auto *cu = sim.cu();
+   auto *wf = cu->dispatch_wf(0, 0, kGfx1250ScalarSlots, 32);
+   ASSERT_NE(wf, nullptr);
+@@ -262,6 +265,7 @@ TEST(Gfx1250ExecutionTest, TensorDmaRejectsZeroLdsAllocation) {
+ TEST(Gfx1250ExecutionTest, TensorDmaRejectsWrappedWalkerArithmetic) {
+   using namespace amdgpu::tensor_dma_detail;
+   Gfx1250Sim sim;
++  ASSERT_NO_FATAL_FAILURE(sim.initialize());
+   auto *cu = sim.cu();
+   auto *wf = cu->dispatch_wf(0, 0, kGfx1250ScalarSlots, 32);
+   ASSERT_NE(wf, nullptr);
+@@ -287,6 +291,7 @@ TEST(Gfx1250ExecutionTest, TensorDmaRejectsWrappedWalkerArithmetic) {
+ TEST(Gfx1250ExecutionTest, TensorDmaRejectsWrappedDenseWalkerArithmetic) {
+   using namespace amdgpu::tensor_dma_detail;
+   Gfx1250Sim sim;
++  ASSERT_NO_FATAL_FAILURE(sim.initialize());
+   auto *cu = sim.cu();
+   auto *wf = cu->dispatch_wf(0, 0, kGfx1250ScalarSlots, 32);
+   ASSERT_NE(wf, nullptr);
+@@ -312,6 +317,7 @@ TEST(Gfx1250ExecutionTest, TensorDmaRejectsWrappedDenseWalkerArithmetic) {
+ TEST(Gfx1250ExecutionTest, TensorDmaAllowsSafeTileInLargerUnaddressableTensor) {
+   using namespace amdgpu::tensor_dma_detail;
+   Gfx1250Sim sim;
++  ASSERT_NO_FATAL_FAILURE(sim.initialize());
+   auto *cu = sim.cu();
+   auto *wf = cu->dispatch_wf(0, 0, kGfx1250ScalarSlots, 32);
+   ASSERT_NE(wf, nullptr);
+@@ -340,6 +346,7 @@ TEST(Gfx1250ExecutionTest, TensorDmaAllowsSafeTileInLargerUnaddressableTensor) {
+ TEST(Gfx1250ExecutionTest, TensorDmaAllowsSafeDenseTileInLargerUnaddressableTensor) {
+   using namespace amdgpu::tensor_dma_detail;
+   Gfx1250Sim sim;
++  ASSERT_NO_FATAL_FAILURE(sim.initialize());
+   auto *cu = sim.cu();
+   auto *wf = cu->dispatch_wf(0, 0, kGfx1250ScalarSlots, 32);
+   ASSERT_NE(wf, nullptr);
+@@ -364,6 +371,7 @@ TEST(Gfx1250ExecutionTest, TensorDmaAllowsSafeDenseTileInLargerUnaddressableTens
+ TEST(Gfx1250ExecutionTest, TensorDmaMaskedGatherSkipsGlobalAddressArithmetic) {
+   using namespace amdgpu::tensor_dma_detail;
+   Gfx1250Sim sim;
++  ASSERT_NO_FATAL_FAILURE(sim.initialize());
+   auto *cu = sim.cu();
+   auto *wf = cu->dispatch_wf(0, 0, kGfx1250ScalarSlots, 32);
+   ASSERT_NE(wf, nullptr);
+@@ -394,6 +402,7 @@ TEST(Gfx1250ExecutionTest, TensorDmaMaskedGatherSkipsGlobalAddressArithmetic) {
+ TEST(Gfx1250ExecutionTest, TensorDmaMaterializationLimitIsDiagnosable) {
+   using namespace amdgpu::tensor_dma_detail;
+   Gfx1250Sim sim;
++  ASSERT_NO_FATAL_FAILURE(sim.initialize());
+   auto *cu = sim.cu();
+   auto *wf = cu->dispatch_wf(0, 0, kGfx1250ScalarSlots, 32);
+   ASSERT_NE(wf, nullptr);
+@@ -430,6 +439,7 @@ TEST(Gfx1250ExecutionTest, TensorDmaMaterializationLimitIsDiagnosable) {
+ TEST(Gfx1250ExecutionTest, TensorDmaRejectsWrappedTransferAddresses) {
+   using namespace amdgpu::tensor_dma_detail;
+   Gfx1250Sim sim;
++  ASSERT_NO_FATAL_FAILURE(sim.initialize());
+   auto *cu = sim.cu();
+   auto *wf = cu->dispatch_wf(0, 0, kGfx1250ScalarSlots, 32);
+   ASSERT_NE(wf, nullptr);
+@@ -491,6 +501,7 @@ TEST(Gfx1250ExecutionTest, TensorDmaOverflowSkipsCopyAndBarrier) {
+ 
+ TEST(Gfx1250ExecutionTest, TensorDmaBarrierMustFitOwnedLds) {
+   Gfx1250Sim sim;
++  ASSERT_NO_FATAL_FAILURE(sim.initialize());
+   auto *cu = sim.cu();
+   auto *wf = cu->dispatch_wf(0, 0, kGfx1250ScalarSlots, 32);
+   ASSERT_NE(wf, nullptr);
+diff --git a/emulation/rocjitsu/tests/host_drm_preload_test.cpp b/emulation/rocjitsu/tests/host_drm_preload_test.cpp
+index df95499d..7fb51bc8 100644
+--- a/emulation/rocjitsu/tests/host_drm_preload_test.cpp
++++ b/emulation/rocjitsu/tests/host_drm_preload_test.cpp
+@@ -6,6 +6,7 @@
+ /// @details Loaded after rocjitsu so its RTLD_NEXT stat calls see this identity.
+ 
+ #include <dlfcn.h>
++#include <cerrno>
+ #include <sys/stat.h>
+ 
+ namespace {
+@@ -28,12 +29,30 @@ extern "C" __attribute__((visibility("default"))) void rj_test_host_drm(int fd,
+ 
+ extern "C" __attribute__((visibility("default"))) int fstat(int fd, struct stat *info) {
+   static auto next = reinterpret_cast<decltype(&fstat)>(dlsym(RTLD_NEXT, "fstat"));
+-  return finish_stat(fd, info, next(fd, info));
++  if (next)
++    return finish_stat(fd, info, next(fd, info));
++#if defined(__GLIBC__) && defined(_STAT_VER)
++  static auto legacy = reinterpret_cast<int (*)(int, int, struct stat *)>(
++      dlsym(RTLD_NEXT, "__fxstat"));
++  if (legacy)
++    return finish_stat(fd, info, legacy(_STAT_VER, fd, info));
++#endif
++  errno = ENOSYS;
++  return -1;
+ }
+ 
+ extern "C" __attribute__((visibility("default"))) int fstat64(int fd, struct stat64 *info) {
+   static auto next = reinterpret_cast<decltype(&fstat64)>(dlsym(RTLD_NEXT, "fstat64"));
+-  return finish_stat(fd, info, next(fd, info));
++  if (next)
++    return finish_stat(fd, info, next(fd, info));
++#if defined(__GLIBC__) && defined(_STAT_VER)
++  static auto legacy = reinterpret_cast<int (*)(int, int, struct stat64 *)>(
++      dlsym(RTLD_NEXT, "__fxstat64"));
++  if (legacy)
++    return finish_stat(fd, info, legacy(_STAT_VER, fd, info));
++#endif
++  errno = ENOSYS;
++  return -1;
+ }
+ 
+ extern "C" __attribute__((visibility("default"))) int __fxstat(int version, int fd,
+diff --git a/emulation/rocjitsu/tests/scripts/test_run_vfio_guest.py b/emulation/rocjitsu/tests/scripts/test_run_vfio_guest.py
+index cedd6aee..2af97e3f 100755
+--- a/emulation/rocjitsu/tests/scripts/test_run_vfio_guest.py
++++ b/emulation/rocjitsu/tests/scripts/test_run_vfio_guest.py
+@@ -8,6 +8,7 @@
+ from __future__ import annotations
+ 
+ import contextlib
++import errno
+ import importlib.util
+ import io
+ import json
+@@ -153,6 +154,26 @@ def fake_server(path: Path, behavior: str, supports_vfio: bool = True) -> None:
+ 
+ @unittest.skipUnless(sys.platform.startswith("linux"), "VFIO launcher is Linux-only")
+ class RunVfioGuestTest(unittest.TestCase):
++    def test_pidfd_fallback_opens_noninheritable_descriptor(self) -> None:
++        with mock.patch.object(RUNNER.os, "pidfd_open", None, create=True):
++            fd = RUNNER.open_pidfd(os.getpid())
++        try:
++            self.assertFalse(os.get_inheritable(fd))
++            self.assertEqual(os.readlink(f"/proc/self/fd/{fd}"), "anon_inode:[pidfd]")
++        finally:
++            os.close(fd)
++
++    def test_pidfd_fallback_preserves_kernel_error(self) -> None:
++        with mock.patch.object(RUNNER.os, "pidfd_open", None, create=True):
++            with self.assertRaises(OSError) as failure:
++                RUNNER.open_pidfd(-1)
++        self.assertEqual(failure.exception.errno, errno.EINVAL)
++
++    def test_pidfd_prefers_python_wrapper(self) -> None:
++        with mock.patch.object(RUNNER.os, "pidfd_open", return_value=123, create=True) as native:
++            self.assertEqual(RUNNER.open_pidfd(456), 123)
++        native.assert_called_once_with(456)
++
+     def run_fake_guest(
+         self,
+         root: Path,

@@ -1,0 +1,90 @@
+diff --git a/projects/rocprofiler-sdk/cmake/Templates/unit-test.cmake.in b/projects/rocprofiler-sdk/cmake/Templates/unit-test.cmake.in
+index b4f0d9f7..fcc5c599 100644
+--- a/projects/rocprofiler-sdk/cmake/Templates/unit-test.cmake.in
++++ b/projects/rocprofiler-sdk/cmake/Templates/unit-test.cmake.in
+@@ -32,8 +32,17 @@ function(rocprofiler_sdk_update_unit_test_environment _VAR _NAME)
+         PARENT_SCOPE)
+ endfunction()
+ 
+-rocprofiler_sdk_update_unit_test_environment(_ENVIRONMENT "LD_LIBRARY_PATH"
+-                                             "$ENV{LD_LIBRARY_PATH}")
++# Build-tree and system ROCm paths are not valid dependencies of relocated tests.
++# Always load this installation's runtime before caller-provided fallback paths.
++get_filename_component(_INSTALL_PREFIX
++                       "${CMAKE_CURRENT_LIST_DIR}/@RAUT_INSTALL_PREFIX_RELATIVE_PATH@"
++                       ABSOLUTE)
++set(_LIBRARY_PATH "${_INSTALL_PREFIX}/@CMAKE_INSTALL_LIBDIR@:${_INSTALL_PREFIX}/llvm/lib")
++if(NOT "$ENV{LD_LIBRARY_PATH}" STREQUAL "")
++    string(APPEND _LIBRARY_PATH ":$ENV{LD_LIBRARY_PATH}")
++endif()
++list(FILTER _ENVIRONMENT EXCLUDE REGEX "^LD_LIBRARY_PATH=")
++list(APPEND _ENVIRONMENT "LD_LIBRARY_PATH=${_LIBRARY_PATH}")
+ rocprofiler_sdk_update_unit_test_environment(_ENVIRONMENT "ROCPROFILER_METRICS_PATH"
+                                              "$ENV{ROCPROFILER_METRICS_PATH}")
+ 
+diff --git a/projects/rocprofiler-sdk/cmake/rocprofiler_build_settings.cmake b/projects/rocprofiler-sdk/cmake/rocprofiler_build_settings.cmake
+index 24c34bc0..8fd02621 100644
+--- a/projects/rocprofiler-sdk/cmake/rocprofiler_build_settings.cmake
++++ b/projects/rocprofiler-sdk/cmake/rocprofiler_build_settings.cmake
+@@ -35,26 +35,26 @@ endif()
+ foreach(_TYPE dl rt)
+     if(NOT ${_TYPE}_LIBRARY)
+         find_library(${_TYPE}_LIBRARY NAMES ${_TYPE})
+-        find_package_handle_standard_args(${_TYPE}-library REQUIRED_VARS ${_TYPE}_LIBRARY)
+-        if(${_TYPE}-library_FOUND)
+-            string(TOUPPER "${_TYPE}" _TYPE_UC)
+-            rocprofiler_target_compile_definitions(rocprofiler-sdk-${_TYPE}
+-                                                   INTERFACE ROCPROFILER_${_TYPE_UC}=1)
+-            target_link_libraries(rocprofiler-sdk-${_TYPE} INTERFACE ${${_TYPE}_LIBRARY})
+-            if("${_TYPE}" STREQUAL "dl" AND NOT ROCPROFILER_ENABLE_CLANG_TIDY)
+-                # This instructs the linker to add all symbols, not only used ones, to the
+-                # dynamic symbol table. This option is needed for some uses of dlopen or
+-                # to allow obtaining backtraces from within a program.
+-                rocprofiler_target_compile_options(
+-                    rocprofiler-sdk-${_TYPE}
+-                    LANGUAGES C CXX
+-                    LINK_LANGUAGES C CXX
+-                    INTERFACE "-rdynamic")
+-            endif()
+-        else()
+-            rocprofiler_target_compile_definitions(rocprofiler-sdk-${_TYPE}
+-                                                   INTERFACE ROCPROFILER_${_TYPE_UC}=0)
++    endif()
++    # Cached library discovery must not suppress interface setup on reconfigure.
++    find_package_handle_standard_args(${_TYPE}-library REQUIRED_VARS ${_TYPE}_LIBRARY)
++    if(${_TYPE}-library_FOUND)
++        string(TOUPPER "${_TYPE}" _TYPE_UC)
++        rocprofiler_target_compile_definitions(rocprofiler-sdk-${_TYPE}
++                                               INTERFACE ROCPROFILER_${_TYPE_UC}=1)
++        target_link_libraries(rocprofiler-sdk-${_TYPE} INTERFACE ${${_TYPE}_LIBRARY})
++        if("${_TYPE}" STREQUAL "dl" AND NOT ROCPROFILER_ENABLE_CLANG_TIDY)
++            # Export executable symbols for dlopen/dlsym and backtraces.
++            rocprofiler_target_compile_options(
++                rocprofiler-sdk-${_TYPE}
++                LANGUAGES C CXX
++                LINK_LANGUAGES C CXX
++                INTERFACE "-rdynamic")
+         endif()
++    else()
++        string(TOUPPER "${_TYPE}" _TYPE_UC)
++        rocprofiler_target_compile_definitions(rocprofiler-sdk-${_TYPE}
++                                               INTERFACE ROCPROFILER_${_TYPE_UC}=0)
+     endif()
+ endforeach()
+ 
+diff --git a/projects/rocprofiler-sdk/cmake/rocprofiler_utilities.cmake b/projects/rocprofiler-sdk/cmake/rocprofiler_utilities.cmake
+index ebbeca7f..fdea123c 100644
+--- a/projects/rocprofiler-sdk/cmake/rocprofiler_utilities.cmake
++++ b/projects/rocprofiler-sdk/cmake/rocprofiler_utilities.cmake
+@@ -1207,6 +1207,11 @@ function(rocprofiler_add_unit_test)
+     endif()
+     set(RAUT_SPM_TESTS "${_SPM_TESTS_INSTALLED}")
+ 
++    # Locate the installation prefix from the relocated unit-test directory.
++    file(RELATIVE_PATH RAUT_INSTALL_PREFIX_RELATIVE_PATH
++         "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATAROOTDIR}/${PACKAGE_NAME}/tests/unit-tests"
++         "${CMAKE_INSTALL_PREFIX}")
++
+     configure_file(
+         ${CMAKE_SOURCE_DIR}/cmake/Templates/unit-test.cmake.in
+         ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_INSTALL_DATAROOTDIR}/${PACKAGE_NAME}/tests/unit-tests/${RAUT_TARGET}.cmake

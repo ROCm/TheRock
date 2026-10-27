@@ -1,0 +1,412 @@
+{
+  "audit_paths": [
+    "lib/llvm/bin/clang",
+    "lib/libamdhip64.so",
+    "lib/libhsa-runtime64.so",
+    "lib/libamd_comgr.so"
+  ],
+  "suites": [
+    {
+      "name": "dasan",
+      "command": [
+        "{python}",
+        "{repo}/test_tools/dasan_smoke.py",
+        "--rocm-path",
+        "{prefix}",
+        "--llvm-lit",
+        "{bundle}/llvm-lit.py",
+        "--lit-suite",
+        "{bundle}/suite",
+        "--output-dir",
+        "{output}/dasan",
+        "--gpu-arch",
+        "gfx950",
+        "--gpu-device-count",
+        "{gpu_count}",
+        "--require-multi-device",
+        "--openmp"
+      ],
+      "requires": [
+        "{bundle}/llvm-lit.py",
+        "{bundle}/suite/lit.site.cfg.py"
+      ],
+      "summary": "{output}/dasan/summary.json",
+      "timeout": 1800
+    },
+    {
+      "name": "sanity",
+      "command": [
+        "{python}",
+        "-m",
+        "pytest",
+        "{repo}/tests/test_rocm_sanity.py",
+        "-v",
+        "--timeout=300",
+        "--junitxml={output}/sanity.xml"
+      ],
+      "installed_requires": [
+        "{prefix}/bin/rocminfo",
+        "{prefix}/bin/clinfo",
+        "{prefix}/lib/opencl/libamdocl64.so"
+      ],
+      "junit": [
+        "{output}/sanity.xml"
+      ],
+      "timeout": 1800
+    },
+    {
+      "name": "rocrtst",
+      "command": [
+        "{python}",
+        "{repo}/build_tools/github_actions/test_executable_scripts/test_rocrtst.py"
+      ],
+      "installed_requires": [
+        "{prefix}/bin/rocrtst64"
+      ],
+      "env": {
+        "GTEST_OUTPUT": "xml:{output}/rocrtst.xml"
+      },
+      "junit": [
+        "{output}/rocrtst.xml"
+      ],
+      "timeout": 1800
+    },
+    {
+      "name": "hip-smoke",
+      "command": [
+        "{python}",
+        "{repo}/build_tools/github_actions/test_executable_scripts/test_hiptests.py"
+      ],
+      "installed_requires": [
+        "{prefix}/share/hip/catch_tests/CTestTestfile.cmake"
+      ],
+      "env": {
+        "CTEST_NO_TESTS_ACTION": "error"
+      },
+      "timeout": 3600,
+      "ctest_counts": true
+    },
+    {
+      "name": "hipfile-unit",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "{prefix}/share/hipfile/test",
+        "-L",
+        "unit",
+        "--no-tests=error",
+        "--output-on-failure",
+        "--timeout",
+        "300",
+        "--output-junit",
+        "{output}/hipfile-unit.xml"
+      ],
+      "installed_requires": [
+        "{prefix}/share/hipfile/test/CTestTestfile.cmake"
+      ],
+      "junit": [
+        "{output}/hipfile-unit.xml"
+      ],
+      "timeout": 1800
+    },
+    {
+      "name": "rccl-unit",
+      "command": [
+        "{prefix}/bin/rccl-UnitTests"
+      ],
+      "installed_requires": [
+        "{prefix}/bin/rccl-UnitTests",
+        "{prefix}/lib/librccl.so"
+      ],
+      "env": {
+        "UT_MIN_GPUS": "2",
+        "UT_MAX_GPUS": "2",
+        "UT_POW2_GPUS": "1",
+        "UT_PROCESS_MASK": "1",
+        "GTEST_OUTPUT": "xml:{output}/rccl-unit.xml"
+      },
+      "junit": [
+        "{output}/rccl-unit.xml"
+      ],
+      "timeout": 3600
+    },
+    {
+      "name": "rccl-allreduce",
+      "command": [
+        "{prefix}/bin/all_reduce_perf",
+        "-b",
+        "8",
+        "-e",
+        "16M",
+        "-f",
+        "2",
+        "-g",
+        "2",
+        "-c",
+        "1"
+      ],
+      "installed_requires": [
+        "{prefix}/bin/all_reduce_perf",
+        "{prefix}/lib/librccl.so"
+      ],
+      "timeout": 1200
+    },
+    {
+      "name": "profiler-sdk",
+      "command": [
+        "{python}",
+        "{repo}/build_tools/github_actions/test_executable_scripts/test_rocprofiler_sdk.py"
+      ],
+      "installed_requires": [
+        "{prefix}/share/rocprofiler-sdk/tests/CMakeLists.txt"
+      ],
+      "env": {
+        "CTEST_NO_TESTS_ACTION": "error"
+      },
+      "timeout": 7200,
+      "ctest_counts": true
+    },
+    {
+      "name": "rpp-quick",
+      "command": [
+        "{python}",
+        "{repo}/build_tools/github_actions/test_executable_scripts/test_rpp.py"
+      ],
+      "installed_requires": [
+        "{prefix}/share/rpp/test/CMakeLists.txt"
+      ],
+      "env": {
+        "CTEST_NO_TESTS_ACTION": "error"
+      },
+      "timeout": 3600,
+      "ctest_counts": true
+    },
+    {
+      "name": "hipdnn",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "{prefix}/bin/hipdnn",
+        "--output-on-failure",
+        "--no-tests=error",
+        "--timeout",
+        "300",
+        "--output-junit",
+        "{output}/hipdnn.xml"
+      ],
+      "installed_requires": [
+        "{prefix}/bin/hipdnn/CTestTestfile.cmake"
+      ],
+      "junit": [
+        "{output}/hipdnn.xml"
+      ],
+      "timeout": 3600
+    },
+    {
+      "name": "hipdnn-install",
+      "command": [
+        "{python}",
+        "{repo}/build_tools/github_actions/test_executable_scripts/test_hipdnn_install.py"
+      ],
+      "requires": [
+        "{repo}/build_tools/github_actions/test_executable_scripts/hipdnn_install_tests/CMakeLists.txt"
+      ],
+      "installed_requires": [
+        "{prefix}/bin/hipdnn/CTestTestfile.cmake"
+      ],
+      "timeout": 1200
+    },
+    {
+      "name": "rocdecode-correctness",
+      "command": [
+        "{python}",
+        "{repo}/test_tools/dasan_components/installed_ctest.py",
+        "--prefix",
+        "{prefix}",
+        "--build",
+        "{output}/rocdecode-build",
+        "--component",
+        "rocdecode",
+        "--junit",
+        "{output}/rocdecode.xml"
+      ],
+      "installed_requires": [
+        "{prefix}/share/rocdecode/test/CMakeLists.txt",
+        "{prefix}/lib/librocdecode.so"
+      ],
+      "env": {
+        "PKG_CONFIG_PATH": "{prefix}/lib/rocm_sysdeps/lib/pkgconfig"
+      },
+      "junit": [
+        "{output}/rocdecode.xml"
+      ],
+      "timeout": 3600
+    },
+    {
+      "name": "rocjpeg-correctness",
+      "command": [
+        "{python}",
+        "{repo}/test_tools/dasan_components/installed_ctest.py",
+        "--prefix",
+        "{prefix}",
+        "--build",
+        "{output}/rocjpeg-build",
+        "--component",
+        "rocjpeg",
+        "--junit",
+        "{output}/rocjpeg.xml"
+      ],
+      "installed_requires": [
+        "{prefix}/share/rocjpeg/test/CMakeLists.txt",
+        "{prefix}/lib/librocjpeg.so"
+      ],
+      "env": {
+        "PKG_CONFIG_PATH": "{prefix}/lib/rocm_sysdeps/lib/pkgconfig"
+      },
+      "junit": [
+        "{output}/rocjpeg.xml"
+      ],
+      "timeout": 3600
+    },
+    {
+      "name": "amdsmi-quick",
+      "command": [
+        "{prefix}/share/amd_smi/tests/amdsmitst",
+        "--gtest_filter=AmdSmiDynamicMetricTest.*:*Unit*"
+      ],
+      "installed_requires": [
+        "{prefix}/share/amd_smi/tests/amdsmitst"
+      ],
+      "env": {
+        "AMDSMI_NON_PRIVILEGED": "1",
+        "GTEST_OUTPUT": "xml:{output}/amdsmi-quick.xml"
+      },
+      "junit": [
+        "{output}/amdsmi-quick.xml"
+      ],
+      "timeout": 1800
+    },
+    {
+      "name": "rocshmem-smoke",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "{prefix}/bin/rocshmem",
+        "--no-tests=error",
+        "--output-on-failure",
+        "-R",
+        "^(put|get|amo_add|barrier|alltoall|broadcast)_n2_w1_z1_",
+        "--output-junit",
+        "{output}/rocshmem-smoke.xml"
+      ],
+      "installed_requires": [
+        "{prefix}/bin/rocshmem_functional_tests",
+        "{prefix}/bin/rocshmem/CTestTestfile.cmake"
+      ],
+      "junit": [
+        "{output}/rocshmem-smoke.xml"
+      ],
+      "timeout": 1800
+    },
+    {
+      "name": "rocprofiler-systems-quick",
+      "command": [
+        "{python}",
+        "{repo}/build_tools/github_actions/test_executable_scripts/test_runner.py"
+      ],
+      "env": {
+        "TEST_COMPONENT": "rocprofiler-systems",
+        "CTEST_NO_TESTS_ACTION": "error"
+      },
+      "ctest_counts": true,
+      "timeout": 5400
+    },
+    {
+      "name": "aqlprofile",
+      "command": [
+        "{python}",
+        "{repo}/build_tools/github_actions/test_executable_scripts/test_aqlprofile.py"
+      ],
+      "installed_requires": [
+        "{prefix}/share/hsa-amd-aqlprofile/run_tests.sh"
+      ],
+      "timeout": 1200
+    },
+    {
+      "name": "profiler-hub-install",
+      "command": [
+        "{python}",
+        "{repo}/build_tools/github_actions/test_executable_scripts/test_profiler_hub_install.py"
+      ],
+      "installed_requires": [
+        "{prefix}/bin/test_profiler-hub"
+      ],
+      "timeout": 120
+    },
+    {
+      "name": "rocprofiler-compute-gpu",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "{prefix}/libexec/rocprofiler-compute",
+        "--output-on-failure",
+        "--no-tests=error",
+        "-R",
+        "^test_profile_kernel_execution$",
+        "--output-junit",
+        "{output}/rocprofiler-compute-gpu.xml"
+      ],
+      "junit": [
+        "{output}/rocprofiler-compute-gpu.xml"
+      ],
+      "installed_requires": [
+        "{prefix}/libexec/rocprofiler-compute/tests/vcopy"
+      ],
+      "timeout": 2100
+    },
+    {
+      "name": "rdc-unit",
+      "command": [
+        "{python}",
+        "{repo}/test_tools/dasan_components/rdc_tests.py",
+        "--prefix",
+        "{prefix}",
+        "--output",
+        "{output}"
+      ],
+      "requires": [
+        "{prefix}/share/rdc/rdctst_tests/rdc_unit_tests"
+      ],
+      "installed_requires": [
+        "{prefix}/share/rdc/rdctst_tests/rdc_unit_tests"
+      ],
+      "timeout": 3600,
+      "summary": "{output}/rdc-summary.json",
+      "env": {
+        "RDC_KERNELS_HSACO_DIR": "{prefix}/lib/rdc/hsaco",
+        "LD_LIBRARY_PATH": "{prefix}/share/rdc/rdctst_tests:{prefix}/lib:{prefix}/lib/rocm_sysdeps/lib"
+      }
+    },
+    {
+      "name": "rocgdb-version",
+      "command": [
+        "{prefix}/bin/rocgdb",
+        "--version"
+      ],
+      "installed_requires": [
+        "{prefix}/bin/rocgdb"
+      ],
+      "timeout": 30
+    },
+    {
+      "name": "rocshmem-info",
+      "command": [
+        "{prefix}/bin/rocshmem_info"
+      ],
+      "installed_requires": [
+        "{prefix}/bin/rocshmem_info"
+      ],
+      "timeout": 60
+    }
+  ]
+}

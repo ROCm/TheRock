@@ -1,0 +1,31 @@
+diff --git a/projects/rdc/tests/unit/test_diag_kernels.cc b/projects/rdc/tests/unit/test_diag_kernels.cc
+index bc884b59..74382097 100644
+--- a/projects/rdc/tests/unit/test_diag_kernels.cc
++++ b/projects/rdc/tests/unit/test_diag_kernels.cc
+@@ -31,12 +31,13 @@ THE SOFTWARE.
+ //
+ // These are pure-logic checks: they read the committed kernel assets directly,
+ // so they need no GPU, no amdsmi and no rdc libraries and run anywhere. If the
+-// kernel source tree is not reachable (for example a packaged test run) the
+-// checks skip instead of failing.
++// kernel source tree is not reachable, set RDC_KERNELS_HSACO_DIR to the
++// installed lib/rdc/hsaco directory. Without either path, the checks skip.
+ 
+ #include <gtest/gtest.h>
+ #include <sys/stat.h>
+ 
++#include <cstdlib>
+ #include <fstream>
+ #include <iterator>
+ #include <string>
+@@ -69,7 +70,9 @@ const char* const kDiagKernels[] = {
+ // Assert every diagnostic kernel for gfx_name exists and is an AMDGPU code
+ // object built for that exact ISA.
+ void ExpectKernelsForTarget(const std::string& gfx_name) {
+-  const std::string base = RDC_KERNELS_HSACO_DIR;
++  // Packaged tests can validate the installed assets without the source tree.
++  const char* override_dir = std::getenv("RDC_KERNELS_HSACO_DIR");
++  const std::string base = override_dir ? override_dir : RDC_KERNELS_HSACO_DIR;
+   if (!DirExists(base)) {
+     GTEST_SKIP() << "kernel source tree not available at '" << base << "'";
+   }

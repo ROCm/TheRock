@@ -1,0 +1,200 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: DASan non-math components using successful CI artifacts
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    name: Build non-math components (reuse DASan 40443090683)
+    runs-on: aws-linux-scale-rocm-prod
+    timeout-minutes: 360
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb
+    defaults:
+      run:
+        shell: bash
+    env:
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: "*"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Confirm baseline CI succeeded
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          request = urllib.request.Request(
+              "https://api.github.com/repos/ROCm/TheRock/actions/runs/40443090683",
+              headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"]})
+          with urllib.request.urlopen(request) as response:
+              run = json.load(response)
+          assert run["status"] == "completed" and run["conclusion"] == "success", run["conclusion"]
+          assert run["head_sha"] == "91f84d411a32b0071c360360de9ac99897aae997"
+          PY
+
+      - name: Download successful compiler and runtime installation
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dasan-installation-gfx942-gfx950
+          run-id: 40443090683
+          github-token: ${{ github.token }}
+          path: baseline-ci
+
+      - name: Prepare pinned sources and import immutable baseline
+        run: |
+          python -m pip install -r requirements.txt
+          python build_tools/dasan_components.py --phase prepare \
+            --archive baseline-ci/therock-dasan-gfx942-gfx950.tar.xz
+
+      - name: Configure non-math components for gfx942 and gfx950
+        run: python build_tools/dasan_components.py --phase configure
+
+      - name: Build remaining common compiler-runtime components
+        run: python build_tools/dasan_components.py --phase compiler-runtime
+      - name: Build emulation
+        run: python build_tools/dasan_components.py --phase emulation
+      - name: Build runtime tests
+        run: python build_tools/dasan_components.py --phase runtime-tests
+      - name: Build computer vision libraries
+        run: python build_tools/dasan_components.py --phase cv-libs
+      - name: Build storage libraries
+        run: python build_tools/dasan_components.py --phase storage-libs
+      - name: Build debug tools
+        run: python build_tools/dasan_components.py --phase debug-tools
+      - name: Build data-center tools
+        run: python build_tools/dasan_components.py --phase dctools-core
+      - name: Build media libraries
+        run: python build_tools/dasan_components.py --phase media-libs
+      - name: Build communications libraries
+        run: python build_tools/dasan_components.py --phase comm-libs
+      - name: Build profiler applications
+        run: python build_tools/dasan_components.py --phase profiler-apps
+      - name: Build standalone hipDNN and merge distribution
+        run: |
+          python build_tools/dasan_components.py --phase hipdnn
+          python build_tools/dasan_components.py --phase finish
+          python build_tools/dasan_components.py --phase verify
+
+      - name: Run packaging and emulation CPU tests
+        env:
+          CMAKE_BUILD_PARALLEL_LEVEL: "48"
+        run: |
+          ctest --test-dir components-output/build --output-on-failure -j 4 \
+            --output-junit "$PWD/components-output/packaging-tests.xml"
+          cmake --build components-output/build --parallel 2 \
+            --target build-test-rocjitsu build-test-mirage
+
+      - name: Package expanded installation
+        run: |
+          XZ_OPT='-T8 -3' tar -cJf components-output/therock-dasan-nonmath-gfx942-gfx950.tar.xz \
+            -C components-output/build/dist rocm
+          sha256sum components-output/therock-dasan-nonmath-gfx942-gfx950.tar.xz \
+            > components-output/installation.sha256
+
+      - name: Upload expanded installation
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dasan-nonmath-installation-gfx942-gfx950
+          path: |
+            components-output/therock-dasan-nonmath-gfx942-gfx950.tar.xz
+            components-output/installation.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload build provenance and CPU test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dasan-nonmath-build-records
+          path: |
+            components-output/*.json
+            components-output/*.log
+            components-output/*.xml
+            components-output/build/logs/
+            components-output/build/emulation/*/build/Testing/Temporary/*.log
+          retention-days: 14
+
+  test:
+    name: Non-math tests (${{ matrix.group }}, gfx950)
+    needs: build
+    runs-on: linux-gfx950-8gpu-ccs-ossci-rocm
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        group: [runtime, communications, libraries, profiler-sdk, profiler-systems, profiler-compute]
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98
+      options: >-
+        --user 0:0
+        --ulimit memlock=-1:-1
+        --ulimit nofile=1048576:1048576
+        --ipc=host
+        --security-opt seccomp=unconfined
+        --group-add video
+        --device /dev/kfd
+        --device /dev/dri
+        --group-add 993
+        --group-add 992
+        --group-add 110
+        --env-file /etc/podinfo/gha-gpu-isolation-settings
+        -e ROCR_VISIBLE_DEVICES
+        -e KUBE_CPU_REQUEST
+    defaults:
+      run:
+        shell: bash
+    env:
+      TEST_GROUP: ${{ matrix.group }}
+      OMPI_ALLOW_RUN_AS_ROOT: "1"
+      OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download expanded installation
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dasan-nonmath-installation-gfx942-gfx950
+          path: components-output
+      - name: Download successful baseline DASan test bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dasan-build-logs-and-tests
+          run-id: 40443090683
+          github-token: ${{ github.token }}
+          path: baseline-tests
+      - name: Verify and extract installation
+        run: |
+          sha256sum --check components-output/installation.sha256
+          mkdir components-install
+          tar -xJf components-output/therock-dasan-nonmath-gfx942-gfx950.tar.xz -C components-install
+      - name: Prepare isolated Python test environment
+        run: |
+          python3 -m venv .components-venv
+          .components-venv/bin/python -m pip install -r requirements-test.txt cmake ninja
+      - name: Run installed component tests
+        run: |
+          .components-venv/bin/python test_tools/dasan_components/ci.py \
+            --group "$TEST_GROUP" --prefix components-install/rocm \
+            --bundle baseline-tests/dasan-lit-bundle --output "test-results/$TEST_GROUP"
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dasan-nonmath-tests-${{ matrix.group }}-gfx950
+          path: test-results/
+          retention-days: 14

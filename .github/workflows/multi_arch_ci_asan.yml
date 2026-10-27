@@ -16,6 +16,10 @@ on:
   #     - main
   workflow_dispatch:
     inputs:
+      enable_dasan_components:
+        type: boolean
+        description: "Build non-math components using the successful DASan artifacts from run 40443090683, then test on gfx950"
+        default: false
       enable_dasan:
         type: boolean
         description: "Run the experimental DASan compiler/runtime build and lit tests for gfx942 and gfx950"
@@ -73,12 +77,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  dasan_components:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.enable_dasan_components }}
+    uses: ./.github/workflows/multi_arch_ci_dasan_components.yml
+
   dasan:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.enable_dasan }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.enable_dasan && !inputs.enable_dasan_components }}
     uses: ./.github/workflows/multi_arch_ci_dasan.yml
 
   setup:
-    if: ${{ !inputs.enable_dasan }}
+    if: ${{ !inputs.enable_dasan && !inputs.enable_dasan_components }}
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "asan"
@@ -112,7 +120,7 @@ jobs:
 
   ci_asan_summary:
     name: CI ASAN Summary
-    if: ${{ always() && !inputs.enable_dasan }}
+    if: ${{ always() && !inputs.enable_dasan && !inputs.enable_dasan_components }}
     needs:
       - setup
       - linux_build_and_test

@@ -100,6 +100,18 @@ if(THEROCK_ENABLE_MIRAGE)
   # binary. Building the dashboard SPA requires Node.js 20.19+ and npm on PATH.
   ##############################################################################
 
+  set(_mirage_build_deps)
+  set(_mirage_test_command "${CMAKE_CTEST_COMMAND}" --output-on-failure --no-tests=error)
+  if(THEROCK_ENABLE_ROCJITSU)
+    list(APPEND _mirage_build_deps rocjitsu)
+    # Mirage's source-tree discovery does not know TheRock's separate build
+    # layout. Point its end-to-end tests at the runtime built by this checkout.
+    set(_mirage_test_command "${CMAKE_COMMAND}" -E env
+      "ROCJITSU_LIB=${CMAKE_CURRENT_BINARY_DIR}/rocjitsu/dist/lib/librocjitsu.so"
+      ${_mirage_test_command}
+    )
+  endif()
+
   therock_cmake_subproject_declare(mirage
     DISABLE_AMDGPU_TARGETS
     NO_MERGE_COMPILE_COMMANDS
@@ -107,12 +119,14 @@ if(THEROCK_ENABLE_MIRAGE)
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/mirage"
     CMAKE_ARGS
       -DMIRAGE_CARGO_PROFILE=release
+    BUILD_DEPS
+      ${_mirage_build_deps}
   )
 
   therock_cmake_subproject_activate(mirage)
 
   therock_cmake_subproject_build_test(mirage
-    COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure --no-tests=error
+    COMMAND ${_mirage_test_command}
   )
 
   therock_provide_artifact(mirage
