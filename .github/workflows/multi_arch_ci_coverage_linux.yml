@@ -231,6 +231,41 @@ jobs:
       contents: read
       id-token: write
 
+
+  # ==========================================================================
+  # STAGE: comm-libs (generic, single job parallel to math-libs)
+  # RCCL and rocshmem are both TARGET_NEUTRAL artifacts. RCCL is built for
+  # Instinct/CDNA targets only (https://github.com/ROCm/TheRock/issues/2130).
+  # Running as a single generic job avoids redundant per-arch builds.
+  # ==========================================================================
+  build_instrumented_comm_libs:
+    needs: [setup_coverage_matrix, build_compiler_runtime]
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+      }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      stage_name: comm-libs
+      stage_display_name: "Stage - Coverage Comm Libs"
+      timeout_minutes: 240  # 4 hours
+      amdgpu_family: ""
+      dist_amdgpu_families: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
+      extra_cmake_options: ${{ needs.setup_coverage_matrix.outputs.coverage_cmake_options }}
+      rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
+      release_type: ci
+      artifact_run_id: ${{ needs.setup_coverage_matrix.outputs.artifact_run_id }}
+      external_repo_config: ${{ inputs.external_repo_config }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      # TheRock scripts for the instrumented build; cross-repo callers pass ROCm/TheRock + ref.
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+    permissions:
+      contents: read
+      id-token: write
+
+
   # A caller that builds the baseline in this same run (the rocm-libraries
   # nightly) can start this workflow alongside that build. The tests install
   # the baseline from S3, so hold them until that build's math-libs stage (which
