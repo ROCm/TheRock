@@ -41,7 +41,9 @@ from determine_rocm_test_dependencies import (  # noqa: E402
     _SUBTREE_ALIAS_OVERRIDES,
     _load_subtree_alias_map,
     _normalize_changed_project,
+    _to_ci_test_selectors,
     explain_component,
+    get_repo_subtrees,
     get_subprojects_to_test,
     list_subprojects,
     validate_policies,
@@ -107,9 +109,10 @@ def _write_fixture(
 ):
     """Populate ``root/test_tools/`` with a graph, policy, and subtree map.
 
-    The subtree map (subtree path -> graph key(s)) is always written so subtree
-    resolution reads it from ``--therock-dir`` rather than the committed copy;
-    it defaults to empty, in which case only _SUBTREE_ALIAS_OVERRIDES applies.
+    The subtree map (repo -> subtree path -> graph key(s)) is always written so
+    subtree resolution reads it from ``--therock-dir`` rather than the committed
+    copy; it defaults to empty, in which case only _SUBTREE_ALIAS_OVERRIDES
+    applies.
     """
     test_tools = root / "test_tools"
     test_tools.mkdir(parents=True, exist_ok=True)
@@ -384,7 +387,9 @@ class TestCliInputParsing(_FixtureTestCase):
         # shared/rocroller is derived by the parser from EXTERNAL_SOURCE_DIR, so
         # it lives in the generated subtree map rather than the overrides; the
         # fixture supplies it to keep resolution hermetic.
-        root = _make_fixture(subtree_map={"shared/rocroller": ["rocroller"]})
+        root = _make_fixture(
+            subtree_map={"rocm-libraries": {"shared/rocroller": ["rocroller"]}}
+        )
         try:
             proc = subprocess.run(
                 [
@@ -478,10 +483,12 @@ class TestCliInputParsing(_FixtureTestCase):
             "miopenprovider": {"consumers": []},
         }
         subtree_map = {
-            "dnn-providers/hipblaslt-provider": ["hipblasltprovider"],
-            "dnn-providers/hip-kernel-provider": ["hipkernelprovider"],
-            "dnn-providers/miopen-provider": ["miopenprovider"],
-            "dnn-providers/integration-tests": ["hipdnn_integration_tests"],
+            "rocm-libraries": {
+                "dnn-providers/hipblaslt-provider": ["hipblasltprovider"],
+                "dnn-providers/hip-kernel-provider": ["hipkernelprovider"],
+                "dnn-providers/miopen-provider": ["miopenprovider"],
+                "dnn-providers/integration-tests": ["hipdnn_integration_tests"],
+            }
         }
         root = _make_fixture(graph=graph, policies="", subtree_map=subtree_map)
         try:
@@ -581,7 +588,9 @@ class TestCliInputParsing(_FixtureTestCase):
         root = _make_fixture(
             graph=graph,
             policies="",
-            subtree_map={"projects/composablekernel": ["composable_kernel"]},
+            subtree_map={
+                "rocm-libraries": {"projects/composablekernel": ["composable_kernel"]}
+            },
         )
         try:
             proc = subprocess.run(
@@ -619,11 +628,13 @@ class TestCliInputParsing(_FixtureTestCase):
         # Parser-derived subtree paths (the override-only paths such as
         # projects/hip resolve through _SUBTREE_ALIAS_OVERRIDES and are omitted).
         subtree_map = {
-            "emulation/mirage": ["mirage"],
-            "emulation/rocjitsu": ["rocjitsu"],
-            "projects/clr": ["hip-clr", "ocl-clr"],
-            "projects/rocm-smi-lib": ["rocm_smi_lib"],
-            "shared/kpack": ["rocm-kpack"],
+            "rocm-systems": {
+                "emulation/mirage": ["mirage"],
+                "emulation/rocjitsu": ["rocjitsu"],
+                "projects/clr": ["hip-clr", "ocl-clr"],
+                "projects/rocm-smi-lib": ["rocm_smi_lib"],
+                "shared/kpack": ["rocm-kpack"],
+            }
         }
         root = _make_fixture(graph=graph, policies="", subtree_map=subtree_map)
         try:
@@ -1338,16 +1349,32 @@ class TestGeneratedSubtreeMapResolution(unittest.TestCase):
                 set(_normalize_changed_project(key, alias_map)), expected, key
             )
 
+    @staticmethod
+    def _generated_lower() -> dict[str, dict[str, set[str]]]:
+        generated = json.loads(
+            (THEROCK_DIR / "test_tools" / "therock_subtree_map.json").read_text()
+        )
+        return {
+            repo: {k.lower(): set(v) for k, v in subtrees.items()}
+            for repo, subtrees in generated.items()
+        }
+
+    @staticmethod
+    def _flat_overrides() -> dict[str, tuple[str, list[str]]]:
+        """Override key -> (owning repo, values)."""
+        return {
+            key: (repo, values)
+            for repo, overrides in _SUBTREE_ALIAS_OVERRIDES.items()
+            for key, values in overrides.items()
+        }
+
     def test_overrides_not_in_generated_map(self) -> None:
         # Each override must be genuinely non-derivable: the generated map either
         # lacks the key or maps it to a value that does not cover the override.
         # Guards against an override hiding a value the parser already derives.
-        generated = json.loads(
-            (THEROCK_DIR / "test_tools" / "therock_subtree_map.json").read_text()
-        )
-        generated_lower = {k.lower(): set(v) for k, v in generated.items()}
-        for key, values in _SUBTREE_ALIAS_OVERRIDES.items():
-            gen = generated_lower.get(key.lower())
+        generated_lower = self._generated_lower()
+        for key, (repo, values) in self._flat_overrides().items():
+            gen = generated_lower.get(repo, {}).get(key.lower())
             self.assertFalse(
                 gen is not None and set(values) <= gen,
                 f"{key} is derivable from the generated subtree_map ({gen}); "
@@ -1366,14 +1393,11 @@ class TestGeneratedSubtreeMapResolution(unittest.TestCase):
         # override must cover the generated value (no dropped edge), unless it is
         # an acknowledged narrowing. Fails if a future parser edge on an
         # overridden subtree would be shadowed.
-        generated = json.loads(
-            (THEROCK_DIR / "test_tools" / "therock_subtree_map.json").read_text()
-        )
-        generated_lower = {k.lower(): set(v) for k, v in generated.items()}
-        for key, values in _SUBTREE_ALIAS_OVERRIDES.items():
+        generated_lower = self._generated_lower()
+        for key, (repo, values) in self._flat_overrides().items():
             if key in self._NARROWING_OVERRIDES:
                 continue
-            gen = generated_lower.get(key.lower())
+            gen = generated_lower.get(repo, {}).get(key.lower())
             if gen is None:
                 continue
             self.assertTrue(
@@ -1384,14 +1408,28 @@ class TestGeneratedSubtreeMapResolution(unittest.TestCase):
 
     def test_merged_map_prefers_overrides(self) -> None:
         merged = _load_subtree_alias_map()
-        for key, values in _SUBTREE_ALIAS_OVERRIDES.items():
+        for key, (_, values) in self._flat_overrides().items():
             self.assertEqual(merged[key.lower()], list(values), key)
+
+    def test_override_filed_under_wrong_repo_is_rejected(self) -> None:
+        # An override for a subtree the parser files under the other repo would
+        # make the flat lookup ambiguous, so loading must fail loudly.
+        root = _make_fixture(
+            subtree_map={"rocm-libraries": {"projects/hip": ["hip-clr"]}}
+        )
+        try:
+            with self.assertRaisesRegex(ValueError, "projects/hip"):
+                _load_subtree_alias_map(root)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
 
     def test_therock_dir_governs_subtree_resolution(self) -> None:
         # projects/clr has no override, so the generated map under --therock-dir
         # decides its resolution: a fixture-only value proves the committed map is
         # not consulted when therock_dir is passed.
-        root = _make_fixture(subtree_map={"projects/clr": ["fixture-only-key"]})
+        root = _make_fixture(
+            subtree_map={"rocm-systems": {"projects/clr": ["fixture-only-key"]}}
+        )
         try:
             self.assertEqual(
                 _normalize_changed_project(
@@ -1401,6 +1439,42 @@ class TestGeneratedSubtreeMapResolution(unittest.TestCase):
             )
         finally:
             shutil.rmtree(root, ignore_errors=True)
+
+
+class TestRepoSubtrees(unittest.TestCase):
+    """get_repo_subtrees() lists everything one repo owns, for repo-scoped runs."""
+
+    def test_includes_generated_and_override_subtrees(self) -> None:
+        libraries = get_repo_subtrees("rocm-libraries")
+        self.assertIn("projects/rocblas", libraries)  # generated
+        self.assertIn("projects/hipblaslt/tensilelite", libraries)  # override only
+        self.assertIn("shared/tensile", libraries)  # override only
+        self.assertNotIn("projects/clr", libraries)
+        self.assertEqual(libraries, sorted(libraries))
+
+        systems = get_repo_subtrees("rocm-systems")
+        self.assertIn("projects/clr", systems)  # generated
+        self.assertIn("projects/hip", systems)  # override only
+        self.assertNotIn("projects/rocblas", systems)
+
+    def test_unknown_repo_is_empty(self) -> None:
+        self.assertEqual(get_repo_subtrees("not-a-repo"), [])
+
+    def test_repo_scope_selects_own_tests_not_other_repos(self) -> None:
+        # End to end: scoping a run to rocm-libraries selects its library jobs
+        # (including the override-only TensileLite suites) and none of the
+        # rocm-systems jobs it cannot affect.
+        alias_map = _load_subtree_alias_map()
+        changed = [
+            key
+            for subtree in get_repo_subtrees("rocm-libraries")
+            for key in _normalize_changed_project(subtree, alias_map)
+        ]
+        selected = _to_ci_test_selectors(get_subprojects_to_test(changed))
+        for expected in ("rocblas", "hipblaslt", "tensilelite-common", "miopen"):
+            self.assertIn(expected, selected)
+        for unexpected in ("hip-tests", "rocrtst", "rccl", "amdsmi", "rocgdb-gpu"):
+            self.assertNotIn(unexpected, selected)
 
 
 if __name__ == "__main__":

@@ -9,7 +9,8 @@ three committed files:
 
 * ``test_tools/therock_consumer_graph.json`` — the reverse-dependency consumer graph.
 * ``test_tools/therock_subtree_map.json`` — each external source subtree mapped to the
-  graph key(s) built from it.
+  graph key(s) built from it, grouped by the repo (rocm-libraries / rocm-systems)
+  that owns the subtree.
 * ``test_tools/therock_source_dir_map.json`` — each artifact mapped to the source
   subtree(s) its therock_provide_artifact() SUBPROJECT_DEPS build from. No code reads
   this file yet; it is committed so its parser-derived artifact→subtree mapping can be
@@ -82,6 +83,15 @@ def _map_delta(generated: dict, committed: dict, noun: str) -> list[str]:
     return lines
 
 
+def _flatten_subtree_map(subtree_map: dict) -> dict[str, list[str]]:
+    """``{repo: {subtree: keys}}`` -> ``{"repo/subtree": keys}`` for diffing."""
+    return {
+        f"{repo}/{subtree}": keys
+        for repo, subtrees in subtree_map.items()
+        for subtree, keys in subtrees.items()
+    }
+
+
 def _read_committed_map(path: Path) -> dict:
     """Committed JSON map, or empty if missing so --check reports full drift."""
     if not path.exists():
@@ -127,7 +137,11 @@ def main(argv: list[str] | None = None) -> int:
             differs = True
 
         committed_subtree = _read_committed_map(SUBTREE_MAP_PATH)
-        subtree_delta = _map_delta(subtree_map, committed_subtree, "subtree")
+        subtree_delta = _map_delta(
+            _flatten_subtree_map(subtree_map),
+            _flatten_subtree_map(committed_subtree),
+            "subtree",
+        )
         if subtree_delta:
             print(
                 "Generated subtree map differs from "
@@ -159,8 +173,9 @@ def main(argv: list[str] | None = None) -> int:
     _write_json(SOURCE_DIR_MAP_PATH, source_dir_map)
     print(
         f"Wrote consumer graph ({len(graph)} subprojects), subtree map "
-        f"({len(subtree_map)} subtrees), and source-dir map ({len(source_dir_map)} "
-        f"artifacts) to {CONSUMER_GRAPH_PATH.parent.relative_to(THEROCK_DIR).as_posix()}/"
+        f"({len(_flatten_subtree_map(subtree_map))} subtrees), and source-dir map "
+        f"({len(source_dir_map)} artifacts) to "
+        f"{CONSUMER_GRAPH_PATH.parent.relative_to(THEROCK_DIR).as_posix()}/"
     )
     return 0
 
