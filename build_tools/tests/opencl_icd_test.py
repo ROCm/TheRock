@@ -87,6 +87,11 @@ class EnsureOpenCLLibrarySymlinksTest(unittest.TestCase):
         root = Path(tempfile.mkdtemp())
         self.ensure(root)  # must not raise
 
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "Win32 strips trailing dots from filenames, so the stray entry cannot be "
+        "created distinctly from the real unversioned name.",
+    )
     def test_ignores_stray_trailing_dot_entry(self):
         # Some builds stage a stray "libamdocl64.so." alongside the real files;
         # it must not be mistaken for a versioned library.
