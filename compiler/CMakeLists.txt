@@ -47,11 +47,17 @@ if(THEROCK_ENABLE_COMPILER)
   ##############################################################################
 
   set(_extra_llvm_cmake_args)
+  set(_llvm_include_tests ${THEROCK_ENABLE_LLVM_TESTS})
+  set(_llvm_build_jitlink ${THEROCK_ENABLE_LLVM_TESTS})
   if(THEROCK_ENABLE_DASAN)
+    set(_llvm_include_tests ${THEROCK_BUILD_LLVM_TESTS})
+    set(_llvm_build_jitlink OFF)
+    if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS)
+      set(_llvm_build_jitlink ON)
+    endif()
     list(APPEND _extra_llvm_cmake_args
       -DTHEROCK_BUILD_LLVM_TESTS=${THEROCK_BUILD_LLVM_TESTS}
       -DTHEROCK_BUILD_LLVM_TOOLS=${THEROCK_BUILD_LLVM_TOOLS}
-      -DLLVM_INCLUDE_TESTS=${THEROCK_BUILD_LLVM_TESTS}
     )
   endif()
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -123,7 +129,7 @@ if(THEROCK_ENABLE_COMPILER)
 
       # Features
       -DTHEROCK_ENABLE_DASAN=${THEROCK_ENABLE_DASAN}
-      -DLLVM_INCLUDE_TESTS=${THEROCK_ENABLE_LLVM_TESTS}
+      -DLLVM_INCLUDE_TESTS=${_llvm_include_tests}
       -DTHEROCK_BUILD_COMGR_TESTS=${THEROCK_BUILD_COMGR_TESTS}
       -DUSE_NEW_HOSTCALL_IMPL=${THEROCK_USE_NEW_HOSTCALL_IMPL}
       -DLLVM_ENABLE_ZLIB=FORCE_ON
@@ -137,9 +143,9 @@ if(THEROCK_ENABLE_COMPILER)
       -DLLVM_BUILD_LLVM_C_DYLIB=OFF
 
       # Build optimizations
-      -DLLVM_BUILD_EXAMPLES=${THEROCK_ENABLE_LLVM_TESTS}
-      -DLLVM_INCLUDE_EXAMPLES=${THEROCK_ENABLE_LLVM_TESTS}
-      -DLLVM_TOOL_LLVM_JITLINK_BUILD=${THEROCK_ENABLE_LLVM_TESTS}
+      -DLLVM_BUILD_EXAMPLES=${_llvm_include_tests}
+      -DLLVM_INCLUDE_EXAMPLES=${_llvm_include_tests}
+      -DLLVM_TOOL_LLVM_JITLINK_BUILD=${_llvm_build_jitlink}
 
       # Coverage tools (needed for code coverage builds)
       -DLLVM_TOOL_LLVM_COV_BUILD=ON
