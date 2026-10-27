@@ -11,12 +11,14 @@ import sys
 from pathlib import Path
 
 
-def _get_rpath(filepath: Path):
+def _get_rpath(filepath: Path, runpath_only: bool = False):
     """Read DT_RPATH or DT_RUNPATH from an ELF binary via readelf.
 
     patchelf --print-rpath only reads DT_RPATH, not DT_RUNPATH, so using it
     directly on a binary that has only DT_RUNPATH returns an empty string and
     would cause --set-rpath to wipe the rpath. readelf reads both tags.
+
+    If runpath_only is True, return the value only when the tag is DT_RUNPATH.
     """
     try:
         out = subprocess.check_output(
@@ -25,7 +27,12 @@ def _get_rpath(filepath: Path):
         ).decode()
     except subprocess.CalledProcessError:
         return None
-    m = re.search(r"\(R(?:UN)?PATH\)\s+Library r(?:un)?path: \[(.+)\]", out)
+    pattern = (
+        r"\(RUNPATH\)\s+Library runpath: \[(.+)\]"
+        if runpath_only
+        else r"\(R(?:UN)?PATH\)\s+Library r(?:un)?path: \[(.+)\]"
+    )
+    m = re.search(pattern, out)
     return m.group(1) if m else None
 
 
@@ -37,19 +44,23 @@ def update_rpath(search_path: Path, excludes):
     rpath value because patchelf --print-rpath only reads DT_RPATH, not
     DT_RUNPATH, and would return empty for binaries that only have DT_RUNPATH.
     """
-    for path, dirs, files in os.walk(search_path, topdown=True, followlinks=True):
+    # Do not follow directory symlinks: avoids walking trees twice or leaving search_path
+    for path, dirs, files in os.walk(search_path, topdown=True, followlinks=False):
         dirs[:] = [d for d in dirs if d not in excludes]
         for filename in files:
             filepath = Path(path) / filename
             if filepath.is_symlink():
                 continue
-            # Quick ELF magic check before invoking readelf/patchelf
+            # Quick ELF magic check before invoking readelf/patchelf;
+            # read only the 4-byte header, not the whole file
             try:
-                if filepath.read_bytes()[:4] != b"\x7fELF":
-                    continue
+                with filepath.open("rb") as f:
+                    if f.read(4) != b"\x7fELF":
+                        continue
             except OSError:
                 continue
-            rpath = _get_rpath(filepath)
+            # Only DT_RUNPATH needs converting; DT_RPATH binaries are already done
+            rpath = _get_rpath(filepath, runpath_only=True)
             if not rpath:
                 continue
             # Write the rpath back, forcing DT_RPATH tag instead of DT_RUNPATH
