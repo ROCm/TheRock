@@ -19,7 +19,12 @@ matching `.github/workflows/multi_arch_build_portable_linux_artifacts.yml`.
 ## Build and resume
 
 Use a dedicated Linux checkout containing the DASan enablement changes. Source
-preparation updates its four gitlink pins and its local rocm-systems submodule
+files for the top-level enablement must be committed before launching, including
+new CMake hooks and scripts: the manifest's diff fingerprint only covers tracked
+files. Commit the experimental gitlink pins after preparation as well when
+preserving a complete reproducible checkout.
+
+Source preparation updates its four gitlink pins and its local rocm-systems submodule
 URL, fetches only the `compiler-runtime` source set, and applies TheRock's
 normal compatibility patches. It refuses already initialized experimental
 submodules because `fetch_sources.py` resets their contents.
@@ -55,6 +60,11 @@ the top-level commit and tracked diff fingerprint, and the container digest.
 `status.json` distinguishes preparation, completed build, and failure; build
 completion does not imply runtime test success.
 
+The launcher enables LLVM/compiler-rt tests explicitly while disabling
+`THEROCK_BUILD_TESTING` and `THEROCK_BUILD_COMGR_TESTS`. The selected artifact
+features exclude HIP's general test suite, ROCr runtime tests, KFD tests, and
+OpenCL. This keeps the validation scope focused on the experimental compiler.
+
 Artifacts are under `build/artifacts/`. The merged installation is
 `build/dist/rocm/`, including `lib/llvm/bin/clang`, the Clang resource directory,
 `libamdhip64`, and `libhsa-runtime64`. Compiler-rt host and AMDGPU sanitizer
@@ -67,15 +77,42 @@ At this pinned compiler revision, the sanitizer's command-line spelling is
 must be tested and reported separately. Do not interpret accepting a spelling
 as evidence that host/device instrumentation or runtime linking works.
 
-The compiler uses the canonical runtime target `amdgcn-amd-amdhsa` internally.
-The original recipe's `amdgpu-amd-amdhsa` spelling differs. TheRock's option
-integrates compiler-rt into its existing host and AMDGPU runtime configuration.
+The pinned compiler uses the canonical runtime target `amdgpu-amd-amdhsa`, as
+in the LLVM team's recipe. Its older `amdgcn-amd-amdhsa` spelling remains a
+legacy alias. TheRock's option integrates compiler-rt into its existing host
+and AMDGPU runtime configuration with the canonical spelling.
 
 The build host may have no AMD GPU, `/dev/kfd`, or `/dev/dri`. It can produce
 gfx942 and gfx950 binaries and run compiler checks, but DASan execution tests
 require a GPU machine with a compatible driver. The Docker build does not
 request GPU devices. Record compile, link, artifact, and GPU runtime checks
 separately; do not report skipped or unsupported tests as passed.
+
+After the build, run the focused validator inside the same container, with
+the source and output directories mounted at the build-time locations. Set
+`BUILD` to the build directory and `HOST_DASAN_SUITE` to the configured host
+compiler-rt `test/dasan` directory. Locate its `lit.site.cfg.py` if necessary:
+
+```bash
+BUILD=/therock/output/build
+find "$BUILD/compiler/amd-llvm/build" -path '*/test/dasan/lit.site.cfg.py'
+# Select the host runtime's test/dasan directory from the results above.
+HOST_DASAN_SUITE=/path/to/host/compiler-rt/test/dasan
+python /therock/src/test_tools/dasan_smoke.py \
+  --rocm-path "$BUILD/dist/rocm" \
+  --llvm-lit "$BUILD/compiler/amd-llvm/build/bin/llvm-lit" \
+  --lit-suite "$HOST_DASAN_SUITE" \
+  --output-dir /therock/output/validation
+```
+
+The validator audits installed sanitizer resources, checks driver spellings,
+requires instrumented IR and successful links for both gfx942 and gfx950, and
+requires all three host lit tests to pass. It writes `summary.json`, detailed
+logs, and lit JSON reports to the validation directory. GPU tests are explicitly
+reported as unrun by default. On a GPU machine, pass `--gpu-arch gfx942` or
+`--gpu-arch gfx950` to require the 21 HIP tests; only the multi-device test may
+be unsupported unless `--require-multi-device` is also passed. The three OpenMP
+tests are outside this validator's scope and require separate validation.
 
 The LLVM team's initial observation was approximately 28 lit tests; the pinned
 source contains 27 (3 host, 21 HIP, and 3 OpenMP). They reported three

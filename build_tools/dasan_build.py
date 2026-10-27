@@ -186,6 +186,8 @@ def build(args: argparse.Namespace, extra: list[str]) -> None:
                 "-DCMAKE_BUILD_TYPE=Release",
                 "-DTHEROCK_BUNDLE_SYSDEPS=ON",
                 "-DTHEROCK_ENABLE_DASAN=ON",
+                "-DTHEROCK_BUILD_TESTING=OFF",
+                "-DTHEROCK_BUILD_COMGR_TESTS=OFF",
                 "-DTHEROCK_BUILD_LLVM_TESTS=ON",
                 "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
                 "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
