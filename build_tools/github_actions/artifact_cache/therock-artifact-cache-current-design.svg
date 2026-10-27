@@ -1,0 +1,181 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420mm" height="297mm" viewBox="0 0 2100 1485" role="img" aria-labelledby="title description">
+<title id="title">TheRock artifact cache — current design at f7cd03db8</title>
+<desc id="description">A one-page design of the implemented local artifact bundle cache. CMake generates fingerprints, Python forms ArtifactKey objects, SQLite supplies metadata candidates, and stored files are verified. A cacheable miss invokes the default incremental build. Copies are saved and validated before complete ready entries are committed. Configured dependency reporting explains impact without selecting build targets. Repository-wide commit invalidation remains deferred.</desc>
+<defs>
+ <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9 z" fill="#647C96"/></marker>
+ <marker id="green-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9 z" fill="#007F75"/></marker>
+ <marker id="amber-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9 z" fill="#9B6318"/></marker>
+</defs>
+<rect width="2100" height="1485" fill="#F4F7FA"/>
+
+<rect x="0" y="0" width="2100" height="10" fill="#007F75"/>
+<text x="55" y="71" font-family="DejaVu Sans, sans-serif" font-size="47" font-weight="700" fill="#172A42" text-anchor="start">TheRock artifact cache</text>
+<text x="55" y="112" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#52657A" text-anchor="start">Current design  /  local bundle publication and verified cache lookup</text>
+<rect x="1560" y="36" width="485" height="55" rx="10" fill="#172A42" stroke="#172A42" stroke-width="1.5"/>
+<text x="1802.5" y="70" font-family="DejaVu Sans, sans-serif" font-size="22" font-weight="700" fill="white" text-anchor="middle">f7cd03db8  ·  pushed checkpoint</text>
+<text x="2045" y="120" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#52657A" text-anchor="end">266 unit tests passed  •  SQLite schema 6</text>
+<text x="55" y="152" font-family="DejaVu Sans, sans-serif" font-size="21" font-weight="700" fill="#315FA4" text-anchor="start">ArtifactKey (bundle mode) = epoch + artifact/target identity + raw .fprint + exact component set</text>
+<text x="55" y="181" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#52657A" text-anchor="start">MANAGED CACHE FLOW  ·  local_cache.py cache</text>
+<text x="1400" y="181" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#52657A" text-anchor="start">PLANNING, STORAGE &amp; SCOPE</text>
+<path d="M 455 302 L 500 302" fill="none" stroke="#647C96" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arrow)"/>
+<path d="M 900 302 L 945 302" fill="none" stroke="#647C96" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arrow)"/>
+<path d="M 1145 415 L 1145 465" fill="none" stroke="#647C96" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arrow)"/>
+<path d="M 560 415 L 560 440 L 255 440 L 255 465" fill="none" stroke="#9B6318" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#amber-arrow)"/>
+<path d="M 945 570 L 900 570" fill="none" stroke="#007F75" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#green-arrow)"/>
+<path d="M 1145 675 L 1145 706 L 255 706 L 255 747" fill="none" stroke="#9B6318" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#amber-arrow)"/>
+<path d="M 455 852 L 500 852" fill="none" stroke="#647C96" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arrow)"/>
+<path d="M 900 852 L 945 852" fill="none" stroke="#647C96" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arrow)"/>
+<rect x="1066.0234375" y="429" width="157.953125" height="26" rx="5" fill="#F4F7FA"/>
+<text x="1145" y="446" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#52657A" text-anchor="middle">candidate / miss</text>
+<rect x="342.5546875" y="425" width="128.890625" height="25" rx="5" fill="#F4F7FA"/>
+<text x="407" y="441" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#9B6318" text-anchor="middle">no usable key</text>
+<rect x="486.8515625" y="688" width="438.296875" height="27" rx="5" fill="#F4F7FA"/>
+<text x="706" y="706" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#9B6318" text-anchor="middle">No candidate, or all candidates fail verification</text>
+<rect x="55" y="205" width="400" height="210" rx="15" fill="white" stroke="#C8D3DF" stroke-width="1.5"/>
+<circle cx="88" cy="239" r="17" fill="#315FA4"/>
+<text x="88" y="246" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="white" text-anchor="middle">1</text>
+<text x="115" y="248" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="700" fill="#172A42" text-anchor="start">Refresh fingerprints</text>
+<text x="78" y="280" font-family="DejaVu Sans, sans-serif" font-size="15" font-weight="400" fill="#52657A" text-anchor="start">local_cache.py • prepared_scan()</text>
+<text x="78" y="303" font-family="DejaVu Sans, sans-serif" font-size="15" font-weight="400" fill="#52657A" text-anchor="start">cmake/therock_{subproject,artifacts}.cmake</text>
+<text x="78" y="334" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">Source identity + configuration +</text>
+<text x="78" y="360" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">dependency fingerprints produce</text>
+<text x="78" y="386" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">build/artifacts/*.fprint.</text>
+<rect x="500" y="205" width="400" height="210" rx="15" fill="white" stroke="#C8D3DF" stroke-width="1.5"/>
+<circle cx="533" cy="239" r="17" fill="#315FA4"/>
+<text x="533" y="246" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="white" text-anchor="middle">2</text>
+<text x="560" y="248" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="700" fill="#172A42" text-anchor="start">Form ArtifactKey</text>
+<text x="523" y="280" font-family="DejaVu Sans, sans-serif" font-size="15" font-weight="400" fill="#52657A" text-anchor="start">inventory.py • bundles.py • manifest.py</text>
+<text x="523" y="316" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">Use --expected, or Ninja exports plus</text>
+<text x="523" y="342" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">observed directories and sidecars.</text>
+<text x="523" y="368" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">Each bundle requires equal, valid</text>
+<text x="523" y="394" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">member fingerprints.</text>
+<rect x="945" y="205" width="400" height="210" rx="15" fill="white" stroke="#C8D3DF" stroke-width="1.5"/>
+<circle cx="978" cy="239" r="17" fill="#315FA4"/>
+<text x="978" y="246" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="white" text-anchor="middle">3</text>
+<text x="1005" y="248" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="700" fill="#172A42" text-anchor="start">Look up metadata</text>
+<text x="968" y="280" font-family="DejaVu Sans, sans-serif" font-size="15" font-weight="400" fill="#52657A" text-anchor="start">cache_db.py • lookup_batch()</text>
+<text x="968" y="316" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">Batched lookup returns candidates.</text>
+<text x="968" y="342" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">Read policy filters readiness, expiry,</text>
+<text x="968" y="368" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">trust and validation. Bytes are not</text>
+<text x="968" y="394" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">yet verified.</text>
+<rect x="55" y="465" width="400" height="210" rx="15" fill="#FFF6E7" stroke="#E3CAA1" stroke-width="1.5"/>
+<text x="78" y="507" font-family="DejaVu Sans, sans-serif" font-size="27" font-weight="700" fill="#9B6318" text-anchor="start">Cache skipped</text>
+<text x="78" y="540" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#9B6318" text-anchor="start">NO_FINGERPRINT / CACHE_SKIPPED</text>
+<text x="78" y="576" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">Missing, invalid or differing member</text>
+<text x="78" y="602" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">fingerprints prevent a key. Restore</text>
+<text x="78" y="628" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">and storage are skipped. This alone</text>
+<text x="78" y="654" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">does not trigger a build.</text>
+<rect x="500" y="465" width="400" height="210" rx="15" fill="#EAF7F1" stroke="#A8D8C7" stroke-width="1.5"/>
+<text x="523" y="507" font-family="DejaVu Sans, sans-serif" font-size="29" font-weight="700" fill="#007F75" text-anchor="start">REUSED</text>
+<text x="523" y="540" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#007F75" text-anchor="start">Verified cached bundle</text>
+<text x="523" y="575" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">Files verified in temporary storage;</text>
+<text x="523" y="601" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">not installed into this build.</text>
+<text x="523" y="627" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">No cacheable misses → no build</text>
+<text x="523" y="653" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">invocation.</text>
+<rect x="945" y="465" width="400" height="210" rx="15" fill="white" stroke="#C8D3DF" stroke-width="1.5"/>
+<circle cx="978" cy="499" r="17" fill="#315FA4"/>
+<text x="978" y="506" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="white" text-anchor="middle">4</text>
+<text x="1005" y="508" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="700" fill="#172A42" text-anchor="start">Verify cached files</text>
+<text x="968" y="540" font-family="DejaVu Sans, sans-serif" font-size="15" font-weight="400" fill="#52657A" text-anchor="start">restore.py • local_store.py</text>
+<text x="968" y="576" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">Check SHA-256, sizes and inventory;</text>
+<text x="968" y="602" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">extract safely and verify members.</text>
+<text x="968" y="628" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">Retire bad entries and try older</text>
+<text x="968" y="654" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">candidates. No candidate → miss.</text>
+<rect x="55" y="747" width="400" height="210" rx="15" fill="white" stroke="#C8D3DF" stroke-width="1.5"/>
+<circle cx="88" cy="781" r="17" fill="#315FA4"/>
+<text x="88" y="788" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="white" text-anchor="middle">5</text>
+<text x="115" y="790" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="700" fill="#172A42" text-anchor="start">Run managed build</text>
+<text x="78" y="822" font-family="DejaVu Sans, sans-serif" font-size="15" font-weight="400" fill="#52657A" text-anchor="start">publish.py • build_and_publish()</text>
+<text x="78" y="858" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">A cacheable miss invokes the default</text>
+<text x="78" y="884" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">incremental cmake --build build.</text>
+<text x="78" y="910" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">Recheck inputs. Failed build or</text>
+<text x="78" y="936" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">changed inputs → no publication.</text>
+<rect x="500" y="747" width="400" height="210" rx="15" fill="white" stroke="#C8D3DF" stroke-width="1.5"/>
+<circle cx="533" cy="781" r="17" fill="#315FA4"/>
+<text x="533" y="788" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="white" text-anchor="middle">6</text>
+<text x="560" y="790" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="700" fill="#172A42" text-anchor="start">Save artifact copies</text>
+<text x="523" y="822" font-family="DejaVu Sans, sans-serif" font-size="15" font-weight="400" fill="#52657A" text-anchor="start">local_store.py • store_bundle()</text>
+<text x="523" y="858" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">Save all requested components in a</text>
+<text x="523" y="884" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">new generation. Write payload.tar +</text>
+<text x="523" y="910" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">inventory.json, verify contents, and</text>
+<text x="523" y="936" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">record object digests and sizes.</text>
+<rect x="945" y="747" width="400" height="210" rx="15" fill="white" stroke="#C8D3DF" stroke-width="1.5"/>
+<circle cx="978" cy="781" r="17" fill="#315FA4"/>
+<text x="978" y="788" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="white" text-anchor="middle">7</text>
+<text x="1005" y="790" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="700" fill="#172A42" text-anchor="start">Commit ready entries</text>
+<text x="968" y="822" font-family="DejaVu Sans, sans-serif" font-size="15" font-weight="400" fill="#52657A" text-anchor="start">collector.py • cache_db.py</text>
+<text x="968" y="858" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">Record producer + observations.</text>
+<text x="968" y="884" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">Commit entries and object metadata</text>
+<text x="968" y="910" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">only after copies are validated.</text>
+<text x="968" y="936" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#172A42" text-anchor="start">Recheck final keys.</text>
+<text x="55" y="978" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#52657A" text-anchor="start">Safety gates: clean tracked sources • build lock • stable input rechecks • saved copies before ready entries</text>
+<rect x="55" y="987" width="1290" height="110" rx="15" fill="#E8EEF6" stroke="#C8D3DF" stroke-width="1.5"/>
+<text x="80" y="1022" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="700" fill="#172A42" text-anchor="start">8  One final artifact report</text>
+<text x="80" y="1058" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#007F75" text-anchor="start">REUSED</text>
+<text x="245" y="1058" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#315FA4" text-anchor="start">MISS → STORED</text>
+<text x="510" y="1058" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#9B6318" text-anchor="start">NO_FINGERPRINT / CACHE_SKIPPED</text>
+<text x="80" y="1083" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#52657A" text-anchor="start">reporting.py + diagnostics.py  •  JSON on stdout; build/report on stderr; --verbose and --log-file for detail</text>
+<rect x="1400" y="205" width="645" height="502" rx="15" fill="#EEF3F9" stroke="#C8D3DF" stroke-width="1.5"/>
+<text x="1425" y="247" font-family="DejaVu Sans, sans-serif" font-size="28" font-weight="700" fill="#172A42" text-anchor="start">Explain dependency impact</text>
+<text x="1425" y="279" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#315FA4" text-anchor="start">planner.py • inventory.TopologyAdapter</text>
+<rect x="1425" y="299" width="595" height="87" rx="10" fill="white" stroke="#C8D3DF" stroke-width="1.5"/>
+<text x="1445" y="330" font-family="DejaVu Sans, sans-serif" font-size="22" font-weight="700" fill="#172A42" text-anchor="start">BUILD_TOPOLOGY.toml</text>
+<text x="1445" y="359" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#52657A" text-anchor="start">Maps artifacts to CI stages and changed paths.</text>
+<rect x="1425" y="411" width="595" height="119" rx="10" fill="white" stroke="#C8D3DF" stroke-width="1.5"/>
+<text x="1445" y="441" font-family="DejaVu Sans, sans-serif" font-size="22" font-weight="700" fill="#172A42" text-anchor="start">Fresh configured CMake metadata</text>
+<text x="1445" y="471" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#52657A" text-anchor="start">build/therock_consumer_graph.json</text>
+<text x="1445" y="500" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#52657A" text-anchor="start">build/artifact_subprojects.json</text>
+<path d="M 1722 530 L 1722 560" fill="none" stroke="#647C96" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arrow)"/>
+<rect x="1425" y="560" width="595" height="100" rx="10" fill="white" stroke="#C8D3DF" stroke-width="1.5"/>
+<text x="1445" y="590" font-family="DejaVu Sans, sans-serif" font-size="22" font-weight="700" fill="#172A42" text-anchor="start">dependency_impact.py</text>
+<text x="1445" y="619" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#52657A" text-anchor="start">--changed-subproject amdsmi → affected groups</text>
+<text x="1445" y="645" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#52657A" text-anchor="start">Example configured path: amdsmi → rocshmem</text>
+<text x="1425" y="689" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#315FA4" text-anchor="start">Reporting only: build selection is unchanged.</text>
+<rect x="1400" y="747" width="645" height="350" rx="15" fill="white" stroke="#C8D3DF" stroke-width="1.5"/>
+<text x="1425" y="790" font-family="DejaVu Sans, sans-serif" font-size="28" font-weight="700" fill="#172A42" text-anchor="start">Cached bytes live on disk</text>
+<text x="1425" y="823" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#52657A" text-anchor="start">Written by step 6; indexed by step 7.</text>
+<text x="1425" y="858" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#315FA4" text-anchor="start">&lt;cache&gt;/objects/artifact-&lt;generation&gt;/files/</text>
+<rect x="1425" y="879" width="595" height="135" rx="10" fill="#F4F7FA" stroke="#D8E1EB" stroke-width="1.5"/>
+<text x="1445" y="912" font-family="DejaVu Sans, sans-serif" font-size="22" font-weight="700" fill="#172A42" text-anchor="start">payload.tar</text>
+<text x="1620" y="912" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#52657A" text-anchor="start">Archived component export trees.</text>
+<text x="1445" y="947" font-family="DejaVu Sans, sans-serif" font-size="22" font-weight="700" fill="#172A42" text-anchor="start">inventory.json</text>
+<text x="1445" y="976" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#52657A" text-anchor="start">Member paths, types, modes, symlink targets,</text>
+<text x="1445" y="1002" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#52657A" text-anchor="start">file sizes + SHA-256, and bundle membership.</text>
+<text x="1425" y="1048" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#172A42" text-anchor="start">Immutable generations: saved copies stay unchanged;</text>
+<text x="1425" y="1075" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#172A42" text-anchor="start">new versions get new locations.</text>
+<rect x="55" y="1127" width="1290" height="290" rx="15" fill="white" stroke="#C8D3DF" stroke-width="1.5"/>
+<text x="80" y="1167" font-family="DejaVu Sans, sans-serif" font-size="28" font-weight="700" fill="#172A42" text-anchor="start">SQLite index</text>
+<text x="295" y="1167" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#52657A" text-anchor="start">cache_db.py  •  build_tools/therock_fingerprint_cache.sql</text>
+<text x="80" y="1200" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#315FA4" text-anchor="start">Unique key: (epoch, artifact_id, fingerprint, components_json)  •  no namespace</text>
+<rect x="80" y="1220" width="210" height="105" rx="10" fill="#F4F7FA" stroke="#C8D3DF" stroke-width="1.5"/>
+<text x="95" y="1250" font-family="DejaVu Sans, sans-serif" font-size="21" font-weight="700" fill="#172A42" text-anchor="start">artifacts</text>
+<text x="95" y="1277" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#52657A" text-anchor="start">artifact_id</text>
+<text x="95" y="1301" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#52657A" text-anchor="start">artifact_identity</text>
+<rect x="335" y="1220" width="280" height="105" rx="10" fill="#F4F7FA" stroke="#C8D3DF" stroke-width="1.5"/>
+<text x="350" y="1250" font-family="DejaVu Sans, sans-serif" font-size="21" font-weight="700" fill="#172A42" text-anchor="start">artifact_keys</text>
+<text x="350" y="1277" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#52657A" text-anchor="start">artifact_key_id • artifact_id</text>
+<text x="350" y="1301" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#52657A" text-anchor="start">epoch • fingerprint • members</text>
+<rect x="660" y="1220" width="280" height="105" rx="10" fill="#F4F7FA" stroke="#C8D3DF" stroke-width="1.5"/>
+<text x="675" y="1250" font-family="DejaVu Sans, sans-serif" font-size="21" font-weight="700" fill="#172A42" text-anchor="start">cache_entries</text>
+<text x="675" y="1277" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#52657A" text-anchor="start">key + producer_run_id</text>
+<text x="675" y="1301" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#52657A" text-anchor="start">state • local_directory</text>
+<rect x="985" y="1220" width="335" height="105" rx="10" fill="#F4F7FA" stroke="#C8D3DF" stroke-width="1.5"/>
+<text x="1000" y="1250" font-family="DejaVu Sans, sans-serif" font-size="21" font-weight="700" fill="#172A42" text-anchor="start">artifact_files</text>
+<text x="1000" y="1277" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#52657A" text-anchor="start">Per-object path, SHA-256, size</text>
+<text x="1000" y="1301" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#52657A" text-anchor="start">payload.tar + inventory.json</text>
+<path d="M 290 1272 L 335 1272" fill="none" stroke="#647C96" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arrow)"/>
+<path d="M 615 1272 L 660 1272" fill="none" stroke="#647C96" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arrow)"/>
+<path d="M 940 1272 L 985 1272" fill="none" stroke="#647C96" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arrow)"/>
+<text x="80" y="1355" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#52657A" text-anchor="start">prototype_runs → producer evidence / commits / timings; artifact_observations → per-run key and lookup records.</text>
+<text x="80" y="1386" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#52657A" text-anchor="start">reusable_cache_entries is an eligibility view. LocalManifest represents joined rows; there is no manifests table.</text>
+<rect x="1400" y="1127" width="645" height="290" rx="15" fill="#172A42" stroke="#172A42" stroke-width="1.5"/>
+<text x="1425" y="1167" font-family="DejaVu Sans, sans-serif" font-size="27" font-weight="700" fill="white" text-anchor="start">Current boundaries</text>
+<text x="1425" y="1203" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#E1E9F2" text-anchor="start">No per-target or CI-stage skip integration. Explicit restore</text>
+<text x="1425" y="1229" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#E1E9F2" text-anchor="start">exports verified files to a new destination; it writes no</text>
+<text x="1425" y="1255" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#E1E9F2" text-anchor="start">.prebuilt markers.</text>
+<text x="1425" y="1295" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#E1E9F2" text-anchor="start">history_ingest.py records evidence; replay.py estimates reuse.</text>
+<text x="1425" y="1321" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#E1E9F2" text-anchor="start">Verified remote import is still pending.</text>
+<text x="1425" y="1381" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="#F5CE8B" text-anchor="start">Deferred: broad misses from repository HEAD.</text>
+<text x="55" y="1453" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#52657A" text-anchor="start">Package: build_tools/github_actions/artifact_cache/  •  Tests: build_tools/github_actions/tests/artifact_cache_*_test.py</text>
+<text x="2045" y="1453" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#52657A" text-anchor="end">DESIGN SNAPSHOT  /  1 PAGE</text>
+</svg>
