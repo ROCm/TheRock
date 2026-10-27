@@ -4,6 +4,13 @@
 # Get access to LLVM_VERSION_MAJOR
 include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/cmake/Modules/LLVMVersion.cmake")
 
+# New staging compilers canonicalize the legacy amdgcn triple to amdgpu.
+# Use the same spelling for every runtime so installed paths stay consistent.
+set(_therock_amdgpu_runtime_target amdgcn-amd-amdhsa)
+if(THEROCK_ENABLE_DASAN)
+  set(_therock_amdgpu_runtime_target amdgpu-amd-amdhsa)
+endif()
+
 # Build LLVM and the comgr dependency.
 # Note that in LLVM "BUILD_SHARED_LIBS" enables an unsupported development mode.
 # The flag you want for a shared library build is LLVM_BUILD_LLVM_DYLIB.
@@ -49,11 +56,11 @@ else()
     # TODO: Guard for amd-staging only. Remove condition when compiler branch is updated.
     if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/openmp/device/CMakeLists.txt")
       list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
-      set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
-      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;flang-rt;openmp")
-      set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
-      set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
-      set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
+      set(LLVM_RUNTIME_TARGETS "default;${_therock_amdgpu_runtime_target}")
+      set(RUNTIMES_${_therock_amdgpu_runtime_target}_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;flang-rt;openmp")
+      set(RUNTIMES_${_therock_amdgpu_runtime_target}_FLANG_RT_LIBC_PROVIDER "llvm")
+      set(RUNTIMES_${_therock_amdgpu_runtime_target}_FLANG_RT_LIBCXX_PROVIDER "llvm")
+      set(RUNTIMES_${_therock_amdgpu_runtime_target}_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
       # Hosts whose C long double is already IEEE-754 binary128 (ppc64le,
       # riscv64) do not need libquadmath: flang-rt folds the F128 entry points
       # into libflang_rt.runtime instead of building libflang_rt.quadmath.
@@ -94,17 +101,17 @@ if(THEROCK_ENABLE_DASAN)
   set(LLVM_ENABLE_PER_TARGET_RUNTIME_DIR ON CACHE BOOL "Separate host and device runtimes" FORCE)
   set(COMPILER_RT_BUILD_SANITIZERS ON CACHE BOOL "Build sanitizer runtimes" FORCE)
 
-  # Reuse the canonical AMDGPU runtime triple already used by TheRock. Keep
+  # Keep a single GPU runtime build using the staging compiler's triple. Keep
   # amd-staging's OpenMP/Fortran runtimes when present, and also support the
   # compiler-rt-only device configuration on earlier DASan branch revisions.
-  list(APPEND LLVM_RUNTIME_TARGETS default amdgcn-amd-amdhsa)
+  list(APPEND LLVM_RUNTIME_TARGETS default ${_therock_amdgpu_runtime_target})
   list(REMOVE_DUPLICATES LLVM_RUNTIME_TARGETS)
   set(LLVM_RUNTIME_TARGETS "${LLVM_RUNTIME_TARGETS}" CACHE STRING "Runtime targets" FORCE)
-  list(APPEND RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES compiler-rt)
-  list(REMOVE_DUPLICATES RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES)
-  list(APPEND RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES
+  list(APPEND RUNTIMES_${_therock_amdgpu_runtime_target}_LLVM_ENABLE_RUNTIMES compiler-rt)
+  list(REMOVE_DUPLICATES RUNTIMES_${_therock_amdgpu_runtime_target}_LLVM_ENABLE_RUNTIMES)
+  list(APPEND RUNTIMES_${_therock_amdgpu_runtime_target}_CACHE_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake")
-  list(REMOVE_DUPLICATES RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES)
+  list(REMOVE_DUPLICATES RUNTIMES_${_therock_amdgpu_runtime_target}_CACHE_FILES)
 endif()
 
 # Set the LLVM_ENABLE_PROJECTS variable before including LLVM's CMakeLists.txt
