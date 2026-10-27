@@ -50,6 +50,8 @@ def build_parser():
         elif name == "plan":
             s.add_argument("--topology", type=Path)
             s.add_argument("--changed", default="", help="optional comma-separated paths forcing rebuild")
+            s.add_argument("--changed-subproject", action="append", default=[],
+                           help="CMake target whose configured downstream impact to report; repeatable")
             s.add_argument("--targets", default="", help="optional emitted family suffixes; generic is included")
         elif name == "ingest":
             s.add_argument("--runs-json", type=Path, help="offline run list with artifacts and optional source_fingerprints")
@@ -104,6 +106,10 @@ def execute(args):
             from .planner import plan_cache
             topology = TopologyAdapter.from_path(args.topology) if args.topology else None
             with prepared_scan(args.build, args.expected, granularity=args.granularity) as records:
+                impact = None
+                if args.changed_subproject:
+                    from .dependency_impact import configured_impact
+                    impact = configured_impact(args.build, args.changed_subproject)
                 if args.targets:
                     requested = set(args.targets.split(",")) | {"generic"}
                     records = [(r, key) for r, key in records
@@ -113,7 +119,15 @@ def execute(args):
                                if parse_identity(r["artifact_identity"])}
                     if missing := requested - {"generic"} - present:
                         raise ValueError("no configured outputs for targets: " + ", ".join(sorted(missing)))
+                if impact is not None:
+                    affected = {item["artifact"] for item in impact["affected_artifacts"]}
+                    impact["affected_requested_outputs"] = sorted(
+                        r["artifact_identity"] for r, _ in records
+                        if parse_identity(r["artifact_identity"])
+                        and parse_identity(r["artifact_identity"])[0] in affected
+                    )
                 return plan_cache(db=db, records=records, topology=topology, read_policy=_policy(args),
+                                  dependency_impact=impact,
                                   changed_paths=[v for v in args.changed.split(",") if v],
                                   inventory_scope=("explicit_outputs" if args.expected else
                                                    "configured_ninja_and_observed_outputs" if args.granularity == "bundle"

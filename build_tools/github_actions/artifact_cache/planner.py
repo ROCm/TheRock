@@ -49,6 +49,7 @@ class StagePlan:
 class CachePlan:
     stage_plans: list[StagePlan]
     inventory_scope: str = "observed_outputs"
+    dependency_impact: dict | None = None
 
     @property
     def entries(self):
@@ -58,6 +59,7 @@ class CachePlan:
         entries = self.entries
         return {
             "operation": "plan", "inventory_scope": self.inventory_scope,
+            "dependency_impact": self.dependency_impact,
             "payloads_verified": False, "skippable_stages": [],
             "summary": {status: sum(e.status == status for e in entries)
                         for status in ("candidate", "miss", "uncacheable")},
@@ -79,7 +81,7 @@ class CachePlan:
 
 @traced("PLAN")
 def plan_cache(*, db, records, topology=None, read_policy=None,
-               changed_paths=(), inventory_scope="observed_outputs"):
+               changed_paths=(), inventory_scope="observed_outputs", dependency_impact=None):
     """Use (collector record, ArtifactKey-or-None) pairs from current configure.
 
     Real CMake fingerprints include dependency propagation. Changed paths are
@@ -120,4 +122,4 @@ def plan_cache(*, db, records, topology=None, read_policy=None,
         stages.setdefault(unit.stage, StagePlan(unit.stage)).entries.append(
             PlanEntry(unit, status, reason, manifest))
     order = {s: i for i, s in enumerate(topology.stages)} if topology else {}
-    return CachePlan(sorted(stages.values(), key=lambda s: order.get(s.stage, len(order))), inventory_scope)
+    return CachePlan(sorted(stages.values(), key=lambda s: order.get(s.stage, len(order))), inventory_scope, dependency_impact)
