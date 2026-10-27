@@ -51,6 +51,26 @@ endif()
 include("${THEROCK_SOURCE_DIR}/cmake/therock_meson_env.cmake")
 therock_get_meson_compiler_env(_meson_cc _meson_cxx)
 
+set(_meson_ldflags "-Wl,-rpath='$$ORIGIN'")
+set(_meson_sanitizer_env)
+if(THEROCK_SANITIZER STREQUAL "DASAN")
+  # Meson does not consume CMake language flags or add_link_options().
+  list(APPEND _meson_sanitizer_env
+    "CFLAGS=${CMAKE_C_FLAGS}"
+    "CXXFLAGS=${CMAKE_CXX_FLAGS}"
+  )
+  string(APPEND _meson_ldflags " ${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=daddress -shared-libsan")
+  # Mesa's libraries install below lib/rocm_sysdeps/lib in the unified SDK.
+  # Keep the shared sanitizer discoverable after relocating that SDK.
+  foreach(_runtime_dir IN LISTS THEROCK_PRIVATE_INSTALL_RPATH_DIRS)
+    if(_runtime_dir MATCHES "^lib/llvm/lib/clang/")
+      file(RELATIVE_PATH _runtime_relative
+        "/prefix/lib/rocm_sysdeps/lib" "/prefix/${_runtime_dir}")
+      string(APPEND _meson_ldflags " -Wl,-rpath='$$ORIGIN/${_runtime_relative}'")
+    endif()
+  endforeach()
+endif()
+
 set(PATCH_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/../patch_source")
 
 add_custom_target(
@@ -67,7 +87,8 @@ add_custom_target(
     # Step 1: Initial meson setup to download libva-2.22.0 subproject
     # This is required before patching because patch_source.sh modifies files in the libva subproject
     "${CMAKE_COMMAND}" -E env
-      "LDFLAGS=-Wl,-rpath='$$ORIGIN'"
+      "LDFLAGS=${_meson_ldflags}"
+      ${_meson_sanitizer_env}
       "CC=${_meson_cc}"
       "CXX=${_meson_cxx}"
       --
@@ -113,7 +134,8 @@ add_custom_target(
     # Step 3: Reconfigure meson to build from patched source
     # This ensures the build system uses the modified source files
     "${CMAKE_COMMAND}" -E env
-      "LDFLAGS=-Wl,-rpath='$$ORIGIN'"
+      "LDFLAGS=${_meson_ldflags}"
+      ${_meson_sanitizer_env}
       "CC=${_meson_cc}"
       "CXX=${_meson_cxx}"
       --

@@ -47,7 +47,6 @@ EXTRA_ARTIFACTS = {}
 # mechanism is recorded rather than misrepresenting them as instrumented C++.
 NON_NATIVE_TARGETS = {
     "mirage": "Rust project; daddress applies to LLVM C/C++/HIP compilation",
-    "rocprofiler-compute": "Python application",
     "rocjitsu-hotswap": "restages the instrumented rocjitsu payload",
 }
 
