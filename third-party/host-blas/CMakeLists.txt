@@ -167,6 +167,19 @@ set(CMAKE_INSTALL_INCLUDEDIR "lib/host-math/include")
 
 add_subdirectory(${SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/build-openblas)
 
+# This OpenBLAS revision uses BUILD_TESTING only for the LAPACK suite and
+# unconditionally adds its BLAS test directories. Honor the requested test
+# setting for those directories too, including mixed C/Fortran test programs.
+if(NOT BUILD_TESTING)
+  get_property(_openblas_subdirectories DIRECTORY "${SOURCE_DIR}" PROPERTY SUBDIRECTORIES)
+  foreach(_subdir IN LISTS _openblas_subdirectories)
+    get_filename_component(_subdir_name "${_subdir}" NAME)
+    if(_subdir_name MATCHES "^(test|ctest|utest|cpp_thread_test)$")
+      set_property(DIRECTORY "${_subdir}" PROPERTY EXCLUDE_FROM_ALL TRUE)
+    endif()
+  endforeach()
+endif()
+
 # Alterations.
 # We would like this to be a library scoped to ROCm, so give it a custom
 # name.

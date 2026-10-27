@@ -196,6 +196,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       amd-hip
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
+      -DBUILD_TESTING=${THEROCK_BUILD_TESTING}
     INTERFACE_INCLUDE_DIRS
       # All old clients of roctx64 expect to just be able to find its include
       # with no further qualification. Bad design, but also deprecated, so meh.

@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from dasan_math_build import SDK_STAGES, bootstrap_sdk, sdk_llvm_major
+from dasan_math_build import SDK_ALIASES, SDK_STAGES, bootstrap_sdk, sdk_llvm_major
 
 
 class SdkVersionTest(unittest.TestCase):
@@ -46,6 +46,7 @@ class BootstrapSdkTest(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("fixture\n", encoding="utf-8")
         for relative in (
+            "lib/llvm/amdgcn/bitcode/ocml.bc",
             "include/rocm_kpack/kpack.h",
             "lib/librocm_kpack.so.0",
             "include/amd_comgr/amd_comgr.h",
@@ -57,6 +58,13 @@ class BootstrapSdkTest(unittest.TestCase):
             path = self.sdk / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(relative, encoding="utf-8")
+        for alias, target in SDK_ALIASES.items():
+            try:
+                (self.sdk / alias).symlink_to(target, target_is_directory=True)
+            except OSError as exc:
+                if getattr(exc, "winerror", None) == 1314:
+                    self.skipTest("Creating SDK symlinks requires Windows privileges")
+                raise
 
     def test_imported_stages_preserve_sdk_ownership_and_resume(self):
         bootstrap_sdk(self.sdk, self.output)
@@ -71,6 +79,13 @@ class BootstrapSdkTest(unittest.TestCase):
         self.assertFalse(list(build.rglob("librocblas.so")))
         self.assertFalse(
             (build / "compiler/amd-llvm/stage/lib/libamdhip64.so.8").exists()
+        )
+        stage = build / "compiler/amd-llvm/stage"
+        self.assertEqual((stage / "amdgcn").readlink(), Path("lib/llvm/amdgcn"))
+        self.assertEqual((stage / "llvm").readlink(), Path("lib/llvm"))
+        self.assertEqual(
+            (stage / "amdgcn/bitcode/ocml.bc").read_text(encoding="utf-8"),
+            "lib/llvm/amdgcn/bitcode/ocml.bc",
         )
         marker = build / "compiler/amd-llvm/stage.prebuilt"
         before = marker.stat().st_mtime_ns
@@ -99,6 +114,11 @@ class BootstrapSdkTest(unittest.TestCase):
         self.assertFalse(
             (self.output / "build/core/rocm-kpack/stage.prebuilt").exists()
         )
+
+    def test_missing_compiler_alias_is_rejected(self):
+        (self.sdk / "amdgcn").unlink()
+        with self.assertRaisesRegex(RuntimeError, "relocatable alias amdgcn"):
+            bootstrap_sdk(self.sdk, self.output)
 
 
 if __name__ == "__main__":

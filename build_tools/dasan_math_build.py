@@ -28,7 +28,10 @@ from _therock_utils.pattern_match import PatternMatcher
 # artifact TOML descriptors and CMake package providers.
 SDK_STAGES = {
     "compiler/amd-llvm/stage": (
-        ["lib/llvm/**"],
+        # The merged SDK also includes aux-overlay's clang configuration files.
+        # rocm.cfg points --rocm-path at the stage root, so preserve its relative
+        # directory aliases for compiler invocations without explicit HIP paths.
+        ["lib/llvm/**", "amdgcn", "llvm"],
         "lib/llvm/bin/clang",
     ),
     "compiler/amd-comgr/stage": (
@@ -88,6 +91,8 @@ SDK_STAGES = {
     ),
 }
 
+SDK_ALIASES = {"amdgcn": "lib/llvm/amdgcn", "llvm": "lib/llvm"}
+
 SOURCE_PATHS = (
     "base/half",
     "base/rocm-cmake",
@@ -127,6 +132,15 @@ def bootstrap_sdk(rocm: Path, output: Path) -> None:
     clang = rocm / "lib/llvm/bin/clang"
     if not clang.is_file():
         raise RuntimeError(f"Missing DASan compiler: {clang}")
+    for alias, target in SDK_ALIASES.items():
+        path = rocm / alias
+        if (
+            not path.is_symlink()
+            or path.readlink().is_absolute()
+            or path.resolve() != (rocm / target).resolve()
+            or not path.is_dir()
+        ):
+            raise RuntimeError(f"SDK requires a relocatable alias {alias} -> {target}")
     digest = hashlib.sha256()
     with clang.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
@@ -175,6 +189,33 @@ def probe_sdk(rocm: Path, output: Path) -> int:
     llvm_major = sdk_llvm_major(rocm)
     with log.open("a", encoding="utf-8") as stream:
         stream.write(f"Imported SDK LLVM major version: {llvm_major}\n")
+    # Exercise the relocated compiler's default device-library discovery, as
+    # used by raw OpenCL custom commands. Explicit --hip-device-lib-path in the
+    # HIP probe below would hide missing root aliases in the imported stage.
+    opencl = probe / "device.cl"
+    opencl.write_text(
+        "kernel void write_element(global int *p) { p[get_global_id(0)] = 1; }\n",
+        encoding="utf-8",
+    )
+    imported_clang = output / "build/compiler/amd-llvm/stage/lib/llvm/bin/clang"
+    run(
+        [
+            str(imported_clang),
+            "-O2",
+            "-x",
+            "cl",
+            "-Xclang",
+            "-finclude-default-header",
+            "-cl-std=CL2.0",
+            "-target",
+            "amdgcn-amd-amdhsa",
+            "-mcpu=gfx950",
+            str(opencl),
+            "-o",
+            str(probe / "device-opencl.hsaco"),
+        ],
+        log,
+    )
     host = probe / "host.c"
     host.write_text("int main(void) { return 0; }\n", encoding="utf-8")
     clang = str(rocm / "lib/llvm/bin/clang")
@@ -220,6 +261,7 @@ def probe_sdk(rocm: Path, output: Path) -> int:
             "gfx950_link": "passed",
             "device_instrumentation": True,
             "llvm_major": llvm_major,
+            "imported_clang_opencl_link": "passed",
         },
     )
     return llvm_major

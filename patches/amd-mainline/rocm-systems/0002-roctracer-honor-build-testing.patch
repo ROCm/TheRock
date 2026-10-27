@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <safaizal@amd.com>
+Date: Tue, 27 Oct 2026 16:28:09 +0000
+Subject: [PATCH] Honor BUILD_TESTING when configuring roctracer tests
+
+Preserve the standalone default of building tests while allowing parent builds to disable test executables and custom GPU fixtures.
+---
+ projects/roctracer/CMakeLists.txt | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/projects/roctracer/CMakeLists.txt b/projects/roctracer/CMakeLists.txt
+index ab99e1d3..99a70ace 100755
+--- a/projects/roctracer/CMakeLists.txt
++++ b/projects/roctracer/CMakeLists.txt
+@@ -65,7 +65,8 @@ endif()
+ add_subdirectory(src)
+ 
+ ## Build tests
+-if(${LIBRARY_TYPE} STREQUAL SHARED)
++option(BUILD_TESTING "Build roctracer tests" ON)
++if(BUILD_TESTING AND ${LIBRARY_TYPE} STREQUAL SHARED)
+   add_subdirectory(test)
+ endif()
+ 
+-- 
+2.43.0
+
