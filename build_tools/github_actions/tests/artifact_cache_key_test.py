@@ -1,9 +1,9 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Key regressions: retained history helpers and real relational ArtifactKey.
+"""Key regressions: estimate helpers and relational ArtifactKey.
 
-compute_cache_key returns a legacy estimate key, not a production database key.
+compute_cache_key returns a derived estimate key. Database lookup requires ArtifactKey.
 """
 
 import sys

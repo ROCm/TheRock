@@ -9,7 +9,7 @@ bad productions and trying older eligible candidates. restore_units accepts a
 metadata plan but still verifies every candidate. None of these writes CMake
 prebuilt markers or suppresses test selection.
 
-The retained in-memory ObjectStore helper is for isolated model checks only;
+The in-memory ObjectStore helper is for isolated model checks only;
 it is not the database restoration path and never downloads/extracts bytes.
 """
 
@@ -96,7 +96,7 @@ def restore_manifest(
     *,
     verify_digests: bool = True,
 ) -> RestoreResult:
-    """Resolve a single hit manifest: download + verify -> reusable/needs_build."""
+    """Check object existence and optional digests; no download or extraction."""
     key = manifest.cache_key
     artifact = str(manifest.artifact)
     if not manifest.is_servable():
@@ -294,10 +294,7 @@ def restore_local_outputs(
     disk restore, but integration with CMake's prebuilt/stage scheduler is a
     separate operation; a restored component alone cannot skip a whole stage.
     """
-    if __package__.startswith("build_tools."):
-        from . import collector
-    else:
-        from . import collector
+    from . import collector
     from .cache_db import CacheDB
     from .inventory import scan_build
     from .manifest import ArtifactKey

@@ -1,9 +1,9 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Retained CI metadata model and relational manifest invariants.
+"""CI metadata model and relational manifest invariants.
 
-The legacy Manifest's is_servable checks metadata only. Neither that method
+Manifest.is_servable checks metadata only. Neither that method
 nor LocalManifest construction verifies bytes or authorizes stage skipping.
 """
 
@@ -21,7 +21,7 @@ from build_tools.github_actions.artifact_cache.manifest import (
 )
 
 
-def legacy_manifest(**overrides):
+def make_manifest(**overrides):
     values = dict(
         cache_key="e1:release:deadbeef",
         artifact=ArtifactIdentity("blas", "bundle", "gfx94X-dcgpu"),
@@ -47,27 +47,27 @@ class EnumOrderingTest(unittest.TestCase):
 
 class ManifestStateTest(unittest.TestCase):
     def test_complete_and_servable_metadata(self):
-        manifest = legacy_manifest()
+        manifest = make_manifest()
         self.assertTrue(manifest.is_complete())
         self.assertTrue(manifest.is_servable())
 
     def test_incomplete_when_missing_uri(self):
-        manifest = legacy_manifest(outputs=(OutputObject("x.tar.zst", ""),))
+        manifest = make_manifest(outputs=(OutputObject("x.tar.zst", ""),))
         self.assertFalse(manifest.is_complete())
         self.assertFalse(manifest.is_servable())
 
     def test_not_servable_when_pending(self):
-        manifest = legacy_manifest(publication=PublicationState.PENDING)
+        manifest = make_manifest(publication=PublicationState.PENDING)
         self.assertTrue(manifest.is_complete())
         self.assertFalse(manifest.is_servable())
 
     def test_not_servable_when_no_outputs(self):
-        self.assertFalse(legacy_manifest(outputs=()).is_complete())
+        self.assertFalse(make_manifest(outputs=()).is_complete())
 
 
 class ManifestRoundTripTest(unittest.TestCase):
     def test_json_roundtrip(self):
-        manifest = legacy_manifest()
+        manifest = make_manifest()
         restored = Manifest.from_json(manifest.to_json())
         self.assertEqual(restored, manifest)
         self.assertEqual(restored.to_dict(), manifest.to_dict())

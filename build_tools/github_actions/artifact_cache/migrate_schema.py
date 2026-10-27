@@ -2,15 +2,14 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Explicit revision-3/4/5 -> revision-6 migration: add bundle membership.
-
-Existing component keys get an empty member list. Legacy namespaces are removed.
+"""Upgrade a supported database schema to revision 6.
 
 Stop all cache commands first. A required new SQLite backup precedes all changes.
-Keys with identical (epoch, artifact_id, fingerprint) are merged onto the smallest
-existing key ID. Productions and observations are relinked; entry/run/artifact IDs,
-file inventories, state, timestamps and payload locations are preserved. Version-3
-keys acquire fixed epoch 1. CacheDB never migrates a database implicitly.
+Component keys receive empty bundle membership. Missing epochs receive the fixed
+revision-3 epoch. Equal keys are merged onto the smallest key ID, with production
+and observation references relinked. Entry/run/artifact IDs, file inventories,
+state, timestamps and payload locations are preserved. CacheDB never migrates a
+database implicitly.
 """
 
 import argparse
@@ -21,7 +20,7 @@ import sqlite3
 
 from .cache_db import SchemaError, _connect, _validate_schema
 
-LEGACY_EPOCH = 1
+SCHEMA_V3_EPOCH = 1
 SCHEMA_VERSION = 6
 SCHEMA = Path(__file__).resolve().parents[2] / "therock_fingerprint_cache.sql"
 
@@ -76,26 +75,26 @@ def migrate(database: Path, backup: Path) -> dict:
             _validate_schema(db)
             _check_integrity(db)
             if version != SCHEMA_VERSION:
-                raise SchemaError("unrecognized schema version for namespace-free keys")
+                raise SchemaError("unrecognized schema version for bundle-aware keys")
             db.rollback()
             return {"operation": "bundle-membership-migration", "status": "already_current",
                     "schema_version": SCHEMA_VERSION, "database": str(database), "backup": None}
-        legacy = "epoch" not in columns
+        without_epoch = "epoch" not in columns
         namespaced = "key_namespace" in columns
         component_only = not namespaced
         expected = {"artifact_key_id", "artifact_id", "fingerprint"}
         if namespaced:
             expected.add("key_namespace")
-        if not legacy:
+        if not without_epoch:
             expected.add("epoch")
-        if columns != expected or version not in ((0, 3) if legacy else (0, 4) if namespaced else (0, 5)):
+        if columns != expected or version not in ((0, 3) if without_epoch else (0, 4) if namespaced else (0, 5)):
             raise SchemaError("unrecognized artifact_keys shape/version; migration refused")
-        _validate_schema(db, legacy=legacy, namespaced=namespaced and not legacy,
+        _validate_schema(db, without_epoch=without_epoch, namespaced=namespaced and not without_epoch,
                          component_only=component_only)
         _check_integrity(db)
         if db.execute("SELECT 1 FROM sqlite_master WHERE name='artifact_keys_v6_new'").fetchone():
             raise SchemaError("artifact_keys_v6_new already exists; migration refused")
-        expected_unique = (("key_namespace", "artifact_id", "fingerprint") if legacy else
+        expected_unique = (("key_namespace", "artifact_id", "fingerprint") if without_epoch else
                            ("key_namespace", "epoch", "artifact_id", "fingerprint") if namespaced else
                            ("epoch", "artifact_id", "fingerprint"))
         for index in db.execute('PRAGMA index_list("artifact_keys")').fetchall():
@@ -106,8 +105,8 @@ def migrate(database: Path, backup: Path) -> dict:
                 expected_unique, ("artifact_key_id", "artifact_id"),
             }):
                 raise SchemaError("unrecognized unique artifact_keys index; migration refused")
-        # Save and restore all dependent SQL. Unknown namespace-based extensions
-        # need an explicit redesign; never silently discard or rewrite them.
+        # Save and restore dependent SQL. Reject custom objects that refer to
+        # key_namespace because that column is absent from the destination schema.
         dependents = db.execute(
             "SELECT type, name, sql FROM sqlite_master "
             "WHERE type IN ('trigger', 'view') OR "
@@ -123,13 +122,13 @@ def migrate(database: Path, backup: Path) -> dict:
         for obj in dependents:
             db.execute(f"DROP {obj['type'].upper()} {_quote_identifier(obj['name'])}")
         db.execute("CREATE TEMP TABLE key_remap (old_id INTEGER PRIMARY KEY, new_id INTEGER NOT NULL)")
-        partition = "artifact_id, fingerprint" if legacy else "epoch, artifact_id, fingerprint"
+        partition = "artifact_id, fingerprint" if without_epoch else "epoch, artifact_id, fingerprint"
         db.execute(
             "INSERT INTO key_remap SELECT artifact_key_id, "
             f"min(artifact_key_id) OVER (PARTITION BY {partition}) FROM artifact_keys"
         )
         db.execute(key_ddl.replace("CREATE TABLE artifact_keys", "CREATE TABLE artifact_keys_v6_new", 1))
-        epoch = str(LEGACY_EPOCH) if legacy else "k.epoch"
+        epoch = str(SCHEMA_V3_EPOCH) if without_epoch else "k.epoch"
         db.execute(
             "INSERT INTO artifact_keys_v6_new (artifact_key_id, artifact_id, epoch, fingerprint) "
             f"SELECT k.artifact_key_id, k.artifact_id, {epoch}, k.fingerprint "
@@ -163,7 +162,7 @@ def migrate(database: Path, backup: Path) -> dict:
         return {"operation": "bundle-membership-migration", "status": "migrated",
                 "database": str(database), "backup": str(backup),
                 "schema_version": SCHEMA_VERSION,
-                "legacy_epoch": LEGACY_EPOCH if legacy else None,
+                "assigned_epoch": SCHEMA_V3_EPOCH if without_epoch else None,
                 "keys_before": before_keys, "keys_after": after_keys,
                 "merged_keys": before_keys - after_keys,
                 "preserved_rows": counts}

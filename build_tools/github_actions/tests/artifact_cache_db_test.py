@@ -3,7 +3,7 @@
 
 """Relational DB tests: schema, lookup, policy, publication, history and eviction.
 
-Combines the original module contracts and the integrated schema regressions.
+Exercises relational schema invariants and the public database APIs.
 Fixtures use isolated databases; metadata lookup never verifies payload bytes.
 """
 
@@ -40,8 +40,18 @@ class CacheDBTest(fixtures.CacheFixture):
         self.assertEqual(before, after)
         self.assertNotIn("manifests", {row[1] for row in after})
 
-    def test_legacy_schema_rejected_without_creating_relational_tables(self):
-        path = self.root / "legacy.db"
+    def test_unsupported_version_marker_is_rejected_without_writing(self) -> None:
+        for version in (0, 5, 7):
+            with self.subTest(version=version):
+                self.db.execute(f"PRAGMA user_version = {version}")
+                self.db.commit()
+                before = self.database.read_bytes()
+                with self.assertRaisesRegex(SchemaError, "unsupported database schema version"):
+                    CacheDB(self.database)
+                self.assertEqual(self.database.read_bytes(), before)
+
+    def test_unsupported_schema_rejected_without_creating_relational_tables(self):
+        path = self.root / "unsupported-schema.db"
         with sqlite3.connect(path) as conn:
             conn.execute("CREATE TABLE manifests (cache_key TEXT PRIMARY KEY)")
         with self.assertRaisesRegex(SchemaError, "missing table artifacts"):
@@ -153,7 +163,7 @@ class CacheDBTest(fixtures.CacheFixture):
         with CacheDB(self.database) as db:
             self.assertEqual(db.lookup(self.key(identity)).key.artifact_identity, identity)
 
-    def test_legacy_string_keys_rejected_and_policy_supported(self):
+    def test_string_keys_rejected_and_policy_supported(self):
         with CacheDB(self.database) as db:
             with self.assertRaisesRegex(TypeError, "ArtifactKey"):
                 db.lookup("e1:release:old-key")

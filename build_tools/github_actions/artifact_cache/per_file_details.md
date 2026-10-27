@@ -460,7 +460,9 @@ saved productions and history.
 
 **Technical:** validates the database schema, creates a backup
 using SQLite's backup API, and upgrades the database to the current schema.
-It preserves artifact records, producing runs and their references.
+It preserves artifact records, producing runs and their references. The
+`assigned_epoch` report field records an epoch assigned during migration, or
+`null` when existing epochs are preserved.
 
 Component entries keep empty component membership. Verified bundles require
 publication of a complete requested component set.
@@ -529,7 +531,7 @@ impact reports.
 `--changed-subproject`, reported dependency paths, and the separation between
 impact reporting, fingerprint invalidation, and actual build selection.
 
-### `fingerprint_cache_file_map.svg`
+### `therock-artifact-cache-current-design.svg`
 
 **High level:** provides a visual architecture overview.
 

@@ -161,18 +161,18 @@ V3_KEYS = """CREATE TABLE artifact_keys (
 class EpochMigrationTest(fixtures.CacheFixture):
     def setUp(self):
         super().setUp()
-        self.legacy = self.root / "legacy.db"
+        self.source_database = self.root / "revision3.db"
         self.backup = self.root / "before-epoch.db"
         current = fixtures.SCHEMA.read_text()
         start = current.index("CREATE TABLE artifact_keys (")
         end = current.index(";", start) + 1
-        legacy = current[:start] + V3_KEYS + current[end:]
-        with sqlite3.connect(self.legacy) as db:
-            db.executescript(legacy)
+        revision3_schema = current[:start] + V3_KEYS + current[end:]
+        with sqlite3.connect(self.source_database) as db:
+            db.executescript(revision3_schema)
             db.execute("PRAGMA user_version = 3")
             db.execute("INSERT INTO artifacts VALUES (7, ?)", (IDENTITY,))
             db.execute("INSERT INTO artifact_keys VALUES (17, 7, ?, ?)",
-                       ("legacy-test", fixtures.FPRINT))
+                       ("revision3-test", fixtures.FPRINT))
             db.execute("INSERT INTO prototype_runs (prototype_run_id,label,repository_commit,"
                        "configure_state,source_state) VALUES (23,'old producer','old commit','succeeded','prepared')")
             db.execute("INSERT INTO artifact_observations (prototype_run_id,artifact_id,artifact_key_id,"
@@ -187,7 +187,7 @@ class EpochMigrationTest(fixtures.CacheFixture):
             db.execute("UPDATE artifact_observations SET lookup_result='hit', selected_entry_id=42")
             db.execute("CREATE INDEX extra_fingerprint_index ON artifact_keys(fingerprint)")
             db.execute("CREATE VIEW extra_key_view AS SELECT artifact_key_id FROM artifact_keys")
-        self.before = self.snapshot(self.legacy)
+        self.before = self.snapshot(self.source_database)
 
     def snapshot(self, path):
         with sqlite3.connect(path) as db:
@@ -197,15 +197,15 @@ class EpochMigrationTest(fixtures.CacheFixture):
 
     def test_migration_preserves_ids_productions_observations_and_backup(self):
         with patch.object(cache_key, "CACHE_EPOCH", 2):
-            result = migrate_schema.migrate(self.legacy, self.backup)
+            result = migrate_schema.migrate(self.source_database, self.backup)
         self.assertEqual(result["keys_after"], 1)
-        self.assertEqual(result["legacy_epoch"], 1)
+        self.assertEqual(result["assigned_epoch"], 1)
         self.assertEqual(self.snapshot(self.backup), self.before)
-        after = self.snapshot(self.legacy)
+        after = self.snapshot(self.source_database)
         for table in after:
             if table != "artifact_keys":
                 self.assertEqual(after[table], self.before[table], table)
-        with CacheDB(self.legacy) as db:
+        with CacheDB(self.source_database) as db:
             key = ArtifactKey(IDENTITY, fixtures.FPRINT, epoch=1)
             self.assertEqual(db.lookup(key).cache_entry_id, 42)
             self.assertIsNone(db.lookup(ArtifactKey(IDENTITY, fixtures.FPRINT, epoch=2)))
@@ -218,51 +218,51 @@ class EpochMigrationTest(fixtures.CacheFixture):
                 db._conn.execute("INSERT INTO artifact_keys (artifact_id,fingerprint,epoch) "
                                  "VALUES (7,?,2)", (fixtures.FPRINT,))
         second_backup = self.root / "unused.db"
-        self.assertEqual(migrate_schema.migrate(self.legacy, second_backup)["status"], "already_current")
+        self.assertEqual(migrate_schema.migrate(self.source_database, second_backup)["status"], "already_current")
         self.assertFalse(second_backup.exists())
 
-    def test_open_old_schema_requires_explicit_migration_without_writing(self):
-        with self.assertRaisesRegex(SchemaError, "namespace removal migration"):
-            CacheDB(self.legacy)
-        self.assertEqual(self.snapshot(self.legacy), self.before)
+    def test_open_revision3_requires_explicit_migration_without_writing(self):
+        with self.assertRaisesRegex(SchemaError, "schema requires migration"):
+            CacheDB(self.source_database)
+        self.assertEqual(self.snapshot(self.source_database), self.before)
 
     def test_adding_column_without_replacing_uniqueness_is_rejected(self):
-        with sqlite3.connect(self.legacy) as db:
+        with sqlite3.connect(self.source_database) as db:
             db.execute("ALTER TABLE artifact_keys ADD COLUMN epoch INTEGER NOT NULL DEFAULT 1")
-        with self.assertRaisesRegex(SchemaError, "namespace removal migration"):
-            CacheDB(self.legacy)
+        with self.assertRaisesRegex(SchemaError, "schema requires migration"):
+            CacheDB(self.source_database)
 
     def test_migration_failure_rolls_back_and_retains_backup(self):
         original = migrate_schema._validate_schema
-        def fail_final(db, *, legacy=False, namespaced=False, component_only=False):
-            if not legacy and not namespaced:
+        def fail_final(db, *, without_epoch=False, namespaced=False, component_only=False):
+            if not without_epoch and not namespaced:
                 raise SchemaError("injected post-migration validation failure")
-            original(db, legacy=True)
+            original(db, without_epoch=True)
         with patch.object(migrate_schema, "_validate_schema", side_effect=fail_final):
             with self.assertRaisesRegex(SchemaError, "injected"):
-                migrate_schema.migrate(self.legacy, self.backup)
-        self.assertEqual(self.snapshot(self.legacy), self.before)
+                migrate_schema.migrate(self.source_database, self.backup)
+        self.assertEqual(self.snapshot(self.source_database), self.before)
         self.assertEqual(self.snapshot(self.backup), self.before)
-        with sqlite3.connect(self.legacy) as db:
+        with sqlite3.connect(self.source_database) as db:
             self.assertNotIn("epoch", [r[1] for r in db.execute("PRAGMA table_info(artifact_keys)")])
             self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 3)
 
     def test_existing_backup_and_missing_database_are_not_overwritten(self):
         self.backup.write_bytes(b"keep me")
         with self.assertRaises(FileExistsError):
-            migrate_schema.migrate(self.legacy, self.backup)
+            migrate_schema.migrate(self.source_database, self.backup)
         self.assertEqual(self.backup.read_bytes(), b"keep me")
-        self.assertEqual(self.snapshot(self.legacy), self.before)
+        self.assertEqual(self.snapshot(self.source_database), self.before)
         with self.assertRaises(FileNotFoundError):
             migrate_schema.migrate(self.root / "typo.db", self.root / "other.db")
         self.assertFalse((self.root / "typo.db").exists())
 
     def test_unrecognized_unique_index_refused_before_migration(self):
-        with sqlite3.connect(self.legacy) as db:
+        with sqlite3.connect(self.source_database) as db:
             db.execute("CREATE UNIQUE INDEX custom_unique ON artifact_keys(fingerprint)")
         with self.assertRaisesRegex(SchemaError, "unrecognized unique"):
-            migrate_schema.migrate(self.legacy, self.backup)
-        self.assertEqual(self.snapshot(self.legacy), self.before)
+            migrate_schema.migrate(self.source_database, self.backup)
+        self.assertEqual(self.snapshot(self.source_database), self.before)
         self.assertFalse(self.backup.exists())
 
 

@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Object-store compatibility and managed local cold/warm cache tests.
+"""Object-store API and managed local cold/warm cache tests.
 
 The managed tests run a miniature CMake/Ninja fixture, not a ROCm build. Each
 test uses an explicitly initialized private relational database.

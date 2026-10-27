@@ -27,7 +27,7 @@ from build_tools.github_actions.tests import _artifact_cache_fixtures as fixture
 
 
 class PublishGatesTest(fixtures.RelationalFixture):
-    def test_legacy_output_list_cannot_assert_a_successful_build(self):
+    def test_output_list_cannot_assert_a_successful_build(self):
         with CacheDB(self.database) as db:
             with self.assertRaises(TypeError):
                 publish_build_outputs(
@@ -159,10 +159,10 @@ class RestoreTest(fixtures.RelationalFixture):
             self.assertIsNone(db.get_manifest(bad.cache_entry_id))
 
 
-class RetainedRestoreModelTest(unittest.TestCase):
+class RestoreModelTest(unittest.TestCase):
     def test_unknown_digest_is_not_a_verified_reuse(self):
         manifest = Manifest(
-            cache_key="legacy-estimate", artifact=ArtifactIdentity("blas", "lib", "generic"),
+            cache_key="metadata-estimate", artifact=ArtifactIdentity("blas", "lib", "generic"),
             outputs=(OutputObject("blas_lib_generic.tar.zst", "s3://b/object"),),
             provenance=Provenance("ROCm/TheRock", "1", "main", "commit", "ci.yml", "2026-09-01T00:00:00Z"),
             publication=PublicationState.PUBLISHED,

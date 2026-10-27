@@ -14,10 +14,7 @@ COMPONENTS = ("lib", "dev", "run", "dbg", "doc", "test")
 
 
 def collector_module():
-    if __package__.startswith("build_tools."):
-        from . import collector as artifact_cache
-    else:
-        from . import collector as artifact_cache
+    from . import collector as artifact_cache
     return artifact_cache
 
 

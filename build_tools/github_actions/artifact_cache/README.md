@@ -64,7 +64,8 @@ including relevant platform and toolchain settings.
 | `artifact_files` | Expected immutable objects, SHA-256 digests and sizes |
 | `reusable_cache_entries` | Eligible metadata candidates; physical verification remains required |
 
-Opening a database validates it and never creates or migrates tables. A Python
+Opening a database validates its revision-6 schema and version marker, and
+never creates or migrates tables. A Python
 `LocalManifest` represents the joined key, production and file records.
 
 ### Database upgrades
@@ -86,7 +87,8 @@ bundles; bundle publication requires a complete requested component set.
 Foreign-key and integrity checks run before commit. Failures roll back changes
 and retain any backup already made. Unsupported schemas or incompatible custom
 schema objects are rejected. An already-current database is validated without
-another migration or backup.
+another migration or backup. The `assigned_epoch` report field contains an
+epoch assigned during migration, or `null` when existing epochs are preserved.
 
 For a **new** database use `build_tools/therock_fingerprint_cache.sql`. Never run
 this fresh-schema SQL against an existing database. Tests use temporary databases:

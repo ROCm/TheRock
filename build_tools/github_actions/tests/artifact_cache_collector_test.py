@@ -4,11 +4,10 @@ All source fingerprints and payloads here are synthetic fixtures. These tests
 exercise SQLite and filesystem ingestion, not actual ROCm builds or restores.
 
 From TheRock's root:
-    THEROCK_CACHE_SCHEMA=~/therock_fingerprint_cache.sql python3 -m unittest \
-        discover -s build_tools/github_actions/tests -p artifact_cache_collector_test.py -v
+    python3 -m unittest discover -s build_tools/github_actions/tests \
+        -p artifact_cache_collector_test.py -v
 
-Alternatively place the existing schema at
-build_tools/therock_fingerprint_cache.sql.
+Uses build_tools/therock_fingerprint_cache.sql unless THEROCK_CACHE_SCHEMA is set.
 """
 
 import contextlib
@@ -203,7 +202,6 @@ class ArtifactCacheTest(CacheFixture):
         report = self.collect(label="second-experiment")
         self.assertEqual(self.count("artifact_keys"), 1)
         self.assertTrue(report["artifacts"][0]["fingerprint_seen_before"])
-        self.assertNotIn("key_namespace", report)
 
     def test_commit_is_provenance_not_part_of_lookup_key(self):
         self.seed_candidate("compiler_lib_generic")

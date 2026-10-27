@@ -106,10 +106,10 @@ class CacheLoggingTest(unittest.TestCase):
         report = {"operation": "build-publish", "run_id": 8, "build_executed": True,
                   "published": [{"artifact_identity": IDENTITY, "epoch": 1,
                                  "cache_entry_id": 2, "payloads_verified": False}]}
-        legacy = ["build-publish", "--db", "cache.db", "--build-dir", "build",
+        collector_args = ["build-publish", "--db", "cache.db", "--build-dir", "build",
                   "--cache-root", "objects", "--expected", "expected.json",
                   "--label", "test"]
-        for main, args in ((cli.main, ["publish", "--granularity", "component", *COMMON]), (artifact_cache.main, legacy)):
+        for main, args in ((cli.main, ["publish", "--granularity", "component", *COMMON]), (artifact_cache.main, collector_args)):
             with self.subTest(entry_point=main.__module__):
                 def publish_result(**kwargs):
                     self.assertIsNone(kwargs.get("progress"))

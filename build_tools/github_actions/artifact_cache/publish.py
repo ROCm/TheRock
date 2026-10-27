@@ -1,19 +1,19 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Publish freshly built outputs to the cache (flowchart 3).
+"""Publish freshly built outputs to the local cache.
 
 Write ordering is the whole point of this module:
 
     built outputs + fingerprint + provenance
         -> outputs complete?                      (no  -> do NOT publish)
         -> producer & validation policy satisfied? (no  -> do NOT publish)
-        -> upload immutable objects FIRST
-        -> publish manifest + fingerprint entry LAST
+        -> save immutable artifact copies FIRST
+        -> commit ready entries and object metadata LAST
 
 The managed driver owns configure/build and input checks. Immutable objects
 are verified first; register_local_outputs records inventory and marks entries
-ready in one transaction. Raw component keys preserve the existing DB contract.
+ready in one transaction. ArtifactKey carries the exact requested identity.
 """
 
 
@@ -35,8 +35,8 @@ from .diagnostics import trace, traced
 def publish_build_outputs(**managed_build_options):
     """Public publication entry point: run the managed build before storing.
 
-    Legacy lists of already-existing outputs and caller-supplied success flags
-    are no longer publication evidence. See build_and_publish for arguments.
+    Publication requires a successful managed build and input consistency checks.
+    See build_and_publish for arguments.
     """
     return build_and_publish(**managed_build_options)
 
@@ -143,10 +143,7 @@ def build_and_publish(
     Like any build driver, correctness still relies on the build graph tracking
     its inputs and the CMake fingerprint covering the intended environment.
     """
-    if __package__.startswith("build_tools."):
-        from . import collector
-    else:
-        from . import collector
+    from . import collector
     from .local_store import regular_reader, safe_relative, store_component, store_bundle
     from .inventory import scan_build
 

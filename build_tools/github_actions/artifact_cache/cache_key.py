@@ -1,14 +1,13 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Cache epoch and legacy derived keys for historical reuse estimates.
+"""Cache epoch, artifact identities and derived keys for reuse estimates.
 
 The relational production cache uses manifest.ArtifactKey(full
 component identity, raw CMake fingerprint, epoch=CACHE_EPOCH). The epoch is
 persisted separately in artifact_keys and participates in key equality.
-Do not pass legacy derived strings
-to CacheDB.lookup or publication. Keeping them separate prevents historical
-commit-derived estimates from being mistaken for verified productions.
+Database lookup and publication require ArtifactKey objects. Derived strings
+identify reuse estimates and do not establish verified artifact availability.
 """
 
 
@@ -17,7 +16,7 @@ import hashlib
 from typing import Iterable
 
 # Bump deliberately when old productions must not satisfy new requests.
-# New relational keys use this epoch; stored keys retain their original epoch.
+# Newly constructed ArtifactKey objects use this epoch; stored epochs stay fixed.
 # Raw .fprint values and payload digests remain independent of it.
 CACHE_EPOCH = 1
 
@@ -33,9 +32,8 @@ def current_cache_epoch() -> int:
     """Resolve the default when a new key/operation is created."""
     return validate_cache_epoch(CACHE_EPOCH)
 
-# Marks keys whose source fingerprint is a fallback rather than a real
-# uploaded artifact fingerprint. This keeps derived keys from ever colliding
-# with (future) real-fingerprint keys, so the two can coexist during migration.
+# Marks commit-derived fallback fingerprints used in reuse estimates.
+# The prefix distinguishes these values from raw CMake fingerprints.
 _FALLBACK_FINGERPRINT_PREFIX = "srcfp1"
 
 
@@ -71,7 +69,7 @@ class CacheKey:
 
     @property
     def value(self) -> str:
-        """Legacy string form; relational lookups use ArtifactKey fields."""
+        """Return the epoch, build variant and fingerprint as a string."""
         return f"e{self.epoch}:{self.build_variant}:{self.fingerprint}"
 
     @property
@@ -111,24 +109,19 @@ def compute_cache_key(
     extra_inputs: Iterable[str] | None = None,
     epoch: int = CACHE_EPOCH,
 ) -> CacheKey:
-    """Compose the final cache key from its inputs.
+    """Compose a derived key for reuse estimates.
 
-    THIS IS THE SEAM. ``source_fingerprint`` is the only thing that changes when
-    real uploaded artifact fingerprints replace the fallback. Everything
-    else -- epoch, build variant, cmake-file hash, and any extra recipe inputs
-    -- is layered on here so the key stays correct regardless of where the
-    source fingerprint came from.
+    This helper combines source evidence and optional recipe inputs. Database
+    lookup and publication use ArtifactKey with the raw CMake fingerprint and
+    exact component membership; they do not use this derived string.
 
     Args:
-        source_fingerprint: A fingerprint of the source + dependency closure
-            that produced the artifact. In production this is the uploaded
-            ``.fprint``; in the fallback path it is ``derive_fallback_fingerprint(...)``.
+        source_fingerprint: Raw CMake fingerprint or a commit-derived value
+            from derive_fallback_fingerprint, used as input to the estimate.
         build_variant: The build variant, which materially changes the bytes.
-        cmake_files_hash: Optional hash of the subproject's cmake files. The
-            design notes call this out as a wanted key input beyond source
-            hashes; included here when available.
+        cmake_files_hash: Optional hash of CMake files for the estimate.
         extra_inputs: Optional additional recipe inputs (e.g. docker image id,
-            toolchain file hash) to fold in as they become available.
+            toolchain file hash) to include in the estimate.
         epoch: Global cache epoch; defaults to ``CACHE_EPOCH``.
     """
     parts = [f"fp={source_fingerprint}", f"variant={build_variant}"]
@@ -138,7 +131,7 @@ def compute_cache_key(
         parts.append(f"extra={item}")
     fingerprint = _sha256_over(parts)
     # Preserve the fallback marker through hashing so derived keys remain
-    # distinguishable from (future) real-fingerprint keys and can never collide.
+    # distinguishable from estimates based on raw CMake fingerprints.
     if source_fingerprint.startswith(_FALLBACK_FINGERPRINT_PREFIX + ":"):
         fingerprint = f"{_FALLBACK_FINGERPRINT_PREFIX}:{fingerprint}"
     return CacheKey(fingerprint=fingerprint, build_variant=build_variant, epoch=epoch)

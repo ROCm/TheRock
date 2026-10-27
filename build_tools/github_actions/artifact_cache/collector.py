@@ -23,7 +23,7 @@ Paths are relative to --artifacts-dir. Do not generate this list by scanning onl
 existing .fprint files: that would silently omit missing fingerprints.
 
 Example (from TheRock's root):
-    python3 build_tools/artifact_cache.py collect \
+    python3 -m build_tools.github_actions.artifact_cache.collector collect \
         --db ~/cache.db --expected /tmp/expected_artifacts.json \
         --artifacts-dir /tmp/therock-build/artifacts \
         --label baseline --commit COMMIT_SHA \
@@ -203,6 +203,7 @@ def load_expected(path: Path) -> list[ExpectedArtifact]:
 def read_fingerprints(
     expected: list[ExpectedArtifact], root: Path, configure_state: ConfigureState
 ) -> list[FingerprintRecord]:
+    root = Path(root).expanduser().resolve()
     result = []
     for item in expected:
         path = root / item["fingerprint_path"]
@@ -377,7 +378,7 @@ def main(argv: list[str] | None = None) -> int:
         allow_abbrev=False,
     )
     add_logging_args(scan)
-    scan.add_argument("--db", type=Path, required=True, help="existing revision-5 cache.db")
+    scan.add_argument("--db", type=Path, required=True, help="existing revision-6 cache.db")
     scan.add_argument("--expected", type=Path, required=True, help="explicit expected-output JSON")
     scan.add_argument("--artifacts-dir", type=Path, required=True)
     scan.add_argument("--label", required=True)

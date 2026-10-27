@@ -3,9 +3,9 @@
 
 """Python representations of artifact metadata; no database initialization.
 
-LocalManifest, ArtifactKey and ArtifactFile represent the existing relational
-schema. The earlier CI Manifest and its supporting types are retained below
-for deferred CI modules; they are not the local database's storage format.
+LocalManifest, ArtifactKey and ArtifactFile represent the relational schema.
+Manifest and its supporting types describe object references and producer
+metadata for model checks. Their presence does not establish reusable bytes.
 
 Per the design feedback (gist item 6), the cache value should be a manifest,
 not just an S3 URL:
@@ -74,10 +74,10 @@ class ValidationState(str, Enum):
 
 
 class PublicationState(str, Enum):
-    """Publish ordering (flowchart 3): objects first, entry last."""
+    """Publication state recorded by the object-reference metadata model."""
 
     PENDING = "pending"  # objects may still be uploading; do NOT serve
-    PUBLISHED = "published"  # manifest + all objects complete; safe to serve
+    PUBLISHED = "published"  # metadata marked published; bytes still need verification
     REVOKED = "revoked"  # withdrawn (bad build discovered, retention, ...)
 
 
@@ -146,7 +146,7 @@ class Provenance:
 
 @dataclass(frozen=True)
 class Manifest:
-    """A complete cache entry: key -> outputs + metadata."""
+    """Object-reference metadata for model checks; not a verified local entry."""
 
     cache_key: str  # CacheKey.value
     artifact: ArtifactIdentity
@@ -159,11 +159,11 @@ class Manifest:
     publication: PublicationState = PublicationState.PENDING
 
     def is_complete(self) -> bool:
-        """All outputs present with a URI, and at least one output."""
+        """At least one output reference, with a URI for every recorded output."""
         return bool(self.outputs) and all(o.uri for o in self.outputs)
 
     def is_servable(self) -> bool:
-        """Safe to hand to a consumer as a cache hit."""
+        """Published, complete metadata; physical contents remain unverified."""
         return self.publication is PublicationState.PUBLISHED and self.is_complete()
 
     def to_dict(self) -> dict[str, Any]:
@@ -202,8 +202,7 @@ class Manifest:
         return Manifest.from_dict(json.loads(text))
 
 
-# Local relational records are distinct from the earlier CI manifest above.
-# Full output identities are the storage contract. Optional policy metadata is
+# Full output identities are the relational storage contract. Policy metadata is
 # recorded explicitly in producer parameters, never inferred from an identity.
 @dataclass(frozen=True)
 class ArtifactKey:
@@ -213,7 +212,7 @@ class ArtifactKey:
     fingerprint: str
     epoch: int = field(default_factory=current_cache_epoch, kw_only=True)
 
-    # Empty for legacy component keys. Sorted complete output identities for a bundle.
+    # Empty for component keys. Sorted complete output identities for a bundle.
     components: tuple[str, ...] = field(default=(), kw_only=True)
 
     def __post_init__(self) -> None:

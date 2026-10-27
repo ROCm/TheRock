@@ -2,7 +2,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Enable ``python -m fingerprint_cache``."""
+"""Enable ``python -m build_tools.github_actions.artifact_cache``."""
 
 from .cli import main
 

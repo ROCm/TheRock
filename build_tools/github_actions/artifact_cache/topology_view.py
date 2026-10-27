@@ -1,9 +1,10 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Topology adapters for the planner.
+"""Standalone topology views for model experiments.
 
-The planner only needs a small, structural view of the build graph:
+The active cache planner uses inventory.TopologyAdapter. The views in this
+module provide a separate interface for inspecting:
 
 * the stages in build order,
 * the artifact units each stage produces (expanded across target families),
@@ -11,9 +12,9 @@ The planner only needs a small, structural view of the build graph:
 
 ``TopologyView`` is that structural interface. ``BuildTopologyView`` adapts
 TheRock's real ``_therock_utils.build_topology.BuildTopology`` to it, so the
-planner can run against the committed ``BUILD_TOPOLOGY.toml``. ``DictTopologyView``
-is a hand-built view for tests and small experiments, so the planner's logic can
-be exercised without a full checkout.
+view can read the committed ``BUILD_TOPOLOGY.toml``. ``DictTopologyView``
+supports small in-memory experiments without a full checkout. These helpers do
+not select cache entries or determine whether a build stage can be skipped.
 """
 
 
@@ -28,7 +29,7 @@ BUNDLE_COMPONENT = "bundle"
 
 
 class TopologyView(Protocol):
-    """Minimal structural view of the build graph used by the planner."""
+    """Structural view of stages, artifact units and changed paths."""
 
     def build_order_stages(self) -> list[str]:
         """Stage names in dependency order."""
@@ -45,9 +46,8 @@ class TopologyView(Protocol):
     ) -> set[tuple[str, str]]:
         """``(artifact_name, target_family)`` pairs directly modified.
 
-        A pair in this set is forced to rebuild (cache miss by construction).
-        Returning target_family-agnostic names is fine; the planner matches on
-        name and treats all its target families as changed.
+        These are model inputs, not build or cache decisions. Consumers of
+        this interface decide how to interpret the affected names and families.
         """
         ...
 
@@ -115,8 +115,8 @@ class DictTopologyView:
 class BuildTopologyView:
     """Adapts TheRock's real ``BuildTopology`` to ``TopologyView``.
 
-    Imports ``_therock_utils.build_topology`` lazily so the pure planner and its
-    tests do not require a full repo checkout. Construct via
+    Imports ``_therock_utils.build_topology`` lazily so in-memory experiments
+    do not require that module. Construct via
     :meth:`from_topology_path` from within the TheRock tree.
     """
 

@@ -7,6 +7,7 @@
 from contextlib import redirect_stdout
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -54,6 +55,22 @@ class AdaptationTest(fixtures.CacheFixture):
             self.db.execute("UPDATE prototype_runs SET parameters_json=? WHERE prototype_run_id="
                             "(SELECT producer_run_id FROM cache_entries WHERE cache_entry_id=?)",
                             (json.dumps({"cache_provenance": {"trust": trust}}), entry))
+
+    def test_relative_build_paths_preserve_component_and_bundle_keys(self) -> None:
+        self.outputs(("compiler_lib_generic", fixtures.FPRINT))
+        relative_build = Path(os.path.relpath(self.artifacts.parent))
+        relative_expected = Path(os.path.relpath(self.manifest))
+        for granularity in ("component", "bundle"):
+            with self.subTest(granularity=granularity):
+                absolute = scan_build(
+                    self.artifacts.parent, self.manifest, granularity=granularity
+                )
+                relative = scan_build(
+                    relative_build, relative_expected, granularity=granularity
+                )
+                self.assertEqual(relative, absolute)
+                self.assertEqual(relative[0][0]["fingerprint_state"], "valid")
+                self.assertIsNotNone(relative[0][1])
 
     def test_policy_filters_before_ranking_and_absent_trust_is_untrusted(self):
         older = self.seed_candidate("compiler_lib_generic", created_at=10)
@@ -263,7 +280,7 @@ class AdaptationTest(fixtures.CacheFixture):
         with self.assertRaisesRegex(ValueError, "emitted component"):
             scan_build(self.root / "build", expected_manifest=expected)
 
-    def test_legacy_store_writes_do_not_overwrite_older_objects(self):
+    def test_object_store_writes_do_not_overwrite_existing_objects(self):
         from build_tools.github_actions.artifact_cache.local_store import LocalObjectStore
         store = LocalObjectStore(self.root / "objects")
         payload = self.root / "payload"

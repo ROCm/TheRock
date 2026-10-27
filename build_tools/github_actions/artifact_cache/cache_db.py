@@ -43,8 +43,8 @@ def _encode_json(value: Any) -> str:
     return encoded
 
 
-# These storage identifiers preserve compatibility with existing databases.
-# Public interfaces use run_id. Renaming storage requires a separate migration.
+# Database storage identifiers for producing runs.
+# Public interfaces use run_id.
 _RUN_TABLE = "prototype_runs"
 _RUN_ID = "prototype_run_id"
 _REQUIRED_COLUMNS = {
@@ -130,40 +130,40 @@ ORDER BY m.request_index
 """
 
 
-def _validate_schema(db: sqlite3.Connection, *, legacy: bool = False,
+def _validate_schema(db: sqlite3.Connection, *, without_epoch: bool = False,
                      namespaced: bool = False, component_only: bool = False) -> None:
-    """Validate v6; older shapes are accepted only by the explicit migration."""
+    """Validate v6 or an explicitly requested migration input shape."""
     objects = {
         row["name"]: row["type"]
         for row in db.execute("SELECT name, type FROM sqlite_master")
     }
     for table, required in _REQUIRED_COLUMNS.items():
         if table == "artifact_keys":
-            if legacy or namespaced or component_only:
+            if without_epoch or namespaced or component_only:
                 required = required - {"components_json"}
-            if legacy or namespaced:
+            if without_epoch or namespaced:
                 required = required | {"key_namespace"}
-            if legacy:
+            if without_epoch:
                 required = required - {"epoch"}
         if objects.get(table) != "table":
             raise SchemaError(f"incompatible cache schema: missing table {table}")
         # Table identifiers are fixed implementation constants, never user input.
         available = {row["name"] for row in db.execute(f'PRAGMA table_info("{table}")')}
-        if table == "artifact_keys" and not (legacy or namespaced) and "key_namespace" in available:
+        if table == "artifact_keys" and not (without_epoch or namespaced) and "key_namespace" in available:
             raise SchemaError(
-                "cache schema needs the namespace removal migration; run python3 -m "
-                "build_tools.github_actions.fingerprint_cache.migrate_schema "
+                "cache schema requires migration; run python3 -m "
+                "build_tools.github_actions.artifact_cache.migrate_schema "
                 "--db <database> --backup <new-backup-file>"
             )
         if missing := required - available:
             if table == "artifact_keys" and "components_json" in missing:
                 raise SchemaError("cache schema needs the bundle membership migration; run python3 -m "
-                                  "build_tools.github_actions.fingerprint_cache.migrate_schema "
+                                  "build_tools.github_actions.artifact_cache.migrate_schema "
                                   "--db <database> --backup <new-backup-file>")
             if table == "artifact_keys" and "epoch" in missing:
                 raise SchemaError(
-                    "cache schema needs the epoch/namespace migration; run python3 -m "
-                    "build_tools.github_actions.fingerprint_cache.migrate_schema "
+                    "cache schema requires migration; run python3 -m "
+                    "build_tools.github_actions.artifact_cache.migrate_schema "
                     "--db <database> --backup <new-backup-file>"
                 )
             raise SchemaError(
@@ -176,11 +176,11 @@ def _validate_schema(db: sqlite3.Connection, *, legacy: bool = False,
         for index in db.execute('PRAGMA index_list("artifact_keys")')
         if index["unique"] and not index["partial"]
     }
-    expected = (("key_namespace", "artifact_id", "fingerprint") if legacy else
+    expected = (("key_namespace", "artifact_id", "fingerprint") if without_epoch else
                 ("key_namespace", "epoch", "artifact_id", "fingerprint") if namespaced else
                 ("epoch", "artifact_id", "fingerprint") if component_only else
                 ("epoch", "artifact_id", "fingerprint", "components_json"))
-    if expected not in unique_keys or (not (legacy or namespaced) and
+    if expected not in unique_keys or (not (without_epoch or namespaced) and
             unique_keys - {expected, ("artifact_key_id", "artifact_id")}):
         raise SchemaError("artifact_keys uniqueness is incompatible; run the schema migration")
     missing_triggers = {name for name in _REQUIRED_TRIGGERS if objects.get(name) != "trigger"}
@@ -191,10 +191,15 @@ def _validate_schema(db: sqlite3.Connection, *, legacy: bool = False,
     if objects.get("reusable_cache_entries") != "view":
         raise SchemaError("incompatible cache schema: missing reusable_cache_entries view")
     # Validate the view's dependencies and the query features before writing.
-    if legacy or namespaced or component_only:
+    if without_epoch or namespaced or component_only:
         db.execute("SELECT * FROM reusable_cache_entries LIMIT 0").fetchall()
     else:
         db.execute(LOOKUP_SQL, ("[]", '{"trusted":0,"tests_passed":0}')).fetchall()
+        version = db.execute("PRAGMA user_version").fetchone()[0]
+        if version != 6:
+            raise SchemaError(
+                f"unsupported database schema version: {version}; expected revision 6"
+            )
 
 
 def _connect(database: Path, timeout: float) -> sqlite3.Connection:
@@ -351,8 +356,8 @@ class CacheDB:
     candidates for verified restoration. Local publication registers completed
     object generations; it does not run builds or copy files inside SQL locks.
 
-    Legacy derived string keys are evidence only. Callers supply
-    ArtifactKey(output_identity, fprint, epoch=...).
+    Lookups require ArtifactKey(output_identity, fprint, epoch=...)
+    containing the raw CMake fingerprint and requested component membership.
     """
 
     def __init__(self, path: str | Path, *, timeout: float = 5.0):
@@ -490,7 +495,7 @@ class CacheDB:
         if any(not isinstance(key, ArtifactKey) for key in keys):
             raise TypeError(
                 "lookup requires ArtifactKey(artifact_identity, fingerprint, epoch=...); "
-                "legacy derived string keys are not supported"
+                "derived string keys are not supported"
             )
         unique = list(dict.fromkeys(keys))
         if not unique:
@@ -794,9 +799,9 @@ class CacheDB:
         return result
 
     def publish(self, manifest: Manifest) -> None:
-        """Reject legacy CI manifests; local publication uses register_local_outputs."""
+        """Require managed-build evidence through register_local_outputs."""
         raise NotImplementedError(
             "local publication must register pending cache_entries and verified "
-            "artifact_files before marking an entry ready; the legacy CI manifest "
-            "publisher is not supported by this schema"
+            "artifact_files before marking an entry ready; publication from a CI manifest "
+            "alone is not supported"
         )

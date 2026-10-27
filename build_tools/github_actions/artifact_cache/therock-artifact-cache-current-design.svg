@@ -146,7 +146,7 @@
 <rect x="55" y="1127" width="1290" height="290" rx="15" fill="white" stroke="#C8D3DF" stroke-width="1.5"/>
 <text x="80" y="1167" font-family="DejaVu Sans, sans-serif" font-size="28" font-weight="700" fill="#172A42" text-anchor="start">SQLite index</text>
 <text x="295" y="1167" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#52657A" text-anchor="start">cache_db.py  •  build_tools/therock_fingerprint_cache.sql</text>
-<text x="80" y="1200" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#315FA4" text-anchor="start">Unique key: (epoch, artifact_id, fingerprint, components_json)  •  no namespace</text>
+<text x="80" y="1200" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#315FA4" text-anchor="start">Unique key: (epoch, artifact_id, fingerprint, components_json)</text>
 <rect x="80" y="1220" width="210" height="105" rx="10" fill="#F4F7FA" stroke="#C8D3DF" stroke-width="1.5"/>
 <text x="95" y="1250" font-family="DejaVu Sans, sans-serif" font-size="21" font-weight="700" fill="#172A42" text-anchor="start">artifacts</text>
 <text x="95" y="1277" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#52657A" text-anchor="start">artifact_id</text>

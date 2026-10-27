@@ -1,16 +1,12 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""A local, directory-backed object store for local builds.
+"""Store and verify artifact exports in local immutable object generations.
 
-Phase 0 of the roadmap runs entirely on one machine with no CI and no network:
-a local build populates a cache, a later local build reuses from it. This module
-is the local fallback for S3 "immutable artifact storage" — it copies artifact
-files into a content directory, records real SHA-256 digests, and satisfies the
-``ObjectStore`` protocol used by ``restore`` (``exists`` / ``fetch_digest``).
-
-Everything here is deliberately simple and provisional: the goal is to flush
-design issues cheaply before any contract is frozen.
+Managed publication writes payload.tar and inventory.json, verifies their
+contents, and returns object digests and sizes for database registration.
+LocalObjectStore also supplies individual-file storage for object-model tests.
+These operations do not publish database entries or install build inputs.
 """
 
 
@@ -41,9 +37,9 @@ def sha256_file(path: Path, _chunk: int = 1 << 20) -> str:
 
 @dataclass
 class LocalObjectStore:
-    """Compatibility object-store adapter with immutable per-write generations.
+    """Individual-file object-store adapter with immutable per-write generations.
 
-    Managed component publication uses store_component below. This adapter
+    Managed publication uses store_component or store_bundle below. This adapter
     does not publish database entries or claim a producing build succeeded.
     """
 
@@ -106,7 +102,7 @@ class LocalObjectStore:
         return sha256_file(path)
 
     def download_file(self, uri: str, dest: Path) -> Path:
-        """Copy an object out of the store (the 'download' in flowchart 2)."""
+        """Copy a stored object to the requested local destination."""
         dest = Path(dest)
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(self.path_for(uri), dest)
