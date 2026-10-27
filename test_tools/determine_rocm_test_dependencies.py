@@ -78,62 +78,73 @@ _SUBTREE_MAP_NAME = "therock_subtree_map.json"
 
 # Hand overrides layered on top of the generated subtree map
 # (test_tools/therock_subtree_map.json, built from each subproject's
-# EXTERNAL_SOURCE_DIR). Every entry is a subtree the static parser cannot derive
-# from EXTERNAL_SOURCE_DIR; an override REPLACES the generated value for its key
-# (see _load_subtree_alias_map), which also corrects subtrees the parser maps to
-# a narrower key than selection needs.
+# EXTERNAL_SOURCE_DIR), grouped by owning repo like the generated map. Every
+# entry is a subtree the static parser cannot derive from EXTERNAL_SOURCE_DIR;
+# an override REPLACES the generated value for its key (see
+# _load_subtree_alias_map), which also corrects subtrees the parser maps to a
+# narrower key than selection needs.
 _SUBTREE_ALIAS_OVERRIDES = {
-    # Not their own declared subproject — no EXTERNAL_SOURCE_DIR subtree for the
-    # parser to relativize, so they never appear in the generated map.
-    "shared/amdgpu-windows-interop": ["hip-clr"],
-    # machine-readable-isa ships the ISA data consumed by the rocjitsu stack.
-    "shared/machine-readable-isa": ["rocjitsu"],
-    # primbench is a benchmarking header library used by rocprim/rocrand benchmarks.
-    "shared/primbench": ["rocprim", "rocrand"],
-    "shared/stinkytofu": ["tensilelite"],
-    "shared/tensile": ["hipblas", "rocblas"],
-    "dnn-providers/cmake": ["hipdnn_integration_tests"],
-    "projects/hip": ["hip-clr"],
-    "projects/hipother": ["hip-clr"],
-    # TensileLite is vendored inside hipBLASLt rather than being its own subtree,
-    # so rocm-libraries change detection reports the nested path
-    # "projects/hipblaslt/tensilelite" (see rocm-libraries#11785). Without this
-    # it falls through the `projects/` strip to the non-existent key
-    # "hipblaslt/tensilelite" and selects nothing. "tensilelite" is a synthetic
-    # level-3 node, so this also pulls in hipblaslt/rocblas/hipblas transitively.
-    "projects/hipblaslt/tensilelite": ["tensilelite"],
-    # Directory name != graph key (the parser keys by subtree path).
-    "projects/cuid": ["rdc"],
-    "projects/rocprofiler": ["rocprofiler-sdk"],
-    # Variable EXTERNAL_SOURCE_DIR (THEROCK_AMD_DBGAPI_SOURCE_DIR) the static
-    # parser cannot resolve, so it is skipped from the generated map by design.
-    "projects/rocdbgapi": ["amd-dbgapi"],
-    # mxdatagenerator's self-node is intentionally replaced by its hand-tuned
-    # GEMM test coupling.
-    "shared/mxdatagenerator": [
-        "hipblas",
-        "hipblaslt",
-        "rocblas",
-        "rocroller",
-        "tensilelite",
-    ],
-    # origami is coupled to tensilelite for test selection (not derivable from
-    # EXTERNAL_SOURCE_DIR).
-    "shared/origami": ["origami", "tensilelite"],
+    "rocm-libraries": {
+        # primbench is a benchmarking header library used by rocprim/rocrand
+        # benchmarks.
+        "shared/primbench": ["rocprim", "rocrand"],
+        "shared/stinkytofu": ["tensilelite"],
+        "shared/tensile": ["hipblas", "rocblas"],
+        "dnn-providers/cmake": ["hipdnn_integration_tests"],
+        # TensileLite is vendored inside hipBLASLt rather than being its own
+        # subtree, so rocm-libraries change detection reports the nested path
+        # "projects/hipblaslt/tensilelite" (see rocm-libraries#11785). Without
+        # this it falls through the `projects/` strip to the non-existent key
+        # "hipblaslt/tensilelite" and selects nothing. "tensilelite" is a
+        # synthetic level-3 node, so this also pulls in hipblaslt/rocblas/hipblas
+        # transitively.
+        "projects/hipblaslt/tensilelite": ["tensilelite"],
+        # mxdatagenerator's self-node is intentionally replaced by its
+        # hand-tuned GEMM test coupling.
+        "shared/mxdatagenerator": [
+            "hipblas",
+            "hipblaslt",
+            "rocblas",
+            "rocroller",
+            "tensilelite",
+        ],
+        # origami is coupled to tensilelite for test selection (not derivable
+        # from EXTERNAL_SOURCE_DIR).
+        "shared/origami": ["origami", "tensilelite"],
+    },
+    "rocm-systems": {
+        # Not their own declared subproject — no EXTERNAL_SOURCE_DIR subtree for
+        # the parser to relativize, so they never appear in the generated map.
+        "shared/amdgpu-windows-interop": ["hip-clr"],
+        # machine-readable-isa ships the ISA data consumed by the rocjitsu stack.
+        "shared/machine-readable-isa": ["rocjitsu"],
+        "projects/hip": ["hip-clr"],
+        "projects/hipother": ["hip-clr"],
+        # Directory name != graph key (the parser keys by subtree path).
+        "projects/cuid": ["rdc"],
+        "projects/rocprofiler": ["rocprofiler-sdk"],
+        # Variable EXTERNAL_SOURCE_DIR (THEROCK_AMD_DBGAPI_SOURCE_DIR) the static
+        # parser cannot resolve, so it is skipped from the generated map by
+        # design.
+        "projects/rocdbgapi": ["amd-dbgapi"],
+    },
 }
 
 _EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
 
 
-def _load_subtree_alias_map(therock_dir: Path | None = None) -> dict[str, list[str]]:
-    """Subtree -> graph-key(s), from the generated map plus hand overrides.
+def _load_repo_subtree_map(
+    therock_dir: Path | None = None,
+) -> dict[str, dict[str, list[str]]]:
+    """Repo -> subtree -> graph-key(s), from the generated map plus hand overrides.
 
     The generated map (test_tools/therock_subtree_map.json) covers every subtree
     the parser derives from EXTERNAL_SOURCE_DIR; _SUBTREE_ALIAS_OVERRIDES supplies
-    what the parser can't derive, and wins on any shared key. Keys are lowercased
-    to match the lookup in _normalize_changed_project. `therock_dir` selects which
-    checkout's test_tools/ copy is read (None = the copy next to this tool), so
-    --therock-dir governs subtree resolution the same way it governs the graph.
+    what the parser can't derive, and wins on any shared key. Subtree keys are
+    lowercased to match the lookup in _normalize_changed_project. `therock_dir`
+    selects which checkout's test_tools/ copy is read (None = the copy next to
+    this tool), so --therock-dir governs subtree resolution the same way it
+    governs the graph.
     """
     map_path = _test_tools_file(_SUBTREE_MAP_NAME, therock_dir)
     if not map_path.exists():
@@ -143,13 +154,47 @@ def _load_subtree_alias_map(therock_dir: Path | None = None) -> dict[str, list[s
             "it with build_tools/generate_consumer_graph.py."
         )
     raw = json.loads(map_path.read_text(encoding="utf-8"))
-    merged = {key.lower(): list(values) for key, values in raw.items()}
+    merged = {
+        repo: {key.lower(): list(values) for key, values in subtrees.items()}
+        for repo, subtrees in raw.items()
+    }
     # Overrides REPLACE (not union) the generated value, so a narrowing override
     # can drop a parser-derived edge; test_overrides_cover_generated_values guards
     # against accidental drops, with a documented narrowing allow-list.
-    for key, values in _SUBTREE_ALIAS_OVERRIDES.items():
-        merged[key.lower()] = list(values)
+    for repo, overrides in _SUBTREE_ALIAS_OVERRIDES.items():
+        for key, values in overrides.items():
+            merged.setdefault(repo, {})[key.lower()] = list(values)
     return merged
+
+
+def _load_subtree_alias_map(therock_dir: Path | None = None) -> dict[str, list[str]]:
+    """Subtree -> graph-key(s) across all repos (see _load_repo_subtree_map).
+
+    Changed-project strings carry no repo, so lookups use this flat view. A
+    subtree path claimed by two repos is ambiguous and raises ValueError.
+    """
+    flat: dict[str, list[str]] = {}
+    owner: dict[str, str] = {}
+    for repo, subtrees in _load_repo_subtree_map(therock_dir).items():
+        for key, values in subtrees.items():
+            if key in owner:
+                raise ValueError(
+                    f"Subtree '{key}' is mapped under both '{owner[key]}' and "
+                    f"'{repo}'; changed-project lookups cannot tell them apart."
+                )
+            owner[key] = repo
+            flat[key] = values
+    return flat
+
+
+def get_repo_subtrees(repo: str, therock_dir: Path | None = None) -> list[str]:
+    """Every subtree `repo` owns, generated or overridden, sorted.
+
+    Passing the result as changed projects scopes selection to the components
+    built from `repo` (and their consumers), e.g. for a scheduled run that has
+    no diff to narrow against. Returns an empty list for an unknown repo.
+    """
+    return sorted(_load_repo_subtree_map(therock_dir).get(repo, {}))
 
 
 # NOTE: the rocgdb/tensilelite entries mirror build_tools' fetch_test_configurations

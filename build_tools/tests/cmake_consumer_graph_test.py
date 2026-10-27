@@ -328,9 +328,10 @@ therock_cmake_subproject_declare(variable-sourced
     result = RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
     subtree_map = result.build_subtree_map()
 
+    # Each subtree is filed under the repo whose source root it sits in.
     assert subtree_map == {
-        "projects/clr": ["hip-clr", "ocl-clr"],
-        "shared/rocroller": ["rocroller"],
+        "rocm-libraries": {"shared/rocroller": ["rocroller"]},
+        "rocm-systems": {"projects/clr": ["hip-clr", "ocl-clr"]},
     }
     # The declaration whose EXTERNAL_SOURCE_DIR did not resolve is still a
     # subproject, but is silently absent from the subtree map.
@@ -398,11 +399,13 @@ def test_subtree_map_on_real_tree() -> None:
         pytest.skip("not a TheRock git checkout")
 
     subtree_map = RepositoryAnalyzer(repo_root).analyze().build_subtree_map()
+    libraries = subtree_map["rocm-libraries"]
+    systems = subtree_map["rocm-systems"]
 
-    assert subtree_map.get("projects/clr") == ["hip-clr", "ocl-clr"]
-    assert subtree_map.get("projects/composablekernel") == ["composable_kernel"]
-    assert "shared/rocroller" in subtree_map
-    assert "projects/rocdbgapi" not in subtree_map
+    assert systems.get("projects/clr") == ["hip-clr", "ocl-clr"]
+    assert libraries.get("projects/composablekernel") == ["composable_kernel"]
+    assert "shared/rocroller" in libraries
+    assert "projects/rocdbgapi" not in systems
 
 
 def test_subtree_map_covers_direct_source_dirs() -> None:
@@ -413,9 +416,10 @@ def test_subtree_map_covers_direct_source_dirs() -> None:
     if not ((repo_root / ".git").exists() and (repo_root / "CMakeLists.txt").exists()):
         pytest.skip("not a TheRock git checkout")
 
-    # Capture the root-relative subtree of each directly-rooted EXTERNAL_SOURCE_DIR.
+    # Capture the repo and root-relative subtree of each directly-rooted
+    # EXTERNAL_SOURCE_DIR.
     pattern = re.compile(
-        r"EXTERNAL_SOURCE_DIR\s+\"?\$\{THEROCK_ROCM_(?:LIBRARIES|SYSTEMS)_SOURCE_DIR\}"
+        r"EXTERNAL_SOURCE_DIR\s+\"?\$\{THEROCK_ROCM_(LIBRARIES|SYSTEMS)_SOURCE_DIR\}"
         r"/([^\"\s)]+)"
     )
     expected: set[str] = set()
@@ -425,14 +429,22 @@ def test_subtree_map_covers_direct_source_dirs() -> None:
             # Drop CMake line comments so a commented-out EXTERNAL_SOURCE_DIR (e.g.
             # math-libs/CMakeLists.txt has one) is not treated as a live declaration.
             code = line.split("#", 1)[0]
-            expected.update(m.rstrip("/") for m in pattern.findall(code))
+            expected.update(
+                f"rocm-{root.lower()}/{subtree.rstrip('/')}"
+                for root, subtree in pattern.findall(code)
+            )
 
     subtree_map = RepositoryAnalyzer(repo_root).analyze().build_subtree_map()
+    generated = {
+        f"{repo}/{subtree}"
+        for repo, subtrees in subtree_map.items()
+        for subtree in subtrees
+    }
 
     assert expected, "regex found no direct EXTERNAL_SOURCE_DIR declarations"
-    missing = sorted(s for s in expected if s not in subtree_map)
+    missing = sorted(expected - generated)
     assert missing == [], f"subtree_map missing direct subtrees: {missing}"
-    assert len(subtree_map) >= len(expected)
+    assert len(generated) >= len(expected)
 
 
 def test_source_dir_map_from_provide_artifact(tmp_path: Path) -> None:
@@ -493,7 +505,7 @@ therock_provide_artifact(thing
     # The failure is visible as a diagnostic, not silently swallowed.
     assert any("UNDEFINED_DEPS" in skipped.reason for skipped in result.skipped_paths)
     # The graph and subtree map are unaffected and still build.
-    assert result.build_subtree_map() == {"projects/clr": ["hip-clr"]}
+    assert result.build_subtree_map() == {"rocm-systems": {"projects/clr": ["hip-clr"]}}
     assert isinstance(result.build_consumer_graph(), dict)
 
 
@@ -536,8 +548,8 @@ therock_cmake_subproject_declare(deep
         .build_subtree_map()
     )
 
-    assert subtree_map == {"projects/clr/opencl/khronos": ["deep"]}
-    assert all("\\" not in key for key in subtree_map)
+    assert subtree_map == {"rocm-systems": {"projects/clr/opencl/khronos": ["deep"]}}
+    assert all("\\" not in key for key in subtree_map["rocm-systems"])
 
 
 def test_source_dir_map_uses_forward_slashes(tmp_path: Path) -> None:

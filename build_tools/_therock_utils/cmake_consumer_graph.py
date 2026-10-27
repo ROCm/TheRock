@@ -220,13 +220,14 @@ class AnalysisResult:
             name: {"consumers": sorted(consumers[name])} for name in sorted(consumers)
         }
 
-    def build_subtree_map(self) -> dict[str, list[str]]:
+    def build_subtree_map(self) -> dict[str, dict[str, list[str]]]:
         """Map each external-repo source subtree to the graph key(s) built from it.
 
-        EXTERNAL_SOURCE_DIR is made relative to the rocm-libraries / rocm-systems
-        roots to yield a ``category/name`` subtree (e.g. ``projects/clr``); one
-        subtree may back several keys. Sources outside those roots, or that did not
-        resolve (see ``_resolve_source_dir_section``), get no entry.
+        Returns ``{repo: {subtree: [keys]}}``. EXTERNAL_SOURCE_DIR is made relative
+        to the rocm-libraries / rocm-systems roots to yield a ``category/name``
+        subtree (e.g. ``projects/clr``), filed under the repo whose root it is in;
+        one subtree may back several keys. Sources outside those roots, or that did
+        not resolve (see ``_resolve_source_dir_section``), get no entry.
         """
         # Default source roots (THEROCK_ROCM_{LIBRARIES,SYSTEMS}_SOURCE_DIR); the
         # parser assumes the default layout and does not honor a cache override.
@@ -234,7 +235,7 @@ class AnalysisResult:
             self.repository_root / "rocm-libraries",
             self.repository_root / "rocm-systems",
         )
-        subtree_to_keys: dict[str, set[str]] = {}
+        repo_to_subtrees: dict[str, dict[str, set[str]]] = {}
         for subproject in self.subprojects.values():
             key = subproject.name.lower()
             # A subproject with several (conditional) source dirs fans into each.
@@ -247,10 +248,13 @@ class AnalysisResult:
                         relative = source_path.relative_to(root)
                     except ValueError:
                         continue
-                    subtree_to_keys.setdefault(relative.as_posix(), set()).add(key)
+                    repo_to_subtrees.setdefault(root.name, {}).setdefault(
+                        relative.as_posix(), set()
+                    ).add(key)
                     break
         return {
-            subtree: sorted(keys) for subtree, keys in sorted(subtree_to_keys.items())
+            repo: {subtree: sorted(keys) for subtree, keys in sorted(subtrees.items())}
+            for repo, subtrees in sorted(repo_to_subtrees.items())
         }
 
     def build_source_dir_map(self) -> dict[str, list[str]]:

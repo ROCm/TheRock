@@ -55,6 +55,19 @@ def test_map_delta_sorts_keys() -> None:
     ]
 
 
+def test_flatten_subtree_map_qualifies_keys_by_repo() -> None:
+    # Diffs name the repo, so the same subtree moving between repos reads as drift.
+    assert gcg._flatten_subtree_map(
+        {
+            "rocm-libraries": {"shared/rocroller": ["rocroller"]},
+            "rocm-systems": {"projects/clr": ["hip-clr", "ocl-clr"]},
+        }
+    ) == {
+        "rocm-libraries/shared/rocroller": ["rocroller"],
+        "rocm-systems/projects/clr": ["hip-clr", "ocl-clr"],
+    }
+
+
 # --- _read_committed_map: missing file reads as empty ---
 
 
@@ -74,7 +87,7 @@ def test_read_committed_map_present_parses(tmp_path: Path) -> None:
 # drift tests redirect THEROCK_DIR + the output paths into a temp tree and feed a
 # fixed analysis result, keeping them off the real committed files.
 _FAKE_GRAPH = {"foo": {"consumers": ["bar"]}}
-_FAKE_SUBTREE = {"projects/foo": ["foo"]}
+_FAKE_SUBTREE = {"rocm-libraries": {"projects/foo": ["foo"]}}
 _FAKE_SOURCE_DIR = {"art": ["projects/foo"]}
 
 

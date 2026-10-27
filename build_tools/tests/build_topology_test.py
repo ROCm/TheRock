@@ -1428,7 +1428,13 @@ class SourceDirMapVsBuildTopologyTest(unittest.TestCase):
     def test_every_derived_subtree_is_real(self):
         source_dir_map, _ = self._load()
         subtree_path = REPO_ROOT / "test_tools" / "therock_subtree_map.json"
-        subtrees = set(json.loads(subtree_path.read_text(encoding="utf-8")))
+        subtrees = {
+            subtree
+            for repo_subtrees in json.loads(
+                subtree_path.read_text(encoding="utf-8")
+            ).values()
+            for subtree in repo_subtrees
+        }
         for artifact, paths in source_dir_map.items():
             for path in paths:
                 self.assertIn(
