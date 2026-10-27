@@ -66,7 +66,7 @@ KNOWN_STAGES = frozenset(
 # Only compiler-runtime and math-libs have build jobs. rccl and rocshmem
 # (comm-libs) are blocked upstream, so selecting them is rejected here rather
 # than failing hours later on a missing inbound artifact.
-BUILDABLE_STAGES = frozenset({STAGE_COMPILER_RUNTIME, STAGE_MATH_LIBS})
+BUILDABLE_STAGES = frozenset({STAGE_COMPILER_RUNTIME, STAGE_MATH_LIBS, STAGE_COMM_LIBS})
 
 
 @dataclass(frozen=True)

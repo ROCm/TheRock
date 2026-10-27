@@ -162,7 +162,7 @@ jobs:
       artifact_group: multi-arch-coverage
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
-      test_runs_on: ${{ matrix.components.test_runner }}
+      test_runs_on: ${{ matrix.components.test_runner || matrix.components.multi_gpu_runner }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
       component: ${{ toJSON(matrix.components) }}
       release_type: ${{ inputs.baseline_release_type }}
