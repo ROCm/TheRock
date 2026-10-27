@@ -152,7 +152,6 @@ jobs:
         --device /dev/dri
         --user root
         --env-file /etc/podinfo/gha-gpu-isolation-settings
-        -v /data:/data:ro
         -e KUBE_CPU_REQUEST
         -e KUBE_MEMORY_REQUEST
       volumes:
