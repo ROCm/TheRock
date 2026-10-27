@@ -112,7 +112,8 @@ jobs:
   math:
     name: Build DASan math libraries (gfx950)
     if: ${{ inputs.math_libraries }}
-    runs-on: aws-linux-scale-rocm-prod
+    # Match the dedicated pool used by the other sanitizer math builds.
+    runs-on: aws-linux-scale-rocm-large
     timeout-minutes: 720
     permissions:
       contents: read
