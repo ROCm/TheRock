@@ -13,6 +13,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
+import tempfile
 
 REPO = Path(__file__).resolve().parent.parent
 IMAGE = "ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb"
@@ -40,7 +41,12 @@ def capture(command: list[str], cwd: Path = REPO) -> str:
     return subprocess.check_output(command, cwd=cwd, text=True).strip()
 
 
-def run(command: list[str], log: Path, cwd: Path = REPO) -> None:
+def run(
+    command: list[str],
+    log: Path,
+    cwd: Path = REPO,
+    env: dict[str, str] | None = None,
+) -> None:
     print(f"++ {shlex.join(command)}", flush=True)
     with log.open("a", encoding="utf-8") as stream:
         stream.write(f"\n++ {shlex.join(command)}\n")
@@ -52,6 +58,7 @@ def run(command: list[str], log: Path, cwd: Path = REPO) -> None:
             stderr=subprocess.STDOUT,
             text=True,
             errors="replace",
+            env=env,
         )
         for line in process.stdout:
             print(line, end="", flush=True)
@@ -159,36 +166,80 @@ def apply_dasan_patches(log: Path) -> None:
         ["git", "merge-base", "--is-ancestor", PINS["compiler/amd-llvm"][1], "HEAD"],
         cwd=compiler,
     )
-    reverse = subprocess.run(
-        ["git", "apply", "--reverse", "--check", *map(str, reversed(patches))],
-        cwd=compiler,
-        capture_output=True,
-        text=True,
-    )
-    if reverse.returncode == 0:
+    # Later patches can change context needed to reverse earlier patches.
+    # Walk backwards in an isolated index, leaving the real sources untouched.
+    applied_count = len(patches)
+    saw_applied = False
+    with tempfile.TemporaryDirectory(prefix="therock-dasan-index-") as temporary:
+        index_env = {**os.environ, "GIT_INDEX_FILE": str(Path(temporary) / "index")}
+        subprocess.check_call(["git", "read-tree", "HEAD"], cwd=compiler, env=index_env)
+        for index in reversed(range(len(patches))):
+            patch = patches[index]
+            reverse = subprocess.run(
+                ["git", "apply", "--cached", "--reverse", str(patch)],
+                cwd=compiler,
+                env=index_env,
+                capture_output=True,
+                text=True,
+            )
+            if reverse.returncode == 0:
+                saw_applied = True
+            elif saw_applied:
+                raise RuntimeError(
+                    f"DASan patch series is out of order or modified at {patch.name}:\n"
+                    + reverse.stderr
+                )
+            else:
+                applied_count = index
+        pending = patches[applied_count:]
+        subprocess.check_call(["git", "read-tree", "HEAD"], cwd=compiler, env=index_env)
+        for patch in pending:
+            forward = subprocess.run(
+                ["git", "apply", "--cached", str(patch)],
+                cwd=compiler,
+                env=index_env,
+                capture_output=True,
+                text=True,
+            )
+            if forward.returncode:
+                raise RuntimeError("DASan compiler patch conflict:\n" + forward.stderr)
+    if not pending:
         print("DASan compiler compatibility patches are already applied", flush=True)
-        return
-    forward = subprocess.run(
-        ["git", "apply", "--check", *map(str, patches)],
-        cwd=compiler,
-        capture_output=True,
-        text=True,
-    )
-    if forward.returncode:
-        raise RuntimeError("DASan compiler patch conflict:\n" + forward.stderr)
-    # Call the normal helper directly: its CLI would clear other projects'
-    # .smrev files. Only the LLVM patch state should change here.
+    else:
+        print(
+            f"Applying {len(pending)} DASan patches after {applied_count} existing patches"
+        )
+        # Match fetch_sources.apply_patches without reapplying the existing
+        # prefix or clearing other projects' .smrev metadata.
+        run(
+            [
+                "git",
+                "-c",
+                "user.name=therockbot",
+                "-c",
+                "user.email=therockbot@amd.com",
+                "am",
+                "--whitespace=nowarn",
+                "--no-gpg-sign",
+                *map(str, pending),
+            ],
+            log,
+            cwd=compiler,
+            env={**os.environ, "GIT_COMMITTER_DATE": "Thu, 1 Jan 2099 00:00:00 +0000"},
+        )
     run(
-        [
-            sys.executable,
-            "-c",
-            "import sys; sys.path.insert(0, 'build_tools'); "
-            "from argparse import Namespace; "
-            "from fetch_sources import apply_patches; "
-            "apply_patches(Namespace(patch_tag='dasan'), ['llvm-project'])",
-        ],
+        ["git", "update-index", "--skip-worktree", "--", "compiler/amd-llvm"],
         log,
+        cwd=REPO,
     )
+    patches_hash = hashlib.sha1(usedforsecurity=False)
+    for patch in patches:
+        patches_hash.update(patch.read_bytes())
+    origin, revision = PINS["compiler/amd-llvm"]
+    state = f"{origin}\n{revision}+PATCHED:{patches_hash.hexdigest()}\n"
+    smrev = compiler.with_name(".amd-llvm.smrev")
+    if not smrev.exists() or smrev.read_text(encoding="utf-8") != state:
+        smrev.write_text(state, encoding="utf-8")
 
 
 def build(args: argparse.Namespace, extra: list[str]) -> None:

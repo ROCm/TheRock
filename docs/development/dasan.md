@@ -30,13 +30,21 @@ normal compatibility patches. It refuses already initialized experimental
 submodules because `fetch_sources.py` resets their contents.
 
 The launcher then applies the local `patches/dasan/llvm-project` compatibility
-patch, including on an already prepared checkout. The supplied LLVM branch
+patches, including on an already prepared checkout. The supplied LLVM branch
 uses an obsolete ROCr executable-allocation enum and bit value; the selected
 ROCr revision expects `HSA_AMD_MEMORY_POOL_EXECUTABLE_FLAG` with value `1 << 2`.
-The patch updates both the call site and fallback enum definition. The normal
-source patch helper records LLVM's `.smrev` without clearing ROCr's patch
-metadata. Subsequent launches detect the already applied patch; dirty compiler
-sources or conflicts stop the build for inspection.
+The first patch updates both the call site and fallback enum definition. The
+second requests executable permission explicitly when mapping the reserved
+address space; allocating executable-capable memory alone does not make the
+KFD mapping executable.
+
+The launcher detects an already applied ordered prefix and applies only the
+remaining patches with TheRock's normal `git am` identity and fixed committer
+date. It refreshes LLVM's `.smrev` using the original source pin and the digest
+of the complete ordered patch series, preserving ROCr's patch metadata. This
+allows a new compatibility patch to be added without resetting sources or
+reapplying earlier patches. Dirty compiler sources, conflicts, or patches
+applied out of order stop the build for inspection.
 
 ```bash
 python3 build_tools/dasan_build.py \
