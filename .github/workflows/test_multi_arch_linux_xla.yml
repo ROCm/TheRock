@@ -10,10 +10,6 @@ on:
         description: GPU family to test (e.g. gfx94X-dcgpu, gfx110X-all)
         required: true
         type: string
-      rocm_version:
-        description: ROCm version to test against (TheRock build under test)
-        required: true
-        type: string
       rocm_distro_url:
         description: "URL of the TheRock multi-arch distro tarball to test against."
         required: true
@@ -71,10 +67,6 @@ on:
         description: GPU family to test (e.g. gfx94X-dcgpu, gfx110X-all)
         type: string
         default: "gfx94X-dcgpu"
-      rocm_version:
-        description: ROCm version to test against (TheRock build under test)
-        type: string
-        default: "10.2.0.dev0"
       rocm_distro_url:
         description: "URL of the TheRock multi-arch distro tarball to test against."
         type: string
@@ -138,7 +130,7 @@ permissions:
 
 jobs:
   test_xla:
-    name: Test XLA | ${{ inputs.test_subset || 'all' }} | ${{ inputs.test_amdgpu_family || 'gfx94X-dcgpu' }}
+    name: Test XLA | ${{ inputs.test_subset || 'all' }} | ${{ inputs.test_amdgpu_family || 'gfx94X-dcgpu,gfx950' }}
     runs-on: ${{ inputs.test_runs_on || 'linux-gfx942-1gpu-ccs-csp-ossci-rocm' }}
     timeout-minutes: 240
     outputs:
@@ -168,10 +160,8 @@ jobs:
     env:
       QUARTZ_REPORTING_WORKFLOW: test_multi_arch_linux_xla.yml
       QUARTZ_WORKFLOW_POSTFIX: "- test XLA (partial)"
-      TEST_AMDGPU_FAMILY: ${{ inputs.test_amdgpu_family || 'gfx94X-dcgpu' }}
-      ROCM_VERSION: ${{ inputs.rocm_version || '10.2.0.dev0' }}
-      XLA_REF: ${{ inputs.xla_ref || 'rocm-jaxlib-v0.11.2' }}
-      TEST_SUBSET: ${{ inputs.test_subset || 'all' }}
+      ROCM_AMD_GPU_TARGETS: ${{ inputs.test_amdgpu_family || 'gfx94X-dcgpu,gfx950' }}
+      RBE_SINGLE_GPU_POOL: "linux_x64_gpu"
       ROCM_DISTRO_URL: ${{ inputs.rocm_distro_url || 'https://rocm.devreleases.amd.com/tarball-multi-arch/therock-dist-linux-multiarch-10.0.0.dev0%2Bc247febed686e713051e4cf7bcce437a8dcbfad9.tar.gz' }}
       ROCM_DISTRO_HASH: ${{ inputs.rocm_distro_hash || 'no_hash' }}
 
@@ -204,18 +194,6 @@ jobs:
           repository: ${{ inputs.xla_repository || 'ROCm/xla' }}
           ref: ${{ inputs.xla_commit || inputs.xla_ref || 'rocm-jaxlib-v0.11.2' }}
 
-      # Same tool and input the JAX test workflow uses (expand_amdgpu_families.py
-      # --output-mode=device-extras); bare "targets" mode gives the comma-separated
-      # gfx target list TF_ROCM_AMDGPU_TARGETS wants instead of pip extras. A
-      # multi-arch test_amdgpu_family (e.g. covering both gfx942 and gfx950)
-      # expands to both targets here, so there is nothing to hardcode.
-      - name: Compute ROCm AMDGPU targets
-        run: |
-          targets=$(python build_tools/github_actions/expand_amdgpu_families.py \
-            --amdgpu-families "${TEST_AMDGPU_FAMILY}")
-          echo "Expanded family '${TEST_AMDGPU_FAMILY}' -> '${targets}'"
-          echo "ROCM_AMD_GPU_TARGETS=${targets}" >> "$GITHUB_ENV"
-
       # The device serial numbers it prints identify a recurring bad device
       # across runs, since the runner and the device index change every time.
       - name: Driver / GPU sanity check
@@ -232,6 +210,7 @@ jobs:
             --config=rocm_rbe_dev \
             --config=ci_single_gpu \
             --repo_env=TF_ROCM_RBE_DOCKER_IMAGE="${DOCKER_IMAGE}" \
+            --repo_env=TF_ROCM_RBE_SINGLE_GPU_POOL="${RBE_SINGLE_GPU_POOL}" \
             --repo_env=ROCM_DISTRO_URL="${ROCM_DISTRO_URL}" \
             --repo_env=ROCM_DISTRO_HASH="${ROCM_DISTRO_HASH}" \
             --repo_env=TF_ROCM_AMDGPU_TARGETS="${ROCM_AMD_GPU_TARGETS}" \
@@ -250,6 +229,7 @@ jobs:
             --config=rocm_rbe_dev \
             --config=ci_single_gpu \
             --repo_env=TF_ROCM_RBE_DOCKER_IMAGE="${DOCKER_IMAGE}" \
+            --repo_env=TF_ROCM_RBE_SINGLE_GPU_POOL="${RBE_SINGLE_GPU_POOL}" \
             --repo_env=ROCM_DISTRO_URL="${ROCM_DISTRO_URL}" \
             --repo_env=ROCM_DISTRO_HASH="${ROCM_DISTRO_HASH}" \
             --repo_env=TF_ROCM_AMDGPU_TARGETS="${ROCM_AMD_GPU_TARGETS}" \
