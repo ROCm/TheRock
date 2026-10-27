@@ -25,7 +25,7 @@ from build_tools.github_actions.artifact_cache.manifest import (
 )
 from build_tools.github_actions.tests import artifact_cache_collector_test as fixtures
 from build_tools.github_actions.tests import _artifact_cache_fixtures as relational
-
+from build_tools.github_actions.artifact_cache.restore import restore_local_key
 
 class CacheDBTest(fixtures.CacheFixture):
     def key(self, identity="compiler_lib_generic"):
@@ -219,6 +219,55 @@ class CacheDBTest(fixtures.CacheFixture):
         completed = subprocess.run(command, cwd=fixtures.TOOLS_DIR.parent, capture_output=True, text=True)
         self.assertEqual(completed.returncode, 0, completed.stderr)
 
+
+class ObjectStoreLookupTest(relational.RelationalFixture):
+    def test_shared_key_selects_correct_store_before_ranking(self):
+        cache = self.root / "objects"
+        first = self.publish_copy(cache, b"first store")
+        second = self.publish_copy(
+            self.root / "objects-other", b"second store"
+        )
+        key = self.key()
+
+        with CacheDB(self.database) as db:
+            self.assertEqual(db.stats()["artifact_keys"], 1)
+            self.assertEqual(
+                db.lookup(key).cache_entry_id, second.cache_entry_id
+            )
+            self.assertEqual(
+                db.lookup_batch([key, key], cache_root=cache)[key].cache_entry_id,
+                first.cache_entry_id,
+            )
+            self.assertIsNone(
+                db.lookup(key, cache_root=self.root / "empty-store")
+            )
+
+            restored = restore_local_key(
+                db, key, cache, self.root / "restored"
+            )
+            self.assertEqual(
+                restored["cache_entry_id"], first.cache_entry_id
+            )
+            self.assertIsNone(
+                db.lookup(
+                    key,
+                    ReadPolicy(min_trust=TrustLevel.TRUSTED),
+                    cache_root=cache,
+                )
+            )
+            self.assertIsNone(
+                db.lookup(
+                    key,
+                    ReadPolicy(min_validation=ValidationState.TESTS_PASSED),
+                    cache_root=cache,
+                )
+            )
+            self.assertEqual(db.stats()["reusable_cache_entries"], 2)
+
+        self.assertEqual(
+            (self.root / "restored/stage/file").read_bytes(),
+            b"first store",
+        )
 
 class PublishGuardTest(relational.RelationalFixture):
     def test_pending_entry_is_never_returned(self):

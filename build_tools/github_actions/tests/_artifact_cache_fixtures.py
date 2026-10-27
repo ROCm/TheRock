@@ -63,6 +63,21 @@ class RelationalFixture(collector_tests.CacheFixture):
                 outputs=[(self.key(identity), stored.directory, stored.files)],
             )[0]
 
+    def publish_copy(self, cache, payload):
+        """Publish a synthetic producer's real archive into a chosen store."""
+        run = self.producer()
+        component = self.artifacts / IDENTITY
+        (component / "stage").mkdir(parents=True, exist_ok=True)
+        (component / "artifact_manifest.txt").write_text(
+            "stage\n", encoding="utf-8"
+        )
+        (component / "stage/file").write_bytes(payload)
+        stored = store_component(component, cache)
+        with CacheDB(self.database) as db:
+            return db.register_local_outputs(
+                producer_run_id=run,
+                outputs=[(self.key(), stored.directory, stored.files)],
+            )[0]
 
 def history_run(run_id, commit="c1", *, branch="main", event="push",
                 start="2026-09-01T00:00:00Z", end="2026-09-01T00:10:00Z",

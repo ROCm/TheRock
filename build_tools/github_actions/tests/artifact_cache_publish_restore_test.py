@@ -130,6 +130,34 @@ class RestoreTest(fixtures.RelationalFixture):
         self.assertEqual(results[0]["outcome"], "needs_build")
         self.assertFalse((self.root / "restored").exists())
 
+    def test_corruption_retries_within_selected_store_without_retiring_other_store(self):
+        cache = self.root / "objects"
+        first = self.publish_copy(cache, b"good")
+        bad = self.publish_copy(cache, b"bad later copy")
+        other = self.publish_copy(self.root / "elsewhere", b"other store")
+
+        (Path(bad.local_directory) / "payload.tar").write_bytes(b"corrupt")
+
+        with CacheDB(self.database) as db:
+            restored = restore_local_key(
+                db,
+                self.key(),
+                cache,
+                self.root / "restored",
+            )
+            self.assertEqual(
+                restored["cache_entry_id"], first.cache_entry_id
+            )
+            self.assertEqual(
+                [
+                    entry["cache_entry_id"]
+                    for entry in restored["rejected_entries"]
+                ],
+                [bad.cache_entry_id],
+            )
+            self.assertIsNotNone(db.get_manifest(other.cache_entry_id))
+            self.assertIsNone(db.get_manifest(bad.cache_entry_id))
+
 
 class RetainedRestoreModelTest(unittest.TestCase):
     def test_unknown_digest_is_not_a_verified_reuse(self):
