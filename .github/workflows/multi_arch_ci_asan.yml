@@ -16,6 +16,10 @@ on:
   #     - main
   workflow_dispatch:
     inputs:
+      enable_dasan:
+        type: boolean
+        description: "Run the experimental DASan compiler/runtime build and lit tests for gfx942 and gfx950"
+        default: false
       linux_amdgpu_families:
         type: string
         description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx120X"
@@ -69,7 +73,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  dasan:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.enable_dasan }}
+    uses: ./.github/workflows/multi_arch_ci_dasan.yml
+
   setup:
+    if: ${{ !inputs.enable_dasan }}
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "asan"
@@ -103,7 +112,7 @@ jobs:
 
   ci_asan_summary:
     name: CI ASAN Summary
-    if: always()
+    if: ${{ always() && !inputs.enable_dasan }}
     needs:
       - setup
       - linux_build_and_test

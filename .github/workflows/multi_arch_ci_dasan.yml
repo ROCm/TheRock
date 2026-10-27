@@ -1,0 +1,142 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Experimental DASan compiler and runtime
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build DASan (gfx942 + gfx950)
+    runs-on: aws-linux-scale-rocm-prod
+    timeout-minutes: 360
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
+    defaults:
+      run:
+        shell: bash
+    env:
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: "*"
+    steps:
+      - name: Checkout DASan branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 10
+        with:
+          persist-credentials: false
+
+      - name: Build pinned compiler and runtimes
+        run: |
+          python build_tools/dasan_build.py \
+            --in-container --prepare-sources --output-dir dasan-output \
+            --gpu-targets 'gfx942;gfx950' --jobs "$(nproc)" --link-jobs 4
+
+      - name: Prepare unchanged LLVM DASan lit suite
+        run: |
+          python test_tools/dasan_bundle.py \
+            --source-root compiler/amd-llvm \
+            --llvm-build dasan-output/build/compiler/amd-llvm/build \
+            --rocm-root dasan-output/build/dist/rocm \
+            --output dasan-output/dasan-lit-bundle
+
+      - name: Validate installed host runtimes and both compile targets
+        run: |
+          python test_tools/dasan_smoke.py \
+            --rocm-path dasan-output/build/dist/rocm \
+            --llvm-lit dasan-output/dasan-lit-bundle/llvm-lit.py \
+            --lit-suite dasan-output/dasan-lit-bundle/suite \
+            --output-dir dasan-output/validation-host
+
+      - name: Package installation
+        run: |
+          tar -cJf therock-dasan-gfx942-gfx950.tar.xz \
+            -C build/dist rocm
+        working-directory: dasan-output
+
+      - name: Upload installation
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dasan-installation-gfx942-gfx950
+          path: dasan-output/therock-dasan-gfx942-gfx950.tar.xz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload build provenance and validation bundle
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dasan-build-logs-and-tests
+          path: |
+            dasan-output/*.json
+            dasan-output/*.log
+            dasan-output/dasan-lit-bundle/
+            dasan-output/validation-host/
+          retention-days: 14
+
+  test:
+    name: DASan lit (${{ matrix.arch }})
+    needs: build
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: gfx942
+            runner: linux-gfx942-8gpu-ossci-rocm
+          - arch: gfx950
+            runner: linux-gfx950-8gpu-ccs-ossci-rocm
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98
+      options: --device=/dev/kfd --device=/dev/dri --group-add=video --ipc=host --security-opt seccomp=unconfined
+    defaults:
+      run:
+        shell: bash
+    env:
+      GPU_ARCH: ${{ matrix.arch }}
+    steps:
+      - name: Checkout validation runner
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download installation
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dasan-installation-gfx942-gfx950
+          path: dasan-test
+
+      - name: Download validation bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dasan-build-logs-and-tests
+          path: dasan-test
+
+      - name: Extract installation
+        run: tar -xJf therock-dasan-gfx942-gfx950.tar.xz
+        working-directory: dasan-test
+
+      - name: Run all 27 DASan tests including OpenMP and multiple GPUs
+        run: |
+          GPU_COUNT="$(python3 -c 'from pathlib import Path; print(sum(int(p.read_text()) != 0 for p in Path("/sys/class/kfd/kfd/topology/nodes").glob("*/gpu_id")))')"
+          python3 test_tools/dasan_smoke.py \
+            --rocm-path dasan-test/rocm \
+            --llvm-lit dasan-test/dasan-lit-bundle/llvm-lit.py \
+            --lit-suite dasan-test/dasan-lit-bundle/suite \
+            --gpu-arch "${GPU_ARCH}" --gpu-device-count "${GPU_COUNT}" \
+            --openmp --require-multi-device \
+            --output-dir "dasan-test/validation-${GPU_ARCH}"
+
+      - name: Upload DASan test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dasan-validation-${{ matrix.arch }}
+          path: dasan-test/validation-${{ matrix.arch }}/
+          retention-days: 14

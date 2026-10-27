@@ -32,14 +32,38 @@ The pinned image is
 `ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb`,
 matching `.github/workflows/multi_arch_build_portable_linux_artifacts.yml`.
 
-| Source | Requested branch/revision | Pinned commit |
-| --- | --- | --- |
-| ROCm/llvm-project | `amd/dev/msearles/dasan` | `b07aa864f5b2bf648e6a61e2902cbfde83192481` |
-| ROCm/HIPIFY | `d364ef4` | `d364ef407b2c3e20c6ceb3575bd852f0c7cebb8c` |
-| ROCm/SPIRV-LLVM-Translator | `5817038` | `5817038657a5d3166f753389ff7f4740bd8d7c16` |
-| jhuber6/rocm-systems | `loader_va` | `f535db62a0dc73f2d56d4b93d9bbd4f3155e113b` |
+| Source                     | Requested branch/revision | Pinned commit                              |
+| -------------------------- | ------------------------- | ------------------------------------------ |
+| ROCm/llvm-project          | `amd/dev/msearles/dasan`  | `b07aa864f5b2bf648e6a61e2902cbfde83192481` |
+| ROCm/HIPIFY                | `d364ef4`                 | `d364ef407b2c3e20c6ceb3575bd852f0c7cebb8c` |
+| ROCm/SPIRV-LLVM-Translator | `5817038`                 | `5817038657a5d3166f753389ff7f4740bd8d7c16` |
+| jhuber6/rocm-systems       | `loader_va`               | `f535db62a0dc73f2d56d4b93d9bbd4f3155e113b` |
 
 ## Build and resume
+
+### GitHub Actions
+
+The experimental branch adds an `enable_dasan` manual-dispatch input to
+`multi_arch_ci_asan.yml`. It selects a dedicated DASan compiler/runtime path
+using the same pinned CI container. The normal ASan path remains the default.
+DASan always builds both `gfx942` and `gfx950`; the ASan family, label, and
+prebuilt-stage inputs do not apply to this experimental path.
+
+```bash
+gh workflow run multi_arch_ci_asan.yml --repo ROCm/TheRock \
+  --ref users/safaizal/dasan-ci-01a17b3a -f enable_dasan=true
+```
+
+The CPU job builds the pinned sources, validates the installed host runtimes
+and both compile/link targets, and uploads the installation, source manifests,
+logs, and unchanged lit source bundle as GitHub Actions artifacts. Separate
+multi-GPU jobs run all 27 DASan tests on `gfx942` and `gfx950`, including OpenMP
+and the multi-device test. The test jobs use the installed artifacts and do
+not set `fast_unwind_on_malloc=0`. Each architecture uploads its own results;
+a failed or unsupported required test fails that job. Artifacts are retained
+for 14 days. This workflow does not publish a ROCm release.
+
+### Local or remote build
 
 Use a dedicated Linux checkout containing the DASan enablement changes. Source
 files for the top-level enablement must be committed before launching, including
