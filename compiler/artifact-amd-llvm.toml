@@ -23,6 +23,8 @@ include = [
   "lib/llvm/include/c++/**",
 ]
 force_include = [
+  # Keep both host and device compiler-rt payloads (including DASan archives,
+  # shared runtimes, preinit and symbol lists) in the runtime artifact.
   "lib/llvm/lib/clang/**",
 ]
 [components.run."compiler/amd-llvm/stage"]

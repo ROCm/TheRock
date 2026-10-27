@@ -82,6 +82,31 @@ else()
   set(LIBOMP_COPY_EXPORTS OFF)
 endif()
 
+if(THEROCK_ENABLE_DASAN)
+  if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "DASan requires a Linux host")
+  endif()
+  if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/lib/dasan/CMakeLists.txt"
+      OR NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../libc/CMakeLists.txt")
+    message(FATAL_ERROR "DASan requires the DASan LLVM branch, including compiler-rt and libc sources")
+  endif()
+  set(LLVM_ENABLE_ASSERTIONS ON CACHE BOOL "Enable LLVM assertions for DASan" FORCE)
+  set(LLVM_ENABLE_PER_TARGET_RUNTIME_DIR ON CACHE BOOL "Separate host and device runtimes" FORCE)
+  set(COMPILER_RT_BUILD_SANITIZERS ON CACHE BOOL "Build sanitizer runtimes" FORCE)
+
+  # Reuse the canonical AMDGPU runtime triple already used by TheRock. Keep
+  # amd-staging's OpenMP/Fortran runtimes when present, and also support the
+  # compiler-rt-only device configuration on earlier DASan branch revisions.
+  list(APPEND LLVM_RUNTIME_TARGETS default amdgcn-amd-amdhsa)
+  list(REMOVE_DUPLICATES LLVM_RUNTIME_TARGETS)
+  set(LLVM_RUNTIME_TARGETS "${LLVM_RUNTIME_TARGETS}" CACHE STRING "Runtime targets" FORCE)
+  list(APPEND RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES compiler-rt)
+  list(REMOVE_DUPLICATES RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES)
+  list(APPEND RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake")
+  list(REMOVE_DUPLICATES RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES)
+endif()
+
 # Set the LLVM_ENABLE_PROJECTS variable before including LLVM's CMakeLists.txt
 # Only enable BUILD_TESTING if LLVM tests are explicitly enabled
 if(THEROCK_BUILD_LLVM_TESTS)
