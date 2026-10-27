@@ -1,0 +1,51 @@
+From: Sahil Faizal <safaizal@amd.com>
+Subject: [PATCH] Use ROCr pool executable flag for DASan images
+
+Align the experimental compiler runtime with the pinned ROCr loader_va API.
+hsa_amd_vmem_handle_create accepts HSA_AMD_MEMORY_POOL_EXECUTABLE_FLAG
+(bit 2). The obsolete private executable flag was bit 0, which this ROCr
+interprets as the PCIe allocation flag; it also fails to compile when using
+the pinned external HSA headers.
+
+ROCr API: https://github.com/jhuber6/rocm-systems/blob/f535db62a0dc73f2d56d4b93d9bbd4f3155e113b/projects/rocr-runtime/runtime/hsa-runtime/inc/hsa_ext_amd.h
+LLVM base: b07aa864f5b2bf648e6a61e2902cbfde83192481
+Drop this one-off patch when the DASan branch adopts the current pool flag.
+
+diff --git a/compiler-rt/lib/dasan/dasan_image.cpp b/compiler-rt/lib/dasan/dasan_image.cpp
+index 4561918..f0236a9 100644
+--- a/compiler-rt/lib/dasan/dasan_image.cpp
++++ b/compiler-rt/lib/dasan/dasan_image.cpp
+@@ -301,7 +301,7 @@ bool ReserveExecutable(hsa_agent_t Agent, uptr LoadSize, uptr* Addr, uptr* Span,
+   if (!Alias)
+     return false;
+   u64 H = 0;
+-  if (!VaCreate(Device, MapSize, HSA_AMD_VMEM_HANDLE_CREATE_EXECUTABLE, &H) ||
++  if (!VaCreate(Device, MapSize, HSA_AMD_MEMORY_POOL_EXECUTABLE_FLAG, &H) ||
+       !VaMap(Alias, MapSize, H, /*ReadOnly=*/false, Device)) {
+     if (H)
+       VaDestroy(H);
+diff --git a/compiler-rt/lib/sanitizer_common/sanitizer_offload_hsa.h b/compiler-rt/lib/sanitizer_common/sanitizer_offload_hsa.h
+index dab7a41..144e5c0 100644
+--- a/compiler-rt/lib/sanitizer_common/sanitizer_offload_hsa.h
++++ b/compiler-rt/lib/sanitizer_common/sanitizer_offload_hsa.h
+@@ -129,18 +129,12 @@ typedef enum {
+   HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_EXTENDED_SCOPE_FINE_GRAINED = 8,
+ } hsa_amd_memory_pool_global_flag_t;
+ 
+-// Point-to-point fine grain. hsa_amd_vmem_handle_create ignores it until the
+-// AMD extension minor that honors pool flags on the virtual-memory path.
++// Memory pool flags are also accepted by hsa_amd_vmem_handle_create.
+ typedef enum {
+   HSA_AMD_MEMORY_POOL_PCIE_FLAG = 1,
++  HSA_AMD_MEMORY_POOL_EXECUTABLE_FLAG = (1 << 2),
+ } hsa_amd_memory_pool_flag_t;
+ 
+-// Flag bit of hsa_amd_vmem_handle_create. Present when the loader extension
+-// can place a code object in a caller-owned mapping.
+-typedef enum {
+-  HSA_AMD_VMEM_HANDLE_CREATE_EXECUTABLE = 1,
+-} hsa_amd_vmem_handle_create_flag_t;
+-
+ typedef enum {
+   HSA_AMD_SYSTEM_INFO_EXT_VERSION_MAJOR = 0x207,
+   HSA_AMD_SYSTEM_INFO_EXT_VERSION_MINOR = 0x208,
