@@ -332,7 +332,7 @@ jobs:
         with:
           persist-credentials: false
           repository: ROCm/therock-ci-config
-          ref: main
+          ref: users/ndhillon/azure-arc-prolense-dev-test
           path: ci-config
         continue-on-error: true
 
