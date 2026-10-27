@@ -228,7 +228,6 @@ class FindMSVC(FindProgram):
             _msg = subprocess.run(
                 [self.name],
                 text=True,
-                shell=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
             ).stdout
@@ -305,7 +304,6 @@ class FindML64(FindProgram):
             _msg = subprocess.run(
                 [self.name],
                 text=True,
-                shell=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
             ).stdout
@@ -335,11 +333,15 @@ class FindLIB(FindProgram):
         self.get_version()
 
     def get_version(self):
+        # Optional tools may be absent or resolve to non-executable PATH entries.
+        executable = shutil.which(self.name)
+        if executable is None:
+            self._version = None
+            return
         try:
             _msg = subprocess.run(
-                [self.name],
+                [executable],
                 text=True,
-                shell=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
             ).stdout
@@ -371,11 +373,15 @@ class FindLINK(FindProgram):
         self.get_version()
 
     def get_version(self):
+        # Optional tools may be absent or resolve to non-executable PATH entries.
+        executable = shutil.which(self.name)
+        if executable is None:
+            self._version = None
+            return
         try:
             _msg = subprocess.run(
-                [self.name],
+                [executable],
                 text=True,
-                shell=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
             ).stdout
