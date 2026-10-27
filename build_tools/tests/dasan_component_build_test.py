@@ -14,6 +14,7 @@ from configure_stage import get_topology
 from dasan_component_build import (
     STAGES,
     assembly_device_fixture,
+    audit_gpu_targets,
     audit_instrumentation,
     has_daddress,
     import_dependencies,
@@ -97,6 +98,32 @@ class ImportTest(unittest.TestCase):
 
 
 class AuditTest(unittest.TestCase):
+    def test_effective_test_toolchain_cannot_widen_requested_architecture(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            project = output / "build/core/hip-tests"
+            project.mkdir(parents=True)
+            (project / "_init.cmake").write_text("# generated\n")
+            toolchain = project / "_toolchain.cmake"
+            toolchain.write_text(
+                'set(CMAKE_HIP_ARCHITECTURES gfx950;gfx1200 CACHE STRING "From super-project" FORCE)\n'
+            )
+            with self.assertRaisesRegex(RuntimeError, "gfx1200"):
+                audit_gpu_targets(output)
+            report = json.loads((output / "target-selection.json").read_text())
+            self.assertTrue(report["failures"])
+            toolchain.write_text(
+                'set(CMAKE_HIP_ARCHITECTURES gfx950 CACHE STRING "From super-project" FORCE)\n'
+            )
+            audit_gpu_targets(output)
+            report = json.loads((output / "target-selection.json").read_text())
+            self.assertEqual(
+                report["generated_toolchains"]["core/hip-tests/_toolchain.cmake"][
+                    "CMAKE_HIP_ARCHITECTURES"
+                ],
+                ["gfx950"],
+            )
+
     def test_custom_commands_are_independent_and_assembly_inputs_explicit(self):
         commands = shell_commands(
             "cd build && clang -x hip -fsanitize=daddress a.hip && clang -x hip b.hip"

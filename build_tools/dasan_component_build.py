@@ -250,6 +250,46 @@ def has_daddress(command: str) -> bool:
     )
 
 
+def audit_gpu_targets(output: Path) -> None:
+    """Check effective generated lists before any nested project compiles.
+
+    Test artifacts default to every architecture independently of the normal
+    and distribution targets. Inspect generated toolchains to catch either
+    accidental widening or a project's fallback architecture.
+    """
+    build = output / "build"
+    selections = {}
+    failures = []
+    for path in sorted(build.rglob("*_toolchain.cmake")):
+        if not path.with_name(
+            path.name.replace("_toolchain.cmake", "_init.cmake")
+        ).is_file():
+            continue
+        variables = {}
+        for name, value in re.findall(
+            r'^set\((AMDGPU_TARGETS|GPU_TARGETS|CMAKE_HIP_ARCHITECTURES)\s+(.*?)\s+CACHE STRING "From super-project" FORCE\)$',
+            path.read_text(),
+            re.MULTILINE,
+        ):
+            targets = value.strip('"').split(";")
+            variables[name] = targets
+            if targets != ["gfx950"]:
+                failures.append(f"{path.relative_to(build)}: {name}={value}")
+        if variables:
+            selections[path.relative_to(build).as_posix()] = variables
+    report = {
+        "requested_target": "gfx950",
+        "generated_toolchains": selections,
+        "failures": failures,
+    }
+    write_json(output / "target-selection.json", report)
+    if failures or not selections:
+        raise RuntimeError(
+            "GPU target selection audit failed: "
+            + "; ".join(failures or ["no generated GPU toolchains"])
+        )
+
+
 def unsupported_device_fixture(command: str) -> bool:
     """Only explicitly targeted SPIR-V fixtures cannot use DASan."""
     return bool(
@@ -572,6 +612,12 @@ def build(args: argparse.Namespace) -> None:
             str(build_dir),
             "-GNinja",
             *[shlex.split(arg)[0] for arg in stage_args],
+            "-DTHEROCK_AMDGPU_FAMILIES=",
+            "-DTHEROCK_DIST_AMDGPU_FAMILIES=",
+            "-DTHEROCK_AMDGPU_TARGETS=gfx950",
+            "-DTHEROCK_DIST_AMDGPU_TARGETS=gfx950",
+            "-DTHEROCK_TEST_AMDGPU_TARGETS=gfx950",
+            "-DTHEROCK_TEST_AMDGPU_FAMILIES=",
             "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
             f"-DCMAKE_C_COMPILER={rocm / 'lib/llvm/bin/clang'}",
             f"-DCMAKE_CXX_COMPILER={rocm / 'lib/llvm/bin/clang++'}",
@@ -594,6 +640,7 @@ def build(args: argparse.Namespace) -> None:
         ]
         write_json(output / "configure.json", {"argv": command})
         run(command, log)
+        audit_gpu_targets(output)
         audit_instrumentation(output, primary, closure, complete=False)
         if not args.configure_only:
             targets = ["therock-artifacts", "therock-dist"]
