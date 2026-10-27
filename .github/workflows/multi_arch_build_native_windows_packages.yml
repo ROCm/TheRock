@@ -25,7 +25,11 @@ on:
         type: string
         default: runtime
       rocm_version:
-        description: "ROCm version to stamp on the MSI (e.g. '7.15.0')."
+        description: "User-facing ROCm version shown in the installer (e.g. '7.15.0')."
+        type: string
+        required: true
+      msi_version:
+        description: "WiX-legal numeric MSI ProductVersion (e.g. '7.15.3800.0')."
         type: string
         required: true
       release_type:
@@ -38,6 +42,13 @@ on:
         default: ""
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
         type: string
         default: ""
   workflow_call:
@@ -54,6 +65,9 @@ on:
       rocm_version:
         type: string
         required: true
+      msi_version:
+        type: string
+        required: true
       release_type:
         type: string
         default: ci
@@ -61,6 +75,9 @@ on:
         type: string
         default: ""
       ref:
+        type: string
+        default: ""
+      quartz_tracking_id:
         type: string
         default: ""
 
@@ -84,7 +101,8 @@ jobs:
     env:
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
       ARTIFACT_GITHUB_REPO: ${{ inputs.artifact_github_repo }}
-      PACKAGE_VERSION: ${{ inputs.rocm_version }}
+      ROCM_VERSION: ${{ inputs.rocm_version }}
+      MSI_VERSION: ${{ inputs.msi_version }}
       PACKAGES: ${{ inputs.packages }}
       MSI_DIR: ${{ github.workspace }}/msi-output
       RELEASE_TYPE: ${{ inputs.release_type }}
@@ -131,7 +149,8 @@ jobs:
             --packages "${PACKAGES}" \
             --run-id "${ARTIFACT_RUN_ID}" \
             --run-github-repo "${ARTIFACT_GITHUB_REPO}" \
-            --package-version "${PACKAGE_VERSION}" \
+            --package-version "${MSI_VERSION}" \
+            --display-version "${ROCM_VERSION}" \
             --output-dir "${MSI_DIR}"
 
           # Compile every generated .wxs into a matching .msi alongside it.

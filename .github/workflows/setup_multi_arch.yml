@@ -91,6 +91,10 @@ on:
         description: "Build native Linux packages (deb/rpm) and run their install tests."
         type: boolean
         default: true
+      build_native_windows:
+        description: "Build native Windows packages (MSI)."
+        type: boolean
+        default: true
       python_version:
         description: "Single Python version for wheel builds; empty uses the default matrix."
         type: string
@@ -150,6 +154,9 @@ on:
       rocm_rpm_package_version:
         description: ROCm RPM package version for native packages.
         value: ${{ jobs.setup.outputs.rocm_rpm_package_version }}
+      rocm_msi_package_version:
+        description: ROCm MSI package version for native Windows packages.
+        value: ${{ jobs.setup.outputs.rocm_msi_package_version }}
       ref:
         description: >-
           Resolved commit SHA from checkout. Use this instead of the input ref
@@ -177,6 +184,7 @@ jobs:
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
       rocm_deb_package_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
+      rocm_msi_package_version: ${{ steps.rocm_package_version.outputs.rocm_msi_package_version }}
       ref: ${{ steps.checkout.outputs.commit }}
       external_repo_config: ${{ steps.external_repo_config.outputs.config_json }}
     env:
@@ -246,6 +254,7 @@ jobs:
           BUILD_PYTORCH: ${{ inputs.build_pytorch }}
           BUILD_JAX: ${{ inputs.build_jax }}
           BUILD_NATIVE_LINUX: ${{ inputs.build_native_linux }}
+          BUILD_NATIVE_WINDOWS: ${{ inputs.build_native_windows }}
           PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}

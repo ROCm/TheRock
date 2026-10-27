@@ -176,10 +176,12 @@ CI_LABELS: list[Label] = [
     Label("ci:build-pytorch", COLOR_CI_PACKAGING, "Opt-in to building PyTorch packages"),
     Label("ci:build-jax", COLOR_CI_PACKAGING, "Opt-in to building JAX packages"),
     Label("ci:build-native-linux", COLOR_CI_PACKAGING, "Opt-in to building native Linux packages"),
+    Label("ci:build-native-windows", COLOR_CI_PACKAGING, "Opt-in to building native Windows packages"),
     Label("ci:build-python-packages", COLOR_CI_PACKAGING, "Opt-in to building Python packages"),
     Label("ci:skip-pytorch", COLOR_CI_PACKAGING, "Skip PyTorch package builds"),
     Label("ci:skip-jax", COLOR_CI_PACKAGING, "Skip JAX package builds"),
     Label("ci:skip-native-linux", COLOR_CI_PACKAGING, "Skip native Linux package builds"),
+    Label("ci:skip-native-windows", COLOR_CI_PACKAGING, "Skip native Windows package builds"),
     Label("ci:skip-python-packages", COLOR_CI_PACKAGING, "Skip Python package builds"),
 ]
 # fmt: on

@@ -128,6 +128,7 @@ _EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
 _CI_TEST_SELECTOR_ALIASES = {
     "hipdnn_integration_tests": ["hipdnn-integration-tests"],
     "hipdnn_samples": ["hipdnn-samples"],
+    "miopen": ["miopen", "miopen-dbsync"],
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
     "rocr-debug-agent-tests": ["rocr-debug-agent"],
     # The common GEMM suite is its own CI job. Aliasing here, rather than a
