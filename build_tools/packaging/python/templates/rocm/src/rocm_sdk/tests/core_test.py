@@ -10,7 +10,6 @@ import platform
 import subprocess
 import sys
 import unittest
-from unittest import mock
 
 from .. import _dist_info as di
 from . import utils
@@ -185,16 +184,34 @@ class ROCmCoreTest(unittest.TestCase):
                 ):
                     rocm_sdk.preload_libraries(lib_entry.shortname)
 
-    def testFindLibrariesDoesNotCallPlatformSystem(self):
-        # On Windows with Python >= 3.12, platform.system() runs a WMI query, after
-        # which amd_comgr.dll can fail to initialize (TheRock#9305).
+    @unittest.skipUnless(
+        is_windows and sys.version_info >= (3, 12),
+        "platform only queries WMI on Windows with Python >= 3.12",
+    )
+    def testInitializeProcessRunsNoWmiQuery(self):
+        # amd_comgr.dll can fail to initialize after a WMI query has run in the
+        # process (TheRock#9305). Runs in a subprocess because platform caches its
+        # WMI results, and this module already calls platform.system() at import.
         target_family = di.determine_target_family()
         shortnames = [
             lib_entry.shortname
             for lib_entry in di.ALL_LIBRARIES.values()
             if lib_entry.package.has_py_package(target_family)
         ]
-        with mock.patch(
-            "platform.system", side_effect=AssertionError("platform.system() called")
-        ):
-            rocm_sdk.find_libraries(*shortnames)
+        command = (
+            "import sys\n"
+            "queries = []\n"
+            "sys.addaudithook(lambda event, args: queries.append(args[0])"
+            " if event == '_wmi.exec_query' else None)\n"
+            "import rocm_sdk\n"
+            "rocm_sdk.initialize_process(preload_shortnames=sys.argv[1:])\n"
+            "print(queries)\n"
+        )
+        output = subprocess.check_output(
+            [sys.executable, "-c", command, *shortnames], text=True
+        )
+        self.assertEqual(
+            output.strip().splitlines()[-1],
+            "[]",
+            "rocm_sdk.initialize_process() ran WMI queries while preloading libraries",
+        )
