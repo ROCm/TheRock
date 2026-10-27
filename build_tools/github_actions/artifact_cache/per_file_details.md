@@ -32,11 +32,12 @@ Its uniqueness constraint is:
 UNIQUE (epoch, artifact_id, fingerprint, components_json)
 ```
 
-There is **no namespace**. Use separate databases to isolate experiments.
-Different artifact names, targets, epochs, fingerprints, or component sets
-produce different lookup identities. In bundle mode, every requested component
-must have the same valid raw fingerprint. Grouping does not create a replacement
-fingerprint or a separate Python key type.
+Each cache lookup uses an `ArtifactKey` containing the artifact identity,
+epoch, raw fingerprint and component membership. Differences in these values
+produce distinct lookup identities.
+
+In bundle mode, every required component must have the same valid raw
+fingerprint. The bundle uses that fingerprint unchanged.
 
 Repository commits are recorded as producer provenance. CMake may also use a
 repository commit when computing the raw fingerprint; the Python lookup layer
@@ -75,13 +76,14 @@ the earlier derived-key design and historical simulations.
 Bumping the epoch makes older epochs ineligible for new requests; it does not
 delete rows, erase files, or change raw fingerprints or output digests.
 
-`ArtifactIdentity`, `CacheKey`, `compute_cache_key()`, and
-`derive_fallback_fingerprint()` remain available. The derived string form
-`e{epoch}:{variant}:{hash}` is **not** the relational production lookup key.
-The `srcfp1:` fallback identifies commit-derived historical evidence, which
-must not be passed to `CacheDB.lookup()` as a real artifact key. The local
-`--variant` option checks the configured build type; it does not add a separate
-variant column to the relational key.
+`ArtifactIdentity` and `derive_fallback_fingerprint()` are used by history
+ingestion. The `srcfp1:` fallback identifies commit-derived historical evidence;
+it must not be passed to `CacheDB.lookup()` as a real artifact key.
+
+`CacheKey` and `compute_cache_key()` remain available as compatibility helpers.
+Their derived string form `e{epoch}:{variant}:{hash}` is not the relational
+production lookup key. The local `--variant` option checks the configured build
+type; it does not add a separate variant column to the relational key.
 
 ### `manifest.py`
 
@@ -98,8 +100,9 @@ location, expected objects, validation state, timestamps, and provenance.
 read or verify payload bytes. The class also checks that the expected object
 inventory and file records agree.
 
-`TrustLevel`, `ValidationState`, and the earlier `Manifest`, `OutputObject`,
-`Provenance`, and `PublicationState` types remain for supporting or legacy APIs.
+`TrustLevel` and `ValidationState` are used by current eligibility policies.
+`OutputObject` also represents archive references during history ingestion.
+`Manifest`, `Provenance`, and `PublicationState` remain for legacy APIs.
 The legacy manifest's `pending/published/revoked` enum must not be confused with
 the relational entry states `pending/ready/invalid`. There is no `manifests`
 database table and no serialized legacy manifest column replacing the tables.
@@ -116,10 +119,9 @@ nested transactions are rejected.
 
 `lookup_batch()` accepts `ArtifactKey` objects, deduplicates requests, selects
 candidates with a batched JSON-backed SQL query, and loads their joined file
-metadata in another batched query. This is not the old string-key `IN` query
-chunked at 500. Lookup performs no payload hashing or extraction. Multiple
-productions may satisfy one key, allowing an older eligible production to be
-selected when a newer one is unsuitable.
+metadata in another batched query. Lookup performs no payload hashing or
+extraction. Multiple productions may satisfy one key, allowing an older eligible
+production to be selected when a newer one is unsuitable.
 
 Read eligibility requires ready, validated, unexpired entries with complete
 available object metadata. `ReadPolicy` additionally filters trust, validation,
@@ -166,7 +168,6 @@ eligible stored production. A collector `hit` is a **metadata** result, with
 alone does not build, package, restore, or mark payloads ready. Unmeasured
 source-preparation, configuration, and restoration timings remain null.
 
-This file is the relocated collector, formerly `build_tools/artifact_cache.py`.
 Its CLI provides `collect`, `build-publish`, and `restore`; the last two delegate
 to the managed implementations. Component collection remains the lower-level
 observation contract used by bundle publication.
@@ -209,10 +210,6 @@ The resulting `ArtifactKey` keeps the raw CMake fingerprint and adds exact
 component membership. Requests for `lib` and `lib + dev` therefore cannot match
 the same key. `component_requests()` expands a bundle request back into the
 component sidecar contract used by managed publication.
-
-Diagnostic event names describe these decisions; they are not Python types or
-database identifiers. Renaming a key-creation event to `ARTIFACT_KEY` does not
-change any stored key or require a migration.
 
 ### `local_cache.py`
 
@@ -454,20 +451,19 @@ events and exit status.
 
 `--verbose` streams detailed events to stderr. `--log-file` writes details to
 a new UTF-8 file even without `--verbose`; it does not overwrite an existing
-log. Normal JSON stdout and final-report semantics are preserved. An event
-name such as `ARTIFACT_KEY` is a diagnostic label, not a database column.
+log. Normal JSON stdout and final-report semantics are preserved.
 
 ### `migrate_schema.py`
 
 **High level:** upgrades a recognized older database while preserving its
 saved productions and history.
 
-**Technical:** the explicit migration validates recognized revision-3/4/5
-layouts, creates a new backup with SQLite's backup API, and installs revision 6.
-It adds the legacy epoch where needed, removes namespace from older keys,
-merges equal keys with reference remapping, and adds `components_json`.
-Existing component entries retain empty membership; they are not relabeled as
-verified bundles.
+**Technical:** validates supported older database schemas, creates a backup
+using SQLite's backup API, and upgrades the database to the current schema.
+It preserves artifact records, producing runs and their references.
+
+Existing component entries retain empty component membership and are not
+converted into verified bundles.
 
 Foreign-key and integrity checks run before commit. Failures roll back the
 migration; unrecognized layouts or incompatible custom schema objects are
@@ -520,10 +516,9 @@ type does not make it valid for the relational database API.
 **High level:** provides setup instructions, usage examples, and the current
 behavioral contract.
 
-**Technical:** documents schema initialization/migration, bundle membership,
-CLI options, managed publication, verification, logging, policies, and current
-limitations. Examples must use `build_tools.github_actions.artifact_cache` and
-must not reintroduce the removed namespace option.
+**Technical:** documents schema initialization and migration, bundle membership,
+CLI options, managed publication, verification, logging, policies and current
+limitations. Command examples use `build_tools.github_actions.artifact_cache`.
 
 ### `configured-impact.md`
 
@@ -541,8 +536,7 @@ impact reporting, fingerprint invalidation, and actual build selection.
 **Technical:** this is documentation, not executable input to the planner or
 database. Keep the diagram synchronized with `ArtifactKey`, bundles, the
 relational schema, verification before reuse, objects-before-readiness
-publication, and the reporting-only dependency-impact feature. Its historical
-filename does not determine the Python package name.
+publication, and the reporting-only dependency-impact feature.
 
 ### `per_file_details.md`
 
@@ -593,7 +587,7 @@ implementation and adapted regressions from the original implementation:
 | `artifact_cache_adaptation_test.py` | Policy/ranking behavior, planner boundaries, history evidence, replay, and adapted CLI/API behavior. |
 | `artifact_cache_bundle_test.py` | Grouping, exact membership, equal fingerprints, missing-member rejection, discovery completeness, and bundle publication/restoration. |
 | `artifact_cache_collector_test.py` | Expected lists, fingerprint validation, missing outputs, observation persistence, repeated keys, and metadata-only reports. |
-| `artifact_cache_db_test.py` | Schema validation, foreign keys, transactions, batched lookup, candidate selection, and joined manifests. |
+| `artifact_cache_db_test.py` | Schema validation, foreign keys, transactions, batched lookup, object-store filtering before candidate ranking, read policy, and joined manifests. |
 | `artifact_cache_dependency_impact_test.py` | Configured consumer traversal, artifact mapping, dependency paths, invalid metadata, and reporting without build selection. |
 | `artifact_cache_diagnostics_test.py` | Detailed events, scoped logging, JSON preservation, progress, and failure diagnostics. |
 | `artifact_cache_epoch_test.py` | Epoch validation, separation/coexistence of keys, stored-epoch preservation, and migration behavior. |
@@ -602,9 +596,8 @@ implementation and adapted regressions from the original implementation:
 | `artifact_cache_local_test.py` | Immutable generations, inventories, safe extraction, real miniature builds, stale-output rejection, and failures. |
 | `artifact_cache_logging_test.py` | Compact final status wording, configure/build visibility, JSON stdout, and absence of false success/reuse claims. |
 | `artifact_cache_manifest_test.py` | Metadata types, trust/validation ordering, serialization, and relational manifest invariants. |
-| `artifact_cache_namespace_test.py` | Removal of legacy namespaces, equal-key merging, reference preservation, backups, and rollback. The filename describes migration coverage, not a current namespace feature. |
 | `artifact_cache_planner_test.py` | Candidate/miss classification, changed-path handling, read policy, and no unverified stage skips. |
-| `artifact_cache_publish_restore_test.py` | Publication evidence requirements, complete metadata, validation/trust behavior, and restore integrity checks. |
+| `artifact_cache_publish_restore_test.py` | Publication evidence requirements, complete metadata, validation/trust behavior, restore integrity, and fallback from corrupt productions without invalidating another object store's productions. |
 | `artifact_cache_replay_test.py` | Historical potential reuse, same-commit comparison, policy, and serialization of estimates. |
 | `artifact_cache_workflow_test.py` | Local object-store helpers and cold/warm/source-change workflows using isolated fixtures. |
 
@@ -613,9 +606,11 @@ implementation and adapted regressions from the original implementation:
 **High level:** supplies reusable test data and database setup helpers.
 
 **Technical:** creates temporary databases from the real SQL schema and supplies
-controlled keys, runs, observations, and productions for tests. Fixture setup
-is not a production publication API. The leading underscore keeps the helper
-outside the `artifact_cache_*_test.py` discovery pattern.
+controlled keys, runs, observations, and productions for tests. `publish_copy()`
+creates verified archive generations in a chosen local object store using
+synthetic producer records. Fixture setup is not a production publication API.
+The leading underscore keeps the helper outside the `artifact_cache_*_test.py`
+discovery pattern.
 
 Run the suite from the repository root:
 
@@ -626,7 +621,5 @@ THEROCK_CACHE_SCHEMA="$PWD/build_tools/therock_fingerprint_cache.sql" \
     -p 'artifact_cache_*_test.py' -v
 ```
 
-The last recorded validation of the configured-impact checkpoint was 266
-passing tests. That is a recorded result, not a fixed requirement for future
-test counts. Isolated fixture tests complement real-build cold/warm and
-source-change experiments; they do not prove full CI-stage reuse integration.
+Isolated fixture tests complement real-build cold/warm and source-change
+experiments; they do not prove full CI-stage reuse integration.
