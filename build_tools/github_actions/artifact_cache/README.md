@@ -1,8 +1,8 @@
 # Relational fingerprint artifact cache
 
-This adapts the local workflow, planner, history ingestion, replay, policies and
-CLI to the revision-6 SQLite schema. It does not create the original
-`manifests` table. All commands below run from the TheRock repository root.
+This package provides local artifact caching, planning, history ingestion,
+replay and read policies using a revision-6 SQLite database. All commands below
+run from the TheRock repository root.
 
 ## Data contract
 
@@ -32,12 +32,11 @@ JSON array of full component directory identities. A request for `lib` alone
 cannot hit a production for `lib + dev`, or vice versa. Component selection is
 part of the contract even if the raw CMake fingerprint remains unchanged.
 
-Existing component keys have `components_json='[]'` and keep their original
-identity, key ID and productions. `--granularity component` selects the previous
-behavior. Package `cache`, `keys`, `plan`, `publish` and `restore` CLIs default to
-bundle mode. The lower-level Python APIs and `build_tools/github_actions/artifact_cache/collector.py`
-entry points keep their component default for compatibility; Python callers
-select bundles with `granularity="bundle"`.
+Component keys have `components_json='[]'`. Use `--granularity component` to
+select individual components. Package `cache`, `keys`, `plan`, `publish` and
+`restore` CLIs default to bundle mode. The lower-level Python APIs and
+`build_tools/github_actions/artifact_cache/collector.py` entry points default
+to component mode; Python callers select bundles with `granularity="bundle"`.
 
 The Python cache records commits and run labels as provenance. CMake's default
 Git-based source identity can still include the repository's `HEAD` commit.
@@ -49,8 +48,7 @@ not change the fingerprint algorithm.
 `CACHE_EPOCH` in `cache_key.py` sets the default epoch. Increase it deliberately
 when existing entries must no longer satisfy new requests, never per build or
 experiment. Stored keys keep their original epochs. Fingerprints and payload
-integrity digests do not change when the epoch changes. Legacy `e1:release:...`
-strings remain historical simulation keys, not relational lookup keys.
+integrity digests do not change when the epoch changes.
 
 Use separate databases to isolate experiments or incompatible build environments.
 The fingerprint must cover all input differences that affect substitutability,
@@ -67,34 +65,28 @@ including relevant platform and toolchain settings.
 | `reusable_cache_entries` | Eligible metadata candidates; physical verification remains required |
 
 Opening a database validates it and never creates or migrates tables. A Python
-`LocalManifest` represents joined rows; no `manifests` table is needed.
+`LocalManifest` represents the joined key, production and file records.
 
-### One-time bundle membership migration
+### Database upgrades
 
-Stop cache commands before migrating. After installing the revision-6 code:
+Stop cache commands before upgrading a supported existing database:
 
 ```bash
 python3 -m build_tools.github_actions.artifact_cache.migrate_schema \
   --db /home/master/erman/cache.db \
-  --backup /home/master/erman/cache-before-bundles.db
+  --backup /home/master/erman/cache-before-migration.db
 ```
 
-The backup filename must be new. SQLite's backup API captures the old database
-before mutation. The migration supports revisions 3, 4 and 5 and installs
-revision 6. Existing component rows gain `components_json='[]'`; their cache
-entry IDs, file inventories, payload directories, timestamps and producer
-records remain intact. They are not relabeled as verified bundles. The first
-bundle run builds incrementally and publishes separate complete bundle entries.
+The backup filename must be new. The command validates the database schema,
+creates a backup using SQLite's backup API, and upgrades it to revision 6.
+It preserves saved productions, file inventories, payload locations, producing
+runs and their references. Component entries are not converted into verified
+bundles; bundle publication requires a complete requested component set.
 
-For older revisions 3/4, the migration also removes `key_namespace`, merging
-equal keys onto the smallest key ID and remapping entry/observation references.
-Version-3 keys gain fixed epoch 1; existing epochs remain unchanged. The backup
-retains the old schema and values.
-
-The migration verifies foreign keys and integrity before committing. Failures
-roll back changes and retain any backup already made. Unknown extensions that
-refer to the removed column are rejected, never silently rewritten. Repeating
-the command against revision 6 validates it and makes no new backup.
+Foreign-key and integrity checks run before commit. Failures roll back changes
+and retain any backup already made. Unsupported schemas or incompatible custom
+schema objects are rejected. An already-current database is validated without
+another migration or backup.
 
 For a **new** database use `build_tools/therock_fingerprint_cache.sql`. Never run
 this fresh-schema SQL against an existing database. Tests use temporary databases:
@@ -190,8 +182,8 @@ the requested destination. If an operation fails, its error is printed instead
 of a successful artifact report; failed configure and build diagnostics remain
 visible.
 
-Local cache outcome names and exit statuses are unchanged. The readable summary uses
-`reused` and `cache_skipped`, while JSON retains `verified_cached` and
+The readable summary uses `reused` and `cache_skipped`, while JSON uses
+`verified_cached` and
 `uncacheable`. Epoch, entry IDs, verification flags and whether a build ran
 remain in JSON. Omit `--expected` to include declared Ninja artifact outputs as well as observed
 directories/sidecars, including those lacking fingerprints. Declared components
@@ -199,15 +191,15 @@ remain expected even if both their directory and sidecar are absent. Use `> repo
 JSON while keeping logs visible; do not merge stderr with stdout using `2>&1`
 when the output file must contain JSON only. Workflows must invoke these CLIs
 for the lines to appear; plain `cmake --build` does not call this cache wrapper.
-This change does not wire the cache into CI workflows or skip individual build
-targets. Python callers can still opt into internal events using the optional
+The cache wrapper does not wire itself into CI workflows or skip individual
+build targets. Python callers can opt into internal events using the optional
 `progress` callback. The cache CLI attaches a filter that prints operation
 phases only. Python callers can opt into the first configure's live output with
-`cache_build(..., show_configure=True)`. Other entry points keep their previous
-configure-output behavior.
+`cache_build(..., show_configure=True)`.
 
-This fixes the configure-only publication problem: old export directories
-cannot be stored under newly configured keys without a successful managed build.
+Publication requires a successful managed build and input consistency checks.
+Reconfiguring alone does not permit existing export directories to be stored
+under newly configured keys.
 A failed build does not create ready entries. When every cacheable request has
 a verified candidate, the command does not invoke a build. Outputs without
 usable fingerprints remain cache-skipped and do not independently trigger
@@ -219,7 +211,7 @@ For automatic bundle mode, configured single-config Ninja outputs establish
 expected component membership. An observed group without a complete declared
 member set is reported as `CACHE_SKIPPED` with a request to supply `--expected`.
 Other generators require an explicit expected list for cacheable bundles.
-Component mode retains observed-only discovery. These inventories do not prove
+Component mode uses observed-only discovery. These inventories do not prove
 that a CI stage is ready to skip. Missing/invalid sidecars are reported without
 assuming all are split artifacts. `--variant` checks `CMAKE_BUILD_TYPE`; it is
 not a second arbitrary key. Multi-config builds need a separate build contract.
@@ -369,9 +361,9 @@ bundle becoming ready. Restoring a bundle verifies all members before exposing
 it in the new destination, under the original component names. A corrupt member
 rejects the entire production; an older complete production may be tried.
 
-Old inventory schema-1 component entries remain readable in component mode.
-There is no automatic conversion of old component productions into a bundle,
-which could otherwise mix unrelated producing runs or incomplete selections.
+Component mode reads inventory schema 1; bundle mode uses inventory schema 2.
+Bundle publication requires all requested components from one managed
+production. It does not combine independently stored component productions.
 
 ## Optional detailed diagnostics
 
@@ -457,9 +449,8 @@ dumped; logs do contain source/cache paths, fingerprints, digests and entry IDs.
 
 If a log becomes unwritable after work starts, a warning is printed and cache
 work continues. Starting with an unusable/existing log path fails before cache
-work. The logging options add no logger thread, network service or trust decision. The existing clean tracked-tree requirement
-still applies after these Python edits; commit the installation on the local
-experiment branch before a real managed-build run.
+work. Logging does not change the clean tracked-tree requirement: commit
+intended tracked source changes locally before a managed-build run.
 
 ## Planning and read policy
 
@@ -612,17 +603,17 @@ source fingerprint implementation or GPU builds.
 
 ## Files and integration boundaries
 
-| File | Role after adaptation |
+| File | Role |
 | --- | --- |
 | `cache_db.py` | Schema validation, batched full-key reads, policy, provenance, publication metadata, retirement and history evidence |
-| `manifest.py` | `ArtifactKey`, `ArtifactFile`, `LocalManifest`; legacy model types retained for isolated simulations |
-| `cache_key.py` | `CACHE_EPOCH`, epoch validation, and retained derived-key/history helpers |
+| `manifest.py` | Artifact keys, stored-file metadata, joined production records, trust and validation types |
+| `cache_key.py` | `CACHE_EPOCH`, epoch validation, and history fingerprint helpers |
 | `bundles.py` | Component grouping, exact membership validation, and bundle `ArtifactKey` construction |
 | `inventory.py` | Current output inventory, component parsing and `TopologyAdapter` |
 | `diagnostics.py`, `reporting.py` | Optional timestamped diagnostics and the final artifact report; stdout remains JSON |
 | `planner.py` | Component or bundle candidates and stage mapping; no unverified stage skipping |
 | `dependency_impact.py` | Configured CMake consumer traversal and affected-artifact explanations; no build-target selection |
-| `local_store.py` | Immutable archives/inventories and safe extraction; compatibility loose-object storage |
+| `local_store.py` | Immutable archives, file inventories, safe extraction and individual object storage |
 | `publish.py` | Managed configure/build/input checks before ready publication |
 | `restore.py` | Physical verification, fallback from bad candidates and extraction |
 | `local_cache.py` | One-command cold/warm workflow, key inspection and isolated fixture |
@@ -633,14 +624,10 @@ source fingerprint implementation or GPU builds.
 | `migrate_schema.py` | Explicit schema upgrades, backups, reference remapping, and integrity checks |
 | `build_tools/therock_fingerprint_cache.sql` | Fresh revision-6 schema; existing databases use the migration command |
 
-The original `topology_view.py` is not required by this path; the new adapter
-uses the real topology parser directly. Legacy APIs that accepted derived
-string keys or arbitrary output lists are intentionally not interchangeable
-with safe production operations. `publish_build_outputs` now forwards to the
-managed build API. Original test cases have been adapted to the relational
-contract in the suite below; obsolete standalone `manifests` tests should not
-remain as duplicate test files. See [per_file_details.md](per_file_details.md)
-for descriptions of every package file, the schema, and test coverage.
+The planner uses `inventory.TopologyAdapter` with TheRock's topology parser.
+Publication runs through the managed build API, including calls through
+`publish_build_outputs`. See [per_file_details.md](per_file_details.md) for
+descriptions of every package file, the schema, and test coverage.
 
 This is local publication/restoration plus CI planning/history tooling. It does
 not implement GitHub Actions job skipping, remote object publication/restoration,
@@ -657,8 +644,8 @@ shared test data and is not itself a test suite. The collector fixture is in
 
 The DB contract and relational-schema tests are consolidated in
 `artifact_cache_db_test.py`, including selection of the requested object store
-before candidate ranking and read-policy checks. Redundant mixed hit/miss and
-duplicate-key tests are covered there once. The incomplete-publication check lives in
+before candidate ranking, read-policy checks, mixed hits/misses and duplicate
+keys. The incomplete-publication check lives in
 `artifact_cache_publish_restore_test.py`, including assertions that no entry
 or file rows remain. That file also tests fallback from a corrupt production
 without invalidating productions in another object store. Managed build,
@@ -680,6 +667,3 @@ THEROCK_CACHE_SCHEMA="$PWD/build_tools/therock_fingerprint_cache.sql" \
 The tests create isolated temporary databases. No real cache database is used.
 The miniature build tests require CMake, Ninja and Git; they skip explicitly
 when these tools are unavailable and do not build ROCm or require a GPU.
-Old cache-test copies should not remain in `build_tools/tests`
-or under `fingerprint_cache_*_test.py` names, to avoid duplicate discovery.
-Unrelated test files stay in their original locations.
