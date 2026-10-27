@@ -217,6 +217,10 @@ jobs:
             --local_test_jobs=1 \
             --jobs=50 \
             --build_event_json_file=xla_single_gpu_build_events.json \
+            --bes_keywords=gpu \
+            --bes_keywords=nightly \
+            --bes_keywords=therock_xla \
+            --bes_keywords=single_gpu \
             -- \
             //xla/...
 
@@ -235,6 +239,10 @@ jobs:
             --repo_env=TF_ROCM_AMDGPU_TARGETS="${ROCM_AMD_GPU_TARGETS}" \
             --jobs=50 \
             --build_event_json_file=xla_single_gpu_build_events.json \
+            --bes_keywords=gpu \
+            --bes_keywords=nightly \
+            --bes_keywords=therock_xla \
+            --bes_keywords=cpu \
             -- \
             //xla/...
 
