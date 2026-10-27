@@ -170,23 +170,32 @@ Subprojects that opt in to source file globbing even when otherwise skipped
 
 ### `THEROCK_HARDENING_POLICY`
 
-`THEROCK_HARDENING_POLICY` controls host compiler and linker hardening. Its
-accepted values are:
+`THEROCK_HARDENING_POLICY` controls host compiler and linker options that
+detect some unsafe code at compile time and enable runtime mitigations in
+generated binaries. These options include stack protection, source
+fortification, position-independent executables, read-only relocations, and
+non-executable stacks. See the
+[OpenSSF Compiler Options Hardening Guide for C and C++](https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C%2B%2B)
+for the security goals and performance tradeoffs of these mechanisms.
+
+Its accepted values are:
 
 - `OFF` (the default): TheRock adds no hardening-policy options. Project,
   toolchain, and distribution defaults still apply.
-- `BASELINE`: enables the policy described below. Initial support is limited to
-  Linux x86-64, using GNU or Clang for C and C++ and Clang for HIP.
+- `BASELINE`: enables the policy described below. It supports Linux x86-64,
+  using GNU or Clang for C and C++ and Clang for HIP.
   Configuration fails for unsupported platforms, architectures, or compilers,
   and required options rejected by the toolchain are build errors.
-- `STRICT`: reserved for a future policy. Selecting it is an error until its
-  protections and validation criteria are defined.
+- `STRICT`: reserved. Selecting it is an error because its protections and
+  validation criteria are not defined.
 
 Enable the baseline with:
 
 ```bash
 cmake -B build -GNinja -DTHEROCK_HARDENING_POLICY=BASELINE
 ```
+
+#### Baseline protections
 
 The baseline applies the following options. Clang receives host options through
 `-Xarch_host`, including during HIP compilation, so they do not reach AMDGPU
@@ -202,71 +211,71 @@ device compilation.
 | Executable, shared-library, and module linking                                                      | `-Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack`                                                        |
 | Executable linking                                                                                  | `-pie`                                                                                              |
 
-Fortification is enabled for `Release`, `RelWithDebInfo`, and `MinSizeRel`
-configurations when the subproject's effective `THEROCK_SANITIZER` is empty.
-When a native project generates one of those configurations, configuration
-verifies that the compiler and C library produce effective fortify level 3;
-selecting `BASELINE` fails rather than falling back to a lower level. A
-Debug-only project does not require level-3 support. An independent inner
-build still validates level 3 when its bridge explicitly requests fortify,
-even if the outer wrapper uses Debug.
+#### Build configurations and fortification
 
-Fortify support cannot be inferred from the glibc version alone. Some
-distributions [backport level-3 support](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html-single/8.7_release_notes/index)
-to glibc 2.28, including the packages used by TheRock's tested manylinux
-image. Configuration therefore checks the effective fortify level with the
-selected compiler and headers instead of imposing a minimum glibc version.
+The baseline adds `_FORTIFY_SOURCE=3` to `Release`, `RelWithDebInfo`, and
+`MinSizeRel` configurations when the subproject's effective
+`THEROCK_SANITIZER` is empty. TheRock preserves each project's optimization
+level rather than increasing optimization to enable fortification.
 
-The plain reset suppresses compiler-driver defaults, while the forwarded
-reset and definition override inherited `-Wp` fortify settings. Both are
-needed to keep effective fortification consistent across supported compilers.
-Selecting a sanitizer suppresses only `_FORTIFY_SOURCE=3`; the other baseline
-protections remain enabled. The policy does not inspect target, source, or
-transitive usage-requirement flags to infer whether fortification is safe.
+When a native project generates a configuration that enables fortification,
+configuration verifies that the compiler and C library produce effective
+fortify level 3. Selecting `BASELINE` fails rather than falling back to a lower
+level. A Debug-only project does not require level-3 support. An independent
+inner build still validates level 3 when its bridge explicitly requests
+fortification, even if the outer wrapper uses Debug.
+
+Because distributions may backport fortification support, TheRock checks the
+selected compiler and headers for effective fortify level 3 instead of
+requiring a particular glibc version.
+
+#### Sanitizers and target exceptions
+
+Setting `THEROCK_SANITIZER` suppresses only `_FORTIFY_SOURCE=3`; the other
+baseline protections remain enabled.
 
 Targets that add `-O0`, `-fsanitize=...`, or a conflicting `_FORTIFY_SOURCE`
-definition must set the `THEROCK_DISABLE_FORTIFY` target property to
-true. This suppresses the policy-owned `_FORTIFY_SOURCE=3` definition. The
-project remains responsible for removing conflicting definitions that its own
-target, source, or dependency flags add after the policy options.
+definition must set the `THEROCK_DISABLE_FORTIFY` target property to true. This
+suppresses the policy-owned `_FORTIFY_SOURCE=3` definition.
 
 Setting the `THEROCK_DISABLE_HARDENING` target property to true disables all
-policy injection for that target. The policy sets `POSITION_INDEPENDENT_CODE`
-on executable, static-library, and object-library targets so CMake validates
-dependency compatibility in addition to the explicit policy flags. A hardened
-executable cannot set this property to false because CMake may then append
-`-no-pie` after the policy's `-pie`; use the explicit target exception if PIE
-is not supported.
+policy options for that target. Use this exception only for a target that
+cannot follow the baseline, and document the reason. The policy sets
+`POSITION_INDEPENDENT_CODE` on executable, static-library, and object-library
+targets so CMake validates dependency compatibility in addition to the
+explicit policy flags. A hardened executable cannot set this property to false
+because CMake may then append `-no-pie` after the policy's `-pie`; use the
+explicit target exception if PIE is not supported.
 
-Keep exceptions narrow and document why the target cannot follow the baseline.
+#### Project flags and compiler defaults
+
+`OFF` does not remove hardening supplied by a project, toolchain, compiler, or
+distribution. With `BASELINE`, `-U_FORTIFY_SOURCE` suppresses compiler-driver
+defaults, while `-Wp,-U_FORTIFY_SOURCE` resets inherited preprocessor settings
+before the policy selects its fortification state. Both forms are needed to
+keep fortification consistent across supported compilers.
+
+The policy does not inspect target, source, or transitive usage-requirement
+flags to infer whether fortification is safe. A project using a fortification
+exception remains responsible for removing conflicting definitions that its
+own target, source, or dependency flags add after the policy options.
+
+#### Subproject propagation and coverage
 
 Ordinary CMake subprojects receive the policy through their generated
-`_init.cmake`. A deferred pass runs after the project's own hooks and applies
-the target-type and language-specific options. The policy, generated init file,
-and hardening module participate in configure dependencies and subproject
-fingerprints, so changing the policy or implementation reconfigures affected
+`_init.cmake`. A deferred pass applies the language- and target-specific
+options after the project has defined its targets. The selected policy,
+generated initialization file, and hardening module participate in configure
+dependencies and subproject fingerprints, so changes reconfigure affected
 builds.
 
-Independent builds launched by CMake wrappers do not inherit target options and
-need an explicit bridge. The initial bridges cover only these independent builds:
+Independent builds launched by CMake wrappers do not inherit target options.
+An inner CMake build can load `therock_compiler_hardening.cmake`; wrappers for
+other build systems can obtain compiler and linker flags from
+`therock_get_hardening_command_flags()`. A bridge must recompute these settings
+when it configures the inner build and must demonstrate that
+`OFF -> BASELINE -> OFF` updates a retained build directory.
 
-- The nested zlib CMake build receives the policy and exclusion state and loads
-  `therock_compiler_hardening.cmake` through `CMAKE_PROJECT_INCLUDE`.
-- The libdrm Meson build passes `c_args`, `cpp_args`, `c_link_args`, and
-  `cpp_link_args` on every `meson setup --reconfigure`. These combine CMake's
-  cached compiler flags and `LIBDRM_CPPFLAGS` (initialized from the environment's
-  `CPPFLAGS`) with the active policy. This preserves initial environment flags
-  while allowing policy changes to update an existing build directory.
-- The expat autotools build regenerates compiler and linker settings on every
-  configure. Compiler wrappers append policy options after user arguments,
-  including forwarded preprocessor options. This preserves unrelated flags
-  and keeps fortify enablement and resets authoritative. An absent `CFLAGS`
-  retains Autoconf's `-g -O2` default; an explicit `CFLAGS` controls whether
-  fortification is enabled.
-
-Other wrappers must use `therock_get_hardening_command_flags()` or load the
-module in their inner CMake project and must demonstrate that switching
-`OFF -> BASELINE -> OFF` updates the retained inner build directory.
 Until a bridge is implemented, the subproject declaration lists the affected
 inner builds in `HARDENING_DEFERRED`, for example:
 
@@ -280,39 +289,28 @@ therock_cmake_subproject_declare(therock-example
 TheRock stores this list in the `THEROCK_HARDENING_DEFERRED` property on the
 subproject target.
 
-With `BASELINE`, TheRock reports each declared gap during top-level configuration
-as `deferred (no TheRock policy injection)`, including when child logs are
-suppressed or the child does not reconfigure. Inherited hardening may still
-exist. These declarations do not disable hardening on ordinary CMake targets in
-the same subproject. Coverage is not inferred from target counts or flags on
-consumers of a dependency; a bridge configures policy flags but does not verify
-the resulting artifacts.
+When `BASELINE` is selected, top-level configuration reports each
+`HARDENING_DEFERRED` entry as `deferred (no TheRock policy injection)`. Each
+entry identifies an independently configured build that does not receive the
+options selected by `THEROCK_HARDENING_POLICY`. The inner project, compiler
+defaults, or inherited build flags may still enable some of the same
+protections. The report describes policy propagation; it does not inspect or
+classify the resulting artifacts. `HARDENING_DEFERRED` affects reporting only
+and does not disable the policy for ordinary CMake targets in the same
+subproject.
 
-The current deferred sysdep builds are gmp, hwloc, libbacktrace, liblzma, mpfr,
-ncurses, zstd, amd-mesa, elfutils, libcap, libiberty, libmnl, libnl, libpciaccess,
-numactl, and util-linux.
-FFTW's independent autotools route is also deferred for both precisions;
-its native CMake route receives the policy normally. OpenMPI's autotools
-build is deferred. The rocprofiler-systems declaration records conditional
-gaps for internally built PAPI, libiberty, and elfutils. Such entries identify
-an uncovered route when its stated condition is met; they do not establish
-that an optional build is enabled. Dyninst's own CMake targets remain in scope.
+#### Excluded and prebuilt projects
 
-The initial policy excludes the compiler group: `amd-llvm` (including its
-nested runtimes and device libraries), `amd-comgr`, `hipcc`, and `hipify`.
-Compiler and compiler-runtime hardening requires a separately reviewed
-follow-up. Exclusion is based on the subproject being built; ROCR, CLR/HIP, and
-other consumers built with the AMD compiler remain in scope. When `BASELINE` is
-selected, compiler-group coverage is reported as deferred. Imported prebuilt
-subprojects are always reported as unverified because the selected policy did
-not build those artifacts, regardless of source-build declarations or compiler
-exclusion. `OFF` emits no hardening coverage diagnostics.
+`BASELINE` does not apply policy options to the compiler-producing subprojects:
+`amd-llvm` (including its nested runtimes and device libraries), `amd-comgr`,
+`hipcc`, and `hipify`. Exclusion is based on the subproject being built, not the
+compiler it uses. ROCR, CLR/HIP, and other consumers built with the AMD compiler
+remain in scope. Top-level configuration reports the excluded compiler-group
+coverage as deferred.
 
-The option selection follows the
-[OpenSSF Compiler Options Hardening Guide for C and C++](https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C%2B%2B),
-revision 2026-08-20, accessed 2026-10-13. TheRock uses fortification level 3 and
-preserves each project's optimization level rather than increasing optimization
-to enable fortification.
+Imported prebuilt subprojects are reported as unverified because the selected
+policy did not build those artifacts. `OFF` emits no hardening coverage
+diagnostics.
 
 ## Developer Cookbook
 
