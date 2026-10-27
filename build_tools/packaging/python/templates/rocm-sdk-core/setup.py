@@ -58,6 +58,12 @@ setup(
     },
     zip_safe=False,
     include_package_data=True,
+    install_requires=["pandas; sys_platform == 'linux'"],
+    extras_require={
+        "rocpd-dashboard": ["jinja2; sys_platform == 'linux'"],
+        "rocpd-otf2": ["otf2; sys_platform == 'linux'"],
+        "rocpd-pdf": ["reportlab; sys_platform == 'linux'"],
+    },
     options={
         "bdist_wheel": {
             "plat_name": os.getenv(
