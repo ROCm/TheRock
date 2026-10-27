@@ -127,7 +127,9 @@ powershell.exe .\build_tools\validate_windows_install.ps1
 
 The script checks RAM, disk space, long path support, symlink capability, MSVC,
 CMake, Ninja, Git, Python, DVC, Strawberry Perl/gfortran, ccache, and git
-configuration. It is safe to re-run at any time.
+configuration. It is safe to re-run at any time. It does not check MSYS2, which
+the debug tools need: run `build_tools\setup_msys2.ps1` with no arguments for
+that (see [Install tools](#install-tools)).
 
 ### Prerequisites
 
@@ -240,6 +242,26 @@ If you prefer to install tools manually, you will need:
   `choco install winflexbison3` — provides the `flex` and `bison` tools that
   Meson uses when building Mesa's gallium/D3D12 driver. Not needed if
   `THEROCK_ENABLE_SYSDEPS_AMD_MESA` is `OFF`.
+
+- MSYS2 (**required for the debug tools**): https://www.msys2.org/.
+  The autotools sysdeps the debug tools use (gmp, mpfr, expat and ncurses)
+  are built by MSYS2's UCRT64 gcc. `build_tools/setup_msys2.ps1` installs
+  MSYS2 with the packages the build uses, in `C:\msys64` by default:
+
+  ```bash
+  powershell.exe .\build_tools\setup_msys2.ps1 -Install
+  ```
+
+  To put it elsewhere, pass `-InstallDir <dir>`, and configure TheRock with
+  `-DTHEROCK_MSYS2_ROOT=<dir>`. Without `-Install`, the script only reports
+  whether the installation is ready for the build. An MSYS2 installation of
+  your own works too, as long as it has the packages listed in the script.
+  `-Install` leaves such an installation alone unless given `-Force`. Run
+  the script with `-Help` for the details.
+
+  Needed whenever one of the four `THEROCK_ENABLE_SYSDEPS_*` features for
+  those libraries is enabled, as `THEROCK_ENABLE_DEBUG_TOOLS`, on by default,
+  does.
 
 - Python: https://www.python.org/downloads/ (3.11+ recommended)
 
