@@ -1,5 +1,28 @@
 # Experimental DASan build
 
+## Validated one-off build (2026-10-27 UTC)
+
+The pinned source combination below, with both DASan compatibility patches and
+HIP frame pointers, produced a portable installation in the pinned CI image.
+The packaged installation passed all 27 unchanged DASan lit tests on an
+eight-GPU MI350X (`gfx950`) machine: 3 host, 21 HIP, and 3 OpenMP tests. This
+includes `heap-overflow`, `host-overflow`, `quarantine`, and `multi-device`,
+using the default unwinder; `fast_unwind_on_malloc=0` was not used.
+
+Both `gfx942` and `gfx950` passed instrumented compilation and linking with the
+installed HIP headers and device libraries. GPU execution was validated only
+on `gfx950`. Static and shared host DASan initialization also passed.
+
+The accepted flag is `-fsanitize=daddress`. The compiler rejects
+`-fsanitize=dasan` at this revision.
+
+The archive `therock-dasan-gfx942-gfx950.tar.xz` has SHA-256
+`db59aa600917080ff555204b0485c57c66d0afe7acb46deed16a4ce903168ec2`.
+It contains the merged installation, relocatable lit sources/configuration,
+validation runner, source/configuration manifests, and both LLVM patches.
+
+## Configuration
+
 This one-off configuration builds LLVM, compiler-rt, HIPIFY, ROCr, and HIP in
 the same manylinux container as the Linux `compiler-runtime` CI stage. It uses
 the `THEROCK_ENABLE_DASAN` CMake option and excludes math libraries, profilers,
