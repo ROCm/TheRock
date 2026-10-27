@@ -50,6 +50,12 @@ SYMLINK_GROUPS = {
     "llvm_symlinks": ("amdrocm-llvm", ["rocm-llvm", "rocm-amdgcn"]),
 }
 
+# OpenCL ICD registration: the flag, its only owner, and what it writes.
+ICD_FLAG = "opencl_icd"
+ICD_PACKAGE = "amdrocm-opencl"
+ICD_DIR = "/etc/OpenCL/vendors"
+ICD_FILE = f"amdocl64_{MAJOR}{MINOR:02d}.icd"
+
 # Packages whose scripts run against a real update-alternatives, the binaries
 # that exist in the sandbox (the rest must be skipped), and the
 # /opt/rocm/<link> -> <prefix>/<dir> links the two packages own.
@@ -115,6 +121,11 @@ class AlternativesScriptsTest(unittest.TestCase):
             ]
             self.assertEqual(owners, [owner], flag)
 
+        icd_owners = [
+            n for n, cfg in self.alternatives.items() if is_key_defined(cfg, ICD_FLAG)
+        ]
+        self.assertEqual(icd_owners, [ICD_PACKAGE], ICD_FLAG)
+
     def test_generated_scripts(self) -> None:
         for name, cfg in self.alternatives.items():
             for target in PREFIX_LINES:
@@ -141,17 +152,17 @@ class AlternativesScriptsTest(unittest.TestCase):
                             for alternative in alternatives:
                                 self.assertEqual(f'"{alternative}"' in text, enabled)
 
-    @unittest.skipUnless(UPDATE_ALTERNATIVES, "update-alternatives is not installed")
-    def test_update_alternatives_install_and_remove(self) -> None:
-        """Run the real postinst and prerm against a sandboxed update-alternatives."""
-        root = (self.deb_root / "sandbox").resolve()
-        prefix = root / "prefix"
+                        # ICD registration is emitted only for its owner, and
+                        # names the file after the install's major.minor.
+                        icd = is_key_defined(cfg, ICD_FLAG)
+                        self.assertEqual(ICD_DIR in text, icd)
+                        self.assertEqual(f"{MAJOR} {MINOR}).icd" in text, icd)
+
+    @staticmethod
+    def _sandbox_update_alternatives(root: Path) -> dict[str, str]:
+        """Put update-alternatives' state and the links it creates under root."""
         for directory in ("usr/bin", "opt/rocm", "alt", "admin", "tools"):
-            (root / directory).mkdir(parents=True)
-        for directory in SANDBOX_DIR_LINKS.values():
-            (prefix / directory).mkdir(parents=True, exist_ok=True)
-        for binary in SANDBOX_BINARIES:
-            (prefix / "bin" / binary).touch(mode=0o755)
+            (root / directory).mkdir(parents=True, exist_ok=True)
 
         # Same tool, but its state and the /usr/bin and /opt/rocm links live in root.
         wrapper = root / "tools" / "update-alternatives"
@@ -167,10 +178,21 @@ class AlternativesScriptsTest(unittest.TestCase):
             encoding="utf-8",
         )
         wrapper.chmod(0o755)
-        env = {
+        return {
             **os.environ,
             "PATH": f"{wrapper.parent}{os.pathsep}{os.environ['PATH']}",
         }
+
+    @unittest.skipUnless(UPDATE_ALTERNATIVES, "update-alternatives is not installed")
+    def test_update_alternatives_install_and_remove(self) -> None:
+        """Run the real postinst and prerm against a sandboxed update-alternatives."""
+        root = (self.deb_root / "sandbox").resolve()
+        prefix = root / "prefix"
+        env = self._sandbox_update_alternatives(root)
+        for directory in SANDBOX_DIR_LINKS.values():
+            (prefix / directory).mkdir(parents=True, exist_ok=True)
+        for binary in SANDBOX_BINARIES:
+            (prefix / "bin" / binary).touch(mode=0o755)
 
         def run(script: str, action: str, names) -> None:
             for name in names:
@@ -199,6 +221,52 @@ class AlternativesScriptsTest(unittest.TestCase):
 
         run("prerm", "remove", reversed(SANDBOX_PACKAGES))
         self.assertEqual(links(), {})
+
+    @unittest.skipUnless(UPDATE_ALTERNATIVES, "update-alternatives is not installed")
+    def test_opencl_icd_register_and_unregister(self) -> None:
+        """Run the real amdrocm-opencl postinst and prerm against a sandboxed ICD dir."""
+        root = (self.deb_root / "icd").resolve()
+        prefix = root / "prefix"
+        opencl = prefix / "lib" / "opencl"
+        opencl.mkdir(parents=True)
+        (prefix / "bin").mkdir(parents=True)
+        env = self._sandbox_update_alternatives(root)
+        icd_dir = root / "etc" / "OpenCL" / "vendors"
+
+        config = PackageConfig(root, root, "deb", VERSION, "", str(prefix), "")
+        deb_package.generate_debian_postscripts(
+            self.packages[ICD_PACKAGE], root / ICD_PACKAGE, config
+        )
+        # Only the ICD directory is redirected, so the library lookup, the file
+        # contents and the permissions under test are the shipped logic.
+        for script in ACTIONS:
+            path = root / ICD_PACKAGE / script
+            text = path.read_text(encoding="utf-8").replace(ICD_DIR, str(icd_dir))
+            path.write_text(text, encoding="utf-8")
+
+        def run(script: str, action: str) -> int:
+            return subprocess.run(
+                [root / ICD_PACKAGE / script, action], env=env
+            ).returncode
+
+        # Without a runtime the postinst must still succeed: a failed ICD
+        # registration cannot be allowed to strand the other alternatives.
+        self.assertEqual(run("postinst", "configure"), 0)
+        self.assertFalse(icd_dir.exists())
+
+        # The SONAME-versioned runtime is preferred over the bare symlink,
+        # which runtime packages do not always ship.
+        versioned = opencl / "libamdocl64.so.10"
+        versioned.touch()
+        (opencl / "libamdocl64.so").symlink_to(versioned)
+
+        self.assertEqual(run("postinst", "configure"), 0)
+        icd = icd_dir / ICD_FILE
+        self.assertEqual(icd.read_text(encoding="utf-8").strip(), str(versioned))
+        self.assertEqual(icd.stat().st_mode & 0o777, 0o644)
+
+        self.assertEqual(run("prerm", "remove"), 0)
+        self.assertFalse(icd.exists())
 
 
 if __name__ == "__main__":
