@@ -392,8 +392,8 @@ def main(argv: list[str]) -> None:
             artifacts_root, args.release_type, backend, args.build_variant
         )
         # After the package repositories, which the amd-repo-setup package
-        # configures. ASAN builds publish their repositories under
-        # packages-asan/, which the package does not point at.
+        # configures. ASAN builds don't build the package, and their packages
+        # go to packages-asan/, which it doesn't configure.
         if not is_asan:
             publish_repo_setup_packages(artifacts_root, args.release_type, backend)
         else:
