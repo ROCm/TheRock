@@ -83,11 +83,11 @@ class LatestCommitTest(unittest.TestCase):
         with patch(
             "bump_automation.gh_api", return_value=[{"sha": "cafef00d"}]
         ) as mock_api:
-            sha = latest_commit("ROCm/rocgdb", "token", "amd-staging-rocgdb-16")
+            sha = latest_commit("ROCm/rocgdb", "token", "amd-staging-rocgdb-18")
         self.assertEqual(sha, "cafef00d")
         self.assertEqual(
             mock_api.call_args.args[1],
-            "repos/ROCm/rocgdb/commits?sha=amd-staging-rocgdb-16",
+            "repos/ROCm/rocgdb/commits?sha=amd-staging-rocgdb-18",
         )
 
 
@@ -1676,7 +1676,7 @@ class CreateTheRockBumpRocgdbConfigTest(unittest.TestCase):
                                         )
 
         mock_latest.assert_called_once_with(
-            "ROCm/rocgdb", "token", "amd-staging-rocgdb-16"
+            "ROCm/rocgdb", "token", "amd-staging-rocgdb-18"
         )
 
 

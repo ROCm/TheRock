@@ -77,7 +77,7 @@ SUBMODULE_CONFIG = {
         # We will reuse the rocm-systems token for now.
         # Selects an entry in the tokens dictionary, not a literal credential.
         "token_key": "systems",  # nosec B105
-        "branch": "amd-staging-rocgdb-16",
+        "branch": "amd-staging-rocgdb-18",
         # Changes to rocgdb can run a limited matrix of CI jobs:
         #   * Build for all gfx archs
         #   * rocgdb tests only (no impact on other project builds/tests)
@@ -760,7 +760,7 @@ def create_therock_bump(submodule: str, token: str) -> None:
 
         # Fetch the exact target commit in the submodule. A plain depth-1 fetch
         # only retrieves the default branch tip, which misses commits that live
-        # on a non-default branch (e.g. rocgdb's amd-staging-rocgdb-16).
+        # on a non-default branch (e.g. rocgdb's amd-staging-rocgdb-18).
         print(f"[INFO] Fetching {latest[:7]} for {submodule}")
         run(["git", "-C", submodule, "fetch", "--depth=1", "origin", latest])
         run(["git", "-C", submodule, "checkout", latest])
