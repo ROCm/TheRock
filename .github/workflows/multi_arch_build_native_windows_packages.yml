@@ -104,6 +104,8 @@ jobs:
       ROCM_VERSION: ${{ inputs.rocm_version }}
       MSI_VERSION: ${{ inputs.msi_version }}
       PACKAGES: ${{ inputs.packages }}
+      ARTIFACTS_OUTPUT_DIR: ${{ github.workspace }}/artifacts
+      ARTIFACTS_DIR: ${{ github.workspace }}/artifacts/artifacts
       MSI_DIR: ${{ github.workspace }}/msi-output
       RELEASE_TYPE: ${{ inputs.release_type }}
     steps:
@@ -128,11 +130,22 @@ jobs:
       - name: Install WiX Toolset v4
         run: dotnet tool install --global wix --version "4.*"
 
-      # The generator installs two driver-supplied System32 DLLs (amdhip64_6.dll,
+      - name: Fetch Windows artifacts
+        run: |
+          python build_tools/artifact_manager.py fetch \
+            --run-id="${ARTIFACT_RUN_ID}" \
+            --run-github-repo="${ARTIFACT_GITHUB_REPO}" \
+            --platform=windows \
+            --stage=all \
+            --generic-only \
+            --exclude-components=dbg,dev,doc,run,test \
+            --output-dir="${ARTIFACTS_OUTPUT_DIR}"
+
+      # The generator requires two driver-supplied System32 DLLs (amdhip64_6.dll,
       # amd_comgr_2.dll) that are DVC-tracked under
-      # rocm-systems/shared/amdgpu-windows-interop/legacy/ rather than committed
-      # to git, and fails if they are missing. Initialize the rocm-systems
-      # submodule at this checkout's pinned commit and materialize its DVC files.
+      # rocm-systems/shared/amdgpu-windows-interop/legacy/. Initialize the
+      # rocm-systems submodule at this checkout's pinned commit and materialize
+      # its DVC files.
       - name: Fetch rocm-systems DVC files
         timeout-minutes: 10
         run: |
@@ -147,8 +160,7 @@ jobs:
           # knowledge of the package-to-filename mapping.
           python build_tools/packaging/windows/generate_msi_wxs.py \
             --packages "${PACKAGES}" \
-            --run-id "${ARTIFACT_RUN_ID}" \
-            --run-github-repo "${ARTIFACT_GITHUB_REPO}" \
+            --artifact-dir "${ARTIFACTS_DIR}" \
             --package-version "${MSI_VERSION}" \
             --display-version "${ROCM_VERSION}" \
             --output-dir "${MSI_DIR}"
