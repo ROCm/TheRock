@@ -5,10 +5,30 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from dasan_math_build import SDK_STAGES, bootstrap_sdk
+from dasan_math_build import SDK_STAGES, bootstrap_sdk, sdk_llvm_major
+
+
+class SdkVersionTest(unittest.TestCase):
+    def test_uses_imported_compiler_not_host_or_source_version(self):
+        sdk = Path("/imported-rocm")
+        for version, expected in (("24.0.0", 24), ("23.1.2git", 23), ("25", 25)):
+            with self.subTest(version=version):
+                with patch("dasan_math_build.capture", return_value=version) as capture:
+                    self.assertEqual(sdk_llvm_major(sdk), expected)
+                    capture.assert_called_once_with(
+                        [str(sdk / "lib/llvm/bin/clang"), "-dumpversion"]
+                    )
+
+    def test_rejects_missing_or_malformed_version(self):
+        for version in ("", "clang version 24", "0.0.0", "24.0\n23.0"):
+            with self.subTest(version=version):
+                with patch("dasan_math_build.capture", return_value=version):
+                    with self.assertRaisesRegex(RuntimeError, "Unexpected SDK clang"):
+                        sdk_llvm_major(Path("/imported-rocm"))
 
 
 class BootstrapSdkTest(unittest.TestCase):

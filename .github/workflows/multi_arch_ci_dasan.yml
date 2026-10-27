@@ -174,6 +174,20 @@ jobs:
 
       - name: Build gfx950 math libraries with DASan
         run: |
+          # Isolate the heartbeat process group so cleanup also stops an
+          # in-flight upload before the final, blocking log upload runs.
+          setsid bash -c '
+            while sleep 60; do
+              python build_tools/github_actions/collect_dasan_logs.py --output-dir dasan-math-output &&
+                python build_tools/github_actions/post_stage_upload.py \
+                  --run-id "${GITHUB_RUN_ID}" --stage math-libs \
+                  --build-dir dasan-math-output/build --amdgpu-family gfx950 || true
+            done
+          ' > dasan-periodic-upload.log 2>&1 &
+          upload_pid=$!
+          trap 'build_status=$?; trap - EXIT; kill -- "-${upload_pid}" 2>/dev/null || true; wait "${upload_pid}" 2>/dev/null || true; exit "${build_status}"' EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
           python build_tools/dasan_math_build.py \
             --rocm-path dasan-prebuilt/rocm --output-dir dasan-math-output \
             --jobs "$(nproc)" --prepare-sources

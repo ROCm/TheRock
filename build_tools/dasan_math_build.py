@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 import hashlib
 import os
 from pathlib import Path
+import re
 import shlex
 import sys
 
@@ -157,11 +158,23 @@ def bootstrap_sdk(rocm: Path, output: Path) -> None:
     write_json(output / "bootstrap.json", {**identity, "stages": imported})
 
 
-def probe_sdk(rocm: Path, output: Path) -> None:
+def sdk_llvm_major(rocm: Path) -> int:
+    """Use the imported compiler version, not an absent LLVM source checkout."""
+    version = capture([str(rocm / "lib/llvm/bin/clang"), "-dumpversion"])
+    match = re.fullmatch(r"([1-9][0-9]*)(?:\.[0-9]+)*(?:git)?", version)
+    if not match:
+        raise RuntimeError(f"Unexpected SDK clang -dumpversion output: {version!r}")
+    return int(match.group(1))
+
+
+def probe_sdk(rocm: Path, output: Path) -> int:
     """Compile and link without needing a GPU on the CI builder."""
     probe = output / "sdk-probe"
     probe.mkdir(exist_ok=True)
     log = output / "sdk-probe.log"
+    llvm_major = sdk_llvm_major(rocm)
+    with log.open("a", encoding="utf-8") as stream:
+        stream.write(f"Imported SDK LLVM major version: {llvm_major}\n")
     host = probe / "host.c"
     host.write_text("int main(void) { return 0; }\n", encoding="utf-8")
     clang = str(rocm / "lib/llvm/bin/clang")
@@ -206,8 +219,10 @@ def probe_sdk(rocm: Path, output: Path) -> None:
             "host_link": "passed",
             "gfx950_link": "passed",
             "device_instrumentation": True,
+            "llvm_major": llvm_major,
         },
     )
+    return llvm_major
 
 
 def record_sources(output: Path, rocm: Path, artifacts: list[str]) -> None:
@@ -257,7 +272,7 @@ def build(args: argparse.Namespace) -> None:
         if args.prepare_sources:
             prepare_sources(log, args.jobs)
         bootstrap_sdk(rocm, output)
-        probe_sdk(rocm, output)
+        llvm_major = probe_sdk(rocm, output)
 
         from configure_stage import generate_cmake_args, get_topology
 
@@ -296,6 +311,10 @@ def build(args: argparse.Namespace) -> None:
             "-DTHEROCK_BUILD_TESTING=OFF",
             "-DTHEROCK_BUILD_COMGR_TESTS=OFF",
             "-DTHEROCK_BUILD_LLVM_TESTS=OFF",
+            # Regenerate the overlay's manifests and gfx950 metadata, but name
+            # its clang configuration alias using the imported SDK's version.
+            "-Dtherock-aux-overlay_CMAKE_ARGS="
+            f"-DTHEROCK_AUX_OVERLAY_LLVM_VERSION_MAJOR={llvm_major}",
             "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
             "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
             "-DCMAKE_HIP_COMPILER_LAUNCHER=ccache",

@@ -103,8 +103,16 @@ if(NOT WIN32)
     DESTINATION bin
   )
 
-  # Begin creation of compiler configs. We will need LLVM_VERSION_MAJOR.
-  include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/cmake/Modules/LLVMVersion.cmake")
+  # Artifact-only builds do not fetch LLVM sources. Their launcher supplies
+  # the major version queried from the imported compiler, not the host compiler.
+  if(DEFINED THEROCK_AUX_OVERLAY_LLVM_VERSION_MAJOR)
+    if(NOT THEROCK_AUX_OVERLAY_LLVM_VERSION_MAJOR MATCHES "^[1-9][0-9]*$")
+      message(FATAL_ERROR "THEROCK_AUX_OVERLAY_LLVM_VERSION_MAJOR must be a positive integer")
+    endif()
+    set(LLVM_VERSION_MAJOR "${THEROCK_AUX_OVERLAY_LLVM_VERSION_MAJOR}")
+  else()
+    include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/cmake/Modules/LLVMVersion.cmake")
+  endif()
   set(rocm_config_name "rocm.cfg")
   set(rocm_config_dir "${CMAKE_CURRENT_BINARY_DIR}/lib/llvm/bin")
   set(rocm_config_content "$-Wl,--enable-new-dtags\n--rocm-path='<CFGDIR>/../../..'\n-frtlib-add-rpath")
